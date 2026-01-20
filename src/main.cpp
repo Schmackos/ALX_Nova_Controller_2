@@ -23,7 +23,6 @@
 // Forward declarations
 int compareVersions(const String& v1, const String& v2);
 
-// Test 2 
 // MQTT functions are defined in mqtt_handler.h/.cpp
 // OTA update functions are defined in ota_updater.h/.cpp
 // Smart Sensing functions are defined in smart_sensing.h/.cpp
