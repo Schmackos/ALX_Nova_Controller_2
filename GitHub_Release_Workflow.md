@@ -48,7 +48,19 @@ The workflow will:
 8. Commit the version change back to the repository
 9. Create a GitHub Release with `firmware.bin` attached
 
-### 5. Verify the Release
+### 5. Sync Changes Back to Local
+
+The workflow commits the version bump to GitHub. Pull these changes to keep your local repository in sync:
+
+```bash
+git pull
+```
+
+This ensures your local `src/config.h` has the updated `FIRMWARE_VERSION`.
+
+**Important:** Always pull before making new changes to avoid merge conflicts.
+
+### 6. Verify the Release
 
 After the workflow completes:
 
