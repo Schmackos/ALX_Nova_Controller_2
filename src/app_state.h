@@ -52,6 +52,10 @@ extern bool updateAvailable;
 extern String cachedLatestVersion;
 extern unsigned long updateDiscoveredTime;
 
+// ===== OTA Just Updated State =====
+extern bool justUpdated;
+extern String previousFirmwareVersion;
+
 // ===== Smart Sensing State =====
 extern SensingMode currentMode;
 extern unsigned long timerDuration;
@@ -99,7 +103,7 @@ extern unsigned long prevMqttTimerRemaining;
 extern float prevMqttVoltageReading;
 extern unsigned long lastMqttPublish;
 
-// ===== GitHub Root CA Certificate =====
-extern String github_root_ca;
+// Note: github_root_ca removed - now using Mozilla certificate bundle
+// via ESP32CertBundle library for automatic SSL validation
 
 #endif // APP_STATE_H

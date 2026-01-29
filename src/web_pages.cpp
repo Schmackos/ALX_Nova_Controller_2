@@ -1178,29 +1178,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <span class="slider"></span>
                 </label>
             </div>
-            
-            <!-- Certificate Editor (collapsible) -->
-            <div class="cert-section" style="margin-top: 15px;">
-                <button class="check-btn" onclick="toggleCertEditor()" style="margin-bottom: 10px; width: 100%;">
-                    <span id="certEditorToggleIcon">▶</span> Configure SSL Certificate
-                </button>
-                <div id="certEditorPanel" style="display: none;">
-                    <div class="timezone-info" style="margin-bottom: 10px;">
-                        Configure the root CA certificate used for secure connections to GitHub. 
-                        Update this if the current certificate expires or GitHub changes their certificate chain.
-                    </div>
-                    <div class="form-group">
-                        <label for="certificateText">Root CA Certificate (PEM format):</label>
-                        <textarea id="certificateText" rows="12" style="width: 100%; font-family: monospace; font-size: 11px; resize: vertical;" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
-                    </div>
-                    <div id="certStatus" style="margin-bottom: 10px; font-size: 0.9em;">
-                        Status: <span id="certIsDefault">Loading...</span>
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="check-btn" onclick="saveCertificate()" style="flex: 1; min-width: 120px;">Save Certificate</button>
-                        <button class="check-btn" onclick="resetCertificate()" style="flex: 1; min-width: 120px; background: #ff9800;">Reset to Default</button>
-                    </div>
-                </div>
+            <div class="timezone-info" style="margin-top: 10px; margin-bottom: 15px;">
+                Uses Mozilla's trusted certificate bundle for automatic SSL validation of all public servers.
             </div>
             
             <button class="check-btn" onclick="checkForUpdate()">Check for Updates</button>
@@ -1666,6 +1645,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     appendDebugLog(data.timestamp, data.message);
                 } else if (data.type === 'hardware_stats') {
                     updateHardwareStats(data);
+                } else if (data.type === 'justUpdated') {
+                    showUpdateSuccessNotification(data);
                 }
             };
 
@@ -1934,106 +1915,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             });
         }
 
-        // Certificate Editor Functions
-        let certEditorOpen = false;
-        
-        function toggleCertEditor() {
-            certEditorOpen = !certEditorOpen;
-            const panel = document.getElementById('certEditorPanel');
-            const icon = document.getElementById('certEditorToggleIcon');
-            
-            if (certEditorOpen) {
-                panel.style.display = 'block';
-                icon.textContent = '▼';
-                loadCertificate();
-            } else {
-                panel.style.display = 'none';
-                icon.textContent = '▶';
-            }
-        }
-        
-        function loadCertificate() {
-            fetch('/api/certificate')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('certificateText').value = data.certificate;
-                        updateCertStatus(data.isDefault);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading certificate:', error);
-                });
-        }
-        
-        function updateCertStatus(isDefault) {
-            const statusEl = document.getElementById('certIsDefault');
-            if (isDefault) {
-                statusEl.textContent = 'Using default certificate';
-                statusEl.style.color = '#4CAF50';
-            } else {
-                statusEl.textContent = 'Using custom certificate';
-                statusEl.style.color = '#2196F3';
-            }
-        }
-        
-        function saveCertificate() {
-            const certText = document.getElementById('certificateText').value.trim();
-            
-            if (!certText) {
-                alert('Please enter a certificate');
-                return;
-            }
-            
-            if (!certText.includes('-----BEGIN CERTIFICATE-----') || 
-                !certText.includes('-----END CERTIFICATE-----')) {
-                alert('Invalid certificate format. Must include BEGIN and END markers.');
-                return;
-            }
-            
-            fetch('/api/certificate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ certificate: certText })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Certificate saved successfully!');
-                    updateCertStatus(data.isDefault);
-                } else {
-                    alert('Failed to save certificate: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                alert('Error saving certificate: ' + error);
-            });
-        }
-        
-        function resetCertificate() {
-            if (!confirm('Are you sure you want to reset to the default certificate?')) {
-                return;
-            }
-            
-            fetch('/api/certificate/reset', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('certificateText').value = data.certificate;
-                    updateCertStatus(true);
-                    alert('Certificate reset to default!');
-                } else {
-                    alert('Failed to reset certificate: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                alert('Error resetting certificate: ' + error);
-            });
-        }
+        // Note: Certificate editor functions removed - now using Mozilla certificate bundle
 
         function updateTimezone() {
             const select = document.getElementById('timezoneSelect');
@@ -2733,6 +2615,80 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .catch(error => {
                 alert('Error cancelling auto-update: ' + error);
             });
+        }
+
+        function showUpdateSuccessNotification(data) {
+            // Create and show a success notification banner
+            const notification = document.createElement('div');
+            notification.id = 'updateSuccessNotification';
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 20px 30px;
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(40, 167, 69, 0.4);
+                z-index: 10000;
+                text-align: center;
+                max-width: 90%;
+                animation: slideDown 0.5s ease-out;
+            `;
+            notification.innerHTML = `
+                <div style="font-size: 24px; margin-bottom: 8px;">✅ Firmware Updated Successfully!</div>
+                <div style="font-size: 14px; opacity: 0.9;">
+                    Updated from <strong>${data.previousVersion}</strong> to <strong>${data.currentVersion}</strong>
+                </div>
+                <div style="font-size: 12px; margin-top: 10px; opacity: 0.7;">
+                    Click to dismiss or wait 10 seconds
+                </div>
+            `;
+            
+            // Add animation keyframes if not already present
+            if (!document.getElementById('updateNotificationStyles')) {
+                const style = document.createElement('style');
+                style.id = 'updateNotificationStyles';
+                style.textContent = `
+                    @keyframes slideDown {
+                        from { transform: translateX(-50%) translateY(-100px); opacity: 0; }
+                        to { transform: translateX(-50%) translateY(0); opacity: 1; }
+                    }
+                    @keyframes fadeOut {
+                        from { opacity: 1; }
+                        to { opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            document.body.appendChild(notification);
+            
+            // Auto-dismiss after 10 seconds
+            const dismissTimeout = setTimeout(() => {
+                dismissNotification(notification);
+            }, 10000);
+            
+            // Click to dismiss
+            notification.onclick = () => {
+                clearTimeout(dismissTimeout);
+                dismissNotification(notification);
+            };
+            
+            function dismissNotification(el) {
+                el.style.animation = 'fadeOut 0.3s ease-out forwards';
+                setTimeout(() => el.remove(), 300);
+            }
+            
+            // Also update the OTA status section
+            const otaStatus = document.getElementById('otaStatus');
+            if (otaStatus) {
+                otaStatus.className = 'ota-status show success';
+                otaStatus.textContent = `Firmware updated from ${data.previousVersion} to ${data.currentVersion}`;
+            }
+            
+            console.log('Firmware update notification:', data.message);
         }
 
         function handleUpdateStatus(data) {

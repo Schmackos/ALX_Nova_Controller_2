@@ -85,6 +85,10 @@ bool updateAvailable = false;
 String cachedLatestVersion = "";
 unsigned long updateDiscoveredTime = 0;  // millis() when update was first detected
 
+// OTA just updated state (set after successful OTA reboot)
+bool justUpdated = false;
+String previousFirmwareVersion = "";
+
 // Smart Sensing feature variables (pins and enum defined in config.h)
 SensingMode currentMode = ALWAYS_ON;
 unsigned long timerDuration = 15;     // minutes (default 15)
@@ -134,31 +138,8 @@ float prevMqttVoltageReading = 0.0;
 unsigned long lastMqttPublish = 0;
 // MQTT_PUBLISH_INTERVAL defined in config.h
 
-// GitHub Root CA Certificate (configurable via web interface)
-// Default: DigiCert/USERTrust certificate - valid until 2038
-// Can be updated by user if certificate expires or changes
-String github_root_ca = \
-"-----BEGIN CERTIFICATE-----\n" \
-"MIIDRjCCAsugAwIBAgIQGp6v7G3o4ZtcGTFBto2Q3TAKBggqhkjOPQQDAzCBiDEL\n" \
-"MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl\n" \
-"eSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMT\n" \
-"JVVTRVJUcnVzdCBFQ0MgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMjEwMzIy\n" \
-"MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjBfMQswCQYDVQQGEwJHQjEYMBYGA1UEChMP\n" \
-"U2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1TZWN0aWdvIFB1YmxpYyBTZXJ2ZXIg\n" \
-"QXV0aGVudGljYXRpb24gUm9vdCBFNDYwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAR2\n" \
-"+pmpbiDt+dd34wc7qNs9Xzjoq1WmVk/WSOrsfy2qw7LFeeyZYX8QeccCWvkEN/U0\n" \
-"NSt3zn8gj1KjAIns1aeibVvjS5KToID1AZTc8GgHHs3u/iVStSBDHBv+6xnOQ6Oj\n" \
-"ggEgMIIBHDAfBgNVHSMEGDAWgBQ64QmG1M8ZwpZ2dEl23OA1xmNjmjAdBgNVHQ4E\n" \
-"FgQU0SLaTFnxS18mOKqd1u7rDcP7qWEwDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB\n" \
-"/wQFMAMBAf8wHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMBEGA1UdIAQK\n" \
-"MAgwBgYEVR0gADBQBgNVHR8ESTBHMEWgQ6BBhj9odHRwOi8vY3JsLnVzZXJ0cnVz\n" \
-"dC5jb20vVVNFUlRydXN0RUNDQ2VydGlmaWNhdGlvbkF1dGhvcml0eS5jcmwwNQYI\n" \
-"KwYBBQUHAQEEKTAnMCUGCCsGAQUFBzABhhlodHRwOi8vb2NzcC51c2VydHJ1c3Qu\n" \
-"Y29tMAoGCCqGSM49BAMDA2kAMGYCMQCMCyBit99vX2ba6xEkDe+YO7vC0twjbkv9\n" \
-"PKpqGGuZ61JZryjFsp+DFpEclCVy4noCMQCwvZDXD/m2Ko1HA5Bkmz7YQOFAiNDD\n" \
-"49IWa2wdT7R3DtODaSXH/BiXv8fwB9su4tU=\n" \
-"-----END CERTIFICATE-----\n" \
-"";
+// Note: GitHub Root CA Certificate removed - now using Mozilla certificate bundle
+// via ESP32CertBundle library for automatic SSL validation of all public servers
 
 // ===== Serial Number Generation =====
 // Generates a unique serial number from eFuse MAC and stores it in NVS
@@ -244,6 +225,12 @@ void setup() {
     DebugOut.println("SPIFFS initialized");
   }
 
+  // Check if device just rebooted after successful OTA update
+  justUpdated = checkAndClearOTASuccessFlag(previousFirmwareVersion);
+  if (justUpdated) {
+    DebugOut.printf("🎉 Firmware was just updated from %s to %s\n", previousFirmwareVersion.c_str(), firmwareVer);
+  }
+
   // Load persisted settings (e.g., auto-update preference)
   if (!loadSettings()) {
     DebugOut.println("No settings file found, using defaults");
@@ -259,10 +246,8 @@ void setup() {
     DebugOut.println("No MQTT settings found, using defaults");
   }
   
-  // Load custom certificate (if saved)
-  if (!loadCertificate()) {
-    DebugOut.println("Using default certificate");
-  }
+  // Note: Certificate loading removed - now using Mozilla certificate bundle
+  // via ESP32CertBundle library for automatic SSL validation
   
   // Define server routes here (before WiFi setup)
   server.on("/", HTTP_GET, []() {
@@ -287,9 +272,7 @@ void setup() {
   server.on("/api/smartsensing", HTTP_POST, handleSmartSensingUpdate);
   server.on("/api/mqtt", HTTP_GET, handleMqttGet);
   server.on("/api/mqtt", HTTP_POST, handleMqttUpdate);
-  server.on("/api/certificate", HTTP_GET, handleCertificateGet);
-  server.on("/api/certificate", HTTP_POST, handleCertificateUpdate);
-  server.on("/api/certificate/reset", HTTP_POST, handleCertificateReset);
+  // Note: Certificate API routes removed - now using Mozilla certificate bundle
   
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
@@ -423,6 +406,7 @@ void loop() {
       
       if (performOTAUpdate(cachedFirmwareUrl)) {
         DebugOut.println("OTA update successful! Rebooting...");
+        saveOTASuccessFlag(firmwareVer);  // Save current version as "previous" before reboot
         delay(2000);
         ESP.restart();
       } else {

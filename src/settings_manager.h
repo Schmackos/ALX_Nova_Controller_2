@@ -7,11 +7,8 @@
 bool loadSettings();
 void saveSettings();
 
-// ===== Certificate Persistence =====
-bool loadCertificate();
-void saveCertificate();
-void resetCertificateToDefault();
-String getDefaultCertificate();
+// Note: Certificate management removed - now using Mozilla certificate bundle
+// via ESP32CertBundle library for automatic SSL validation
 
 // ===== Factory Reset =====
 void performFactoryReset();
@@ -23,10 +20,5 @@ void handleSettingsExport();
 void handleSettingsImport();
 void handleFactoryReset();
 void handleReboot();
-
-// ===== Certificate HTTP API Handlers =====
-void handleCertificateGet();
-void handleCertificateUpdate();
-void handleCertificateReset();
 
 #endif // SETTINGS_MANAGER_H

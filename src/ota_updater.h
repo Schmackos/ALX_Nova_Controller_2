@@ -15,6 +15,11 @@ void broadcastUpdateStatus();
 // ===== NTP Time Synchronization =====
 void syncTimeWithNTP();
 
+// ===== OTA Success Flag =====
+void saveOTASuccessFlag(const String& previousVersion);
+bool checkAndClearOTASuccessFlag(String& previousVersion);
+void broadcastJustUpdated();
+
 // ===== OTA HTTP API Handlers =====
 void handleCheckUpdate();
 void handleStartUpdate();

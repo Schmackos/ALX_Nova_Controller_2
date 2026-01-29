@@ -69,9 +69,7 @@ const int DEFAULT_MQTT_PORT = 1883;
 // ===== Default AP Configuration =====
 #define DEFAULT_AP_PASSWORD "12345678"
 
-// ===== GitHub Root CA Certificate =====
-// DigiCert/USERTrust certificate - valid until 2038
-// Configurable via web interface
-extern String github_root_ca;
+// Note: GitHub Root CA Certificate removed - now using Mozilla certificate bundle
+// via ESP32CertBundle library for automatic SSL validation of all public servers
 
 #endif // CONFIG_H

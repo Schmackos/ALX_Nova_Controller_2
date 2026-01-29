@@ -3,6 +3,7 @@
 #include "app_state.h"
 #include "wifi_manager.h"
 #include "smart_sensing.h"
+#include "ota_updater.h"
 #include "debug_serial.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -48,6 +49,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         sendBlinkingState();
         sendWiFiStatus();
         sendSmartSensingStateInternal();  // Force send for new client
+        
+        // If device just updated, notify the client
+        if (justUpdated) {
+          broadcastJustUpdated();
+        }
       }
       break;
       

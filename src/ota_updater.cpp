@@ -9,6 +9,87 @@
 #include <Update.h>
 #include <mbedtls/md.h>
 #include <time.h>
+#include <Preferences.h>
+
+// Root CA certificates for GitHub (api.github.com, github.com, and objects.githubusercontent.com)
+// GitHub migrated to Sectigo/USERTrust in March 2024
+// Includes both USERTrust (ECC and RSA) for github.com/api.github.com 
+// and DigiCert Global Root G2 for objects.githubusercontent.com CDN
+// Valid until 2030-2038
+static const char* GITHUB_ROOT_CA = \
+// USERTrust ECC Certification Authority (for api.github.com and github.com) - valid until 2038
+"-----BEGIN CERTIFICATE-----\n" \
+"MIICjzCCAhWgAwIBAgIQXIuZxVqUxdJxVt7NiYDMJjAKBggqhkjOPQQDAzCBiDEL\n" \
+"MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl\n" \
+"eSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMT\n" \
+"JVVTRVJUcnVzdCBFQ0MgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTAwMjAx\n" \
+"MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjCBiDELMAkGA1UEBhMCVVMxEzARBgNVBAgT\n" \
+"Ck5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNleSBDaXR5MR4wHAYDVQQKExVUaGUg\n" \
+"VVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMTJVVTRVJUcnVzdCBFQ0MgQ2VydGlm\n" \
+"aWNhdGlvbiBBdXRob3JpdHkwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQarFRaqflo\n" \
+"I+d61SRvU8Za2EurxtW20eZzca7dnNYMYf3boIkDuAUU7FfO7l0/4iGzzvfUinng\n" \
+"o4N+LZfQYcTxmdwlkWOrfzCjtHDix6EznPO/LlxTsV+zfTJ/ijTjeXmjQjBAMB0G\n" \
+"A1UdDgQWBBQ64QmG1M8ZwpZ2dEl23OA1xmNjmjAOBgNVHQ8BAf8EBAMCAQYwDwYD\n" \
+"VR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAwNoADBlAjA2Z6EWCNzklwBBHU6+4WMB\n" \
+"zzuqQhFkoJ2UOQIReVx7Hfpkue4WQrO/isIJxOzksU0CMQDpKmFHjFJKS04YcPbW\n" \
+"RNZu9YO6bVi9JNlWSOrvxKJGgYhqOkbRqZtNyWHa0V1Xahg=\n" \
+"-----END CERTIFICATE-----\n" \
+// USERTrust RSA Certification Authority (for github.com RSA certificates) - valid until 2038
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIFgTCCBGmgAwIBAgIQOXJEOvkit1HX02wQ3TE1lTANBgkqhkiG9w0BAQwFADB7\n" \
+"MQswCQYDVQQGEwJHQjEbMBkGA1UECAwSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYD\n" \
+"VQQHDAdTYWxmb3JkMRowGAYDVQQKDBFDb21vZG8gQ0EgTGltaXRlZDEhMB8GA1UE\n" \
+"AwwYQUFBIENlcnRpZmljYXRlIFNlcnZpY2VzMB4XDTE5MDMxMjAwMDAwMFoXDTI4\n" \
+"MTIzMTIzNTk1OVowgYgxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpOZXcgSmVyc2V5\n" \
+"MRQwEgYDVQQHEwtKZXJzZXkgQ2l0eTEeMBwGA1UEChMVVGhlIFVTRVJUUlVTVCBO\n" \
+"ZXR3b3JrMS4wLAYDVQQDEyVVU0VSVHJ1c3QgUlNBIENlcnRpZmljYXRpb24gQXV0\n" \
+"aG9yaXR5MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAgBJlFzYOw9sI\n" \
+"s9CsVw127c0n00ytUINh4qogTQktZAnczomfzD2p7PbPwdzx07HWezcoEStH2jnG\n" \
+"vDoZtF+mvX2do2NCtnbyqTsrkfjib9DsFiCQCT7i6HTJGLSR1GJk23+jBvGIGGqQ\n" \
+"Ijy8/hPwhxR79uQfjtTkUcYRZ0YIUcuGFFQ/vDP+fmyc/xadGL1RjjWmp2bIcmfb\n" \
+"IWax1Jt4A8BQOujM8Ny8nkz+rwWWNR9XWrf/zvk9tyy29lTdyOcSOk2uTIq3XJq0\n" \
+"tyA9yn8iNK5+O2hmAUTnAU5GU5szYPeUvlM3kHND8zLDU+/bqv50TmnHa4xgk97E\n" \
+"xwzf4TKuzJM7UXiVZ4vuPVb+DNBpDxsP8yUmazNt925H+nND5X4OpWaxKXwyhGNV\n" \
+"icQNwZNUMBkTrNN9N6frXTpsNVzbQdcS2qlJC9/YgIoJk2KOtWbPJYjNhLixP6Q5\n" \
+"D9kCnusSTJV882sFqV4Wg8y4Z+LoE53MW4LTTLPtW//e5XOsIzstAL81VXQJSdhJ\n" \
+"WBp/kjbmUZIO8yZ9HE0XvMnsQybQv0FfQKlERPSZ51eHnlAfV1SoPv10Yy+xUGUJ\n" \
+"5lhCLkMaTLTwJUdZ+gQek9QmRkpQgbLevni3/GcV4clXhB4PY9bpYrrWX1Uu6lzG\n" \
+"KAgEJTm4Diup8kyXHAc/DVL17e8vgg8CAwEAAaOB8jCB7zAfBgNVHSMEGDAWgBSg\n" \
+"EQojPpbxB+zirynvgqV/0DCktDAdBgNVHQ4EFgQUU3m/WqorSs9UgOHYm8Cd8rID\n" \
+"ZsswDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB/wQFMAMBAf8wEQYDVR0gBAowCDAG\n" \
+"BgRVHSAAMEMGA1UdHwQ8MDowOKA2oDSGMmh0dHA6Ly9jcmwuY29tb2RvY2EuY29t\n" \
+"L0FBQUNlcnRpZmljYXRlU2VydmljZXMuY3JsMDQGCCsGAQUFBwEBBCgwJjAkBggr\n" \
+"BgEFBQcwAYYYaHR0cDovL29jc3AuY29tb2RvY2EuY29tMA0GCSqGSIb3DQEBDAUA\n" \
+"A4IBAQAYh1HcdCE9nIrgJ7cz0C7M7PDmy14R3iJvm3WOnnL+5Nb+qh+cli3vA0p+\n" \
+"rvSNb3I8QzvAP+u431yqqcau8vzY7qN7Q/aGNnwU4M309z/+3ri0ivCRlv79Q2R+\n" \
+"/czSAaF9ffgZGclCKxO/WIu6pKJmBHaIkU4MiRTOok3JMrO66BQavHHxW/BBC5gA\n" \
+"CiIDEOUMsfnNkjcZ7Tvx5Dq2+UUTJnWvu6rvP3t3O9LEApE9GQDTF1w52z97GA1F\n" \
+"zZOFli9d31kWTz9RvdVFGD/tSo7oBmF0Ixa1DVBzJ0RHfxBdiSprhTEUxOipakyA\n" \
+"vGp4z7h/jnZymQyd/teRCBaho1+V\n" \
+"-----END CERTIFICATE-----\n" \
+// DigiCert Global Root G2 (for objects.githubusercontent.com - GitHub releases CDN) - valid until 2038
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh\n" \
+"MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n" \
+"d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\n" \
+"MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT\n" \
+"MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n" \
+"b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG\n" \
+"9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI\n" \
+"2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx\n" \
+"1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ\n" \
+"q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz\n" \
+"tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ\n" \
+"vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP\n" \
+"BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV\n" \
+"5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY\n" \
+"1Yl9PMCcit0BnuQ/8Kt+cTxZp2nh5w1TBVB0El8eTKt/IfVt8+yS2TY+Hp1VxS1x\n" \
+"mfo/7SfE85AmUptT/PCTTp/ShpMrnJN/QvmKp5h/Db0OuCFq5g0rLM3MnvsU2rFy\n" \
+"dHWqZdMI7TaWvRw0ng8NDYMBUu0F0R6xz1BqeOlF+v6PvMRyhPEZ7D6V3AVMuX4a\n" \
+"IjEcnAcLJlCH4nRmFBsKgyJhSz1cMq6cIsPE3ha6uPCTsjHRM63UPk5ZLkIQ5SeE\n" \
+"MppdNrYpMYL7I5lGCNvAk/b7QBQg9T3VwW8E4L8PqlKjFz5E8k4sFTbLCS7Q/l6a\n" \
+"o5c=\n" \
+"-----END CERTIFICATE-----\n";
 
 // External functions from main.cpp that OTA needs to call
 extern int compareVersions(const String& v1, const String& v2);
@@ -99,6 +180,7 @@ void handleStartUpdate() {
   if (updateSuccess) {
     otaStatus = "complete";
     DebugOut.println("OTA update successful! Rebooting...");
+    saveOTASuccessFlag(firmwareVer);  // Save current version as "previous" before reboot
     delay(2000);
     ESP.restart();
   } else {
@@ -145,7 +227,7 @@ void handleGetReleaseNotes() {
   WiFiClientSecure client;
   
   if (enableCertValidation) {
-    client.setCACert(github_root_ca.c_str());
+    client.setCACert(GITHUB_ROOT_CA);  // Use bundled GitHub root certificates
   } else {
     client.setInsecure();  // Skip certificate validation
   }
@@ -287,7 +369,7 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   
   if (enableCertValidation) {
     DebugOut.println("🔐 Certificate validation: ENABLED");
-    client.setCACert(github_root_ca.c_str());
+    client.setCACert(GITHUB_ROOT_CA);  // Use bundled GitHub root certificates
   } else {
     DebugOut.println("⚠️  Certificate validation: DISABLED (insecure mode)");
     client.setInsecure();  // Skip certificate validation
@@ -449,7 +531,7 @@ bool performOTAUpdate(String firmwareUrl) {
   
   if (enableCertValidation) {
     DebugOut.println("🔐 Certificate validation: ENABLED");
-    client.setCACert(github_root_ca.c_str());
+    client.setCACert(GITHUB_ROOT_CA);  // Use bundled GitHub root certificates
   } else {
     DebugOut.println("⚠️  Certificate validation: DISABLED (insecure mode)");
     client.setInsecure();  // Skip certificate validation
@@ -657,4 +739,55 @@ bool performOTAUpdate(String firmwareUrl) {
     broadcastUpdateStatus();
     return false;
   }
+}
+
+// ===== OTA Success Flag Functions =====
+
+// Save flag indicating OTA was successful (called before reboot)
+void saveOTASuccessFlag(const String& previousVersion) {
+  Preferences prefs;
+  prefs.begin("ota", false);
+  prefs.putBool("justUpdated", true);
+  prefs.putString("prevVersion", previousVersion);
+  prefs.end();
+  DebugOut.printf("💾 Saved OTA success flag (previous version: %s)\n", previousVersion.c_str());
+}
+
+// Check if device just rebooted after successful OTA and clear the flag
+bool checkAndClearOTASuccessFlag(String& previousVersion) {
+  Preferences prefs;
+  prefs.begin("ota", false);
+  
+  bool wasJustUpdated = prefs.getBool("justUpdated", false);
+  if (wasJustUpdated) {
+    previousVersion = prefs.getString("prevVersion", "unknown");
+    // Clear the flag
+    prefs.putBool("justUpdated", false);
+    prefs.remove("prevVersion");
+    DebugOut.printf("✅ Device just updated from version %s\n", previousVersion.c_str());
+  }
+  
+  prefs.end();
+  return wasJustUpdated;
+}
+
+// Broadcast "just updated" message to all WebSocket clients
+void broadcastJustUpdated() {
+  if (!justUpdated) return;
+  
+  JsonDocument doc;
+  doc["type"] = "justUpdated";
+  doc["previousVersion"] = previousFirmwareVersion;
+  doc["currentVersion"] = firmwareVer;
+  doc["message"] = String("Firmware successfully updated from ") + previousFirmwareVersion + " to " + firmwareVer;
+  
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT(json);
+  
+  DebugOut.printf("📢 Broadcast: Firmware updated from %s to %s\n", previousFirmwareVersion.c_str(), firmwareVer);
+  
+  // Clear the flag after broadcasting
+  justUpdated = false;
+  previousFirmwareVersion = "";
 }

@@ -10,76 +10,8 @@
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 
-// ===== Default Certificate =====
-// DigiCert/USERTrust certificate - valid until 2038
-static const char* DEFAULT_GITHUB_ROOT_CA = \
-"-----BEGIN CERTIFICATE-----\n" \
-"MIIDRjCCAsugAwIBAgIQGp6v7G3o4ZtcGTFBto2Q3TAKBggqhkjOPQQDAzCBiDEL\n" \
-"MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl\n" \
-"eSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMT\n" \
-"JVVTRVJUcnVzdCBFQ0MgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMjEwMzIy\n" \
-"MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjBfMQswCQYDVQQGEwJHQjEYMBYGA1UEChMP\n" \
-"U2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1TZWN0aWdvIFB1YmxpYyBTZXJ2ZXIg\n" \
-"QXV0aGVudGljYXRpb24gUm9vdCBFNDYwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAR2\n" \
-"+pmpbiDt+dd34wc7qNs9Xzjoq1WmVk/WSOrsfy2qw7LFeeyZYX8QeccCWvkEN/U0\n" \
-"NSt3zn8gj1KjAIns1aeibVvjS5KToID1AZTc8GgHHs3u/iVStSBDHBv+6xnOQ6Oj\n" \
-"ggEgMIIBHDAfBgNVHSMEGDAWgBQ64QmG1M8ZwpZ2dEl23OA1xmNjmjAdBgNVHQ4E\n" \
-"FgQU0SLaTFnxS18mOKqd1u7rDcP7qWEwDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB\n" \
-"/wQFMAMBAf8wHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMBEGA1UdIAQK\n" \
-"MAgwBgYEVR0gADBQBgNVHR8ESTBHMEWgQ6BBhj9odHRwOi8vY3JsLnVzZXJ0cnVz\n" \
-"dC5jb20vVVNFUlRydXN0RUNDQ2VydGlmaWNhdGlvbkF1dGhvcml0eS5jcmwwNQYI\n" \
-"KwYBBQUHAQEEKTAnMCUGCCsGAQUFBzABhhlodHRwOi8vb2NzcC51c2VydHJ1c3Qu\n" \
-"Y29tMAoGCCqGSM49BAMDA2kAMGYCMQCMCyBit99vX2ba6xEkDe+YO7vC0twjbkv9\n" \
-"PKpqGGuZ61JZryjFsp+DFpEclCVy4noCMQCwvZDXD/m2Ko1HA5Bkmz7YQOFAiNDD\n" \
-"49IWa2wdT7R3DtODaSXH/BiXv8fwB9su4tU=\n" \
-"-----END CERTIFICATE-----\n";
-
-// ===== Certificate Persistence =====
-
-String getDefaultCertificate() {
-  return String(DEFAULT_GITHUB_ROOT_CA);
-}
-
-bool loadCertificate() {
-  File file = SPIFFS.open("/certificate.pem", "r");
-  if (!file) {
-    DebugOut.println("No custom certificate found, using default");
-    github_root_ca = getDefaultCertificate();
-    return false;
-  }
-  
-  github_root_ca = file.readString();
-  file.close();
-  
-  // Validate the certificate has proper format
-  if (!github_root_ca.startsWith("-----BEGIN CERTIFICATE-----") ||
-      !github_root_ca.endsWith("-----END CERTIFICATE-----\n")) {
-    DebugOut.println("Invalid certificate format, resetting to default");
-    github_root_ca = getDefaultCertificate();
-    return false;
-  }
-  
-  DebugOut.println("Custom certificate loaded from SPIFFS");
-  return true;
-}
-
-void saveCertificate() {
-  File file = SPIFFS.open("/certificate.pem", "w");
-  if (!file) {
-    DebugOut.println("Failed to open certificate file for writing");
-    return;
-  }
-  
-  file.print(github_root_ca);
-  file.close();
-  DebugOut.println("Certificate saved to SPIFFS");
-}
-
-void resetCertificateToDefault() {
-  github_root_ca = getDefaultCertificate();
-  SPIFFS.remove("/certificate.pem");
-  DebugOut.println("Certificate reset to default");
-}
+// Note: Certificate management removed - now using Mozilla certificate bundle
+// via ESP32CertBundle library for automatic SSL validation of all public servers
 
 // ===== Settings Persistence =====
 
@@ -294,12 +226,7 @@ void handleSettingsExport() {
   doc["mqtt"]["haDiscovery"] = mqttHADiscovery;
   // Note: Password is intentionally excluded from export for security
   
-  // SSL Certificate (include if custom)
-  bool isDefaultCert = (github_root_ca == getDefaultCertificate());
-  doc["certificate"]["isDefault"] = isDefaultCert;
-  if (!isDefaultCert) {
-    doc["certificate"]["pem"] = github_root_ca;
-  }
+  // Note: Certificate management removed - now using Mozilla certificate bundle
   
   // Generate timestamp
   time_t now = time(nullptr);
@@ -464,24 +391,7 @@ void handleSettingsImport() {
     saveMqttSettings();
   }
   
-  // Import certificate (if custom certificate was exported)
-  if (!doc["certificate"].isNull()) {
-    if (doc["certificate"]["isDefault"].is<bool>() && doc["certificate"]["isDefault"].as<bool>()) {
-      // Reset to default if the export indicates default
-      resetCertificateToDefault();
-      DebugOut.println("Certificate: reset to default");
-    } else if (doc["certificate"]["pem"].is<String>()) {
-      String certPem = doc["certificate"]["pem"].as<String>();
-      if (certPem.startsWith("-----BEGIN CERTIFICATE-----") &&
-          certPem.indexOf("-----END CERTIFICATE-----") > 0) {
-        github_root_ca = certPem;
-        saveCertificate();
-        DebugOut.println("Custom certificate imported");
-      } else {
-        DebugOut.println("Invalid certificate format in import, keeping current");
-      }
-    }
-  }
+  // Note: Certificate import removed - now using Mozilla certificate bundle
   
   DebugOut.println("All settings imported successfully!");
   
@@ -521,86 +431,7 @@ void handleReboot() {
   ESP.restart();
 }
 
-// ===== Certificate HTTP API Handlers =====
-
-void handleCertificateGet() {
-  JsonDocument doc;
-  doc["success"] = true;
-  doc["certificate"] = github_root_ca;
-  doc["isDefault"] = (github_root_ca == getDefaultCertificate());
-  
-  String json;
-  serializeJson(doc, json);
-  server.send(200, "application/json", json);
-}
-
-void handleCertificateUpdate() {
-  if (!server.hasArg("plain")) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"No data received\"}");
-    return;
-  }
-  
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, server.arg("plain"));
-  
-  if (error) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid JSON\"}");
-    return;
-  }
-  
-  if (!doc["certificate"].is<String>()) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"Missing certificate field\"}");
-    return;
-  }
-  
-  String newCert = doc["certificate"].as<String>();
-  
-  // Normalize line endings (convert \r\n to \n)
-  newCert.replace("\r\n", "\n");
-  newCert.replace("\r", "\n");
-  
-  // Ensure certificate ends with newline
-  if (!newCert.endsWith("\n")) {
-    newCert += "\n";
-  }
-  
-  // Basic validation
-  if (!newCert.startsWith("-----BEGIN CERTIFICATE-----")) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid certificate: must start with -----BEGIN CERTIFICATE-----\"}");
-    return;
-  }
-  
-  if (newCert.indexOf("-----END CERTIFICATE-----") < 0) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid certificate: must contain -----END CERTIFICATE-----\"}");
-    return;
-  }
-  
-  // Update the certificate
-  github_root_ca = newCert;
-  saveCertificate();
-  
-  DebugOut.println("Certificate updated via web interface");
-  
-  JsonDocument resp;
-  resp["success"] = true;
-  resp["message"] = "Certificate updated successfully";
-  resp["isDefault"] = false;
-  
-  String json;
-  serializeJson(resp, json);
-  server.send(200, "application/json", json);
-}
-
-void handleCertificateReset() {
-  resetCertificateToDefault();
-  
-  JsonDocument doc;
-  doc["success"] = true;
-  doc["message"] = "Certificate reset to default";
-  doc["certificate"] = github_root_ca;
-  doc["isDefault"] = true;
-  
-  String json;
-  serializeJson(doc, json);
-  server.send(200, "application/json", json);
-}
+// Note: Certificate HTTP API handlers removed - now using Mozilla certificate bundle
+// The enableCertValidation setting still works to toggle between:
+// - ENABLED: Uses Mozilla certificate bundle for validation
+// - DISABLED: Insecure mode (no certificate validation)
