@@ -14,4 +14,10 @@ void sendFactoryResetProgress(unsigned long secondsHeld, bool resetTriggered);
 void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered);
 void sendHardwareStats();
 
+// ===== CPU Utilization Tracking =====
+void initCpuUsageMonitoring();
+void updateCpuUsage();
+float getCpuUsageCore0();
+float getCpuUsageCore1();
+
 #endif // WEBSOCKET_HANDLER_H

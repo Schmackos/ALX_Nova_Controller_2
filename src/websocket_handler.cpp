@@ -7,6 +7,29 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
+#include "esp_freertos_hooks.h"
+
+// ===== CPU Utilization Tracking =====
+// Using FreeRTOS idle hooks to measure CPU usage
+static volatile uint32_t idleCounter0 = 0;
+static volatile uint32_t idleCounter1 = 0;
+static uint32_t lastIdleCount0 = 0;
+static uint32_t lastIdleCount1 = 0;
+static unsigned long lastCpuMeasureTime = 0;
+static float cpuUsageCore0 = 0.0;
+static float cpuUsageCore1 = 0.0;
+static bool cpuHooksInstalled = false;
+
+// Idle hook callbacks - called when core is idle
+static bool idleHookCore0() {
+  idleCounter0++;
+  return false; // Don't yield
+}
+
+static bool idleHookCore1() {
+  idleCounter1++;
+  return false;
+}
 
 // ===== WebSocket Event Handler =====
 
@@ -131,7 +154,80 @@ void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered) {
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
 
+// ===== CPU Utilization Functions =====
+
+void initCpuUsageMonitoring() {
+  if (!cpuHooksInstalled) {
+    // Register idle hooks for both cores
+    esp_register_freertos_idle_hook_for_cpu(idleHookCore0, 0);
+    esp_register_freertos_idle_hook_for_cpu(idleHookCore1, 1);
+    cpuHooksInstalled = true;
+    lastCpuMeasureTime = millis();
+  }
+}
+
+void updateCpuUsage() {
+  // Initialize hooks if not done yet
+  if (!cpuHooksInstalled) {
+    initCpuUsageMonitoring();
+    return;
+  }
+  
+  unsigned long currentTime = millis();
+  unsigned long elapsed = currentTime - lastCpuMeasureTime;
+  
+  // Only update every 500ms minimum for stable readings
+  if (elapsed < 500) {
+    return;
+  }
+  
+  // Calculate idle iterations since last measurement
+  uint32_t idleDelta0 = idleCounter0 - lastIdleCount0;
+  uint32_t idleDelta1 = idleCounter1 - lastIdleCount1;
+  
+  // Save current counts for next calculation
+  lastIdleCount0 = idleCounter0;
+  lastIdleCount1 = idleCounter1;
+  lastCpuMeasureTime = currentTime;
+  
+  // The maximum idle count represents 100% idle (0% CPU usage)
+  // We need to calibrate this - typically idle hook runs many times per ms when idle
+  // A good estimate is about 10000-50000 iterations per second when fully idle
+  // We'll use a dynamic max based on the highest count seen
+  static uint32_t maxIdlePerSecond0 = 100000;
+  static uint32_t maxIdlePerSecond1 = 100000;
+  
+  // Scale to per-second rate
+  float idlePerSecond0 = (float)idleDelta0 * 1000.0f / (float)elapsed;
+  float idlePerSecond1 = (float)idleDelta1 * 1000.0f / (float)elapsed;
+  
+  // Update max if we see higher (indicating lower CPU usage baseline)
+  if (idlePerSecond0 > maxIdlePerSecond0) maxIdlePerSecond0 = idlePerSecond0;
+  if (idlePerSecond1 > maxIdlePerSecond1) maxIdlePerSecond1 = idlePerSecond1;
+  
+  // Calculate CPU usage: 100% - (idle% of max)
+  cpuUsageCore0 = 100.0f - (idlePerSecond0 / maxIdlePerSecond0 * 100.0f);
+  cpuUsageCore1 = 100.0f - (idlePerSecond1 / maxIdlePerSecond1 * 100.0f);
+  
+  // Clamp values
+  if (cpuUsageCore0 < 0) cpuUsageCore0 = 0;
+  if (cpuUsageCore0 > 100) cpuUsageCore0 = 100;
+  if (cpuUsageCore1 < 0) cpuUsageCore1 = 0;
+  if (cpuUsageCore1 > 100) cpuUsageCore1 = 100;
+}
+
+float getCpuUsageCore0() {
+  return cpuUsageCore0;
+}
+
+float getCpuUsageCore1() {
+  return cpuUsageCore1;
+}
+
 void sendHardwareStats() {
+  // Update CPU usage before sending stats
+  updateCpuUsage();
+  
   JsonDocument doc;
   doc["type"] = "hardware_stats";
   
@@ -150,6 +246,11 @@ void sendHardwareStats() {
   doc["cpu"]["model"] = ESP.getChipModel();
   doc["cpu"]["revision"] = ESP.getChipRevision();
   doc["cpu"]["cores"] = ESP.getChipCores();
+  
+  // CPU Utilization per core
+  doc["cpu"]["usageCore0"] = cpuUsageCore0;
+  doc["cpu"]["usageCore1"] = cpuUsageCore1;
+  doc["cpu"]["usageTotal"] = (cpuUsageCore0 + cpuUsageCore1) / 2.0;
   
   // Temperature - ESP32-S3 internal sensor
   // temperatureRead() returns temperature in Celsius

@@ -759,10 +759,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             transition: width 0.3s ease;
         }
         .stat-bar-fill.memory { background: #2196F3; }
+        .stat-bar-fill.cpu { background: #ff9800; }
         .stat-bar-fill.storage { background: #4CAF50; }
         .stat-bar-fill.wifi { background: #9c27b0; }
         .stat-bar-fill.warning { background: #ff9800; }
         .stat-bar-fill.danger { background: #f44336; }
+        .cpu-core-label {
+            font-size: 0.8em;
+            opacity: 0.6;
+            margin-right: 5px;
+        }
+        .cpu-usage-value {
+            min-width: 45px;
+            text-align: right;
+        }
         .uptime-bar {
             text-align: center;
             padding: 10px;
@@ -1306,12 +1316,26 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <span class="stat-value" id="statCpuFreq">--</span>
                         </div>
                         <div class="stat-row">
-                            <span class="stat-label">Cores</span>
-                            <span class="stat-value" id="statCpuCores">--</span>
-                        </div>
-                        <div class="stat-row">
                             <span class="stat-label">Temperature</span>
                             <span class="stat-value" id="statCpuTemp">--</span>
+                        </div>
+                        <div class="stat-row" style="margin-top: 10px;">
+                            <span class="stat-label"><span class="cpu-core-label">Core 0</span>Usage</span>
+                            <span class="stat-value cpu-usage-value" id="statCpuCore0">--%</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill cpu" id="statCpuCore0Bar" style="width: 0%;"></div>
+                        </div>
+                        <div class="stat-row" style="margin-top: 8px;">
+                            <span class="stat-label"><span class="cpu-core-label">Core 1</span>Usage</span>
+                            <span class="stat-value cpu-usage-value" id="statCpuCore1">--%</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill cpu" id="statCpuCore1Bar" style="width: 0%;"></div>
+                        </div>
+                        <div class="stat-row" style="margin-top: 8px;">
+                            <span class="stat-label">Total</span>
+                            <span class="stat-value cpu-usage-value" id="statCpuTotal">--%</span>
                         </div>
                     </div>
                     
@@ -3199,6 +3223,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             return { label: 'Poor', class: 'poor', percent: Math.max(20, 100 + rssi) };
         }
         
+        function updateBarColor(barElement, percentage, baseClass) {
+            barElement.className = 'stat-bar-fill ' + baseClass;
+            if (percentage > 80) barElement.classList.add('warning');
+            if (percentage > 90) barElement.classList.replace('warning', 'danger');
+        }
+        
         function updateHardwareStats(data) {
             // Memory stats
             if (data.memory) {
@@ -3230,13 +3260,33 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (data.cpu) {
                 document.getElementById('statCpuModel').textContent = data.cpu.model || '--';
                 document.getElementById('statCpuFreq').textContent = data.cpu.freqMHz + ' MHz';
-                document.getElementById('statCpuCores').textContent = data.cpu.cores;
                 
                 // Temperature (might be NaN if not supported)
                 if (data.cpu.temperature && !isNaN(data.cpu.temperature) && data.cpu.temperature > 0) {
                     document.getElementById('statCpuTemp').textContent = data.cpu.temperature.toFixed(1) + ' °C';
                 } else {
                     document.getElementById('statCpuTemp').textContent = 'N/A';
+                }
+                
+                // CPU Usage per core
+                if (data.cpu.usageCore0 !== undefined) {
+                    const core0Usage = data.cpu.usageCore0.toFixed(1);
+                    document.getElementById('statCpuCore0').textContent = core0Usage + '%';
+                    const core0Bar = document.getElementById('statCpuCore0Bar');
+                    core0Bar.style.width = core0Usage + '%';
+                    updateBarColor(core0Bar, data.cpu.usageCore0, 'cpu');
+                }
+                
+                if (data.cpu.usageCore1 !== undefined) {
+                    const core1Usage = data.cpu.usageCore1.toFixed(1);
+                    document.getElementById('statCpuCore1').textContent = core1Usage + '%';
+                    const core1Bar = document.getElementById('statCpuCore1Bar');
+                    core1Bar.style.width = core1Usage + '%';
+                    updateBarColor(core1Bar, data.cpu.usageCore1, 'cpu');
+                }
+                
+                if (data.cpu.usageTotal !== undefined) {
+                    document.getElementById('statCpuTotal').textContent = data.cpu.usageTotal.toFixed(1) + '%';
                 }
             }
             

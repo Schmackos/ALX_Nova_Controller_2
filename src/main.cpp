@@ -291,6 +291,9 @@ void setup() {
   server.on("/api/certificate", HTTP_POST, handleCertificateUpdate);
   server.on("/api/certificate/reset", HTTP_POST, handleCertificateReset);
   
+  // Initialize CPU usage monitoring
+  initCpuUsageMonitoring();
+  
   // Try to load WiFi credentials from storage
   if (loadWiFiCredentials(wifiSSID, wifiPassword) && wifiSSID.length() > 0) {
     DebugOut.println("Loaded credentials from storage");
