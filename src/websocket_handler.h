@@ -12,5 +12,6 @@ void sendLEDState();
 void sendBlinkingState();
 void sendFactoryResetProgress(unsigned long secondsHeld, bool resetTriggered);
 void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered);
+void sendHardwareStats();
 
 #endif // WEBSOCKET_HANDLER_H

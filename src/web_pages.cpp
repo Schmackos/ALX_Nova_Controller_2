@@ -656,6 +656,136 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .debug-status-indicator.paused {
             background: #ff9800;
         }
+        /* Hardware Stats Panel */
+        .hardware-stats-section {
+            margin-bottom: 20px;
+        }
+        .hardware-stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .hardware-stats-header h3 {
+            margin: 0;
+            color: #9c27b0;
+            font-size: 1.2em;
+        }
+        .refresh-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        .refresh-selector select {
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.3);
+            color: inherit;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+        .hardware-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        @media (max-width: 600px) {
+            .hardware-stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .stats-card {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #888;
+        }
+        .stats-card.memory {
+            border-left-color: #2196F3;
+        }
+        .stats-card.cpu {
+            border-left-color: #ff9800;
+        }
+        .stats-card.storage {
+            border-left-color: #4CAF50;
+        }
+        .stats-card.wifi {
+            border-left-color: #9c27b0;
+        }
+        .stats-card h4 {
+            margin: 0 0 12px 0;
+            font-size: 0.95em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.8;
+        }
+        .stats-card.memory h4 { color: #2196F3; }
+        .stats-card.cpu h4 { color: #ff9800; }
+        .stats-card.storage h4 { color: #4CAF50; }
+        .stats-card.wifi h4 { color: #9c27b0; }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        .stat-row:last-child {
+            margin-bottom: 0;
+        }
+        .stat-label {
+            opacity: 0.7;
+        }
+        .stat-value {
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        .stat-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        .stat-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        .stat-bar-fill.memory { background: #2196F3; }
+        .stat-bar-fill.storage { background: #4CAF50; }
+        .stat-bar-fill.wifi { background: #9c27b0; }
+        .stat-bar-fill.warning { background: #ff9800; }
+        .stat-bar-fill.danger { background: #f44336; }
+        .uptime-bar {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1em;
+        }
+        .uptime-label {
+            opacity: 0.7;
+            margin-right: 10px;
+        }
+        .signal-quality {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            margin-left: 5px;
+        }
+        .signal-quality.excellent { background: #4CAF50; color: white; }
+        .signal-quality.good { background: #8BC34A; color: white; }
+        .signal-quality.fair { background: #ff9800; color: white; }
+        .signal-quality.poor { background: #f44336; color: white; }
         .device-control-section {
             margin-bottom: 30px;
             padding: 30px;
@@ -1123,6 +1253,123 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         <!-- Debugging Section -->
         <div class="debug-section">
             <h2>🔧 Debugging</h2>
+            
+            <!-- Hardware Stats Panel -->
+            <div class="hardware-stats-section">
+                <div class="hardware-stats-header">
+                    <h3>📊 Hardware Utilization</h3>
+                    <div class="refresh-selector">
+                        <label for="statsRefreshRate">Refresh:</label>
+                        <select id="statsRefreshRate" onchange="changeStatsRefreshRate()">
+                            <option value="1000">1s</option>
+                            <option value="3000">3s</option>
+                            <option value="5000" selected>5s</option>
+                            <option value="10000">10s</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="hardware-stats-grid">
+                    <!-- Memory Card -->
+                    <div class="stats-card memory">
+                        <h4>Memory</h4>
+                        <div class="stat-row">
+                            <span class="stat-label">Heap</span>
+                            <span class="stat-value" id="statHeapUsed">--</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill memory" id="statHeapBar" style="width: 0%;"></div>
+                        </div>
+                        <div class="stat-row" style="margin-top: 8px;">
+                            <span class="stat-label">Min Free</span>
+                            <span class="stat-value" id="statHeapMinFree">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Max Block</span>
+                            <span class="stat-value" id="statHeapMaxBlock">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">PSRAM</span>
+                            <span class="stat-value" id="statPsram">--</span>
+                        </div>
+                    </div>
+                    
+                    <!-- CPU Card -->
+                    <div class="stats-card cpu">
+                        <h4>CPU</h4>
+                        <div class="stat-row">
+                            <span class="stat-label">Model</span>
+                            <span class="stat-value" id="statCpuModel">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Frequency</span>
+                            <span class="stat-value" id="statCpuFreq">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Cores</span>
+                            <span class="stat-value" id="statCpuCores">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Temperature</span>
+                            <span class="stat-value" id="statCpuTemp">--</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Storage Card -->
+                    <div class="stats-card storage">
+                        <h4>Storage</h4>
+                        <div class="stat-row">
+                            <span class="stat-label">Flash Size</span>
+                            <span class="stat-value" id="statFlashSize">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Sketch Size</span>
+                            <span class="stat-value" id="statSketchSize">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">OTA Free</span>
+                            <span class="stat-value" id="statOtaFree">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">SPIFFS</span>
+                            <span class="stat-value" id="statSpiffs">--</span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill storage" id="statSpiffsBar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- WiFi Card -->
+                    <div class="stats-card wifi">
+                        <h4>WiFi</h4>
+                        <div class="stat-row">
+                            <span class="stat-label">RSSI</span>
+                            <span class="stat-value">
+                                <span id="statWifiRssi">--</span>
+                                <span class="signal-quality" id="statWifiQuality">--</span>
+                            </span>
+                        </div>
+                        <div class="stat-bar">
+                            <div class="stat-bar-fill wifi" id="statWifiBar" style="width: 0%;"></div>
+                        </div>
+                        <div class="stat-row" style="margin-top: 8px;">
+                            <span class="stat-label">Channel</span>
+                            <span class="stat-value" id="statWifiChannel">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">AP Clients</span>
+                            <span class="stat-value" id="statApClients">--</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Uptime Bar -->
+                <div class="uptime-bar">
+                    <span class="uptime-label">UPTIME:</span>
+                    <span id="statUptime">--</span>
+                </div>
+            </div>
+            
             <div class="debug-info">
                 Real-time terminal output from the ESP32. Messages are streamed via WebSocket when connected.
             </div>
@@ -1249,6 +1496,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     handlePhysicalRebootProgress(data);
                 } else if (data.type === 'debugLog') {
                     appendDebugLog(data.timestamp, data.message);
+                } else if (data.type === 'hardware_stats') {
+                    updateHardwareStats(data);
                 }
             };
 
@@ -2877,6 +3126,168 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 console.scrollTop = console.scrollHeight;
             }
         }
+        
+        // ===== Hardware Stats Functions =====
+        let statsRefreshInterval = null;
+        let statsRefreshRate = 5000; // Default 5 seconds
+        
+        function initHardwareStats() {
+            // Load saved refresh rate from localStorage
+            const savedRate = localStorage.getItem('statsRefreshRate');
+            if (savedRate) {
+                statsRefreshRate = parseInt(savedRate);
+                document.getElementById('statsRefreshRate').value = statsRefreshRate;
+            }
+            
+            // Start requesting stats
+            startStatsPolling();
+        }
+        
+        function startStatsPolling() {
+            // Clear existing interval if any
+            if (statsRefreshInterval) {
+                clearInterval(statsRefreshInterval);
+            }
+            
+            // Request stats immediately
+            requestHardwareStats();
+            
+            // Set up periodic polling
+            statsRefreshInterval = setInterval(requestHardwareStats, statsRefreshRate);
+        }
+        
+        function requestHardwareStats() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'getHardwareStats' }));
+            }
+        }
+        
+        function changeStatsRefreshRate() {
+            const select = document.getElementById('statsRefreshRate');
+            statsRefreshRate = parseInt(select.value);
+            localStorage.setItem('statsRefreshRate', statsRefreshRate);
+            startStatsPolling();
+        }
+        
+        function formatBytes(bytes, decimals = 1) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
+        }
+        
+        function formatUptime(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            let result = '';
+            if (days > 0) result += days + 'd ';
+            if (hours > 0 || days > 0) result += hours + 'h ';
+            if (minutes > 0 || hours > 0 || days > 0) result += minutes + 'm ';
+            result += secs + 's';
+            return result;
+        }
+        
+        function getRssiQuality(rssi) {
+            if (rssi >= -50) return { label: 'Excellent', class: 'excellent', percent: 100 };
+            if (rssi >= -60) return { label: 'Good', class: 'good', percent: 80 };
+            if (rssi >= -70) return { label: 'Fair', class: 'fair', percent: 60 };
+            return { label: 'Poor', class: 'poor', percent: Math.max(20, 100 + rssi) };
+        }
+        
+        function updateHardwareStats(data) {
+            // Memory stats
+            if (data.memory) {
+                const heapUsed = data.memory.heapTotal - data.memory.heapFree;
+                const heapPercent = Math.round((heapUsed / data.memory.heapTotal) * 100);
+                
+                document.getElementById('statHeapUsed').textContent = 
+                    formatBytes(data.memory.heapFree) + ' / ' + formatBytes(data.memory.heapTotal);
+                
+                const heapBar = document.getElementById('statHeapBar');
+                heapBar.style.width = heapPercent + '%';
+                heapBar.className = 'stat-bar-fill memory';
+                if (heapPercent > 80) heapBar.classList.add('warning');
+                if (heapPercent > 90) heapBar.classList.replace('warning', 'danger');
+                
+                document.getElementById('statHeapMinFree').textContent = formatBytes(data.memory.heapMinFree);
+                document.getElementById('statHeapMaxBlock').textContent = formatBytes(data.memory.heapMaxBlock);
+                
+                // PSRAM
+                if (data.memory.psramTotal > 0) {
+                    document.getElementById('statPsram').textContent = 
+                        formatBytes(data.memory.psramFree) + ' / ' + formatBytes(data.memory.psramTotal);
+                } else {
+                    document.getElementById('statPsram').textContent = 'N/A';
+                }
+            }
+            
+            // CPU stats
+            if (data.cpu) {
+                document.getElementById('statCpuModel').textContent = data.cpu.model || '--';
+                document.getElementById('statCpuFreq').textContent = data.cpu.freqMHz + ' MHz';
+                document.getElementById('statCpuCores').textContent = data.cpu.cores;
+                
+                // Temperature (might be NaN if not supported)
+                if (data.cpu.temperature && !isNaN(data.cpu.temperature) && data.cpu.temperature > 0) {
+                    document.getElementById('statCpuTemp').textContent = data.cpu.temperature.toFixed(1) + ' °C';
+                } else {
+                    document.getElementById('statCpuTemp').textContent = 'N/A';
+                }
+            }
+            
+            // Storage stats
+            if (data.storage) {
+                document.getElementById('statFlashSize').textContent = formatBytes(data.storage.flashSize);
+                document.getElementById('statSketchSize').textContent = formatBytes(data.storage.sketchSize);
+                document.getElementById('statOtaFree').textContent = formatBytes(data.storage.sketchFree);
+                
+                if (data.storage.spiffsTotal > 0) {
+                    const spiffsPercent = Math.round((data.storage.spiffsUsed / data.storage.spiffsTotal) * 100);
+                    document.getElementById('statSpiffs').textContent = 
+                        formatBytes(data.storage.spiffsUsed) + ' / ' + formatBytes(data.storage.spiffsTotal);
+                    
+                    const spiffsBar = document.getElementById('statSpiffsBar');
+                    spiffsBar.style.width = spiffsPercent + '%';
+                    spiffsBar.className = 'stat-bar-fill storage';
+                    if (spiffsPercent > 80) spiffsBar.classList.add('warning');
+                    if (spiffsPercent > 90) spiffsBar.classList.replace('warning', 'danger');
+                } else {
+                    document.getElementById('statSpiffs').textContent = 'N/A';
+                    document.getElementById('statSpiffsBar').style.width = '0%';
+                }
+            }
+            
+            // WiFi stats
+            if (data.wifi) {
+                const rssi = data.wifi.rssi;
+                document.getElementById('statWifiRssi').textContent = rssi + ' dBm';
+                
+                const quality = getRssiQuality(rssi);
+                const qualityEl = document.getElementById('statWifiQuality');
+                qualityEl.textContent = quality.label;
+                qualityEl.className = 'signal-quality ' + quality.class;
+                
+                document.getElementById('statWifiBar').style.width = quality.percent + '%';
+                document.getElementById('statWifiChannel').textContent = data.wifi.channel || '--';
+                document.getElementById('statApClients').textContent = data.wifi.apClients;
+            }
+            
+            // Uptime
+            if (data.uptime !== undefined) {
+                document.getElementById('statUptime').textContent = formatUptime(data.uptime);
+            }
+        }
+        
+        // Initialize hardware stats when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Delay slightly to ensure WebSocket is ready
+            setTimeout(initHardwareStats, 1000);
+        });
         
         function clearDebugConsole() {
             const console = document.getElementById('debugConsole');

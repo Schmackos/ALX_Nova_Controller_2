@@ -6,6 +6,7 @@
 #include "debug_serial.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <SPIFFS.h>
 
 // ===== WebSocket Event Handler =====
 
@@ -74,6 +75,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
           
           sendWiFiStatus();
+        } else if (doc["type"] == "getHardwareStats") {
+          // Client requesting hardware stats
+          sendHardwareStats();
         }
       }
       break;
@@ -122,6 +126,54 @@ void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered) {
   doc["secondsRequired"] = BTN_VERY_LONG_PRESS_MIN / 1000;
   doc["rebootTriggered"] = rebootTriggered;
   doc["progress"] = (secondsHeld * 100) / (BTN_VERY_LONG_PRESS_MIN / 1000);
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+void sendHardwareStats() {
+  JsonDocument doc;
+  doc["type"] = "hardware_stats";
+  
+  // Memory - Internal Heap
+  doc["memory"]["heapTotal"] = ESP.getHeapSize();
+  doc["memory"]["heapFree"] = ESP.getFreeHeap();
+  doc["memory"]["heapMinFree"] = ESP.getMinFreeHeap();
+  doc["memory"]["heapMaxBlock"] = ESP.getMaxAllocHeap();
+  
+  // Memory - PSRAM (external, may not be available)
+  doc["memory"]["psramTotal"] = ESP.getPsramSize();
+  doc["memory"]["psramFree"] = ESP.getFreePsram();
+  
+  // CPU Information
+  doc["cpu"]["freqMHz"] = ESP.getCpuFreqMHz();
+  doc["cpu"]["model"] = ESP.getChipModel();
+  doc["cpu"]["revision"] = ESP.getChipRevision();
+  doc["cpu"]["cores"] = ESP.getChipCores();
+  
+  // Temperature - ESP32-S3 internal sensor
+  // temperatureRead() returns temperature in Celsius
+  doc["cpu"]["temperature"] = temperatureRead();
+  
+  // Storage - Flash
+  doc["storage"]["flashSize"] = ESP.getFlashChipSize();
+  doc["storage"]["sketchSize"] = ESP.getSketchSize();
+  doc["storage"]["sketchFree"] = ESP.getFreeSketchSpace();
+  
+  // Storage - SPIFFS
+  doc["storage"]["spiffsTotal"] = SPIFFS.totalBytes();
+  doc["storage"]["spiffsUsed"] = SPIFFS.usedBytes();
+  
+  // WiFi Information
+  doc["wifi"]["rssi"] = WiFi.RSSI();
+  doc["wifi"]["channel"] = WiFi.channel();
+  doc["wifi"]["apClients"] = WiFi.softAPgetStationNum();
+  doc["wifi"]["connected"] = (WiFi.status() == WL_CONNECTED);
+  
+  // Uptime (milliseconds since boot)
+  doc["uptime"] = millis();
+  
+  // Broadcast to all WebSocket clients
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
