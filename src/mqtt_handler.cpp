@@ -1,5 +1,6 @@
 #include "mqtt_handler.h"
 #include "app_state.h"
+#include "config.h"
 #include <SPIFFS.h>
 
 // External functions from other modules
@@ -491,6 +492,10 @@ void publishMqttSystemStatus() {
   
   String base = mqttBaseTopic;
   
+  // Device information
+  mqttClient.publish((base + "/system/manufacturer").c_str(), MANUFACTURER_NAME, true);
+  mqttClient.publish((base + "/system/model").c_str(), MANUFACTURER_MODEL, true);
+  mqttClient.publish((base + "/system/serial_number").c_str(), deviceSerialNumber.c_str(), true);
   mqttClient.publish((base + "/system/firmware").c_str(), firmwareVer, true);
   mqttClient.publish((base + "/system/update_available").c_str(), updateAvailable ? "ON" : "OFF", true);
   
@@ -526,9 +531,10 @@ void addHADeviceInfo(JsonDocument& doc) {
   JsonObject device = doc["device"].to<JsonObject>();
   JsonArray identifiers = device["identifiers"].to<JsonArray>();
   identifiers.add(deviceId);
-  device["name"] = String("ALX Audio Controller ") + idBuf;
-  device["model"] = "ESP32-S3";
-  device["manufacturer"] = "Custom";
+  device["name"] = String(MANUFACTURER_MODEL) + " " + idBuf;
+  device["model"] = MANUFACTURER_MODEL;
+  device["manufacturer"] = MANUFACTURER_NAME;
+  device["serial_number"] = deviceSerialNumber;
   device["sw_version"] = firmwareVer;
 }
 

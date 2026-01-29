@@ -6,10 +6,10 @@
 // ===== Device Information =====
 #define MANUFACTURER_NAME "ALX Audio"
 #define MANUFACTURER_MODEL "ALX Audio Controller"
-#define MANUFACTURER_SERIAL_NUMBER "1234567890"
+// Serial number is now generated at runtime from eFuse MAC (see deviceSerialNumber in app_state.h)
 
 // ===== Firmware Version =====
-#define FIRMWARE_VERSION "1.1.4"
+#define FIRMWARE_VERSION "1.2.0"
 
 // ===== GitHub Repository Configuration =====
 #define GITHUB_REPO_OWNER "Schmackos"

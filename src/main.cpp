@@ -9,6 +9,7 @@
 #include <mbedtls/md.h>
 #include <time.h>
 #include <PubSubClient.h>
+#include <Preferences.h>
 #include "config.h"
 #include "app_state.h"
 #include "button_handler.h"
@@ -33,6 +34,9 @@ int compareVersions(const String& v1, const String& v2);
 // WiFi credentials
 String wifiSSID = "";
 String wifiPassword = "";
+
+// Device serial number (generated from eFuse MAC, stored in NVS)
+String deviceSerialNumber = "";
 
 // LED_PIN is defined in config.h
 
@@ -154,6 +158,43 @@ const char* github_root_ca = \
 "-----END CERTIFICATE-----\n" \
 "";
 
+// ===== Serial Number Generation =====
+// Generates a unique serial number from eFuse MAC and stores it in NVS
+// Regenerates when firmware version changes
+void initSerialNumber() {
+  Preferences prefs;
+  prefs.begin("device", false);  // Open NVS namespace "device" in read-write mode
+  
+  // Get stored firmware version
+  String storedFwVer = prefs.getString("fw_ver", "");
+  String currentFwVer = String(FIRMWARE_VERSION);
+  
+  // Check if we need to regenerate (firmware version mismatch or missing serial)
+  if (storedFwVer != currentFwVer || !prefs.isKey("serial")) {
+    // Generate serial number from eFuse MAC
+    uint64_t mac = ESP.getEfuseMac();
+    char serial[17];
+    snprintf(serial, sizeof(serial), "ALX-%02X%02X%02X%02X%02X%02X",
+             (uint8_t)(mac), (uint8_t)(mac >> 8), (uint8_t)(mac >> 16),
+             (uint8_t)(mac >> 24), (uint8_t)(mac >> 32), (uint8_t)(mac >> 40));
+    
+    deviceSerialNumber = String(serial);
+    
+    // Store serial number and firmware version in NVS
+    prefs.putString("serial", deviceSerialNumber);
+    prefs.putString("fw_ver", currentFwVer);
+    
+    Serial.printf("Serial number generated: %s (firmware: %s)\n", 
+                  deviceSerialNumber.c_str(), currentFwVer.c_str());
+  } else {
+    // Load existing serial number
+    deviceSerialNumber = prefs.getString("serial", "");
+    Serial.printf("Serial number loaded: %s\n", deviceSerialNumber.c_str());
+  }
+  
+  prefs.end();
+}
+
 void setup() {
   Serial.begin(9600);
   delay(1000);
@@ -161,6 +202,9 @@ void setup() {
   Serial.println("\n\n=== ESP32-S3 LED Blink with WebSocket ===");
   Serial.println("Initializing...");
   Serial.printf("Current Firmware Version: %s\n", firmwareVer);
+
+  // Initialize device serial number from NVS (generates on first boot or firmware update)
+  initSerialNumber();
 
   // Generate a unique AP SSID based on the device ID (last 4 hex chars of MAC)
   uint64_t chipId = ESP.getEfuseMac();

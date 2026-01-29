@@ -1150,18 +1150,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const macAddress = data.mac || 'Unknown';
             const rssi = data.rssi !== undefined ? `${data.rssi} dBm` : 'N/A';
             const firmwareVersion = data.firmwareVersion || 'Unknown';
+            const manufacturer = data.manufacturer || 'Unknown';
+            const model = data.model || 'Unknown';
+            const serialNumber = data.serialNumber || 'Unknown';
+            
+            // Build device info string
+            const deviceInfoStr = `<br><small style="opacity: 0.8;">Manufacturer: ${manufacturer}<br>Model: ${model}<br>Serial: ${serialNumber}</small>`;
             
             if (data.mode === 'ap') {
                 statusEl.className = 'wifi-status ap';
-                statusEl.innerHTML = `● Access Point Mode<br>SSID: ${data.apSSID || 'ESP32-LED-Setup'}<br>IP: ${data.ip || '192.168.4.1'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}`;
+                statusEl.innerHTML = `● Access Point Mode<br>SSID: ${data.apSSID || 'ESP32-LED-Setup'}<br>IP: ${data.ip || '192.168.4.1'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}${deviceInfoStr}`;
                 apToggle.checked = true;
             } else if (data.connected) {
                 statusEl.className = 'wifi-status connected';
-                statusEl.innerHTML = `● Connected to: ${data.ssid || 'Unknown'}<br>IP: ${data.ip || 'Unknown'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}<br>Signal: ${rssi}`;
+                statusEl.innerHTML = `● Connected to: ${data.ssid || 'Unknown'}<br>IP: ${data.ip || 'Unknown'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}<br>Signal: ${rssi}${deviceInfoStr}`;
                 apToggle.checked = data.apEnabled || false;
             } else {
                 statusEl.className = 'wifi-status';
-                statusEl.innerHTML = `● Not Connected<br>SSID: ${data.ssid || 'None'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}`;
+                statusEl.innerHTML = `● Not Connected<br>SSID: ${data.ssid || 'None'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}${deviceInfoStr}`;
                 apToggle.checked = data.apEnabled || false;
             }
 

@@ -141,6 +141,11 @@ void buildWiFiStatusJson(JsonDocument& doc, bool fetchVersionIfMissing) {
   doc["mac"] = WiFi.macAddress();
   doc["firmwareVersion"] = firmwareVer;
   
+  // Device information
+  doc["manufacturer"] = MANUFACTURER_NAME;
+  doc["model"] = MANUFACTURER_MODEL;
+  doc["serialNumber"] = deviceSerialNumber;
+  
   // Include latest version info if available
   if (cachedLatestVersion.length() > 0) {
     doc["latestVersion"] = cachedLatestVersion;

@@ -15,6 +15,9 @@ extern WebSocketsServer webSocket;
 extern String wifiSSID;
 extern String wifiPassword;
 
+// ===== Device Serial Number =====
+extern String deviceSerialNumber;
+
 // ===== LED State =====
 extern bool blinkingEnabled;
 extern bool ledState;

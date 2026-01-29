@@ -179,6 +179,9 @@ void handleSettingsExport() {
   JsonDocument doc;
   
   // Device info
+  doc["deviceInfo"]["manufacturer"] = MANUFACTURER_NAME;
+  doc["deviceInfo"]["model"] = MANUFACTURER_MODEL;
+  doc["deviceInfo"]["serialNumber"] = deviceSerialNumber;
   doc["deviceInfo"]["firmwareVersion"] = firmwareVer;
   doc["deviceInfo"]["mac"] = WiFi.macAddress();
   doc["deviceInfo"]["chipId"] = String((uint32_t)(ESP.getEfuseMac() & 0xFFFFFFFF), HEX);
