@@ -26,4 +26,8 @@ void handleStartUpdate();
 void handleUpdateStatus();
 void handleGetReleaseNotes();
 
+// ===== Manual Firmware Upload Handlers =====
+void handleFirmwareUploadComplete();
+void handleFirmwareUploadChunk();
+
 #endif // OTA_UPDATER_H

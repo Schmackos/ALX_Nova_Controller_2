@@ -1193,6 +1193,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <div class="progress-status" id="progressStatus"></div>
             
             <div class="ota-status" id="otaStatus"></div>
+            
+            <!-- Manual Firmware Upload -->
+            <div class="timezone-info" style="margin-top: 30px; border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 20px;">
+                Or manually upload a firmware file (.bin) from your computer.
+            </div>
+            <input type="file" id="firmwareFileInput" accept=".bin" style="display: none;" onchange="handleFirmwareSelect(event)">
+            <div class="drop-zone" id="firmwareDropZone" onclick="document.getElementById('firmwareFileInput').click()">
+                <div class="drop-zone-icon">📦</div>
+                <div class="drop-zone-text">Drag & Drop Firmware File Here</div>
+                <div class="drop-zone-hint">or click to browse (.bin files)</div>
+            </div>
         </div>
 
         <!-- Timezone Configuration Section -->
@@ -1593,6 +1604,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let debugLogBuffer = [];
         const DEBUG_MAX_LINES = 500;
         
+        // Manual firmware upload state (prevents WebSocket from hiding progress bar)
+        let manualUploadInProgress = false;
+        
         // WebSocket reconnection with exponential backoff
         let wsReconnectDelay = 2000;
         const WS_MIN_RECONNECT_DELAY = 2000;
@@ -1619,6 +1633,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 updateConnectionStatus(true);
                 // Reset reconnect delay on successful connection
                 wsReconnectDelay = WS_MIN_RECONNECT_DELAY;
+                // Reset OTA UI state on reconnect (device may have rebooted)
+                resetOtaUIState();
+                // Fetch current update status from server to restore UI state
+                fetchUpdateStatus();
             };
 
             ws.onmessage = function(event) {
@@ -1783,16 +1801,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 
                 latestVersionContainer.style.display = 'block';
                 latestVersionSpan.textContent = data.latestVersion;
+                latestVersionNotesBtn.style.display = 'inline-block';
                 
                 if (data.updateAvailable) {
                     latestVersionSpan.className = 'update-available';
-                    latestVersionNotesBtn.style.display = 'inline-block';
                     updateBtn.style.display = 'block';
                     otaStatus.className = 'ota-status show update-available';
                     otaStatus.textContent = 'Update available! You can view the release notes or click update to install.';
                 } else {
                     latestVersionSpan.className = 'up-to-date';
-                    latestVersionNotesBtn.style.display = 'none';
                     updateBtn.style.display = 'none';
                     otaStatus.className = 'ota-status show success';
                     otaStatus.textContent = 'You have the latest version installed.';
@@ -2617,7 +2634,75 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             });
         }
 
+        function resetOtaUIState() {
+            // Reset all OTA-related UI elements to their default state
+            const updateBtn = document.getElementById('updateBtn');
+            const cancelBtn = document.getElementById('cancelUpdateBtn');
+            const otaStatus = document.getElementById('otaStatus');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressStatus = document.getElementById('progressStatus');
+            const checkBtn = document.getElementById('checkUpdateBtn');
+            
+            // Reset progress bar
+            if (progressContainer) {
+                progressContainer.classList.remove('show');
+            }
+            if (progressBar) {
+                progressBar.style.width = '0%';
+                progressBar.textContent = '0%';
+            }
+            if (progressStatus) {
+                progressStatus.textContent = '';
+            }
+            
+            // Reset buttons
+            if (updateBtn) {
+                updateBtn.style.display = 'none';
+                updateBtn.disabled = false;
+                updateBtn.textContent = 'Update to Latest Version';
+            }
+            if (cancelBtn) {
+                cancelBtn.style.display = 'none';
+            }
+            if (checkBtn) {
+                checkBtn.disabled = false;
+            }
+            
+            // Reset status message (but don't clear if showing justUpdated notification)
+            if (otaStatus && !otaStatus.dataset.justUpdated) {
+                otaStatus.className = 'ota-status';
+                otaStatus.textContent = '';
+            }
+            
+            // Note: Don't reset latestVersionContainer here - let fetchUpdateStatus() handle it
+            
+            // Remove any existing update success notification
+            const existingNotification = document.getElementById('updateSuccessNotification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+            
+            console.log('OTA UI state reset');
+        }
+        
+        function fetchUpdateStatus() {
+            // Fetch current update status from the server to restore UI state after reconnect
+            fetch('/api/updatestatus')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Fetched update status:', data);
+                    handleUpdateStatus(data);
+                })
+                .catch(error => {
+                    console.log('Could not fetch update status:', error);
+                });
+        }
+
         function showUpdateSuccessNotification(data) {
+            // First reset any stale OTA UI state
+            resetOtaUIState();
+            
             // Create and show a success notification banner
             const notification = document.createElement('div');
             notification.id = 'updateSuccessNotification';
@@ -2665,6 +2750,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             document.body.appendChild(notification);
             
+            // Mark OTA status as showing justUpdated (so resetOtaUIState doesn't clear it immediately)
+            const otaStatus = document.getElementById('otaStatus');
+            if (otaStatus) {
+                otaStatus.dataset.justUpdated = 'true';
+                otaStatus.className = 'ota-status show success';
+                otaStatus.textContent = `Firmware updated from ${data.previousVersion} to ${data.currentVersion}`;
+            }
+            
             // Auto-dismiss after 10 seconds
             const dismissTimeout = setTimeout(() => {
                 dismissNotification(notification);
@@ -2678,14 +2771,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             function dismissNotification(el) {
                 el.style.animation = 'fadeOut 0.3s ease-out forwards';
-                setTimeout(() => el.remove(), 300);
-            }
-            
-            // Also update the OTA status section
-            const otaStatus = document.getElementById('otaStatus');
-            if (otaStatus) {
-                otaStatus.className = 'ota-status show success';
-                otaStatus.textContent = `Firmware updated from ${data.previousVersion} to ${data.currentVersion}`;
+                setTimeout(() => {
+                    el.remove();
+                    // Also clear the OTA status after notification is dismissed
+                    if (otaStatus) {
+                        delete otaStatus.dataset.justUpdated;
+                        otaStatus.className = 'ota-status';
+                        otaStatus.textContent = '';
+                    }
+                }, 300);
             }
             
             console.log('Firmware update notification:', data.message);
@@ -2701,6 +2795,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const progressStatus = document.getElementById('progressStatus');
             
             // Handle progress bar for downloading/preparing/complete states
+            // Skip if manual upload is in progress (manual upload manages its own progress bar)
             if (data.status === 'downloading' || data.status === 'preparing' || data.status === 'complete') {
                 progressContainer.classList.add('show');
                 progressBar.style.width = data.progress + '%';
@@ -2715,7 +2810,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     const totalKB = (data.totalBytes / 1024).toFixed(1);
                     progressStatus.textContent = `${data.message} (${downloadedKB} / ${totalKB} KB)`;
                 }
-            } else {
+            } else if (!manualUploadInProgress) {
+                // Only hide progress bar if no manual upload is happening
                 progressContainer.classList.remove('show');
             }
             
@@ -2728,39 +2824,57 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 progressContainer.classList.remove('show');
             }
             
-            if (data.updateAvailable) {
-                document.getElementById('latestVersion').textContent = data.latestVersion;
+            // Show latest version info if available (exclude "Unknown" and "Checking..." states)
+            if (data.latestVersion && data.latestVersion.length > 0 && data.latestVersion !== 'Unknown' && data.latestVersion !== 'Checking...') {
+                const latestVersionSpan = document.getElementById('latestVersion');
+                const latestVersionNotesBtn = document.getElementById('latestVersionNotesBtn');
+                latestVersionSpan.textContent = data.latestVersion;
                 currentLatestVersion = data.latestVersion;
                 latestVersionContainer.style.display = 'block';
                 
-                if (data.countdownSeconds > 0) {
-                    // Show countdown
-                    updateBtn.style.display = 'block';
-                    updateBtn.textContent = 'Update Now (Auto-updating in ' + data.countdownSeconds + 's)';
-                    cancelBtn.style.display = 'block';
-                    otaStatus.className = 'ota-status show updating';
-                    otaStatus.textContent = 'New firmware detected. Auto-update in ' + data.countdownSeconds + ' seconds...';
-                } else if (data.autoUpdateEnabled) {
-                    // Countdown ended, update imminent
-                    updateBtn.style.display = 'block';
-                    updateBtn.textContent = 'Update Now';
-                    cancelBtn.style.display = 'none';
-                    otaStatus.className = 'ota-status show updating';
-                    otaStatus.textContent = 'Update starting...';
+                if (data.updateAvailable) {
+                    latestVersionSpan.className = 'update-available';
+                    latestVersionNotesBtn.style.display = 'inline-block';
+                    
+                    if (data.countdownSeconds > 0) {
+                        // Show countdown (auto-update in progress, amplifier is off)
+                        updateBtn.style.display = 'block';
+                        updateBtn.textContent = 'Update Now (Auto-updating in ' + data.countdownSeconds + 's)';
+                        cancelBtn.style.display = 'block';
+                        otaStatus.className = 'ota-status show updating';
+                        otaStatus.textContent = 'New firmware detected. Auto-update in ' + data.countdownSeconds + ' seconds...';
+                    } else if (data.autoUpdateEnabled && data.amplifierInUse) {
+                        // Auto-update enabled but amplifier is in use - will retry automatically
+                        updateBtn.style.display = 'block';
+                        updateBtn.textContent = 'Update to Latest Version';
+                        cancelBtn.style.display = 'none';
+                        otaStatus.className = 'ota-status show update-available';
+                        otaStatus.textContent = 'Update available! Auto-update paused while amplifier is in use. Will retry automatically.';
+                    } else if (data.autoUpdateEnabled) {
+                        // Auto-update enabled, waiting for next check cycle
+                        updateBtn.style.display = 'block';
+                        updateBtn.textContent = 'Update to Latest Version';
+                        cancelBtn.style.display = 'none';
+                        otaStatus.className = 'ota-status show update-available';
+                        otaStatus.textContent = 'Update available! Auto-update will start on next check.';
+                    } else {
+                        // Auto-update disabled, show manual button
+                        updateBtn.style.display = 'block';
+                        updateBtn.textContent = 'Update to Latest Version';
+                        cancelBtn.style.display = 'none';
+                        otaStatus.className = 'ota-status show update-available';
+                        otaStatus.textContent = 'Update available! Click to install.';
+                    }
                 } else {
-                    // Auto-update disabled, show manual button
-                    updateBtn.style.display = 'block';
-                    updateBtn.textContent = 'Update to Latest Version';
+                    // Up to date
+                    latestVersionSpan.className = 'up-to-date';
+                    latestVersionNotesBtn.style.display = 'inline-block';
+                    updateBtn.style.display = 'none';
                     cancelBtn.style.display = 'none';
-                    otaStatus.className = 'ota-status show update-available';
-                    otaStatus.textContent = 'Update available! Click to install.';
                 }
             } else {
                 updateBtn.style.display = 'none';
                 cancelBtn.style.display = 'none';
-                if (otaStatus.className.includes('show')) {
-                    otaStatus.className = 'ota-status';
-                }
             }
         }
 
@@ -3131,9 +3245,235 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        // Initialize firmware drag and drop zone
+        function initFirmwareDragAndDrop() {
+            const dropZone = document.getElementById('firmwareDropZone');
+            const fileInput = document.getElementById('firmwareFileInput');
+            
+            if (!dropZone) return;
+            
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            // Highlight drop zone when item is dragged over it
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, unhighlight, false);
+            });
+            
+            // Handle dropped files
+            dropZone.addEventListener('drop', handleFirmwareDrop, false);
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            function highlight(e) {
+                dropZone.classList.add('drag-over');
+            }
+            
+            function unhighlight(e) {
+                dropZone.classList.remove('drag-over');
+            }
+            
+            function handleFirmwareDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0) {
+                    // Create a fake event object to pass to handleFirmwareSelect
+                    const fakeEvent = {
+                        target: {
+                            files: files,
+                            value: ''
+                        }
+                    };
+                    handleFirmwareSelect(fakeEvent);
+                }
+            }
+        }
+
+        // Handle firmware file selection
+        function handleFirmwareSelect(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            
+            const otaStatus = document.getElementById('otaStatus');
+            const dropZone = document.getElementById('firmwareDropZone');
+            
+            // Reset drop zone appearance
+            dropZone.classList.remove('drag-over');
+            
+            // Validate file type
+            if (!file.name.endsWith('.bin')) {
+                otaStatus.className = 'ota-status show error';
+                otaStatus.textContent = '❌ Error: Please select a .bin firmware file';
+                return;
+            }
+            
+            // Show selected file info
+            const fileSizeKB = (file.size / 1024).toFixed(1);
+            otaStatus.className = 'ota-status show';
+            otaStatus.textContent = '📦 Selected: ' + file.name + ' (' + fileSizeKB + ' KB)';
+            
+            // Confirm before uploading
+            const confirmMsg = 'Upload firmware file?\n\nFile: ' + file.name + '\nSize: ' + fileSizeKB + ' KB\n\nThis will:\n- Flash new firmware to the device\n- Reboot automatically when complete\n- Cannot be cancelled once started\n\nContinue?';
+            
+            if (!confirm(confirmMsg)) {
+                otaStatus.className = 'ota-status show';
+                otaStatus.textContent = 'Upload cancelled';
+                event.target.value = ''; // Reset file input
+                return;
+            }
+            
+            // Start upload
+            uploadFirmware(file);
+        }
+
+        // Upload firmware file with progress tracking (uses same progress bar as OTA update)
+        function uploadFirmware(file) {
+            const otaStatus = document.getElementById('otaStatus');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressStatus = document.getElementById('progressStatus');
+            const dropZone = document.getElementById('firmwareDropZone');
+            
+            // Mark manual upload in progress (prevents WebSocket from hiding progress bar)
+            manualUploadInProgress = true;
+            
+            // Disable drop zone during upload
+            dropZone.style.pointerEvents = 'none';
+            dropZone.style.opacity = '0.5';
+            
+            // Show progress bar (same as OTA update)
+            progressContainer.classList.add('show');
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+            progressStatus.textContent = 'Uploading firmware...';
+            
+            otaStatus.className = 'ota-status show updating';
+            otaStatus.textContent = 'Uploading firmware file...';
+            
+            // Create FormData and XMLHttpRequest for progress tracking
+            const formData = new FormData();
+            formData.append('firmware', file);
+            
+            const xhr = new XMLHttpRequest();
+            
+            // Track upload progress
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressBar.textContent = percent + '%';
+                    const loadedKB = (e.loaded / 1024).toFixed(1);
+                    const totalKB = (e.total / 1024).toFixed(1);
+                    progressStatus.textContent = 'Uploading: ' + loadedKB + ' / ' + totalKB + ' KB';
+                    otaStatus.textContent = 'Uploading firmware... ' + percent + '%';
+                }
+            });
+            
+            // Handle completion
+            xhr.addEventListener('load', function() {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    
+                    if (response.success) {
+                        // Clear upload flag on success (page will reload anyway)
+                        manualUploadInProgress = false;
+                        
+                        progressBar.style.width = '100%';
+                        progressBar.textContent = '100%';
+                        progressStatus.textContent = 'Upload complete! Rebooting...';
+                        otaStatus.className = 'ota-status show success';
+                        otaStatus.textContent = '✅ ' + response.message;
+                        
+                        // Show reboot countdown
+                        let countdown = 5;
+                        const countdownInterval = setInterval(() => {
+                            otaStatus.textContent = '✅ Upload complete! Device rebooting in ' + countdown + 's...';
+                            progressStatus.textContent = 'Rebooting in ' + countdown + 's...';
+                            countdown--;
+                            if (countdown < 0) {
+                                clearInterval(countdownInterval);
+                                otaStatus.textContent = '🔄 Reconnecting...';
+                                progressStatus.textContent = 'Reconnecting...';
+                                // Try to reconnect after device reboots
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 5000);
+                            }
+                        }, 1000);
+                    } else {
+                        otaStatus.className = 'ota-status show error';
+                        otaStatus.textContent = '❌ ' + (response.message || 'Upload failed');
+                        progressStatus.textContent = 'Upload failed';
+                        resetUploadUI();
+                    }
+                } catch (e) {
+                    // Device might have rebooted during response
+                    manualUploadInProgress = false;
+                    otaStatus.className = 'ota-status show success';
+                    otaStatus.textContent = '✅ Upload complete! Device is rebooting...';
+                    progressStatus.textContent = 'Device rebooting...';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000);
+                }
+            });
+            
+            // Handle errors
+            xhr.addEventListener('error', function() {
+                // Connection error might mean device is rebooting
+                manualUploadInProgress = false;
+                otaStatus.className = 'ota-status show updating';
+                otaStatus.textContent = '🔄 Connection lost - device may be rebooting...';
+                progressStatus.textContent = 'Connection lost...';
+                setTimeout(() => {
+                    window.location.reload();
+                }, 5000);
+            });
+            
+            xhr.addEventListener('abort', function() {
+                otaStatus.className = 'ota-status show error';
+                otaStatus.textContent = '❌ Upload aborted';
+                progressStatus.textContent = 'Aborted';
+                resetUploadUI();
+            });
+            
+            // Send the request
+            xhr.open('POST', '/api/firmware/upload', true);
+            xhr.send(formData);
+        }
+
+        // Reset upload UI elements
+        function resetUploadUI() {
+            const progressContainer = document.getElementById('progressContainer');
+            const dropZone = document.getElementById('firmwareDropZone');
+            const fileInput = document.getElementById('firmwareFileInput');
+            
+            // Clear manual upload flag
+            manualUploadInProgress = false;
+            
+            progressContainer.classList.remove('show');
+            dropZone.style.pointerEvents = 'auto';
+            dropZone.style.opacity = '1';
+            fileInput.value = ''; // Reset file input
+        }
+
         window.onload = function() {
             initWebSocket();
             initDragAndDrop();
+            initFirmwareDragAndDrop();
             loadMqttSettings();
             // Request initial WiFi status
             fetch('/api/wifistatus')
@@ -3147,7 +3487,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     }
                     
                     // Display latest version if available
-                    if (data.latestVersion && data.latestVersion !== 'Checking...') {
+                    if (data.latestVersion && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
                         currentLatestVersion = data.latestVersion;
                         const latestVersionContainer = document.getElementById('latestVersionContainer');
                         const latestVersionSpan = document.getElementById('latestVersion');
@@ -3166,11 +3506,56 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             otaStatus.textContent = 'Update available! You can view the release notes or click update to install.';
                         } else {
                             latestVersionSpan.className = 'up-to-date';
+                            latestVersionNotesBtn.style.display = 'inline-block';
                             
                             const otaStatus = document.getElementById('otaStatus');
                             otaStatus.className = 'ota-status show success';
                             otaStatus.textContent = 'You have the latest version installed.';
                         }
+                    } else if (!data.latestVersion || data.latestVersion === 'Unknown' || data.latestVersion === 'Checking...') {
+                        // Version check failed or still checking - auto-trigger a check
+                        const otaStatus = document.getElementById('otaStatus');
+                        otaStatus.className = 'ota-status show updating';
+                        otaStatus.textContent = 'Checking for updates...';
+                        
+                        // Automatically check for updates after a short delay
+                        setTimeout(() => {
+                            fetch('/api/checkupdate')
+                                .then(response => response.json())
+                                .then(updateData => {
+                                    if (updateData.success && updateData.latestVersion && updateData.latestVersion !== 'Unknown') {
+                                        currentLatestVersion = updateData.latestVersion;
+                                        const latestVersionContainer = document.getElementById('latestVersionContainer');
+                                        const latestVersionSpan = document.getElementById('latestVersion');
+                                        const latestVersionNotesBtn = document.getElementById('latestVersionNotesBtn');
+                                        const updateBtn = document.getElementById('updateBtn');
+                                        
+                                        latestVersionContainer.style.display = 'block';
+                                        latestVersionSpan.textContent = updateData.latestVersion;
+                                        latestVersionNotesBtn.style.display = 'inline-block';
+                                        
+                                        if (updateData.updateAvailable) {
+                                            latestVersionSpan.className = 'update-available';
+                                            updateBtn.style.display = 'block';
+                                            otaStatus.className = 'ota-status show update-available';
+                                            otaStatus.textContent = 'Update available! You can view the release notes or click update to install.';
+                                        } else {
+                                            latestVersionSpan.className = 'up-to-date';
+                                            updateBtn.style.display = 'none';
+                                            otaStatus.className = 'ota-status show success';
+                                            otaStatus.textContent = 'You have the latest version installed.';
+                                        }
+                                    } else {
+                                        otaStatus.className = 'ota-status show';
+                                        otaStatus.textContent = 'Could not check for updates. Click "Check for Updates" to try again.';
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Auto update check failed:', error);
+                                    otaStatus.className = 'ota-status show';
+                                    otaStatus.textContent = 'Click "Check for Updates" to see if a newer version is available.';
+                                });
+                        }, 2000);  // Wait 2 seconds for network to stabilize
                     }
                 })
                 .catch(error => {

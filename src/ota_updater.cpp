@@ -106,13 +106,15 @@ void broadcastUpdateStatus() {
   doc["currentVersion"] = firmwareVer;
   doc["latestVersion"] = cachedLatestVersion;
   doc["autoUpdateEnabled"] = autoUpdateEnabled;
+  doc["amplifierInUse"] = amplifierState;
   
   if (otaTotalBytes > 0) {
     doc["bytesDownloaded"] = otaProgressBytes;
     doc["totalBytes"] = otaTotalBytes;
   }
   
-  if (autoUpdateEnabled && updateAvailable && updateDiscoveredTime > 0) {
+  // Show countdown when auto-update enabled, update available, amplifier is off, and countdown active
+  if (autoUpdateEnabled && updateAvailable && !amplifierState && updateDiscoveredTime > 0) {
     unsigned long elapsed = millis() - updateDiscoveredTime;
     unsigned long remaining = (elapsed < AUTO_UPDATE_COUNTDOWN) 
                               ? (AUTO_UPDATE_COUNTDOWN - elapsed) / 1000 
@@ -194,10 +196,26 @@ void handleUpdateStatus() {
   doc["status"] = otaStatus;
   doc["progress"] = otaProgress;
   doc["message"] = otaStatusMessage;
+  doc["updateAvailable"] = updateAvailable;
+  doc["currentVersion"] = firmwareVer;
+  doc["latestVersion"] = cachedLatestVersion.length() > 0 ? cachedLatestVersion : "Unknown";
+  doc["autoUpdateEnabled"] = autoUpdateEnabled;
+  doc["amplifierInUse"] = amplifierState;
   
   if (otaTotalBytes > 0) {
     doc["bytesDownloaded"] = otaProgressBytes;
     doc["totalBytes"] = otaTotalBytes;
+  }
+  
+  // Include countdown if auto-update is active
+  if (autoUpdateEnabled && updateAvailable && !amplifierState && updateDiscoveredTime > 0) {
+    unsigned long elapsed = millis() - updateDiscoveredTime;
+    unsigned long remaining = (elapsed < AUTO_UPDATE_COUNTDOWN) 
+                              ? (AUTO_UPDATE_COUNTDOWN - elapsed) / 1000 
+                              : 0;
+    doc["countdownSeconds"] = remaining;
+  } else {
+    doc["countdownSeconds"] = 0;
   }
   
   String json;
@@ -332,35 +350,42 @@ void checkForFirmwareUpdate() {
   latestVersion.trim();
   DebugOut.printf("Latest firmware version available: %s\n", latestVersion.c_str());
   
+  // Always update cached version info
+  cachedLatestVersion = latestVersion;
+  cachedFirmwareUrl = firmwareUrl;
+  cachedChecksum = checksum;
+  
   int cmp = compareVersions(latestVersion, String(firmwareVer));
   
-  if (cmp > 0 && cachedLatestVersion != latestVersion) {
-    // New update detected
+  if (cmp > 0) {
+    // Update available
+    bool isNewUpdate = !updateAvailable;  // Track if this is a newly discovered update
     updateAvailable = true;
-    cachedLatestVersion = latestVersion;
-    cachedFirmwareUrl = firmwareUrl;
-    cachedChecksum = checksum;
-    updateDiscoveredTime = millis();
-    DebugOut.printf("New version available: %s\n", latestVersion.c_str());
-    if (checksum.length() > 0) {
-      DebugOut.printf("SHA256 checksum: %s\n", checksum.c_str());
+    
+    if (isNewUpdate || updateDiscoveredTime == 0) {
+      // Start countdown timer for new update or if timer was reset
+      updateDiscoveredTime = millis();
+      DebugOut.printf("New version available: %s\n", latestVersion.c_str());
+      if (checksum.length() > 0) {
+        DebugOut.printf("SHA256 checksum: %s\n", checksum.c_str());
+      }
+    } else {
+      DebugOut.printf("Update still available: %s\n", latestVersion.c_str());
     }
-    broadcastUpdateStatus();
-    sendWiFiStatus();  // Broadcast to update UI
-  } else if (cmp <= 0) {
+  } else {
     // Up to date or downgrade
     updateAvailable = false;
-    cachedLatestVersion = latestVersion;  // Keep the version even if up-to-date
-    cachedFirmwareUrl = firmwareUrl;
-    cachedChecksum = checksum;
     updateDiscoveredTime = 0;
     if (cmp == 0) {
       DebugOut.println("Firmware is up to date!");
     } else {
       DebugOut.println("Remote firmware version is older; skipping downgrade.");
     }
-    sendWiFiStatus();  // Broadcast to update UI
   }
+  
+  // Always broadcast status to update UI
+  broadcastUpdateStatus();
+  sendWiFiStatus();
 }
 
 // Get latest release information from GitHub API
@@ -658,11 +683,12 @@ bool performOTAUpdate(String firmwareUrl) {
       otaProgressBytes = written;
       
       // Update progress percentage
-      otaProgress = (written * 100) / contentLength;
+      int newProgress = (written * 100) / contentLength;
       
-      // Broadcast every 5% or every 2 seconds
+      // Broadcast every 1% change or every 2 seconds (same as manual upload)
       unsigned long now = millis();
-      if (otaProgress % 5 == 0 || (now - lastBroadcast) >= 2000) {
+      if (newProgress != otaProgress || (now - lastBroadcast) >= 2000) {
+        otaProgress = newProgress;
         otaStatusMessage = String("Downloading: ") + String(written / 1024) + " / " + String(contentLength / 1024) + " KB";
         broadcastUpdateStatus();
         lastBroadcast = now;
@@ -790,4 +816,192 @@ void broadcastJustUpdated() {
   // Clear the flag after broadcasting
   justUpdated = false;
   previousFirmwareVersion = "";
+}
+
+// ===== Manual Firmware Upload Handlers =====
+
+// Static variable to track upload error state
+static bool uploadError = false;
+static String uploadErrorMessage = "";
+
+// Handler called for each chunk of uploaded firmware data
+void handleFirmwareUploadChunk() {
+  HTTPUpload& upload = server.upload();
+  
+  if (upload.status == UPLOAD_FILE_START) {
+    // Reset error state
+    uploadError = false;
+    uploadErrorMessage = "";
+    
+    DebugOut.printf("\n=== Manual Firmware Upload Started ===\n");
+    DebugOut.printf("📁 Filename: %s\n", upload.filename.c_str());
+    
+    // Check if already in progress
+    if (otaInProgress) {
+      DebugOut.println("❌ Another update is already in progress");
+      uploadError = true;
+      uploadErrorMessage = "Another update is already in progress";
+      return;
+    }
+    
+    // Validate file extension
+    if (!upload.filename.endsWith(".bin")) {
+      DebugOut.println("❌ Invalid file type. Only .bin files are allowed");
+      uploadError = true;
+      uploadErrorMessage = "Invalid file type. Only .bin files are allowed";
+      return;
+    }
+    
+    otaInProgress = true;
+    otaStatus = "uploading";
+    otaProgress = 0;
+    otaProgressBytes = 0;
+    otaTotalBytes = 0;  // Unknown until upload completes
+    otaStatusMessage = "Receiving firmware file...";
+    broadcastUpdateStatus();
+    
+    // Begin OTA update with unknown size (will auto-detect)
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+      DebugOut.printf("❌ Failed to begin update: %s\n", Update.errorString());
+      uploadError = true;
+      uploadErrorMessage = String("Failed to begin update: ") + Update.errorString();
+      otaStatus = "error";
+      otaStatusMessage = uploadErrorMessage;
+      otaInProgress = false;
+      broadcastUpdateStatus();
+      return;
+    }
+    
+    DebugOut.println("📥 Update initialized, receiving data...");
+    
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    // Skip writing if there was an error
+    if (uploadError) {
+      return;
+    }
+    
+    // Write chunk to flash
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      DebugOut.printf("❌ Write error: %s\n", Update.errorString());
+      uploadError = true;
+      uploadErrorMessage = String("Write error: ") + Update.errorString();
+      Update.abort();
+      otaStatus = "error";
+      otaStatusMessage = uploadErrorMessage;
+      otaInProgress = false;
+      broadcastUpdateStatus();
+      return;
+    }
+    
+    otaProgressBytes += upload.currentSize;
+    
+    // Broadcast progress periodically (every ~10KB or every 2 seconds)
+    static unsigned long lastBroadcast = 0;
+    static size_t lastBroadcastBytes = 0;
+    unsigned long now = millis();
+    
+    if ((otaProgressBytes - lastBroadcastBytes) >= 10240 || (now - lastBroadcast) >= 2000) {
+      otaStatusMessage = String("Uploading: ") + String(otaProgressBytes / 1024) + " KB received...";
+      broadcastUpdateStatus();
+      lastBroadcast = now;
+      lastBroadcastBytes = otaProgressBytes;
+      DebugOut.printf("📊 Received: %d KB\n", otaProgressBytes / 1024);
+    }
+    
+  } else if (upload.status == UPLOAD_FILE_END) {
+    // Skip finalization if there was an error
+    if (uploadError) {
+      return;
+    }
+    
+    otaTotalBytes = upload.totalSize;
+    DebugOut.printf("📦 Upload complete: %d bytes (%.2f KB)\n", upload.totalSize, upload.totalSize / 1024.0);
+    
+    otaStatusMessage = "Verifying firmware...";
+    otaProgress = 100;
+    broadcastUpdateStatus();
+    
+    // Finalize update
+    if (Update.end(true)) {
+      if (Update.isFinished()) {
+        DebugOut.println("✅ Firmware upload and verification successful!");
+        otaStatus = "complete";
+        otaStatusMessage = "Upload complete! Rebooting...";
+        broadcastUpdateStatus();
+        // Note: Response and reboot handled in handleFirmwareUploadComplete
+      } else {
+        DebugOut.println("❌ Update did not finish correctly");
+        uploadError = true;
+        uploadErrorMessage = "Update verification failed";
+        otaStatus = "error";
+        otaStatusMessage = uploadErrorMessage;
+        otaInProgress = false;
+        broadcastUpdateStatus();
+      }
+    } else {
+      DebugOut.printf("❌ Update finalization error: %s\n", Update.errorString());
+      uploadError = true;
+      uploadErrorMessage = String("Update error: ") + Update.errorString();
+      otaStatus = "error";
+      otaStatusMessage = uploadErrorMessage;
+      otaInProgress = false;
+      broadcastUpdateStatus();
+    }
+    
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    DebugOut.println("⚠️  Upload aborted by client");
+    Update.abort();
+    uploadError = true;
+    uploadErrorMessage = "Upload aborted";
+    otaStatus = "error";
+    otaStatusMessage = "Upload aborted";
+    otaInProgress = false;
+    broadcastUpdateStatus();
+  }
+}
+
+// Handler called when upload POST request completes
+void handleFirmwareUploadComplete() {
+  JsonDocument doc;
+  
+  if (uploadError) {
+    doc["success"] = false;
+    doc["message"] = uploadErrorMessage;
+    
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+    
+    // Reset state
+    uploadError = false;
+    uploadErrorMessage = "";
+    return;
+  }
+  
+  // Check if update was successful
+  if (otaStatus == "complete") {
+    doc["success"] = true;
+    doc["message"] = "Firmware uploaded successfully! Rebooting...";
+    doc["bytesReceived"] = otaTotalBytes;
+    
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+    
+    // Save success flag and reboot
+    DebugOut.println("🔄 Rebooting in 2 seconds...");
+    saveOTASuccessFlag(firmwareVer);
+    delay(2000);
+    ESP.restart();
+  } else {
+    doc["success"] = false;
+    doc["message"] = otaStatusMessage.length() > 0 ? otaStatusMessage : "Upload failed";
+    
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+  }
+  
+  // Reset OTA state
+  otaInProgress = false;
 }

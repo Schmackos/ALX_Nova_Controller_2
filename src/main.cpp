@@ -272,6 +272,7 @@ void setup() {
   server.on("/api/smartsensing", HTTP_POST, handleSmartSensingUpdate);
   server.on("/api/mqtt", HTTP_GET, handleMqttGet);
   server.on("/api/mqtt", HTTP_POST, handleMqttUpdate);
+  server.on("/api/firmware/upload", HTTP_POST, handleFirmwareUploadComplete, handleFirmwareUploadChunk);
   // Note: Certificate API routes removed - now using Mozilla certificate bundle
   
   // Initialize CPU usage monitoring
@@ -388,32 +389,48 @@ void loop() {
     }
   }
   
-  // Auto-update countdown logic
+  // Auto-update logic (runs on every periodic check when update is available)
+  // Will retry on next periodic check (5 min) if amplifier is in use
   if (autoUpdateEnabled && updateAvailable && !otaInProgress && updateDiscoveredTime > 0) {
-    unsigned long elapsed = millis() - updateDiscoveredTime;
-    
-    // Broadcast countdown every second
-    static unsigned long lastCountdownBroadcast = 0;
-    if (millis() - lastCountdownBroadcast >= 1000) {
-      lastCountdownBroadcast = millis();
+    if (amplifierState) {
+      // Amplifier is ON - skip this check, will retry on next periodic check
+      // Reset updateDiscoveredTime so countdown restarts when amp turns off
+      DebugOut.println("⚠️  Auto-update skipped: Amplifier is in use. Will retry on next check.");
+      updateDiscoveredTime = 0;
       broadcastUpdateStatus();
-    }
-    
-    if (elapsed >= AUTO_UPDATE_COUNTDOWN) {
-      DebugOut.println("Auto-update countdown expired, starting update...");
-      otaStatus = "downloading";
-      otaProgress = 0;
+    } else {
+      // Amplifier is OFF - safe to proceed with countdown
+      unsigned long elapsed = millis() - updateDiscoveredTime;
       
-      if (performOTAUpdate(cachedFirmwareUrl)) {
-        DebugOut.println("OTA update successful! Rebooting...");
-        saveOTASuccessFlag(firmwareVer);  // Save current version as "previous" before reboot
-        delay(2000);
-        ESP.restart();
-      } else {
-        DebugOut.println("OTA update failed!");
-        otaInProgress = false;
-        updateAvailable = false;  // Reset to avoid retry loop
-        updateDiscoveredTime = 0;
+      // Broadcast countdown every second
+      static unsigned long lastCountdownBroadcast = 0;
+      if (millis() - lastCountdownBroadcast >= 1000) {
+        lastCountdownBroadcast = millis();
+        broadcastUpdateStatus();
+      }
+      
+      if (elapsed >= AUTO_UPDATE_COUNTDOWN) {
+        // Double-check amplifier state before starting update
+        if (amplifierState) {
+          DebugOut.println("⚠️  Auto-update cancelled: Amplifier turned on during countdown. Will retry on next check.");
+          updateDiscoveredTime = 0;  // Reset to retry on next periodic check
+          broadcastUpdateStatus();
+        } else {
+          DebugOut.println("Auto-update: Starting update (amplifier is off)...");
+          otaStatus = "downloading";
+          otaProgress = 0;
+          
+          if (performOTAUpdate(cachedFirmwareUrl)) {
+            DebugOut.println("OTA update successful! Rebooting...");
+            saveOTASuccessFlag(firmwareVer);  // Save current version as "previous" before reboot
+            delay(2000);
+            ESP.restart();
+          } else {
+            DebugOut.println("OTA update failed! Will retry on next check.");
+            otaInProgress = false;
+            updateDiscoveredTime = 0;  // Reset to retry on next periodic check
+          }
+        }
       }
     }
   }
