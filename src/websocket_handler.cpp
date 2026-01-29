@@ -3,6 +3,7 @@
 #include "app_state.h"
 #include "wifi_manager.h"
 #include "smart_sensing.h"
+#include "debug_serial.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
@@ -11,13 +12,13 @@
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   switch(type) {
     case WStype_DISCONNECTED:
-      Serial.printf("Client [%u] disconnected\n", num);
+      DebugOut.printf("Client [%u] disconnected\n", num);
       break;
       
     case WStype_CONNECTED:
       {
         IPAddress ip = webSocket.remoteIP(num);
-        Serial.printf("Client [%u] connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
+        DebugOut.printf("Client [%u] connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
         
         sendLEDState();
         sendBlinkingState();
@@ -28,20 +29,20 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
       
     case WStype_TEXT:
       {
-        Serial.printf("Received from client [%u]: %s\n", num, payload);
+        DebugOut.printf("Received from client [%u]: %s\n", num, payload);
         
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, (const char*)payload, length);
         
         if (error) {
-          Serial.print("JSON parsing failed: ");
-          Serial.println(error.c_str());
+          DebugOut.print("JSON parsing failed: ");
+          DebugOut.println(error.c_str());
           return;
         }
         
         if (doc["type"] == "toggle") {
           blinkingEnabled = doc["enabled"];
-          Serial.printf("Blinking %s by client [%u]\n", blinkingEnabled ? "enabled" : "disabled", num);
+          DebugOut.printf("Blinking %s by client [%u]\n", blinkingEnabled ? "enabled" : "disabled", num);
           
           sendBlinkingState();
           
@@ -49,7 +50,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             ledState = false;
             digitalWrite(LED_PIN, LOW);
             sendLEDState();
-            Serial.println("LED turned OFF");
+            DebugOut.println("LED turned OFF");
           }
         } else if (doc["type"] == "toggleAP") {
           bool enabled = doc["enabled"].as<bool>();
@@ -60,15 +61,15 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               WiFi.mode(WIFI_AP_STA);
               WiFi.softAP(apSSID.c_str(), apPassword);
               isAPMode = true;
-              Serial.println("Access Point enabled via WebSocket");
-              Serial.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+              DebugOut.println("Access Point enabled via WebSocket");
+              DebugOut.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
             }
           } else {
             if (isAPMode && WiFi.status() == WL_CONNECTED) {
               WiFi.softAPdisconnect(true);
               WiFi.mode(WIFI_STA);
               isAPMode = false;
-              Serial.println("Access Point disabled via WebSocket");
+              DebugOut.println("Access Point disabled via WebSocket");
             }
           }
           

@@ -544,6 +544,118 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             position: relative;
             z-index: 1;
         }
+        /* Debug Console Section */
+        .debug-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        .debug-section h2 {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #9c27b0;
+        }
+        .debug-info {
+            padding: 15px;
+            background: rgba(156, 39, 176, 0.2);
+            border-left: 4px solid #9c27b0;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+        .debug-console {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 0.85em;
+            height: 300px;
+            overflow-y: auto;
+            text-align: left;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .debug-console::-webkit-scrollbar {
+            width: 8px;
+        }
+        .debug-console::-webkit-scrollbar-track {
+            background: #2d2d2d;
+            border-radius: 4px;
+        }
+        .debug-console::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+        .debug-console::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+        .log-entry {
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            word-wrap: break-word;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        .log-timestamp {
+            color: #888;
+            margin-right: 10px;
+        }
+        .log-message {
+            color: #00ff00;
+        }
+        .log-message.info {
+            color: #00bcd4;
+        }
+        .log-message.warn {
+            color: #ffeb3b;
+        }
+        .log-message.error {
+            color: #f44336;
+        }
+        .debug-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .debug-controls button {
+            padding: 10px 20px;
+            font-size: 0.9em;
+        }
+        .debug-btn-clear {
+            background: #757575;
+        }
+        .debug-btn-clear:hover {
+            background: #616161;
+        }
+        .debug-btn-pause {
+            background: #ff9800;
+        }
+        .debug-btn-pause:hover {
+            background: #f57c00;
+        }
+        .debug-btn-pause.paused {
+            background: #4CAF50;
+        }
+        .debug-btn-pause.paused:hover {
+            background: #45a049;
+        }
+        .debug-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+            font-size: 0.9em;
+        }
+        .debug-status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4CAF50;
+        }
+        .debug-status-indicator.paused {
+            background: #ff9800;
+        }
         .device-control-section {
             margin-bottom: 30px;
             padding: 30px;
@@ -829,6 +941,31 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <span class="slider"></span>
                 </label>
             </div>
+            
+            <!-- Certificate Editor (collapsible) -->
+            <div class="cert-section" style="margin-top: 15px;">
+                <button class="check-btn" onclick="toggleCertEditor()" style="margin-bottom: 10px; width: 100%;">
+                    <span id="certEditorToggleIcon">▶</span> Configure SSL Certificate
+                </button>
+                <div id="certEditorPanel" style="display: none;">
+                    <div class="timezone-info" style="margin-bottom: 10px;">
+                        Configure the root CA certificate used for secure connections to GitHub. 
+                        Update this if the current certificate expires or GitHub changes their certificate chain.
+                    </div>
+                    <div class="form-group">
+                        <label for="certificateText">Root CA Certificate (PEM format):</label>
+                        <textarea id="certificateText" rows="12" style="width: 100%; font-family: monospace; font-size: 11px; resize: vertical;" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+                    </div>
+                    <div id="certStatus" style="margin-bottom: 10px; font-size: 0.9em;">
+                        Status: <span id="certIsDefault">Loading...</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="check-btn" onclick="saveCertificate()" style="flex: 1; min-width: 120px;">Save Certificate</button>
+                        <button class="check-btn" onclick="resetCertificate()" style="flex: 1; min-width: 120px; background: #ff9800;">Reset to Default</button>
+                    </div>
+                </div>
+            </div>
+            
             <button class="check-btn" onclick="checkForUpdate()">Check for Updates</button>
             <button class="update-btn" id="updateBtn" onclick="startOTAUpdate()" style="display: none;">Update to Latest Version</button>
             <button class="update-btn" id="cancelUpdateBtn" onclick="cancelAutoUpdate()" style="display: none; background: #f44336;">Cancel Auto-Update</button>
@@ -982,6 +1119,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <span class="reset-btn-text" id="resetBtnText">Hold for 3 Seconds to Reset</span>
             </button>
         </div>
+
+        <!-- Debugging Section -->
+        <div class="debug-section">
+            <h2>🔧 Debugging</h2>
+            <div class="debug-info">
+                Real-time terminal output from the ESP32. Messages are streamed via WebSocket when connected.
+            </div>
+            <div class="debug-console" id="debugConsole">
+                <div class="log-entry">
+                    <span class="log-timestamp">[--:--:--]</span>
+                    <span class="log-message info">Waiting for connection...</span>
+                </div>
+            </div>
+            <div class="debug-controls">
+                <button class="debug-btn-clear" onclick="clearDebugConsole()">Clear</button>
+                <button class="debug-btn-pause" id="debugPauseBtn" onclick="toggleDebugPause()">Pause</button>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" id="debugAutoScroll" checked>
+                    Auto-scroll
+                </label>
+                <div class="debug-status">
+                    <div class="debug-status-indicator" id="debugStatusIndicator"></div>
+                    <span id="debugStatusText">Receiving</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Release Notes Modal -->
@@ -1042,6 +1205,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             voltageThreshold: false
         };
         
+        // Debug console state
+        let debugPaused = false;
+        let debugLogBuffer = [];
+        const DEBUG_MAX_LINES = 500;
+        
         // WebSocket reconnection with exponential backoff
         let wsReconnectDelay = 2000;
         const WS_MIN_RECONNECT_DELAY = 2000;
@@ -1079,6 +1247,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     handlePhysicalResetProgress(data);
                 } else if (data.type === 'rebootProgress') {
                     handlePhysicalRebootProgress(data);
+                } else if (data.type === 'debugLog') {
+                    appendDebugLog(data.timestamp, data.message);
                 }
             };
 
@@ -1344,6 +1514,107 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .catch(error => {
                 alert('Error updating certificate validation setting: ' + error);
                 document.getElementById('certValidationToggle').checked = !enabled;
+            });
+        }
+
+        // Certificate Editor Functions
+        let certEditorOpen = false;
+        
+        function toggleCertEditor() {
+            certEditorOpen = !certEditorOpen;
+            const panel = document.getElementById('certEditorPanel');
+            const icon = document.getElementById('certEditorToggleIcon');
+            
+            if (certEditorOpen) {
+                panel.style.display = 'block';
+                icon.textContent = '▼';
+                loadCertificate();
+            } else {
+                panel.style.display = 'none';
+                icon.textContent = '▶';
+            }
+        }
+        
+        function loadCertificate() {
+            fetch('/api/certificate')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('certificateText').value = data.certificate;
+                        updateCertStatus(data.isDefault);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading certificate:', error);
+                });
+        }
+        
+        function updateCertStatus(isDefault) {
+            const statusEl = document.getElementById('certIsDefault');
+            if (isDefault) {
+                statusEl.textContent = 'Using default certificate';
+                statusEl.style.color = '#4CAF50';
+            } else {
+                statusEl.textContent = 'Using custom certificate';
+                statusEl.style.color = '#2196F3';
+            }
+        }
+        
+        function saveCertificate() {
+            const certText = document.getElementById('certificateText').value.trim();
+            
+            if (!certText) {
+                alert('Please enter a certificate');
+                return;
+            }
+            
+            if (!certText.includes('-----BEGIN CERTIFICATE-----') || 
+                !certText.includes('-----END CERTIFICATE-----')) {
+                alert('Invalid certificate format. Must include BEGIN and END markers.');
+                return;
+            }
+            
+            fetch('/api/certificate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ certificate: certText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Certificate saved successfully!');
+                    updateCertStatus(data.isDefault);
+                } else {
+                    alert('Failed to save certificate: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('Error saving certificate: ' + error);
+            });
+        }
+        
+        function resetCertificate() {
+            if (!confirm('Are you sure you want to reset to the default certificate?')) {
+                return;
+            }
+            
+            fetch('/api/certificate/reset', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('certificateText').value = data.certificate;
+                    updateCertStatus(true);
+                    alert('Certificate reset to default!');
+                } else {
+                    alert('Failed to reset certificate: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('Error resetting certificate: ' + error);
             });
         }
 
@@ -2543,6 +2814,107 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 })
                 .catch(error => console.error('Error loading smart sensing state:', error));
         };
+
+        // ===== Debug Console Functions =====
+        
+        function formatDebugTimestamp(millis) {
+            const totalSeconds = Math.floor(millis / 1000);
+            const hours = Math.floor(totalSeconds / 3600) % 24;
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            const ms = millis % 1000;
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+        }
+        
+        function getLogMessageClass(message) {
+            const lowerMsg = message.toLowerCase();
+            if (lowerMsg.includes('error') || lowerMsg.includes('failed') || lowerMsg.includes('fail')) {
+                return 'error';
+            } else if (lowerMsg.includes('warning') || lowerMsg.includes('warn')) {
+                return 'warn';
+            } else if (lowerMsg.includes('===') || lowerMsg.includes('connected') || lowerMsg.includes('success') || lowerMsg.includes('initialized')) {
+                return 'info';
+            }
+            return '';
+        }
+        
+        function appendDebugLog(timestamp, message) {
+            if (debugPaused) {
+                // Buffer messages while paused
+                debugLogBuffer.push({ timestamp, message });
+                if (debugLogBuffer.length > DEBUG_MAX_LINES) {
+                    debugLogBuffer.shift();
+                }
+                return;
+            }
+            
+            const console = document.getElementById('debugConsole');
+            const autoScroll = document.getElementById('debugAutoScroll').checked;
+            const wasAtBottom = console.scrollHeight - console.scrollTop <= console.clientHeight + 50;
+            
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            const timestampSpan = document.createElement('span');
+            timestampSpan.className = 'log-timestamp';
+            timestampSpan.textContent = '[' + formatDebugTimestamp(timestamp) + ']';
+            
+            const messageSpan = document.createElement('span');
+            messageSpan.className = 'log-message ' + getLogMessageClass(message);
+            messageSpan.textContent = message;
+            
+            entry.appendChild(timestampSpan);
+            entry.appendChild(messageSpan);
+            console.appendChild(entry);
+            
+            // Limit the number of log entries
+            while (console.children.length > DEBUG_MAX_LINES) {
+                console.removeChild(console.firstChild);
+            }
+            
+            // Auto-scroll if enabled and was at bottom
+            if (autoScroll && wasAtBottom) {
+                console.scrollTop = console.scrollHeight;
+            }
+        }
+        
+        function clearDebugConsole() {
+            const console = document.getElementById('debugConsole');
+            console.innerHTML = '<div class="log-entry"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Console cleared</span></div>';
+            debugLogBuffer = [];
+        }
+        
+        function toggleDebugPause() {
+            debugPaused = !debugPaused;
+            const btn = document.getElementById('debugPauseBtn');
+            const indicator = document.getElementById('debugStatusIndicator');
+            const statusText = document.getElementById('debugStatusText');
+            
+            if (debugPaused) {
+                btn.textContent = 'Resume';
+                btn.classList.add('paused');
+                indicator.classList.add('paused');
+                statusText.textContent = 'Paused (' + debugLogBuffer.length + ' buffered)';
+            } else {
+                btn.textContent = 'Pause';
+                btn.classList.remove('paused');
+                indicator.classList.remove('paused');
+                statusText.textContent = 'Receiving';
+                
+                // Flush buffered messages
+                debugLogBuffer.forEach(item => {
+                    appendDebugLog(item.timestamp, item.message);
+                });
+                debugLogBuffer = [];
+            }
+        }
+        
+        // Update buffered count while paused
+        setInterval(() => {
+            if (debugPaused && debugLogBuffer.length > 0) {
+                document.getElementById('debugStatusText').textContent = 'Paused (' + debugLogBuffer.length + ' buffered)';
+            }
+        }, 500);
     </script>
 </body>
 </html>

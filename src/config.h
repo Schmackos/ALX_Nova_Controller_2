@@ -9,11 +9,11 @@
 // Serial number is now generated at runtime from eFuse MAC (see deviceSerialNumber in app_state.h)
 
 // ===== Firmware Version =====
-#define FIRMWARE_VERSION "1.2.0"
+#define FIRMWARE_VERSION "1.1.9"
 
 // ===== GitHub Repository Configuration =====
 #define GITHUB_REPO_OWNER "Schmackos"
-#define GITHUB_REPO_NAME "Esp32_firmware"
+#define GITHUB_REPO_NAME "ALX_Nova_Controller_2"
 
 // ===== Pin Definitions =====
 const int LED_PIN = 2;                    // Internal board LED pin
@@ -71,6 +71,7 @@ const int DEFAULT_MQTT_PORT = 1883;
 
 // ===== GitHub Root CA Certificate =====
 // DigiCert/USERTrust certificate - valid until 2038
-extern const char* github_root_ca;
+// Configurable via web interface
+extern String github_root_ca;
 
 #endif // CONFIG_H

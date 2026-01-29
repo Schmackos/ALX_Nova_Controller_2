@@ -3,6 +3,8 @@
 #include "app_state.h"
 #include "mqtt_handler.h"
 #include "ota_updater.h"
+#include "websocket_handler.h"
+#include "debug_serial.h"
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
@@ -24,24 +26,24 @@ void startAccessPoint() {
   WiFi.softAP(apSSID.c_str(), apPassword);
   
   IPAddress apIP = WiFi.softAPIP();
-  Serial.println("\n=== Access Point Started ===");
-  Serial.printf("SSID: %s\n", apSSID.c_str());
-  Serial.printf("Password: %s\n", apPassword);
-  Serial.print("AP IP address: ");
-  Serial.println(apIP);
+  DebugOut.println("\n=== Access Point Started ===");
+  DebugOut.printf("SSID: %s\n", apSSID.c_str());
+  DebugOut.printf("Password: %s\n", apPassword);
+  DebugOut.print("AP IP address: ");
+  DebugOut.println(apIP);
   
   server.on("/", handleAPRoot);
   server.on("/config", HTTP_POST, handleAPConfig);
   
   server.begin();
-  Serial.println("Web server started on port 80 (AP Mode)");
+  DebugOut.println("Web server started on port 80 (AP Mode)");
 }
 
 void stopAccessPoint() {
   if (isAPMode) {
     WiFi.softAPdisconnect(true);
     isAPMode = false;
-    Serial.println("Access Point stopped");
+    DebugOut.println("Access Point stopped");
   }
 }
 
@@ -49,20 +51,19 @@ void connectToWiFi(const char* ssid, const char* password) {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   
-  Serial.print("Connecting to WiFi: ");
-  Serial.println(ssid);
+  DebugOut.print("Connecting to WiFi: ");
+  DebugOut.println(ssid);
   
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 40) {
     delay(500);
-    Serial.print(".");
+    DebugOut.print(".");
     attempts++;
   }
   
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi connected!");
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
+    DebugOut.println("\nWiFi connected!");
+    DebugOut.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
     
     // Synchronize time with NTP (required for SSL certificate validation)
     syncTimeWithNTP();
@@ -72,7 +73,7 @@ void connectToWiFi(const char* ssid, const char* password) {
       WiFi.mode(WIFI_AP_STA);
       WiFi.softAP(apSSID.c_str(), apPassword);
       isAPMode = true;
-      Serial.printf("Access Point also running at: %s\n", WiFi.softAPIP().toString().c_str());
+      DebugOut.printf("Access Point also running at: %s\n", WiFi.softAPIP().toString().c_str());
     } else if (!apEnabled) {
       isAPMode = false;
     }
@@ -82,15 +83,18 @@ void connectToWiFi(const char* ssid, const char* password) {
     webSocket.begin();
     webSocket.onEvent(webSocketEvent);
     
+    // Connect DebugSerial to WebSocket for log broadcasting
+    DebugOut.setWebSocket(&webSocket);
+    
     server.begin();
-    Serial.println("Web server started on port 80");
-    Serial.println("WebSocket server started on port 81");
-    Serial.printf("Navigate to http://%s\n", WiFi.localIP().toString().c_str());
+    DebugOut.println("=== Web server started on port 80 ===");
+    DebugOut.println("=== WebSocket server started on port 81 ===");
+    DebugOut.printf("Navigate to http://%s\n", WiFi.localIP().toString().c_str());
     
     // Setup MQTT client
     setupMqtt();
   } else {
-    Serial.println("\nFailed to connect to WiFi. Starting AP mode...");
+    DebugOut.println("WARNING: Failed to connect to WiFi. Starting AP mode...");
     startAccessPoint();
   }
 }
@@ -124,7 +128,7 @@ void saveWiFiCredentials(const char* ssid, const char* password) {
     file.println(ssid);
     file.println(password);
     file.close();
-    Serial.println("Credentials saved to SPIFFS");
+    DebugOut.println("Credentials saved to SPIFFS");
   }
 }
 
@@ -229,7 +233,7 @@ void handleAPConfig() {
   saveWiFiCredentials(ssid.c_str(), password.c_str());
   server.send(200, "application/json", "{\"success\": true}");
   
-  Serial.printf("Credentials saved. Connecting to %s...\n", ssid.c_str());
+  DebugOut.printf("Credentials saved. Connecting to %s...\n", ssid.c_str());
   delay(1000);
   
   connectToWiFi(ssid.c_str(), password.c_str());
@@ -264,7 +268,7 @@ void handleAPConfigUpdate() {
     String newPassword = doc["password"].as<String>();
     if (newPassword.length() >= 8) {
       apPassword = newPassword;
-      Serial.println("AP password updated");
+      DebugOut.println("AP password updated");
     } else if (newPassword.length() > 0) {
       server.send(400, "application/json", "{\"success\": false, \"message\": \"Password must be at least 8 characters\"}");
       return;
@@ -272,11 +276,11 @@ void handleAPConfigUpdate() {
     // If password is empty string, keep existing password
   }
   
-  Serial.printf("AP Configuration updated: SSID=%s\n", apSSID.c_str());
+  DebugOut.printf("AP Configuration updated: SSID=%s\n", apSSID.c_str());
   
   // If AP is currently running, restart it with new credentials
   if (isAPMode) {
-    Serial.println("Restarting AP with new configuration...");
+    DebugOut.println("Restarting AP with new configuration...");
     WiFi.softAPdisconnect(true);  // Disconnect all clients
     delay(100);
     
@@ -289,8 +293,8 @@ void handleAPConfigUpdate() {
     }
     
     WiFi.softAP(apSSID.c_str(), apPassword.c_str());
-    Serial.printf("AP restarted with new SSID: %s\n", apSSID.c_str());
-    Serial.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+    DebugOut.printf("AP restarted with new SSID: %s\n", apSSID.c_str());
+    DebugOut.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
   }
   
   sendWiFiStatus();
@@ -320,8 +324,8 @@ void handleAPToggle() {
       WiFi.mode(WIFI_AP_STA);
       WiFi.softAP(apSSID, apPassword);
       isAPMode = true;
-      Serial.println("Access Point enabled");
-      Serial.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+      DebugOut.println("Access Point enabled");
+      DebugOut.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
     }
   } else {
     if (isAPMode && WiFi.status() == WL_CONNECTED) {
@@ -329,7 +333,7 @@ void handleAPToggle() {
       WiFi.softAPdisconnect(true);
       WiFi.mode(WIFI_STA);
       isAPMode = false;
-      Serial.println("Access Point disabled");
+      DebugOut.println("Access Point disabled");
     }
   }
   
@@ -365,7 +369,7 @@ void handleWiFiConfig() {
   
   server.send(200, "application/json", "{\"success\": true}");
   
-  Serial.printf("WiFi credentials updated. Connecting to %s...\n", ssid.c_str());
+  DebugOut.printf("WiFi credentials updated. Connecting to %s...\n", ssid.c_str());
   
   // Disconnect current connection and reconnect with new credentials
   if (isAPMode) {

@@ -20,6 +20,7 @@
 #include "settings_manager.h"
 #include "websocket_handler.h"
 #include "web_pages.h"
+#include "debug_serial.h"
 
 // Forward declarations
 int compareVersions(const String& v1, const String& v2);
@@ -133,9 +134,10 @@ float prevMqttVoltageReading = 0.0;
 unsigned long lastMqttPublish = 0;
 // MQTT_PUBLISH_INTERVAL defined in config.h
 
-// GitHub Root CA Certificate (DigiCert Global Root G2)
-// GitHub uses DigiCert certificates - this root CA is valid until 2038
-const char* github_root_ca = \
+// GitHub Root CA Certificate (configurable via web interface)
+// Default: DigiCert/USERTrust certificate - valid until 2038
+// Can be updated by user if certificate expires or changes
+String github_root_ca = \
 "-----BEGIN CERTIFICATE-----\n" \
 "MIIDRjCCAsugAwIBAgIQGp6v7G3o4ZtcGTFBto2Q3TAKBggqhkjOPQQDAzCBiDEL\n" \
 "MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl\n" \
@@ -184,24 +186,24 @@ void initSerialNumber() {
     prefs.putString("serial", deviceSerialNumber);
     prefs.putString("fw_ver", currentFwVer);
     
-    Serial.printf("Serial number generated: %s (firmware: %s)\n", 
+    DebugOut.printf("Serial number generated: %s (firmware: %s)\n", 
                   deviceSerialNumber.c_str(), currentFwVer.c_str());
   } else {
     // Load existing serial number
     deviceSerialNumber = prefs.getString("serial", "");
-    Serial.printf("Serial number loaded: %s\n", deviceSerialNumber.c_str());
+    DebugOut.printf("Serial number loaded: %s\n", deviceSerialNumber.c_str());
   }
   
   prefs.end();
 }
 
 void setup() {
-  Serial.begin(9600);
+  DebugOut.begin(9600);
   delay(1000);
   
-  Serial.println("\n\n=== ESP32-S3 LED Blink with WebSocket ===");
-  Serial.println("Initializing...");
-  Serial.printf("Current Firmware Version: %s\n", firmwareVer);
+  DebugOut.println("\n\n=== ESP32-S3 LED Blink with WebSocket ===");
+  DebugOut.println("Initializing...");
+  DebugOut.printf("Current Firmware Version: %s\n", firmwareVer);
 
   // Initialize device serial number from NVS (generates on first boot or firmware update)
   initSerialNumber();
@@ -212,49 +214,54 @@ void setup() {
   char idBuf[5];
   snprintf(idBuf, sizeof(idBuf), "%04X", shortId);
   apSSID = String("ALX Audio Controller ") + idBuf;
-  Serial.printf("AP SSID set to: %s\n", apSSID.c_str());
+  DebugOut.printf("AP SSID set to: %s\n", apSSID.c_str());
   
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
-  //Serial.printf("LED pin configured: GPIO%d\n", LED_PIN);
+  //DebugOut.printf("LED pin configured: GPIO%d\n", LED_PIN);
   
   // Configure factory reset button with enhanced detection
   resetButton.begin();
-  Serial.printf("Factory reset button configured: GPIO%d\n", RESET_BUTTON_PIN);
-  Serial.println("  Button actions:");
-  Serial.println("    - Short press (< 0.5s): Print status info");
-  Serial.println("    - Double click: Toggle AP mode");
-  Serial.println("    - Triple click: Toggle LED blinking");
-  Serial.println("    - Long press (2s): Restart ESP32");
-  Serial.println("    - Very long press (10s): Reboot ESP32");
+  DebugOut.printf("Factory reset button configured: GPIO%d\n", RESET_BUTTON_PIN);
+  DebugOut.println("  Button actions:");
+  DebugOut.println("    - Short press (< 0.5s): Print status info");
+  DebugOut.println("    - Double click: Toggle AP mode");
+  DebugOut.println("    - Triple click: Toggle LED blinking");
+  DebugOut.println("    - Long press (2s): Restart ESP32");
+  DebugOut.println("    - Very long press (10s): Reboot ESP32");
   
   // Configure Smart Sensing pins
   pinMode(AMPLIFIER_PIN, OUTPUT);
   digitalWrite(AMPLIFIER_PIN, LOW);  // Start with amplifier OFF (fail-safe)
   pinMode(VOLTAGE_SENSE_PIN, INPUT);
-  Serial.printf("Smart Sensing configured: Amplifier GPIO%d, Voltage Sense GPIO%d\n", 
+  DebugOut.printf("Smart Sensing configured: Amplifier GPIO%d, Voltage Sense GPIO%d\n", 
                 AMPLIFIER_PIN, VOLTAGE_SENSE_PIN);
   
   // Initialize SPIFFS
   if (!SPIFFS.begin(true)) {
-    Serial.println("SPIFFS initialization failed!");
+    DebugOut.println("ERROR: SPIFFS initialization failed!");
   } else {
-    Serial.println("SPIFFS initialized");
+    DebugOut.println("SPIFFS initialized");
   }
 
   // Load persisted settings (e.g., auto-update preference)
   if (!loadSettings()) {
-    Serial.println("No settings file found, using defaults");
+    DebugOut.println("No settings file found, using defaults");
   }
   
   // Load Smart Sensing settings
   if (!loadSmartSensingSettings()) {
-    Serial.println("No Smart Sensing settings found, using defaults");
+    DebugOut.println("No Smart Sensing settings found, using defaults");
   }
   
   // Load MQTT settings
   if (!loadMqttSettings()) {
-    Serial.println("No MQTT settings found, using defaults");
+    DebugOut.println("No MQTT settings found, using defaults");
+  }
+  
+  // Load custom certificate (if saved)
+  if (!loadCertificate()) {
+    DebugOut.println("Using default certificate");
   }
   
   // Define server routes here (before WiFi setup)
@@ -280,13 +287,16 @@ void setup() {
   server.on("/api/smartsensing", HTTP_POST, handleSmartSensingUpdate);
   server.on("/api/mqtt", HTTP_GET, handleMqttGet);
   server.on("/api/mqtt", HTTP_POST, handleMqttUpdate);
+  server.on("/api/certificate", HTTP_GET, handleCertificateGet);
+  server.on("/api/certificate", HTTP_POST, handleCertificateUpdate);
+  server.on("/api/certificate/reset", HTTP_POST, handleCertificateReset);
   
   // Try to load WiFi credentials from storage
   if (loadWiFiCredentials(wifiSSID, wifiPassword) && wifiSSID.length() > 0) {
-    Serial.println("Loaded credentials from storage");
+    DebugOut.println("Loaded credentials from storage");
     connectToWiFi(wifiSSID.c_str(), wifiPassword.c_str());
   } else {
-    Serial.println("No stored credentials found, starting Access Point mode");
+    DebugOut.println("No stored credentials found, starting Access Point mode");
     startAccessPoint();
   }
 }
@@ -303,15 +313,15 @@ void loop() {
     // Handle different button press types
     switch (pressType) {
       case BTN_SHORT_PRESS:
-        Serial.println("=== Button: Short Press ===");
-        Serial.printf("WiFi: %s\n", WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
-        Serial.printf("AP Mode: %s\n", isAPMode ? "Active" : "Inactive");
-        Serial.printf("LED Blinking: %s\n", blinkingEnabled ? "Enabled" : "Disabled");
-        Serial.printf("Firmware: %s\n", firmwareVer);
+        DebugOut.println("=== Button: Short Press ===");
+        DebugOut.printf("WiFi: %s\n", WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
+        DebugOut.printf("AP Mode: %s\n", isAPMode ? "Active" : "Inactive");
+        DebugOut.printf("LED Blinking: %s\n", blinkingEnabled ? "Enabled" : "Disabled");
+        DebugOut.printf("Firmware: %s\n", firmwareVer);
         break;
         
       case BTN_DOUBLE_CLICK:
-        Serial.println("=== Button: Double Click - Toggle AP Mode ===");
+        DebugOut.println("=== Button: Double Click - Toggle AP Mode ===");
         if (isAPMode) {
           stopAccessPoint();
         } else {
@@ -320,20 +330,20 @@ void loop() {
         break;
         
       case BTN_TRIPLE_CLICK:
-        Serial.println("=== Button: Triple Click - Toggle LED Blinking ===");
+        DebugOut.println("=== Button: Triple Click - Toggle LED Blinking ===");
         blinkingEnabled = !blinkingEnabled;
-        Serial.printf("LED Blinking is now: %s\n", blinkingEnabled ? "ON" : "OFF");
+        DebugOut.printf("LED Blinking is now: %s\n", blinkingEnabled ? "ON" : "OFF");
         sendBlinkingState();
         break;
         
       case BTN_LONG_PRESS:
-        Serial.println("=== Button: Long Press - Restarting ESP32 ===");
+        DebugOut.println("=== Button: Long Press - Restarting ESP32 ===");
         delay(500);
         ESP.restart();
         break;
         
       case BTN_VERY_LONG_PRESS:
-        Serial.println("=== Button: Very Long Press - Rebooting ESP32 ===");
+        DebugOut.println("=== Button: Very Long Press - Rebooting ESP32 ===");
         sendRebootProgress(10, true);
         delay(100); // Give time for WebSocket message to send
         ESP.restart();
@@ -361,7 +371,7 @@ void loop() {
         static unsigned long lastProgressPrint = 0;
         if (millis() - lastProgressPrint >= 1000) {
           unsigned long secondsHeld = holdDuration / 1000;
-          Serial.printf("Button held for %lu seconds...\n", secondsHeld);
+          DebugOut.printf("Button held for %lu seconds...\n", secondsHeld);
           
           // Send progress if approaching reboot (from 5 seconds onward)
           if (holdDuration >= 5000) {
@@ -404,16 +414,16 @@ void loop() {
     }
     
     if (elapsed >= AUTO_UPDATE_COUNTDOWN) {
-      Serial.println("Auto-update countdown expired, starting update...");
+      DebugOut.println("Auto-update countdown expired, starting update...");
       otaStatus = "downloading";
       otaProgress = 0;
       
       if (performOTAUpdate(cachedFirmwareUrl)) {
-        Serial.println("OTA update successful! Rebooting...");
+        DebugOut.println("OTA update successful! Rebooting...");
         delay(2000);
         ESP.restart();
       } else {
-        Serial.println("OTA update failed!");
+        DebugOut.println("OTA update failed!");
         otaInProgress = false;
         updateAvailable = false;  // Reset to avoid retry loop
         updateDiscoveredTime = 0;
@@ -442,14 +452,14 @@ void loop() {
       
       sendLEDState();
       
-      //Serial.printf("[%lu ms] LED: %s\n", currentMillis, ledState ? "ON" : "OFF");
+      //DebugOut.printf("[%lu ms] LED: %s\n", currentMillis, ledState ? "ON" : "OFF");
     }
   } else {
     if (ledState) {
       ledState = false;
       digitalWrite(LED_PIN, LOW);
       sendLEDState();
-      Serial.println("Blinking stopped - LED turned OFF");
+      DebugOut.println("Blinking stopped - LED turned OFF");
     }
   }
 }

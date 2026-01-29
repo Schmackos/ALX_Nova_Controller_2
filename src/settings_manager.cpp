@@ -5,9 +5,81 @@
 #include "smart_sensing.h"
 #include "mqtt_handler.h"
 #include "ota_updater.h"
+#include "debug_serial.h"
 #include <WiFi.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
+
+// ===== Default Certificate =====
+// DigiCert/USERTrust certificate - valid until 2038
+static const char* DEFAULT_GITHUB_ROOT_CA = \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDRjCCAsugAwIBAgIQGp6v7G3o4ZtcGTFBto2Q3TAKBggqhkjOPQQDAzCBiDEL\n" \
+"MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl\n" \
+"eSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMT\n" \
+"JVVTRVJUcnVzdCBFQ0MgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMjEwMzIy\n" \
+"MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjBfMQswCQYDVQQGEwJHQjEYMBYGA1UEChMP\n" \
+"U2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1TZWN0aWdvIFB1YmxpYyBTZXJ2ZXIg\n" \
+"QXV0aGVudGljYXRpb24gUm9vdCBFNDYwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAR2\n" \
+"+pmpbiDt+dd34wc7qNs9Xzjoq1WmVk/WSOrsfy2qw7LFeeyZYX8QeccCWvkEN/U0\n" \
+"NSt3zn8gj1KjAIns1aeibVvjS5KToID1AZTc8GgHHs3u/iVStSBDHBv+6xnOQ6Oj\n" \
+"ggEgMIIBHDAfBgNVHSMEGDAWgBQ64QmG1M8ZwpZ2dEl23OA1xmNjmjAdBgNVHQ4E\n" \
+"FgQU0SLaTFnxS18mOKqd1u7rDcP7qWEwDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB\n" \
+"/wQFMAMBAf8wHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMBEGA1UdIAQK\n" \
+"MAgwBgYEVR0gADBQBgNVHR8ESTBHMEWgQ6BBhj9odHRwOi8vY3JsLnVzZXJ0cnVz\n" \
+"dC5jb20vVVNFUlRydXN0RUNDQ2VydGlmaWNhdGlvbkF1dGhvcml0eS5jcmwwNQYI\n" \
+"KwYBBQUHAQEEKTAnMCUGCCsGAQUFBzABhhlodHRwOi8vb2NzcC51c2VydHJ1c3Qu\n" \
+"Y29tMAoGCCqGSM49BAMDA2kAMGYCMQCMCyBit99vX2ba6xEkDe+YO7vC0twjbkv9\n" \
+"PKpqGGuZ61JZryjFsp+DFpEclCVy4noCMQCwvZDXD/m2Ko1HA5Bkmz7YQOFAiNDD\n" \
+"49IWa2wdT7R3DtODaSXH/BiXv8fwB9su4tU=\n" \
+"-----END CERTIFICATE-----\n";
+
+// ===== Certificate Persistence =====
+
+String getDefaultCertificate() {
+  return String(DEFAULT_GITHUB_ROOT_CA);
+}
+
+bool loadCertificate() {
+  File file = SPIFFS.open("/certificate.pem", "r");
+  if (!file) {
+    DebugOut.println("No custom certificate found, using default");
+    github_root_ca = getDefaultCertificate();
+    return false;
+  }
+  
+  github_root_ca = file.readString();
+  file.close();
+  
+  // Validate the certificate has proper format
+  if (!github_root_ca.startsWith("-----BEGIN CERTIFICATE-----") ||
+      !github_root_ca.endsWith("-----END CERTIFICATE-----\n")) {
+    DebugOut.println("Invalid certificate format, resetting to default");
+    github_root_ca = getDefaultCertificate();
+    return false;
+  }
+  
+  DebugOut.println("Custom certificate loaded from SPIFFS");
+  return true;
+}
+
+void saveCertificate() {
+  File file = SPIFFS.open("/certificate.pem", "w");
+  if (!file) {
+    DebugOut.println("Failed to open certificate file for writing");
+    return;
+  }
+  
+  file.print(github_root_ca);
+  file.close();
+  DebugOut.println("Certificate saved to SPIFFS");
+}
+
+void resetCertificateToDefault() {
+  github_root_ca = getDefaultCertificate();
+  SPIFFS.remove("/certificate.pem");
+  DebugOut.println("Certificate reset to default");
+}
 
 // ===== Settings Persistence =====
 
@@ -54,7 +126,7 @@ bool loadSettings() {
 void saveSettings() {
   File file = SPIFFS.open("/settings.txt", "w");
   if (!file) {
-    Serial.println("Failed to open settings file for writing");
+    DebugOut.println("Failed to open settings file for writing");
     return;
   }
 
@@ -63,31 +135,31 @@ void saveSettings() {
   file.println(nightMode ? "1" : "0");
   file.println(enableCertValidation ? "1" : "0");
   file.close();
-  Serial.println("Settings saved to SPIFFS");
+  DebugOut.println("Settings saved to SPIFFS");
 }
 
 // ===== Factory Reset =====
 
 void performFactoryReset() {
-  Serial.println("\n=== FACTORY RESET INITIATED ===");
+  DebugOut.println("\n=== FACTORY RESET INITIATED ===");
   factoryResetInProgress = true;
   
   // Visual feedback: solid LED
   digitalWrite(LED_PIN, HIGH);
   
   // Format SPIFFS (erases all persistent data)
-  Serial.println("Formatting SPIFFS...");
+  DebugOut.println("Formatting SPIFFS...");
   if (SPIFFS.format()) {
-    Serial.println("SPIFFS formatted successfully");
+    DebugOut.println("SPIFFS formatted successfully");
   } else {
-    Serial.println("SPIFFS format failed");
+    DebugOut.println("SPIFFS format failed");
   }
   
   // End SPIFFS
   SPIFFS.end();
   
-  Serial.println("=== FACTORY RESET COMPLETE ===");
-  Serial.println("Rebooting in 2 seconds...");
+  DebugOut.println("=== FACTORY RESET COMPLETE ===");
+  DebugOut.println("Rebooting in 2 seconds...");
   
   delay(2000);
   ESP.restart();
@@ -154,7 +226,7 @@ void handleSettingsUpdate() {
     if (newCertValidation != enableCertValidation) {
       enableCertValidation = newCertValidation;
       settingsChanged = true;
-      Serial.printf("Certificate validation %s\n", enableCertValidation ? "ENABLED" : "DISABLED");
+      DebugOut.printf("Certificate validation %s\n", enableCertValidation ? "ENABLED" : "DISABLED");
     }
   }
   
@@ -174,7 +246,7 @@ void handleSettingsUpdate() {
 }
 
 void handleSettingsExport() {
-  Serial.println("Settings export requested via web interface");
+  DebugOut.println("Settings export requested via web interface");
   
   JsonDocument doc;
   
@@ -222,6 +294,13 @@ void handleSettingsExport() {
   doc["mqtt"]["haDiscovery"] = mqttHADiscovery;
   // Note: Password is intentionally excluded from export for security
   
+  // SSL Certificate (include if custom)
+  bool isDefaultCert = (github_root_ca == getDefaultCertificate());
+  doc["certificate"]["isDefault"] = isDefaultCert;
+  if (!isDefaultCert) {
+    doc["certificate"]["pem"] = github_root_ca;
+  }
+  
   // Generate timestamp
   time_t now = time(nullptr);
   struct tm timeinfo;
@@ -243,11 +322,11 @@ void handleSettingsExport() {
   server.sendHeader("Content-Disposition", "attachment; filename=\"device-settings.json\"");
   server.send(200, "application/json", json);
   
-  Serial.println("Settings exported successfully");
+  DebugOut.println("Settings exported successfully");
 }
 
 void handleSettingsImport() {
-  Serial.println("Settings import requested via web interface");
+  DebugOut.println("Settings import requested via web interface");
   
   if (!server.hasArg("plain")) {
     server.send(400, "application/json", "{\"success\": false, \"message\": \"No data received\"}");
@@ -258,7 +337,7 @@ void handleSettingsImport() {
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
   
   if (error) {
-    Serial.printf("JSON parsing failed: %s\n", error.c_str());
+    DebugOut.printf("JSON parsing failed: %s\n", error.c_str());
     server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid JSON format\"}");
     return;
   }
@@ -269,17 +348,17 @@ void handleSettingsImport() {
     return;
   }
   
-  Serial.println("Importing settings...");
+  DebugOut.println("Importing settings...");
   
   // Import WiFi settings
   if (!doc["wifi"].isNull()) {
     if (doc["wifi"]["ssid"].is<String>()) {
       wifiSSID = doc["wifi"]["ssid"].as<String>();
-      Serial.printf("WiFi SSID: %s\n", wifiSSID.c_str());
+      DebugOut.printf("WiFi SSID: %s\n", wifiSSID.c_str());
     }
     if (doc["wifi"]["password"].is<String>()) {
       wifiPassword = doc["wifi"]["password"].as<String>();
-      Serial.println("WiFi password imported");
+      DebugOut.println("WiFi password imported");
     }
     // Save WiFi credentials
     if (wifiSSID.length() > 0) {
@@ -291,15 +370,15 @@ void handleSettingsImport() {
   if (!doc["accessPoint"].isNull()) {
     if (doc["accessPoint"]["enabled"].is<bool>()) {
       apEnabled = doc["accessPoint"]["enabled"].as<bool>();
-      Serial.printf("AP Enabled: %s\n", apEnabled ? "true" : "false");
+      DebugOut.printf("AP Enabled: %s\n", apEnabled ? "true" : "false");
     }
     if (doc["accessPoint"]["ssid"].is<String>()) {
       apSSID = doc["accessPoint"]["ssid"].as<String>();
-      Serial.printf("AP SSID: %s\n", apSSID.c_str());
+      DebugOut.printf("AP SSID: %s\n", apSSID.c_str());
     }
     if (doc["accessPoint"]["password"].is<String>()) {
       apPassword = doc["accessPoint"]["password"].as<String>();
-      Serial.println("AP password imported");
+      DebugOut.println("AP password imported");
     }
   }
   
@@ -307,23 +386,23 @@ void handleSettingsImport() {
   if (!doc["settings"].isNull()) {
     if (doc["settings"]["autoUpdateEnabled"].is<bool>()) {
       autoUpdateEnabled = doc["settings"]["autoUpdateEnabled"].as<bool>();
-      Serial.printf("Auto Update: %s\n", autoUpdateEnabled ? "enabled" : "disabled");
+      DebugOut.printf("Auto Update: %s\n", autoUpdateEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["timezoneOffset"].is<int>()) {
       timezoneOffset = doc["settings"]["timezoneOffset"].as<int>();
-      Serial.printf("Timezone Offset: %d\n", timezoneOffset);
+      DebugOut.printf("Timezone Offset: %d\n", timezoneOffset);
     }
     if (doc["settings"]["nightMode"].is<bool>()) {
       nightMode = doc["settings"]["nightMode"].as<bool>();
-      Serial.printf("Night Mode: %s\n", nightMode ? "enabled" : "disabled");
+      DebugOut.printf("Night Mode: %s\n", nightMode ? "enabled" : "disabled");
     }
     if (doc["settings"]["enableCertValidation"].is<bool>()) {
       enableCertValidation = doc["settings"]["enableCertValidation"].as<bool>();
-      Serial.printf("Cert Validation: %s\n", enableCertValidation ? "enabled" : "disabled");
+      DebugOut.printf("Cert Validation: %s\n", enableCertValidation ? "enabled" : "disabled");
     }
     if (doc["settings"]["blinkingEnabled"].is<bool>()) {
       blinkingEnabled = doc["settings"]["blinkingEnabled"].as<bool>();
-      Serial.printf("Blinking: %s\n", blinkingEnabled ? "enabled" : "disabled");
+      DebugOut.printf("Blinking: %s\n", blinkingEnabled ? "enabled" : "disabled");
     }
     // Save general settings
     saveSettings();
@@ -340,15 +419,15 @@ void handleSettingsImport() {
       } else if (modeStr == "smart_auto") {
         currentMode = SMART_AUTO;
       }
-      Serial.printf("Smart Sensing Mode: %s\n", modeStr.c_str());
+      DebugOut.printf("Smart Sensing Mode: %s\n", modeStr.c_str());
     }
     if (doc["smartSensing"]["timerDuration"].is<int>() || doc["smartSensing"]["timerDuration"].is<unsigned long>()) {
       timerDuration = doc["smartSensing"]["timerDuration"].as<unsigned long>();
-      Serial.printf("Timer Duration: %lu minutes\n", timerDuration);
+      DebugOut.printf("Timer Duration: %lu minutes\n", timerDuration);
     }
     if (doc["smartSensing"]["voltageThreshold"].is<float>()) {
       voltageThreshold = doc["smartSensing"]["voltageThreshold"].as<float>();
-      Serial.printf("Voltage Threshold: %.2fV\n", voltageThreshold);
+      DebugOut.printf("Voltage Threshold: %.2fV\n", voltageThreshold);
     }
     // Save Smart Sensing settings
     saveSmartSensingSettings();
@@ -358,47 +437,66 @@ void handleSettingsImport() {
   if (!doc["mqtt"].isNull()) {
     if (doc["mqtt"]["enabled"].is<bool>()) {
       mqttEnabled = doc["mqtt"]["enabled"].as<bool>();
-      Serial.printf("MQTT Enabled: %s\n", mqttEnabled ? "true" : "false");
+      DebugOut.printf("MQTT Enabled: %s\n", mqttEnabled ? "true" : "false");
     }
     if (doc["mqtt"]["broker"].is<String>()) {
       mqttBroker = doc["mqtt"]["broker"].as<String>();
-      Serial.printf("MQTT Broker: %s\n", mqttBroker.c_str());
+      DebugOut.printf("MQTT Broker: %s\n", mqttBroker.c_str());
     }
     if (doc["mqtt"]["port"].is<int>()) {
       mqttPort = doc["mqtt"]["port"].as<int>();
-      Serial.printf("MQTT Port: %d\n", mqttPort);
+      DebugOut.printf("MQTT Port: %d\n", mqttPort);
     }
     if (doc["mqtt"]["username"].is<String>()) {
       mqttUsername = doc["mqtt"]["username"].as<String>();
-      Serial.println("MQTT username imported");
+      DebugOut.println("MQTT username imported");
     }
     if (doc["mqtt"]["baseTopic"].is<String>()) {
       mqttBaseTopic = doc["mqtt"]["baseTopic"].as<String>();
-      Serial.printf("MQTT Base Topic: %s\n", mqttBaseTopic.c_str());
+      DebugOut.printf("MQTT Base Topic: %s\n", mqttBaseTopic.c_str());
     }
     if (doc["mqtt"]["haDiscovery"].is<bool>()) {
       mqttHADiscovery = doc["mqtt"]["haDiscovery"].as<bool>();
-      Serial.printf("MQTT HA Discovery: %s\n", mqttHADiscovery ? "enabled" : "disabled");
+      DebugOut.printf("MQTT HA Discovery: %s\n", mqttHADiscovery ? "enabled" : "disabled");
     }
     // Note: Password is not imported for security - user needs to re-enter it
     // Save MQTT settings
     saveMqttSettings();
   }
   
-  Serial.println("All settings imported successfully!");
+  // Import certificate (if custom certificate was exported)
+  if (!doc["certificate"].isNull()) {
+    if (doc["certificate"]["isDefault"].is<bool>() && doc["certificate"]["isDefault"].as<bool>()) {
+      // Reset to default if the export indicates default
+      resetCertificateToDefault();
+      DebugOut.println("Certificate: reset to default");
+    } else if (doc["certificate"]["pem"].is<String>()) {
+      String certPem = doc["certificate"]["pem"].as<String>();
+      if (certPem.startsWith("-----BEGIN CERTIFICATE-----") &&
+          certPem.indexOf("-----END CERTIFICATE-----") > 0) {
+        github_root_ca = certPem;
+        saveCertificate();
+        DebugOut.println("Custom certificate imported");
+      } else {
+        DebugOut.println("Invalid certificate format in import, keeping current");
+      }
+    }
+  }
+  
+  DebugOut.println("All settings imported successfully!");
   
   // Send success response
   server.send(200, "application/json", "{\"success\": true, \"message\": \"Settings imported successfully. Device will reboot in 3 seconds.\"}");
   
   // Schedule reboot after 3 seconds
   delay(100); // Give time for response to be sent
-  Serial.println("Rebooting in 3 seconds...");
+  DebugOut.println("Rebooting in 3 seconds...");
   delay(3000);
   ESP.restart();
 }
 
 void handleFactoryReset() {
-  Serial.println("Factory reset requested via web interface");
+  DebugOut.println("Factory reset requested via web interface");
   
   // Send success response before performing reset
   server.send(200, "application/json", "{\"success\": true, \"message\": \"Factory reset initiated\"}");
@@ -411,7 +509,7 @@ void handleFactoryReset() {
 }
 
 void handleReboot() {
-  Serial.println("Reboot requested via web interface");
+  DebugOut.println("Reboot requested via web interface");
   
   // Send success response before rebooting
   server.send(200, "application/json", "{\"success\": true, \"message\": \"Rebooting device\"}");
@@ -421,4 +519,88 @@ void handleReboot() {
   
   // Reboot the ESP32
   ESP.restart();
+}
+
+// ===== Certificate HTTP API Handlers =====
+
+void handleCertificateGet() {
+  JsonDocument doc;
+  doc["success"] = true;
+  doc["certificate"] = github_root_ca;
+  doc["isDefault"] = (github_root_ca == getDefaultCertificate());
+  
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
+}
+
+void handleCertificateUpdate() {
+  if (!server.hasArg("plain")) {
+    server.send(400, "application/json", "{\"success\": false, \"message\": \"No data received\"}");
+    return;
+  }
+  
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
+  
+  if (error) {
+    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid JSON\"}");
+    return;
+  }
+  
+  if (!doc["certificate"].is<String>()) {
+    server.send(400, "application/json", "{\"success\": false, \"message\": \"Missing certificate field\"}");
+    return;
+  }
+  
+  String newCert = doc["certificate"].as<String>();
+  
+  // Normalize line endings (convert \r\n to \n)
+  newCert.replace("\r\n", "\n");
+  newCert.replace("\r", "\n");
+  
+  // Ensure certificate ends with newline
+  if (!newCert.endsWith("\n")) {
+    newCert += "\n";
+  }
+  
+  // Basic validation
+  if (!newCert.startsWith("-----BEGIN CERTIFICATE-----")) {
+    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid certificate: must start with -----BEGIN CERTIFICATE-----\"}");
+    return;
+  }
+  
+  if (newCert.indexOf("-----END CERTIFICATE-----") < 0) {
+    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid certificate: must contain -----END CERTIFICATE-----\"}");
+    return;
+  }
+  
+  // Update the certificate
+  github_root_ca = newCert;
+  saveCertificate();
+  
+  DebugOut.println("Certificate updated via web interface");
+  
+  JsonDocument resp;
+  resp["success"] = true;
+  resp["message"] = "Certificate updated successfully";
+  resp["isDefault"] = false;
+  
+  String json;
+  serializeJson(resp, json);
+  server.send(200, "application/json", json);
+}
+
+void handleCertificateReset() {
+  resetCertificateToDefault();
+  
+  JsonDocument doc;
+  doc["success"] = true;
+  doc["message"] = "Certificate reset to default";
+  doc["certificate"] = github_root_ca;
+  doc["isDefault"] = true;
+  
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
 }

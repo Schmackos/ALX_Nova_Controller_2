@@ -1,6 +1,7 @@
 #include "smart_sensing.h"
 #include "config.h"
 #include "app_state.h"
+#include "debug_serial.h"
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
 
@@ -66,14 +67,14 @@ void handleSmartSensingUpdate() {
     if (currentMode != newMode) {
       currentMode = newMode;
       settingsChanged = true;
-      Serial.printf("Mode changed to: %s\n", modeStr.c_str());
+      DebugOut.printf("Mode changed to: %s\n", modeStr.c_str());
       
       // When switching to SMART_AUTO mode
       if (currentMode == SMART_AUTO) {
         // Set timer to configured duration but don't start countdown yet
         // Countdown will start when voltage is detected in updateSmartSensingLogic()
         timerRemaining = timerDuration * 60;
-        Serial.println("SMART_AUTO mode activated - timer countdown will start when voltage is detected");
+        DebugOut.println("SMART_AUTO mode activated - timer countdown will start when voltage is detected");
       }
     }
   }
@@ -94,14 +95,14 @@ void handleSmartSensingUpdate() {
         if (amplifierState) {
           // Amplifier is ON - restart the countdown with new duration
           lastTimerUpdate = millis();
-          Serial.printf("Timer duration changed to: %d minutes (countdown active)\n", duration);
+          DebugOut.printf("Timer duration changed to: %d minutes (countdown active)\n", duration);
         } else {
           // Amplifier is OFF - just display new duration, countdown won't start until voltage detected
-          Serial.printf("Timer duration changed to: %d minutes (countdown will start when voltage detected)\n", duration);
+          DebugOut.printf("Timer duration changed to: %d minutes (countdown will start when voltage detected)\n", duration);
         }
       }
       
-      Serial.printf("Timer duration set to: %d minutes\n", duration);
+      DebugOut.printf("Timer duration set to: %d minutes\n", duration);
     } else {
       server.send(400, "application/json", "{\"success\": false, \"message\": \"Timer duration must be between 1 and 60 minutes\"}");
       return;
@@ -115,7 +116,7 @@ void handleSmartSensingUpdate() {
     if (threshold >= 0.1 && threshold <= 3.3) {
       voltageThreshold = threshold;
       settingsChanged = true;
-      Serial.printf("Voltage threshold changed to: %.2fV\n", threshold);
+      DebugOut.printf("Voltage threshold changed to: %.2fV\n", threshold);
     } else {
       server.send(400, "application/json", "{\"success\": false, \"message\": \"Voltage threshold must be between 0.1 and 3.3 volts\"}");
       return;
@@ -126,18 +127,18 @@ void handleSmartSensingUpdate() {
   if (doc["manualOverride"].is<bool>()) {
     bool state = doc["manualOverride"].as<bool>();
     setAmplifierState(state);
-    Serial.printf("Manual override: Amplifier set to %s\n", state ? "ON" : "OFF");
+    DebugOut.printf("Manual override: Amplifier set to %s\n", state ? "ON" : "OFF");
     
     if (currentMode == SMART_AUTO) {
       if (state) {
         // If turning on manually in SMART_AUTO mode, restart timer
         timerRemaining = timerDuration * 60;
         lastTimerUpdate = millis();
-        Serial.println("Manual ON: Timer restarted");
+        DebugOut.println("Manual ON: Timer restarted");
       } else {
         // If turning off manually in SMART_AUTO mode, reset timer to 0
         timerRemaining = 0;
-        Serial.println("Manual OFF: Timer reset to 0");
+        DebugOut.println("Manual OFF: Timer reset to 0");
       }
     }
   }
@@ -177,7 +178,7 @@ void setAmplifierState(bool state) {
   if (amplifierState != state) {
     amplifierState = state;
     digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
-    Serial.printf("Amplifier state changed to: %s\n", state ? "ON" : "OFF");
+    DebugOut.printf("Amplifier state changed to: %s\n", state ? "ON" : "OFF");
     
     // Broadcast state change immediately (force broadcast)
     sendSmartSensingStateInternal();
@@ -218,7 +219,7 @@ void updateSmartSensingLogic() {
         
         // Turn amplifier ON if not already
         setAmplifierState(true);
-        Serial.println("Smart Auto: Voltage detected above threshold - timer started");
+        DebugOut.println("Smart Auto: Voltage detected above threshold - timer started");
       }
       
       // Update timer countdown every second (only if amplifier is ON and timer has time remaining)
@@ -229,7 +230,7 @@ void updateSmartSensingLogic() {
         // Check if timer reached zero
         if (timerRemaining == 0) {
           setAmplifierState(false);
-          Serial.println("Smart Auto: Timer expired, turning amplifier OFF");
+          DebugOut.println("Smart Auto: Timer expired, turning amplifier OFF");
         }
       }
       
@@ -332,8 +333,8 @@ bool loadSmartSensingSettings() {
     }
   }
   
-  Serial.println("Smart Sensing settings loaded from SPIFFS");
-  Serial.printf("  Mode: %d, Timer: %lu min, Threshold: %.2fV\n", 
+  DebugOut.println("Smart Sensing settings loaded from SPIFFS");
+  DebugOut.printf("  Mode: %d, Timer: %lu min, Threshold: %.2fV\n", 
                 currentMode, timerDuration, voltageThreshold);
   
   return true;
@@ -343,7 +344,7 @@ bool loadSmartSensingSettings() {
 void saveSmartSensingSettings() {
   File file = SPIFFS.open("/smartsensing.txt", "w");
   if (!file) {
-    Serial.println("Failed to open smart sensing settings file for writing");
+    DebugOut.println("Failed to open smart sensing settings file for writing");
     return;
   }
   
@@ -352,5 +353,5 @@ void saveSmartSensingSettings() {
   file.println(String(voltageThreshold, 2));
   file.close();
   
-  Serial.println("Smart Sensing settings saved to SPIFFS");
+  DebugOut.println("Smart Sensing settings saved to SPIFFS");
 }

@@ -1,6 +1,7 @@
 #include "ota_updater.h"
 #include "config.h"
 #include "app_state.h"
+#include "debug_serial.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -53,7 +54,7 @@ void handleCheckUpdate() {
     return;
   }
   
-  Serial.println("Manual update check requested");
+  DebugOut.println("Manual update check requested");
   
   // Trigger fresh check
   checkForFirmwareUpdate();
@@ -85,7 +86,7 @@ void handleStartUpdate() {
     return;
   }
   
-  Serial.println("Manual OTA update started");
+  DebugOut.println("Manual OTA update started");
   otaStatus = "downloading";
   otaProgress = 0;
   
@@ -97,7 +98,7 @@ void handleStartUpdate() {
   
   if (updateSuccess) {
     otaStatus = "complete";
-    Serial.println("OTA update successful! Rebooting...");
+    DebugOut.println("OTA update successful! Rebooting...");
     delay(2000);
     ESP.restart();
   } else {
@@ -139,12 +140,12 @@ void handleGetReleaseNotes() {
   // Fetch release notes from GitHub releases API with secure HTTPS
   String releaseNotesUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases/tags/" + version;
   
-  Serial.printf("Fetching release notes from: %s\n", releaseNotesUrl.c_str());
+  DebugOut.printf("Fetching release notes from: %s\n", releaseNotesUrl.c_str());
   
   WiFiClientSecure client;
   
   if (enableCertValidation) {
-    client.setCACert(github_root_ca);
+    client.setCACert(github_root_ca.c_str());
   } else {
     client.setInsecure();  // Skip certificate validation
   }
@@ -196,31 +197,31 @@ void handleGetReleaseNotes() {
 
 // ===== NTP Time Synchronization =====
 void syncTimeWithNTP() {
-  Serial.println("\n=== Synchronizing Time with NTP ===");
-  Serial.printf("Timezone offset: %d seconds (%.1f hours)\n", timezoneOffset, timezoneOffset / 3600.0);
+  DebugOut.println("\n=== Synchronizing Time with NTP ===");
+  DebugOut.printf("Timezone offset: %d seconds (%.1f hours)\n", timezoneOffset, timezoneOffset / 3600.0);
   
   // Configure NTP with timezone offset (no DST offset for simplicity)
   configTime(timezoneOffset, 0, "pool.ntp.org", "time.nist.gov");
   
-  Serial.print("Waiting for NTP time sync: ");
+  DebugOut.print("Waiting for NTP time sync: ");
   time_t now = time(nullptr);
   int attempts = 0;
   
   while (now < 1000000000 && attempts < 20) {  // Wait until we have a valid timestamp
     delay(500);
-    Serial.print(".");
+    DebugOut.print(".");
     now = time(nullptr);
     attempts++;
   }
   
   if (now < 1000000000) {
-    Serial.println("\n⚠️  Failed to sync time with NTP server");
-    Serial.println("⚠️  SSL certificate validation may fail!");
+    DebugOut.println("\n⚠️  Failed to sync time with NTP server");
+    DebugOut.println("⚠️  SSL certificate validation may fail!");
   } else {
-    Serial.println("\n✅ Time synchronized successfully");
+    DebugOut.println("\n✅ Time synchronized successfully");
     struct tm timeinfo;
     if (getLocalTime(&timeinfo)) {
-      Serial.printf("📅 Current local time: %04d-%02d-%02d %02d:%02d:%02d\n",
+      DebugOut.printf("📅 Current local time: %04d-%02d-%02d %02d:%02d:%02d\n",
                     timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
                     timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
     }
@@ -234,20 +235,20 @@ void checkForFirmwareUpdate() {
     return;
   }
   
-  Serial.println("\n=== Checking for Firmware Update ===");
-  Serial.printf("Current firmware version installed: %s\n", firmwareVer);
+  DebugOut.println("\n=== Checking for Firmware Update ===");
+  DebugOut.printf("Current firmware version installed: %s\n", firmwareVer);
   
   String latestVersion = "";
   String firmwareUrl = "";
   String checksum = "";
   
   if (!getLatestReleaseInfo(latestVersion, firmwareUrl, checksum)) {
-    Serial.println("Failed to retrieve release information");
+    DebugOut.println("Failed to retrieve release information");
     return;
   }
   
   latestVersion.trim();
-  Serial.printf("Latest firmware version available: %s\n", latestVersion.c_str());
+  DebugOut.printf("Latest firmware version available: %s\n", latestVersion.c_str());
   
   int cmp = compareVersions(latestVersion, String(firmwareVer));
   
@@ -258,9 +259,9 @@ void checkForFirmwareUpdate() {
     cachedFirmwareUrl = firmwareUrl;
     cachedChecksum = checksum;
     updateDiscoveredTime = millis();
-    Serial.printf("New version available: %s\n", latestVersion.c_str());
+    DebugOut.printf("New version available: %s\n", latestVersion.c_str());
     if (checksum.length() > 0) {
-      Serial.printf("SHA256 checksum: %s\n", checksum.c_str());
+      DebugOut.printf("SHA256 checksum: %s\n", checksum.c_str());
     }
     broadcastUpdateStatus();
     sendWiFiStatus();  // Broadcast to update UI
@@ -272,9 +273,9 @@ void checkForFirmwareUpdate() {
     cachedChecksum = checksum;
     updateDiscoveredTime = 0;
     if (cmp == 0) {
-      Serial.println("Firmware is up to date!");
+      DebugOut.println("Firmware is up to date!");
     } else {
-      Serial.println("Remote firmware version is older; skipping downgrade.");
+      DebugOut.println("Remote firmware version is older; skipping downgrade.");
     }
     sendWiFiStatus();  // Broadcast to update UI
   }
@@ -285,10 +286,10 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   WiFiClientSecure client;
   
   if (enableCertValidation) {
-    Serial.println("🔐 Certificate validation: ENABLED");
-    client.setCACert(github_root_ca);
+    DebugOut.println("🔐 Certificate validation: ENABLED");
+    client.setCACert(github_root_ca.c_str());
   } else {
-    Serial.println("⚠️  Certificate validation: DISABLED (insecure mode)");
+    DebugOut.println("⚠️  Certificate validation: DISABLED (insecure mode)");
     client.setInsecure();  // Skip certificate validation
   }
   
@@ -297,10 +298,10 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   HTTPClient https;
   String apiUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases/latest";
   
-  Serial.printf("Fetching release info from: %s\n", apiUrl.c_str());
+  DebugOut.printf("Fetching release info from: %s\n", apiUrl.c_str());
   
   if (!https.begin(client, apiUrl)) {
-    Serial.println("❌ Failed to initialize HTTPS connection");
+    DebugOut.println("❌ Failed to initialize HTTPS connection");
     return false;
   }
   
@@ -308,22 +309,22 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   https.addHeader("User-Agent", "ESP32-OTA-Updater");
   https.setTimeout(15000);
   
-  Serial.println("📡 Performing HTTPS request...");
+  DebugOut.println("📡 Performing HTTPS request...");
   int httpCode = https.GET();
   
   if (httpCode != HTTP_CODE_OK) {
-    Serial.printf("❌ Failed to get release info. HTTP code: %d\n", httpCode);
+    DebugOut.printf("❌ Failed to get release info. HTTP code: %d\n", httpCode);
     if (httpCode == -1) {
-      Serial.println("⚠️  Connection failed - possible causes:");
-      Serial.println("   - SSL certificate validation failed (check NTP time sync)");
-      Serial.println("   - Network/firewall blocking HTTPS");
-      Serial.println("   - GitHub API temporarily unavailable");
+      DebugOut.println("⚠️  Connection failed - possible causes:");
+      DebugOut.println("   - SSL certificate validation failed (check NTP time sync)");
+      DebugOut.println("   - Network/firewall blocking HTTPS");
+      DebugOut.println("   - GitHub API temporarily unavailable");
     }
     https.end();
     return false;
   }
   
-  Serial.println("✅ HTTPS request successful");
+  DebugOut.println("✅ HTTPS request successful");
   
   String payload = https.getString();
   https.end();
@@ -333,13 +334,13 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   DeserializationError error = deserializeJson(doc, payload);
   
   if (error) {
-    Serial.printf("JSON parsing failed: %s\n", error.c_str());
+    DebugOut.printf("JSON parsing failed: %s\n", error.c_str());
     return false;
   }
   
   // Extract version from tag_name
   if (!doc["tag_name"].is<String>()) {
-    Serial.println("No tag_name found in release");
+    DebugOut.println("No tag_name found in release");
     return false;
   }
   
@@ -355,17 +356,17 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
     if (assetName == "firmware.bin") {
       firmwareUrl = asset["browser_download_url"].as<String>();
       foundFirmware = true;
-      Serial.printf("Found firmware asset: %s\n", firmwareUrl.c_str());
+      DebugOut.printf("Found firmware asset: %s\n", firmwareUrl.c_str());
     } else if (assetName == "firmware.bin.sha256") {
       // If there's a separate checksum file, we could download it
       // For now, we'll look for it in the release body
       String checksumUrl = asset["browser_download_url"].as<String>();
-      Serial.printf("Found checksum file: %s\n", checksumUrl.c_str());
+      DebugOut.printf("Found checksum file: %s\n", checksumUrl.c_str());
     }
   }
   
   if (!foundFirmware) {
-    Serial.println("firmware.bin not found in release assets");
+    DebugOut.println("firmware.bin not found in release assets");
     return false;
   }
   
@@ -440,17 +441,17 @@ bool performOTAUpdate(String firmwareUrl) {
   otaProgress = 0;
   broadcastUpdateStatus();
   
-  Serial.println("\n=== Starting OTA Update ===");
-  Serial.printf("Downloading from: %s\n", firmwareUrl.c_str());
+  DebugOut.println("\n=== Starting OTA Update ===");
+  DebugOut.printf("Downloading from: %s\n", firmwareUrl.c_str());
   
   // Use secure HTTPS connection with certificate validation
   WiFiClientSecure client;
   
   if (enableCertValidation) {
-    Serial.println("🔐 Certificate validation: ENABLED");
-    client.setCACert(github_root_ca);
+    DebugOut.println("🔐 Certificate validation: ENABLED");
+    client.setCACert(github_root_ca.c_str());
   } else {
-    Serial.println("⚠️  Certificate validation: DISABLED (insecure mode)");
+    DebugOut.println("⚠️  Certificate validation: DISABLED (insecure mode)");
     client.setInsecure();  // Skip certificate validation
   }
   
@@ -458,7 +459,7 @@ bool performOTAUpdate(String firmwareUrl) {
   
   HTTPClient https;
   if (!https.begin(client, firmwareUrl)) {
-    Serial.println("❌ Failed to initialize HTTPS connection");
+    DebugOut.println("❌ Failed to initialize HTTPS connection");
     otaStatus = "error";
     otaStatusMessage = "Failed to initialize secure connection";
     otaInProgress = false;
@@ -475,7 +476,7 @@ bool performOTAUpdate(String firmwareUrl) {
   int httpCode = https.GET();
   
   if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY && httpCode != HTTP_CODE_FOUND) {
-    Serial.printf("❌ Failed to download firmware. HTTP code: %d\n", httpCode);
+    DebugOut.printf("❌ Failed to download firmware. HTTP code: %d\n", httpCode);
     https.end();
     otaStatus = "error";
     otaStatusMessage = "Failed to connect to server";
@@ -486,10 +487,10 @@ bool performOTAUpdate(String firmwareUrl) {
   
   int contentLength = https.getSize();
   otaTotalBytes = contentLength;
-  Serial.printf("📦 Firmware size: %d bytes (%.2f KB)\n", contentLength, contentLength / 1024.0);
+  DebugOut.printf("📦 Firmware size: %d bytes (%.2f KB)\n", contentLength, contentLength / 1024.0);
   
   if (contentLength <= 0) {
-    Serial.println("❌ Invalid firmware size");
+    DebugOut.println("❌ Invalid firmware size");
     https.end();
     otaStatus = "error";
     otaStatusMessage = "Invalid firmware file";
@@ -501,7 +502,7 @@ bool performOTAUpdate(String firmwareUrl) {
   // Check if enough space is available
   int freeSpace = ESP.getFreeSketchSpace() - 0x1000;
   if (contentLength > freeSpace) {
-    Serial.printf("❌ Not enough space. Need: %d, Available: %d\n", contentLength, freeSpace);
+    DebugOut.printf("❌ Not enough space. Need: %d, Available: %d\n", contentLength, freeSpace);
     https.end();
     otaStatus = "error";
     otaStatusMessage = "Not enough storage space";
@@ -512,7 +513,7 @@ bool performOTAUpdate(String firmwareUrl) {
   
   // Begin OTA update
   if (!Update.begin(contentLength)) {
-    Serial.printf("❌ Failed to begin OTA. Free space: %d\n", ESP.getFreeSketchSpace());
+    DebugOut.printf("❌ Failed to begin OTA. Free space: %d\n", ESP.getFreeSketchSpace());
     https.end();
     otaStatus = "error";
     otaStatusMessage = "Failed to initialize update";
@@ -527,7 +528,7 @@ bool performOTAUpdate(String firmwareUrl) {
   otaStatusMessage = "Downloading firmware...";
   broadcastUpdateStatus();
   
-  Serial.println("📥 Downloading firmware to flash...");
+  DebugOut.println("📥 Downloading firmware to flash...");
   
   WiFiClient* stream = https.getStreamPtr();
   
@@ -544,7 +545,7 @@ bool performOTAUpdate(String firmwareUrl) {
     mbedtls_md_init(&ctx);
     mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 0);
     mbedtls_md_starts(&ctx);
-    Serial.println("🔐 Checksum verification enabled");
+    DebugOut.println("🔐 Checksum verification enabled");
   }
   
   while (https.connected() && (written < contentLength)) {
@@ -558,7 +559,7 @@ bool performOTAUpdate(String firmwareUrl) {
       }
       
       if (Update.write(buffer, bytesRead) != bytesRead) {
-        Serial.println("❌ Error writing firmware data");
+        DebugOut.println("❌ Error writing firmware data");
         Update.abort();
         if (calculatingChecksum) {
           mbedtls_md_free(&ctx);
@@ -583,7 +584,7 @@ bool performOTAUpdate(String firmwareUrl) {
         otaStatusMessage = String("Downloading: ") + String(written / 1024) + " / " + String(contentLength / 1024) + " KB";
         broadcastUpdateStatus();
         lastBroadcast = now;
-        Serial.printf("📊 Progress: %d%% (%d KB / %d KB)\n", otaProgress, written / 1024, contentLength / 1024);
+        DebugOut.printf("📊 Progress: %d%% (%d KB / %d KB)\n", otaProgress, written / 1024, contentLength / 1024);
       }
     }
     delay(1);
@@ -605,13 +606,13 @@ bool performOTAUpdate(String firmwareUrl) {
       calculatedChecksum += str;
     }
     
-    Serial.printf("📋 Expected checksum:   %s\n", cachedChecksum.c_str());
-    Serial.printf("📋 Calculated checksum: %s\n", calculatedChecksum.c_str());
+    DebugOut.printf("📋 Expected checksum:   %s\n", cachedChecksum.c_str());
+    DebugOut.printf("📋 Calculated checksum: %s\n", calculatedChecksum.c_str());
     
     if (calculatedChecksum.equalsIgnoreCase(cachedChecksum)) {
-      Serial.println("✅ Checksum verification passed!");
+      DebugOut.println("✅ Checksum verification passed!");
     } else {
-      Serial.println("❌ Checksum verification FAILED!");
+      DebugOut.println("❌ Checksum verification FAILED!");
       Update.abort();
       otaStatus = "error";
       otaStatusMessage = "Checksum verification failed - firmware corrupted";
@@ -620,18 +621,18 @@ bool performOTAUpdate(String firmwareUrl) {
       return false;
     }
   } else {
-    Serial.println("⚠️  No checksum available for verification");
+    DebugOut.println("⚠️  No checksum available for verification");
   }
   
   otaStatusMessage = "Verifying firmware...";
   otaProgress = 100;
   broadcastUpdateStatus();
-  Serial.println("✅ Download complete. Verifying...");
+  DebugOut.println("✅ Download complete. Verifying...");
   
   if (Update.end()) {
     if (Update.isFinished()) {
-      Serial.println("✅ OTA update completed successfully!");
-      Serial.println("🔄 Rebooting device in 3 seconds...");
+      DebugOut.println("✅ OTA update completed successfully!");
+      DebugOut.println("🔄 Rebooting device in 3 seconds...");
       otaProgress = 100;
       otaStatus = "complete";
       otaStatusMessage = "Update complete! Rebooting...";
@@ -639,7 +640,7 @@ bool performOTAUpdate(String firmwareUrl) {
       broadcastUpdateStatus();
       return true;
     } else {
-      Serial.println("❌ OTA update did not finish correctly");
+      DebugOut.println("❌ OTA update did not finish correctly");
       Update.abort();
       otaStatus = "error";
       otaStatusMessage = "Update verification failed";
@@ -648,7 +649,7 @@ bool performOTAUpdate(String firmwareUrl) {
       return false;
     }
   } else {
-    Serial.printf("❌ OTA update error: %s\n", Update.errorString());
+    DebugOut.printf("❌ OTA update error: %s\n", Update.errorString());
     Update.abort();
     otaStatus = "error";
     otaStatusMessage = String("Update error: ") + Update.errorString();

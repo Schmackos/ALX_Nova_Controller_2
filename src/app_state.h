@@ -100,6 +100,6 @@ extern float prevMqttVoltageReading;
 extern unsigned long lastMqttPublish;
 
 // ===== GitHub Root CA Certificate =====
-extern const char* github_root_ca;
+extern String github_root_ca;
 
 #endif // APP_STATE_H
