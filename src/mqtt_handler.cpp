@@ -928,6 +928,22 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
   
+  // ===== Latest Firmware Version Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Latest Firmware Version";
+    doc["unique_id"] = deviceId + "_latest_firmware";
+    doc["state_topic"] = base + "/system/latest_version";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:tag-arrow-up";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/latest_firmware/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
   // ===== Reboot Button =====
   {
     JsonDocument doc;
@@ -1190,6 +1206,7 @@ void removeHADiscovery() {
     "homeassistant/sensor/%s/timer_remaining/config",
     "homeassistant/sensor/%s/rssi/config",
     "homeassistant/sensor/%s/firmware/config",
+    "homeassistant/sensor/%s/latest_firmware/config",
     "homeassistant/sensor/%s/ip/config",
     "homeassistant/sensor/%s/cpu_temp/config",
     "homeassistant/sensor/%s/cpu_usage/config",
