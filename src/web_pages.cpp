@@ -946,6 +946,103 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             font-size: 0.9em;
             opacity: 0.7;
         }
+        /* Performance History Section */
+        .history-section {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            cursor: pointer;
+            background: rgba(0, 0, 0, 0.1);
+            transition: background 0.2s ease;
+        }
+        .history-header:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .history-header h3 {
+            margin: 0;
+            font-size: 1.1em;
+            color: #9c27b0;
+        }
+        .collapse-icon {
+            font-size: 0.9em;
+            transition: transform 0.3s ease;
+        }
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+        .history-content {
+            padding: 15px 20px 20px;
+            display: block;
+        }
+        .history-content.collapsed {
+            display: none;
+        }
+        .history-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .history-controls select {
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.3);
+            color: inherit;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+        .graph-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        @media (max-width: 700px) {
+            .graph-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        .graph-card {
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .graph-card h4 {
+            margin: 0 0 10px 0;
+            font-size: 0.95em;
+            opacity: 0.8;
+        }
+        .graph-card canvas {
+            width: 100%;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+        }
+        .graph-legend {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 0.8em;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            opacity: 0.8;
+        }
+        .legend-item.total { color: #ff9800; }
+        .legend-item.core0 { color: #ffb74d; }
+        .legend-item.core1 { color: #f57c00; }
+        .legend-item.heap { color: #2196F3; }
     </style>
 </head>
 <body>
@@ -1394,6 +1491,42 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
             
+            <!-- Performance History Section -->
+            <div class="history-section">
+                <div class="history-header" onclick="toggleHistorySection()">
+                    <h3>Performance History</h3>
+                    <span class="collapse-icon" id="historyCollapseIcon">▼</span>
+                </div>
+                <div class="history-content" id="historyContent">
+                    <div class="history-controls">
+                        <label>Time Range:</label>
+                        <select id="historyTimeRange" onchange="changeHistoryRange()">
+                            <option value="60">1 minute</option>
+                            <option value="300" selected>5 minutes</option>
+                            <option value="600">10 minutes</option>
+                        </select>
+                    </div>
+                    <div class="graph-container">
+                        <div class="graph-card">
+                            <h4>CPU Usage</h4>
+                            <canvas id="cpuGraph"></canvas>
+                            <div class="graph-legend cpu-legend">
+                                <span class="legend-item total">● Total</span>
+                                <span class="legend-item core0">● Core 0</span>
+                                <span class="legend-item core1">● Core 1</span>
+                            </div>
+                        </div>
+                        <div class="graph-card">
+                            <h4>Memory Usage</h4>
+                            <canvas id="memoryGraph"></canvas>
+                            <div class="graph-legend memory-legend">
+                                <span class="legend-item heap">● Heap %</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="debug-info">
                 Real-time terminal output from the ESP32. Messages are streamed via WebSocket when connected.
             </div>
@@ -1485,6 +1618,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let wsReconnectDelay = 2000;
         const WS_MIN_RECONNECT_DELAY = 2000;
         const WS_MAX_RECONNECT_DELAY = 30000;
+        
+        // Performance History Data
+        let historyData = {
+            timestamps: [],
+            cpuTotal: [],
+            cpuCore0: [],
+            cpuCore1: [],
+            memoryPercent: []
+        };
+        let maxHistoryPoints = 300; // 5 minutes at 1s intervals
+        let historyCollapsed = false;
 
         function initWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -3229,6 +3373,228 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (percentage > 90) barElement.classList.replace('warning', 'danger');
         }
         
+        // ===== Performance History Functions =====
+        
+        function toggleHistorySection() {
+            historyCollapsed = !historyCollapsed;
+            const content = document.getElementById('historyContent');
+            const icon = document.getElementById('historyCollapseIcon');
+            
+            if (historyCollapsed) {
+                content.classList.add('collapsed');
+                icon.classList.add('collapsed');
+            } else {
+                content.classList.remove('collapsed');
+                icon.classList.remove('collapsed');
+                // Redraw graphs when expanding
+                drawCpuGraph();
+                drawMemoryGraph();
+            }
+            
+            // Save preference
+            localStorage.setItem('historyCollapsed', historyCollapsed);
+        }
+        
+        function changeHistoryRange() {
+            const select = document.getElementById('historyTimeRange');
+            maxHistoryPoints = parseInt(select.value);
+            localStorage.setItem('historyTimeRange', maxHistoryPoints);
+            
+            // Trim existing data if needed
+            while (historyData.timestamps.length > maxHistoryPoints) {
+                historyData.timestamps.shift();
+                historyData.cpuTotal.shift();
+                historyData.cpuCore0.shift();
+                historyData.cpuCore1.shift();
+                historyData.memoryPercent.shift();
+            }
+            
+            // Redraw graphs
+            drawCpuGraph();
+            drawMemoryGraph();
+        }
+        
+        function addHistoryDataPoint(data) {
+            const now = Date.now();
+            
+            // Add new data points
+            historyData.timestamps.push(now);
+            
+            if (data.cpu) {
+                historyData.cpuTotal.push(data.cpu.usageTotal || 0);
+                historyData.cpuCore0.push(data.cpu.usageCore0 || 0);
+                historyData.cpuCore1.push(data.cpu.usageCore1 || 0);
+            } else {
+                historyData.cpuTotal.push(0);
+                historyData.cpuCore0.push(0);
+                historyData.cpuCore1.push(0);
+            }
+            
+            if (data.memory && data.memory.heapTotal > 0) {
+                const heapUsed = data.memory.heapTotal - data.memory.heapFree;
+                const heapPercent = (heapUsed / data.memory.heapTotal) * 100;
+                historyData.memoryPercent.push(heapPercent);
+            } else {
+                historyData.memoryPercent.push(0);
+            }
+            
+            // Trim old data if exceeds max points
+            while (historyData.timestamps.length > maxHistoryPoints) {
+                historyData.timestamps.shift();
+                historyData.cpuTotal.shift();
+                historyData.cpuCore0.shift();
+                historyData.cpuCore1.shift();
+                historyData.memoryPercent.shift();
+            }
+            
+            // Redraw graphs if section is visible
+            if (!historyCollapsed) {
+                drawCpuGraph();
+                drawMemoryGraph();
+            }
+        }
+        
+        function initHistorySettings() {
+            // Load saved preferences
+            const savedCollapsed = localStorage.getItem('historyCollapsed');
+            if (savedCollapsed === 'true') {
+                historyCollapsed = true;
+                document.getElementById('historyContent').classList.add('collapsed');
+                document.getElementById('historyCollapseIcon').classList.add('collapsed');
+            }
+            
+            const savedRange = localStorage.getItem('historyTimeRange');
+            if (savedRange) {
+                maxHistoryPoints = parseInt(savedRange);
+                document.getElementById('historyTimeRange').value = savedRange;
+            }
+        }
+        
+        // ===== Canvas Graph Rendering =====
+        
+        function drawGraph(canvasId, datasets, options = {}) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            
+            // Set canvas size for high DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            
+            const width = rect.width;
+            const height = rect.height;
+            const padding = { top: 10, right: 10, bottom: 25, left: 40 };
+            const graphWidth = width - padding.left - padding.right;
+            const graphHeight = height - padding.top - padding.bottom;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+            
+            // Get text color based on theme
+            const isDarkTheme = !document.body.classList.contains('light-theme');
+            const textColor = isDarkTheme ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
+            const gridColor = isDarkTheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            
+            // Draw grid and Y-axis labels
+            ctx.strokeStyle = gridColor;
+            ctx.lineWidth = 1;
+            ctx.font = '10px sans-serif';
+            ctx.fillStyle = textColor;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            
+            const yLabels = [0, 25, 50, 75, 100];
+            yLabels.forEach(val => {
+                const y = padding.top + graphHeight - (val / 100) * graphHeight;
+                
+                // Grid line
+                ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(width - padding.right, y);
+                ctx.stroke();
+                
+                // Label
+                ctx.fillText(val + '%', padding.left - 5, y);
+            });
+            
+            // Draw X-axis time labels
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            
+            const timeRangeSeconds = maxHistoryPoints * (statsRefreshRate / 1000);
+            const timeLabels = [];
+            
+            if (timeRangeSeconds <= 60) {
+                timeLabels.push({ pos: 0, label: 'now' }, { pos: 0.5, label: '-30s' }, { pos: 1, label: '-1m' });
+            } else if (timeRangeSeconds <= 300) {
+                timeLabels.push({ pos: 0, label: 'now' }, { pos: 0.2, label: '-1m' }, { pos: 0.4, label: '-2m' }, 
+                               { pos: 0.6, label: '-3m' }, { pos: 0.8, label: '-4m' }, { pos: 1, label: '-5m' });
+            } else {
+                timeLabels.push({ pos: 0, label: 'now' }, { pos: 0.2, label: '-2m' }, { pos: 0.4, label: '-4m' }, 
+                               { pos: 0.6, label: '-6m' }, { pos: 0.8, label: '-8m' }, { pos: 1, label: '-10m' });
+            }
+            
+            timeLabels.forEach(item => {
+                const x = padding.left + graphWidth - (item.pos * graphWidth);
+                ctx.fillText(item.label, x, height - padding.bottom + 5);
+            });
+            
+            // Draw data lines
+            if (historyData.timestamps.length < 2) {
+                // Not enough data yet
+                ctx.fillStyle = textColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Collecting data...', width / 2, height / 2);
+                return;
+            }
+            
+            datasets.forEach(dataset => {
+                const data = dataset.data;
+                if (!data || data.length < 2) return;
+                
+                ctx.strokeStyle = dataset.color;
+                ctx.lineWidth = dataset.lineWidth || 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                
+                ctx.beginPath();
+                
+                for (let i = 0; i < data.length; i++) {
+                    // X position: rightmost = newest data
+                    const x = padding.left + (i / (maxHistoryPoints - 1)) * graphWidth;
+                    // Y position: 0% at bottom, 100% at top
+                    const y = padding.top + graphHeight - (data[i] / 100) * graphHeight;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                
+                ctx.stroke();
+            });
+        }
+        
+        function drawCpuGraph() {
+            drawGraph('cpuGraph', [
+                { data: historyData.cpuTotal, color: '#ff9800', lineWidth: 2.5 },
+                { data: historyData.cpuCore0, color: '#ffb74d', lineWidth: 1.5 },
+                { data: historyData.cpuCore1, color: '#f57c00', lineWidth: 1.5 }
+            ]);
+        }
+        
+        function drawMemoryGraph() {
+            drawGraph('memoryGraph', [
+                { data: historyData.memoryPercent, color: '#2196F3', lineWidth: 2.5 }
+            ]);
+        }
+        
         function updateHardwareStats(data) {
             // Memory stats
             if (data.memory) {
@@ -3331,12 +3697,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (data.uptime !== undefined) {
                 document.getElementById('statUptime').textContent = formatUptime(data.uptime);
             }
+            
+            // Add data point to history graphs
+            addHistoryDataPoint(data);
         }
         
         // Initialize hardware stats when page loads
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize history settings
+            initHistorySettings();
+            
             // Delay slightly to ensure WebSocket is ready
             setTimeout(initHardwareStats, 1000);
+            
+            // Initial graph draw (empty state)
+            setTimeout(function() {
+                drawCpuGraph();
+                drawMemoryGraph();
+            }, 100);
+        });
+        
+        // Redraw graphs on window resize
+        window.addEventListener('resize', function() {
+            if (!historyCollapsed) {
+                drawCpuGraph();
+                drawMemoryGraph();
+            }
         });
         
         function clearDebugConsole() {

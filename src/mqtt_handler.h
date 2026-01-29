@@ -24,6 +24,8 @@ void publishMqttBlinkingState();
 void publishMqttSmartSensingState();
 void publishMqttWifiStatus();
 void publishMqttSystemStatus();
+void publishMqttUpdateState();
+void publishMqttHardwareStats();
 
 // ===== Home Assistant Discovery =====
 void publishHADiscovery();

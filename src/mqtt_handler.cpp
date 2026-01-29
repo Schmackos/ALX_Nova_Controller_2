@@ -5,6 +5,12 @@
 #include "debug_serial.h"
 #include <SPIFFS.h>
 
+// State tracking for hardware stats change detection
+static unsigned long prevMqttUptime = 0;
+static uint32_t prevMqttHeapFree = 0;
+static float prevMqttCpuUsage = 0;
+static float prevMqttTemperature = 0;
+
 // External functions from other modules
 extern void sendBlinkingState();
 extern void sendLEDState();
@@ -14,6 +20,7 @@ extern void sendWiFiStatus();
 extern void saveSettings();
 extern void performFactoryReset();
 extern void checkForFirmwareUpdate();
+extern bool performOTAUpdate(String firmwareUrl);
 extern void setAmplifierState(bool state);
 
 // ===== MQTT Settings Functions =====
@@ -127,9 +134,12 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/smartsensing/voltage_threshold/set").c_str());
   mqttClient.subscribe((base + "/ap/enabled/set").c_str());
   mqttClient.subscribe((base + "/settings/auto_update/set").c_str());
+  mqttClient.subscribe((base + "/settings/night_mode/set").c_str());
+  mqttClient.subscribe((base + "/settings/cert_validation/set").c_str());
   mqttClient.subscribe((base + "/system/reboot").c_str());
   mqttClient.subscribe((base + "/system/factory_reset").c_str());
   mqttClient.subscribe((base + "/system/check_update").c_str());
+  mqttClient.subscribe((base + "/system/update/command").c_str());
   
   DebugOut.println("MQTT: Subscribed to command topics");
 }
@@ -272,6 +282,27 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     publishMqttSystemStatus();
   }
+  // Handle night mode setting
+  else if (topicStr == base + "/settings/night_mode/set") {
+    bool enabled = (message == "ON" || message == "1" || message == "true");
+    if (nightMode != enabled) {
+      nightMode = enabled;
+      saveSettings();
+      DebugOut.printf("MQTT: Night mode set to %s\n", enabled ? "ON" : "OFF");
+      sendWiFiStatus();  // Night mode is part of WiFi status in web UI
+    }
+    publishMqttSystemStatus();
+  }
+  // Handle certificate validation setting
+  else if (topicStr == base + "/settings/cert_validation/set") {
+    bool enabled = (message == "ON" || message == "1" || message == "true");
+    if (enableCertValidation != enabled) {
+      enableCertValidation = enabled;
+      saveSettings();
+      DebugOut.printf("MQTT: Certificate validation set to %s\n", enabled ? "ON" : "OFF");
+    }
+    publishMqttSystemStatus();
+  }
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
     DebugOut.println("MQTT: Reboot command received");
@@ -289,6 +320,29 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     DebugOut.println("MQTT: Update check command received");
     checkForFirmwareUpdate();
     publishMqttSystemStatus();
+    publishMqttUpdateState();
+  }
+  // Handle update install command (from HA Update entity)
+  else if (topicStr == base + "/system/update/command") {
+    if (message == "install") {
+      DebugOut.println("MQTT: Firmware install command received from Home Assistant");
+      if (updateAvailable && cachedFirmwareUrl.length() > 0) {
+        DebugOut.println("MQTT: Starting OTA update...");
+        // Publish in_progress state before starting
+        publishMqttUpdateState();
+        bool success = performOTAUpdate(cachedFirmwareUrl);
+        if (success) {
+          DebugOut.println("MQTT: OTA update successful, rebooting...");
+          delay(1000);
+          ESP.restart();
+        } else {
+          DebugOut.println("MQTT: OTA update failed");
+          publishMqttUpdateState();  // Update state to show failure
+        }
+      } else {
+        DebugOut.println("MQTT: No update available or firmware URL missing");
+      }
+    }
   }
 }
 
@@ -508,6 +562,92 @@ void publishMqttSystemStatus() {
   
   mqttClient.publish((base + "/settings/auto_update").c_str(), autoUpdateEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/system/mac").c_str(), WiFi.macAddress().c_str(), true);
+  
+  // Additional settings
+  mqttClient.publish((base + "/settings/timezone_offset").c_str(), String(timezoneOffset).c_str(), true);
+  mqttClient.publish((base + "/settings/night_mode").c_str(), nightMode ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/settings/cert_validation").c_str(), enableCertValidation ? "ON" : "OFF", true);
+}
+
+// Publish update state for Home Assistant Update entity
+void publishMqttUpdateState() {
+  if (!mqttClient.connected()) return;
+  
+  String base = mqttBaseTopic;
+  
+  // Build JSON state for HA Update entity
+  JsonDocument doc;
+  doc["installed_version"] = firmwareVer;
+  doc["latest_version"] = cachedLatestVersion.length() > 0 ? cachedLatestVersion : firmwareVer;
+  doc["title"] = String(MANUFACTURER_MODEL) + " Firmware";
+  doc["release_url"] = String("https://github.com/") + GITHUB_REPO_OWNER + "/" + GITHUB_REPO_NAME + "/releases";
+  doc["in_progress"] = otaInProgress;
+  
+  // Add release summary if update available
+  if (updateAvailable && cachedLatestVersion.length() > 0) {
+    doc["release_summary"] = "New firmware version " + cachedLatestVersion + " is available";
+  }
+  
+  String json;
+  serializeJson(doc, json);
+  mqttClient.publish((base + "/system/update/state").c_str(), json.c_str(), true);
+}
+
+// Publish hardware statistics
+void publishMqttHardwareStats() {
+  if (!mqttClient.connected()) return;
+  
+  // Update CPU usage before reading
+  updateCpuUsage();
+  
+  String base = mqttBaseTopic;
+  
+  // Memory - Internal Heap
+  mqttClient.publish((base + "/hardware/heap_total").c_str(), String(ESP.getHeapSize()).c_str(), true);
+  mqttClient.publish((base + "/hardware/heap_free").c_str(), String(ESP.getFreeHeap()).c_str(), true);
+  mqttClient.publish((base + "/hardware/heap_min_free").c_str(), String(ESP.getMinFreeHeap()).c_str(), true);
+  mqttClient.publish((base + "/hardware/heap_max_block").c_str(), String(ESP.getMaxAllocHeap()).c_str(), true);
+  
+  // Memory - PSRAM (if available)
+  uint32_t psramSize = ESP.getPsramSize();
+  if (psramSize > 0) {
+    mqttClient.publish((base + "/hardware/psram_total").c_str(), String(psramSize).c_str(), true);
+    mqttClient.publish((base + "/hardware/psram_free").c_str(), String(ESP.getFreePsram()).c_str(), true);
+  }
+  
+  // CPU Information
+  mqttClient.publish((base + "/hardware/cpu_freq").c_str(), String(ESP.getCpuFreqMHz()).c_str(), true);
+  mqttClient.publish((base + "/hardware/cpu_model").c_str(), ESP.getChipModel(), true);
+  mqttClient.publish((base + "/hardware/cpu_cores").c_str(), String(ESP.getChipCores()).c_str(), true);
+  
+  // CPU Utilization
+  float cpuCore0 = getCpuUsageCore0();
+  float cpuCore1 = getCpuUsageCore1();
+  float cpuTotal = (cpuCore0 + cpuCore1) / 2.0;
+  mqttClient.publish((base + "/hardware/cpu_usage_core0").c_str(), String(cpuCore0, 1).c_str(), true);
+  mqttClient.publish((base + "/hardware/cpu_usage_core1").c_str(), String(cpuCore1, 1).c_str(), true);
+  mqttClient.publish((base + "/hardware/cpu_usage").c_str(), String(cpuTotal, 1).c_str(), true);
+  
+  // Temperature
+  float temp = temperatureRead();
+  mqttClient.publish((base + "/hardware/temperature").c_str(), String(temp, 1).c_str(), true);
+  
+  // Storage - Flash
+  mqttClient.publish((base + "/hardware/flash_size").c_str(), String(ESP.getFlashChipSize()).c_str(), true);
+  mqttClient.publish((base + "/hardware/sketch_size").c_str(), String(ESP.getSketchSize()).c_str(), true);
+  mqttClient.publish((base + "/hardware/sketch_free").c_str(), String(ESP.getFreeSketchSpace()).c_str(), true);
+  
+  // Storage - SPIFFS
+  mqttClient.publish((base + "/hardware/spiffs_total").c_str(), String(SPIFFS.totalBytes()).c_str(), true);
+  mqttClient.publish((base + "/hardware/spiffs_used").c_str(), String(SPIFFS.usedBytes()).c_str(), true);
+  
+  // WiFi channel and AP clients
+  mqttClient.publish((base + "/wifi/channel").c_str(), String(WiFi.channel()).c_str(), true);
+  mqttClient.publish((base + "/ap/clients").c_str(), String(WiFi.softAPgetStationNum()).c_str(), true);
+  
+  // Uptime (in seconds for easier reading)
+  unsigned long uptimeSeconds = millis() / 1000;
+  mqttClient.publish((base + "/system/uptime").c_str(), String(uptimeSeconds).c_str(), true);
 }
 
 // Publish all states
@@ -517,6 +657,8 @@ void publishMqttState() {
   publishMqttSmartSensingState();
   publishMqttWifiStatus();
   publishMqttSystemStatus();
+  publishMqttUpdateState();
+  publishMqttHardwareStats();
 }
 
 // ===== Home Assistant Auto-Discovery =====
@@ -839,6 +981,25 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
   
+  // ===== Firmware Update Entity =====
+  // This provides the native HA Update entity with install capability
+  {
+    JsonDocument doc;
+    doc["name"] = "Firmware";
+    doc["unique_id"] = deviceId + "_firmware_update";
+    doc["device_class"] = "firmware";
+    doc["state_topic"] = base + "/system/update/state";
+    doc["command_topic"] = base + "/system/update/command";
+    doc["payload_install"] = "install";
+    doc["entity_picture"] = "https://brands.home-assistant.io/_/esphome/icon.png";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/update/" + deviceId + "/firmware/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
   // ===== IP Address Sensor =====
   {
     JsonDocument doc;
@@ -852,6 +1013,154 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/ip/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
+  // ===== Hardware Diagnostics =====
+  
+  // ===== CPU Temperature Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "CPU Temperature";
+    doc["unique_id"] = deviceId + "_cpu_temp";
+    doc["state_topic"] = base + "/hardware/temperature";
+    doc["unit_of_measurement"] = "°C";
+    doc["device_class"] = "temperature";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:thermometer";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/cpu_temp/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
+  // ===== CPU Usage Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "CPU Usage";
+    doc["unique_id"] = deviceId + "_cpu_usage";
+    doc["state_topic"] = base + "/hardware/cpu_usage";
+    doc["unit_of_measurement"] = "%";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:cpu-64-bit";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/cpu_usage/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
+  // ===== Free Heap Memory Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Free Heap Memory";
+    doc["unique_id"] = deviceId + "_heap_free";
+    doc["state_topic"] = base + "/hardware/heap_free";
+    doc["unit_of_measurement"] = "B";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:memory";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/heap_free/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
+  // ===== Uptime Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Uptime";
+    doc["unique_id"] = deviceId + "_uptime";
+    doc["state_topic"] = base + "/system/uptime";
+    doc["unit_of_measurement"] = "s";
+    doc["device_class"] = "duration";
+    doc["state_class"] = "total_increasing";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:clock-outline";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/uptime/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
+  // ===== SPIFFS Used Storage Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "SPIFFS Used";
+    doc["unique_id"] = deviceId + "_spiffs_used";
+    doc["state_topic"] = base + "/hardware/spiffs_used";
+    doc["unit_of_measurement"] = "B";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:harddisk";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/spiffs_used/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
+  // ===== WiFi Channel Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "WiFi Channel";
+    doc["unique_id"] = deviceId + "_wifi_channel";
+    doc["state_topic"] = base + "/wifi/channel";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:wifi";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/wifi_channel/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
+  // ===== Night Mode Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Night Mode";
+    doc["unique_id"] = deviceId + "_night_mode";
+    doc["state_topic"] = base + "/settings/night_mode";
+    doc["command_topic"] = base + "/settings/night_mode/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:weather-night";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/night_mode/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+  
+  // ===== Certificate Validation Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Certificate Validation";
+    doc["unique_id"] = deviceId + "_cert_validation";
+    doc["state_topic"] = base + "/settings/cert_validation";
+    doc["command_topic"] = base + "/settings/cert_validation/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:certificate";
+    addHADeviceInfo(doc);
+    
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/cert_validation/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
   
@@ -872,6 +1181,8 @@ void removeHADiscovery() {
     "homeassistant/switch/%s/amplifier/config",
     "homeassistant/switch/%s/ap/config",
     "homeassistant/switch/%s/auto_update/config",
+    "homeassistant/switch/%s/night_mode/config",
+    "homeassistant/switch/%s/cert_validation/config",
     "homeassistant/select/%s/mode/config",
     "homeassistant/number/%s/timer_duration/config",
     "homeassistant/number/%s/voltage_threshold/config",
@@ -880,11 +1191,18 @@ void removeHADiscovery() {
     "homeassistant/sensor/%s/rssi/config",
     "homeassistant/sensor/%s/firmware/config",
     "homeassistant/sensor/%s/ip/config",
+    "homeassistant/sensor/%s/cpu_temp/config",
+    "homeassistant/sensor/%s/cpu_usage/config",
+    "homeassistant/sensor/%s/heap_free/config",
+    "homeassistant/sensor/%s/uptime/config",
+    "homeassistant/sensor/%s/spiffs_used/config",
+    "homeassistant/sensor/%s/wifi_channel/config",
     "homeassistant/binary_sensor/%s/wifi_connected/config",
     "homeassistant/binary_sensor/%s/voltage_detected/config",
     "homeassistant/binary_sensor/%s/update_available/config",
     "homeassistant/button/%s/reboot/config",
-    "homeassistant/button/%s/check_update/config"
+    "homeassistant/button/%s/check_update/config",
+    "homeassistant/update/%s/firmware/config"
   };
   
   char topicBuf[128];
