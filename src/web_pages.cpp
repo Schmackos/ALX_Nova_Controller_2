@@ -916,7 +916,47 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .drop-zone-text strong {
             color: var(--accent);
         }
+
+        /* ===== User Manual QR Code Section ===== */
+        .qr-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+            gap: 12px;
+        }
+
+        .qr-code {
+            background: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+
+        .qr-code canvas {
+            display: block;
+        }
+
+        .manual-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 14px;
+            word-break: break-all;
+            text-align: center;
+        }
+
+        .manual-link:hover {
+            text-decoration: underline;
+        }
+
+        .manual-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 4px;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <!-- Tab Navigation Bar -->
@@ -1089,9 +1129,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="toggle-row">
                     <div>
                         <div class="toggle-label">Enable MQTT</div>
+                        <div class="toggle-sublabel">Toggle to connect/disconnect</div>
                     </div>
                     <label class="switch">
-                        <input type="checkbox" id="mqttEnabled">
+                        <input type="checkbox" id="mqttEnabled" onchange="toggleMqttEnabled()">
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -1117,7 +1158,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 <div class="form-group">
                     <label class="form-label">Base Topic</label>
-                    <input type="text" class="form-input" id="mqttBaseTopic" placeholder="alx/audio">
+                    <input type="text" class="form-input" id="mqttBaseTopic" placeholder="ALX/device-serial">
+                    <div class="text-secondary" style="font-size: 11px; margin-top: 4px;">Leave empty to use: <span id="mqttDefaultTopic">ALX/{serial}</span></div>
                 </div>
                 <div class="toggle-row">
                     <div>
@@ -1251,6 +1293,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="card-title">Device Actions</div>
                 <button class="btn btn-secondary mb-8" onclick="startReboot()">Reboot Device</button>
                 <button class="btn btn-danger" onclick="startFactoryReset()">Factory Reset</button>
+            </div>
+
+            <!-- User Manual -->
+            <div class="card">
+                <div class="collapsible-header" onclick="toggleManualSection()">
+                    <span class="card-title" style="margin-bottom: 0;">User Manual</span>
+                    <svg viewBox="0 0 24 24" id="manualChevron"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" id="manualContent">
+                    <div class="qr-container">
+                        <div class="manual-description">Scan the QR code or click the link below to access the full user manual:</div>
+                        <div class="qr-code" id="manualQrCode"></div>
+                        <a href="#" id="manualLink" class="manual-link" target="_blank" rel="noopener noreferrer">Loading...</a>
+                        <div class="manual-description">The manual includes setup instructions, troubleshooting tips, and feature documentation.</div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -1399,6 +1457,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="deviceSerial">--</span>
                     </div>
                     <div class="info-row">
+                        <span class="info-label">MAC Address</span>
+                        <span class="info-value" id="deviceMac">--</span>
+                    </div>
+                    <div class="info-row">
                         <span class="info-label">Signal Strength</span>
                         <span class="info-value" id="wifiRssi">-- dBm</span>
                     </div>
@@ -1471,7 +1533,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <form onsubmit="submitAPConfig(event)">
                 <div class="form-group">
                     <label class="form-label">AP Network Name (SSID)</label>
-                    <input type="text" class="form-input" id="apSSID" placeholder="ESP32-LED-Setup">
+                    <input type="text" class="form-input" id="apSSID" placeholder="ALX-XXXXXXXXXXXX">
                 </div>
                 <div class="form-group">
                     <label class="form-label">AP Password</label>
@@ -1664,7 +1726,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (data.mode === 'ap') {
                 html = `
                     <div class="info-row"><span class="info-label">Mode</span><span class="info-value text-warning">Access Point</span></div>
-                    <div class="info-row"><span class="info-label">SSID</span><span class="info-value">${data.apSSID || 'ESP32-LED-Setup'}</span></div>
+                    <div class="info-row"><span class="info-label">SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
                     <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || '192.168.4.1'}</span></div>
                     <div class="info-row"><span class="info-label">MAC</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
                 `;
@@ -1728,9 +1790,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             }
             
-            // Update device serial number in Debug tab
+            // Update device serial number and MAC in Debug tab
             if (data.serialNumber) {
                 document.getElementById('deviceSerial').textContent = data.serialNumber;
+            }
+            if (data.mac) {
+                document.getElementById('deviceMac').textContent = data.mac;
+            }
+            
+            // Pre-fill WiFi SSID with currently connected network
+            if (data.ssid && data.connected) {
+                document.getElementById('wifiSSID').value = data.ssid;
             }
         }
 
@@ -2013,13 +2083,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('mqttPort').value = data.port || 1883;
                 document.getElementById('mqttUsername').value = data.username || '';
                 document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
+                document.getElementById('mqttBaseTopic').placeholder = data.defaultBaseTopic || 'ALX/device-serial';
+                document.getElementById('mqttDefaultTopic').textContent = data.defaultBaseTopic || 'ALX/{serial}';
                 document.getElementById('mqttHADiscovery').checked = data.haDiscovery || false;
-                updateMqttConnectionStatus(data.connected, data.deviceId, data.broker, data.port);
+                updateMqttConnectionStatus(data.connected, data.broker, data.port, data.effectiveBaseTopic);
             })
             .catch(err => console.error('Failed to load MQTT settings:', err));
         }
 
-        function updateMqttConnectionStatus(connected, deviceId, broker, port) {
+        function updateMqttConnectionStatus(connected, broker, port, baseTopic) {
             const statusBox = document.getElementById('mqttStatusBox');
             const enabled = document.getElementById('mqttEnabled').checked;
             
@@ -2029,13 +2101,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-success">Connected</span></div>
                     <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
-                    ${deviceId ? `<div class="info-row"><span class="info-label">Device ID</span><span class="info-value">${deviceId}</span></div>` : ''}
+                    <div class="info-row"><span class="info-label">Base Topic</span><span class="info-value">${baseTopic || 'Unknown'}</span></div>
                 `;
             } else if (enabled) {
                 html = `
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Disconnected</span></div>
                     <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Not configured'}</span></div>
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
+                    ${baseTopic ? `<div class="info-row"><span class="info-label">Base Topic</span><span class="info-value">${baseTopic}</span></div>` : ''}
                 `;
             } else {
                 html = `
@@ -2046,9 +2119,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             statusBox.innerHTML = html;
         }
 
+        function toggleMqttEnabled() {
+            const enabled = document.getElementById('mqttEnabled').checked;
+            fetch('/api/mqtt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(enabled ? 'MQTT enabled' : 'MQTT disabled', 'success');
+                    setTimeout(loadMqttSettings, 1000);
+                } else {
+                    showToast(data.message || 'Failed to toggle MQTT', 'error');
+                    // Revert toggle on failure
+                    document.getElementById('mqttEnabled').checked = !enabled;
+                }
+            })
+            .catch(err => {
+                showToast('Failed to toggle MQTT', 'error');
+                document.getElementById('mqttEnabled').checked = !enabled;
+            });
+        }
+
         function saveMqttSettings() {
             const settings = {
-                enabled: document.getElementById('mqttEnabled').checked,
                 broker: document.getElementById('mqttBroker').value,
                 port: parseInt(document.getElementById('mqttPort').value) || 1883,
                 username: document.getElementById('mqttUsername').value,
@@ -2524,6 +2620,54 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        // ===== User Manual Section =====
+        let manualCollapsed = true;
+        let manualQrGenerated = false;
+        const GITHUB_REPO_OWNER = 'Schmackos';
+        const GITHUB_REPO_NAME = 'ALX_Nova_Controller_2';
+        const MANUAL_URL = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/blob/main/USER_MANUAL.md`;
+
+        function toggleManualSection() {
+            manualCollapsed = !manualCollapsed;
+            const content = document.getElementById('manualContent');
+            const chevron = document.getElementById('manualChevron');
+            
+            if (manualCollapsed) {
+                content.classList.remove('open');
+                chevron.parentElement.classList.remove('open');
+            } else {
+                content.classList.add('open');
+                chevron.parentElement.classList.add('open');
+                generateManualQRCode();
+            }
+        }
+
+        function generateManualQRCode() {
+            if (manualQrGenerated) return;
+            
+            const qrContainer = document.getElementById('manualQrCode');
+            const manualLink = document.getElementById('manualLink');
+            
+            // Set the link
+            manualLink.href = MANUAL_URL;
+            manualLink.textContent = MANUAL_URL;
+            
+            // Generate QR code
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrContainer, {
+                    text: MANUAL_URL,
+                    width: 180,
+                    height: 180,
+                    colorDark: '#000000',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                manualQrGenerated = true;
+            } else {
+                qrContainer.innerHTML = '<div style="color: var(--error); padding: 20px;">QR Code library not loaded</div>';
+            }
+        }
+
         function drawCpuGraph() {
             const canvas = document.getElementById('cpuGraph');
             if (!canvas) return;
@@ -2985,7 +3129,7 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
                 if (data.apSSID) {
                     apInfo.textContent = 'Access Point: ' + data.apSSID;
                 } else {
-                    apInfo.textContent = 'Access Point: ESP32-Setup';
+                    apInfo.textContent = 'Access Point: ALX-Device';
                 }
             })
             .catch(err => {

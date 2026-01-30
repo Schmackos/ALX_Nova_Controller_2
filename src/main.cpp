@@ -120,7 +120,7 @@ String mqttBroker = "";
 int mqttPort = 1883;
 String mqttUsername = "";
 String mqttPassword = "";
-String mqttBaseTopic = "esp32-audio";
+String mqttBaseTopic = "";  // Default: empty, will use ALX/{serialNumber} if not set
 bool mqttHADiscovery = false;
 
 // MQTT client objects
@@ -192,12 +192,8 @@ void setup() {
   // Initialize device serial number from NVS (generates on first boot or firmware update)
   initSerialNumber();
 
-  // Generate a unique AP SSID based on the device ID (last 4 hex chars of MAC)
-  uint64_t chipId = ESP.getEfuseMac();
-  uint16_t shortId = (uint16_t)(chipId & 0xFFFF);
-  char idBuf[5];
-  snprintf(idBuf, sizeof(idBuf), "%04X", shortId);
-  apSSID = String("ALX Audio Controller ") + idBuf;
+  // Set AP SSID to the device serial number (e.g., ALX-AABBCCDDEEFF)
+  apSSID = deviceSerialNumber;
   DebugOut.printf("AP SSID set to: %s\n", apSSID.c_str());
   
   pinMode(LED_PIN, OUTPUT);

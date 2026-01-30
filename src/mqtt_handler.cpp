@@ -118,13 +118,22 @@ String getMqttDeviceId() {
   return String("esp32_audio_") + idBuf;
 }
 
+// Get effective MQTT base topic (falls back to ALX/{serialNumber} if not configured)
+String getEffectiveMqttBaseTopic() {
+  if (mqttBaseTopic.length() > 0) {
+    return mqttBaseTopic;
+  }
+  // Default: ALX/{deviceSerialNumber}
+  return String("ALX/") + deviceSerialNumber;
+}
+
 // ===== MQTT Core Functions =====
 
 // Subscribe to all command topics
 void subscribeToMqttTopics() {
   if (!mqttClient.connected()) return;
   
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   
   // Subscribe to command topics
   mqttClient.subscribe((base + "/led/blinking/set").c_str());
@@ -154,7 +163,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   message.trim();
   
   String topicStr = String(topic);
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   
   DebugOut.printf("MQTT received: %s = %s\n", topic, message.c_str());
   
@@ -484,7 +493,7 @@ void mqttLoop() {
 void publishMqttLedState() {
   if (!mqttClient.connected()) return;
   
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   mqttClient.publish((base + "/led/state").c_str(), ledState ? "ON" : "OFF", true);
 }
 
@@ -492,7 +501,7 @@ void publishMqttLedState() {
 void publishMqttBlinkingState() {
   if (!mqttClient.connected()) return;
   
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   mqttClient.publish((base + "/led/blinking").c_str(), blinkingEnabled ? "ON" : "OFF", true);
 }
 
@@ -500,7 +509,7 @@ void publishMqttBlinkingState() {
 void publishMqttSmartSensingState() {
   if (!mqttClient.connected()) return;
   
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   
   // Convert mode enum to string
   String modeStr;
@@ -524,7 +533,7 @@ void publishMqttSmartSensingState() {
 void publishMqttWifiStatus() {
   if (!mqttClient.connected()) return;
   
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   
   bool connected = (WiFi.status() == WL_CONNECTED);
   mqttClient.publish((base + "/wifi/connected").c_str(), connected ? "ON" : "OFF", true);
@@ -547,7 +556,7 @@ void publishMqttWifiStatus() {
 void publishMqttSystemStatus() {
   if (!mqttClient.connected()) return;
   
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   
   // Device information
   mqttClient.publish((base + "/system/manufacturer").c_str(), MANUFACTURER_NAME, true);
@@ -573,7 +582,7 @@ void publishMqttSystemStatus() {
 void publishMqttUpdateState() {
   if (!mqttClient.connected()) return;
   
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   
   // Build JSON state for HA Update entity
   JsonDocument doc;
@@ -600,7 +609,7 @@ void publishMqttHardwareStats() {
   // Update CPU usage before reading
   updateCpuUsage();
   
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   
   // Memory - Internal Heap
   mqttClient.publish((base + "/hardware/heap_total").c_str(), String(ESP.getHeapSize()).c_str(), true);
@@ -690,7 +699,7 @@ void publishHADiscovery() {
   DebugOut.println("MQTT: Publishing Home Assistant discovery configs...");
   
   String deviceId = getMqttDeviceId();
-  String base = mqttBaseTopic;
+  String base = getEffectiveMqttBaseTopic();
   
   // ===== LED Blinking Switch =====
   {
@@ -1246,6 +1255,8 @@ void handleMqttGet() {
   // Don't send password for security, just indicate if set
   doc["hasPassword"] = (mqttPassword.length() > 0);
   doc["baseTopic"] = mqttBaseTopic;
+  doc["effectiveBaseTopic"] = getEffectiveMqttBaseTopic();
+  doc["defaultBaseTopic"] = String("ALX/") + deviceSerialNumber;
   doc["haDiscovery"] = mqttHADiscovery;
   
   // Status
