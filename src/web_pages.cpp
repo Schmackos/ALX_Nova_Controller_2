@@ -1629,11 +1629,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <form onsubmit="submitWiFiConfig(event)">
                     <div class="form-group">
                         <label class="form-label">Available Networks</label>
-                        <div style="display: flex; gap: 6px; align-items: center;">
+                        <div style="display: flex; gap: 8px; align-items: center;">
                             <select class="form-input" id="wifiNetworkSelect" style="flex: 1; min-width: 0;" onchange="onNetworkSelect()">
                                 <option value="">-- Select a network --</option>
                             </select>
-                            <button type="button" class="btn btn-secondary" onclick="scanWiFiNetworks()" id="scanBtn" style="padding: 8px 10px; min-width: 40px; font-size: 16px;" title="Scan for networks">
+                            <button type="button" class="btn btn-secondary" onclick="scanWiFiNetworks()" id="scanBtn" style="padding: 0; width: 48px; min-height: 48px; min-width: 48px; font-size: 18px; flex-shrink: 0;" title="Scan for networks">
                                 🔍
                             </button>
                         </div>
@@ -2376,7 +2376,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row"><span class="info-label">Mode</span><span class="info-value text-warning">Access Point</span></div>
                     <div class="info-row"><span class="info-label">SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
                     <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || '192.168.4.1'}</span></div>
-                    <div class="info-row"><span class="info-label">MAC</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
                 `;
                 apToggle.checked = true;
             } else if (data.connected) {
@@ -2385,13 +2385,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row"><span class="info-label">Network</span><span class="info-value">${data.ssid || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${data.rssi !== undefined ? data.rssi + ' dBm' : 'N/A'}</span></div>
-                    <div class="info-row"><span class="info-label">MAC</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
                 `;
                 apToggle.checked = data.apEnabled || false;
             } else {
                 html = `
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Not Connected</span></div>
-                    <div class="info-row"><span class="info-label">MAC</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
                 `;
                 apToggle.checked = data.apEnabled || false;
             }
@@ -2446,6 +2446,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (sidebarVer && data.firmwareVersion) {
                     sidebarVer.textContent = 'v' + data.firmwareVersion;
                 }
+            }
+            
+            // Update MAC address in Debug tab
+            if (data.mac) {
+                document.getElementById('deviceMac').textContent = data.mac;
             }
             
             // Pre-fill WiFi SSID with currently connected network
