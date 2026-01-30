@@ -111,6 +111,9 @@ unsigned long lastSmartSensingHeartbeat = 0;
 // Certificate validation - can be enabled/disabled via settings
 bool enableCertValidation = false;  // Default: DISABLED (can be enabled via web interface)
 
+// Hardware stats broadcast interval - user configurable (1000, 3000, 5000, 10000 ms)
+unsigned long hardwareStatsInterval = 2000;  // Default: 2 seconds
+
 // ===== MQTT Client Configuration =====
 bool mqttEnabled = false;
 String mqttBroker = "";
@@ -255,6 +258,7 @@ void setup() {
   });
   
   server.on("/api/wificonfig", HTTP_POST, handleWiFiConfig);
+  server.on("/api/wifiscan", HTTP_GET, handleWiFiScan);
   server.on("/api/apconfig", HTTP_POST, handleAPConfigUpdate);
   server.on("/api/toggleap", HTTP_POST, handleAPToggle);
   server.on("/api/wifistatus", HTTP_GET, handleWiFiStatus);
@@ -443,6 +447,13 @@ void loop() {
   if (millis() - lastSmartSensingBroadcast >= 1000) {
     lastSmartSensingBroadcast = millis();
     sendSmartSensingState();
+  }
+  
+  // Broadcast Hardware Stats periodically (user-configurable interval)
+  static unsigned long lastHardwareStatsBroadcast = 0;
+  if (millis() - lastHardwareStatsBroadcast >= hardwareStatsInterval) {
+    lastHardwareStatsBroadcast = millis();
+    sendHardwareStats();
   }
 
   // IMPORTANT: blinking must NOT depend on isAPMode

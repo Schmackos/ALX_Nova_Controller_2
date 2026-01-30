@@ -6,167 +6,356 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32-S3 LED Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#F5F5F5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>ALX Audio Controller</title>
     <style>
-        /* Day/Night Mode Variables */
+        /* ===== CSS Variables - Light Theme (Day Mode) ===== */
         :root {
-            --bg-gradient-start: #667eea;
-            --bg-gradient-end: #764ba2;
-            --container-bg: rgba(255, 255, 255, 0.1);
-            --text-color: white;
-            --shadow-color: rgba(0, 0, 0, 0.3);
-            --transition-speed: 0.3s;
+            --bg-primary: #F5F5F5;
+            --bg-surface: #FFFFFF;
+            --bg-card: #EEEEEE;
+            --bg-input: #E0E0E0;
+            --accent: #FF9800;
+            --accent-light: #FFB74D;
+            --accent-dark: #F57C00;
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --text-disabled: #9E9E9E;
+            --success: #4CAF50;
+            --error: #D32F2F;
+            --warning: #FF9800;
+            --info: #1976D2;
+            --border: #E0E0E0;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --tab-height: 56px;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
-        
+
+        /* ===== Dark Theme (Night Mode) ===== */
         body.night-mode {
-            --bg-gradient-start: #1a1a2e;
-            --bg-gradient-end: #16213e;
-            --container-bg: rgba(0, 0, 0, 0.4);
-            --text-color: #e0e0e0;
-            --shadow-color: rgba(0, 0, 0, 0.6);
+            --bg-primary: #121212;
+            --bg-surface: #1E1E1E;
+            --bg-card: #252525;
+            --bg-input: #2a2a2a;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B3B3B3;
+            --text-disabled: #666666;
+            --error: #CF6679;
+            --info: #2196F3;
+            --border: #333333;
+            --shadow: rgba(0, 0, 0, 0.4);
         }
-        
+
+        /* ===== Reset & Base Styles ===== */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+            -webkit-text-size-adjust: 100%;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            padding-top: calc(var(--tab-height) + var(--safe-top));
+            padding-bottom: var(--safe-bottom);
+        }
+
+        /* ===== Tab Navigation Bar ===== */
+        .tab-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: calc(var(--tab-height) + var(--safe-top));
+            padding-top: var(--safe-top);
+            background: var(--bg-surface);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+        }
+
+        .tab {
+            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
-            color: var(--text-color);
-            transition: background var(--transition-speed) ease, color var(--transition-speed) ease;
-            position: relative;
-        }
-        .container {
-            background: var(--container-bg);
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 8px 32px var(--shadow-color);
-            backdrop-filter: blur(10px);
-            text-align: center;
-            transition: background var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
-        }
-        h1 {
-            margin-top: 0;
-            font-size: 2.5em;
-        }
-        .led-container {
-            margin: 40px 0;
-        }
-        .led {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            margin: 20px auto;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
-            transition: all 0.3s ease;
-        }
-        .led.on {
-            background: #ffeb3b;
-            box-shadow: 0 0 30px #ffeb3b, inset 0 0 20px rgba(255, 235, 59, 0.5);
-        }
-        .led.off {
-            background: #333;
-            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
-        }
-        button {
-            background: #4CAF50;
-            color: white;
+            height: var(--tab-height);
+            background: none;
             border: none;
-            padding: 15px 40px;
-            font-size: 1.2em;
-            border-radius: 10px;
+            color: var(--text-disabled);
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: color 0.2s ease;
+            position: relative;
+            -webkit-tap-highlight-color: transparent;
         }
-        button:hover {
-            background: #45a049;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+
+        .tab svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
         }
-        button:active {
-            transform: translateY(0);
+
+        .tab.active {
+            color: var(--accent);
         }
-        button.stop {
-            background: #f44336;
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 32px;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 3px 3px 0 0;
         }
-        button.stop:hover {
-            background: #da190b;
+
+        .tab:active {
+            opacity: 0.7;
         }
-        .status {
-            margin-top: 20px;
-            font-size: 1.1em;
-            opacity: 0.9;
+
+        /* ===== Main Content ===== */
+        .tab-content {
+            padding: 16px;
+            max-width: 480px;
+            margin: 0 auto;
         }
-        .connection-status {
-            margin-top: 10px;
-            font-size: 0.9em;
-            padding: 10px;
-            border-radius: 5px;
-            background: rgba(0, 0, 0, 0.2);
+
+        .panel {
+            display: none;
         }
-        .connected {
-            color: #4CAF50;
-        }
-        .disconnected {
-            color: #f44336;
-        }
-        .wifi-section {
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .wifi-section h2 {
-            font-size: 1.5em;
-            margin-bottom: 20px;
-        }
-        .form-group {
-            margin: 15px 0;
-            text-align: left;
-        }
-        label {
+
+        .panel.active {
             display: block;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ===== Card Component ===== */
+        .card {
+            background: var(--bg-surface);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        /* ===== Skeleton Loading ===== */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-card) 25%, #3a3a3a 50%, var(--bg-card) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        .skeleton-text {
+            height: 16px;
+            width: 60%;
             margin-bottom: 8px;
-            font-weight: bold;
         }
-        input[type="text"], input[type="password"] {
+
+        .skeleton-text.short {
+            width: 40%;
+        }
+
+        .skeleton-text.full {
             width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            box-sizing: border-box;
-            font-size: 1em;
-            color: #333;
         }
-        .toggle-container {
+
+        .skeleton-button {
+            height: 48px;
+            width: 100%;
+            border-radius: 8px;
+        }
+
+        .skeleton-circle {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ===== Buttons ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .btn-primary:active {
+            background: var(--accent-dark);
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:active {
+            background: var(--bg-input);
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: #fff;
+        }
+
+        .btn-danger:active {
+            opacity: 0.8;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .btn + .btn {
+            margin-top: 8px;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-row .btn {
+            flex: 1;
+        }
+
+        .btn-row .btn + .btn {
+            margin-top: 0;
+        }
+
+        /* ===== Form Elements ===== */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            height: 48px;
+            padding: 12px 16px;
+            font-size: 16px;
+            color: var(--text-primary);
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-input:focus {
+            border-color: var(--accent);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-disabled);
+        }
+
+        .input-with-btn {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-with-btn .form-input {
+            flex: 1;
+        }
+
+        .input-with-btn .btn {
+            width: auto;
+            padding: 12px 16px;
+        }
+
+        /* ===== Toggle Switch ===== */
+        .toggle-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin: 20px 0;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
+            min-height: 48px;
+            padding: 8px 0;
         }
+
         .toggle-label {
-            font-size: 1.1em;
-            font-weight: bold;
+            font-size: 16px;
+            color: var(--text-primary);
         }
+
+        .toggle-sublabel {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
         .switch {
             position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 34px;
+            width: 52px;
+            height: 32px;
+            flex-shrink: 0;
         }
+
         .switch input {
             opacity: 0;
             width: 0;
             height: 0;
         }
+
         .slider {
             position: absolute;
             cursor: pointer;
@@ -174,1444 +363,1164 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 34px;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 32px;
+            transition: 0.2s;
         }
-        .slider:before {
+
+        .slider::before {
+            content: '';
             position: absolute;
-            content: "";
-            height: 26px;
-            width: 26px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
+            height: 24px;
+            width: 24px;
+            left: 2px;
+            bottom: 2px;
+            background: var(--text-secondary);
             border-radius: 50%;
+            transition: 0.2s;
         }
+
         input:checked + .slider {
-            background-color: #4CAF50;
+            background: var(--accent);
+            border-color: var(--accent);
         }
-        input:checked + .slider:before {
-            transform: translateX(26px);
+
+        input:checked + .slider::before {
+            background: #fff;
+            transform: translateX(20px);
         }
-        .wifi-status {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 5px;
-            background: rgba(0, 0, 0, 0.2);
-            font-size: 0.9em;
+
+        /* ===== Radio Buttons ===== */
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
-        .wifi-status.connected {
-            color: #4CAF50;
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            min-height: 48px;
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
         }
-        .wifi-status.ap {
-            color: #ff9800;
+
+        .radio-option:active {
+            background: var(--bg-input);
         }
-        button.config-btn {
-            background: #2196F3;
-            margin-top: 10px;
+
+        .radio-option input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            accent-color: var(--accent);
         }
-        button.config-btn:hover {
-            background: #0b7dda;
+
+        .radio-option span {
+            font-size: 16px;
         }
+
+        /* ===== Status Indicators ===== */
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-dot.success { background: var(--success); }
+        .status-dot.error { background: var(--error); }
+        .status-dot.warning { background: var(--warning); }
+        .status-dot.info { background: var(--info); }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 16px;
+            background: var(--bg-card);
+        }
+
+        .status-badge.on {
+            background: rgba(76, 175, 80, 0.2);
+            color: var(--success);
+        }
+
+        .status-badge.off {
+            background: rgba(207, 102, 121, 0.2);
+            color: var(--error);
+        }
+
+        /* ===== Progress Bar ===== */
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-card);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 4px;
+        }
+
+        /* ===== Info Box ===== */
+        .info-box {
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            color: var(--text-primary);
+            font-weight: 500;
+            text-align: right;
+        }
+
+        /* ===== Connection Status ===== */
+        .connection-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .connection-bar.connected {
+            background: rgba(76, 175, 80, 0.15);
+            color: var(--success);
+        }
+
+        .connection-bar.disconnected {
+            background: rgba(207, 102, 121, 0.15);
+            color: var(--error);
+        }
+
+        /* ===== Stats Grid ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* ===== Timer Display ===== */
+        .timer-display {
+            text-align: center;
+            padding: 20px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            margin: 12px 0;
+        }
+
+        .timer-value {
+            font-size: 48px;
+            font-weight: 700;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            color: var(--accent);
+        }
+
+        .timer-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* ===== LED Indicator ===== */
+        .led-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px;
+        }
+
+        .led {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 4px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .led.on {
+            background: #ffeb3b;
+            box-shadow: 0 0 40px #ffeb3b, 0 0 80px rgba(255, 235, 59, 0.5);
+            border-color: #ffeb3b;
+        }
+
+        .led.off {
+            background: var(--bg-card);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .led-status {
+            margin-top: 12px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* ===== Debug Console ===== */
+        .debug-console {
+            background: #0d0d0d;
+            border-radius: 8px;
+            font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .log-entry {
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .log-timestamp {
+            color: var(--text-disabled);
+            margin-right: 8px;
+        }
+
+        .log-message { color: var(--text-primary); }
+        .log-message.info { color: var(--info); }
+        .log-message.success { color: var(--success); }
+        .log-message.warning { color: var(--warning); }
+        .log-message.error { color: var(--error); }
+
+        /* ===== Modal ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-surface);
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: var(--bg-card);
+            border-radius: 50%;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 20px;
+        }
+
+        /* ===== Notification Toast ===== */
+        .toast {
+            position: fixed;
+            bottom: calc(20px + var(--safe-bottom));
+            left: 16px;
+            right: 16px;
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 16px;
+            background: var(--bg-surface);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px var(--shadow);
+            z-index: 3000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--error);
+        }
+
+        /* ===== Collapsible Section ===== */
+        .collapsible-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 48px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .collapsible-header svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--text-secondary);
+            transition: transform 0.2s;
+        }
+
+        .collapsible-header.open svg {
+            transform: rotate(180deg);
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .collapsible-content.open {
+            max-height: 2000px;
+        }
+
+        /* ===== Version Info ===== */
+        .version-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .version-row:last-child {
+            border-bottom: none;
+        }
+
+        .version-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .version-value {
+            font-weight: 600;
+            font-family: 'SF Mono', 'Consolas', monospace;
+        }
+
+        .version-update {
+            color: var(--success);
+        }
+
+        /* ===== Graph Canvas ===== */
+        .graph-container {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .graph-canvas {
+            width: 100%;
+            height: 120px;
+            display: block;
+        }
+
+        /* ===== Utility Classes ===== */
+        .hidden { display: none !important; }
+        .text-center { text-align: center; }
+        .text-secondary { color: var(--text-secondary); }
+        .text-success { color: var(--success); }
+        .text-error { color: var(--error); }
+        .text-warning { color: var(--warning); }
+        .mb-8 { margin-bottom: 8px; }
+        .mb-12 { margin-bottom: 12px; }
+        .mb-16 { margin-bottom: 16px; }
+        .mt-12 { margin-top: 12px; }
+        .mt-16 { margin-top: 16px; }
+
+        /* ===== Amplifier Status ===== */
+        .amplifier-display {
+            text-align: center;
+            padding: 24px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            margin-bottom: 12px;
+        }
+
+        .amplifier-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 12px;
+            fill: var(--text-disabled);
+            transition: all 0.3s;
+        }
+
+        .amplifier-display.on .amplifier-icon {
+            fill: var(--success);
+            filter: drop-shadow(0 0 12px var(--success));
+        }
+
+        .amplifier-label {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        /* ===== Select Dropdown ===== */
+        .form-select {
+            width: 100%;
+            height: 48px;
+            padding: 12px 16px;
+            font-size: 16px;
+            color: var(--text-primary);
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23B3B3B3' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+        }
+
+        .form-select:focus {
+            border-color: var(--accent);
+        }
+
+        /* ===== Divider ===== */
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 16px 0;
+        }
+
+        /* ===== Password Toggle ===== */
         .password-wrapper {
             position: relative;
         }
+
         .password-toggle {
             position: absolute;
-            right: 10px;
+            right: 12px;
             top: 50%;
             transform: translateY(-50%);
             background: none;
             border: none;
+            color: var(--text-secondary);
             cursor: pointer;
-            padding: 5px;
-            font-size: 1.2em;
-            color: #666;
-        }
-        .password-toggle:hover {
-            color: #333;
-        }
-        .form-note {
-            margin-top: 5px;
-            font-size: 0.85em;
-            color: #ff9800;
-            font-style: italic;
-        }
-        .ota-section {
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .ota-section h2 {
-            font-size: 1.5em;
-            margin-bottom: 20px;
-        }
-        .version-info {
-            margin: 15px 0;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 5px;
-            font-size: 0.95em;
-        }
-        .version-info .current {
-            margin-bottom: 10px;
-        }
-        .version-info .latest {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .version-info .update-available {
-            color: #4CAF50;
-            font-weight: bold;
-        }
-        .version-info .up-to-date {
-            color: #4CAF50;
-        }
-        button.check-btn {
-            background: #2196F3;
-            margin-top: 10px;
-            width: 100%;
-            display: block;
-        }
-        button.check-btn:hover {
-            background: #0b7dda;
-        }
-        button.update-btn {
-            background: #ff9800;
-            margin-top: 15px;
-            width: 100%;
-            display: block;
-        }
-        button.update-btn:hover {
-            background: #f57c00;
-        }
-        .ota-status {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 5px;
-            background: rgba(0, 0, 0, 0.2);
-            font-size: 0.9em;
-            display: none;
-        }
-        .ota-status.show {
-            display: block;
-        }
-        .ota-status.updating {
-            color: #ff9800;
-        }
-        .ota-status.success {
-            color: #4CAF50;
-        }
-        .ota-status.error {
-            color: #f44336;
-        }
-        .ota-status.update-available {
-            color: #ff9800;
-        }
-        /* Progress Bar Styles */
-        .progress-container {
-            width: 100%;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            overflow: hidden;
-            margin: 20px 0;
-            display: none;
-        }
-        .progress-container.show {
-            display: block;
-        }
-        .progress-bar {
-            height: 30px;
-            background: linear-gradient(90deg, #4CAF50, #45a049);
-            border-radius: 10px;
-            transition: width 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 0.9em;
-            box-shadow: 0 2px 10px rgba(76, 175, 80, 0.5);
-        }
-        .progress-status {
-            margin-top: 10px;
-            font-size: 0.9em;
-            color: #fff;
-            text-align: center;
-        }
-        /* Modal for Release Notes */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(5px);
-        }
-        .modal.show {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-content {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 30px;
-            border-radius: 20px;
-            max-width: 600px;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
-            color: white;
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .modal-header h2 {
-            margin: 0;
-        }
-        .close-btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            font-size: 1.5em;
-            cursor: pointer;
-            width: 35px;
-            height: 35px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.3s;
-            padding: 0;
-        }
-        .close-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: none;
-        }
-        .release-notes-content {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 20px;
-            border-radius: 10px;
-            white-space: pre-wrap;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            line-height: 1.6;
-        }
-        .notes-btn {
-            background: #2196F3;
-            margin-left: 10px;
-            padding: 8px 20px;
-            font-size: 0.9em;
-            display: inline-block;
-        }
-        .notes-btn:hover {
-            background: #0b7dda;
-        }
-        .timezone-section {
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .timezone-section h2 {
-            font-size: 1.5em;
-            margin-bottom: 20px;
-        }
-        select {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            box-sizing: border-box;
-            font-size: 1em;
-            color: #333;
-            background: white;
-            cursor: pointer;
-        }
-        select:focus {
-            outline: 2px solid #4CAF50;
-        }
-        .timezone-info {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 5px;
-            background: rgba(0, 0, 0, 0.2);
-            font-size: 0.9em;
-        }
-        .reboot-section {
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .reboot-section h2 {
-            font-size: 1.5em;
-            margin-bottom: 20px;
-            color: #3b82f6;
-        }
-        .reboot-info {
-            padding: 15px;
-            background: rgba(59, 130, 246, 0.2);
-            border-left: 4px solid #3b82f6;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-size: 0.95em;
-        }
-        button.reboot-btn {
-            background: #3b82f6;
-            width: 100%;
-            position: relative;
-            overflow: hidden;
-        }
-        button.reboot-btn:hover {
-            background: #2563eb;
-        }
-        button.reboot-btn:disabled {
-            background: #999;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-        button.reboot-btn.holding {
-            background: #60a5fa;
-        }
-        .reboot-progress {
-            position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.3);
-            width: 0%;
-            transition: width 0.1s linear;
-        }
-        .reboot-btn-text {
-            position: relative;
-            z-index: 1;
-        }
-        .factory-reset-section {
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .factory-reset-section h2 {
-            font-size: 1.5em;
-            margin-bottom: 20px;
-            color: #ff9800;
-        }
-        .reset-warning {
-            padding: 15px;
-            background: rgba(244, 67, 54, 0.2);
-            border-left: 4px solid #f44336;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-size: 0.95em;
-        }
-        button.reset-btn {
-            background: #f44336;
-            width: 100%;
-            position: relative;
-            overflow: hidden;
-        }
-        button.reset-btn:hover {
-            background: #da190b;
-        }
-        button.reset-btn:disabled {
-            background: #999;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-        button.reset-btn.holding {
-            background: #ff5722;
-        }
-        .reset-progress {
-            position: absolute;
-            left: 0;
-            top: 0;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.3);
-            width: 0%;
-            transition: width 0.1s linear;
-        }
-        .reset-btn-text {
-            position: relative;
-            z-index: 1;
-        }
-        /* Debug Console Section */
-        .debug-section {
-            margin-top: 30px;
-            padding-top: 30px;
-            border-top: 2px solid rgba(255, 255, 255, 0.2);
-        }
-        .debug-section h2 {
-            font-size: 1.5em;
-            margin-bottom: 20px;
-            color: #9c27b0;
-        }
-        .debug-info {
-            padding: 15px;
-            background: rgba(156, 39, 176, 0.2);
-            border-left: 4px solid #9c27b0;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            font-size: 0.95em;
-        }
-        .debug-console {
-            background: #1e1e1e;
-            border-radius: 8px;
-            padding: 15px;
-            font-family: 'Courier New', Consolas, monospace;
-            font-size: 0.85em;
-            height: 300px;
-            overflow-y: auto;
-            text-align: left;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .debug-console::-webkit-scrollbar {
-            width: 8px;
-        }
-        .debug-console::-webkit-scrollbar-track {
-            background: #2d2d2d;
-            border-radius: 4px;
-        }
-        .debug-console::-webkit-scrollbar-thumb {
-            background: #555;
-            border-radius: 4px;
-        }
-        .debug-console::-webkit-scrollbar-thumb:hover {
-            background: #777;
-        }
-        .log-entry {
-            padding: 3px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            word-wrap: break-word;
-        }
-        .log-entry:last-child {
-            border-bottom: none;
-        }
-        .log-timestamp {
-            color: #888;
-            margin-right: 10px;
-        }
-        .log-message {
-            color: #00ff00;
-        }
-        .log-message.info {
-            color: #00bcd4;
-        }
-        .log-message.warn {
-            color: #ffeb3b;
-        }
-        .log-message.error {
-            color: #f44336;
-        }
-        .debug-controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-        .debug-controls button {
-            padding: 10px 20px;
-            font-size: 0.9em;
-        }
-        .debug-btn-clear {
-            background: #757575;
-        }
-        .debug-btn-clear:hover {
-            background: #616161;
-        }
-        .debug-btn-pause {
-            background: #ff9800;
-        }
-        .debug-btn-pause:hover {
-            background: #f57c00;
-        }
-        .debug-btn-pause.paused {
-            background: #4CAF50;
-        }
-        .debug-btn-pause.paused:hover {
-            background: #45a049;
-        }
-        .debug-status {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-left: auto;
-            font-size: 0.9em;
-        }
-        .debug-status-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #4CAF50;
-        }
-        .debug-status-indicator.paused {
-            background: #ff9800;
-        }
-        /* Hardware Stats Panel */
-        .hardware-stats-section {
-            margin-bottom: 20px;
-        }
-        .hardware-stats-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .hardware-stats-header h3 {
-            margin: 0;
-            color: #9c27b0;
-            font-size: 1.2em;
-        }
-        .refresh-selector {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.9em;
-        }
-        .refresh-selector select {
-            padding: 5px 10px;
-            border-radius: 5px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: rgba(0, 0, 0, 0.3);
-            color: inherit;
-            font-size: 0.9em;
-            cursor: pointer;
-        }
-        .hardware-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        @media (max-width: 600px) {
-            .hardware-stats-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-        .stats-card {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            padding: 15px;
-            border-left: 4px solid #888;
-        }
-        .stats-card.memory {
-            border-left-color: #2196F3;
-        }
-        .stats-card.cpu {
-            border-left-color: #ff9800;
-        }
-        .stats-card.storage {
-            border-left-color: #4CAF50;
-        }
-        .stats-card.wifi {
-            border-left-color: #9c27b0;
-        }
-        .stats-card h4 {
-            margin: 0 0 12px 0;
-            font-size: 0.95em;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            opacity: 0.8;
-        }
-        .stats-card.memory h4 { color: #2196F3; }
-        .stats-card.cpu h4 { color: #ff9800; }
-        .stats-card.storage h4 { color: #4CAF50; }
-        .stats-card.wifi h4 { color: #9c27b0; }
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            font-size: 0.9em;
-        }
-        .stat-row:last-child {
-            margin-bottom: 0;
-        }
-        .stat-label {
-            opacity: 0.7;
-        }
-        .stat-value {
-            font-weight: bold;
-            font-family: 'Courier New', monospace;
-        }
-        .stat-bar {
-            width: 100%;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            margin-top: 5px;
-            overflow: hidden;
-        }
-        .stat-bar-fill {
-            height: 100%;
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-        .stat-bar-fill.memory { background: #2196F3; }
-        .stat-bar-fill.cpu { background: #ff9800; }
-        .stat-bar-fill.storage { background: #4CAF50; }
-        .stat-bar-fill.wifi { background: #9c27b0; }
-        .stat-bar-fill.warning { background: #ff9800; }
-        .stat-bar-fill.danger { background: #f44336; }
-        .cpu-core-label {
-            font-size: 0.8em;
-            opacity: 0.6;
-            margin-right: 5px;
-        }
-        .cpu-usage-value {
-            min-width: 45px;
-            text-align: right;
-        }
-        .uptime-bar {
-            text-align: center;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 1.1em;
-        }
-        .uptime-label {
-            opacity: 0.7;
-            margin-right: 10px;
-        }
-        .signal-quality {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
-            margin-left: 5px;
-        }
-        .signal-quality.excellent { background: #4CAF50; color: white; }
-        .signal-quality.good { background: #8BC34A; color: white; }
-        .signal-quality.fair { background: #ff9800; color: white; }
-        .signal-quality.poor { background: #f44336; color: white; }
-        .device-control-section {
-            margin-bottom: 30px;
-            padding: 30px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 15px;
-            background: rgba(255, 255, 255, 0.05);
-        }
-        .device-control-section h3 {
-            font-size: 1.3em;
-            margin-top: 20px;
-            margin-bottom: 15px;
-        }
-        .radio-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin: 15px 0;
-        }
-        .radio-option {
-            display: flex;
-            align-items: center;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        .radio-option:hover {
-            background: rgba(0, 0, 0, 0.3);
-        }
-        .radio-option input[type="radio"] {
-            margin-right: 12px;
-            cursor: pointer;
-            width: 18px;
-            height: 18px;
-        }
-        .radio-option span {
-            font-size: 1.05em;
-        }
-        .timer-display {
-            font-size: 2em;
-            font-weight: bold;
-            color: #4CAF50;
-            margin: 20px 0;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            text-align: center;
-        }
-        .amplifier-status {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        .amplifier-status.on {
-            background: #4CAF50;
-            color: white;
-        }
-        .amplifier-status.off {
-            background: #f44336;
-            color: white;
-        }
-        .manual-controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-        .manual-controls button {
-            flex: 1;
-        }
-        input[type="number"] {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            font-size: 1em;
-            color: #333;
-        }
-        input[type="number"]:disabled {
-            background: #e0e0e0;
-            cursor: not-allowed;
-        }
-        .voltage-info {
-            margin-top: 10px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 5px;
-            font-size: 0.9em;
-        }
-        /* Theme Toggle Button */
-        .theme-toggle {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            padding: 12px 16px;
-            border-radius: 50px;
-            cursor: pointer;
-            font-size: 1.2em;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-            color: var(--text-color);
-            z-index: 1000;
-        }
-        .theme-toggle:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.1);
-        }
-        .theme-toggle:active {
-            transform: scale(0.95);
-        }
-        /* Drag and Drop Zone */
+            padding: 8px;
+            font-size: 18px;
+        }
+
+        .password-wrapper .form-input {
+            padding-right: 48px;
+        }
+
+        /* ===== File Drop Zone ===== */
         .drop-zone {
-            border: 2px dashed rgba(255, 255, 255, 0.4);
-            border-radius: 10px;
-            padding: 40px 20px;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 32px 16px;
             text-align: center;
+            transition: all 0.2s;
             cursor: pointer;
-            transition: all 0.3s ease;
-            background: rgba(0, 0, 0, 0.2);
-            margin-top: 15px;
         }
-        .drop-zone:hover {
-            border-color: rgba(255, 255, 255, 0.6);
-            background: rgba(0, 0, 0, 0.3);
-            transform: scale(1.02);
+
+        .drop-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(255, 152, 0, 0.1);
         }
-        .drop-zone.drag-over {
-            border-color: #4CAF50;
-            background: rgba(76, 175, 80, 0.2);
-            border-style: solid;
-            transform: scale(1.05);
-        }
+
         .drop-zone-icon {
-            font-size: 3em;
-            margin-bottom: 10px;
-            opacity: 0.8;
+            width: 48px;
+            height: 48px;
+            fill: var(--text-secondary);
+            margin-bottom: 12px;
         }
+
         .drop-zone-text {
-            font-size: 1.1em;
-            margin-bottom: 5px;
+            color: var(--text-secondary);
+            font-size: 14px;
         }
-        .drop-zone-hint {
-            font-size: 0.9em;
-            opacity: 0.7;
+
+        .drop-zone-text strong {
+            color: var(--accent);
         }
-        /* Performance History Section */
-        .history-section {
-            margin-top: 20px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .history-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 20px;
-            cursor: pointer;
-            background: rgba(0, 0, 0, 0.1);
-            transition: background 0.2s ease;
-        }
-        .history-header:hover {
-            background: rgba(0, 0, 0, 0.2);
-        }
-        .history-header h3 {
-            margin: 0;
-            font-size: 1.1em;
-            color: #9c27b0;
-        }
-        .collapse-icon {
-            font-size: 0.9em;
-            transition: transform 0.3s ease;
-        }
-        .collapse-icon.collapsed {
-            transform: rotate(-90deg);
-        }
-        .history-content {
-            padding: 15px 20px 20px;
-            display: block;
-        }
-        .history-content.collapsed {
-            display: none;
-        }
-        .history-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-            font-size: 0.9em;
-        }
-        .history-controls select {
-            padding: 5px 10px;
-            border-radius: 5px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: rgba(0, 0, 0, 0.3);
-            color: inherit;
-            font-size: 0.9em;
-            cursor: pointer;
-        }
-        .graph-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-        @media (max-width: 700px) {
-            .graph-container {
-                grid-template-columns: 1fr;
-            }
-        }
-        .graph-card {
-            background: rgba(0, 0, 0, 0.15);
-            border-radius: 8px;
-            padding: 15px;
-        }
-        .graph-card h4 {
-            margin: 0 0 10px 0;
-            font-size: 0.95em;
-            opacity: 0.8;
-        }
-        .graph-card canvas {
-            width: 100%;
-            height: 150px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 5px;
-        }
-        .graph-legend {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 10px;
-            font-size: 0.8em;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            opacity: 0.8;
-        }
-        .legend-item.total { color: #ff9800; }
-        .legend-item.core0 { color: #ffb74d; }
-        .legend-item.core1 { color: #f57c00; }
-        .legend-item.heap { color: #2196F3; }
     </style>
 </head>
 <body>
-    <!-- Theme Toggle Button -->
-    <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle" title="Toggle Day/Night Mode">
-        🌙
-    </button>
-    
-    <div class="container">
-        <h1>ESP32-S3 LED Control</h1>
-        
-        <!-- Device Control Settings Section -->
-        <div class="device-control-section">
-            <h2>Device Control Settings</h2>
-            
-            <h3>Smart Sensing On/Off</h3>
-            <div class="radio-group">
-                <label class="radio-option">
-                    <input type="radio" name="sensingMode" value="always_on" checked onchange="updateSensingMode()">
-                    <span>Always On</span>
-                </label>
-                <label class="radio-option">
-                    <input type="radio" name="sensingMode" value="always_off" onchange="updateSensingMode()">
-                    <span>Always Off</span>
-                </label>
-                <label class="radio-option">
-                    <input type="radio" name="sensingMode" value="smart_auto" onchange="updateSensingMode()">
-                    <span>Smart Auto Sensing</span>
-                </label>
+    <!-- Tab Navigation Bar -->
+    <nav class="tab-bar">
+        <button class="tab active" data-tab="control" onclick="switchTab('control')">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        </button>
+        <button class="tab" data-tab="wifi" onclick="switchTab('wifi')">
+            <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+        </button>
+        <button class="tab" data-tab="mqtt" onclick="switchTab('mqtt')">
+            <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/></svg>
+        </button>
+        <button class="tab" data-tab="settings" onclick="switchTab('settings')">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+        <button class="tab" data-tab="debug" onclick="switchTab('debug')">
+            <svg viewBox="0 0 24 24"><path d="M20 19V7H4v12h16m0-16c1.11 0 2 .89 2 2v14c0 1.11-.89 2-2 2H4c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h16zM7 9h10v2H7V9zm0 4h7v2H7v-2z"/></svg>
+        </button>
+        <button class="tab" data-tab="test" onclick="switchTab('test')">
+            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>
+        </button>
+    </nav>
+
+    <!-- Tab Content Panels -->
+    <main class="tab-content">
+        <!-- ===== CONTROL TAB ===== -->
+        <section id="control" class="panel active">
+            <div class="connection-bar" id="connectionStatus">
+                <span class="status-dot info"></span> Connecting...
             </div>
-            
-            <div class="form-group">
-                <label for="timerDuration">Auto-Off Timer Duration (minutes):</label>
-                <input type="number" id="timerDuration" min="1" max="60" value="15" 
-                       onchange="updateTimerDuration()" 
-                       onfocus="inputFocusState.timerDuration = true" 
-                       onblur="inputFocusState.timerDuration = false">
+
+            <!-- Amplifier Status -->
+            <div class="amplifier-display" id="amplifierDisplay">
+                <svg class="amplifier-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                <div class="amplifier-label" id="amplifierStatus">OFF</div>
             </div>
-            
-            <div class="form-group">
-                <label for="voltageThreshold">Voltage Detection Threshold (volts):</label>
-                <input type="number" id="voltageThreshold" min="0.1" max="3.3" step="0.1" value="1.0" 
-                       onchange="updateVoltageThreshold()" 
-                       onfocus="inputFocusState.voltageThreshold = true" 
-                       onblur="inputFocusState.voltageThreshold = false">
+
+            <!-- Smart Sensing Mode -->
+            <div class="card">
+                <div class="card-title">Smart Sensing Mode</div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="sensingMode" value="always_on" onchange="updateSensingMode()">
+                        <span>Always On</span>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="sensingMode" value="always_off" onchange="updateSensingMode()">
+                        <span>Always Off</span>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="sensingMode" value="smart_auto" onchange="updateSensingMode()">
+                        <span>Smart Auto Sensing</span>
+                    </label>
+                </div>
             </div>
-            
-            <div class="timer-display" id="timerDisplay" style="display: none;">
-                Time Remaining: <span id="timerValue">--:--</span>
+
+            <!-- Timer Display -->
+            <div class="timer-display hidden" id="timerDisplay">
+                <div class="timer-value" id="timerValue">--:--</div>
+                <div class="timer-label">Time Remaining</div>
             </div>
-            
-            <div class="status">
-                Amplifier Status: <span class="amplifier-status off" id="amplifierStatus">OFF</span>
-            </div>
-            
-            <div class="voltage-info" id="voltageInfo">
-                Voltage Detected: <span id="voltageDetected">No</span> | 
-                Current Reading: <span id="voltageReading">0.00V</span>
-            </div>
-            
-            <div class="manual-controls">
-                <button onclick="manualOverride(true)" class="config-btn" style="background: #4CAF50;">Turn On Now</button>
-                <button onclick="manualOverride(false)" class="config-btn" style="background: #f44336;">Turn Off Now</button>
-            </div>
-        </div>
-        
-        <div class="led-container">
-            <div id="led" class="led off"></div>
-        </div>
-        <button id="toggleBtn" onclick="toggleBlinking();">Stop Blinking</button>
-        <div class="status" id="status">Blinking: ON</div>
-        <div class="connection-status" id="connectionStatus">
-            <span class="disconnected">Disconnected</span>
-        </div>
-        
-        <div class="wifi-section">
-            <h2>WiFi Configuration</h2>
-            <div class="wifi-status" id="wifiStatus">Loading...</div>
-            
-            <div class="toggle-container">
-                <span class="toggle-label">ESP32 Access Point</span>
-                <label class="switch">
-                    <input type="checkbox" id="apToggle" onchange="toggleAP()">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            
-            <button class="config-btn" onclick="showAPConfig()">Configure Access Point</button>
-            
-            <form onsubmit="submitWiFiConfig(event)">
+
+            <!-- Timer & Voltage Settings -->
+            <div class="card">
+                <div class="card-title">Timer & Voltage Settings</div>
                 <div class="form-group">
-                    <label for="wifiSSID">Network Name (SSID):</label>
-                    <input type="text" id="wifiSSID" name="ssid" placeholder="Enter WiFi SSID">
+                    <label class="form-label">Auto-Off Timer (minutes)</label>
+                    <input type="number" class="form-input" id="timerDuration" inputmode="numeric" min="1" max="60" value="15" onchange="updateTimerDuration()">
                 </div>
                 <div class="form-group">
-                    <label for="wifiPassword">Password:</label>
-                    <div class="password-wrapper">
-                        <input type="password" id="wifiPassword" name="password" placeholder="Enter WiFi password">
-                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('wifiPassword', this)">👁️</button>
+                    <label class="form-label">Voltage Threshold (volts)</label>
+                    <input type="number" class="form-input" id="voltageThreshold" inputmode="decimal" min="0.1" max="3.3" step="0.1" value="1.0" onchange="updateVoltageThreshold()">
+                </div>
+                <div class="info-box" id="voltageInfo">
+                    <div class="info-row">
+                        <span class="info-label">Voltage Detected</span>
+                        <span class="info-value" id="voltageDetected">No</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Current Reading</span>
+                        <span class="info-value" id="voltageReading">0.00V</span>
                     </div>
                 </div>
-                <button type="submit" class="config-btn">Connect to WiFi</button>
-            </form>
-        </div>
-        
-        <div class="ota-section">
-            <h2>Firmware Update</h2>
-            <div class="version-info">
-                <div class="current">
-                    <strong>Current Version:</strong> <span id="currentVersion">Loading...</span>
-                    <button class="notes-btn" id="currentVersionNotesBtn" onclick="showCurrentVersionNotes()" style="display: inline-block; margin-left: 10px;">
-                        View Release Notes
-                    </button>
-                </div>
-                <div class="latest" id="latestVersionContainer" style="display: none;">
-                    <strong>Latest Version:</strong> <span id="latestVersion"></span>
-                    <button class="notes-btn" id="latestVersionNotesBtn" onclick="showReleaseNotes()" style="display: none;">
-                        View Release Notes
-                    </button>
-                </div>
             </div>
-            <div class="toggle-container">
-                <span class="toggle-label">Auto update on boot</span>
-                <label class="switch">
-                    <input type="checkbox" id="autoUpdateToggle" onchange="toggleAutoUpdate()">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="toggle-container">
-                <span class="toggle-label">Enable SSL Certificate Validation</span>
-                <label class="switch">
-                    <input type="checkbox" id="certValidationToggle" onchange="toggleCertValidation()">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="timezone-info" style="margin-top: 10px; margin-bottom: 15px;">
-                Uses Mozilla's trusted certificate bundle for automatic SSL validation of all public servers.
-            </div>
-            
-            <button class="check-btn" onclick="checkForUpdate()">Check for Updates</button>
-            <button class="update-btn" id="updateBtn" onclick="startOTAUpdate()" style="display: none;">Update to Latest Version</button>
-            <button class="update-btn" id="cancelUpdateBtn" onclick="cancelAutoUpdate()" style="display: none; background: #f44336;">Cancel Auto-Update</button>
-            
-            <!-- Progress Bar -->
-            <div class="progress-container" id="progressContainer">
-                <div class="progress-bar" id="progressBar">0%</div>
-            </div>
-            <div class="progress-status" id="progressStatus"></div>
-            
-            <div class="ota-status" id="otaStatus"></div>
-            
-            <!-- Manual Firmware Upload -->
-            <div class="timezone-info" style="margin-top: 30px; border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 20px;">
-                Or manually upload a firmware file (.bin) from your computer.
-            </div>
-            <input type="file" id="firmwareFileInput" accept=".bin" style="display: none;" onchange="handleFirmwareSelect(event)">
-            <div class="drop-zone" id="firmwareDropZone" onclick="document.getElementById('firmwareFileInput').click()">
-                <div class="drop-zone-icon">📦</div>
-                <div class="drop-zone-text">Drag & Drop Firmware File Here</div>
-                <div class="drop-zone-hint">or click to browse (.bin files)</div>
-            </div>
-        </div>
 
-        <!-- Timezone Configuration Section -->
-        <div class="timezone-section">
-            <h2>⏰ Timezone Configuration</h2>
-            <div class="form-group">
-                <label for="timezoneSelect">Select Timezone:</label>
-                <select id="timezoneSelect" onchange="updateTimezone()">
-                    <option value="0">UTC (GMT+0:00)</option>
-                    <option value="3600">CET - Central European Time (GMT+1:00)</option>
-                    <option value="7200">CEST - Central European Summer Time (GMT+2:00)</option>
-                    <option value="-18000">EST - Eastern Standard Time (GMT-5:00)</option>
-                    <option value="-14400">EDT - Eastern Daylight Time (GMT-4:00)</option>
-                    <option value="-21600">CST - Central Standard Time (GMT-6:00)</option>
-                    <option value="-18000">CDT - Central Daylight Time (GMT-5:00)</option>
-                    <option value="-25200">MST - Mountain Standard Time (GMT-7:00)</option>
-                    <option value="-21600">MDT - Mountain Daylight Time (GMT-6:00)</option>
-                    <option value="-28800">PST - Pacific Standard Time (GMT-8:00)</option>
-                    <option value="-25200">PDT - Pacific Daylight Time (GMT-7:00)</option>
-                    <option value="28800">CST - China Standard Time (GMT+8:00)</option>
-                    <option value="32400">JST - Japan Standard Time (GMT+9:00)</option>
-                    <option value="36000">AEST - Australian Eastern Standard Time (GMT+10:00)</option>
-                    <option value="39600">AEDT - Australian Eastern Daylight Time (GMT+11:00)</option>
-                    <option value="43200">NZST - New Zealand Standard Time (GMT+12:00)</option>
-                    <option value="46800">NZDT - New Zealand Daylight Time (GMT+13:00)</option>
-                </select>
+            <!-- Manual Controls -->
+            <div class="card">
+                <div class="card-title">Manual Control</div>
+                <div class="btn-row">
+                    <button class="btn btn-success" onclick="manualOverride(true)">Turn On</button>
+                    <button class="btn btn-danger" onclick="manualOverride(false)">Turn Off</button>
+                </div>
             </div>
-            <div class="timezone-info" id="timezoneInfo">
-                Current offset: <span id="timezoneOffsetDisplay">Loading...</span>
-            </div>
-        </div>
+        </section>
 
-        <!-- MQTT Configuration Section -->
-        <div class="timezone-section">
-            <h2>📡 MQTT Configuration</h2>
-            <div class="timezone-info">
-                Connect to an MQTT broker to control this device remotely. Enable Home Assistant auto-discovery for seamless integration.
+        <!-- ===== WIFI TAB ===== -->
+        <section id="wifi" class="panel">
+            <!-- WiFi Status -->
+            <div class="card">
+                <div class="card-title">Connection Status</div>
+                <div class="info-box" id="wifiStatusBox">
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text short"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </div>
             </div>
-            
-            <div class="toggle-container" style="margin-top: 20px;">
-                <span class="toggle-label">Enable MQTT</span>
-                <label class="switch">
-                    <input type="checkbox" id="mqttEnabled" onchange="updateMqttSettings()">
-                    <span class="slider"></span>
-                </label>
+
+            <!-- Connect to WiFi -->
+            <div class="card">
+                <div class="card-title">Connect to Network</div>
+                <form onsubmit="submitWiFiConfig(event)">
+                    <div class="form-group">
+                        <label class="form-label">Available Networks</label>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <select class="form-input" id="wifiNetworkSelect" style="flex: 1; min-width: 0;" onchange="onNetworkSelect()">
+                                <option value="">-- Select a network --</option>
+                            </select>
+                            <button type="button" class="btn btn-secondary" onclick="scanWiFiNetworks()" id="scanBtn" style="padding: 8px 10px; min-width: 40px; font-size: 16px;" title="Scan for networks">
+                                🔍
+                            </button>
+                        </div>
+                        <div id="scanStatus" style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Network Name (SSID)</label>
+                        <input type="text" class="form-input" id="wifiSSID" inputmode="text" placeholder="Enter WiFi SSID or select from above">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" class="form-input" id="wifiPassword" placeholder="Enter password">
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('wifiPassword', this)">👁</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Connect</button>
+                </form>
             </div>
-            
-            <div id="mqttSettingsPanel" style="display: none;">
-                <div class="form-group">
-                    <label for="mqttBroker">Broker Address:</label>
-                    <input type="text" id="mqttBroker" placeholder="e.g., 192.168.1.100 or mqtt.example.com">
-                </div>
-                
-                <div class="form-group">
-                    <label for="mqttPort">Port:</label>
-                    <input type="number" id="mqttPort" value="1883" min="1" max="65535">
-                </div>
-                
-                <div class="form-group">
-                    <label for="mqttUsername">Username (optional):</label>
-                    <input type="text" id="mqttUsername" placeholder="Leave empty if not required">
-                </div>
-                
-                <div class="form-group">
-                    <label for="mqttPassword">Password (optional):</label>
-                    <input type="password" id="mqttPassword" placeholder="Leave empty if not required">
-                </div>
-                
-                <div class="form-group">
-                    <label for="mqttBaseTopic">Base Topic:</label>
-                    <input type="text" id="mqttBaseTopic" placeholder="e.g., home/audio-controller">
-                </div>
-                
-                <div class="toggle-container">
-                    <span class="toggle-label">Enable Home Assistant Auto-Discovery</span>
+
+            <!-- Access Point -->
+            <div class="card">
+                <div class="card-title">Access Point</div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Enable AP Mode</div>
+                        <div class="toggle-sublabel">Allow direct connections</div>
+                    </div>
                     <label class="switch">
-                        <input type="checkbox" id="mqttHADiscovery" onchange="updateMqttSettings()">
+                        <input type="checkbox" id="apToggle" onchange="toggleAP()">
                         <span class="slider"></span>
                     </label>
                 </div>
-                
-                <button class="check-btn" onclick="saveMqttSettings()" style="margin-top: 15px;">Save MQTT Settings</button>
-                
-                <div class="timezone-info" id="mqttStatus" style="margin-top: 15px;">
-                    Status: <span id="mqttConnectionStatus">Loading...</span>
-                </div>
+                <button class="btn btn-secondary mt-12" onclick="showAPConfig()">Configure AP</button>
             </div>
-        </div>
+        </section>
 
-        <!-- Export/Import Settings Section -->
-        <div class="timezone-section">
-            <h2>💾 Export/Import Settings</h2>
-            <div class="timezone-info">
-                Export all device settings to a JSON file for backup or transfer to another device.
+        <!-- ===== MQTT TAB ===== -->
+        <section id="mqtt" class="panel">
+            <div class="card">
+                <div class="card-title">Connection Status</div>
+                <div class="info-box" id="mqttStatusBox">
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text short"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </div>
             </div>
-            <button class="check-btn" onclick="exportSettings()" style="margin-top: 15px;">Download Settings File</button>
-            
-            <div class="timezone-info" style="margin-top: 30px; border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 20px;">
-                Import settings from a previously exported JSON file. The device will reboot after import.
-            </div>
-            <input type="file" id="settingsFileInput" accept=".json" style="display: none;" onchange="handleFileSelect(event)">
-            <div class="drop-zone" id="dropZone" onclick="document.getElementById('settingsFileInput').click()">
-                <div class="drop-zone-icon">📁</div>
-                <div class="drop-zone-text">Drag & Drop Settings File Here</div>
-                <div class="drop-zone-hint">or click to browse</div>
-            </div>
-            <div class="ota-status" id="importStatus" style="margin-top: 15px;"></div>
-        </div>
 
-        <!-- Reboot Device Section -->
-        <div class="reboot-section">
-            <h2>🔄 Reboot Device</h2>
-            <div class="reboot-info">
-                <strong>INFO:</strong> This will restart the ESP32. All settings will be preserved. The device will reconnect to WiFi automatically.
+            <div class="card">
+                <div class="card-title">MQTT Settings</div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Enable MQTT</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="mqttEnabled">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="divider"></div>
+                <div class="form-group">
+                    <label class="form-label">Broker Address</label>
+                    <input type="text" class="form-input" id="mqttBroker" inputmode="url" placeholder="mqtt.example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Port</label>
+                    <input type="number" class="form-input" id="mqttPort" inputmode="numeric" placeholder="1883" value="1883">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Username (optional)</label>
+                    <input type="text" class="form-input" id="mqttUsername" placeholder="Username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password (optional)</label>
+                    <div class="password-wrapper">
+                        <input type="password" class="form-input" id="mqttPassword" placeholder="Password">
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('mqttPassword', this)">👁</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Base Topic</label>
+                    <input type="text" class="form-input" id="mqttBaseTopic" placeholder="alx/audio">
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Home Assistant Discovery</div>
+                        <div class="toggle-sublabel">Auto-configure in Home Assistant</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="mqttHADiscovery">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="btn btn-primary" onclick="saveMqttSettings()">Save MQTT Settings</button>
             </div>
-            <button class="reboot-btn" id="rebootBtn" 
-                    onmousedown="startReboot()" 
-                    onmouseup="cancelReboot()" 
-                    onmouseleave="cancelReboot()"
-                    ontouchstart="startReboot()" 
-                    ontouchend="cancelReboot()">
-                <div class="reboot-progress" id="rebootProgress"></div>
-                <span class="reboot-btn-text" id="rebootBtnText">Hold for 2 Seconds to Reboot</span>
-            </button>
-        </div>
+        </section>
 
-        <!-- Factory Reset Section -->
-        <div class="factory-reset-section">
-            <h2>⚠️ Factory Reset</h2>
-            <div class="reset-warning">
-                <strong>WARNING:</strong> This will erase all settings including WiFi credentials, timezone, auto-update preferences, and Smart Sensing configuration. The device will reboot and start in Access Point mode.
+        <!-- ===== SETTINGS TAB ===== -->
+        <section id="settings" class="panel">
+            <!-- Timezone -->
+            <div class="card">
+                <div class="card-title">Timezone</div>
+                <div class="form-group">
+                    <select class="form-select" id="timezoneSelect" onchange="updateTimezone()">
+                        <option value="-43200">UTC-12:00 (Baker Island)</option>
+                        <option value="-39600">UTC-11:00 (Samoa)</option>
+                        <option value="-36000">UTC-10:00 (Hawaii)</option>
+                        <option value="-32400">UTC-09:00 (Alaska)</option>
+                        <option value="-28800">UTC-08:00 (Pacific Time)</option>
+                        <option value="-25200">UTC-07:00 (Mountain Time)</option>
+                        <option value="-21600">UTC-06:00 (Central Time)</option>
+                        <option value="-18000">UTC-05:00 (Eastern Time)</option>
+                        <option value="-14400">UTC-04:00 (Atlantic Time)</option>
+                        <option value="-10800">UTC-03:00 (Buenos Aires)</option>
+                        <option value="-7200">UTC-02:00 (Mid-Atlantic)</option>
+                        <option value="-3600">UTC-01:00 (Azores)</option>
+                        <option value="0">UTC+00:00 (London, GMT)</option>
+                        <option value="3600" selected>UTC+01:00 (Amsterdam, Paris)</option>
+                        <option value="7200">UTC+02:00 (Cairo, Athens)</option>
+                        <option value="10800">UTC+03:00 (Moscow, Nairobi)</option>
+                        <option value="14400">UTC+04:00 (Dubai)</option>
+                        <option value="18000">UTC+05:00 (Karachi)</option>
+                        <option value="19800">UTC+05:30 (Mumbai)</option>
+                        <option value="21600">UTC+06:00 (Dhaka)</option>
+                        <option value="25200">UTC+07:00 (Bangkok)</option>
+                        <option value="28800">UTC+08:00 (Singapore)</option>
+                        <option value="32400">UTC+09:00 (Tokyo)</option>
+                        <option value="36000">UTC+10:00 (Sydney)</option>
+                        <option value="43200">UTC+12:00 (Auckland)</option>
+                    </select>
+                </div>
+                <div class="info-box">
+                    <span id="timezoneInfo">Current timezone offset will be shown here</span>
+                </div>
             </div>
-            <button class="reset-btn" id="factoryResetBtn" 
-                    onmousedown="startFactoryReset()" 
-                    onmouseup="cancelFactoryReset()" 
-                    onmouseleave="cancelFactoryReset()"
-                    ontouchstart="startFactoryReset()" 
-                    ontouchend="cancelFactoryReset()">
-                <div class="reset-progress" id="resetProgress"></div>
-                <span class="reset-btn-text" id="resetBtnText">Hold for 3 Seconds to Reset</span>
-            </button>
-        </div>
 
-        <!-- Debugging Section -->
-        <div class="debug-section">
-            <h2>🔧 Debugging</h2>
-            
-            <!-- Hardware Stats Panel -->
-            <div class="hardware-stats-section">
-                <div class="hardware-stats-header">
-                    <h3>📊 Hardware Utilization</h3>
-                    <div class="refresh-selector">
-                        <label for="statsRefreshRate">Refresh:</label>
-                        <select id="statsRefreshRate" onchange="changeStatsRefreshRate()">
-                            <option value="1000">1s</option>
-                            <option value="3000">3s</option>
-                            <option value="5000" selected>5s</option>
-                            <option value="10000">10s</option>
-                        </select>
+            <!-- Day/Night Mode -->
+            <div class="card">
+                <div class="card-title">Appearance</div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Night Mode</div>
+                        <div class="toggle-sublabel">Use darker theme</div>
                     </div>
-                </div>
-                
-                <div class="hardware-stats-grid">
-                    <!-- Memory Card -->
-                    <div class="stats-card memory">
-                        <h4>Memory</h4>
-                        <div class="stat-row">
-                            <span class="stat-label">Heap</span>
-                            <span class="stat-value" id="statHeapUsed">--</span>
-                        </div>
-                        <div class="stat-bar">
-                            <div class="stat-bar-fill memory" id="statHeapBar" style="width: 0%;"></div>
-                        </div>
-                        <div class="stat-row" style="margin-top: 8px;">
-                            <span class="stat-label">Min Free</span>
-                            <span class="stat-value" id="statHeapMinFree">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Max Block</span>
-                            <span class="stat-value" id="statHeapMaxBlock">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">PSRAM</span>
-                            <span class="stat-value" id="statPsram">--</span>
-                        </div>
-                    </div>
-                    
-                    <!-- CPU Card -->
-                    <div class="stats-card cpu">
-                        <h4>CPU</h4>
-                        <div class="stat-row">
-                            <span class="stat-label">Model</span>
-                            <span class="stat-value" id="statCpuModel">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Frequency</span>
-                            <span class="stat-value" id="statCpuFreq">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Temperature</span>
-                            <span class="stat-value" id="statCpuTemp">--</span>
-                        </div>
-                        <div class="stat-row" style="margin-top: 10px;">
-                            <span class="stat-label"><span class="cpu-core-label">Core 0</span>Usage</span>
-                            <span class="stat-value cpu-usage-value" id="statCpuCore0">--%</span>
-                        </div>
-                        <div class="stat-bar">
-                            <div class="stat-bar-fill cpu" id="statCpuCore0Bar" style="width: 0%;"></div>
-                        </div>
-                        <div class="stat-row" style="margin-top: 8px;">
-                            <span class="stat-label"><span class="cpu-core-label">Core 1</span>Usage</span>
-                            <span class="stat-value cpu-usage-value" id="statCpuCore1">--%</span>
-                        </div>
-                        <div class="stat-bar">
-                            <div class="stat-bar-fill cpu" id="statCpuCore1Bar" style="width: 0%;"></div>
-                        </div>
-                        <div class="stat-row" style="margin-top: 8px;">
-                            <span class="stat-label">Total</span>
-                            <span class="stat-value cpu-usage-value" id="statCpuTotal">--%</span>
-                        </div>
-                    </div>
-                    
-                    <!-- Storage Card -->
-                    <div class="stats-card storage">
-                        <h4>Storage</h4>
-                        <div class="stat-row">
-                            <span class="stat-label">Flash Size</span>
-                            <span class="stat-value" id="statFlashSize">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Sketch Size</span>
-                            <span class="stat-value" id="statSketchSize">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">OTA Free</span>
-                            <span class="stat-value" id="statOtaFree">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">SPIFFS</span>
-                            <span class="stat-value" id="statSpiffs">--</span>
-                        </div>
-                        <div class="stat-bar">
-                            <div class="stat-bar-fill storage" id="statSpiffsBar" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- WiFi Card -->
-                    <div class="stats-card wifi">
-                        <h4>WiFi</h4>
-                        <div class="stat-row">
-                            <span class="stat-label">RSSI</span>
-                            <span class="stat-value">
-                                <span id="statWifiRssi">--</span>
-                                <span class="signal-quality" id="statWifiQuality">--</span>
-                            </span>
-                        </div>
-                        <div class="stat-bar">
-                            <div class="stat-bar-fill wifi" id="statWifiBar" style="width: 0%;"></div>
-                        </div>
-                        <div class="stat-row" style="margin-top: 8px;">
-                            <span class="stat-label">Channel</span>
-                            <span class="stat-value" id="statWifiChannel">--</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">AP Clients</span>
-                            <span class="stat-value" id="statApClients">--</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Uptime Bar -->
-                <div class="uptime-bar">
-                    <span class="uptime-label">UPTIME:</span>
-                    <span id="statUptime">--</span>
+                    <label class="switch">
+                        <input type="checkbox" id="nightModeToggle" onchange="toggleTheme()">
+                        <span class="slider"></span>
+                    </label>
                 </div>
             </div>
-            
-            <!-- Performance History Section -->
-            <div class="history-section">
-                <div class="history-header" onclick="toggleHistorySection()">
-                    <h3>Performance History</h3>
-                    <span class="collapse-icon" id="historyCollapseIcon">▼</span>
+
+            <!-- Firmware Update -->
+            <div class="card">
+                <div class="card-title">Firmware Update</div>
+                <div class="info-box">
+                    <div class="version-row">
+                        <span class="version-label">Current Version</span>
+                        <span class="version-value" id="currentVersion">Loading...</span>
+                    </div>
+                    <div class="version-row" id="latestVersionRow" style="display: none;">
+                        <span class="version-label">Latest Version</span>
+                        <span class="version-value version-update" id="latestVersion">--</span>
+                    </div>
                 </div>
-                <div class="history-content" id="historyContent">
-                    <div class="history-controls">
-                        <label>Time Range:</label>
-                        <select id="historyTimeRange" onchange="changeHistoryRange()">
-                            <option value="60">1 minute</option>
-                            <option value="300" selected>5 minutes</option>
-                            <option value="600">10 minutes</option>
-                        </select>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Auto Update</div>
+                        <div class="toggle-sublabel">Update on boot when available</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="autoUpdateToggle" onchange="toggleAutoUpdate()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">SSL Validation</div>
+                        <div class="toggle-sublabel">Verify update server certificate</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="certValidationToggle" onchange="toggleCertValidation()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="btn btn-secondary mb-8" onclick="checkForUpdate()">Check for Updates</button>
+                <button class="btn btn-primary hidden" id="updateBtn" onclick="startOTAUpdate()">Update Now</button>
+                <div class="progress-container hidden" id="progressContainer">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-text hidden" id="progressStatus"></div>
+
+                <div class="divider"></div>
+                <div class="text-secondary mb-8" style="font-size: 14px;">Or upload firmware manually:</div>
+                <div class="drop-zone" id="firmwareDropZone" onclick="document.getElementById('firmwareFile').click()">
+                    <svg class="drop-zone-icon" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+                    <div class="drop-zone-text">Tap to select or <strong>drag & drop</strong> .bin file</div>
+                </div>
+                <input type="file" id="firmwareFile" accept=".bin" style="display: none;" onchange="handleFirmwareSelect(event)">
+            </div>
+
+            <!-- Export/Import Settings -->
+            <div class="card">
+                <div class="card-title">Backup & Restore</div>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="exportSettings()">Export</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Import</button>
+                </div>
+                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileSelect(event)">
+            </div>
+
+            <!-- Reboot & Factory Reset -->
+            <div class="card">
+                <div class="card-title">Device Actions</div>
+                <button class="btn btn-secondary mb-8" onclick="startReboot()">Reboot Device</button>
+                <button class="btn btn-danger" onclick="startFactoryReset()">Factory Reset</button>
+            </div>
+        </section>
+
+        <!-- ===== DEBUG TAB ===== -->
+        <section id="debug" class="panel">
+            <!-- Stats Refresh Interval -->
+            <div class="card">
+                <div class="card-title">Refresh Rate</div>
+                <div class="input-group">
+                    <label for="statsIntervalSelect" class="input-label">Update Interval</label>
+                    <select id="statsIntervalSelect" class="select-input" onchange="setStatsInterval()">
+                        <option value="1">1 second</option>
+                        <option value="2" selected>2 seconds</option>
+                        <option value="3">3 seconds</option>
+                        <option value="5">5 seconds</option>
+                        <option value="10">10 seconds</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- CPU Stats -->
+            <div class="card">
+                <div class="card-title">CPU</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="cpuTotal">--%</div>
+                        <div class="stat-label">Total Load</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="cpuTemp">--°C</div>
+                        <div class="stat-label">Temperature</div>
+                    </div>
+                </div>
+                <div class="info-box mt-12">
+                    <div class="info-row">
+                        <span class="info-label">Core 0 Load</span>
+                        <span class="info-value" id="cpuCore0">--%</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Core 1 Load</span>
+                        <span class="info-value" id="cpuCore1">--%</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Frequency</span>
+                        <span class="info-value" id="cpuFreq">-- MHz</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Chip Model</span>
+                        <span class="info-value" id="cpuModel">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Revision</span>
+                        <span class="info-value" id="cpuRevision">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Cores</span>
+                        <span class="info-value" id="cpuCores">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memory Stats -->
+            <div class="card">
+                <div class="card-title">Memory</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="heapPercent">--%</div>
+                        <div class="stat-label">Heap Used</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="psramPercent">--%</div>
+                        <div class="stat-label">PSRAM Used</div>
+                    </div>
+                </div>
+                <div class="info-box mt-12">
+                    <div class="info-row">
+                        <span class="info-label">Heap Free</span>
+                        <span class="info-value" id="heapFree">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Heap Total</span>
+                        <span class="info-value" id="heapTotal">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Heap Min Free</span>
+                        <span class="info-value" id="heapMinFree">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Largest Block</span>
+                        <span class="info-value" id="heapMaxBlock">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">PSRAM Free</span>
+                        <span class="info-value" id="psramFree">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">PSRAM Total</span>
+                        <span class="info-value" id="psramTotal">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Storage Stats -->
+            <div class="card">
+                <div class="card-title">Storage</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="sketchPercent">--%</div>
+                        <div class="stat-label">Sketch Used</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="spiffsPercent">--%</div>
+                        <div class="stat-label">SPIFFS Used</div>
+                    </div>
+                </div>
+                <div class="info-box mt-12">
+                    <div class="info-row">
+                        <span class="info-label">Flash Size</span>
+                        <span class="info-value" id="flashSize">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Sketch Size</span>
+                        <span class="info-value" id="sketchSize">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Sketch Free</span>
+                        <span class="info-value" id="sketchFree">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">SPIFFS Used</span>
+                        <span class="info-value" id="spiffsUsed">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">SPIFFS Total</span>
+                        <span class="info-value" id="spiffsTotal">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WiFi & System Stats -->
+            <div class="card">
+                <div class="card-title">WiFi & System</div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Signal Strength</span>
+                        <span class="info-value" id="wifiRssi">-- dBm</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Channel</span>
+                        <span class="info-value" id="wifiChannel">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">AP Clients</span>
+                        <span class="info-value" id="apClients">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Uptime</span>
+                        <span class="info-value" id="uptime">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Graphs -->
+            <div class="card">
+                <div class="collapsible-header" onclick="toggleHistorySection()">
+                    <span class="card-title" style="margin-bottom: 0;">Performance History</span>
+                    <svg viewBox="0 0 24 24" id="historyChevron"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" id="historyContent">
+                    <div class="graph-container">
+                        <div class="text-secondary mb-8" style="font-size: 12px;">CPU Usage (Orange: Total, Light: Core 0, Dark: Core 1)</div>
+                        <canvas class="graph-canvas" id="cpuGraph"></canvas>
                     </div>
                     <div class="graph-container">
-                        <div class="graph-card">
-                            <h4>CPU Usage</h4>
-                            <canvas id="cpuGraph"></canvas>
-                            <div class="graph-legend cpu-legend">
-                                <span class="legend-item total">● Total</span>
-                                <span class="legend-item core0">● Core 0</span>
-                                <span class="legend-item core1">● Core 1</span>
-                            </div>
-                        </div>
-                        <div class="graph-card">
-                            <h4>Memory Usage</h4>
-                            <canvas id="memoryGraph"></canvas>
-                            <div class="graph-legend memory-legend">
-                                <span class="legend-item heap">● Heap %</span>
-                            </div>
-                        </div>
+                        <div class="text-secondary mb-8" style="font-size: 12px;">Memory Usage (%)</div>
+                        <canvas class="graph-canvas" id="memoryGraph"></canvas>
                     </div>
                 </div>
             </div>
-            
-            <div class="debug-info">
-                Real-time terminal output from the ESP32. Messages are streamed via WebSocket when connected.
-            </div>
-            <div class="debug-console" id="debugConsole">
-                <div class="log-entry">
-                    <span class="log-timestamp">[--:--:--]</span>
-                    <span class="log-message info">Waiting for connection...</span>
+
+            <!-- Debug Console -->
+            <div class="card">
+                <div class="card-title">Debug Console</div>
+                <div class="debug-console" id="debugConsole">
+                    <div class="log-entry"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
+                </div>
+                <div class="btn-row mt-12">
+                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
+                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
                 </div>
             </div>
-            <div class="debug-controls">
-                <button class="debug-btn-clear" onclick="clearDebugConsole()">Clear</button>
-                <button class="debug-btn-pause" id="debugPauseBtn" onclick="toggleDebugPause()">Pause</button>
-                <label style="display: flex; align-items: center; gap: 5px;">
-                    <input type="checkbox" id="debugAutoScroll" checked>
-                    Auto-scroll
-                </label>
-                <div class="debug-status">
-                    <div class="debug-status-indicator" id="debugStatusIndicator"></div>
-                    <span id="debugStatusText">Receiving</span>
+        </section>
+
+        <!-- ===== TEST TAB ===== -->
+        <section id="test" class="panel">
+            <div class="card">
+                <div class="card-title">LED Blink Test</div>
+                <div class="led-display">
+                    <div id="led" class="led off"></div>
+                    <div class="led-status" id="ledStatus">LED is OFF</div>
+                </div>
+                <button class="btn btn-primary" id="toggleBtn" onclick="toggleBlinking()">Start Blinking</button>
+                <div class="info-box mt-12" id="blinkStatus">
+                    <div class="text-center">Blinking: <strong id="blinkingState">OFF</strong></div>
                 </div>
             </div>
+        </section>
+    </main>
+
+    <!-- AP Config Modal -->
+    <div class="modal-overlay" id="apConfigModal">
+        <div class="modal">
+            <div class="modal-title">Configure Access Point</div>
+            <form onsubmit="submitAPConfig(event)">
+                <div class="form-group">
+                    <label class="form-label">AP Network Name (SSID)</label>
+                    <input type="text" class="form-input" id="apSSID" placeholder="ESP32-LED-Setup">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">AP Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" class="form-input" id="apPassword" placeholder="Min 8 characters">
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('apPassword', this)">👁</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary mb-8">Save AP Settings</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAPConfig()">Cancel</button>
+            </form>
         </div>
     </div>
 
     <!-- Release Notes Modal -->
-    <div class="modal" id="releaseNotesModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Release Notes</h2>
-                <button class="close-btn" onclick="closeReleaseNotes()">&times;</button>
-            </div>
-            <div class="release-notes-content" id="releaseNotesContent">
-                Loading release notes...
-            </div>
+    <div class="modal-overlay" id="releaseNotesModal">
+        <div class="modal">
+            <div class="modal-title" id="releaseNotesTitle">Release Notes</div>
+            <div id="releaseNotesContent" style="white-space: pre-wrap; font-size: 14px; color: var(--text-secondary);"></div>
+            <button class="btn btn-secondary mt-16" onclick="closeReleaseNotes()">Close</button>
         </div>
     </div>
 
-    <!-- AP Configuration Modal -->
-    <div class="modal" id="apConfigModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Access Point Configuration</h2>
-                <button class="close-btn" onclick="closeAPConfig()">&times;</button>
-            </div>
-            <form onsubmit="submitAPConfig(event)">
-                <div class="form-group">
-                    <label for="apSSID">AP Network Name (SSID):</label>
-                    <input type="text" id="apSSID" name="apSSID" placeholder="Enter AP SSID" required>
-                </div>
-                <div class="form-group">
-                    <label for="apPassword">AP Password:</label>
-                    <div class="password-wrapper">
-                        <input type="password" id="apPassword" name="apPassword" placeholder="Enter AP password (min 8 characters)" minlength="8" required>
-                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('apPassword', this)">👁️</button>
-                    </div>
-                    <div class="form-note">⚠️ Setting or changing password will cause device's AP clients to disconnect!</div>
-                </div>
-                <button type="submit" class="config-btn" style="width: 100%;">Save AP Configuration</button>
-            </form>
-        </div>
-    </div>
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
 
     <script>
-        let ws;
-        let blinkingEnabled = true;
+        // ===== State Variables =====
+        let ws = null;
         let ledState = false;
-        let autoUpdateEnabled = true;
-        let currentLatestVersion = '';
+        let blinkingEnabled = false;
+        let autoUpdateEnabled = false;
+        let nightMode = true;
+        let enableCertValidation = true;
         let currentFirmwareVersion = '';
-        let currentTimezoneOffset = 0;
-        let currentSensingMode = 'always_on';
-        let timerDurationMinutes = 15;
-        let voltageThresholdVolts = 1.0;
-        let nightMode = false;
-        let enableCertValidation = false;
-        
-        // Track which input fields are currently being edited
+        let currentLatestVersion = '';
+        let currentTimezoneOffset = 3600;
+        let manualUploadInProgress = false;
+        let debugPaused = false;
+        let debugLogBuffer = [];
+        const DEBUG_MAX_LINES = 500;
+
+        // Input focus state to prevent overwrites during user input
         let inputFocusState = {
             timerDuration: false,
             voltageThreshold: false
         };
-        
-        // Debug console state
-        let debugPaused = false;
-        let debugLogBuffer = [];
-        const DEBUG_MAX_LINES = 500;
-        
-        // Manual firmware upload state (prevents WebSocket from hiding progress bar)
-        let manualUploadInProgress = false;
-        
-        // WebSocket reconnection with exponential backoff
+
+        // WebSocket reconnection
         let wsReconnectDelay = 2000;
         const WS_MIN_RECONNECT_DELAY = 2000;
         const WS_MAX_RECONNECT_DELAY = 30000;
-        
+
         // Performance History Data
         let historyData = {
             timestamps: [],
@@ -1620,9 +1529,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             cpuCore1: [],
             memoryPercent: []
         };
-        let maxHistoryPoints = 300; // 5 minutes at 1s intervals
-        let historyCollapsed = false;
+        let maxHistoryPoints = 300;
+        let historyCollapsed = true;
 
+        // ===== Tab Switching =====
+        function switchTab(tabId) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tab === tabId);
+            });
+            // Update panels
+            document.querySelectorAll('.panel').forEach(panel => {
+                panel.classList.toggle('active', panel.id === tabId);
+            });
+        }
+
+        // ===== WebSocket =====
         function initWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsHost = window.location.hostname;
@@ -1631,11 +1553,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ws.onopen = function() {
                 console.log('WebSocket connected');
                 updateConnectionStatus(true);
-                // Reset reconnect delay on successful connection
                 wsReconnectDelay = WS_MIN_RECONNECT_DELAY;
-                // Reset OTA UI state on reconnect (device may have rebooted)
-                resetOtaUIState();
-                // Fetch current update status from server to restore UI state
                 fetchUpdateStatus();
             };
 
@@ -1648,7 +1566,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     updateLED();
                 } else if (data.type === 'blinkingEnabled') {
                     blinkingEnabled = data.enabled;
-                    updateButton();
+                    updateBlinkButton();
                 } else if (data.type === 'wifiStatus') {
                     updateWiFiStatus(data);
                 } else if (data.type === 'updateStatus') {
@@ -1674,118 +1592,123 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             };
 
             ws.onclose = function() {
-                console.log('WebSocket disconnected, reconnecting in ' + (wsReconnectDelay / 1000) + 's...');
+                console.log('WebSocket disconnected, reconnecting...');
                 updateConnectionStatus(false);
                 setTimeout(initWebSocket, wsReconnectDelay);
-                // Exponential backoff: double the delay for next attempt, up to max
                 wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY);
             };
         }
 
-        function updateLED() {
-            const led = document.getElementById('led');
-            if (ledState) {
-                led.classList.remove('off');
-                led.classList.add('on');
+        // ===== Connection Status =====
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.className = 'connection-bar connected';
+                statusEl.innerHTML = '<span class="status-dot success"></span> Connected';
             } else {
-                led.classList.remove('on');
-                led.classList.add('off');
+                statusEl.className = 'connection-bar disconnected';
+                statusEl.innerHTML = '<span class="status-dot error"></span> Disconnected';
             }
         }
 
-        function updateButton() {
+        // ===== LED Control =====
+        function updateLED() {
+            const led = document.getElementById('led');
+            const status = document.getElementById('ledStatus');
+            if (ledState) {
+                led.classList.remove('off');
+                led.classList.add('on');
+                status.textContent = 'LED is ON';
+            } else {
+                led.classList.remove('on');
+                led.classList.add('off');
+                status.textContent = 'LED is OFF';
+            }
+        }
+
+        function updateBlinkButton() {
             const btn = document.getElementById('toggleBtn');
-            const status = document.getElementById('status');
-            
+            const state = document.getElementById('blinkingState');
             if (blinkingEnabled) {
                 btn.textContent = 'Stop Blinking';
-                btn.classList.remove('stop');
-                status.textContent = 'Blinking: ON';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-danger');
+                state.textContent = 'ON';
             } else {
                 btn.textContent = 'Start Blinking';
-                btn.classList.add('stop');
-                status.textContent = 'Blinking: OFF';
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-primary');
+                state.textContent = 'OFF';
             }
         }
 
         function toggleBlinking() {
             blinkingEnabled = !blinkingEnabled;
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'toggle',
-                    enabled: blinkingEnabled
-                }));
+                ws.send(JSON.stringify({ type: 'toggle', enabled: blinkingEnabled }));
             }
-            updateButton();
+            updateBlinkButton();
         }
 
-        function updateConnectionStatus(connected) {
-            const statusEl = document.getElementById('connectionStatus');
-            if (connected) {
-                statusEl.innerHTML = '<span class="connected">● Connected</span>';
-            } else {
-                statusEl.innerHTML = '<span class="disconnected">● Disconnected</span>';
-            }
-        }
-
+        // ===== WiFi Status =====
         function updateWiFiStatus(data) {
-            const statusEl = document.getElementById('wifiStatus');
+            const statusBox = document.getElementById('wifiStatusBox');
             const apToggle = document.getElementById('apToggle');
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');
             
-            const macAddress = data.mac || 'Unknown';
-            const rssi = data.rssi !== undefined ? `${data.rssi} dBm` : 'N/A';
-            const firmwareVersion = data.firmwareVersion || 'Unknown';
-            const manufacturer = data.manufacturer || 'Unknown';
-            const model = data.model || 'Unknown';
-            const serialNumber = data.serialNumber || 'Unknown';
-            
-            // Build device info string
-            const deviceInfoStr = `<br><small style="opacity: 0.8;">Manufacturer: ${manufacturer}<br>Model: ${model}<br>Serial: ${serialNumber}</small>`;
-            
+            let html = '';
             if (data.mode === 'ap') {
-                statusEl.className = 'wifi-status ap';
-                statusEl.innerHTML = `● Access Point Mode<br>SSID: ${data.apSSID || 'ESP32-LED-Setup'}<br>IP: ${data.ip || '192.168.4.1'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}${deviceInfoStr}`;
+                html = `
+                    <div class="info-row"><span class="info-label">Mode</span><span class="info-value text-warning">Access Point</span></div>
+                    <div class="info-row"><span class="info-label">SSID</span><span class="info-value">${data.apSSID || 'ESP32-LED-Setup'}</span></div>
+                    <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || '192.168.4.1'}</span></div>
+                    <div class="info-row"><span class="info-label">MAC</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
+                `;
                 apToggle.checked = true;
             } else if (data.connected) {
-                statusEl.className = 'wifi-status connected';
-                statusEl.innerHTML = `● Connected to: ${data.ssid || 'Unknown'}<br>IP: ${data.ip || 'Unknown'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}<br>Signal: ${rssi}${deviceInfoStr}`;
+                html = `
+                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-success">Connected</span></div>
+                    <div class="info-row"><span class="info-label">Network</span><span class="info-value">${data.ssid || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${data.rssi !== undefined ? data.rssi + ' dBm' : 'N/A'}</span></div>
+                    <div class="info-row"><span class="info-label">MAC</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
+                `;
                 apToggle.checked = data.apEnabled || false;
             } else {
-                statusEl.className = 'wifi-status';
-                statusEl.innerHTML = `● Not Connected<br>SSID: ${data.ssid || 'None'}<br>MAC: ${macAddress}<br>Firmware: ${firmwareVersion}${deviceInfoStr}`;
+                html = `
+                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Not Connected</span></div>
+                    <div class="info-row"><span class="info-label">MAC</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
+                `;
                 apToggle.checked = data.apEnabled || false;
             }
+            statusBox.innerHTML = html;
 
             if (typeof data.autoUpdateEnabled !== 'undefined') {
                 autoUpdateEnabled = !!data.autoUpdateEnabled;
                 autoUpdateToggle.checked = autoUpdateEnabled;
             }
             
-            // Update timezone information if available
             if (typeof data.timezoneOffset !== 'undefined') {
                 currentTimezoneOffset = data.timezoneOffset;
-                const timezoneSelect = document.getElementById('timezoneSelect');
-                timezoneSelect.value = data.timezoneOffset.toString();
+                document.getElementById('timezoneSelect').value = data.timezoneOffset.toString();
                 updateTimezoneDisplay(data.timezoneOffset);
             }
             
-            // Update night mode if available
             if (typeof data.nightMode !== 'undefined') {
                 nightMode = !!data.nightMode;
+                document.getElementById('nightModeToggle').checked = nightMode;
                 applyTheme(nightMode);
             }
             
-            // Update certificate validation setting if available
             if (typeof data.enableCertValidation !== 'undefined') {
                 enableCertValidation = !!data.enableCertValidation;
-                const certValidationToggle = document.getElementById('certValidationToggle');
-                if (certValidationToggle) {
-                    certValidationToggle.checked = enableCertValidation;
-                }
+                document.getElementById('certValidationToggle').checked = enableCertValidation;
             }
             
-            // Update version information if available
+            if (typeof data.hardwareStatsInterval !== 'undefined') {
+                document.getElementById('statsIntervalSelect').value = data.hardwareStatsInterval.toString();
+            }
+            
             if (data.firmwareVersion) {
                 currentFirmwareVersion = data.firmwareVersion;
                 document.getElementById('currentVersion').textContent = data.firmwareVersion;
@@ -1793,1323 +1716,62 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             if (data.latestVersion && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
                 currentLatestVersion = data.latestVersion;
-                const latestVersionContainer = document.getElementById('latestVersionContainer');
-                const latestVersionSpan = document.getElementById('latestVersion');
-                const latestVersionNotesBtn = document.getElementById('latestVersionNotesBtn');
-                const updateBtn = document.getElementById('updateBtn');
-                const otaStatus = document.getElementById('otaStatus');
-                
-                latestVersionContainer.style.display = 'block';
-                latestVersionSpan.textContent = data.latestVersion;
-                latestVersionNotesBtn.style.display = 'inline-block';
+                document.getElementById('latestVersion').textContent = data.latestVersion;
+                document.getElementById('latestVersionRow').style.display = 'flex';
                 
                 if (data.updateAvailable) {
-                    latestVersionSpan.className = 'update-available';
-                    updateBtn.style.display = 'block';
-                    otaStatus.className = 'ota-status show update-available';
-                    otaStatus.textContent = 'Update available! You can view the release notes or click update to install.';
-                } else {
-                    latestVersionSpan.className = 'up-to-date';
-                    updateBtn.style.display = 'none';
-                    otaStatus.className = 'ota-status show success';
-                    otaStatus.textContent = 'You have the latest version installed.';
+                    document.getElementById('updateBtn').classList.remove('hidden');
                 }
             }
         }
 
-        function toggleAP() {
-            const enabled = document.getElementById('apToggle').checked;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'toggleAP',
-                    enabled: enabled
-                }));
-            } else {
-                // Fallback to HTTP if WebSocket not available
-                fetch('/api/toggleap', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ enabled: enabled })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        setTimeout(() => location.reload(), 2000);
-                    }
-                });
-            }
-        }
-
-        function toggleAutoUpdate() {
-            const enabled = document.getElementById('autoUpdateToggle').checked;
-            autoUpdateEnabled = enabled;
-
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ autoUpdateEnabled: enabled })
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Optionally handle response or errors here
-                if (!data.success) {
-                    alert('Failed to update settings: ' + (data.message || 'Unknown error'));
-                    document.getElementById('autoUpdateToggle').checked = !enabled;
-                }
-            })
-            .catch(error => {
-                alert('Error updating settings: ' + error);
-                document.getElementById('autoUpdateToggle').checked = !enabled;
-            });
-        }
-
-        function toggleTheme() {
-            nightMode = !nightMode;
-            applyTheme(nightMode);
-            
-            // Save to backend
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ nightMode: nightMode })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    console.error('Failed to save theme preference');
-                }
-            })
-            .catch(error => {
-                console.error('Error saving theme preference:', error);
-            });
-        }
-
-        function applyTheme(isNightMode) {
-            const body = document.body;
-            const themeToggleBtn = document.getElementById('themeToggle');
-            
-            if (isNightMode) {
-                body.classList.add('night-mode');
-                themeToggleBtn.textContent = '☀️';
-                themeToggleBtn.title = 'Switch to Day Mode';
-            } else {
-                body.classList.remove('night-mode');
-                themeToggleBtn.textContent = '🌙';
-                themeToggleBtn.title = 'Switch to Night Mode';
-            }
-        }
-
-        function toggleCertValidation() {
-            const enabled = document.getElementById('certValidationToggle').checked;
-            enableCertValidation = enabled;
-            
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ enableCertValidation: enabled })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    alert('Failed to update certificate validation setting: ' + (data.message || 'Unknown error'));
-                    document.getElementById('certValidationToggle').checked = !enabled;
-                } else {
-                    const statusMsg = enabled ? 'SSL Certificate Validation ENABLED' : 'SSL Certificate Validation DISABLED';
-                    console.log(statusMsg);
-                }
-            })
-            .catch(error => {
-                alert('Error updating certificate validation setting: ' + error);
-                document.getElementById('certValidationToggle').checked = !enabled;
-            });
-        }
-
-        // Note: Certificate editor functions removed - now using Mozilla certificate bundle
-
-        function updateTimezone() {
-            const select = document.getElementById('timezoneSelect');
-            const offset = parseInt(select.value);
-            currentTimezoneOffset = offset;
-
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ timezoneOffset: offset })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    updateTimezoneDisplay(offset);
-                    alert('Timezone updated successfully! Time will be re-synchronized.');
-                } else {
-                    alert('Failed to update timezone: ' + (data.message || 'Unknown error'));
-                    // Revert selection
-                    select.value = currentTimezoneOffset.toString();
-                }
-            })
-            .catch(error => {
-                alert('Error updating timezone: ' + error);
-                // Revert selection
-                select.value = currentTimezoneOffset.toString();
-            });
-        }
-
-        function updateTimezoneDisplay(offset) {
-            const hours = offset / 3600;
-            const sign = hours >= 0 ? '+' : '';
-            const displayText = `GMT${sign}${hours.toFixed(1)} (${offset} seconds)`;
-            document.getElementById('timezoneOffsetDisplay').textContent = displayText;
-        }
-
-        // ===== MQTT Configuration Functions =====
-        
-        function loadMqttSettings() {
-            fetch('/api/mqtt')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('mqttEnabled').checked = data.enabled;
-                        document.getElementById('mqttBroker').value = data.broker || '';
-                        document.getElementById('mqttPort').value = data.port || 1883;
-                        document.getElementById('mqttUsername').value = data.username || '';
-                        document.getElementById('mqttBaseTopic').value = data.baseTopic || 'esp32-audio';
-                        document.getElementById('mqttHADiscovery').checked = data.haDiscovery;
-                        
-                        // Show/hide settings panel based on enabled state
-                        document.getElementById('mqttSettingsPanel').style.display = data.enabled ? 'block' : 'none';
-                        
-                        // Update connection status
-                        updateMqttConnectionStatus(data.connected, data.deviceId);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading MQTT settings:', error);
-                    document.getElementById('mqttConnectionStatus').textContent = 'Error loading settings';
-                });
-        }
-        
-        function updateMqttSettings() {
-            const enabled = document.getElementById('mqttEnabled').checked;
-            document.getElementById('mqttSettingsPanel').style.display = enabled ? 'block' : 'none';
-        }
-        
-        function updateMqttConnectionStatus(connected, deviceId) {
-            const statusEl = document.getElementById('mqttConnectionStatus');
-            if (connected) {
-                statusEl.innerHTML = '<span style="color: #4CAF50;">✅ Connected</span>';
-                if (deviceId) {
-                    statusEl.innerHTML += ' (Device ID: ' + deviceId + ')';
-                }
-            } else {
-                const enabled = document.getElementById('mqttEnabled').checked;
-                if (enabled) {
-                    statusEl.innerHTML = '<span style="color: #ff9800;">⚠️ Disconnected</span>';
-                } else {
-                    statusEl.innerHTML = '<span style="color: #888;">MQTT disabled</span>';
-                }
-            }
-        }
-        
-        function saveMqttSettings() {
-            const enabled = document.getElementById('mqttEnabled').checked;
-            const broker = document.getElementById('mqttBroker').value.trim();
-            const port = parseInt(document.getElementById('mqttPort').value) || 1883;
-            const username = document.getElementById('mqttUsername').value.trim();
-            const password = document.getElementById('mqttPassword').value;
-            const baseTopic = document.getElementById('mqttBaseTopic').value.trim() || 'esp32-audio';
-            const haDiscovery = document.getElementById('mqttHADiscovery').checked;
-            
-            // Validate broker if enabled
-            if (enabled && !broker) {
-                alert('Please enter a broker address');
-                document.getElementById('mqttBroker').focus();
-                return;
-            }
-            
-            const statusEl = document.getElementById('mqttConnectionStatus');
-            statusEl.innerHTML = '<span style="color: #2196F3;">⏳ Saving...</span>';
-            
-            const settings = {
-                enabled: enabled,
-                broker: broker,
-                port: port,
-                username: username,
-                baseTopic: baseTopic,
-                haDiscovery: haDiscovery
-            };
-            
-            // Only include password if it was entered
-            if (password) {
-                settings.password = password;
-            }
-            
-            fetch('/api/mqtt', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(settings)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Clear password field after saving
-                    document.getElementById('mqttPassword').value = '';
-                    
-                    // Update status
-                    updateMqttConnectionStatus(data.connected);
-                    
-                    // Show success message briefly
-                    statusEl.innerHTML = '<span style="color: #4CAF50;">✅ Settings saved!</span>';
-                    
-                    // Reload status after a short delay
-                    setTimeout(loadMqttSettings, 2000);
-                } else {
-                    statusEl.innerHTML = '<span style="color: #f44336;">❌ ' + (data.message || 'Failed to save') + '</span>';
-                }
-            })
-            .catch(error => {
-                console.error('Error saving MQTT settings:', error);
-                statusEl.innerHTML = '<span style="color: #f44336;">❌ Error saving settings</span>';
-            });
-        }
-
-        function exportSettings() {
-            // Create a download link and trigger it
-            const link = document.createElement('a');
-            link.href = '/api/settings/export';
-            link.download = 'device-settings.json';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) {
-                return;
-            }
-            
-            const statusEl = document.getElementById('importStatus');
-            const dropZone = document.getElementById('dropZone');
-            
-            // Reset drop zone appearance
-            dropZone.classList.remove('drag-over');
-            
-            // Validate file type
-            if (!file.name.endsWith('.json')) {
-                statusEl.className = 'ota-status show error';
-                statusEl.textContent = '❌ Error: Please select a JSON file';
-                return;
-            }
-            
-            // Show selected file name
-            statusEl.className = 'ota-status show';
-            statusEl.textContent = '📄 Selected: ' + file.name;
-            
-            // Read file
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const settings = JSON.parse(e.target.result);
-                    
-                    // Validate it's a settings file
-                    if (!settings.exportInfo || !settings.settings) {
-                        statusEl.className = 'ota-status show error';
-                        statusEl.textContent = 'Error: Invalid settings file format';
-                        return;
-                    }
-                    
-                    // Confirm before importing
-                    const exportTime = settings.exportInfo.timestamp || 'unknown';
-                    const confirmMsg = `Import settings from backup?\n\nExport Date: ${exportTime}\n\nThis will:\n- Apply all saved settings\n- Reboot the device in 3 seconds\n- Cannot be cancelled once started\n\nContinue?`;
-                    
-                    if (!confirm(confirmMsg)) {
-                        statusEl.className = 'ota-status show';
-                        statusEl.textContent = 'Import cancelled';
-                        event.target.value = ''; // Reset file input
-                        return;
-                    }
-                    
-                    // Import settings
-                    importSettings(e.target.result);
-                    
-                } catch (error) {
-                    statusEl.className = 'ota-status show error';
-                    statusEl.textContent = 'Error: Failed to parse JSON file - ' + error.message;
-                }
-            };
-            
-            reader.onerror = function() {
-                statusEl.className = 'ota-status show error';
-                statusEl.textContent = 'Error: Failed to read file';
-            };
-            
-            reader.readAsText(file);
-        }
-
-        function importSettings(jsonData) {
-            const statusEl = document.getElementById('importStatus');
-            
-            statusEl.className = 'ota-status show updating';
-            statusEl.textContent = 'Importing settings...';
-            
-            fetch('/api/settings/import', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: jsonData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    statusEl.className = 'ota-status show success';
-                    statusEl.textContent = '✅ Settings imported successfully!';
-                    
-                    // Show countdown
-                    let countdown = 3;
-                    const countdownInterval = setInterval(() => {
-                        statusEl.textContent = `✅ Settings imported successfully! Rebooting in ${countdown} seconds...`;
-                        countdown--;
-                        
-                        if (countdown < 0) {
-                            clearInterval(countdownInterval);
-                            statusEl.textContent = '🔄 Device is rebooting...';
-                            
-                            // Try to reconnect after reboot
-                            setTimeout(() => {
-                                statusEl.textContent = '⏳ Waiting for device to come back online...';
-                                // Attempt to reload page after device reboots
-                                setTimeout(() => {
-                                    window.location.reload();
-                                }, 5000);
-                            }, 3000);
-                        }
-                    }, 1000);
-                } else {
-                    statusEl.className = 'ota-status show error';
-                    statusEl.textContent = '❌ Import failed: ' + (data.message || 'Unknown error');
-                }
-            })
-            .catch(error => {
-                // If fetch fails, device might already be rebooting
-                statusEl.className = 'ota-status show success';
-                statusEl.textContent = '✅ Import started. Device is rebooting...';
-                
-                setTimeout(() => {
-                    statusEl.textContent = '⏳ Waiting for device to come back online...';
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 5000);
-                }, 3000);
-            });
-            
-            // Reset file input
-            document.getElementById('settingsFileInput').value = '';
-        }
-
-        let rebootHoldTimer = null;
-        let rebootStartTime = 0;
-        let rebootAnimationFrame = null;
-        let resetHoldTimer = null;
-        let resetStartTime = 0;
-        let resetAnimationFrame = null;
-
-        function startReboot() {
-            const btn = document.getElementById('rebootBtn');
-            const progress = document.getElementById('rebootProgress');
-            const text = document.getElementById('rebootBtnText');
-            
-            rebootStartTime = Date.now();
-            btn.classList.add('holding');
-            text.textContent = 'Keep Holding...';
-            
-            // Animate progress bar
-            function updateProgress() {
-                const elapsed = Date.now() - rebootStartTime;
-                const percentage = Math.min((elapsed / 2000) * 100, 100);
-                progress.style.width = percentage + '%';
-                
-                if (elapsed >= 2000) {
-                    // 2 seconds elapsed - perform reboot
-                    performReboot();
-                } else {
-                    rebootAnimationFrame = requestAnimationFrame(updateProgress);
-                }
-            }
-            
-            rebootAnimationFrame = requestAnimationFrame(updateProgress);
-        }
-
-        function cancelReboot() {
-            const btn = document.getElementById('rebootBtn');
-            const progress = document.getElementById('rebootProgress');
-            const text = document.getElementById('rebootBtnText');
-            
-            if (rebootAnimationFrame) {
-                cancelAnimationFrame(rebootAnimationFrame);
-                rebootAnimationFrame = null;
-            }
-            
-            btn.classList.remove('holding');
-            progress.style.width = '0%';
-            text.textContent = 'Hold for 2 Seconds to Reboot';
-        }
-
-        function performReboot() {
-            const btn = document.getElementById('rebootBtn');
-            const text = document.getElementById('rebootBtnText');
-            
-            btn.disabled = true;
-            text.textContent = 'Rebooting...';
-            
-            fetch('/api/reboot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    text.textContent = 'Rebooting Device...';
-                    // Show message for 2 seconds
-                    setTimeout(() => {
-                        alert('Device is rebooting. The page will reconnect automatically.');
-                        // Reload page after device reboots
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 5000);
-                    }, 1000);
-                } else {
-                    alert('Reboot failed: ' + (data.message || 'Unknown error'));
-                    btn.disabled = false;
-                    cancelReboot();
-                }
-            })
-            .catch(error => {
-                alert('Error performing reboot: ' + error);
-                btn.disabled = false;
-                cancelReboot();
-            });
-        }
-
-        function startFactoryReset() {
-            const btn = document.getElementById('factoryResetBtn');
-            const progress = document.getElementById('resetProgress');
-            const text = document.getElementById('resetBtnText');
-            
-            resetStartTime = Date.now();
-            btn.classList.add('holding');
-            text.textContent = 'Keep Holding...';
-            
-            // Animate progress bar
-            function updateProgress() {
-                const elapsed = Date.now() - resetStartTime;
-                const percentage = Math.min((elapsed / 3000) * 100, 100);
-                progress.style.width = percentage + '%';
-                
-                if (elapsed >= 3000) {
-                    // 3 seconds elapsed - perform reset
-                    performFactoryReset();
-                } else {
-                    resetAnimationFrame = requestAnimationFrame(updateProgress);
-                }
-            }
-            
-            resetAnimationFrame = requestAnimationFrame(updateProgress);
-        }
-
-        function cancelFactoryReset() {
-            const btn = document.getElementById('factoryResetBtn');
-            const progress = document.getElementById('resetProgress');
-            const text = document.getElementById('resetBtnText');
-            
-            if (resetAnimationFrame) {
-                cancelAnimationFrame(resetAnimationFrame);
-                resetAnimationFrame = null;
-            }
-            
-            btn.classList.remove('holding');
-            progress.style.width = '0%';
-            text.textContent = 'Hold for 3 Seconds to Reset';
-        }
-
-        function performFactoryReset() {
-            const btn = document.getElementById('factoryResetBtn');
-            const text = document.getElementById('resetBtnText');
-            
-            btn.disabled = true;
-            text.textContent = 'Resetting...';
-            
-            fetch('/api/factoryreset', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    text.textContent = 'Reset Complete! Rebooting...';
-                    // Show message for 2 seconds
-                    setTimeout(() => {
-                        alert('Factory reset complete. The device will reboot and start in Access Point mode. You will need to reconnect.');
-                        // Optionally reload page after device reboots
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 5000);
-                    }, 2000);
-                } else {
-                    alert('Factory reset failed: ' + (data.message || 'Unknown error'));
-                    btn.disabled = false;
-                    cancelFactoryReset();
-                }
-            })
-            .catch(error => {
-                alert('Error performing factory reset: ' + error);
-                btn.disabled = false;
-                cancelFactoryReset();
-            });
-        }
-
-        function handlePhysicalResetProgress(data) {
-            const btn = document.getElementById('factoryResetBtn');
-            const progress = document.getElementById('resetProgress');
-            const text = document.getElementById('resetBtnText');
-            
-            if (data.resetTriggered) {
-                // Physical button triggered reset
-                btn.disabled = true;
-                btn.classList.add('holding');
-                progress.style.width = '100%';
-                text.textContent = 'Physical Reset Triggered! Rebooting...';
-                
-                // Show notification
-                setTimeout(() => {
-                    alert('Factory reset triggered by physical button. The device will reboot and start in Access Point mode.');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 5000);
-                }, 1000);
-                
-            } else if (data.secondsHeld > 0) {
-                // Physical button is being held - show progress
-                btn.classList.add('holding');
-                progress.style.width = data.progress + '%';
-                text.textContent = `Physical Button: ${data.secondsHeld}/${data.secondsRequired}s`;
-                
-            } else {
-                // Physical button released or cancelled
-                btn.classList.remove('holding');
-                progress.style.width = '0%';
-                text.textContent = 'Hold for 3 Seconds to Reset';
-                btn.disabled = false;
-            }
-        }
-
-        function handlePhysicalRebootProgress(data) {
-            const btn = document.getElementById('rebootBtn');
-            const progress = document.getElementById('rebootProgress');
-            const text = document.getElementById('rebootBtnText');
-            
-            if (data.rebootTriggered) {
-                // Physical button triggered reboot
-                btn.disabled = true;
-                btn.classList.add('holding');
-                progress.style.width = '100%';
-                text.textContent = 'Physical Reboot Triggered! Rebooting...';
-                
-                // Show notification
-                setTimeout(() => {
-                    alert('Reboot triggered by physical button. The device will restart shortly.');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 5000);
-                }, 1000);
-                
-            } else if (data.secondsHeld > 0) {
-                // Physical button is being held - show progress
-                btn.classList.add('holding');
-                progress.style.width = data.progress + '%';
-                text.textContent = `Physical Button: ${data.secondsHeld}/${data.secondsRequired}s`;
-                
-            } else {
-                // Physical button released or cancelled
-                btn.classList.remove('holding');
-                progress.style.width = '0%';
-                text.textContent = 'Hold for 2 Seconds to Reboot';
-                btn.disabled = false;
-            }
-        }
-
-        function submitWiFiConfig(event) {
-            event.preventDefault();
-            const ssid = document.getElementById('wifiSSID').value;
-            const password = document.getElementById('wifiPassword').value;
-            
-            if (!ssid || !password) {
-                alert('Please enter both SSID and password');
-                return;
-            }
-            
-            fetch('/api/wificonfig', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    ssid: ssid,
-                    password: password
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('WiFi configuration saved! Connecting...');
-                    setTimeout(() => location.reload(), 3000);
-                } else {
-                    alert('Error: ' + (data.message || 'Failed to save configuration'));
-                }
-            })
-            .catch(error => {
-                alert('Error: ' + error);
-            });
-        }
-
-        function checkForUpdate() {
-            const statusEl = document.getElementById('otaStatus');
-            const checkBtn = document.querySelector('.check-btn');
-            const latestVersionContainer = document.getElementById('latestVersionContainer');
-            const updateBtn = document.getElementById('updateBtn');
-            const latestVersionNotesBtn = document.getElementById('latestVersionNotesBtn');
-            
-            statusEl.className = 'ota-status show updating';
-            statusEl.textContent = 'Checking for updates...';
-            checkBtn.disabled = true;
-            latestVersionContainer.style.display = 'none';
-            updateBtn.style.display = 'none';
-            latestVersionNotesBtn.style.display = 'none';
-            
-            fetch('/api/checkupdate')
-                .then(response => response.json())
-                .then(data => {
-                    checkBtn.disabled = false;
-                    
-                    if (data.success) {
-                        const currentVersion = data.currentVersion || 'Unknown';
-                        const latestVersion = data.latestVersion || 'Unknown';
-                        currentLatestVersion = latestVersion;  // Store for release notes
-                        currentFirmwareVersion = currentVersion;  // Store current version
-                        
-                        document.getElementById('currentVersion').textContent = currentVersion;
-                        latestVersionContainer.style.display = 'block';
-                        document.getElementById('latestVersion').textContent = latestVersion;
-                        
-                        if (data.updateAvailable) {
-                            document.getElementById('latestVersion').className = 'update-available';
-                            updateBtn.style.display = 'block';
-                            latestVersionNotesBtn.style.display = 'inline-block';
-                            statusEl.className = 'ota-status show update-available';
-                            statusEl.textContent = 'Update available! View release notes or click update to proceed.';
-                        } else {
-                            document.getElementById('latestVersion').className = 'up-to-date';
-                            statusEl.className = 'ota-status show success';
-                            statusEl.textContent = 'You have the latest version installed.';
-                        }
-                    } else {
-                        statusEl.className = 'ota-status show error';
-                        statusEl.textContent = 'Error: ' + (data.message || 'Failed to check for updates');
-                    }
-                })
-                .catch(error => {
-                    checkBtn.disabled = false;
-                    statusEl.className = 'ota-status show error';
-                    statusEl.textContent = 'Error: ' + error;
-                });
-        }
-
-        function startOTAUpdate() {
-            const statusEl = document.getElementById('otaStatus');
-            const updateBtn = document.getElementById('updateBtn');
-            const checkBtn = document.querySelector('.check-btn');
-            
-            if (!confirm('This will download and install the new firmware. The device will restart automatically. Continue?')) {
-                return;
-            }
-            
-            statusEl.className = 'ota-status show updating';
-            statusEl.textContent = 'Starting OTA update... This may take a few minutes.';
-            updateBtn.disabled = true;
-            checkBtn.disabled = true;
-            
-            fetch('/api/startupdate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    statusEl.className = 'ota-status show updating';
-                    statusEl.textContent = 'Update started. Downloading firmware... The device will restart when complete.';
-                    
-                    // Poll for update status
-                    let pollCount = 0;
-                    const pollInterval = setInterval(() => {
-                        pollCount++;
-                        fetch('/api/updatestatus')
-                            .then(response => response.json())
-                            .then(statusData => {
-                                if (statusData.status === 'complete') {
-                                    clearInterval(pollInterval);
-                                    statusEl.className = 'ota-status show success';
-                                    statusEl.textContent = 'Update complete! Device will restart in a few seconds...';
-                                } else if (statusData.status === 'error') {
-                                    clearInterval(pollInterval);
-                                    statusEl.className = 'ota-status show error';
-                                    statusEl.textContent = 'Update failed: ' + (statusData.message || 'Unknown error');
-                                    updateBtn.disabled = false;
-                                    checkBtn.disabled = false;
-                                } else if (statusData.status === 'downloading') {
-                                    statusEl.textContent = 'Downloading: ' + (statusData.progress || '0') + '%';
-                                }
-                            })
-                            .catch(() => {
-                                // Server might have restarted
-                                if (pollCount > 30) {
-                                    clearInterval(pollInterval);
-                                    statusEl.className = 'ota-status show success';
-                                    statusEl.textContent = 'Update may have completed. Please refresh the page.';
-                                }
-                            });
-                    }, 2000);
-                } else {
-                    statusEl.className = 'ota-status show error';
-                    statusEl.textContent = 'Error: ' + (data.message || 'Failed to start update');
-                    updateBtn.disabled = false;
-                    checkBtn.disabled = false;
-                }
-            })
-            .catch(error => {
-                statusEl.className = 'ota-status show error';
-                statusEl.textContent = 'Error: ' + error;
-                updateBtn.disabled = false;
-                checkBtn.disabled = false;
-            });
-        }
-
-        function cancelAutoUpdate() {
-            autoUpdateEnabled = false;
-            
-            fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ autoUpdateEnabled: false })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('autoUpdateToggle').checked = false;
-                    document.getElementById('cancelUpdateBtn').style.display = 'none';
-                    const otaStatus = document.getElementById('otaStatus');
-                    otaStatus.className = 'ota-status show update-available';
-                    otaStatus.textContent = 'Auto-update cancelled. Update available for manual installation.';
-                }
-            })
-            .catch(error => {
-                alert('Error cancelling auto-update: ' + error);
-            });
-        }
-
-        function resetOtaUIState() {
-            // Reset all OTA-related UI elements to their default state
-            const updateBtn = document.getElementById('updateBtn');
-            const cancelBtn = document.getElementById('cancelUpdateBtn');
-            const otaStatus = document.getElementById('otaStatus');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            const progressStatus = document.getElementById('progressStatus');
-            const checkBtn = document.getElementById('checkUpdateBtn');
-            
-            // Reset progress bar
-            if (progressContainer) {
-                progressContainer.classList.remove('show');
-            }
-            if (progressBar) {
-                progressBar.style.width = '0%';
-                progressBar.textContent = '0%';
-            }
-            if (progressStatus) {
-                progressStatus.textContent = '';
-            }
-            
-            // Reset buttons
-            if (updateBtn) {
-                updateBtn.style.display = 'none';
-                updateBtn.disabled = false;
-                updateBtn.textContent = 'Update to Latest Version';
-            }
-            if (cancelBtn) {
-                cancelBtn.style.display = 'none';
-            }
-            if (checkBtn) {
-                checkBtn.disabled = false;
-            }
-            
-            // Reset status message (but don't clear if showing justUpdated notification)
-            if (otaStatus && !otaStatus.dataset.justUpdated) {
-                otaStatus.className = 'ota-status';
-                otaStatus.textContent = '';
-            }
-            
-            // Note: Don't reset latestVersionContainer here - let fetchUpdateStatus() handle it
-            
-            // Remove any existing update success notification
-            const existingNotification = document.getElementById('updateSuccessNotification');
-            if (existingNotification) {
-                existingNotification.remove();
-            }
-            
-            console.log('OTA UI state reset');
-        }
-        
-        function fetchUpdateStatus() {
-            // Fetch current update status from the server to restore UI state after reconnect
-            fetch('/api/updatestatus')
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Fetched update status:', data);
-                    handleUpdateStatus(data);
-                })
-                .catch(error => {
-                    console.log('Could not fetch update status:', error);
-                });
-        }
-
-        function showUpdateSuccessNotification(data) {
-            // First reset any stale OTA UI state
-            resetOtaUIState();
-            
-            // Create and show a success notification banner
-            const notification = document.createElement('div');
-            notification.id = 'updateSuccessNotification';
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-                color: white;
-                padding: 20px 30px;
-                border-radius: 12px;
-                box-shadow: 0 8px 32px rgba(40, 167, 69, 0.4);
-                z-index: 10000;
-                text-align: center;
-                max-width: 90%;
-                animation: slideDown 0.5s ease-out;
-            `;
-            notification.innerHTML = `
-                <div style="font-size: 24px; margin-bottom: 8px;">✅ Firmware Updated Successfully!</div>
-                <div style="font-size: 14px; opacity: 0.9;">
-                    Updated from <strong>${data.previousVersion}</strong> to <strong>${data.currentVersion}</strong>
-                </div>
-                <div style="font-size: 12px; margin-top: 10px; opacity: 0.7;">
-                    Click to dismiss or wait 10 seconds
-                </div>
-            `;
-            
-            // Add animation keyframes if not already present
-            if (!document.getElementById('updateNotificationStyles')) {
-                const style = document.createElement('style');
-                style.id = 'updateNotificationStyles';
-                style.textContent = `
-                    @keyframes slideDown {
-                        from { transform: translateX(-50%) translateY(-100px); opacity: 0; }
-                        to { transform: translateX(-50%) translateY(0); opacity: 1; }
-                    }
-                    @keyframes fadeOut {
-                        from { opacity: 1; }
-                        to { opacity: 0; }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-            
-            document.body.appendChild(notification);
-            
-            // Mark OTA status as showing justUpdated (so resetOtaUIState doesn't clear it immediately)
-            const otaStatus = document.getElementById('otaStatus');
-            if (otaStatus) {
-                otaStatus.dataset.justUpdated = 'true';
-                otaStatus.className = 'ota-status show success';
-                otaStatus.textContent = `Firmware updated from ${data.previousVersion} to ${data.currentVersion}`;
-            }
-            
-            // Auto-dismiss after 10 seconds
-            const dismissTimeout = setTimeout(() => {
-                dismissNotification(notification);
-            }, 10000);
-            
-            // Click to dismiss
-            notification.onclick = () => {
-                clearTimeout(dismissTimeout);
-                dismissNotification(notification);
-            };
-            
-            function dismissNotification(el) {
-                el.style.animation = 'fadeOut 0.3s ease-out forwards';
-                setTimeout(() => {
-                    el.remove();
-                    // Also clear the OTA status after notification is dismissed
-                    if (otaStatus) {
-                        delete otaStatus.dataset.justUpdated;
-                        otaStatus.className = 'ota-status';
-                        otaStatus.textContent = '';
-                    }
-                }, 300);
-            }
-            
-            console.log('Firmware update notification:', data.message);
-        }
-
-        function handleUpdateStatus(data) {
-            const updateBtn = document.getElementById('updateBtn');
-            const cancelBtn = document.getElementById('cancelUpdateBtn');
-            const otaStatus = document.getElementById('otaStatus');
-            const latestVersionContainer = document.getElementById('latestVersionContainer');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            const progressStatus = document.getElementById('progressStatus');
-            
-            // Handle progress bar for downloading/preparing/complete states
-            // Skip if manual upload is in progress (manual upload manages its own progress bar)
-            if (data.status === 'downloading' || data.status === 'preparing' || data.status === 'complete') {
-                progressContainer.classList.add('show');
-                progressBar.style.width = data.progress + '%';
-                progressBar.textContent = data.progress + '%';
-                
-                if (data.message) {
-                    progressStatus.textContent = data.message;
-                }
-                
-                if (data.bytesDownloaded && data.totalBytes) {
-                    const downloadedKB = (data.bytesDownloaded / 1024).toFixed(1);
-                    const totalKB = (data.totalBytes / 1024).toFixed(1);
-                    progressStatus.textContent = `${data.message} (${downloadedKB} / ${totalKB} KB)`;
-                }
-            } else if (!manualUploadInProgress) {
-                // Only hide progress bar if no manual upload is happening
-                progressContainer.classList.remove('show');
-            }
-            
-            if (data.status === 'complete') {
-                otaStatus.className = 'ota-status show success';
-                otaStatus.textContent = 'Update complete! Device rebooting...';
-            } else if (data.status === 'error') {
-                otaStatus.className = 'ota-status show error';
-                otaStatus.textContent = 'Update failed: ' + (data.message || 'Unknown error');
-                progressContainer.classList.remove('show');
-            }
-            
-            // Show latest version info if available (exclude "Unknown" and "Checking..." states)
-            if (data.latestVersion && data.latestVersion.length > 0 && data.latestVersion !== 'Unknown' && data.latestVersion !== 'Checking...') {
-                const latestVersionSpan = document.getElementById('latestVersion');
-                const latestVersionNotesBtn = document.getElementById('latestVersionNotesBtn');
-                latestVersionSpan.textContent = data.latestVersion;
-                currentLatestVersion = data.latestVersion;
-                latestVersionContainer.style.display = 'block';
-                
-                if (data.updateAvailable) {
-                    latestVersionSpan.className = 'update-available';
-                    latestVersionNotesBtn.style.display = 'inline-block';
-                    
-                    if (data.countdownSeconds > 0) {
-                        // Show countdown (auto-update in progress, amplifier is off)
-                        updateBtn.style.display = 'block';
-                        updateBtn.textContent = 'Update Now (Auto-updating in ' + data.countdownSeconds + 's)';
-                        cancelBtn.style.display = 'block';
-                        otaStatus.className = 'ota-status show updating';
-                        otaStatus.textContent = 'New firmware detected. Auto-update in ' + data.countdownSeconds + ' seconds...';
-                    } else if (data.autoUpdateEnabled && data.amplifierInUse) {
-                        // Auto-update enabled but amplifier is in use - will retry automatically
-                        updateBtn.style.display = 'block';
-                        updateBtn.textContent = 'Update to Latest Version';
-                        cancelBtn.style.display = 'none';
-                        otaStatus.className = 'ota-status show update-available';
-                        otaStatus.textContent = 'Update available! Auto-update paused while amplifier is in use. Will retry automatically.';
-                    } else if (data.autoUpdateEnabled) {
-                        // Auto-update enabled, waiting for next check cycle
-                        updateBtn.style.display = 'block';
-                        updateBtn.textContent = 'Update to Latest Version';
-                        cancelBtn.style.display = 'none';
-                        otaStatus.className = 'ota-status show update-available';
-                        otaStatus.textContent = 'Update available! Auto-update will start on next check.';
-                    } else {
-                        // Auto-update disabled, show manual button
-                        updateBtn.style.display = 'block';
-                        updateBtn.textContent = 'Update to Latest Version';
-                        cancelBtn.style.display = 'none';
-                        otaStatus.className = 'ota-status show update-available';
-                        otaStatus.textContent = 'Update available! Click to install.';
-                    }
-                } else {
-                    // Up to date
-                    latestVersionSpan.className = 'up-to-date';
-                    latestVersionNotesBtn.style.display = 'inline-block';
-                    updateBtn.style.display = 'none';
-                    cancelBtn.style.display = 'none';
-                }
-            } else {
-                updateBtn.style.display = 'none';
-                cancelBtn.style.display = 'none';
-            }
-        }
-
-        function showReleaseNotes() {
-            const modal = document.getElementById('releaseNotesModal');
-            const content = document.getElementById('releaseNotesContent');
-            const header = document.querySelector('.modal-header h2');
-            
-            header.textContent = 'Release Notes - Version ' + currentLatestVersion;
-            modal.classList.add('show');
-            content.textContent = 'Loading release notes...';
-            
-            fetch(`/api/releasenotes?version=${encodeURIComponent(currentLatestVersion)}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        content.textContent = data.notes;
-                    } else {
-                        content.textContent = data.notes || data.message || 'Failed to load release notes';
-                    }
-                })
-                .catch(error => {
-                    content.textContent = 'Error loading release notes: ' + error;
-                });
-        }
-
-        function showCurrentVersionNotes() {
-            const modal = document.getElementById('releaseNotesModal');
-            const content = document.getElementById('releaseNotesContent');
-            const header = document.querySelector('.modal-header h2');
-            
-            header.textContent = 'Release Notes - Version ' + currentFirmwareVersion;
-            modal.classList.add('show');
-            content.textContent = 'Loading release notes...';
-            
-            fetch(`/api/releasenotes?version=${encodeURIComponent(currentFirmwareVersion)}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        content.textContent = data.notes;
-                    } else {
-                        content.textContent = data.notes || data.message || 'Failed to load release notes';
-                    }
-                })
-                .catch(error => {
-                    content.textContent = 'Error loading release notes: ' + error;
-                });
-        }
-
-        function closeReleaseNotes() {
-            const modal = document.getElementById('releaseNotesModal');
-            modal.classList.remove('show');
-        }
-
-        // Password visibility toggle
-        function togglePasswordVisibility(inputId, button) {
-            const input = document.getElementById(inputId);
-            if (input.type === 'password') {
-                input.type = 'text';
-                button.textContent = '🙈';  // Hide icon
-            } else {
-                input.type = 'password';
-                button.textContent = '👁️';  // Show icon
-            }
-        }
-
-        // AP Configuration Modal functions
-        let currentAPSSID = '';
-        let currentAPPassword = '';
-
-        function showAPConfig() {
-            const modal = document.getElementById('apConfigModal');
-            const ssidInput = document.getElementById('apSSID');
-            const passwordInput = document.getElementById('apPassword');
-            
-            // Fetch current AP settings from server
-            fetch('/api/wifistatus')
-                .then(response => response.json())
-                .then(data => {
-                    // Prefill with current AP SSID
-                    if (data.apSSID) {
-                        currentAPSSID = data.apSSID;
-                        ssidInput.value = data.apSSID;
-                    }
-                    // Password cannot be retrieved for security - use placeholder
-                    passwordInput.value = '';
-                    passwordInput.placeholder = '********';
-                    currentAPPassword = '';
-                })
-                .catch(error => {
-                    console.error('Error fetching AP config:', error);
-                });
-            
-            modal.classList.add('show');
-        }
-
-        function closeAPConfig() {
-            const modal = document.getElementById('apConfigModal');
-            modal.classList.remove('show');
-        }
-
-        function submitAPConfig(event) {
-            event.preventDefault();
-            
-            const ssid = document.getElementById('apSSID').value;
-            const password = document.getElementById('apPassword').value;
-            
-            // Password validation: if provided, must be at least 8 characters
-            // Empty password means keep existing
-            if (password.length > 0 && password.length < 8) {
-                alert('Password must be at least 8 characters long (or leave empty to keep current password)');
-                return;
-            }
-            
-            // Build request body - only include password if changed
-            const requestBody = { ssid: ssid };
-            if (password.length >= 8) {
-                requestBody.password = password;
-            }
-            
-            // Send AP configuration to server
-            fetch('/api/apconfig', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('AP configuration updated successfully!\\nNew SSID: ' + ssid + '\\nNote: Connected AP clients have been disconnected.');
-                    closeAPConfig();
-                    // Refresh WiFi status
-                    fetch('/api/wifistatus')
-                        .then(response => response.json())
-                        .then(data => updateWiFiStatus(data));
-                } else {
-                    alert('Failed to update AP configuration: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                alert('Error updating AP configuration: ' + error);
-            });
-        }
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const releaseModal = document.getElementById('releaseNotesModal');
-            const apModal = document.getElementById('apConfigModal');
-            if (event.target === releaseModal) {
-                closeReleaseNotes();
-            } else if (event.target === apModal) {
-                closeAPConfig();
-            }
-        }
-
-        // Smart Sensing Functions
+        // ===== Smart Sensing =====
         function updateSensingMode() {
-            const selected = document.querySelector('input[name="sensingMode"]:checked').value;
-            currentSensingMode = selected;
-            
-            const timerDisplay = document.getElementById('timerDisplay');
-            
-            // Show/hide timer display based on mode (but keep input always editable)
-            if (selected === 'smart_auto') {
-                timerDisplay.style.display = 'block';
-            } else {
-                timerDisplay.style.display = 'none';
-            }
+            const selected = document.querySelector('input[name="sensingMode"]:checked');
+            if (!selected) return;
             
             fetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mode: selected })
+                body: JSON.stringify({ mode: selected.value })
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
-                if (!data.success) {
-                    alert('Failed to update mode: ' + (data.message || 'Unknown error'));
-                }
+                if (data.success) showToast('Mode updated', 'success');
             })
-            .catch(error => {
-                console.error('Error updating mode:', error);
-            });
+            .catch(err => showToast('Failed to update mode', 'error'));
         }
 
         function updateTimerDuration() {
-            const duration = parseInt(document.getElementById('timerDuration').value);
-            if (duration < 1 || duration > 60) {
-                alert('Timer duration must be between 1 and 60 minutes');
-                return;
-            }
-            
-            timerDurationMinutes = duration;
+            const value = parseInt(document.getElementById('timerDuration').value);
+            if (isNaN(value) || value < 1 || value > 60) return;
             
             fetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timerDuration: duration })
+                body: JSON.stringify({ timerDuration: value })
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
-                if (!data.success) {
-                    alert('Failed to update timer: ' + (data.message || 'Unknown error'));
-                }
+                if (data.success) showToast('Timer updated', 'success');
             })
-            .catch(error => {
-                console.error('Error updating timer:', error);
-            });
+            .catch(err => showToast('Failed to update timer', 'error'));
         }
 
         function updateVoltageThreshold() {
-            const threshold = parseFloat(document.getElementById('voltageThreshold').value);
-            if (threshold < 0.1 || threshold > 3.3) {
-                alert('Voltage threshold must be between 0.1 and 3.3 volts');
-                return;
-            }
-            
-            voltageThresholdVolts = threshold;
+            const value = parseFloat(document.getElementById('voltageThreshold').value);
+            if (isNaN(value) || value < 0.1 || value > 3.3) return;
             
             fetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ voltageThreshold: threshold })
+                body: JSON.stringify({ voltageThreshold: value })
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
-                if (!data.success) {
-                    alert('Failed to update threshold: ' + (data.message || 'Unknown error'));
-                }
+                if (data.success) showToast('Threshold updated', 'success');
             })
-            .catch(error => {
-                console.error('Error updating threshold:', error);
-            });
+            .catch(err => showToast('Failed to update threshold', 'error'));
         }
 
         function manualOverride(state) {
@@ -3118,1162 +1780,1253 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ manualOverride: state })
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
-                if (!data.success) {
-                    alert('Failed to override: ' + (data.message || 'Unknown error'));
-                }
+                if (data.success) showToast(state ? 'Turned ON' : 'Turned OFF', 'success');
             })
-            .catch(error => {
-                console.error('Error with manual override:', error);
-            });
+            .catch(err => showToast('Failed to control amplifier', 'error'));
         }
 
         function updateSmartSensingUI(data) {
-            // Update mode radio buttons
-            if (data.mode) {
-                const modeRadio = document.querySelector(`input[name="sensingMode"][value="${data.mode}"]`);
-                if (modeRadio) {
-                    modeRadio.checked = true;
-                    currentSensingMode = data.mode;
-                    
-                    const timerDisplay = document.getElementById('timerDisplay');
-                    
-                    // Show/hide timer display based on mode
-                    if (data.mode === 'smart_auto') {
-                        timerDisplay.style.display = 'block';
-                    } else {
-                        timerDisplay.style.display = 'none';
-                    }
+            // Update mode selection
+            if (data.mode !== undefined) {
+                // Mode can be a string ("always_on", "always_off", "smart_auto") or number (0, 1, 2)
+                let modeValue = data.mode;
+                if (typeof data.mode === 'number') {
+                    const modeMap = { 0: 'always_on', 1: 'always_off', 2: 'smart_auto' };
+                    modeValue = modeMap[data.mode] || 'smart_auto';
                 }
+                document.querySelectorAll('input[name="sensingMode"]').forEach(radio => {
+                    radio.checked = (radio.value === modeValue);
+                });
             }
             
-            // Get input elements
-            const timerDurationInput = document.getElementById('timerDuration');
-            const voltageThresholdInput = document.getElementById('voltageThreshold');
-            
-            // Update timer duration input (ONLY if user is not currently editing it)
+            // Update timer duration (only if not focused)
             if (data.timerDuration !== undefined && !inputFocusState.timerDuration) {
-                timerDurationInput.value = data.timerDuration;
-                timerDurationMinutes = data.timerDuration;
+                document.getElementById('timerDuration').value = data.timerDuration;
             }
             
-            // Update timer display
-            if (data.timerRemaining !== undefined) {
-                const minutes = Math.floor(data.timerRemaining / 60);
-                const seconds = data.timerRemaining % 60;
-                document.getElementById('timerValue').textContent = 
-                    String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+            // Update voltage threshold (only if not focused)
+            if (data.voltageThreshold !== undefined && !inputFocusState.voltageThreshold) {
+                document.getElementById('voltageThreshold').value = data.voltageThreshold.toFixed(1);
             }
             
             // Update amplifier status
             if (data.amplifierState !== undefined) {
-                const statusEl = document.getElementById('amplifierStatus');
-                statusEl.textContent = data.amplifierState ? 'ON' : 'OFF';
-                statusEl.className = 'amplifier-status ' + (data.amplifierState ? 'on' : 'off');
+                const display = document.getElementById('amplifierDisplay');
+                const status = document.getElementById('amplifierStatus');
+                if (data.amplifierState) {
+                    display.classList.add('on');
+                    status.textContent = 'ON';
+                } else {
+                    display.classList.remove('on');
+                    status.textContent = 'OFF';
+                }
             }
             
-            // Update voltage detection
+            // Update voltage info
             if (data.voltageDetected !== undefined) {
-                const voltageDetectedEl = document.getElementById('voltageDetected');
-                voltageDetectedEl.textContent = data.voltageDetected ? 'Yes' : 'No';
-                voltageDetectedEl.style.color = data.voltageDetected ? '#4CAF50' : '#f44336';
+                document.getElementById('voltageDetected').textContent = data.voltageDetected ? 'Yes' : 'No';
+            }
+            if (data.currentVoltage !== undefined) {
+                document.getElementById('voltageReading').textContent = data.currentVoltage.toFixed(2) + 'V';
             }
             
-            // Update voltage reading
-            if (data.voltageReading !== undefined) {
-                document.getElementById('voltageReading').textContent = data.voltageReading.toFixed(2) + 'V';
-            }
-            
-            // Update threshold (ONLY if user is not currently editing it)
-            if (data.voltageThreshold !== undefined && !inputFocusState.voltageThreshold) {
-                voltageThresholdInput.value = data.voltageThreshold;
-                voltageThresholdVolts = data.voltageThreshold;
+            // Update timer display
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerValue = document.getElementById('timerValue');
+            if (data.timerActive && data.timerRemaining !== undefined) {
+                timerDisplay.classList.remove('hidden');
+                const mins = Math.floor(data.timerRemaining / 60);
+                const secs = data.timerRemaining % 60;
+                timerValue.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            } else {
+                timerDisplay.classList.add('hidden');
             }
         }
 
-        // Initialize drag and drop zone
-        function initDragAndDrop() {
-            const dropZone = document.getElementById('dropZone');
-            const fileInput = document.getElementById('settingsFileInput');
+        // ===== WiFi Configuration =====
+        let wifiScanInProgress = false;
+        
+        function submitWiFiConfig(event) {
+            event.preventDefault();
+            const ssid = document.getElementById('wifiSSID').value;
+            const password = document.getElementById('wifiPassword').value;
             
-            // Prevent default drag behaviors
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, preventDefaults, false);
-                document.body.addEventListener(eventName, preventDefaults, false);
-            });
-            
-            // Highlight drop zone when item is dragged over it
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropZone.addEventListener(eventName, highlight, false);
-            });
-            
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, unhighlight, false);
-            });
-            
-            // Handle dropped files
-            dropZone.addEventListener('drop', handleDrop, false);
-            
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            
-            function highlight(e) {
-                dropZone.classList.add('drag-over');
-            }
-            
-            function unhighlight(e) {
-                dropZone.classList.remove('drag-over');
-            }
-            
-            function handleDrop(e) {
-                const dt = e.dataTransfer;
-                const files = dt.files;
-                
-                if (files.length > 0) {
-                    // Create a fake event object to pass to handleFileSelect
-                    const fakeEvent = {
-                        target: {
-                            files: files,
-                            value: ''
-                        }
-                    };
-                    handleFileSelect(fakeEvent);
+            fetch('/api/wificonfig', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ssid, password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Connecting to WiFi...', 'success');
+                } else {
+                    showToast(data.message || 'Connection failed', 'error');
                 }
+            })
+            .catch(err => showToast('Failed to connect', 'error'));
+        }
+        
+        function scanWiFiNetworks() {
+            const scanBtn = document.getElementById('scanBtn');
+            const scanStatus = document.getElementById('scanStatus');
+            const select = document.getElementById('wifiNetworkSelect');
+            
+            if (wifiScanInProgress) return;
+            
+            wifiScanInProgress = true;
+            scanBtn.disabled = true;
+            scanBtn.textContent = '⏳';
+            scanStatus.textContent = 'Scanning for networks...';
+            
+            // Start scan and poll for results
+            pollWiFiScan();
+        }
+        
+        function pollWiFiScan() {
+            fetch('/api/wifiscan')
+                .then(res => res.json())
+                .then(data => {
+                    const scanBtn = document.getElementById('scanBtn');
+                    const scanStatus = document.getElementById('scanStatus');
+                    const select = document.getElementById('wifiNetworkSelect');
+                    
+                    if (data.scanning) {
+                        // Still scanning, poll again
+                        setTimeout(pollWiFiScan, 1000);
+                        return;
+                    }
+                    
+                    // Scan complete
+                    wifiScanInProgress = false;
+                    scanBtn.disabled = false;
+                    scanBtn.textContent = '🔍';
+                    
+                    // Clear and populate dropdown
+                    select.innerHTML = '<option value="">-- Select a network --</option>';
+                    
+                    if (data.networks && data.networks.length > 0) {
+                        // Sort by signal strength (strongest first)
+                        data.networks.sort((a, b) => b.rssi - a.rssi);
+                        
+                        data.networks.forEach(network => {
+                            const option = document.createElement('option');
+                            option.value = network.ssid;
+                            // Show signal strength indicator
+                            const signalIcon = network.rssi > -50 ? '📶' : network.rssi > -70 ? '📶' : '📶';
+                            const lockIcon = network.encryption === 'secured' ? '🔒' : '🔓';
+                            option.textContent = `${network.ssid} ${lockIcon} (${network.rssi} dBm)`;
+                            select.appendChild(option);
+                        });
+                        scanStatus.textContent = `Found ${data.networks.length} network(s)`;
+                    } else {
+                        scanStatus.textContent = 'No networks found';
+                    }
+                })
+                .catch(err => {
+                    wifiScanInProgress = false;
+                    const scanBtn = document.getElementById('scanBtn');
+                    const scanStatus = document.getElementById('scanStatus');
+                    scanBtn.disabled = false;
+                    scanBtn.textContent = '🔍';
+                    scanStatus.textContent = 'Scan failed';
+                    showToast('Failed to scan networks', 'error');
+                });
+        }
+        
+        function onNetworkSelect() {
+            const select = document.getElementById('wifiNetworkSelect');
+            const ssidInput = document.getElementById('wifiSSID');
+            
+            if (select.value) {
+                ssidInput.value = select.value;
             }
         }
 
-        // Initialize firmware drag and drop zone
-        function initFirmwareDragAndDrop() {
-            const dropZone = document.getElementById('firmwareDropZone');
-            const fileInput = document.getElementById('firmwareFileInput');
+        function toggleAP() {
+            const enabled = document.getElementById('apToggle').checked;
+            fetch('/api/toggleap', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast(enabled ? 'AP enabled' : 'AP disabled', 'success');
+            })
+            .catch(err => showToast('Failed to toggle AP', 'error'));
+        }
+
+        function showAPConfig() {
+            document.getElementById('apConfigModal').classList.add('active');
+        }
+
+        function closeAPConfig() {
+            document.getElementById('apConfigModal').classList.remove('active');
+        }
+
+        function submitAPConfig(event) {
+            event.preventDefault();
+            const ssid = document.getElementById('apSSID').value;
+            const password = document.getElementById('apPassword').value;
             
-            if (!dropZone) return;
-            
-            // Prevent default drag behaviors
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, preventDefaults, false);
-                document.body.addEventListener(eventName, preventDefaults, false);
-            });
-            
-            // Highlight drop zone when item is dragged over it
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropZone.addEventListener(eventName, highlight, false);
-            });
-            
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, unhighlight, false);
-            });
-            
-            // Handle dropped files
-            dropZone.addEventListener('drop', handleFirmwareDrop, false);
-            
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
+            if (password.length > 0 && password.length < 8) {
+                showToast('Password must be at least 8 characters', 'error');
+                return;
             }
             
-            function highlight(e) {
-                dropZone.classList.add('drag-over');
-            }
-            
-            function unhighlight(e) {
-                dropZone.classList.remove('drag-over');
-            }
-            
-            function handleFirmwareDrop(e) {
-                const dt = e.dataTransfer;
-                const files = dt.files;
-                
-                if (files.length > 0) {
-                    // Create a fake event object to pass to handleFirmwareSelect
-                    const fakeEvent = {
-                        target: {
-                            files: files,
-                            value: ''
-                        }
-                    };
-                    handleFirmwareSelect(fakeEvent);
+            fetch('/api/apconfig', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ssid, password })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('AP settings saved', 'success');
+                    closeAPConfig();
+                } else {
+                    showToast(data.message || 'Failed to save', 'error');
                 }
+            })
+            .catch(err => showToast('Failed to save AP settings', 'error'));
+        }
+
+        // ===== MQTT =====
+        function loadMqttSettings() {
+            fetch('/api/mqtt')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('mqttEnabled').checked = data.enabled || false;
+                document.getElementById('mqttBroker').value = data.broker || '';
+                document.getElementById('mqttPort').value = data.port || 1883;
+                document.getElementById('mqttUsername').value = data.username || '';
+                document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
+                document.getElementById('mqttHADiscovery').checked = data.haDiscovery || false;
+                updateMqttConnectionStatus(data.connected, data.deviceId, data.broker, data.port);
+            })
+            .catch(err => console.error('Failed to load MQTT settings:', err));
+        }
+
+        function updateMqttConnectionStatus(connected, deviceId, broker, port) {
+            const statusBox = document.getElementById('mqttStatusBox');
+            const enabled = document.getElementById('mqttEnabled').checked;
+            
+            let html = '';
+            if (connected) {
+                html = `
+                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-success">Connected</span></div>
+                    <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
+                    ${deviceId ? `<div class="info-row"><span class="info-label">Device ID</span><span class="info-value">${deviceId}</span></div>` : ''}
+                `;
+            } else if (enabled) {
+                html = `
+                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Disconnected</span></div>
+                    <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Not configured'}</span></div>
+                    <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
+                `;
+            } else {
+                html = `
+                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-secondary">Disabled</span></div>
+                    <div class="info-row"><span class="info-label">MQTT</span><span class="info-value">Not enabled</span></div>
+                `;
+            }
+            statusBox.innerHTML = html;
+        }
+
+        function saveMqttSettings() {
+            const settings = {
+                enabled: document.getElementById('mqttEnabled').checked,
+                broker: document.getElementById('mqttBroker').value,
+                port: parseInt(document.getElementById('mqttPort').value) || 1883,
+                username: document.getElementById('mqttUsername').value,
+                password: document.getElementById('mqttPassword').value,
+                baseTopic: document.getElementById('mqttBaseTopic').value,
+                haDiscovery: document.getElementById('mqttHADiscovery').checked
+            };
+            
+            fetch('/api/mqtt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('MQTT settings saved', 'success');
+                    setTimeout(loadMqttSettings, 2000);
+                } else {
+                    showToast(data.message || 'Failed to save', 'error');
+                }
+            })
+            .catch(err => showToast('Failed to save MQTT settings', 'error'));
+        }
+
+        // ===== Settings =====
+        function updateTimezone() {
+            const offset = parseInt(document.getElementById('timezoneSelect').value);
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timezoneOffset: offset })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Timezone updated', 'success');
+                    updateTimezoneDisplay(offset);
+                }
+            })
+            .catch(err => showToast('Failed to update timezone', 'error'));
+        }
+
+        function updateTimezoneDisplay(offset) {
+            const hours = offset / 3600;
+            const sign = hours >= 0 ? '+' : '';
+            document.getElementById('timezoneInfo').textContent = `UTC${sign}${hours} hours`;
+        }
+
+        function toggleTheme() {
+            nightMode = document.getElementById('nightModeToggle').checked;
+            applyTheme(nightMode);
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nightMode })
+            });
+        }
+
+        function applyTheme(isNightMode) {
+            if (isNightMode) {
+                document.body.classList.add('night-mode');
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#121212');
+            } else {
+                document.body.classList.remove('night-mode');
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F5F5F5');
             }
         }
 
-        // Handle firmware file selection
+        function toggleAutoUpdate() {
+            autoUpdateEnabled = document.getElementById('autoUpdateToggle').checked;
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ autoUpdateEnabled: autoUpdateEnabled })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast(autoUpdateEnabled ? 'Auto-update enabled' : 'Auto-update disabled', 'success');
+            })
+            .catch(err => showToast('Failed to update setting', 'error'));
+        }
+
+        function toggleCertValidation() {
+            enableCertValidation = document.getElementById('certValidationToggle').checked;
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enableCertValidation: enableCertValidation })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast(enableCertValidation ? 'SSL validation enabled' : 'SSL validation disabled', 'success');
+            })
+            .catch(err => showToast('Failed to update setting', 'error'));
+        }
+
+        function setStatsInterval() {
+            const interval = parseInt(document.getElementById('statsIntervalSelect').value);
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hardwareStatsInterval: interval })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast('Stats interval set to ' + interval + 's', 'success');
+            })
+            .catch(err => showToast('Failed to update interval', 'error'));
+        }
+
+        // ===== Firmware Update =====
+        function checkForUpdate() {
+            showToast('Checking for updates...', 'info');
+            fetch('/api/checkupdate')
+            .then(res => res.json())
+            .then(data => {
+                if (data.updateAvailable) {
+                    document.getElementById('latestVersion').textContent = data.latestVersion;
+                    document.getElementById('latestVersionRow').style.display = 'flex';
+                    document.getElementById('updateBtn').classList.remove('hidden');
+                    showToast(`Update available: ${data.latestVersion}`, 'success');
+                } else {
+                    showToast('Firmware is up to date', 'success');
+                }
+            })
+            .catch(err => showToast('Failed to check for updates', 'error'));
+        }
+
+        function fetchUpdateStatus() {
+            fetch('/api/updatestatus')
+            .then(res => res.json())
+            .then(data => handleUpdateStatus(data))
+            .catch(err => console.error('Failed to fetch update status:', err));
+        }
+
+        function startOTAUpdate() {
+            fetch('/api/startupdate', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('progressContainer').classList.remove('hidden');
+                    document.getElementById('progressStatus').classList.remove('hidden');
+                    showToast('Update started', 'success');
+                } else {
+                    showToast(data.message || 'Failed to start update', 'error');
+                }
+            })
+            .catch(err => showToast('Failed to start update', 'error'));
+        }
+
+        function handleUpdateStatus(data) {
+            if (data.status === 'downloading' || data.status === 'uploading') {
+                const container = document.getElementById('progressContainer');
+                const bar = document.getElementById('progressBar');
+                const status = document.getElementById('progressStatus');
+                
+                container.classList.remove('hidden');
+                status.classList.remove('hidden');
+                bar.style.width = data.progress + '%';
+                status.textContent = data.message || `${data.progress}%`;
+            } else if (data.status === 'complete') {
+                showToast('Update complete! Rebooting...', 'success');
+            } else if (data.status === 'error') {
+                document.getElementById('progressContainer').classList.add('hidden');
+                document.getElementById('progressStatus').classList.add('hidden');
+                showToast(data.message || 'Update failed', 'error');
+            }
+        }
+
+        function showUpdateSuccessNotification(data) {
+            showToast(`Firmware updated: ${data.previousVersion} → ${data.currentVersion}`, 'success');
+        }
+
+        // ===== Manual Firmware Upload =====
         function handleFirmwareSelect(event) {
             const file = event.target.files[0];
-            if (!file) {
-                return;
-            }
-            
-            const otaStatus = document.getElementById('otaStatus');
-            const dropZone = document.getElementById('firmwareDropZone');
-            
-            // Reset drop zone appearance
-            dropZone.classList.remove('drag-over');
-            
-            // Validate file type
-            if (!file.name.endsWith('.bin')) {
-                otaStatus.className = 'ota-status show error';
-                otaStatus.textContent = '❌ Error: Please select a .bin firmware file';
-                return;
-            }
-            
-            // Show selected file info
-            const fileSizeKB = (file.size / 1024).toFixed(1);
-            otaStatus.className = 'ota-status show';
-            otaStatus.textContent = '📦 Selected: ' + file.name + ' (' + fileSizeKB + ' KB)';
-            
-            // Confirm before uploading
-            const confirmMsg = 'Upload firmware file?\n\nFile: ' + file.name + '\nSize: ' + fileSizeKB + ' KB\n\nThis will:\n- Flash new firmware to the device\n- Reboot automatically when complete\n- Cannot be cancelled once started\n\nContinue?';
-            
-            if (!confirm(confirmMsg)) {
-                otaStatus.className = 'ota-status show';
-                otaStatus.textContent = 'Upload cancelled';
-                event.target.value = ''; // Reset file input
-                return;
-            }
-            
-            // Start upload
-            uploadFirmware(file);
+            if (file) uploadFirmware(file);
         }
 
-        // Upload firmware file with progress tracking (uses same progress bar as OTA update)
         function uploadFirmware(file) {
-            const otaStatus = document.getElementById('otaStatus');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressBar = document.getElementById('progressBar');
-            const progressStatus = document.getElementById('progressStatus');
-            const dropZone = document.getElementById('firmwareDropZone');
+            if (!file.name.endsWith('.bin')) {
+                showToast('Please select a .bin file', 'error');
+                return;
+            }
             
-            // Mark manual upload in progress (prevents WebSocket from hiding progress bar)
             manualUploadInProgress = true;
+            const container = document.getElementById('progressContainer');
+            const bar = document.getElementById('progressBar');
+            const status = document.getElementById('progressStatus');
             
-            // Disable drop zone during upload
-            dropZone.style.pointerEvents = 'none';
-            dropZone.style.opacity = '0.5';
+            container.classList.remove('hidden');
+            status.classList.remove('hidden');
+            status.textContent = 'Uploading...';
             
-            // Show progress bar (same as OTA update)
-            progressContainer.classList.add('show');
-            progressBar.style.width = '0%';
-            progressBar.textContent = '0%';
-            progressStatus.textContent = 'Uploading firmware...';
-            
-            otaStatus.className = 'ota-status show updating';
-            otaStatus.textContent = 'Uploading firmware file...';
-            
-            // Create FormData and XMLHttpRequest for progress tracking
             const formData = new FormData();
             formData.append('firmware', file);
             
             const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/firmware/upload', true);
             
-            // Track upload progress
-            xhr.upload.addEventListener('progress', function(e) {
+            xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
                     const percent = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = percent + '%';
-                    progressBar.textContent = percent + '%';
-                    const loadedKB = (e.loaded / 1024).toFixed(1);
-                    const totalKB = (e.total / 1024).toFixed(1);
-                    progressStatus.textContent = 'Uploading: ' + loadedKB + ' / ' + totalKB + ' KB';
-                    otaStatus.textContent = 'Uploading firmware... ' + percent + '%';
+                    bar.style.width = percent + '%';
+                    status.textContent = `Uploading: ${percent}%`;
                 }
-            });
+            };
             
-            // Handle completion
-            xhr.addEventListener('load', function() {
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    
-                    if (response.success) {
-                        // Clear upload flag on success (page will reload anyway)
-                        manualUploadInProgress = false;
-                        
-                        progressBar.style.width = '100%';
-                        progressBar.textContent = '100%';
-                        progressStatus.textContent = 'Upload complete! Rebooting...';
-                        otaStatus.className = 'ota-status show success';
-                        otaStatus.textContent = '✅ ' + response.message;
-                        
-                        // Show reboot countdown
-                        let countdown = 5;
-                        const countdownInterval = setInterval(() => {
-                            otaStatus.textContent = '✅ Upload complete! Device rebooting in ' + countdown + 's...';
-                            progressStatus.textContent = 'Rebooting in ' + countdown + 's...';
-                            countdown--;
-                            if (countdown < 0) {
-                                clearInterval(countdownInterval);
-                                otaStatus.textContent = '🔄 Reconnecting...';
-                                progressStatus.textContent = 'Reconnecting...';
-                                // Try to reconnect after device reboots
-                                setTimeout(() => {
-                                    window.location.reload();
-                                }, 5000);
-                            }
-                        }, 1000);
-                    } else {
-                        otaStatus.className = 'ota-status show error';
-                        otaStatus.textContent = '❌ ' + (response.message || 'Upload failed');
-                        progressStatus.textContent = 'Upload failed';
-                        resetUploadUI();
-                    }
-                } catch (e) {
-                    // Device might have rebooted during response
-                    manualUploadInProgress = false;
-                    otaStatus.className = 'ota-status show success';
-                    otaStatus.textContent = '✅ Upload complete! Device is rebooting...';
-                    progressStatus.textContent = 'Device rebooting...';
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 5000);
-                }
-            });
-            
-            // Handle errors
-            xhr.addEventListener('error', function() {
-                // Connection error might mean device is rebooting
+            xhr.onload = function() {
                 manualUploadInProgress = false;
-                otaStatus.className = 'ota-status show updating';
-                otaStatus.textContent = '🔄 Connection lost - device may be rebooting...';
-                progressStatus.textContent = 'Connection lost...';
-                setTimeout(() => {
-                    window.location.reload();
-                }, 5000);
-            });
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        status.textContent = 'Upload complete! Rebooting...';
+                        showToast('Firmware uploaded successfully', 'success');
+                    } else {
+                        container.classList.add('hidden');
+                        status.classList.add('hidden');
+                        showToast(response.message || 'Upload failed', 'error');
+                    }
+                } else {
+                    container.classList.add('hidden');
+                    status.classList.add('hidden');
+                    showToast('Upload failed', 'error');
+                }
+            };
             
-            xhr.addEventListener('abort', function() {
-                otaStatus.className = 'ota-status show error';
-                otaStatus.textContent = '❌ Upload aborted';
-                progressStatus.textContent = 'Aborted';
-                resetUploadUI();
-            });
+            xhr.onerror = function() {
+                manualUploadInProgress = false;
+                container.classList.add('hidden');
+                status.classList.add('hidden');
+                showToast('Upload failed', 'error');
+            };
             
-            // Send the request
-            xhr.open('POST', '/api/firmware/upload', true);
             xhr.send(formData);
         }
 
-        // Reset upload UI elements
-        function resetUploadUI() {
-            const progressContainer = document.getElementById('progressContainer');
+        // Drag and drop for firmware
+        function initFirmwareDragDrop() {
             const dropZone = document.getElementById('firmwareDropZone');
-            const fileInput = document.getElementById('firmwareFileInput');
             
-            // Clear manual upload flag
-            manualUploadInProgress = false;
-            
-            progressContainer.classList.remove('show');
-            dropZone.style.pointerEvents = 'auto';
-            dropZone.style.opacity = '1';
-            fileInput.value = ''; // Reset file input
-        }
-
-        window.onload = function() {
-            initWebSocket();
-            initDragAndDrop();
-            initFirmwareDragAndDrop();
-            loadMqttSettings();
-            // Request initial WiFi status
-            fetch('/api/wifistatus')
-                .then(response => response.json())
-                .then(data => {
-                    updateWiFiStatus(data);
-                    // Set current version
-                    if (data.firmwareVersion) {
-                        currentFirmwareVersion = data.firmwareVersion;
-                        document.getElementById('currentVersion').textContent = data.firmwareVersion;
-                    }
-                    
-                    // Display latest version if available
-                    if (data.latestVersion && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
-                        currentLatestVersion = data.latestVersion;
-                        const latestVersionContainer = document.getElementById('latestVersionContainer');
-                        const latestVersionSpan = document.getElementById('latestVersion');
-                        const latestVersionNotesBtn = document.getElementById('latestVersionNotesBtn');
-                        
-                        latestVersionContainer.style.display = 'block';
-                        latestVersionSpan.textContent = data.latestVersion;
-                        
-                        if (data.updateAvailable) {
-                            latestVersionSpan.className = 'update-available';
-                            latestVersionNotesBtn.style.display = 'inline-block';
-                            document.getElementById('updateBtn').style.display = 'block';
-                            
-                            const otaStatus = document.getElementById('otaStatus');
-                            otaStatus.className = 'ota-status show update-available';
-                            otaStatus.textContent = 'Update available! You can view the release notes or click update to install.';
-                        } else {
-                            latestVersionSpan.className = 'up-to-date';
-                            latestVersionNotesBtn.style.display = 'inline-block';
-                            
-                            const otaStatus = document.getElementById('otaStatus');
-                            otaStatus.className = 'ota-status show success';
-                            otaStatus.textContent = 'You have the latest version installed.';
-                        }
-                    } else if (!data.latestVersion || data.latestVersion === 'Unknown' || data.latestVersion === 'Checking...') {
-                        // Version check failed or still checking - auto-trigger a check
-                        const otaStatus = document.getElementById('otaStatus');
-                        otaStatus.className = 'ota-status show updating';
-                        otaStatus.textContent = 'Checking for updates...';
-                        
-                        // Automatically check for updates after a short delay
-                        setTimeout(() => {
-                            fetch('/api/checkupdate')
-                                .then(response => response.json())
-                                .then(updateData => {
-                                    if (updateData.success && updateData.latestVersion && updateData.latestVersion !== 'Unknown') {
-                                        currentLatestVersion = updateData.latestVersion;
-                                        const latestVersionContainer = document.getElementById('latestVersionContainer');
-                                        const latestVersionSpan = document.getElementById('latestVersion');
-                                        const latestVersionNotesBtn = document.getElementById('latestVersionNotesBtn');
-                                        const updateBtn = document.getElementById('updateBtn');
-                                        
-                                        latestVersionContainer.style.display = 'block';
-                                        latestVersionSpan.textContent = updateData.latestVersion;
-                                        latestVersionNotesBtn.style.display = 'inline-block';
-                                        
-                                        if (updateData.updateAvailable) {
-                                            latestVersionSpan.className = 'update-available';
-                                            updateBtn.style.display = 'block';
-                                            otaStatus.className = 'ota-status show update-available';
-                                            otaStatus.textContent = 'Update available! You can view the release notes or click update to install.';
-                                        } else {
-                                            latestVersionSpan.className = 'up-to-date';
-                                            updateBtn.style.display = 'none';
-                                            otaStatus.className = 'ota-status show success';
-                                            otaStatus.textContent = 'You have the latest version installed.';
-                                        }
-                                    } else {
-                                        otaStatus.className = 'ota-status show';
-                                        otaStatus.textContent = 'Could not check for updates. Click "Check for Updates" to try again.';
-                                    }
-                                })
-                                .catch(error => {
-                                    console.error('Auto update check failed:', error);
-                                    otaStatus.className = 'ota-status show';
-                                    otaStatus.textContent = 'Click "Check for Updates" to see if a newer version is available.';
-                                });
-                        }, 2000);  // Wait 2 seconds for network to stabilize
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching WiFi status:', error);
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    e.stopPropagation();
                 });
+            });
             
-            // Load initial Smart Sensing state
-            fetch('/api/smartsensing')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        updateSmartSensingUI(data);
-                    }
-                })
-                .catch(error => console.error('Error loading smart sensing state:', error));
-        };
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'));
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'));
+            });
+            
+            dropZone.addEventListener('drop', e => {
+                const file = e.dataTransfer.files[0];
+                if (file) uploadFirmware(file);
+            });
+        }
 
-        // ===== Debug Console Functions =====
-        
-        function formatDebugTimestamp(millis) {
-            const totalSeconds = Math.floor(millis / 1000);
-            const hours = Math.floor(totalSeconds / 3600) % 24;
-            const minutes = Math.floor((totalSeconds % 3600) / 60);
-            const seconds = totalSeconds % 60;
-            const ms = millis % 1000;
-            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+        // ===== Export/Import Settings =====
+        function exportSettings() {
+            fetch('/api/settings/export')
+            .then(res => res.json())
+            .then(data => {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'alx-settings.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('Settings exported', 'success');
+            })
+            .catch(err => showToast('Failed to export settings', 'error'));
         }
-        
-        function getLogMessageClass(message) {
-            const lowerMsg = message.toLowerCase();
-            if (lowerMsg.includes('error') || lowerMsg.includes('failed') || lowerMsg.includes('fail')) {
-                return 'error';
-            } else if (lowerMsg.includes('warning') || lowerMsg.includes('warn')) {
-                return 'warn';
-            } else if (lowerMsg.includes('===') || lowerMsg.includes('connected') || lowerMsg.includes('success') || lowerMsg.includes('initialized')) {
-                return 'info';
-            }
-            return '';
-        }
-        
-        function appendDebugLog(timestamp, message) {
-            if (debugPaused) {
-                // Buffer messages while paused
-                debugLogBuffer.push({ timestamp, message });
-                if (debugLogBuffer.length > DEBUG_MAX_LINES) {
-                    debugLogBuffer.shift();
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const settings = JSON.parse(e.target.result);
+                    importSettings(settings);
+                } catch (err) {
+                    showToast('Invalid settings file', 'error');
                 }
-                return;
-            }
-            
-            const console = document.getElementById('debugConsole');
-            const autoScroll = document.getElementById('debugAutoScroll').checked;
-            const wasAtBottom = console.scrollHeight - console.scrollTop <= console.clientHeight + 50;
-            
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            
-            const timestampSpan = document.createElement('span');
-            timestampSpan.className = 'log-timestamp';
-            timestampSpan.textContent = '[' + formatDebugTimestamp(timestamp) + ']';
-            
-            const messageSpan = document.createElement('span');
-            messageSpan.className = 'log-message ' + getLogMessageClass(message);
-            messageSpan.textContent = message;
-            
-            entry.appendChild(timestampSpan);
-            entry.appendChild(messageSpan);
-            console.appendChild(entry);
-            
-            // Limit the number of log entries
-            while (console.children.length > DEBUG_MAX_LINES) {
-                console.removeChild(console.firstChild);
-            }
-            
-            // Auto-scroll if enabled and was at bottom
-            if (autoScroll && wasAtBottom) {
-                console.scrollTop = console.scrollHeight;
-            }
+            };
+            reader.readAsText(file);
         }
-        
-        // ===== Hardware Stats Functions =====
-        let statsRefreshInterval = null;
-        let statsRefreshRate = 5000; // Default 5 seconds
-        
-        function initHardwareStats() {
-            // Load saved refresh rate from localStorage
-            const savedRate = localStorage.getItem('statsRefreshRate');
-            if (savedRate) {
-                statsRefreshRate = parseInt(savedRate);
-                document.getElementById('statsRefreshRate').value = statsRefreshRate;
-            }
-            
-            // Start requesting stats
-            startStatsPolling();
-        }
-        
-        function startStatsPolling() {
-            // Clear existing interval if any
-            if (statsRefreshInterval) {
-                clearInterval(statsRefreshInterval);
-            }
-            
-            // Request stats immediately
-            requestHardwareStats();
-            
-            // Set up periodic polling
-            statsRefreshInterval = setInterval(requestHardwareStats, statsRefreshRate);
-        }
-        
-        function requestHardwareStats() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'getHardwareStats' }));
-            }
-        }
-        
-        function changeStatsRefreshRate() {
-            const select = document.getElementById('statsRefreshRate');
-            statsRefreshRate = parseInt(select.value);
-            localStorage.setItem('statsRefreshRate', statsRefreshRate);
-            startStatsPolling();
-        }
-        
-        function formatBytes(bytes, decimals = 1) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
-        }
-        
-        function formatUptime(ms) {
-            const seconds = Math.floor(ms / 1000);
-            const days = Math.floor(seconds / 86400);
-            const hours = Math.floor((seconds % 86400) / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = seconds % 60;
-            
-            let result = '';
-            if (days > 0) result += days + 'd ';
-            if (hours > 0 || days > 0) result += hours + 'h ';
-            if (minutes > 0 || hours > 0 || days > 0) result += minutes + 'm ';
-            result += secs + 's';
-            return result;
-        }
-        
-        function getRssiQuality(rssi) {
-            if (rssi >= -50) return { label: 'Excellent', class: 'excellent', percent: 100 };
-            if (rssi >= -60) return { label: 'Good', class: 'good', percent: 80 };
-            if (rssi >= -70) return { label: 'Fair', class: 'fair', percent: 60 };
-            return { label: 'Poor', class: 'poor', percent: Math.max(20, 100 + rssi) };
-        }
-        
-        function updateBarColor(barElement, percentage, baseClass) {
-            barElement.className = 'stat-bar-fill ' + baseClass;
-            if (percentage > 80) barElement.classList.add('warning');
-            if (percentage > 90) barElement.classList.replace('warning', 'danger');
-        }
-        
-        // ===== Performance History Functions =====
-        
-        function toggleHistorySection() {
-            historyCollapsed = !historyCollapsed;
-            const content = document.getElementById('historyContent');
-            const icon = document.getElementById('historyCollapseIcon');
-            
-            if (historyCollapsed) {
-                content.classList.add('collapsed');
-                icon.classList.add('collapsed');
-            } else {
-                content.classList.remove('collapsed');
-                icon.classList.remove('collapsed');
-                // Redraw graphs when expanding
-                drawCpuGraph();
-                drawMemoryGraph();
-            }
-            
-            // Save preference
-            localStorage.setItem('historyCollapsed', historyCollapsed);
-        }
-        
-        function changeHistoryRange() {
-            const select = document.getElementById('historyTimeRange');
-            maxHistoryPoints = parseInt(select.value);
-            localStorage.setItem('historyTimeRange', maxHistoryPoints);
-            
-            // Trim existing data if needed
-            while (historyData.timestamps.length > maxHistoryPoints) {
-                historyData.timestamps.shift();
-                historyData.cpuTotal.shift();
-                historyData.cpuCore0.shift();
-                historyData.cpuCore1.shift();
-                historyData.memoryPercent.shift();
-            }
-            
-            // Redraw graphs
-            drawCpuGraph();
-            drawMemoryGraph();
-        }
-        
-        function addHistoryDataPoint(data) {
-            const now = Date.now();
-            
-            // Add new data points
-            historyData.timestamps.push(now);
-            
-            if (data.cpu) {
-                historyData.cpuTotal.push(data.cpu.usageTotal || 0);
-                historyData.cpuCore0.push(data.cpu.usageCore0 || 0);
-                historyData.cpuCore1.push(data.cpu.usageCore1 || 0);
-            } else {
-                historyData.cpuTotal.push(0);
-                historyData.cpuCore0.push(0);
-                historyData.cpuCore1.push(0);
-            }
-            
-            if (data.memory && data.memory.heapTotal > 0) {
-                const heapUsed = data.memory.heapTotal - data.memory.heapFree;
-                const heapPercent = (heapUsed / data.memory.heapTotal) * 100;
-                historyData.memoryPercent.push(heapPercent);
-            } else {
-                historyData.memoryPercent.push(0);
-            }
-            
-            // Trim old data if exceeds max points
-            while (historyData.timestamps.length > maxHistoryPoints) {
-                historyData.timestamps.shift();
-                historyData.cpuTotal.shift();
-                historyData.cpuCore0.shift();
-                historyData.cpuCore1.shift();
-                historyData.memoryPercent.shift();
-            }
-            
-            // Redraw graphs if section is visible
-            if (!historyCollapsed) {
-                drawCpuGraph();
-                drawMemoryGraph();
-            }
-        }
-        
-        function initHistorySettings() {
-            // Load saved preferences
-            const savedCollapsed = localStorage.getItem('historyCollapsed');
-            if (savedCollapsed === 'true') {
-                historyCollapsed = true;
-                document.getElementById('historyContent').classList.add('collapsed');
-                document.getElementById('historyCollapseIcon').classList.add('collapsed');
-            }
-            
-            const savedRange = localStorage.getItem('historyTimeRange');
-            if (savedRange) {
-                maxHistoryPoints = parseInt(savedRange);
-                document.getElementById('historyTimeRange').value = savedRange;
-            }
-        }
-        
-        // ===== Canvas Graph Rendering =====
-        
-        function drawGraph(canvasId, datasets, options = {}) {
-            const canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-            
-            const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            
-            // Set canvas size for high DPI displays
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = rect.width * dpr;
-            canvas.height = rect.height * dpr;
-            ctx.scale(dpr, dpr);
-            
-            const width = rect.width;
-            const height = rect.height;
-            const padding = { top: 10, right: 10, bottom: 25, left: 40 };
-            const graphWidth = width - padding.left - padding.right;
-            const graphHeight = height - padding.top - padding.bottom;
-            
-            // Clear canvas
-            ctx.clearRect(0, 0, width, height);
-            
-            // Get text color based on theme
-            const isDarkTheme = !document.body.classList.contains('light-theme');
-            const textColor = isDarkTheme ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)';
-            const gridColor = isDarkTheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
-            
-            // Draw grid and Y-axis labels
-            ctx.strokeStyle = gridColor;
-            ctx.lineWidth = 1;
-            ctx.font = '10px sans-serif';
-            ctx.fillStyle = textColor;
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'middle';
-            
-            const yLabels = [0, 25, 50, 75, 100];
-            yLabels.forEach(val => {
-                const y = padding.top + graphHeight - (val / 100) * graphHeight;
-                
-                // Grid line
-                ctx.beginPath();
-                ctx.moveTo(padding.left, y);
-                ctx.lineTo(width - padding.right, y);
-                ctx.stroke();
-                
-                // Label
-                ctx.fillText(val + '%', padding.left - 5, y);
-            });
-            
-            // Draw X-axis time labels
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            
-            const timeRangeSeconds = maxHistoryPoints * (statsRefreshRate / 1000);
-            const timeLabels = [];
-            
-            if (timeRangeSeconds <= 60) {
-                timeLabels.push({ pos: 0, label: 'now' }, { pos: 0.5, label: '-30s' }, { pos: 1, label: '-1m' });
-            } else if (timeRangeSeconds <= 300) {
-                timeLabels.push({ pos: 0, label: 'now' }, { pos: 0.2, label: '-1m' }, { pos: 0.4, label: '-2m' }, 
-                               { pos: 0.6, label: '-3m' }, { pos: 0.8, label: '-4m' }, { pos: 1, label: '-5m' });
-            } else {
-                timeLabels.push({ pos: 0, label: 'now' }, { pos: 0.2, label: '-2m' }, { pos: 0.4, label: '-4m' }, 
-                               { pos: 0.6, label: '-6m' }, { pos: 0.8, label: '-8m' }, { pos: 1, label: '-10m' });
-            }
-            
-            timeLabels.forEach(item => {
-                const x = padding.left + graphWidth - (item.pos * graphWidth);
-                ctx.fillText(item.label, x, height - padding.bottom + 5);
-            });
-            
-            // Draw data lines
-            if (historyData.timestamps.length < 2) {
-                // Not enough data yet
-                ctx.fillStyle = textColor;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('Collecting data...', width / 2, height / 2);
-                return;
-            }
-            
-            datasets.forEach(dataset => {
-                const data = dataset.data;
-                if (!data || data.length < 2) return;
-                
-                ctx.strokeStyle = dataset.color;
-                ctx.lineWidth = dataset.lineWidth || 2;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                
-                ctx.beginPath();
-                
-                for (let i = 0; i < data.length; i++) {
-                    // X position: rightmost = newest data
-                    const x = padding.left + (i / (maxHistoryPoints - 1)) * graphWidth;
-                    // Y position: 0% at bottom, 100% at top
-                    const y = padding.top + graphHeight - (data[i] / 100) * graphHeight;
-                    
-                    if (i === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
+
+        function importSettings(settings) {
+            fetch('/api/settings/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Settings imported. Rebooting...', 'success');
+                } else {
+                    showToast(data.message || 'Import failed', 'error');
                 }
-                
-                ctx.stroke();
-            });
+            })
+            .catch(err => showToast('Failed to import settings', 'error'));
         }
-        
-        function drawCpuGraph() {
-            drawGraph('cpuGraph', [
-                { data: historyData.cpuTotal, color: '#ff9800', lineWidth: 2.5 },
-                { data: historyData.cpuCore0, color: '#ffb74d', lineWidth: 1.5 },
-                { data: historyData.cpuCore1, color: '#f57c00', lineWidth: 1.5 }
-            ]);
+
+        // ===== Reboot & Factory Reset =====
+        function startReboot() {
+            if (confirm('Are you sure you want to reboot the device?')) {
+                fetch('/api/reboot', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) showToast('Rebooting...', 'success');
+                })
+                .catch(err => showToast('Failed to reboot', 'error'));
+            }
         }
-        
-        function drawMemoryGraph() {
-            drawGraph('memoryGraph', [
-                { data: historyData.memoryPercent, color: '#2196F3', lineWidth: 2.5 }
-            ]);
+
+        function startFactoryReset() {
+            if (confirm('Are you sure? This will erase all settings!')) {
+                fetch('/api/factoryreset', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) showToast('Factory reset in progress...', 'success');
+                })
+                .catch(err => showToast('Failed to reset', 'error'));
+            }
         }
-        
+
+        function handlePhysicalResetProgress(data) {
+            showToast(`Factory reset: ${data.progress}%`, 'info');
+        }
+
+        function handlePhysicalRebootProgress(data) {
+            showToast(`Rebooting: ${data.progress}%`, 'info');
+        }
+
+        // ===== Hardware Stats =====
         function updateHardwareStats(data) {
-            // Memory stats
+            // CPU Stats
+            if (data.cpu) {
+                document.getElementById('cpuTotal').textContent = Math.round(data.cpu.usageTotal || 0) + '%';
+                document.getElementById('cpuCore0').textContent = Math.round(data.cpu.usageCore0 || 0) + '%';
+                document.getElementById('cpuCore1').textContent = Math.round(data.cpu.usageCore1 || 0) + '%';
+                document.getElementById('cpuTemp').textContent = (data.cpu.temperature || 0).toFixed(1) + '°C';
+                document.getElementById('cpuFreq').textContent = (data.cpu.freqMHz || 0) + ' MHz';
+                document.getElementById('cpuModel').textContent = data.cpu.model || '--';
+                document.getElementById('cpuRevision').textContent = data.cpu.revision || '--';
+                document.getElementById('cpuCores').textContent = data.cpu.cores || '--';
+            }
+            
+            // Memory Stats (Heap)
             if (data.memory) {
-                const heapUsed = data.memory.heapTotal - data.memory.heapFree;
-                const heapPercent = Math.round((heapUsed / data.memory.heapTotal) * 100);
-                
-                document.getElementById('statHeapUsed').textContent = 
-                    formatBytes(data.memory.heapFree) + ' / ' + formatBytes(data.memory.heapTotal);
-                
-                const heapBar = document.getElementById('statHeapBar');
-                heapBar.style.width = heapPercent + '%';
-                heapBar.className = 'stat-bar-fill memory';
-                if (heapPercent > 80) heapBar.classList.add('warning');
-                if (heapPercent > 90) heapBar.classList.replace('warning', 'danger');
-                
-                document.getElementById('statHeapMinFree').textContent = formatBytes(data.memory.heapMinFree);
-                document.getElementById('statHeapMaxBlock').textContent = formatBytes(data.memory.heapMaxBlock);
+                const heapTotal = data.memory.heapTotal || 0;
+                const heapFree = data.memory.heapFree || 0;
+                const heapPercent = heapTotal > 0 ? Math.round((1 - heapFree / heapTotal) * 100) : 0;
+                document.getElementById('heapPercent').textContent = heapPercent + '%';
+                document.getElementById('heapFree').textContent = formatBytes(heapFree);
+                document.getElementById('heapTotal').textContent = formatBytes(heapTotal);
+                document.getElementById('heapMinFree').textContent = formatBytes(data.memory.heapMinFree || 0);
+                document.getElementById('heapMaxBlock').textContent = formatBytes(data.memory.heapMaxBlock || 0);
                 
                 // PSRAM
-                if (data.memory.psramTotal > 0) {
-                    document.getElementById('statPsram').textContent = 
-                        formatBytes(data.memory.psramFree) + ' / ' + formatBytes(data.memory.psramTotal);
-                } else {
-                    document.getElementById('statPsram').textContent = 'N/A';
-                }
+                const psramTotal = data.memory.psramTotal || 0;
+                const psramFree = data.memory.psramFree || 0;
+                const psramPercent = psramTotal > 0 ? Math.round((1 - psramFree / psramTotal) * 100) : 0;
+                document.getElementById('psramPercent').textContent = psramTotal > 0 ? psramPercent + '%' : 'N/A';
+                document.getElementById('psramFree').textContent = psramTotal > 0 ? formatBytes(psramFree) : 'N/A';
+                document.getElementById('psramTotal').textContent = psramTotal > 0 ? formatBytes(psramTotal) : 'N/A';
             }
             
-            // CPU stats
-            if (data.cpu) {
-                document.getElementById('statCpuModel').textContent = data.cpu.model || '--';
-                document.getElementById('statCpuFreq').textContent = data.cpu.freqMHz + ' MHz';
-                
-                // Temperature (might be NaN if not supported)
-                if (data.cpu.temperature && !isNaN(data.cpu.temperature) && data.cpu.temperature > 0) {
-                    document.getElementById('statCpuTemp').textContent = data.cpu.temperature.toFixed(1) + ' °C';
-                } else {
-                    document.getElementById('statCpuTemp').textContent = 'N/A';
-                }
-                
-                // CPU Usage per core
-                if (data.cpu.usageCore0 !== undefined) {
-                    const core0Usage = data.cpu.usageCore0.toFixed(1);
-                    document.getElementById('statCpuCore0').textContent = core0Usage + '%';
-                    const core0Bar = document.getElementById('statCpuCore0Bar');
-                    core0Bar.style.width = core0Usage + '%';
-                    updateBarColor(core0Bar, data.cpu.usageCore0, 'cpu');
-                }
-                
-                if (data.cpu.usageCore1 !== undefined) {
-                    const core1Usage = data.cpu.usageCore1.toFixed(1);
-                    document.getElementById('statCpuCore1').textContent = core1Usage + '%';
-                    const core1Bar = document.getElementById('statCpuCore1Bar');
-                    core1Bar.style.width = core1Usage + '%';
-                    updateBarColor(core1Bar, data.cpu.usageCore1, 'cpu');
-                }
-                
-                if (data.cpu.usageTotal !== undefined) {
-                    document.getElementById('statCpuTotal').textContent = data.cpu.usageTotal.toFixed(1) + '%';
-                }
-            }
-            
-            // Storage stats
+            // Storage Stats
             if (data.storage) {
-                document.getElementById('statFlashSize').textContent = formatBytes(data.storage.flashSize);
-                document.getElementById('statSketchSize').textContent = formatBytes(data.storage.sketchSize);
-                document.getElementById('statOtaFree').textContent = formatBytes(data.storage.sketchFree);
+                document.getElementById('flashSize').textContent = formatBytes(data.storage.flashSize || 0);
+                document.getElementById('sketchSize').textContent = formatBytes(data.storage.sketchSize || 0);
+                document.getElementById('sketchFree').textContent = formatBytes(data.storage.sketchFree || 0);
                 
-                if (data.storage.spiffsTotal > 0) {
-                    const spiffsPercent = Math.round((data.storage.spiffsUsed / data.storage.spiffsTotal) * 100);
-                    document.getElementById('statSpiffs').textContent = 
-                        formatBytes(data.storage.spiffsUsed) + ' / ' + formatBytes(data.storage.spiffsTotal);
-                    
-                    const spiffsBar = document.getElementById('statSpiffsBar');
-                    spiffsBar.style.width = spiffsPercent + '%';
-                    spiffsBar.className = 'stat-bar-fill storage';
-                    if (spiffsPercent > 80) spiffsBar.classList.add('warning');
-                    if (spiffsPercent > 90) spiffsBar.classList.replace('warning', 'danger');
-                } else {
-                    document.getElementById('statSpiffs').textContent = 'N/A';
-                    document.getElementById('statSpiffsBar').style.width = '0%';
-                }
+                const sketchTotal = (data.storage.sketchSize || 0) + (data.storage.sketchFree || 0);
+                const sketchPercent = sketchTotal > 0 ? Math.round((data.storage.sketchSize / sketchTotal) * 100) : 0;
+                document.getElementById('sketchPercent').textContent = sketchPercent + '%';
+                
+                const spiffsTotal = data.storage.spiffsTotal || 0;
+                const spiffsUsed = data.storage.spiffsUsed || 0;
+                const spiffsPercent = spiffsTotal > 0 ? Math.round((spiffsUsed / spiffsTotal) * 100) : 0;
+                document.getElementById('spiffsPercent').textContent = spiffsTotal > 0 ? spiffsPercent + '%' : 'N/A';
+                document.getElementById('spiffsUsed').textContent = spiffsTotal > 0 ? formatBytes(spiffsUsed) : 'N/A';
+                document.getElementById('spiffsTotal').textContent = spiffsTotal > 0 ? formatBytes(spiffsTotal) : 'N/A';
             }
             
-            // WiFi stats
+            // WiFi Stats
             if (data.wifi) {
-                const rssi = data.wifi.rssi;
-                document.getElementById('statWifiRssi').textContent = rssi + ' dBm';
-                
-                const quality = getRssiQuality(rssi);
-                const qualityEl = document.getElementById('statWifiQuality');
-                qualityEl.textContent = quality.label;
-                qualityEl.className = 'signal-quality ' + quality.class;
-                
-                document.getElementById('statWifiBar').style.width = quality.percent + '%';
-                document.getElementById('statWifiChannel').textContent = data.wifi.channel || '--';
-                document.getElementById('statApClients').textContent = data.wifi.apClients;
+                document.getElementById('wifiRssi').textContent = (data.wifi.rssi || 0) + ' dBm';
+                document.getElementById('wifiChannel').textContent = data.wifi.channel || '--';
+                document.getElementById('apClients').textContent = data.wifi.apClients || 0;
             }
             
             // Uptime
             if (data.uptime !== undefined) {
-                document.getElementById('statUptime').textContent = formatUptime(data.uptime);
+                document.getElementById('uptime').textContent = formatUptime(data.uptime);
             }
             
-            // Add data point to history graphs
+            // Add to history
             addHistoryDataPoint(data);
         }
-        
-        // Initialize hardware stats when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize history settings
-            initHistorySettings();
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        function formatUptime(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
             
-            // Delay slightly to ensure WebSocket is ready
-            setTimeout(initHardwareStats, 1000);
+            if (days > 0) return `${days}d ${hours % 24}h`;
+            if (hours > 0) return `${hours}h ${minutes % 60}m`;
+            if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+            return `${seconds}s`;
+        }
+
+        function addHistoryDataPoint(data) {
+            historyData.timestamps.push(Date.now());
+            historyData.cpuTotal.push(data.cpu ? (data.cpu.usageTotal || 0) : 0);
+            historyData.cpuCore0.push(data.cpu ? (data.cpu.usageCore0 || 0) : 0);
+            historyData.cpuCore1.push(data.cpu ? (data.cpu.usageCore1 || 0) : 0);
             
-            // Initial graph draw (empty state)
-            setTimeout(function() {
-                drawCpuGraph();
-                drawMemoryGraph();
-            }, 100);
-        });
-        
-        // Redraw graphs on window resize
-        window.addEventListener('resize', function() {
+            if (data.memory && data.memory.heapTotal > 0) {
+                const memPercent = (1 - data.memory.heapFree / data.memory.heapTotal) * 100;
+                historyData.memoryPercent.push(memPercent);
+            } else {
+                historyData.memoryPercent.push(0);
+            }
+            
+            // Trim to max points
+            while (historyData.timestamps.length > maxHistoryPoints) {
+                historyData.timestamps.shift();
+                historyData.cpuTotal.shift();
+                historyData.cpuCore0.shift();
+                historyData.cpuCore1.shift();
+                historyData.memoryPercent.shift();
+            }
+            
+            // Redraw graphs if visible
             if (!historyCollapsed) {
                 drawCpuGraph();
                 drawMemoryGraph();
             }
-        });
-        
+        }
+
+        function toggleHistorySection() {
+            historyCollapsed = !historyCollapsed;
+            const content = document.getElementById('historyContent');
+            const chevron = document.getElementById('historyChevron');
+            
+            if (historyCollapsed) {
+                content.classList.remove('open');
+                chevron.parentElement.classList.remove('open');
+            } else {
+                content.classList.add('open');
+                chevron.parentElement.classList.add('open');
+                drawCpuGraph();
+                drawMemoryGraph();
+            }
+        }
+
+        function drawCpuGraph() {
+            const canvas = document.getElementById('cpuGraph');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            
+            const w = rect.width;
+            const h = rect.height;
+            
+            // Background
+            ctx.fillStyle = '#1E1E1E';
+            ctx.fillRect(0, 0, w, h);
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = (h / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+            
+            if (historyData.cpuTotal.length < 2) return;
+            
+            const step = w / (historyData.cpuTotal.length - 1);
+            
+            // Draw Core 0 (light orange)
+            ctx.strokeStyle = '#FFB74D';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            historyData.cpuCore0.forEach((val, i) => {
+                const x = i * step;
+                const y = h - (val / 100) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            
+            // Draw Core 1 (dark orange)
+            ctx.strokeStyle = '#F57C00';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            historyData.cpuCore1.forEach((val, i) => {
+                const x = i * step;
+                const y = h - (val / 100) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            
+            // Draw Total (bright orange, on top)
+            ctx.strokeStyle = '#FF9800';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            historyData.cpuTotal.forEach((val, i) => {
+                const x = i * step;
+                const y = h - (val / 100) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        }
+
+        function drawMemoryGraph() {
+            const canvas = document.getElementById('memoryGraph');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            
+            const w = rect.width;
+            const h = rect.height;
+            
+            // Background
+            ctx.fillStyle = '#1E1E1E';
+            ctx.fillRect(0, 0, w, h);
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = (h / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+            
+            if (historyData.memoryPercent.length < 2) return;
+            
+            const step = w / (historyData.memoryPercent.length - 1);
+            
+            // Draw memory line
+            ctx.strokeStyle = '#2196F3';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            historyData.memoryPercent.forEach((val, i) => {
+                const x = i * step;
+                const y = h - (val / 100) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        }
+
+        // ===== Debug Console =====
+        function appendDebugLog(timestamp, message) {
+            if (debugPaused) {
+                debugLogBuffer.push({ timestamp, message });
+                return;
+            }
+            
+            const console = document.getElementById('debugConsole');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            const ts = formatDebugTimestamp(timestamp);
+            let msgClass = 'log-message';
+            if (message.includes('Error') || message.includes('❌')) msgClass += ' error';
+            else if (message.includes('Warning') || message.includes('⚠')) msgClass += ' warning';
+            else if (message.includes('✅') || message.includes('Success')) msgClass += ' success';
+            else if (message.includes('ℹ') || message.includes('Info')) msgClass += ' info';
+            
+            entry.innerHTML = `<span class="log-timestamp">[${ts}]</span><span class="${msgClass}">${message}</span>`;
+            console.appendChild(entry);
+            
+            // Limit entries
+            while (console.children.length > DEBUG_MAX_LINES) {
+                console.removeChild(console.firstChild);
+            }
+            
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function formatDebugTimestamp(millis) {
+            const date = new Date(millis);
+            const h = date.getHours().toString().padStart(2, '0');
+            const m = date.getMinutes().toString().padStart(2, '0');
+            const s = date.getSeconds().toString().padStart(2, '0');
+            const ms = date.getMilliseconds().toString().padStart(3, '0');
+            return `${h}:${m}:${s}.${ms}`;
+        }
+
+        function toggleDebugPause() {
+            debugPaused = !debugPaused;
+            const btn = document.getElementById('pauseBtn');
+            if (debugPaused) {
+                btn.textContent = 'Resume';
+            } else {
+                btn.textContent = 'Pause';
+                // Flush buffer
+                debugLogBuffer.forEach(log => appendDebugLog(log.timestamp, log.message));
+                debugLogBuffer = [];
+            }
+        }
+
         function clearDebugConsole() {
             const console = document.getElementById('debugConsole');
             console.innerHTML = '<div class="log-entry"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Console cleared</span></div>';
             debugLogBuffer = [];
         }
-        
-        function toggleDebugPause() {
-            debugPaused = !debugPaused;
-            const btn = document.getElementById('debugPauseBtn');
-            const indicator = document.getElementById('debugStatusIndicator');
-            const statusText = document.getElementById('debugStatusText');
+
+        // ===== Release Notes =====
+        function showReleaseNotes() {
+            if (!currentLatestVersion) return;
             
-            if (debugPaused) {
-                btn.textContent = 'Resume';
-                btn.classList.add('paused');
-                indicator.classList.add('paused');
-                statusText.textContent = 'Paused (' + debugLogBuffer.length + ' buffered)';
+            fetch(`/api/releasenotes?version=${currentLatestVersion}`)
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('releaseNotesTitle').textContent = `Release Notes v${currentLatestVersion}`;
+                document.getElementById('releaseNotesContent').textContent = data.notes || 'No release notes available.';
+                document.getElementById('releaseNotesModal').classList.add('active');
+            })
+            .catch(err => showToast('Failed to load release notes', 'error'));
+        }
+
+        function closeReleaseNotes() {
+            document.getElementById('releaseNotesModal').classList.remove('active');
+        }
+
+        // ===== Utilities =====
+        function togglePasswordVisibility(inputId, button) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                button.textContent = '🙈';
             } else {
-                btn.textContent = 'Pause';
-                btn.classList.remove('paused');
-                indicator.classList.remove('paused');
-                statusText.textContent = 'Receiving';
-                
-                // Flush buffered messages
-                debugLogBuffer.forEach(item => {
-                    appendDebugLog(item.timestamp, item.message);
-                });
-                debugLogBuffer = [];
+                input.type = 'password';
+                button.textContent = '👁';
             }
         }
-        
-        // Update buffered count while paused
-        setInterval(() => {
-            if (debugPaused && debugLogBuffer.length > 0) {
-                document.getElementById('debugStatusText').textContent = 'Paused (' + debugLogBuffer.length + ' buffered)';
-            }
-        }, 500);
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ===== Initialization =====
+        window.onload = function() {
+            initWebSocket();
+            loadMqttSettings();
+            initFirmwareDragDrop();
+            
+            // Add input focus listeners
+            document.getElementById('timerDuration').addEventListener('focus', () => inputFocusState.timerDuration = true);
+            document.getElementById('timerDuration').addEventListener('blur', () => inputFocusState.timerDuration = false);
+            document.getElementById('voltageThreshold').addEventListener('focus', () => inputFocusState.voltageThreshold = true);
+            document.getElementById('voltageThreshold').addEventListener('blur', () => inputFocusState.voltageThreshold = false);
+        };
     </script>
 </body>
 </html>
 )rawliteral";
 
-const char apHtmlPage[] PROGMEM = R"rawliteral(<!DOCTYPE html>
+const char apHtmlPage[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 WiFi Setup</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#121212">
+    <title>ALX Audio - WiFi Setup</title>
     <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-surface: #1E1E1E;
+            --bg-card: #252525;
+            --bg-input: #2a2a2a;
+            --accent: #FF9800;
+            --accent-dark: #F57C00;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B3B3B3;
+            --text-disabled: #666666;
+            --success: #4CAF50;
+            --error: #CF6679;
+            --border: #333333;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            padding: 16px;
+            padding-top: calc(16px + var(--safe-top));
+            padding-bottom: calc(16px + var(--safe-bottom));
         }
+
         .container {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-            text-align: center;
             width: 100%;
             max-width: 400px;
         }
-        h1 {
-            margin-top: 0;
-            font-size: 2em;
+
+        .logo {
+            text-align: center;
+            margin-bottom: 32px;
         }
+
+        .logo svg {
+            width: 64px;
+            height: 64px;
+            fill: var(--accent);
+        }
+
+        .logo h1 {
+            font-size: 24px;
+            margin-top: 12px;
+        }
+
+        .logo p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .card {
+            background: var(--bg-surface);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
         .form-group {
-            margin: 20px 0;
-            text-align: left;
+            margin-bottom: 16px;
         }
-        label {
+
+        .form-label {
             display: block;
+            font-size: 14px;
+            color: var(--text-secondary);
             margin-bottom: 8px;
-            font-weight: bold;
         }
-        input {
+
+        .form-input {
             width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            box-sizing: border-box;
-            font-size: 1em;
+            height: 48px;
+            padding: 12px 16px;
+            font-size: 16px;
+            color: var(--text-primary);
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            outline: none;
         }
-        button {
-            background: #4CAF50;
-            color: white;
+
+        .form-input:focus {
+            border-color: var(--accent);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-disabled);
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 48px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
             border: none;
-            padding: 12px 40px;
-            font-size: 1.1em;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 20px;
-            width: 100%;
+            background: var(--accent);
+            color: #000;
+            margin-top: 8px;
         }
-        button:hover {
-            background: #45a049;
-            transform: translateY(-2px);
+
+        .btn:active {
+            background: var(--accent-dark);
         }
-        .info {
-            margin-top: 20px;
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
+
         .status-message {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 5px;
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 14px;
             display: none;
         }
+
         .status-message.success {
-            background: #4CAF50;
             display: block;
+            background: rgba(76, 175, 80, 0.2);
+            color: var(--success);
         }
+
         .status-message.error {
-            background: #f44336;
             display: block;
+            background: rgba(207, 102, 121, 0.2);
+            color: var(--error);
+        }
+
+        .info-text {
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 16px;
+        }
+
+        .current-ap {
+            text-align: center;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: 8px;
+        }
+
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 8px;
+            font-size: 18px;
+        }
+
+        .password-wrapper .form-input {
+            padding-right: 48px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>ESP32 WiFi Setup</h1>
-        <div class="info">
-            <p id="currentAPInfo">Current AP: Loading...</p>
+        <div class="logo">
+            <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            <h1>ALX Audio</h1>
+            <p>WiFi Configuration</p>
         </div>
-        <form onsubmit="submitWiFi(event)">
-            <div class="form-group">
-                <label for="ssid">Network Name (SSID):</label>
-                <input type="text" id="ssid" name="ssid" required placeholder="Enter WiFi SSID">
-            </div>
-            <div class="form-group">
-                <label for="password">Password:</label>
-                <input type="password" id="password" name="password" required placeholder="Enter WiFi password">
-            </div>
-            <button type="submit">Connect to WiFi</button>
-        </form>
-        <div class="info">
-            <p>Enter your WiFi network credentials to connect the ESP32.</p>
+
+        <div class="current-ap" id="currentAPInfo">Loading AP info...</div>
+
+        <div class="card">
+            <form onsubmit="submitWiFi(event)">
+                <div class="form-group">
+                    <label class="form-label">Network Name (SSID)</label>
+                    <input type="text" class="form-input" id="ssid" inputmode="text" placeholder="Enter WiFi network name" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" class="form-input" id="password" placeholder="Enter WiFi password" required>
+                        <button type="button" class="password-toggle" onclick="togglePassword()">👁</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn">Connect to WiFi</button>
+            </form>
+            <div class="status-message" id="statusMessage"></div>
         </div>
-        <div class="status-message" id="statusMessage"></div>
+
+        <p class="info-text">Enter your WiFi credentials to connect the device to your network.</p>
     </div>
 
     <script>
-        // Load current AP information on page load
         window.onload = function() {
             fetch('/api/wifistatus')
-                .then(response => response.json())
-                .then(data => {
-                    const apInfo = document.getElementById('currentAPInfo');
-                    const ssidInput = document.getElementById('ssid');
-                    
-                    if (data.apSSID) {
-                        apInfo.textContent = 'Current AP: ' + data.apSSID;
-                        // Prefill SSID field with current AP SSID
-                        ssidInput.value = data.apSSID;
-                    } else {
-                        apInfo.textContent = 'Current AP: ESP32-LED-Setup';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching AP info:', error);
-                });
+            .then(res => res.json())
+            .then(data => {
+                const apInfo = document.getElementById('currentAPInfo');
+                if (data.apSSID) {
+                    apInfo.textContent = 'Access Point: ' + data.apSSID;
+                } else {
+                    apInfo.textContent = 'Access Point: ESP32-Setup';
+                }
+            })
+            .catch(err => {
+                document.getElementById('currentAPInfo').textContent = 'Access Point Mode';
+            });
         };
 
         function submitWiFi(event) {
             event.preventDefault();
-            const ssid = document.getElementById("ssid").value;
-            const password = document.getElementById("password").value;
+            const ssid = document.getElementById('ssid').value;
+            const password = document.getElementById('password').value;
             const statusMsg = document.getElementById('statusMessage');
             
-            fetch('/config', {
+            statusMsg.className = 'status-message';
+            statusMsg.style.display = 'none';
+            
+            fetch('/api/wificonfig', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    ssid: ssid,
-                    password: password
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ssid, password })
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     statusMsg.className = 'status-message success';
-                    statusMsg.textContent = 'Configuration saved! Connecting to WiFi...';
-                    setTimeout(() => {
-                        window.location.href = '/';
-                    }, 3000);
+                    statusMsg.textContent = 'Connecting to WiFi... Please wait.';
+                    setTimeout(() => window.location.href = '/', 5000);
                 } else {
                     statusMsg.className = 'status-message error';
-                    statusMsg.textContent = 'Error: ' + (data.message || 'Unknown error');
+                    statusMsg.textContent = data.message || 'Connection failed';
                 }
             })
-            .catch(error => {
+            .catch(err => {
                 statusMsg.className = 'status-message error';
-                statusMsg.textContent = 'Error: ' + error;
+                statusMsg.textContent = 'Error: ' + err.message;
             });
+        }
+
+        function togglePassword() {
+            const input = document.getElementById('password');
+            const btn = event.target;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁';
+            }
         }
     </script>
 </body>
 </html>
 )rawliteral";
-

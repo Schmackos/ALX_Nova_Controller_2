@@ -25,6 +25,7 @@ bool loadSettings() {
   String line2 = file.readStringUntil('\n');
   String line3 = file.readStringUntil('\n');
   String line4 = file.readStringUntil('\n');
+  String line5 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -52,6 +53,16 @@ bool loadSettings() {
     enableCertValidation = (line4.toInt() != 0);
   }
   
+  // Load hardware stats interval (if available, otherwise default to 2000ms)
+  if (line5.length() > 0) {
+    line5.trim();
+    unsigned long interval = line5.toInt();
+    // Validate: only allow 1000, 2000, 3000, 5000, or 10000 ms
+    if (interval == 1000 || interval == 2000 || interval == 3000 || interval == 5000 || interval == 10000) {
+      hardwareStatsInterval = interval;
+    }
+  }
+  
   return true;
 }
 
@@ -66,6 +77,7 @@ void saveSettings() {
   file.println(timezoneOffset);
   file.println(nightMode ? "1" : "0");
   file.println(enableCertValidation ? "1" : "0");
+  file.println(hardwareStatsInterval);
   file.close();
   DebugOut.println("Settings saved to SPIFFS");
 }
@@ -106,6 +118,7 @@ void handleSettingsGet() {
   doc["timezoneOffset"] = timezoneOffset;
   doc["nightMode"] = nightMode;
   doc["enableCertValidation"] = enableCertValidation;
+  doc["hardwareStatsInterval"] = hardwareStatsInterval / 1000;  // Send as seconds
 
   String json;
   serializeJson(doc, json);
@@ -162,6 +175,19 @@ void handleSettingsUpdate() {
     }
   }
   
+  if (doc["hardwareStatsInterval"].is<int>()) {
+    int newInterval = doc["hardwareStatsInterval"].as<int>();
+    // Validate: only allow 1, 2, 3, 5, or 10 seconds
+    if (newInterval == 1 || newInterval == 2 || newInterval == 3 || newInterval == 5 || newInterval == 10) {
+      unsigned long newIntervalMs = newInterval * 1000UL;
+      if (newIntervalMs != hardwareStatsInterval) {
+        hardwareStatsInterval = newIntervalMs;
+        settingsChanged = true;
+        DebugOut.printf("Hardware stats interval set to %d seconds\n", newInterval);
+      }
+    }
+  }
+  
   if (settingsChanged) {
     saveSettings();
   }
@@ -172,6 +198,7 @@ void handleSettingsUpdate() {
   resp["timezoneOffset"] = timezoneOffset;
   resp["nightMode"] = nightMode;
   resp["enableCertValidation"] = enableCertValidation;
+  resp["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
   String json;
   serializeJson(resp, json);
   server.send(200, "application/json", json);
@@ -205,6 +232,7 @@ void handleSettingsExport() {
   doc["settings"]["nightMode"] = nightMode;
   doc["settings"]["enableCertValidation"] = enableCertValidation;
   doc["settings"]["blinkingEnabled"] = blinkingEnabled;
+  doc["settings"]["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
   
   // Smart Sensing settings
   String modeStr;
@@ -330,6 +358,13 @@ void handleSettingsImport() {
     if (doc["settings"]["blinkingEnabled"].is<bool>()) {
       blinkingEnabled = doc["settings"]["blinkingEnabled"].as<bool>();
       DebugOut.printf("Blinking: %s\n", blinkingEnabled ? "enabled" : "disabled");
+    }
+    if (doc["settings"]["hardwareStatsInterval"].is<int>()) {
+      int interval = doc["settings"]["hardwareStatsInterval"].as<int>();
+      if (interval == 1 || interval == 2 || interval == 3 || interval == 5 || interval == 10) {
+        hardwareStatsInterval = interval * 1000UL;
+        DebugOut.printf("Hardware Stats Interval: %d seconds\n", interval);
+      }
     }
     // Save general settings
     saveSettings();

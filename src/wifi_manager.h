@@ -24,5 +24,6 @@ void handleAPConfigUpdate();
 void handleAPToggle();
 void handleWiFiConfig();
 void handleWiFiStatus();
+void handleWiFiScan();
 
 #endif // WIFI_MANAGER_H

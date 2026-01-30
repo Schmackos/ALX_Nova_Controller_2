@@ -77,6 +77,9 @@ extern unsigned long lastSmartSensingHeartbeat;
 // ===== Certificate Validation =====
 extern bool enableCertValidation;
 
+// ===== Hardware Stats =====
+extern unsigned long hardwareStatsInterval;  // Interval in ms (1000, 3000, 5000, 10000)
+
 // ===== MQTT State =====
 extern bool mqttEnabled;
 extern String mqttBroker;

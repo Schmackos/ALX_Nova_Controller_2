@@ -388,3 +388,64 @@ void handleWiFiStatus() {
   serializeJson(doc, json);
   server.send(200, "application/json", json);
 }
+
+void handleWiFiScan() {
+  DebugOut.println("Scanning for WiFi networks...");
+  
+  // Start async scan if not already scanning
+  int n = WiFi.scanComplete();
+  
+  if (n == WIFI_SCAN_FAILED) {
+    // Start a new scan
+    WiFi.scanNetworks(true);  // Async scan
+    server.send(200, "application/json", "{\"scanning\": true, \"networks\": []}");
+    return;
+  }
+  
+  if (n == WIFI_SCAN_RUNNING) {
+    // Scan still in progress
+    server.send(200, "application/json", "{\"scanning\": true, \"networks\": []}");
+    return;
+  }
+  
+  // Scan complete, return results
+  JsonDocument doc;
+  doc["scanning"] = false;
+  JsonArray networks = doc["networks"].to<JsonArray>();
+  
+  // Sort by signal strength and remove duplicates
+  for (int i = 0; i < n; i++) {
+    String ssid = WiFi.SSID(i);
+    if (ssid.length() == 0) continue;  // Skip hidden networks
+    
+    // Check for duplicates (same SSID)
+    bool duplicate = false;
+    for (JsonVariant v : networks) {
+      if (v["ssid"].as<String>() == ssid) {
+        // Keep the one with stronger signal
+        if (WiFi.RSSI(i) > v["rssi"].as<int>()) {
+          v["rssi"] = WiFi.RSSI(i);
+          v["encryption"] = WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? "secured" : "open";
+        }
+        duplicate = true;
+        break;
+      }
+    }
+    
+    if (!duplicate) {
+      JsonObject network = networks.add<JsonObject>();
+      network["ssid"] = ssid;
+      network["rssi"] = WiFi.RSSI(i);
+      network["encryption"] = WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? "secured" : "open";
+    }
+  }
+  
+  // Clear scan results to free memory
+  WiFi.scanDelete();
+  
+  DebugOut.printf("Found %d unique networks\n", networks.size());
+  
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
+}

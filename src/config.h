@@ -66,6 +66,9 @@ const unsigned long MQTT_RECONNECT_INTERVAL = 5000;   // Reconnect every 5 secon
 const unsigned long MQTT_PUBLISH_INTERVAL = 1000;     // Publish state every 1 second
 const int DEFAULT_MQTT_PORT = 1883;
 
+// ===== Hardware Stats Configuration =====
+const unsigned long HARDWARE_STATS_INTERVAL = 2000;   // Broadcast hardware stats every 2 seconds
+
 // ===== Default AP Configuration =====
 #define DEFAULT_AP_PASSWORD "12345678"
 
