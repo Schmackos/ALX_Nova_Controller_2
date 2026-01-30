@@ -2810,7 +2810,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-success">Connected</span></div>
                     <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
-                    <div class="info-row"><span class="info-label">Base Topic</span><span class="info-value">${baseTopic || 'Unknown'}</span></div>
                 `;
                 currentMqttConnected = true;
             } else if (enabled) {
@@ -2818,7 +2817,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Disconnected</span></div>
                     <div class="info-row"><span class="info-label">Broker</span><span class="info-value">${broker || 'Not configured'}</span></div>
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
-                    ${baseTopic ? `<div class="info-row"><span class="info-label">Base Topic</span><span class="info-value">${baseTopic}</span></div>` : ''}
                 `;
                 currentMqttConnected = false;
             } else {
