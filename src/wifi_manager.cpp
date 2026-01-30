@@ -178,8 +178,10 @@ void buildWiFiStatusJson(JsonDocument& doc, bool fetchVersionIfMissing) {
     doc["updateAvailable"] = false;
   }
   
+  // Always include AP SSID for pre-filling config
+  doc["apSSID"] = apSSID;
+  
   if (isAPMode) {
-    doc["apSSID"] = apSSID;
     doc["ip"] = WiFi.softAPIP().toString();
   } else {
     doc["ssid"] = WiFi.SSID();

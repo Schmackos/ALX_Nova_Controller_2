@@ -4,6 +4,7 @@
 #include "websocket_handler.h"
 #include "debug_serial.h"
 #include <SPIFFS.h>
+#include <esp_system.h>  // For esp_reset_reason()
 
 // State tracking for hardware stats change detection
 static unsigned long prevMqttUptime = 0;
@@ -527,6 +528,17 @@ void publishMqttSmartSensingState() {
   mqttClient.publish((base + "/smartsensing/voltage_threshold").c_str(), String(voltageThreshold, 2).c_str(), true);
   mqttClient.publish((base + "/smartsensing/voltage_detected").c_str(), 
                      (lastVoltageReading >= voltageThreshold) ? "ON" : "OFF", true);
+  
+  // Last voltage detection timestamp (seconds since boot, 0 if never detected)
+  unsigned long lastDetectionSecs = lastVoltageDetection > 0 ? lastVoltageDetection / 1000 : 0;
+  mqttClient.publish((base + "/smartsensing/last_detection_time").c_str(), String(lastDetectionSecs).c_str(), true);
+}
+
+// Convert RSSI to signal quality percentage (0-100%)
+int rssiToQuality(int rssi) {
+  if (rssi <= -100) return 0;
+  if (rssi >= -50) return 100;
+  return 2 * (rssi + 100);  // Linear scale: -100dBm=0%, -50dBm=100%
 }
 
 // Publish WiFi status
@@ -539,7 +551,9 @@ void publishMqttWifiStatus() {
   mqttClient.publish((base + "/wifi/connected").c_str(), connected ? "ON" : "OFF", true);
   
   if (connected) {
-    mqttClient.publish((base + "/wifi/rssi").c_str(), String(WiFi.RSSI()).c_str(), true);
+    int rssi = WiFi.RSSI();
+    mqttClient.publish((base + "/wifi/rssi").c_str(), String(rssi).c_str(), true);
+    mqttClient.publish((base + "/wifi/signal_quality").c_str(), String(rssiToQuality(rssi)).c_str(), true);
     mqttClient.publish((base + "/wifi/ip").c_str(), WiFi.localIP().toString().c_str(), true);
     mqttClient.publish((base + "/wifi/ssid").c_str(), WiFi.SSID().c_str(), true);
   }
@@ -549,6 +563,24 @@ void publishMqttWifiStatus() {
   if (isAPMode) {
     mqttClient.publish((base + "/ap/ip").c_str(), WiFi.softAPIP().toString().c_str(), true);
     mqttClient.publish((base + "/ap/ssid").c_str(), apSSID.c_str(), true);
+  }
+}
+
+// Get human-readable reset reason
+String getResetReasonString() {
+  esp_reset_reason_t reason = esp_reset_reason();
+  switch (reason) {
+    case ESP_RST_POWERON: return "power_on";
+    case ESP_RST_EXT: return "external_reset";
+    case ESP_RST_SW: return "software_reset";
+    case ESP_RST_PANIC: return "exception_panic";
+    case ESP_RST_INT_WDT: return "interrupt_watchdog";
+    case ESP_RST_TASK_WDT: return "task_watchdog";
+    case ESP_RST_WDT: return "other_watchdog";
+    case ESP_RST_DEEPSLEEP: return "deep_sleep_wake";
+    case ESP_RST_BROWNOUT: return "brownout";
+    case ESP_RST_SDIO: return "sdio_reset";
+    default: return "unknown";
   }
 }
 
@@ -571,6 +603,9 @@ void publishMqttSystemStatus() {
   
   mqttClient.publish((base + "/settings/auto_update").c_str(), autoUpdateEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/system/mac").c_str(), WiFi.macAddress().c_str(), true);
+  
+  // Reset/boot reason
+  mqttClient.publish((base + "/system/reset_reason").c_str(), getResetReasonString().c_str(), true);
   
   // Additional settings
   mqttClient.publish((base + "/settings/timezone_offset").c_str(), String(timezoneOffset).c_str(), true);
@@ -600,6 +635,20 @@ void publishMqttUpdateState() {
   String json;
   serializeJson(doc, json);
   mqttClient.publish((base + "/system/update/state").c_str(), json.c_str(), true);
+  
+  // Publish separate OTA progress topics for easier monitoring
+  mqttClient.publish((base + "/system/update/in_progress").c_str(), otaInProgress ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/system/update/progress").c_str(), String(otaProgress).c_str(), true);
+  mqttClient.publish((base + "/system/update/status").c_str(), otaStatus.c_str(), true);
+  
+  if (otaStatusMessage.length() > 0) {
+    mqttClient.publish((base + "/system/update/message").c_str(), otaStatusMessage.c_str(), true);
+  }
+  
+  if (otaTotalBytes > 0) {
+    mqttClient.publish((base + "/system/update/bytes_downloaded").c_str(), String(otaProgressBytes).c_str(), true);
+    mqttClient.publish((base + "/system/update/bytes_total").c_str(), String(otaTotalBytes).c_str(), true);
+  }
 }
 
 // Publish hardware statistics

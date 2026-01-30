@@ -917,6 +917,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             color: var(--accent);
         }
 
+        /* ===== Release Notes Link ===== */
+        .release-notes-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            margin-left: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            background: var(--accent);
+            border-radius: 50%;
+            text-decoration: none;
+            vertical-align: middle;
+        }
+
+        .release-notes-link:hover {
+            background: var(--accent-dark);
+        }
+
         /* ===== User Manual QR Code Section ===== */
         .qr-container {
             display: flex;
@@ -1235,11 +1256,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="info-box">
                     <div class="version-row">
                         <span class="version-label">Current Version</span>
-                        <span class="version-value" id="currentVersion">Loading...</span>
+                        <span class="version-value">
+                            <span id="currentVersion">Loading...</span>
+                            <a href="#" id="currentVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('current'); return false;" title="View release notes">?</a>
+                        </span>
                     </div>
                     <div class="version-row" id="latestVersionRow" style="display: none;">
                         <span class="version-label">Latest Version</span>
-                        <span class="version-value version-update" id="latestVersion">--</span>
+                        <span class="version-value version-update">
+                            <span id="latestVersion">--</span>
+                            <a href="#" id="latestVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('latest'); return false;" title="View release notes">?</a>
+                        </span>
                     </div>
                 </div>
                 <div class="toggle-row">
@@ -1571,6 +1598,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let currentFirmwareVersion = '';
         let currentLatestVersion = '';
         let currentTimezoneOffset = 3600;
+        let currentAPSSID = '';
         let manualUploadInProgress = false;
         let debugPaused = false;
         let debugLogBuffer = [];
@@ -1721,6 +1749,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const statusBox = document.getElementById('wifiStatusBox');
             const apToggle = document.getElementById('apToggle');
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');
+            
+            // Store AP SSID for pre-filling the config modal
+            if (data.apSSID) {
+                currentAPSSID = data.apSSID;
+            } else if (data.serialNumber) {
+                // Fallback to serial number if apSSID not provided
+                currentAPSSID = data.serialNumber;
+            }
             
             let html = '';
             if (data.mode === 'ap') {
@@ -2039,6 +2075,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function showAPConfig() {
+            // Pre-fill with current AP SSID from stored data
+            if (currentAPSSID) {
+                document.getElementById('apSSID').value = currentAPSSID;
+            }
             document.getElementById('apConfigModal').classList.add('active');
         }
 
@@ -2262,14 +2302,31 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             fetch('/api/checkupdate')
             .then(res => res.json())
             .then(data => {
-                if (data.updateAvailable) {
+                // Update current version display
+                if (data.currentVersion) {
+                    currentFirmwareVersion = data.currentVersion;
+                    document.getElementById('currentVersion').textContent = data.currentVersion;
+                }
+                
+                // Update latest version display
+                if (data.latestVersion && data.latestVersion !== 'Unknown') {
+                    currentLatestVersion = data.latestVersion;
                     document.getElementById('latestVersion').textContent = data.latestVersion;
                     document.getElementById('latestVersionRow').style.display = 'flex';
+                }
+                
+                // Show/hide update button based on update availability
+                if (data.updateAvailable) {
                     document.getElementById('updateBtn').classList.remove('hidden');
                     showToast(`Update available: ${data.latestVersion}`, 'success');
                 } else {
+                    document.getElementById('updateBtn').classList.add('hidden');
                     showToast('Firmware is up to date', 'success');
                 }
+                
+                // Reset progress UI when checking
+                document.getElementById('progressContainer').classList.add('hidden');
+                document.getElementById('progressStatus').classList.add('hidden');
             })
             .catch(err => showToast('Failed to check for updates', 'error'));
         }
@@ -2297,21 +2354,59 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function handleUpdateStatus(data) {
-            if (data.status === 'downloading' || data.status === 'uploading') {
-                const container = document.getElementById('progressContainer');
-                const bar = document.getElementById('progressBar');
-                const status = document.getElementById('progressStatus');
-                
+            const container = document.getElementById('progressContainer');
+            const bar = document.getElementById('progressBar');
+            const status = document.getElementById('progressStatus');
+            const updateBtn = document.getElementById('updateBtn');
+            
+            // Update version info if available
+            if (data.currentVersion) {
+                currentFirmwareVersion = data.currentVersion;
+                document.getElementById('currentVersion').textContent = data.currentVersion;
+            }
+            if (data.latestVersion && data.latestVersion !== 'Unknown') {
+                currentLatestVersion = data.latestVersion;
+                document.getElementById('latestVersion').textContent = data.latestVersion;
+                document.getElementById('latestVersionRow').style.display = 'flex';
+            }
+            
+            // Handle different status states
+            if (data.status === 'preparing') {
+                container.classList.remove('hidden');
+                status.classList.remove('hidden');
+                bar.style.width = '0%';
+                status.textContent = data.message || 'Preparing for update...';
+                updateBtn.classList.add('hidden');
+            } else if (data.status === 'downloading' || data.status === 'uploading') {
                 container.classList.remove('hidden');
                 status.classList.remove('hidden');
                 bar.style.width = data.progress + '%';
                 status.textContent = data.message || `${data.progress}%`;
+                updateBtn.classList.add('hidden');
             } else if (data.status === 'complete') {
+                bar.style.width = '100%';
+                status.textContent = 'Update complete! Rebooting...';
                 showToast('Update complete! Rebooting...', 'success');
+                updateBtn.classList.add('hidden');
             } else if (data.status === 'error') {
-                document.getElementById('progressContainer').classList.add('hidden');
-                document.getElementById('progressStatus').classList.add('hidden');
+                container.classList.add('hidden');
+                status.classList.add('hidden');
                 showToast(data.message || 'Update failed', 'error');
+                // Re-show update button if update is still available
+                if (data.updateAvailable) {
+                    updateBtn.classList.remove('hidden');
+                }
+            } else {
+                // Idle state or unknown - reset UI
+                container.classList.add('hidden');
+                status.classList.add('hidden');
+                
+                // Show/hide update button based on update availability
+                if (data.updateAvailable) {
+                    updateBtn.classList.remove('hidden');
+                } else {
+                    updateBtn.classList.add('hidden');
+                }
             }
         }
 
@@ -2839,13 +2934,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== Release Notes =====
         function showReleaseNotes() {
-            if (!currentLatestVersion) return;
+            showReleaseNotesFor('latest');
+        }
+
+        function showReleaseNotesFor(which) {
+            let version = which === 'current' ? currentFirmwareVersion : currentLatestVersion;
             
-            fetch(`/api/releasenotes?version=${currentLatestVersion}`)
+            if (!version) {
+                showToast('Version information not available', 'error');
+                return;
+            }
+            
+            fetch(`/api/releasenotes?version=${version}`)
             .then(res => res.json())
             .then(data => {
-                document.getElementById('releaseNotesTitle').textContent = `Release Notes v${currentLatestVersion}`;
-                document.getElementById('releaseNotesContent').textContent = data.notes || 'No release notes available.';
+                const label = which === 'current' ? 'Current' : 'Latest';
+                document.getElementById('releaseNotesTitle').textContent = `Release Notes v${version} (${label})`;
+                document.getElementById('releaseNotesContent').textContent = data.notes || 'No release notes available for this version.';
                 document.getElementById('releaseNotesModal').classList.add('active');
             })
             .catch(err => showToast('Failed to load release notes', 'error'));
