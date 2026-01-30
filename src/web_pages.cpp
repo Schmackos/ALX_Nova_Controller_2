@@ -2255,6 +2255,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== WebSocket =====
+        let wasDisconnectedDuringUpdate = false;
+        let hadPreviousConnection = false;
+        
         function initWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsHost = window.location.hostname;
@@ -2265,6 +2268,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 updateConnectionStatus(true);
                 wsReconnectDelay = WS_MIN_RECONNECT_DELAY;
                 fetchUpdateStatus();
+                
+                // Show reconnection notification if we were disconnected during an update
+                if (wasDisconnectedDuringUpdate) {
+                    showToast('Device is back online after update!', 'success');
+                    wasDisconnectedDuringUpdate = false;
+                } else if (hadPreviousConnection) {
+                    // Show general reconnection notification
+                    showToast('Device reconnected', 'success');
+                }
+                hadPreviousConnection = true;
             };
 
             ws.onmessage = function(event) {
@@ -3059,13 +3072,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 container.classList.remove('hidden');
                 status.classList.remove('hidden');
                 bar.style.width = data.progress + '%';
-                status.textContent = data.message || `${data.progress}%`;
+                // Show percentage and downloaded size for OTA
+                let statusText = `${data.progress}%`;
+                if (data.bytesDownloaded !== undefined && data.totalBytes !== undefined && data.totalBytes > 0) {
+                    const downloadedKB = (data.bytesDownloaded / 1024).toFixed(0);
+                    const totalKB = (data.totalBytes / 1024).toFixed(0);
+                    statusText = `Downloading: ${data.progress}% (${downloadedKB} / ${totalKB} KB)`;
+                }
+                status.textContent = data.message || statusText;
                 updateBtn.classList.add('hidden');
             } else if (data.status === 'complete') {
                 bar.style.width = '100%';
                 status.textContent = 'Update complete! Rebooting...';
                 showToast('Update complete! Rebooting...', 'success');
                 updateBtn.classList.add('hidden');
+                wasDisconnectedDuringUpdate = true;  // Flag for reconnection notification
             } else if (data.status === 'error') {
                 container.classList.add('hidden');
                 status.classList.add('hidden');
@@ -3089,6 +3110,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function showUpdateSuccessNotification(data) {
+            // Clear the flag so we don't show duplicate notification
+            wasDisconnectedDuringUpdate = false;
             showToast(`Firmware updated: ${data.previousVersion} → ${data.currentVersion}`, 'success');
         }
 
@@ -3134,6 +3157,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     if (response.success) {
                         status.textContent = 'Upload complete! Rebooting...';
                         showToast('Firmware uploaded successfully', 'success');
+                        wasDisconnectedDuringUpdate = true;  // Flag for reconnection notification
                     } else {
                         container.classList.add('hidden');
                         status.classList.add('hidden');
