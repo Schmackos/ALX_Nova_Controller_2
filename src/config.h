@@ -9,7 +9,7 @@
 // Serial number is now generated at runtime from eFuse MAC (see deviceSerialNumber in app_state.h)
 
 // ===== Firmware Version =====
-#define FIRMWARE_VERSION "1.1.21"
+#define FIRMWARE_VERSION "1.1.22"
 
 // ===== GitHub Repository Configuration =====
 #define GITHUB_REPO_OWNER "Schmackos"
