@@ -1,5 +1,6 @@
-#include <pgmspace.h>
 #include "web_pages.h"
+#include <pgmspace.h>
+
 
 const char htmlPage[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -1704,6 +1705,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Home Assistant Discovery</div>
+                        <div class="toggle-sublabel">Auto-configure in Home Assistant</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="mqttHADiscovery">
+                        <span class="slider"></span>
+                    </label>
+                </div>
                 <div class="divider"></div>
                 <div class="form-group">
                     <label class="form-label">Broker Address</label>
@@ -1728,16 +1739,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <label class="form-label">Base Topic</label>
                     <input type="text" class="form-input" id="mqttBaseTopic" placeholder="ALX/device-serial">
                     <div class="text-secondary" style="font-size: 11px; margin-top: 4px;">Leave empty to use: <span id="mqttDefaultTopic">ALX/{serial}</span></div>
-                </div>
-                <div class="toggle-row">
-                    <div>
-                        <div class="toggle-label">Home Assistant Discovery</div>
-                        <div class="toggle-sublabel">Auto-configure in Home Assistant</div>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox" id="mqttHADiscovery">
-                        <span class="slider"></span>
-                    </label>
                 </div>
                 <button class="btn btn-primary" onclick="saveMqttSettings()">Save MQTT Settings</button>
             </div>
