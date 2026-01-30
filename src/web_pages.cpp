@@ -1499,6 +1499,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
     <!-- Persistent Status Bar -->
     <div class="status-bar" id="statusBar">
+        <div class="status-item" title="Amplifier State">
+            <div class="status-indicator" id="statusAmp"></div>
+            <span id="statusAmpText">Amp</span>
+        </div>
         <div class="status-item" title="WiFi Connection">
             <div class="status-indicator" id="statusWifi"></div>
             <span id="statusWifiText">WiFi</span>
@@ -1506,10 +1510,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         <div class="status-item" title="MQTT Connection">
             <div class="status-indicator" id="statusMqtt"></div>
             <span id="statusMqttText">MQTT</span>
-        </div>
-        <div class="status-item" title="Amplifier State">
-            <div class="status-indicator" id="statusAmp"></div>
-            <span id="statusAmpText">Amp</span>
         </div>
         <div class="status-item" title="WebSocket">
             <div class="status-indicator" id="statusWs"></div>
@@ -2228,7 +2228,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const ampIndicator = document.getElementById('statusAmp');
             const ampText = document.getElementById('statusAmpText');
             if (ampState) {
-                ampIndicator.className = 'status-indicator active';
+                ampIndicator.className = 'status-indicator online';
                 ampText.textContent = 'Amp ON';
             } else {
                 ampIndicator.className = 'status-indicator';
@@ -2985,6 +2985,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function handleUpdateStatus(data) {
+            // Skip progress bar updates if manual upload is in progress
+            // Manual upload manages its own progress bar
+            if (manualUploadInProgress) {
+                return;
+            }
+            
             const container = document.getElementById('progressContainer');
             const bar = document.getElementById('progressBar');
             const status = document.getElementById('progressStatus');
