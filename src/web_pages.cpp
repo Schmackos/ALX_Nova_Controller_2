@@ -1543,14 +1543,35 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     <main class="tab-content">
         <!-- ===== CONTROL TAB ===== -->
         <section id="control" class="panel active">
-            <div class="connection-bar" id="connectionStatus">
-                <span class="status-dot info"></span> Connecting...
+            <!-- Control Status -->
+            <div class="card">
+                <div class="card-title">Control Status</div>
+                <div class="info-box" id="controlStatusBox">
+                    <div class="info-row">
+                        <span class="info-label">Connection</span>
+                        <span class="info-value" id="wsConnectionStatus">Connecting...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Voltage Detected</span>
+                        <span class="info-value" id="voltageDetected">No</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Current Reading</span>
+                        <span class="info-value" id="voltageReading">0.00V</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Amplifier Status -->
             <div class="amplifier-display" id="amplifierDisplay">
                 <svg class="amplifier-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
                 <div class="amplifier-label" id="amplifierStatus">OFF</div>
+            </div>
+
+            <!-- Timer Display -->
+            <div class="timer-display hidden" id="timerDisplay">
+                <div class="timer-value" id="timerValue">--:--</div>
+                <div class="timer-label">Time Remaining</div>
             </div>
 
             <!-- Smart Sensing Mode -->
@@ -1572,31 +1593,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
-            <!-- Timer Display -->
-            <div class="timer-display hidden" id="timerDisplay">
-                <div class="timer-value" id="timerValue">--:--</div>
-                <div class="timer-label">Time Remaining</div>
-            </div>
-
-            <!-- Timer & Voltage Settings -->
-            <div class="card">
-                <div class="card-title">Timer & Voltage Settings</div>
-                <div class="form-group">
-                    <label class="form-label">Auto-Off Timer (minutes)</label>
-                    <input type="number" class="form-input" id="timerDuration" inputmode="numeric" min="1" max="60" value="15" onchange="updateTimerDuration()">
+            <!-- Smart Auto Settings (collapsible, only shown when Smart Auto is selected) -->
+            <div class="card" id="smartAutoSettingsCard" style="display: none;">
+                <div class="collapsible-header" onclick="toggleSmartAutoSettings()">
+                    <span class="card-title" style="margin-bottom: 0;">Smart Auto Settings</span>
+                    <svg viewBox="0 0 24 24" id="smartAutoChevron"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Voltage Threshold (volts)</label>
-                    <input type="number" class="form-input" id="voltageThreshold" inputmode="decimal" min="0.1" max="3.3" step="0.1" value="1.0" onchange="updateVoltageThreshold()">
-                </div>
-                <div class="info-box" id="voltageInfo">
-                    <div class="info-row">
-                        <span class="info-label">Voltage Detected</span>
-                        <span class="info-value" id="voltageDetected">No</span>
+                <div class="collapsible-content" id="smartAutoContent">
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label class="form-label">Auto-Off Timer (minutes)</label>
+                        <input type="number" class="form-input" id="timerDuration" inputmode="numeric" min="1" max="60" value="15" onchange="updateTimerDuration()">
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">Current Reading</span>
-                        <span class="info-value" id="voltageReading">0.00V</span>
+                    <div class="form-group">
+                        <label class="form-label">Voltage Threshold (volts)</label>
+                        <input type="number" class="form-input" id="voltageThreshold" inputmode="decimal" min="0.1" max="3.3" step="0.1" value="1.0" onchange="updateVoltageThreshold()">
                     </div>
                 </div>
             </div>
@@ -2305,13 +2315,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let currentAmpState = false;
 
         function updateConnectionStatus(connected) {
-            const statusEl = document.getElementById('connectionStatus');
-            if (connected) {
-                statusEl.className = 'connection-bar connected';
-                statusEl.innerHTML = '<span class="status-dot success"></span> Connected';
-            } else {
-                statusEl.className = 'connection-bar disconnected';
-                statusEl.innerHTML = '<span class="status-dot error"></span> Disconnected';
+            const statusEl = document.getElementById('wsConnectionStatus');
+            if (statusEl) {
+                if (connected) {
+                    statusEl.textContent = 'Connected';
+                    statusEl.className = 'info-value text-success';
+                } else {
+                    statusEl.textContent = 'Disconnected';
+                    statusEl.className = 'info-value text-error';
+                }
             }
             // Update status bar
             updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, connected);
@@ -2464,9 +2476,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Smart Sensing =====
+        let smartAutoSettingsCollapsed = true;
+        
         function updateSensingMode() {
             const selected = document.querySelector('input[name="sensingMode"]:checked');
             if (!selected) return;
+            
+            // Show/hide Smart Auto Settings card based on mode
+            updateSmartAutoSettingsVisibility(selected.value);
             
             fetch('/api/smartsensing', {
                 method: 'POST',
@@ -2478,6 +2495,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (data.success) showToast('Mode updated', 'success');
             })
             .catch(err => showToast('Failed to update mode', 'error'));
+        }
+        
+        function updateSmartAutoSettingsVisibility(mode) {
+            const settingsCard = document.getElementById('smartAutoSettingsCard');
+            if (mode === 'smart_auto') {
+                settingsCard.style.display = 'block';
+            } else {
+                settingsCard.style.display = 'none';
+            }
+        }
+        
+        function toggleSmartAutoSettings() {
+            smartAutoSettingsCollapsed = !smartAutoSettingsCollapsed;
+            const content = document.getElementById('smartAutoContent');
+            const chevron = document.getElementById('smartAutoChevron');
+            const header = chevron.parentElement;
+            
+            if (smartAutoSettingsCollapsed) {
+                content.classList.remove('open');
+                header.classList.remove('open');
+            } else {
+                content.classList.add('open');
+                header.classList.add('open');
+            }
         }
 
         function updateTimerDuration() {
@@ -2537,6 +2578,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.querySelectorAll('input[name="sensingMode"]').forEach(radio => {
                     radio.checked = (radio.value === modeValue);
                 });
+                // Show/hide Smart Auto Settings based on mode
+                updateSmartAutoSettingsVisibility(modeValue);
             }
             
             // Update timer duration (only if not focused)
