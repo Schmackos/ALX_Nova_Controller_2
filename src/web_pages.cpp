@@ -976,11 +976,548 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             text-align: center;
             margin-top: 4px;
         }
+
+        /* ===== ADAPTIVE DESIGN ===== */
+        
+        /* --- Persistent Status Bar --- */
+        .status-bar {
+            position: fixed;
+            top: calc(var(--tab-height) + var(--safe-top));
+            left: 0;
+            right: 0;
+            height: 36px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            padding: 0 16px;
+            z-index: 999;
+            font-size: 12px;
+            transition: top 0.3s ease;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+        }
+
+        .status-item .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-disabled);
+            transition: background 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .status-item .status-indicator.online {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        .status-item .status-indicator.offline {
+            background: var(--error);
+        }
+
+        .status-item .status-indicator.warning {
+            background: var(--warning);
+        }
+
+        .status-item .status-indicator.active {
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        body.has-status-bar {
+            padding-top: calc(var(--tab-height) + var(--safe-top) + 36px);
+        }
+
+        /* --- Sidebar Navigation (Desktop) --- */
+        .sidebar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 240px;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            z-index: 1001;
+            flex-direction: column;
+            padding-top: var(--safe-top);
+            transition: transform 0.3s ease, width 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 20px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .sidebar-logo svg {
+            width: 32px;
+            height: 32px;
+            fill: var(--accent);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 0;
+            overflow-y: auto;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 20px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-size: 15px;
+        }
+
+        .sidebar-item svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+            flex-shrink: 0;
+        }
+
+        .sidebar-item:hover {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .sidebar-item.active {
+            color: var(--accent);
+            background: rgba(255, 152, 0, 0.1);
+            border-right: 3px solid var(--accent);
+        }
+
+        .sidebar-item span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-footer {
+            padding: 16px;
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Sidebar collapsed state */
+        .sidebar.collapsed {
+            width: 64px;
+        }
+
+        .sidebar.collapsed .sidebar-item span,
+        .sidebar.collapsed .sidebar-logo span,
+        .sidebar.collapsed .sidebar-footer {
+            display: none;
+        }
+
+        .sidebar.collapsed .sidebar-item {
+            justify-content: center;
+            padding: 14px;
+        }
+
+        .sidebar-toggle {
+            position: absolute;
+            bottom: 60px;
+            right: -12px;
+            width: 24px;
+            height: 24px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-toggle svg {
+            width: 14px;
+            height: 14px;
+            fill: var(--text-secondary);
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar.collapsed .sidebar-toggle svg {
+            transform: rotate(180deg);
+        }
+
+        /* --- Dashboard Stats Grid --- */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .dashboard-card {
+            background: var(--bg-surface);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .dashboard-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-card-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .dashboard-card-icon {
+            width: 20px;
+            height: 20px;
+            fill: var(--text-disabled);
+        }
+
+        .dashboard-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+            line-height: 1;
+        }
+
+        .dashboard-unit {
+            font-size: 14px;
+            font-weight: 400;
+            color: var(--text-secondary);
+            margin-left: 4px;
+        }
+
+        .dashboard-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .dashboard-sparkline {
+            height: 32px;
+            margin-top: 12px;
+        }
+
+        .dashboard-progress {
+            height: 4px;
+            background: var(--bg-card);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .dashboard-progress-bar {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+
+        .dashboard-card.full-width {
+            grid-column: span 2;
+        }
+
+        /* --- Enhanced Animations --- */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .animate-slide-in {
+            animation: slideIn 0.3s ease forwards;
+        }
+
+        .animate-slide-up {
+            animation: slideUp 0.3s ease forwards;
+        }
+
+        .animate-pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .animate-scale-in {
+            animation: scaleIn 0.2s ease forwards;
+        }
+
+        /* Staggered animation for cards */
+        .panel.active .card:nth-child(1) { animation-delay: 0ms; }
+        .panel.active .card:nth-child(2) { animation-delay: 50ms; }
+        .panel.active .card:nth-child(3) { animation-delay: 100ms; }
+        .panel.active .card:nth-child(4) { animation-delay: 150ms; }
+        .panel.active .card:nth-child(5) { animation-delay: 200ms; }
+        .panel.active .card:nth-child(6) { animation-delay: 250ms; }
+
+        .panel.active .card {
+            animation: slideUp 0.3s ease forwards;
+            opacity: 0;
+        }
+
+        /* Button hover effects for desktop */
+        @media (hover: hover) {
+            .btn:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px var(--shadow);
+            }
+
+            .btn-primary:hover {
+                background: var(--accent-light);
+            }
+
+            .btn-secondary:hover {
+                background: var(--bg-input);
+            }
+
+            .card:hover {
+                box-shadow: 0 2px 8px var(--shadow);
+            }
+        }
+
+        /* --- Responsive Breakpoints --- */
+
+        /* Tablet (768px+) */
+        @media (min-width: 768px) {
+            :root {
+                --content-padding: 24px;
+            }
+
+            .tab-content {
+                max-width: 720px;
+                padding: 24px;
+            }
+
+            .card {
+                padding: 20px;
+                margin-bottom: 16px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }
+
+            .btn-row {
+                gap: 12px;
+            }
+
+            .modal {
+                max-width: 500px;
+                padding: 32px;
+            }
+
+            .status-bar {
+                gap: 24px;
+            }
+        }
+
+        /* Desktop (1024px+) - Enable sidebar */
+        @media (min-width: 1024px) {
+            .tab-bar {
+                display: none;
+            }
+
+            .sidebar {
+                display: flex;
+            }
+
+            body {
+                padding-left: 240px;
+                padding-top: calc(var(--safe-top) + 36px);
+            }
+
+            body.sidebar-collapsed {
+                padding-left: 64px;
+            }
+
+            body.has-status-bar {
+                padding-top: calc(var(--safe-top) + 36px);
+            }
+
+            .status-bar {
+                top: 0;
+                left: 240px;
+                padding-top: var(--safe-top);
+                height: calc(36px + var(--safe-top));
+            }
+
+            body.sidebar-collapsed .status-bar {
+                left: 64px;
+            }
+
+            .tab-content {
+                max-width: 900px;
+                padding: 32px;
+            }
+
+            .card {
+                padding: 24px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .dashboard-card.full-width {
+                grid-column: span 3;
+            }
+
+            .form-group {
+                margin-bottom: 20px;
+            }
+        }
+
+        /* Large Desktop (1280px+) */
+        @media (min-width: 1280px) {
+            .tab-content {
+                max-width: 1100px;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+
+            .dashboard-card.full-width {
+                grid-column: span 4;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        /* Reduce motion preference */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
-<body>
-    <!-- Tab Navigation Bar -->
+<body class="has-status-bar">
+    <!-- Sidebar Navigation (Desktop) -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                <span>ALX Audio</span>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <button class="sidebar-item active" data-tab="control" onclick="switchTab('control')">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <span>Control</span>
+            </button>
+            <button class="sidebar-item" data-tab="wifi" onclick="switchTab('wifi')">
+                <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+                <span>WiFi</span>
+            </button>
+            <button class="sidebar-item" data-tab="mqtt" onclick="switchTab('mqtt')">
+                <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/></svg>
+                <span>MQTT</span>
+            </button>
+            <button class="sidebar-item" data-tab="settings" onclick="switchTab('settings')">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                <span>Settings</span>
+            </button>
+            <button class="sidebar-item" data-tab="debug" onclick="switchTab('debug')">
+                <svg viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
+                <span>Debug</span>
+            </button>
+            <button class="sidebar-item" data-tab="test" onclick="switchTab('test')">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l4.59-4.58L18 11l-6 6z"/></svg>
+                <span>Test</span>
+            </button>
+        </nav>
+        <div class="sidebar-footer">
+            <span id="sidebarVersion">v--</span>
+        </div>
+        <button class="sidebar-toggle" onclick="toggleSidebar()">
+            <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+        </button>
+    </aside>
+
+    <!-- Persistent Status Bar -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-item" title="WiFi Connection">
+            <div class="status-indicator" id="statusWifi"></div>
+            <span id="statusWifiText">WiFi</span>
+        </div>
+        <div class="status-item" title="MQTT Connection">
+            <div class="status-indicator" id="statusMqtt"></div>
+            <span id="statusMqttText">MQTT</span>
+        </div>
+        <div class="status-item" title="Amplifier State">
+            <div class="status-indicator" id="statusAmp"></div>
+            <span id="statusAmpText">Amp</span>
+        </div>
+        <div class="status-item" title="WebSocket">
+            <div class="status-indicator" id="statusWs"></div>
+            <span>WS</span>
+        </div>
+    </div>
+
+    <!-- Tab Navigation Bar (Mobile) -->
     <nav class="tab-bar">
         <button class="tab active" data-tab="control" onclick="switchTab('control')">
             <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
@@ -1628,14 +2165,83 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== Tab Switching =====
         function switchTab(tabId) {
-            // Update tab buttons
+            // Update mobile tab buttons
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.toggle('active', tab.dataset.tab === tabId);
+            });
+            // Update sidebar items
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.tab === tabId);
             });
             // Update panels
             document.querySelectorAll('.panel').forEach(panel => {
                 panel.classList.toggle('active', panel.id === tabId);
             });
+        }
+
+        // ===== Sidebar Toggle =====
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const body = document.body;
+            sidebar.classList.toggle('collapsed');
+            body.classList.toggle('sidebar-collapsed');
+            // Save preference
+            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+        }
+
+        function initSidebar() {
+            const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (collapsed) {
+                document.getElementById('sidebar').classList.add('collapsed');
+                document.body.classList.add('sidebar-collapsed');
+            }
+        }
+
+        // ===== Status Bar Updates =====
+        function updateStatusBar(wifiConnected, mqttConnected, ampState, wsConnected) {
+            // WiFi status
+            const wifiIndicator = document.getElementById('statusWifi');
+            const wifiText = document.getElementById('statusWifiText');
+            if (wifiConnected) {
+                wifiIndicator.className = 'status-indicator online';
+                wifiText.textContent = 'WiFi';
+            } else {
+                wifiIndicator.className = 'status-indicator offline';
+                wifiText.textContent = 'WiFi';
+            }
+
+            // MQTT status
+            const mqttIndicator = document.getElementById('statusMqtt');
+            const mqttText = document.getElementById('statusMqttText');
+            if (mqttConnected) {
+                mqttIndicator.className = 'status-indicator online';
+                mqttText.textContent = 'MQTT';
+            } else if (mqttConnected === false) {
+                mqttIndicator.className = 'status-indicator offline';
+                mqttText.textContent = 'MQTT';
+            } else {
+                mqttIndicator.className = 'status-indicator';
+                mqttText.textContent = 'MQTT';
+            }
+
+            // Amplifier status
+            const ampIndicator = document.getElementById('statusAmp');
+            const ampText = document.getElementById('statusAmpText');
+            if (ampState) {
+                ampIndicator.className = 'status-indicator active';
+                ampText.textContent = 'Amp ON';
+            } else {
+                ampIndicator.className = 'status-indicator';
+                ampText.textContent = 'Amp OFF';
+            }
+
+            // WebSocket status
+            const wsIndicator = document.getElementById('statusWs');
+            if (wsConnected) {
+                wsIndicator.className = 'status-indicator online';
+            } else {
+                wsIndicator.className = 'status-indicator offline';
+            }
         }
 
         // ===== WebSocket =====
@@ -1694,6 +2300,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Connection Status =====
+        let currentWifiConnected = false;
+        let currentMqttConnected = null;
+        let currentAmpState = false;
+
         function updateConnectionStatus(connected) {
             const statusEl = document.getElementById('connectionStatus');
             if (connected) {
@@ -1703,6 +2313,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 statusEl.className = 'connection-bar disconnected';
                 statusEl.innerHTML = '<span class="status-dot error"></span> Disconnected';
             }
+            // Update status bar
+            updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, connected);
         }
 
         // ===== LED Control =====
@@ -1826,18 +2438,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             }
             
-            // Update device serial number and MAC in Debug tab
+            // Update device serial number in Debug tab
             if (data.serialNumber) {
                 document.getElementById('deviceSerial').textContent = data.serialNumber;
-            }
-            if (data.mac) {
-                document.getElementById('deviceMac').textContent = data.mac;
+                // Also update sidebar version
+                const sidebarVer = document.getElementById('sidebarVersion');
+                if (sidebarVer && data.firmwareVersion) {
+                    sidebarVer.textContent = 'v' + data.firmwareVersion;
+                }
             }
             
             // Pre-fill WiFi SSID with currently connected network
             if (data.ssid && data.connected) {
                 document.getElementById('wifiSSID').value = data.ssid;
             }
+
+            // Update global WiFi status for status bar
+            currentWifiConnected = data.connected || data.mode === 'ap';
+            updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, ws && ws.readyState === WebSocket.OPEN);
         }
 
         // ===== Smart Sensing =====
@@ -1937,6 +2555,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     display.classList.remove('on');
                     status.textContent = 'OFF';
                 }
+                // Update status bar
+                currentAmpState = data.amplifierState;
+                updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, ws && ws.readyState === WebSocket.OPEN);
             }
             
             // Update voltage info
@@ -2143,6 +2764,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
                     <div class="info-row"><span class="info-label">Base Topic</span><span class="info-value">${baseTopic || 'Unknown'}</span></div>
                 `;
+                currentMqttConnected = true;
             } else if (enabled) {
                 html = `
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Disconnected</span></div>
@@ -2150,13 +2772,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row"><span class="info-label">Port</span><span class="info-value">${port || 1883}</span></div>
                     ${baseTopic ? `<div class="info-row"><span class="info-label">Base Topic</span><span class="info-value">${baseTopic}</span></div>` : ''}
                 `;
+                currentMqttConnected = false;
             } else {
                 html = `
                     <div class="info-row"><span class="info-label">Status</span><span class="info-value text-secondary">Disabled</span></div>
                     <div class="info-row"><span class="info-label">MQTT</span><span class="info-value">Not enabled</span></div>
                 `;
+                currentMqttConnected = null;
             }
             statusBox.innerHTML = html;
+            // Update status bar
+            updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, ws && ws.readyState === WebSocket.OPEN);
         }
 
         function toggleMqttEnabled() {
@@ -2987,12 +3613,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             initWebSocket();
             loadMqttSettings();
             initFirmwareDragDrop();
+            initSidebar();
             
             // Add input focus listeners
             document.getElementById('timerDuration').addEventListener('focus', () => inputFocusState.timerDuration = true);
             document.getElementById('timerDuration').addEventListener('blur', () => inputFocusState.timerDuration = false);
             document.getElementById('voltageThreshold').addEventListener('focus', () => inputFocusState.voltageThreshold = true);
             document.getElementById('voltageThreshold').addEventListener('blur', () => inputFocusState.voltageThreshold = false);
+            
+            // Initial status bar update
+            updateStatusBar(false, null, false, false);
         };
     </script>
 </body>
