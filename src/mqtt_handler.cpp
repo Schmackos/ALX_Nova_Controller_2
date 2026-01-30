@@ -1385,21 +1385,20 @@ void handleMqttUpdate() {
     }
   }
   
-  // Update password (only if provided)
-  if (doc["password"].is<String>()) {
+  // Update password (empty string clears it)
+  if (doc.containsKey("password")) {
     String newPassword = doc["password"].as<String>();
-    // Only update if a new password is provided (empty string clears it)
-    if (newPassword.length() > 0 || !doc["clearPassword"].isNull()) {
+    if (mqttPassword != newPassword) {
       mqttPassword = newPassword;
       settingsChanged = true;
       needReconnect = true;
     }
   }
   
-  // Update base topic
-  if (doc["baseTopic"].is<String>()) {
+  // Update base topic (empty string uses default ALX/{serial})
+  if (doc.containsKey("baseTopic")) {
     String newBaseTopic = doc["baseTopic"].as<String>();
-    if (newBaseTopic.length() > 0 && mqttBaseTopic != newBaseTopic) {
+    if (mqttBaseTopic != newBaseTopic) {
       // Remove old HA discovery before changing topic
       if (mqttHADiscovery && mqttClient.connected()) {
         removeHADiscovery();
@@ -1407,6 +1406,7 @@ void handleMqttUpdate() {
       mqttBaseTopic = newBaseTopic;
       settingsChanged = true;
       needReconnect = true;
+      DebugOut.printf("Base topic changed to: %s\n", newBaseTopic.length() > 0 ? newBaseTopic.c_str() : "(default)");
     }
   }
   
