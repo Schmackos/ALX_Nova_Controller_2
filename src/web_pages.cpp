@@ -1395,6 +1395,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="card-title">WiFi & System</div>
                 <div class="info-box">
                     <div class="info-row">
+                        <span class="info-label">Serial Number</span>
+                        <span class="info-value" id="deviceSerial">--</span>
+                    </div>
+                    <div class="info-row">
                         <span class="info-label">Signal Strength</span>
                         <span class="info-value" id="wifiRssi">-- dBm</span>
                     </div>
@@ -1722,6 +1726,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (data.updateAvailable) {
                     document.getElementById('updateBtn').classList.remove('hidden');
                 }
+            }
+            
+            // Update device serial number in Debug tab
+            if (data.serialNumber) {
+                document.getElementById('deviceSerial').textContent = data.serialNumber;
             }
         }
 
