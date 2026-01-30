@@ -70,12 +70,25 @@ void handleSmartSensingUpdate() {
       settingsChanged = true;
       DebugOut.printf("Mode changed to: %s\n", modeStr.c_str());
       
-      // When switching to SMART_AUTO mode
+      // When switching to SMART_AUTO mode, immediately evaluate voltage state
       if (currentMode == SMART_AUTO) {
-        // Set timer to configured duration but don't start countdown yet
-        // Countdown will start when voltage is detected in updateSmartSensingLogic()
-        timerRemaining = timerDuration * 60;
-        DebugOut.println("SMART_AUTO mode activated - timer countdown will start when voltage is detected");
+        bool voltageDetected = detectVoltage();
+        
+        if (voltageDetected) {
+          // Voltage is above threshold - turn ON and start timer
+          timerRemaining = timerDuration * 60;
+          lastTimerUpdate = millis();
+          lastVoltageDetection = millis();
+          setAmplifierState(true);
+          previousVoltageState = true;
+          DebugOut.println("SMART_AUTO mode activated - voltage detected, amplifier ON, timer started");
+        } else {
+          // Voltage is below threshold - turn OFF
+          timerRemaining = 0;
+          setAmplifierState(false);
+          previousVoltageState = false;
+          DebugOut.println("SMART_AUTO mode activated - no voltage detected, amplifier OFF");
+        }
       }
     }
   }
