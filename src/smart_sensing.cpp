@@ -22,6 +22,7 @@ void handleSmartSensingGet() {
   
   doc["timerDuration"] = timerDuration;
   doc["timerRemaining"] = timerRemaining;
+  doc["timerActive"] = (timerRemaining > 0);
   doc["amplifierState"] = amplifierState;
   doc["voltageThreshold"] = voltageThreshold;
   doc["voltageReading"] = lastVoltageReading;
@@ -258,6 +259,7 @@ void sendSmartSensingStateInternal() {
   
   doc["timerDuration"] = timerDuration;
   doc["timerRemaining"] = timerRemaining;
+  doc["timerActive"] = (timerRemaining > 0);
   doc["amplifierState"] = amplifierState;
   doc["voltageThreshold"] = voltageThreshold;
   doc["voltageReading"] = lastVoltageReading;
