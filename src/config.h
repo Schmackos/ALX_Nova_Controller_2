@@ -50,7 +50,7 @@ const unsigned long OTA_CHECK_INTERVAL = 300000;      // Check every 5 minutes (
 const unsigned long AUTO_UPDATE_COUNTDOWN = 30000;    // 30 seconds countdown
 
 // ===== Smart Sensing Configuration =====
-const unsigned long SMART_SENSING_HEARTBEAT_INTERVAL = 5000;  // Send heartbeat every 5 seconds
+const unsigned long SMART_SENSING_HEARTBEAT_INTERVAL = 1000;  // Send heartbeat every 1 second for real-time voltage updates
 const unsigned long DEFAULT_TIMER_DURATION = 15;              // Default timer duration in minutes
 const float DEFAULT_VOLTAGE_THRESHOLD = 1.0;                  // Default voltage threshold in volts
 

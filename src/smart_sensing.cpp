@@ -4,6 +4,7 @@
 #include "debug_serial.h"
 #include <ArduinoJson.h>
 #include <SPIFFS.h>
+#include <cmath>
 
 // ===== Smart Sensing HTTP API Handlers =====
 
@@ -221,7 +222,7 @@ void updateSmartSensingLogic() {
       previousVoltageState = voltageDetected; // Update state tracking
       break;
       
-    case SMART_AUTO:
+    case SMART_AUTO: {
       // Detect rising edge: voltage goes from below threshold to above threshold
       bool voltageRisingEdge = voltageDetected && !previousVoltageState;
       
@@ -251,6 +252,7 @@ void updateSmartSensingLogic() {
       // Update previous voltage state for next iteration
       previousVoltageState = voltageDetected;
       break;
+    }
   }
 }
 
@@ -298,7 +300,7 @@ void sendSmartSensingState() {
   bool stateChanged = (currentMode != prevBroadcastMode) ||
                       (amplifierState != prevBroadcastAmplifierState) ||
                       (timerRemaining != prevBroadcastTimerRemaining) ||
-                      (abs(lastVoltageReading - prevBroadcastVoltageReading) > 0.05);  // 0.05V tolerance
+                      (fabs(lastVoltageReading - prevBroadcastVoltageReading) > 0.02);  // 0.02V tolerance for more frequent updates
   
   // Check if heartbeat interval has elapsed
   bool heartbeatDue = (currentMillis - lastSmartSensingHeartbeat >= SMART_SENSING_HEARTBEAT_INTERVAL);

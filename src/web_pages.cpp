@@ -2569,8 +2569,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (data.voltageDetected !== undefined) {
                 document.getElementById('voltageDetected').textContent = data.voltageDetected ? 'Yes' : 'No';
             }
-            if (data.currentVoltage !== undefined) {
-                document.getElementById('voltageReading').textContent = data.currentVoltage.toFixed(2) + 'V';
+            if (data.voltageReading !== undefined) {
+                document.getElementById('voltageReading').textContent = data.voltageReading.toFixed(2) + 'V';
             }
             
             // Update timer display
