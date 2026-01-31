@@ -1,17 +1,19 @@
 #include "settings_manager.h"
-#include "config.h"
 #include "app_state.h"
-#include "wifi_manager.h"
-#include "smart_sensing.h"
+#include "config.h"
+#include "debug_serial.h"
 #include "mqtt_handler.h"
 #include "ota_updater.h"
-#include "debug_serial.h"
-#include <WiFi.h>
-#include <LittleFS.h>
+#include "smart_sensing.h"
+#include "wifi_manager.h"
 #include <ArduinoJson.h>
+#include <LittleFS.h>
+#include <WiFi.h>
+
 
 // Note: Certificate management removed - now using Mozilla certificate bundle
-// via ESP32CertBundle library for automatic SSL validation of all public servers
+// via ESP32CertBundle library for automatic SSL validation of all public
+// servers
 
 // ===== Settings Persistence =====
 
@@ -34,35 +36,37 @@ bool loadSettings() {
   }
 
   autoUpdateEnabled = (line1.toInt() != 0);
-  
+
   // Load timezone offset (if available, otherwise default to 0)
   if (line2.length() > 0) {
     line2.trim();
     timezoneOffset = line2.toInt();
   }
-  
+
   // Load night mode (if available, otherwise default to false)
   if (line3.length() > 0) {
     line3.trim();
     nightMode = (line3.toInt() != 0);
   }
-  
-  // Load cert validation setting (if available, otherwise default to false)
+
+  // Load cert validation setting (if available, otherwise default to true from
+  // AppState)
   if (line4.length() > 0) {
     line4.trim();
     enableCertValidation = (line4.toInt() != 0);
   }
-  
+
   // Load hardware stats interval (if available, otherwise default to 2000ms)
   if (line5.length() > 0) {
     line5.trim();
     unsigned long interval = line5.toInt();
     // Validate: only allow 1000, 2000, 3000, 5000, or 10000 ms
-    if (interval == 1000 || interval == 2000 || interval == 3000 || interval == 5000 || interval == 10000) {
+    if (interval == 1000 || interval == 2000 || interval == 3000 ||
+        interval == 5000 || interval == 10000) {
       hardwareStatsInterval = interval;
     }
   }
-  
+
   return true;
 }
 
@@ -87,10 +91,10 @@ void saveSettings() {
 void performFactoryReset() {
   DebugOut.println("\n=== FACTORY RESET INITIATED ===");
   factoryResetInProgress = true;
-  
+
   // Visual feedback: solid LED
   digitalWrite(LED_PIN, HIGH);
-  
+
   // Format LittleFS (erases all persistent data)
   DebugOut.println("Formatting LittleFS...");
   if (LittleFS.format()) {
@@ -98,13 +102,13 @@ void performFactoryReset() {
   } else {
     DebugOut.println("LittleFS format failed");
   }
-  
+
   // End LittleFS
   LittleFS.end();
-  
+
   DebugOut.println("=== FACTORY RESET COMPLETE ===");
   DebugOut.println("Rebooting in 2 seconds...");
-  
+
   delay(2000);
   ESP.restart();
 }
@@ -118,7 +122,8 @@ void handleSettingsGet() {
   doc["timezoneOffset"] = timezoneOffset;
   doc["nightMode"] = nightMode;
   doc["enableCertValidation"] = enableCertValidation;
-  doc["hardwareStatsInterval"] = hardwareStatsInterval / 1000;  // Send as seconds
+  doc["hardwareStatsInterval"] =
+      hardwareStatsInterval / 1000; // Send as seconds
 
   String json;
   serializeJson(doc, json);
@@ -127,7 +132,8 @@ void handleSettingsGet() {
 
 void handleSettingsUpdate() {
   if (!server.hasArg("plain")) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"No data received\"}");
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"No data received\"}");
     return;
   }
 
@@ -135,17 +141,18 @@ void handleSettingsUpdate() {
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
   if (error) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid JSON\"}");
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Invalid JSON\"}");
     return;
   }
 
   bool settingsChanged = false;
-  
+
   if (doc["autoUpdateEnabled"].is<bool>()) {
     autoUpdateEnabled = doc["autoUpdateEnabled"].as<bool>();
     settingsChanged = true;
   }
-  
+
   if (doc["timezoneOffset"].is<int>()) {
     int newOffset = doc["timezoneOffset"].as<int>();
     if (newOffset != timezoneOffset) {
@@ -157,7 +164,7 @@ void handleSettingsUpdate() {
       }
     }
   }
-  
+
   if (doc["nightMode"].is<bool>()) {
     bool newNightMode = doc["nightMode"].as<bool>();
     if (newNightMode != nightMode) {
@@ -165,29 +172,32 @@ void handleSettingsUpdate() {
       settingsChanged = true;
     }
   }
-  
+
   if (doc["enableCertValidation"].is<bool>()) {
     bool newCertValidation = doc["enableCertValidation"].as<bool>();
     if (newCertValidation != enableCertValidation) {
       enableCertValidation = newCertValidation;
       settingsChanged = true;
-      DebugOut.printf("Certificate validation %s\n", enableCertValidation ? "ENABLED" : "DISABLED");
+      DebugOut.printf("Certificate validation %s\n",
+                      enableCertValidation ? "ENABLED" : "DISABLED");
     }
   }
-  
+
   if (doc["hardwareStatsInterval"].is<int>()) {
     int newInterval = doc["hardwareStatsInterval"].as<int>();
     // Validate: only allow 1, 2, 3, 5, or 10 seconds
-    if (newInterval == 1 || newInterval == 2 || newInterval == 3 || newInterval == 5 || newInterval == 10) {
+    if (newInterval == 1 || newInterval == 2 || newInterval == 3 ||
+        newInterval == 5 || newInterval == 10) {
       unsigned long newIntervalMs = newInterval * 1000UL;
       if (newIntervalMs != hardwareStatsInterval) {
         hardwareStatsInterval = newIntervalMs;
         settingsChanged = true;
-        DebugOut.printf("Hardware stats interval set to %d seconds\n", newInterval);
+        DebugOut.printf("Hardware stats interval set to %d seconds\n",
+                        newInterval);
       }
     }
   }
-  
+
   if (settingsChanged) {
     saveSettings();
   }
@@ -206,26 +216,27 @@ void handleSettingsUpdate() {
 
 void handleSettingsExport() {
   DebugOut.println("Settings export requested via web interface");
-  
+
   JsonDocument doc;
-  
+
   // Device info
   doc["deviceInfo"]["manufacturer"] = MANUFACTURER_NAME;
   doc["deviceInfo"]["model"] = MANUFACTURER_MODEL;
   doc["deviceInfo"]["serialNumber"] = deviceSerialNumber;
   doc["deviceInfo"]["firmwareVersion"] = firmwareVer;
   doc["deviceInfo"]["mac"] = WiFi.macAddress();
-  doc["deviceInfo"]["chipId"] = String((uint32_t)(ESP.getEfuseMac() & 0xFFFFFFFF), HEX);
-  
+  doc["deviceInfo"]["chipId"] =
+      String((uint32_t)(ESP.getEfuseMac() & 0xFFFFFFFF), HEX);
+
   // WiFi settings
   doc["wifi"]["ssid"] = wifiSSID;
   doc["wifi"]["password"] = wifiPassword;
-  
+
   // AP settings
   doc["accessPoint"]["enabled"] = apEnabled;
   doc["accessPoint"]["ssid"] = apSSID;
   doc["accessPoint"]["password"] = apPassword;
-  
+
   // General settings
   doc["settings"]["autoUpdateEnabled"] = autoUpdateEnabled;
   doc["settings"]["timezoneOffset"] = timezoneOffset;
@@ -233,18 +244,24 @@ void handleSettingsExport() {
   doc["settings"]["enableCertValidation"] = enableCertValidation;
   doc["settings"]["blinkingEnabled"] = blinkingEnabled;
   doc["settings"]["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
-  
+
   // Smart Sensing settings
   String modeStr;
   switch (currentMode) {
-    case ALWAYS_ON: modeStr = "always_on"; break;
-    case ALWAYS_OFF: modeStr = "always_off"; break;
-    case SMART_AUTO: modeStr = "smart_auto"; break;
+  case ALWAYS_ON:
+    modeStr = "always_on";
+    break;
+  case ALWAYS_OFF:
+    modeStr = "always_off";
+    break;
+  case SMART_AUTO:
+    modeStr = "smart_auto";
+    break;
   }
   doc["smartSensing"]["mode"] = modeStr;
   doc["smartSensing"]["timerDuration"] = timerDuration;
   doc["smartSensing"]["voltageThreshold"] = voltageThreshold;
-  
+
   // MQTT settings (password excluded for security)
   doc["mqtt"]["enabled"] = mqttEnabled;
   doc["mqtt"]["broker"] = mqttBroker;
@@ -253,9 +270,9 @@ void handleSettingsExport() {
   doc["mqtt"]["baseTopic"] = mqttBaseTopic;
   doc["mqtt"]["haDiscovery"] = mqttHADiscovery;
   // Note: Password is intentionally excluded from export for security
-  
+
   // Note: Certificate management removed - now using Mozilla certificate bundle
-  
+
   // Generate timestamp
   time_t now = time(nullptr);
   struct tm timeinfo;
@@ -269,42 +286,47 @@ void handleSettingsExport() {
   }
   doc["exportInfo"]["timestamp"] = timestamp;
   doc["exportInfo"]["version"] = "1.0";
-  
+
   String json;
   serializeJsonPretty(doc, json);
-  
+
   // Send as downloadable JSON file
-  server.sendHeader("Content-Disposition", "attachment; filename=\"device-settings.json\"");
+  server.sendHeader("Content-Disposition",
+                    "attachment; filename=\"device-settings.json\"");
   server.send(200, "application/json", json);
-  
+
   DebugOut.println("Settings exported successfully");
 }
 
 void handleSettingsImport() {
   DebugOut.println("Settings import requested via web interface");
-  
+
   if (!server.hasArg("plain")) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"No data received\"}");
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"No data received\"}");
     return;
   }
-  
+
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
-  
+
   if (error) {
     DebugOut.printf("JSON parsing failed: %s\n", error.c_str());
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid JSON format\"}");
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Invalid JSON format\"}");
     return;
   }
-  
+
   // Validate it's a settings export file
   if (doc["exportInfo"].isNull() || doc["settings"].isNull()) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"Invalid settings file format\"}");
+    server.send(
+        400, "application/json",
+        "{\"success\": false, \"message\": \"Invalid settings file format\"}");
     return;
   }
-  
+
   DebugOut.println("Importing settings...");
-  
+
   // Import WiFi settings
   if (!doc["wifi"].isNull()) {
     if (doc["wifi"]["ssid"].is<String>()) {
@@ -320,7 +342,7 @@ void handleSettingsImport() {
       saveWiFiCredentials(wifiSSID.c_str(), wifiPassword.c_str());
     }
   }
-  
+
   // Import AP settings
   if (!doc["accessPoint"].isNull()) {
     if (doc["accessPoint"]["enabled"].is<bool>()) {
@@ -336,12 +358,13 @@ void handleSettingsImport() {
       DebugOut.println("AP password imported");
     }
   }
-  
+
   // Import general settings
   if (!doc["settings"].isNull()) {
     if (doc["settings"]["autoUpdateEnabled"].is<bool>()) {
       autoUpdateEnabled = doc["settings"]["autoUpdateEnabled"].as<bool>();
-      DebugOut.printf("Auto Update: %s\n", autoUpdateEnabled ? "enabled" : "disabled");
+      DebugOut.printf("Auto Update: %s\n",
+                      autoUpdateEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["timezoneOffset"].is<int>()) {
       timezoneOffset = doc["settings"]["timezoneOffset"].as<int>();
@@ -353,15 +376,18 @@ void handleSettingsImport() {
     }
     if (doc["settings"]["enableCertValidation"].is<bool>()) {
       enableCertValidation = doc["settings"]["enableCertValidation"].as<bool>();
-      DebugOut.printf("Cert Validation: %s\n", enableCertValidation ? "enabled" : "disabled");
+      DebugOut.printf("Cert Validation: %s\n",
+                      enableCertValidation ? "enabled" : "disabled");
     }
     if (doc["settings"]["blinkingEnabled"].is<bool>()) {
       blinkingEnabled = doc["settings"]["blinkingEnabled"].as<bool>();
-      DebugOut.printf("Blinking: %s\n", blinkingEnabled ? "enabled" : "disabled");
+      DebugOut.printf("Blinking: %s\n",
+                      blinkingEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["hardwareStatsInterval"].is<int>()) {
       int interval = doc["settings"]["hardwareStatsInterval"].as<int>();
-      if (interval == 1 || interval == 2 || interval == 3 || interval == 5 || interval == 10) {
+      if (interval == 1 || interval == 2 || interval == 3 || interval == 5 ||
+          interval == 10) {
         hardwareStatsInterval = interval * 1000UL;
         DebugOut.printf("Hardware Stats Interval: %d seconds\n", interval);
       }
@@ -369,7 +395,7 @@ void handleSettingsImport() {
     // Save general settings
     saveSettings();
   }
-  
+
   // Import Smart Sensing settings
   if (!doc["smartSensing"].isNull()) {
     if (doc["smartSensing"]["mode"].is<String>()) {
@@ -383,7 +409,8 @@ void handleSettingsImport() {
       }
       DebugOut.printf("Smart Sensing Mode: %s\n", modeStr.c_str());
     }
-    if (doc["smartSensing"]["timerDuration"].is<int>() || doc["smartSensing"]["timerDuration"].is<unsigned long>()) {
+    if (doc["smartSensing"]["timerDuration"].is<int>() ||
+        doc["smartSensing"]["timerDuration"].is<unsigned long>()) {
       timerDuration = doc["smartSensing"]["timerDuration"].as<unsigned long>();
       DebugOut.printf("Timer Duration: %lu minutes\n", timerDuration);
     }
@@ -394,7 +421,7 @@ void handleSettingsImport() {
     // Save Smart Sensing settings
     saveSmartSensingSettings();
   }
-  
+
   // Import MQTT settings
   if (!doc["mqtt"].isNull()) {
     if (doc["mqtt"]["enabled"].is<bool>()) {
@@ -419,20 +446,23 @@ void handleSettingsImport() {
     }
     if (doc["mqtt"]["haDiscovery"].is<bool>()) {
       mqttHADiscovery = doc["mqtt"]["haDiscovery"].as<bool>();
-      DebugOut.printf("MQTT HA Discovery: %s\n", mqttHADiscovery ? "enabled" : "disabled");
+      DebugOut.printf("MQTT HA Discovery: %s\n",
+                      mqttHADiscovery ? "enabled" : "disabled");
     }
     // Note: Password is not imported for security - user needs to re-enter it
     // Save MQTT settings
     saveMqttSettings();
   }
-  
+
   // Note: Certificate import removed - now using Mozilla certificate bundle
-  
+
   DebugOut.println("All settings imported successfully!");
-  
+
   // Send success response
-  server.send(200, "application/json", "{\"success\": true, \"message\": \"Settings imported successfully. Device will reboot in 3 seconds.\"}");
-  
+  server.send(200, "application/json",
+              "{\"success\": true, \"message\": \"Settings imported "
+              "successfully. Device will reboot in 3 seconds.\"}");
+
   // Schedule reboot after 3 seconds
   delay(100); // Give time for response to be sent
   DebugOut.println("Rebooting in 3 seconds...");
@@ -442,31 +472,33 @@ void handleSettingsImport() {
 
 void handleFactoryReset() {
   DebugOut.println("Factory reset requested via web interface");
-  
+
   // Send success response before performing reset
-  server.send(200, "application/json", "{\"success\": true, \"message\": \"Factory reset initiated\"}");
-  
+  server.send(200, "application/json",
+              "{\"success\": true, \"message\": \"Factory reset initiated\"}");
+
   // Give time for response to be sent
   delay(500);
-  
+
   // Perform factory reset
   performFactoryReset();
 }
 
 void handleReboot() {
   DebugOut.println("Reboot requested via web interface");
-  
+
   // Send success response before rebooting
-  server.send(200, "application/json", "{\"success\": true, \"message\": \"Rebooting device\"}");
-  
+  server.send(200, "application/json",
+              "{\"success\": true, \"message\": \"Rebooting device\"}");
+
   // Give time for response to be sent
   delay(500);
-  
+
   // Reboot the ESP32
   ESP.restart();
 }
 
-// Note: Certificate HTTP API handlers removed - now using Mozilla certificate bundle
-// The enableCertValidation setting still works to toggle between:
+// Note: Certificate HTTP API handlers removed - now using Mozilla certificate
+// bundle The enableCertValidation setting still works to toggle between:
 // - ENABLED: Uses Mozilla certificate bundle for validation
 // - DISABLED: Insecure mode (no certificate validation)

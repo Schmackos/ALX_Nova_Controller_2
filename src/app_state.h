@@ -114,7 +114,7 @@ public:
   unsigned long lastSmartSensingHeartbeat = 0;
 
   // ===== Certificate Validation =====
-  bool enableCertValidation = false;
+  bool enableCertValidation = true;
 
   // ===== Hardware Stats =====
   unsigned long hardwareStatsInterval = HARDWARE_STATS_INTERVAL;
