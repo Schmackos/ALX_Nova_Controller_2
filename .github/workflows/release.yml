@@ -94,8 +94,11 @@ jobs:
 
       - name: Prepare release notes
         run: |
-          # Read and process the template
-          sed "s/X.X.X/${{ steps.new_version.outputs.new_version }}/g" RELEASE_NOTES_TEMPLATE.md > release_notes.md
+          # Use the prepared RELEASE_NOTES.md
+          cp RELEASE_NOTES.md release_notes.md
+          
+          # Optional: Replace version placeholder if we used one (we hardcoded it, but this is safe)
+          sed -i "s/X.X.X/${{ steps.new_version.outputs.new_version }}/g" release_notes.md
           
           # Append firmware details
           echo "" >> release_notes.md

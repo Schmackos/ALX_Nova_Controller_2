@@ -3,7 +3,7 @@
 #include "app_state.h"
 #include "debug_serial.h"
 #include <ArduinoJson.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <cmath>
 
 // ===== Smart Sensing HTTP API Handlers =====
@@ -313,9 +313,9 @@ void sendSmartSensingState() {
 
 // ===== Smart Sensing Settings =====
 
-// Load Smart Sensing settings from SPIFFS
+// Load Smart Sensing settings from LittleFS
 bool loadSmartSensingSettings() {
-  File file = SPIFFS.open("/smartsensing.txt", "r");
+  File file = LittleFS.open("/smartsensing.txt", "r");
   if (!file) {
     return false;
   }
@@ -350,16 +350,16 @@ bool loadSmartSensingSettings() {
     }
   }
   
-  DebugOut.println("Smart Sensing settings loaded from SPIFFS");
+  DebugOut.println("Smart Sensing settings loaded from LittleFS");
   DebugOut.printf("  Mode: %d, Timer: %lu min, Threshold: %.2fV\n", 
                 currentMode, timerDuration, voltageThreshold);
   
   return true;
 }
 
-// Save Smart Sensing settings to SPIFFS
+// Save Smart Sensing settings to LittleFS
 void saveSmartSensingSettings() {
-  File file = SPIFFS.open("/smartsensing.txt", "w");
+  File file = LittleFS.open("/smartsensing.txt", "w");
   if (!file) {
     DebugOut.println("Failed to open smart sensing settings file for writing");
     return;
@@ -370,5 +370,5 @@ void saveSmartSensingSettings() {
   file.println(String(voltageThreshold, 2));
   file.close();
   
-  DebugOut.println("Smart Sensing settings saved to SPIFFS");
+  DebugOut.println("Smart Sensing settings saved to LittleFS");
 }

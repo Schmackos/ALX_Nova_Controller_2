@@ -1995,8 +1995,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="stat-label">Sketch Used</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value" id="spiffsPercent">--%</div>
-                        <div class="stat-label">SPIFFS Used</div>
+                        <div class="stat-value" id="LittleFSPercent">--%</div>
+                        <div class="stat-label">LittleFS Used</div>
                     </div>
                 </div>
                 <div class="info-box mt-12">
@@ -2013,12 +2013,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="sketchFree">--</span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">SPIFFS Used</span>
-                        <span class="info-value" id="spiffsUsed">--</span>
+                        <span class="info-label">LittleFS Used</span>
+                        <span class="info-value" id="LittleFSUsed">--</span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">SPIFFS Total</span>
-                        <span class="info-value" id="spiffsTotal">--</span>
+                        <span class="info-label">LittleFS Total</span>
+                        <span class="info-value" id="LittleFSTotal">--</span>
                     </div>
                 </div>
             </div>
@@ -3331,12 +3331,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 const sketchPercent = sketchTotal > 0 ? Math.round((data.storage.sketchSize / sketchTotal) * 100) : 0;
                 document.getElementById('sketchPercent').textContent = sketchPercent + '%';
                 
-                const spiffsTotal = data.storage.spiffsTotal || 0;
-                const spiffsUsed = data.storage.spiffsUsed || 0;
-                const spiffsPercent = spiffsTotal > 0 ? Math.round((spiffsUsed / spiffsTotal) * 100) : 0;
-                document.getElementById('spiffsPercent').textContent = spiffsTotal > 0 ? spiffsPercent + '%' : 'N/A';
-                document.getElementById('spiffsUsed').textContent = spiffsTotal > 0 ? formatBytes(spiffsUsed) : 'N/A';
-                document.getElementById('spiffsTotal').textContent = spiffsTotal > 0 ? formatBytes(spiffsTotal) : 'N/A';
+                const LittleFSTotal = data.storage.LittleFSTotal || 0;
+                const LittleFSUsed = data.storage.LittleFSUsed || 0;
+                const LittleFSPercent = LittleFSTotal > 0 ? Math.round((LittleFSUsed / LittleFSTotal) * 100) : 0;
+                document.getElementById('LittleFSPercent').textContent = LittleFSTotal > 0 ? LittleFSPercent + '%' : 'N/A';
+                document.getElementById('LittleFSUsed').textContent = LittleFSTotal > 0 ? formatBytes(LittleFSUsed) : 'N/A';
+                document.getElementById('LittleFSTotal').textContent = LittleFSTotal > 0 ? formatBytes(LittleFSTotal) : 'N/A';
             }
             
             // WiFi Stats

@@ -144,7 +144,7 @@
 #define STR_STAT_FLASH_SIZE                 "Flash Size"
 #define STR_STAT_SKETCH_SIZE                "Sketch Size"
 #define STR_STAT_OTA_FREE                   "OTA Free"
-#define STR_STAT_SPIFFS                     "SPIFFS"
+#define STR_STAT_LittleFS                     "LittleFS"
 #define STR_STAT_WIFI                       "WiFi"
 #define STR_STAT_RSSI                       "RSSI"
 #define STR_STAT_CHANNEL                    "Channel"

@@ -6,7 +6,7 @@
 #include "websocket_handler.h"
 #include "debug_serial.h"
 #include <WiFi.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <ArduinoJson.h>
 
 // External function declarations
@@ -102,7 +102,7 @@ void connectToWiFi(const char* ssid, const char* password) {
 // ===== WiFi Credentials Persistence =====
 
 bool loadWiFiCredentials(String& ssid, String& password) {
-  File file = SPIFFS.open("/wifi_config.txt", "r");
+  File file = LittleFS.open("/wifi_config.txt", "r");
   if (!file) {
     return false;
   }
@@ -123,12 +123,12 @@ bool loadWiFiCredentials(String& ssid, String& password) {
 }
 
 void saveWiFiCredentials(const char* ssid, const char* password) {
-  File file = SPIFFS.open("/wifi_config.txt", "w");
+  File file = LittleFS.open("/wifi_config.txt", "w");
   if (file) {
     file.println(ssid);
     file.println(password);
     file.close();
-    DebugOut.println("Credentials saved to SPIFFS");
+    DebugOut.println("Credentials saved to LittleFS");
   }
 }
 

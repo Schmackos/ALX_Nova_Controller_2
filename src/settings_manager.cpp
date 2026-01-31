@@ -7,7 +7,7 @@
 #include "ota_updater.h"
 #include "debug_serial.h"
 #include <WiFi.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <ArduinoJson.h>
 
 // Note: Certificate management removed - now using Mozilla certificate bundle
@@ -16,7 +16,7 @@
 // ===== Settings Persistence =====
 
 bool loadSettings() {
-  File file = SPIFFS.open("/settings.txt", "r");
+  File file = LittleFS.open("/settings.txt", "r");
   if (!file) {
     return false;
   }
@@ -67,7 +67,7 @@ bool loadSettings() {
 }
 
 void saveSettings() {
-  File file = SPIFFS.open("/settings.txt", "w");
+  File file = LittleFS.open("/settings.txt", "w");
   if (!file) {
     DebugOut.println("Failed to open settings file for writing");
     return;
@@ -79,7 +79,7 @@ void saveSettings() {
   file.println(enableCertValidation ? "1" : "0");
   file.println(hardwareStatsInterval);
   file.close();
-  DebugOut.println("Settings saved to SPIFFS");
+  DebugOut.println("Settings saved to LittleFS");
 }
 
 // ===== Factory Reset =====
@@ -91,16 +91,16 @@ void performFactoryReset() {
   // Visual feedback: solid LED
   digitalWrite(LED_PIN, HIGH);
   
-  // Format SPIFFS (erases all persistent data)
-  DebugOut.println("Formatting SPIFFS...");
-  if (SPIFFS.format()) {
-    DebugOut.println("SPIFFS formatted successfully");
+  // Format LittleFS (erases all persistent data)
+  DebugOut.println("Formatting LittleFS...");
+  if (LittleFS.format()) {
+    DebugOut.println("LittleFS formatted successfully");
   } else {
-    DebugOut.println("SPIFFS format failed");
+    DebugOut.println("LittleFS format failed");
   }
   
-  // End SPIFFS
-  SPIFFS.end();
+  // End LittleFS
+  LittleFS.end();
   
   DebugOut.println("=== FACTORY RESET COMPLETE ===");
   DebugOut.println("Rebooting in 2 seconds...");

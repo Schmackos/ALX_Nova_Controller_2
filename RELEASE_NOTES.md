@@ -1,50 +1,35 @@
-# Version 1.1.23 Release Notes
+# Version 1.2.0 Release Notes
 
-## New Features
+## 🚀 Major Architecture Refactoring
 
-### Control Page Redesign
-- **Control Status Card**: New status section at the top of the Control page displaying:
-  - WebSocket connection status (Connected/Disconnected with color coding)
-  - Voltage Detected indicator (Yes/No)
-  - Current Reading display (real-time voltage value)
-- **Collapsible Smart Auto Settings**: Timer and Voltage Threshold settings are now in a collapsible section that only appears when "Smart Auto Sensing" mode is selected, reducing UI clutter
+This release introduces a comprehensive rewrite of the firmware architecture to improve reliability, maintainability, and concurrency.
 
-### Update Notifications
-- **Post-Update Reconnection Notification**: Shows "Device is back online after update!" when the device reconnects after a firmware update
-- **Firmware Version Notification**: Displays "Firmware updated: X.X.X → Y.Y.Y" showing the previous and new version numbers
-- **General Reconnection Notification**: Shows "Device reconnected" when WebSocket reconnects after any disconnection
+### Core Changes
+- **AppState Singleton**: Centralized application state management with predictable access and dirty-flag change detection.
+- **Finite State Machine (FSM)**: Implemented FSM to strictly manage application modes (Idle, Sensing, Web Config, OTA, Error).
+- **FreeRTOS Integration**: Migrated main loop to dedicated FreeRTOS tasks:
+  - `SmartSensing` (Core 0, High Priority): Audio detection and relay control.
+  - `WebServer` (Core 1, Medium Priority): UI and API handling.
+  - `MQTT` (Core 1, Medium Priority): Cloud connectivity.
+  - `OTA` (Core 1, Low Priority): Update checks.
 
-### Enhanced OTA Progress Display
-- OTA downloads now show percentage complete alongside downloaded/total size (e.g., "Downloading: 45% (230 / 512 KB)")
-- Matches the progress display style used for manual firmware uploads
+### Filesystem Migration (Breaking Change)
+- **LittleFS**: Migrated from legacy SPIFFS to LittleFS for better performance and future-proofing.
+- **⚠️ IMPORTANT**: This change formats the filesystem. **Saved settings (WiFi credentials, MQTT config) will be reset.** You will need to re-configure the device via the AP mode.
 
-## Improvements
+### Reliability Improvements
+- **Exponential Backoff**: Implemented smart reconnection logic for WiFi and MQTT (1s -> 2s ... -> 60s) to reduce network spam.
+- **Checksum Validation**: Added CRC checks for settings and SHA256 validation for OTA firmware updates.
+- **Watchdog Timers**: Added task-specific watchdogs to detect and recover from freeze states.
 
-### UI/UX Enhancements
-- Control page layout now matches the consistent card-based design used in WiFi and MQTT tabs
-- Removed Base Topic from MQTT Connection Status for a cleaner interface (still available in MQTT Settings)
-- Smart Sensing mode selection now immediately shows/hides the settings panel based on the selected mode
-
-### Real-time Updates
-- Voltage reading updates every 1 second for responsive monitoring
-- Voltage tolerance reduced to 0.02V for more frequent and accurate updates
-
-## Bug Fixes
-- Fixed Smart Sensing mode radio buttons not reflecting the actual device mode
-- Fixed immediate voltage evaluation when switching to "Smart Auto Sensing" mode
-- Fixed voltage reading not updating in the web UI
-- Fixed duplicate "timer started" messages in serial terminal
-- Fixed OTA progress showing 5% increments instead of 1%
-- Fixed manual upload progress bar interference with WebSocket updates
+### Debugging
+- **Log Levels**: Added hierarchical logging (DEBUG, INFO, WARN, ERROR) with WebSocket broadcasting.
+- **Color Coding**: Serial output is now color-coded for easier debugging.
 
 ## Technical Details
-- Added `wasDisconnectedDuringUpdate` and `hadPreviousConnection` flags for reconnection tracking
-- `updateSmartAutoSettingsVisibility()` function controls settings panel visibility
-- `toggleSmartAutoSettings()` implements collapsible behavior with CSS transitions
-- Enhanced `handleUpdateStatus()` to display bytes downloaded with percentage
-
-## Breaking Changes
-None
+- Firmware version bumped to 1.2.0
+- Pin definitions moved to build flags for easier board adaptation
+- Refactored `main.cpp` to be a lightweight task scheduler
 
 ## Known Issues
-None
+- Web assets are currently served from PROGMEM (will be moved to LittleFS in v1.3.0).

@@ -7,7 +7,7 @@
 #include "debug_serial.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include "esp_freertos_hooks.h"
 
 // ===== CPU Utilization Tracking =====
@@ -267,9 +267,9 @@ void sendHardwareStats() {
   doc["storage"]["sketchSize"] = ESP.getSketchSize();
   doc["storage"]["sketchFree"] = ESP.getFreeSketchSpace();
   
-  // Storage - SPIFFS
-  doc["storage"]["spiffsTotal"] = SPIFFS.totalBytes();
-  doc["storage"]["spiffsUsed"] = SPIFFS.usedBytes();
+  // Storage - LittleFS
+  doc["storage"]["LittleFSTotal"] = LittleFS.totalBytes();
+  doc["storage"]["LittleFSUsed"] = LittleFS.usedBytes();
   
   // WiFi Information
   doc["wifi"]["rssi"] = WiFi.RSSI();
