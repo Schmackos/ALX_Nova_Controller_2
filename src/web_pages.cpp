@@ -2467,12 +2467,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             if (data.latestVersion && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
                 currentLatestVersion = data.latestVersion;
-                document.getElementById('latestVersion').textContent = data.latestVersion;
-                document.getElementById('latestVersionRow').style.display = 'flex';
+                const latestEl = document.getElementById('latestVersion');
+                const updateBtn = document.getElementById('updateBtn');
                 
-                if (data.updateAvailable) {
-                    document.getElementById('updateBtn').classList.remove('hidden');
+                if (data.firmwareVersion === data.latestVersion) {
+                    latestEl.textContent = 'Up-To-Date';
+                    latestEl.parentElement.classList.remove('version-update');
+                    latestEl.parentElement.classList.add('text-success');
+                    updateBtn.classList.add('hidden');
+                } else {
+                    latestEl.textContent = data.latestVersion;
+                    latestEl.parentElement.classList.add('version-update');
+                    latestEl.parentElement.classList.remove('text-success');
+                    if (data.updateAvailable) {
+                        updateBtn.classList.remove('hidden');
+                    }
                 }
+                document.getElementById('latestVersionRow').style.display = 'flex';
             }
             
             // Update device serial number in Debug tab
