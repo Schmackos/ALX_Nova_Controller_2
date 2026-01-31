@@ -6,7 +6,7 @@ This project uses an automated GitHub Actions workflow to build and publish firm
 
 ### 1. Update Release Notes
 
-Before triggering a release, edit `RELEASE_NOTES_TEMPLATE.md` with your actual release notes:
+Before triggering a release, edit `RELEASE_NOTES.md` with your actual release notes. You can use `RELEASE_NOTES_TEMPLATE.md` as a starting point.
 
 - Add new features, improvements, and bug fixes
 - Update technical details
@@ -43,7 +43,7 @@ The workflow will:
 3. Update `FIRMWARE_VERSION` in `src/config.h`
 4. Build the firmware using PlatformIO
 5. Calculate SHA256 checksum of the firmware
-6. Read your release notes from `RELEASE_NOTES_TEMPLATE.md`
+6. Read your release notes from `RELEASE_NOTES.md`
 7. Append firmware details (version, SHA256, file size, build date)
 8. Commit the version change back to the repository
 9. Create a GitHub Release with `firmware.bin` attached
@@ -95,7 +95,7 @@ This project follows [Semantic Versioning](https://semver.org/):
 
 ### Release notes are empty
 
-- Make sure `RELEASE_NOTES_TEMPLATE.md` exists and has content
+- Make sure `RELEASE_NOTES.md` exists and has content
 - The `X.X.X` placeholder will be replaced with the actual version
 
 ## Files
@@ -103,5 +103,6 @@ This project follows [Semantic Versioning](https://semver.org/):
 | File | Purpose |
 |------|---------|
 | `.github/workflows/release.yml` | GitHub Actions workflow definition |
-| `RELEASE_NOTES_TEMPLATE.md` | Template for release notes (edit before each release) |
+| `RELEASE_NOTES.md` | The actual release notes file used by the workflow |
+| `RELEASE_NOTES_TEMPLATE.md` | Template to copy into `RELEASE_NOTES.md` for new releases |
 | `src/config.h` | Contains `FIRMWARE_VERSION` (updated automatically) |
