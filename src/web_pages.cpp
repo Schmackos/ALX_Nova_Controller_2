@@ -1,7 +1,6 @@
 #include "web_pages.h"
 #include <pgmspace.h>
 
-
 const char htmlPage[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="en">
@@ -2397,30 +2396,42 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             
             let html = '';
-            if (data.mode === 'ap') {
-                html = `
-                    <div class="info-row"><span class="info-label">Mode</span><span class="info-value text-warning">Access Point</span></div>
-                    <div class="info-row"><span class="info-label">SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
-                    <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || '192.168.4.1'}</span></div>
-                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
-                `;
-                apToggle.checked = true;
-            } else if (data.connected) {
-                html = `
-                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-success">Connected</span></div>
+            let html = '';
+            
+            // Client (STA) Status
+            if (data.connected) {
+                html += `
+                    <div class="info-row"><span class="info-label">Client Status</span><span class="info-value text-success">Connected</span></div>
                     <div class="info-row"><span class="info-label">Network</span><span class="info-value">${data.ssid || 'Unknown'}</span></div>
-                    <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">Client IP</span><span class="info-value">${data.staIP || data.ip || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${data.rssi !== undefined ? data.rssi + ' dBm' : 'N/A'}</span></div>
-                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
                 `;
-                apToggle.checked = data.apEnabled || false;
             } else {
-                html = `
-                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Not Connected</span></div>
-                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
+                html += `
+                    <div class="info-row"><span class="info-label">Client Status</span><span class="info-value text-error">Not Connected</span></div>
                 `;
-                apToggle.checked = data.apEnabled || false;
             }
+            
+            // AP Details separator if both are relevant
+            if (data.mode === 'ap' || data.apEnabled) {
+                if (html !== '') html += '<div class="divider"></div>';
+                
+                html += `
+                    <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
+                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
+                    <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
+                `;
+                
+                if (data.apClients !== undefined) {
+                    html += `<div class="info-row"><span class="info-label">Clients Connected</span><span class="info-value">${data.apClients}</span></div>`;
+                }
+            }
+            
+            // Common details
+            html += `<div class="divider"></div>`;
+            html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
+
+            apToggle.checked = data.apEnabled || (data.mode === 'ap');
             statusBox.innerHTML = html;
 
             if (typeof data.autoUpdateEnabled !== 'undefined') {
