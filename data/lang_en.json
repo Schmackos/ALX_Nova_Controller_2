@@ -1,0 +1,21 @@
+{
+    "firmware": {
+        "title": "Firmware Update",
+        "current_label": "Current Version",
+        "latest_label": "Latest Version",
+        "auto_update": "Auto Update",
+        "auto_update_sub": "Update on boot when available",
+        "ssl_validation": "SSL Validation",
+        "ssl_validation_sub": "Verify update server certificate",
+        "check_updates": "Check for Updates",
+        "update_now": "Update Now",
+        "up_to_date": "Up-To-Date",
+        "manual_upload": "Or upload firmware manually:",
+        "drop_zone": "Tap to select or <strong>drag & drop</strong> .bin file"
+    },
+    "common": {
+        "loading": "Loading...",
+        "close": "Close",
+        "cancel": "Cancel"
+    }
+}
