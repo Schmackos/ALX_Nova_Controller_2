@@ -638,6 +638,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             margin-right: 8px;
         }
 
+        .log-message.debug { color: #888; }
         .log-message { color: var(--text-primary); }
         .log-message.info { color: var(--info); }
         .log-message.success { color: var(--success); }
@@ -2078,6 +2079,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="log-entry"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
                 </div>
                 <div class="btn-row mt-12">
+                    <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+                        <label for="debugLevelSelect" style="font-size: 13px; color: var(--text-secondary);">Level:</label>
+                        <select id="debugLevelSelect" class="form-input" style="height: 36px; padding: 0 8px; font-size: 13px;" onchange="setDebugLevel()">
+                            <option value="0" selected>Debug</option>
+                            <option value="1">Info</option>
+                            <option value="2">Warn</option>
+                            <option value="3">Error</option>
+                        </select>
+                    </div>
                     <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
                     <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
                 </div>
@@ -2301,7 +2311,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 } else if (data.type === 'rebootProgress') {
                     handlePhysicalRebootProgress(data);
                 } else if (data.type === 'debugLog') {
-                    appendDebugLog(data.timestamp, data.message);
+                    appendDebugLog(data.timestamp, data.message, data.level);
                 } else if (data.type === 'hardware_stats') {
                     updateHardwareStats(data);
                 } else if (data.type === 'justUpdated') {
@@ -3601,9 +3611,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Debug Console =====
-        function appendDebugLog(timestamp, message) {
+        function setDebugLevel() {
+            const level = parseInt(document.getElementById('debugLevelSelect').value);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setDebugLevel', level: level }));
+            }
+        }
+
+        function appendDebugLog(timestamp, message, level = 'info') {
             if (debugPaused) {
-                debugLogBuffer.push({ timestamp, message });
+                debugLogBuffer.push({ timestamp, message, level });
                 return;
             }
             
@@ -3613,10 +3630,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             const ts = formatDebugTimestamp(timestamp);
             let msgClass = 'log-message';
-            if (message.includes('Error') || message.includes('❌')) msgClass += ' error';
-            else if (message.includes('Warning') || message.includes('⚠')) msgClass += ' warning';
-            else if (message.includes('✅') || message.includes('Success')) msgClass += ' success';
-            else if (message.includes('ℹ') || message.includes('Info')) msgClass += ' info';
+            
+            // Map level to class
+            if (level === 'error') msgClass += ' error';
+            else if (level === 'warn') msgClass += ' warning';
+            else if (level === 'success') msgClass += ' success';
+            else if (level === 'info') msgClass += ' info';
+            else if (level === 'debug') msgClass += ' debug';
+            
+            // Fallback content-based highlighting
+            if (msgClass === 'log-message') {
+                if (message.includes('Error') || message.includes('❌')) msgClass += ' error';
+                else if (message.includes('Warning') || message.includes('⚠')) msgClass += ' warning';
+                else if (message.includes('✅') || message.includes('Success')) msgClass += ' success';
+                else if (message.includes('ℹ') || message.includes('Info')) msgClass += ' info';
+            }
             
             entry.innerHTML = `<span class="log-timestamp">[${ts}]</span><span class="${msgClass}">${message}</span>`;
             console.appendChild(entry);
