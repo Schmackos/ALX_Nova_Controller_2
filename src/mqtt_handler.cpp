@@ -2,9 +2,9 @@
 #include "app_state.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "utils.h"
 #include "websocket_handler.h"
 #include <LittleFS.h>
-#include <esp_system.h> // For esp_reset_reason()
 
 
 // State tracking for hardware stats change detection
@@ -293,6 +293,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       autoUpdateEnabled = enabled;
       saveSettings();
       DebugOut.printf("MQTT: Auto-update set to %s\n", enabled ? "ON" : "OFF");
+      sendWiFiStatus(); // Broadcast to web clients
     }
     publishMqttSystemStatus();
   }
@@ -315,6 +316,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       saveSettings();
       DebugOut.printf("MQTT: Certificate validation set to %s\n",
                       enabled ? "ON" : "OFF");
+      sendWiFiStatus(); // Broadcast to web clients
     }
     publishMqttSystemStatus();
   }
@@ -556,15 +558,6 @@ void publishMqttSmartSensingState() {
                      String(lastDetectionSecs).c_str(), true);
 }
 
-// Convert RSSI to signal quality percentage (0-100%)
-int rssiToQuality(int rssi) {
-  if (rssi <= -100)
-    return 0;
-  if (rssi >= -50)
-    return 100;
-  return 2 * (rssi + 100); // Linear scale: -100dBm=0%, -50dBm=100%
-}
-
 // Publish WiFi status
 void publishMqttWifiStatus() {
   if (!mqttClient.connected())
@@ -595,35 +588,6 @@ void publishMqttWifiStatus() {
     mqttClient.publish((base + "/ap/ip").c_str(),
                        WiFi.softAPIP().toString().c_str(), true);
     mqttClient.publish((base + "/ap/ssid").c_str(), apSSID.c_str(), true);
-  }
-}
-
-// Get human-readable reset reason
-String getResetReasonString() {
-  esp_reset_reason_t reason = esp_reset_reason();
-  switch (reason) {
-  case ESP_RST_POWERON:
-    return "power_on";
-  case ESP_RST_EXT:
-    return "external_reset";
-  case ESP_RST_SW:
-    return "software_reset";
-  case ESP_RST_PANIC:
-    return "exception_panic";
-  case ESP_RST_INT_WDT:
-    return "interrupt_watchdog";
-  case ESP_RST_TASK_WDT:
-    return "task_watchdog";
-  case ESP_RST_WDT:
-    return "other_watchdog";
-  case ESP_RST_DEEPSLEEP:
-    return "deep_sleep_wake";
-  case ESP_RST_BROWNOUT:
-    return "brownout";
-  case ESP_RST_SDIO:
-    return "sdio_reset";
-  default:
-    return "unknown";
   }
 }
 

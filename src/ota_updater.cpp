@@ -2,6 +2,7 @@
 #include "config.h"
 #include "app_state.h"
 #include "debug_serial.h"
+#include "utils.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -293,39 +294,6 @@ void handleGetReleaseNotes() {
   serializeJson(doc, json);
   https.end();
   server.send(200, "application/json", json);
-}
-
-// ===== NTP Time Synchronization =====
-void syncTimeWithNTP() {
-  DebugOut.println("\n=== Synchronizing Time with NTP ===");
-  DebugOut.printf("Timezone offset: %d seconds (%.1f hours)\n", timezoneOffset, timezoneOffset / 3600.0);
-  
-  // Configure NTP with timezone offset (no DST offset for simplicity)
-  configTime(timezoneOffset, 0, "pool.ntp.org", "time.nist.gov");
-  
-  DebugOut.print("Waiting for NTP time sync: ");
-  time_t now = time(nullptr);
-  int attempts = 0;
-  
-  while (now < 1000000000 && attempts < 20) {  // Wait until we have a valid timestamp
-    delay(500);
-    DebugOut.print(".");
-    now = time(nullptr);
-    attempts++;
-  }
-  
-  if (now < 1000000000) {
-    DebugOut.println("\n⚠️  Failed to sync time with NTP server");
-    DebugOut.println("⚠️  SSL certificate validation may fail!");
-  } else {
-    DebugOut.println("\n✅ Time synchronized successfully");
-    struct tm timeinfo;
-    if (getLocalTime(&timeinfo)) {
-      DebugOut.printf("📅 Current local time: %04d-%02d-%02d %02d:%02d:%02d\n",
-                    timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                    timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-    }
-  }
 }
 
 // ===== OTA Core Functions =====

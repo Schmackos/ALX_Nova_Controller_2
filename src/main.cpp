@@ -6,6 +6,7 @@
 #include "ota_updater.h"
 #include "settings_manager.h"
 #include "smart_sensing.h"
+#include "utils.h"
 #include "web_pages.h"
 #include "websocket_handler.h"
 #include "wifi_manager.h"
@@ -466,38 +467,4 @@ void loop() {
 
 // WiFi functions are defined in wifi_manager.h/.cpp
 // Settings persistence functions are defined in settings_manager.h/.cpp
-
-// Compare semantic version strings like "1.0.7" and "1.1.2"
-// Returns: -1 if v1 < v2, 0 if equal, 1 if v1 > v2
-int compareVersions(const String &v1, const String &v2) {
-  int i = 0, j = 0;
-  const int n1 = v1.length();
-  const int n2 = v2.length();
-
-  while (i < n1 || j < n2) {
-    long num1 = 0;
-    long num2 = 0;
-
-    while (i < n1 && isDigit(v1[i])) {
-      num1 = num1 * 10 + (v1[i] - '0');
-      i++;
-    }
-    // Skip non-digit separators like '.'
-    while (i < n1 && !isDigit(v1[i]))
-      i++;
-
-    while (j < n2 && isDigit(v2[j])) {
-      num2 = num2 * 10 + (v2[j] - '0');
-      j++;
-    }
-    while (j < n2 && !isDigit(v2[j]))
-      j++;
-
-    if (num1 < num2)
-      return -1;
-    if (num1 > num2)
-      return 1;
-  }
-
-  return 0;
-}
+// Utility functions (compareVersions, etc.) are defined in utils.h/.cpp

@@ -2452,7 +2452,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             
             let html = '';
-            let html = '';
             
             // Client (STA) Status
             if (data.connected) {

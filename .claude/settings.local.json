@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pio run:*)",
+      "Bash(pio device monitor:*)",
+      "Bash(timeout 10 cat:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}
