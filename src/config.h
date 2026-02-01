@@ -78,7 +78,9 @@ enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };
 // ===== MQTT Configuration =====
 const unsigned long MQTT_RECONNECT_INTERVAL = 5000; // Reconnect every 5 seconds
 const unsigned long MQTT_PUBLISH_INTERVAL =
-    1000; // Publish state every 1 second
+    1000; // Check for state changes every 1 second
+const unsigned long MQTT_HEARTBEAT_INTERVAL =
+    60000; // Mandatory state publish every 60 seconds (heartbeat)
 const int DEFAULT_MQTT_PORT = 1883;
 
 // ===== Hardware Stats Configuration =====

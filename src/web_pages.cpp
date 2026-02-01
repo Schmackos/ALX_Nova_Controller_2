@@ -1,7 +1,6 @@
 #include "web_pages.h"
 #include <pgmspace.h>
 
-
 const char htmlPage[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="en">
@@ -1168,6 +1167,61 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             transform: rotate(180deg);
         }
 
+        .release-notes-inline {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), margin 0.3s ease, opacity 0.3s ease;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            margin-top: 0;
+            opacity: 0;
+        }
+
+        .release-notes-inline.open {
+            max-height: 2000px;
+            margin-top: 12px;
+            margin-bottom: 12px;
+            opacity: 1;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .release-notes-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .release-notes-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .release-notes-body {
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .release-notes-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+
+        .release-notes-close:hover {
+            color: var(--text-primary);
+        }
+
         /* --- Dashboard Stats Grid --- */
         .dashboard-grid {
             display: grid;
@@ -1817,6 +1871,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         </span>
                     </div>
                 </div>
+                
+                <!-- Inline Release Notes Accordion -->
+                <div id="inlineReleaseNotes" class="release-notes-inline">
+                    <div class="release-notes-header">
+                        <span id="inlineReleaseNotesTitle" class="release-notes-title">Release Notes</span>
+                        <button type="button" class="release-notes-close" onclick="toggleInlineReleaseNotes(false)">×</button>
+                    </div>
+                    <div id="inlineReleaseNotesContent" class="release-notes-body"></div>
+                </div>
+
                 <div class="toggle-row">
                     <div>
                         <div class="toggle-label">Auto Update</div>
@@ -2123,15 +2187,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         </div>
     </div>
 
-    <!-- Release Notes Modal -->
-    <div class="modal-overlay" id="releaseNotesModal">
-        <div class="modal">
-            <div class="modal-title" id="releaseNotesTitle">Release Notes</div>
-            <div id="releaseNotesContent" style="white-space: pre-wrap; font-size: 14px; color: var(--text-secondary);"></div>
-            <button class="btn btn-secondary mt-16" onclick="closeReleaseNotes()">Close</button>
-        </div>
-    </div>
-
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
@@ -2397,30 +2452,42 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             
             let html = '';
-            if (data.mode === 'ap') {
-                html = `
-                    <div class="info-row"><span class="info-label">Mode</span><span class="info-value text-warning">Access Point</span></div>
-                    <div class="info-row"><span class="info-label">SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
-                    <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || '192.168.4.1'}</span></div>
-                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
-                `;
-                apToggle.checked = true;
-            } else if (data.connected) {
-                html = `
-                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-success">Connected</span></div>
+            let html = '';
+            
+            // Client (STA) Status
+            if (data.connected) {
+                html += `
+                    <div class="info-row"><span class="info-label">Client Status</span><span class="info-value text-success">Connected</span></div>
                     <div class="info-row"><span class="info-label">Network</span><span class="info-value">${data.ssid || 'Unknown'}</span></div>
-                    <div class="info-row"><span class="info-label">IP Address</span><span class="info-value">${data.ip || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">Client IP</span><span class="info-value">${data.staIP || data.ip || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${data.rssi !== undefined ? data.rssi + ' dBm' : 'N/A'}</span></div>
-                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
                 `;
-                apToggle.checked = data.apEnabled || false;
             } else {
-                html = `
-                    <div class="info-row"><span class="info-label">Status</span><span class="info-value text-error">Not Connected</span></div>
-                    <div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>
+                html += `
+                    <div class="info-row"><span class="info-label">Client Status</span><span class="info-value text-error">Not Connected</span></div>
                 `;
-                apToggle.checked = data.apEnabled || false;
             }
+            
+            // AP Details separator if both are relevant
+            if (data.mode === 'ap' || data.apEnabled) {
+                if (html !== '') html += '<div class="divider"></div>';
+                
+                html += `
+                    <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
+                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
+                    <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
+                `;
+                
+                if (data.apClients !== undefined) {
+                    html += `<div class="info-row"><span class="info-label">Clients Connected</span><span class="info-value">${data.apClients}</span></div>`;
+                }
+            }
+            
+            // Common details
+            html += `<div class="divider"></div>`;
+            html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
+
+            apToggle.checked = data.apEnabled || (data.mode === 'ap');
             statusBox.innerHTML = html;
 
             if (typeof data.autoUpdateEnabled !== 'undefined') {
@@ -3648,20 +3715,39 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 return;
             }
             
+            // If already open with the same version, toggle it closed
+            const container = document.getElementById('inlineReleaseNotes');
+            const currentShownVersion = container.dataset.version;
+            
+            if (container.classList.contains('open') && currentShownVersion === version) {
+                toggleInlineReleaseNotes(false);
+                return;
+            }
+
+            // Fetch and show
             fetch(`/api/releasenotes?version=${version}`)
             .then(res => res.json())
             .then(data => {
                 const label = which === 'current' ? 'Current' : 'Latest';
-                document.getElementById('releaseNotesTitle').textContent = `Release Notes v${version} (${label})`;
-                document.getElementById('releaseNotesContent').textContent = data.notes || 'No release notes available for this version.';
-                document.getElementById('releaseNotesModal').classList.add('active');
+                document.getElementById('inlineReleaseNotesTitle').textContent = `Release Notes v${version} (${label})`;
+                document.getElementById('inlineReleaseNotesContent').textContent = data.notes || 'No release notes available for this version.';
+                
+                container.dataset.version = version;
+                toggleInlineReleaseNotes(true);
             })
             .catch(err => showToast('Failed to load release notes', 'error'));
         }
 
-        function closeReleaseNotes() {
-            document.getElementById('releaseNotesModal').classList.remove('active');
+        function toggleInlineReleaseNotes(show) {
+            const container = document.getElementById('inlineReleaseNotes');
+            if (show) {
+                container.classList.add('open');
+            } else {
+                container.classList.remove('open');
+            }
         }
+        
+        // Remove old modal functions if needed, but keeping utilities below
 
         // ===== Utilities =====
         function togglePasswordVisibility(inputId, button) {
