@@ -263,6 +263,10 @@ void setup() {
 }
 
 void loop() {
+  // Small delay to reduce CPU usage - allows other tasks to run
+  // Without this, the loop runs as fast as possible (~49% CPU)
+  delay(1);
+
   server.handleClient();
   webSocket.loop();
   mqttLoop();

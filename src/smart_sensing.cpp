@@ -203,9 +203,16 @@ void setAmplifierState(bool state) {
 // Main Smart Sensing logic - called from loop()
 void updateSmartSensingLogic() {
   unsigned long currentMillis = millis();
-  
-  // Always read voltage for real-time display, regardless of mode
-  bool voltageDetected = detectVoltage();
+
+  // Rate limit voltage reading to reduce CPU usage (every 50ms is sufficient)
+  static unsigned long lastVoltageRead = 0;
+  static bool voltageDetected = false;
+
+  if (currentMillis - lastVoltageRead >= 50) {
+    lastVoltageRead = currentMillis;
+    // Read voltage for real-time display, regardless of mode
+    voltageDetected = detectVoltage();
+  }
   
   switch (currentMode) {
     case ALWAYS_ON:
