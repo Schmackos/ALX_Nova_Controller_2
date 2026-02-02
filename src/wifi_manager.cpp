@@ -634,9 +634,9 @@ void handleAPToggle() {
         WiFi.softAPdisconnect(true);
         WiFi.mode(WIFI_STA);
       } else {
-        // Just turn off AP if not connected
+        // Disable AP but keep WiFi in STA mode for scanning
         WiFi.softAPdisconnect(true);
-        WiFi.mode(WIFI_OFF);
+        WiFi.mode(WIFI_STA);
       }
       isAPMode = false;
       DebugOut.println("Access Point disabled");

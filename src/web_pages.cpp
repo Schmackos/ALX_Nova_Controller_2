@@ -1454,6 +1454,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         /* --- Responsive Breakpoints --- */
 
+        /* Mobile (max 480px) - Stack button rows vertically */
+        @media (max-width: 480px) {
+            .btn-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .btn-row .btn {
+                width: 100%;
+            }
+        }
+
         /* Tablet (768px+) */
         @media (min-width: 768px) {
             :root {
