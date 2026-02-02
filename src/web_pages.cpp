@@ -3129,7 +3129,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Settings =====
-        let currentTimezoneOffset = 0;
         let currentDstOffset = 0;
         let timeUpdateInterval = null;
 
