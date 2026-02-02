@@ -1661,6 +1661,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             z-index: 2000;
             padding: 20px;
         }
+        
+        #apConfigModal {
+            display: none;
+        }
 
         .modal-content {
             background: var(--bg-surface);
@@ -1984,7 +1988,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="slider"></span>
                     </label>
                 </div>
-                <button class="btn btn-secondary mt-12" onclick="showAPConfig()">Configure AP</button>
+                <button class="btn btn-secondary mt-12" onclick="openAPConfig()">Configure AP</button>
             </div>
         </section>
 
@@ -2597,6 +2601,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let wasDisconnectedDuringUpdate = false;
         let hadPreviousConnection = false;
         
+        function getSessionIdFromCookie() {
+            const name = "sessionId=";
+            const decodedCookie = decodeURIComponent(document.cookie);
+            const ca = decodedCookie.split(';');
+            for(let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) == ' ') {
+                    c = c.substring(1);
+                }
+                if (c.indexOf(name) == 0) {
+                    return c.substring(name.length, c.length);
+                }
+            }
+            return "";
+        }
+        
         function initWebSocket() {
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsHost = window.location.hostname;
@@ -2631,8 +2651,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             sessionId: sessionId
                         }));
                     } else {
-                        ws.close();
-                        window.location.href = '/login';
+                        console.error('No session ID for WebSocket auth');
+                        // Do not redirect automatically to avoid loops
+                        showToast('Connection failed: No Session ID', 'error');
                     }
                 }
                 else if (data.type === 'authSuccess') {
@@ -2654,7 +2675,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else if (data.type === 'authFailed') {
                     console.error('WebSocket auth failed:', data.error);
                     ws.close();
-                    window.location.href = '/login';
+                    // Do not redirect automatically to avoid loops
+                    showToast('WebSocket Auth Failed. Please reload.', 'error');
                 }
                 else if (data.type === 'ledState') {
                     ledState = data.state;
@@ -3139,13 +3161,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // Load and display saved networks
         function loadSavedNetworks() {
-            fetch('/api/wifilist')
-                .then(res => res.json())
-                .then(data => {
-                    const container = document.getElementById('savedNetworksList');
-                    const badge = document.getElementById('networkCountBadge');
+            const container = document.getElementById('savedNetworksList');
+            const badge = document.getElementById('networkCountBadge');
+            const sessionId = getSessionIdFromCookie();
 
-                    if (data.success && data.networks && data.networks.length > 0) {
+            fetch('/api/wifilist', { 
+                credentials: 'include',
+                headers: {
+                    'X-Session-ID': sessionId
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.networks) { // Check success flag specifically
+                    if (data.networks.length > 0) {
                         badge.textContent = `(${data.count}/5)`;
 
                         container.innerHTML = data.networks.map((net, idx) => `
@@ -3164,11 +3193,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         badge.textContent = '(0/5)';
                         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 24px; font-style: italic;">No saved networks</p>';
                     }
-                })
-                .catch(err => {
-                    console.error('Failed to load saved networks:', err);
-                    document.getElementById('savedNetworksList').innerHTML = '<p style="text-align: center; color: var(--error); padding: 24px;">Failed to load networks</p>';
-                });
+                } else {
+                    // Show error from API if available
+                    const errorMsg = data.error || 'Unknown error';
+                    console.error('API Error loading networks:', errorMsg);
+                    container.innerHTML = `<p style="text-align: center; color: var(--error); padding: 24px;">Error: ${errorMsg}</p>`;
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load saved networks:', err);
+                document.getElementById('savedNetworksList').innerHTML = '<p style="text-align: center; color: var(--error); padding: 24px;">Failed to load networks (Network Error)</p>';
+            });
         }
 
         // Remove network by index
@@ -4358,6 +4393,43 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 banner.remove();
             }
             sessionStorage.setItem('passwordWarningDismissed', 'true');
+        }
+
+        
+        // ===== AP Configuration Modal =====
+        function openAPConfig() {
+            document.getElementById('apConfigModal').style.display = 'flex';
+            // Load current AP settings if available (optional, requires API support)
+        }
+
+        function closeAPConfig() {
+            document.getElementById('apConfigModal').style.display = 'none';
+        }
+
+        function submitAPConfig(event) {
+            event.preventDefault();
+            const ssid = document.getElementById('apSSID').value;
+            const password = document.getElementById('apPassword').value;
+            
+            if (password && password.length < 8) {
+                showToast('Password must be at least 8 characters', 'error');
+                return;
+            }
+
+            fetch('/api/ap/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ssid: ssid, password: password })
+            })
+            .then(res => {
+                if (res.ok) {
+                    showToast('AP settings saved. Reboot required.', 'success');
+                    closeAPConfig();
+                } else {
+                    showToast('Failed to save AP settings', 'error');
+                }
+            })
+            .catch(err => showToast('Error saving AP settings', 'error'));
         }
 
         function openPasswordChangeSettings() {

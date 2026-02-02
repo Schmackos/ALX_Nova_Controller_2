@@ -2,6 +2,7 @@
 #include "app_state.h"
 #include "config.h"
 #include "debug_serial.h"
+#include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <esp_random.h>
@@ -11,384 +12,411 @@ Preferences authPrefs;
 
 // Initialize authentication system
 void initAuth() {
-    // Clear all sessions
-    for (int i = 0; i < MAX_SESSIONS; i++) {
-        activeSessions[i].sessionId = "";
-        activeSessions[i].createdAt = 0;
-        activeSessions[i].lastSeen = 0;
-    }
+  // Clear all sessions
+  for (int i = 0; i < MAX_SESSIONS; i++) {
+    activeSessions[i].sessionId = "";
+    activeSessions[i].createdAt = 0;
+    activeSessions[i].lastSeen = 0;
+  }
 
-    // Load password from NVS
-    authPrefs.begin("auth", false);
-    String savedPassword = authPrefs.getString("web_pwd", "");
-    authPrefs.end();
+  // Load password from NVS
+  authPrefs.begin("auth", false);
+  String savedPassword = "";
+  if (authPrefs.isKey("web_pwd")) {
+    savedPassword = authPrefs.getString("web_pwd", "");
+  }
+  authPrefs.end();
 
-    if (savedPassword.length() == 0) {
-        // No password saved, use default (AP password)
-        appState.webPassword = appState.apPassword;
-        DebugOut.println("Auth: Using default password (AP password)");
-    } else {
-        appState.webPassword = savedPassword;
-        DebugOut.println("Auth: Loaded password from NVS");
-    }
+  if (savedPassword.length() == 0) {
+    // No password saved, use default (AP password)
+    appState.webPassword = appState.apPassword;
+    DebugOut.println("Auth: Using default password (AP password)");
+  } else {
+    appState.webPassword = savedPassword;
+    DebugOut.println("Auth: Loaded password from NVS");
+  }
 
-    DebugOut.println("Auth: Authentication system initialized");
+  DebugOut.println("Auth: Authentication system initialized");
 }
 
 // Generate a cryptographically random session ID (UUID format)
 String generateSessionId() {
-    uint8_t randomBytes[16];
-    esp_fill_random(randomBytes, 16);
+  uint8_t randomBytes[16];
+  esp_fill_random(randomBytes, 16);
 
-    // Format as UUID (8-4-4-4-12)
-    char uuid[37];
-    snprintf(uuid, sizeof(uuid),
-             "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-             randomBytes[0], randomBytes[1], randomBytes[2], randomBytes[3],
-             randomBytes[4], randomBytes[5], randomBytes[6], randomBytes[7],
-             randomBytes[8], randomBytes[9], randomBytes[10], randomBytes[11],
-             randomBytes[12], randomBytes[13], randomBytes[14], randomBytes[15]);
+  // Format as UUID (8-4-4-4-12)
+  char uuid[37];
+  snprintf(
+      uuid, sizeof(uuid),
+      "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+      randomBytes[0], randomBytes[1], randomBytes[2], randomBytes[3],
+      randomBytes[4], randomBytes[5], randomBytes[6], randomBytes[7],
+      randomBytes[8], randomBytes[9], randomBytes[10], randomBytes[11],
+      randomBytes[12], randomBytes[13], randomBytes[14], randomBytes[15]);
 
-    return String(uuid);
+  return String(uuid);
 }
 
 // Create a new session
-bool createSession(String& sessionId) {
-    unsigned long now = millis();
+bool createSession(String &sessionId) {
+  unsigned long now = millis();
 
-    // Try to find an empty slot
-    for (int i = 0; i < MAX_SESSIONS; i++) {
-        if (activeSessions[i].sessionId.length() == 0) {
-            sessionId = generateSessionId();
-            activeSessions[i].sessionId = sessionId;
-            activeSessions[i].createdAt = now;
-            activeSessions[i].lastSeen = now;
-            DebugOut.printf("Auth: Created session %s in slot %d\n", sessionId.c_str(), i);
-            return true;
-        }
+  // Try to find an empty slot
+  for (int i = 0; i < MAX_SESSIONS; i++) {
+    if (activeSessions[i].sessionId.length() == 0) {
+      sessionId = generateSessionId();
+      activeSessions[i].sessionId = sessionId;
+      activeSessions[i].createdAt = now;
+      activeSessions[i].lastSeen = now;
+      DebugOut.printf("Auth: Created session %s in slot %d\n",
+                      sessionId.c_str(), i);
+      return true;
     }
+  }
 
-    // No empty slot, evict oldest session
-    int oldestIndex = 0;
-    unsigned long oldestTime = activeSessions[0].lastSeen;
+  // No empty slot, evict oldest session
+  int oldestIndex = 0;
+  unsigned long oldestTime = activeSessions[0].lastSeen;
 
-    for (int i = 1; i < MAX_SESSIONS; i++) {
-        if (activeSessions[i].lastSeen < oldestTime) {
-            oldestTime = activeSessions[i].lastSeen;
-            oldestIndex = i;
-        }
+  for (int i = 1; i < MAX_SESSIONS; i++) {
+    if (activeSessions[i].lastSeen < oldestTime) {
+      oldestTime = activeSessions[i].lastSeen;
+      oldestIndex = i;
     }
+  }
 
-    DebugOut.printf("Auth: Evicting oldest session %s from slot %d\n",
-                    activeSessions[oldestIndex].sessionId.c_str(), oldestIndex);
+  DebugOut.printf("Auth: Evicting oldest session %s from slot %d\n",
+                  activeSessions[oldestIndex].sessionId.c_str(), oldestIndex);
 
-    sessionId = generateSessionId();
-    activeSessions[oldestIndex].sessionId = sessionId;
-    activeSessions[oldestIndex].createdAt = now;
-    activeSessions[oldestIndex].lastSeen = now;
+  sessionId = generateSessionId();
+  activeSessions[oldestIndex].sessionId = sessionId;
+  activeSessions[oldestIndex].createdAt = now;
+  activeSessions[oldestIndex].lastSeen = now;
 
-    DebugOut.printf("Auth: Created session %s in slot %d (evicted)\n", sessionId.c_str(), oldestIndex);
-    return true;
+  DebugOut.printf("Auth: Created session %s in slot %d (evicted)\n",
+                  sessionId.c_str(), oldestIndex);
+  return true;
 }
 
 // Validate a session (check if exists and not expired)
 bool validateSession(String sessionId) {
-    if (sessionId.length() == 0) {
-        return false;
-    }
-
-    unsigned long now = millis();
-
-    for (int i = 0; i < MAX_SESSIONS; i++) {
-        if (activeSessions[i].sessionId == sessionId) {
-            // Check if expired
-            if (now - activeSessions[i].lastSeen > SESSION_TIMEOUT) {
-                DebugOut.printf("Auth: Session %s expired\n", sessionId.c_str());
-                activeSessions[i].sessionId = "";
-                return false;
-            }
-
-            // Update last seen time
-            activeSessions[i].lastSeen = now;
-            return true;
-        }
-    }
-
+  if (sessionId.length() == 0) {
+    DebugOut.println("Auth: Session ID is empty, validation failed.");
     return false;
+  }
+
+  unsigned long now = millis();
+
+  for (int i = 0; i < MAX_SESSIONS; i++) {
+    if (activeSessions[i].sessionId == sessionId) {
+      // Check if expired
+      if (now - activeSessions[i].lastSeen > SESSION_TIMEOUT) {
+        DebugOut.printf("Auth: Session %s found but EXPIRED\n",
+                        sessionId.c_str());
+        activeSessions[i].sessionId = "";
+        return false;
+      }
+
+      // Update last seen time
+      activeSessions[i].lastSeen = now;
+      DebugOut.printf("Auth: Session %s validated successfully\n",
+                      sessionId.c_str());
+      return true;
+    }
+  }
+
+  DebugOut.printf("Auth: Session %s NOT FOUND in active list\n",
+                  sessionId.c_str());
+  return false;
 }
 
 // Remove a session
 void removeSession(String sessionId) {
-    for (int i = 0; i < MAX_SESSIONS; i++) {
-        if (activeSessions[i].sessionId == sessionId) {
-            DebugOut.printf("Auth: Removed session %s from slot %d\n", sessionId.c_str(), i);
-            activeSessions[i].sessionId = "";
-            activeSessions[i].createdAt = 0;
-            activeSessions[i].lastSeen = 0;
-            return;
-        }
+  for (int i = 0; i < MAX_SESSIONS; i++) {
+    if (activeSessions[i].sessionId == sessionId) {
+      DebugOut.printf("Auth: Removed session %s from slot %d\n",
+                      sessionId.c_str(), i);
+      activeSessions[i].sessionId = "";
+      activeSessions[i].createdAt = 0;
+      activeSessions[i].lastSeen = 0;
+      return;
     }
+  }
 }
 
-// Extract session ID from cookie
+// Helper: Get session ID from Cookie or Header
 String getSessionFromCookie() {
-    String cookie = server.header("Cookie");
-
-    if (cookie.length() == 0) {
-        return "";
+  // First try the custom header (more reliable for API calls)
+  if (server.hasHeader("X-Session-ID")) {
+    String headerId = server.header("X-Session-ID");
+    if (headerId.length() > 0) {
+      return headerId;
     }
+  }
 
-    // Parse cookie header for sessionId
-    int start = cookie.indexOf("sessionId=");
-    if (start == -1) {
-        return "";
-    }
+  // Fallback to Cookie header
+  if (!server.hasHeader("Cookie")) {
+    return "";
+  }
 
-    start += 10; // Length of "sessionId="
-    int end = cookie.indexOf(";", start);
+  String cookie = server.header("Cookie");
+  if (cookie.length() == 0) {
+    return "";
+  }
 
-    if (end == -1) {
-        end = cookie.length();
-    }
+  DebugOut.println("Auth: Raw Cookie header: " + cookie);
 
-    return cookie.substring(start, end);
+  // Parse cookie header for sessionId
+  int start = cookie.indexOf("sessionId=");
+  if (start == -1) {
+    return "";
+  }
+
+  start += 10; // Length of "sessionId="
+  int end = cookie.indexOf(";", start);
+
+  if (end == -1) {
+    end = cookie.length();
+  }
+
+  return cookie.substring(start, end);
 }
 
 // Middleware: Require authentication
 bool requireAuth() {
-    String sessionId = getSessionFromCookie();
+  String sessionId = getSessionFromCookie();
 
-    if (validateSession(sessionId)) {
-        return true;
-    }
+  if (validateSession(sessionId)) {
+    return true;
+  }
 
-    // Not authenticated
-    DebugOut.println("Auth: Unauthorized access attempt to " + server.uri());
+  // Not authenticated
+  DebugOut.println("Auth: Unauthorized access attempt to " + server.uri());
 
-    // If it's a page request (not an API call), redirect to login
-    if (!server.uri().startsWith("/api/")) {
-        server.sendHeader("Location", "/login");
-        server.send(302, "text/plain", "Redirecting to /login");
-        return false;
-    }
-
-    // For API calls, return 401 Unauthorized with JSON
-    JsonDocument doc;
-    doc["success"] = false;
-    doc["error"] = "Unauthorized";
-    doc["redirect"] = "/login";
-
-    String response;
-    serializeJson(doc, response);
-    server.send(401, "application/json", response);
-
+  // If it's a page request (not an API call), redirect to login
+  if (!server.uri().startsWith("/api/")) {
+    server.sendHeader("Location", "/login");
+    server.send(302, "text/plain", "Redirecting to /login");
     return false;
+  }
+
+  // For API calls, return 401 Unauthorized with JSON
+  JsonDocument doc;
+  doc["success"] = false;
+  doc["error"] = "Unauthorized";
+  doc["redirect"] = "/login";
+
+  String response;
+  serializeJson(doc, response);
+  server.send(401, "application/json", response);
+
+  return false;
 }
 
 // Get web password
-String getWebPassword() {
-    return appState.webPassword;
-}
+String getWebPassword() { return appState.webPassword; }
 
 // Set web password and save to NVS
 void setWebPassword(String newPassword) {
-    appState.webPassword = newPassword;
+  appState.webPassword = newPassword;
 
-    authPrefs.begin("auth", false);
-    authPrefs.putString("web_pwd", newPassword);
-    authPrefs.end();
+  authPrefs.begin("auth", false);
+  authPrefs.putString("web_pwd", newPassword);
+  authPrefs.end();
 
-    DebugOut.println("Auth: Password changed and saved to NVS");
+  DebugOut.println("Auth: Password changed and saved to NVS");
 }
 
 // Check if using default password
-bool isDefaultPassword() {
-    return appState.webPassword == DEFAULT_AP_PASSWORD;
-}
+bool isDefaultPassword() { return appState.webPassword == DEFAULT_AP_PASSWORD; }
 
 // Handler: Login
 void handleLogin() {
-    if (server.method() != HTTP_POST) {
-        server.send(405, "text/plain", "Method Not Allowed");
-        return;
-    }
+  if (server.method() != HTTP_POST) {
+    server.send(405, "text/plain", "Method Not Allowed");
+    return;
+  }
 
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, server.arg("plain"));
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
-    if (error) {
-        JsonDocument response;
-        response["success"] = false;
-        response["error"] = "Invalid JSON";
-
-        String responseStr;
-        serializeJson(response, responseStr);
-        server.send(400, "application/json", responseStr);
-        return;
-    }
-
-    String password = doc["password"].as<String>();
-
-    // Validate password
-    if (password != appState.webPassword) {
-        // Rate limiting: delay on failed attempt
-        delay(1000);
-
-        DebugOut.println("Auth: Login failed - incorrect password");
-
-        JsonDocument response;
-        response["success"] = false;
-        response["error"] = "Incorrect password";
-
-        String responseStr;
-        serializeJson(response, responseStr);
-        server.send(401, "application/json", responseStr);
-        return;
-    }
-
-    // Create session
-    String sessionId;
-    if (!createSession(sessionId)) {
-        JsonDocument response;
-        response["success"] = false;
-        response["error"] = "Failed to create session";
-
-        String responseStr;
-        serializeJson(response, responseStr);
-        server.send(500, "application/json", responseStr);
-        return;
-    }
-
-    DebugOut.println("Auth: Login successful");
-
-    // Send response with cookie
+  if (error) {
     JsonDocument response;
-    response["success"] = true;
-    response["message"] = "Login successful";
-    response["isDefaultPassword"] = isDefaultPassword();
+    response["success"] = false;
+    response["error"] = "Invalid JSON";
 
     String responseStr;
     serializeJson(response, responseStr);
+    server.send(400, "application/json", responseStr);
+    return;
+  }
 
-    // Set cookie (HttpOnly, SameSite=Strict, Max-Age=3600)
-    String cookie = "sessionId=" + sessionId + "; Path=/; Max-Age=3600; SameSite=Strict; HttpOnly";
-    server.sendHeader("Set-Cookie", cookie);
-    server.send(200, "application/json", responseStr);
+  String password = doc["password"].as<String>();
+
+  // Validate password
+  if (password != appState.webPassword) {
+    // Rate limiting: delay on failed attempt
+    delay(1000);
+
+    DebugOut.println("Auth: Login failed - incorrect password");
+
+    JsonDocument response;
+    response["success"] = false;
+    response["error"] = "Incorrect password";
+
+    String responseStr;
+    serializeJson(response, responseStr);
+    server.send(401, "application/json", responseStr);
+    return;
+  }
+
+  // Create session
+  String sessionId;
+  if (!createSession(sessionId)) {
+    JsonDocument response;
+    response["success"] = false;
+    response["error"] = "Failed to create session";
+
+    String responseStr;
+    serializeJson(response, responseStr);
+    server.send(500, "application/json", responseStr);
+    return;
+  }
+
+  DebugOut.println("Auth: Login successful");
+
+  // Send response with cookie
+  JsonDocument response;
+  response["success"] = true;
+  response["message"] = "Login successful";
+  response["isDefaultPassword"] = isDefaultPassword();
+
+  String responseStr;
+  serializeJson(response, responseStr);
+
+  // Set cookie (Path=/, Max-Age=3600)
+  // Removing HttpOnly to allow JS to read it for WebSocket auth
+  String cookie = "sessionId=" + sessionId + "; Path=/; Max-Age=3600";
+  server.sendHeader("Set-Cookie", cookie);
+  DebugOut.println("Auth: Sending Set-Cookie header: " + cookie);
+  server.send(200, "application/json", responseStr);
 }
 
 // Handler: Logout
 void handleLogout() {
-    if (server.method() != HTTP_POST) {
-        server.send(405, "text/plain", "Method Not Allowed");
-        return;
-    }
+  if (server.method() != HTTP_POST) {
+    server.send(405, "text/plain", "Method Not Allowed");
+    return;
+  }
 
-    String sessionId = getSessionFromCookie();
+  String sessionId = getSessionFromCookie();
 
-    if (sessionId.length() > 0) {
-        removeSession(sessionId);
-    }
+  if (sessionId.length() > 0) {
+    removeSession(sessionId);
+  }
 
-    DebugOut.println("Auth: Logout successful");
+  DebugOut.println("Auth: Logout successful");
 
-    // Clear cookie
-    String cookie = "sessionId=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly";
-    server.sendHeader("Set-Cookie", cookie);
+  // Clear cookie
+  String cookie = "sessionId=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly";
+  server.sendHeader("Set-Cookie", cookie);
 
-    JsonDocument response;
-    response["success"] = true;
-    response["message"] = "Logged out successfully";
+  JsonDocument response;
+  response["success"] = true;
+  response["message"] = "Logged out successfully";
 
-    String responseStr;
-    serializeJson(response, responseStr);
-    server.send(200, "application/json", responseStr);
+  String responseStr;
+  serializeJson(response, responseStr);
+  server.send(200, "application/json", responseStr);
 }
 
 // Handler: Auth status
 void handleAuthStatus() {
-    String sessionId = getSessionFromCookie();
+  String sessionId = getSessionFromCookie();
 
-    JsonDocument response;
+  JsonDocument response;
 
-    if (validateSession(sessionId)) {
-        response["success"] = true;
-        response["authenticated"] = true;
-        response["isDefaultPassword"] = isDefaultPassword();
-    } else {
-        response["success"] = true;
-        response["authenticated"] = false;
-    }
+  if (validateSession(sessionId)) {
+    response["success"] = true;
+    response["authenticated"] = true;
+    response["isDefaultPassword"] = isDefaultPassword();
+  } else {
+    response["success"] = true;
+    response["authenticated"] = false;
+  }
 
-    String responseStr;
-    serializeJson(response, responseStr);
-    server.send(200, "application/json", responseStr);
+  String responseStr;
+  serializeJson(response, responseStr);
+  server.send(200, "application/json", responseStr);
 }
 
 // Handler: Password change
 void handlePasswordChange() {
-    if (!requireAuth()) return;
+  if (!requireAuth())
+    return;
 
-    if (server.method() != HTTP_POST) {
-        server.send(405, "text/plain", "Method Not Allowed");
-        return;
-    }
+  if (server.method() != HTTP_POST) {
+    server.send(405, "text/plain", "Method Not Allowed");
+    return;
+  }
 
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, server.arg("plain"));
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
-    if (error) {
-        JsonDocument response;
-        response["success"] = false;
-        response["error"] = "Invalid JSON";
-
-        String responseStr;
-        serializeJson(response, responseStr);
-        server.send(400, "application/json", responseStr);
-        return;
-    }
-
-    String currentPassword = doc["currentPassword"].as<String>();
-    String newPassword = doc["newPassword"].as<String>();
-
-    // Validate current password
-    if (currentPassword != appState.webPassword) {
-        delay(1000); // Rate limiting
-
-        DebugOut.println("Auth: Password change failed - incorrect current password");
-
-        JsonDocument response;
-        response["success"] = false;
-        response["error"] = "Current password is incorrect";
-
-        String responseStr;
-        serializeJson(response, responseStr);
-        server.send(401, "application/json", responseStr);
-        return;
-    }
-
-    // Validate new password
-    if (newPassword.length() < 8) {
-        JsonDocument response;
-        response["success"] = false;
-        response["error"] = "Password must be at least 8 characters";
-
-        String responseStr;
-        serializeJson(response, responseStr);
-        server.send(400, "application/json", responseStr);
-        return;
-    }
-
-    // Change password
-    setWebPassword(newPassword);
-
-    DebugOut.println("Auth: Password changed successfully");
-
+  if (error) {
     JsonDocument response;
-    response["success"] = true;
-    response["message"] = "Password changed successfully";
-    response["isDefaultPassword"] = isDefaultPassword();
+    response["success"] = false;
+    response["error"] = "Invalid JSON";
 
     String responseStr;
     serializeJson(response, responseStr);
-    server.send(200, "application/json", responseStr);
+    server.send(400, "application/json", responseStr);
+    return;
+  }
+
+  String currentPassword = doc["currentPassword"].as<String>();
+  String newPassword = doc["newPassword"].as<String>();
+
+  // Validate current password
+  if (currentPassword != appState.webPassword) {
+    delay(1000); // Rate limiting
+
+    DebugOut.println(
+        "Auth: Password change failed - incorrect current password");
+
+    JsonDocument response;
+    response["success"] = false;
+    response["error"] = "Current password is incorrect";
+
+    String responseStr;
+    serializeJson(response, responseStr);
+    server.send(401, "application/json", responseStr);
+    return;
+  }
+
+  // Validate new password
+  if (newPassword.length() < 8) {
+    JsonDocument response;
+    response["success"] = false;
+    response["error"] = "Password must be at least 8 characters";
+
+    String responseStr;
+    serializeJson(response, responseStr);
+    server.send(400, "application/json", responseStr);
+    return;
+  }
+
+  // Change password
+  setWebPassword(newPassword);
+
+  DebugOut.println("Auth: Password changed successfully");
+
+  JsonDocument response;
+  response["success"] = true;
+  response["message"] = "Password changed successfully";
+  response["isDefaultPassword"] = isDefaultPassword();
+
+  String responseStr;
+  serializeJson(response, responseStr);
+  server.send(200, "application/json", responseStr);
 }

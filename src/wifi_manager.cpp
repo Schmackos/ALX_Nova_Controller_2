@@ -10,7 +10,6 @@
 #include <Preferences.h>
 #include <WiFi.h>
 
-
 // External function declarations
 extern int compareVersions(const String &v1, const String &v2);
 extern void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
@@ -153,7 +152,8 @@ void migrateWiFiCredentials() {
   // Load old credentials from LittleFS
   String oldSSID, oldPassword;
   if (loadWiFiCredentials(oldSSID, oldPassword)) {
-    DebugOut.println("Migrating WiFi credentials from LittleFS to Preferences...");
+    DebugOut.println(
+        "Migrating WiFi credentials from LittleFS to Preferences...");
 
     // Save as first network
     prefs.putString("s0", oldSSID);
@@ -186,7 +186,7 @@ int getWiFiNetworkCount() {
 }
 
 // Save WiFi network (add or update)
-bool saveWiFiNetwork(const char* ssid, const char* password) {
+bool saveWiFiNetwork(const char *ssid, const char *password) {
   if (ssid == nullptr || strlen(ssid) == 0) {
     return false;
   }
@@ -264,7 +264,8 @@ bool connectToStoredNetworks() {
 
   if (count == 0) {
     prefs.end();
-    DebugOut.println("No saved WiFi networks");
+    DebugOut.println("No saved WiFi networks. Starting AP mode...");
+    startAccessPoint(); // Fix: Ensure AP starts if list is empty
     return false;
   }
 
@@ -278,7 +279,8 @@ bool connectToStoredNetworks() {
       continue;
     }
 
-    DebugOut.printf("Attempting connection %d/%d: %s\n", i + 1, count, ssid.c_str());
+    DebugOut.printf("Attempting connection %d/%d: %s\n", i + 1, count,
+                    ssid.c_str());
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid.c_str(), password.c_str());
@@ -307,8 +309,10 @@ bool connectToStoredNetworks() {
 
         // Shift networks 0 to i-1 down by one
         for (int j = i; j > 0; j--) {
-          String shiftSSID = prefsWrite.getString(("s" + String(j - 1)).c_str(), "");
-          String shiftPass = prefsWrite.getString(("p" + String(j - 1)).c_str(), "");
+          String shiftSSID =
+              prefsWrite.getString(("s" + String(j - 1)).c_str(), "");
+          String shiftPass =
+              prefsWrite.getString(("p" + String(j - 1)).c_str(), "");
           prefsWrite.putString(("s" + String(j)).c_str(), shiftSSID);
           prefsWrite.putString(("p" + String(j)).c_str(), shiftPass);
         }
@@ -330,7 +334,7 @@ bool connectToStoredNetworks() {
         WiFi.softAP(apSSID.c_str(), apPassword);
         isAPMode = true;
         DebugOut.printf("Access Point also running at: %s\n",
-                       WiFi.softAPIP().toString().c_str());
+                        WiFi.softAPIP().toString().c_str());
       } else if (!apEnabled) {
         isAPMode = false;
       }
@@ -343,7 +347,8 @@ bool connectToStoredNetworks() {
 
       DebugOut.println("=== Web server started on port 80 ===");
       DebugOut.println("=== WebSocket server started on port 81 ===");
-      DebugOut.printf("Navigate to http://%s\n", WiFi.localIP().toString().c_str());
+      DebugOut.printf("Navigate to http://%s\n",
+                      WiFi.localIP().toString().c_str());
 
       // Setup MQTT
       setupMqtt();
@@ -371,7 +376,8 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   doc["dstOffset"] = dstOffset;
   doc["nightMode"] = nightMode;
   doc["enableCertValidation"] = enableCertValidation;
-  doc["hardwareStatsInterval"] = hardwareStatsInterval / 1000; // Send as seconds
+  doc["hardwareStatsInterval"] =
+      hardwareStatsInterval / 1000; // Send as seconds
   doc["mac"] = WiFi.macAddress();
   doc["firmwareVersion"] = firmwareVer;
 
@@ -618,7 +624,8 @@ void handleWiFiConfig() {
   // Save to multi-WiFi list
   if (!saveWiFiNetwork(ssid.c_str(), password.c_str())) {
     server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"Failed to save network. Maximum 5 networks reached.\"}");
+                "{\"success\": false, \"message\": \"Failed to save network. "
+                "Maximum 5 networks reached.\"}");
     return;
   }
 
@@ -770,6 +777,7 @@ void handleWiFiRemove() {
     server.send(200, "application/json", "{\"success\": true}");
   } else {
     server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"Invalid index or removal failed\"}");
+                "{\"success\": false, \"message\": \"Invalid index or removal "
+                "failed\"}");
   }
 }

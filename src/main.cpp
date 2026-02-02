@@ -14,9 +14,9 @@
 #include "wifi_manager.h"
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
+#include <LittleFS.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
-#include <LittleFS.h>
 #include <Update.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
@@ -24,7 +24,6 @@
 #include <WiFiClientSecure.h>
 #include <mbedtls/md.h>
 #include <time.h>
-
 
 // Forward declarations
 int compareVersions(const String &v1, const String &v2);
@@ -224,10 +223,17 @@ void setup() {
   // Note: Certificate loading removed - now using Mozilla certificate bundle
   // via ESP32CertBundle library for automatic SSL validation
 
+  // ===== Header Collection for Auth =====
+  // IMPORTANT: We must collect the "Cookie" header to read the session ID
+  // Also collecting X-Session-ID as a fallback for API calls
+  const char *headerkeys[] = {"Cookie", "X-Session-ID"};
+  server.collectHeaders(headerkeys, 2);
+
   // Define server routes here (before WiFi setup)
 
   // Authentication routes (unprotected)
-  server.on("/login", HTTP_GET, []() { server.send_P(200, "text/html", loginPage); });
+  server.on("/login", HTTP_GET,
+            []() { server.send_P(200, "text/html", loginPage); });
   server.on("/api/auth/login", HTTP_POST, handleLogin);
   server.on("/api/auth/logout", HTTP_POST, handleLogout);
   server.on("/api/auth/status", HTTP_GET, handleAuthStatus);
@@ -235,107 +241,133 @@ void setup() {
 
   // Protected routes
   server.on("/", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     server.send_P(200, "text/html", htmlPage);
   });
 
   server.on("/api/wificonfig", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleWiFiConfig();
   });
   server.on("/api/wifiscan", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleWiFiScan();
   });
   server.on("/api/wifilist", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleWiFiList();
   });
   server.on("/api/wifiremove", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleWiFiRemove();
   });
   server.on("/api/apconfig", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleAPConfigUpdate();
   });
   server.on("/api/toggleap", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleAPToggle();
   });
   server.on("/api/wifistatus", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleWiFiStatus();
   });
   server.on("/api/checkupdate", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleCheckUpdate();
   });
   server.on("/api/startupdate", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleStartUpdate();
   });
   server.on("/api/updatestatus", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleUpdateStatus();
   });
   server.on("/api/releasenotes", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleGetReleaseNotes();
   });
   server.on("/api/settings", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleSettingsGet();
   });
   server.on("/api/settings", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleSettingsUpdate();
   });
   server.on("/api/settings/export", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleSettingsExport();
   });
   server.on("/api/settings/import", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleSettingsImport();
   });
   server.on("/api/diagnostics", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleDiagnostics();
   });
   server.on("/api/factoryreset", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleFactoryReset();
   });
   server.on("/api/reboot", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleReboot();
   });
   server.on("/api/smartsensing", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleSmartSensingGet();
   });
   server.on("/api/smartsensing", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleSmartSensingUpdate();
   });
   server.on("/api/mqtt", HTTP_GET, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleMqttGet();
   });
   server.on("/api/mqtt", HTTP_POST, []() {
-    if (!requireAuth()) return;
+    if (!requireAuth())
+      return;
     handleMqttUpdate();
   });
-  server.on("/api/firmware/upload", HTTP_POST,
-    []() {
-      if (!requireAuth()) return;
-      handleFirmwareUploadComplete();
-    },
-    []() {
-      if (!requireAuth()) return;
-      handleFirmwareUploadChunk();
-    });
+  server.on(
+      "/api/firmware/upload", HTTP_POST,
+      []() {
+        if (!requireAuth())
+          return;
+        handleFirmwareUploadComplete();
+      },
+      []() {
+        if (!requireAuth())
+          return;
+        handleFirmwareUploadChunk();
+      });
   // Note: Certificate API routes removed - now using Mozilla certificate bundle
 
   // Initialize CPU usage monitoring
@@ -344,9 +376,11 @@ void setup() {
   // Migrate old WiFi credentials to new multi-WiFi system (one-time operation)
   migrateWiFiCredentials();
 
-  // Try to connect to stored WiFi networks (tries all saved networks in priority order)
+  // Try to connect to stored WiFi networks (tries all saved networks in
+  // priority order)
   if (!connectToStoredNetworks()) {
-    // All networks failed, automatic fallback to AP mode already happened in connectToStoredNetworks()
+    // All networks failed, automatic fallback to AP mode already happened in
+    // connectToStoredNetworks()
     DebugOut.println("No WiFi connection established. Running in AP mode.");
   }
 
