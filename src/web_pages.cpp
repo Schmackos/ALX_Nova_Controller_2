@@ -1754,7 +1754,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             background: var(--border);
         }
     </style>
-    <script async src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body class="has-status-bar">
     <!-- Sidebar Navigation (Desktop) -->
@@ -4019,19 +4018,39 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             manualLink.href = MANUAL_URL;
             manualLink.textContent = MANUAL_URL;
             
-            // Generate QR code
+            // If library already exists, render immediately
             if (typeof QRCode !== 'undefined') {
-                new QRCode(qrContainer, {
-                    text: MANUAL_URL,
-                    width: 180,
-                    height: 180,
-                    colorDark: '#000000',
-                    colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.M
-                });
-                manualQrGenerated = true;
-            } else {
-                qrContainer.innerHTML = '<div style="color: var(--error); padding: 20px;">QR Code library not loaded</div>';
+                renderQR();
+                return;
+            }
+
+            // Otherwise load dynamically
+            console.log('Loading QR code library dynamically...');
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+            script.onload = () => {
+                console.log('QR library loaded');
+                renderQR();
+            };
+            script.onerror = () => {
+                qrContainer.innerHTML = '<div style="color: var(--text-secondary); padding: 10px; font-size: 13px;">QR code library unavailable (offline)</div>';
+            };
+            document.head.appendChild(script);
+
+            function renderQR() {
+                try {
+                    new QRCode(qrContainer, {
+                        text: MANUAL_URL,
+                        width: 180,
+                        height: 180,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                    manualQrGenerated = true;
+                } catch (e) {
+                    console.error('QR Generator Error:', e);
+                }
             }
         }
 
