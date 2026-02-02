@@ -2925,22 +2925,35 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 currentLatestVersion = data.latestVersion;
                 const latestVersionEl = document.getElementById('latestVersion');
                 const latestVersionRow = document.getElementById('latestVersionRow');
+                const latestVersionNotes = document.getElementById('latestVersionNotes');
 
-                latestVersionEl.textContent = data.latestVersion;
                 latestVersionRow.style.display = 'flex';
 
-                // Style based on status
-                if (data.latestVersion === 'Checking...') {
-                    latestVersionEl.style.opacity = '0.6';
-                    latestVersionEl.style.fontStyle = 'italic';
-                } else if (data.latestVersion === 'Unknown') {
-                    latestVersionEl.style.opacity = '0.6';
-                    latestVersionEl.style.fontStyle = 'italic';
-                    latestVersionEl.style.color = 'var(--text-secondary)';
-                } else {
+                // If up-to-date, show green "Up-To-Date" text and hide release notes link
+                if (!data.updateAvailable && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
+                    latestVersionEl.textContent = 'Up-To-Date';
                     latestVersionEl.style.opacity = '1';
                     latestVersionEl.style.fontStyle = 'normal';
-                    latestVersionEl.style.color = '';
+                    latestVersionEl.style.color = 'var(--success)';
+                    latestVersionNotes.style.display = 'none';
+                } else {
+                    latestVersionEl.textContent = data.latestVersion;
+                    latestVersionNotes.style.display = '';
+
+                    // Style based on status
+                    if (data.latestVersion === 'Checking...') {
+                        latestVersionEl.style.opacity = '0.6';
+                        latestVersionEl.style.fontStyle = 'italic';
+                        latestVersionEl.style.color = '';
+                    } else if (data.latestVersion === 'Unknown') {
+                        latestVersionEl.style.opacity = '0.6';
+                        latestVersionEl.style.fontStyle = 'italic';
+                        latestVersionEl.style.color = 'var(--text-secondary)';
+                    } else {
+                        latestVersionEl.style.opacity = '1';
+                        latestVersionEl.style.fontStyle = 'normal';
+                        latestVersionEl.style.color = '';
+                    }
                 }
 
                 if (data.updateAvailable) {
@@ -3730,21 +3743,33 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (data.latestVersion) {
                     currentLatestVersion = data.latestVersion;
                     const latestVersionEl = document.getElementById('latestVersion');
-                    latestVersionEl.textContent = data.latestVersion;
+                    const latestVersionNotes = document.getElementById('latestVersionNotes');
                     document.getElementById('latestVersionRow').style.display = 'flex';
 
-                    // Style based on status
-                    if (data.latestVersion === 'Unknown') {
-                        latestVersionEl.style.opacity = '0.6';
-                        latestVersionEl.style.fontStyle = 'italic';
-                        latestVersionEl.style.color = 'var(--text-secondary)';
-                    } else {
+                    // If up-to-date, show green "Up-To-Date" text and hide release notes link
+                    if (!data.updateAvailable && data.latestVersion !== 'Unknown') {
+                        latestVersionEl.textContent = 'Up-To-Date';
                         latestVersionEl.style.opacity = '1';
                         latestVersionEl.style.fontStyle = 'normal';
-                        latestVersionEl.style.color = '';
+                        latestVersionEl.style.color = 'var(--success)';
+                        latestVersionNotes.style.display = 'none';
+                    } else {
+                        latestVersionEl.textContent = data.latestVersion;
+                        latestVersionNotes.style.display = '';
+
+                        // Style based on status
+                        if (data.latestVersion === 'Unknown') {
+                            latestVersionEl.style.opacity = '0.6';
+                            latestVersionEl.style.fontStyle = 'italic';
+                            latestVersionEl.style.color = 'var(--text-secondary)';
+                        } else {
+                            latestVersionEl.style.opacity = '1';
+                            latestVersionEl.style.fontStyle = 'normal';
+                            latestVersionEl.style.color = '';
+                        }
                     }
                 }
-                
+
                 // Show/hide update button based on update availability
                 if (data.updateAvailable) {
                     document.getElementById('updateBtn').classList.remove('hidden');
