@@ -53,14 +53,8 @@ void setAmplifierState(bool state) {
 void updateSmartSensingLogic() {
     unsigned long currentMillis = millis();
 
-    // Rate limited voltage reading
-    static unsigned long lastVoltageRead = 0;
-    static bool voltageDetected = false;
-
-    if (currentMillis - lastVoltageRead >= 50) {
-        lastVoltageRead = currentMillis;
-        voltageDetected = detectVoltage();
-    }
+    // Detect voltage on every call (no rate limiting for tests)
+    bool voltageDetected = detectVoltage();
 
     switch (TestState::currentMode) {
         case TestState::ALWAYS_ON:
