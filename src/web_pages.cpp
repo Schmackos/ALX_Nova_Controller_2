@@ -2609,11 +2609,40 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 while (c.charAt(0) == ' ') {
                     c = c.substring(1);
                 }
-                if (c.indexOf(name) == 0) {
+                if (c.indexOf(name) === 0) {
                     return c.substring(name.length, c.length);
                 }
             }
             return "";
+        }
+
+        // Global fetch wrapper for API calls (handles 401 Unauthorized)
+        async function apiFetch(url, options = {}) {
+            try {
+                const response = await fetch(url, options);
+                
+                if (response.status === 401) {
+                    console.warn(`Unauthorized (401) on ${url}. Redirecting...`);
+                    // Try to parse JSON to see if there's a redirect provided
+                    try {
+                        const data = await response.clone().json();
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            window.location.href = '/login';
+                        }
+                    } catch(e) {
+                        window.location.href = '/login';
+                    }
+                    // Return a never-resolving promise to stop further .then() calls
+                    return new Promise(() => {});
+                }
+                
+                return response;
+            } catch (error) {
+                console.error(`API Fetch Error [${url}]:`, error);
+                throw error;
+            }
         }
         
         function initWebSocket() {
@@ -2674,8 +2703,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else if (data.type === 'authFailed') {
                     console.error('WebSocket auth failed:', data.error);
                     ws.close();
-                    // Do not redirect automatically to avoid loops
-                    showToast('WebSocket Auth Failed. Please reload.', 'error');
+                    showToast('Session invalid. Redirecting to login...', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 2000);
                 }
                 else if (data.type === 'ledState') {
                     ledState = data.state;
@@ -2914,7 +2945,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             // Show/hide Smart Auto Settings card based on mode
             updateSmartAutoSettingsVisibility(selected.value);
             
-            fetch('/api/smartsensing', {
+            apiFetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mode: selected.value })
@@ -2954,7 +2985,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const value = parseInt(document.getElementById('timerDuration').value);
             if (isNaN(value) || value < 1 || value > 60) return;
             
-            fetch('/api/smartsensing', {
+            apiFetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ timerDuration: value })
@@ -2970,7 +3001,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const value = parseFloat(document.getElementById('voltageThreshold').value);
             if (isNaN(value) || value < 0.1 || value > 3.3) return;
             
-            fetch('/api/smartsensing', {
+            apiFetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ voltageThreshold: value })
@@ -2983,7 +3014,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function manualOverride(state) {
-            fetch('/api/smartsensing', {
+            apiFetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ manualOverride: state })
@@ -3066,7 +3097,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const ssid = document.getElementById('wifiSSID').value;
             const password = document.getElementById('wifiPassword').value;
             
-            fetch('/api/wificonfig', {
+            apiFetch('/api/wificonfig', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ssid, password })
@@ -3099,7 +3130,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
         
         function pollWiFiScan() {
-            fetch('/api/wifiscan')
+            apiFetch('/api/wifiscan')
                 .then(res => res.json())
                 .then(data => {
                     const scanBtn = document.getElementById('scanBtn');
@@ -3164,7 +3195,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const badge = document.getElementById('networkCountBadge');
             const sessionId = getSessionIdFromCookie();
 
-            fetch('/api/wifilist', { 
+            apiFetch('/api/wifilist', { 
                 credentials: 'include',
                 headers: {
                     'X-Session-ID': sessionId
@@ -3209,7 +3240,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function removeNetwork(index) {
             if (!confirm('Remove this network?')) return;
 
-            fetch('/api/wifiremove', {
+            apiFetch('/api/wifiremove', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ index })
@@ -3228,7 +3259,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function toggleAP() {
             const enabled = document.getElementById('apToggle').checked;
-            fetch('/api/toggleap', {
+            apiFetch('/api/toggleap', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled })
@@ -3262,7 +3293,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 return;
             }
             
-            fetch('/api/apconfig', {
+            apiFetch('/api/apconfig', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ssid, password })
@@ -3281,7 +3312,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== MQTT =====
         function loadMqttSettings() {
-            fetch('/api/mqtt')
+            apiFetch('/api/mqtt')
             .then(res => res.json())
             .then(data => {
                 document.getElementById('mqttEnabled').checked = data.enabled || false;
@@ -3330,7 +3361,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function toggleMqttEnabled() {
             const enabled = document.getElementById('mqttEnabled').checked;
-            fetch('/api/mqtt', {
+            apiFetch('/api/mqtt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: enabled })
@@ -3362,7 +3393,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 haDiscovery: document.getElementById('mqttHADiscovery').checked
             };
             
-            fetch('/api/mqtt', {
+            apiFetch('/api/mqtt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(settings)
@@ -3386,7 +3417,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function updateTimezone() {
             const offset = parseInt(document.getElementById('timezoneSelect').value);
             const dstOffset = document.getElementById('dstToggle').checked ? 3600 : 0;
-            fetch('/api/settings', {
+            apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
@@ -3408,7 +3439,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function updateDST() {
             const offset = parseInt(document.getElementById('timezoneSelect').value);
             const dstOffset = document.getElementById('dstToggle').checked ? 3600 : 0;
-            fetch('/api/settings', {
+            apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
@@ -3446,7 +3477,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function updateCurrentTime() {
-            fetch('/api/settings')
+            apiFetch('/api/settings')
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -3491,7 +3522,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function toggleTheme() {
             nightMode = document.getElementById('nightModeToggle').checked;
             applyTheme(nightMode);
-            fetch('/api/settings', {
+            apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nightMode })
@@ -3510,7 +3541,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function toggleAutoUpdate() {
             autoUpdateEnabled = document.getElementById('autoUpdateToggle').checked;
-            fetch('/api/settings', {
+            apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ autoUpdateEnabled: autoUpdateEnabled })
@@ -3524,7 +3555,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function toggleCertValidation() {
             enableCertValidation = document.getElementById('certValidationToggle').checked;
-            fetch('/api/settings', {
+            apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enableCertValidation: enableCertValidation })
@@ -3538,7 +3569,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function setStatsInterval() {
             const interval = parseInt(document.getElementById('statsIntervalSelect').value);
-            fetch('/api/settings', {
+            apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ hardwareStatsInterval: interval })
@@ -3553,7 +3584,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         // ===== Firmware Update =====
         function checkForUpdate() {
             showToast('Checking for updates...', 'info');
-            fetch('/api/checkupdate')
+            apiFetch('/api/checkupdate')
             .then(res => res.json())
             .then(data => {
                 // Update current version display
@@ -3586,14 +3617,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function fetchUpdateStatus() {
-            fetch('/api/updatestatus')
+            apiFetch('/api/updatestatus')
             .then(res => res.json())
             .then(data => handleUpdateStatus(data))
             .catch(err => console.error('Failed to fetch update status:', err));
         }
 
         function startOTAUpdate() {
-            fetch('/api/startupdate', { method: 'POST' })
+            apiFetch('/api/startupdate', { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -3776,7 +3807,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== Export/Import Settings =====
         function exportSettings() {
-            fetch('/api/settings/export')
+            apiFetch('/api/settings/export')
             .then(res => res.json())
             .then(data => {
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -3808,7 +3839,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function importSettings(settings) {
-            fetch('/api/settings/import', {
+            apiFetch('/api/settings/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(settings)
@@ -3827,7 +3858,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         // ===== Reboot & Factory Reset =====
         function startReboot() {
             if (confirm('Are you sure you want to reboot the device?')) {
-                fetch('/api/reboot', { method: 'POST' })
+                apiFetch('/api/reboot', { method: 'POST' })
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) showToast('Rebooting...', 'success');
@@ -3838,7 +3869,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function startFactoryReset() {
             if (confirm('Are you sure? This will erase all settings!')) {
-                fetch('/api/factoryreset', { method: 'POST' })
+                apiFetch('/api/factoryreset', { method: 'POST' })
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) showToast('Factory reset in progress...', 'success');
@@ -4225,7 +4256,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function downloadDiagnostics() {
             showToast('Generating diagnostics...', 'info');
-            fetch('/api/diagnostics')
+            apiFetch('/api/diagnostics')
                 .then(res => {
                     if (!res.ok) throw new Error('Failed to generate diagnostics');
                     return res.blob();
@@ -4274,7 +4305,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
 
             // Fetch and show
-            fetch(`/api/releasenotes?version=${version}`)
+            apiFetch(`/api/releasenotes?version=${version}`)
             .then(res => res.json())
             .then(data => {
                 const label = which === 'current' ? 'Current' : 'Latest';
@@ -4347,25 +4378,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             checkPasswordWarning();
         };
 
-        // ===== Authentication Helper Functions =====
-
-        function getSessionIdFromCookie() {
-            const cookies = document.cookie.split(';');
-            for (let cookie of cookies) {
-                const [name, value] = cookie.trim().split('=');
-                if (name === 'sessionId') {
-                    return value;
-                }
-            }
-            return null;
-        }
+        // Authentication Helper Functions moved/unified at top of script
 
         async function checkPasswordWarning() {
             const shouldShowWarning = sessionStorage.getItem('showPasswordWarning') === 'true';
 
             if (shouldShowWarning) {
                 try {
-                    const response = await fetch('/api/auth/status');
+                    const response = await apiFetch('/api/auth/status');
                     const data = await response.json();
 
                     if (data.success && data.isDefaultPassword) {
@@ -4435,7 +4455,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 return;
             }
 
-            fetch('/api/ap/config', {
+            apiFetch('/api/ap/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ssid: ssid, password: password })
@@ -4512,7 +4532,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
 
             try {
-                const response = await fetch('/api/auth/change', {
+                const response = await apiFetch('/api/auth/change', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -4545,7 +4565,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function logout() {
-            fetch('/api/auth/logout', { method: 'POST' })
+            apiFetch('/api/auth/logout', { method: 'POST' })
                 .then(() => {
                     sessionStorage.clear();
                     localStorage.clear();
@@ -4784,8 +4804,23 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
     </div>
 
     <script>
+        // Global fetch wrapper for API calls (handles 401 Unauthorized)
+        async function apiFetch(url, options = {}) {
+            try {
+                const response = await fetch(url, options);
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return new Promise(() => {});
+                }
+                return response;
+            } catch (error) {
+                console.error(`API Fetch Error [${url}]:`, error);
+                throw error;
+            }
+        }
+
         window.onload = function() {
-            fetch('/api/wifistatus')
+            apiFetch('/api/wifistatus')
             .then(res => res.json())
             .then(data => {
                 const apInfo = document.getElementById('currentAPInfo');
@@ -4809,7 +4844,7 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             statusMsg.className = 'status-message';
             statusMsg.style.display = 'none';
             
-            fetch('/api/wificonfig', {
+            apiFetch('/api/wificonfig', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ssid, password })
