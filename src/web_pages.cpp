@@ -1577,6 +1577,178 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 transition-duration: 0.01ms !important;
             }
         }
+
+        /* ===== Password Warning Banner ===== */
+        .warning-banner {
+            background: linear-gradient(135deg, #FF6B00 0%, #FF9800 100%);
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-radius: 8px;
+            margin: 16px;
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+            animation: slideDown 0.3s ease-out;
+            position: relative;
+            z-index: 100;
+        }
+
+        .warning-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .warning-text {
+            flex: 1;
+            line-height: 1.5;
+        }
+
+        .warning-text strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 16px;
+        }
+
+        .warning-text a {
+            color: white;
+            text-decoration: underline;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .warning-text a:hover {
+            opacity: 0.8;
+        }
+
+        .warning-dismiss {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+
+        .warning-dismiss:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ===== Modal Styles ===== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: var(--bg-surface);
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 8px 32px var(--shadow);
+        }
+
+        .modal-content h2 {
+            margin-bottom: 24px;
+            font-size: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-input);
+            color: var(--text-primary);
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: var(--bg-surface);
+        }
+
+        .error-message {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: var(--error);
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .modal-actions button {
+            flex: 1;
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-actions button.primary {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+            color: white;
+        }
+
+        .modal-actions button.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
+        }
+
+        .modal-actions button:not(.primary) {
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+
+        .modal-actions button:not(.primary):hover {
+            background: var(--border);
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
@@ -1940,6 +2112,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <input type="checkbox" id="nightModeToggle" onchange="toggleTheme()">
                         <span class="slider"></span>
                     </label>
+                </div>
+            </div>
+
+            <!-- Security -->
+            <div class="card">
+                <div class="card-title">Security</div>
+                <div class="button-row">
+                    <button class="btn btn-secondary" onclick="showPasswordChangeModal()">Change Password</button>
+                    <button class="btn btn-secondary" onclick="logout()">Logout</button>
+                </div>
+                <div class="info-box">
+                    <div class="toggle-sublabel">Change your web interface password or logout from the current session.</div>
                 </div>
             </div>
 
@@ -2420,26 +2604,59 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             ws.onopen = function() {
                 console.log('WebSocket connected');
-                updateConnectionStatus(true);
-                wsReconnectDelay = WS_MIN_RECONNECT_DELAY;
-                fetchUpdateStatus();
-                
-                // Show reconnection notification if we were disconnected during an update
-                if (wasDisconnectedDuringUpdate) {
-                    showToast('Device is back online after update!', 'success');
-                    wasDisconnectedDuringUpdate = false;
-                } else if (hadPreviousConnection) {
-                    // Show general reconnection notification
-                    showToast('Device reconnected', 'success');
+
+                // Send authentication immediately
+                const sessionId = getSessionIdFromCookie();
+                if (sessionId) {
+                    ws.send(JSON.stringify({
+                        type: 'auth',
+                        sessionId: sessionId
+                    }));
+                } else {
+                    console.error('No session ID for WebSocket auth');
+                    window.location.href = '/login';
                 }
-                hadPreviousConnection = true;
             };
 
             ws.onmessage = function(event) {
                 const data = JSON.parse(event.data);
                 console.log('Received:', data);
-                
-                if (data.type === 'ledState') {
+
+                if (data.type === 'authRequired') {
+                    // Server requesting authentication
+                    const sessionId = getSessionIdFromCookie();
+                    if (sessionId) {
+                        ws.send(JSON.stringify({
+                            type: 'auth',
+                            sessionId: sessionId
+                        }));
+                    } else {
+                        ws.close();
+                        window.location.href = '/login';
+                    }
+                }
+                else if (data.type === 'authSuccess') {
+                    console.log('WebSocket authenticated');
+                    updateConnectionStatus(true);
+                    wsReconnectDelay = WS_MIN_RECONNECT_DELAY;
+                    fetchUpdateStatus();
+
+                    // Show reconnection notification if we were disconnected during an update
+                    if (wasDisconnectedDuringUpdate) {
+                        showToast('Device is back online after update!', 'success');
+                        wasDisconnectedDuringUpdate = false;
+                    } else if (hadPreviousConnection) {
+                        // Show general reconnection notification
+                        showToast('Device reconnected', 'success');
+                    }
+                    hadPreviousConnection = true;
+                }
+                else if (data.type === 'authFailed') {
+                    console.error('WebSocket auth failed:', data.error);
+                    ws.close();
+                    window.location.href = '/login';
+                }
+                else if (data.type === 'ledState') {
                     ledState = data.state;
                     updateLED();
                 } else if (data.type === 'blinkingEnabled') {
@@ -4071,7 +4288,179 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (activePanel && activePanel.id === 'settings') {
                 startTimeUpdates();
             }
+
+            // Check for default password warning
+            checkPasswordWarning();
         };
+
+        // ===== Authentication Helper Functions =====
+
+        function getSessionIdFromCookie() {
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if (name === 'sessionId') {
+                    return value;
+                }
+            }
+            return null;
+        }
+
+        async function checkPasswordWarning() {
+            const shouldShowWarning = sessionStorage.getItem('showPasswordWarning') === 'true';
+
+            if (shouldShowWarning) {
+                try {
+                    const response = await fetch('/api/auth/status');
+                    const data = await response.json();
+
+                    if (data.success && data.isDefaultPassword) {
+                        showDefaultPasswordWarning();
+                        sessionStorage.removeItem('showPasswordWarning');
+                    }
+                } catch (err) {
+                    console.error('Failed to check auth status:', err);
+                }
+            }
+        }
+
+        function showDefaultPasswordWarning() {
+            if (sessionStorage.getItem('passwordWarningDismissed') === 'true') {
+                return;
+            }
+
+            const banner = document.createElement('div');
+            banner.className = 'warning-banner';
+            banner.id = 'passwordWarning';
+            banner.innerHTML = `
+                <div class="warning-icon">⚠️</div>
+                <div class="warning-text">
+                    <strong>Security Warning</strong>
+                    You are using the default password. Anyone on your network can access this device.
+                    <a href="#" onclick="openPasswordChangeSettings(); return false;">
+                        Change password now →
+                    </a>
+                </div>
+                <button class="warning-dismiss" onclick="dismissPasswordWarning()">
+                    Dismiss
+                </button>
+            `;
+
+            const container = document.querySelector('.main-content');
+            if (container && container.firstChild) {
+                container.insertBefore(banner, container.firstChild);
+            }
+        }
+
+        function dismissPasswordWarning() {
+            const banner = document.getElementById('passwordWarning');
+            if (banner) {
+                banner.remove();
+            }
+            sessionStorage.setItem('passwordWarningDismissed', 'true');
+        }
+
+        function openPasswordChangeSettings() {
+            switchTab('settings');
+            showPasswordChangeModal();
+            dismissPasswordWarning();
+        }
+
+        function showPasswordChangeModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.id = 'passwordChangeModal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <h2>Change Password</h2>
+                    <form id="passwordChangeForm">
+                        <div class="form-group">
+                            <label>Current Password</label>
+                            <input type="password" id="currentPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" id="newPassword" required minlength="8">
+                        </div>
+                        <div class="form-group">
+                            <label>Confirm New Password</label>
+                            <input type="password" id="confirmPassword" required minlength="8">
+                        </div>
+                        <div id="passwordError" class="error-message" style="display:none;"></div>
+                        <div class="modal-actions">
+                            <button type="button" onclick="closePasswordChangeModal()">Cancel</button>
+                            <button type="submit" class="primary">Change Password</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('passwordChangeForm').onsubmit = async function(e) {
+                e.preventDefault();
+                await changePassword();
+            };
+        }
+
+        async function changePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const errorDiv = document.getElementById('passwordError');
+
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (newPassword.length < 8) {
+                errorDiv.textContent = 'Password must be at least 8 characters';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/change', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        currentPassword: currentPassword,
+                        newPassword: newPassword
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('Password changed successfully', 'success');
+                    closePasswordChangeModal();
+                    sessionStorage.removeItem('passwordWarningDismissed');
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to change password';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.textContent = 'Network error';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        function closePasswordChangeModal() {
+            const modal = document.getElementById('passwordChangeModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function logout() {
+            fetch('/api/auth/logout', { method: 'POST' })
+                .then(() => {
+                    sessionStorage.clear();
+                    localStorage.clear();
+                    window.location.href = '/login';
+                });
+        }
     </script>
 </body>
 </html>

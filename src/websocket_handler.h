@@ -4,6 +4,12 @@
 #include <Arduino.h>
 #include <WebSocketsServer.h>
 
+#define MAX_WS_CLIENTS 10
+
+// ===== WebSocket Authentication =====
+extern bool wsAuthStatus[MAX_WS_CLIENTS];
+extern unsigned long wsAuthTimeout[MAX_WS_CLIENTS];
+
 // ===== WebSocket Event Handler =====
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length);
 

@@ -62,6 +62,9 @@ public:
   String apSSID;
   String apPassword = DEFAULT_AP_PASSWORD;
 
+  // ===== Web Authentication =====
+  String webPassword = DEFAULT_AP_PASSWORD;
+
   // ===== Factory Reset State =====
   bool factoryResetInProgress = false;
 

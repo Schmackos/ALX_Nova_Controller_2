@@ -18,7 +18,9 @@
       "Bash(pio test:*)",
       "Bash(gh:*)",
       "Bash(pacman -Q:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(platformio run:*)",
+      "Bash(cat:*)"
     ]
   }
 }

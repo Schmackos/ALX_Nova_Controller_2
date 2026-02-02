@@ -1,4 +1,5 @@
 #include "websocket_handler.h"
+#include "auth_handler.h"
 #include "config.h"
 #include "app_state.h"
 #include "wifi_manager.h"
@@ -9,6 +10,10 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include "esp_freertos_hooks.h"
+
+// ===== WebSocket Authentication Tracking =====
+bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
+unsigned long wsAuthTimeout[MAX_WS_CLIENTS] = {0};
 
 // ===== CPU Utilization Tracking =====
 // Using FreeRTOS idle hooks to measure CPU usage
@@ -38,39 +43,74 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
   switch(type) {
     case WStype_DISCONNECTED:
       DebugOut.printf("Client [%u] disconnected\n", num);
+      wsAuthStatus[num] = false;
+      wsAuthTimeout[num] = 0;
       break;
-      
+
     case WStype_CONNECTED:
       {
         IPAddress ip = webSocket.remoteIP(num);
         DebugOut.printf("Client [%u] connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
-        
-        sendLEDState();
-        sendBlinkingState();
-        sendWiFiStatus();
-        sendSmartSensingStateInternal();  // Force send for new client
-        
-        // If device just updated, notify the client
-        if (justUpdated) {
-          broadcastJustUpdated();
-        }
+
+        // Set auth timeout (5 seconds to authenticate)
+        wsAuthStatus[num] = false;
+        wsAuthTimeout[num] = millis() + 5000;
+
+        // Request authentication
+        webSocket.sendTXT(num, "{\"type\":\"authRequired\"}");
       }
       break;
-      
+
     case WStype_TEXT:
       {
         DebugOut.printf("Received from client [%u]: %s\n", num, payload);
-        
+
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, (const char*)payload, length);
-        
+
         if (error) {
           DebugOut.print("JSON parsing failed: ");
           DebugOut.println(error.c_str());
           return;
         }
-        
-        if (doc["type"] == "toggle") {
+
+        String msgType = doc["type"].as<String>();
+
+        // Handle authentication message
+        if (msgType == "auth") {
+          String sessionId = doc["sessionId"].as<String>();
+
+          if (validateSession(sessionId)) {
+            wsAuthStatus[num] = true;
+            wsAuthTimeout[num] = 0;
+            webSocket.sendTXT(num, "{\"type\":\"authSuccess\"}");
+            DebugOut.printf("WebSocket client [%u] authenticated\n", num);
+
+            // Send initial state after authentication
+            sendLEDState();
+            sendBlinkingState();
+            sendWiFiStatus();
+            sendSmartSensingStateInternal();
+
+            // If device just updated, notify the client
+            if (justUpdated) {
+              broadcastJustUpdated();
+            }
+          } else {
+            webSocket.sendTXT(num, "{\"type\":\"authFailed\",\"error\":\"Invalid session\"}");
+            webSocket.disconnect(num);
+          }
+          return;
+        }
+
+        // Check if client is authenticated for all other commands
+        if (!wsAuthStatus[num]) {
+          webSocket.sendTXT(num, "{\"type\":\"error\",\"message\":\"Not authenticated\"}");
+          webSocket.disconnect(num);
+          return;
+        }
+
+        if (msgType == "toggle") {
           blinkingEnabled = doc["enabled"];
           DebugOut.printf("Blinking %s by client [%u]\n", blinkingEnabled ? "enabled" : "disabled", num);
           

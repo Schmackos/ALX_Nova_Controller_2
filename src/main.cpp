@@ -1,7 +1,9 @@
 #include "app_state.h"
+#include "auth_handler.h"
 #include "button_handler.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "login_page.h"
 #include "mqtt_handler.h"
 #include "ota_updater.h"
 #include "settings_manager.h"
@@ -216,36 +218,124 @@ void setup() {
     DebugOut.println("No MQTT settings found, using defaults");
   }
 
+  // Initialize authentication system
+  initAuth();
+
   // Note: Certificate loading removed - now using Mozilla certificate bundle
   // via ESP32CertBundle library for automatic SSL validation
 
   // Define server routes here (before WiFi setup)
-  server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", htmlPage); });
 
-  server.on("/api/wificonfig", HTTP_POST, handleWiFiConfig);
-  server.on("/api/wifiscan", HTTP_GET, handleWiFiScan);
-  server.on("/api/wifilist", HTTP_GET, handleWiFiList);
-  server.on("/api/wifiremove", HTTP_POST, handleWiFiRemove);
-  server.on("/api/apconfig", HTTP_POST, handleAPConfigUpdate);
-  server.on("/api/toggleap", HTTP_POST, handleAPToggle);
-  server.on("/api/wifistatus", HTTP_GET, handleWiFiStatus);
-  server.on("/api/checkupdate", HTTP_GET, handleCheckUpdate);
-  server.on("/api/startupdate", HTTP_POST, handleStartUpdate);
-  server.on("/api/updatestatus", HTTP_GET, handleUpdateStatus);
-  server.on("/api/releasenotes", HTTP_GET, handleGetReleaseNotes);
-  server.on("/api/settings", HTTP_GET, handleSettingsGet);
-  server.on("/api/settings", HTTP_POST, handleSettingsUpdate);
-  server.on("/api/settings/export", HTTP_GET, handleSettingsExport);
-  server.on("/api/settings/import", HTTP_POST, handleSettingsImport);
-  server.on("/api/diagnostics", HTTP_GET, handleDiagnostics);
-  server.on("/api/factoryreset", HTTP_POST, handleFactoryReset);
-  server.on("/api/reboot", HTTP_POST, handleReboot);
-  server.on("/api/smartsensing", HTTP_GET, handleSmartSensingGet);
-  server.on("/api/smartsensing", HTTP_POST, handleSmartSensingUpdate);
-  server.on("/api/mqtt", HTTP_GET, handleMqttGet);
-  server.on("/api/mqtt", HTTP_POST, handleMqttUpdate);
-  server.on("/api/firmware/upload", HTTP_POST, handleFirmwareUploadComplete,
-            handleFirmwareUploadChunk);
+  // Authentication routes (unprotected)
+  server.on("/login", HTTP_GET, []() { server.send_P(200, "text/html", loginPage); });
+  server.on("/api/auth/login", HTTP_POST, handleLogin);
+  server.on("/api/auth/logout", HTTP_POST, handleLogout);
+  server.on("/api/auth/status", HTTP_GET, handleAuthStatus);
+  server.on("/api/auth/change", HTTP_POST, handlePasswordChange);
+
+  // Protected routes
+  server.on("/", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    server.send_P(200, "text/html", htmlPage);
+  });
+
+  server.on("/api/wificonfig", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleWiFiConfig();
+  });
+  server.on("/api/wifiscan", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleWiFiScan();
+  });
+  server.on("/api/wifilist", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleWiFiList();
+  });
+  server.on("/api/wifiremove", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleWiFiRemove();
+  });
+  server.on("/api/apconfig", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleAPConfigUpdate();
+  });
+  server.on("/api/toggleap", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleAPToggle();
+  });
+  server.on("/api/wifistatus", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleWiFiStatus();
+  });
+  server.on("/api/checkupdate", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleCheckUpdate();
+  });
+  server.on("/api/startupdate", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleStartUpdate();
+  });
+  server.on("/api/updatestatus", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleUpdateStatus();
+  });
+  server.on("/api/releasenotes", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleGetReleaseNotes();
+  });
+  server.on("/api/settings", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleSettingsGet();
+  });
+  server.on("/api/settings", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleSettingsUpdate();
+  });
+  server.on("/api/settings/export", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleSettingsExport();
+  });
+  server.on("/api/settings/import", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleSettingsImport();
+  });
+  server.on("/api/diagnostics", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleDiagnostics();
+  });
+  server.on("/api/factoryreset", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleFactoryReset();
+  });
+  server.on("/api/reboot", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleReboot();
+  });
+  server.on("/api/smartsensing", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleSmartSensingGet();
+  });
+  server.on("/api/smartsensing", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleSmartSensingUpdate();
+  });
+  server.on("/api/mqtt", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleMqttGet();
+  });
+  server.on("/api/mqtt", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleMqttUpdate();
+  });
+  server.on("/api/firmware/upload", HTTP_POST,
+    []() {
+      if (!requireAuth()) return;
+      handleFirmwareUploadComplete();
+    },
+    []() {
+      if (!requireAuth()) return;
+      handleFirmwareUploadChunk();
+    });
   // Note: Certificate API routes removed - now using Mozilla certificate bundle
 
   // Initialize CPU usage monitoring
@@ -272,6 +362,17 @@ void loop() {
   server.handleClient();
   webSocket.loop();
   mqttLoop();
+
+  // Check WebSocket auth timeouts
+  for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+    if (wsAuthTimeout[i] > 0 && millis() > wsAuthTimeout[i]) {
+      if (!wsAuthStatus[i]) {
+        DebugOut.printf("WebSocket client [%u] auth timeout\n", i);
+        webSocket.disconnect(i);
+      }
+      wsAuthTimeout[i] = 0;
+    }
+  }
 
   // Enhanced button monitoring with multiple press types
   if (!appState.factoryResetInProgress) {
