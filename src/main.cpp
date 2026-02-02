@@ -246,10 +246,8 @@ void setup() {
 
   // Apple captive portal check
   server.on("/hotspot-detect.html", HTTP_GET, []() {
-    server.send(
-        200, "text/html",
-        "<html><head><title>Success</title><meta http-equiv=\"refresh\" "
-        "content=\"0;url=/\"></head><body>Success</body></html>");
+    server.sendHeader("Location", "/", true);
+    server.send(302, "text/plain", "");
   });
 
   // Redirect all unknown routes to root in AP mode (Captive Portal)
@@ -276,7 +274,13 @@ void setup() {
   server.on("/", HTTP_GET, []() {
     if (!requireAuth())
       return;
-    server.send_P(200, "text/html", htmlPage);
+
+    // In AP mode, serve the setup page. In STA mode, serve the dashboard.
+    if (appState.isAPMode) {
+      server.send_P(200, "text/html", apHtmlPage);
+    } else {
+      server.send_P(200, "text/html", htmlPage);
+    }
   });
 
   server.on("/api/wificonfig", HTTP_POST, []() {
