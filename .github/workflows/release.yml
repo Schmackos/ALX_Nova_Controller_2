@@ -132,33 +132,186 @@ jobs:
 
       - name: Prepare release notes
         run: |
-          # Use the prepared RELEASE_NOTES.md
-          cp RELEASE_NOTES.md release_notes.md
-          
-          # Optional: Replace version placeholder if we used one (we hardcoded it, but this is safe)
-          sed -i "s/X.X.X/${{ steps.new_version.outputs.new_version }}/g" release_notes.md
-          
+          VERSION="${{ steps.new_version.outputs.new_version }}"
+
+          # Get the previous version tag (latest tag before this release)
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "⚠ No previous tag found, this is the first release"
+            COMMIT_RANGE="HEAD"
+          else
+            echo "✓ Previous release: $PREV_TAG"
+            COMMIT_RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          # Generate commit log since last release
+          echo "## Version $VERSION" > release_notes.md
+          echo "" >> release_notes.md
+
+          # Extract from RELEASE_NOTES.md if it exists for this version
+          if [ -f RELEASE_NOTES.md ]; then
+            START_LINE=$(grep -n "^## Version $VERSION" RELEASE_NOTES.md | head -1 | cut -d: -f1)
+
+            if [ -n "$START_LINE" ]; then
+              echo "✓ Found version $VERSION in RELEASE_NOTES.md"
+
+              # Find the next version section
+              NEXT_VERSION=$(tail -n +$((START_LINE + 1)) RELEASE_NOTES.md | grep -n "^## Version" | head -1 | cut -d: -f1)
+
+              if [ -n "$NEXT_VERSION" ]; then
+                END_LINE=$((START_LINE + NEXT_VERSION - 1))
+                # Extract the version section (skip the version header itself)
+                sed -n "$((START_LINE + 1)),${END_LINE}p" RELEASE_NOTES.md >> release_notes.md
+              else
+                # Extract to end of file (skip version header)
+                tail -n +$((START_LINE + 1)) RELEASE_NOTES.md >> release_notes.md
+              fi
+            else
+              echo "⚠ Version $VERSION not found in RELEASE_NOTES.md"
+            fi
+          fi
+
+          # Always append complete commit history since last release
+          echo "" >> release_notes.md
+          echo "## 📝 All Commits Since Last Release" >> release_notes.md
+          echo "" >> release_notes.md
+
+          # Categorize commits by type
+          declare -A sections
+          sections["feat"]="### ✨ New Features"
+          sections["fix"]="### 🐛 Bug Fixes"
+          sections["perf"]="### ⚡ Performance Improvements"
+          sections["docs"]="### 📚 Documentation"
+          sections["refactor"]="### ♻️ Code Refactoring"
+          sections["test"]="### ✅ Tests"
+          sections["chore"]="### 🔧 Chores"
+          sections["style"]="### 💄 Style"
+          sections["other"]="### 🔀 Other Changes"
+
+          # Create temporary files for each category
+          for key in "${!sections[@]}"; do
+            echo "" > "/tmp/${key}_commits.txt"
+          done
+
+          # Process each commit since last release
+          git log ${COMMIT_RANGE} --pretty=format:"%h|%s|%an|%ad" --date=short | while IFS='|' read -r hash subject author date; do
+            # Determine category
+            category="other"
+            if [[ "$subject" =~ ^feat[:(].*|^feature[:(].* ]]; then
+              category="feat"
+            elif [[ "$subject" =~ ^fix[:(].*|^bugfix[:(].* ]]; then
+              category="fix"
+            elif [[ "$subject" =~ ^perf[:(].*|^performance[:(].* ]]; then
+              category="perf"
+            elif [[ "$subject" =~ ^docs[:(].* ]]; then
+              category="docs"
+            elif [[ "$subject" =~ ^refactor[:(].* ]]; then
+              category="refactor"
+            elif [[ "$subject" =~ ^test[:(].* ]]; then
+              category="test"
+            elif [[ "$subject" =~ ^chore[:(].*|^build[:(].* ]]; then
+              category="chore"
+            elif [[ "$subject" =~ ^style[:(].* ]]; then
+              category="style"
+            fi
+
+            # Add to appropriate category file
+            echo "- [$date] $subject (\`$hash\`) - *$author*" >> "/tmp/${category}_commits.txt"
+          done
+
+          # Append categories with commits to release notes
+          for key in feat fix perf docs refactor test chore style other; do
+            if [ -s "/tmp/${key}_commits.txt" ]; then
+              echo "" >> release_notes.md
+              echo "${sections[$key]}" >> release_notes.md
+              cat "/tmp/${key}_commits.txt" >> release_notes.md
+            fi
+          done
+
+          # Count total commits
+          COMMIT_COUNT=$(git rev-list --count ${COMMIT_RANGE})
+          echo "" >> release_notes.md
+          echo "**Total commits in this release:** $COMMIT_COUNT" >> release_notes.md
+
           # Append firmware details
           echo "" >> release_notes.md
           echo "---" >> release_notes.md
           echo "" >> release_notes.md
-          echo "## Firmware Details" >> release_notes.md
-          echo "**Version:** ${{ steps.new_version.outputs.new_version }}" >> release_notes.md
-          echo "**SHA256:** ${{ steps.checksum.outputs.sha256 }}" >> release_notes.md
-          echo "**File Size:** ${{ steps.filesize.outputs.size }} bytes (${{ steps.filesize.outputs.size_kb }} KB)" >> release_notes.md
-          echo "**Build Date:** $(date -u +%Y-%m-%d)" >> release_notes.md
-          echo "**Platform:** ESP32-S3" >> release_notes.md
-          echo "**Tests:** ✅ All tests passed (23/23)" >> release_notes.md
-          
-          echo "Release notes prepared:"
-          cat release_notes.md
+          echo "## 📦 Firmware Details" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "| Property | Value |" >> release_notes.md
+          echo "|----------|-------|" >> release_notes.md
+          echo "| **Version** | \`${{ steps.new_version.outputs.new_version }}\` |" >> release_notes.md
+          echo "| **SHA256** | \`${{ steps.checksum.outputs.sha256 }}\` |" >> release_notes.md
+          echo "| **File Size** | ${{ steps.filesize.outputs.size_kb }} KB |" >> release_notes.md
+          echo "| **Build Date** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> release_notes.md
+          echo "| **Platform** | ESP32-S3 DevKit M-1 |" >> release_notes.md
+          echo "| **Tests** | ✅ All tests passed |" >> release_notes.md
+          echo "| **Commits** | $COMMIT_COUNT commits since $PREV_TAG |" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### 🔐 Verification" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "To verify the firmware integrity:" >> release_notes.md
+          echo "\`\`\`bash" >> release_notes.md
+          echo "sha256sum firmware.bin" >> release_notes.md
+          echo "# Should match: ${{ steps.checksum.outputs.sha256 }}" >> release_notes.md
+          echo "\`\`\`" >> release_notes.md
 
-      - name: Commit version change
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Release notes prepared for version $VERSION ($COMMIT_COUNT commits):"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          cat release_notes.md
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Update release notes with new version
+        run: |
+          VERSION="${{ steps.new_version.outputs.new_version }}"
+
+          # Check if this version already exists in RELEASE_NOTES.md
+          if ! grep -q "^## Version $VERSION" RELEASE_NOTES.md 2>/dev/null; then
+            echo "Creating new version section in RELEASE_NOTES.md"
+
+            # Create temporary file with new version section
+            {
+              echo "# Release Notes"
+              echo ""
+              echo "## Version $VERSION"
+              echo ""
+              echo "## New Features"
+              echo "- Automated release via GitHub Actions"
+              echo ""
+              echo "## Improvements"
+              echo "- None"
+              echo ""
+              echo "## Bug Fixes"
+              echo "- None"
+              echo ""
+              echo "## Technical Details"
+              echo "- Version bump to $VERSION"
+              echo ""
+              echo "## Breaking Changes"
+              echo "None"
+              echo ""
+              echo "## Known Issues"
+              echo "- None"
+              echo ""
+              # Append existing content (skip the title line)
+              tail -n +3 RELEASE_NOTES.md 2>/dev/null || true
+            } > RELEASE_NOTES_new.md
+
+            mv RELEASE_NOTES_new.md RELEASE_NOTES.md
+            echo "✓ Created new version section for $VERSION"
+          else
+            echo "Version $VERSION already exists in RELEASE_NOTES.md"
+          fi
+
+      - name: Commit version change and release notes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/config.h
-          git commit -m "Bump version to ${{ steps.new_version.outputs.new_version }}"
+          git add src/config.h RELEASE_NOTES.md
+          git commit -m "chore: Bump version to ${{ steps.new_version.outputs.new_version }}"
           git push
 
       - name: Create GitHub Release
