@@ -34,11 +34,10 @@ void startAccessPoint() {
   DebugOut.print("AP IP address: ");
   DebugOut.println(apIP);
 
-  server.on("/", handleAPRoot);
-  server.on("/config", HTTP_POST, handleAPConfig);
+  // We no longer overwrite "/" with a simple setup page.
+  // The main dashboard routes from main.cpp will now handle requests.
 
-  server.begin();
-  DebugOut.println("Web server started on port 80 (AP Mode)");
+  DebugOut.println("Web server configured for AP Mode");
 }
 
 void stopAccessPoint() {

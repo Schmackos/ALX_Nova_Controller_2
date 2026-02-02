@@ -379,10 +379,15 @@ void setup() {
   // Try to connect to stored WiFi networks (tries all saved networks in
   // priority order)
   if (!connectToStoredNetworks()) {
-    // All networks failed, automatic fallback to AP mode already happened in
-    // connectToStoredNetworks()
     DebugOut.println("No WiFi connection established. Running in AP mode.");
   }
+
+  // Always start server and WebSocket regardless of mode
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+  DebugOut.setWebSocket(&webSocket);
+  server.begin();
+  DebugOut.println("Web server and WebSocket started");
 
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
