@@ -112,7 +112,7 @@ jobs:
           pip install platformio
 
       - name: Build firmware
-        run: platformio run
+        run: platformio run -e esp32-s3-devkitm-1
 
       - name: Calculate SHA256 checksum
         id: checksum
