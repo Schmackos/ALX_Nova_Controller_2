@@ -1,5 +1,46 @@
 # Release Notes
 
+## Version 1.2.8
+
+### New Features
+- **Multi-WiFi Support**: The device can now remember and automatically connect to up to 5 saved WiFi networks
+  - Priority system: Most recently successful network is tried first
+  - 12-second connection timeout per network
+  - Networks are stored in ESP32 NVS (Non-Volatile Storage) using Preferences library
+  - One-time automatic migration from old single-network storage (LittleFS) to new multi-network system
+  - Add/update networks via existing WiFi configuration form (maximum 5 networks)
+  - Duplicate SSID detection prevents saving the same network twice
+
+- **Automatic AP Fallback**: Device automatically enters Access Point mode if no saved WiFi networks are available or if all connection attempts fail
+  - Seamless fallback ensures device is always accessible
+  - No manual intervention required
+
+- **Saved Networks Management UI**: New web interface for managing saved WiFi networks
+  - Visual list showing all saved networks with priority badges
+  - Network count indicator (X/5) shows how many slots are used
+  - One-click removal of saved networks with confirmation dialog
+  - Real-time list updates when WiFi status changes
+  - Responsive design with hover effects
+  - Empty state message when no networks are saved
+
+### Technical Details
+- New API endpoints:
+  - `GET /api/wifilist` - Returns list of saved networks (SSIDs only, no passwords)
+  - `POST /api/wifiremove` - Remove network by index
+- Backend functions in `wifi_manager.cpp`:
+  - `migrateWiFiCredentials()` - One-time migration from LittleFS to Preferences
+  - `connectToStoredNetworks()` - Try all saved networks with automatic AP fallback
+  - `saveWiFiNetwork()` - Add/update network with duplicate checking
+  - `removeWiFiNetwork()` - Remove network by index
+  - `getWiFiNetworkCount()` - Return saved network count
+- Frontend JavaScript functions in `web_pages.cpp`:
+  - `loadSavedNetworks()` - Fetch and display saved networks
+  - `removeNetwork(index)` - Remove network with confirmation
+- Configuration constants in `config.h`:
+  - `MAX_WIFI_NETWORKS = 5` - Maximum number of saved networks
+  - `WIFI_CONNECT_TIMEOUT = 12000` - Connection timeout per network (12 seconds)
+- Firmware size increase: ~27KB (backend + frontend)
+
 ## Version 1.2.4
 
 ## Bug Fixes
