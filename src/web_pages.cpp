@@ -1754,7 +1754,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             background: var(--border);
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script async src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body class="has-status-bar">
     <!-- Sidebar Navigation (Desktop) -->

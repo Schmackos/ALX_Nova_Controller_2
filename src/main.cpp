@@ -13,6 +13,7 @@
 #include "websocket_handler.h"
 #include "wifi_manager.h"
 #include <ArduinoJson.h>
+#include <DNSServer.h>
 #include <HTTPClient.h>
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -27,6 +28,9 @@
 
 // Forward declarations
 int compareVersions(const String &v1, const String &v2);
+
+// Global DNS Server (defined in wifi_manager.cpp)
+extern DNSServer dnsServer;
 
 // MQTT functions are defined in mqtt_handler.h/.cpp
 // OTA update functions are defined in ota_updater.h/.cpp
@@ -231,6 +235,35 @@ void setup() {
 
   // Define server routes here (before WiFi setup)
 
+  // Favicon (don't redirect/auth for this)
+  server.on("/favicon.ico", HTTP_GET, []() { server.send(204); });
+
+  // Android/Chrome captive portal check
+  server.on("/generate_204", HTTP_GET, []() {
+    server.sendHeader("Location", "/", true);
+    server.send(302, "text/plain", "");
+  });
+
+  // Apple captive portal check
+  server.on("/hotspot-detect.html", HTTP_GET, []() {
+    server.send(
+        200, "text/html",
+        "<html><head><title>Success</title><meta http-equiv=\"refresh\" "
+        "content=\"0;url=/\"></head><body>Success</body></html>");
+  });
+
+  // Redirect all unknown routes to root in AP mode (Captive Portal)
+  server.onNotFound([]() {
+    if (appState.isAPMode) {
+      server.sendHeader("Location",
+                        String("http://") + WiFi.softAPIP().toString() + "/",
+                        true);
+      server.send(302, "text/plain", "Redirecting to Captive Portal");
+    } else {
+      server.send(404, "text/plain", "Not Found");
+    }
+  });
+
   // Authentication routes (unprotected)
   server.on("/login", HTTP_GET,
             []() { server.send_P(200, "text/html", loginPage); });
@@ -399,6 +432,9 @@ void loop() {
   delay(1);
 
   server.handleClient();
+  if (appState.isAPMode) {
+    dnsServer.processNextRequest();
+  }
   webSocket.loop();
   mqttLoop();
 

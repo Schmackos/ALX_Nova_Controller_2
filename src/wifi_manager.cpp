@@ -6,9 +6,14 @@
 #include "ota_updater.h"
 #include "websocket_handler.h"
 #include <ArduinoJson.h>
+#include <DNSServer.h>
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <WiFi.h>
+
+// DNS Server for Captive Portal
+DNSServer dnsServer;
+const byte DNS_PORT = 53;
 
 // External function declarations
 extern int compareVersions(const String &v1, const String &v2);
@@ -34,6 +39,10 @@ void startAccessPoint() {
   DebugOut.print("AP IP address: ");
   DebugOut.println(apIP);
 
+  // Start the DNS server for Captive Portal
+  dnsServer.start(DNS_PORT, "*", apIP);
+  DebugOut.println("DNS server started (Captive Portal active)");
+
   // We no longer overwrite "/" with a simple setup page.
   // The main dashboard routes from main.cpp will now handle requests.
 
@@ -42,9 +51,10 @@ void startAccessPoint() {
 
 void stopAccessPoint() {
   if (isAPMode) {
+    dnsServer.stop();
     WiFi.softAPdisconnect(true);
     isAPMode = false;
-    DebugOut.println("Access Point stopped");
+    DebugOut.println("Access Point and DNS server stopped");
   }
 }
 
