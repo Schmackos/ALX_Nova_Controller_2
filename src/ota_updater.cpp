@@ -602,7 +602,8 @@ bool performOTAUpdate(String firmwareUrl) {
   otaStatus = "downloading";
   otaStatusMessage = "Downloading firmware...";
   broadcastUpdateStatus();
-  
+  webSocket.loop();  // Ensure "Downloading" status is sent before entering download loop
+
   DebugOut.println("📥 Downloading firmware to flash...");
   
   WiFiClient* stream = https.getStreamPtr();
@@ -644,6 +645,7 @@ bool performOTAUpdate(String firmwareUrl) {
         otaStatusMessage = "Write error during download";
         otaInProgress = false;
         broadcastUpdateStatus();
+        webSocket.loop();  // Ensure error status is sent
         return false;
       }
       
@@ -659,6 +661,7 @@ bool performOTAUpdate(String firmwareUrl) {
         otaProgress = newProgress;
         otaStatusMessage = String("Downloading: ") + String(written / 1024) + " / " + String(contentLength / 1024) + " KB";
         broadcastUpdateStatus();
+        webSocket.loop();  // Process WebSocket to actually send the progress update
         lastBroadcast = now;
         DebugOut.printf("📊 Progress: %d%% (%d KB / %d KB)\n", otaProgress, written / 1024, contentLength / 1024);
       }
@@ -694,6 +697,7 @@ bool performOTAUpdate(String firmwareUrl) {
       otaStatusMessage = "Checksum verification failed - firmware corrupted";
       otaInProgress = false;
       broadcastUpdateStatus();
+      webSocket.loop();  // Ensure error status is sent
       return false;
     }
   } else {
@@ -703,8 +707,9 @@ bool performOTAUpdate(String firmwareUrl) {
   otaStatusMessage = "Verifying firmware...";
   otaProgress = 100;
   broadcastUpdateStatus();
+  webSocket.loop();  // Ensure "Verifying" status is sent
   DebugOut.println("✅ Download complete. Verifying...");
-  
+
   if (Update.end()) {
     if (Update.isFinished()) {
       DebugOut.println("✅ OTA update completed successfully!");
@@ -714,6 +719,7 @@ bool performOTAUpdate(String firmwareUrl) {
       otaStatusMessage = "Update complete! Rebooting...";
       otaInProgress = false;
       broadcastUpdateStatus();
+      webSocket.loop();  // Ensure "complete" status is sent before reboot
       return true;
     } else {
       DebugOut.println("❌ OTA update did not finish correctly");
@@ -722,6 +728,7 @@ bool performOTAUpdate(String firmwareUrl) {
       otaStatusMessage = "Update verification failed";
       otaInProgress = false;
       broadcastUpdateStatus();
+      webSocket.loop();  // Ensure error status is sent
       return false;
     }
   } else {
@@ -731,6 +738,7 @@ bool performOTAUpdate(String firmwareUrl) {
     otaStatusMessage = String("Update error: ") + Update.errorString();
     otaInProgress = false;
     broadcastUpdateStatus();
+    webSocket.loop();  // Ensure error status is sent
     return false;
   }
 }
