@@ -24,7 +24,12 @@
       "Bash(git remote:*)",
       "Bash(winget install:*)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login)"
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login)",
+      "Bash(alias gh=\"/c/Program Files/GitHub CLI/gh.exe\")",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run list --workflow=release.yml --limit 5)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run cancel 21609085323)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run list --workflow=release.yml --limit 3)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 21609085323)"
     ]
   }
 }
