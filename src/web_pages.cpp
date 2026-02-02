@@ -3046,7 +3046,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
                 // If up-to-date, show green "Up-To-Date" text and hide release notes link
                 if (!data.updateAvailable && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
-                    latestVersionEl.textContent = 'Up-To-Date';
+                    latestVersionEl.textContent = 'Up-To-Date, no newer version available';
                     latestVersionEl.style.opacity = '1';
                     latestVersionEl.style.fontStyle = 'normal';
                     latestVersionEl.style.color = 'var(--success)';
@@ -4164,7 +4164,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
                     // If up-to-date, show green "Up-To-Date" text and hide release notes link
                     if (!data.updateAvailable && data.latestVersion !== 'Unknown') {
-                        latestVersionEl.textContent = 'Up-To-Date';
+                        latestVersionEl.textContent = 'Up-To-Date, no newer version available';
                         latestVersionEl.style.opacity = '1';
                         latestVersionEl.style.fontStyle = 'normal';
                         latestVersionEl.style.color = 'var(--success)';

@@ -1452,7 +1452,7 @@ void handleMqttUpdate() {
   }
 
   // Update password (empty string clears it)
-  if (doc.containsKey("password")) {
+  if (!doc["password"].isNull()) {
     String newPassword = doc["password"].as<String>();
     if (mqttPassword != newPassword) {
       mqttPassword = newPassword;
@@ -1462,7 +1462,7 @@ void handleMqttUpdate() {
   }
 
   // Update base topic (empty string uses default ALX/{serial})
-  if (doc.containsKey("baseTopic")) {
+  if (!doc["baseTopic"].isNull()) {
     String newBaseTopic = doc["baseTopic"].as<String>();
     if (mqttBaseTopic != newBaseTopic) {
       // Remove old HA discovery before changing topic
