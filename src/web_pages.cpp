@@ -2157,10 +2157,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <a href="#" id="currentVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('current'); return false;" title="View release notes">?</a>
                         </span>
                     </div>
-                    <div class="version-row" id="latestVersionRow" style="display: none;">
+                    <div class="version-row" id="latestVersionRow">
                         <span class="version-label">Latest Version</span>
                         <span class="version-value version-update">
-                            <span id="latestVersion">--</span>
+                            <span id="latestVersion" style="opacity: 0.6; font-style: italic;">Checking...</span>
                             <a href="#" id="latestVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('latest'); return false;" title="View release notes">?</a>
                         </span>
                     </div>
@@ -2920,13 +2920,33 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('currentVersion').textContent = data.firmwareVersion;
             }
             
-            if (data.latestVersion && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
+            // Always show latest version row if we have any version info
+            if (data.latestVersion) {
                 currentLatestVersion = data.latestVersion;
-                document.getElementById('latestVersion').textContent = data.latestVersion;
-                document.getElementById('latestVersionRow').style.display = 'flex';
-                
+                const latestVersionEl = document.getElementById('latestVersion');
+                const latestVersionRow = document.getElementById('latestVersionRow');
+
+                latestVersionEl.textContent = data.latestVersion;
+                latestVersionRow.style.display = 'flex';
+
+                // Style based on status
+                if (data.latestVersion === 'Checking...') {
+                    latestVersionEl.style.opacity = '0.6';
+                    latestVersionEl.style.fontStyle = 'italic';
+                } else if (data.latestVersion === 'Unknown') {
+                    latestVersionEl.style.opacity = '0.6';
+                    latestVersionEl.style.fontStyle = 'italic';
+                    latestVersionEl.style.color = 'var(--text-secondary)';
+                } else {
+                    latestVersionEl.style.opacity = '1';
+                    latestVersionEl.style.fontStyle = 'normal';
+                    latestVersionEl.style.color = '';
+                }
+
                 if (data.updateAvailable) {
                     document.getElementById('updateBtn').classList.remove('hidden');
+                } else {
+                    document.getElementById('updateBtn').classList.add('hidden');
                 }
             }
             
@@ -3707,10 +3727,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
                 
                 // Update latest version display
-                if (data.latestVersion && data.latestVersion !== 'Unknown') {
+                if (data.latestVersion) {
                     currentLatestVersion = data.latestVersion;
-                    document.getElementById('latestVersion').textContent = data.latestVersion;
+                    const latestVersionEl = document.getElementById('latestVersion');
+                    latestVersionEl.textContent = data.latestVersion;
                     document.getElementById('latestVersionRow').style.display = 'flex';
+
+                    // Style based on status
+                    if (data.latestVersion === 'Unknown') {
+                        latestVersionEl.style.opacity = '0.6';
+                        latestVersionEl.style.fontStyle = 'italic';
+                        latestVersionEl.style.color = 'var(--text-secondary)';
+                    } else {
+                        latestVersionEl.style.opacity = '1';
+                        latestVersionEl.style.fontStyle = 'normal';
+                        latestVersionEl.style.color = '';
+                    }
                 }
                 
                 // Show/hide update button based on update availability
@@ -3768,10 +3800,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 currentFirmwareVersion = data.currentVersion;
                 document.getElementById('currentVersion').textContent = data.currentVersion;
             }
-            if (data.latestVersion && data.latestVersion !== 'Unknown') {
+            if (data.latestVersion) {
                 currentLatestVersion = data.latestVersion;
-                document.getElementById('latestVersion').textContent = data.latestVersion;
+                const latestVersionEl = document.getElementById('latestVersion');
+                latestVersionEl.textContent = data.latestVersion;
                 document.getElementById('latestVersionRow').style.display = 'flex';
+
+                // Style based on status
+                if (data.latestVersion === 'Unknown') {
+                    latestVersionEl.style.opacity = '0.6';
+                    latestVersionEl.style.fontStyle = 'italic';
+                    latestVersionEl.style.color = 'var(--text-secondary)';
+                } else {
+                    latestVersionEl.style.opacity = '1';
+                    latestVersionEl.style.fontStyle = 'normal';
+                    latestVersionEl.style.color = '';
+                }
             }
             
             // Handle different status states
@@ -4599,10 +4643,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <h2>Change Password</h2>
                     <form id="passwordChangeForm">
                         <div class="form-group">
-                            <label>Current Password</label>
-                            <input type="password" id="currentPassword" required>
-                        </div>
-                        <div class="form-group">
                             <label>New Password</label>
                             <input type="password" id="newPassword" required minlength="8">
                         </div>
@@ -4627,7 +4667,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         async function changePassword() {
-            const currentPassword = document.getElementById('currentPassword').value;
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
             const errorDiv = document.getElementById('passwordError');
@@ -4649,7 +4688,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        currentPassword: currentPassword,
                         newPassword: newPassword
                     })
                 });

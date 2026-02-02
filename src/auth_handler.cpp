@@ -374,25 +374,7 @@ void handlePasswordChange() {
     return;
   }
 
-  String currentPassword = doc["currentPassword"].as<String>();
   String newPassword = doc["newPassword"].as<String>();
-
-  // Validate current password
-  if (currentPassword != appState.webPassword) {
-    delay(1000); // Rate limiting
-
-    DebugOut.println(
-        "Auth: Password change failed - incorrect current password");
-
-    JsonDocument response;
-    response["success"] = false;
-    response["error"] = "Current password is incorrect";
-
-    String responseStr;
-    serializeJson(response, responseStr);
-    server.send(401, "application/json", responseStr);
-    return;
-  }
 
   // Validate new password
   if (newPassword.length() < 8) {
