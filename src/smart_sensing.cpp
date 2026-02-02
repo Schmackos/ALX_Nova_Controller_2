@@ -74,15 +74,15 @@ void handleSmartSensingUpdate() {
       // When switching to SMART_AUTO mode, immediately evaluate voltage state
       if (currentMode == SMART_AUTO) {
         bool voltageDetected = detectVoltage();
-        
+
         if (voltageDetected) {
-          // Voltage is above threshold - turn ON and start timer
+          // Voltage is above threshold - turn ON and set timer to full value
           timerRemaining = timerDuration * 60;
           lastTimerUpdate = millis();
           lastVoltageDetection = millis();
           setAmplifierState(true);
           previousVoltageState = true;
-          DebugOut.println("SMART_AUTO mode activated - voltage detected, amplifier ON, timer started");
+          DebugOut.println("SMART_AUTO mode activated - voltage detected, amplifier ON, timer at full value");
         } else {
           // Voltage is below threshold - turn OFF
           timerRemaining = 0;
@@ -106,14 +106,14 @@ void handleSmartSensingUpdate() {
       if (currentMode == SMART_AUTO) {
         // Always update timerRemaining to show the new duration
         timerRemaining = timerDuration * 60;
-        
+
         if (amplifierState) {
-          // Amplifier is ON - restart the countdown with new duration
+          // Amplifier is ON - update timer to new duration
           lastTimerUpdate = millis();
-          DebugOut.printf("Timer duration changed to: %d minutes (countdown active)\n", duration);
+          DebugOut.printf("Timer duration changed to: %d minutes (timer updated)\n", duration);
         } else {
-          // Amplifier is OFF - just display new duration, countdown won't start until voltage detected
-          DebugOut.printf("Timer duration changed to: %d minutes (countdown will start when voltage detected)\n", duration);
+          // Amplifier is OFF - just display new duration, countdown won't start until voltage disappears
+          DebugOut.printf("Timer duration changed to: %d minutes (countdown starts when voltage disappears)\n", duration);
         }
       }
       
@@ -146,10 +146,10 @@ void handleSmartSensingUpdate() {
     
     if (currentMode == SMART_AUTO) {
       if (state) {
-        // If turning on manually in SMART_AUTO mode, restart timer
+        // If turning on manually in SMART_AUTO mode, set timer to full value
         timerRemaining = timerDuration * 60;
         lastTimerUpdate = millis();
-        DebugOut.println("Manual ON: Timer restarted");
+        DebugOut.println("Manual ON: Timer set to full value");
       } else {
         // If turning off manually in SMART_AUTO mode, reset timer to 0
         timerRemaining = 0;
@@ -230,32 +230,32 @@ void updateSmartSensingLogic() {
       break;
       
     case SMART_AUTO: {
-      // Detect rising edge: voltage goes from below threshold to above threshold
-      bool voltageRisingEdge = voltageDetected && !previousVoltageState;
-      
-      if (voltageRisingEdge) {
-        // Voltage just crossed threshold (rising edge) - start/restart timer
-        timerRemaining = timerDuration * 60;  // Convert minutes to seconds
+      if (voltageDetected) {
+        // Voltage is currently detected - keep timer at full value and amplifier ON
+        timerRemaining = timerDuration * 60;  // Keep timer at full value
         lastVoltageDetection = currentMillis;
         lastTimerUpdate = currentMillis;
-        
-        // Turn amplifier ON if not already
-        setAmplifierState(true);
-        DebugOut.println("Smart Auto: Voltage detected above threshold - timer started");
-      }
-      
-      // Update timer countdown every second (only if amplifier is ON and timer has time remaining)
-      if (amplifierState && timerRemaining > 0 && (currentMillis - lastTimerUpdate >= 1000)) {
-        lastTimerUpdate = currentMillis;
-        timerRemaining--;
-        
-        // Check if timer reached zero
-        if (timerRemaining == 0) {
-          setAmplifierState(false);
-          DebugOut.println("Smart Auto: Timer expired, turning amplifier OFF");
+
+        // Ensure amplifier is ON
+        if (!amplifierState) {
+          setAmplifierState(true);
+          DebugOut.println("Smart Auto: Voltage detected - amplifier ON, timer reset");
+        }
+      } else {
+        // No voltage detected - countdown timer if amplifier is ON
+        if (amplifierState && timerRemaining > 0) {
+          if (currentMillis - lastTimerUpdate >= 1000) {
+            lastTimerUpdate = currentMillis;
+            timerRemaining--;
+
+            if (timerRemaining == 0) {
+              setAmplifierState(false);
+              DebugOut.println("Smart Auto: Timer expired, turning amplifier OFF");
+            }
+          }
         }
       }
-      
+
       // Update previous voltage state for next iteration
       previousVoltageState = voltageDetected;
       break;
