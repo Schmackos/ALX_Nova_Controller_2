@@ -8,7 +8,6 @@
 #include "utils.h"
 #include "wifi_manager.h"
 #include <ArduinoJson.h>
-#include <ESP.h>
 #include <LittleFS.h>
 #include <WiFi.h>
 
