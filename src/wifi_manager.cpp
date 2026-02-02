@@ -83,10 +83,17 @@ void connectToWiFi(const char *ssid, const char *password) {
     if (apEnabled && !isAPMode) {
       WiFi.mode(WIFI_AP_STA);
       WiFi.softAP(apSSID.c_str(), apPassword);
+
+      // Start DNS server for AP mode
+      dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
       isAPMode = true;
+
       DebugOut.printf("Access Point also running at: %s\n",
                       WiFi.softAPIP().toString().c_str());
     } else if (!apEnabled) {
+      if (isAPMode) {
+        dnsServer.stop();
+      }
       isAPMode = false;
     }
 
@@ -341,10 +348,17 @@ bool connectToStoredNetworks() {
       if (apEnabled && !isAPMode) {
         WiFi.mode(WIFI_AP_STA);
         WiFi.softAP(apSSID.c_str(), apPassword);
+
+        // Start DNS server for AP mode
+        dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
         isAPMode = true;
+
         DebugOut.printf("Access Point also running at: %s\n",
                         WiFi.softAPIP().toString().c_str());
       } else if (!apEnabled) {
+        if (isAPMode) {
+          dnsServer.stop();
+        }
         isAPMode = false;
       }
 
@@ -445,6 +459,11 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
 
   // Add saved networks count
   doc["networkCount"] = getWiFiNetworkCount();
+
+  // Add async connection status
+  doc["wifiConnecting"] = wifiConnecting;
+  doc["wifiConnectSuccess"] = wifiConnectSuccess;
+  doc["wifiNewIP"] = wifiNewIP;
 }
 
 void sendWiFiStatus() {
@@ -488,12 +507,22 @@ void handleAPConfig() {
   }
 
   saveWiFiCredentials(ssid.c_str(), password.c_str());
-  server.send(200, "application/json", "{\"success\": true}");
 
-  DebugOut.printf("Credentials saved. Connecting to %s...\n", ssid.c_str());
-  delay(1000);
+  // Start asynchronous connection
+  wifiSSID = ssid;
+  wifiPassword = password;
+  wifiConnecting = true;
+  wifiConnectSuccess = false;
+  wifiNewIP = "";
 
-  connectToWiFi(ssid.c_str(), password.c_str());
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(ssid.c_str(), password.c_str());
+
+  server.send(200, "application/json",
+              "{\"success\": true, \"message\": \"Connection initiated\"}");
+
+  DebugOut.printf("Credentials saved. Connecting to %s in background...\n",
+                  ssid.c_str());
 }
 
 void handleAPConfigUpdate() {
@@ -587,15 +616,28 @@ void handleAPToggle() {
       // Start AP mode (can run alongside STA mode)
       WiFi.mode(WIFI_AP_STA);
       WiFi.softAP(apSSID, apPassword);
+
+      // Start DNS server for AP mode
+      dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
       isAPMode = true;
+
       DebugOut.println("Access Point enabled");
       DebugOut.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
     }
   } else {
-    if (isAPMode && WiFi.status() == WL_CONNECTED) {
-      // Disable AP but keep STA connection
-      WiFi.softAPdisconnect(true);
-      WiFi.mode(WIFI_STA);
+    if (isAPMode) {
+      // Always stop DNS server before disabling AP mode
+      dnsServer.stop();
+
+      if (WiFi.status() == WL_CONNECTED) {
+        // Disable AP but keep STA connection
+        WiFi.softAPdisconnect(true);
+        WiFi.mode(WIFI_STA);
+      } else {
+        // Just turn off AP if not connected
+        WiFi.softAPdisconnect(true);
+        WiFi.mode(WIFI_OFF);
+      }
       isAPMode = false;
       DebugOut.println("Access Point disabled");
     }
@@ -638,20 +680,21 @@ void handleWiFiConfig() {
     return;
   }
 
+  // Start asynchronous connection
   wifiSSID = ssid;
   wifiPassword = password;
+  wifiConnecting = true;
+  wifiConnectSuccess = false;
+  wifiNewIP = "";
 
-  server.send(200, "application/json", "{\"success\": true}");
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(ssid.c_str(), password.c_str());
 
-  DebugOut.printf("WiFi network saved. Connecting to %s...\n", ssid.c_str());
+  server.send(200, "application/json",
+              "{\"success\": true, \"message\": \"Connection initiated\"}");
 
-  // Disconnect current connection and reconnect with new credentials
-  if (isAPMode) {
-    stopAccessPoint();
-  }
-  WiFi.disconnect();
-  delay(500);
-  connectToWiFi(ssid.c_str(), password.c_str());
+  DebugOut.printf("Network saved. Connecting to %s in background...\n",
+                  ssid.c_str());
 }
 
 void handleWiFiStatus() {
@@ -788,5 +831,37 @@ void handleWiFiRemove() {
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid index or removal "
                 "failed\"}");
+  }
+}
+void updateWiFiConnection() {
+  if (!wifiConnecting)
+    return;
+
+  static unsigned long connectionStarted = 0;
+  if (connectionStarted == 0) {
+    connectionStarted = millis();
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnectSuccess = true;
+    wifiConnecting = false;
+    wifiNewIP = WiFi.localIP().toString();
+    connectionStarted = 0;
+
+    DebugOut.println("\nWiFi connected in background!");
+    DebugOut.printf("IP address: %s\n", wifiNewIP.c_str());
+
+    // Sync time and setup services
+    syncTimeWithNTP();
+    setupMqtt();
+
+    // Broadcast success to WebSocket clients
+    sendWiFiStatus();
+  } else if (millis() - connectionStarted > 20000) { // 20s timeout
+    wifiConnectSuccess = false;
+    wifiConnecting = false;
+    connectionStarted = 0;
+    DebugOut.println("\nWiFi connection failed (timeout)");
+    sendWiFiStatus();
   }
 }

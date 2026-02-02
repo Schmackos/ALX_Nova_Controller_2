@@ -65,6 +65,11 @@ public:
   // ===== Web Authentication =====
   String webPassword = DEFAULT_AP_PASSWORD;
 
+  // ===== WiFi Connection State (Async) =====
+  bool wifiConnecting = false;
+  bool wifiConnectSuccess = false;
+  String wifiNewIP;
+
   // ===== Factory Reset State =====
   bool factoryResetInProgress = false;
 
@@ -209,6 +214,11 @@ private:
 #define apEnabled appState.apEnabled
 #define apSSID appState.apSSID
 #define apPassword appState.apPassword
+
+// WiFi Connection State (Async)
+#define wifiConnecting appState.wifiConnecting
+#define wifiConnectSuccess appState.wifiConnectSuccess
+#define wifiNewIP appState.wifiNewIP
 
 // Factory Reset State
 #define factoryResetInProgress appState.factoryResetInProgress

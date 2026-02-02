@@ -19,6 +19,9 @@
 // ===== Settings Persistence =====
 
 bool loadSettings() {
+  if (!LittleFS.exists("/settings.txt")) {
+    return false;
+  }
   File file = LittleFS.open("/settings.txt", "r");
   if (!file) {
     return false;

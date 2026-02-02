@@ -6,7 +6,6 @@
 #include "websocket_handler.h"
 #include <LittleFS.h>
 
-
 // State tracking for hardware stats change detection
 static unsigned long prevMqttUptime = 0;
 static uint32_t prevMqttHeapFree = 0;
@@ -29,6 +28,9 @@ extern void setAmplifierState(bool state);
 
 // Load MQTT settings from LittleFS
 bool loadMqttSettings() {
+  if (!LittleFS.exists("/mqtt_config.txt")) {
+    return false;
+  }
   File file = LittleFS.open("/mqtt_config.txt", "r");
   if (!file) {
     return false;

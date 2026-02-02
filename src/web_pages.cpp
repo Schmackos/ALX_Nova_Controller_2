@@ -1415,6 +1415,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             animation: scaleIn 0.2s ease forwards;
         }
 
+        .hidden {
+            display: none !important;
+        }
+
         /* Staggered animation for cards */
         .panel.active .card:nth-child(1) { animation-delay: 0ms; }
         .panel.active .card:nth-child(2) { animation-delay: 50ms; }
@@ -3092,10 +3096,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         // ===== WiFi Configuration =====
         let wifiScanInProgress = false;
         
+        let wifiConnectionPollTimer = null;
+
         function submitWiFiConfig(event) {
             event.preventDefault();
             const ssid = document.getElementById('wifiSSID').value;
             const password = document.getElementById('wifiPassword').value;
+            
+            showWiFiConnectionModal(ssid);
             
             apiFetch('/api/wificonfig', {
                 method: 'POST',
@@ -3105,12 +3113,98 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    showToast('Connecting to WiFi...', 'success');
+                    // Start polling for connection status
+                    if (wifiConnectionPollTimer) clearInterval(wifiConnectionPollTimer);
+                    wifiConnectionPollTimer = setInterval(pollWiFiConnection, 2000);
                 } else {
-                    showToast(data.message || 'Connection failed', 'error');
+                    updateWiFiConnectionStatus('error', data.message || 'Failed to initiate connection');
                 }
             })
-            .catch(err => showToast('Failed to connect', 'error'));
+            .catch(err => updateWiFiConnectionStatus('error', 'Network error: ' + err.message));
+        }
+
+        function pollWiFiConnection() {
+            apiFetch('/api/wifistatus')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.wifiConnecting) {
+                        // Still connecting
+                        return;
+                    }
+                    
+                    clearInterval(wifiConnectionPollTimer);
+                    wifiConnectionPollTimer = null;
+                    
+                    if (data.wifiConnectSuccess) {
+                        updateWiFiConnectionStatus('success', 'Connected successfully!', data.wifiNewIP);
+                    } else {
+                        updateWiFiConnectionStatus('error', 'Failed to connect. Please check credentials.');
+                    }
+                })
+                .catch(err => {
+                    console.error('Polling error:', err);
+                });
+        }
+
+        function showWiFiConnectionModal(ssid) {
+            const modal = document.createElement('div');
+            modal.id = 'wifiConnectionModal';
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <div class="modal-title">Connecting to WiFi</div>
+                    <div class="info-box">
+                        <div style="text-align: center; padding: 20px;">
+                            <div id="wifiLoader" class="animate-pulse" style="font-size: 40px; margin-bottom: 16px;">📶</div>
+                            <div id="wifiStatusText">Connecting to <strong>${ssid}</strong>...</div>
+                            <div id="wifiIPInfo" class="hidden" style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--success);"></div>
+                        </div>
+                    </div>
+                    <div id="wifiModalActions" class="modal-actions" style="margin-top: 16px;">
+                        <button type="button" class="secondary" onclick="closeWiFiModal()">Cancel</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function updateWiFiConnectionStatus(type, message, ip = null) {
+            const statusText = document.getElementById('wifiStatusText');
+            const loader = document.getElementById('wifiLoader');
+            const actions = document.getElementById('wifiModalActions');
+            const ipInfo = document.getElementById('wifiIPInfo');
+            
+            statusText.innerHTML = message;
+            loader.classList.remove('animate-pulse');
+            
+            if (type === 'success') {
+                loader.textContent = '✅';
+                if (ip) {
+                    ipInfo.textContent = ip;
+                    ipInfo.classList.remove('hidden');
+                    actions.innerHTML = `
+                        <button class="primary" onclick="window.location.href='http://${ip}'">Go to Dashboard</button>
+                    `;
+                } else {
+                    actions.innerHTML = `
+                        <button class="primary" onclick="closeWiFiModal()">Close</button>
+                    `;
+                }
+            } else if (type === 'error') {
+                loader.textContent = '❌';
+                actions.innerHTML = `
+                    <button class="secondary" onclick="closeWiFiModal()">Try Again</button>
+                `;
+            }
+        }
+
+        function closeWiFiModal() {
+            const modal = document.getElementById('wifiConnectionModal');
+            if (modal) modal.remove();
+            if (wifiConnectionPollTimer) {
+                clearInterval(wifiConnectionPollTimer);
+                wifiConnectionPollTimer = null;
+            }
         }
         
         function scanWiFiNetworks() {
@@ -4740,6 +4834,72 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             margin-top: 16px;
         }
 
+        /* ===== Modal ===== */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-surface);
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .modal-actions button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .modal-actions .btn-primary { background: var(--accent); color: #000; }
+        .modal-actions .btn-secondary { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); }
+
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        .hidden { display: none; }
+
         .current-ap {
             text-align: center;
             font-size: 14px;
@@ -4797,10 +4957,23 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 <button type="submit" class="btn">Connect to WiFi</button>
             </form>
-            <div class="status-message" id="statusMessage"></div>
         </div>
 
         <p class="info-text">Enter your WiFi credentials to connect the device to your network.</p>
+    </div>
+
+    <div id="wifiConnectionModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-title">Connecting to WiFi</div>
+            <div style="text-align: center; padding: 20px;">
+                <div id="wifiLoader" class="animate-pulse" style="font-size: 40px; margin-bottom: 16px;">📶</div>
+                <div id="wifiStatusText">Connecting...</div>
+                <div id="wifiIPInfo" class="hidden" style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--success); font-weight: bold;"></div>
+            </div>
+            <div id="wifiModalActions" class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeWiFiModal()">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -4835,14 +5008,55 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             });
         };
 
+        let wifiConnectionPollTimer = null;
+
+        function showWiFiModal(ssid) {
+            document.getElementById('wifiStatusText').innerHTML = `Connecting to <strong>${ssid}</strong>...`;
+            document.getElementById('wifiLoader').textContent = '📶';
+            document.getElementById('wifiLoader').classList.add('animate-pulse');
+            document.getElementById('wifiIPInfo').classList.add('hidden');
+            document.getElementById('wifiModalActions').innerHTML = '<button type="button" class="btn-secondary" onclick="closeWiFiModal()">Cancel</button>';
+            document.getElementById('wifiConnectionModal').classList.add('active');
+        }
+
+        function closeWiFiModal() {
+            document.getElementById('wifiConnectionModal').classList.remove('active');
+            if (wifiConnectionPollTimer) {
+                clearInterval(wifiConnectionPollTimer);
+                wifiConnectionPollTimer = null;
+            }
+        }
+
+        function updateWiFiStatus(type, message, ip = null) {
+            const statusText = document.getElementById('wifiStatusText');
+            const loader = document.getElementById('wifiLoader');
+            const actions = document.getElementById('wifiModalActions');
+            const ipInfo = document.getElementById('wifiIPInfo');
+            
+            statusText.innerHTML = message;
+            loader.classList.remove('animate-pulse');
+            
+            if (type === 'success') {
+                loader.textContent = '✅';
+                if (ip) {
+                    ipInfo.textContent = ip;
+                    ipInfo.classList.remove('hidden');
+                    actions.innerHTML = `<button class="btn-primary" onclick="window.location.href='http://${ip}'">Go to Dashboard</button>`;
+                } else {
+                    actions.innerHTML = `<button class="btn-primary" onclick="closeWiFiModal()">Close</button>`;
+                }
+            } else if (type === 'error') {
+                loader.textContent = '❌';
+                actions.innerHTML = `<button class="btn-secondary" onclick="closeWiFiModal()">Try Again</button>`;
+            }
+        }
+
         function submitWiFi(event) {
             event.preventDefault();
             const ssid = document.getElementById('ssid').value;
             const password = document.getElementById('password').value;
-            const statusMsg = document.getElementById('statusMessage');
             
-            statusMsg.className = 'status-message';
-            statusMsg.style.display = 'none';
+            showWiFiModal(ssid);
             
             apiFetch('/api/wificonfig', {
                 method: 'POST',
@@ -4852,18 +5066,35 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    statusMsg.className = 'status-message success';
-                    statusMsg.textContent = 'Connecting to WiFi... Please wait.';
-                    setTimeout(() => window.location.href = '/', 5000);
+                    if (wifiConnectionPollTimer) clearInterval(wifiConnectionPollTimer);
+                    wifiConnectionPollTimer = setInterval(pollWiFiConnection, 2000);
                 } else {
-                    statusMsg.className = 'status-message error';
-                    statusMsg.textContent = data.message || 'Connection failed';
+                    updateWiFiStatus('error', data.message || 'Connection failed');
                 }
             })
             .catch(err => {
-                statusMsg.className = 'status-message error';
-                statusMsg.textContent = 'Error: ' + err.message;
+                updateWiFiStatus('error', 'Error: ' + err.message);
             });
+        }
+
+        function pollWiFiConnection() {
+            apiFetch('/api/wifistatus')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.wifiConnecting) return;
+                    
+                    clearInterval(wifiConnectionPollTimer);
+                    wifiConnectionPollTimer = null;
+                    
+                    if (data.wifiConnectSuccess) {
+                        updateWiFiStatus('success', 'Connected successfully!', data.wifiNewIP);
+                    } else {
+                        updateWiFiStatus('error', 'Failed to connect. Check credentials.');
+                    }
+                })
+                .catch(err => {
+                    console.error('Polling error:', err);
+                });
         }
 
         function togglePassword() {

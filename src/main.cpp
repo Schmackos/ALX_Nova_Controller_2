@@ -236,18 +236,19 @@ void setup() {
   // Define server routes here (before WiFi setup)
 
   // Favicon (don't redirect/auth for this)
-  server.on("/favicon.ico", HTTP_GET, []() { server.send(204); });
+  server.on("/favicon.ico", HTTP_GET,
+            []() { server.send(204, "text/plain", ""); });
 
   // Android/Chrome captive portal check
   server.on("/generate_204", HTTP_GET, []() {
     server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "");
+    server.send(302, "text/plain", "Redirecting...");
   });
 
   // Apple captive portal check
   server.on("/hotspot-detect.html", HTTP_GET, []() {
     server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "");
+    server.send(302, "text/plain", "Redirecting...");
   });
 
   // Redirect all unknown routes to root in AP mode (Captive Portal)
@@ -437,6 +438,7 @@ void loop() {
   }
   webSocket.loop();
   mqttLoop();
+  updateWiFiConnection();
 
   // Check WebSocket auth timeouts
   for (int i = 0; i < MAX_WS_CLIENTS; i++) {
