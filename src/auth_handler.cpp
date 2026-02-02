@@ -119,8 +119,8 @@ bool validateSession(String sessionId) {
 
       // Update last seen time
       activeSessions[i].lastSeen = now;
-      DebugOut.printf("Auth: Session %s validated successfully\n",
-                      sessionId.c_str());
+      // DebugOut.printf("Auth: Session %s validated successfully\n",
+      //                 sessionId.c_str());
       return true;
     }
   }
@@ -164,7 +164,7 @@ String getSessionFromCookie() {
     return "";
   }
 
-  DebugOut.println("Auth: Raw Cookie header: " + cookie);
+  // DebugOut.println("Auth: Raw Cookie header: " + cookie);
 
   // Parse cookie header for sessionId
   int start = cookie.indexOf("sessionId=");
