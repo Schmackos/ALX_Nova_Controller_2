@@ -237,6 +237,7 @@ void setup() {
   server.on("/api/settings", HTTP_POST, handleSettingsUpdate);
   server.on("/api/settings/export", HTTP_GET, handleSettingsExport);
   server.on("/api/settings/import", HTTP_POST, handleSettingsImport);
+  server.on("/api/diagnostics", HTTP_GET, handleDiagnostics);
   server.on("/api/factoryreset", HTTP_POST, handleFactoryReset);
   server.on("/api/reboot", HTTP_POST, handleReboot);
   server.on("/api/smartsensing", HTTP_GET, handleSmartSensingGet);

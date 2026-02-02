@@ -20,5 +20,6 @@ void handleSettingsExport();
 void handleSettingsImport();
 void handleFactoryReset();
 void handleReboot();
+void handleDiagnostics();
 
 #endif // SETTINGS_MANAGER_H

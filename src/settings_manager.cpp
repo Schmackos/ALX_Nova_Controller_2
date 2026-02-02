@@ -5,8 +5,10 @@
 #include "mqtt_handler.h"
 #include "ota_updater.h"
 #include "smart_sensing.h"
+#include "utils.h"
 #include "wifi_manager.h"
 #include <ArduinoJson.h>
+#include <ESP.h>
 #include <LittleFS.h>
 #include <WiFi.h>
 
@@ -524,6 +526,168 @@ void handleReboot() {
 
   // Reboot the ESP32
   ESP.restart();
+}
+
+void handleDiagnostics() {
+  DebugOut.println("Diagnostics export requested via web interface");
+
+  JsonDocument doc;
+
+  // ===== Timestamp =====
+  time_t now = time(nullptr);
+  struct tm timeinfo;
+  char timestamp[32];
+  if (getLocalTime(&timeinfo)) {
+    snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02dT%02d:%02d:%02d",
+             timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+             timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  } else {
+    snprintf(timestamp, sizeof(timestamp), "unknown");
+  }
+  doc["timestamp"] = timestamp;
+  doc["diagnosticsVersion"] = "1.0";
+
+  // ===== Device Information =====
+  JsonObject device = doc["device"].to<JsonObject>();
+  device["manufacturer"] = MANUFACTURER_NAME;
+  device["model"] = MANUFACTURER_MODEL;
+  device["serialNumber"] = deviceSerialNumber;
+  device["firmwareVersion"] = firmwareVer;
+  device["mac"] = WiFi.macAddress();
+  device["chipId"] = String((uint32_t)(ESP.getEfuseMac() & 0xFFFFFFFF), HEX);
+  device["chipModel"] = ESP.getChipModel();
+  device["chipRevision"] = ESP.getChipRevision();
+  device["chipCores"] = ESP.getChipCores();
+  device["cpuFreqMHz"] = ESP.getCpuFreqMHz();
+
+  // ===== System Information =====
+  JsonObject system = doc["system"].to<JsonObject>();
+  system["uptimeSeconds"] = millis() / 1000;
+  system["resetReason"] = getResetReasonString();
+  system["sdkVersion"] = ESP.getSdkVersion();
+  system["freeHeap"] = ESP.getFreeHeap();
+  system["heapSize"] = ESP.getHeapSize();
+  system["minFreeHeap"] = ESP.getMinFreeHeap();
+  system["maxAllocHeap"] = ESP.getMaxAllocHeap();
+  system["psramSize"] = ESP.getPsramSize();
+  system["freePsram"] = ESP.getFreePsram();
+  system["flashSize"] = ESP.getFlashChipSize();
+  system["flashSpeed"] = ESP.getFlashChipSpeed();
+
+  // ===== WiFi Status =====
+  JsonObject wifi = doc["wifi"].to<JsonObject>();
+  wifi["connected"] = (WiFi.status() == WL_CONNECTED);
+  wifi["mode"] = isAPMode ? "ap" : "sta";
+  wifi["ssid"] = WiFi.SSID();
+  wifi["rssi"] = WiFi.RSSI();
+  wifi["localIP"] = WiFi.localIP().toString();
+  wifi["gateway"] = WiFi.gatewayIP().toString();
+  wifi["subnetMask"] = WiFi.subnetMask().toString();
+  wifi["dnsIP"] = WiFi.dnsIP().toString();
+  wifi["hostname"] = WiFi.getHostname();
+  wifi["apEnabled"] = apEnabled;
+  wifi["apSSID"] = apSSID;
+  wifi["apIP"] = WiFi.softAPIP().toString();
+  wifi["apClients"] = WiFi.softAPgetStationNum();
+
+  // Get saved networks count
+  wifi["savedNetworksCount"] = getWiFiNetworkCount();
+
+  // ===== Settings =====
+  JsonObject settings = doc["settings"].to<JsonObject>();
+  settings["autoUpdateEnabled"] = autoUpdateEnabled;
+  settings["timezoneOffset"] = timezoneOffset;
+  settings["dstOffset"] = dstOffset;
+  settings["nightMode"] = nightMode;
+  settings["enableCertValidation"] = enableCertValidation;
+  settings["blinkingEnabled"] = blinkingEnabled;
+  settings["hardwareStatsInterval"] = hardwareStatsInterval;
+
+  // ===== Smart Sensing =====
+  JsonObject sensing = doc["smartSensing"].to<JsonObject>();
+  String modeStr;
+  switch (currentMode) {
+  case ALWAYS_ON:
+    modeStr = "always_on";
+    break;
+  case ALWAYS_OFF:
+    modeStr = "always_off";
+    break;
+  case SMART_AUTO:
+    modeStr = "smart_auto";
+    break;
+  }
+  sensing["mode"] = modeStr;
+  sensing["amplifierState"] = amplifierState;
+  sensing["timerDuration"] = timerDuration;
+  sensing["timerRemaining"] = timerRemaining;
+  sensing["voltageThreshold"] = voltageThreshold;
+  sensing["lastVoltageReading"] = lastVoltageReading;
+  sensing["lastVoltageDetection"] = lastVoltageDetection;
+
+  // ===== MQTT Settings (password excluded) =====
+  JsonObject mqtt = doc["mqtt"].to<JsonObject>();
+  mqtt["enabled"] = mqttEnabled;
+  mqtt["broker"] = mqttBroker;
+  mqtt["port"] = mqttPort;
+  mqtt["username"] = mqttUsername;
+  mqtt["baseTopic"] = mqttBaseTopic;
+  mqtt["haDiscovery"] = mqttHADiscovery;
+  mqtt["connected"] = mqttConnected;
+
+  // ===== OTA Status =====
+  JsonObject ota = doc["ota"].to<JsonObject>();
+  ota["updateAvailable"] = updateAvailable;
+  ota["latestVersion"] = cachedLatestVersion;
+  ota["inProgress"] = otaInProgress;
+  ota["status"] = otaStatus;
+
+  // ===== FSM State =====
+  String fsmStateStr;
+  switch (appState.fsmState) {
+  case STATE_IDLE:
+    fsmStateStr = "idle";
+    break;
+  case STATE_SIGNAL_DETECTED:
+    fsmStateStr = "signal_detected";
+    break;
+  case STATE_AUTO_OFF_TIMER:
+    fsmStateStr = "auto_off_timer";
+    break;
+  case STATE_WEB_CONFIG:
+    fsmStateStr = "web_config";
+    break;
+  case STATE_OTA_UPDATE:
+    fsmStateStr = "ota_update";
+    break;
+  case STATE_ERROR:
+    fsmStateStr = "error";
+    break;
+  default:
+    fsmStateStr = "unknown";
+  }
+  doc["fsmState"] = fsmStateStr;
+  doc["ledState"] = ledState;
+
+  // ===== Error State =====
+  if (appState.hasError()) {
+    JsonObject error = doc["error"].to<JsonObject>();
+    error["code"] = appState.errorCode;
+    error["message"] = appState.errorMessage;
+  }
+
+  // Generate JSON
+  String json;
+  serializeJsonPretty(doc, json);
+
+  // Send as downloadable JSON file
+  char filename[64];
+  snprintf(filename, sizeof(filename), "attachment; filename=\"diagnostics-%s.json\"",
+           timestamp);
+  server.sendHeader("Content-Disposition", filename);
+  server.send(200, "application/json", json);
+
+  DebugOut.println("Diagnostics exported successfully");
 }
 
 // Note: Certificate HTTP API handlers removed - now using Mozilla certificate
