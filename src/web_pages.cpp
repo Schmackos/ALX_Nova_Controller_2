@@ -886,6 +886,77 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             padding-right: 48px;
         }
 
+        /* ===== Saved Networks List ===== */
+        .network-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+
+        .network-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .network-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .network-ssid {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .network-status {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .network-priority {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--bg-primary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 14px;
+            min-height: 36px;
+        }
+
+        .btn-danger {
+            background: var(--error);
+        }
+
+        .btn-danger:hover {
+            background: #D32F2F;
+        }
+
+        #savedNetworksList:empty::after {
+            content: 'No saved networks';
+            display: block;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 24px;
+            font-style: italic;
+        }
+
         /* ===== File Drop Zone ===== */
         .drop-zone {
             border: 2px dashed var(--border);
@@ -1719,6 +1790,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </form>
             </div>
 
+            <!-- Saved Networks -->
+            <div class="card">
+                <div class="card-title">Saved Networks <span id="networkCountBadge" style="font-size: 14px; opacity: 0.7;"></span></div>
+                <div id="savedNetworksList">
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text short"></div>
+                </div>
+            </div>
+
             <!-- Access Point -->
             <div class="card">
                 <div class="card-title">Access Point</div>
@@ -2156,6 +2236,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="btn-row mt-12">
                     <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
                     <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
+                    <button class="btn btn-primary" onclick="downloadDiagnostics()">Download Diagnostics</button>
                 </div>
             </div>
         </section>
@@ -2580,6 +2661,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             // Update global WiFi status for status bar
             currentWifiConnected = data.connected || data.mode === 'ap';
             updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, ws && ws.readyState === WebSocket.OPEN);
+
+            // Refresh saved networks list
+            loadSavedNetworks();
         }
 
         // ===== Smart Sensing =====
@@ -2830,10 +2914,65 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function onNetworkSelect() {
             const select = document.getElementById('wifiNetworkSelect');
             const ssidInput = document.getElementById('wifiSSID');
-            
+
             if (select.value) {
                 ssidInput.value = select.value;
             }
+        }
+
+        // Load and display saved networks
+        function loadSavedNetworks() {
+            fetch('/api/wifilist')
+                .then(res => res.json())
+                .then(data => {
+                    const container = document.getElementById('savedNetworksList');
+                    const badge = document.getElementById('networkCountBadge');
+
+                    if (data.success && data.networks && data.networks.length > 0) {
+                        badge.textContent = `(${data.count}/5)`;
+
+                        container.innerHTML = data.networks.map((net, idx) => `
+                            <div class="network-item">
+                                <div class="network-info">
+                                    <div class="network-ssid">
+                                        ${net.ssid}
+                                        ${net.priority ? '<span class="network-priority">Priority</span>' : ''}
+                                    </div>
+                                    <div class="network-status">Saved</div>
+                                </div>
+                                <button class="btn btn-danger btn-sm" onclick="removeNetwork(${net.index})">Remove</button>
+                            </div>
+                        `).join('');
+                    } else {
+                        badge.textContent = '(0/5)';
+                        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 24px; font-style: italic;">No saved networks</p>';
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load saved networks:', err);
+                    document.getElementById('savedNetworksList').innerHTML = '<p style="text-align: center; color: var(--error); padding: 24px;">Failed to load networks</p>';
+                });
+        }
+
+        // Remove network by index
+        function removeNetwork(index) {
+            if (!confirm('Remove this network?')) return;
+
+            fetch('/api/wifiremove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Network removed', 'success');
+                    loadSavedNetworks(); // Reload the list
+                } else {
+                    showToast(data.message || 'Failed to remove', 'error');
+                }
+            })
+            .catch(err => showToast('Failed to remove network', 'error'));
         }
 
         function toggleAP() {
@@ -3814,6 +3953,34 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             debugLogBuffer = [];
         }
 
+        function downloadDiagnostics() {
+            showToast('Generating diagnostics...', 'info');
+            fetch('/api/diagnostics')
+                .then(res => {
+                    if (!res.ok) throw new Error('Failed to generate diagnostics');
+                    return res.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    // Generate filename with timestamp
+                    const now = new Date();
+                    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                    a.download = `diagnostics-${timestamp}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    showToast('Diagnostics downloaded', 'success');
+                })
+                .catch(err => {
+                    console.error('Download error:', err);
+                    showToast('Failed to download diagnostics', 'error');
+                });
+        }
+
         // ===== Release Notes =====
         function showReleaseNotes() {
             showReleaseNotesFor('latest');
@@ -3889,6 +4056,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             loadMqttSettings();
             initFirmwareDragDrop();
             initSidebar();
+            loadSavedNetworks();
 
             // Add input focus listeners
             document.getElementById('timerDuration').addEventListener('focus', () => inputFocusState.timerDuration = true);
