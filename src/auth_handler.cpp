@@ -162,9 +162,17 @@ bool requireAuth() {
         return true;
     }
 
-    // Not authenticated - return 401
-    DebugOut.println("Auth: Unauthorized access attempt");
+    // Not authenticated
+    DebugOut.println("Auth: Unauthorized access attempt to " + server.uri());
 
+    // If it's a page request (not an API call), redirect to login
+    if (!server.uri().startsWith("/api/")) {
+        server.sendHeader("Location", "/login");
+        server.send(302, "text/plain", "Redirecting to /login");
+        return false;
+    }
+
+    // For API calls, return 401 Unauthorized with JSON
     JsonDocument doc;
     doc["success"] = false;
     doc["error"] = "Unauthorized";
