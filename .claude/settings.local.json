@@ -23,7 +23,8 @@
       "Bash(cat:*)",
       "Bash(git remote:*)",
       "Bash(winget install:*)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)"
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login)"
     ]
   }
 }

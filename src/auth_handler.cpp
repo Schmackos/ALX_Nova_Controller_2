@@ -193,10 +193,26 @@ bool requireAuth() {
   // Not authenticated
   DebugOut.println("Auth: Unauthorized access attempt to " + server.uri());
 
-  // If it's a page request (not an API call), redirect to login
-  if (!server.uri().startsWith("/api/")) {
+  // Determine if this is a page request or API call
+  // Check both URL path and Accept header for better detection
+  String acceptHeader = server.header("Accept");
+  bool isApiCall = server.uri().startsWith("/api/") ||
+                   acceptHeader.indexOf("application/json") >= 0;
+  bool isPageRequest = !isApiCall &&
+                       (acceptHeader.indexOf("text/html") >= 0 ||
+                        acceptHeader.length() == 0);
+
+  // For page requests, send HTML redirect page
+  if (isPageRequest) {
+    String html = F("<!DOCTYPE html><html><head>"
+                    "<meta charset='UTF-8'>"
+                    "<meta http-equiv='refresh' content='0;url=/login'>"
+                    "<title>Redirecting...</title></head>"
+                    "<body><p>Redirecting to login...</p>"
+                    "<script>window.location.href='/login';</script>"
+                    "</body></html>");
     server.sendHeader("Location", "/login");
-    server.send(302, "text/plain", "Redirecting to /login");
+    server.send(302, "text/html", html);
     return false;
   }
 
