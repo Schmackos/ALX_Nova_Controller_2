@@ -14,7 +14,8 @@
       "Bash(cmd /c \"where gh\")",
       "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
       "Bash(git pull:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(pio test:*)"
     ]
   }
 }
