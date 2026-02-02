@@ -275,12 +275,8 @@ void setup() {
     if (!requireAuth())
       return;
 
-    // In AP mode, serve the setup page. In STA mode, serve the dashboard.
-    if (appState.isAPMode) {
-      server.send_P(200, "text/html", apHtmlPage);
-    } else {
-      server.send_P(200, "text/html", htmlPage);
-    }
+    // Both AP and STA modes now serve the main dashboard.
+    server.send_P(200, "text/html", htmlPage);
   });
 
   server.on("/api/wificonfig", HTTP_POST, []() {
