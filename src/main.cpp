@@ -224,6 +224,8 @@ void setup() {
 
   server.on("/api/wificonfig", HTTP_POST, handleWiFiConfig);
   server.on("/api/wifiscan", HTTP_GET, handleWiFiScan);
+  server.on("/api/wifilist", HTTP_GET, handleWiFiList);
+  server.on("/api/wifiremove", HTTP_POST, handleWiFiRemove);
   server.on("/api/apconfig", HTTP_POST, handleAPConfigUpdate);
   server.on("/api/toggleap", HTTP_POST, handleAPToggle);
   server.on("/api/wifistatus", HTTP_GET, handleWiFiStatus);
@@ -248,14 +250,13 @@ void setup() {
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
 
-  // Try to load WiFi credentials from storage
-  if (loadWiFiCredentials(appState.wifiSSID, appState.wifiPassword) &&
-      appState.wifiSSID.length() > 0) {
-    DebugOut.println("Loaded credentials from storage");
-    connectToWiFi(appState.wifiSSID.c_str(), appState.wifiPassword.c_str());
-  } else {
-    DebugOut.println("No stored credentials found, starting Access Point mode");
-    startAccessPoint();
+  // Migrate old WiFi credentials to new multi-WiFi system (one-time operation)
+  migrateWiFiCredentials();
+
+  // Try to connect to stored WiFi networks (tries all saved networks in priority order)
+  if (!connectToStoredNetworks()) {
+    // All networks failed, automatic fallback to AP mode already happened in connectToStoredNetworks()
+    DebugOut.println("No WiFi connection established. Running in AP mode.");
   }
 
   // Set initial FSM state

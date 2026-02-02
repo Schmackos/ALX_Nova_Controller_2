@@ -2486,22 +2486,26 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             
             // AP Details separator if both are relevant
+            let apContentAdded = false;
             if (data.mode === 'ap' || data.apEnabled) {
                 if (html !== '') html += '<div class="divider"></div>';
-                
+
                 html += `
                     <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
                     <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
                     <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
                 `;
-                
+
                 if (data.apClients !== undefined) {
                     html += `<div class="info-row"><span class="info-label">Clients Connected</span><span class="info-value">${data.apClients}</span></div>`;
                 }
+                apContentAdded = true;
             }
-            
-            // Common details
-            html += `<div class="divider"></div>`;
+
+            // Common details - only add divider if AP content was shown or if we have any content
+            if (html !== '' && apContentAdded) {
+                html += `<div class="divider"></div>`;
+            }
             html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
 
             apToggle.checked = data.apEnabled || (data.mode === 'ap');

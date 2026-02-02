@@ -17,7 +17,8 @@
       "Bash(git stash:*)",
       "Bash(pio test:*)",
       "Bash(gh:*)",
-      "Bash(pacman -Q:*)"
+      "Bash(pacman -Q:*)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

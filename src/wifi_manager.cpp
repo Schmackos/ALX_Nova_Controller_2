@@ -7,6 +7,7 @@
 #include "websocket_handler.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <Preferences.h>
 #include <WiFi.h>
 
 
@@ -136,6 +137,229 @@ void saveWiFiCredentials(const char *ssid, const char *password) {
   }
 }
 
+// ===== Multi-WiFi Management =====
+
+// One-time migration from LittleFS to Preferences
+void migrateWiFiCredentials() {
+  Preferences prefs;
+  prefs.begin("wifi-list", false);
+
+  // Check if migration already done
+  if (prefs.getUChar("migrated", 0) == 1) {
+    prefs.end();
+    return;
+  }
+
+  // Load old credentials from LittleFS
+  String oldSSID, oldPassword;
+  if (loadWiFiCredentials(oldSSID, oldPassword)) {
+    DebugOut.println("Migrating WiFi credentials from LittleFS to Preferences...");
+
+    // Save as first network
+    prefs.putString("s0", oldSSID);
+    prefs.putString("p0", oldPassword);
+    prefs.putUChar("count", 1);
+
+    // Delete old file
+    LittleFS.remove("/wifi_config.txt");
+
+    DebugOut.printf("Migrated network: %s\n", oldSSID.c_str());
+  } else {
+    // No old credentials, initialize empty
+    prefs.putUChar("count", 0);
+  }
+
+  // Mark migration as complete
+  prefs.putUChar("migrated", 1);
+  prefs.end();
+
+  DebugOut.println("WiFi credential migration complete");
+}
+
+// Get number of saved networks
+int getWiFiNetworkCount() {
+  Preferences prefs;
+  prefs.begin("wifi-list", true); // Read-only
+  int count = prefs.getUChar("count", 0);
+  prefs.end();
+  return count;
+}
+
+// Save WiFi network (add or update)
+bool saveWiFiNetwork(const char* ssid, const char* password) {
+  if (ssid == nullptr || strlen(ssid) == 0) {
+    return false;
+  }
+
+  Preferences prefs;
+  prefs.begin("wifi-list", false);
+
+  int count = prefs.getUChar("count", 0);
+
+  // Check if SSID already exists
+  for (int i = 0; i < count; i++) {
+    String existingSSID = prefs.getString(("s" + String(i)).c_str(), "");
+    if (existingSSID == ssid) {
+      // Update password for existing SSID
+      prefs.putString(("p" + String(i)).c_str(), password);
+      prefs.end();
+      DebugOut.printf("Updated password for network: %s\n", ssid);
+      return true;
+    }
+  }
+
+  // Check if we've reached the maximum
+  if (count >= MAX_WIFI_NETWORKS) {
+    prefs.end();
+    DebugOut.println("Maximum number of WiFi networks reached (5)");
+    return false;
+  }
+
+  // Add new network at the end
+  prefs.putString(("s" + String(count)).c_str(), ssid);
+  prefs.putString(("p" + String(count)).c_str(), password);
+  prefs.putUChar("count", count + 1);
+  prefs.end();
+
+  DebugOut.printf("Saved new network: %s (total: %d)\n", ssid, count + 1);
+  return true;
+}
+
+// Remove network by index
+bool removeWiFiNetwork(int index) {
+  Preferences prefs;
+  prefs.begin("wifi-list", false);
+
+  int count = prefs.getUChar("count", 0);
+
+  if (index < 0 || index >= count) {
+    prefs.end();
+    return false;
+  }
+
+  // Shift all networks after this index down by one
+  for (int i = index; i < count - 1; i++) {
+    String ssid = prefs.getString(("s" + String(i + 1)).c_str(), "");
+    String pass = prefs.getString(("p" + String(i + 1)).c_str(), "");
+    prefs.putString(("s" + String(i)).c_str(), ssid);
+    prefs.putString(("p" + String(i)).c_str(), pass);
+  }
+
+  // Remove the last entry
+  prefs.remove(("s" + String(count - 1)).c_str());
+  prefs.remove(("p" + String(count - 1)).c_str());
+  prefs.putUChar("count", count - 1);
+
+  prefs.end();
+  DebugOut.printf("Removed network at index %d\n", index);
+  return true;
+}
+
+// Try connecting to all saved networks in order
+bool connectToStoredNetworks() {
+  Preferences prefs;
+  prefs.begin("wifi-list", true); // Read-only
+
+  int count = prefs.getUChar("count", 0);
+
+  if (count == 0) {
+    prefs.end();
+    DebugOut.println("No saved WiFi networks");
+    return false;
+  }
+
+  DebugOut.printf("Trying %d saved network(s)...\n", count);
+
+  for (int i = 0; i < count; i++) {
+    String ssid = prefs.getString(("s" + String(i)).c_str(), "");
+    String password = prefs.getString(("p" + String(i)).c_str(), "");
+
+    if (ssid.length() == 0) {
+      continue;
+    }
+
+    DebugOut.printf("Attempting connection %d/%d: %s\n", i + 1, count, ssid.c_str());
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), password.c_str());
+
+    unsigned long startTime = millis();
+    while (WiFi.status() != WL_CONNECTED &&
+           millis() - startTime < WIFI_CONNECT_TIMEOUT) {
+      delay(500);
+      DebugOut.print(".");
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+      prefs.end();
+      DebugOut.println("\nWiFi connected!");
+      DebugOut.printf("Connected to: %s\n", ssid.c_str());
+      DebugOut.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+
+      // Move successful network to index 0 (priority) if not already there
+      if (i != 0) {
+        Preferences prefsWrite;
+        prefsWrite.begin("wifi-list", false);
+
+        // Save the successful network
+        String successSSID = ssid;
+        String successPass = password;
+
+        // Shift networks 0 to i-1 down by one
+        for (int j = i; j > 0; j--) {
+          String shiftSSID = prefsWrite.getString(("s" + String(j - 1)).c_str(), "");
+          String shiftPass = prefsWrite.getString(("p" + String(j - 1)).c_str(), "");
+          prefsWrite.putString(("s" + String(j)).c_str(), shiftSSID);
+          prefsWrite.putString(("p" + String(j)).c_str(), shiftPass);
+        }
+
+        // Put successful network at index 0
+        prefsWrite.putString("s0", successSSID);
+        prefsWrite.putString("p0", successPass);
+        prefsWrite.end();
+
+        DebugOut.println("Moved successful network to priority position");
+      }
+
+      // Synchronize time with NTP
+      syncTimeWithNTP();
+
+      // Setup WebSocket and server
+      if (apEnabled && !isAPMode) {
+        WiFi.mode(WIFI_AP_STA);
+        WiFi.softAP(apSSID.c_str(), apPassword);
+        isAPMode = true;
+        DebugOut.printf("Access Point also running at: %s\n",
+                       WiFi.softAPIP().toString().c_str());
+      } else if (!apEnabled) {
+        isAPMode = false;
+      }
+
+      server.stop();
+      webSocket.begin();
+      webSocket.onEvent(webSocketEvent);
+      DebugOut.setWebSocket(&webSocket);
+      server.begin();
+
+      DebugOut.println("=== Web server started on port 80 ===");
+      DebugOut.println("=== WebSocket server started on port 81 ===");
+      DebugOut.printf("Navigate to http://%s\n", WiFi.localIP().toString().c_str());
+
+      // Setup MQTT
+      setupMqtt();
+
+      return true;
+    } else {
+      DebugOut.printf("\nFailed to connect to: %s\n", ssid.c_str());
+    }
+  }
+
+  prefs.end();
+  DebugOut.println("All networks failed. Starting AP mode...");
+  startAccessPoint();
+  return false;
+}
+
 // ===== WiFi Status Broadcasting =====
 
 void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
@@ -203,6 +427,9 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   } else {
     doc["ip"] = isAPMode ? WiFi.softAPIP().toString() : "";
   }
+
+  // Add saved networks count
+  doc["networkCount"] = getWiFiNetworkCount();
 }
 
 void sendWiFiStatus() {
@@ -388,14 +615,19 @@ void handleWiFiConfig() {
     return;
   }
 
-  saveWiFiCredentials(ssid.c_str(), password.c_str());
+  // Save to multi-WiFi list
+  if (!saveWiFiNetwork(ssid.c_str(), password.c_str())) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Failed to save network. Maximum 5 networks reached.\"}");
+    return;
+  }
+
   wifiSSID = ssid;
   wifiPassword = password;
 
   server.send(200, "application/json", "{\"success\": true}");
 
-  DebugOut.printf("WiFi credentials updated. Connecting to %s...\n",
-                  ssid.c_str());
+  DebugOut.printf("WiFi network saved. Connecting to %s...\n", ssid.c_str());
 
   // Disconnect current connection and reconnect with new credentials
   if (isAPMode) {
@@ -480,4 +712,64 @@ void handleWiFiScan() {
   String json;
   serializeJson(doc, json);
   server.send(200, "application/json", json);
+}
+
+void handleWiFiList() {
+  Preferences prefs;
+  prefs.begin("wifi-list", true); // Read-only
+
+  int count = prefs.getUChar("count", 0);
+
+  JsonDocument doc;
+  doc["success"] = true;
+  doc["count"] = count;
+  JsonArray networks = doc["networks"].to<JsonArray>();
+
+  for (int i = 0; i < count; i++) {
+    String ssid = prefs.getString(("s" + String(i)).c_str(), "");
+    if (ssid.length() > 0) {
+      JsonObject net = networks.add<JsonObject>();
+      net["ssid"] = ssid;
+      net["index"] = i;
+      net["priority"] = (i == 0) ? true : false;
+    }
+  }
+
+  prefs.end();
+
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
+}
+
+void handleWiFiRemove() {
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"No data received\"}");
+    return;
+  }
+
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
+
+  if (error) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+    return;
+  }
+
+  if (!doc["index"].is<int>()) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Index required\"}");
+    return;
+  }
+
+  int index = doc["index"].as<int>();
+
+  if (removeWiFiNetwork(index)) {
+    server.send(200, "application/json", "{\"success\": true}");
+  } else {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Invalid index or removal failed\"}");
+  }
 }

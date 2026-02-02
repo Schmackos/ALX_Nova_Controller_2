@@ -90,6 +90,10 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 // ===== Default AP Configuration =====
 #define DEFAULT_AP_PASSWORD "12345678"
 
+// ===== Multi-WiFi Configuration =====
+#define MAX_WIFI_NETWORKS 5         // Maximum number of saved WiFi networks
+#define WIFI_CONNECT_TIMEOUT 12000  // Connection timeout per network (12 seconds)
+
 // ===== FreeRTOS Task Configuration =====
 #define TASK_STACK_SIZE_SENSING 4096
 #define TASK_STACK_SIZE_WEB 8192
