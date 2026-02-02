@@ -20,7 +20,10 @@
       "Bash(pacman -Q:*)",
       "WebFetch(domain:github.com)",
       "Bash(platformio run:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git remote:*)",
+      "Bash(winget install:*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)"
     ]
   }
 }

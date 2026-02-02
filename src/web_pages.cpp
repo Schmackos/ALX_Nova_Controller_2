@@ -890,16 +890,29 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .network-item {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 12px;
             padding: 12px;
             background: rgba(255, 255, 255, 0.05);
             border-radius: 8px;
             margin-bottom: 8px;
             transition: all 0.2s;
+            cursor: pointer;
         }
 
         .network-item:hover {
             background: rgba(255, 255, 255, 0.08);
+        }
+
+        .network-item.selected {
+            background: rgba(76, 175, 80, 0.15);
+            border: 1px solid var(--success);
+        }
+
+        .network-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--success);
         }
 
         .network-info {
@@ -955,6 +968,26 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             text-align: center;
             padding: 24px;
             font-style: italic;
+        }
+
+        .bulk-actions {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid var(--success);
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .bulk-actions.active {
+            display: flex;
+        }
+
+        .bulk-actions-info {
+            color: var(--success);
+            font-weight: 500;
         }
 
         /* ===== File Drop Zone ===== */
@@ -1984,6 +2017,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- Saved Networks -->
             <div class="card">
                 <div class="card-title">Saved Networks <span id="networkCountBadge" style="font-size: 14px; opacity: 0.7;"></span></div>
+                <div class="bulk-actions" id="bulkActions">
+                    <span class="bulk-actions-info"><span id="selectedCount">0</span> selected</span>
+                    <button class="btn btn-danger btn-sm" onclick="removeSelectedNetworks()">Remove Selected</button>
+                </div>
                 <div id="savedNetworksList">
                     <div class="skeleton skeleton-text"></div>
                     <div class="skeleton skeleton-text short"></div>
@@ -3354,7 +3391,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         badge.textContent = `(${data.count}/5)`;
 
                         container.innerHTML = data.networks.map((net, idx) => `
-                            <div class="network-item">
+                            <div class="network-item" data-index="${net.index}" onclick="toggleNetworkSelection(${net.index}, event)">
+                                <input type="checkbox" class="network-checkbox" data-index="${net.index}" onclick="event.stopPropagation(); toggleNetworkSelection(${net.index}, event)">
                                 <div class="network-info">
                                     <div class="network-ssid">
                                         ${net.ssid}
@@ -3362,9 +3400,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                     </div>
                                     <div class="network-status">Saved</div>
                                 </div>
-                                <button class="btn btn-danger btn-sm" onclick="removeNetwork(${net.index})">Remove</button>
+                                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeNetwork(${net.index})">Remove</button>
                             </div>
                         `).join('');
+                        updateBulkActionsVisibility();
                     } else {
                         badge.textContent = '(0/5)';
                         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 24px; font-style: italic;">No saved networks</p>';
@@ -3401,6 +3440,93 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             })
             .catch(err => showToast('Failed to remove network', 'error'));
+        }
+
+        // Toggle network selection
+        function toggleNetworkSelection(index, event) {
+            const checkbox = document.querySelector(`.network-checkbox[data-index="${index}"]`);
+            const item = document.querySelector(`.network-item[data-index="${index}"]`);
+
+            if (!checkbox || !item) return;
+
+            // Toggle checkbox if clicking on the item (not the checkbox itself)
+            if (event.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+            }
+
+            // Update item visual state
+            if (checkbox.checked) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
+
+            updateBulkActionsVisibility();
+        }
+
+        // Update bulk actions bar visibility based on selection
+        function updateBulkActionsVisibility() {
+            const checkboxes = document.querySelectorAll('.network-checkbox');
+            const selectedCheckboxes = Array.from(checkboxes).filter(cb => cb.checked);
+            const bulkActions = document.getElementById('bulkActions');
+            const selectedCount = document.getElementById('selectedCount');
+
+            if (selectedCheckboxes.length > 0) {
+                bulkActions.classList.add('active');
+                selectedCount.textContent = selectedCheckboxes.length;
+            } else {
+                bulkActions.classList.remove('active');
+            }
+        }
+
+        // Remove selected networks
+        async function removeSelectedNetworks() {
+            const checkboxes = document.querySelectorAll('.network-checkbox:checked');
+            const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.index));
+
+            if (selectedIndices.length === 0) return;
+
+            const confirmMsg = selectedIndices.length === 1
+                ? 'Remove this network?'
+                : `Remove ${selectedIndices.length} networks?`;
+
+            if (!confirm(confirmMsg)) return;
+
+            // Remove networks in sequence (highest index first to avoid index shifting issues)
+            selectedIndices.sort((a, b) => b - a);
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const index of selectedIndices) {
+                try {
+                    const response = await apiFetch('/api/wifiremove', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ index })
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (err) {
+                    failCount++;
+                }
+            }
+
+            // Show result
+            if (successCount > 0) {
+                showToast(`${successCount} network(s) removed`, 'success');
+            }
+            if (failCount > 0) {
+                showToast(`${failCount} network(s) failed to remove`, 'error');
+            }
+
+            // Reload the list
+            loadSavedNetworks();
         }
 
         function toggleAP() {
