@@ -1,0 +1,146 @@
+Processing native (platform: native)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 2 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- ArduinoJson @ 7.4.2
+Building in release mode
+Compiling .pio\build\native\src\app_state.o
+Compiling .pio\build\native\src\auth_handler.o
+Compiling .pio\build\native\src\button_handler.o
+Compiling .pio\build\native\src\debug_serial.o
+In file included from src\app_state.h:4,
+                 from src\app_state.cpp:1:
+src\config.h:4:10: fatal error: Arduino.h: No such file or directory
+
+*****************************************************************
+* Looking for Arduino.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:Arduino.h"
+* Web  > https://registry.platformio.org/search?q=header:Arduino.h
+*
+*****************************************************************
+
+    4 | #include <Arduino.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+Compiling .pio\build\native\src\main.o
+Compiling .pio\build\native\src\mqtt_handler.o
+Compiling .pio\build\native\src\ota_updater.o
+Compiling .pio\build\native\src\settings_manager.o
+*** [.pio\build\native\src\app_state.o] Error 1
+In file included from src\auth_handler.cpp:1:
+src\auth_handler.h:4:10: fatal error: Arduino.h: No such file or directory
+
+*****************************************************************
+* Looking for Arduino.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:Arduino.h"
+* Web  > https://registry.platformio.org/search?q=header:Arduino.h
+*
+*****************************************************************
+
+    4 | #include <Arduino.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+*** [.pio\build\native\src\auth_handler.o] Error 1
+In file included from src\button_handler.cpp:1:
+src\button_handler.h:4:10: fatal error: Arduino.h: No such file or directory
+
+*****************************************************************
+* Looking for Arduino.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:Arduino.h"
+* Web  > https://registry.platformio.org/search?q=header:Arduino.h
+*
+*****************************************************************
+
+    4 | #include <Arduino.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+*** [.pio\build\native\src\button_handler.o] Error 1
+In file included from src\debug_serial.cpp:1:
+src\debug_serial.h:4:10: fatal error: Arduino.h: No such file or directory
+
+*****************************************************************
+* Looking for Arduino.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:Arduino.h"
+* Web  > https://registry.platformio.org/search?q=header:Arduino.h
+*
+*****************************************************************
+
+    4 | #include <Arduino.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+In file included from src\app_state.h:4,
+                 from src\main.cpp:1:
+src\config.h:4:10: fatal error: Arduino.h: No such file or directory
+
+*****************************************************************
+* Looking for Arduino.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:Arduino.h"
+* Web  > https://registry.platformio.org/search?q=header:Arduino.h
+*
+*****************************************************************
+
+    4 | #include <Arduino.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+In file included from src\mqtt_handler.cpp:1:
+src\mqtt_handler.h:4:10: fatal error: Arduino.h: No such file or directory
+
+*****************************************************************
+* Looking for Arduino.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:Arduino.h"
+* Web  > https://registry.platformio.org/search?q=header:Arduino.h
+*
+*****************************************************************
+
+    4 | #include <Arduino.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+*** [.pio\build\native\src\debug_serial.o] Error 1
+*** [.pio\build\native\src\mqtt_handler.o] Error 1
+*** [.pio\build\native\src\main.o] Error 1
+In file included from src\ota_updater.cpp:1:
+src\ota_updater.h:4:10: fatal error: Arduino.h: No such file or directory
+
+*****************************************************************
+* Looking for Arduino.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:Arduino.h"
+* Web  > https://registry.platformio.org/search?q=header:Arduino.h
+*
+*****************************************************************
+
+    4 | #include <Arduino.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+In file included from src\settings_manager.cpp:1:
+src\settings_manager.h:4:10: fatal error: Arduino.h: No such file or directory
+
+*****************************************************************
+* Looking for Arduino.h dependency? Check our library registry!
+*
+* CLI  > platformio lib search "header:Arduino.h"
+* Web  > https://registry.platformio.org/search?q=header:Arduino.h
+*
+*****************************************************************
+
+    4 | #include <Arduino.h>
+      |          ^~~~~~~~~~~
+compilation terminated.
+*** [.pio\build\native\src\ota_updater.o] Error 1
+*** [.pio\build\native\src\settings_manager.o] Error 1
+========================== [FAILED] Took 0.59 seconds ==========================
+
+Environment    Status    Duration
+-------------  --------  ------------
+native         FAILED    00:00:00.595
+==================== 1 failed, 0 succeeded in 00:00:00.595 ====================
