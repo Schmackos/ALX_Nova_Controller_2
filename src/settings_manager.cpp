@@ -138,7 +138,31 @@ void performFactoryReset() {
   isAPMode = true;
 
   DebugOut.println("=== FACTORY RESET COMPLETE ===");
+
+  // Broadcast factory reset complete message
+  JsonDocument completeDoc;
+  completeDoc["type"] = "factoryResetStatus";
+  completeDoc["status"] = "complete";
+  completeDoc["message"] = "Factory reset complete";
+  String completeJson;
+  serializeJson(completeDoc, completeJson);
+  webSocket.broadcastTXT((uint8_t *)completeJson.c_str(),
+                         completeJson.length());
+  webSocket.loop(); // Ensure message is sent
+
+  delay(500); // Give time for message to be received
+
   DebugOut.println("Rebooting in 2 seconds...");
+
+  // Broadcast rebooting message
+  JsonDocument rebootDoc;
+  rebootDoc["type"] = "factoryResetStatus";
+  rebootDoc["status"] = "rebooting";
+  rebootDoc["message"] = "Rebooting device...";
+  String rebootJson;
+  serializeJson(rebootDoc, rebootJson);
+  webSocket.broadcastTXT((uint8_t *)rebootJson.c_str(), rebootJson.length());
+  webSocket.loop(); // Ensure message is sent
 
   delay(2000);
   ESP.restart();

@@ -2726,6 +2726,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     updateSmartSensingUI(data);
                 } else if (data.type === 'factoryResetProgress') {
                     handlePhysicalResetProgress(data);
+                } else if (data.type === 'factoryResetStatus') {
+                    // Handle factory reset status messages
+                    if (data.status === 'complete') {
+                        showToast(data.message || 'Factory reset complete', 'success');
+                    } else if (data.status === 'rebooting') {
+                        showToast(data.message || 'Rebooting device...', 'info');
+                    }
                 } else if (data.type === 'rebootProgress') {
                     handlePhysicalRebootProgress(data);
                 } else if (data.type === 'debugLog') {

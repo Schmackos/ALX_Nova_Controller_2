@@ -8,6 +8,9 @@ DEBUG: Current (esp-builtin) On-board (esp-builtin) External (cmsis-dap, esp-bri
 PACKAGES: 
  - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
  - tool-esptoolpy @ 2.40900.250804 (4.9.0) 
+ - tool-mkfatfs @ 2.0.1 
+ - tool-mklittlefs @ 1.203.210628 (2.3) 
+ - tool-mkspiffs @ 2.230.0 (2.30) 
  - toolchain-riscv32-esp @ 8.4.0+2021r2-patch5 
  - toolchain-xtensa-esp32s3 @ 8.4.0+2021r2-patch5
 LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
@@ -31,9 +34,24 @@ Retrieving maximum program size .pio\build\esp32-s3-devkitm-1\firmware.elf
 Checking size .pio\build\esp32-s3-devkitm-1\firmware.elf
 Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
 RAM:   [==        ]  15.1% (used 49576 bytes from 327680 bytes)
-Flash: [====      ]  41.1% (used 1374201 bytes from 3342336 bytes)
-========================= [SUCCESS] Took 3.61 seconds =========================
+Flash: [====      ]  41.2% (used 1375453 bytes from 3342336 bytes)
+Configuring upload protocol...
+AVAILABLE: cmsis-dap, esp-bridge, esp-builtin, esp-prog, espota, esptool, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa
+CURRENT: upload_protocol = esptool
+Looking for upload port...
+Auto-detected: COM5
+Uploading .pio\build\esp32-s3-devkitm-1\firmware.bin
+esptool.py v4.9.0
+Serial port COM5
 
+A fatal error occurred: Could not open COM5, the port is busy or doesn't exist.
+(could not open port 'COM5': PermissionError(13, 'Access is denied.', None, 5))
+
+Hint: Check if the port is not used by another task
+
+*** [upload] Error 2
+
+========================== [FAILED] Took 5.88 seconds ==========================
 Processing native (platform: native)
 --------------------------------------------------------------------------------
 Verbose mode can be enabled via `-v, --verbose` option
@@ -52,10 +70,10 @@ Compiling .pio\build\native\src\auth_handler.o
 'g++' is not recognized as an internal or external command,
 operable program or batch file.
 *** [.pio\build\native\src\auth_handler.o] Error 1
-========================== [FAILED] Took 0.52 seconds ==========================
+========================== [FAILED] Took 0.58 seconds ==========================
 
 Environment         Status    Duration
 ------------------  --------  ------------
-esp32-s3-devkitm-1  SUCCESS   00:00:03.607
-native              FAILED    00:00:00.522
-==================== 1 failed, 1 succeeded in 00:00:04.128 ====================
+esp32-s3-devkitm-1  FAILED    00:00:05.877
+native              FAILED    00:00:00.575
+==================== 2 failed, 0 succeeded in 00:00:06.453 ====================
