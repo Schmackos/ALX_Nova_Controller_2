@@ -76,8 +76,10 @@ void syncTimeWithNTP() {
   DebugOut.println("\n=== Synchronizing Time with NTP ===");
   DebugOut.printf("Timezone offset: %d seconds (%.1f hours)\n",
                   appState.timezoneOffset, appState.timezoneOffset / 3600.0);
+  DebugOut.printf("DST offset: %d seconds (%.1f hours)\n",
+                  appState.dstOffset, appState.dstOffset / 3600.0);
 
-  configTime(appState.timezoneOffset, 0, "pool.ntp.org", "time.nist.gov");
+  configTime(appState.timezoneOffset, appState.dstOffset, "pool.ntp.org", "time.nist.gov");
 
   DebugOut.print("Waiting for NTP time sync: ");
   time_t now = time(nullptr);

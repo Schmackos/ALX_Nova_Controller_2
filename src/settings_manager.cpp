@@ -28,6 +28,7 @@ bool loadSettings() {
   String line3 = file.readStringUntil('\n');
   String line4 = file.readStringUntil('\n');
   String line5 = file.readStringUntil('\n');
+  String line6 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -43,23 +44,29 @@ bool loadSettings() {
     timezoneOffset = line2.toInt();
   }
 
-  // Load night mode (if available, otherwise default to false)
+  // Load DST offset (if available, otherwise default to 0)
   if (line3.length() > 0) {
     line3.trim();
-    nightMode = (line3.toInt() != 0);
+    dstOffset = line3.toInt();
+  }
+
+  // Load night mode (if available, otherwise default to false)
+  if (line4.length() > 0) {
+    line4.trim();
+    nightMode = (line4.toInt() != 0);
   }
 
   // Load cert validation setting (if available, otherwise default to true from
   // AppState)
-  if (line4.length() > 0) {
-    line4.trim();
-    enableCertValidation = (line4.toInt() != 0);
+  if (line5.length() > 0) {
+    line5.trim();
+    enableCertValidation = (line5.toInt() != 0);
   }
 
   // Load hardware stats interval (if available, otherwise default to 2000ms)
-  if (line5.length() > 0) {
-    line5.trim();
-    unsigned long interval = line5.toInt();
+  if (line6.length() > 0) {
+    line6.trim();
+    unsigned long interval = line6.toInt();
     // Validate: only allow 1000, 2000, 3000, 5000, or 10000 ms
     if (interval == 1000 || interval == 2000 || interval == 3000 ||
         interval == 5000 || interval == 10000) {
@@ -79,6 +86,7 @@ void saveSettings() {
 
   file.println(autoUpdateEnabled ? "1" : "0");
   file.println(timezoneOffset);
+  file.println(dstOffset);
   file.println(nightMode ? "1" : "0");
   file.println(enableCertValidation ? "1" : "0");
   file.println(hardwareStatsInterval);
@@ -120,6 +128,7 @@ void handleSettingsGet() {
   doc["success"] = true;
   doc["autoUpdateEnabled"] = autoUpdateEnabled;
   doc["timezoneOffset"] = timezoneOffset;
+  doc["dstOffset"] = dstOffset;
   doc["nightMode"] = nightMode;
   doc["enableCertValidation"] = enableCertValidation;
   doc["hardwareStatsInterval"] =
@@ -153,16 +162,29 @@ void handleSettingsUpdate() {
     settingsChanged = true;
   }
 
+  bool timezoneChanged = false;
+
   if (doc["timezoneOffset"].is<int>()) {
     int newOffset = doc["timezoneOffset"].as<int>();
     if (newOffset != timezoneOffset) {
       timezoneOffset = newOffset;
       settingsChanged = true;
-      // Re-sync time with new timezone
-      if (WiFi.status() == WL_CONNECTED) {
-        syncTimeWithNTP();
-      }
+      timezoneChanged = true;
     }
+  }
+
+  if (doc["dstOffset"].is<int>()) {
+    int newDstOffset = doc["dstOffset"].as<int>();
+    if (newDstOffset != dstOffset) {
+      dstOffset = newDstOffset;
+      settingsChanged = true;
+      timezoneChanged = true;
+    }
+  }
+
+  // Re-sync time if timezone or DST changed
+  if (timezoneChanged && WiFi.status() == WL_CONNECTED) {
+    syncTimeWithNTP();
   }
 
   if (doc["nightMode"].is<bool>()) {
@@ -206,6 +228,7 @@ void handleSettingsUpdate() {
   resp["success"] = true;
   resp["autoUpdateEnabled"] = autoUpdateEnabled;
   resp["timezoneOffset"] = timezoneOffset;
+  resp["dstOffset"] = dstOffset;
   resp["nightMode"] = nightMode;
   resp["enableCertValidation"] = enableCertValidation;
   resp["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
@@ -240,6 +263,7 @@ void handleSettingsExport() {
   // General settings
   doc["settings"]["autoUpdateEnabled"] = autoUpdateEnabled;
   doc["settings"]["timezoneOffset"] = timezoneOffset;
+  doc["settings"]["dstOffset"] = dstOffset;
   doc["settings"]["nightMode"] = nightMode;
   doc["settings"]["enableCertValidation"] = enableCertValidation;
   doc["settings"]["blinkingEnabled"] = blinkingEnabled;
@@ -369,6 +393,10 @@ void handleSettingsImport() {
     if (doc["settings"]["timezoneOffset"].is<int>()) {
       timezoneOffset = doc["settings"]["timezoneOffset"].as<int>();
       DebugOut.printf("Timezone Offset: %d\n", timezoneOffset);
+    }
+    if (doc["settings"]["dstOffset"].is<int>()) {
+      dstOffset = doc["settings"]["dstOffset"].as<int>();
+      DebugOut.printf("DST Offset: %d\n", dstOffset);
     }
     if (doc["settings"]["nightMode"].is<bool>()) {
       nightMode = doc["settings"]["nightMode"].as<bool>();

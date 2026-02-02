@@ -1832,8 +1832,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="43200">UTC+12:00 (Auckland)</option>
                     </select>
                 </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Daylight Saving Time (DST)</div>
+                        <div class="toggle-sublabel">Add 1 hour for DST</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="dstToggle" onchange="updateDST()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
                 <div class="info-box">
-                    <span id="timezoneInfo">Current timezone offset will be shown here</span>
+                    <div><span id="timezoneInfo">Current timezone offset will be shown here</span></div>
+                    <div style="margin-top: 8px;"><strong>Device time:</strong> <span id="currentTimeDisplay">Loading...</span></div>
                 </div>
             </div>
 
@@ -2243,6 +2254,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             document.querySelectorAll('.panel').forEach(panel => {
                 panel.classList.toggle('active', panel.id === tabId);
             });
+
+            // Start/stop time updates when switching to/from settings tab
+            if (tabId === 'settings') {
+                startTimeUpdates();
+            } else {
+                stopTimeUpdates();
+            }
         }
 
         // ===== Sidebar Toggle =====
@@ -2497,7 +2515,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (typeof data.timezoneOffset !== 'undefined') {
                 currentTimezoneOffset = data.timezoneOffset;
                 document.getElementById('timezoneSelect').value = data.timezoneOffset.toString();
-                updateTimezoneDisplay(data.timezoneOffset);
+                updateTimezoneDisplay(data.timezoneOffset, data.dstOffset || 0);
+            }
+
+            if (typeof data.dstOffset !== 'undefined') {
+                currentDstOffset = data.dstOffset;
+                document.getElementById('dstToggle').checked = (data.dstOffset === 3600);
             }
             
             if (typeof data.nightMode !== 'undefined') {
@@ -2963,27 +2986,113 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Settings =====
+        let currentTimezoneOffset = 0;
+        let currentDstOffset = 0;
+        let timeUpdateInterval = null;
+
         function updateTimezone() {
             const offset = parseInt(document.getElementById('timezoneSelect').value);
+            const dstOffset = document.getElementById('dstToggle').checked ? 3600 : 0;
             fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timezoneOffset: offset })
+                body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     showToast('Timezone updated', 'success');
-                    updateTimezoneDisplay(offset);
+                    currentTimezoneOffset = offset;
+                    currentDstOffset = dstOffset;
+                    updateTimezoneDisplay(offset, dstOffset);
+                    // Wait a moment for NTP sync then refresh time
+                    setTimeout(updateCurrentTime, 2000);
                 }
             })
             .catch(err => showToast('Failed to update timezone', 'error'));
         }
 
-        function updateTimezoneDisplay(offset) {
-            const hours = offset / 3600;
+        function updateDST() {
+            const offset = parseInt(document.getElementById('timezoneSelect').value);
+            const dstOffset = document.getElementById('dstToggle').checked ? 3600 : 0;
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('DST setting updated', 'success');
+                    currentTimezoneOffset = offset;
+                    currentDstOffset = dstOffset;
+                    updateTimezoneDisplay(offset, dstOffset);
+                    // Wait a moment for NTP sync then refresh time
+                    setTimeout(updateCurrentTime, 2000);
+                }
+            })
+            .catch(err => showToast('Failed to update DST setting', 'error'));
+        }
+
+        function updateTimezoneDisplay(offset, dstOffset = 0) {
+            const totalOffset = offset + dstOffset;
+            const hours = totalOffset / 3600;
             const sign = hours >= 0 ? '+' : '';
-            document.getElementById('timezoneInfo').textContent = `UTC${sign}${hours} hours`;
+            const baseHours = offset / 3600;
+            const baseSign = baseHours >= 0 ? '+' : '';
+
+            let displayText = `UTC${sign}${hours} hours (GMT${baseSign}${baseHours}`;
+            if (dstOffset !== 0) {
+                displayText += ' + DST)';
+            } else {
+                displayText += ')';
+            }
+
+            document.getElementById('timezoneInfo').textContent = displayText;
+            updateCurrentTime();
+        }
+
+        function updateCurrentTime() {
+            fetch('/api/settings')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Create date object with current UTC time
+                    const now = new Date();
+                    // Apply timezone and DST offsets
+                    const offset = (data.timezoneOffset || 0) + (data.dstOffset || 0);
+                    const localTime = new Date(now.getTime() + offset * 1000);
+
+                    // Format time
+                    const year = localTime.getUTCFullYear();
+                    const month = String(localTime.getUTCMonth() + 1).padStart(2, '0');
+                    const day = String(localTime.getUTCDate()).padStart(2, '0');
+                    const hours = String(localTime.getUTCHours()).padStart(2, '0');
+                    const minutes = String(localTime.getUTCMinutes()).padStart(2, '0');
+                    const seconds = String(localTime.getUTCSeconds()).padStart(2, '0');
+
+                    document.getElementById('currentTimeDisplay').textContent =
+                        `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                }
+            })
+            .catch(err => {
+                document.getElementById('currentTimeDisplay').textContent = 'Error loading time';
+            });
+        }
+
+        // Update time every second when on settings tab
+        function startTimeUpdates() {
+            if (!timeUpdateInterval) {
+                updateCurrentTime();
+                timeUpdateInterval = setInterval(updateCurrentTime, 1000);
+            }
+        }
+
+        function stopTimeUpdates() {
+            if (timeUpdateInterval) {
+                clearInterval(timeUpdateInterval);
+                timeUpdateInterval = null;
+            }
         }
 
         function toggleTheme() {
@@ -3776,15 +3885,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             loadMqttSettings();
             initFirmwareDragDrop();
             initSidebar();
-            
+
             // Add input focus listeners
             document.getElementById('timerDuration').addEventListener('focus', () => inputFocusState.timerDuration = true);
             document.getElementById('timerDuration').addEventListener('blur', () => inputFocusState.timerDuration = false);
             document.getElementById('voltageThreshold').addEventListener('focus', () => inputFocusState.voltageThreshold = true);
             document.getElementById('voltageThreshold').addEventListener('blur', () => inputFocusState.voltageThreshold = false);
-            
+
             // Initial status bar update
             updateStatusBar(false, null, false, false);
+
+            // Check if settings tab is active and start time updates
+            const activePanel = document.querySelector('.panel.active');
+            if (activePanel && activePanel.id === 'settings') {
+                startTimeUpdates();
+            }
         };
     </script>
 </body>

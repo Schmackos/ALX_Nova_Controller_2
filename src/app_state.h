@@ -77,6 +77,7 @@ public:
   String cachedFirmwareUrl;
   String cachedChecksum;
   int timezoneOffset = 0;
+  int dstOffset = 0;
   bool nightMode = false;
   bool updateAvailable = false;
   String cachedLatestVersion;
@@ -221,6 +222,7 @@ private:
 #define cachedFirmwareUrl appState.cachedFirmwareUrl
 #define cachedChecksum appState.cachedChecksum
 #define timezoneOffset appState.timezoneOffset
+#define dstOffset appState.dstOffset
 #define nightMode appState.nightMode
 #define updateAvailable appState.updateAvailable
 #define cachedLatestVersion appState.cachedLatestVersion

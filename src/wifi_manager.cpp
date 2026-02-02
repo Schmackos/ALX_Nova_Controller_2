@@ -144,8 +144,10 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   doc["apEnabled"] = apEnabled;
   doc["autoUpdateEnabled"] = autoUpdateEnabled;
   doc["timezoneOffset"] = timezoneOffset;
+  doc["dstOffset"] = dstOffset;
   doc["nightMode"] = nightMode;
   doc["enableCertValidation"] = enableCertValidation;
+  doc["hardwareStatsInterval"] = hardwareStatsInterval / 1000; // Send as seconds
   doc["mac"] = WiFi.macAddress();
   doc["firmwareVersion"] = firmwareVer;
 
