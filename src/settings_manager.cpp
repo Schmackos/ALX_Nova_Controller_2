@@ -9,8 +9,8 @@
 #include "wifi_manager.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <Preferences.h>
 #include <WiFi.h>
-
 
 // Note: Certificate management removed - now using Mozilla certificate bundle
 // via ESP32CertBundle library for automatic SSL validation of all public
@@ -104,7 +104,22 @@ void performFactoryReset() {
   // Visual feedback: solid LED
   digitalWrite(LED_PIN, HIGH);
 
-  // Format LittleFS (erases all persistent data)
+  // 1. Clear WiFi settings from NVS
+  DebugOut.println("Clearing WiFi credentials (NVS: wifi-list)...");
+  Preferences wifiPrefs;
+  wifiPrefs.begin("wifi-list", false);
+  wifiPrefs.clear();
+  wifiPrefs.end();
+
+  // 2. Clear Auth settings from NVS
+  DebugOut.println("Clearing Auth settings (NVS: auth)...");
+  Preferences authPrefs;
+  authPrefs.begin("auth", false);
+  authPrefs.clear();
+  authPrefs.end();
+
+  // 3. Format LittleFS (erases /settings.txt, /mqtt_config.txt,
+  // /smartsensing.txt, etc.)
   DebugOut.println("Formatting LittleFS...");
   if (LittleFS.format()) {
     DebugOut.println("LittleFS formatted successfully");
@@ -114,6 +129,10 @@ void performFactoryReset() {
 
   // End LittleFS
   LittleFS.end();
+
+  // 4. Force AP Mode defaults for next boot
+  apEnabled = true;
+  isAPMode = true;
 
   DebugOut.println("=== FACTORY RESET COMPLETE ===");
   DebugOut.println("Rebooting in 2 seconds...");
@@ -681,8 +700,8 @@ void handleDiagnostics() {
 
   // Send as downloadable JSON file
   char filename[64];
-  snprintf(filename, sizeof(filename), "attachment; filename=\"diagnostics-%s.json\"",
-           timestamp);
+  snprintf(filename, sizeof(filename),
+           "attachment; filename=\"diagnostics-%s.json\"", timestamp);
   server.sendHeader("Content-Disposition", filename);
   server.send(200, "application/json", json);
 

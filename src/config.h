@@ -70,7 +70,7 @@ const unsigned long SMART_SENSING_HEARTBEAT_INTERVAL =
 const unsigned long DEFAULT_TIMER_DURATION =
     15; // Default timer duration in minutes
 const float DEFAULT_VOLTAGE_THRESHOLD =
-    1.0; // Default voltage threshold in volts
+    0.1; // Default voltage threshold in volts
 
 // Smart Sensing modes
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };
@@ -91,8 +91,9 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define DEFAULT_AP_PASSWORD "12345678"
 
 // ===== Multi-WiFi Configuration =====
-#define MAX_WIFI_NETWORKS 5         // Maximum number of saved WiFi networks
-#define WIFI_CONNECT_TIMEOUT 12000  // Connection timeout per network (12 seconds)
+#define MAX_WIFI_NETWORKS 5 // Maximum number of saved WiFi networks
+#define WIFI_CONNECT_TIMEOUT                                                   \
+  12000 // Connection timeout per network (12 seconds)
 
 // ===== FreeRTOS Task Configuration =====
 #define TASK_STACK_SIZE_SENSING 4096
