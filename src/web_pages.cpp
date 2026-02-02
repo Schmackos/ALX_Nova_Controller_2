@@ -2010,6 +2010,38 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <button type="button" class="password-toggle" onclick="togglePasswordVisibility('wifiPassword', this)">👁</button>
                         </div>
                     </div>
+                    <div class="toggle-row" style="margin: 16px 0;">
+                        <div>
+                            <div class="toggle-label">Static IP</div>
+                            <div class="toggle-sublabel">Use static IP instead of DHCP</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="useStaticIP" onchange="toggleStaticIPFields()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="staticIPFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">IPv4 Address</label>
+                            <input type="text" class="form-input" id="staticIP" inputmode="decimal" placeholder="e.g., 192.168.1.100" onchange="updateStaticIPDefaults()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Network Mask</label>
+                            <input type="text" class="form-input" id="subnet" inputmode="decimal" placeholder="e.g., 255.255.255.0" value="255.255.255.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Gateway</label>
+                            <input type="text" class="form-input" id="gateway" inputmode="decimal" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Primary DNS</label>
+                            <input type="text" class="form-input" id="dns1" inputmode="decimal" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Secondary DNS (Optional)</label>
+                            <input type="text" class="form-input" id="dns2" inputmode="decimal" placeholder="e.g., 8.8.8.8">
+                        </div>
+                    </div>
                     <button type="submit" class="btn btn-primary">Connect</button>
                 </form>
             </div>
@@ -2024,6 +2056,52 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div id="savedNetworksList">
                     <div class="skeleton skeleton-text"></div>
                     <div class="skeleton skeleton-text short"></div>
+                </div>
+            </div>
+
+            <!-- Network Configuration -->
+            <div class="card">
+                <div class="card-title">Network Configuration</div>
+                <div class="form-group">
+                    <label class="form-label">Select Network</label>
+                    <select class="form-input" id="configNetworkSelect" onchange="loadNetworkConfig()">
+                        <option value="">-- Select a saved network --</option>
+                    </select>
+                </div>
+                <div id="networkConfigFields" style="display: none;">
+                    <div class="toggle-row" style="margin: 16px 0;">
+                        <div>
+                            <div class="toggle-label">Static IP</div>
+                            <div class="toggle-sublabel">Use static IP for this network</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="configUseStaticIP" onchange="toggleConfigStaticIPFields()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="configStaticIPFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">IPv4 Address</label>
+                            <input type="text" class="form-input" id="configStaticIP" inputmode="decimal" placeholder="e.g., 192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Network Mask</label>
+                            <input type="text" class="form-input" id="configSubnet" inputmode="decimal" placeholder="e.g., 255.255.255.0" value="255.255.255.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Gateway</label>
+                            <input type="text" class="form-input" id="configGateway" inputmode="decimal" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Primary DNS</label>
+                            <input type="text" class="form-input" id="configDns1" inputmode="decimal" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Secondary DNS (Optional)</label>
+                            <input type="text" class="form-input" id="configDns2" inputmode="decimal" placeholder="e.g., 8.8.8.8">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="updateNetworkConfig()">Update Configuration</button>
                 </div>
             </div>
 
@@ -3191,13 +3269,48 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             event.preventDefault();
             const ssid = document.getElementById('wifiSSID').value;
             const password = document.getElementById('wifiPassword').value;
-            
+            const useStaticIP = document.getElementById('useStaticIP').checked;
+
+            // Build request body
+            const requestBody = { ssid, password, useStaticIP };
+
+            // Add static IP configuration if enabled
+            if (useStaticIP) {
+                requestBody.staticIP = document.getElementById('staticIP').value;
+                requestBody.subnet = document.getElementById('subnet').value;
+                requestBody.gateway = document.getElementById('gateway').value;
+                requestBody.dns1 = document.getElementById('dns1').value;
+                requestBody.dns2 = document.getElementById('dns2').value;
+
+                // Validate IP addresses
+                if (!isValidIP(requestBody.staticIP)) {
+                    showToast('Invalid IPv4 address', 'error');
+                    return;
+                }
+                if (!isValidIP(requestBody.subnet)) {
+                    showToast('Invalid network mask', 'error');
+                    return;
+                }
+                if (!isValidIP(requestBody.gateway)) {
+                    showToast('Invalid gateway address', 'error');
+                    return;
+                }
+                if (requestBody.dns1 && !isValidIP(requestBody.dns1)) {
+                    showToast('Invalid primary DNS address', 'error');
+                    return;
+                }
+                if (requestBody.dns2 && !isValidIP(requestBody.dns2)) {
+                    showToast('Invalid secondary DNS address', 'error');
+                    return;
+                }
+            }
+
             showWiFiConnectionModal(ssid);
-            
+
             apiFetch('/api/wificonfig', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ssid, password })
+                body: JSON.stringify(requestBody)
             })
             .then(res => res.json())
             .then(data => {
@@ -3296,6 +3409,47 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
         
+        // Toggle static IP fields visibility
+        function toggleStaticIPFields() {
+            const useStaticIP = document.getElementById('useStaticIP').checked;
+            const fields = document.getElementById('staticIPFields');
+            fields.style.display = useStaticIP ? 'block' : 'none';
+        }
+
+        // Auto-populate gateway and DNS based on static IP
+        function updateStaticIPDefaults() {
+            const staticIP = document.getElementById('staticIP').value;
+            const gatewayField = document.getElementById('gateway');
+            const dns1Field = document.getElementById('dns1');
+
+            if (!staticIP || !isValidIP(staticIP)) return;
+
+            // Extract network portion and suggest gateway (.1)
+            const parts = staticIP.split('.');
+            if (parts.length === 4) {
+                const suggestedGateway = `${parts[0]}.${parts[1]}.${parts[2]}.1`;
+
+                // Only auto-fill if fields are empty
+                if (!gatewayField.value) {
+                    gatewayField.value = suggestedGateway;
+                }
+                if (!dns1Field.value) {
+                    dns1Field.value = suggestedGateway;
+                }
+            }
+        }
+
+        // Validate IP address format
+        function isValidIP(ip) {
+            if (!ip) return false;
+            const parts = ip.split('.');
+            if (parts.length !== 4) return false;
+            return parts.every(part => {
+                const num = parseInt(part, 10);
+                return num >= 0 && num <= 255 && part === num.toString();
+            });
+        }
+
         function scanWiFiNetworks() {
             const scanBtn = document.getElementById('scanBtn');
             const scanStatus = document.getElementById('scanStatus');
@@ -3372,13 +3526,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        // Store saved networks data globally for config management
+        let savedNetworksData = [];
+
         // Load and display saved networks
         function loadSavedNetworks() {
             const container = document.getElementById('savedNetworksList');
             const badge = document.getElementById('networkCountBadge');
+            const configSelect = document.getElementById('configNetworkSelect');
             const sessionId = getSessionIdFromCookie();
 
-            apiFetch('/api/wifilist', { 
+            apiFetch('/api/wifilist', {
                 credentials: 'include',
                 headers: {
                     'X-Session-ID': sessionId
@@ -3387,6 +3545,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.networks) { // Check success flag specifically
+                    // Store networks data globally
+                    savedNetworksData = data.networks;
+
                     if (data.networks.length > 0) {
                         badge.textContent = `(${data.count}/5)`;
 
@@ -3398,15 +3559,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                         ${net.ssid}
                                         ${net.priority ? '<span class="network-priority">Priority</span>' : ''}
                                     </div>
-                                    <div class="network-status">Saved</div>
+                                    <div class="network-status">Saved${net.useStaticIP ? ' • Static IP' : ''}</div>
                                 </div>
                                 <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeNetwork(${net.index})">Remove</button>
                             </div>
                         `).join('');
                         updateBulkActionsVisibility();
+
+                        // Populate config network select dropdown
+                        configSelect.innerHTML = '<option value="">-- Select a saved network --</option>';
+                        data.networks.forEach(net => {
+                            const option = document.createElement('option');
+                            option.value = net.index;
+                            option.textContent = net.ssid + (net.useStaticIP ? ' (Static IP)' : '');
+                            configSelect.appendChild(option);
+                        });
                     } else {
                         badge.textContent = '(0/5)';
                         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 24px; font-style: italic;">No saved networks</p>';
+                        configSelect.innerHTML = '<option value="">-- No saved networks --</option>';
                     }
                 } else {
                     // Show error from API if available
@@ -3527,6 +3698,125 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             // Reload the list
             loadSavedNetworks();
+        }
+
+        // Load network configuration for selected network
+        function loadNetworkConfig() {
+            const select = document.getElementById('configNetworkSelect');
+            const fields = document.getElementById('networkConfigFields');
+            const staticIPFields = document.getElementById('configStaticIPFields');
+            const useStaticIP = document.getElementById('configUseStaticIP');
+
+            const selectedIndex = parseInt(select.value);
+            if (isNaN(selectedIndex)) {
+                fields.style.display = 'none';
+                return;
+            }
+
+            // Find the network data
+            const network = savedNetworksData.find(net => net.index === selectedIndex);
+            if (!network) {
+                fields.style.display = 'none';
+                return;
+            }
+
+            // Show fields and populate data
+            fields.style.display = 'block';
+            useStaticIP.checked = network.useStaticIP || false;
+
+            if (network.useStaticIP) {
+                staticIPFields.style.display = 'block';
+                document.getElementById('configStaticIP').value = network.staticIP || '';
+                document.getElementById('configSubnet').value = network.subnet || '255.255.255.0';
+                document.getElementById('configGateway').value = network.gateway || '';
+                document.getElementById('configDns1').value = network.dns1 || '';
+                document.getElementById('configDns2').value = network.dns2 || '';
+            } else {
+                staticIPFields.style.display = 'none';
+                // Clear fields
+                document.getElementById('configStaticIP').value = '';
+                document.getElementById('configSubnet').value = '255.255.255.0';
+                document.getElementById('configGateway').value = '';
+                document.getElementById('configDns1').value = '';
+                document.getElementById('configDns2').value = '';
+            }
+        }
+
+        // Toggle config static IP fields visibility
+        function toggleConfigStaticIPFields() {
+            const useStaticIP = document.getElementById('configUseStaticIP').checked;
+            const fields = document.getElementById('configStaticIPFields');
+            fields.style.display = useStaticIP ? 'block' : 'none';
+        }
+
+        // Update network configuration
+        function updateNetworkConfig() {
+            const select = document.getElementById('configNetworkSelect');
+            const selectedIndex = parseInt(select.value);
+
+            if (isNaN(selectedIndex)) {
+                showToast('Please select a network', 'error');
+                return;
+            }
+
+            const network = savedNetworksData.find(net => net.index === selectedIndex);
+            if (!network) {
+                showToast('Network not found', 'error');
+                return;
+            }
+
+            const useStaticIP = document.getElementById('configUseStaticIP').checked;
+            const requestBody = {
+                ssid: network.ssid,
+                password: '', // Keep existing password (backend will handle this)
+                useStaticIP: useStaticIP
+            };
+
+            if (useStaticIP) {
+                requestBody.staticIP = document.getElementById('configStaticIP').value;
+                requestBody.subnet = document.getElementById('configSubnet').value;
+                requestBody.gateway = document.getElementById('configGateway').value;
+                requestBody.dns1 = document.getElementById('configDns1').value;
+                requestBody.dns2 = document.getElementById('configDns2').value;
+
+                // Validate IP addresses
+                if (!isValidIP(requestBody.staticIP)) {
+                    showToast('Invalid IPv4 address', 'error');
+                    return;
+                }
+                if (!isValidIP(requestBody.subnet)) {
+                    showToast('Invalid network mask', 'error');
+                    return;
+                }
+                if (!isValidIP(requestBody.gateway)) {
+                    showToast('Invalid gateway address', 'error');
+                    return;
+                }
+                if (requestBody.dns1 && !isValidIP(requestBody.dns1)) {
+                    showToast('Invalid primary DNS address', 'error');
+                    return;
+                }
+                if (requestBody.dns2 && !isValidIP(requestBody.dns2)) {
+                    showToast('Invalid secondary DNS address', 'error');
+                    return;
+                }
+            }
+
+            apiFetch('/api/wificonfig', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Network configuration updated', 'success');
+                    loadSavedNetworks(); // Reload the list
+                } else {
+                    showToast(data.message || 'Failed to update configuration', 'error');
+                }
+            })
+            .catch(err => showToast('Network error: ' + err.message, 'error'));
         }
 
         function toggleAP() {

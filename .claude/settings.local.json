@@ -29,7 +29,12 @@
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run list --workflow=release.yml --limit 5)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run cancel 21609085323)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run list --workflow=release.yml --limit 3)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 21609085323)"
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 21609085323)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" workflow run release.yml)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run list --workflow=release.yml --limit 2)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run watch 21609459881)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 21609459881)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" release list --limit 3)"
     ]
   }
 }

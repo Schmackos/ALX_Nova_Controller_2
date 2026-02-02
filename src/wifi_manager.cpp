@@ -58,12 +58,45 @@ void stopAccessPoint() {
   }
 }
 
-void connectToWiFi(const char *ssid, const char *password) {
+void connectToWiFi(const char *ssid, const char *password, bool useStaticIP,
+                   const char *staticIP, const char *subnet,
+                   const char *gateway, const char *dns1, const char *dns2) {
   WiFi.mode(WIFI_STA);
+
+  // Configure static IP if enabled
+  if (useStaticIP && strlen(staticIP) > 0) {
+    IPAddress ip, gw, sn, d1, d2;
+
+    if (ip.fromString(staticIP) && gw.fromString(gateway) &&
+        sn.fromString(subnet)) {
+      // Parse DNS servers (optional)
+      if (strlen(dns1) > 0) {
+        d1.fromString(dns1);
+      }
+      if (strlen(dns2) > 0) {
+        d2.fromString(dns2);
+      }
+
+      // Apply static IP configuration
+      if (WiFi.config(ip, gw, sn, d1, d2)) {
+        DebugOut.printf("Static IP configured: %s\n", staticIP);
+      } else {
+        DebugOut.println("Failed to configure static IP");
+      }
+    } else {
+      DebugOut.println("Invalid IP address format");
+    }
+  }
+
   WiFi.begin(ssid, password);
 
   DebugOut.print("Connecting to WiFi: ");
   DebugOut.println(ssid);
+  if (useStaticIP) {
+    DebugOut.printf("  Using Static IP: %s\n", staticIP);
+  } else {
+    DebugOut.println("  Using DHCP");
+  }
 
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 40) {
@@ -202,7 +235,9 @@ int getWiFiNetworkCount() {
 }
 
 // Save WiFi network (add or update)
-bool saveWiFiNetwork(const char *ssid, const char *password) {
+bool saveWiFiNetwork(const char *ssid, const char *password, bool useStaticIP,
+                     const char *staticIP, const char *subnet,
+                     const char *gateway, const char *dns1, const char *dns2) {
   if (ssid == nullptr || strlen(ssid) == 0) {
     return false;
   }
@@ -216,10 +251,20 @@ bool saveWiFiNetwork(const char *ssid, const char *password) {
   for (int i = 0; i < count; i++) {
     String existingSSID = prefs.getString(("s" + String(i)).c_str(), "");
     if (existingSSID == ssid) {
-      // Update password for existing SSID
-      prefs.putString(("p" + String(i)).c_str(), password);
+      // Update existing network (password and static IP config)
+      // Only update password if provided (non-empty)
+      if (strlen(password) > 0) {
+        prefs.putString(("p" + String(i)).c_str(), password);
+      }
+      prefs.putBool(("static" + String(i)).c_str(), useStaticIP);
+      prefs.putString(("ip" + String(i)).c_str(), staticIP);
+      prefs.putString(("subnet" + String(i)).c_str(), subnet);
+      prefs.putString(("gw" + String(i)).c_str(), gateway);
+      prefs.putString(("dns1_" + String(i)).c_str(), dns1);
+      prefs.putString(("dns2_" + String(i)).c_str(), dns2);
       prefs.end();
-      DebugOut.printf("Updated password for network: %s\n", ssid);
+      DebugOut.printf("Updated network: %s (Static IP: %s)\n", ssid,
+                      useStaticIP ? "enabled" : "disabled");
       return true;
     }
   }
@@ -234,10 +279,17 @@ bool saveWiFiNetwork(const char *ssid, const char *password) {
   // Add new network at the end
   prefs.putString(("s" + String(count)).c_str(), ssid);
   prefs.putString(("p" + String(count)).c_str(), password);
+  prefs.putBool(("static" + String(count)).c_str(), useStaticIP);
+  prefs.putString(("ip" + String(count)).c_str(), staticIP);
+  prefs.putString(("subnet" + String(count)).c_str(), subnet);
+  prefs.putString(("gw" + String(count)).c_str(), gateway);
+  prefs.putString(("dns1_" + String(count)).c_str(), dns1);
+  prefs.putString(("dns2_" + String(count)).c_str(), dns2);
   prefs.putUChar("count", count + 1);
   prefs.end();
 
-  DebugOut.printf("Saved new network: %s (total: %d)\n", ssid, count + 1);
+  DebugOut.printf("Saved new network: %s (total: %d, Static IP: %s)\n", ssid,
+                  count + 1, useStaticIP ? "enabled" : "disabled");
   return true;
 }
 
@@ -257,13 +309,32 @@ bool removeWiFiNetwork(int index) {
   for (int i = index; i < count - 1; i++) {
     String ssid = prefs.getString(("s" + String(i + 1)).c_str(), "");
     String pass = prefs.getString(("p" + String(i + 1)).c_str(), "");
+    bool useStatic = prefs.getBool(("static" + String(i + 1)).c_str(), false);
+    String ip = prefs.getString(("ip" + String(i + 1)).c_str(), "");
+    String subnet = prefs.getString(("subnet" + String(i + 1)).c_str(), "");
+    String gw = prefs.getString(("gw" + String(i + 1)).c_str(), "");
+    String dns1 = prefs.getString(("dns1_" + String(i + 1)).c_str(), "");
+    String dns2 = prefs.getString(("dns2_" + String(i + 1)).c_str(), "");
+
     prefs.putString(("s" + String(i)).c_str(), ssid);
     prefs.putString(("p" + String(i)).c_str(), pass);
+    prefs.putBool(("static" + String(i)).c_str(), useStatic);
+    prefs.putString(("ip" + String(i)).c_str(), ip);
+    prefs.putString(("subnet" + String(i)).c_str(), subnet);
+    prefs.putString(("gw" + String(i)).c_str(), gw);
+    prefs.putString(("dns1_" + String(i)).c_str(), dns1);
+    prefs.putString(("dns2_" + String(i)).c_str(), dns2);
   }
 
   // Remove the last entry
   prefs.remove(("s" + String(count - 1)).c_str());
   prefs.remove(("p" + String(count - 1)).c_str());
+  prefs.remove(("static" + String(count - 1)).c_str());
+  prefs.remove(("ip" + String(count - 1)).c_str());
+  prefs.remove(("subnet" + String(count - 1)).c_str());
+  prefs.remove(("gw" + String(count - 1)).c_str());
+  prefs.remove(("dns1_" + String(count - 1)).c_str());
+  prefs.remove(("dns2_" + String(count - 1)).c_str());
   prefs.putUChar("count", count - 1);
 
   prefs.end();
@@ -290,6 +361,12 @@ bool connectToStoredNetworks() {
   for (int i = 0; i < count; i++) {
     String ssid = prefs.getString(("s" + String(i)).c_str(), "");
     String password = prefs.getString(("p" + String(i)).c_str(), "");
+    bool useStatic = prefs.getBool(("static" + String(i)).c_str(), false);
+    String ip = prefs.getString(("ip" + String(i)).c_str(), "");
+    String subnet = prefs.getString(("subnet" + String(i)).c_str(), "");
+    String gw = prefs.getString(("gw" + String(i)).c_str(), "");
+    String dns1 = prefs.getString(("dns1_" + String(i)).c_str(), "");
+    String dns2 = prefs.getString(("dns2_" + String(i)).c_str(), "");
 
     if (ssid.length() == 0) {
       continue;
@@ -299,6 +376,24 @@ bool connectToStoredNetworks() {
                     ssid.c_str());
 
     WiFi.mode(WIFI_STA);
+
+    // Configure static IP if enabled
+    if (useStatic && ip.length() > 0) {
+      IPAddress ipAddr, gwAddr, snAddr, dns1Addr, dns2Addr;
+      if (ipAddr.fromString(ip) && gwAddr.fromString(gw) &&
+          snAddr.fromString(subnet)) {
+        if (dns1.length() > 0)
+          dns1Addr.fromString(dns1);
+        if (dns2.length() > 0)
+          dns2Addr.fromString(dns2);
+
+        WiFi.config(ipAddr, gwAddr, snAddr, dns1Addr, dns2Addr);
+        DebugOut.printf("  Using Static IP: %s\n", ip.c_str());
+      }
+    } else {
+      DebugOut.println("  Using DHCP");
+    }
+
     WiFi.begin(ssid.c_str(), password.c_str());
 
     unsigned long startTime = millis();
@@ -666,14 +761,24 @@ void handleWiFiConfig() {
   String ssid = doc["ssid"].as<String>();
   String password = doc["password"].as<String>();
 
+  // Extract static IP configuration
+  bool useStaticIP = doc["useStaticIP"] | false;
+  String staticIP = doc["staticIP"] | "";
+  String subnet = doc["subnet"] | "";
+  String gateway = doc["gateway"] | "";
+  String dns1 = doc["dns1"] | "";
+  String dns2 = doc["dns2"] | "";
+
   if (ssid.length() == 0) {
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"SSID required\"}");
     return;
   }
 
-  // Save to multi-WiFi list
-  if (!saveWiFiNetwork(ssid.c_str(), password.c_str())) {
+  // Save to multi-WiFi list with static IP configuration
+  if (!saveWiFiNetwork(ssid.c_str(), password.c_str(), useStaticIP,
+                       staticIP.c_str(), subnet.c_str(), gateway.c_str(),
+                       dns1.c_str(), dns2.c_str())) {
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"Failed to save network. "
                 "Maximum 5 networks reached.\"}");
@@ -688,6 +793,21 @@ void handleWiFiConfig() {
   wifiNewIP = "";
 
   WiFi.mode(WIFI_AP_STA);
+
+  // Configure static IP if enabled
+  if (useStaticIP && staticIP.length() > 0) {
+    IPAddress ip, gw, sn, d1, d2;
+    if (ip.fromString(staticIP) && gw.fromString(gateway) &&
+        sn.fromString(subnet)) {
+      if (dns1.length() > 0)
+        d1.fromString(dns1);
+      if (dns2.length() > 0)
+        d2.fromString(dns2);
+      WiFi.config(ip, gw, sn, d1, d2);
+      DebugOut.printf("Static IP configured: %s\n", staticIP.c_str());
+    }
+  }
+
   WiFi.begin(ssid.c_str(), password.c_str());
 
   server.send(200, "application/json",
@@ -791,6 +911,17 @@ void handleWiFiList() {
       net["ssid"] = ssid;
       net["index"] = i;
       net["priority"] = (i == 0) ? true : false;
+
+      // Include static IP configuration
+      bool useStatic = prefs.getBool(("static" + String(i)).c_str(), false);
+      net["useStaticIP"] = useStatic;
+      if (useStatic) {
+        net["staticIP"] = prefs.getString(("ip" + String(i)).c_str(), "");
+        net["subnet"] = prefs.getString(("subnet" + String(i)).c_str(), "");
+        net["gateway"] = prefs.getString(("gw" + String(i)).c_str(), "");
+        net["dns1"] = prefs.getString(("dns1_" + String(i)).c_str(), "");
+        net["dns2"] = prefs.getString(("dns2_" + String(i)).c_str(), "");
+      }
     }
   }
 

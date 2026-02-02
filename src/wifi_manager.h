@@ -7,7 +7,10 @@
 // ===== WiFi Core Functions =====
 void startAccessPoint();
 void stopAccessPoint();
-void connectToWiFi(const char *ssid, const char *password);
+void connectToWiFi(const char *ssid, const char *password, bool useStaticIP = false,
+                   const char *staticIP = "", const char *subnet = "",
+                   const char *gateway = "", const char *dns1 = "",
+                   const char *dns2 = "");
 void updateWiFiConnection();
 
 // ===== WiFi Credentials Persistence =====
@@ -18,8 +21,11 @@ void saveWiFiCredentials(const char *ssid, const char *password);
 void migrateWiFiCredentials();  // One-time migration from LittleFS to
                                 // Preferences
 bool connectToStoredNetworks(); // Try all saved networks in order
-bool saveWiFiNetwork(const char *ssid,
-                     const char *password); // Add/update network
+bool saveWiFiNetwork(const char *ssid, const char *password,
+                     bool useStaticIP = false, const char *staticIP = "",
+                     const char *subnet = "", const char *gateway = "",
+                     const char *dns1 = "",
+                     const char *dns2 = ""); // Add/update network
 bool removeWiFiNetwork(int index);          // Remove network by index
 int getWiFiNetworkCount();                  // Get number of saved networks
 
