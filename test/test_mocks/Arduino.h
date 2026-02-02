@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <cstring>
 
 // Mock Arduino types
 typedef std::string String;
@@ -18,14 +19,18 @@ typedef uint8_t byte;
 #define LOW 0x0
 #define HIGH 0x1
 
-// Mock global state for testing
+// Mock global state for testing (header-only implementation)
 namespace ArduinoMock {
-    extern unsigned long mockMillis;
-    extern int mockAnalogValue;
-    extern int mockDigitalPins[50];
+    static unsigned long mockMillis = 0;
+    static int mockAnalogValue = 0;
+    static int mockDigitalPins[50] = {0};
 
     // Reset function for tests
-    void reset();
+    inline void reset() {
+        mockMillis = 0;
+        mockAnalogValue = 0;
+        std::memset(mockDigitalPins, 0, sizeof(mockDigitalPins));
+    }
 }
 
 // Mock Arduino functions

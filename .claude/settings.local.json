@@ -15,7 +15,9 @@
       "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
       "Bash(git pull:*)",
       "Bash(git stash:*)",
-      "Bash(pio test:*)"
+      "Bash(pio test:*)",
+      "Bash(gh:*)",
+      "Bash(pacman -Q:*)"
     ]
   }
 }
