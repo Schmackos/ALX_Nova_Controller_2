@@ -2000,6 +2000,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </select>
                 </div>
                 <div id="networkConfigFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" class="form-input" id="configPassword" placeholder="Enter network password">
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('configPassword', this)">👁</button>
+                        </div>
+                    </div>
                     <div class="toggle-row" style="margin: 16px 0;">
                         <div>
                             <div class="toggle-label">Static IP</div>
@@ -2033,8 +2040,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn-primary" style="flex: 1; min-width: 120px;" onclick="updateNetworkConfig(true)">Connect & Update</button>
-                        <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="updateNetworkConfig(false)">Update Only</button>
+                        <button id="connectUpdateBtn" class="btn btn-primary" style="flex: 1; min-width: 120px;" onclick="updateNetworkConfig(true)">Connect</button>
+                        <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="updateNetworkConfig(false)">Update Network</button>
                         <button class="btn btn-danger" style="flex: 1; min-width: 120px;" onclick="removeSelectedNetworkConfig()">Remove Network</button>
                     </div>
                 </div>
@@ -3613,11 +3620,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // Remove network by index
         // Load network configuration for selected network
+        // Store original network config to detect changes
+        let originalNetworkConfig = {
+            useStaticIP: false,
+            staticIP: '',
+            subnet: '',
+            gateway: '',
+            dns1: '',
+            dns2: ''
+        };
+
         function loadNetworkConfig() {
             const select = document.getElementById('configNetworkSelect');
             const fields = document.getElementById('networkConfigFields');
             const staticIPFields = document.getElementById('configStaticIPFields');
             const useStaticIP = document.getElementById('configUseStaticIP');
+            const passwordField = document.getElementById('configPassword');
 
             const selectedIndex = parseInt(select.value);
             if (isNaN(selectedIndex)) {
@@ -3634,7 +3652,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             // Show fields and populate data
             fields.style.display = 'block';
+
+            // Clear password field (we don't store passwords on frontend for security)
+            passwordField.value = '';
+            passwordField.placeholder = 'Enter password (leave empty to keep current)';
+
             useStaticIP.checked = network.useStaticIP || false;
+
+            // Store original values for change detection
+            originalNetworkConfig = {
+                useStaticIP: network.useStaticIP || false,
+                staticIP: network.staticIP || '',
+                subnet: network.subnet || '255.255.255.0',
+                gateway: network.gateway || '',
+                dns1: network.dns1 || '',
+                dns2: network.dns2 || ''
+            };
 
             if (network.useStaticIP) {
                 staticIPFields.style.display = 'block';
@@ -3652,6 +3685,50 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('configDns1').value = '';
                 document.getElementById('configDns2').value = '';
             }
+
+            // Update button label
+            updateConnectButtonLabel();
+
+            // Add change listeners to update button label
+            const fieldsToWatch = ['configPassword', 'configUseStaticIP', 'configStaticIP', 'configSubnet', 'configGateway', 'configDns1', 'configDns2'];
+            fieldsToWatch.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.removeEventListener('input', updateConnectButtonLabel);
+                    field.removeEventListener('change', updateConnectButtonLabel);
+                    field.addEventListener('input', updateConnectButtonLabel);
+                    field.addEventListener('change', updateConnectButtonLabel);
+                }
+            });
+        }
+
+        function updateConnectButtonLabel() {
+            const btn = document.getElementById('connectUpdateBtn');
+            if (!btn) return;
+
+            const passwordField = document.getElementById('configPassword');
+            const useStaticIP = document.getElementById('configUseStaticIP').checked;
+
+            // Check if password was entered
+            const hasPasswordChange = passwordField.value.trim() !== '';
+
+            // Check if static IP settings changed
+            const hasStaticIPChange =
+                useStaticIP !== originalNetworkConfig.useStaticIP ||
+                (useStaticIP && (
+                    document.getElementById('configStaticIP').value !== originalNetworkConfig.staticIP ||
+                    document.getElementById('configSubnet').value !== originalNetworkConfig.subnet ||
+                    document.getElementById('configGateway').value !== originalNetworkConfig.gateway ||
+                    document.getElementById('configDns1').value !== originalNetworkConfig.dns1 ||
+                    document.getElementById('configDns2').value !== originalNetworkConfig.dns2
+                ));
+
+            // Update button text based on whether changes were made
+            if (hasPasswordChange || hasStaticIPChange) {
+                btn.textContent = 'Connect & Update';
+            } else {
+                btn.textContent = 'Connect';
+            }
         }
 
         // Toggle config static IP fields visibility
@@ -3659,10 +3736,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const useStaticIP = document.getElementById('configUseStaticIP').checked;
             const fields = document.getElementById('configStaticIPFields');
             fields.style.display = useStaticIP ? 'block' : 'none';
+            updateConnectButtonLabel();
         }
 
         // Update network configuration
-        function updateNetworkConfig() {
+        function updateNetworkConfig(connect) {
             const select = document.getElementById('configNetworkSelect');
             const selectedIndex = parseInt(select.value);
 
@@ -3677,10 +3755,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 return;
             }
 
+            const passwordField = document.getElementById('configPassword');
+            const password = passwordField.value.trim();
+
+            // If password is empty, we'll send empty string and backend will keep existing password
             const useStaticIP = document.getElementById('configUseStaticIP').checked;
             const requestBody = {
                 ssid: network.ssid,
-                password: '', // Keep existing password (backend will handle this)
+                password: password, // Empty string keeps existing password
                 useStaticIP: useStaticIP
             };
 
@@ -3714,7 +3796,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             }
 
-            apiFetch('/api/wificonfig', {
+            // Choose endpoint based on connect parameter
+            const endpoint = connect ? '/api/wificonfig' : '/api/wifisave';
+
+            // Show connection modal if connecting
+            if (connect) {
+                showWiFiModal(network.ssid);
+            }
+
+            apiFetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(requestBody)
@@ -3722,13 +3812,31 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    showToast('Network configuration updated', 'success');
-                    loadSavedNetworks(); // Reload the list
+                    if (connect) {
+                        // Start polling for connection status
+                        if (wifiConnectionPollTimer) clearInterval(wifiConnectionPollTimer);
+                        wifiConnectionPollTimer = setInterval(pollWiFiConnection, 2000);
+                    } else {
+                        showToast('Network settings updated', 'success');
+                        loadSavedNetworks(); // Reload the list
+                        // Clear password field after successful save
+                        document.getElementById('configPassword').value = '';
+                    }
                 } else {
-                    showToast(data.message || 'Failed to update configuration', 'error');
+                    if (connect) {
+                        updateWiFiConnectionStatus('error', data.message || 'Failed to connect');
+                    } else {
+                        showToast(data.message || 'Failed to update settings', 'error');
+                    }
                 }
             })
-            .catch(err => showToast('Network error: ' + err.message, 'error'));
+            .catch(err => {
+                if (connect) {
+                    updateWiFiConnectionStatus('error', 'Network error: ' + err.message);
+                } else {
+                    showToast('Network error: ' + err.message, 'error');
+                }
+            });
         }
 
         let networkRemovalPollTimer = null;
@@ -5992,18 +6100,19 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
                 .then(res => res.json())
                 .then(data => {
                     if (data.wifiConnecting) return;
-                    
+
                     clearInterval(wifiConnectionPollTimer);
                     wifiConnectionPollTimer = null;
-                    
+
                     if (data.wifiConnectSuccess) {
-                        updateWiFiStatus('success', 'Connected successfully!', data.wifiNewIP);
+                        updateWiFiConnectionStatus('success', 'Connected successfully!', data.wifiNewIP);
                     } else {
-                        updateWiFiStatus('error', 'Failed to connect. Check credentials.');
+                        updateWiFiConnectionStatus('error', data.message || 'Failed to connect. Check credentials.');
                     }
                 })
                 .catch(err => {
                     console.error('Polling error:', err);
+                    updateWiFiConnectionStatus('error', 'Network error during connection');
                 });
         }
 
