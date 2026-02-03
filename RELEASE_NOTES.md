@@ -2,7 +2,115 @@
 
 ## Version 1.4.1
 
+## New Features
+- [2026-02-03] feat: Introduce automatic WiFi reconnection and enhanced network removal experience
+
+- Implemented an intelligent WiFi reconnection system that automatically manages disconnections and reconnects without user intervention.
+- Added a warning modal for removing the currently connected network, requiring explicit confirmation and providing clear consequences.
+- Enhanced user experience with real-time status updates and improved feedback during network removal and reconnection attempts.
+- Fixed authentication issues in API calls by ensuring session credentials are included in all requests.
+
+Files modified: src/wifi_manager.cpp, src/wifi_manager.h, src/main.cpp, src/web_pages.cpp
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`5214ff8`)
+- [2026-02-03] feat: Automatic WiFi reconnection with event-driven monitoring
+
+Implemented intelligent WiFi reconnection system that automatically handles network disconnections and recovers connectivity without user intervention.
+
+**WiFi Event Handler:**
+- Detects WiFi disconnection events in real-time (SYSTEM_EVENT_STA_DISCONNECTED)
+- Monitors connection establishment (SYSTEM_EVENT_STA_CONNECTED)
+- Tracks IP address assignment (SYSTEM_EVENT_STA_GOT_IP)
+- Broadcasts status updates to connected clients via WebSocket
+
+**Smart Reconnection Logic:**
+- Waits 10 seconds after disconnection before attempting reconnection
+- Throttles reconnection attempts to every 5 seconds to avoid overwhelming the network
+- Automatically tries all saved networks in priority order
+- Falls back to AP Mode if no saved networks are available
+- Suppresses repetitive console warnings (one message per 30 seconds max)
+
+**User Experience:**
+- Silent recovery when access point comes back online
+- No flooding of serial console with disconnect warnings
+- Real-time status updates to web interface
+- Seamless transition to AP mode when network is permanently unavailable
+
+**Technical Implementation:**
+- Added `onWiFiEvent()` handler to process WiFi system events
+- Created `initWiFiEventHandler()` to register event handler at startup
+- Implemented `checkWiFiConnection()` in main loop for reconnection monitoring
+- Reuses existing `connectToStoredNetworks()` for multi-network reconnection
+- State tracking prevents duplicate reconnection attempts
+
+**Files Modified:**
+- src/wifi_manager.cpp: WiFi event handler and reconnection logic
+- src/wifi_manager.h: Function declarations for event handling
+- src/main.cpp: Initialize event handler in setup(), monitor in loop()
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+- [2026-02-03] feat: Enhanced WiFi network removal with current network warning
+
+Improved the network removal experience with better user feedback and safety checks:
+
+**Current Network Warning:**
+- Shows dedicated warning modal when removing the currently connected network
+- Clearly explains the consequences (disconnection, reconnection attempts, AP mode fallback)
+- Requires explicit confirmation before proceeding
+- Visual warning styling with error color scheme
+
+**Smart Network Tracking:**
+- Tracks current WiFi SSID to detect when user is removing active connection
+- Updates connection state in real-time from WebSocket data
+- Distinguishes between removing current network vs. other saved networks
+
+**Improved User Flow:**
+- Simple confirmation for non-current networks
+- Detailed warning modal for current network removal
+- Real-time feedback during reconnection attempts
+- Automatic monitoring shows either:
+  - Success toast when reconnected to another network
+  - AP Mode modal with IP address if no networks available
+
+**Technical Implementation:**
+- Added `currentWifiSSID` global variable to track active connection
+- Created `showRemoveCurrentNetworkModal()` for warning display
+- Split removal logic into `performNetworkRemoval()` for better code organization
+- Enhanced `updateWiFiStatus()` to update connection tracking
+- Existing `monitorNetworkRemoval()` handles post-removal reconnection monitoring
+
+**Files Modified:**
+- src/web_pages.cpp: Added network tracking, warning modal, improved removal flow
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
 ## Bug Fixes
+- [2026-02-03] fix: WiFi scan authentication error - Add automatic credentials to all API calls
+
+Fixed "Session NOT FOUND in active list" and "Unauthorized access attempt to /api/wifiscan" errors by enhancing the `apiFetch()` wrapper to automatically include session credentials with all API requests.
+
+**Root Cause:**
+- API calls were not consistently sending session authentication (cookies and X-Session-ID header)
+- Browser may not automatically send cookies without explicit `credentials: 'include'`
+- Session validation was failing, causing 401 Unauthorized responses
+
+**Solution:**
+- Enhanced `apiFetch()` wrapper to automatically inject credentials and session header for ALL API calls
+- Ensures consistent authentication across the entire application
+- Prevents future similar authentication issues
+
+**Technical Details:**
+- Modified `apiFetch()` to auto-include `credentials: 'include'` option
+- Automatically adds `X-Session-ID` header by reading session cookie
+- Properly merges default options with user-provided options
+- Cleaned up redundant credential specifications in other API calls
+
+**Files Modified:**
+- src/web_pages.cpp: Enhanced apiFetch() wrapper, cleaned up redundant credentials in loadSavedNetworks() and WiFi list calls
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
 - [2026-02-03] fix: Replace 204 No Content response with 404 for favicon.ico to eliminate WebServer content-length warning
 
 The favicon.ico endpoint was returning 204 (No Content) which caused the WebServer library to warn about zero content length. Changing to 404 (Not Found) is more semantically correct for a missing resource and eliminates the warning without affecting functionality.
