@@ -1101,6 +1101,14 @@ void handleWiFiConfig() {
   // First set to STA mode for clean connection
   WiFi.mode(WIFI_STA);
 
+  // If we're updating the password of the currently connected network,
+  // disconnect first to ensure clean reconnection with new credentials
+  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == ssid) {
+    DebugOut.printf("Disconnecting from %s before reconnecting with new credentials\n", ssid.c_str());
+    WiFi.disconnect(true); // true = turn off WiFi radio
+    delay(500); // Give it time to disconnect
+  }
+
   // Configure static IP if enabled (must be done in STA mode)
   if (useStaticIP && staticIP.length() > 0) {
     if (!configureStaticIP(staticIP.c_str(), subnet.c_str(), gateway.c_str(),

@@ -9,9 +9,54 @@
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
+
+When a user updates the password for a currently connected network, the
+device was calling WiFi.begin() while still connected, causing an abrupt
+disconnect (ASSOC_LEAVE) and subsequent authentication failure with the
+new password.
+
+This fix checks if the device is already connected to the target SSID
+and disconnects gracefully before attempting to reconnect with the new
+credentials. This ensures the device properly registers the new password
+and successfully reconnects.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`c278959`)
+- [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
+
+When a user updates the password for a currently connected network, the
+device was calling WiFi.begin() while still connected, causing an abrupt
+disconnect (ASSOC_LEAVE) and subsequent authentication failure with the
+new password.
+
+This fix checks if the device is already connected to the target SSID
+and disconnects gracefully before attempting to reconnect with the new
+credentials. This ensures the device properly registers the new password
+and successfully reconnects.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`f7ad558`)
+- [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
+
+When a user updates the password for a currently connected network, the
+device was calling WiFi.begin() while still connected, causing an abrupt
+disconnect (ASSOC_LEAVE) and subsequent authentication failure with the
+new password.
+
+This fix checks if the device is already connected to the target SSID
+and disconnects gracefully before attempting to reconnect with the new
+credentials. This ensures the device properly registers the new password
+and successfully reconnects.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
+
 
 ## Technical Details
+- [2026-02-03] Refactor WiFi connection handling to utilize stored passwords and enhance error recovery
+
+- Implemented logic to fetch stored passwords for WiFi networks if no password is provided.
+- Updated connection handling to use the retrieved password for establishing connections.
+- Added functionality to restore AP mode after a failed connection attempt, improving user experience during connectivity issues.
+- Updated .gitignore to exclude RELEASE_NOTES.md from version control. (`0bc7ead`)
 - [2026-02-03] Update RELEASE_NOTES.md to reflect recent enhancements in WiFi connection handling, including user-friendly disconnect messages, improved logging for connection failures, and an updated WiFi status JSON response. Removed unused code related to saved networks. (`9520b2a`)
 - [2026-02-03] Update RELEASE_NOTES.md to include recent enhancements in WiFi connection handling and error reporting. Added user-friendly messages for disconnect reasons, improved logging for connection failures, and updated WiFi status JSON response. Removed unused code related to saved networks. (`d8bea09`)
 - [2026-02-03] Enhance WiFi connection handling and error reporting
