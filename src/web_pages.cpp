@@ -2042,7 +2042,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <input type="text" class="form-input" id="dns2" inputmode="decimal" placeholder="e.g., 8.8.8.8">
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary">Connect</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">Connect</button>
+                        <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="saveNetworkSettings(event)">Save Settings</button>
+                    </div>
                 </form>
             </div>
 
@@ -2961,10 +2964,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             // Client (STA) Status
             if (data.connected) {
+                const ipType = data.usingStaticIP ? 'Static IP' : 'DHCP';
                 html += `
                     <div class="info-row"><span class="info-label">Client Status</span><span class="info-value text-success">Connected</span></div>
                     <div class="info-row"><span class="info-label">Network</span><span class="info-value">${data.ssid || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Client IP</span><span class="info-value">${data.staIP || data.ip || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">IP Configuration</span><span class="info-value">${ipType}</span></div>
                     <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${data.rssi !== undefined ? data.rssi + ' dBm' : 'N/A'}</span></div>
                 `;
             } else {
@@ -3325,6 +3330,68 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .catch(err => updateWiFiConnectionStatus('error', 'Network error: ' + err.message));
         }
 
+        function saveNetworkSettings(event) {
+            event.preventDefault();
+            const ssid = document.getElementById('wifiSSID').value;
+            const password = document.getElementById('wifiPassword').value;
+            const useStaticIP = document.getElementById('useStaticIP').checked;
+
+            if (!ssid) {
+                showToast('Please enter a network name (SSID)', 'error');
+                return;
+            }
+
+            // Build request body
+            const requestBody = { ssid, password, useStaticIP };
+
+            // Add static IP configuration if enabled
+            if (useStaticIP) {
+                requestBody.staticIP = document.getElementById('staticIP').value;
+                requestBody.subnet = document.getElementById('subnet').value;
+                requestBody.gateway = document.getElementById('gateway').value;
+                requestBody.dns1 = document.getElementById('dns1').value;
+                requestBody.dns2 = document.getElementById('dns2').value;
+
+                // Validate IP addresses
+                if (!isValidIP(requestBody.staticIP)) {
+                    showToast('Invalid IPv4 address', 'error');
+                    return;
+                }
+                if (!isValidIP(requestBody.subnet)) {
+                    showToast('Invalid network mask', 'error');
+                    return;
+                }
+                if (!isValidIP(requestBody.gateway)) {
+                    showToast('Invalid gateway address', 'error');
+                    return;
+                }
+                if (requestBody.dns1 && !isValidIP(requestBody.dns1)) {
+                    showToast('Invalid primary DNS address', 'error');
+                    return;
+                }
+                if (requestBody.dns2 && !isValidIP(requestBody.dns2)) {
+                    showToast('Invalid secondary DNS address', 'error');
+                    return;
+                }
+            }
+
+            apiFetch('/api/wifisave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Network settings saved successfully', 'success');
+                    loadSavedNetworks(); // Reload the saved networks list
+                } else {
+                    showToast(data.message || 'Failed to save network settings', 'error');
+                }
+            })
+            .catch(err => showToast('Network error: ' + err.message, 'error'));
+        }
+
         function pollWiFiConnection() {
             apiFetch('/api/wifistatus')
                 .then(res => res.json())
@@ -3520,9 +3587,51 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function onNetworkSelect() {
             const select = document.getElementById('wifiNetworkSelect');
             const ssidInput = document.getElementById('wifiSSID');
+            const passwordInput = document.getElementById('wifiPassword');
+            const useStaticIPCheckbox = document.getElementById('useStaticIP');
+            const staticIPFields = document.getElementById('staticIPFields');
 
             if (select.value) {
                 ssidInput.value = select.value;
+
+                // Check if this is a saved network
+                const savedNetwork = savedNetworksData.find(net => net.ssid === select.value);
+                if (savedNetwork) {
+                    // Populate password field with placeholder
+                    passwordInput.value = '';
+                    passwordInput.placeholder = '••••••••';
+
+                    // Populate Static IP fields if configured
+                    if (savedNetwork.useStaticIP) {
+                        useStaticIPCheckbox.checked = true;
+                        staticIPFields.style.display = 'block';
+                        document.getElementById('staticIP').value = savedNetwork.staticIP || '';
+                        document.getElementById('subnet').value = savedNetwork.subnet || '255.255.255.0';
+                        document.getElementById('gateway').value = savedNetwork.gateway || '';
+                        document.getElementById('dns1').value = savedNetwork.dns1 || '';
+                        document.getElementById('dns2').value = savedNetwork.dns2 || '';
+                    } else {
+                        useStaticIPCheckbox.checked = false;
+                        staticIPFields.style.display = 'none';
+                        // Clear Static IP fields
+                        document.getElementById('staticIP').value = '';
+                        document.getElementById('subnet').value = '255.255.255.0';
+                        document.getElementById('gateway').value = '';
+                        document.getElementById('dns1').value = '';
+                        document.getElementById('dns2').value = '';
+                    }
+                } else {
+                    // Not a saved network - clear password and Static IP fields
+                    passwordInput.value = '';
+                    passwordInput.placeholder = 'Enter password';
+                    useStaticIPCheckbox.checked = false;
+                    staticIPFields.style.display = 'none';
+                    document.getElementById('staticIP').value = '';
+                    document.getElementById('subnet').value = '255.255.255.0';
+                    document.getElementById('gateway').value = '';
+                    document.getElementById('dns1').value = '';
+                    document.getElementById('dns2').value = '';
+                }
             }
         }
 

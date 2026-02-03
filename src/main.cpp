@@ -285,6 +285,11 @@ void setup() {
       return;
     handleWiFiConfig();
   });
+  server.on("/api/wifisave", HTTP_POST, []() {
+    if (!requireAuth())
+      return;
+    handleWiFiSave();
+  });
   server.on("/api/wifiscan", HTTP_GET, []() {
     if (!requireAuth())
       return;

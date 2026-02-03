@@ -3,6 +3,30 @@
 ## Version 1.2.12
 
 ## New Features
+- [2026-02-03] feat: Enhance WiFi management with improved network configuration workflow
+
+Add comprehensive WiFi network management improvements:
+- Auto-populate connection form when selecting saved networks with SSID, password placeholder, and Static IP settings
+- Add "Save Settings" button to save network configurations without connecting
+- Display IP configuration type (Static IP/DHCP) in connection status
+- Create new /api/wifisave endpoint for save-only operations
+- Enhance backend to detect and report Static IP usage for connected networks
+
+These changes improve the user experience by making it easier to manage multiple WiFi networks and their configurations without requiring reconnection.
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`e413c93`)
+- [2026-02-03] feat: Enhance WiFi management with improved network configuration workflow
+
+Add comprehensive WiFi network management improvements:
+- Auto-populate connection form when selecting saved networks with SSID, password placeholder, and Static IP settings
+- Add "Save Settings" button to save network configurations without connecting
+- Display IP configuration type (Static IP/DHCP) in connection status
+- Create new /api/wifisave endpoint for save-only operations
+- Enhance backend to detect and report Static IP usage for connected networks
+
+These changes improve the user experience by making it easier to manage multiple WiFi networks and their configurations without requiring reconnection.
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`325a232`)
 - Automated release via GitHub Actions
 
 ## Improvements

@@ -548,8 +548,27 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
     doc["rssi"] = WiFi.RSSI();
     // Primary IP preference: STA > AP
     doc["ip"] = WiFi.localIP().toString();
+
+    // Check if current network is using static IP
+    String currentSSID = WiFi.SSID();
+    Preferences prefs;
+    prefs.begin("wifi-list", true); // Read-only
+    int count = prefs.getUChar("count", 0);
+    bool isUsingStaticIP = false;
+
+    for (int i = 0; i < count; i++) {
+      String savedSSID = prefs.getString(("s" + String(i)).c_str(), "");
+      if (savedSSID == currentSSID) {
+        isUsingStaticIP = prefs.getBool(("static" + String(i)).c_str(), false);
+        break;
+      }
+    }
+    prefs.end();
+
+    doc["usingStaticIP"] = isUsingStaticIP;
   } else {
     doc["ip"] = isAPMode ? WiFi.softAPIP().toString() : "";
+    doc["usingStaticIP"] = false;
   }
 
   // Add saved networks count
@@ -815,6 +834,55 @@ void handleWiFiConfig() {
 
   DebugOut.printf("Network saved. Connecting to %s in background...\n",
                   ssid.c_str());
+}
+
+void handleWiFiSave() {
+  if (server.hasArg("plain") == false) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"No data received\"}");
+    return;
+  }
+
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
+
+  if (error) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+    return;
+  }
+
+  String ssid = doc["ssid"].as<String>();
+  String password = doc["password"].as<String>();
+
+  // Extract static IP configuration
+  bool useStaticIP = doc["useStaticIP"] | false;
+  String staticIP = doc["staticIP"] | "";
+  String subnet = doc["subnet"] | "";
+  String gateway = doc["gateway"] | "";
+  String dns1 = doc["dns1"] | "";
+  String dns2 = doc["dns2"] | "";
+
+  if (ssid.length() == 0) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"SSID required\"}");
+    return;
+  }
+
+  // Save to multi-WiFi list with static IP configuration
+  if (!saveWiFiNetwork(ssid.c_str(), password.c_str(), useStaticIP,
+                       staticIP.c_str(), subnet.c_str(), gateway.c_str(),
+                       dns1.c_str(), dns2.c_str())) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Failed to save network. "
+                "Maximum 5 networks reached.\"}");
+    return;
+  }
+
+  server.send(200, "application/json",
+              "{\"success\": true, \"message\": \"Network settings saved\"}");
+
+  DebugOut.printf("Network saved: %s (without connecting)\n", ssid.c_str());
 }
 
 void handleWiFiStatus() {

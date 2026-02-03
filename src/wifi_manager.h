@@ -44,5 +44,6 @@ void handleWiFiScan();
 void handleWiFiList();   // GET /api/wifilist - return all saved networks (no
                          // passwords)
 void handleWiFiRemove(); // POST /api/wifiremove - remove network by index
+void handleWiFiSave();   // POST /api/wifisave - save network without connecting
 
 #endif // WIFI_MANAGER_H
