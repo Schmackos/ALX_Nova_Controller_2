@@ -237,7 +237,7 @@ void setup() {
 
   // Favicon (don't redirect/auth for this)
   server.on("/favicon.ico", HTTP_GET,
-            []() { server.send(204, "text/plain", ""); });
+            []() { server.send(404, "text/plain", "Not Found"); });
 
   // Android/Chrome captive portal check
   server.on("/generate_204", HTTP_GET, []() {

@@ -34,6 +34,38 @@
 - src/config.h: Version bump to 1.4.1
 - RELEASE_NOTES.md: Updated with v1.4.1 release notes
 
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`040a6f5`)
+- [2026-02-03] feat: Improve Debug tab layout and WiFi network removal UX
+
+**Debug Tab Improvements:**
+- Repositioned performance graphs to top of their respective sections
+- CPU graph now appears immediately after CPU stats grid
+- Memory graphs (Heap/PSRAM) now appear immediately after Memory stats grid
+- Better visual hierarchy and easier access to performance metrics
+
+**WiFi Network Management Enhancements:**
+- Added AP Mode modal when removing currently connected network
+- Automatically monitors network status after removal (30s window)
+- Shows modal with AP IP address and direct dashboard link when AP activates
+- Displays success notification when reconnecting to another saved network
+- Seamless transition handling with intelligent polling
+
+**UI Consistency:**
+- Fixed button sizing inconsistency between "Update Configuration" and "Remove Network"
+- Both buttons now render with identical dimensions
+
+**Technical Implementation:**
+- Added showAPModeModal() function reusing WiFi connection modal styling
+- Implemented monitorNetworkRemoval() with 1s polling intervals
+- Enhanced removeSelectedNetworkConfig() to track connection state
+- Graph repositioning improves visual flow in Debug tab
+- Button sizing fixed with min-width: 0 for proper flexbox behavior
+
+**Files Modified:**
+- src/web_pages.cpp: Graph positioning, AP modal, network removal monitoring
+- src/config.h: Version bump to 1.4.1
+- RELEASE_NOTES.md: Updated with v1.4.1 release notes
+
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`35c37f9`)
 - [2026-02-03] feat: Improve Debug tab layout and WiFi network removal UX
 
