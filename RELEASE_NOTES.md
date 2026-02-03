@@ -1,5 +1,35 @@
 # Release Notes
 
+## Version 1.2.11
+
+## Documentation
+- [2026-02-03] docs: Document dual-source release notes feature and fix template structure
+
+- Add documentation for complete commit list in releases
+- Fix duplicate Technical Details section in RELEASE_NOTES.md
+- Add missing New Features section to version 1.2.11
+- Document firmware details table enhancement with commit count
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`39e4e07`)
+
+## New Features
+- None
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+- [2026-02-03] chore: Enhance release notes generation and update formatting in release.yml (`fa98455`)
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.2.8
 
 ### New Features

@@ -105,6 +105,24 @@ None
 ## Known Issues
 - None
 
+## 📝 All Commits Since Last Release
+
+### ✨ New Features
+- [2026-02-03] feat: Add static IP configuration (`abc123`) - *Developer Name*
+- [2026-02-02] feat: Add network configuration UI (`def456`) - *Developer Name*
+
+### 🐛 Bug Fixes
+- [2026-02-03] fix: Resolve authentication redirect (`ghi789`) - *Developer Name*
+- [2026-02-01] fix: Correct timer countdown logic (`jkl012`) - *Developer Name*
+
+### ⚡ Performance Improvements
+- [2026-02-02] perf: Optimize WiFi connection speed (`mno345`) - *Developer Name*
+
+### 🔧 Chores
+- [2026-02-03] chore: Update dependencies (`pqr678`) - *Developer Name*
+
+**Total commits in this release:** 6
+
 ---
 
 ## 📦 Firmware Details
@@ -117,6 +135,7 @@ None
 | **Build Date** | 2026-02-03 14:30:00 UTC |
 | **Platform** | ESP32-S3 DevKit M-1 |
 | **Tests** | ✅ All tests passed |
+| **Commits** | 6 commits since 1.2.11 |
 
 ### 🔐 Verification
 
@@ -129,6 +148,12 @@ sha256sum firmware.bin
 
 **Attached Files:**
 - `firmware.bin` - Ready to flash
+
+**Key Feature:** The release includes **TWO** sources of information:
+1. **Curated notes** from `RELEASE_NOTES.md` (manually enhanced)
+2. **Complete commit list** since last release (automatically generated)
+
+This ensures **nothing is missed** even if developers forget to update release notes!
 
 ## 🔧 Version Management
 
