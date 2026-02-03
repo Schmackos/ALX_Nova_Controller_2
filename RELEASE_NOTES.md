@@ -3,6 +3,16 @@
 ## Version 1.4.1
 
 ## Technical Details
+- [2026-02-03] Enhance WiFi management with automatic reconnection and improved network removal experience
+
+- Implemented a WiFi event handler to manage automatic reconnections upon disconnection.
+- Added a confirmation modal for removing currently connected networks, ensuring users are aware of the consequences.
+- Updated API calls to include session credentials for enhanced security.
+- Improved test workflows with comprehensive unit tests and detailed summaries.
+
+Files modified: src/wifi_manager.cpp, src/wifi_manager.h, src/main.cpp, src/web_pages.cpp, .github/workflows/release.yml, .github/workflows/tests.yml, .claude/settings.local.json, RELEASE_NOTES.md
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`b26a3bb`)
 - [2026-02-03] Update RELEASE_NOTES.md to include technical details about enhancements in WiFi management, highlighting automatic reconnection, improved network removal experience, and resolved API authentication issues. Co-authored by Claude Sonnet. (`978bc44`)
 - [2026-02-03] Update RELEASE_NOTES.md to reflect enhancements in WiFi management, including automatic reconnection, improved network removal experience, and fixed API authentication issues. Co-authored by Claude Sonnet. (`c3486d0`)
 
