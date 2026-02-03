@@ -72,6 +72,12 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-03] Enhance WiFi connection handling with polling mechanism for network changes
+
+- Added a polling function to track WiFi connection attempts and detect network changes.
+- Implemented logic to handle successful and failed connection attempts, updating the UI accordingly.
+- Refactored modal functions to improve clarity and maintainability.
+- Updated connection status messages to provide better user feedback during WiFi transitions. (`d6d4d79`)
 - [2026-02-03] Refactor WiFi connection handling to utilize stored passwords and enhance error recovery
 
 - Implemented logic to fetch stored passwords for WiFi networks if no password is provided.
