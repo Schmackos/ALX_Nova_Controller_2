@@ -1,5 +1,25 @@
 # Release Notes
 
+## Version 1.3.0
+
+## New Features
+- Automated release via GitHub Actions
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+- Version bump to 1.3.0
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.2.12
 
 ## New Features
