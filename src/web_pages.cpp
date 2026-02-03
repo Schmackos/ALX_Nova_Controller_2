@@ -2033,8 +2033,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-primary" style="flex: 1;" onclick="updateNetworkConfig()">Update Configuration</button>
-                        <button class="btn btn-danger" style="flex: 1;" onclick="removeSelectedNetworkConfig()">Remove Network</button>
+                        <button class="btn btn-primary" style="flex: 1; min-width: 0;" onclick="updateNetworkConfig()">Update Configuration</button>
+                        <button class="btn btn-danger" style="flex: 1; min-width: 0;" onclick="removeSelectedNetworkConfig()">Remove Network</button>
                     </div>
                 </div>
             </div>
@@ -2324,6 +2324,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="stat-label">Temperature</div>
                     </div>
                 </div>
+                <div class="graph-embedded">
+                    <div class="graph-legend">CPU Usage (Orange: Total, Light: Core 0, Dark: Core 1)</div>
+                    <canvas class="graph-canvas" id="cpuGraph"></canvas>
+                </div>
                 <div class="info-box-compact mt-12">
                     <div class="info-row">
                         <span class="info-label">Core 0 Load</span>
@@ -2350,10 +2354,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="cpuCores">--</span>
                     </div>
                 </div>
-                <div class="graph-embedded">
-                    <div class="graph-legend">CPU Usage (Orange: Total, Light: Core 0, Dark: Core 1)</div>
-                    <canvas class="graph-canvas" id="cpuGraph"></canvas>
-                </div>
             </div>
 
             <!-- Memory Stats -->
@@ -2368,6 +2368,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="stat-value" id="psramPercent">--%</div>
                         <div class="stat-label">PSRAM Used</div>
                     </div>
+                </div>
+                <div class="graph-embedded">
+                    <div class="graph-legend">Heap Memory Usage (%)</div>
+                    <canvas class="graph-canvas" id="memoryGraph"></canvas>
+                </div>
+                <div class="graph-embedded" id="psramGraphContainer" style="display: none;">
+                    <div class="graph-legend">PSRAM Usage (%)</div>
+                    <canvas class="graph-canvas" id="psramGraph"></canvas>
                 </div>
                 <div class="info-box-compact mt-12">
                     <div class="info-row">
@@ -2394,14 +2402,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-label">PSRAM Total</span>
                         <span class="info-value" id="psramTotal">--</span>
                     </div>
-                </div>
-                <div class="graph-embedded">
-                    <div class="graph-legend">Heap Memory Usage (%)</div>
-                    <canvas class="graph-canvas" id="memoryGraph"></canvas>
-                </div>
-                <div class="graph-embedded" id="psramGraphContainer" style="display: none;">
-                    <div class="graph-legend">PSRAM Usage (%)</div>
-                    <canvas class="graph-canvas" id="psramGraph"></canvas>
                 </div>
             </div>
 
@@ -3409,7 +3409,35 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 wifiConnectionPollTimer = null;
             }
         }
-        
+
+        function showAPModeModal(apIP) {
+            const modal = document.createElement('div');
+            modal.id = 'apModeModal';
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <div class="modal-title">AP Mode Activated</div>
+                    <div class="info-box">
+                        <div style="text-align: center; padding: 20px;">
+                            <div style="font-size: 40px; margin-bottom: 16px;">📶</div>
+                            <div style="margin-bottom: 8px;">No saved networks available.</div>
+                            <div style="margin-bottom: 16px;">Access Point mode has been started.</div>
+                            <div style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--accent);">${apIP}</div>
+                        </div>
+                    </div>
+                    <div class="modal-actions" style="margin-top: 16px;">
+                        <button class="primary" onclick="window.location.href='http://${apIP}'">Go to Dashboard</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function closeAPModeModal() {
+            const modal = document.getElementById('apModeModal');
+            if (modal) modal.remove();
+        }
+
         // Toggle static IP fields visibility
         function toggleStaticIPFields() {
             const useStaticIP = document.getElementById('useStaticIP').checked;
@@ -3732,6 +3760,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .catch(err => showToast('Network error: ' + err.message, 'error'));
         }
 
+        let networkRemovalPollTimer = null;
+
         function removeSelectedNetworkConfig() {
             const select = document.getElementById('configNetworkSelect');
             const selectedIndex = parseInt(select.value);
@@ -3751,6 +3781,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 return;
             }
 
+            // Store the current connection state
+            const wasConnected = wifiConnected;
+
             apiFetch('/api/wifiremove', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -3764,11 +3797,54 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     // Reset the select dropdown
                     select.value = '';
                     document.getElementById('networkConfigFields').style.display = 'none';
+
+                    // If we were connected, monitor for AP mode activation
+                    if (wasConnected) {
+                        monitorNetworkRemoval();
+                    }
                 } else {
                     showToast(data.message || 'Failed to remove network', 'error');
                 }
             })
             .catch(err => showToast('Network error: ' + err.message, 'error'));
+        }
+
+        function monitorNetworkRemoval() {
+            let pollCount = 0;
+            const maxPolls = 30; // Poll for up to 30 seconds
+
+            if (networkRemovalPollTimer) {
+                clearInterval(networkRemovalPollTimer);
+            }
+
+            networkRemovalPollTimer = setInterval(() => {
+                pollCount++;
+
+                apiFetch('/api/wifistatus')
+                    .then(res => res.json())
+                    .then(data => {
+                        // Check if AP mode is now active and we're not connected to WiFi
+                        if (data.mode === 'ap' && !data.connected && data.apIP) {
+                            clearInterval(networkRemovalPollTimer);
+                            networkRemovalPollTimer = null;
+                            showAPModeModal(data.apIP);
+                        }
+                        // Check if successfully reconnected to another network
+                        else if (data.connected) {
+                            clearInterval(networkRemovalPollTimer);
+                            networkRemovalPollTimer = null;
+                            showToast('Reconnected to another saved network', 'success');
+                        }
+                        // Timeout after max polls
+                        else if (pollCount >= maxPolls) {
+                            clearInterval(networkRemovalPollTimer);
+                            networkRemovalPollTimer = null;
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error polling WiFi status:', err);
+                    });
+            }, 1000); // Poll every second
         }
 
         function toggleAP() {
