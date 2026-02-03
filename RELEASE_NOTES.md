@@ -20,10 +20,35 @@ When removing the currently connected WiFi network:
 
 This fixes the issue where removing the current network would start AP mode with default ESP SSID instead of the configured ALX SSID, and the AP toggle would not update correctly.
 
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`2026fda`)
+- [2026-02-03] fix: Properly handle WiFi disconnection and AP mode when removing current network
+
+When removing the currently connected WiFi network:
+- Detect if the removed network is currently connected
+- Disconnect from WiFi gracefully
+- Attempt to connect to remaining saved networks
+- Start AP mode with correct SSID (ALX-******) if no networks available
+- Broadcast WiFi status update to frontend so AP toggle reflects correct state
+
+This fixes the issue where removing the current network would start AP mode with default ESP SSID instead of the configured ALX SSID, and the AP toggle would not update correctly.
+
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`9394684`)
 
 
 ## Technical Details
+- [2026-02-03] refactor: Reorganize WiFi interface by removing Saved Networks section and adding Remove button to Network Configuration
+
+Changes:
+- Remove the redundant "Saved Networks" section from WiFi management UI
+- Consolidate network management to the "Network Configuration" section
+- Add "Remove Network" button to Network Configuration section for easier network management
+- Remove unused JavaScript functions: toggleNetworkSelection, removeSelectedNetworks, updateBulkActionsVisibility, removeNetwork
+- Remove unused CSS styles for network-item, network-checkbox, bulk-actions, and related elements
+- Simplify loadSavedNetworks() to only populate the config dropdown
+
+The Network Configuration section now provides complete network management (view, update, and remove) without the duplicate Saved Networks view.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`dc3bb08`)
 - Version bump to 1.3.0
 
 ## Breaking Changes

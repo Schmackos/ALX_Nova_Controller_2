@@ -514,6 +514,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             text-align: right;
         }
 
+        .info-box-compact {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0 12px;
+            padding: 8px;
+            font-size: 13px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .info-box-compact .info-row {
+            padding: 6px 8px;
+            font-size: 12px;
+        }
+
+        /* Mobile: single column */
+        @media (max-width: 767px) {
+            .info-box-compact {
+                grid-template-columns: 1fr;
+            }
+        }
+
         /* ===== Connection Status ===== */
         .connection-bar {
             display: flex;
@@ -796,6 +820,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             display: block;
         }
 
+        .graph-embedded {
+            background: #1A1A1A;
+            border-radius: 8px;
+            padding: 12px;
+            padding-left: 40px;
+            padding-bottom: 28px;
+            margin-top: 12px;
+        }
+
+        .graph-legend {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .graph-embedded .graph-canvas {
+            width: 100%;
+            height: 140px;
+        }
+
         /* ===== Utility Classes ===== */
         .hidden { display: none !important; }
         .text-center { text-align: center; }
@@ -884,110 +929,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         .password-wrapper .form-input {
             padding-right: 48px;
-        }
-
-        /* ===== Saved Networks List ===== */
-        .network-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            margin-bottom: 8px;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-
-        .network-item:hover {
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .network-item.selected {
-            background: rgba(76, 175, 80, 0.15);
-            border: 1px solid var(--success);
-        }
-
-        .network-checkbox {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            accent-color: var(--success);
-        }
-
-        .network-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .network-ssid {
-            font-size: 16px;
-            font-weight: 500;
-            color: var(--text-primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .network-status {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 2px;
-        }
-
-        .network-priority {
-            display: inline-block;
-            background: var(--accent);
-            color: var(--bg-primary);
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-left: 8px;
-        }
-
-        .btn-sm {
-            padding: 8px 16px;
-            font-size: 14px;
-            min-height: 36px;
-        }
-
-        .btn-danger {
-            background: var(--error);
-        }
-
-        .btn-danger:hover {
-            background: #D32F2F;
-        }
-
-        #savedNetworksList:empty::after {
-            content: 'No saved networks';
-            display: block;
-            color: var(--text-secondary);
-            text-align: center;
-            padding: 24px;
-            font-style: italic;
-        }
-
-        .bulk-actions {
-            display: none;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px;
-            background: rgba(76, 175, 80, 0.1);
-            border: 1px solid var(--success);
-            border-radius: 8px;
-            margin-bottom: 12px;
-        }
-
-        .bulk-actions.active {
-            display: flex;
-        }
-
-        .bulk-actions-info {
-            color: var(--success);
-            font-weight: 500;
         }
 
         /* ===== File Drop Zone ===== */
@@ -2049,19 +1990,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </form>
             </div>
 
-            <!-- Saved Networks -->
-            <div class="card">
-                <div class="card-title">Saved Networks <span id="networkCountBadge" style="font-size: 14px; opacity: 0.7;"></span></div>
-                <div class="bulk-actions" id="bulkActions">
-                    <span class="bulk-actions-info"><span id="selectedCount">0</span> selected</span>
-                    <button class="btn btn-danger btn-sm" onclick="removeSelectedNetworks()">Remove Selected</button>
-                </div>
-                <div id="savedNetworksList">
-                    <div class="skeleton skeleton-text"></div>
-                    <div class="skeleton skeleton-text short"></div>
-                </div>
-            </div>
-
             <!-- Network Configuration -->
             <div class="card">
                 <div class="card-title">Network Configuration</div>
@@ -2104,7 +2032,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <input type="text" class="form-input" id="configDns2" inputmode="decimal" placeholder="e.g., 8.8.8.8">
                         </div>
                     </div>
-                    <button class="btn btn-primary" onclick="updateNetworkConfig()">Update Configuration</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" style="flex: 1;" onclick="updateNetworkConfig()">Update Configuration</button>
+                        <button class="btn btn-danger" style="flex: 1;" onclick="removeSelectedNetworkConfig()">Remove Network</button>
+                    </div>
                 </div>
             </div>
 
@@ -2393,7 +2324,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="stat-label">Temperature</div>
                     </div>
                 </div>
-                <div class="info-box mt-12">
+                <div class="info-box-compact mt-12">
                     <div class="info-row">
                         <span class="info-label">Core 0 Load</span>
                         <span class="info-value" id="cpuCore0">--%</span>
@@ -2419,6 +2350,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="cpuCores">--</span>
                     </div>
                 </div>
+                <div class="graph-embedded">
+                    <div class="graph-legend">CPU Usage (Orange: Total, Light: Core 0, Dark: Core 1)</div>
+                    <canvas class="graph-canvas" id="cpuGraph"></canvas>
+                </div>
             </div>
 
             <!-- Memory Stats -->
@@ -2434,7 +2369,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="stat-label">PSRAM Used</div>
                     </div>
                 </div>
-                <div class="info-box mt-12">
+                <div class="info-box-compact mt-12">
                     <div class="info-row">
                         <span class="info-label">Heap Free</span>
                         <span class="info-value" id="heapFree">--</span>
@@ -2459,6 +2394,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-label">PSRAM Total</span>
                         <span class="info-value" id="psramTotal">--</span>
                     </div>
+                </div>
+                <div class="graph-embedded">
+                    <div class="graph-legend">Heap Memory Usage (%)</div>
+                    <canvas class="graph-canvas" id="memoryGraph"></canvas>
+                </div>
+                <div class="graph-embedded" id="psramGraphContainer" style="display: none;">
+                    <div class="graph-legend">PSRAM Usage (%)</div>
+                    <canvas class="graph-canvas" id="psramGraph"></canvas>
                 </div>
             </div>
 
@@ -2504,6 +2447,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="card-title">WiFi & System</div>
                 <div class="info-box">
                     <div class="info-row">
+                        <span class="info-label">Reset Reason</span>
+                        <span class="info-value" id="resetReason">--</span>
+                    </div>
+                    <div class="info-row">
                         <span class="info-label">Serial Number</span>
                         <span class="info-value" id="deviceSerial">--</span>
                     </div>
@@ -2526,24 +2473,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row">
                         <span class="info-label">Uptime</span>
                         <span class="info-value" id="uptime">--</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Performance Graphs -->
-            <div class="card">
-                <div class="collapsible-header" onclick="toggleHistorySection()">
-                    <span class="card-title" style="margin-bottom: 0;">Performance History</span>
-                    <svg viewBox="0 0 24 24" id="historyChevron"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-                </div>
-                <div class="collapsible-content" id="historyContent">
-                    <div class="graph-container">
-                        <div class="text-secondary mb-8" style="font-size: 12px;">CPU Usage (Orange: Total, Light: Core 0, Dark: Core 1)</div>
-                        <canvas class="graph-canvas" id="cpuGraph"></canvas>
-                    </div>
-                    <div class="graph-container">
-                        <div class="text-secondary mb-8" style="font-size: 12px;">Memory Usage (%)</div>
-                        <canvas class="graph-canvas" id="memoryGraph"></canvas>
                     </div>
                 </div>
             </div>
@@ -2637,10 +2566,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             cpuTotal: [],
             cpuCore0: [],
             cpuCore1: [],
-            memoryPercent: []
+            memoryPercent: [],
+            psramPercent: []
         };
         let maxHistoryPoints = 300;
-        let historyCollapsed = true;
 
         // ===== Tab Switching =====
         function switchTab(tabId) {
@@ -2823,6 +2752,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     updateConnectionStatus(true);
                     wsReconnectDelay = WS_MIN_RECONNECT_DELAY;
                     fetchUpdateStatus();
+
+                    // Draw initial graphs
+                    drawCpuGraph();
+                    drawMemoryGraph();
+                    drawPsramGraph();
 
                     // Show reconnection notification if we were disconnected during an update
                     if (wasDisconnectedDuringUpdate) {
@@ -3640,8 +3574,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // Load and display saved networks
         function loadSavedNetworks() {
-            const container = document.getElementById('savedNetworksList');
-            const badge = document.getElementById('networkCountBadge');
             const configSelect = document.getElementById('configNetworkSelect');
             const sessionId = getSessionIdFromCookie();
 
@@ -3658,23 +3590,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     savedNetworksData = data.networks;
 
                     if (data.networks.length > 0) {
-                        badge.textContent = `(${data.count}/5)`;
-
-                        container.innerHTML = data.networks.map((net, idx) => `
-                            <div class="network-item" data-index="${net.index}" onclick="toggleNetworkSelection(${net.index}, event)">
-                                <input type="checkbox" class="network-checkbox" data-index="${net.index}" onclick="event.stopPropagation(); toggleNetworkSelection(${net.index}, event)">
-                                <div class="network-info">
-                                    <div class="network-ssid">
-                                        ${net.ssid}
-                                        ${net.priority ? '<span class="network-priority">Priority</span>' : ''}
-                                    </div>
-                                    <div class="network-status">Saved${net.useStaticIP ? ' • Static IP' : ''}</div>
-                                </div>
-                                <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeNetwork(${net.index})">Remove</button>
-                            </div>
-                        `).join('');
-                        updateBulkActionsVisibility();
-
                         // Populate config network select dropdown
                         configSelect.innerHTML = '<option value="">-- Select a saved network --</option>';
                         data.networks.forEach(net => {
@@ -3684,131 +3599,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             configSelect.appendChild(option);
                         });
                     } else {
-                        badge.textContent = '(0/5)';
-                        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 24px; font-style: italic;">No saved networks</p>';
                         configSelect.innerHTML = '<option value="">-- No saved networks --</option>';
                     }
                 } else {
                     // Show error from API if available
                     const errorMsg = data.error || 'Unknown error';
                     console.error('API Error loading networks:', errorMsg);
-                    container.innerHTML = `<p style="text-align: center; color: var(--error); padding: 24px;">Error: ${errorMsg}</p>`;
                 }
             })
             .catch(err => {
                 console.error('Failed to load saved networks:', err);
-                document.getElementById('savedNetworksList').innerHTML = '<p style="text-align: center; color: var(--error); padding: 24px;">Failed to load networks (Network Error)</p>';
             });
         }
 
         // Remove network by index
-        function removeNetwork(index) {
-            if (!confirm('Remove this network?')) return;
-
-            apiFetch('/api/wifiremove', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ index })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast('Network removed', 'success');
-                    loadSavedNetworks(); // Reload the list
-                } else {
-                    showToast(data.message || 'Failed to remove', 'error');
-                }
-            })
-            .catch(err => showToast('Failed to remove network', 'error'));
-        }
-
-        // Toggle network selection
-        function toggleNetworkSelection(index, event) {
-            const checkbox = document.querySelector(`.network-checkbox[data-index="${index}"]`);
-            const item = document.querySelector(`.network-item[data-index="${index}"]`);
-
-            if (!checkbox || !item) return;
-
-            // Toggle checkbox if clicking on the item (not the checkbox itself)
-            if (event.target !== checkbox) {
-                checkbox.checked = !checkbox.checked;
-            }
-
-            // Update item visual state
-            if (checkbox.checked) {
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
-            }
-
-            updateBulkActionsVisibility();
-        }
-
-        // Update bulk actions bar visibility based on selection
-        function updateBulkActionsVisibility() {
-            const checkboxes = document.querySelectorAll('.network-checkbox');
-            const selectedCheckboxes = Array.from(checkboxes).filter(cb => cb.checked);
-            const bulkActions = document.getElementById('bulkActions');
-            const selectedCount = document.getElementById('selectedCount');
-
-            if (selectedCheckboxes.length > 0) {
-                bulkActions.classList.add('active');
-                selectedCount.textContent = selectedCheckboxes.length;
-            } else {
-                bulkActions.classList.remove('active');
-            }
-        }
-
-        // Remove selected networks
-        async function removeSelectedNetworks() {
-            const checkboxes = document.querySelectorAll('.network-checkbox:checked');
-            const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.index));
-
-            if (selectedIndices.length === 0) return;
-
-            const confirmMsg = selectedIndices.length === 1
-                ? 'Remove this network?'
-                : `Remove ${selectedIndices.length} networks?`;
-
-            if (!confirm(confirmMsg)) return;
-
-            // Remove networks in sequence (highest index first to avoid index shifting issues)
-            selectedIndices.sort((a, b) => b - a);
-
-            let successCount = 0;
-            let failCount = 0;
-
-            for (const index of selectedIndices) {
-                try {
-                    const response = await apiFetch('/api/wifiremove', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ index })
-                    });
-                    const data = await response.json();
-
-                    if (data.success) {
-                        successCount++;
-                    } else {
-                        failCount++;
-                    }
-                } catch (err) {
-                    failCount++;
-                }
-            }
-
-            // Show result
-            if (successCount > 0) {
-                showToast(`${successCount} network(s) removed`, 'success');
-            }
-            if (failCount > 0) {
-                showToast(`${failCount} network(s) failed to remove`, 'error');
-            }
-
-            // Reload the list
-            loadSavedNetworks();
-        }
-
         // Load network configuration for selected network
         function loadNetworkConfig() {
             const select = document.getElementById('configNetworkSelect');
@@ -3923,6 +3727,45 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     loadSavedNetworks(); // Reload the list
                 } else {
                     showToast(data.message || 'Failed to update configuration', 'error');
+                }
+            })
+            .catch(err => showToast('Network error: ' + err.message, 'error'));
+        }
+
+        function removeSelectedNetworkConfig() {
+            const select = document.getElementById('configNetworkSelect');
+            const selectedIndex = parseInt(select.value);
+
+            if (isNaN(selectedIndex)) {
+                showToast('Please select a network to remove', 'error');
+                return;
+            }
+
+            const network = savedNetworksData.find(net => net.index === selectedIndex);
+            if (!network) {
+                showToast('Network not found', 'error');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to remove "${network.ssid}"?`)) {
+                return;
+            }
+
+            apiFetch('/api/wifiremove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: selectedIndex })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Network removed successfully', 'success');
+                    loadSavedNetworks(); // Reload the list
+                    // Reset the select dropdown
+                    select.value = '';
+                    document.getElementById('networkConfigFields').style.display = 'none';
+                } else {
+                    showToast(data.message || 'Failed to remove network', 'error');
                 }
             })
             .catch(err => showToast('Network error: ' + err.message, 'error'));
@@ -4656,7 +4499,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (data.uptime !== undefined) {
                 document.getElementById('uptime').textContent = formatUptime(data.uptime);
             }
-            
+
+            // Reset Reason
+            if (data.resetReason) {
+                document.getElementById('resetReason').textContent = formatResetReason(data.resetReason);
+            }
+
             // Add to history
             addHistoryDataPoint(data);
         }
@@ -4672,11 +4520,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const minutes = Math.floor(seconds / 60);
             const hours = Math.floor(minutes / 60);
             const days = Math.floor(hours / 24);
-            
+
             if (days > 0) return `${days}d ${hours % 24}h`;
             if (hours > 0) return `${hours}h ${minutes % 60}m`;
             if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
             return `${seconds}s`;
+        }
+
+        function formatResetReason(reason) {
+            if (!reason) return '--';
+            // The reset reason from the backend is already formatted as a readable string
+            return reason;
         }
 
         function addHistoryDataPoint(data) {
@@ -4684,14 +4538,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             historyData.cpuTotal.push(data.cpu ? (data.cpu.usageTotal || 0) : 0);
             historyData.cpuCore0.push(data.cpu ? (data.cpu.usageCore0 || 0) : 0);
             historyData.cpuCore1.push(data.cpu ? (data.cpu.usageCore1 || 0) : 0);
-            
+
             if (data.memory && data.memory.heapTotal > 0) {
                 const memPercent = (1 - data.memory.heapFree / data.memory.heapTotal) * 100;
                 historyData.memoryPercent.push(memPercent);
             } else {
                 historyData.memoryPercent.push(0);
             }
-            
+
+            if (data.memory && data.memory.psramTotal > 0) {
+                const psramPercent = (1 - data.memory.psramFree / data.memory.psramTotal) * 100;
+                historyData.psramPercent.push(psramPercent);
+            } else {
+                historyData.psramPercent.push(0);
+            }
+
             // Trim to max points
             while (historyData.timestamps.length > maxHistoryPoints) {
                 historyData.timestamps.shift();
@@ -4699,29 +4560,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 historyData.cpuCore0.shift();
                 historyData.cpuCore1.shift();
                 historyData.memoryPercent.shift();
+                historyData.psramPercent.shift();
             }
-            
-            // Redraw graphs if visible
-            if (!historyCollapsed) {
-                drawCpuGraph();
-                drawMemoryGraph();
-            }
-        }
 
-        function toggleHistorySection() {
-            historyCollapsed = !historyCollapsed;
-            const content = document.getElementById('historyContent');
-            const chevron = document.getElementById('historyChevron');
-            
-            if (historyCollapsed) {
-                content.classList.remove('open');
-                chevron.parentElement.classList.remove('open');
-            } else {
-                content.classList.add('open');
-                chevron.parentElement.classList.add('open');
-                drawCpuGraph();
-                drawMemoryGraph();
-            }
+            // Always redraw graphs (they're always visible now)
+            drawCpuGraph();
+            drawMemoryGraph();
+            drawPsramGraph();
         }
 
         // ===== User Manual Section =====
@@ -4800,29 +4645,59 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             canvas.width = rect.width * window.devicePixelRatio;
             canvas.height = rect.height * window.devicePixelRatio;
             ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-            
-            const w = rect.width;
-            const h = rect.height;
-            
+
+            const leftMargin = 35;
+            const bottomMargin = 20;
+            const w = rect.width - leftMargin;
+            const h = rect.height - bottomMargin;
+
             // Background
-            ctx.fillStyle = '#1E1E1E';
-            ctx.fillRect(0, 0, w, h);
-            
-            // Draw grid lines
+            ctx.fillStyle = '#1A1A1A';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+
+            // Translate for margins
+            ctx.save();
+            ctx.translate(leftMargin, 0);
+
+            // Draw grid lines with Y-axis labels
             ctx.strokeStyle = '#333';
             ctx.lineWidth = 1;
+            ctx.fillStyle = '#999';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+
             for (let i = 0; i <= 4; i++) {
                 const y = (h / 4) * i;
+                const percent = 100 - (i * 25);
+
+                // Grid line
                 ctx.beginPath();
                 ctx.moveTo(0, y);
                 ctx.lineTo(w, y);
                 ctx.stroke();
+
+                // Y-axis label
+                ctx.fillText(percent + '%', -5, y);
             }
-            
-            if (historyData.cpuTotal.length < 2) return;
-            
+
+            // X-axis time labels
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const timePoints = [0, 0.5, 1];
+            const timeLabels = ['-60s', '-30s', 'now'];
+            timePoints.forEach((point, idx) => {
+                const x = w * point;
+                ctx.fillText(timeLabels[idx], x, h + 4);
+            });
+
+            if (historyData.cpuTotal.length < 2) {
+                ctx.restore();
+                return;
+            }
+
             const step = w / (historyData.cpuTotal.length - 1);
-            
+
             // Draw Core 0 (light orange)
             ctx.strokeStyle = '#FFB74D';
             ctx.lineWidth = 1.5;
@@ -4834,7 +4709,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else ctx.lineTo(x, y);
             });
             ctx.stroke();
-            
+
             // Draw Core 1 (dark orange)
             ctx.strokeStyle = '#F57C00';
             ctx.lineWidth = 1.5;
@@ -4846,7 +4721,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else ctx.lineTo(x, y);
             });
             ctx.stroke();
-            
+
             // Draw Total (bright orange, on top)
             ctx.strokeStyle = '#FF9800';
             ctx.lineWidth = 2;
@@ -4858,6 +4733,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else ctx.lineTo(x, y);
             });
             ctx.stroke();
+
+            ctx.restore();
         }
 
         function drawMemoryGraph() {
@@ -4868,30 +4745,60 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             canvas.width = rect.width * window.devicePixelRatio;
             canvas.height = rect.height * window.devicePixelRatio;
             ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-            
-            const w = rect.width;
-            const h = rect.height;
-            
+
+            const leftMargin = 35;
+            const bottomMargin = 20;
+            const w = rect.width - leftMargin;
+            const h = rect.height - bottomMargin;
+
             // Background
-            ctx.fillStyle = '#1E1E1E';
-            ctx.fillRect(0, 0, w, h);
-            
-            // Draw grid lines
+            ctx.fillStyle = '#1A1A1A';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+
+            // Translate for margins
+            ctx.save();
+            ctx.translate(leftMargin, 0);
+
+            // Draw grid lines with Y-axis labels
             ctx.strokeStyle = '#333';
             ctx.lineWidth = 1;
+            ctx.fillStyle = '#999';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+
             for (let i = 0; i <= 4; i++) {
                 const y = (h / 4) * i;
+                const percent = 100 - (i * 25);
+
+                // Grid line
                 ctx.beginPath();
                 ctx.moveTo(0, y);
                 ctx.lineTo(w, y);
                 ctx.stroke();
+
+                // Y-axis label
+                ctx.fillText(percent + '%', -5, y);
             }
-            
-            if (historyData.memoryPercent.length < 2) return;
-            
+
+            // X-axis time labels
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const timePoints = [0, 0.5, 1];
+            const timeLabels = ['-60s', '-30s', 'now'];
+            timePoints.forEach((point, idx) => {
+                const x = w * point;
+                ctx.fillText(timeLabels[idx], x, h + 4);
+            });
+
+            if (historyData.memoryPercent.length < 2) {
+                ctx.restore();
+                return;
+            }
+
             const step = w / (historyData.memoryPercent.length - 1);
-            
-            // Draw memory line
+
+            // Draw memory line (blue)
             ctx.strokeStyle = '#2196F3';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -4902,6 +4809,94 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else ctx.lineTo(x, y);
             });
             ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawPsramGraph() {
+            const canvas = document.getElementById('psramGraph');
+            const container = document.getElementById('psramGraphContainer');
+            if (!canvas || !container) return;
+
+            // Check if PSRAM is available
+            const psramTotal = document.getElementById('psramTotal');
+            if (!psramTotal || psramTotal.textContent === 'N/A') {
+                container.style.display = 'none';
+                return;
+            }
+            container.style.display = 'block';
+
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            const leftMargin = 35;
+            const bottomMargin = 20;
+            const w = rect.width - leftMargin;
+            const h = rect.height - bottomMargin;
+
+            // Background
+            ctx.fillStyle = '#1A1A1A';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+
+            // Translate for margins
+            ctx.save();
+            ctx.translate(leftMargin, 0);
+
+            // Draw grid lines with Y-axis labels
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#999';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i <= 4; i++) {
+                const y = (h / 4) * i;
+                const percent = 100 - (i * 25);
+
+                // Grid line
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+
+                // Y-axis label
+                ctx.fillText(percent + '%', -5, y);
+            }
+
+            // X-axis time labels
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const timePoints = [0, 0.5, 1];
+            const timeLabels = ['-60s', '-30s', 'now'];
+            timePoints.forEach((point, idx) => {
+                const x = w * point;
+                ctx.fillText(timeLabels[idx], x, h + 4);
+            });
+
+            if (historyData.psramPercent.length < 2) {
+                ctx.restore();
+                return;
+            }
+
+            const step = w / (historyData.psramPercent.length - 1);
+
+            // Draw PSRAM line (purple)
+            ctx.strokeStyle = '#9C27B0';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            historyData.psramPercent.forEach((val, i) => {
+                const x = i * step;
+                const y = h - (val / 100) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            ctx.restore();
         }
 
         // ===== Debug Console =====
@@ -5057,6 +5052,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 toast.classList.remove('show');
             }, 3000);
         }
+
+        // ===== Window Resize Handler =====
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(function() {
+                drawCpuGraph();
+                drawMemoryGraph();
+                drawPsramGraph();
+            }, 250);
+        });
 
         // ===== Initialization =====
         window.onload = function() {
