@@ -6,6 +6,7 @@
 #include "smart_sensing.h"
 #include "ota_updater.h"
 #include "debug_serial.h"
+#include "utils.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -319,7 +320,10 @@ void sendHardwareStats() {
   
   // Uptime (milliseconds since boot)
   doc["uptime"] = millis();
-  
+
+  // Reset reason
+  doc["resetReason"] = getResetReasonString();
+
   // Broadcast to all WebSocket clients
   String json;
   serializeJson(doc, json);

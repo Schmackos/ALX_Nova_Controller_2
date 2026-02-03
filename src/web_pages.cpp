@@ -5094,20 +5094,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         // Authentication Helper Functions moved/unified at top of script
 
         async function checkPasswordWarning() {
-            const shouldShowWarning = sessionStorage.getItem('showPasswordWarning') === 'true';
+            try {
+                const response = await apiFetch('/api/auth/status');
+                const data = await response.json();
 
-            if (shouldShowWarning) {
-                try {
-                    const response = await apiFetch('/api/auth/status');
-                    const data = await response.json();
-
-                    if (data.success && data.isDefaultPassword) {
-                        showDefaultPasswordWarning();
-                        sessionStorage.removeItem('showPasswordWarning');
-                    }
-                } catch (err) {
-                    console.error('Failed to check auth status:', err);
+                if (data.success && data.isDefaultPassword) {
+                    showDefaultPasswordWarning();
                 }
+            } catch (err) {
+                console.error('Failed to check auth status:', err);
             }
         }
 
