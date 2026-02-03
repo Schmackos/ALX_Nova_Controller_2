@@ -3,6 +3,12 @@
 ## Version 1.4.1
 
 ## Technical Details
+- [2026-02-03] Update RELEASE_NOTES.md to document the addition of the saveNetworkSettings() function and improvements to browser request handling.
+
+- Implemented saveNetworkSettings() to allow users to save WiFi configurations without connecting immediately, including validation for SSID, password, and static IP settings.
+- Added explicit HTTP handlers for common browser auto-requests to reduce console noise from "request handler not found" errors.
+
+Files modified: src/web_pages.cpp, src/main.cpp, RELEASE_NOTES.md (`f57de5d`)
 - [2026-02-03] Update RELEASE_NOTES.md to document enhancements in WiFi management, including automatic reconnection, improved network removal confirmation, and updated API security measures. Co-authored by Claude Sonnet. (`adde1f8`)
 - [2026-02-03] Enhance WiFi management with automatic reconnection and improved network removal experience
 
@@ -170,6 +176,28 @@ Improved the network removal experience with better user feedback and safety che
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 
 ## Bug Fixes
+- [2026-02-03] fix: Remove duplicate updateNetworkConfig function that used prompt() for password
+
+The duplicate function definition was overriding the correct implementation, forcing users to enter passwords via a browser prompt() dialog instead of using the password field in the form.
+
+The correct implementation now:
+- Uses the configPassword input field from the form
+- Provides proper success/error feedback via toast messages
+- Clears password field after successful save
+- Handles both /api/wificonfig and /api/wifisave endpoints
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`5b4257c`)
+- [2026-02-03] fix: Remove duplicate updateNetworkConfig function that used prompt() for password
+
+The duplicate function definition was overriding the correct implementation, forcing users to enter passwords via a browser prompt() dialog instead of using the password field in the form.
+
+The correct implementation now:
+- Uses the configPassword input field from the form
+- Provides proper success/error feedback via toast messages
+- Clears password field after successful save
+- Handles both /api/wificonfig and /api/wifisave endpoints
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`3624b3c`)
 - [2026-02-03] fix: Implement missing saveNetworkSettings() function for "Save Settings" button
 
 The "Save Settings" button in the "Connect to Network" section was calling a non-existent `saveNetworkSettings()` function, causing JavaScript errors when clicked.
