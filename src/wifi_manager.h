@@ -31,6 +31,7 @@ extern String pendingSubnet;
 extern String pendingGateway;
 extern String pendingDNS1;
 extern String pendingDNS2;
+extern bool wifiStatusUpdateRequested;
 
 // ===== WiFi Credentials Persistence =====
 bool loadWiFiCredentials(String &ssid, String &password);

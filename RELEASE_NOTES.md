@@ -3,6 +3,7 @@
 ## Version 1.4.2
 
 ## New Features
+- [2026-02-04] feat: Introduce `WiFiManager` for centralized connection, persistence, and API handling, resolving previous build failures. (`3b84a06`)
 - [2026-02-04] feat: Add WiFiManager module to centralize and enhance WiFi connection, persistence, and API handling. (`4745ba3`)
 - Automated release via GitHub Actions
 

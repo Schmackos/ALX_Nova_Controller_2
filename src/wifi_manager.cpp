@@ -24,6 +24,9 @@ String pendingGateway = "";
 String pendingDNS1 = "";
 String pendingDNS2 = "";
 
+// Flag to defer WiFi status updates from event task to main loop
+bool wifiStatusUpdateRequested = false;
+
 // DNS Server for Captive Portal
 DNSServer dnsServer;
 const byte DNS_PORT = 53;
@@ -147,22 +150,23 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 
     wifiDisconnected = true;
     lastDisconnectTime = millis();
-    sendWiFiStatus(); // Notify clients of disconnection
+    wifiStatusUpdateRequested = true; // Defer update to main loop
     break;
   }
 
   case ARDUINO_EVENT_WIFI_STA_CONNECTED:
     DebugOut.println("✓ WiFi connected to access point");
     wifiDisconnected = false;
-    wifiConnectError = ""; // Clear any previous error
+    wifiConnectError = "";            // Clear any previous error
+    wifiStatusUpdateRequested = true; // Defer update to main loop
     break;
 
   case ARDUINO_EVENT_WIFI_STA_GOT_IP:
     DebugOut.printf("✓ WiFi IP address: %s\n",
                     WiFi.localIP().toString().c_str());
     wifiDisconnected = false;
-    wifiConnectError = ""; // Clear any previous error
-    sendWiFiStatus();      // Notify clients of successful connection
+    wifiConnectError = "";            // Clear any previous error
+    wifiStatusUpdateRequested = true; // Defer update to main loop
     break;
 
   default:
@@ -1393,6 +1397,12 @@ void handleWiFiRemove() {
   }
 }
 void updateWiFiConnection() {
+  // Handle deferred WiFi status broadcasting
+  if (wifiStatusUpdateRequested) {
+    wifiStatusUpdateRequested = false;
+    sendWiFiStatus();
+  }
+
   // Handle deferred connection request
   if (wifiConnectRequested) {
     // Wait for HTTP response to be sent (non-blocking delay)
