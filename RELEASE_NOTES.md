@@ -9,7 +9,19 @@
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-03] fix: Properly handle WiFi disconnection and AP mode when removing current network
+
+When removing the currently connected WiFi network:
+- Detect if the removed network is currently connected
+- Disconnect from WiFi gracefully
+- Attempt to connect to remaining saved networks
+- Start AP mode with correct SSID (ALX-******) if no networks available
+- Broadcast WiFi status update to frontend so AP toggle reflects correct state
+
+This fixes the issue where removing the current network would start AP mode with default ESP SSID instead of the configured ALX SSID, and the AP toggle would not update correctly.
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`9394684`)
+
 
 ## Technical Details
 - Version bump to 1.3.0

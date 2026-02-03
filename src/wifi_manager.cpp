@@ -1024,8 +1024,45 @@ void handleWiFiRemove() {
 
   int index = doc["index"].as<int>();
 
+  // Get the SSID of the network being removed before removing it
+  String removedSSID = "";
+  bool wasConnectedToRemovedNetwork = false;
+
+  Preferences prefs;
+  prefs.begin("wifi-list", true); // Read-only first
+  removedSSID = prefs.getString(("s" + String(index)).c_str(), "");
+  prefs.end();
+
+  // Check if we're currently connected to this network
+  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == removedSSID) {
+    wasConnectedToRemovedNetwork = true;
+    DebugOut.printf("Removing currently connected network: %s\n", removedSSID.c_str());
+  }
+
   if (removeWiFiNetwork(index)) {
     server.send(200, "application/json", "{\"success\": true}");
+
+    // If we were connected to the removed network, disconnect and try to reconnect
+    if (wasConnectedToRemovedNetwork) {
+      DebugOut.println("Disconnecting from removed network...");
+      WiFi.disconnect();
+
+      // Stop AP if it was running in STA+AP mode
+      if (isAPMode && WiFi.status() != WL_CONNECTED) {
+        dnsServer.stop();
+        WiFi.softAPdisconnect(true);
+        isAPMode = false;
+      }
+
+      // Try to connect to other saved networks, or start AP if none available
+      delay(500); // Brief delay to allow disconnect to complete
+      if (!connectToStoredNetworks()) {
+        DebugOut.println("No saved networks available. AP mode started.");
+      }
+
+      // Broadcast updated WiFi status to all WebSocket clients
+      sendWiFiStatus();
+    }
   } else {
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid index or removal "
