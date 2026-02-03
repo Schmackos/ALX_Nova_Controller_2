@@ -3,6 +3,7 @@
 ## Version 1.4.1
 
 ## Technical Details
+- [2026-02-03] Update RELEASE_NOTES.md to document enhancements in WiFi management, including automatic reconnection, improved network removal confirmation, and updated API security measures. Co-authored by Claude Sonnet. (`adde1f8`)
 - [2026-02-03] Enhance WiFi management with automatic reconnection and improved network removal experience
 
 - Implemented a WiFi event handler to manage automatic reconnections upon disconnection.
