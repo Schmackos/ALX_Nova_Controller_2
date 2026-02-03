@@ -2,6 +2,13 @@
 
 ## Version 1.4.1
 
+## Bug Fixes
+- [2026-02-03] fix: Replace 204 No Content response with 404 for favicon.ico to eliminate WebServer content-length warning
+
+The favicon.ico endpoint was returning 204 (No Content) which caused the WebServer library to warn about zero content length. Changing to 404 (Not Found) is more semantically correct for a missing resource and eliminates the warning without affecting functionality.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`5373849`)
+
 ## New Features
 - [2026-02-03] feat: Improve Debug tab layout and WiFi network removal UX
 
