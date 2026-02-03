@@ -7,10 +7,10 @@
 // ===== WiFi Core Functions =====
 void startAccessPoint();
 void stopAccessPoint();
-void connectToWiFi(const char *ssid, const char *password, bool useStaticIP = false,
-                   const char *staticIP = "", const char *subnet = "",
-                   const char *gateway = "", const char *dns1 = "",
-                   const char *dns2 = "");
+void connectToWiFi(const char *ssid, const char *password,
+                   bool useStaticIP = false, const char *staticIP = "",
+                   const char *subnet = "", const char *gateway = "",
+                   const char *dns1 = "", const char *dns2 = "");
 void updateWiFiConnection();
 bool configureStaticIP(const char *staticIP, const char *subnet,
                        const char *gateway, const char *dns1 = "",
@@ -19,6 +19,18 @@ bool configureStaticIP(const char *staticIP, const char *subnet,
 // ===== WiFi Event Handler & Reconnection =====
 void initWiFiEventHandler(); // Initialize WiFi event handler (call in setup)
 void checkWiFiConnection();  // Check and handle reconnection (call in loop)
+
+// ===== Deferred Connection Globals =====
+extern bool wifiConnectRequested;
+extern unsigned long wifiConnectRequestTime;
+extern String pendingSSID;
+extern String pendingPassword;
+extern bool pendingUseStaticIP;
+extern String pendingStaticIP;
+extern String pendingSubnet;
+extern String pendingGateway;
+extern String pendingDNS1;
+extern String pendingDNS2;
 
 // ===== WiFi Credentials Persistence =====
 bool loadWiFiCredentials(String &ssid, String &password);
@@ -33,8 +45,8 @@ bool saveWiFiNetwork(const char *ssid, const char *password,
                      const char *subnet = "", const char *gateway = "",
                      const char *dns1 = "",
                      const char *dns2 = ""); // Add/update network
-bool removeWiFiNetwork(int index);          // Remove network by index
-int getWiFiNetworkCount();                  // Get number of saved networks
+bool removeWiFiNetwork(int index);           // Remove network by index
+int getWiFiNetworkCount();                   // Get number of saved networks
 
 // ===== WiFi Status Broadcasting =====
 void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing);

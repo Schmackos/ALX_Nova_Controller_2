@@ -12,6 +12,17 @@
 #include <Preferences.h>
 #include <WiFi.h>
 
+// ===== Deferred Connection Globals =====
+bool wifiConnectRequested = false;
+unsigned long wifiConnectRequestTime = 0;
+String pendingSSID = "";
+String pendingPassword = "";
+bool pendingUseStaticIP = false;
+String pendingStaticIP = "";
+String pendingSubnet = "";
+String pendingGateway = "";
+String pendingDNS1 = "";
+String pendingDNS2 = "";
 
 // DNS Server for Captive Portal
 DNSServer dnsServer;
@@ -1073,7 +1084,8 @@ void handleWiFiConfig() {
       String storedSSID = prefs.getString(("s" + String(i)).c_str(), "");
       if (storedSSID == ssid) {
         connectionPassword = prefs.getString(("p" + String(i)).c_str(), "");
-        DebugOut.printf("Using stored password for network: %s\n", ssid.c_str());
+        DebugOut.printf("Using stored password for network: %s\n",
+                        ssid.c_str());
         break;
       }
     }
@@ -1090,56 +1102,28 @@ void handleWiFiConfig() {
     return;
   }
 
-  // Start asynchronous connection
-  wifiSSID = ssid;
-  wifiPassword = connectionPassword;
+  // Start asynchronous connection request
+  wifiConnectRequested = true;
+  wifiConnectRequestTime = millis();
+  pendingSSID = ssid;
+  pendingPassword = connectionPassword;
+  pendingUseStaticIP = useStaticIP;
+  pendingStaticIP = staticIP;
+  pendingSubnet = subnet;
+  pendingGateway = gateway;
+  pendingDNS1 = dns1;
+  pendingDNS2 = dns2;
+
+  // Reset status flags for UI polling
   wifiConnecting = true;
   wifiConnectSuccess = false;
   wifiNewIP = "";
-  wifiConnectError = ""; // Clear any previous error
-
-  // First set to STA mode for clean connection
-  WiFi.mode(WIFI_STA);
-
-  // If we're updating the password of the currently connected network,
-  // disconnect first to ensure clean reconnection with new credentials
-  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == ssid) {
-    DebugOut.printf("Disconnecting from %s before reconnecting with new credentials\n", ssid.c_str());
-    WiFi.disconnect(true); // true = turn off WiFi radio
-    delay(500); // Give it time to disconnect
-  }
-
-  // Configure static IP if enabled (must be done in STA mode)
-  if (useStaticIP && staticIP.length() > 0) {
-    if (!configureStaticIP(staticIP.c_str(), subnet.c_str(), gateway.c_str(),
-                           dns1.c_str(), dns2.c_str())) {
-      server.send(400, "application/json",
-                  "{\"success\": false, \"message\": \"Failed to configure "
-                  "static IP\"}");
-      return;
-    }
-  } else {
-    // Reset to DHCP if not using static IP
-    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
-  }
-
-  WiFi.begin(ssid.c_str(), connectionPassword.c_str());
-
-  // Enable AP mode after connection initiated if needed
-  delay(100); // Brief delay to allow connection to start
-  if (apEnabled) {
-    WiFi.mode(WIFI_AP_STA);
-    if (!isAPMode) {
-      WiFi.softAP(apSSID.c_str(), apPassword);
-      dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-      isAPMode = true;
-    }
-  }
+  wifiConnectError = "";
 
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Connection initiated\"}");
 
-  DebugOut.printf("Network saved. Connecting to %s in background...\n",
+  DebugOut.printf("Network saved. Connection request queued for %s...\n",
                   ssid.c_str());
 }
 
@@ -1409,6 +1393,66 @@ void handleWiFiRemove() {
   }
 }
 void updateWiFiConnection() {
+  // Handle deferred connection request
+  if (wifiConnectRequested) {
+    // Wait for HTTP response to be sent (non-blocking delay)
+    if (millis() - wifiConnectRequestTime < 500) {
+      return;
+    }
+
+    DebugOut.println("\n=== Processing Deferred Connection Request ===");
+    wifiConnectRequested = false;
+
+    // Set global connection variables for status reporting
+    wifiSSID = pendingSSID;
+    wifiPassword = pendingPassword;
+
+    // IMPORTANT: Maintain AP mode if enabled so frontend doesn't lose
+    // connection This allows the UI to poll for status (success/failure)
+    if (apEnabled || isAPMode) {
+      DebugOut.println("Maintaining AP mode during connection attempt...");
+      WiFi.mode(WIFI_AP_STA);
+      // Ensure AP is up if it wasn't
+      if (!isAPMode) {
+        WiFi.softAP(apSSID.c_str(), apPassword);
+        dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+        isAPMode = true;
+      }
+    } else {
+      WiFi.mode(WIFI_STA);
+    }
+
+    // Disconnect current STA connection but keep radio on (false) if in AP_STA
+    if (WiFi.status() == WL_CONNECTED) {
+      WiFi.disconnect(false);
+      delay(100);
+    }
+
+    // Configure static IP logic
+    if (pendingUseStaticIP && pendingStaticIP.length() > 0) {
+      if (!configureStaticIP(pendingStaticIP.c_str(), pendingSubnet.c_str(),
+                             pendingGateway.c_str(), pendingDNS1.c_str(),
+                             pendingDNS2.c_str())) {
+        DebugOut.println("Failed to configure static IP");
+        wifiConnectSuccess = false;
+        wifiConnectError = "Invalid Static IP Configuration";
+        wifiConnecting = false;
+        return;
+      }
+    } else {
+      WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
+    }
+
+    DebugOut.printf("Initiating connection to: %s\n", pendingSSID.c_str());
+    WiFi.begin(pendingSSID.c_str(), pendingPassword.c_str());
+
+    // Initialize connection verification state
+    static unsigned long connectionStarted = 0; // Reset static
+    // Resetting the local static variable by assignment won't work across calls
+    // if it's static We handle the timeout logic below using the
+    // 'wifiConnecting' flag
+  }
+
   if (!wifiConnecting)
     return;
 
@@ -1450,7 +1494,8 @@ void updateWiFiConnection() {
       WiFi.softAP(apSSID.c_str(), apPassword);
       dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
       isAPMode = true;
-      DebugOut.printf("AP restored at: %s\n", WiFi.softAPIP().toString().c_str());
+      DebugOut.printf("AP restored at: %s\n",
+                      WiFi.softAPIP().toString().c_str());
     }
 
     sendWiFiStatus();
