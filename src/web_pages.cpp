@@ -3473,6 +3473,65 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        // Track connection attempts for network change detection
+        let connectionPollAttempts = 0;
+        let lastKnownNewIP = '';
+
+        function pollWiFiConnection() {
+            connectionPollAttempts++;
+
+            apiFetch('/api/wifistatus')
+                .then(res => res.json())
+                .then(data => {
+                    // Reset attempts on successful response
+                    connectionPollAttempts = 0;
+
+                    if (data.wifiConnecting) {
+                        // Still connecting, keep polling
+                        return;
+                    }
+
+                    // Stop polling
+                    if (wifiConnectionPollTimer) {
+                        clearInterval(wifiConnectionPollTimer);
+                        wifiConnectionPollTimer = null;
+                    }
+
+                    if (data.wifiConnectSuccess) {
+                        lastKnownNewIP = data.wifiNewIP || data.staIP || '';
+                        updateWiFiConnectionStatus('success', 'Connected successfully!', lastKnownNewIP);
+                    } else {
+                        const errorMsg = data.wifiConnectError || 'Failed to connect. Check credentials.';
+                        updateWiFiConnectionStatus('error', errorMsg);
+                    }
+                })
+                .catch(err => {
+                    console.log('Poll attempt ' + connectionPollAttempts + ' failed:', err.message);
+
+                    // If we've had multiple failed fetch attempts, the device likely changed networks
+                    if (connectionPollAttempts >= 3) {
+                        if (wifiConnectionPollTimer) {
+                            clearInterval(wifiConnectionPollTimer);
+                            wifiConnectionPollTimer = null;
+                        }
+
+                        // Check if we're on AP mode IP - device may have connected to WiFi
+                        const currentHost = window.location.hostname;
+                        if (currentHost === '192.168.4.1' || currentHost.startsWith('192.168.4.')) {
+                            // We were on AP mode, device likely connected to new network
+                            updateWiFiConnectionStatus('success',
+                                'Connection successful! The device has connected to WiFi and is no longer reachable at this address. Please connect to your WiFi network and access the device at its new IP address.',
+                                '');
+                        } else {
+                            // Generic network error
+                            updateWiFiConnectionStatus('error', 'Network error: Lost connection to device. The device may have changed networks.');
+                        }
+                        connectionPollAttempts = 0;
+                    }
+                    // Otherwise keep trying (device might be temporarily unreachable during network switch)
+                });
+        }
+
         function showAPModeModal(apIP) {
             const modal = document.createElement('div');
             modal.id = 'apModeModal';
@@ -5954,36 +6013,34 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             });
         };
 
-        let wifiConnectionPollTimer = null;
+        let apPagePollTimer = null;
 
-
-
-        function showWiFiModal(ssid) {
+        function showAPPageModal(ssid) {
             document.getElementById('wifiStatusText').innerHTML = `Connecting to <strong>${ssid}</strong>...`;
             document.getElementById('wifiLoader').textContent = '📶';
             document.getElementById('wifiLoader').classList.add('animate-pulse');
             document.getElementById('wifiIPInfo').classList.add('hidden');
-            document.getElementById('wifiModalActions').innerHTML = '<button type="button" class="btn-secondary" onclick="closeWiFiModal()">Cancel</button>';
+            document.getElementById('wifiModalActions').innerHTML = '<button type="button" class="btn-secondary" onclick="closeAPPageModal()">Cancel</button>';
             document.getElementById('wifiConnectionModal').classList.add('active');
         }
 
-        function closeWiFiModal() {
+        function closeAPPageModal() {
             document.getElementById('wifiConnectionModal').classList.remove('active');
-            if (wifiConnectionPollTimer) {
-                clearInterval(wifiConnectionPollTimer);
-                wifiConnectionPollTimer = null;
+            if (apPagePollTimer) {
+                clearInterval(apPagePollTimer);
+                apPagePollTimer = null;
             }
         }
 
-        function updateWiFiStatus(type, message, ip = null) {
+        function updateAPPageStatus(type, message, ip = null) {
             const statusText = document.getElementById('wifiStatusText');
             const loader = document.getElementById('wifiLoader');
             const actions = document.getElementById('wifiModalActions');
             const ipInfo = document.getElementById('wifiIPInfo');
-            
+
             statusText.innerHTML = message;
             loader.classList.remove('animate-pulse');
-            
+
             if (type === 'success') {
                 loader.textContent = '✅';
                 if (ip) {
@@ -5991,11 +6048,11 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
                     ipInfo.classList.remove('hidden');
                     actions.innerHTML = `<button class="btn-primary" onclick="window.location.href='http://${ip}'">Go to Dashboard</button>`;
                 } else {
-                    actions.innerHTML = `<button class="btn-primary" onclick="closeWiFiModal()">Close</button>`;
+                    actions.innerHTML = `<button class="btn-primary" onclick="closeAPPageModal()">Close</button>`;
                 }
             } else if (type === 'error') {
                 loader.textContent = '❌';
-                actions.innerHTML = `<button class="btn-secondary" onclick="closeWiFiModal()">Try Again</button>`;
+                actions.innerHTML = `<button class="btn-secondary" onclick="closeAPPageModal()">Try Again</button>`;
             }
         }
 
@@ -6003,9 +6060,9 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             event.preventDefault();
             const ssid = document.getElementById('ssid').value;
             const password = document.getElementById('password').value;
-            
-            showWiFiModal(ssid);
-            
+
+            showAPPageModal(ssid);
+
             apiFetch('/api/wificonfig', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -6014,35 +6071,35 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    if (wifiConnectionPollTimer) clearInterval(wifiConnectionPollTimer);
-                    wifiConnectionPollTimer = setInterval(pollWiFiConnection, 2000);
+                    if (apPagePollTimer) clearInterval(apPagePollTimer);
+                    apPagePollTimer = setInterval(pollAPPageConnection, 2000);
                 } else {
-                    updateWiFiStatus('error', data.message || 'Connection failed');
+                    updateAPPageStatus('error', data.message || 'Connection failed');
                 }
             })
             .catch(err => {
-                updateWiFiStatus('error', 'Error: ' + err.message);
+                updateAPPageStatus('error', 'Error: ' + err.message);
             });
         }
 
-        function pollWiFiConnection() {
+        function pollAPPageConnection() {
             apiFetch('/api/wifistatus')
                 .then(res => res.json())
                 .then(data => {
                     if (data.wifiConnecting) return;
 
-                    clearInterval(wifiConnectionPollTimer);
-                    wifiConnectionPollTimer = null;
+                    clearInterval(apPagePollTimer);
+                    apPagePollTimer = null;
 
                     if (data.wifiConnectSuccess) {
-                        updateWiFiConnectionStatus('success', 'Connected successfully!', data.wifiNewIP);
+                        updateAPPageStatus('success', 'Connected successfully!', data.wifiNewIP);
                     } else {
-                        updateWiFiConnectionStatus('error', data.message || 'Failed to connect. Check credentials.');
+                        updateAPPageStatus('error', data.message || 'Failed to connect. Check credentials.');
                     }
                 })
                 .catch(err => {
                     console.error('Polling error:', err);
-                    updateWiFiConnectionStatus('error', 'Network error during connection');
+                    updateAPPageStatus('error', 'Network error during connection');
                 });
         }
 
