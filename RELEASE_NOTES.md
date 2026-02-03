@@ -18,10 +18,33 @@ new password.
 
 This fix checks if the device is already connected to the target SSID
 and disconnects gracefully before attempting to reconnect with the new
-credentials. This ensures the device properly registers the new password
-and successfully reconnects.
+credentials.
 
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`c278959`)
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`a0758f8`)
+- [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
+
+When a user updates the password for a currently connected network, the
+device was calling WiFi.begin() while still connected, causing an abrupt
+disconnect (ASSOC_LEAVE) and subsequent authentication failure with the
+new password.
+
+This fix checks if the device is already connected to the target SSID
+and disconnects gracefully before attempting to reconnect with the new
+credentials.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`7b28294`)
+- [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
+
+When a user updates the password for a currently connected network, the
+device was calling WiFi.begin() while still connected, causing an abrupt
+disconnect (ASSOC_LEAVE) and subsequent authentication failure with the
+new password.
+
+This fix checks if the device is already connected to the target SSID
+and disconnects gracefully before attempting to reconnect with the new
+credentials.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`cc7176b`)
 - [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
 
 When a user updates the password for a currently connected network, the
@@ -33,8 +56,6 @@ This fix checks if the device is already connected to the target SSID
 and disconnects gracefully before attempting to reconnect with the new
 credentials. This ensures the device properly registers the new password
 and successfully reconnects.
-
-Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`f7ad558`)
 - [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
 
 When a user updates the password for a currently connected network, the
