@@ -12,6 +12,14 @@
 - None
 
 ## Technical Details
+- [2026-02-03] Enhance WiFi connection handling and error reporting
+
+- Added a helper function to convert WiFi disconnect reasons into user-friendly messages.
+- Updated the WiFi event handler to log detailed connection failure reasons.
+- Introduced a new state variable to track connection errors and included it in the WiFi status JSON response.
+- Removed unused code related to saved networks from the web interface.
+
+Files modified: src/wifi_manager.cpp, src/web_pages.cpp, src/app_state.h, RELEASE_NOTES.md (`e2814f6`)
 - [2026-02-03] Enhance WiFi management and debugging capabilities
 
 - Added logic to prevent reconnection attempts during WiFi scanning, including a timeout safeguard.
