@@ -3,6 +3,16 @@
 ## Version 1.4.1
 
 ## New Features
+- [2026-02-03] feat: Enhance WiFi management with automatic reconnection and improved network removal experience
+
+- Introduced an intelligent WiFi reconnection system that automatically manages disconnections and reconnects without user intervention.
+- Added a warning modal for removing the currently connected network, requiring explicit confirmation and providing clear consequences.
+- Enhanced user experience with real-time status updates during network removal and reconnection attempts.
+- Fixed authentication issues in API calls by ensuring session credentials are included in all requests.
+
+Files modified: src/wifi_manager.cpp, src/wifi_manager.h, src/main.cpp, src/web_pages.cpp
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`866d67f`)
 - [2026-02-03] feat: Introduce automatic WiFi reconnection and enhanced network removal experience
 
 - Implemented an intelligent WiFi reconnection system that automatically manages disconnections and reconnects without user intervention.
