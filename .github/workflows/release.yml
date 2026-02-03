@@ -199,21 +199,21 @@ jobs:
           git log ${COMMIT_RANGE} --pretty=format:"%h|%s|%an|%ad" --date=short | while IFS='|' read -r hash subject author date; do
             # Determine category
             category="other"
-            if [[ "$subject" =~ ^(feat|feature)[:(] ]]; then
+            if [[ "$subject" =~ ^(feat|feature)[:(].* ]]; then
               category="feat"
-            elif [[ "$subject" =~ ^(fix|bugfix)[:(] ]]; then
+            elif [[ "$subject" =~ ^(fix|bugfix)[:(].* ]]; then
               category="fix"
-            elif [[ "$subject" =~ ^(perf|performance)[:(] ]]; then
+            elif [[ "$subject" =~ ^(perf|performance)[:(].* ]]; then
               category="perf"
-            elif [[ "$subject" =~ ^docs[:(] ]]; then
+            elif [[ "$subject" =~ ^docs[:(].* ]]; then
               category="docs"
-            elif [[ "$subject" =~ ^refactor[:(] ]]; then
+            elif [[ "$subject" =~ ^refactor[:(].* ]]; then
               category="refactor"
-            elif [[ "$subject" =~ ^test[:(] ]]; then
+            elif [[ "$subject" =~ ^test[:(].* ]]; then
               category="test"
-            elif [[ "$subject" =~ ^(chore|build)[:(] ]]; then
+            elif [[ "$subject" =~ ^(chore|build)[:(].* ]]; then
               category="chore"
-            elif [[ "$subject" =~ ^style[:(] ]]; then
+            elif [[ "$subject" =~ ^style[:(].* ]]; then
               category="style"
             fi
 

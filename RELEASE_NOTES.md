@@ -27,6 +27,18 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`39e4e07`)
 - None
 
 ## Bug Fixes
+- [2026-02-03] fix: Complete regex pattern fix by restoring wildcard matchers
+
+- Add back .* after [:(] to match the rest of commit messages
+- Fixes shell syntax error in release notes preparation
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`277a03c`)
+- [2026-02-03] fix: Correct release workflow to fetch tags and fix regex syntax errors
+
+- Add fetch-depth: 0 to checkout step to fetch all tags
+- Fix regex patterns to use proper OR syntax (feat|feature) instead of invalid bracket expressions
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`879bad8`)
 - [2026-02-03] fix: Correct release workflow to fetch tags and fix regex syntax errors
 
 - Add fetch-depth: 0 to checkout step to fetch all tags
