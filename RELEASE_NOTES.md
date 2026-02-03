@@ -12,6 +12,7 @@
 - None
 
 ## Technical Details
+- [2026-02-03] Update RELEASE_NOTES.md to reflect recent enhancements in WiFi connection handling, including user-friendly disconnect messages, improved logging for connection failures, and an updated WiFi status JSON response. Removed unused code related to saved networks. (`9520b2a`)
 - [2026-02-03] Update RELEASE_NOTES.md to include recent enhancements in WiFi connection handling and error reporting. Added user-friendly messages for disconnect reasons, improved logging for connection failures, and updated WiFi status JSON response. Removed unused code related to saved networks. (`d8bea09`)
 - [2026-02-03] Enhance WiFi connection handling and error reporting
 

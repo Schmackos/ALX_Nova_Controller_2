@@ -1063,6 +1063,23 @@ void handleWiFiConfig() {
     return;
   }
 
+  // If password is empty, fetch the stored password for this SSID
+  String connectionPassword = password;
+  if (password.length() == 0) {
+    Preferences prefs;
+    prefs.begin("wifi-list", true); // Read-only
+    int count = prefs.getUChar("count", 0);
+    for (int i = 0; i < count; i++) {
+      String storedSSID = prefs.getString(("s" + String(i)).c_str(), "");
+      if (storedSSID == ssid) {
+        connectionPassword = prefs.getString(("p" + String(i)).c_str(), "");
+        DebugOut.printf("Using stored password for network: %s\n", ssid.c_str());
+        break;
+      }
+    }
+    prefs.end();
+  }
+
   // Save to multi-WiFi list with static IP configuration
   if (!saveWiFiNetwork(ssid.c_str(), password.c_str(), useStaticIP,
                        staticIP.c_str(), subnet.c_str(), gateway.c_str(),
@@ -1075,7 +1092,7 @@ void handleWiFiConfig() {
 
   // Start asynchronous connection
   wifiSSID = ssid;
-  wifiPassword = password;
+  wifiPassword = connectionPassword;
   wifiConnecting = true;
   wifiConnectSuccess = false;
   wifiNewIP = "";
@@ -1098,7 +1115,7 @@ void handleWiFiConfig() {
     WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
   }
 
-  WiFi.begin(ssid.c_str(), password.c_str());
+  WiFi.begin(ssid.c_str(), connectionPassword.c_str());
 
   // Enable AP mode after connection initiated if needed
   delay(100); // Brief delay to allow connection to start
@@ -1417,6 +1434,17 @@ void updateWiFiConnection() {
       wifiConnectError = "Connection timed out - check password and signal";
     }
     DebugOut.printf("\nWiFi connection failed: %s\n", wifiConnectError.c_str());
+
+    // Restore AP mode if it was enabled
+    if (apEnabled && !isAPMode) {
+      DebugOut.println("Restoring AP mode after failed connection...");
+      WiFi.mode(WIFI_AP_STA);
+      WiFi.softAP(apSSID.c_str(), apPassword);
+      dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+      isAPMode = true;
+      DebugOut.printf("AP restored at: %s\n", WiFi.softAPIP().toString().c_str());
+    }
+
     sendWiFiStatus();
   }
 }
