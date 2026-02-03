@@ -27,6 +27,19 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`39e4e07`)
 - None
 
 ## Bug Fixes
+- [2026-02-03] fix: Simplify regex patterns to match conventional commit colons only
+
+- Remove character class [:(] which was causing syntax errors
+- Use simple colon matching since conventional commits always use colons
+- Fixes "unexpected EOF while looking for matching ')'" error
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`cdc5fd7`)
+- [2026-02-03] fix: Complete regex pattern fix by restoring wildcard matchers
+
+- Add back .* after [:(] to match the rest of commit messages
+- Fixes shell syntax error in release notes preparation
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`f48eac8`)
 - [2026-02-03] fix: Complete regex pattern fix by restoring wildcard matchers
 
 - Add back .* after [:(] to match the rest of commit messages
