@@ -40,29 +40,118 @@ static bool wifiScanInProgress = false;
 static unsigned long wifiScanStartTime = 0;
 static const unsigned long WIFI_SCAN_TIMEOUT = 30000; // 30 second timeout
 
-// WiFi Event Handler
-void onWiFiEvent(WiFiEvent_t event) {
+// Helper function to convert WiFi disconnect reason to user-friendly message
+String getWiFiDisconnectReason(uint8_t reason) {
+  switch (reason) {
+  case 1:
+    return "Unspecified error";
+  case 2:
+    return "Authentication expired";
+  case 3:
+    return "Deauthenticated - AP is leaving";
+  case 4:
+    return "Disconnected due to inactivity";
+  case 5:
+    return "AP is busy, too many connected clients";
+  case 6:
+    return "Class 2 frame received from unauthenticated STA";
+  case 7:
+    return "Class 3 frame received from unassociated STA";
+  case 8:
+    return "Disassociated - AP is leaving";
+  case 9:
+    return "Not authenticated with AP";
+  case 10:
+    return "Power capability not valid";
+  case 11:
+    return "Supported channel not valid";
+  case 13:
+    return "Invalid information element";
+  case 14:
+    return "MIC failure";
+  case 15:
+    return "Authentication failed - check password";
+  case 16:
+    return "Group key handshake timeout";
+  case 17:
+    return "Invalid group key";
+  case 18:
+    return "Invalid pairwise cipher";
+  case 19:
+    return "Invalid AKMP";
+  case 20:
+    return "Unsupported RSN information element";
+  case 21:
+    return "Invalid RSN capabilities";
+  case 22:
+    return "IEEE 802.1X authentication failed";
+  case 23:
+    return "Cipher suite rejected";
+  case 24:
+    return "TDLS teardown unreachable";
+  case 25:
+    return "TDLS teardown unspecified";
+  case 26:
+    return "SSP requested disassociation";
+  case 27:
+    return "No SSP roaming agreement";
+  case 200:
+    return "Beacon timeout - AP not responding";
+  case 201:
+    return "Network not found";
+  case 202:
+    return "Authentication failed";
+  case 203:
+    return "Association failed";
+  case 204:
+    return "Handshake timeout - check password";
+  case 205:
+    return "Connection failed";
+  case 206:
+    return "AP TSF reset";
+  case 207:
+    return "Roaming link probe failed";
+  default:
+    return "Connection failed (code: " + String(reason) + ")";
+  }
+}
+
+// WiFi Event Handler with reason info
+void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
   switch (event) {
-  case SYSTEM_EVENT_STA_DISCONNECTED:
-    if (millis() - lastDisconnectWarning > WARNING_THROTTLE) {
-      DebugOut.println("⚠️  WiFi disconnected from access point");
+  case ARDUINO_EVENT_WIFI_STA_DISCONNECTED: {
+    uint8_t reason = info.wifi_sta_disconnected.reason;
+    String reasonStr = getWiFiDisconnectReason(reason);
+
+    // Always print when actively connecting, otherwise throttle
+    if (wifiConnecting) {
+      DebugOut.printf("⚠️  WiFi connection failed: %s (reason %d)\n",
+                      reasonStr.c_str(), reason);
+      wifiConnectError = reasonStr;
+    } else if (millis() - lastDisconnectWarning > WARNING_THROTTLE) {
+      DebugOut.printf("⚠️  WiFi disconnected: %s (reason %d)\n",
+                      reasonStr.c_str(), reason);
       lastDisconnectWarning = millis();
     }
+
     wifiDisconnected = true;
     lastDisconnectTime = millis();
     sendWiFiStatus(); // Notify clients of disconnection
     break;
+  }
 
-  case SYSTEM_EVENT_STA_CONNECTED:
+  case ARDUINO_EVENT_WIFI_STA_CONNECTED:
     DebugOut.println("✓ WiFi connected to access point");
     wifiDisconnected = false;
+    wifiConnectError = ""; // Clear any previous error
     break;
 
-  case SYSTEM_EVENT_STA_GOT_IP:
+  case ARDUINO_EVENT_WIFI_STA_GOT_IP:
     DebugOut.printf("✓ WiFi IP address: %s\n",
                     WiFi.localIP().toString().c_str());
     wifiDisconnected = false;
-    sendWiFiStatus(); // Notify clients of successful connection
+    wifiConnectError = ""; // Clear any previous error
+    sendWiFiStatus();      // Notify clients of successful connection
     break;
 
   default:
@@ -752,6 +841,11 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   doc["wifiConnecting"] = wifiConnecting;
   doc["wifiConnectSuccess"] = wifiConnectSuccess;
   doc["wifiNewIP"] = wifiNewIP;
+
+  // Add error message if connection failed
+  if (!wifiConnecting && !wifiConnectSuccess && wifiConnectError.length() > 0) {
+    doc["message"] = wifiConnectError;
+  }
 }
 
 void sendWiFiStatus() {
@@ -802,6 +896,7 @@ void handleAPConfig() {
   wifiConnecting = true;
   wifiConnectSuccess = false;
   wifiNewIP = "";
+  wifiConnectError = ""; // Clear any previous error
 
   WiFi.mode(WIFI_AP_STA);
   WiFi.begin(ssid.c_str(), password.c_str());
@@ -984,6 +1079,7 @@ void handleWiFiConfig() {
   wifiConnecting = true;
   wifiConnectSuccess = false;
   wifiNewIP = "";
+  wifiConnectError = ""; // Clear any previous error
 
   // First set to STA mode for clean connection
   WiFi.mode(WIFI_STA);
@@ -1300,6 +1396,7 @@ void updateWiFiConnection() {
     wifiConnectSuccess = true;
     wifiConnecting = false;
     wifiNewIP = WiFi.localIP().toString();
+    wifiConnectError = ""; // Clear any previous error
     connectionStarted = 0;
 
     DebugOut.println("\nWiFi connected in background!");
@@ -1315,7 +1412,11 @@ void updateWiFiConnection() {
     wifiConnectSuccess = false;
     wifiConnecting = false;
     connectionStarted = 0;
-    DebugOut.println("\nWiFi connection failed (timeout)");
+    // Set timeout error if no specific disconnect reason was captured
+    if (wifiConnectError.length() == 0) {
+      wifiConnectError = "Connection timed out - check password and signal";
+    }
+    DebugOut.printf("\nWiFi connection failed: %s\n", wifiConnectError.c_str());
     sendWiFiStatus();
   }
 }

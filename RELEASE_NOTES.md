@@ -12,6 +12,13 @@
 - None
 
 ## Technical Details
+- [2026-02-03] Enhance WiFi management and debugging capabilities
+
+- Added logic to prevent reconnection attempts during WiFi scanning, including a timeout safeguard.
+- Implemented logging for 404 Not Found requests to aid in debugging.
+- Updated RELEASE_NOTES.md to reflect the removal of a duplicate function that caused issues with password input handling.
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`7fe1b9a`)
 - Version bump to 1.4.2
 
 ## Breaking Changes

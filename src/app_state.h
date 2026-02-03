@@ -70,6 +70,7 @@ public:
   bool wifiConnecting = false;
   bool wifiConnectSuccess = false;
   String wifiNewIP;
+  String wifiConnectError;
 
   // ===== Factory Reset State =====
   bool factoryResetInProgress = false;
@@ -221,6 +222,7 @@ private:
 #define wifiConnecting appState.wifiConnecting
 #define wifiConnectSuccess appState.wifiConnectSuccess
 #define wifiNewIP appState.wifiNewIP
+#define wifiConnectError appState.wifiConnectError
 
 // Factory Reset State
 #define factoryResetInProgress appState.factoryResetInProgress

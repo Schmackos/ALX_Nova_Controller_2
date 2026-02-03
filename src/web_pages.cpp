@@ -2622,7 +2622,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         }
 
-        let savedNetworks = [];
         let wifiConnectionPollTimer = null;
 
 
@@ -4078,12 +4077,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         else if (data.connected) {
                             clearInterval(networkRemovalPollTimer);
                             networkRemovalPollTimer = null;
-                            showToast('Reconnected to another saved network', 'success');
+                            showWiFiModal(data.ssid);
+                            updateWiFiConnectionStatus('success', 'Network removed. Reconnected successfully!', data.ip);
                         }
                         // Timeout after max polls
                         else if (pollCount >= maxPolls) {
                             clearInterval(networkRemovalPollTimer);
                             networkRemovalPollTimer = null;
+                            showWiFiModal('');
+                            updateWiFiConnectionStatus('error', 'Failed to connect to any saved network');
                         }
                     })
                     .catch(err => {
@@ -4258,94 +4260,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (data.success) showToast(enabled ? 'Auto AP enabled' : 'Auto AP disabled', 'success');
             })
             .catch(err => showToast('Failed to update setting', 'error'));
-        }
-
-        function loadSavedNetworks() {
-            apiFetch('/api/wifilist')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    savedNetworks = data.networks || [];
-                    const select = document.getElementById('configNetworkSelect');
-                    
-                    // Save current selection if any
-                    const currentConfig = select.value;
-                    
-                    // Clear options
-                    select.innerHTML = '<option value="">-- Select a saved network --</option>';
-                    
-                    savedNetworks.forEach(net => {
-                        const option = document.createElement('option');
-                        option.value = net.index;
-                        option.textContent = net.ssid + (net.priority ? ' (Priority)' : '');
-                        select.appendChild(option);
-                    });
-                    
-                    if (currentConfig && savedNetworks.find(n => n.index == currentConfig)) {
-                         select.value = currentConfig;
-                    }
-                }
-            })
-            .catch(err => console.error('Failed to load saved networks', err));
-        }
-
-        function loadNetworkConfig() {
-            const index = document.getElementById('configNetworkSelect').value;
-            const fields = document.getElementById('networkConfigFields');
-            
-            if (!index) {
-                fields.style.display = 'none';
-                return;
-            }
-            
-            const network = savedNetworks.find(n => n.index == index);
-            if (!network) return;
-            
-            fields.style.display = 'block';
-            document.getElementById('configUseStaticIP').checked = network.useStaticIP || false;
-            
-            if (network.useStaticIP) {
-                document.getElementById('configStaticIPFields').style.display = 'block';
-                document.getElementById('configStaticIP').value = network.staticIP || '';
-                document.getElementById('configSubnet').value = network.subnet || '';
-                document.getElementById('configGateway').value = network.gateway || '';
-                document.getElementById('configDns1').value = network.dns1 || '';
-                document.getElementById('configDns2').value = network.dns2 || '';
-            } else {
-                document.getElementById('configStaticIPFields').style.display = 'none';
-            }
-        }
-        
-        function toggleConfigStaticIPFields() {
-            const useStatic = document.getElementById('configUseStaticIP').checked;
-            document.getElementById('configStaticIPFields').style.display = useStatic ? 'block' : 'none';
-        }
-
-        function removeSelectedNetworkConfig() {
-            const select = document.getElementById('configNetworkSelect');
-            if (!select.value) {
-                showToast('Please select a network to remove', 'error');
-                return;
-            }
-
-            if (!confirm('Are you sure you want to remove this network?')) return;
-
-            apiFetch('/api/wifiremove', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ index: parseInt(select.value) })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    showToast('Network removed', 'success');
-                    loadSavedNetworks();
-                    document.getElementById('networkConfigFields').style.display = 'none';
-                } else {
-                    showToast(data.message || 'Failed to remove network', 'error');
-                }
-            })
-            .catch(err => showToast('Error removing network', 'error'));
         }
 
         // ===== Settings =====
