@@ -265,6 +265,12 @@ void setup() {
 
   // Redirect all unknown routes to root in AP mode (Captive Portal)
   server.onNotFound([]() {
+    // Log the request for debugging
+    DebugOut.printf("404 Not Found: %s %s\n",
+                    server.method() == HTTP_GET ? "GET" :
+                    server.method() == HTTP_POST ? "POST" : "OTHER",
+                    server.uri().c_str());
+
     if (appState.isAPMode) {
       server.sendHeader("Location",
                         String("http://") + WiFi.softAPIP().toString() + "/",

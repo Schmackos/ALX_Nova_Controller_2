@@ -35,6 +35,11 @@ static unsigned long lastDisconnectWarning = 0;
 static const unsigned long WARNING_THROTTLE =
     30000; // Only print warning every 30 seconds
 
+// WiFi scan state - prevents reconnection logic during scanning
+static bool wifiScanInProgress = false;
+static unsigned long wifiScanStartTime = 0;
+static const unsigned long WIFI_SCAN_TIMEOUT = 30000; // 30 second timeout
+
 // WiFi Event Handler
 void onWiFiEvent(WiFiEvent_t event) {
   switch (event) {
@@ -73,6 +78,17 @@ void initWiFiEventHandler() {
 
 // Check WiFi connection and attempt reconnection if needed
 void checkWiFiConnection() {
+  // Skip reconnection logic during WiFi scanning (with timeout safeguard)
+  if (wifiScanInProgress) {
+    if (millis() - wifiScanStartTime > WIFI_SCAN_TIMEOUT) {
+      // Scan timed out, clear the flag
+      wifiScanInProgress = false;
+      DebugOut.println("WiFi scan timeout - clearing scan flag");
+    } else {
+      return;
+    }
+  }
+
   // Only try to reconnect if we're in STA mode and disconnected
   if (wifiDisconnected && WiFi.getMode() != WIFI_AP && !wifiConnecting &&
       millis() - lastReconnectAttempt > RECONNECT_DELAY) {
@@ -1068,6 +1084,12 @@ void handleWiFiStatus() {
 void handleWiFiScan() {
   DebugOut.println("Scanning for WiFi networks...");
 
+  // Mark scan as in progress to prevent reconnection logic from interfering
+  if (!wifiScanInProgress) {
+    wifiScanStartTime = millis();
+  }
+  wifiScanInProgress = true;
+
   // Ensure WiFi is in proper mode for scanning
   wifi_mode_t wifiMode = WiFi.getMode();
   if (wifiMode == WIFI_MODE_NULL) {
@@ -1089,6 +1111,7 @@ void handleWiFiScan() {
     int result = WiFi.scanNetworks(true); // Async scan
     if (result == WIFI_SCAN_FAILED) {
       DebugOut.println("Failed to start WiFi scan");
+      wifiScanInProgress = false;
       server.send(500, "application/json",
                   "{\"scanning\": false, \"networks\": [], \"error\": \"Failed "
                   "to start scan\"}");
@@ -1143,6 +1166,9 @@ void handleWiFiScan() {
 
   // Clear scan results to free memory
   WiFi.scanDelete();
+
+  // Scan complete, clear the flag
+  wifiScanInProgress = false;
 
   DebugOut.printf("Found %d unique networks\n", networks.size());
 

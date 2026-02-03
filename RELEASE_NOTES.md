@@ -206,6 +206,17 @@ The correct implementation now:
 - Clears password field after successful save
 - Handles both /api/wificonfig and /api/wifisave endpoints
 
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`f3b9c38`)
+- [2026-02-03] fix: Remove duplicate updateNetworkConfig function that used prompt() for password
+
+The duplicate function definition was overriding the correct implementation, forcing users to enter passwords via a browser prompt() dialog instead of using the password field in the form.
+
+The correct implementation now:
+- Uses the configPassword input field from the form
+- Provides proper success/error feedback via toast messages
+- Clears password field after successful save
+- Handles both /api/wificonfig and /api/wifisave endpoints
+
 Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`5b4257c`)
 - [2026-02-03] fix: Remove duplicate updateNetworkConfig function that used prompt() for password
 
