@@ -5,11 +5,13 @@
 #include "mqtt_handler.h"
 #include "ota_updater.h"
 #include "websocket_handler.h"
+#include <Arduino.h>
 #include <ArduinoJson.h>
 #include <DNSServer.h>
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <WiFi.h>
+
 
 // DNS Server for Captive Portal
 DNSServer dnsServer;
@@ -27,36 +29,39 @@ extern const char apHtmlPage[] PROGMEM;
 static bool wifiDisconnected = false;
 static unsigned long lastDisconnectTime = 0;
 static unsigned long lastReconnectAttempt = 0;
-static const unsigned long RECONNECT_DELAY = 5000; // Wait 5 seconds before reconnecting
+static const unsigned long RECONNECT_DELAY =
+    5000; // Wait 5 seconds before reconnecting
 static unsigned long lastDisconnectWarning = 0;
-static const unsigned long WARNING_THROTTLE = 30000; // Only print warning every 30 seconds
+static const unsigned long WARNING_THROTTLE =
+    30000; // Only print warning every 30 seconds
 
 // WiFi Event Handler
 void onWiFiEvent(WiFiEvent_t event) {
   switch (event) {
-    case SYSTEM_EVENT_STA_DISCONNECTED:
-      if (millis() - lastDisconnectWarning > WARNING_THROTTLE) {
-        DebugOut.println("⚠️  WiFi disconnected from access point");
-        lastDisconnectWarning = millis();
-      }
-      wifiDisconnected = true;
-      lastDisconnectTime = millis();
-      sendWiFiStatus(); // Notify clients of disconnection
-      break;
+  case SYSTEM_EVENT_STA_DISCONNECTED:
+    if (millis() - lastDisconnectWarning > WARNING_THROTTLE) {
+      DebugOut.println("⚠️  WiFi disconnected from access point");
+      lastDisconnectWarning = millis();
+    }
+    wifiDisconnected = true;
+    lastDisconnectTime = millis();
+    sendWiFiStatus(); // Notify clients of disconnection
+    break;
 
-    case SYSTEM_EVENT_STA_CONNECTED:
-      DebugOut.println("✓ WiFi connected to access point");
-      wifiDisconnected = false;
-      break;
+  case SYSTEM_EVENT_STA_CONNECTED:
+    DebugOut.println("✓ WiFi connected to access point");
+    wifiDisconnected = false;
+    break;
 
-    case SYSTEM_EVENT_STA_GOT_IP:
-      DebugOut.printf("✓ WiFi IP address: %s\n", WiFi.localIP().toString().c_str());
-      wifiDisconnected = false;
-      sendWiFiStatus(); // Notify clients of successful connection
-      break;
+  case SYSTEM_EVENT_STA_GOT_IP:
+    DebugOut.printf("✓ WiFi IP address: %s\n",
+                    WiFi.localIP().toString().c_str());
+    wifiDisconnected = false;
+    sendWiFiStatus(); // Notify clients of successful connection
+    break;
 
-    default:
-      break;
+  default:
+    break;
   }
 }
 
@@ -69,8 +74,8 @@ void initWiFiEventHandler() {
 // Check WiFi connection and attempt reconnection if needed
 void checkWiFiConnection() {
   // Only try to reconnect if we're in STA mode and disconnected
-  if (wifiDisconnected && WiFi.getMode() != WIFI_AP &&
-      !wifiConnecting && millis() - lastReconnectAttempt > RECONNECT_DELAY) {
+  if (wifiDisconnected && WiFi.getMode() != WIFI_AP && !wifiConnecting &&
+      millis() - lastReconnectAttempt > RECONNECT_DELAY) {
 
     lastReconnectAttempt = millis();
 
@@ -256,8 +261,12 @@ void connectToWiFi(const char *ssid, const char *password, bool useStaticIP,
 // ===== WiFi Credentials Persistence =====
 
 bool loadWiFiCredentials(String &ssid, String &password) {
-  File file = LittleFS.open("/wifi_config.txt", "r");
-  if (!file) {
+  // Use create=true to avoid "no permits for creation" error log if file is
+  // missing
+  File file = LittleFS.open("/wifi_config.txt", "r", true);
+  if (!file || file.size() == 0) {
+    if (file)
+      file.close();
     return false;
   }
 
@@ -401,7 +410,8 @@ bool removeWiFiNetwork(int index) {
 
   int count = prefs.getUChar("count", 0);
 
-  DebugOut.printf("removeWiFiNetwork called. Index: %d, Current count: %d\n", index, count);
+  DebugOut.printf("removeWiFiNetwork called. Index: %d, Current count: %d\n",
+                  index, count);
 
   if (index < 0 || index >= count) {
     DebugOut.printf("Invalid index %d for count %d\n", index, count);
@@ -411,7 +421,8 @@ bool removeWiFiNetwork(int index) {
 
   // Get SSID being removed for debug
   String removingSSID = prefs.getString(("s" + String(index)).c_str(), "");
-  DebugOut.printf("Removing network at index %d: %s\n", index, removingSSID.c_str());
+  DebugOut.printf("Removing network at index %d: %s\n", index,
+                  removingSSID.c_str());
 
   // Shift all networks after this index down by one
   for (int i = index; i < count - 1; i++) {
@@ -462,8 +473,13 @@ bool connectToStoredNetworks() {
 
   if (count == 0) {
     prefs.end();
-    DebugOut.println("No saved WiFi networks. Starting AP mode...");
-    startAccessPoint(); // Fix: Ensure AP starts if list is empty
+    DebugOut.println("No saved WiFi networks.");
+    if (autoAPEnabled) {
+      DebugOut.println("Auto AP enabled: Starting AP mode...");
+      startAccessPoint();
+    } else {
+      DebugOut.println("Auto AP disabled: Not starting AP mode.");
+    }
     return false;
   }
 
@@ -523,6 +539,12 @@ bool connectToStoredNetworks() {
         // Save the successful network
         String successSSID = ssid;
         String successPass = password;
+        bool successStatic = useStatic;
+        String successIp = ip;
+        String successSubnet = subnet;
+        String successGw = gw;
+        String successDns1 = dns1;
+        String successDns2 = dns2;
 
         // Shift networks 0 to i-1 down by one
         for (int j = i; j > 0; j--) {
@@ -530,13 +552,38 @@ bool connectToStoredNetworks() {
               prefsWrite.getString(("s" + String(j - 1)).c_str(), "");
           String shiftPass =
               prefsWrite.getString(("p" + String(j - 1)).c_str(), "");
+          bool shiftStatic =
+              prefsWrite.getBool(("static" + String(j - 1)).c_str(), false);
+          String shiftIp =
+              prefsWrite.getString(("ip" + String(j - 1)).c_str(), "");
+          String shiftSubnet =
+              prefsWrite.getString(("subnet" + String(j - 1)).c_str(), "");
+          String shiftGw =
+              prefsWrite.getString(("gw" + String(j - 1)).c_str(), "");
+          String shiftDns1 =
+              prefsWrite.getString(("dns1_" + String(j - 1)).c_str(), "");
+          String shiftDns2 =
+              prefsWrite.getString(("dns2_" + String(j - 1)).c_str(), "");
+
           prefsWrite.putString(("s" + String(j)).c_str(), shiftSSID);
           prefsWrite.putString(("p" + String(j)).c_str(), shiftPass);
+          prefsWrite.putBool(("static" + String(j)).c_str(), shiftStatic);
+          prefsWrite.putString(("ip" + String(j)).c_str(), shiftIp);
+          prefsWrite.putString(("subnet" + String(j)).c_str(), shiftSubnet);
+          prefsWrite.putString(("gw" + String(j)).c_str(), shiftGw);
+          prefsWrite.putString(("dns1_" + String(j)).c_str(), shiftDns1);
+          prefsWrite.putString(("dns2_" + String(j)).c_str(), shiftDns2);
         }
 
         // Put successful network at index 0
         prefsWrite.putString("s0", successSSID);
         prefsWrite.putString("p0", successPass);
+        prefsWrite.putBool("static0", successStatic);
+        prefsWrite.putString("ip0", successIp);
+        prefsWrite.putString("subnet0", successSubnet);
+        prefsWrite.putString("gw0", successGw);
+        prefsWrite.putString("dns1_0", successDns1);
+        prefsWrite.putString("dns2_0", successDns2);
         prefsWrite.end();
 
         DebugOut.println("Moved successful network to priority position");
@@ -584,8 +631,13 @@ bool connectToStoredNetworks() {
   }
 
   prefs.end();
-  DebugOut.println("All networks failed. Starting AP mode...");
-  startAccessPoint();
+  DebugOut.println("All networks failed.");
+  if (autoAPEnabled) {
+    DebugOut.println("Auto AP enabled: Starting AP mode...");
+    startAccessPoint();
+  } else {
+    DebugOut.println("Auto AP disabled: Not starting AP mode.");
+  }
   return false;
 }
 
@@ -925,7 +977,8 @@ void handleWiFiConfig() {
     if (!configureStaticIP(staticIP.c_str(), subnet.c_str(), gateway.c_str(),
                            dns1.c_str(), dns2.c_str())) {
       server.send(400, "application/json",
-                  "{\"success\": false, \"message\": \"Failed to configure static IP\"}");
+                  "{\"success\": false, \"message\": \"Failed to configure "
+                  "static IP\"}");
       return;
     }
   } else {
@@ -1037,7 +1090,8 @@ void handleWiFiScan() {
     if (result == WIFI_SCAN_FAILED) {
       DebugOut.println("Failed to start WiFi scan");
       server.send(500, "application/json",
-                  "{\"scanning\": false, \"networks\": [], \"error\": \"Failed to start scan\"}");
+                  "{\"scanning\": false, \"networks\": [], \"error\": \"Failed "
+                  "to start scan\"}");
       return;
     }
     server.send(200, "application/json",
@@ -1172,13 +1226,15 @@ void handleWiFiRemove() {
   // Check if we're currently connected to this network
   if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == removedSSID) {
     wasConnectedToRemovedNetwork = true;
-    DebugOut.printf("Removing currently connected network: %s\n", removedSSID.c_str());
+    DebugOut.printf("Removing currently connected network: %s\n",
+                    removedSSID.c_str());
   }
 
   if (removeWiFiNetwork(index)) {
     server.send(200, "application/json", "{\"success\": true}");
 
-    // If we were connected to the removed network, disconnect and try to reconnect
+    // If we were connected to the removed network, disconnect and try to
+    // reconnect
     if (wasConnectedToRemovedNetwork) {
       DebugOut.println("Disconnecting from removed network...");
       WiFi.disconnect();

@@ -6,7 +6,6 @@
 #include <LittleFS.h>
 #include <cmath>
 
-
 // ===== Smart Sensing HTTP API Handlers =====
 
 void handleSmartSensingGet() {
@@ -357,11 +356,12 @@ void sendSmartSensingState() {
 
 // Load Smart Sensing settings from LittleFS
 bool loadSmartSensingSettings() {
-  if (!LittleFS.exists("/smartsensing.txt")) {
-    return false;
-  }
-  File file = LittleFS.open("/smartsensing.txt", "r");
-  if (!file) {
+  // Use create=true to avoid "no permits for creation" error log if file is
+  // missing
+  File file = LittleFS.open("/smartsensing.txt", "r", true);
+  if (!file || file.size() == 0) {
+    if (file)
+      file.close();
     return false;
   }
 

@@ -28,11 +28,12 @@ extern void setAmplifierState(bool state);
 
 // Load MQTT settings from LittleFS
 bool loadMqttSettings() {
-  if (!LittleFS.exists("/mqtt_config.txt")) {
-    return false;
-  }
-  File file = LittleFS.open("/mqtt_config.txt", "r");
-  if (!file) {
+  // Use create=true to avoid "no permits for creation" error log if file is
+  // missing
+  File file = LittleFS.open("/mqtt_config.txt", "r", true);
+  if (!file || file.size() == 0) {
+    if (file)
+      file.close();
     return false;
   }
 

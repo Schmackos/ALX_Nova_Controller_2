@@ -59,6 +59,7 @@ public:
   // ===== AP Mode State =====
   bool isAPMode = false;
   bool apEnabled = false;
+  bool autoAPEnabled = true; // Default to true per requirements
   String apSSID;
   String apPassword = DEFAULT_AP_PASSWORD;
 
@@ -214,6 +215,7 @@ private:
 #define apEnabled appState.apEnabled
 #define apSSID appState.apSSID
 #define apPassword appState.apPassword
+#define autoAPEnabled appState.autoAPEnabled
 
 // WiFi Connection State (Async)
 #define wifiConnecting appState.wifiConnecting

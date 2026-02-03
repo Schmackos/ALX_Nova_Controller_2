@@ -18,6 +18,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`b26a3bb`)
 - [2026-02-03] Update RELEASE_NOTES.md to reflect enhancements in WiFi management, including automatic reconnection, improved network removal experience, and fixed API authentication issues. Co-authored by Claude Sonnet. (`c3486d0`)
 
 ## New Features
+- [2026-02-03] feat: Implement comprehensive WiFi management with AP/STA modes, static IP, multi-network persistence, and introduce new core application modules. (`bb6dad5`)
 - [2026-02-03] feat: Enhance WiFi management with automatic reconnection and improved network removal experience
 
 - Introduced an intelligent WiFi reconnection system that automatically manages disconnections and reconnects without user intervention.

@@ -19,11 +19,12 @@
 // ===== Settings Persistence =====
 
 bool loadSettings() {
-  if (!LittleFS.exists("/settings.txt")) {
-    return false;
-  }
-  File file = LittleFS.open("/settings.txt", "r");
-  if (!file) {
+  // Use create=true to avoid "no permits for creation" error log if file is
+  // missing
+  File file = LittleFS.open("/settings.txt", "r", true);
+  if (!file || file.size() == 0) {
+    if (file)
+      file.close();
     return false;
   }
 
@@ -78,6 +79,15 @@ bool loadSettings() {
     }
   }
 
+  String line7 = file.readStringUntil('\n');
+  if (line7.length() > 0) {
+    line7.trim();
+    autoAPEnabled = (line7.toInt() != 0);
+  } else {
+    // Default to true if not present (backward compatibility)
+    autoAPEnabled = true;
+  }
+
   return true;
 }
 
@@ -94,6 +104,7 @@ void saveSettings() {
   file.println(nightMode ? "1" : "0");
   file.println(enableCertValidation ? "1" : "0");
   file.println(hardwareStatsInterval);
+  file.println(autoAPEnabled ? "1" : "0");
   file.close();
   DebugOut.println("Settings saved to LittleFS");
 }
@@ -178,6 +189,7 @@ void handleSettingsGet() {
   doc["dstOffset"] = dstOffset;
   doc["nightMode"] = nightMode;
   doc["enableCertValidation"] = enableCertValidation;
+  doc["autoAPEnabled"] = autoAPEnabled;
   doc["hardwareStatsInterval"] =
       hardwareStatsInterval / 1000; // Send as seconds
 
@@ -267,6 +279,15 @@ void handleSettingsUpdate() {
     }
   }
 
+  if (doc["autoAPEnabled"].is<bool>()) {
+    bool newAutoAP = doc["autoAPEnabled"].as<bool>();
+    if (newAutoAP != autoAPEnabled) {
+      autoAPEnabled = newAutoAP;
+      settingsChanged = true;
+      DebugOut.printf("Auto AP %s\n", autoAPEnabled ? "enabled" : "disabled");
+    }
+  }
+
   if (settingsChanged) {
     saveSettings();
   }
@@ -277,7 +298,9 @@ void handleSettingsUpdate() {
   resp["timezoneOffset"] = timezoneOffset;
   resp["dstOffset"] = dstOffset;
   resp["nightMode"] = nightMode;
+  resp["nightMode"] = nightMode;
   resp["enableCertValidation"] = enableCertValidation;
+  resp["autoAPEnabled"] = autoAPEnabled;
   resp["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
   String json;
   serializeJson(resp, json);
@@ -306,6 +329,7 @@ void handleSettingsExport() {
   doc["accessPoint"]["enabled"] = apEnabled;
   doc["accessPoint"]["ssid"] = apSSID;
   doc["accessPoint"]["password"] = apPassword;
+  doc["accessPoint"]["autoAPEnabled"] = autoAPEnabled;
 
   // General settings
   doc["settings"]["autoUpdateEnabled"] = autoUpdateEnabled;
@@ -427,6 +451,10 @@ void handleSettingsImport() {
     if (doc["accessPoint"]["password"].is<String>()) {
       apPassword = doc["accessPoint"]["password"].as<String>();
       DebugOut.println("AP password imported");
+    }
+    if (doc["accessPoint"]["autoAPEnabled"].is<bool>()) {
+      autoAPEnabled = doc["accessPoint"]["autoAPEnabled"].as<bool>();
+      DebugOut.printf("Auto AP: %s\n", autoAPEnabled ? "enabled" : "disabled");
     }
   }
 
