@@ -18,6 +18,7 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`b26a3bb`)
 - [2026-02-03] Update RELEASE_NOTES.md to reflect enhancements in WiFi management, including automatic reconnection, improved network removal experience, and fixed API authentication issues. Co-authored by Claude Sonnet. (`c3486d0`)
 
 ## New Features
+- [2026-02-03] feat: Add initial web interface for ALX Audio Controller. (`30f03be`)
 - [2026-02-03] feat: Introduce centralized application state management and core modules for MQTT, settings, sensing, web, and WiFi. (`47f708a`)
 - [2026-02-03] feat: Implement comprehensive WiFi management with AP/STA modes, static IP, multi-network persistence, and introduce new core application modules. (`bb6dad5`)
 - [2026-02-03] feat: Enhance WiFi management with automatic reconnection and improved network removal experience
@@ -169,6 +170,53 @@ Improved the network removal experience with better user feedback and safety che
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 
 ## Bug Fixes
+- [2026-02-03] fix: Implement missing saveNetworkSettings() function for "Save Settings" button
+
+The "Save Settings" button in the "Connect to Network" section was calling a non-existent `saveNetworkSettings()` function, causing JavaScript errors when clicked.
+
+**What Was Fixed:**
+- Implemented complete `saveNetworkSettings()` function
+- Validates SSID and password are entered
+- Validates static IP configuration if enabled
+- Calls `/api/wifisave` endpoint (save without connecting)
+- Shows success/failure toast notifications
+- Clears form after successful save
+- Reloads saved networks list to show newly added network
+
+**Function Behavior:**
+- Does NOT connect to the network (unlike Connect button)
+- Does NOT show connection modal
+- Does NOT poll for connection status
+- Simply saves network to persistent storage
+- User can connect later from Network Configuration section
+
+**Files Modified:**
+- src/web_pages.cpp: Added saveNetworkSettings() function at line 3327
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
+- [2026-02-03] fix: Reduce console noise by adding handlers for common browser auto-requests
+
+Added explicit HTTP handlers for common browser automatic requests to reduce "request handler not found" error messages in the serial console.
+
+**Handlers Added:**
+- /manifest.json - PWA manifest file request
+- /robots.txt - Search engine crawler file
+- /sitemap.xml - Site map request
+- /apple-touch-icon.png - iOS home screen icon
+- /apple-touch-icon-precomposed.png - iOS legacy icon
+
+**Technical Details:**
+- All handlers return 404 Not Found (as these resources don't exist)
+- Prevents ESP32 WebServer library from logging errors for expected browser behavior
+- Doesn't affect functionality, just reduces verbose logging
+- onNotFound handler still catches any other unknown requests
+
+**Files Modified:**
+- src/main.cpp: Added explicit handlers for browser auto-requests
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+
 - [2026-02-03] fix: WiFi scan authentication error - Add automatic credentials to all API calls
 
 Fixed "Session NOT FOUND in active list" and "Unauthorized access attempt to /api/wifiscan" errors by enhancing the `apiFetch()` wrapper to automatically include session credentials with all API requests.

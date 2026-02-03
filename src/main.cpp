@@ -239,6 +239,18 @@ void setup() {
   server.on("/favicon.ico", HTTP_GET,
             []() { server.send(404, "text/plain", "Not Found"); });
 
+  // Common browser auto-requests (reduce console noise)
+  server.on("/manifest.json", HTTP_GET,
+            []() { server.send(404, "text/plain", "Not Found"); });
+  server.on("/robots.txt", HTTP_GET,
+            []() { server.send(404, "text/plain", "Not Found"); });
+  server.on("/sitemap.xml", HTTP_GET,
+            []() { server.send(404, "text/plain", "Not Found"); });
+  server.on("/apple-touch-icon.png", HTTP_GET,
+            []() { server.send(404, "text/plain", "Not Found"); });
+  server.on("/apple-touch-icon-precomposed.png", HTTP_GET,
+            []() { server.send(404, "text/plain", "Not Found"); });
+
   // Android/Chrome captive portal check
   server.on("/generate_204", HTTP_GET, []() {
     server.sendHeader("Location", "/", true);

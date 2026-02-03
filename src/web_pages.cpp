@@ -3324,9 +3324,89 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .catch(err => updateWiFiConnectionStatus('error', 'Network error: ' + err.message));
         }
 
-        // ... (saveNetworkSettings and pollWiFiConnection remain unchanged) ...
+        function saveNetworkSettings(event) {
+            event.preventDefault();
+            const ssid = document.getElementById('wifiSSID').value;
+            const password = document.getElementById('wifiPassword').value;
+            const useStaticIP = document.getElementById('useStaticIP').checked;
 
-        // Replaced showWiFiConnectionModal with showWiFiModal
+            if (!ssid) {
+                showToast('Please enter network SSID', 'error');
+                return;
+            }
+
+            if (!password) {
+                showToast('Please enter network password', 'error');
+                return;
+            }
+
+            // Build request body
+            const requestBody = { ssid, password, useStaticIP };
+
+            // Add static IP configuration if enabled
+            if (useStaticIP) {
+                requestBody.staticIP = document.getElementById('staticIP').value;
+                requestBody.subnet = document.getElementById('subnet').value;
+                requestBody.gateway = document.getElementById('gateway').value;
+                requestBody.dns1 = document.getElementById('dns1').value;
+                requestBody.dns2 = document.getElementById('dns2').value;
+
+                // Validate IP addresses
+                if (!isValidIP(requestBody.staticIP)) {
+                    showToast('Invalid IPv4 address', 'error');
+                    return;
+                }
+                if (!isValidIP(requestBody.subnet)) {
+                    showToast('Invalid network mask', 'error');
+                    return;
+                }
+                if (!isValidIP(requestBody.gateway)) {
+                    showToast('Invalid gateway address', 'error');
+                    return;
+                }
+                if (requestBody.dns1 && !isValidIP(requestBody.dns1)) {
+                    showToast('Invalid primary DNS address', 'error');
+                    return;
+                }
+                if (requestBody.dns2 && !isValidIP(requestBody.dns2)) {
+                    showToast('Invalid secondary DNS address', 'error');
+                    return;
+                }
+            }
+
+            // Call save-only endpoint
+            apiFetch('/api/wifisave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Network saved successfully', 'success');
+
+                    // Clear the form
+                    document.getElementById('wifiSSID').value = '';
+                    document.getElementById('wifiPassword').value = '';
+                    document.getElementById('useStaticIP').checked = false;
+                    toggleStaticIPFields(); // Hide static IP fields
+
+                    // Clear static IP fields
+                    document.getElementById('staticIP').value = '';
+                    document.getElementById('subnet').value = '255.255.255.0';
+                    document.getElementById('gateway').value = '';
+                    document.getElementById('dns1').value = '';
+                    document.getElementById('dns2').value = '';
+
+                    // Reload saved networks list
+                    loadSavedNetworks();
+                } else {
+                    showToast(data.message || 'Failed to save network', 'error');
+                }
+            })
+            .catch(err => showToast('Network error: ' + err.message, 'error'));
+        }
+
         function showWiFiModal(ssid) {
             // Remove existing modal if any
             const existing = document.getElementById('wifiConnectionModal');
