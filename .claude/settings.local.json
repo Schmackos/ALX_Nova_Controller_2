@@ -35,7 +35,19 @@
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run watch 21609459881)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run view 21609459881)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" release list --limit 3)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(git restore:*)",
+      "Bash(git tag:*)",
+      "Bash(pio device:*)",
+      "Bash(powershell -Command \"[System.IO.Ports.SerialPort]::getportnames\\(\\)\")",
+      "Bash(cmd.exe /c \"powershell -Command \"\"[System.IO.Ports.SerialPort]::getportnames\\(\\)\"\"\")",
+      "Bash(cmd.exe:*)",
+      "Bash(for port in COM{4..10})",
+      "Bash(do echo \"Trying $port...\")",
+      "Bash(break)",
+      "Bash(done)",
+      "Bash(python:*)",
+      "Bash(grep:*)"
     ]
   }
 }

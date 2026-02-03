@@ -12,6 +12,13 @@ void connectToWiFi(const char *ssid, const char *password, bool useStaticIP = fa
                    const char *gateway = "", const char *dns1 = "",
                    const char *dns2 = "");
 void updateWiFiConnection();
+bool configureStaticIP(const char *staticIP, const char *subnet,
+                       const char *gateway, const char *dns1 = "",
+                       const char *dns2 = ""); // Helper for static IP config
+
+// ===== WiFi Event Handler & Reconnection =====
+void initWiFiEventHandler(); // Initialize WiFi event handler (call in setup)
+void checkWiFiConnection();  // Check and handle reconnection (call in loop)
 
 // ===== WiFi Credentials Persistence =====
 bool loadWiFiCredentials(String &ssid, String &password);

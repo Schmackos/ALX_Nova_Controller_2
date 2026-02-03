@@ -2681,9 +2681,28 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // Global fetch wrapper for API calls (handles 401 Unauthorized)
         async function apiFetch(url, options = {}) {
+            // Auto-include credentials and session header for all API calls
+            const sessionId = getSessionIdFromCookie();
+            const defaultOptions = {
+                credentials: 'include',
+                headers: {
+                    'X-Session-ID': sessionId
+                }
+            };
+
+            // Merge options with defaults, ensuring headers are properly combined
+            const mergedOptions = {
+                ...defaultOptions,
+                ...options,
+                headers: {
+                    ...defaultOptions.headers,
+                    ...(options.headers || {})
+                }
+            };
+
             try {
-                const response = await fetch(url, options);
-                
+                const response = await fetch(url, mergedOptions);
+
                 if (response.status === 401) {
                     console.warn(`Unauthorized (401) on ${url}. Redirecting...`);
                     // Try to parse JSON to see if there's a redirect provided
@@ -2700,7 +2719,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     // Return a never-resolving promise to stop further .then() calls
                     return new Promise(() => {});
                 }
-                
+
                 return response;
             } catch (error) {
                 console.error(`API Fetch Error [${url}]:`, error);
@@ -2823,6 +2842,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== Connection Status =====
         let currentWifiConnected = false;
+        let currentWifiSSID = '';
         let currentMqttConnected = null;
         let currentAmpState = false;
 
@@ -2885,7 +2905,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const statusBox = document.getElementById('wifiStatusBox');
             const apToggle = document.getElementById('apToggle');
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');
-            
+
             // Store AP SSID for pre-filling the config modal
             if (data.apSSID) {
                 currentAPSSID = data.apSSID;
@@ -2893,9 +2913,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 // Fallback to serial number if apSSID not provided
                 currentAPSSID = data.serialNumber;
             }
-            
+
+            // Track current WiFi connection state and SSID
+            currentWifiConnected = data.connected || false;
+            currentWifiSSID = data.connected ? (data.ssid || '') : '';
+
             let html = '';
-            
+
             // Client (STA) Status
             if (data.connected) {
                 const ipType = data.usingStaticIP ? 'Static IP' : 'DHCP';
@@ -3603,14 +3627,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         // Load and display saved networks
         function loadSavedNetworks() {
             const configSelect = document.getElementById('configNetworkSelect');
-            const sessionId = getSessionIdFromCookie();
 
-            apiFetch('/api/wifilist', {
-                credentials: 'include',
-                headers: {
-                    'X-Session-ID': sessionId
-                }
-            })
+            apiFetch('/api/wifilist')
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.networks) { // Check success flag specifically
@@ -3777,13 +3795,69 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 return;
             }
 
-            if (!confirm(`Are you sure you want to remove "${network.ssid}"?`)) {
-                return;
+            // Check if this is the currently connected network
+            const isCurrentNetwork = currentWifiConnected && currentWifiSSID === network.ssid;
+
+            if (isCurrentNetwork) {
+                // Show warning modal for currently connected network
+                showRemoveCurrentNetworkModal(network, selectedIndex);
+            } else {
+                // Show simple confirmation for other networks
+                if (!confirm(`Are you sure you want to remove "${network.ssid}"?`)) {
+                    return;
+                }
+                performNetworkRemoval(selectedIndex, false);
             }
+        }
 
-            // Store the current connection state
-            const wasConnected = wifiConnected;
+        function showRemoveCurrentNetworkModal(network, selectedIndex) {
+            const modal = document.createElement('div');
+            modal.id = 'removeNetworkModal';
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = `
+                <div class="modal">
+                    <div class="modal-title">⚠️ Remove Current Network</div>
+                    <div class="info-box" style="background: var(--error-bg); border-color: var(--error);">
+                        <div style="padding: 20px;">
+                            <div style="font-size: 16px; margin-bottom: 16px; font-weight: bold; color: var(--error);">
+                                Warning: You are currently connected to this network
+                            </div>
+                            <div style="margin-bottom: 12px;">
+                                Network: <strong>${network.ssid}</strong>
+                            </div>
+                            <div style="margin-bottom: 16px; line-height: 1.5;">
+                                If you remove this network, the device will:
+                                <ul style="margin: 8px 0; padding-left: 20px;">
+                                    <li>Disconnect from this network</li>
+                                    <li>Try to connect to other saved networks</li>
+                                    <li>Start AP Mode if no networks connect successfully</li>
+                                </ul>
+                            </div>
+                            <div style="font-weight: bold;">
+                                Do you want to continue?
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="secondary" onclick="closeRemoveNetworkModal()">Cancel</button>
+                        <button class="primary" style="background: var(--error);" onclick="confirmNetworkRemoval(${selectedIndex})">Remove Network</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
 
+        function closeRemoveNetworkModal() {
+            const modal = document.getElementById('removeNetworkModal');
+            if (modal) modal.remove();
+        }
+
+        function confirmNetworkRemoval(selectedIndex) {
+            closeRemoveNetworkModal();
+            performNetworkRemoval(selectedIndex, true);
+        }
+
+        function performNetworkRemoval(selectedIndex, wasCurrentNetwork) {
             apiFetch('/api/wifiremove', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -3793,20 +3867,50 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .then(data => {
                 if (data.success) {
                     showToast('Network removed successfully', 'success');
-                    loadSavedNetworks(); // Reload the list
-                    // Reset the select dropdown
-                    select.value = '';
-                    document.getElementById('networkConfigFields').style.display = 'none';
 
-                    // If we were connected, monitor for AP mode activation
-                    if (wasConnected) {
+                    // Reload the network list
+                    apiFetch('/api/wifilist')
+                    .then(res => res.json())
+                    .then(listData => {
+                        if (listData.success && listData.networks) {
+                            // Store networks data globally
+                            savedNetworksData = listData.networks;
+
+                            const configSelect = document.getElementById('configNetworkSelect');
+                            if (listData.networks.length > 0) {
+                                // Populate config network select dropdown
+                                configSelect.innerHTML = '<option value="">-- Select a saved network --</option>';
+                                listData.networks.forEach(net => {
+                                    const option = document.createElement('option');
+                                    option.value = net.index;
+                                    option.textContent = net.ssid + (net.useStaticIP ? ' (Static IP)' : '');
+                                    configSelect.appendChild(option);
+                                });
+                            } else {
+                                configSelect.innerHTML = '<option value="">-- No saved networks --</option>';
+                            }
+
+                            // Reset the select dropdown and hide fields
+                            configSelect.value = '';
+                            document.getElementById('networkConfigFields').style.display = 'none';
+                        }
+                    })
+                    .catch(err => {
+                        showToast('Failed to reload network list', 'error');
+                    });
+
+                    // If this was the current network, monitor for reconnection or AP mode
+                    if (wasCurrentNetwork) {
+                        showToast('Attempting to connect to other saved networks...', 'info');
                         monitorNetworkRemoval();
                     }
                 } else {
                     showToast(data.message || 'Failed to remove network', 'error');
                 }
             })
-            .catch(err => showToast('Network error: ' + err.message, 'error'));
+            .catch(err => {
+                showToast('Network error: ' + err.message, 'error');
+            });
         }
 
         function monitorNetworkRemoval() {

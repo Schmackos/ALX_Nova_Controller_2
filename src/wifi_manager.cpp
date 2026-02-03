@@ -23,6 +23,77 @@ extern void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 // External HTML page reference
 extern const char apHtmlPage[] PROGMEM;
 
+// WiFi reconnection state
+static bool wifiDisconnected = false;
+static unsigned long lastDisconnectTime = 0;
+static unsigned long lastReconnectAttempt = 0;
+static const unsigned long RECONNECT_DELAY = 5000; // Wait 5 seconds before reconnecting
+static unsigned long lastDisconnectWarning = 0;
+static const unsigned long WARNING_THROTTLE = 30000; // Only print warning every 30 seconds
+
+// WiFi Event Handler
+void onWiFiEvent(WiFiEvent_t event) {
+  switch (event) {
+    case SYSTEM_EVENT_STA_DISCONNECTED:
+      if (millis() - lastDisconnectWarning > WARNING_THROTTLE) {
+        DebugOut.println("⚠️  WiFi disconnected from access point");
+        lastDisconnectWarning = millis();
+      }
+      wifiDisconnected = true;
+      lastDisconnectTime = millis();
+      sendWiFiStatus(); // Notify clients of disconnection
+      break;
+
+    case SYSTEM_EVENT_STA_CONNECTED:
+      DebugOut.println("✓ WiFi connected to access point");
+      wifiDisconnected = false;
+      break;
+
+    case SYSTEM_EVENT_STA_GOT_IP:
+      DebugOut.printf("✓ WiFi IP address: %s\n", WiFi.localIP().toString().c_str());
+      wifiDisconnected = false;
+      sendWiFiStatus(); // Notify clients of successful connection
+      break;
+
+    default:
+      break;
+  }
+}
+
+// Initialize WiFi event handler (call this in setup)
+void initWiFiEventHandler() {
+  WiFi.onEvent(onWiFiEvent);
+  DebugOut.println("WiFi event handler initialized");
+}
+
+// Check WiFi connection and attempt reconnection if needed
+void checkWiFiConnection() {
+  // Only try to reconnect if we're in STA mode and disconnected
+  if (wifiDisconnected && WiFi.getMode() != WIFI_AP &&
+      !wifiConnecting && millis() - lastReconnectAttempt > RECONNECT_DELAY) {
+
+    lastReconnectAttempt = millis();
+
+    // Check if we've been disconnected for more than 10 seconds
+    if (millis() - lastDisconnectTime > 10000) {
+      DebugOut.println("Attempting to reconnect to saved networks...");
+
+      // Try to connect to stored networks
+      if (connectToStoredNetworks()) {
+        DebugOut.println("Reconnection successful!");
+        wifiDisconnected = false;
+      } else {
+        // If no networks are available and we're not already in AP mode
+        if (!isAPMode) {
+          DebugOut.println("No saved networks available. Starting AP mode...");
+          startAccessPoint();
+          sendWiFiStatus();
+        }
+      }
+    }
+  }
+}
+
 // ===== WiFi Core Functions =====
 
 void startAccessPoint() {
@@ -58,34 +129,64 @@ void stopAccessPoint() {
   }
 }
 
+// Helper function to configure static IP
+bool configureStaticIP(const char *staticIP, const char *subnet,
+                       const char *gateway, const char *dns1,
+                       const char *dns2) {
+  if (!staticIP || strlen(staticIP) == 0) {
+    DebugOut.println("No static IP provided");
+    return false;
+  }
+
+  IPAddress ip, gw, sn, d1, d2;
+
+  if (!ip.fromString(staticIP)) {
+    DebugOut.println("Invalid static IP address format");
+    return false;
+  }
+
+  if (!gw.fromString(gateway)) {
+    DebugOut.println("Invalid gateway address format");
+    return false;
+  }
+
+  if (!sn.fromString(subnet)) {
+    DebugOut.println("Invalid subnet mask format");
+    return false;
+  }
+
+  // DNS servers are optional
+  if (dns1 && strlen(dns1) > 0) {
+    if (!d1.fromString(dns1)) {
+      DebugOut.println("Invalid DNS1 address format");
+      return false;
+    }
+  }
+
+  if (dns2 && strlen(dns2) > 0) {
+    if (!d2.fromString(dns2)) {
+      DebugOut.println("Invalid DNS2 address format");
+      return false;
+    }
+  }
+
+  if (!WiFi.config(ip, gw, sn, d1, d2)) {
+    DebugOut.println("Failed to configure static IP");
+    return false;
+  }
+
+  DebugOut.printf("Static IP configured: %s\n", staticIP);
+  return true;
+}
+
 void connectToWiFi(const char *ssid, const char *password, bool useStaticIP,
                    const char *staticIP, const char *subnet,
                    const char *gateway, const char *dns1, const char *dns2) {
   WiFi.mode(WIFI_STA);
 
   // Configure static IP if enabled
-  if (useStaticIP && strlen(staticIP) > 0) {
-    IPAddress ip, gw, sn, d1, d2;
-
-    if (ip.fromString(staticIP) && gw.fromString(gateway) &&
-        sn.fromString(subnet)) {
-      // Parse DNS servers (optional)
-      if (strlen(dns1) > 0) {
-        d1.fromString(dns1);
-      }
-      if (strlen(dns2) > 0) {
-        d2.fromString(dns2);
-      }
-
-      // Apply static IP configuration
-      if (WiFi.config(ip, gw, sn, d1, d2)) {
-        DebugOut.printf("Static IP configured: %s\n", staticIP);
-      } else {
-        DebugOut.println("Failed to configure static IP");
-      }
-    } else {
-      DebugOut.println("Invalid IP address format");
-    }
+  if (useStaticIP) {
+    configureStaticIP(staticIP, subnet, gateway, dns1, dns2);
   }
 
   WiFi.begin(ssid, password);
@@ -300,10 +401,17 @@ bool removeWiFiNetwork(int index) {
 
   int count = prefs.getUChar("count", 0);
 
+  DebugOut.printf("removeWiFiNetwork called. Index: %d, Current count: %d\n", index, count);
+
   if (index < 0 || index >= count) {
+    DebugOut.printf("Invalid index %d for count %d\n", index, count);
     prefs.end();
     return false;
   }
+
+  // Get SSID being removed for debug
+  String removingSSID = prefs.getString(("s" + String(index)).c_str(), "");
+  DebugOut.printf("Removing network at index %d: %s\n", index, removingSSID.c_str());
 
   // Shift all networks after this index down by one
   for (int i = index; i < count - 1; i++) {
@@ -316,6 +424,8 @@ bool removeWiFiNetwork(int index) {
     String dns1 = prefs.getString(("dns1_" + String(i + 1)).c_str(), "");
     String dns2 = prefs.getString(("dns2_" + String(i + 1)).c_str(), "");
 
+    DebugOut.printf("  Shifting index %d -> %d: %s\n", i + 1, i, ssid.c_str());
+
     prefs.putString(("s" + String(i)).c_str(), ssid);
     prefs.putString(("p" + String(i)).c_str(), pass);
     prefs.putBool(("static" + String(i)).c_str(), useStatic);
@@ -327,6 +437,7 @@ bool removeWiFiNetwork(int index) {
   }
 
   // Remove the last entry
+  DebugOut.printf("Removing last entry at index %d\n", count - 1);
   prefs.remove(("s" + String(count - 1)).c_str());
   prefs.remove(("p" + String(count - 1)).c_str());
   prefs.remove(("static" + String(count - 1)).c_str());
@@ -338,7 +449,7 @@ bool removeWiFiNetwork(int index) {
   prefs.putUChar("count", count - 1);
 
   prefs.end();
-  DebugOut.printf("Removed network at index %d\n", index);
+  DebugOut.printf("Successfully removed network. New count: %d\n", count - 1);
   return true;
 }
 
@@ -379,18 +490,13 @@ bool connectToStoredNetworks() {
 
     // Configure static IP if enabled
     if (useStatic && ip.length() > 0) {
-      IPAddress ipAddr, gwAddr, snAddr, dns1Addr, dns2Addr;
-      if (ipAddr.fromString(ip) && gwAddr.fromString(gw) &&
-          snAddr.fromString(subnet)) {
-        if (dns1.length() > 0)
-          dns1Addr.fromString(dns1);
-        if (dns2.length() > 0)
-          dns2Addr.fromString(dns2);
-
-        WiFi.config(ipAddr, gwAddr, snAddr, dns1Addr, dns2Addr);
+      if (configureStaticIP(ip.c_str(), subnet.c_str(), gw.c_str(),
+                            dns1.c_str(), dns2.c_str())) {
         DebugOut.printf("  Using Static IP: %s\n", ip.c_str());
       }
     } else {
+      // Reset to DHCP
+      WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
       DebugOut.println("  Using DHCP");
     }
 
@@ -811,23 +917,34 @@ void handleWiFiConfig() {
   wifiConnectSuccess = false;
   wifiNewIP = "";
 
-  WiFi.mode(WIFI_AP_STA);
+  // First set to STA mode for clean connection
+  WiFi.mode(WIFI_STA);
 
-  // Configure static IP if enabled
+  // Configure static IP if enabled (must be done in STA mode)
   if (useStaticIP && staticIP.length() > 0) {
-    IPAddress ip, gw, sn, d1, d2;
-    if (ip.fromString(staticIP) && gw.fromString(gateway) &&
-        sn.fromString(subnet)) {
-      if (dns1.length() > 0)
-        d1.fromString(dns1);
-      if (dns2.length() > 0)
-        d2.fromString(dns2);
-      WiFi.config(ip, gw, sn, d1, d2);
-      DebugOut.printf("Static IP configured: %s\n", staticIP.c_str());
+    if (!configureStaticIP(staticIP.c_str(), subnet.c_str(), gateway.c_str(),
+                           dns1.c_str(), dns2.c_str())) {
+      server.send(400, "application/json",
+                  "{\"success\": false, \"message\": \"Failed to configure static IP\"}");
+      return;
     }
+  } else {
+    // Reset to DHCP if not using static IP
+    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
   }
 
   WiFi.begin(ssid.c_str(), password.c_str());
+
+  // Enable AP mode after connection initiated if needed
+  delay(100); // Brief delay to allow connection to start
+  if (apEnabled) {
+    WiFi.mode(WIFI_AP_STA);
+    if (!isAPMode) {
+      WiFi.softAP(apSSID.c_str(), apPassword);
+      dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+      isAPMode = true;
+    }
+  }
 
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Connection initiated\"}");
@@ -898,12 +1015,31 @@ void handleWiFiStatus() {
 void handleWiFiScan() {
   DebugOut.println("Scanning for WiFi networks...");
 
+  // Ensure WiFi is in proper mode for scanning
+  wifi_mode_t wifiMode = WiFi.getMode();
+  if (wifiMode == WIFI_MODE_NULL) {
+    // If WiFi is off, set to STA mode
+    WiFi.mode(WIFI_STA);
+  } else if (wifiMode == WIFI_MODE_AP) {
+    // If only AP mode, switch to AP+STA for scanning
+    WiFi.mode(WIFI_AP_STA);
+  }
+  // For WIFI_MODE_STA or WIFI_MODE_APSTA, no change needed
+
   // Start async scan if not already scanning
   int n = WiFi.scanComplete();
 
   if (n == WIFI_SCAN_FAILED) {
+    // Clean up any previous failed scan
+    WiFi.scanDelete();
     // Start a new scan
-    WiFi.scanNetworks(true); // Async scan
+    int result = WiFi.scanNetworks(true); // Async scan
+    if (result == WIFI_SCAN_FAILED) {
+      DebugOut.println("Failed to start WiFi scan");
+      server.send(500, "application/json",
+                  "{\"scanning\": false, \"networks\": [], \"error\": \"Failed to start scan\"}");
+      return;
+    }
     server.send(200, "application/json",
                 "{\"scanning\": true, \"networks\": []}");
     return;

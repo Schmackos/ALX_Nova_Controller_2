@@ -3,6 +3,7 @@
 ## Version 1.4.1
 
 ## Technical Details
+- [2026-02-03] Update RELEASE_NOTES.md to include technical details about enhancements in WiFi management, highlighting automatic reconnection, improved network removal experience, and resolved API authentication issues. Co-authored by Claude Sonnet. (`978bc44`)
 - [2026-02-03] Update RELEASE_NOTES.md to reflect enhancements in WiFi management, including automatic reconnection, improved network removal experience, and fixed API authentication issues. Co-authored by Claude Sonnet. (`c3486d0`)
 
 ## New Features

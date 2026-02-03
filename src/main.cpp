@@ -412,6 +412,9 @@ void setup() {
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
 
+  // Initialize WiFi event handler for automatic reconnection
+  initWiFiEventHandler();
+
   // Migrate old WiFi credentials to new multi-WiFi system (one-time operation)
   migrateWiFiCredentials();
 
@@ -444,6 +447,7 @@ void loop() {
   webSocket.loop();
   mqttLoop();
   updateWiFiConnection();
+  checkWiFiConnection(); // Monitor WiFi and auto-reconnect if disconnected
 
   // Check WebSocket auth timeouts
   for (int i = 0; i < MAX_WS_CLIENTS; i++) {
