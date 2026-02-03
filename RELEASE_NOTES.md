@@ -10,6 +10,14 @@
 - Add missing New Features section to version 1.2.11
 - Document firmware details table enhancement with commit count
 
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`5c86001`)
+- [2026-02-03] docs: Document dual-source release notes feature and fix template structure
+
+- Add documentation for complete commit list in releases
+- Fix duplicate Technical Details section in RELEASE_NOTES.md
+- Add missing New Features section to version 1.2.11
+- Document firmware details table enhancement with commit count
+
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`39e4e07`)
 
 ## New Features
@@ -19,7 +27,13 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`39e4e07`)
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-03] fix: Correct release workflow to fetch tags and fix regex syntax errors
+
+- Add fetch-depth: 0 to checkout step to fetch all tags
+- Fix regex patterns to use proper OR syntax (feat|feature) instead of invalid bracket expressions
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`6d05d73`)
+
 
 ## Technical Details
 - [2026-02-03] chore: Enhance release notes generation and update formatting in release.yml (`fa98455`)
