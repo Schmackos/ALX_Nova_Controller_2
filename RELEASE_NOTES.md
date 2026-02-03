@@ -34,6 +34,38 @@ Major improvements to the Debug tab UI/UX:
 - src/config.h: Version bump to 1.4.0
 - RELEASE_NOTES.md: Updated with v1.4.0 release notes
 
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`c22c551`)
+- [2026-02-03] feat: Redesign Debug tab with integrated graphs and compact layout
+
+Major improvements to the Debug tab UI/UX:
+
+**New Features:**
+- CPU and Memory graphs now embedded directly in their respective cards
+- Added Y-axis labels (0%, 25%, 50%, 75%, 100%) to all graphs
+- Added X-axis time labels (-60s, -30s, now) for temporal context
+- PSRAM usage graph displays automatically when PSRAM is available
+- Reset Reason now shown in WiFi & System card
+- Window resize handler for responsive graph redrawing
+
+**Layout Improvements:**
+- Compact 2-column grid layout for stats (single column on mobile)
+- Removed collapsible Performance History section (graphs always visible)
+- More efficient use of screen space
+- Reduced padding and font sizes for denser information display
+
+**Technical Changes:**
+- Enhanced graph rendering functions with proper margins for axis labels
+- Added psramPercent tracking to history data structure
+- Updated WebSocket handler to include reset reason in hardware stats
+- Graph dimensions: 140px height with 35px left margin, 20px bottom margin
+- Removed toggleHistorySection() function and historyCollapsed variable
+
+**Files Modified:**
+- src/web_pages.cpp: Major restructuring of Debug tab HTML, CSS, and JavaScript
+- src/websocket_handler.cpp: Added reset reason to hardware stats payload
+- src/config.h: Version bump to 1.4.0
+- RELEASE_NOTES.md: Updated with v1.4.0 release notes
+
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com> (`d2dda04`)
 - [2026-02-03] feat: Redesign Debug tab with integrated graphs and compact layout
 
