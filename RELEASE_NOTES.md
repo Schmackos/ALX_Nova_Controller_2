@@ -75,6 +75,7 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-04] test: add new unit tests for button, auth, websocket, and utilities, including necessary mock headers. (`a1754b2`)
 - [2026-02-03] Enhance WiFi connection handling with polling mechanism for network changes
 
 - Added a polling function to track WiFi connection attempts and detect network changes.
