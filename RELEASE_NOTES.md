@@ -108,6 +108,11 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-04] chore: Update RELEASE_NOTES.md and enhance WiFi manager unit tests
+
+- Added new entry in RELEASE_NOTES.md for the implementation of WiFi manager unit tests using mock classes.
+- Updated WiFi class declaration from extern to static in WiFi.h for better encapsulation.
+- Enhanced test_wifi_manager.cpp with additional tests for password management, static IP configurations, and network removal edge cases. (`2b9c36b`)
 - [2026-02-04] chore: Update platformio.ini and RELEASE_NOTES.md for test configuration and documentation
 
 - Added test_ignore configuration to platformio.ini to exclude all unit tests for ESP32.
