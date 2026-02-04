@@ -60,6 +60,32 @@ public:
         return std::string(buffer);
     }
 
+    // Parse IP address from string (e.g., "192.168.1.1")
+    bool fromString(const char* address) {
+        if (!address) return false;
+
+        int a, b, c, d;
+        if (sscanf(address, "%d.%d.%d.%d", &a, &b, &c, &d) != 4) {
+            return false;
+        }
+
+        // Validate range (0-255)
+        if (a < 0 || a > 255 || b < 0 || b > 255 ||
+            c < 0 || c > 255 || d < 0 || d > 255) {
+            return false;
+        }
+
+        parts[0] = static_cast<uint8_t>(a);
+        parts[1] = static_cast<uint8_t>(b);
+        parts[2] = static_cast<uint8_t>(c);
+        parts[3] = static_cast<uint8_t>(d);
+        return true;
+    }
+
+    bool fromString(const std::string& address) {
+        return fromString(address.c_str());
+    }
+
     // Check if valid (non-zero)
     bool isValid() const {
         return _address != 0 || (parts[0] != 0 || parts[1] != 0 ||

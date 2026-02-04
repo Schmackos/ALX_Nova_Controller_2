@@ -49,7 +49,9 @@
       "Bash(python:*)",
       "Bash(grep:*)",
       "Bash(git reset:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(git fetch:*)",
+      "Bash(tee:*)"
     ]
   }
 }

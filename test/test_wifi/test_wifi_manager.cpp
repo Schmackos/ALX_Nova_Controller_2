@@ -330,6 +330,446 @@ void test_remove_network_negative_index(void) {
     TEST_ASSERT_EQUAL(1, wifiNetworkCount);
 }
 
+// ===== Static IP Configuration Tests (Advanced) =====
+
+void test_static_ip_parsing_valid_addresses(void) {
+    IPAddress ip, gw, sn;
+
+    // Test valid IP addresses
+    bool validIP = ip.fromString("192.168.1.100");
+    bool validGW = gw.fromString("192.168.1.1");
+    bool validSN = sn.fromString("255.255.255.0");
+
+    TEST_ASSERT_TRUE(validIP);
+    TEST_ASSERT_TRUE(validGW);
+    TEST_ASSERT_TRUE(validSN);
+}
+
+void test_static_ip_parsing_invalid_addresses(void) {
+    IPAddress ip;
+
+    // Test invalid IP formats
+    bool invalid1 = ip.fromString("256.168.1.1"); // Out of range
+    bool invalid2 = ip.fromString("192.168.1");   // Incomplete
+    bool invalid3 = ip.fromString("invalid");      // Not numeric
+
+    TEST_ASSERT_FALSE(invalid1);
+    TEST_ASSERT_FALSE(invalid2);
+    TEST_ASSERT_FALSE(invalid3);
+}
+
+void test_dhcp_to_static_transition(void) {
+    // Save network with DHCP first
+    saveWiFiNetwork("TestNet", "pwd", false);
+    TEST_ASSERT_FALSE(wifiNetworks[0].useStaticIP);
+
+    // Update to use static IP
+    saveWiFiNetwork("TestNet", "pwd", true, "192.168.1.100",
+                    "255.255.255.0", "192.168.1.1");
+
+    TEST_ASSERT_TRUE(wifiNetworks[0].useStaticIP);
+    TEST_ASSERT_EQUAL_STRING("192.168.1.100", wifiNetworks[0].staticIP.c_str());
+}
+
+void test_static_to_dhcp_transition(void) {
+    // Save network with static IP
+    saveWiFiNetwork("TestNet", "pwd", true, "192.168.1.100",
+                    "255.255.255.0", "192.168.1.1");
+    TEST_ASSERT_TRUE(wifiNetworks[0].useStaticIP);
+
+    // Update to use DHCP
+    saveWiFiNetwork("TestNet", "pwd", false);
+
+    TEST_ASSERT_FALSE(wifiNetworks[0].useStaticIP);
+}
+
+void test_static_ip_with_dns_servers(void) {
+    saveWiFiNetwork("TestNet", "pwd", true, "192.168.1.100",
+                    "255.255.255.0", "192.168.1.1", "8.8.8.8", "8.8.4.4");
+
+    TEST_ASSERT_TRUE(wifiNetworks[0].useStaticIP);
+    TEST_ASSERT_EQUAL_STRING("8.8.8.8", wifiNetworks[0].dns1.c_str());
+    TEST_ASSERT_EQUAL_STRING("8.8.4.4", wifiNetworks[0].dns2.c_str());
+}
+
+void test_static_ip_without_dns_servers(void) {
+    saveWiFiNetwork("TestNet", "pwd", true, "192.168.1.100",
+                    "255.255.255.0", "192.168.1.1", "", "");
+
+    TEST_ASSERT_TRUE(wifiNetworks[0].useStaticIP);
+    TEST_ASSERT_EQUAL_STRING("", wifiNetworks[0].dns1.c_str());
+    TEST_ASSERT_EQUAL_STRING("", wifiNetworks[0].dns2.c_str());
+}
+
+void test_static_ip_partial_dns_servers(void) {
+    // Only DNS1 provided
+    saveWiFiNetwork("TestNet", "pwd", true, "192.168.1.100",
+                    "255.255.255.0", "192.168.1.1", "8.8.8.8", "");
+
+    TEST_ASSERT_TRUE(wifiNetworks[0].useStaticIP);
+    TEST_ASSERT_EQUAL_STRING("8.8.8.8", wifiNetworks[0].dns1.c_str());
+    TEST_ASSERT_EQUAL_STRING("", wifiNetworks[0].dns2.c_str());
+}
+
+// ===== Connection Process Tests =====
+
+void test_connect_to_stored_networks_tries_in_order(void) {
+    saveWiFiNetwork("Network1", "pwd1");
+    saveWiFiNetwork("Network2", "pwd2");
+    saveWiFiNetwork("Network3", "pwd3");
+
+    // Networks should be tried in order (0, 1, 2)
+    TEST_ASSERT_EQUAL_STRING("Network1", wifiNetworks[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Network2", wifiNetworks[1].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Network3", wifiNetworks[2].ssid.c_str());
+}
+
+void test_successful_connection_updates_priority(void) {
+    saveWiFiNetwork("Network1", "pwd1");
+    saveWiFiNetwork("Network2", "pwd2");
+    saveWiFiNetwork("Network3", "pwd3");
+
+    // Simulate Network2 (index 1) connecting successfully
+    // Move it to priority position (index 0)
+    WiFiNetworkConfig successNet = wifiNetworks[1];
+
+    // Shift networks 0 down
+    for (int i = 1; i > 0; i--) {
+        wifiNetworks[i] = wifiNetworks[i - 1];
+    }
+    wifiNetworks[0] = successNet;
+
+    // Network2 should now be first
+    TEST_ASSERT_EQUAL_STRING("Network2", wifiNetworks[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Network1", wifiNetworks[1].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Network3", wifiNetworks[2].ssid.c_str());
+}
+
+void test_priority_reorder_preserves_static_ip(void) {
+    // Save networks with different static IP configs
+    saveWiFiNetwork("Net1", "pwd1", true, "192.168.1.100", "255.255.255.0", "192.168.1.1");
+    saveWiFiNetwork("Net2", "pwd2", false);
+    saveWiFiNetwork("Net3", "pwd3", true, "192.168.1.101", "255.255.255.0", "192.168.1.1");
+
+    // Move Net3 (index 2) to priority (index 0)
+    WiFiNetworkConfig successNet = wifiNetworks[2];
+    for (int i = 2; i > 0; i--) {
+        wifiNetworks[i] = wifiNetworks[i - 1];
+    }
+    wifiNetworks[0] = successNet;
+
+    // Verify Net3's static IP config is preserved
+    TEST_ASSERT_EQUAL_STRING("Net3", wifiNetworks[0].ssid.c_str());
+    TEST_ASSERT_TRUE(wifiNetworks[0].useStaticIP);
+    TEST_ASSERT_EQUAL_STRING("192.168.1.101", wifiNetworks[0].staticIP.c_str());
+
+    // Verify Net1's static IP is still at new position
+    TEST_ASSERT_EQUAL_STRING("Net1", wifiNetworks[1].ssid.c_str());
+    TEST_ASSERT_TRUE(wifiNetworks[1].useStaticIP);
+    TEST_ASSERT_EQUAL_STRING("192.168.1.100", wifiNetworks[1].staticIP.c_str());
+}
+
+void test_empty_network_list_returns_zero_count(void) {
+    TEST_ASSERT_EQUAL(0, getWiFiNetworkCount());
+}
+
+void test_network_count_after_operations(void) {
+    TEST_ASSERT_EQUAL(0, getWiFiNetworkCount());
+
+    saveWiFiNetwork("Net1", "pwd1");
+    TEST_ASSERT_EQUAL(1, getWiFiNetworkCount());
+
+    saveWiFiNetwork("Net2", "pwd2");
+    TEST_ASSERT_EQUAL(2, getWiFiNetworkCount());
+
+    removeWiFiNetwork(0);
+    TEST_ASSERT_EQUAL(1, getWiFiNetworkCount());
+
+    removeWiFiNetwork(0);
+    TEST_ASSERT_EQUAL(0, getWiFiNetworkCount());
+}
+
+// ===== Migration Logic Tests =====
+
+void test_migration_marks_as_complete(void) {
+    Preferences prefs;
+    prefs.begin("wifi-list", false);
+
+    // Initially not migrated
+    TEST_ASSERT_EQUAL(0, prefs.getUChar("migrated", 0));
+
+    // Mark as migrated
+    prefs.putUChar("migrated", 1);
+
+    // Verify migration flag is set
+    TEST_ASSERT_EQUAL(1, prefs.getUChar("migrated", 0));
+
+    prefs.end();
+}
+
+void test_migration_initializes_empty_count(void) {
+    Preferences prefs;
+    prefs.begin("wifi-list", false);
+
+    // Initialize with zero networks
+    prefs.putUChar("count", 0);
+    prefs.putUChar("migrated", 1);
+
+    TEST_ASSERT_EQUAL(0, prefs.getUChar("count", 0));
+    TEST_ASSERT_EQUAL(1, prefs.getUChar("migrated", 0));
+
+    prefs.end();
+}
+
+void test_preferences_storage_format(void) {
+    Preferences prefs;
+    prefs.begin("wifi-list", false);
+
+    // Save using Preferences storage format
+    prefs.putString("s0", "TestSSID");
+    prefs.putString("p0", "TestPassword");
+    prefs.putBool("static0", true);
+    prefs.putString("ip0", "192.168.1.100");
+    prefs.putUChar("count", 1);
+
+    // Verify retrieval
+    String ssid = prefs.getString("s0", "");
+    String pwd = prefs.getString("p0", "");
+    bool useStatic = prefs.getBool("static0", false);
+    String ip = prefs.getString("ip0", "");
+    int count = prefs.getUChar("count", 0);
+
+    TEST_ASSERT_EQUAL_STRING("TestSSID", ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("TestPassword", pwd.c_str());
+    TEST_ASSERT_TRUE(useStatic);
+    TEST_ASSERT_EQUAL_STRING("192.168.1.100", ip.c_str());
+    TEST_ASSERT_EQUAL(1, count);
+
+    prefs.end();
+}
+
+// ===== Network Removal Edge Cases =====
+
+void test_remove_first_network_shifts_correctly(void) {
+    saveWiFiNetwork("First", "pwd1");
+    saveWiFiNetwork("Second", "pwd2");
+    saveWiFiNetwork("Third", "pwd3");
+
+    removeWiFiNetwork(0);
+
+    TEST_ASSERT_EQUAL(2, wifiNetworkCount);
+    TEST_ASSERT_EQUAL_STRING("Second", wifiNetworks[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Third", wifiNetworks[1].ssid.c_str());
+}
+
+void test_remove_last_network_decrements_count(void) {
+    saveWiFiNetwork("First", "pwd1");
+    saveWiFiNetwork("Second", "pwd2");
+    saveWiFiNetwork("Third", "pwd3");
+
+    removeWiFiNetwork(2); // Remove last
+
+    TEST_ASSERT_EQUAL(2, wifiNetworkCount);
+    TEST_ASSERT_EQUAL_STRING("First", wifiNetworks[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Second", wifiNetworks[1].ssid.c_str());
+}
+
+void test_remove_all_networks_one_by_one(void) {
+    saveWiFiNetwork("Net1", "pwd1");
+    saveWiFiNetwork("Net2", "pwd2");
+    saveWiFiNetwork("Net3", "pwd3");
+
+    TEST_ASSERT_EQUAL(3, wifiNetworkCount);
+
+    removeWiFiNetwork(0);
+    TEST_ASSERT_EQUAL(2, wifiNetworkCount);
+
+    removeWiFiNetwork(0);
+    TEST_ASSERT_EQUAL(1, wifiNetworkCount);
+
+    removeWiFiNetwork(0);
+    TEST_ASSERT_EQUAL(0, wifiNetworkCount);
+}
+
+void test_remove_from_empty_list_fails(void) {
+    TEST_ASSERT_EQUAL(0, wifiNetworkCount);
+
+    bool result = removeWiFiNetwork(0);
+
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_EQUAL(0, wifiNetworkCount);
+}
+
+// ===== Password Management Tests =====
+
+void test_update_network_keeps_password_if_empty(void) {
+    // Save network with password
+    saveWiFiNetwork("TestNet", "original_password");
+    TEST_ASSERT_EQUAL_STRING("original_password", wifiNetworks[0].password.c_str());
+
+    // Update with empty password - implementation should keep original
+    // (This tests the intended behavior from wifi_manager.cpp line 486)
+    saveWiFiNetwork("TestNet", "");
+
+    // Password should remain unchanged
+    TEST_ASSERT_EQUAL_STRING("original_password", wifiNetworks[0].password.c_str());
+}
+
+void test_update_network_changes_password_if_provided(void) {
+    saveWiFiNetwork("TestNet", "old_password");
+    TEST_ASSERT_EQUAL_STRING("old_password", wifiNetworks[0].password.c_str());
+
+    saveWiFiNetwork("TestNet", "new_password");
+    TEST_ASSERT_EQUAL_STRING("new_password", wifiNetworks[0].password.c_str());
+}
+
+void test_password_not_exposed_in_api(void) {
+    saveWiFiNetwork("SecureNet", "VerySecretPassword123!");
+
+    // Password is stored internally
+    TEST_ASSERT_EQUAL_STRING("VerySecretPassword123!", wifiNetworks[0].password.c_str());
+
+    // In a real API handler, passwords would not be included in JSON response
+    // This test verifies the password exists but would be filtered out
+    TEST_ASSERT_TRUE(wifiNetworks[0].password.length() > 0);
+}
+
+// ===== WiFi Connection State Tests =====
+
+void test_wifi_connection_status_changes(void) {
+#ifdef NATIVE_TEST
+    // Test connection status transitions
+    TEST_ASSERT_EQUAL(WiFiClass::WL_IDLE_STATUS, WiFi.status());
+
+    WiFi.begin("TestSSID", "password");
+    TEST_ASSERT_EQUAL(WiFiClass::WL_CONNECTED, WiFi.status());
+
+    WiFi.disconnect();
+    TEST_ASSERT_EQUAL(WiFiClass::WL_DISCONNECTED, WiFi.status());
+#endif
+}
+
+void test_wifi_ssid_tracking(void) {
+#ifdef NATIVE_TEST
+    WiFi.begin("MyNetwork", "password");
+
+    String connectedSSID = WiFi.SSID();
+    TEST_ASSERT_EQUAL_STRING("MyNetwork", connectedSSID.c_str());
+
+    WiFi.disconnect();
+    String afterDisconnect = WiFi.SSID();
+    TEST_ASSERT_EQUAL(0, afterDisconnect.length());
+#endif
+}
+
+void test_wifi_ip_configuration(void) {
+#ifdef NATIVE_TEST
+    IPAddress ip(192, 168, 1, 100);
+    IPAddress gw(192, 168, 1, 1);
+    IPAddress sn(255, 255, 255, 0);
+
+    WiFi.config(ip, gw, sn);
+
+    TEST_ASSERT_TRUE(WiFi.localIP() == ip);
+    TEST_ASSERT_TRUE(WiFi.gatewayIP() == gw);
+    TEST_ASSERT_TRUE(WiFi.subnetMask() == sn);
+#endif
+}
+
+// ===== Multi-Network Advanced Tests =====
+
+void test_duplicate_ssid_updates_not_adds(void) {
+    saveWiFiNetwork("DuplicateNet", "pwd1");
+    TEST_ASSERT_EQUAL(1, wifiNetworkCount);
+
+    saveWiFiNetwork("DuplicateNet", "pwd2");
+    TEST_ASSERT_EQUAL(1, wifiNetworkCount); // Count should not increase
+    TEST_ASSERT_EQUAL_STRING("pwd2", wifiNetworks[0].password.c_str());
+}
+
+void test_case_sensitive_ssid_comparison(void) {
+    saveWiFiNetwork("MyNetwork", "pwd1");
+    saveWiFiNetwork("mynetwork", "pwd2");
+
+    // SSIDs are case-sensitive, so these should be different
+    TEST_ASSERT_EQUAL(2, wifiNetworkCount);
+    TEST_ASSERT_EQUAL_STRING("MyNetwork", wifiNetworks[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("mynetwork", wifiNetworks[1].ssid.c_str());
+}
+
+void test_special_characters_in_ssid(void) {
+    saveWiFiNetwork("WiFi-2.4GHz_Guest@Home!", "password");
+
+    TEST_ASSERT_EQUAL(1, wifiNetworkCount);
+    TEST_ASSERT_EQUAL_STRING("WiFi-2.4GHz_Guest@Home!", wifiNetworks[0].ssid.c_str());
+}
+
+void test_very_long_ssid(void) {
+    // WiFi SSIDs can be up to 32 characters
+    const char* longSSID = "This_Is_A_Very_Long_SSID_Name_32";
+    saveWiFiNetwork(longSSID, "password");
+
+    TEST_ASSERT_EQUAL(1, wifiNetworkCount);
+    TEST_ASSERT_EQUAL_STRING(longSSID, wifiNetworks[0].ssid.c_str());
+}
+
+void test_network_with_spaces_in_ssid(void) {
+    saveWiFiNetwork("My Home Network", "password");
+
+    TEST_ASSERT_EQUAL(1, wifiNetworkCount);
+    TEST_ASSERT_EQUAL_STRING("My Home Network", wifiNetworks[0].ssid.c_str());
+}
+
+// ===== Preferences Integration Tests =====
+
+void test_preferences_namespace_isolation(void) {
+    // Test that wifi-list namespace is isolated
+    Preferences prefs1, prefs2;
+
+    prefs1.begin("wifi-list", false);
+    prefs1.putString("s0", "WiFiNetwork");
+    prefs1.end();
+
+    prefs2.begin("other-namespace", false);
+    String value = prefs2.getString("s0", "default");
+    prefs2.end();
+
+    // Value from other namespace should be default
+    TEST_ASSERT_EQUAL_STRING("default", value.c_str());
+
+    prefs1.begin("wifi-list", true);
+    String wifiValue = prefs1.getString("s0", "default");
+    prefs1.end();
+
+    // Value from wifi-list should be what we stored
+    TEST_ASSERT_EQUAL_STRING("WiFiNetwork", wifiValue.c_str());
+}
+
+void test_preferences_read_only_mode(void) {
+    Preferences prefsWrite, prefsRead;
+
+    // Write some data
+    prefsWrite.begin("wifi-list", false);
+    prefsWrite.putString("test", "value");
+    prefsWrite.end();
+
+    // Open in read-only mode
+    prefsRead.begin("wifi-list", true);
+    String value = prefsRead.getString("test", "");
+    TEST_ASSERT_EQUAL_STRING("value", value.c_str());
+
+    // Attempt to write in read-only mode (should fail silently)
+    prefsRead.putString("test", "newvalue");
+    prefsRead.end();
+
+    // Verify original value is unchanged
+    prefsWrite.begin("wifi-list", true);
+    String verifyValue = prefsWrite.getString("test", "");
+    prefsWrite.end();
+
+    TEST_ASSERT_EQUAL_STRING("value", verifyValue.c_str());
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {

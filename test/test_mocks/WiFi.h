@@ -40,6 +40,8 @@ public:
   static IPAddress mockLocalIP;
   static IPAddress mockGateway;
   static IPAddress mockSubnet;
+  static IPAddress mockAPIP;
+  static int mockRSSI;
 
   // Core functions
   int status() { return lastStatusCode; }
@@ -91,6 +93,12 @@ public:
 
   IPAddress subnetMask() { return mockSubnet; }
 
+  IPAddress softAPIP() { return mockAPIP; }
+
+  String SSID() { return String(connectedSSID.c_str()); }
+
+  int RSSI() { return mockRSSI; }
+
   // Scanning
   int scanNetworks() { return mockScanResults.size(); }
 
@@ -135,6 +143,8 @@ public:
     mockLocalIP = IPAddress(192, 168, 1, 100);
     mockGateway = IPAddress(192, 168, 1, 1);
     mockSubnet = IPAddress(255, 255, 255, 0);
+    mockAPIP = IPAddress(192, 168, 4, 1);
+    mockRSSI = -50;
   }
 
   static void addMockNetwork(const char *ssid, int rssi, uint8_t channel = 1,
@@ -153,6 +163,8 @@ bool WiFiClass::apModeActive = false;
 IPAddress WiFiClass::mockLocalIP(192, 168, 1, 100);
 IPAddress WiFiClass::mockGateway(192, 168, 1, 1);
 IPAddress WiFiClass::mockSubnet(255, 255, 255, 0);
+IPAddress WiFiClass::mockAPIP(192, 168, 4, 1);
+int WiFiClass::mockRSSI = -50;
 
 // Global WiFi object
 extern WiFiClass WiFi;

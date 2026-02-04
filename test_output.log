@@ -1,0 +1,276 @@
+Verbosity level can be increased via `-v, -vv, or -vvv` option
+Collected 11 tests
+
+Processing test_api in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_api\test_smart_sensing_api.cpp:378: test_get_smartsensing_returns_state	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:379: test_post_smartsensing_updates_mode	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:380: test_post_smartsensing_updates_timer_duration	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:381: test_post_smartsensing_rejects_invalid_timer_low	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:382: test_post_smartsensing_rejects_invalid_timer_high	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:383: test_post_smartsensing_updates_voltage_threshold	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:384: test_post_smartsensing_rejects_invalid_voltage_low	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:385: test_post_smartsensing_rejects_invalid_voltage_high	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:386: test_post_smartsensing_rejects_invalid_json	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:387: test_post_smartsensing_rejects_missing_body	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:388: test_post_smartsensing_manual_override	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:389: test_post_smartsensing_rejects_invalid_mode	[PASSED]
+test\test_api\test_smart_sensing_api.cpp:390: test_post_smartsensing_multiple_parameters	[PASSED]
+------------------ native:test_api [PASSED] Took 0.77 seconds ------------------
+
+Processing test_auth in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_auth\test_auth_handler.cpp:378: test_session_creation_empty_slot	[PASSED]
+test\test_auth\test_auth_handler.cpp:379: test_session_creation_fills_slots	[PASSED]
+test\test_auth\test_auth_handler.cpp:380: test_session_creation_full_eviction	[PASSED]
+test\test_auth\test_auth_handler.cpp:381: test_session_validation_valid	[PASSED]
+test\test_auth\test_auth_handler.cpp:382: test_session_validation_expired	[PASSED]
+test\test_auth\test_auth_handler.cpp:383: test_session_validation_nonexistent	[PASSED]
+test\test_auth\test_auth_handler.cpp:384: test_session_removal	[PASSED]
+test\test_auth\test_auth_handler.cpp:385: test_session_lastSeen_updates	[PASSED]
+test\test_auth\test_auth_handler.cpp:388: test_password_default_from_ap	[PASSED]
+test\test_auth\test_auth_handler.cpp:389: test_password_load_from_nvs	[PASSED]
+test\test_auth\test_auth_handler.cpp:390: test_password_change_saved	[PASSED]
+test\test_auth\test_auth_handler.cpp:393: test_login_success	[PASSED]
+test\test_auth\test_auth_handler.cpp:394: test_login_failure	[PASSED]
+test\test_auth\test_auth_handler.cpp:395: test_session_empty_validation	[PASSED]
+test\test_auth\test_auth_handler.cpp:396: test_multiple_sessions_independent_validation	[PASSED]
+----------------- native:test_auth [PASSED] Took 0.66 seconds -----------------
+
+Processing test_button in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_button\test_button_handler.cpp:320: test_button_press_detected	[PASSED]
+test\test_button\test_button_handler.cpp:321: test_button_debouncing	[PASSED]
+test\test_button\test_button_handler.cpp:322: test_button_long_press	[PASSED]
+test\test_button\test_button_handler.cpp:323: test_button_very_long_press	[PASSED]
+test\test_button\test_button_handler.cpp:324: test_button_release_timing	[PASSED]
+test\test_button\test_button_handler.cpp:325: test_button_single_click	[PASSED]
+test\test_button\test_button_handler.cpp:326: test_button_double_click	[PASSED]
+test\test_button\test_button_handler.cpp:327: test_button_state_transitions	[PASSED]
+test\test_button\test_button_handler.cpp:328: test_button_active_low_logic	[PASSED]
+test\test_button\test_button_handler.cpp:329: test_button_held_release	[PASSED]
+---------------- native:test_button [PASSED] Took 0.62 seconds ----------------
+
+Processing test_mqtt in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_mqtt\test_mqtt_handler.cpp:389: test_load_mqtt_settings_from_nvs	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:390: test_save_mqtt_settings_to_nvs	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:391: test_mqtt_disabled_when_no_broker	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:394: test_mqtt_connect_success	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:395: test_mqtt_reconnect_on_disconnect	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:396: test_mqtt_connect_with_auth	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:399: test_publish_led_state	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:400: test_publish_blinking_state	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:401: test_publish_smart_sensing_state	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:404: test_ha_discovery_generation	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:405: test_ha_discovery_removal	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:408: test_mqtt_update_validates_broker	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:409: test_mqtt_custom_base_topic	[PASSED]
+test\test_mqtt\test_mqtt_handler.cpp:410: test_mqtt_default_port	[PASSED]
+----------------- native:test_mqtt [PASSED] Took 1.18 seconds -----------------
+
+Processing test_ota in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_ota\test_ota_updater.cpp:323: test_version_comparison_update_available	[PASSED]
+test\test_ota\test_ota_updater.cpp:324: test_version_comparison_update_not_available	[PASSED]
+test\test_ota\test_ota_updater.cpp:325: test_version_comparison_same_version	[PASSED]
+test\test_ota\test_ota_updater.cpp:326: test_version_comparison_major_upgrade	[PASSED]
+test\test_ota\test_ota_updater.cpp:327: test_version_comparison_minor_upgrade	[PASSED]
+test\test_ota\test_ota_updater.cpp:328: test_version_comparison_patch_upgrade	[PASSED]
+test\test_ota\test_ota_updater.cpp:331: test_parse_github_release_json	[PASSED]
+test\test_ota\test_ota_updater.cpp:332: test_parse_github_release_invalid_json	[PASSED]
+test\test_ota\test_ota_updater.cpp:335: test_sha256_calculation	[PASSED]
+test\test_ota\test_ota_updater.cpp:336: test_sha256_verification_pass	[PASSED]
+test\test_ota\test_ota_updater.cpp:337: test_sha256_verification_fail	[PASSED]
+test\test_ota\test_ota_updater.cpp:340: test_ota_success_flag_saved	[PASSED]
+test\test_ota\test_ota_updater.cpp:341: test_ota_success_flag_cleared	[PASSED]
+test\test_ota\test_ota_updater.cpp:344: test_check_update_api_update_available	[PASSED]
+test\test_ota\test_ota_updater.cpp:345: test_check_update_api_no_update	[PASSED]
+test\test_ota\test_ota_updater.cpp:346: test_firmware_size_validation	[PASSED]
+------------------ native:test_ota [PASSED] Took 0.99 seconds ------------------
+
+Processing test_settings in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_settings\test_settings_manager.cpp:285: test_load_settings_defaults	[PASSED]
+test\test_settings\test_settings_manager.cpp:286: test_save_settings_to_nvs	[PASSED]
+test\test_settings\test_settings_manager.cpp:287: test_load_settings_from_nvs	[PASSED]
+test\test_settings\test_settings_manager.cpp:288: test_factory_reset_clears_all	[PASSED]
+test\test_settings\test_settings_manager.cpp:290: test_settings_api_get	[PASSED]
+test\test_settings\test_settings_manager.cpp:291: test_settings_api_update	[PASSED]
+test\test_settings\test_settings_manager.cpp:292: test_settings_update_partial	[PASSED]
+test\test_settings\test_settings_manager.cpp:293: test_settings_validation	[PASSED]
+--------------- native:test_settings [PASSED] Took 0.62 seconds ---------------
+
+Processing test_smart_sensing in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_smart_sensing\test_smart_sensing_logic.cpp:312: test_timer_stays_full_when_voltage_detected	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:313: test_timer_counts_down_without_voltage	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:314: test_timer_resets_when_voltage_reappears	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:315: test_amplifier_turns_off_at_zero	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:316: test_always_on_mode	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:317: test_always_off_mode	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:318: test_voltage_threshold_detection	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:319: test_mode_transitions	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:320: test_rapid_voltage_fluctuations	[PASSED]
+test\test_smart_sensing\test_smart_sensing_logic.cpp:321: test_timer_at_zero_with_voltage	[PASSED]
+------------- native:test_smart_sensing [PASSED] Took 0.59 seconds -------------
+
+Processing test_utils in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_utils\test_utils.cpp:232: test_version_comparison_equal	[PASSED]
+test\test_utils\test_utils.cpp:233: test_version_comparison_less	[PASSED]
+test\test_utils\test_utils.cpp:234: test_version_comparison_greater	[PASSED]
+test\test_utils\test_utils.cpp:235: test_version_comparison_major_minor_patch	[PASSED]
+test\test_utils\test_utils.cpp:238: test_rssi_to_quality_boundaries	[PASSED]
+test\test_utils\test_utils.cpp:239: test_rssi_to_quality_linear_scale	[PASSED]
+test\test_utils\test_utils.cpp:242: test_reset_reason_poweron	[PASSED]
+test\test_utils\test_utils.cpp:243: test_reset_reason_external	[PASSED]
+test\test_utils\test_utils.cpp:244: test_reset_reason_software	[PASSED]
+test\test_utils\test_utils.cpp:245: test_reset_reason_panic	[PASSED]
+test\test_utils\test_utils.cpp:246: test_reset_reason_int_watchdog	[PASSED]
+test\test_utils\test_utils.cpp:247: test_reset_reason_task_watchdog	[PASSED]
+test\test_utils\test_utils.cpp:248: test_reset_reason_deepsleep	[PASSED]
+test\test_utils\test_utils.cpp:249: test_reset_reason_brownout	[PASSED]
+test\test_utils\test_utils.cpp:250: test_reset_reason_unknown	[PASSED]
+----------------- native:test_utils [PASSED] Took 0.79 seconds -----------------
+
+Processing test_websocket in native environment
+--------------------------------------------------------------------------------
+Building...
+Testing...
+test\test_websocket\test_websocket_handler.cpp:313: test_broadcast_led_state_on	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:314: test_broadcast_led_state_off	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:315: test_broadcast_blinking_state_on	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:316: test_broadcast_blinking_state_off	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:317: test_broadcast_json_format	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:320: test_broadcast_hardware_stats	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:321: test_broadcast_zero_stats	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:324: test_websocket_client_cleanup	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:325: test_websocket_add_client	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:326: test_websocket_remove_client	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:327: test_websocket_broadcast_to_all_clients	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:328: test_websocket_no_broadcast_when_empty	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:331: test_websocket_message_json_valid	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:332: test_websocket_message_escaping	[PASSED]
+test\test_websocket\test_websocket_handler.cpp:333: test_websocket_message_size	[PASSED]
+--------------- native:test_websocket [PASSED] Took 0.63 seconds ---------------
+
+Processing test_wifi in native environment
+--------------------------------------------------------------------------------
+Building...
+test\test_wifi\test_wifi_manager.cpp: In function 'void test_static_ip_parsing_valid_addresses()':
+test\test_wifi\test_wifi_manager.cpp:339:23: error: 'class IPAddress' has no member named 'fromString'; did you mean 'toString'?
+  339 |     bool validIP = ip.fromString("192.168.1.100");
+      |                       ^~~~~~~~~~
+      |                       toString
+test\test_wifi\test_wifi_manager.cpp:340:23: error: 'class IPAddress' has no member named 'fromString'; did you mean 'toString'?
+  340 |     bool validGW = gw.fromString("192.168.1.1");
+      |                       ^~~~~~~~~~
+      |                       toString
+test\test_wifi\test_wifi_manager.cpp:341:23: error: 'class IPAddress' has no member named 'fromString'; did you mean 'toString'?
+  341 |     bool validSN = sn.fromString("255.255.255.0");
+      |                       ^~~~~~~~~~
+      |                       toString
+test\test_wifi\test_wifi_manager.cpp: In function 'void test_static_ip_parsing_invalid_addresses()':
+test\test_wifi\test_wifi_manager.cpp:352:24: error: 'class IPAddress' has no member named 'fromString'; did you mean 'toString'?
+  352 |     bool invalid1 = ip.fromString("256.168.1.1"); // Out of range
+      |                        ^~~~~~~~~~
+      |                        toString
+test\test_wifi\test_wifi_manager.cpp:353:24: error: 'class IPAddress' has no member named 'fromString'; did you mean 'toString'?
+  353 |     bool invalid2 = ip.fromString("192.168.1");   // Incomplete
+      |                        ^~~~~~~~~~
+      |                        toString
+test\test_wifi\test_wifi_manager.cpp:354:24: error: 'class IPAddress' has no member named 'fromString'; did you mean 'toString'?
+  354 |     bool invalid3 = ip.fromString("invalid");      // Not numeric
+      |                        ^~~~~~~~~~
+      |                        toString
+In file included from .pio\libdeps\native\Unity\src/unity.h:22,
+                 from test\test_wifi\test_wifi_manager.cpp:1:
+test\test_wifi\test_wifi_manager.cpp: In function 'void test_migration_marks_as_complete()':
+test\test_wifi\test_wifi_manager.cpp:499:32: error: 'class Preferences' has no member named 'getUChar'
+  499 |     TEST_ASSERT_EQUAL(0, prefs.getUChar("migrated", 0));
+      |                                ^~~~~~~~
+.pio\libdeps\native\Unity\src/unity_internals.h:897:156: note: in definition of macro 'UNITY_TEST_ASSERT_EQUAL_INT'
+  897 | #define UNITY_TEST_ASSERT_EQUAL_INT(expected, actual, line, message)                             UnityAssertEqualNumber((UNITY_INT)(expected), (UNITY_INT)(actual), (message), (UNITY_LINE_TYPE)(line), UNITY_DISPLAY_STYLE_INT)
+      |                                                                                                                                                            ^~~~~~
+test\test_wifi\test_wifi_manager.cpp:499:5: note: in expansion of macro 'TEST_ASSERT_EQUAL'
+  499 |     TEST_ASSERT_EQUAL(0, prefs.getUChar("migrated", 0));
+      |     ^~~~~~~~~~~~~~~~~
+test\test_wifi\test_wifi_manager.cpp:502:11: error: 'class Preferences' has no member named 'putUChar'
+  502 |     prefs.putUChar("migrated", 1);
+      |           ^~~~~~~~
+test\test_wifi\test_wifi_manager.cpp:505:32: error: 'class Preferences' has no member named 'getUChar'
+  505 |     TEST_ASSERT_EQUAL(1, prefs.getUChar("migrated", 0));
+      |                                ^~~~~~~~
+.pio\libdeps\native\Unity\src/unity_internals.h:897:156: note: in definition of macro 'UNITY_TEST_ASSERT_EQUAL_INT'
+  897 | #define UNITY_TEST_ASSERT_EQUAL_INT(expected, actual, line, message)                             UnityAssertEqualNumber((UNITY_INT)(expected), (UNITY_INT)(actual), (message), (UNITY_LINE_TYPE)(line), UNITY_DISPLAY_STYLE_INT)
+      |                                                                                                                                                            ^~~~~~
+test\test_wifi\test_wifi_manager.cpp:505:5: note: in expansion of macro 'TEST_ASSERT_EQUAL'
+  505 |     TEST_ASSERT_EQUAL(1, prefs.getUChar("migrated", 0));
+      |     ^~~~~~~~~~~~~~~~~
+test\test_wifi\test_wifi_manager.cpp: In function 'void test_migration_initializes_empty_count()':
+test\test_wifi\test_wifi_manager.cpp:515:11: error: 'class Preferences' has no member named 'putUChar'
+  515 |     prefs.putUChar("count", 0);
+      |           ^~~~~~~~
+test\test_wifi\test_wifi_manager.cpp:516:11: error: 'class Preferences' has no member named 'putUChar'
+  516 |     prefs.putUChar("migrated", 1);
+      |           ^~~~~~~~
+test\test_wifi\test_wifi_manager.cpp:518:32: error: 'class Preferences' has no member named 'getUChar'
+  518 |     TEST_ASSERT_EQUAL(0, prefs.getUChar("count", 0));
+      |                                ^~~~~~~~
+.pio\libdeps\native\Unity\src/unity_internals.h:897:156: note: in definition of macro 'UNITY_TEST_ASSERT_EQUAL_INT'
+  897 | #define UNITY_TEST_ASSERT_EQUAL_INT(expected, actual, line, message)                             UnityAssertEqualNumber((UNITY_INT)(expected), (UNITY_INT)(actual), (message), (UNITY_LINE_TYPE)(line), UNITY_DISPLAY_STYLE_INT)
+      |                                                                                                                                                            ^~~~~~
+test\test_wifi\test_wifi_manager.cpp:518:5: note: in expansion of macro 'TEST_ASSERT_EQUAL'
+  518 |     TEST_ASSERT_EQUAL(0, prefs.getUChar("count", 0));
+      |     ^~~~~~~~~~~~~~~~~
+test\test_wifi\test_wifi_manager.cpp:519:32: error: 'class Preferences' has no member named 'getUChar'
+  519 |     TEST_ASSERT_EQUAL(1, prefs.getUChar("migrated", 0));
+      |                                ^~~~~~~~
+.pio\libdeps\native\Unity\src/unity_internals.h:897:156: note: in definition of macro 'UNITY_TEST_ASSERT_EQUAL_INT'
+  897 | #define UNITY_TEST_ASSERT_EQUAL_INT(expected, actual, line, message)                             UnityAssertEqualNumber((UNITY_INT)(expected), (UNITY_INT)(actual), (message), (UNITY_LINE_TYPE)(line), UNITY_DISPLAY_STYLE_INT)
+      |                                                                                                                                                            ^~~~~~
+test\test_wifi\test_wifi_manager.cpp:519:5: note: in expansion of macro 'TEST_ASSERT_EQUAL'
+  519 |     TEST_ASSERT_EQUAL(1, prefs.getUChar("migrated", 0));
+      |     ^~~~~~~~~~~~~~~~~
+test\test_wifi\test_wifi_manager.cpp: In function 'void test_preferences_storage_format()':
+test\test_wifi\test_wifi_manager.cpp:533:11: error: 'class Preferences' has no member named 'putUChar'
+  533 |     prefs.putUChar("count", 1);
+      |           ^~~~~~~~
+test\test_wifi\test_wifi_manager.cpp:540:23: error: 'class Preferences' has no member named 'getUChar'
+  540 |     int count = prefs.getUChar("count", 0);
+      |                       ^~~~~~~~
+*** [.pio\build\native\test\test_wifi\test_wifi_manager.o] Error 1
+Building stage has failed, see errors above. Use `pio test -vvv` option to enable verbose output.
+----------------- native:test_wifi [ERRORED] Took 0.74 seconds -----------------
+
+=================================== SUMMARY ===================================
+Environment    Test                Status    Duration
+-------------  ------------------  --------  ------------
+native         test_api            PASSED    00:00:00.770
+native         test_auth           PASSED    00:00:00.659
+native         test_button         PASSED    00:00:00.621
+native         test_mqtt           PASSED    00:00:01.181
+native         test_ota            PASSED    00:00:00.992
+native         test_settings       PASSED    00:00:00.623
+native         test_smart_sensing  PASSED    00:00:00.591
+native         test_utils          PASSED    00:00:00.793
+native         test_websocket      PASSED    00:00:00.627
+native         test_wifi           ERRORED   00:00:00.743
+================ 117 test cases: 116 succeeded in 00:00:07.600 ================

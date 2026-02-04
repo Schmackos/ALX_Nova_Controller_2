@@ -27,6 +27,22 @@ All previously failing tests now pass:
 - test_button: PASSED
 - test_websocket: PASSED
 
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com> (`ca5a26c`)
+- [2026-02-04] fix: resolve unit test compilation errors for native environment
+
+- Fix random() function conflict in test_mqtt by using rand() % 10000 instead of Arduino random(10000)
+- Fix isDigit() not found errors by using std::isdigit() from <cctype> in test_utils and test_ota
+- Fix String method issues in test_ota by converting to std::string for indexOf/substring operations
+- Add missing putUChar/getUChar methods to Preferences mock for WiFi tests
+
+All previously failing tests now pass:
+- test_mqtt: PASSED
+- test_utils: PASSED
+- test_ota: PASSED
+- test_auth: PASSED
+- test_button: PASSED
+- test_websocket: PASSED
+
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com> (`6806b7a`)
 - [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
 
