@@ -1,5 +1,6 @@
 #include <string>
 #include <unity.h>
+#include <cctype>
 
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
@@ -50,19 +51,19 @@ int compareVersions(const String &v1, const String &v2) {
     long num1 = 0;
     long num2 = 0;
 
-    while (i < n1 && isDigit(v1[i])) {
+    while (i < n1 && std::isdigit(static_cast<unsigned char>(v1[i]))) {
       num1 = num1 * 10 + (v1[i] - '0');
       i++;
     }
     // Skip non-digit separators like '.'
-    while (i < n1 && !isDigit(v1[i]))
+    while (i < n1 && !std::isdigit(static_cast<unsigned char>(v1[i])))
       i++;
 
-    while (j < n2 && isDigit(v2[j])) {
+    while (j < n2 && std::isdigit(static_cast<unsigned char>(v2[j]))) {
       num2 = num2 * 10 + (v2[j] - '0');
       j++;
     }
-    while (j < n2 && !isDigit(v2[j]))
+    while (j < n2 && !std::isdigit(static_cast<unsigned char>(v2[j])))
       j++;
 
     if (num1 < num2)

@@ -95,7 +95,9 @@ bool mqttConnect() {
 
     mockMqttClient.setServer(mqttSettings.broker.c_str(), mqttSettings.port);
 
-    String clientId = "alx_nova_" + String(random(10000));
+    // Generate random client ID (using modulo to avoid conflict with stdlib random())
+    long randVal = rand() % 10000;
+    String clientId = "alx_nova_" + String(randVal);
 
     if (mqttSettings.username.length() > 0) {
         return mockMqttClient.connect(clientId.c_str(),

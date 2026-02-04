@@ -1,6 +1,7 @@
 #include <unity.h>
 #include <string>
 #include <cstring>
+#include <cctype>
 
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
@@ -39,18 +40,18 @@ int compareVersions(const String& v1, const String& v2) {
         long num1 = 0;
         long num2 = 0;
 
-        while (i < n1 && isDigit(v1[i])) {
+        while (i < n1 && std::isdigit(static_cast<unsigned char>(v1[i]))) {
             num1 = num1 * 10 + (v1[i] - '0');
             i++;
         }
-        while (i < n1 && !isDigit(v1[i]))
+        while (i < n1 && !std::isdigit(static_cast<unsigned char>(v1[i])))
             i++;
 
-        while (j < n2 && isDigit(v2[j])) {
+        while (j < n2 && std::isdigit(static_cast<unsigned char>(v2[j]))) {
             num2 = num2 * 10 + (v2[j] - '0');
             j++;
         }
-        while (j < n2 && !isDigit(v2[j]))
+        while (j < n2 && !std::isdigit(static_cast<unsigned char>(v2[j])))
             j++;
 
         if (num1 < num2)
@@ -72,30 +73,33 @@ bool parseGithubReleaseJson(const String& json, String& version, String& downloa
     // Simple JSON parsing for testing
     // In real code this would use ArduinoJson
 
+    // Convert to std::string for string operations
+    std::string jsonStr = json.c_str();
+
     // Extract version
-    int versionStart = json.indexOf("\"tag_name\":\"v");
-    if (versionStart == -1) {
+    size_t versionStart = jsonStr.find("\"tag_name\":\"v");
+    if (versionStart == std::string::npos) {
         return false;
     }
     versionStart += 13; // Length of "\"tag_name\":\"v"
-    int versionEnd = json.indexOf("\"", versionStart);
-    version = json.substring(versionStart, versionEnd);
+    size_t versionEnd = jsonStr.find("\"", versionStart);
+    version = jsonStr.substr(versionStart, versionEnd - versionStart).c_str();
 
     // Extract download URL (mock: look for .bin URL)
-    int urlStart = json.indexOf(".bin");
-    if (urlStart != -1) {
+    size_t urlStart = jsonStr.find(".bin");
+    if (urlStart != std::string::npos) {
         // Find the full URL
-        int urlBegin = json.lastIndexOf("\"", urlStart);
-        int urlEnd = urlStart + 4; // .bin
-        downloadUrl = json.substring(urlBegin + 1, urlEnd);
+        size_t urlBegin = jsonStr.rfind("\"", urlStart);
+        size_t urlEnd = urlStart + 4; // .bin
+        downloadUrl = jsonStr.substr(urlBegin + 1, urlEnd - urlBegin - 1).c_str();
     }
 
     // Extract SHA256
-    int sha256Start = json.indexOf("\"sha256\":\"");
-    if (sha256Start != -1) {
+    size_t sha256Start = jsonStr.find("\"sha256\":\"");
+    if (sha256Start != std::string::npos) {
         sha256Start += 10;
-        int sha256End = json.indexOf("\"", sha256Start);
-        sha256 = json.substring(sha256Start, sha256End);
+        size_t sha256End = jsonStr.find("\"", sha256Start);
+        sha256 = jsonStr.substr(sha256Start, sha256End - sha256Start).c_str();
     }
 
     return true;

@@ -94,6 +94,29 @@ public:
     storage[currentNamespace][std::string(key)] = std::to_string(value);
   }
 
+  // UChar (unsigned char) methods
+  uint8_t getUChar(const char *key, uint8_t defaultValue = 0) {
+    if (currentNamespace.empty() || !key) {
+      return defaultValue;
+    }
+    std::string keyStr(key);
+    auto nsIt = storage.find(currentNamespace);
+    if (nsIt != storage.end()) {
+      auto keyIt = nsIt->second.find(keyStr);
+      if (keyIt != nsIt->second.end()) {
+        return static_cast<uint8_t>(std::stoi(keyIt->second));
+      }
+    }
+    return defaultValue;
+  }
+
+  void putUChar(const char *key, uint8_t value) {
+    if (readOnlyMode || currentNamespace.empty() || !key) {
+      return;
+    }
+    storage[currentNamespace][std::string(key)] = std::to_string(static_cast<int>(value));
+  }
+
   // Double methods (for floats/doubles)
   double getDouble(const char *key, double defaultValue = 0.0) {
     if (currentNamespace.empty() || !key) {

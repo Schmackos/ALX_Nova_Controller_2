@@ -12,6 +12,22 @@
 - None
 
 ## Bug Fixes
+- [2026-02-04] fix: resolve unit test compilation errors for native environment
+
+- Fix random() function conflict in test_mqtt by using rand() % 10000 instead of Arduino random(10000)
+- Fix isDigit() not found errors by using std::isdigit() from <cctype> in test_utils and test_ota
+- Fix String method issues in test_ota by converting to std::string for indexOf/substring operations
+- Add missing putUChar/getUChar methods to Preferences mock for WiFi tests
+
+All previously failing tests now pass:
+- test_mqtt: PASSED
+- test_utils: PASSED
+- test_ota: PASSED
+- test_auth: PASSED
+- test_button: PASSED
+- test_websocket: PASSED
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com> (`6806b7a`)
 - [2026-02-03] fix: Gracefully disconnect before updating WiFi password on current network
 
 When a user updates the password for a currently connected network, the
@@ -75,6 +91,10 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-04] chore: Update platformio.ini and RELEASE_NOTES.md for test configuration and documentation
+
+- Added test_ignore configuration to platformio.ini to exclude all unit tests for ESP32.
+- Updated RELEASE_NOTES.md to include recent test additions and enhancements. (`7b35db5`)
 - [2026-02-04] test: add new unit tests for button, auth, websocket, and utilities, including necessary mock headers. (`a1754b2`)
 - [2026-02-03] Enhance WiFi connection handling with polling mechanism for network changes
 
