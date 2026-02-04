@@ -1,0 +1,43 @@
+Collected 11 tests (test_api, test_auth, test_button, test_mocks, test_mqtt, test_ota, test_settings, test_smart_sensing, test_utils, test_websocket, test_wifi)
+
+Processing test_wifi in native environment
+--------------------------------------------------------------------------------
+Building...
+In file included from test\test_wifi\test_wifi_manager.cpp:7:
+test\test_wifi\../test_mocks/Preferences.h:171:21: error: conflicting declaration 'typedef std::string String'
+  171 | typedef std::string String;
+      |                     ^~~~~~
+In file included from test\test_wifi\test_wifi_manager.cpp:6:
+test\test_wifi\../test_mocks/Arduino.h:10:7: note: previous declaration as 'class String'
+   10 | class String : public std::string {
+      |       ^~~~~~
+*** [.pio\build\native\test\test_wifi\test_wifi_manager.o] Error 1
+Building stage has failed, see errors above. Use `pio test -vvv` option to enable verbose output.
+----------------- native:test_wifi [ERRORED] Took 0.68 seconds -----------------
+
+=================================== SUMMARY ===================================
+Environment         Test                Status    Duration
+------------------  ------------------  --------  ------------
+esp32-s3-devkitm-1  test_api            SKIPPED
+esp32-s3-devkitm-1  test_auth           SKIPPED
+esp32-s3-devkitm-1  test_button         SKIPPED
+esp32-s3-devkitm-1  test_mocks          SKIPPED
+esp32-s3-devkitm-1  test_mqtt           SKIPPED
+esp32-s3-devkitm-1  test_ota            SKIPPED
+esp32-s3-devkitm-1  test_settings       SKIPPED
+esp32-s3-devkitm-1  test_smart_sensing  SKIPPED
+esp32-s3-devkitm-1  test_utils          SKIPPED
+esp32-s3-devkitm-1  test_websocket      SKIPPED
+esp32-s3-devkitm-1  test_wifi           SKIPPED
+native              test_api            SKIPPED
+native              test_auth           SKIPPED
+native              test_button         SKIPPED
+native              test_mocks          SKIPPED
+native              test_mqtt           SKIPPED
+native              test_ota            SKIPPED
+native              test_settings       SKIPPED
+native              test_smart_sensing  SKIPPED
+native              test_utils          SKIPPED
+native              test_websocket      SKIPPED
+native              test_wifi           ERRORED   00:00:00.682
+================== 1 test cases: 0 succeeded in 00:00:00.682 ==================

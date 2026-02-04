@@ -1,0 +1,58 @@
+Collected 11 tests (test_api, test_auth, test_button, test_mocks, test_mqtt, test_ota, test_settings, test_smart_sensing, test_utils, test_websocket, test_wifi)
+
+Processing test_wifi in native environment
+--------------------------------------------------------------------------------
+Building...
+
+
+Testing...
+test\test_wifi\test_wifi_manager.cpp:339:test_save_single_network:PASS
+test\test_wifi\test_wifi_manager.cpp:340:test_save_multiple_networks:PASS
+test\test_wifi\test_wifi_manager.cpp:341:test_update_existing_network:PASS
+test\test_wifi\test_wifi_manager.cpp:342:test_remove_network_shifts_down:PASS
+test\test_wifi\test_wifi_manager.cpp:343:test_save_rejects_sixth_network:PASS
+test\test_wifi\test_wifi_manager.cpp:346:test_save_network_with_static_ip:PASS
+test\test_wifi\test_wifi_manager.cpp:347:test_load_network_applies_static_ip:PASS
+test\test_wifi\test_wifi_manager.cpp:348:test_network_priority_preserves_static_ip:PASS
+test\test_wifi\test_wifi_manager.cpp:349:test_static_ip_validation:PASS
+test\test_wifi\test_wifi_manager.cpp:352:test_wifi_scan_returns_json:PASS
+test\test_wifi\test_wifi_manager.cpp:353:test_wifi_scan_signal_strength:PASS
+test\test_wifi\test_wifi_manager.cpp:356:test_connect_to_stored_networks_order:PASS
+test\test_wifi\test_wifi_manager.cpp:357:test_connect_success_moves_to_priority:PASS
+test\test_wifi\test_wifi_manager.cpp:360:test_wifi_list_excludes_passwords:PASS
+test\test_wifi\test_wifi_manager.cpp:361:test_wifi_save_validates_fields:PASS
+test\test_wifi\test_wifi_manager.cpp:362:test_remove_network_invalid_index:PASS
+test\test_wifi\test_wifi_manager.cpp:363:test_remove_network_negative_index:PASS
+
+-----------------------
+17 Tests 0 Failures 0 Ignored 
+OK
+
+----------------- native:test_wifi [PASSED] Took 0.91 seconds -----------------
+
+=================================== SUMMARY ===================================
+Environment         Test                Status    Duration
+------------------  ------------------  --------  ------------
+esp32-s3-devkitm-1  test_api            SKIPPED
+esp32-s3-devkitm-1  test_auth           SKIPPED
+esp32-s3-devkitm-1  test_button         SKIPPED
+esp32-s3-devkitm-1  test_mocks          SKIPPED
+esp32-s3-devkitm-1  test_mqtt           SKIPPED
+esp32-s3-devkitm-1  test_ota            SKIPPED
+esp32-s3-devkitm-1  test_settings       SKIPPED
+esp32-s3-devkitm-1  test_smart_sensing  SKIPPED
+esp32-s3-devkitm-1  test_utils          SKIPPED
+esp32-s3-devkitm-1  test_websocket      SKIPPED
+esp32-s3-devkitm-1  test_wifi           SKIPPED
+native              test_api            SKIPPED
+native              test_auth           SKIPPED
+native              test_button         SKIPPED
+native              test_mocks          SKIPPED
+native              test_mqtt           SKIPPED
+native              test_ota            SKIPPED
+native              test_settings       SKIPPED
+native              test_smart_sensing  SKIPPED
+native              test_utils          SKIPPED
+native              test_websocket      SKIPPED
+native              test_wifi           PASSED    00:00:00.913
+================= 17 test cases: 17 succeeded in 00:00:00.913 =================

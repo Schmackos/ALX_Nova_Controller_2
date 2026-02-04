@@ -1,0 +1,56 @@
+Collected 11 tests (test_api, test_auth, test_button, test_mocks, test_mqtt, test_ota, test_settings, test_smart_sensing, test_utils, test_websocket, test_wifi)
+
+Processing test_websocket in native environment
+--------------------------------------------------------------------------------
+Building...
+
+
+Testing...
+test\test_websocket\test_websocket_handler.cpp:313:test_broadcast_led_state_on:PASS
+test\test_websocket\test_websocket_handler.cpp:314:test_broadcast_led_state_off:PASS
+test\test_websocket\test_websocket_handler.cpp:315:test_broadcast_blinking_state_on:PASS
+test\test_websocket\test_websocket_handler.cpp:316:test_broadcast_blinking_state_off:PASS
+test\test_websocket\test_websocket_handler.cpp:317:test_broadcast_json_format:PASS
+test\test_websocket\test_websocket_handler.cpp:320:test_broadcast_hardware_stats:PASS
+test\test_websocket\test_websocket_handler.cpp:321:test_broadcast_zero_stats:PASS
+test\test_websocket\test_websocket_handler.cpp:324:test_websocket_client_cleanup:PASS
+test\test_websocket\test_websocket_handler.cpp:325:test_websocket_add_client:PASS
+test\test_websocket\test_websocket_handler.cpp:326:test_websocket_remove_client:PASS
+test\test_websocket\test_websocket_handler.cpp:327:test_websocket_broadcast_to_all_clients:PASS
+test\test_websocket\test_websocket_handler.cpp:328:test_websocket_no_broadcast_when_empty:PASS
+test\test_websocket\test_websocket_handler.cpp:331:test_websocket_message_json_valid:PASS
+test\test_websocket\test_websocket_handler.cpp:332:test_websocket_message_escaping:PASS
+test\test_websocket\test_websocket_handler.cpp:333:test_websocket_message_size:PASS
+
+-----------------------
+15 Tests 0 Failures 0 Ignored 
+OK
+
+--------------- native:test_websocket [PASSED] Took 0.86 seconds ---------------
+
+=================================== SUMMARY ===================================
+Environment         Test                Status    Duration
+------------------  ------------------  --------  ------------
+esp32-s3-devkitm-1  test_api            SKIPPED
+esp32-s3-devkitm-1  test_auth           SKIPPED
+esp32-s3-devkitm-1  test_button         SKIPPED
+esp32-s3-devkitm-1  test_mocks          SKIPPED
+esp32-s3-devkitm-1  test_mqtt           SKIPPED
+esp32-s3-devkitm-1  test_ota            SKIPPED
+esp32-s3-devkitm-1  test_settings       SKIPPED
+esp32-s3-devkitm-1  test_smart_sensing  SKIPPED
+esp32-s3-devkitm-1  test_utils          SKIPPED
+esp32-s3-devkitm-1  test_websocket      SKIPPED
+esp32-s3-devkitm-1  test_wifi           SKIPPED
+native              test_api            SKIPPED
+native              test_auth           SKIPPED
+native              test_button         SKIPPED
+native              test_mocks          SKIPPED
+native              test_mqtt           SKIPPED
+native              test_ota            SKIPPED
+native              test_settings       SKIPPED
+native              test_smart_sensing  SKIPPED
+native              test_utils          SKIPPED
+native              test_websocket      PASSED    00:00:00.859
+native              test_wifi           SKIPPED
+================= 15 test cases: 15 succeeded in 00:00:00.859 =================

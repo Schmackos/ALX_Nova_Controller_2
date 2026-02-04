@@ -1,0 +1,57 @@
+Collected 11 tests (test_api, test_auth, test_button, test_mocks, test_mqtt, test_ota, test_settings, test_smart_sensing, test_utils, test_websocket, test_wifi)
+
+Processing test_ota in native environment
+--------------------------------------------------------------------------------
+Building...
+
+
+Testing...
+test\test_ota\test_ota_updater.cpp:319:test_version_comparison_update_available:PASS
+test\test_ota\test_ota_updater.cpp:320:test_version_comparison_update_not_available:PASS
+test\test_ota\test_ota_updater.cpp:321:test_version_comparison_same_version:PASS
+test\test_ota\test_ota_updater.cpp:322:test_version_comparison_major_upgrade:PASS
+test\test_ota\test_ota_updater.cpp:323:test_version_comparison_minor_upgrade:PASS
+test\test_ota\test_ota_updater.cpp:324:test_version_comparison_patch_upgrade:PASS
+test\test_ota\test_ota_updater.cpp:327:test_parse_github_release_json:PASS
+test\test_ota\test_ota_updater.cpp:328:test_parse_github_release_invalid_json:PASS
+test\test_ota\test_ota_updater.cpp:331:test_sha256_calculation:PASS
+test\test_ota\test_ota_updater.cpp:332:test_sha256_verification_pass:PASS
+test\test_ota\test_ota_updater.cpp:333:test_sha256_verification_fail:PASS
+test\test_ota\test_ota_updater.cpp:336:test_ota_success_flag_saved:PASS
+test\test_ota\test_ota_updater.cpp:337:test_ota_success_flag_cleared:PASS
+test\test_ota\test_ota_updater.cpp:340:test_check_update_api_update_available:PASS
+test\test_ota\test_ota_updater.cpp:341:test_check_update_api_no_update:PASS
+test\test_ota\test_ota_updater.cpp:342:test_firmware_size_validation:PASS
+
+-----------------------
+16 Tests 0 Failures 0 Ignored 
+OK
+
+------------------ native:test_ota [PASSED] Took 0.92 seconds ------------------
+
+=================================== SUMMARY ===================================
+Environment         Test                Status    Duration
+------------------  ------------------  --------  ------------
+esp32-s3-devkitm-1  test_api            SKIPPED
+esp32-s3-devkitm-1  test_auth           SKIPPED
+esp32-s3-devkitm-1  test_button         SKIPPED
+esp32-s3-devkitm-1  test_mocks          SKIPPED
+esp32-s3-devkitm-1  test_mqtt           SKIPPED
+esp32-s3-devkitm-1  test_ota            SKIPPED
+esp32-s3-devkitm-1  test_settings       SKIPPED
+esp32-s3-devkitm-1  test_smart_sensing  SKIPPED
+esp32-s3-devkitm-1  test_utils          SKIPPED
+esp32-s3-devkitm-1  test_websocket      SKIPPED
+esp32-s3-devkitm-1  test_wifi           SKIPPED
+native              test_api            SKIPPED
+native              test_auth           SKIPPED
+native              test_button         SKIPPED
+native              test_mocks          SKIPPED
+native              test_mqtt           SKIPPED
+native              test_ota            PASSED    00:00:00.921
+native              test_settings       SKIPPED
+native              test_smart_sensing  SKIPPED
+native              test_utils          SKIPPED
+native              test_websocket      SKIPPED
+native              test_wifi           SKIPPED
+================= 16 test cases: 16 succeeded in 00:00:00.921 =================
