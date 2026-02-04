@@ -167,6 +167,6 @@ IPAddress WiFiClass::mockAPIP(192, 168, 4, 1);
 int WiFiClass::mockRSSI = -50;
 
 // Global WiFi object
-extern WiFiClass WiFi;
+static WiFiClass WiFi;
 
 #endif // WIFI_MOCK_H

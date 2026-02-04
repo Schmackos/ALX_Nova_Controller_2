@@ -62,7 +62,10 @@ bool saveWiFiNetwork(const char* ssid, const char* password, bool useStaticIP = 
     // Check if network already exists and update it
     for (int i = 0; i < wifiNetworkCount; i++) {
         if (wifiNetworks[i].ssid == ssid) {
-            wifiNetworks[i].password = password ? String(password) : "";
+            // Only update password if provided (non-empty)
+            if (password && strlen(password) > 0) {
+                wifiNetworks[i].password = password;
+            }
             wifiNetworks[i].useStaticIP = useStaticIP;
             wifiNetworks[i].staticIP = staticIP ? String(staticIP) : "";
             wifiNetworks[i].subnet = subnet ? String(subnet) : "";
@@ -782,11 +785,20 @@ int runUnityTests(void) {
     RUN_TEST(test_remove_network_shifts_down);
     RUN_TEST(test_save_rejects_sixth_network);
 
-    // Static IP configuration tests
+    // Static IP configuration tests (Basic)
     RUN_TEST(test_save_network_with_static_ip);
     RUN_TEST(test_load_network_applies_static_ip);
     RUN_TEST(test_network_priority_preserves_static_ip);
     RUN_TEST(test_static_ip_validation);
+
+    // Static IP configuration tests (Advanced)
+    RUN_TEST(test_static_ip_parsing_valid_addresses);
+    RUN_TEST(test_static_ip_parsing_invalid_addresses);
+    RUN_TEST(test_dhcp_to_static_transition);
+    RUN_TEST(test_static_to_dhcp_transition);
+    RUN_TEST(test_static_ip_with_dns_servers);
+    RUN_TEST(test_static_ip_without_dns_servers);
+    RUN_TEST(test_static_ip_partial_dns_servers);
 
     // Network scanning tests
     RUN_TEST(test_wifi_scan_returns_json);
@@ -795,6 +807,43 @@ int runUnityTests(void) {
     // Connection logic tests
     RUN_TEST(test_connect_to_stored_networks_order);
     RUN_TEST(test_connect_success_moves_to_priority);
+    RUN_TEST(test_connect_to_stored_networks_tries_in_order);
+    RUN_TEST(test_successful_connection_updates_priority);
+    RUN_TEST(test_priority_reorder_preserves_static_ip);
+    RUN_TEST(test_empty_network_list_returns_zero_count);
+    RUN_TEST(test_network_count_after_operations);
+
+    // Migration logic tests
+    RUN_TEST(test_migration_marks_as_complete);
+    RUN_TEST(test_migration_initializes_empty_count);
+    RUN_TEST(test_preferences_storage_format);
+
+    // Network removal edge cases
+    RUN_TEST(test_remove_first_network_shifts_correctly);
+    RUN_TEST(test_remove_last_network_decrements_count);
+    RUN_TEST(test_remove_all_networks_one_by_one);
+    RUN_TEST(test_remove_from_empty_list_fails);
+
+    // Password management tests
+    RUN_TEST(test_update_network_keeps_password_if_empty);
+    RUN_TEST(test_update_network_changes_password_if_provided);
+    RUN_TEST(test_password_not_exposed_in_api);
+
+    // WiFi connection state tests
+    RUN_TEST(test_wifi_connection_status_changes);
+    RUN_TEST(test_wifi_ssid_tracking);
+    RUN_TEST(test_wifi_ip_configuration);
+
+    // Multi-network advanced tests
+    RUN_TEST(test_duplicate_ssid_updates_not_adds);
+    RUN_TEST(test_case_sensitive_ssid_comparison);
+    RUN_TEST(test_special_characters_in_ssid);
+    RUN_TEST(test_very_long_ssid);
+    RUN_TEST(test_network_with_spaces_in_ssid);
+
+    // Preferences integration tests
+    RUN_TEST(test_preferences_namespace_isolation);
+    RUN_TEST(test_preferences_read_only_mode);
 
     // API handler tests
     RUN_TEST(test_wifi_list_excludes_passwords);

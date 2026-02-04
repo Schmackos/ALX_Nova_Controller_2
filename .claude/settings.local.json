@@ -51,7 +51,11 @@
       "Bash(git reset:*)",
       "Bash(git checkout:*)",
       "Bash(git fetch:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(node build_web_assets.js:*)",
+      "Bash(ls:*)",
+      "Bash(~/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-nm:*)",
+      "Bash(~/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-objdump:*)"
     ]
   }
 }
