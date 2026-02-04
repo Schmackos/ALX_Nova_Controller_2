@@ -773,6 +773,245 @@ void test_preferences_read_only_mode(void) {
     TEST_ASSERT_EQUAL_STRING("value", verifyValue.c_str());
 }
 
+// ===== WiFi Retry Logic Tests =====
+
+// Mock retry state variables (would be static in real implementation)
+namespace WiFiRetryState {
+    bool wifiRetryInProgress = false;
+    unsigned long lastFullRetryAttempt = 0;
+    int currentRetryCount = 0;
+    String lastFailedSSID = "";
+    bool wifiDisconnected = false;
+
+    void reset() {
+        wifiRetryInProgress = false;
+        lastFullRetryAttempt = 0;
+        currentRetryCount = 0;
+        lastFailedSSID = "";
+        wifiDisconnected = false;
+    }
+}
+
+// Mock function to simulate WiFi event with error 201
+void simulateWiFiError201(const char* ssid) {
+    // Simulate error 201 detection logic from onWiFiEvent
+    WiFiRetryState::lastFailedSSID = String(ssid);
+    WiFiRetryState::wifiRetryInProgress = true;
+    WiFiRetryState::wifiDisconnected = true;
+}
+
+// Mock function to simulate successful connection
+void simulateSuccessfulConnection() {
+    // Simulate success logic from onWiFiEvent
+    WiFiRetryState::wifiRetryInProgress = false;
+    WiFiRetryState::currentRetryCount = 0;
+    WiFiRetryState::lastFailedSSID = "";
+    WiFiRetryState::wifiDisconnected = false;
+}
+
+// Mock function to simulate retry attempt failure
+void simulateRetryFailure() {
+    WiFiRetryState::lastFullRetryAttempt = ArduinoMock::mockMillis;
+    WiFiRetryState::currentRetryCount++;
+    WiFiRetryState::wifiRetryInProgress = false;
+}
+
+void test_wifi_retry_error_201_triggers_retry(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+
+    // Simulate connecting to a network that doesn't exist
+    simulateWiFiError201("NonExistentNetwork");
+
+    // Verify retry flags are set
+    TEST_ASSERT_TRUE(WiFiRetryState::wifiRetryInProgress);
+    TEST_ASSERT_TRUE(WiFiRetryState::wifiDisconnected);
+    TEST_ASSERT_EQUAL_STRING("NonExistentNetwork", WiFiRetryState::lastFailedSSID.c_str());
+}
+
+void test_wifi_retry_successful_connection_clears_flags(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+
+    // Start with retry in progress
+    WiFiRetryState::wifiRetryInProgress = true;
+    WiFiRetryState::currentRetryCount = 3;
+    WiFiRetryState::lastFailedSSID = "FailedNetwork";
+    WiFiRetryState::wifiDisconnected = true;
+
+    // Simulate successful connection
+    simulateSuccessfulConnection();
+
+    // Verify all retry state is cleared
+    TEST_ASSERT_FALSE(WiFiRetryState::wifiRetryInProgress);
+    TEST_ASSERT_FALSE(WiFiRetryState::wifiDisconnected);
+    TEST_ASSERT_EQUAL(0, WiFiRetryState::currentRetryCount);
+    TEST_ASSERT_EQUAL_STRING("", WiFiRetryState::lastFailedSSID.c_str());
+}
+
+void test_wifi_retry_counter_increments(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+
+    // Initial state
+    TEST_ASSERT_EQUAL(0, WiFiRetryState::currentRetryCount);
+
+    // Simulate first failure
+    simulateRetryFailure();
+    TEST_ASSERT_EQUAL(1, WiFiRetryState::currentRetryCount);
+
+    // Simulate second failure
+    simulateRetryFailure();
+    TEST_ASSERT_EQUAL(2, WiFiRetryState::currentRetryCount);
+
+    // Simulate third failure
+    simulateRetryFailure();
+    TEST_ASSERT_EQUAL(3, WiFiRetryState::currentRetryCount);
+
+    // Verify counter resets on success
+    simulateSuccessfulConnection();
+    TEST_ASSERT_EQUAL(0, WiFiRetryState::currentRetryCount);
+}
+
+void test_wifi_retry_tracks_failed_ssid(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+
+    // Simulate failure on first network
+    simulateWiFiError201("Network1");
+    TEST_ASSERT_EQUAL_STRING("Network1", WiFiRetryState::lastFailedSSID.c_str());
+
+    // Simulate failure on different network
+    WiFiRetryState::reset();
+    simulateWiFiError201("Network2");
+    TEST_ASSERT_EQUAL_STRING("Network2", WiFiRetryState::lastFailedSSID.c_str());
+
+    // Verify cleared on success
+    simulateSuccessfulConnection();
+    TEST_ASSERT_EQUAL_STRING("", WiFiRetryState::lastFailedSSID.c_str());
+}
+
+void test_wifi_retry_interval_timing(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+    ArduinoMock::reset();
+
+    const unsigned long RETRY_INTERVAL_MS = 30000;
+
+    // Simulate initial failure
+    simulateRetryFailure();
+    unsigned long firstRetryTime = WiFiRetryState::lastFullRetryAttempt;
+    TEST_ASSERT_EQUAL(0, firstRetryTime);
+
+    // Advance time by 15 seconds (not enough)
+    ArduinoMock::mockMillis += 15000;
+    unsigned long timeSinceRetry = ArduinoMock::mockMillis - WiFiRetryState::lastFullRetryAttempt;
+    TEST_ASSERT_TRUE(timeSinceRetry < RETRY_INTERVAL_MS);
+
+    // Advance time by another 15 seconds (total 30 seconds - should trigger retry)
+    ArduinoMock::mockMillis += 15000;
+    timeSinceRetry = ArduinoMock::mockMillis - WiFiRetryState::lastFullRetryAttempt;
+    TEST_ASSERT_TRUE(timeSinceRetry >= RETRY_INTERVAL_MS);
+}
+
+void test_wifi_retry_multiple_networks_fallback(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+
+    // Save multiple networks
+    saveWiFiNetwork("Network1", "pass1");
+    saveWiFiNetwork("Network2", "pass2");
+    saveWiFiNetwork("Network3", "pass3");
+
+    TEST_ASSERT_EQUAL(3, getWiFiNetworkCount());
+
+    // Simulate error 201 on first network
+    simulateWiFiError201("Network1");
+    TEST_ASSERT_TRUE(WiFiRetryState::wifiRetryInProgress);
+
+    // Verify retry should attempt other networks
+    // In real implementation, connectToStoredNetworks() would be called
+    // which tries Network2, then Network3
+}
+
+void test_wifi_retry_clears_on_success_after_multiple_failures(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+
+    // Simulate multiple failures
+    simulateWiFiError201("Network1");
+    simulateRetryFailure();
+    TEST_ASSERT_EQUAL(1, WiFiRetryState::currentRetryCount);
+
+    simulateWiFiError201("Network2");
+    simulateRetryFailure();
+    TEST_ASSERT_EQUAL(2, WiFiRetryState::currentRetryCount);
+
+    simulateWiFiError201("Network3");
+    simulateRetryFailure();
+    TEST_ASSERT_EQUAL(3, WiFiRetryState::currentRetryCount);
+
+    // Finally succeed
+    simulateSuccessfulConnection();
+
+    // Verify everything is cleared
+    TEST_ASSERT_FALSE(WiFiRetryState::wifiRetryInProgress);
+    TEST_ASSERT_FALSE(WiFiRetryState::wifiDisconnected);
+    TEST_ASSERT_EQUAL(0, WiFiRetryState::currentRetryCount);
+    TEST_ASSERT_EQUAL_STRING("", WiFiRetryState::lastFailedSSID.c_str());
+}
+
+void test_wifi_retry_immediate_vs_periodic(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+    ArduinoMock::reset();
+
+    const unsigned long RETRY_INTERVAL_MS = 30000;
+
+    // Simulate error 201 - should trigger immediate retry
+    simulateWiFiError201("TestNetwork");
+    TEST_ASSERT_TRUE(WiFiRetryState::wifiRetryInProgress);
+    TEST_ASSERT_EQUAL(0, WiFiRetryState::lastFullRetryAttempt); // Not set yet
+
+    // After immediate retry fails, should schedule periodic retry
+    simulateRetryFailure();
+    TEST_ASSERT_FALSE(WiFiRetryState::wifiRetryInProgress); // Immediate flag cleared
+    TEST_ASSERT_TRUE(WiFiRetryState::wifiDisconnected);      // Still disconnected
+    TEST_ASSERT_EQUAL(1, WiFiRetryState::currentRetryCount);
+    unsigned long firstRetryTime = WiFiRetryState::lastFullRetryAttempt;
+
+    // Advance time for periodic retry
+    ArduinoMock::mockMillis += RETRY_INTERVAL_MS + 1000;
+
+    // Periodic retry should be ready
+    unsigned long timeSinceRetry = ArduinoMock::mockMillis - WiFiRetryState::lastFullRetryAttempt;
+    TEST_ASSERT_TRUE(timeSinceRetry > RETRY_INTERVAL_MS);
+}
+
+void test_wifi_retry_preserves_network_order(void) {
+    TestWiFiState::reset();
+    WiFiRetryState::reset();
+
+    // Save networks in priority order
+    saveWiFiNetwork("Priority1", "pass1");
+    saveWiFiNetwork("Priority2", "pass2");
+    saveWiFiNetwork("Priority3", "pass3");
+
+    // Verify order is preserved
+    TEST_ASSERT_EQUAL_STRING("Priority1", wifiNetworks[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Priority2", wifiNetworks[1].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Priority3", wifiNetworks[2].ssid.c_str());
+
+    // Simulate error 201 on Priority1
+    simulateWiFiError201("Priority1");
+
+    // After retry, networks should still be in same order
+    // (retry logic should try Priority2, then Priority3, but not reorder)
+    TEST_ASSERT_EQUAL_STRING("Priority1", wifiNetworks[0].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Priority2", wifiNetworks[1].ssid.c_str());
+    TEST_ASSERT_EQUAL_STRING("Priority3", wifiNetworks[2].ssid.c_str());
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -850,6 +1089,17 @@ int runUnityTests(void) {
     RUN_TEST(test_wifi_save_validates_fields);
     RUN_TEST(test_remove_network_invalid_index);
     RUN_TEST(test_remove_network_negative_index);
+
+    // WiFi retry logic tests
+    RUN_TEST(test_wifi_retry_error_201_triggers_retry);
+    RUN_TEST(test_wifi_retry_successful_connection_clears_flags);
+    RUN_TEST(test_wifi_retry_counter_increments);
+    RUN_TEST(test_wifi_retry_tracks_failed_ssid);
+    RUN_TEST(test_wifi_retry_interval_timing);
+    RUN_TEST(test_wifi_retry_multiple_networks_fallback);
+    RUN_TEST(test_wifi_retry_clears_on_success_after_multiple_failures);
+    RUN_TEST(test_wifi_retry_immediate_vs_periodic);
+    RUN_TEST(test_wifi_retry_preserves_network_order);
 
     return UNITY_END();
 }

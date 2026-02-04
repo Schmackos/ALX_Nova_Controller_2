@@ -40,6 +40,13 @@ static unsigned long lastDisconnectWarning = 0;
 static bool wifiScanInProgress = false;
 static unsigned long wifiScanStartTime = 0;
 
+// WiFi retry state - for intelligent network retry logic
+static bool wifiRetryInProgress = false;
+static unsigned long lastFullRetryAttempt = 0;
+static const unsigned long RETRY_INTERVAL_MS = 30000; // 30 seconds between full list retries
+static int currentRetryCount = 0;
+static String lastFailedSSID = ""; // Track last failed network to avoid immediate retry
+
 // Helper function to convert WiFi disconnect reason to user-friendly message
 String getWiFiDisconnectReason(uint8_t reason) {
   switch (reason) {
@@ -239,6 +246,14 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
       lastDisconnectWarning = millis();
     }
 
+    // Detect "Network not found" error (201) - trigger retry of other networks
+    if (reason == 201) {
+      lastFailedSSID = WiFi.SSID();
+      wifiRetryInProgress = true;
+      DebugOut.printf("Network not found (%s) - will try other saved networks\n",
+                      lastFailedSSID.c_str());
+    }
+
     wifiDisconnected = true;
     lastDisconnectTime = millis();
     wifiStatusUpdateRequested = true; // Defer update to main loop
@@ -249,6 +264,9 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     DebugOut.println("✓ WiFi connected to access point");
     wifiDisconnected = false;
     wifiConnectError = "";            // Clear any previous error
+    wifiRetryInProgress = false;      // Clear retry flag on success
+    currentRetryCount = 0;            // Reset retry counter
+    lastFailedSSID = "";              // Clear failed SSID
     wifiStatusUpdateRequested = true; // Defer update to main loop
     break;
 
@@ -257,6 +275,9 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
                     WiFi.localIP().toString().c_str());
     wifiDisconnected = false;
     wifiConnectError = "";            // Clear any previous error
+    wifiRetryInProgress = false;      // Clear retry flag on success
+    currentRetryCount = 0;            // Reset retry counter
+    lastFailedSSID = "";              // Clear failed SSID
     wifiStatusUpdateRequested = true; // Defer update to main loop
     break;
 
@@ -284,27 +305,75 @@ void checkWiFiConnection() {
     }
   }
 
-  // Only try to reconnect if we're in STA mode and disconnected
-  if (wifiDisconnected && WiFi.getMode() != WIFI_AP && !wifiConnecting &&
-      millis() - lastReconnectAttempt > RECONNECT_DELAY_MS) {
+  // Handle immediate retry when network not found (error 201)
+  if (wifiRetryInProgress && !wifiConnecting && WiFi.getMode() != WIFI_AP) {
+    DebugOut.printf("Network '%s' not found - trying other saved networks...\n",
+                    lastFailedSSID.c_str());
 
-    lastReconnectAttempt = millis();
+    if (connectToStoredNetworks()) {
+      DebugOut.println("✓ Connected to alternative network!");
+      wifiRetryInProgress = false;
+      wifiDisconnected = false;
+      currentRetryCount = 0;
+    } else {
+      // All networks failed, schedule full list retry
+      lastFullRetryAttempt = millis();
+      currentRetryCount++;
+      DebugOut.printf("All networks failed (attempt %d). Will retry in %d seconds...\n",
+                      currentRetryCount, RETRY_INTERVAL_MS / 1000);
+      wifiRetryInProgress = false; // Clear immediate retry flag
+    }
+    return;
+  }
 
-    // Check if we've been disconnected for more than 10 seconds
-    if (millis() - lastDisconnectTime > 10000) {
-      DebugOut.println("Attempting to reconnect to saved networks...");
+  // Handle periodic retry of full network list
+  if (wifiDisconnected && WiFi.getMode() != WIFI_AP && !wifiConnecting) {
+    unsigned long timeSinceLastRetry = millis() - lastFullRetryAttempt;
+
+    // Retry full list at interval if disconnected
+    if (timeSinceLastRetry > RETRY_INTERVAL_MS &&
+        millis() - lastReconnectAttempt > RECONNECT_DELAY_MS) {
+
+      lastReconnectAttempt = millis();
+      lastFullRetryAttempt = millis();
+      currentRetryCount++;
+
+      DebugOut.printf("Periodic retry attempt #%d - trying all saved networks...\n",
+                      currentRetryCount);
 
       // Try to connect to stored networks
       if (connectToStoredNetworks()) {
-        DebugOut.println("Reconnection successful!");
+        DebugOut.println("✓ Reconnection successful!");
         wifiDisconnected = false;
+        currentRetryCount = 0;
       } else {
         // If no networks are available and we're not already in AP mode
-        if (!isAPMode) {
+        if (!isAPMode && autoAPEnabled) {
           DebugOut.println("No saved networks available. Starting AP mode...");
           startAccessPoint();
           sendWiFiStatus();
+        } else {
+          DebugOut.printf("No networks available. Next retry in %d seconds...\n",
+                          RETRY_INTERVAL_MS / 1000);
         }
+      }
+    }
+    // For initial disconnect, use old 10-second logic
+    else if (timeSinceLastRetry == 0 && millis() - lastDisconnectTime > 10000 &&
+             millis() - lastReconnectAttempt > RECONNECT_DELAY_MS) {
+
+      lastReconnectAttempt = millis();
+      lastFullRetryAttempt = millis();
+
+      DebugOut.println("Initial reconnection attempt to saved networks...");
+
+      if (connectToStoredNetworks()) {
+        DebugOut.println("✓ Reconnection successful!");
+        wifiDisconnected = false;
+      } else if (!isAPMode && autoAPEnabled) {
+        DebugOut.println("No saved networks available. Starting AP mode...");
+        startAccessPoint();
+        sendWiFiStatus();
       }
     }
   }

@@ -108,6 +108,13 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-04] Enhance WiFi manager and web interface with gzip support and improved logging
+
+- Updated WiFi manager to support gzipped content delivery for HTML pages, reducing transfer size.
+- Enhanced debug console with log level filtering and improved log message handling.
+- Refactored WiFi credentials management to use a structured configuration approach.
+- Added new helper functions for JSON parsing and network configuration management.
+- Updated RELEASE_NOTES.md to reflect these changes and improvements. (`c98198e`)
 - [2026-02-04] Update RELEASE_NOTES.md with new WiFi manager unit tests and enhancements (`7d8f18a`)
 - [2026-02-04] chore: Update RELEASE_NOTES.md and enhance WiFi manager unit tests
 
