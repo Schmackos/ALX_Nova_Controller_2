@@ -432,9 +432,9 @@ void handleSettingsImport() {
       wifiPassword = doc["wifi"]["password"].as<String>();
       DebugOut.println("WiFi password imported");
     }
-    // Save WiFi credentials
+    // Save WiFi credentials to multi-WiFi list
     if (wifiSSID.length() > 0) {
-      saveWiFiCredentials(wifiSSID.c_str(), wifiPassword.c_str());
+      saveWiFiNetwork(wifiSSID.c_str(), wifiPassword.c_str());
     }
   }
 

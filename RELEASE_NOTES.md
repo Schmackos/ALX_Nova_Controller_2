@@ -108,6 +108,7 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-04] Update RELEASE_NOTES.md with new WiFi manager unit tests and enhancements (`7d8f18a`)
 - [2026-02-04] chore: Update RELEASE_NOTES.md and enhance WiFi manager unit tests
 
 - Added new entry in RELEASE_NOTES.md for the implementation of WiFi manager unit tests using mock classes.

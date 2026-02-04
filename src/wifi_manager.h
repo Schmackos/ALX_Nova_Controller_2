@@ -4,9 +4,50 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+// ===== Constants =====
+constexpr uint8_t DNS_PORT = 53;
+constexpr unsigned long RECONNECT_DELAY_MS = 5000;
+constexpr unsigned long WARNING_THROTTLE_MS = 30000;
+constexpr unsigned long WIFI_SCAN_TIMEOUT_MS = 30000;
+constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
+
+// ===== WiFi Network Configuration Struct =====
+struct WiFiNetworkConfig {
+  String ssid;
+  String password;
+  bool useStaticIP = false;
+  String staticIP;
+  String subnet;
+  String gateway;
+  String dns1;
+  String dns2;
+
+  void clear() {
+    ssid = "";
+    password = "";
+    useStaticIP = false;
+    staticIP = "";
+    subnet = "";
+    gateway = "";
+    dns1 = "";
+    dns2 = "";
+  }
+};
+
+// ===== Deferred Connection State =====
+struct WiFiConnectionRequest {
+  bool requested = false;
+  unsigned long requestTime = 0;
+  WiFiNetworkConfig config;
+};
+
+extern WiFiConnectionRequest pendingConnection;
+extern bool wifiStatusUpdateRequested;
+
 // ===== WiFi Core Functions =====
 void startAccessPoint();
 void stopAccessPoint();
+void connectToWiFi(const WiFiNetworkConfig &config);
 void connectToWiFi(const char *ssid, const char *password,
                    bool useStaticIP = false, const char *staticIP = "",
                    const char *subnet = "", const char *gateway = "",
@@ -14,40 +55,35 @@ void connectToWiFi(const char *ssid, const char *password,
 void updateWiFiConnection();
 bool configureStaticIP(const char *staticIP, const char *subnet,
                        const char *gateway, const char *dns1 = "",
-                       const char *dns2 = ""); // Helper for static IP config
+                       const char *dns2 = "");
 
 // ===== WiFi Event Handler & Reconnection =====
-void initWiFiEventHandler(); // Initialize WiFi event handler (call in setup)
-void checkWiFiConnection();  // Check and handle reconnection (call in loop)
+void initWiFiEventHandler();
+void checkWiFiConnection();
 
-// ===== Deferred Connection Globals =====
-extern bool wifiConnectRequested;
-extern unsigned long wifiConnectRequestTime;
-extern String pendingSSID;
-extern String pendingPassword;
-extern bool pendingUseStaticIP;
-extern String pendingStaticIP;
-extern String pendingSubnet;
-extern String pendingGateway;
-extern String pendingDNS1;
-extern String pendingDNS2;
-extern bool wifiStatusUpdateRequested;
-
-// ===== WiFi Credentials Persistence =====
+// ===== WiFi Credentials Persistence (Legacy - for migration only) =====
 bool loadWiFiCredentials(String &ssid, String &password);
-void saveWiFiCredentials(const char *ssid, const char *password);
 
 // ===== Multi-WiFi Management =====
-void migrateWiFiCredentials();  // One-time migration from LittleFS to
-                                // Preferences
-bool connectToStoredNetworks(); // Try all saved networks in order
+void migrateWiFiCredentials();
+bool connectToStoredNetworks();
+bool saveWiFiNetwork(const WiFiNetworkConfig &config);
 bool saveWiFiNetwork(const char *ssid, const char *password,
                      bool useStaticIP = false, const char *staticIP = "",
                      const char *subnet = "", const char *gateway = "",
-                     const char *dns1 = "",
-                     const char *dns2 = ""); // Add/update network
-bool removeWiFiNetwork(int index);           // Remove network by index
-int getWiFiNetworkCount();                   // Get number of saved networks
+                     const char *dns1 = "", const char *dns2 = "");
+bool removeWiFiNetwork(int index);
+int getWiFiNetworkCount();
+bool readNetworkFromPrefs(int index, WiFiNetworkConfig &config);
+
+// ===== Preferences Key Helpers =====
+String getNetworkKey(const char *prefix, int index);
+
+// ===== Helper Functions =====
+bool parseJsonRequest(JsonDocument &doc);
+void extractStaticIPConfig(const JsonDocument &doc, WiFiNetworkConfig &config);
+void initializeNetworkServices();
+void ensureAPModeWithSTA();
 
 // ===== WiFi Status Broadcasting =====
 void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing);

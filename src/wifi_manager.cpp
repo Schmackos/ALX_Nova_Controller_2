@@ -4,6 +4,7 @@
 #include "debug_serial.h"
 #include "mqtt_handler.h"
 #include "ota_updater.h"
+#include "web_pages.h"
 #include "websocket_handler.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -12,24 +13,12 @@
 #include <Preferences.h>
 #include <WiFi.h>
 
-// ===== Deferred Connection Globals =====
-bool wifiConnectRequested = false;
-unsigned long wifiConnectRequestTime = 0;
-String pendingSSID = "";
-String pendingPassword = "";
-bool pendingUseStaticIP = false;
-String pendingStaticIP = "";
-String pendingSubnet = "";
-String pendingGateway = "";
-String pendingDNS1 = "";
-String pendingDNS2 = "";
-
-// Flag to defer WiFi status updates from event task to main loop
+// ===== Deferred Connection State =====
+WiFiConnectionRequest pendingConnection;
 bool wifiStatusUpdateRequested = false;
 
 // DNS Server for Captive Portal
 DNSServer dnsServer;
-const byte DNS_PORT = 53;
 
 // External function declarations
 extern int compareVersions(const String &v1, const String &v2);
@@ -38,21 +27,18 @@ extern void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 
 // External HTML page reference
 extern const char apHtmlPage[] PROGMEM;
+extern const uint8_t apHtmlPage_gz[] PROGMEM;
+extern const size_t apHtmlPage_gz_len;
 
 // WiFi reconnection state
 static bool wifiDisconnected = false;
 static unsigned long lastDisconnectTime = 0;
 static unsigned long lastReconnectAttempt = 0;
-static const unsigned long RECONNECT_DELAY =
-    5000; // Wait 5 seconds before reconnecting
 static unsigned long lastDisconnectWarning = 0;
-static const unsigned long WARNING_THROTTLE =
-    30000; // Only print warning every 30 seconds
 
 // WiFi scan state - prevents reconnection logic during scanning
 static bool wifiScanInProgress = false;
 static unsigned long wifiScanStartTime = 0;
-static const unsigned long WIFI_SCAN_TIMEOUT = 30000; // 30 second timeout
 
 // Helper function to convert WiFi disconnect reason to user-friendly message
 String getWiFiDisconnectReason(uint8_t reason) {
@@ -130,6 +116,111 @@ String getWiFiDisconnectReason(uint8_t reason) {
   }
 }
 
+// ===== Helper Functions =====
+
+// Generate Preferences key for network at given index
+String getNetworkKey(const char *prefix, int index) {
+  return String(prefix) + String(index);
+}
+
+// Parse JSON from HTTP request body
+bool parseJsonRequest(JsonDocument &doc) {
+  if (!server.hasArg("plain")) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"No data received\"}");
+    return false;
+  }
+
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
+  if (error) {
+    server.send(400, "application/json",
+                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+    return false;
+  }
+
+  return true;
+}
+
+// Extract static IP configuration from JSON into config struct
+void extractStaticIPConfig(const JsonDocument &doc, WiFiNetworkConfig &config) {
+  config.ssid = doc["ssid"].as<String>();
+  config.password = doc["password"].as<String>();
+  config.useStaticIP = doc["useStaticIP"] | false;
+  config.staticIP = doc["staticIP"] | "";
+  config.subnet = doc["subnet"] | "";
+  config.gateway = doc["gateway"] | "";
+  config.dns1 = doc["dns1"] | "";
+  config.dns2 = doc["dns2"] | "";
+}
+
+// Read network configuration from Preferences at given index
+bool readNetworkFromPrefs(int index, WiFiNetworkConfig &config) {
+  Preferences prefs;
+  prefs.begin("wifi-list", true);
+
+  int count = prefs.getUChar("count", 0);
+  if (index < 0 || index >= count) {
+    prefs.end();
+    return false;
+  }
+
+  config.ssid = prefs.getString(getNetworkKey("s", index).c_str(), "");
+  config.password = prefs.getString(getNetworkKey("p", index).c_str(), "");
+  config.useStaticIP = prefs.getBool(getNetworkKey("static", index).c_str(), false);
+  config.staticIP = prefs.getString(getNetworkKey("ip", index).c_str(), "");
+  config.subnet = prefs.getString(getNetworkKey("subnet", index).c_str(), "");
+  config.gateway = prefs.getString(getNetworkKey("gw", index).c_str(), "");
+  config.dns1 = prefs.getString(getNetworkKey("dns1_", index).c_str(), "");
+  config.dns2 = prefs.getString(getNetworkKey("dns2_", index).c_str(), "");
+
+  prefs.end();
+  return config.ssid.length() > 0;
+}
+
+// Write network configuration to Preferences at given index
+static void writeNetworkToPrefs(Preferences &prefs, int index,
+                                const WiFiNetworkConfig &config) {
+  prefs.putString(getNetworkKey("s", index).c_str(), config.ssid);
+  prefs.putString(getNetworkKey("p", index).c_str(), config.password);
+  prefs.putBool(getNetworkKey("static", index).c_str(), config.useStaticIP);
+  prefs.putString(getNetworkKey("ip", index).c_str(), config.staticIP);
+  prefs.putString(getNetworkKey("subnet", index).c_str(), config.subnet);
+  prefs.putString(getNetworkKey("gw", index).c_str(), config.gateway);
+  prefs.putString(getNetworkKey("dns1_", index).c_str(), config.dns1);
+  prefs.putString(getNetworkKey("dns2_", index).c_str(), config.dns2);
+}
+
+// Initialize network services (WebSocket, HTTP server, MQTT)
+void initializeNetworkServices() {
+  server.stop();
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+  DebugOut.setWebSocket(&webSocket);
+  server.begin();
+
+  DebugOut.println("=== Web server started on port 80 ===");
+  DebugOut.println("=== WebSocket server started on port 81 ===");
+  DebugOut.printf("Navigate to http://%s\n",
+                  WiFi.localIP().toString().c_str());
+
+  setupMqtt();
+}
+
+// Ensure AP mode is running alongside STA mode
+void ensureAPModeWithSTA() {
+  if (apEnabled && !isAPMode) {
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP(apSSID.c_str(), apPassword);
+    dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+    isAPMode = true;
+    DebugOut.printf("Access Point also running at: %s\n",
+                    WiFi.softAPIP().toString().c_str());
+  } else if (!apEnabled && isAPMode) {
+    dnsServer.stop();
+    isAPMode = false;
+  }
+}
+
 // WiFi Event Handler with reason info
 void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
   switch (event) {
@@ -142,7 +233,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
       DebugOut.printf("⚠️  WiFi connection failed: %s (reason %d)\n",
                       reasonStr.c_str(), reason);
       wifiConnectError = reasonStr;
-    } else if (millis() - lastDisconnectWarning > WARNING_THROTTLE) {
+    } else if (millis() - lastDisconnectWarning > WARNING_THROTTLE_MS) {
       DebugOut.printf("⚠️  WiFi disconnected: %s (reason %d)\n",
                       reasonStr.c_str(), reason);
       lastDisconnectWarning = millis();
@@ -184,7 +275,7 @@ void initWiFiEventHandler() {
 void checkWiFiConnection() {
   // Skip reconnection logic during WiFi scanning (with timeout safeguard)
   if (wifiScanInProgress) {
-    if (millis() - wifiScanStartTime > WIFI_SCAN_TIMEOUT) {
+    if (millis() - wifiScanStartTime > WIFI_SCAN_TIMEOUT_MS) {
       // Scan timed out, clear the flag
       wifiScanInProgress = false;
       DebugOut.println("WiFi scan timeout - clearing scan flag");
@@ -195,7 +286,7 @@ void checkWiFiConnection() {
 
   // Only try to reconnect if we're in STA mode and disconnected
   if (wifiDisconnected && WiFi.getMode() != WIFI_AP && !wifiConnecting &&
-      millis() - lastReconnectAttempt > RECONNECT_DELAY) {
+      millis() - lastReconnectAttempt > RECONNECT_DELAY_MS) {
 
     lastReconnectAttempt = millis();
 
@@ -304,22 +395,23 @@ bool configureStaticIP(const char *staticIP, const char *subnet,
   return true;
 }
 
-void connectToWiFi(const char *ssid, const char *password, bool useStaticIP,
-                   const char *staticIP, const char *subnet,
-                   const char *gateway, const char *dns1, const char *dns2) {
+// Connect to WiFi using config struct
+void connectToWiFi(const WiFiNetworkConfig &config) {
   WiFi.mode(WIFI_STA);
 
   // Configure static IP if enabled
-  if (useStaticIP) {
-    configureStaticIP(staticIP, subnet, gateway, dns1, dns2);
+  if (config.useStaticIP) {
+    configureStaticIP(config.staticIP.c_str(), config.subnet.c_str(),
+                      config.gateway.c_str(), config.dns1.c_str(),
+                      config.dns2.c_str());
   }
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(config.ssid.c_str(), config.password.c_str());
 
   DebugOut.print("Connecting to WiFi: ");
-  DebugOut.println(ssid);
-  if (useStaticIP) {
-    DebugOut.printf("  Using Static IP: %s\n", staticIP);
+  DebugOut.println(config.ssid);
+  if (config.useStaticIP) {
+    DebugOut.printf("  Using Static IP: %s\n", config.staticIP.c_str());
   } else {
     DebugOut.println("  Using DHCP");
   }
@@ -338,44 +430,31 @@ void connectToWiFi(const char *ssid, const char *password, bool useStaticIP,
     // Synchronize time with NTP (required for SSL certificate validation)
     syncTimeWithNTP();
 
-    // If AP is enabled, keep it running alongside STA
-    if (apEnabled && !isAPMode) {
-      WiFi.mode(WIFI_AP_STA);
-      WiFi.softAP(apSSID.c_str(), apPassword);
+    // Setup AP mode if enabled
+    ensureAPModeWithSTA();
 
-      // Start DNS server for AP mode
-      dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-      isAPMode = true;
-
-      DebugOut.printf("Access Point also running at: %s\n",
-                      WiFi.softAPIP().toString().c_str());
-    } else if (!apEnabled) {
-      if (isAPMode) {
-        dnsServer.stop();
-      }
-      isAPMode = false;
-    }
-
-    server.stop();
-
-    webSocket.begin();
-    webSocket.onEvent(webSocketEvent);
-
-    // Connect DebugSerial to WebSocket for log broadcasting
-    DebugOut.setWebSocket(&webSocket);
-
-    server.begin();
-    DebugOut.println("=== Web server started on port 80 ===");
-    DebugOut.println("=== WebSocket server started on port 81 ===");
-    DebugOut.printf("Navigate to http://%s\n",
-                    WiFi.localIP().toString().c_str());
-
-    // Setup MQTT client
-    setupMqtt();
+    // Initialize network services
+    initializeNetworkServices();
   } else {
     DebugOut.println("WARNING: Failed to connect to WiFi. Starting AP mode...");
     startAccessPoint();
   }
+}
+
+// Connect to WiFi (legacy overload for compatibility)
+void connectToWiFi(const char *ssid, const char *password, bool useStaticIP,
+                   const char *staticIP, const char *subnet,
+                   const char *gateway, const char *dns1, const char *dns2) {
+  WiFiNetworkConfig config;
+  config.ssid = ssid ? ssid : "";
+  config.password = password ? password : "";
+  config.useStaticIP = useStaticIP;
+  config.staticIP = staticIP ? staticIP : "";
+  config.subnet = subnet ? subnet : "";
+  config.gateway = gateway ? gateway : "";
+  config.dns1 = dns1 ? dns1 : "";
+  config.dns2 = dns2 ? dns2 : "";
+  connectToWiFi(config);
 }
 
 // ===== WiFi Credentials Persistence =====
@@ -403,16 +482,6 @@ bool loadWiFiCredentials(String &ssid, String &password) {
   }
 
   return false;
-}
-
-void saveWiFiCredentials(const char *ssid, const char *password) {
-  File file = LittleFS.open("/wifi_config.txt", "w");
-  if (file) {
-    file.println(ssid);
-    file.println(password);
-    file.close();
-    DebugOut.println("Credentials saved to LittleFS");
-  }
 }
 
 // ===== Multi-WiFi Management =====
@@ -464,11 +533,9 @@ int getWiFiNetworkCount() {
   return count;
 }
 
-// Save WiFi network (add or update)
-bool saveWiFiNetwork(const char *ssid, const char *password, bool useStaticIP,
-                     const char *staticIP, const char *subnet,
-                     const char *gateway, const char *dns1, const char *dns2) {
-  if (ssid == nullptr || strlen(ssid) == 0) {
+// Save WiFi network using config struct
+bool saveWiFiNetwork(const WiFiNetworkConfig &config) {
+  if (config.ssid.length() == 0) {
     return false;
   }
 
@@ -479,22 +546,19 @@ bool saveWiFiNetwork(const char *ssid, const char *password, bool useStaticIP,
 
   // Check if SSID already exists
   for (int i = 0; i < count; i++) {
-    String existingSSID = prefs.getString(("s" + String(i)).c_str(), "");
-    if (existingSSID == ssid) {
-      // Update existing network (password and static IP config)
-      // Only update password if provided (non-empty)
-      if (strlen(password) > 0) {
-        prefs.putString(("p" + String(i)).c_str(), password);
+    String existingSSID = prefs.getString(getNetworkKey("s", i).c_str(), "");
+    if (existingSSID == config.ssid) {
+      // Update existing network - only update password if provided
+      WiFiNetworkConfig updateConfig = config;
+      if (config.password.length() == 0) {
+        updateConfig.password =
+            prefs.getString(getNetworkKey("p", i).c_str(), "");
       }
-      prefs.putBool(("static" + String(i)).c_str(), useStaticIP);
-      prefs.putString(("ip" + String(i)).c_str(), staticIP);
-      prefs.putString(("subnet" + String(i)).c_str(), subnet);
-      prefs.putString(("gw" + String(i)).c_str(), gateway);
-      prefs.putString(("dns1_" + String(i)).c_str(), dns1);
-      prefs.putString(("dns2_" + String(i)).c_str(), dns2);
+      writeNetworkToPrefs(prefs, i, updateConfig);
       prefs.end();
-      DebugOut.printf("Updated network: %s (Static IP: %s)\n", ssid,
-                      useStaticIP ? "enabled" : "disabled");
+      DebugOut.printf("Updated network: %s (Static IP: %s)\n",
+                      config.ssid.c_str(),
+                      config.useStaticIP ? "enabled" : "disabled");
       return true;
     }
   }
@@ -507,20 +571,56 @@ bool saveWiFiNetwork(const char *ssid, const char *password, bool useStaticIP,
   }
 
   // Add new network at the end
-  prefs.putString(("s" + String(count)).c_str(), ssid);
-  prefs.putString(("p" + String(count)).c_str(), password);
-  prefs.putBool(("static" + String(count)).c_str(), useStaticIP);
-  prefs.putString(("ip" + String(count)).c_str(), staticIP);
-  prefs.putString(("subnet" + String(count)).c_str(), subnet);
-  prefs.putString(("gw" + String(count)).c_str(), gateway);
-  prefs.putString(("dns1_" + String(count)).c_str(), dns1);
-  prefs.putString(("dns2_" + String(count)).c_str(), dns2);
+  writeNetworkToPrefs(prefs, count, config);
   prefs.putUChar("count", count + 1);
   prefs.end();
 
-  DebugOut.printf("Saved new network: %s (total: %d, Static IP: %s)\n", ssid,
-                  count + 1, useStaticIP ? "enabled" : "disabled");
+  DebugOut.printf("Saved new network: %s (total: %d, Static IP: %s)\n",
+                  config.ssid.c_str(), count + 1,
+                  config.useStaticIP ? "enabled" : "disabled");
   return true;
+}
+
+// Save WiFi network (legacy overload for compatibility)
+bool saveWiFiNetwork(const char *ssid, const char *password, bool useStaticIP,
+                     const char *staticIP, const char *subnet,
+                     const char *gateway, const char *dns1, const char *dns2) {
+  WiFiNetworkConfig config;
+  config.ssid = ssid ? ssid : "";
+  config.password = password ? password : "";
+  config.useStaticIP = useStaticIP;
+  config.staticIP = staticIP ? staticIP : "";
+  config.subnet = subnet ? subnet : "";
+  config.gateway = gateway ? gateway : "";
+  config.dns1 = dns1 ? dns1 : "";
+  config.dns2 = dns2 ? dns2 : "";
+  return saveWiFiNetwork(config);
+}
+
+// Helper to read network config directly from open Preferences
+static void readNetworkFromOpenPrefs(Preferences &prefs, int index,
+                                     WiFiNetworkConfig &config) {
+  config.ssid = prefs.getString(getNetworkKey("s", index).c_str(), "");
+  config.password = prefs.getString(getNetworkKey("p", index).c_str(), "");
+  config.useStaticIP =
+      prefs.getBool(getNetworkKey("static", index).c_str(), false);
+  config.staticIP = prefs.getString(getNetworkKey("ip", index).c_str(), "");
+  config.subnet = prefs.getString(getNetworkKey("subnet", index).c_str(), "");
+  config.gateway = prefs.getString(getNetworkKey("gw", index).c_str(), "");
+  config.dns1 = prefs.getString(getNetworkKey("dns1_", index).c_str(), "");
+  config.dns2 = prefs.getString(getNetworkKey("dns2_", index).c_str(), "");
+}
+
+// Helper to remove all keys for a network at given index
+static void removeNetworkKeys(Preferences &prefs, int index) {
+  prefs.remove(getNetworkKey("s", index).c_str());
+  prefs.remove(getNetworkKey("p", index).c_str());
+  prefs.remove(getNetworkKey("static", index).c_str());
+  prefs.remove(getNetworkKey("ip", index).c_str());
+  prefs.remove(getNetworkKey("subnet", index).c_str());
+  prefs.remove(getNetworkKey("gw", index).c_str());
+  prefs.remove(getNetworkKey("dns1_", index).c_str());
+  prefs.remove(getNetworkKey("dns2_", index).c_str());
 }
 
 // Remove network by index
@@ -540,43 +640,22 @@ bool removeWiFiNetwork(int index) {
   }
 
   // Get SSID being removed for debug
-  String removingSSID = prefs.getString(("s" + String(index)).c_str(), "");
+  String removingSSID = prefs.getString(getNetworkKey("s", index).c_str(), "");
   DebugOut.printf("Removing network at index %d: %s\n", index,
                   removingSSID.c_str());
 
   // Shift all networks after this index down by one
   for (int i = index; i < count - 1; i++) {
-    String ssid = prefs.getString(("s" + String(i + 1)).c_str(), "");
-    String pass = prefs.getString(("p" + String(i + 1)).c_str(), "");
-    bool useStatic = prefs.getBool(("static" + String(i + 1)).c_str(), false);
-    String ip = prefs.getString(("ip" + String(i + 1)).c_str(), "");
-    String subnet = prefs.getString(("subnet" + String(i + 1)).c_str(), "");
-    String gw = prefs.getString(("gw" + String(i + 1)).c_str(), "");
-    String dns1 = prefs.getString(("dns1_" + String(i + 1)).c_str(), "");
-    String dns2 = prefs.getString(("dns2_" + String(i + 1)).c_str(), "");
-
-    DebugOut.printf("  Shifting index %d -> %d: %s\n", i + 1, i, ssid.c_str());
-
-    prefs.putString(("s" + String(i)).c_str(), ssid);
-    prefs.putString(("p" + String(i)).c_str(), pass);
-    prefs.putBool(("static" + String(i)).c_str(), useStatic);
-    prefs.putString(("ip" + String(i)).c_str(), ip);
-    prefs.putString(("subnet" + String(i)).c_str(), subnet);
-    prefs.putString(("gw" + String(i)).c_str(), gw);
-    prefs.putString(("dns1_" + String(i)).c_str(), dns1);
-    prefs.putString(("dns2_" + String(i)).c_str(), dns2);
+    WiFiNetworkConfig config;
+    readNetworkFromOpenPrefs(prefs, i + 1, config);
+    DebugOut.printf("  Shifting index %d -> %d: %s\n", i + 1, i,
+                    config.ssid.c_str());
+    writeNetworkToPrefs(prefs, i, config);
   }
 
   // Remove the last entry
   DebugOut.printf("Removing last entry at index %d\n", count - 1);
-  prefs.remove(("s" + String(count - 1)).c_str());
-  prefs.remove(("p" + String(count - 1)).c_str());
-  prefs.remove(("static" + String(count - 1)).c_str());
-  prefs.remove(("ip" + String(count - 1)).c_str());
-  prefs.remove(("subnet" + String(count - 1)).c_str());
-  prefs.remove(("gw" + String(count - 1)).c_str());
-  prefs.remove(("dns1_" + String(count - 1)).c_str());
-  prefs.remove(("dns2_" + String(count - 1)).c_str());
+  removeNetworkKeys(prefs, count - 1);
   prefs.putUChar("count", count - 1);
 
   prefs.end();
@@ -606,29 +685,24 @@ bool connectToStoredNetworks() {
   DebugOut.printf("Trying %d saved network(s)...\n", count);
 
   for (int i = 0; i < count; i++) {
-    String ssid = prefs.getString(("s" + String(i)).c_str(), "");
-    String password = prefs.getString(("p" + String(i)).c_str(), "");
-    bool useStatic = prefs.getBool(("static" + String(i)).c_str(), false);
-    String ip = prefs.getString(("ip" + String(i)).c_str(), "");
-    String subnet = prefs.getString(("subnet" + String(i)).c_str(), "");
-    String gw = prefs.getString(("gw" + String(i)).c_str(), "");
-    String dns1 = prefs.getString(("dns1_" + String(i)).c_str(), "");
-    String dns2 = prefs.getString(("dns2_" + String(i)).c_str(), "");
+    WiFiNetworkConfig config;
+    readNetworkFromOpenPrefs(prefs, i, config);
 
-    if (ssid.length() == 0) {
+    if (config.ssid.length() == 0) {
       continue;
     }
 
     DebugOut.printf("Attempting connection %d/%d: %s\n", i + 1, count,
-                    ssid.c_str());
+                    config.ssid.c_str());
 
     WiFi.mode(WIFI_STA);
 
     // Configure static IP if enabled
-    if (useStatic && ip.length() > 0) {
-      if (configureStaticIP(ip.c_str(), subnet.c_str(), gw.c_str(),
-                            dns1.c_str(), dns2.c_str())) {
-        DebugOut.printf("  Using Static IP: %s\n", ip.c_str());
+    if (config.useStaticIP && config.staticIP.length() > 0) {
+      if (configureStaticIP(config.staticIP.c_str(), config.subnet.c_str(),
+                            config.gateway.c_str(), config.dns1.c_str(),
+                            config.dns2.c_str())) {
+        DebugOut.printf("  Using Static IP: %s\n", config.staticIP.c_str());
       }
     } else {
       // Reset to DHCP
@@ -636,11 +710,11 @@ bool connectToStoredNetworks() {
       DebugOut.println("  Using DHCP");
     }
 
-    WiFi.begin(ssid.c_str(), password.c_str());
+    WiFi.begin(config.ssid.c_str(), config.password.c_str());
 
     unsigned long startTime = millis();
     while (WiFi.status() != WL_CONNECTED &&
-           millis() - startTime < WIFI_CONNECT_TIMEOUT) {
+           millis() - startTime < WIFI_CONNECT_TIMEOUT_MS) {
       delay(500);
       DebugOut.print(".");
     }
@@ -648,7 +722,7 @@ bool connectToStoredNetworks() {
     if (WiFi.status() == WL_CONNECTED) {
       prefs.end();
       DebugOut.println("\nWiFi connected!");
-      DebugOut.printf("Connected to: %s\n", ssid.c_str());
+      DebugOut.printf("Connected to: %s\n", config.ssid.c_str());
       DebugOut.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
 
       // Move successful network to index 0 (priority) if not already there
@@ -656,54 +730,15 @@ bool connectToStoredNetworks() {
         Preferences prefsWrite;
         prefsWrite.begin("wifi-list", false);
 
-        // Save the successful network
-        String successSSID = ssid;
-        String successPass = password;
-        bool successStatic = useStatic;
-        String successIp = ip;
-        String successSubnet = subnet;
-        String successGw = gw;
-        String successDns1 = dns1;
-        String successDns2 = dns2;
-
         // Shift networks 0 to i-1 down by one
         for (int j = i; j > 0; j--) {
-          String shiftSSID =
-              prefsWrite.getString(("s" + String(j - 1)).c_str(), "");
-          String shiftPass =
-              prefsWrite.getString(("p" + String(j - 1)).c_str(), "");
-          bool shiftStatic =
-              prefsWrite.getBool(("static" + String(j - 1)).c_str(), false);
-          String shiftIp =
-              prefsWrite.getString(("ip" + String(j - 1)).c_str(), "");
-          String shiftSubnet =
-              prefsWrite.getString(("subnet" + String(j - 1)).c_str(), "");
-          String shiftGw =
-              prefsWrite.getString(("gw" + String(j - 1)).c_str(), "");
-          String shiftDns1 =
-              prefsWrite.getString(("dns1_" + String(j - 1)).c_str(), "");
-          String shiftDns2 =
-              prefsWrite.getString(("dns2_" + String(j - 1)).c_str(), "");
-
-          prefsWrite.putString(("s" + String(j)).c_str(), shiftSSID);
-          prefsWrite.putString(("p" + String(j)).c_str(), shiftPass);
-          prefsWrite.putBool(("static" + String(j)).c_str(), shiftStatic);
-          prefsWrite.putString(("ip" + String(j)).c_str(), shiftIp);
-          prefsWrite.putString(("subnet" + String(j)).c_str(), shiftSubnet);
-          prefsWrite.putString(("gw" + String(j)).c_str(), shiftGw);
-          prefsWrite.putString(("dns1_" + String(j)).c_str(), shiftDns1);
-          prefsWrite.putString(("dns2_" + String(j)).c_str(), shiftDns2);
+          WiFiNetworkConfig shiftConfig;
+          readNetworkFromOpenPrefs(prefsWrite, j - 1, shiftConfig);
+          writeNetworkToPrefs(prefsWrite, j, shiftConfig);
         }
 
         // Put successful network at index 0
-        prefsWrite.putString("s0", successSSID);
-        prefsWrite.putString("p0", successPass);
-        prefsWrite.putBool("static0", successStatic);
-        prefsWrite.putString("ip0", successIp);
-        prefsWrite.putString("subnet0", successSubnet);
-        prefsWrite.putString("gw0", successGw);
-        prefsWrite.putString("dns1_0", successDns1);
-        prefsWrite.putString("dns2_0", successDns2);
+        writeNetworkToPrefs(prefsWrite, 0, config);
         prefsWrite.end();
 
         DebugOut.println("Moved successful network to priority position");
@@ -712,41 +747,15 @@ bool connectToStoredNetworks() {
       // Synchronize time with NTP
       syncTimeWithNTP();
 
-      // Setup WebSocket and server
-      if (apEnabled && !isAPMode) {
-        WiFi.mode(WIFI_AP_STA);
-        WiFi.softAP(apSSID.c_str(), apPassword);
+      // Setup AP mode if enabled
+      ensureAPModeWithSTA();
 
-        // Start DNS server for AP mode
-        dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-        isAPMode = true;
-
-        DebugOut.printf("Access Point also running at: %s\n",
-                        WiFi.softAPIP().toString().c_str());
-      } else if (!apEnabled) {
-        if (isAPMode) {
-          dnsServer.stop();
-        }
-        isAPMode = false;
-      }
-
-      server.stop();
-      webSocket.begin();
-      webSocket.onEvent(webSocketEvent);
-      DebugOut.setWebSocket(&webSocket);
-      server.begin();
-
-      DebugOut.println("=== Web server started on port 80 ===");
-      DebugOut.println("=== WebSocket server started on port 81 ===");
-      DebugOut.printf("Navigate to http://%s\n",
-                      WiFi.localIP().toString().c_str());
-
-      // Setup MQTT
-      setupMqtt();
+      // Initialize network services
+      initializeNetworkServices();
 
       return true;
     } else {
-      DebugOut.printf("\nFailed to connect to: %s\n", ssid.c_str());
+      DebugOut.printf("\nFailed to connect to: %s\n", config.ssid.c_str());
     }
   }
 
@@ -875,21 +884,15 @@ void sendWiFiStatus() {
 
 // ===== WiFi HTTP API Handlers =====
 
-void handleAPRoot() { server.send_P(200, "text/html", apHtmlPage); }
+void handleAPRoot() {
+  if (!sendGzipped(server, apHtmlPage_gz, apHtmlPage_gz_len)) {
+    server.send_P(200, "text/html", apHtmlPage);
+  }
+}
 
 void handleAPConfig() {
-  if (server.hasArg("plain") == false) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"No data received\"}");
-    return;
-  }
-
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, server.arg("plain"));
-
-  if (error) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+  if (!parseJsonRequest(doc)) {
     return;
   }
 
@@ -903,7 +906,11 @@ void handleAPConfig() {
     return;
   }
 
-  saveWiFiCredentials(ssid.c_str(), password.c_str());
+  // Save to multi-WiFi list (replaces deprecated LittleFS storage)
+  WiFiNetworkConfig config;
+  config.ssid = ssid;
+  config.password = password;
+  saveWiFiNetwork(config);
 
   // Start asynchronous connection
   wifiSSID = ssid;
@@ -911,7 +918,7 @@ void handleAPConfig() {
   wifiConnecting = true;
   wifiConnectSuccess = false;
   wifiNewIP = "";
-  wifiConnectError = ""; // Clear any previous error
+  wifiConnectError = "";
 
   WiFi.mode(WIFI_AP_STA);
   WiFi.begin(ssid.c_str(), password.c_str());
@@ -924,18 +931,8 @@ void handleAPConfig() {
 }
 
 void handleAPConfigUpdate() {
-  if (server.hasArg("plain") == false) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"No data received\"}");
-    return;
-  }
-
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, server.arg("plain"));
-
-  if (error) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+  if (!parseJsonRequest(doc)) {
     return;
   }
 
@@ -991,18 +988,8 @@ void handleAPConfigUpdate() {
 }
 
 void handleAPToggle() {
-  if (server.hasArg("plain") == false) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"No data received\"}");
-    return;
-  }
-
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, server.arg("plain"));
-
-  if (error) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+  if (!parseJsonRequest(doc)) {
     return;
   }
 
@@ -1046,50 +1033,33 @@ void handleAPToggle() {
 }
 
 void handleWiFiConfig() {
-  if (server.hasArg("plain") == false) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"No data received\"}");
-    return;
-  }
-
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, server.arg("plain"));
-
-  if (error) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+  if (!parseJsonRequest(doc)) {
     return;
   }
 
-  String ssid = doc["ssid"].as<String>();
-  String password = doc["password"].as<String>();
+  WiFiNetworkConfig config;
+  extractStaticIPConfig(doc, config);
 
-  // Extract static IP configuration
-  bool useStaticIP = doc["useStaticIP"] | false;
-  String staticIP = doc["staticIP"] | "";
-  String subnet = doc["subnet"] | "";
-  String gateway = doc["gateway"] | "";
-  String dns1 = doc["dns1"] | "";
-  String dns2 = doc["dns2"] | "";
-
-  if (ssid.length() == 0) {
+  if (config.ssid.length() == 0) {
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"SSID required\"}");
     return;
   }
 
   // If password is empty, fetch the stored password for this SSID
-  String connectionPassword = password;
-  if (password.length() == 0) {
+  String connectionPassword = config.password;
+  if (config.password.length() == 0) {
+    WiFiNetworkConfig storedConfig;
     Preferences prefs;
-    prefs.begin("wifi-list", true); // Read-only
+    prefs.begin("wifi-list", true);
     int count = prefs.getUChar("count", 0);
     for (int i = 0; i < count; i++) {
-      String storedSSID = prefs.getString(("s" + String(i)).c_str(), "");
-      if (storedSSID == ssid) {
-        connectionPassword = prefs.getString(("p" + String(i)).c_str(), "");
+      readNetworkFromOpenPrefs(prefs, i, storedConfig);
+      if (storedConfig.ssid == config.ssid) {
+        connectionPassword = storedConfig.password;
         DebugOut.printf("Using stored password for network: %s\n",
-                        ssid.c_str());
+                        config.ssid.c_str());
         break;
       }
     }
@@ -1097,9 +1067,7 @@ void handleWiFiConfig() {
   }
 
   // Save to multi-WiFi list with static IP configuration
-  if (!saveWiFiNetwork(ssid.c_str(), password.c_str(), useStaticIP,
-                       staticIP.c_str(), subnet.c_str(), gateway.c_str(),
-                       dns1.c_str(), dns2.c_str())) {
+  if (!saveWiFiNetwork(config)) {
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"Failed to save network. "
                 "Maximum 5 networks reached.\"}");
@@ -1107,16 +1075,10 @@ void handleWiFiConfig() {
   }
 
   // Start asynchronous connection request
-  wifiConnectRequested = true;
-  wifiConnectRequestTime = millis();
-  pendingSSID = ssid;
-  pendingPassword = connectionPassword;
-  pendingUseStaticIP = useStaticIP;
-  pendingStaticIP = staticIP;
-  pendingSubnet = subnet;
-  pendingGateway = gateway;
-  pendingDNS1 = dns1;
-  pendingDNS2 = dns2;
+  pendingConnection.requested = true;
+  pendingConnection.requestTime = millis();
+  pendingConnection.config = config;
+  pendingConnection.config.password = connectionPassword;
 
   // Reset status flags for UI polling
   wifiConnecting = true;
@@ -1128,46 +1090,26 @@ void handleWiFiConfig() {
               "{\"success\": true, \"message\": \"Connection initiated\"}");
 
   DebugOut.printf("Network saved. Connection request queued for %s...\n",
-                  ssid.c_str());
+                  config.ssid.c_str());
 }
 
 void handleWiFiSave() {
-  if (server.hasArg("plain") == false) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"No data received\"}");
-    return;
-  }
-
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, server.arg("plain"));
-
-  if (error) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+  if (!parseJsonRequest(doc)) {
     return;
   }
 
-  String ssid = doc["ssid"].as<String>();
-  String password = doc["password"].as<String>();
+  WiFiNetworkConfig config;
+  extractStaticIPConfig(doc, config);
 
-  // Extract static IP configuration
-  bool useStaticIP = doc["useStaticIP"] | false;
-  String staticIP = doc["staticIP"] | "";
-  String subnet = doc["subnet"] | "";
-  String gateway = doc["gateway"] | "";
-  String dns1 = doc["dns1"] | "";
-  String dns2 = doc["dns2"] | "";
-
-  if (ssid.length() == 0) {
+  if (config.ssid.length() == 0) {
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"SSID required\"}");
     return;
   }
 
   // Save to multi-WiFi list with static IP configuration
-  if (!saveWiFiNetwork(ssid.c_str(), password.c_str(), useStaticIP,
-                       staticIP.c_str(), subnet.c_str(), gateway.c_str(),
-                       dns1.c_str(), dns2.c_str())) {
+  if (!saveWiFiNetwork(config)) {
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"Failed to save network. "
                 "Maximum 5 networks reached.\"}");
@@ -1177,7 +1119,8 @@ void handleWiFiSave() {
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Network settings saved\"}");
 
-  DebugOut.printf("Network saved: %s (without connecting)\n", ssid.c_str());
+  DebugOut.printf("Network saved: %s (without connecting)\n",
+                  config.ssid.c_str());
 }
 
 void handleWiFiStatus() {
@@ -1287,10 +1230,7 @@ void handleWiFiScan() {
 }
 
 void handleWiFiList() {
-  Preferences prefs;
-  prefs.begin("wifi-list", true); // Read-only
-
-  int count = prefs.getUChar("count", 0);
+  int count = getWiFiNetworkCount();
 
   JsonDocument doc;
   doc["success"] = true;
@@ -1298,27 +1238,22 @@ void handleWiFiList() {
   JsonArray networks = doc["networks"].to<JsonArray>();
 
   for (int i = 0; i < count; i++) {
-    String ssid = prefs.getString(("s" + String(i)).c_str(), "");
-    if (ssid.length() > 0) {
+    WiFiNetworkConfig config;
+    if (readNetworkFromPrefs(i, config) && config.ssid.length() > 0) {
       JsonObject net = networks.add<JsonObject>();
-      net["ssid"] = ssid;
+      net["ssid"] = config.ssid;
       net["index"] = i;
-      net["priority"] = (i == 0) ? true : false;
-
-      // Include static IP configuration
-      bool useStatic = prefs.getBool(("static" + String(i)).c_str(), false);
-      net["useStaticIP"] = useStatic;
-      if (useStatic) {
-        net["staticIP"] = prefs.getString(("ip" + String(i)).c_str(), "");
-        net["subnet"] = prefs.getString(("subnet" + String(i)).c_str(), "");
-        net["gateway"] = prefs.getString(("gw" + String(i)).c_str(), "");
-        net["dns1"] = prefs.getString(("dns1_" + String(i)).c_str(), "");
-        net["dns2"] = prefs.getString(("dns2_" + String(i)).c_str(), "");
+      net["priority"] = (i == 0);
+      net["useStaticIP"] = config.useStaticIP;
+      if (config.useStaticIP) {
+        net["staticIP"] = config.staticIP;
+        net["subnet"] = config.subnet;
+        net["gateway"] = config.gateway;
+        net["dns1"] = config.dns1;
+        net["dns2"] = config.dns2;
       }
     }
   }
-
-  prefs.end();
 
   String json;
   serializeJson(doc, json);
@@ -1326,18 +1261,8 @@ void handleWiFiList() {
 }
 
 void handleWiFiRemove() {
-  if (server.hasArg("plain") == false) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"No data received\"}");
-    return;
-  }
-
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, server.arg("plain"));
-
-  if (error) {
-    server.send(400, "application/json",
-                "{\"success\": false, \"message\": \"Invalid JSON\"}");
+  if (!parseJsonRequest(doc)) {
     return;
   }
 
@@ -1350,19 +1275,15 @@ void handleWiFiRemove() {
   int index = doc["index"].as<int>();
 
   // Get the SSID of the network being removed before removing it
-  String removedSSID = "";
+  WiFiNetworkConfig removedConfig;
   bool wasConnectedToRemovedNetwork = false;
-
-  Preferences prefs;
-  prefs.begin("wifi-list", true); // Read-only first
-  removedSSID = prefs.getString(("s" + String(index)).c_str(), "");
-  prefs.end();
+  readNetworkFromPrefs(index, removedConfig);
 
   // Check if we're currently connected to this network
-  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == removedSSID) {
+  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == removedConfig.ssid) {
     wasConnectedToRemovedNetwork = true;
     DebugOut.printf("Removing currently connected network: %s\n",
-                    removedSSID.c_str());
+                    removedConfig.ssid.c_str());
   }
 
   if (removeWiFiNetwork(index)) {
@@ -1404,21 +1325,21 @@ void updateWiFiConnection() {
   }
 
   // Handle deferred connection request
-  if (wifiConnectRequested) {
+  if (pendingConnection.requested) {
     // Wait for HTTP response to be sent (non-blocking delay)
-    if (millis() - wifiConnectRequestTime < 500) {
+    if (millis() - pendingConnection.requestTime < 500) {
       return;
     }
 
     DebugOut.println("\n=== Processing Deferred Connection Request ===");
-    wifiConnectRequested = false;
+    pendingConnection.requested = false;
 
     // Set global connection variables for status reporting
-    wifiSSID = pendingSSID;
-    wifiPassword = pendingPassword;
+    wifiSSID = pendingConnection.config.ssid;
+    wifiPassword = pendingConnection.config.password;
 
     // IMPORTANT: Maintain AP mode if enabled so frontend doesn't lose
-    // connection This allows the UI to poll for status (success/failure)
+    // connection. This allows the UI to poll for status (success/failure)
     if (apEnabled || isAPMode) {
       DebugOut.println("Maintaining AP mode during connection attempt...");
       WiFi.mode(WIFI_AP_STA);
@@ -1439,28 +1360,24 @@ void updateWiFiConnection() {
     }
 
     // Configure static IP logic
-    if (pendingUseStaticIP && pendingStaticIP.length() > 0) {
-      if (!configureStaticIP(pendingStaticIP.c_str(), pendingSubnet.c_str(),
-                             pendingGateway.c_str(), pendingDNS1.c_str(),
-                             pendingDNS2.c_str())) {
+    const WiFiNetworkConfig &cfg = pendingConnection.config;
+    if (cfg.useStaticIP && cfg.staticIP.length() > 0) {
+      if (!configureStaticIP(cfg.staticIP.c_str(), cfg.subnet.c_str(),
+                             cfg.gateway.c_str(), cfg.dns1.c_str(),
+                             cfg.dns2.c_str())) {
         DebugOut.println("Failed to configure static IP");
         wifiConnectSuccess = false;
         wifiConnectError = "Invalid Static IP Configuration";
         wifiConnecting = false;
+        pendingConnection.config.clear();
         return;
       }
     } else {
       WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
     }
 
-    DebugOut.printf("Initiating connection to: %s\n", pendingSSID.c_str());
-    WiFi.begin(pendingSSID.c_str(), pendingPassword.c_str());
-
-    // Initialize connection verification state
-    static unsigned long connectionStarted = 0; // Reset static
-    // Resetting the local static variable by assignment won't work across calls
-    // if it's static We handle the timeout logic below using the
-    // 'wifiConnecting' flag
+    DebugOut.printf("Initiating connection to: %s\n", cfg.ssid.c_str());
+    WiFi.begin(cfg.ssid.c_str(), cfg.password.c_str());
   }
 
   if (!wifiConnecting)
@@ -1475,8 +1392,9 @@ void updateWiFiConnection() {
     wifiConnectSuccess = true;
     wifiConnecting = false;
     wifiNewIP = WiFi.localIP().toString();
-    wifiConnectError = ""; // Clear any previous error
+    wifiConnectError = "";
     connectionStarted = 0;
+    pendingConnection.config.clear();
 
     DebugOut.println("\nWiFi connected in background!");
     DebugOut.printf("IP address: %s\n", wifiNewIP.c_str());
@@ -1487,10 +1405,12 @@ void updateWiFiConnection() {
 
     // Broadcast success to WebSocket clients
     sendWiFiStatus();
-  } else if (millis() - connectionStarted > 20000) { // 20s timeout
+  } else if (millis() - connectionStarted > WIFI_CONNECT_TIMEOUT_MS) {
     wifiConnectSuccess = false;
     wifiConnecting = false;
     connectionStarted = 0;
+    pendingConnection.config.clear();
+
     // Set timeout error if no specific disconnect reason was captured
     if (wifiConnectError.length() == 0) {
       wifiConnectError = "Connection timed out - check password and signal";

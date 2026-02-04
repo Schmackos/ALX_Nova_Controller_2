@@ -227,11 +227,12 @@ void setup() {
   // Note: Certificate loading removed - now using Mozilla certificate bundle
   // via ESP32CertBundle library for automatic SSL validation
 
-  // ===== Header Collection for Auth =====
+  // ===== Header Collection for Auth and Gzip =====
   // IMPORTANT: We must collect the "Cookie" header to read the session ID
   // Also collecting X-Session-ID as a fallback for API calls
-  const char *headerkeys[] = {"Cookie", "X-Session-ID"};
-  server.collectHeaders(headerkeys, 2);
+  // Accept-Encoding allows us to serve gzipped content when supported
+  const char *headerkeys[] = {"Cookie", "X-Session-ID", "Accept-Encoding"};
+  server.collectHeaders(headerkeys, 3);
 
   // Define server routes here (before WiFi setup)
 
@@ -282,8 +283,11 @@ void setup() {
   });
 
   // Authentication routes (unprotected)
-  server.on("/login", HTTP_GET,
-            []() { server.send_P(200, "text/html", loginPage); });
+  server.on("/login", HTTP_GET, []() {
+    if (!sendGzipped(server, loginPage_gz, loginPage_gz_len)) {
+      server.send_P(200, "text/html", loginPage);
+    }
+  });
   server.on("/api/auth/login", HTTP_POST, handleLogin);
   server.on("/api/auth/logout", HTTP_POST, handleLogout);
   server.on("/api/auth/status", HTTP_GET, handleAuthStatus);
@@ -294,8 +298,10 @@ void setup() {
     if (!requireAuth())
       return;
 
-    // Both AP and STA modes now serve the main dashboard.
-    server.send_P(200, "text/html", htmlPage);
+    // Serve gzipped dashboard if client supports it (~85% smaller)
+    if (!sendGzipped(server, htmlPage_gz, htmlPage_gz_len)) {
+      server.send_P(200, "text/html", htmlPage);
+    }
   });
 
   server.on("/api/wificonfig", HTTP_POST, []() {
