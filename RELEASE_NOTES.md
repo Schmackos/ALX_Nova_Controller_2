@@ -1,5 +1,25 @@
 # Release Notes
 
+## Version 1.4.4
+
+## New Features
+- Automated release via GitHub Actions
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+- Version bump to 1.4.4
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.4.3
 
 ## New Features
