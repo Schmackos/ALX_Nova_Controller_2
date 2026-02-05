@@ -106,6 +106,46 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_PRIORITY_MQTT 1    // Medium priority
 #define TASK_PRIORITY_OTA 0     // Low priority
 
+// ===== GUI Configuration (TFT + Rotary Encoder) =====
+#ifdef GUI_ENABLED
+
+// TFT SPI pins (ST7735S via Hardware SPI2/FSPI)
+#ifndef TFT_MOSI_PIN
+#define TFT_MOSI_PIN 11
+#endif
+#ifndef TFT_SCLK_PIN
+#define TFT_SCLK_PIN 12
+#endif
+#ifndef TFT_CS_PIN
+#define TFT_CS_PIN 10
+#endif
+#ifndef TFT_DC_PIN
+#define TFT_DC_PIN 13
+#endif
+#ifndef TFT_RST_PIN
+#define TFT_RST_PIN 14
+#endif
+#ifndef TFT_BL_PIN
+#define TFT_BL_PIN 21
+#endif
+
+// EC11 Rotary Encoder pins
+#ifndef ENCODER_A_PIN
+#define ENCODER_A_PIN 5
+#endif
+#ifndef ENCODER_B_PIN
+#define ENCODER_B_PIN 6
+#endif
+#ifndef ENCODER_SW_PIN
+#define ENCODER_SW_PIN 7
+#endif
+
+// GUI FreeRTOS task
+#define TASK_STACK_SIZE_GUI 8192
+#define TASK_PRIORITY_GUI 1
+
+#endif // GUI_ENABLED
+
 // Note: GitHub Root CA Certificate removed - now using Mozilla certificate
 // bundle via ESP32CertBundle library for automatic SSL validation of all public
 // servers

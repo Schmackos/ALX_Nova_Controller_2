@@ -259,6 +259,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             color: #fff;
         }
 
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 13px;
+            min-width: auto;
+        }
+
         .btn + .btn {
             margin-top: 8px;
         }
@@ -663,6 +669,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         .log-message { color: var(--text-primary); }
+        .log-message.debug { color: #9E9E9E; }
         .log-message.info { color: var(--info); }
         .log-message.success { color: var(--success); }
         .log-message.warning { color: var(--warning); }
@@ -1850,6 +1857,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-label">Current Reading</span>
                         <span class="info-value" id="voltageReading">0.00V</span>
                     </div>
+                    <div class="info-row">
+                        <span class="info-label">Sensing Mode</span>
+                        <span class="info-value" id="infoSensingMode">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Auto-Off Timer</span>
+                        <span class="info-value" id="infoTimerDuration">-- min</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Voltage Threshold</span>
+                        <span class="info-value" id="infoVoltageThreshold">--V</span>
+                    </div>
                 </div>
             </div>
 
@@ -2186,7 +2205,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
-            <!-- Day/Night Mode -->
+            <!-- Appearance -->
             <div class="card">
                 <div class="card-title">Appearance</div>
                 <div class="toggle-row">
@@ -2198,6 +2217,44 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <input type="checkbox" id="nightModeToggle" onchange="toggleTheme()">
                         <span class="slider"></span>
                     </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Display Backlight</div>
+                        <div class="toggle-sublabel">Turn screen on/off</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="backlightToggle" onchange="toggleBacklight()" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Screen Timeout</div>
+                        <div class="toggle-sublabel">Auto-sleep delay</div>
+                    </div>
+                    <select id="screenTimeoutSelect" onchange="setScreenTimeout()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="30">30 sec</option>
+                        <option value="60" selected>1 min</option>
+                        <option value="300">5 min</option>
+                        <option value="600">10 min</option>
+                        <option value="0">Never</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Boot Animation</div>
+                        <div class="toggle-sublabel">Animation on startup</div>
+                    </div>
+                    <select id="bootAnimSelect" onchange="setBootAnimation()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="-1">None</option>
+                        <option value="0" selected>Wave Pulse</option>
+                        <option value="1">Speaker</option>
+                        <option value="2">Waveform</option>
+                        <option value="3">Beat Bounce</option>
+                        <option value="4">Freq Bars</option>
+                        <option value="5">Heartbeat</option>
+                    </select>
                 </div>
             </div>
 
@@ -2498,13 +2555,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- Debug Console -->
             <div class="card">
                 <div class="card-title">Debug Console</div>
+                <div class="form-row mb-12">
+                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
+                    <select id="logLevelFilter" onchange="setLogFilter(this.value)" style="flex: 0 0 auto; min-width: 120px;">
+                        <option value="all">All Levels</option>
+                        <option value="debug">Debug</option>
+                        <option value="info">Info</option>
+                        <option value="warn">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                </div>
                 <div class="debug-console" id="debugConsole">
-                    <div class="log-entry"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
+                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
                 </div>
                 <div class="btn-row mt-12">
                     <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
                     <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
-                    <button class="btn btn-primary" onclick="downloadDiagnostics()">Download Diagnostics</button>
+                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
                 </div>
             </div>
         </section>
@@ -2557,6 +2624,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let blinkingEnabled = false;
         let autoUpdateEnabled = false;
         let nightMode = true;
+        let backlightOn = true;
+        let screenTimeoutSec = 60;
         let enableCertValidation = true;
         let currentFirmwareVersion = '';
         let currentLatestVersion = '';
@@ -2565,7 +2634,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let manualUploadInProgress = false;
         let debugPaused = false;
         let debugLogBuffer = [];
-        const DEBUG_MAX_LINES = 500;
+        const DEBUG_MAX_LINES = 1000;
+        let currentLogFilter = 'all'; // all, debug, info, warn, error
 
         // Input focus state to prevent overwrites during user input
         let inputFocusState = {
@@ -2840,11 +2910,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 } else if (data.type === 'rebootProgress') {
                     handlePhysicalRebootProgress(data);
                 } else if (data.type === 'debugLog') {
-                    appendDebugLog(data.timestamp, data.message);
+                    appendDebugLog(data.timestamp, data.message, data.level);
                 } else if (data.type === 'hardware_stats') {
                     updateHardwareStats(data);
                 } else if (data.type === 'justUpdated') {
                     showUpdateSuccessNotification(data);
+                } else if (data.type === 'displayState') {
+                    if (typeof data.backlightOn !== 'undefined') {
+                        backlightOn = !!data.backlightOn;
+                        document.getElementById('backlightToggle').checked = backlightOn;
+                    }
+                    if (typeof data.screenTimeout !== 'undefined') {
+                        screenTimeoutSec = data.screenTimeout;
+                        document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
+                    }
                 }
             };
 
@@ -3018,7 +3097,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('nightModeToggle').checked = nightMode;
                 applyTheme(nightMode);
             }
-            
+
+            if (typeof data.backlightOn !== 'undefined') {
+                backlightOn = !!data.backlightOn;
+                document.getElementById('backlightToggle').checked = backlightOn;
+            }
+
+            if (typeof data.screenTimeout !== 'undefined') {
+                screenTimeoutSec = data.screenTimeout;
+                document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
+            }
+
+            if (typeof data.bootAnimEnabled !== 'undefined') {
+                if (!data.bootAnimEnabled) {
+                    document.getElementById('bootAnimSelect').value = '-1';
+                } else if (typeof data.bootAnimStyle !== 'undefined') {
+                    document.getElementById('bootAnimSelect').value = data.bootAnimStyle.toString();
+                }
+            }
+
             if (typeof data.enableCertValidation !== 'undefined') {
                 enableCertValidation = !!data.enableCertValidation;
                 document.getElementById('certValidationToggle').checked = enableCertValidation;
@@ -3209,16 +3306,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 });
                 // Show/hide Smart Auto Settings based on mode
                 updateSmartAutoSettingsVisibility(modeValue);
+                const modeLabels = { 'always_on': 'Always On', 'always_off': 'Always Off', 'smart_auto': 'Smart Auto' };
+                document.getElementById('infoSensingMode').textContent = modeLabels[modeValue] || modeValue;
             }
             
             // Update timer duration (only if not focused)
             if (data.timerDuration !== undefined && !inputFocusState.timerDuration) {
                 document.getElementById('timerDuration').value = data.timerDuration;
             }
+            if (data.timerDuration !== undefined) {
+                document.getElementById('infoTimerDuration').textContent = data.timerDuration + ' min';
+            }
             
             // Update voltage threshold (only if not focused)
             if (data.voltageThreshold !== undefined && !inputFocusState.voltageThreshold) {
                 document.getElementById('voltageThreshold').value = data.voltageThreshold.toFixed(1);
+            }
+            if (data.voltageThreshold !== undefined) {
+                document.getElementById('infoVoltageThreshold').textContent = data.voltageThreshold.toFixed(1) + 'V';
             }
             
             // Update amplifier status
@@ -4450,6 +4555,46 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        function toggleBacklight() {
+            backlightOn = document.getElementById('backlightToggle').checked;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setBacklight', enabled: backlightOn }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ backlightOn })
+            });
+        }
+
+        function setScreenTimeout() {
+            screenTimeoutSec = parseInt(document.getElementById('screenTimeoutSelect').value);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setScreenTimeout', value: screenTimeoutSec }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ screenTimeout: screenTimeoutSec })
+            });
+        }
+
+        function setBootAnimation() {
+            var val = parseInt(document.getElementById('bootAnimSelect').value);
+            var payload = {};
+            if (val < 0) {
+                payload.bootAnimEnabled = false;
+            } else {
+                payload.bootAnimEnabled = true;
+                payload.bootAnimStyle = val;
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+
         function toggleAutoUpdate() {
             autoUpdateEnabled = document.getElementById('autoUpdateToggle').checked;
             apiFetch('/api/settings', {
@@ -5297,32 +5442,55 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Debug Console =====
-        function appendDebugLog(timestamp, message) {
+        function appendDebugLog(timestamp, message, level = 'info') {
             if (debugPaused) {
-                debugLogBuffer.push({ timestamp, message });
+                debugLogBuffer.push({ timestamp, message, level });
                 return;
             }
-            
+
+            // Determine log level from message if not provided
+            let detectedLevel = level;
+            if (message.includes('[E]') || message.includes('Error') || message.includes('❌')) {
+                detectedLevel = 'error';
+            } else if (message.includes('[W]') || message.includes('Warning') || message.includes('⚠')) {
+                detectedLevel = 'warn';
+            } else if (message.includes('[D]')) {
+                detectedLevel = 'debug';
+            } else if (message.includes('[I]') || message.includes('Info') || message.includes('ℹ')) {
+                detectedLevel = 'info';
+            }
+
             const console = document.getElementById('debugConsole');
             const entry = document.createElement('div');
             entry.className = 'log-entry';
-            
+            entry.dataset.level = detectedLevel; // Store level for filtering
+
             const ts = formatDebugTimestamp(timestamp);
             let msgClass = 'log-message';
-            if (message.includes('Error') || message.includes('❌')) msgClass += ' error';
-            else if (message.includes('Warning') || message.includes('⚠')) msgClass += ' warning';
+            if (detectedLevel === 'error') msgClass += ' error';
+            else if (detectedLevel === 'warn') msgClass += ' warning';
+            else if (detectedLevel === 'debug') msgClass += ' debug';
             else if (message.includes('✅') || message.includes('Success')) msgClass += ' success';
-            else if (message.includes('ℹ') || message.includes('Info')) msgClass += ' info';
-            
+            else msgClass += ' info';
+
             entry.innerHTML = `<span class="log-timestamp">[${ts}]</span><span class="${msgClass}">${message}</span>`;
+
+            // Apply filter visibility (but always add to DOM)
+            if (currentLogFilter !== 'all' && detectedLevel !== currentLogFilter) {
+                entry.style.display = 'none';
+            }
+
             console.appendChild(entry);
-            
+
             // Limit entries
             while (console.children.length > DEBUG_MAX_LINES) {
                 console.removeChild(console.firstChild);
             }
-            
-            console.scrollTop = console.scrollHeight;
+
+            // Only scroll if entry is visible
+            if (entry.style.display !== 'none') {
+                console.scrollTop = console.scrollHeight;
+            }
         }
 
         function formatDebugTimestamp(millis) {
@@ -5342,15 +5510,87 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             } else {
                 btn.textContent = 'Pause';
                 // Flush buffer
-                debugLogBuffer.forEach(log => appendDebugLog(log.timestamp, log.message));
+                debugLogBuffer.forEach(log => appendDebugLog(log.timestamp, log.message, log.level));
                 debugLogBuffer = [];
             }
         }
 
         function clearDebugConsole() {
             const console = document.getElementById('debugConsole');
-            console.innerHTML = '<div class="log-entry"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Console cleared</span></div>';
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.dataset.level = 'info';
+            entry.innerHTML = '<span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Console cleared</span>';
+
+            console.innerHTML = '';
+            console.appendChild(entry);
             debugLogBuffer = [];
+        }
+
+        function setLogFilter(level) {
+            currentLogFilter = level;
+
+            // Apply filter to all console entries
+            const console = document.getElementById('debugConsole');
+            const allEntries = Array.from(console.children);
+
+            allEntries.forEach(entry => {
+                const entryLevel = entry.dataset.level;
+                if (level === 'all' || entryLevel === level) {
+                    entry.style.display = '';
+                } else {
+                    entry.style.display = 'none';
+                }
+            });
+
+            // Auto-scroll to bottom after filtering
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function downloadDebugLog() {
+            const console = document.getElementById('debugConsole');
+            const entries = Array.from(console.children);
+
+            if (entries.length === 0) {
+                showToast('No logs to download', 'warning');
+                return;
+            }
+
+            // Build log content
+            let logContent = '=== Debug Log Export ===\n';
+            logContent += `Exported: ${new Date().toISOString()}\n`;
+            logContent += `Device: ${currentAPSSID || 'Unknown'}\n`;
+            logContent += `Firmware: ${currentFirmwareVersion || 'Unknown'}\n`;
+            logContent += `Total Entries: ${entries.length}\n`;
+            logContent += `Filter: ${currentLogFilter}\n`;
+            logContent += '========================\n\n';
+
+            entries.forEach(entry => {
+                // Only include visible entries (respects current filter)
+                if (entry.style.display !== 'none') {
+                    const text = entry.textContent || entry.innerText;
+                    logContent += text + '\n';
+                }
+            });
+
+            // Create blob and download
+            const blob = new Blob([logContent], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+
+            // Generate filename with timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            const deviceName = currentAPSSID.replace(/[^a-zA-Z0-9]/g, '_') || 'device';
+            a.download = `${deviceName}_debug_log_${timestamp}.txt`;
+
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            showToast(`Log downloaded (${entries.filter(e => e.style.display !== 'none').length} entries)`, 'success');
         }
 
         function downloadDiagnostics() {

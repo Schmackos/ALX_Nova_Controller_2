@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "author": "ALX Nova Controller",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-ili9341",
+      "id": "lcd1",
+      "top": -200,
+      "left": 300,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-ky-040",
+      "id": "encoder1",
+      "top": 100,
+      "left": 350,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn_k0",
+      "top": 250,
+      "left": 350,
+      "attrs": {
+        "color": "red",
+        "label": "K0 Reset"
+      }
+    }
+  ],
+  "connections": [
+    ["esp:TX", "$serialMonitor:RX", "", []],
+    ["esp:RX", "$serialMonitor:TX", "", []],
+
+    ["lcd1:GND",  "esp:GND.1", "black", ["v38.4", "h-48"]],
+    ["lcd1:VCC",  "esp:3V3.1", "red", ["v9.6", "h153.6"]],
+    ["lcd1:CS",   "esp:15", "orange", ["v38.4", "h76.8"]],
+    ["lcd1:D/C",  "esp:2", "gold", ["v19.2", "h144"]],
+    ["lcd1:MOSI", "esp:13", "green", ["v67.2", "h-57.61"]],
+    ["lcd1:SCK",  "esp:14", "blue", ["v76.8", "h-76.81"]],
+    ["lcd1:RST",  "esp:4", "green", ["v57.6", "h105.6"]],
+    ["esp:19",    "lcd1:MISO", "green", ["v19.2", "h-96"]],
+
+    ["esp:5", "encoder1:CLK", "cyan", ["h20"]],
+    ["esp:6", "encoder1:DT", "magenta", ["h30"]],
+    ["esp:7", "encoder1:SW", "brown", ["h40"]],
+    ["esp:3V3.2", "encoder1:VCC", "red", ["h50"]],
+    ["esp:GND.2", "encoder1:GND", "black", ["h60"]],
+
+    ["esp:9", "btn_k0:1.l", "red", ["h20"]],
+    ["esp:GND.3", "btn_k0:2.l", "black", ["h30"]]
+  ]
+}

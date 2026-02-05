@@ -216,9 +216,6 @@ void setAmplifierState(bool state) {
     amplifierState = state;
     digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
     DebugOut.printf("Amplifier state changed to: %s\n", state ? "ON" : "OFF");
-
-    // Broadcast state change immediately (force broadcast)
-    sendSmartSensingStateInternal();
   }
 }
 

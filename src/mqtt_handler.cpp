@@ -12,6 +12,11 @@ static uint32_t prevMqttHeapFree = 0;
 static float prevMqttCpuUsage = 0;
 static float prevMqttTemperature = 0;
 
+// State tracking for settings change detection
+static bool prevMqttNightMode = false;
+static bool prevMqttAutoUpdate = false;
+static bool prevMqttCertValidation = true;
+
 // External functions from other modules
 extern void sendBlinkingState();
 extern void sendLEDState();
@@ -152,6 +157,8 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/settings/auto_update/set").c_str());
   mqttClient.subscribe((base + "/settings/night_mode/set").c_str());
   mqttClient.subscribe((base + "/settings/cert_validation/set").c_str());
+  mqttClient.subscribe((base + "/settings/screen_timeout/set").c_str());
+  mqttClient.subscribe((base + "/display/backlight/set").c_str());
   mqttClient.subscribe((base + "/system/reboot").c_str());
   mqttClient.subscribe((base + "/system/factory_reset").c_str());
   mqttClient.subscribe((base + "/system/check_update").c_str());
@@ -323,6 +330,26 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     }
     publishMqttSystemStatus();
   }
+  // Handle screen timeout setting
+  else if (topicStr == base + "/settings/screen_timeout/set") {
+    int timeoutSec = message.toInt();
+    unsigned long timeoutMs = (unsigned long)timeoutSec * 1000UL;
+    if (timeoutMs == 0 || timeoutMs == 30000 || timeoutMs == 60000 ||
+        timeoutMs == 300000 || timeoutMs == 600000) {
+      appState.setScreenTimeout(timeoutMs);
+      saveSettings();
+      DebugOut.printf("MQTT: Screen timeout set to %d seconds\n", timeoutSec);
+      sendWiFiStatus();
+    }
+    publishMqttDisplayState();
+  }
+  // Handle backlight control
+  else if (topicStr == base + "/display/backlight/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.setBacklightOn(newState);
+    DebugOut.printf("MQTT: Backlight set to %s\n", newState ? "ON" : "OFF");
+    publishMqttDisplayState();
+  }
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
     DebugOut.println("MQTT: Reboot command received");
@@ -479,7 +506,12 @@ void mqttLoop() {
         (amplifierState != prevMqttAmplifierState) ||
         (currentMode != prevMqttSensingMode) ||
         (timerRemaining != prevMqttTimerRemaining) ||
-        (abs(lastVoltageReading - prevMqttVoltageReading) > 0.05);
+        (abs(lastVoltageReading - prevMqttVoltageReading) > 0.05) ||
+        (appState.backlightOn != prevMqttBacklightOn) ||
+        (appState.screenTimeout != prevMqttScreenTimeout) ||
+        (nightMode != prevMqttNightMode) ||
+        (autoUpdateEnabled != prevMqttAutoUpdate) ||
+        (enableCertValidation != prevMqttCertValidation);
 
     if (stateChanged) {
       publishMqttState();
@@ -491,6 +523,11 @@ void mqttLoop() {
       prevMqttSensingMode = currentMode;
       prevMqttTimerRemaining = timerRemaining;
       prevMqttVoltageReading = lastVoltageReading;
+      prevMqttBacklightOn = appState.backlightOn;
+      prevMqttScreenTimeout = appState.screenTimeout;
+      prevMqttNightMode = nightMode;
+      prevMqttAutoUpdate = autoUpdateEnabled;
+      prevMqttCertValidation = enableCertValidation;
     }
   }
 }
@@ -763,6 +800,19 @@ void publishMqttHardwareStats() {
                      String(uptimeSeconds).c_str(), true);
 }
 
+// Publish display state (backlight + screen timeout)
+void publishMqttDisplayState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/display/backlight").c_str(),
+                     appState.backlightOn ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/settings/screen_timeout").c_str(),
+                     String(appState.screenTimeout / 1000).c_str(), true);
+}
+
 // Publish all states
 void publishMqttState() {
   publishMqttLedState();
@@ -772,6 +822,7 @@ void publishMqttState() {
   publishMqttSystemStatus();
   publishMqttUpdateState();
   publishMqttHardwareStats();
+  publishMqttDisplayState();
 }
 
 // ===== Home Assistant Auto-Discovery =====
@@ -1303,6 +1354,46 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Display Backlight Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Display Backlight";
+    doc["unique_id"] = deviceId + "_backlight";
+    doc["state_topic"] = base + "/display/backlight";
+    doc["command_topic"] = base + "/display/backlight/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["icon"] = "mdi:brightness-6";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/backlight/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Screen Timeout Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Screen Timeout";
+    doc["unique_id"] = deviceId + "_screen_timeout";
+    doc["state_topic"] = base + "/settings/screen_timeout";
+    doc["command_topic"] = base + "/settings/screen_timeout/set";
+    doc["min"] = 0;
+    doc["max"] = 600;
+    doc["step"] = 30;
+    doc["unit_of_measurement"] = "s";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:timer-off-outline";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic =
+        "homeassistant/number/" + deviceId + "/screen_timeout/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   DebugOut.println("MQTT: Home Assistant discovery configs published");
 }
 
@@ -1343,7 +1434,9 @@ void removeHADiscovery() {
       "homeassistant/binary_sensor/%s/update_available/config",
       "homeassistant/button/%s/reboot/config",
       "homeassistant/button/%s/check_update/config",
-      "homeassistant/update/%s/firmware/config"};
+      "homeassistant/update/%s/firmware/config",
+      "homeassistant/switch/%s/backlight/config",
+      "homeassistant/number/%s/screen_timeout/config"};
 
   char topicBuf[128];
   for (const char *topicTemplate : topics) {

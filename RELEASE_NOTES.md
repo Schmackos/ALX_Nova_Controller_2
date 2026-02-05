@@ -43,6 +43,18 @@ None
 ## Version 1.4.2
 
 ## New Features
+- [2026-02-05] feat: Add LVGL GUI with TFT display, encoder input, and fix cross-task state sync
+
+Implements complete 7-phase GUI system for ST7735S 128x160 TFT with rotary
+encoder on ESP32-S3 using LVGL v9.4 + TFT_eSPI. Includes desktop carousel,
+control/settings/WiFi/MQTT/debug screens, boot animations, dark mode, and
+screen sleep/wake. Fixes cross-task WebSocket/MQTT sync where GUI callbacks
+on gui_task would call non-thread-safe WebSocket broadcasts, causing silent
+failures and poisoned change tracking. GUI now only sets dirty flags; the
+main loop handles all broadcasts.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`f8be593`)
+- [2026-02-04] feat: Implement WiFi manager unit tests using mock classes and resolve native compilation issues for existing tests. (`5820b55`)
 - [2026-02-04] feat: Introduce `WiFiManager` module for centralized WiFi connection, persistence, and API handling. (`72525b0`)
 - [2026-02-04] feat: Introduce `WiFiManager` for centralized connection, persistence, and API handling, resolving previous build failures. (`3b84a06`)
 - [2026-02-04] feat: Add WiFiManager module to centralize and enhance WiFi connection, persistence, and API handling. (`4745ba3`)
@@ -52,6 +64,22 @@ None
 - None
 
 ## Bug Fixes
+- [2026-02-04] fix: resolve unit test compilation errors for native environment
+
+- Fix random() function conflict in test_mqtt by using rand() % 10000 instead of Arduino random(10000)
+- Fix isDigit() not found errors by using std::isdigit() from <cctype> in test_utils and test_ota
+- Fix String method issues in test_ota by converting to std::string for indexOf/substring operations
+- Add missing putUChar/getUChar methods to Preferences mock for WiFi tests
+
+All previously failing tests now pass:
+- test_mqtt: PASSED
+- test_utils: PASSED
+- test_ota: PASSED
+- test_auth: PASSED
+- test_button: PASSED
+- test_websocket: PASSED
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com> (`ca5a26c`)
 - [2026-02-04] fix: resolve unit test compilation errors for native environment
 
 - Fix random() function conflict in test_mqtt by using rand() % 10000 instead of Arduino random(10000)
@@ -131,6 +159,40 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-05] Update RELEASE_NOTES.md to document the removal of obsolete skills and the addition of WebSearch functionality
+
+- Deleted SKILL.md files for brainstorming, code reviewer, frontend design, and related references to streamline the codebase.
+- Removed associated scripts and license files to eliminate unused components.
+- Added WebSearch functionality to the settings.local.json file. (`c078041`)
+- [2026-02-05] Update RELEASE_NOTES.md to reflect the removal of obsolete skills and documentation
+
+- Deleted SKILL.md files for brainstorming, code reviewer, frontend design, and related references to streamline the codebase.
+- Removed associated scripts and license files to eliminate unused components.
+- Cleaned up the repository by ensuring only relevant skills and documentation remain. (`9e9cc57`)
+- [2026-02-05] Update RELEASE_NOTES.md to include new WiFi retry logic and unit test enhancements
+
+- Documented the implementation of an intelligent retry mechanism for WiFi connections, addressing "Network not found" errors.
+- Noted updates to the WiFi manager for tracking last failed SSID and retry count.
+- Included details on enhanced unit tests for the WiFi retry logic, covering various scenarios. (`a589794`)
+- [2026-02-04] Implement WiFi retry logic and enhance unit tests
+
+- Added intelligent retry mechanism for WiFi connections, handling "Network not found" errors and implementing periodic retries.
+- Updated WiFi manager to track last failed SSID and retry count, improving connection reliability.
+- Enhanced unit tests for WiFi retry logic, including scenarios for immediate retries, success clearing flags, and multiple network fallbacks.
+- Updated RELEASE_NOTES.md to document these enhancements and new test cases. (`65bd7be`)
+- [2026-02-04] Enhance WiFi manager and web interface with gzip support and improved logging
+
+- Updated WiFi manager to support gzipped content delivery for HTML pages, reducing transfer size.
+- Enhanced debug console with log level filtering and improved log message handling.
+- Refactored WiFi credentials management to use a structured configuration approach.
+- Added new helper functions for JSON parsing and network configuration management.
+- Updated RELEASE_NOTES.md to reflect these changes and improvements. (`c98198e`)
+- [2026-02-04] Update RELEASE_NOTES.md with new WiFi manager unit tests and enhancements (`7d8f18a`)
+- [2026-02-04] chore: Update RELEASE_NOTES.md and enhance WiFi manager unit tests
+
+- Added new entry in RELEASE_NOTES.md for the implementation of WiFi manager unit tests using mock classes.
+- Updated WiFi class declaration from extern to static in WiFi.h for better encapsulation.
+- Enhanced test_wifi_manager.cpp with additional tests for password management, static IP configurations, and network removal edge cases. (`2b9c36b`)
 - [2026-02-04] chore: Update platformio.ini and RELEASE_NOTES.md for test configuration and documentation
 
 - Added test_ignore configuration to platformio.ini to exclude all unit tests for ESP32.

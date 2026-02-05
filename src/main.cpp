@@ -12,6 +12,9 @@
 #include "web_pages.h"
 #include "websocket_handler.h"
 #include "wifi_manager.h"
+#ifdef GUI_ENABLED
+#include "gui/gui_manager.h"
+#endif
 #include <ArduinoJson.h>
 #include <DNSServer.h>
 #include <HTTPClient.h>
@@ -191,7 +194,8 @@ void setup() {
       "Smart Sensing configured: Amplifier GPIO%d, Voltage Sense GPIO%d\n",
       AMPLIFIER_PIN, VOLTAGE_SENSE_PIN);
 
-  // Initialize LittleFS
+  // Initialize LittleFS and load settings BEFORE GUI so boot animation
+  // settings are available when gui_init() runs.
   if (!LittleFS.begin(true)) {
     DebugOut.println("ERROR: LittleFS initialization failed!");
   } else {
@@ -211,6 +215,12 @@ void setup() {
     DebugOut.println("No settings file found, using defaults");
   }
 
+#ifdef GUI_ENABLED
+  // Initialize TFT display + rotary encoder GUI (may play boot animation
+  // using settings loaded above).
+  gui_init();
+#endif
+
   // Load Smart Sensing settings
   if (!loadSmartSensingSettings()) {
     DebugOut.println("No Smart Sensing settings found, using defaults");
@@ -227,11 +237,12 @@ void setup() {
   // Note: Certificate loading removed - now using Mozilla certificate bundle
   // via ESP32CertBundle library for automatic SSL validation
 
-  // ===== Header Collection for Auth =====
+  // ===== Header Collection for Auth and Gzip =====
   // IMPORTANT: We must collect the "Cookie" header to read the session ID
   // Also collecting X-Session-ID as a fallback for API calls
-  const char *headerkeys[] = {"Cookie", "X-Session-ID"};
-  server.collectHeaders(headerkeys, 2);
+  // Accept-Encoding allows us to serve gzipped content when supported
+  const char *headerkeys[] = {"Cookie", "X-Session-ID", "Accept-Encoding"};
+  server.collectHeaders(headerkeys, 3);
 
   // Define server routes here (before WiFi setup)
 
@@ -282,8 +293,11 @@ void setup() {
   });
 
   // Authentication routes (unprotected)
-  server.on("/login", HTTP_GET,
-            []() { server.send_P(200, "text/html", loginPage); });
+  server.on("/login", HTTP_GET, []() {
+    if (!sendGzipped(server, loginPage_gz, loginPage_gz_len)) {
+      server.send_P(200, "text/html", loginPage);
+    }
+  });
   server.on("/api/auth/login", HTTP_POST, handleLogin);
   server.on("/api/auth/logout", HTTP_POST, handleLogout);
   server.on("/api/auth/status", HTTP_GET, handleAuthStatus);
@@ -294,8 +308,10 @@ void setup() {
     if (!requireAuth())
       return;
 
-    // Both AP and STA modes now serve the main dashboard.
-    server.send_P(200, "text/html", htmlPage);
+    // Serve gzipped dashboard if client supports it (~85% smaller)
+    if (!sendGzipped(server, htmlPage_gz, htmlPage_gz_len)) {
+      server.send_P(200, "text/html", htmlPage);
+    }
   });
 
   server.on("/api/wificonfig", HTTP_POST, []() {
@@ -451,12 +467,13 @@ void setup() {
 
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
+
 }
 
 void loop() {
   // Small delay to reduce CPU usage - allows other tasks to run
   // Without this, the loop runs as fast as possible (~49% CPU)
-  delay(1);
+  delay(10);
 
   server.handleClient();
   if (appState.isAPMode) {
@@ -486,6 +503,9 @@ void loop() {
     switch (pressType) {
     case BTN_SHORT_PRESS:
       DebugOut.println("=== Button: Short Press ===");
+#ifdef GUI_ENABLED
+      gui_wake(); // Wake TFT screen on K0 short press
+#endif
       DebugOut.printf("WiFi: %s\n", WiFi.status() == WL_CONNECTED
                                         ? "Connected"
                                         : "Disconnected");
@@ -640,6 +660,25 @@ void loop() {
 
   // Smart Sensing logic update
   updateSmartSensingLogic();
+
+  // Broadcast display state changes (GUI auto-sleep/wake -> WS clients + MQTT)
+  if (appState.isDisplayDirty()) {
+    sendDisplayState();
+    appState.clearDisplayDirty();
+  }
+
+  // Broadcast blinking state changes (GUI -> WS clients)
+  if (appState.isBlinkingDirty()) {
+    sendBlinkingState();
+    appState.clearBlinkingDirty();
+  }
+
+  // Broadcast settings changes (GUI -> WS clients + MQTT)
+  if (appState.isSettingsDirty()) {
+    sendWiFiStatus();
+    publishMqttSystemStatus();
+    appState.clearSettingsDirty();
+  }
 
   // Broadcast Smart Sensing state every second
   static unsigned long lastSmartSensingBroadcast = 0;
