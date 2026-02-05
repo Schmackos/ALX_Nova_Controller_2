@@ -2,6 +2,7 @@
 #include "auth_handler.h"
 #include "config.h"
 #include "app_state.h"
+#include "settings_manager.h"
 #include "wifi_manager.h"
 #include "smart_sensing.h"
 #include "ota_updater.h"
@@ -92,6 +93,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendBlinkingState();
             sendWiFiStatus();
             sendSmartSensingStateInternal();
+            sendDisplayState();
 
             // If device just updated, notify the client
             if (justUpdated) {
@@ -148,6 +150,21 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (doc["type"] == "getHardwareStats") {
           // Client requesting hardware stats
           sendHardwareStats();
+        } else if (msgType == "setBacklight") {
+          bool newState = doc["enabled"].as<bool>();
+          AppState::getInstance().setBacklightOn(newState);
+          DebugOut.printf("WS: Backlight set to %s\n", newState ? "ON" : "OFF");
+          sendDisplayState();
+        } else if (msgType == "setScreenTimeout") {
+          int timeoutSec = doc["value"].as<int>();
+          unsigned long timeoutMs = (unsigned long)timeoutSec * 1000UL;
+          if (timeoutMs == 0 || timeoutMs == 30000 || timeoutMs == 60000 ||
+              timeoutMs == 300000 || timeoutMs == 600000) {
+            AppState::getInstance().setScreenTimeout(timeoutMs);
+            saveSettings();
+            DebugOut.printf("WS: Screen timeout set to %d seconds\n", timeoutSec);
+            sendDisplayState();
+          }
         }
       }
       break;
@@ -172,6 +189,16 @@ void sendBlinkingState() {
   JsonDocument doc;
   doc["type"] = "blinkingEnabled";
   doc["enabled"] = blinkingEnabled;
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+void sendDisplayState() {
+  JsonDocument doc;
+  doc["type"] = "displayState";
+  doc["backlightOn"] = AppState::getInstance().backlightOn;
+  doc["screenTimeout"] = AppState::getInstance().screenTimeout / 1000; // Send as seconds
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());

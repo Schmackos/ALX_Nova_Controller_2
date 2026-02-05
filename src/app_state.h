@@ -149,12 +149,35 @@ public:
   SensingMode prevMqttSensingMode = ALWAYS_ON;
   unsigned long prevMqttTimerRemaining = 0;
   float prevMqttVoltageReading = 0.0;
+  bool prevMqttBacklightOn = true;
+  unsigned long prevMqttScreenTimeout = 60000;
 
   // ===== Smart Sensing Broadcast State Tracking =====
   SensingMode prevBroadcastMode = ALWAYS_ON;
   bool prevBroadcastAmplifierState = false;
   unsigned long prevBroadcastTimerRemaining = 0;
   float prevBroadcastVoltageReading = 0.0;
+
+  // ===== Display State (accessible from all interfaces) =====
+  unsigned long screenTimeout = 60000; // Screen timeout in ms (default 60s)
+  bool backlightOn = true;             // Runtime backlight state (not persisted)
+
+  void setBacklightOn(bool state);
+  void setScreenTimeout(unsigned long timeout);
+  bool isDisplayDirty() const { return _displayDirty; }
+  void clearDisplayDirty() { _displayDirty = false; }
+
+  // ===== Settings Dirty Flag (for GUI -> WS/MQTT sync) =====
+  bool isSettingsDirty() const { return _settingsDirty; }
+  void clearSettingsDirty() { _settingsDirty = false; }
+  void markSettingsDirty() { _settingsDirty = true; }
+
+  // ===== GUI State =====
+#ifdef GUI_ENABLED
+  bool guiDarkMode = false;            // GUI dark mode (separate from web nightMode)
+  bool bootAnimEnabled = true;         // Enable/disable boot animation
+  int bootAnimStyle = 0;               // 0-5 animation style index
+#endif
 
   // ===== Error State =====
   int errorCode = 0;
@@ -189,6 +212,8 @@ private:
   bool _sensingModeDirty = false;
   bool _timerDirty = false;
   bool _voltageDirty = false;
+  bool _displayDirty = false;
+  bool _settingsDirty = false;
 };
 
 // Convenience macro for accessing AppState
@@ -286,6 +311,8 @@ private:
 #define prevMqttSensingMode appState.prevMqttSensingMode
 #define prevMqttTimerRemaining appState.prevMqttTimerRemaining
 #define prevMqttVoltageReading appState.prevMqttVoltageReading
+#define prevMqttBacklightOn appState.prevMqttBacklightOn
+#define prevMqttScreenTimeout appState.prevMqttScreenTimeout
 
 // Smart Sensing Broadcast State Tracking
 #define prevBroadcastMode appState.prevBroadcastMode

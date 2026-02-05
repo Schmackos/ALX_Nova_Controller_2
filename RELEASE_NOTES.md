@@ -3,6 +3,17 @@
 ## Version 1.4.2
 
 ## New Features
+- [2026-02-05] feat: Add LVGL GUI with TFT display, encoder input, and fix cross-task state sync
+
+Implements complete 7-phase GUI system for ST7735S 128x160 TFT with rotary
+encoder on ESP32-S3 using LVGL v9.4 + TFT_eSPI. Includes desktop carousel,
+control/settings/WiFi/MQTT/debug screens, boot animations, dark mode, and
+screen sleep/wake. Fixes cross-task WebSocket/MQTT sync where GUI callbacks
+on gui_task would call non-thread-safe WebSocket broadcasts, causing silent
+failures and poisoned change tracking. GUI now only sets dirty flags; the
+main loop handles all broadcasts.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`f8be593`)
 - [2026-02-04] feat: Implement WiFi manager unit tests using mock classes and resolve native compilation issues for existing tests. (`5820b55`)
 - [2026-02-04] feat: Introduce `WiFiManager` module for centralized WiFi connection, persistence, and API handling. (`72525b0`)
 - [2026-02-04] feat: Introduce `WiFiManager` for centralized connection, persistence, and API handling, resolving previous build failures. (`3b84a06`)
@@ -108,6 +119,11 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-05] Update RELEASE_NOTES.md to document the removal of obsolete skills and the addition of WebSearch functionality
+
+- Deleted SKILL.md files for brainstorming, code reviewer, frontend design, and related references to streamline the codebase.
+- Removed associated scripts and license files to eliminate unused components.
+- Added WebSearch functionality to the settings.local.json file. (`c078041`)
 - [2026-02-05] Update RELEASE_NOTES.md to reflect the removal of obsolete skills and documentation
 
 - Deleted SKILL.md files for brainstorming, code reviewer, frontend design, and related references to streamline the codebase.

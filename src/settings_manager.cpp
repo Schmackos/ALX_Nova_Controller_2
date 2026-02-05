@@ -28,12 +28,17 @@ bool loadSettings() {
     return false;
   }
 
+  // Read ALL lines before closing the file
   String line1 = file.readStringUntil('\n');
   String line2 = file.readStringUntil('\n');
   String line3 = file.readStringUntil('\n');
   String line4 = file.readStringUntil('\n');
   String line5 = file.readStringUntil('\n');
   String line6 = file.readStringUntil('\n');
+  String line7 = file.readStringUntil('\n');
+  String line8 = file.readStringUntil('\n');
+  String line9 = file.readStringUntil('\n');
+  String line10 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -79,13 +84,40 @@ bool loadSettings() {
     }
   }
 
-  String line7 = file.readStringUntil('\n');
   if (line7.length() > 0) {
     line7.trim();
     autoAPEnabled = (line7.toInt() != 0);
   } else {
     // Default to true if not present (backward compatibility)
     autoAPEnabled = true;
+  }
+
+#ifdef GUI_ENABLED
+  // Load boot animation enabled (if available, otherwise default to true)
+  if (line8.length() > 0) {
+    line8.trim();
+    appState.bootAnimEnabled = (line8.toInt() != 0);
+  }
+
+  // Load boot animation style (if available, otherwise default to 0)
+  if (line9.length() > 0) {
+    line9.trim();
+    int style = line9.toInt();
+    if (style >= 0 && style <= 5) {
+      appState.bootAnimStyle = style;
+    }
+  }
+#endif
+
+  // Load screen timeout (if available, otherwise keep default)
+  if (line10.length() > 0) {
+    line10.trim();
+    unsigned long timeout = line10.toInt();
+    // Validate: only allow 0 (never), 30000, 60000, 300000, 600000 ms
+    if (timeout == 0 || timeout == 30000 || timeout == 60000 ||
+        timeout == 300000 || timeout == 600000) {
+      appState.screenTimeout = timeout;
+    }
   }
 
   return true;
@@ -105,6 +137,14 @@ void saveSettings() {
   file.println(enableCertValidation ? "1" : "0");
   file.println(hardwareStatsInterval);
   file.println(autoAPEnabled ? "1" : "0");
+#ifdef GUI_ENABLED
+  file.println(appState.bootAnimEnabled ? "1" : "0");
+  file.println(appState.bootAnimStyle);
+#else
+  file.println("1"); // placeholder for bootAnimEnabled
+  file.println("0"); // placeholder for bootAnimStyle
+#endif
+  file.println(appState.screenTimeout);
   file.close();
   DebugOut.println("Settings saved to LittleFS");
 }
@@ -192,6 +232,12 @@ void handleSettingsGet() {
   doc["autoAPEnabled"] = autoAPEnabled;
   doc["hardwareStatsInterval"] =
       hardwareStatsInterval / 1000; // Send as seconds
+  doc["screenTimeout"] = appState.screenTimeout / 1000; // Send as seconds
+  doc["backlightOn"] = appState.backlightOn;
+#ifdef GUI_ENABLED
+  doc["bootAnimEnabled"] = appState.bootAnimEnabled;
+  doc["bootAnimStyle"] = appState.bootAnimStyle;
+#endif
 
   String json;
   serializeJson(doc, json);
@@ -288,6 +334,52 @@ void handleSettingsUpdate() {
     }
   }
 
+  if (doc["screenTimeout"].is<int>()) {
+    int newTimeoutSec = doc["screenTimeout"].as<int>();
+    // Convert seconds to milliseconds and validate allowed values
+    unsigned long newTimeoutMs = (unsigned long)newTimeoutSec * 1000UL;
+    if (newTimeoutMs == 0 || newTimeoutMs == 30000 || newTimeoutMs == 60000 ||
+        newTimeoutMs == 300000 || newTimeoutMs == 600000) {
+      if (newTimeoutMs != appState.screenTimeout) {
+        appState.setScreenTimeout(newTimeoutMs);
+        settingsChanged = true;
+        DebugOut.printf("Screen timeout set to %d seconds\n", newTimeoutSec);
+      }
+    }
+  }
+
+  if (doc["backlightOn"].is<bool>()) {
+    bool newBacklight = doc["backlightOn"].as<bool>();
+    if (newBacklight != appState.backlightOn) {
+      appState.setBacklightOn(newBacklight);
+      DebugOut.printf("Backlight set to %s\n", newBacklight ? "ON" : "OFF");
+    }
+    // backlightOn is runtime only, no save
+  }
+
+#ifdef GUI_ENABLED
+  if (doc["bootAnimEnabled"].is<bool>()) {
+    bool newBootAnim = doc["bootAnimEnabled"].as<bool>();
+    if (newBootAnim != appState.bootAnimEnabled) {
+      appState.bootAnimEnabled = newBootAnim;
+      settingsChanged = true;
+      DebugOut.printf("Boot animation %s\n",
+                      appState.bootAnimEnabled ? "enabled" : "disabled");
+    }
+  }
+
+  if (doc["bootAnimStyle"].is<int>()) {
+    int newStyle = doc["bootAnimStyle"].as<int>();
+    if (newStyle >= 0 && newStyle <= 5 &&
+        newStyle != appState.bootAnimStyle) {
+      appState.bootAnimStyle = newStyle;
+      settingsChanged = true;
+      DebugOut.printf("Boot animation style set to %d\n",
+                      appState.bootAnimStyle);
+    }
+  }
+#endif
+
   if (settingsChanged) {
     saveSettings();
   }
@@ -302,6 +394,12 @@ void handleSettingsUpdate() {
   resp["enableCertValidation"] = enableCertValidation;
   resp["autoAPEnabled"] = autoAPEnabled;
   resp["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
+  resp["screenTimeout"] = appState.screenTimeout / 1000;
+  resp["backlightOn"] = appState.backlightOn;
+#ifdef GUI_ENABLED
+  resp["bootAnimEnabled"] = appState.bootAnimEnabled;
+  resp["bootAnimStyle"] = appState.bootAnimStyle;
+#endif
   String json;
   serializeJson(resp, json);
   server.send(200, "application/json", json);
@@ -339,6 +437,11 @@ void handleSettingsExport() {
   doc["settings"]["enableCertValidation"] = enableCertValidation;
   doc["settings"]["blinkingEnabled"] = blinkingEnabled;
   doc["settings"]["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
+  doc["settings"]["screenTimeout"] = appState.screenTimeout / 1000;
+#ifdef GUI_ENABLED
+  doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
+  doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
+#endif
 
   // Smart Sensing settings
   String modeStr;
@@ -495,6 +598,29 @@ void handleSettingsImport() {
         DebugOut.printf("Hardware Stats Interval: %d seconds\n", interval);
       }
     }
+    if (doc["settings"]["screenTimeout"].is<int>()) {
+      int timeoutSec = doc["settings"]["screenTimeout"].as<int>();
+      unsigned long timeoutMs = (unsigned long)timeoutSec * 1000UL;
+      if (timeoutMs == 0 || timeoutMs == 30000 || timeoutMs == 60000 ||
+          timeoutMs == 300000 || timeoutMs == 600000) {
+        appState.screenTimeout = timeoutMs;
+        DebugOut.printf("Screen Timeout: %d seconds\n", timeoutSec);
+      }
+    }
+#ifdef GUI_ENABLED
+    if (doc["settings"]["bootAnimEnabled"].is<bool>()) {
+      appState.bootAnimEnabled = doc["settings"]["bootAnimEnabled"].as<bool>();
+      DebugOut.printf("Boot Animation: %s\n",
+                      appState.bootAnimEnabled ? "enabled" : "disabled");
+    }
+    if (doc["settings"]["bootAnimStyle"].is<int>()) {
+      int style = doc["settings"]["bootAnimStyle"].as<int>();
+      if (style >= 0 && style <= 5) {
+        appState.bootAnimStyle = style;
+        DebugOut.printf("Boot Animation Style: %d\n", style);
+      }
+    }
+#endif
     // Save general settings
     saveSettings();
   }
@@ -675,6 +801,8 @@ void handleDiagnostics() {
   settings["enableCertValidation"] = enableCertValidation;
   settings["blinkingEnabled"] = blinkingEnabled;
   settings["hardwareStatsInterval"] = hardwareStatsInterval;
+  settings["screenTimeout"] = appState.screenTimeout;
+  settings["backlightOn"] = appState.backlightOn;
 
   // ===== Smart Sensing =====
   JsonObject sensing = doc["smartSensing"].to<JsonObject>();

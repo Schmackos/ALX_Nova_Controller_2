@@ -1857,6 +1857,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-label">Current Reading</span>
                         <span class="info-value" id="voltageReading">0.00V</span>
                     </div>
+                    <div class="info-row">
+                        <span class="info-label">Sensing Mode</span>
+                        <span class="info-value" id="infoSensingMode">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Auto-Off Timer</span>
+                        <span class="info-value" id="infoTimerDuration">-- min</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Voltage Threshold</span>
+                        <span class="info-value" id="infoVoltageThreshold">--V</span>
+                    </div>
                 </div>
             </div>
 
@@ -2193,7 +2205,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
-            <!-- Day/Night Mode -->
+            <!-- Appearance -->
             <div class="card">
                 <div class="card-title">Appearance</div>
                 <div class="toggle-row">
@@ -2205,6 +2217,44 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <input type="checkbox" id="nightModeToggle" onchange="toggleTheme()">
                         <span class="slider"></span>
                     </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Display Backlight</div>
+                        <div class="toggle-sublabel">Turn screen on/off</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="backlightToggle" onchange="toggleBacklight()" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Screen Timeout</div>
+                        <div class="toggle-sublabel">Auto-sleep delay</div>
+                    </div>
+                    <select id="screenTimeoutSelect" onchange="setScreenTimeout()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="30">30 sec</option>
+                        <option value="60" selected>1 min</option>
+                        <option value="300">5 min</option>
+                        <option value="600">10 min</option>
+                        <option value="0">Never</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Boot Animation</div>
+                        <div class="toggle-sublabel">Animation on startup</div>
+                    </div>
+                    <select id="bootAnimSelect" onchange="setBootAnimation()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="-1">None</option>
+                        <option value="0" selected>Wave Pulse</option>
+                        <option value="1">Speaker</option>
+                        <option value="2">Waveform</option>
+                        <option value="3">Beat Bounce</option>
+                        <option value="4">Freq Bars</option>
+                        <option value="5">Heartbeat</option>
+                    </select>
                 </div>
             </div>
 
@@ -2574,6 +2624,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let blinkingEnabled = false;
         let autoUpdateEnabled = false;
         let nightMode = true;
+        let backlightOn = true;
+        let screenTimeoutSec = 60;
         let enableCertValidation = true;
         let currentFirmwareVersion = '';
         let currentLatestVersion = '';
@@ -2863,6 +2915,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     updateHardwareStats(data);
                 } else if (data.type === 'justUpdated') {
                     showUpdateSuccessNotification(data);
+                } else if (data.type === 'displayState') {
+                    if (typeof data.backlightOn !== 'undefined') {
+                        backlightOn = !!data.backlightOn;
+                        document.getElementById('backlightToggle').checked = backlightOn;
+                    }
+                    if (typeof data.screenTimeout !== 'undefined') {
+                        screenTimeoutSec = data.screenTimeout;
+                        document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
+                    }
                 }
             };
 
@@ -3036,7 +3097,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('nightModeToggle').checked = nightMode;
                 applyTheme(nightMode);
             }
-            
+
+            if (typeof data.backlightOn !== 'undefined') {
+                backlightOn = !!data.backlightOn;
+                document.getElementById('backlightToggle').checked = backlightOn;
+            }
+
+            if (typeof data.screenTimeout !== 'undefined') {
+                screenTimeoutSec = data.screenTimeout;
+                document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
+            }
+
+            if (typeof data.bootAnimEnabled !== 'undefined') {
+                if (!data.bootAnimEnabled) {
+                    document.getElementById('bootAnimSelect').value = '-1';
+                } else if (typeof data.bootAnimStyle !== 'undefined') {
+                    document.getElementById('bootAnimSelect').value = data.bootAnimStyle.toString();
+                }
+            }
+
             if (typeof data.enableCertValidation !== 'undefined') {
                 enableCertValidation = !!data.enableCertValidation;
                 document.getElementById('certValidationToggle').checked = enableCertValidation;
@@ -3227,16 +3306,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 });
                 // Show/hide Smart Auto Settings based on mode
                 updateSmartAutoSettingsVisibility(modeValue);
+                const modeLabels = { 'always_on': 'Always On', 'always_off': 'Always Off', 'smart_auto': 'Smart Auto' };
+                document.getElementById('infoSensingMode').textContent = modeLabels[modeValue] || modeValue;
             }
             
             // Update timer duration (only if not focused)
             if (data.timerDuration !== undefined && !inputFocusState.timerDuration) {
                 document.getElementById('timerDuration').value = data.timerDuration;
             }
+            if (data.timerDuration !== undefined) {
+                document.getElementById('infoTimerDuration').textContent = data.timerDuration + ' min';
+            }
             
             // Update voltage threshold (only if not focused)
             if (data.voltageThreshold !== undefined && !inputFocusState.voltageThreshold) {
                 document.getElementById('voltageThreshold').value = data.voltageThreshold.toFixed(1);
+            }
+            if (data.voltageThreshold !== undefined) {
+                document.getElementById('infoVoltageThreshold').textContent = data.voltageThreshold.toFixed(1) + 'V';
             }
             
             // Update amplifier status
@@ -4466,6 +4553,46 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.body.classList.remove('night-mode');
                 document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F5F5F5');
             }
+        }
+
+        function toggleBacklight() {
+            backlightOn = document.getElementById('backlightToggle').checked;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setBacklight', enabled: backlightOn }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ backlightOn })
+            });
+        }
+
+        function setScreenTimeout() {
+            screenTimeoutSec = parseInt(document.getElementById('screenTimeoutSelect').value);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setScreenTimeout', value: screenTimeoutSec }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ screenTimeout: screenTimeoutSec })
+            });
+        }
+
+        function setBootAnimation() {
+            var val = parseInt(document.getElementById('bootAnimSelect').value);
+            var payload = {};
+            if (val < 0) {
+                payload.bootAnimEnabled = false;
+            } else {
+                payload.bootAnimEnabled = true;
+                payload.bootAnimStyle = val;
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
         }
 
         function toggleAutoUpdate() {

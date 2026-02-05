@@ -12,6 +12,9 @@
 #include "web_pages.h"
 #include "websocket_handler.h"
 #include "wifi_manager.h"
+#ifdef GUI_ENABLED
+#include "gui/gui_manager.h"
+#endif
 #include <ArduinoJson.h>
 #include <DNSServer.h>
 #include <HTTPClient.h>
@@ -191,7 +194,8 @@ void setup() {
       "Smart Sensing configured: Amplifier GPIO%d, Voltage Sense GPIO%d\n",
       AMPLIFIER_PIN, VOLTAGE_SENSE_PIN);
 
-  // Initialize LittleFS
+  // Initialize LittleFS and load settings BEFORE GUI so boot animation
+  // settings are available when gui_init() runs.
   if (!LittleFS.begin(true)) {
     DebugOut.println("ERROR: LittleFS initialization failed!");
   } else {
@@ -210,6 +214,12 @@ void setup() {
   if (!loadSettings()) {
     DebugOut.println("No settings file found, using defaults");
   }
+
+#ifdef GUI_ENABLED
+  // Initialize TFT display + rotary encoder GUI (may play boot animation
+  // using settings loaded above).
+  gui_init();
+#endif
 
   // Load Smart Sensing settings
   if (!loadSmartSensingSettings()) {
@@ -457,12 +467,13 @@ void setup() {
 
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
+
 }
 
 void loop() {
   // Small delay to reduce CPU usage - allows other tasks to run
   // Without this, the loop runs as fast as possible (~49% CPU)
-  delay(1);
+  delay(10);
 
   server.handleClient();
   if (appState.isAPMode) {
@@ -492,6 +503,9 @@ void loop() {
     switch (pressType) {
     case BTN_SHORT_PRESS:
       DebugOut.println("=== Button: Short Press ===");
+#ifdef GUI_ENABLED
+      gui_wake(); // Wake TFT screen on K0 short press
+#endif
       DebugOut.printf("WiFi: %s\n", WiFi.status() == WL_CONNECTED
                                         ? "Connected"
                                         : "Disconnected");
@@ -646,6 +660,25 @@ void loop() {
 
   // Smart Sensing logic update
   updateSmartSensingLogic();
+
+  // Broadcast display state changes (GUI auto-sleep/wake -> WS clients + MQTT)
+  if (appState.isDisplayDirty()) {
+    sendDisplayState();
+    appState.clearDisplayDirty();
+  }
+
+  // Broadcast blinking state changes (GUI -> WS clients)
+  if (appState.isBlinkingDirty()) {
+    sendBlinkingState();
+    appState.clearBlinkingDirty();
+  }
+
+  // Broadcast settings changes (GUI -> WS clients + MQTT)
+  if (appState.isSettingsDirty()) {
+    sendWiFiStatus();
+    publishMqttSystemStatus();
+    appState.clearSettingsDirty();
+  }
 
   // Broadcast Smart Sensing state every second
   static unsigned long lastSmartSensingBroadcast = 0;

@@ -53,6 +53,21 @@ void AppState::setVoltageReading(float reading) {
   }
 }
 
+// ===== Display State Management =====
+void AppState::setBacklightOn(bool state) {
+  if (backlightOn != state) {
+    backlightOn = state;
+    _displayDirty = true;
+  }
+}
+
+void AppState::setScreenTimeout(unsigned long timeout) {
+  if (screenTimeout != timeout) {
+    screenTimeout = timeout;
+    _displayDirty = true;
+  }
+}
+
 // ===== Error State Management =====
 void AppState::setError(int code, const String &message) {
   errorCode = code;
@@ -86,9 +101,12 @@ void AppState::clearAllDirtyFlags() {
   _sensingModeDirty = false;
   _timerDirty = false;
   _voltageDirty = false;
+  _displayDirty = false;
+  _settingsDirty = false;
 }
 
 bool AppState::hasAnyDirtyFlag() const {
   return _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
-         _amplifierDirty || _sensingModeDirty || _timerDirty || _voltageDirty;
+         _amplifierDirty || _sensingModeDirty || _timerDirty ||
+         _voltageDirty || _displayDirty || _settingsDirty;
 }
