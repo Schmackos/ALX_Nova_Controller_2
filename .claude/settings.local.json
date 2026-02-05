@@ -62,7 +62,8 @@
       "Bash(\"/c/Program Files/PowerShell/7/pwsh.exe\" -Command \"irm https://claude.ai/install.ps1 | iex\")",
       "Bash(\"/c/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe\" -Command \"irm https://claude.ai/install.ps1 | iex\")",
       "Bash(wc:*)",
-      "Bash(npx claude-code-templates@latest:*)"
+      "Bash(npx claude-code-templates@latest:*)",
+      "WebSearch"
     ]
   }
 }
