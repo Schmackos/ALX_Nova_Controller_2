@@ -108,6 +108,12 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-04] Implement WiFi retry logic and enhance unit tests
+
+- Added intelligent retry mechanism for WiFi connections, handling "Network not found" errors and implementing periodic retries.
+- Updated WiFi manager to track last failed SSID and retry count, improving connection reliability.
+- Enhanced unit tests for WiFi retry logic, including scenarios for immediate retries, success clearing flags, and multiple network fallbacks.
+- Updated RELEASE_NOTES.md to document these enhancements and new test cases. (`65bd7be`)
 - [2026-02-04] Enhance WiFi manager and web interface with gzip support and improved logging
 
 - Updated WiFi manager to support gzipped content delivery for HTML pages, reducing transfer size.

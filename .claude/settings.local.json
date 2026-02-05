@@ -55,7 +55,14 @@
       "Bash(node build_web_assets.js:*)",
       "Bash(ls:*)",
       "Bash(~/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-nm:*)",
-      "Bash(~/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-objdump:*)"
+      "Bash(~/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-objdump:*)",
+      "Bash(npm update:*)",
+      "Bash(powershell.exe -Command \"irm https://claude.ai/install.ps1 | iex\")",
+      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -Command \"irm https://claude.ai/install.ps1 | iex\")",
+      "Bash(\"/c/Program Files/PowerShell/7/pwsh.exe\" -Command \"irm https://claude.ai/install.ps1 | iex\")",
+      "Bash(\"/c/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe\" -Command \"irm https://claude.ai/install.ps1 | iex\")",
+      "Bash(wc:*)",
+      "Bash(npx claude-code-templates@latest:*)"
     ]
   }
 }
