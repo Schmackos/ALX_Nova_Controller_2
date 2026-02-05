@@ -13,6 +13,17 @@ on gui_task would call non-thread-safe WebSocket broadcasts, causing silent
 failures and poisoned change tracking. GUI now only sets dirty flags; the
 main loop handles all broadcasts.
 
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`06a0d42`)
+- [2026-02-05] feat: Add LVGL GUI with TFT display, encoder input, and fix cross-task state sync
+
+Implements complete 7-phase GUI system for ST7735S 128x160 TFT with rotary
+encoder on ESP32-S3 using LVGL v9.4 + TFT_eSPI. Includes desktop carousel,
+control/settings/WiFi/MQTT/debug screens, boot animations, dark mode, and
+screen sleep/wake. Fixes cross-task WebSocket/MQTT sync where GUI callbacks
+on gui_task would call non-thread-safe WebSocket broadcasts, causing silent
+failures and poisoned change tracking. GUI now only sets dirty flags; the
+main loop handles all broadcasts.
+
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`f8be593`)
 - [2026-02-04] feat: Implement WiFi manager unit tests using mock classes and resolve native compilation issues for existing tests. (`5820b55`)
 - [2026-02-04] feat: Introduce `WiFiManager` module for centralized WiFi connection, persistence, and API handling. (`72525b0`)
