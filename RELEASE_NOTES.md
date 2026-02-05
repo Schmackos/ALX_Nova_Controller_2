@@ -108,6 +108,11 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-05] Update RELEASE_NOTES.md to include new WiFi retry logic and unit test enhancements
+
+- Documented the implementation of an intelligent retry mechanism for WiFi connections, addressing "Network not found" errors.
+- Noted updates to the WiFi manager for tracking last failed SSID and retry count.
+- Included details on enhanced unit tests for the WiFi retry logic, covering various scenarios. (`a589794`)
 - [2026-02-04] Implement WiFi retry logic and enhance unit tests
 
 - Added intelligent retry mechanism for WiFi connections, handling "Network not found" errors and implementing periodic retries.
