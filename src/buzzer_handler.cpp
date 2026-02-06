@@ -15,7 +15,7 @@ struct ToneStep {
 
 // ===== Pattern definitions (terminated by {0,0}) =====
 static const ToneStep pat_tick[] = {
-  {4000, 8},
+  {1500, 8},
   {0, 20},    // silence gap between ticks
   {0, 0}
 };

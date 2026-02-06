@@ -37,7 +37,7 @@ struct ToneStep {
 };
 
 // Pattern definitions (same as buzzer_handler.cpp)
-static const ToneStep pat_tick[] = {{4000, 8}, {0, 20}, {0, 0}};
+static const ToneStep pat_tick[] = {{1500, 8}, {0, 20}, {0, 0}};
 static const ToneStep pat_click[] = {{2000, 30}, {0, 0}};
 static const ToneStep pat_confirm[] = {{2000, 60}, {3000, 80}, {0, 0}};
 static const ToneStep pat_btn_short[] = {{1500, 100}, {0, 0}};
@@ -247,7 +247,7 @@ void test_isr_tick_flag(void) {
 
   TEST_ASSERT_FALSE(_buzzer_tick_pending);
   TEST_ASSERT_TRUE(playing);
-  TEST_ASSERT_EQUAL(4000, (int)ArduinoMock::ledcLastFreq);
+  TEST_ASSERT_EQUAL(1500, (int)ArduinoMock::ledcLastFreq);
 }
 
 void test_isr_click_flag(void) {
@@ -295,7 +295,7 @@ void test_new_pattern_overrides(void) {
   buzzer_play(BUZZ_TICK);
   buzzer_update();
   TEST_ASSERT_TRUE(playing);
-  TEST_ASSERT_EQUAL(4000, (int)ArduinoMock::ledcLastFreq);
+  TEST_ASSERT_EQUAL(1500, (int)ArduinoMock::ledcLastFreq);
 }
 
 // Test 7: Silence gaps produce zero duty

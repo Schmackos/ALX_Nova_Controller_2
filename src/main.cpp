@@ -729,8 +729,6 @@ void loop() {
     }
   }
 
-  // Non-blocking buzzer pattern sequencer
-  buzzer_update();
 }
 
 // WiFi functions are defined in wifi_manager.h/.cpp
