@@ -74,10 +74,13 @@ static void screen_wake(void) {
     last_activity_time = millis();
     if (screen_awake) return;
     screen_awake = true;
-    set_backlight(BL_BRIGHTNESS_MAX);
+    set_backlight(AppState::getInstance().backlightBrightness);
     AppState::getInstance().setBacklightOn(true);
     LOG_D("[GUI] Screen wake");
 }
+
+/* Track last applied brightness to detect changes */
+static uint8_t last_applied_brightness = 255;
 
 /* GUI FreeRTOS task */
 static void gui_task(void *param) {
@@ -88,7 +91,8 @@ static void gui_task(void *param) {
     /* Flush one black frame to overwrite any stale display RAM
        (e.g. desktop from previous boot), then turn on backlight. */
     lv_timer_handler();
-    set_backlight(BL_BRIGHTNESS_MAX);
+    set_backlight(AppState::getInstance().backlightBrightness);
+    last_applied_brightness = AppState::getInstance().backlightBrightness;
 
     /* Play boot animation and load desktop inside the task so all
        lv_timer_handler() calls originate from the same FreeRTOS context. */
@@ -108,6 +112,15 @@ static void gui_task(void *param) {
             screen_wake();
         } else if (!desired && screen_awake) {
             screen_sleep();
+        }
+
+        /* Apply brightness changes while screen is awake */
+        if (screen_awake) {
+            uint8_t cur_brightness = AppState::getInstance().backlightBrightness;
+            if (cur_brightness != last_applied_brightness) {
+                set_backlight(cur_brightness);
+                last_applied_brightness = cur_brightness;
+            }
         }
 
         /* Handle screen timeout */
@@ -233,6 +246,13 @@ void gui_sleep(void) {
 
 bool gui_is_awake(void) {
     return screen_awake;
+}
+
+void gui_set_brightness(uint8_t brightness) {
+    if (screen_awake) {
+        set_backlight(brightness);
+        last_applied_brightness = brightness;
+    }
 }
 
 #endif /* GUI_ENABLED */

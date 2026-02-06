@@ -2313,6 +2313,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 <div class="toggle-row">
                     <div>
+                        <div class="toggle-label">Brightness</div>
+                        <div class="toggle-sublabel">Display brightness: <span id="brightnessLabel">100%</span></div>
+                    </div>
+                    <input type="range" id="brightnessSlider" min="10" max="100" step="25" value="100" onchange="setBrightness()" style="width:100px;accent-color:var(--accent);">
+                </div>
+                <div class="toggle-row">
+                    <div>
                         <div class="toggle-label">Screen Timeout</div>
                         <div class="toggle-sublabel">Auto-sleep delay</div>
                     </div>
@@ -2766,6 +2773,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let autoUpdateEnabled = false;
         let nightMode = true;
         let backlightOn = true;
+        let backlightBrightness = 255;
         let screenTimeoutSec = 60;
         let enableCertValidation = true;
         let currentFirmwareVersion = '';
@@ -3071,6 +3079,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         screenTimeoutSec = data.screenTimeout;
                         document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
                     }
+                    if (typeof data.backlightBrightness !== 'undefined') {
+                        backlightBrightness = data.backlightBrightness;
+                        var pct = Math.round(backlightBrightness * 100 / 255);
+                        document.getElementById('brightnessSlider').value = pct;
+                        document.getElementById('brightnessLabel').textContent = pct + '%';
+                    }
                 } else if (data.type === 'buzzerState') {
                     if (typeof data.enabled !== 'undefined') {
                         document.getElementById('buzzerToggle').checked = !!data.enabled;
@@ -3268,6 +3282,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (typeof data.screenTimeout !== 'undefined') {
                 screenTimeoutSec = data.screenTimeout;
                 document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
+            }
+
+            if (typeof data.backlightBrightness !== 'undefined') {
+                backlightBrightness = data.backlightBrightness;
+                var pct = Math.round(backlightBrightness * 100 / 255);
+                document.getElementById('brightnessSlider').value = pct;
+                document.getElementById('brightnessLabel').textContent = pct + '%';
             }
 
             if (typeof data.bootAnimEnabled !== 'undefined') {
@@ -4734,6 +4755,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ backlightOn })
             });
+        }
+
+        function setBrightness() {
+            var pct = parseInt(document.getElementById('brightnessSlider').value);
+            document.getElementById('brightnessLabel').textContent = pct + '%';
+            var pwm = Math.round(pct * 255 / 100);
+            backlightBrightness = pwm;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setBrightness', value: pwm }));
+            }
         }
 
         function setScreenTimeout() {

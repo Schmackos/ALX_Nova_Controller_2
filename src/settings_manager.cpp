@@ -1,5 +1,6 @@
 #include "settings_manager.h"
 #include "app_state.h"
+#include "buzzer_handler.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "mqtt_handler.h"
@@ -41,6 +42,7 @@ bool loadSettings() {
   String line10 = file.readStringUntil('\n');
   String line11 = file.readStringUntil('\n');
   String line12 = file.readStringUntil('\n');
+  String line13 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -137,6 +139,15 @@ bool loadSettings() {
     }
   }
 
+  // Load backlight brightness (if available, otherwise default to 255)
+  if (line13.length() > 0) {
+    line13.trim();
+    int bright = line13.toInt();
+    if (bright >= 1 && bright <= 255) {
+      appState.backlightBrightness = (uint8_t)bright;
+    }
+  }
+
   return true;
 }
 
@@ -164,6 +175,7 @@ void saveSettings() {
   file.println(appState.screenTimeout);
   file.println(appState.buzzerEnabled ? "1" : "0");
   file.println(appState.buzzerVolume);
+  file.println(appState.backlightBrightness);
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -234,7 +246,7 @@ void performFactoryReset() {
   webSocket.broadcastTXT((uint8_t *)rebootJson.c_str(), rebootJson.length());
   webSocket.loop(); // Ensure message is sent
 
-  delay(2000);
+  buzzer_play_blocking(BUZZ_SHUTDOWN, 1200);
   ESP.restart();
 }
 
@@ -255,6 +267,7 @@ void handleSettingsGet() {
   doc["backlightOn"] = appState.backlightOn;
   doc["buzzerEnabled"] = appState.buzzerEnabled;
   doc["buzzerVolume"] = appState.buzzerVolume;
+  doc["backlightBrightness"] = appState.backlightBrightness;
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -396,6 +409,16 @@ void handleSettingsUpdate() {
     }
   }
 
+  if (doc["backlightBrightness"].is<int>()) {
+    int newBright = doc["backlightBrightness"].as<int>();
+    if (newBright >= 1 && newBright <= 255 &&
+        (uint8_t)newBright != appState.backlightBrightness) {
+      appState.setBacklightBrightness((uint8_t)newBright);
+      settingsChanged = true;
+      LOG_I("[Settings] Backlight brightness set to %d", newBright);
+    }
+  }
+
 #ifdef GUI_ENABLED
   if (doc["bootAnimEnabled"].is<bool>()) {
     bool newBootAnim = doc["bootAnimEnabled"].as<bool>();
@@ -437,6 +460,7 @@ void handleSettingsUpdate() {
   resp["backlightOn"] = appState.backlightOn;
   resp["buzzerEnabled"] = appState.buzzerEnabled;
   resp["buzzerVolume"] = appState.buzzerVolume;
+  resp["backlightBrightness"] = appState.backlightBrightness;
 #ifdef GUI_ENABLED
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
@@ -481,6 +505,7 @@ void handleSettingsExport() {
   doc["settings"]["screenTimeout"] = appState.screenTimeout / 1000;
   doc["settings"]["buzzerEnabled"] = appState.buzzerEnabled;
   doc["settings"]["buzzerVolume"] = appState.buzzerVolume;
+  doc["settings"]["backlightBrightness"] = appState.backlightBrightness;
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
@@ -662,6 +687,13 @@ void handleSettingsImport() {
         LOG_D("[Settings] Buzzer Volume: %d", vol);
       }
     }
+    if (doc["settings"]["backlightBrightness"].is<int>()) {
+      int bright = doc["settings"]["backlightBrightness"].as<int>();
+      if (bright >= 1 && bright <= 255) {
+        appState.backlightBrightness = (uint8_t)bright;
+        LOG_D("[Settings] Backlight Brightness: %d", bright);
+      }
+    }
 #ifdef GUI_ENABLED
     if (doc["settings"]["bootAnimEnabled"].is<bool>()) {
       appState.bootAnimEnabled = doc["settings"]["bootAnimEnabled"].as<bool>();
@@ -747,10 +779,10 @@ void handleSettingsImport() {
               "{\"success\": true, \"message\": \"Settings imported "
               "successfully. Device will reboot in 3 seconds.\"}");
 
-  // Schedule reboot after 3 seconds
+  // Give time for response, then play shutdown melody and reboot
   delay(100); // Give time for response to be sent
-  LOG_W("[Settings] Rebooting in 3 seconds");
-  delay(3000);
+  LOG_W("[Settings] Rebooting after shutdown melody");
+  buzzer_play_blocking(BUZZ_SHUTDOWN, 1200);
   ESP.restart();
 }
 
@@ -775,10 +807,8 @@ void handleReboot() {
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Rebooting device\"}");
 
-  // Give time for response to be sent
-  delay(500);
-
-  // Reboot the ESP32
+  // Play shutdown melody then reboot
+  buzzer_play_blocking(BUZZ_SHUTDOWN, 1200);
   ESP.restart();
 }
 
@@ -858,6 +888,7 @@ void handleDiagnostics() {
   settings["hardwareStatsInterval"] = hardwareStatsInterval;
   settings["screenTimeout"] = appState.screenTimeout;
   settings["backlightOn"] = appState.backlightOn;
+  settings["backlightBrightness"] = appState.backlightBrightness;
   settings["buzzerEnabled"] = appState.buzzerEnabled;
   settings["buzzerVolume"] = appState.buzzerVolume;
 

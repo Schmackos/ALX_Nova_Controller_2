@@ -153,6 +153,7 @@ public:
   unsigned long prevMqttScreenTimeout = 60000;
   bool prevMqttBuzzerEnabled = true;
   int prevMqttBuzzerVolume = 1;
+  uint8_t prevMqttBrightness = 255;
 
   // ===== Smart Sensing Broadcast State Tracking =====
   SensingMode prevBroadcastMode = ALWAYS_ON;
@@ -163,9 +164,11 @@ public:
   // ===== Display State (accessible from all interfaces) =====
   unsigned long screenTimeout = 60000; // Screen timeout in ms (default 60s)
   bool backlightOn = true;             // Runtime backlight state (not persisted)
+  uint8_t backlightBrightness = 255;   // Backlight brightness (1-255, persisted)
 
   void setBacklightOn(bool state);
   void setScreenTimeout(unsigned long timeout);
+  void setBacklightBrightness(uint8_t brightness);
   bool isDisplayDirty() const { return _displayDirty; }
   void clearDisplayDirty() { _displayDirty = false; }
 
@@ -327,6 +330,7 @@ private:
 #define prevMqttScreenTimeout appState.prevMqttScreenTimeout
 #define prevMqttBuzzerEnabled appState.prevMqttBuzzerEnabled
 #define prevMqttBuzzerVolume appState.prevMqttBuzzerVolume
+#define prevMqttBrightness appState.prevMqttBrightness
 
 // Smart Sensing Broadcast State Tracking
 #define prevBroadcastMode appState.prevBroadcastMode

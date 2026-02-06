@@ -3,6 +3,8 @@
 
 #ifdef GUI_ENABLED
 
+#include <stdint.h>
+
 /* Initialize TFT display, LVGL, input drivers, and start GUI FreeRTOS task */
 void gui_init(void);
 
@@ -14,6 +16,9 @@ void gui_sleep(void);
 
 /* Returns true if the display is currently awake */
 bool gui_is_awake(void);
+
+/* Apply brightness to the backlight (0-255). Only takes effect when awake. */
+void gui_set_brightness(uint8_t brightness);
 
 #endif /* GUI_ENABLED */
 #endif /* GUI_MANAGER_H */

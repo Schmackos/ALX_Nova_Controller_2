@@ -12,6 +12,7 @@
 #include "../../settings_manager.h"
 #include "../../ota_updater.h"
 #include "../gui_manager.h"
+#include "../../buzzer_handler.h"
 #include "../../debug_serial.h"
 #include <Arduino.h>
 
@@ -39,6 +40,22 @@ static void on_backlight_confirm(int int_val, float, int) {
         gui_sleep();
     }
     LOG_I("[GUI] Backlight %s", int_val ? "ON" : "OFF");
+}
+
+/* Brightness cycle options (PWM values) */
+static const CycleOption brightness_options[] = {
+    {"10%",   26},
+    {"25%",   64},
+    {"50%",  128},
+    {"75%",  191},
+    {"100%", 255},
+};
+
+static void on_brightness_confirm(int int_val, float, int) {
+    AppState::getInstance().setBacklightBrightness((uint8_t)int_val);
+    gui_set_brightness((uint8_t)int_val);
+    saveSettings();
+    LOG_I("[GUI] Brightness set to %d", int_val);
 }
 
 static void on_night_mode_confirm(int int_val, float, int) {
@@ -117,7 +134,7 @@ static void do_reboot(void) {
     cfg.on_confirm = [](int int_val, float, int) {
         if (int_val) {
             LOG_W("[GUI] Rebooting...");
-            delay(500);
+            buzzer_play_blocking(BUZZ_SHUTDOWN, 1200);
             ESP.restart();
         }
     };
@@ -162,6 +179,22 @@ static void edit_backlight(void) {
     cfg.type = VE_TOGGLE;
     cfg.toggle_val = AppState::getInstance().backlightOn;
     cfg.on_confirm = on_backlight_confirm;
+    scr_value_edit_open(&cfg);
+}
+
+static void edit_brightness(void) {
+    uint8_t cur_val = AppState::getInstance().backlightBrightness;
+    int cur = 4; /* default: 100% */
+    for (int i = 0; i < 5; i++) {
+        if (brightness_options[i].value == (int)cur_val) { cur = i; break; }
+    }
+    ValueEditConfig cfg = {};
+    cfg.title = "Brightness";
+    cfg.type = VE_CYCLE;
+    cfg.options = brightness_options;
+    cfg.option_count = 5;
+    cfg.current_option = cur;
+    cfg.on_confirm = on_brightness_confirm;
     scr_value_edit_open(&cfg);
 }
 
@@ -252,6 +285,16 @@ static void build_settings_menu(void) {
     static char backlight_str[8];
     snprintf(backlight_str, sizeof(backlight_str), "%s", st.backlightOn ? "ON" : "OFF");
 
+    static char brightness_str[8];
+    const char *br = "100%";
+    for (int i = 0; i < 5; i++) {
+        if (brightness_options[i].value == (int)st.backlightBrightness) {
+            br = brightness_options[i].label;
+            break;
+        }
+    }
+    snprintf(brightness_str, sizeof(brightness_str), "%s", br);
+
     static char night_str[8];
     snprintf(night_str, sizeof(night_str), "%s", st.nightMode ? "ON" : "OFF");
 
@@ -292,19 +335,20 @@ static void build_settings_menu(void) {
     snprintf(buzzer_vol_str, sizeof(buzzer_vol_str), "%s", vol_names[bv]);
 
     settings_menu.title = "Settings";
-    settings_menu.item_count = 12;
+    settings_menu.item_count = 13;
     settings_menu.items[0]  = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     settings_menu.items[1]  = {"Screen Timeout", timeout_str, nullptr, MENU_ACTION, edit_screen_timeout};
     settings_menu.items[2]  = {"Backlight", backlight_str, nullptr, MENU_ACTION, edit_backlight};
-    settings_menu.items[3]  = {"Night Mode", night_str, nullptr, MENU_ACTION, edit_night_mode};
-    settings_menu.items[4]  = {"Boot Animation", boot_anim_str, nullptr, MENU_ACTION, edit_boot_anim};
-    settings_menu.items[5]  = {"Buzzer", buzzer_str, nullptr, MENU_ACTION, edit_buzzer_enable};
-    settings_menu.items[6]  = {"Buzzer Volume", buzzer_vol_str, nullptr, MENU_ACTION, edit_buzzer_volume};
-    settings_menu.items[7]  = {"Auto Update", update_str, nullptr, MENU_ACTION, edit_auto_update};
-    settings_menu.items[8]  = {"SSL Validation", ssl_str, nullptr, MENU_ACTION, edit_ssl_validation};
-    settings_menu.items[9]  = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
-    settings_menu.items[10] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
-    settings_menu.items[11] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
+    settings_menu.items[3]  = {"Brightness", brightness_str, nullptr, MENU_ACTION, edit_brightness};
+    settings_menu.items[4]  = {"Night Mode", night_str, nullptr, MENU_ACTION, edit_night_mode};
+    settings_menu.items[5]  = {"Boot Animation", boot_anim_str, nullptr, MENU_ACTION, edit_boot_anim};
+    settings_menu.items[6]  = {"Buzzer", buzzer_str, nullptr, MENU_ACTION, edit_buzzer_enable};
+    settings_menu.items[7]  = {"Buzzer Volume", buzzer_vol_str, nullptr, MENU_ACTION, edit_buzzer_volume};
+    settings_menu.items[8]  = {"Auto Update", update_str, nullptr, MENU_ACTION, edit_auto_update};
+    settings_menu.items[9]  = {"SSL Validation", ssl_str, nullptr, MENU_ACTION, edit_ssl_validation};
+    settings_menu.items[10] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
+    settings_menu.items[11] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
+    settings_menu.items[12] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
 }
 
 lv_obj_t *scr_settings_create(void) {
@@ -328,7 +372,18 @@ void scr_settings_refresh(void) {
 
     scr_menu_set_item_value(2, st.backlightOn ? "ON" : "OFF");
 
-    scr_menu_set_item_value(3, st.nightMode ? "ON" : "OFF");
+    static char bright_buf[8];
+    const char *br_label = "100%";
+    for (int i = 0; i < 5; i++) {
+        if (brightness_options[i].value == (int)st.backlightBrightness) {
+            br_label = brightness_options[i].label;
+            break;
+        }
+    }
+    snprintf(bright_buf, sizeof(bright_buf), "%s", br_label);
+    scr_menu_set_item_value(3, bright_buf);
+
+    scr_menu_set_item_value(4, st.nightMode ? "ON" : "OFF");
 
     static char boot_anim_buf[14];
     if (!st.bootAnimEnabled) {
@@ -343,20 +398,20 @@ void scr_settings_refresh(void) {
         }
         snprintf(boot_anim_buf, sizeof(boot_anim_buf), "%s", style_name);
     }
-    scr_menu_set_item_value(4, boot_anim_buf);
+    scr_menu_set_item_value(5, boot_anim_buf);
 
-    scr_menu_set_item_value(5, st.buzzerEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(6, st.buzzerEnabled ? "ON" : "OFF");
 
     static char bvol_buf[8];
     const char *vol_names[] = {"Low", "Medium", "High"};
     int bv = st.buzzerVolume;
     if (bv < 0 || bv > 2) bv = 1;
     snprintf(bvol_buf, sizeof(bvol_buf), "%s", vol_names[bv]);
-    scr_menu_set_item_value(6, bvol_buf);
+    scr_menu_set_item_value(7, bvol_buf);
 
-    scr_menu_set_item_value(7, st.autoUpdateEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(8, st.autoUpdateEnabled ? "ON" : "OFF");
 
-    scr_menu_set_item_value(8, st.enableCertValidation ? "ON" : "OFF");
+    scr_menu_set_item_value(9, st.enableCertValidation ? "ON" : "OFF");
 
     static char fw_buf[24];
     if (st.updateAvailable) {
@@ -364,7 +419,7 @@ void scr_settings_refresh(void) {
     } else {
         snprintf(fw_buf, sizeof(fw_buf), "%s", FIRMWARE_VERSION);
     }
-    scr_menu_set_item_value(9, fw_buf);
+    scr_menu_set_item_value(10, fw_buf);
 }
 
 #endif /* GUI_ENABLED */

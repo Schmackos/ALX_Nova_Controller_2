@@ -1,5 +1,6 @@
 #include "mqtt_handler.h"
 #include "app_state.h"
+#include "buzzer_handler.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "utils.h"
@@ -156,6 +157,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/settings/cert_validation/set").c_str());
   mqttClient.subscribe((base + "/settings/screen_timeout/set").c_str());
   mqttClient.subscribe((base + "/display/backlight/set").c_str());
+  mqttClient.subscribe((base + "/display/brightness/set").c_str());
   mqttClient.subscribe((base + "/settings/buzzer/set").c_str());
   mqttClient.subscribe((base + "/settings/buzzer_volume/set").c_str());
   mqttClient.subscribe((base + "/system/reboot").c_str());
@@ -347,6 +349,18 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     LOG_I("[MQTT] Backlight set to %s", newState ? "ON" : "OFF");
     publishMqttDisplayState();
   }
+  // Handle brightness control
+  else if (topicStr == base + "/display/brightness/set") {
+    int bright = message.toInt();
+    // Accept percentage (10-100) and convert to PWM
+    if (bright >= 10 && bright <= 100) {
+      uint8_t pwm = (uint8_t)(bright * 255 / 100);
+      appState.setBacklightBrightness(pwm);
+      saveSettings();
+      LOG_I("[MQTT] Brightness set to %d%% (PWM %d)", bright, pwm);
+      publishMqttDisplayState();
+    }
+  }
   // Handle buzzer enable/disable
   else if (topicStr == base + "/settings/buzzer/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
@@ -368,7 +382,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
     LOG_W("[MQTT] Reboot command received");
-    delay(500);
+    buzzer_play_blocking(BUZZ_SHUTDOWN, 1200);
     ESP.restart();
   }
   // Handle factory reset command
@@ -523,6 +537,7 @@ void mqttLoop() {
         (appState.screenTimeout != prevMqttScreenTimeout) ||
         (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
         (appState.buzzerVolume != prevMqttBuzzerVolume) ||
+        (appState.backlightBrightness != prevMqttBrightness) ||
         (nightMode != prevMqttNightMode) ||
         (autoUpdateEnabled != prevMqttAutoUpdate) ||
         (enableCertValidation != prevMqttCertValidation);
@@ -541,6 +556,7 @@ void mqttLoop() {
       prevMqttScreenTimeout = appState.screenTimeout;
       prevMqttBuzzerEnabled = appState.buzzerEnabled;
       prevMqttBuzzerVolume = appState.buzzerVolume;
+      prevMqttBrightness = appState.backlightBrightness;
       prevMqttNightMode = nightMode;
       prevMqttAutoUpdate = autoUpdateEnabled;
       prevMqttCertValidation = enableCertValidation;
@@ -840,6 +856,11 @@ void publishMqttDisplayState() {
                      appState.backlightOn ? "ON" : "OFF", true);
   mqttClient.publish((base + "/settings/screen_timeout").c_str(),
                      String(appState.screenTimeout / 1000).c_str(), true);
+
+  // Publish brightness as percentage (0-100)
+  int brightPct = (int)appState.backlightBrightness * 100 / 255;
+  mqttClient.publish((base + "/display/brightness").c_str(),
+                     String(brightPct).c_str(), true);
 }
 
 // Publish all states
@@ -1424,6 +1445,28 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Display Brightness Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Display Brightness";
+    doc["unique_id"] = deviceId + "_brightness";
+    doc["state_topic"] = base + "/display/brightness";
+    doc["command_topic"] = base + "/display/brightness/set";
+    doc["min"] = 10;
+    doc["max"] = 100;
+    doc["step"] = 25;
+    doc["unit_of_measurement"] = "%";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:brightness-percent";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic =
+        "homeassistant/number/" + deviceId + "/brightness/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   // ===== Buzzer Switch =====
   {
     JsonDocument doc;
@@ -1507,6 +1550,7 @@ void removeHADiscovery() {
       "homeassistant/update/%s/firmware/config",
       "homeassistant/switch/%s/backlight/config",
       "homeassistant/number/%s/screen_timeout/config",
+      "homeassistant/number/%s/brightness/config",
       "homeassistant/switch/%s/buzzer/config",
       "homeassistant/number/%s/buzzer_volume/config"};
 

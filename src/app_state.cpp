@@ -68,6 +68,14 @@ void AppState::setScreenTimeout(unsigned long timeout) {
   }
 }
 
+void AppState::setBacklightBrightness(uint8_t brightness) {
+  if (brightness < 1) brightness = 1;
+  if (backlightBrightness != brightness) {
+    backlightBrightness = brightness;
+    _displayDirty = true;
+  }
+}
+
 // ===== Buzzer State Management =====
 void AppState::setBuzzerEnabled(bool enabled) {
   if (buzzerEnabled != enabled) {
