@@ -12,6 +12,7 @@
 #include "screens/scr_settings.h"
 #include "screens/scr_debug.h"
 #include "screens/scr_support.h"
+#include "screens/scr_home.h"
 #include "screens/scr_boot_anim.h"
 #include "../app_state.h"
 #include <Arduino.h>
@@ -133,6 +134,8 @@ static void gui_task(void *param) {
                 scr_mqtt_refresh();
             } else if (cur == SCR_SETTINGS_MENU) {
                 scr_settings_refresh();
+            } else if (cur == SCR_HOME) {
+                scr_home_refresh();
             }
         }
 
@@ -157,6 +160,7 @@ static void register_screens(void) {
     gui_nav_register(SCR_SETTINGS_MENU, scr_settings_create);
     gui_nav_register(SCR_SUPPORT_MENU, scr_support_create);
     gui_nav_register(SCR_DEBUG_MENU, scr_debug_create);
+    gui_nav_register(SCR_HOME, scr_home_create);
 }
 
 void gui_init(void) {

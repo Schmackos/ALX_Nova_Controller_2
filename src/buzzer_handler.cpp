@@ -16,6 +16,7 @@ struct ToneStep {
 // ===== Pattern definitions (terminated by {0,0}) =====
 static const ToneStep pat_tick[] = {
   {4000, 8},
+  {0, 20},    // silence gap between ticks
   {0, 0}
 };
 
@@ -158,13 +159,13 @@ void buzzer_update() {
   // Check ISR-safe tick/click flags first
   if (_buzzer_tick_pending) {
     _buzzer_tick_pending = false;
-    if (AppState::getInstance().buzzerEnabled) {
+    if (AppState::getInstance().buzzerEnabled && !playing) {
       start_pattern(pat_tick);
     }
   }
   if (_buzzer_click_pending) {
     _buzzer_click_pending = false;
-    if (AppState::getInstance().buzzerEnabled) {
+    if (AppState::getInstance().buzzerEnabled && !playing) {
       start_pattern(pat_click);
     }
   }

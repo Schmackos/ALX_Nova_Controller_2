@@ -37,7 +37,7 @@ struct ToneStep {
 };
 
 // Pattern definitions (same as buzzer_handler.cpp)
-static const ToneStep pat_tick[] = {{4000, 8}, {0, 0}};
+static const ToneStep pat_tick[] = {{4000, 8}, {0, 20}, {0, 0}};
 static const ToneStep pat_click[] = {{2000, 30}, {0, 0}};
 static const ToneStep pat_confirm[] = {{2000, 60}, {3000, 80}, {0, 0}};
 static const ToneStep pat_btn_short[] = {{1500, 100}, {0, 0}};
@@ -125,13 +125,13 @@ static void stop_buzzer() {
 static void buzzer_update() {
   if (_buzzer_tick_pending) {
     _buzzer_tick_pending = false;
-    if (test_buzzerEnabled) {
+    if (test_buzzerEnabled && !playing) {
       start_pattern(pat_tick);
     }
   }
   if (_buzzer_click_pending) {
     _buzzer_click_pending = false;
-    if (test_buzzerEnabled) {
+    if (test_buzzerEnabled && !playing) {
       start_pattern(pat_click);
     }
   }

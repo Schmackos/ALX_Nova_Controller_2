@@ -11,7 +11,7 @@
 #include <WiFi.h>
 
 /* Number of dashboard cards */
-#define CARD_COUNT 6
+#define CARD_COUNT 7
 
 /* Card definitions */
 struct CardDef {
@@ -21,6 +21,7 @@ struct CardDef {
 };
 
 static const CardDef cards[CARD_COUNT] = {
+    {ICON_HOME,     "Home",     SCR_HOME},
     {ICON_CONTROL,  "Control",  SCR_CONTROL_MENU},
     {ICON_WIFI,     "WiFi",     SCR_WIFI_MENU},
     {ICON_MQTT,     "MQTT",     SCR_MQTT_MENU},
@@ -39,14 +40,22 @@ static void get_card_summary(int idx, char *buf, size_t len) {
     AppState &st = AppState::getInstance();
 
     switch (idx) {
-        case 0: { /* Control */
+        case 0: { /* Home */
+            snprintf(buf, len, "Amp: %s\n%s\nFW %s",
+                     st.amplifierState ? "ON" : "OFF",
+                     WiFi.status() == WL_CONNECTED ? "WiFi OK" :
+                     st.isAPMode ? "AP Mode" : "No WiFi",
+                     FIRMWARE_VERSION);
+            break;
+        }
+        case 1: { /* Control */
             const char *mode = (st.currentMode == ALWAYS_ON) ? "Always On" :
                                (st.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
             snprintf(buf, len, "%s\nAmp: %s\n%.2fV",
                      mode, st.amplifierState ? "ON" : "OFF", st.lastVoltageReading);
             break;
         }
-        case 1: { /* WiFi */
+        case 2: { /* WiFi */
             if (WiFi.status() == WL_CONNECTED) {
                 snprintf(buf, len, "%s\n%s\n%ddBm",
                          WiFi.SSID().c_str(),
@@ -59,7 +68,7 @@ static void get_card_summary(int idx, char *buf, size_t len) {
             }
             break;
         }
-        case 2: { /* MQTT */
+        case 3: { /* MQTT */
             if (!st.mqttEnabled) {
                 snprintf(buf, len, "Disabled");
             } else if (st.mqttConnected) {
@@ -69,17 +78,17 @@ static void get_card_summary(int idx, char *buf, size_t len) {
             }
             break;
         }
-        case 3: { /* Settings */
+        case 4: { /* Settings */
             snprintf(buf, len, "FW %s\n%s mode",
                      FIRMWARE_VERSION,
                      st.nightMode ? "Night" : "Day");
             break;
         }
-        case 4: { /* Support */
+        case 5: { /* Support */
             snprintf(buf, len, "User Manual");
             break;
         }
-        case 5: { /* Debug */
+        case 6: { /* Debug */
             snprintf(buf, len, "Heap: %uKB\nUp: %lus",
                      (unsigned int)(ESP.getFreeHeap() / 1024),
                      millis() / 1000);

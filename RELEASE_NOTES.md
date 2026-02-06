@@ -130,6 +130,14 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-06] Add buzzer functionality and configuration options
+
+- Introduced buzzer state management with enable/disable and volume control.
+- Updated platformio.ini to define BUZZER_PIN.
+- Enhanced GUI to include buzzer settings and controls.
+- Implemented MQTT support for buzzer state and volume adjustments.
+- Added WebSocket functionality for real-time buzzer state updates.
+- Updated RELEASE_NOTES.md to reflect these changes. (`f32ea20`)
 - [2026-02-06] Update RELEASE_NOTES.md to include recent enhancements related to the Support tab and navigation improvements in the GUI. (`1670b51`)
 - [2026-02-06] Update RELEASE_NOTES.md to include recent enhancements related to the Support tab and navigation improvements in the GUI. (`03f912c`)
 - [2026-02-06] Update RELEASE_NOTES.md to include recent enhancements related to the Support tab and navigation improvements in the GUI. (`174e8f6`)
