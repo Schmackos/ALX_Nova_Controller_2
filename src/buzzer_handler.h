@@ -16,12 +16,14 @@ enum BuzzerPattern {
   BUZZ_BTN_TRIPLE,     // Reset button triple click
   BUZZ_NAV,            // Screen navigation transition
   BUZZ_STARTUP,        // Boot startup melody
+  BUZZ_OTA_UPDATE,     // Pre-OTA update melody
 };
 
 // ===== Public API =====
 void buzzer_init();
 void buzzer_play(BuzzerPattern pattern);
 void buzzer_update();  // Call from main loop — non-blocking sequencer
+void buzzer_play_blocking(BuzzerPattern pattern, uint16_t timeout_ms);
 
 // ===== ISR-safe request functions (inlined volatile writes) =====
 // These are safe to call from any context including IRAM_ATTR ISRs.

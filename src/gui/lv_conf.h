@@ -24,7 +24,7 @@
  *====================*/
 
 /* Size of the memory available for `lv_malloc()` in bytes (>= 2kB) */
-#define LV_MEM_SIZE (32 * 1024U) /* 32KB */
+#define LV_MEM_SIZE (48 * 1024U) /* 48KB */
 
 /* Set an address for the memory pool instead of allocating it as a normal array.
  * Can be in external SRAM too. */

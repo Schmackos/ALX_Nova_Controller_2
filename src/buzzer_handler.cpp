@@ -2,6 +2,8 @@
 #include "app_state.h"
 #include "config.h"
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 // ===== ISR-safe volatile flags =====
 volatile bool _buzzer_tick_pending = false;
@@ -88,6 +90,20 @@ static const ToneStep pat_startup[] = {
   {0, 0}
 };
 
+// OTA update melody: descending D-minor alert + rising resolution
+static const ToneStep pat_ota_update[] = {
+  {1175, 100},   // D6 - attention
+  {0, 30},
+  {880, 100},    // A5
+  {0, 30},
+  {698, 120},    // F5 - descent bottom
+  {0, 80},       // phrase gap
+  {587, 100},    // D5 - resolve start
+  {0, 30},
+  {880, 200},    // A5 - held resolve
+  {0, 0}
+};
+
 // ===== Pattern lookup =====
 static const ToneStep *get_pattern(BuzzerPattern p) {
   switch (p) {
@@ -101,6 +117,7 @@ static const ToneStep *get_pattern(BuzzerPattern p) {
     case BUZZ_BTN_TRIPLE:     return pat_btn_triple;
     case BUZZ_NAV:            return pat_nav;
     case BUZZ_STARTUP:        return pat_startup;
+    case BUZZ_OTA_UPDATE:     return pat_ota_update;
     default:                  return nullptr;
   }
 }
@@ -117,10 +134,15 @@ static bool playing = false;
 // Pending pattern request (from non-ISR context)
 static volatile BuzzerPattern pending_pattern = BUZZ_NONE;
 
+static SemaphoreHandle_t buzzer_mutex = nullptr;
+
 void buzzer_init() {
   ledcSetup(BUZZER_PWM_CHANNEL, 2000, BUZZER_PWM_RESOLUTION);
   ledcAttachPin(BUZZER_PIN, BUZZER_PWM_CHANNEL);
   ledcWrite(BUZZER_PWM_CHANNEL, 0);  // Start silent
+  if (buzzer_mutex == nullptr) {
+    buzzer_mutex = xSemaphoreCreateMutex();
+  }
 }
 
 void buzzer_play(BuzzerPattern pattern) {
@@ -156,6 +178,9 @@ static void stop_buzzer() {
 }
 
 void buzzer_update() {
+  if (buzzer_mutex == nullptr) return;
+  if (xSemaphoreTake(buzzer_mutex, 0) != pdTRUE) return;
+
   // Check ISR-safe tick/click flags first
   if (_buzzer_tick_pending) {
     _buzzer_tick_pending = false;
@@ -183,7 +208,10 @@ void buzzer_update() {
   }
 
   // Sequence current pattern
-  if (!playing || current_pattern == nullptr) return;
+  if (!playing || current_pattern == nullptr) {
+    xSemaphoreGive(buzzer_mutex);
+    return;
+  }
 
   unsigned long elapsed = millis() - step_start_ms;
   if (elapsed >= current_pattern[current_step].duration_ms) {
@@ -192,6 +220,7 @@ void buzzer_update() {
     if (current_pattern[current_step].duration_ms == 0) {
       // Pattern complete
       stop_buzzer();
+      xSemaphoreGive(buzzer_mutex);
       return;
     }
 
@@ -208,4 +237,16 @@ void buzzer_update() {
       ledcWrite(BUZZER_PWM_CHANNEL, 0);
     }
   }
+
+  xSemaphoreGive(buzzer_mutex);
+}
+
+void buzzer_play_blocking(BuzzerPattern pattern, uint16_t timeout_ms) {
+  buzzer_play(pattern);
+  unsigned long start = millis();
+  while (millis() - start < timeout_ms) {
+    buzzer_update();
+    delay(1);
+  }
+  buzzer_update();
 }

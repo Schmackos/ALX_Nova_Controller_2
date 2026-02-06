@@ -718,6 +718,9 @@ void loop() {
     }
   }
 
+  // Fallback buzzer processing (primary path is gui_task on Core 1)
+  // Non-blocking mutex: skips if gui_task is already processing
+  buzzer_update();
 }
 
 // WiFi functions are defined in wifi_manager.h/.cpp
