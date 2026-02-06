@@ -130,6 +130,12 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-06] Enhance MQTT settings management and update UI
+
+- Added functionality to send and receive MQTT settings via WebSocket, including broker, port, username, and discovery options.
+- Updated the GUI to reflect changes in MQTT settings, ensuring the interface is synchronized with the application state.
+- Improved the handling of MQTT settings changes to mark the application state as dirty, prompting necessary updates.
+- Documented changes in RELEASE_NOTES.md to reflect new features and improvements in MQTT integration. (`4b1fe88`)
 - [2026-02-06] Update RELEASE_NOTES.md to document new LVGL GUI features and cross-task state sync improvements (`1bbaeab`)
 - [2026-02-05] Update RELEASE_NOTES.md to include new LVGL GUI features and cross-task state sync improvements
 
