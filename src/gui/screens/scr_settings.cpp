@@ -259,4 +259,50 @@ lv_obj_t *scr_settings_create(void) {
     return scr_menu_create(&settings_menu);
 }
 
+void scr_settings_refresh(void) {
+    AppState &st = AppState::getInstance();
+
+    static char timeout_buf[12];
+    const char *t = "Custom";
+    for (int i = 0; i < 5; i++) {
+        if ((unsigned long)timeout_options[i].value == st.screenTimeout) {
+            t = timeout_options[i].label;
+            break;
+        }
+    }
+    snprintf(timeout_buf, sizeof(timeout_buf), "%s", t);
+    scr_menu_set_item_value(1, timeout_buf);
+
+    scr_menu_set_item_value(2, st.backlightOn ? "ON" : "OFF");
+
+    scr_menu_set_item_value(3, st.nightMode ? "ON" : "OFF");
+
+    static char boot_anim_buf[14];
+    if (!st.bootAnimEnabled) {
+        snprintf(boot_anim_buf, sizeof(boot_anim_buf), "None");
+    } else {
+        const char *style_name = "Wave Pulse";
+        for (int i = 1; i < 7; i++) {
+            if (boot_anim_options[i].value == st.bootAnimStyle) {
+                style_name = boot_anim_options[i].label;
+                break;
+            }
+        }
+        snprintf(boot_anim_buf, sizeof(boot_anim_buf), "%s", style_name);
+    }
+    scr_menu_set_item_value(4, boot_anim_buf);
+
+    scr_menu_set_item_value(5, st.autoUpdateEnabled ? "ON" : "OFF");
+
+    scr_menu_set_item_value(6, st.enableCertValidation ? "ON" : "OFF");
+
+    static char fw_buf[24];
+    if (st.updateAvailable) {
+        snprintf(fw_buf, sizeof(fw_buf), "%s -> %s", FIRMWARE_VERSION, st.cachedLatestVersion.c_str());
+    } else {
+        snprintf(fw_buf, sizeof(fw_buf), "%s", FIRMWARE_VERSION);
+    }
+    scr_menu_set_item_value(7, fw_buf);
+}
+
 #endif /* GUI_ENABLED */

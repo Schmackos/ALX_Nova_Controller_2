@@ -115,7 +115,7 @@ static void gui_task(void *param) {
             }
         }
 
-        /* Refresh dashboard/debug data periodically */
+        /* Refresh active screen data periodically */
         if (millis() - last_dashboard_refresh > DASHBOARD_REFRESH_MS) {
             last_dashboard_refresh = millis();
             ScreenId cur = gui_nav_current();
@@ -123,6 +123,16 @@ static void gui_task(void *param) {
                 scr_desktop_refresh();
             } else if (cur == SCR_DEBUG_MENU) {
                 scr_debug_refresh();
+            } else if (cur == SCR_CONTROL_MENU) {
+                scr_control_refresh();
+            } else if (cur == SCR_WIFI_MENU) {
+                scr_wifi_refresh();
+            } else if (cur == SCR_WIFI_AP_MENU) {
+                scr_wifi_ap_refresh();
+            } else if (cur == SCR_MQTT_MENU) {
+                scr_mqtt_refresh();
+            } else if (cur == SCR_SETTINGS_MENU) {
+                scr_settings_refresh();
             }
         }
 

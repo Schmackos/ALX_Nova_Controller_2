@@ -193,4 +193,42 @@ lv_obj_t *scr_mqtt_create(void) {
     return scr_menu_create(&mqtt_menu);
 }
 
+void scr_mqtt_refresh(void) {
+    AppState &st = AppState::getInstance();
+
+    static char status_buf[24];
+    if (!st.mqttEnabled) {
+        snprintf(status_buf, sizeof(status_buf), "Disabled");
+    } else if (st.mqttConnected) {
+        snprintf(status_buf, sizeof(status_buf), "Connected");
+    } else {
+        snprintf(status_buf, sizeof(status_buf), "Disconnected");
+    }
+    scr_menu_set_item_value(1, status_buf);
+
+    scr_menu_set_item_value(2, st.mqttEnabled ? "ON" : "OFF");
+
+    static char broker_buf[24];
+    if (st.mqttBroker.length() > 0) {
+        snprintf(broker_buf, sizeof(broker_buf), "%.20s", st.mqttBroker.c_str());
+    } else {
+        snprintf(broker_buf, sizeof(broker_buf), "(not set)");
+    }
+    scr_menu_set_item_value(3, broker_buf);
+
+    static char port_buf[8];
+    snprintf(port_buf, sizeof(port_buf), "%d", st.mqttPort);
+    scr_menu_set_item_value(4, port_buf);
+
+    static char user_buf[16];
+    if (st.mqttUsername.length() > 0) {
+        snprintf(user_buf, sizeof(user_buf), "%.12s", st.mqttUsername.c_str());
+    } else {
+        snprintf(user_buf, sizeof(user_buf), "(none)");
+    }
+    scr_menu_set_item_value(5, user_buf);
+
+    scr_menu_set_item_value(8, st.mqttHADiscovery ? "ON" : "OFF");
+}
+
 #endif /* GUI_ENABLED */

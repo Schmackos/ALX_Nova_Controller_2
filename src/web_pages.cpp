@@ -20,14 +20,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             --bg-input: #E0E0E0;
             --accent: #FF9800;
             --accent-light: #FFB74D;
-            --accent-dark: #F57C00;
+            --accent-dark: #E68900;
             --text-primary: #212121;
             --text-secondary: #757575;
             --text-disabled: #9E9E9E;
             --success: #4CAF50;
-            --error: #D32F2F;
-            --warning: #FF9800;
-            --info: #1976D2;
+            --error: #F44336;
+            --warning: #FFC107;
+            --info: #2196F3;
             --border: #E0E0E0;
             --shadow: rgba(0, 0, 0, 0.1);
             --tab-height: 56px;
@@ -37,16 +37,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         /* ===== Dark Theme (Night Mode) ===== */
         body.night-mode {
-            --bg-primary: #121212;
-            --bg-surface: #1E1E1E;
-            --bg-card: #252525;
-            --bg-input: #2a2a2a;
+            --bg-primary: #1A1A2E;
+            --bg-surface: #16213E;
+            --bg-card: #1E2A4A;
+            --bg-input: #243356;
             --text-primary: #FFFFFF;
-            --text-secondary: #B3B3B3;
+            --text-secondary: #B0B0B0;
             --text-disabled: #666666;
-            --error: #CF6679;
+            --error: #F44336;
             --info: #2196F3;
-            --border: #333333;
+            --border: #2A2A4A;
             --shadow: rgba(0, 0, 0, 0.4);
         }
 
@@ -171,7 +171,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         /* ===== Skeleton Loading ===== */
         .skeleton {
-            background: linear-gradient(90deg, var(--bg-card) 25%, #3a3a3a 50%, var(--bg-card) 75%);
+            background: linear-gradient(90deg, var(--bg-card) 25%, var(--border) 50%, var(--bg-card) 75%);
             background-size: 200% 100%;
             animation: shimmer 1.5s infinite;
             border-radius: 4px;
@@ -4616,7 +4616,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function applyTheme(isNightMode) {
             if (isNightMode) {
                 document.body.classList.add('night-mode');
-                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#121212');
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1A1A2E');
             } else {
                 document.body.classList.remove('night-mode');
                 document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F5F5F5');
@@ -6050,22 +6050,22 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#121212">
+    <meta name="theme-color" content="#1A1A2E">
     <title>ALX Audio - WiFi Setup</title>
     <style>
         :root {
-            --bg-primary: #121212;
-            --bg-surface: #1E1E1E;
-            --bg-card: #252525;
-            --bg-input: #2a2a2a;
+            --bg-primary: #1A1A2E;
+            --bg-surface: #16213E;
+            --bg-card: #1E2A4A;
+            --bg-input: #243356;
             --accent: #FF9800;
-            --accent-dark: #F57C00;
+            --accent-dark: #E68900;
             --text-primary: #FFFFFF;
-            --text-secondary: #B3B3B3;
+            --text-secondary: #B0B0B0;
             --text-disabled: #666666;
             --success: #4CAF50;
-            --error: #CF6679;
-            --border: #333333;
+            --error: #F44336;
+            --border: #2A2A4A;
             --safe-top: env(safe-area-inset-top, 0px);
             --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
