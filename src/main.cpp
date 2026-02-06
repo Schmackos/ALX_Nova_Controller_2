@@ -676,6 +676,7 @@ void loop() {
   // Broadcast settings changes (GUI -> WS clients + MQTT)
   if (appState.isSettingsDirty()) {
     sendWiFiStatus();
+    sendMqttSettingsState();
     publishMqttSystemStatus();
     appState.clearSettingsDirty();
   }

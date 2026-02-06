@@ -81,6 +81,11 @@ static void gui_task(void *param) {
 
     Serial.println("[GUI] Task started on core " + String(xPortGetCoreID()));
 
+    /* Flush one black frame to overwrite any stale display RAM
+       (e.g. desktop from previous boot), then turn on backlight. */
+    lv_timer_handler();
+    set_backlight(BL_BRIGHTNESS_MAX);
+
     /* Play boot animation and load desktop inside the task so all
        lv_timer_handler() calls originate from the same FreeRTOS context. */
     boot_anim_play();
@@ -148,7 +153,7 @@ void gui_init(void) {
     /* Initialize backlight PWM */
     ledcSetup(BL_PWM_CHANNEL, BL_PWM_FREQ, BL_PWM_RESOLUTION);
     ledcAttachPin(TFT_BL_PIN, BL_PWM_CHANNEL);
-    set_backlight(BL_BRIGHTNESS_MAX);
+    set_backlight(0);  /* Keep backlight OFF until content is ready */
 
     /* Initialize TFT */
     tft.init();

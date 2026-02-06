@@ -228,6 +228,22 @@ void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered) {
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
 
+void sendMqttSettingsState() {
+  JsonDocument doc;
+  doc["type"] = "mqttSettings";
+  doc["enabled"] = appState.mqttEnabled;
+  doc["broker"] = appState.mqttBroker;
+  doc["port"] = appState.mqttPort;
+  doc["username"] = appState.mqttUsername;
+  doc["hasPassword"] = (appState.mqttPassword.length() > 0);
+  doc["baseTopic"] = appState.mqttBaseTopic;
+  doc["haDiscovery"] = appState.mqttHADiscovery;
+  doc["connected"] = appState.mqttConnected;
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t *)json.c_str(), json.length());
+}
+
 // ===== CPU Utilization Functions =====
 
 void initCpuUsageMonitoring() {

@@ -75,7 +75,8 @@ lv_obj_t *scr_menu_create(const MenuConfig *config) {
 
         /* Left side: icon + label */
         lv_obj_t *left = lv_obj_create(row);
-        lv_obj_set_size(left, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_height(left, LV_SIZE_CONTENT);
+        lv_obj_set_flex_grow(left, 1);
         lv_obj_set_flex_flow(left, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(left, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_column(left, 4, LV_PART_MAIN);
@@ -96,6 +97,8 @@ lv_obj_t *scr_menu_create(const MenuConfig *config) {
 
         lv_obj_t *lbl = lv_label_create(left);
         lv_label_set_text(lbl, item->label);
+        lv_obj_set_width(lbl, LV_PCT(100));
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
         lv_obj_add_style(lbl, gui_style_body(), LV_PART_MAIN);
         if (item->type == MENU_BACK) {
             lv_obj_set_style_text_color(lbl, COLOR_TEXT_SEC, LV_PART_MAIN);

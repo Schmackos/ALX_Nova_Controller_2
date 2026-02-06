@@ -2924,6 +2924,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         screenTimeoutSec = data.screenTimeout;
                         document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
                     }
+                } else if (data.type === 'mqttSettings') {
+                    document.getElementById('mqttEnabled').checked = data.enabled || false;
+                    document.getElementById('mqttBroker').value = data.broker || '';
+                    document.getElementById('mqttPort').value = data.port || 1883;
+                    document.getElementById('mqttUsername').value = data.username || '';
+                    document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
+                    document.getElementById('mqttHADiscovery').checked = data.haDiscovery || false;
+                    updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
                 }
             };
 

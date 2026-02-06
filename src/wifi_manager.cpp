@@ -854,6 +854,11 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
       hardwareStatsInterval / 1000; // Send as seconds
   doc["screenTimeout"] = appState.screenTimeout / 1000; // Send as seconds
   doc["backlightOn"] = appState.backlightOn;
+  doc["autoAPEnabled"] = autoAPEnabled;
+#ifdef GUI_ENABLED
+  doc["bootAnimEnabled"] = appState.bootAnimEnabled;
+  doc["bootAnimStyle"] = appState.bootAnimStyle;
+#endif
   doc["mac"] = WiFi.macAddress();
   doc["firmwareVersion"] = firmwareVer;
 

@@ -15,6 +15,7 @@
 static void on_mqtt_enable_confirm(int int_val, float, int) {
     AppState::getInstance().mqttEnabled = (int_val != 0);
     saveMqttSettings();
+    AppState::getInstance().markSettingsDirty();
     if (int_val) {
         setupMqtt();
     }
@@ -24,12 +25,14 @@ static void on_mqtt_enable_confirm(int int_val, float, int) {
 static void on_mqtt_port_confirm(int int_val, float, int) {
     AppState::getInstance().mqttPort = int_val;
     saveMqttSettings();
+    AppState::getInstance().markSettingsDirty();
     Serial.printf("[GUI] MQTT port set to %d\n", int_val);
 }
 
 static void on_mqtt_ha_confirm(int int_val, float, int) {
     AppState::getInstance().mqttHADiscovery = (int_val != 0);
     saveMqttSettings();
+    AppState::getInstance().markSettingsDirty();
     if (int_val && AppState::getInstance().mqttConnected) {
         publishHADiscovery();
     }
@@ -41,24 +44,28 @@ static void on_mqtt_ha_confirm(int int_val, float, int) {
 static void on_broker_done(const char *text) {
     AppState::getInstance().mqttBroker = text;
     saveMqttSettings();
+    AppState::getInstance().markSettingsDirty();
     Serial.printf("[GUI] MQTT broker set to %s\n", text);
 }
 
 static void on_username_done(const char *text) {
     AppState::getInstance().mqttUsername = text;
     saveMqttSettings();
+    AppState::getInstance().markSettingsDirty();
     Serial.printf("[GUI] MQTT username set\n");
 }
 
 static void on_password_done(const char *text) {
     AppState::getInstance().mqttPassword = text;
     saveMqttSettings();
+    AppState::getInstance().markSettingsDirty();
     Serial.printf("[GUI] MQTT password set\n");
 }
 
 static void on_topic_done(const char *text) {
     AppState::getInstance().mqttBaseTopic = text;
     saveMqttSettings();
+    AppState::getInstance().markSettingsDirty();
     Serial.printf("[GUI] MQTT base topic set to %s\n", text);
 }
 
