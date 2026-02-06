@@ -8,6 +8,7 @@
 #include "ota_updater.h"
 #include "debug_serial.h"
 #include "utils.h"
+#include "i2s_audio.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -16,6 +17,9 @@
 // ===== WebSocket Authentication Tracking =====
 bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
 unsigned long wsAuthTimeout[MAX_WS_CLIENTS] = {0};
+
+// ===== Per-client Audio Streaming Subscription =====
+static bool _audioSubscribed[MAX_WS_CLIENTS] = {};
 
 // ===== CPU Utilization Tracking =====
 // Using FreeRTOS idle hooks to measure CPU usage
@@ -47,6 +51,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
       LOG_I("[WebSocket] Client [%u] disconnected", num);
       wsAuthStatus[num] = false;
       wsAuthTimeout[num] = 0;
+      _audioSubscribed[num] = false;
       break;
 
     case WStype_CONNECTED:
@@ -187,6 +192,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_I("[WebSocket] Buzzer volume set to %d", newVol);
             sendBuzzerState();
           }
+        } else if (msgType == "subscribeAudio") {
+          bool enabled = doc["enabled"] | false;
+          _audioSubscribed[num] = enabled;
+          LOG_I("[WebSocket] Client [%u] audio subscription %s", num, enabled ? "enabled" : "disabled");
         }
       }
       break;
@@ -404,4 +413,56 @@ void sendHardwareStats() {
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+// ===== Audio Streaming to Subscribed Clients =====
+
+void sendAudioData() {
+  // Early return if no clients are subscribed
+  bool anySubscribed = false;
+  for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+    if (_audioSubscribed[i]) {
+      anySubscribed = true;
+      break;
+    }
+  }
+  if (!anySubscribed) return;
+
+  // --- Waveform data ---
+  uint8_t waveformBuf[WAVEFORM_BUFFER_SIZE];
+  if (i2s_audio_get_waveform(waveformBuf)) {
+    JsonDocument doc;
+    doc["type"] = "audioWaveform";
+    JsonArray w = doc["w"].to<JsonArray>();
+    for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
+      w.add(waveformBuf[i]);
+    }
+    String json;
+    serializeJson(doc, json);
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+      if (_audioSubscribed[i]) {
+        webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+      }
+    }
+  }
+
+  // --- Spectrum data ---
+  float bands[SPECTRUM_BANDS];
+  float freq = 0.0f;
+  if (i2s_audio_get_spectrum(bands, &freq)) {
+    JsonDocument doc;
+    doc["type"] = "audioSpectrum";
+    doc["freq"] = freq;
+    JsonArray b = doc["bands"].to<JsonArray>();
+    for (int i = 0; i < SPECTRUM_BANDS; i++) {
+      b.add(serialized(String(bands[i], 3)));
+    }
+    String json;
+    serializeJson(doc, json);
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+      if (_audioSubscribed[i]) {
+        webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+      }
+    }
+  }
 }

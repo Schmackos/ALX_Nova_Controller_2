@@ -23,6 +23,9 @@ void sendHardwareStats();
 void sendMqttSettingsState();
 void sendBuzzerState();
 
+// ===== Audio Streaming =====
+void sendAudioData();
+
 // ===== CPU Utilization Tracking =====
 void initCpuUsageMonitoring();
 void updateCpuUsage();

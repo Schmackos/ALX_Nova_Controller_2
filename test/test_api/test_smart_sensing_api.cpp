@@ -62,17 +62,17 @@ namespace TestAPIState {
     SensingMode currentMode = ALWAYS_ON;
     unsigned long timerDuration = 5;
     unsigned long timerRemaining = 0;
-    float voltageThreshold = 0.5;
+    float audioThreshold = -40.0f;
     bool amplifierState = false;
-    float lastVoltageReading = 0.0;
+    float audioLevel = -96.0f;
 
     void reset() {
         currentMode = ALWAYS_ON;
         timerDuration = 5;
         timerRemaining = 0;
-        voltageThreshold = 0.5;
+        audioThreshold = -40.0f;
         amplifierState = false;
-        lastVoltageReading = 0.0;
+        audioLevel = -96.0f;
     }
 }
 
@@ -100,9 +100,9 @@ void handleSmartSensingGet() {
     doc["timerRemaining"] = TestAPIState::timerRemaining;
     doc["timerActive"] = (TestAPIState::timerRemaining > 0);
     doc["amplifierState"] = TestAPIState::amplifierState;
-    doc["voltageThreshold"] = TestAPIState::voltageThreshold;
-    doc["voltageReading"] = TestAPIState::lastVoltageReading;
-    doc["voltageDetected"] = (TestAPIState::lastVoltageReading >= TestAPIState::voltageThreshold);
+    doc["audioThreshold"] = TestAPIState::audioThreshold;
+    doc["audioLevel"] = TestAPIState::audioLevel;
+    doc["signalDetected"] = (TestAPIState::audioLevel >= TestAPIState::audioThreshold);
 
     std::string json;
     serializeJson(doc, json);
@@ -154,14 +154,14 @@ void handleSmartSensingUpdate() {
         }
     }
 
-    // Update voltage threshold
-    if (doc["voltageThreshold"].is<float>() || doc["voltageThreshold"].is<int>()) {
-        float threshold = doc["voltageThreshold"].as<float>();
+    // Update audio threshold
+    if (doc["audioThreshold"].is<float>() || doc["audioThreshold"].is<int>()) {
+        float threshold = doc["audioThreshold"].as<float>();
 
-        if (threshold >= 0.1 && threshold <= 3.3) {
-            TestAPIState::voltageThreshold = threshold;
+        if (threshold >= -96.0f && threshold <= 0.0f) {
+            TestAPIState::audioThreshold = threshold;
         } else {
-            server.send(400, "application/json", "{\"success\": false, \"message\": \"Voltage threshold must be between 0.1 and 3.3 volts\"}");
+            server.send(400, "application/json", "{\"success\": false, \"message\": \"Audio threshold must be between -96 and 0 dBFS\"}");
             return;
         }
     }
@@ -198,8 +198,8 @@ void test_get_smartsensing_returns_state(void) {
     TestAPIState::timerDuration = 10;
     TestAPIState::timerRemaining = 150;
     TestAPIState::amplifierState = true;
-    TestAPIState::voltageThreshold = 0.8;
-    TestAPIState::lastVoltageReading = 1.5;
+    TestAPIState::audioThreshold = -30.0f;
+    TestAPIState::audioLevel = -18.0f;
 
     handleSmartSensingGet();
 
@@ -216,9 +216,9 @@ void test_get_smartsensing_returns_state(void) {
     TEST_ASSERT_EQUAL(150, doc["timerRemaining"].as<int>());
     TEST_ASSERT_TRUE(doc["timerActive"].as<bool>());
     TEST_ASSERT_TRUE(doc["amplifierState"].as<bool>());
-    TEST_ASSERT_FLOAT_WITHIN(0.01, 0.8, doc["voltageThreshold"].as<float>());
-    TEST_ASSERT_FLOAT_WITHIN(0.01, 1.5, doc["voltageReading"].as<float>());
-    TEST_ASSERT_TRUE(doc["voltageDetected"].as<bool>());
+    TEST_ASSERT_FLOAT_WITHIN(0.01, -30.0, doc["audioThreshold"].as<float>());
+    TEST_ASSERT_FLOAT_WITHIN(0.01, -18.0, doc["audioLevel"].as<float>());
+    TEST_ASSERT_TRUE(doc["signalDetected"].as<bool>());
 }
 
 // Test 2: POST /api/smartsensing updates mode
@@ -273,28 +273,28 @@ void test_post_smartsensing_rejects_invalid_timer_high(void) {
     TEST_ASSERT_FALSE(doc["success"].as<bool>());
 }
 
-// Test 6: POST /api/smartsensing updates voltage threshold
-void test_post_smartsensing_updates_voltage_threshold(void) {
-    MockWebServer::requestBody = R"({"voltageThreshold": 1.5})";
+// Test 6: POST /api/smartsensing updates audio threshold
+void test_post_smartsensing_updates_audio_threshold(void) {
+    MockWebServer::requestBody = R"({"audioThreshold": -30.0})";
 
     handleSmartSensingUpdate();
 
     TEST_ASSERT_EQUAL(200, MockWebServer::lastResponseCode);
-    TEST_ASSERT_FLOAT_WITHIN(0.01, 1.5, TestAPIState::voltageThreshold);
+    TEST_ASSERT_FLOAT_WITHIN(0.01, -30.0, TestAPIState::audioThreshold);
 }
 
-// Test 7: POST /api/smartsensing validates voltage threshold (too low)
-void test_post_smartsensing_rejects_invalid_voltage_low(void) {
-    MockWebServer::requestBody = R"({"voltageThreshold": 0.05})";
+// Test 7: POST /api/smartsensing validates audio threshold (too low)
+void test_post_smartsensing_rejects_invalid_audio_threshold_low(void) {
+    MockWebServer::requestBody = R"({"audioThreshold": -100.0})";
 
     handleSmartSensingUpdate();
 
     TEST_ASSERT_EQUAL(400, MockWebServer::lastResponseCode);
 }
 
-// Test 8: POST /api/smartsensing validates voltage threshold (too high)
-void test_post_smartsensing_rejects_invalid_voltage_high(void) {
-    MockWebServer::requestBody = R"({"voltageThreshold": 3.5})";
+// Test 8: POST /api/smartsensing validates audio threshold (too high)
+void test_post_smartsensing_rejects_invalid_audio_threshold_high(void) {
+    MockWebServer::requestBody = R"({"audioThreshold": 5.0})";
 
     handleSmartSensingUpdate();
 
@@ -359,7 +359,7 @@ void test_post_smartsensing_multiple_parameters(void) {
     MockWebServer::requestBody = R"({
         "mode": "smart_auto",
         "timerDuration": 20,
-        "voltageThreshold": 1.2
+        "audioThreshold": -18.0
     })";
 
     handleSmartSensingUpdate();
@@ -367,7 +367,7 @@ void test_post_smartsensing_multiple_parameters(void) {
     TEST_ASSERT_EQUAL(200, MockWebServer::lastResponseCode);
     TEST_ASSERT_EQUAL(TestAPIState::SMART_AUTO, TestAPIState::currentMode);
     TEST_ASSERT_EQUAL(20, TestAPIState::timerDuration);
-    TEST_ASSERT_FLOAT_WITHIN(0.01, 1.2, TestAPIState::voltageThreshold);
+    TEST_ASSERT_FLOAT_WITHIN(0.01, -18.0, TestAPIState::audioThreshold);
 }
 
 // ===== Test Runner =====
@@ -380,9 +380,9 @@ int runUnityTests(void) {
     RUN_TEST(test_post_smartsensing_updates_timer_duration);
     RUN_TEST(test_post_smartsensing_rejects_invalid_timer_low);
     RUN_TEST(test_post_smartsensing_rejects_invalid_timer_high);
-    RUN_TEST(test_post_smartsensing_updates_voltage_threshold);
-    RUN_TEST(test_post_smartsensing_rejects_invalid_voltage_low);
-    RUN_TEST(test_post_smartsensing_rejects_invalid_voltage_high);
+    RUN_TEST(test_post_smartsensing_updates_audio_threshold);
+    RUN_TEST(test_post_smartsensing_rejects_invalid_audio_threshold_low);
+    RUN_TEST(test_post_smartsensing_rejects_invalid_audio_threshold_high);
     RUN_TEST(test_post_smartsensing_rejects_invalid_json);
     RUN_TEST(test_post_smartsensing_rejects_missing_body);
     RUN_TEST(test_post_smartsensing_manual_override);

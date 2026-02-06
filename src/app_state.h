@@ -101,25 +101,39 @@ public:
   SensingMode currentMode = ALWAYS_ON;
   unsigned long timerDuration = DEFAULT_TIMER_DURATION;
   unsigned long timerRemaining = 0;
-  unsigned long lastVoltageDetection = 0;
+  unsigned long lastSignalDetection = 0;
   unsigned long lastTimerUpdate = 0;
-  float voltageThreshold = DEFAULT_VOLTAGE_THRESHOLD;
+  float audioThreshold_dBFS = DEFAULT_AUDIO_THRESHOLD;
   bool amplifierState = false;
-  float lastVoltageReading = 0.0;
-  bool previousVoltageState = false;
+  float audioLevel_dBFS = -96.0f;
+  bool previousSignalState = false;
+
+  // Audio analysis fields (updated by I2S audio task)
+  float audioRmsLeft = 0.0f;
+  float audioRmsRight = 0.0f;
+  float audioRmsCombined = 0.0f;
+  float audioVuLeft = 0.0f;       // VU-smoothed (300ms attack, 650ms decay)
+  float audioVuRight = 0.0f;
+  float audioVuCombined = 0.0f;
+  float audioPeakLeft = 0.0f;     // Peak hold (instant attack, 2s hold, 300ms decay)
+  float audioPeakRight = 0.0f;
+  float audioPeakCombined = 0.0f;
+  float audioDominantFreq = 0.0f;
+  float audioSpectrumBands[16] = {};
+  uint32_t audioSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 
   void setAmplifierState(bool state);
   void setSensingMode(SensingMode mode);
   void setTimerRemaining(unsigned long remaining);
-  void setVoltageReading(float reading);
+  void setAudioLevel(float dBFS);
   bool isAmplifierDirty() const { return _amplifierDirty; }
   bool isSensingModeDirty() const { return _sensingModeDirty; }
   bool isTimerDirty() const { return _timerDirty; }
-  bool isVoltageDirty() const { return _voltageDirty; }
+  bool isAudioDirty() const { return _audioDirty; }
   void clearAmplifierDirty() { _amplifierDirty = false; }
   void clearSensingModeDirty() { _sensingModeDirty = false; }
   void clearTimerDirty() { _timerDirty = false; }
-  void clearVoltageDirty() { _voltageDirty = false; }
+  void clearAudioDirty() { _audioDirty = false; }
 
   // Smart Sensing heartbeat
   unsigned long lastSmartSensingHeartbeat = 0;
@@ -148,7 +162,7 @@ public:
   bool prevMqttAmplifierState = false;
   SensingMode prevMqttSensingMode = ALWAYS_ON;
   unsigned long prevMqttTimerRemaining = 0;
-  float prevMqttVoltageReading = 0.0;
+  float prevMqttAudioLevel = -96.0f;
   bool prevMqttBacklightOn = true;
   unsigned long prevMqttScreenTimeout = 60000;
   bool prevMqttBuzzerEnabled = true;
@@ -159,7 +173,7 @@ public:
   SensingMode prevBroadcastMode = ALWAYS_ON;
   bool prevBroadcastAmplifierState = false;
   unsigned long prevBroadcastTimerRemaining = 0;
-  float prevBroadcastVoltageReading = 0.0;
+  float prevBroadcastAudioLevel = -96.0f;
 
   // ===== Display State (accessible from all interfaces) =====
   unsigned long screenTimeout = 60000; // Screen timeout in ms (default 60s)
@@ -225,7 +239,7 @@ private:
   bool _amplifierDirty = false;
   bool _sensingModeDirty = false;
   bool _timerDirty = false;
-  bool _voltageDirty = false;
+  bool _audioDirty = false;
   bool _displayDirty = false;
   bool _buzzerDirty = false;
   bool _settingsDirty = false;
@@ -293,12 +307,12 @@ private:
 #define currentMode appState.currentMode
 #define timerDuration appState.timerDuration
 #define timerRemaining appState.timerRemaining
-#define lastVoltageDetection appState.lastVoltageDetection
+#define lastSignalDetection appState.lastSignalDetection
 #define lastTimerUpdate appState.lastTimerUpdate
-#define voltageThreshold appState.voltageThreshold
+#define audioThreshold_dBFS appState.audioThreshold_dBFS
 #define amplifierState appState.amplifierState
-#define lastVoltageReading appState.lastVoltageReading
-#define previousVoltageState appState.previousVoltageState
+#define audioLevel_dBFS appState.audioLevel_dBFS
+#define previousSignalState appState.previousSignalState
 #define lastSmartSensingHeartbeat appState.lastSmartSensingHeartbeat
 
 // Certificate Validation
@@ -325,7 +339,7 @@ private:
 #define prevMqttAmplifierState appState.prevMqttAmplifierState
 #define prevMqttSensingMode appState.prevMqttSensingMode
 #define prevMqttTimerRemaining appState.prevMqttTimerRemaining
-#define prevMqttVoltageReading appState.prevMqttVoltageReading
+#define prevMqttAudioLevel appState.prevMqttAudioLevel
 #define prevMqttBacklightOn appState.prevMqttBacklightOn
 #define prevMqttScreenTimeout appState.prevMqttScreenTimeout
 #define prevMqttBuzzerEnabled appState.prevMqttBuzzerEnabled
@@ -336,7 +350,7 @@ private:
 #define prevBroadcastMode appState.prevBroadcastMode
 #define prevBroadcastAmplifierState appState.prevBroadcastAmplifierState
 #define prevBroadcastTimerRemaining appState.prevBroadcastTimerRemaining
-#define prevBroadcastVoltageReading appState.prevBroadcastVoltageReading
+#define prevBroadcastAudioLevel appState.prevBroadcastAudioLevel
 
 // ===== Global Object extern declarations =====
 // These are actual global objects, not AppState members

@@ -75,8 +75,8 @@ void scr_home_refresh(void) {
     scr_menu_set_item_value(1, st.amplifierState ? "ON" : "OFF");
 
     /* 2: Signal */
-    bool detected = st.lastVoltageReading >= st.voltageThreshold;
-    snprintf(buf, sizeof(buf), "%.2fV %s", st.lastVoltageReading,
+    bool detected = st.audioLevel_dBFS >= st.audioThreshold_dBFS;
+    snprintf(buf, sizeof(buf), "%+.0f dBFS %s", st.audioLevel_dBFS,
              detected ? "Detected" : "\xE2\x80\x94");
     scr_menu_set_item_value(2, buf);
 
