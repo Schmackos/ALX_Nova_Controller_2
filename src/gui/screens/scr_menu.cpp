@@ -17,10 +17,12 @@ static void back_cb(lv_event_t *e) {
     gui_nav_pop();
 }
 
-/* Scroll focused row into view */
+/* Scroll focused row into view and report focus index */
 static void row_focus_cb(lv_event_t *e) {
     lv_obj_t *row = (lv_obj_t *)lv_event_get_target(e);
     lv_obj_scroll_to_view(row, LV_ANIM_ON);
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    gui_nav_set_focus_index(idx);
 }
 
 /* Generic menu item click callback */
@@ -121,7 +123,7 @@ lv_obj_t *scr_menu_create(const MenuConfig *config) {
             lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
             lv_group_add_obj(grp, row);
 
-            lv_obj_add_event_cb(row, row_focus_cb, LV_EVENT_FOCUSED, NULL);
+            lv_obj_add_event_cb(row, row_focus_cb, LV_EVENT_FOCUSED, (void *)(intptr_t)i);
 
             if (item->type == MENU_BACK) {
                 lv_obj_add_event_cb(row, back_cb, LV_EVENT_CLICKED, NULL);

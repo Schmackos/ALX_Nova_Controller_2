@@ -11,7 +11,7 @@
 #include <WiFi.h>
 
 /* Number of dashboard cards */
-#define CARD_COUNT 5
+#define CARD_COUNT 6
 
 /* Card definitions */
 struct CardDef {
@@ -25,6 +25,7 @@ static const CardDef cards[CARD_COUNT] = {
     {ICON_WIFI,     "WiFi",     SCR_WIFI_MENU},
     {ICON_MQTT,     "MQTT",     SCR_MQTT_MENU},
     {ICON_SETTINGS, "Settings", SCR_SETTINGS_MENU},
+    {ICON_SUPPORT,  "Support",  SCR_SUPPORT_MENU},
     {ICON_DEBUG,    "Debug",    SCR_DEBUG_MENU},
 };
 
@@ -74,7 +75,11 @@ static void get_card_summary(int idx, char *buf, size_t len) {
                      st.nightMode ? "Night" : "Day");
             break;
         }
-        case 4: { /* Debug */
+        case 4: { /* Support */
+            snprintf(buf, len, "User Manual");
+            break;
+        }
+        case 5: { /* Debug */
             snprintf(buf, len, "Heap: %uKB\nUp: %lus",
                      (unsigned int)(ESP.getFreeHeap() / 1024),
                      millis() / 1000);
@@ -105,6 +110,7 @@ static void card_focus_cb(lv_event_t *e) {
                     (i == idx) ? COLOR_PRIMARY : COLOR_TEXT_DIM, LV_PART_MAIN);
             }
         }
+        gui_nav_set_focus_index(idx);
         Serial.printf("[GUI] Desktop focus → card %d\n", idx);
     }
 }

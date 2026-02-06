@@ -11,6 +11,7 @@
 #include "screens/scr_mqtt.h"
 #include "screens/scr_settings.h"
 #include "screens/scr_debug.h"
+#include "screens/scr_support.h"
 #include "screens/scr_boot_anim.h"
 #include "../app_state.h"
 #include <Arduino.h>
@@ -144,6 +145,7 @@ static void register_screens(void) {
     gui_nav_register(SCR_WIFI_NET_MENU, scr_wifi_net_create);
     gui_nav_register(SCR_MQTT_MENU, scr_mqtt_create);
     gui_nav_register(SCR_SETTINGS_MENU, scr_settings_create);
+    gui_nav_register(SCR_SUPPORT_MENU, scr_support_create);
     gui_nav_register(SCR_DEBUG_MENU, scr_debug_create);
 }
 
