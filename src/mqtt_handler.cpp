@@ -157,6 +157,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/settings/night_mode/set").c_str());
   mqttClient.subscribe((base + "/settings/cert_validation/set").c_str());
   mqttClient.subscribe((base + "/settings/screen_timeout/set").c_str());
+  mqttClient.subscribe((base + "/settings/dim_timeout/set").c_str());
   mqttClient.subscribe((base + "/display/backlight/set").c_str());
   mqttClient.subscribe((base + "/display/brightness/set").c_str());
   mqttClient.subscribe((base + "/settings/buzzer/set").c_str());
@@ -340,6 +341,18 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       saveSettings();
       LOG_I("[MQTT] Screen timeout set to %d seconds", timeoutSec);
       sendWiFiStatus();
+    }
+    publishMqttDisplayState();
+  }
+  // Handle dim timeout setting
+  else if (topicStr == base + "/settings/dim_timeout/set") {
+    int dimSec = message.toInt();
+    unsigned long dimMs = (unsigned long)dimSec * 1000UL;
+    if (dimMs == 0 || dimMs == 5000 || dimMs == 10000 ||
+        dimMs == 30000 || dimMs == 60000) {
+      appState.setDimTimeout(dimMs);
+      saveSettings();
+      LOG_I("[MQTT] Dim timeout set to %d seconds", dimSec);
     }
     publishMqttDisplayState();
   }
@@ -539,6 +552,7 @@ void mqttLoop() {
         (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
         (appState.buzzerVolume != prevMqttBuzzerVolume) ||
         (appState.backlightBrightness != prevMqttBrightness) ||
+        (appState.dimTimeout != prevMqttDimTimeout) ||
         (nightMode != prevMqttNightMode) ||
         (autoUpdateEnabled != prevMqttAutoUpdate) ||
         (enableCertValidation != prevMqttCertValidation);
@@ -558,6 +572,7 @@ void mqttLoop() {
       prevMqttBuzzerEnabled = appState.buzzerEnabled;
       prevMqttBuzzerVolume = appState.buzzerVolume;
       prevMqttBrightness = appState.backlightBrightness;
+      prevMqttDimTimeout = appState.dimTimeout;
       prevMqttNightMode = nightMode;
       prevMqttAutoUpdate = autoUpdateEnabled;
       prevMqttCertValidation = enableCertValidation;
@@ -862,6 +877,9 @@ void publishMqttDisplayState() {
   int brightPct = (int)appState.backlightBrightness * 100 / 255;
   mqttClient.publish((base + "/display/brightness").c_str(),
                      String(brightPct).c_str(), true);
+
+  mqttClient.publish((base + "/settings/dim_timeout").c_str(),
+                     String(appState.dimTimeout / 1000).c_str(), true);
 }
 
 // Publish all states
@@ -1446,6 +1464,28 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Dim Timeout Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Dim Timeout";
+    doc["unique_id"] = deviceId + "_dim_timeout";
+    doc["state_topic"] = base + "/settings/dim_timeout";
+    doc["command_topic"] = base + "/settings/dim_timeout/set";
+    doc["min"] = 0;
+    doc["max"] = 60;
+    doc["step"] = 5;
+    doc["unit_of_measurement"] = "s";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:brightness-auto";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic =
+        "homeassistant/number/" + deviceId + "/dim_timeout/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   // ===== Display Brightness Number =====
   {
     JsonDocument doc;
@@ -1551,6 +1591,7 @@ void removeHADiscovery() {
       "homeassistant/update/%s/firmware/config",
       "homeassistant/switch/%s/backlight/config",
       "homeassistant/number/%s/screen_timeout/config",
+      "homeassistant/number/%s/dim_timeout/config",
       "homeassistant/number/%s/brightness/config",
       "homeassistant/switch/%s/buzzer/config",
       "homeassistant/number/%s/buzzer_volume/config"};

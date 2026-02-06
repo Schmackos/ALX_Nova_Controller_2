@@ -57,5 +57,13 @@ lv_group_t *gui_nav_get_group(void);
 /* Save current focus index for the active screen (called by screen focus callbacks) */
 void gui_nav_set_focus_index(int idx);
 
+/* Deferred navigation — safe to call from LVGL event callbacks.
+ * Queues the action; actual push/pop happens after lv_timer_handler returns. */
+void gui_nav_push_deferred(ScreenId id);
+void gui_nav_pop_deferred(void);
+
+/* Process any pending deferred navigation (call from gui_task main loop) */
+void gui_nav_process_deferred(void);
+
 #endif /* GUI_ENABLED */
 #endif /* GUI_NAVIGATION_H */

@@ -19,6 +19,10 @@ static screen_create_fn screen_creators[SCR_COUNT] = {nullptr};
 /* LVGL group for encoder input on current screen */
 static lv_group_t *current_group = nullptr;
 
+/* Deferred navigation — avoids modifying group inside LVGL event callbacks */
+static volatile ScreenId deferred_push_target = SCR_COUNT;
+static volatile bool deferred_pop_flag = false;
+
 void gui_nav_init(void) {
     nav_depth = 0;
     current_group = lv_group_create();
@@ -129,6 +133,26 @@ int gui_nav_depth(void) {
 
 lv_group_t *gui_nav_get_group(void) {
     return current_group;
+}
+
+void gui_nav_push_deferred(ScreenId id) {
+    deferred_push_target = id;
+}
+
+void gui_nav_pop_deferred(void) {
+    deferred_pop_flag = true;
+}
+
+void gui_nav_process_deferred(void) {
+    if (deferred_push_target < SCR_COUNT) {
+        ScreenId target = deferred_push_target;
+        deferred_push_target = SCR_COUNT;
+        gui_nav_push(target);
+    }
+    if (deferred_pop_flag) {
+        deferred_pop_flag = false;
+        gui_nav_pop();
+    }
 }
 
 #endif /* GUI_ENABLED */

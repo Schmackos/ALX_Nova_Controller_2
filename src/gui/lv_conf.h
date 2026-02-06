@@ -111,6 +111,11 @@
 #define LV_USE_ASSERT_MEM_INTEGRITY 0
 #define LV_USE_ASSERT_OBJ 0
 
+/* Override default while(1) handler — continue instead of freezing gui_task.
+ * The LV_LOG_ERROR before this handler already logs the failure details.
+ * NOTE: LV_ASSERT_HANDLER is pasted without trailing ';' in lv_assert.h */
+#define LV_ASSERT_HANDLER  ;
+
 /*-------------
  * Others
  *-----------*/

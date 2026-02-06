@@ -97,8 +97,9 @@ static void encoder_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
         data->enc_diff = diff;
     }
 
-    /* Button state always goes through LVGL (for CLICKED events) */
-    bool pressed_now = encoder_pressed;
+    /* Button state: verify against physical pin to avoid stuck press state.
+     * The ISR handles buzzer feedback; LVGL gets the authoritative pin reading. */
+    bool pressed_now = (digitalRead(ENCODER_SW_PIN) == LOW);
     data->state = pressed_now ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 
     /* Serial debug: rotation */

@@ -28,8 +28,8 @@ static uint32_t lv_millis_cb(void) { return (uint32_t)millis(); }
 /* TFT driver instance */
 static TFT_eSPI tft = TFT_eSPI();
 
-/* LVGL display buffer */
-static lv_color_t draw_buf[DISP_BUF_SIZE];
+/* LVGL display buffer (must be aligned per LV_DRAW_BUF_ALIGN) */
+static lv_color_t draw_buf[DISP_BUF_SIZE] __attribute__((aligned(LV_DRAW_BUF_ALIGN)));
 
 /* Screen sleep state */
 static bool screen_awake = true;
@@ -190,6 +190,9 @@ static void gui_task(void *param) {
 
         /* Run LVGL timer handler */
         uint32_t time_till_next = lv_timer_handler();
+
+        /* Process deferred navigation (safe: outside LVGL event context) */
+        gui_nav_process_deferred();
 
         /* Delay until next LVGL tick needed */
         uint32_t delay_ms = (time_till_next < GUI_TICK_PERIOD_MS) ? time_till_next : GUI_TICK_PERIOD_MS;

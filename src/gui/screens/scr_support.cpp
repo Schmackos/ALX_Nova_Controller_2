@@ -58,7 +58,7 @@ static const uint8_t PROGMEM qr_bitmap[] = {
 /* Back button callback */
 static void on_back(lv_event_t *e) {
     (void)e;
-    gui_nav_pop();
+    gui_nav_pop_deferred();
 }
 
 lv_obj_t *scr_support_create(void) {
