@@ -130,6 +130,7 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-06] Update RELEASE_NOTES.md to reflect the addition of a Support tab in the GUI and navigation enhancements (`b4f9834`)
 - [2026-02-06] Update RELEASE_NOTES.md to include enhancements in GUI with new Support tab and navigation improvements (`3066a51`)
 - [2026-02-06] Enhance GUI with Support Tab and Navigation Improvements
 
