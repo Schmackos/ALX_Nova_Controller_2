@@ -2,6 +2,7 @@
 
 #include "gui_navigation.h"
 #include "gui_input.h"
+#include "../buzzer_handler.h"
 #include <Arduino.h>
 
 /* Navigation stack */
@@ -83,6 +84,7 @@ void gui_nav_push(ScreenId id) {
         anim = LV_SCR_LOAD_ANIM_FADE_IN;
     } else {
         anim = LV_SCR_LOAD_ANIM_MOVE_LEFT;
+        buzzer_play(BUZZ_NAV);
     }
 
     activate_screen(id, anim);
@@ -99,6 +101,7 @@ void gui_nav_pop(void) {
     ScreenId prev = nav_stack[nav_depth - 1];
     int saved_idx = nav_focus_index[nav_depth - 1];
 
+    buzzer_play(BUZZ_NAV);
     activate_screen(prev, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
     restore_focus(saved_idx);
     Serial.printf("[GUI Nav] Pop to screen %d (depth %d, focus %d)\n", prev, nav_depth, saved_idx);

@@ -159,6 +159,8 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/settings/cert_validation/set").c_str());
   mqttClient.subscribe((base + "/settings/screen_timeout/set").c_str());
   mqttClient.subscribe((base + "/display/backlight/set").c_str());
+  mqttClient.subscribe((base + "/settings/buzzer/set").c_str());
+  mqttClient.subscribe((base + "/settings/buzzer_volume/set").c_str());
   mqttClient.subscribe((base + "/system/reboot").c_str());
   mqttClient.subscribe((base + "/system/factory_reset").c_str());
   mqttClient.subscribe((base + "/system/check_update").c_str());
@@ -350,6 +352,24 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     DebugOut.printf("MQTT: Backlight set to %s\n", newState ? "ON" : "OFF");
     publishMqttDisplayState();
   }
+  // Handle buzzer enable/disable
+  else if (topicStr == base + "/settings/buzzer/set") {
+    bool enabled = (message == "ON" || message == "1" || message == "true");
+    appState.setBuzzerEnabled(enabled);
+    saveSettings();
+    DebugOut.printf("MQTT: Buzzer set to %s\n", enabled ? "ON" : "OFF");
+    publishMqttBuzzerState();
+  }
+  // Handle buzzer volume
+  else if (topicStr == base + "/settings/buzzer_volume/set") {
+    int vol = message.toInt();
+    if (vol >= 0 && vol <= 2) {
+      appState.setBuzzerVolume(vol);
+      saveSettings();
+      DebugOut.printf("MQTT: Buzzer volume set to %d\n", vol);
+      publishMqttBuzzerState();
+    }
+  }
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
     DebugOut.println("MQTT: Reboot command received");
@@ -509,6 +529,8 @@ void mqttLoop() {
         (abs(lastVoltageReading - prevMqttVoltageReading) > 0.05) ||
         (appState.backlightOn != prevMqttBacklightOn) ||
         (appState.screenTimeout != prevMqttScreenTimeout) ||
+        (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
+        (appState.buzzerVolume != prevMqttBuzzerVolume) ||
         (nightMode != prevMqttNightMode) ||
         (autoUpdateEnabled != prevMqttAutoUpdate) ||
         (enableCertValidation != prevMqttCertValidation);
@@ -525,6 +547,8 @@ void mqttLoop() {
       prevMqttVoltageReading = lastVoltageReading;
       prevMqttBacklightOn = appState.backlightOn;
       prevMqttScreenTimeout = appState.screenTimeout;
+      prevMqttBuzzerEnabled = appState.buzzerEnabled;
+      prevMqttBuzzerVolume = appState.buzzerVolume;
       prevMqttNightMode = nightMode;
       prevMqttAutoUpdate = autoUpdateEnabled;
       prevMqttCertValidation = enableCertValidation;
@@ -800,6 +824,19 @@ void publishMqttHardwareStats() {
                      String(uptimeSeconds).c_str(), true);
 }
 
+// Publish buzzer state
+void publishMqttBuzzerState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/settings/buzzer").c_str(),
+                     appState.buzzerEnabled ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/settings/buzzer_volume").c_str(),
+                     String(appState.buzzerVolume).c_str(), true);
+}
+
 // Publish display state (backlight + screen timeout)
 void publishMqttDisplayState() {
   if (!mqttClient.connected())
@@ -823,6 +860,7 @@ void publishMqttState() {
   publishMqttUpdateState();
   publishMqttHardwareStats();
   publishMqttDisplayState();
+  publishMqttBuzzerState();
 }
 
 // ===== Home Assistant Auto-Discovery =====
@@ -1394,6 +1432,46 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Buzzer Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Buzzer";
+    doc["unique_id"] = deviceId + "_buzzer";
+    doc["state_topic"] = base + "/settings/buzzer";
+    doc["command_topic"] = base + "/settings/buzzer/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:volume-high";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/buzzer/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Buzzer Volume Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Buzzer Volume";
+    doc["unique_id"] = deviceId + "_buzzer_volume";
+    doc["state_topic"] = base + "/settings/buzzer_volume";
+    doc["command_topic"] = base + "/settings/buzzer_volume/set";
+    doc["min"] = 0;
+    doc["max"] = 2;
+    doc["step"] = 1;
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:volume-medium";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic =
+        "homeassistant/number/" + deviceId + "/buzzer_volume/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   DebugOut.println("MQTT: Home Assistant discovery configs published");
 }
 
@@ -1436,7 +1514,9 @@ void removeHADiscovery() {
       "homeassistant/button/%s/check_update/config",
       "homeassistant/update/%s/firmware/config",
       "homeassistant/switch/%s/backlight/config",
-      "homeassistant/number/%s/screen_timeout/config"};
+      "homeassistant/number/%s/screen_timeout/config",
+      "homeassistant/switch/%s/buzzer/config",
+      "homeassistant/number/%s/buzzer_volume/config"};
 
   char topicBuf[128];
   for (const char *topicTemplate : topics) {

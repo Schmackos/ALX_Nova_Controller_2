@@ -39,6 +39,8 @@ bool loadSettings() {
   String line8 = file.readStringUntil('\n');
   String line9 = file.readStringUntil('\n');
   String line10 = file.readStringUntil('\n');
+  String line11 = file.readStringUntil('\n');
+  String line12 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -120,6 +122,21 @@ bool loadSettings() {
     }
   }
 
+  // Load buzzer enabled (if available, otherwise default to true)
+  if (line11.length() > 0) {
+    line11.trim();
+    appState.buzzerEnabled = (line11.toInt() != 0);
+  }
+
+  // Load buzzer volume (if available, otherwise default to 1=Medium)
+  if (line12.length() > 0) {
+    line12.trim();
+    int vol = line12.toInt();
+    if (vol >= 0 && vol <= 2) {
+      appState.buzzerVolume = vol;
+    }
+  }
+
   return true;
 }
 
@@ -145,6 +162,8 @@ void saveSettings() {
   file.println("0"); // placeholder for bootAnimStyle
 #endif
   file.println(appState.screenTimeout);
+  file.println(appState.buzzerEnabled ? "1" : "0");
+  file.println(appState.buzzerVolume);
   file.close();
   DebugOut.println("Settings saved to LittleFS");
 }
@@ -234,6 +253,8 @@ void handleSettingsGet() {
       hardwareStatsInterval / 1000; // Send as seconds
   doc["screenTimeout"] = appState.screenTimeout / 1000; // Send as seconds
   doc["backlightOn"] = appState.backlightOn;
+  doc["buzzerEnabled"] = appState.buzzerEnabled;
+  doc["buzzerVolume"] = appState.buzzerVolume;
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -357,6 +378,24 @@ void handleSettingsUpdate() {
     // backlightOn is runtime only, no save
   }
 
+  if (doc["buzzerEnabled"].is<bool>()) {
+    bool newBuzzer = doc["buzzerEnabled"].as<bool>();
+    if (newBuzzer != appState.buzzerEnabled) {
+      appState.setBuzzerEnabled(newBuzzer);
+      settingsChanged = true;
+      DebugOut.printf("Buzzer %s\n", newBuzzer ? "enabled" : "disabled");
+    }
+  }
+
+  if (doc["buzzerVolume"].is<int>()) {
+    int newVol = doc["buzzerVolume"].as<int>();
+    if (newVol >= 0 && newVol <= 2 && newVol != appState.buzzerVolume) {
+      appState.setBuzzerVolume(newVol);
+      settingsChanged = true;
+      DebugOut.printf("Buzzer volume set to %d\n", newVol);
+    }
+  }
+
 #ifdef GUI_ENABLED
   if (doc["bootAnimEnabled"].is<bool>()) {
     bool newBootAnim = doc["bootAnimEnabled"].as<bool>();
@@ -396,6 +435,8 @@ void handleSettingsUpdate() {
   resp["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
   resp["screenTimeout"] = appState.screenTimeout / 1000;
   resp["backlightOn"] = appState.backlightOn;
+  resp["buzzerEnabled"] = appState.buzzerEnabled;
+  resp["buzzerVolume"] = appState.buzzerVolume;
 #ifdef GUI_ENABLED
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
@@ -438,6 +479,8 @@ void handleSettingsExport() {
   doc["settings"]["blinkingEnabled"] = blinkingEnabled;
   doc["settings"]["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
   doc["settings"]["screenTimeout"] = appState.screenTimeout / 1000;
+  doc["settings"]["buzzerEnabled"] = appState.buzzerEnabled;
+  doc["settings"]["buzzerVolume"] = appState.buzzerVolume;
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
@@ -605,6 +648,18 @@ void handleSettingsImport() {
           timeoutMs == 300000 || timeoutMs == 600000) {
         appState.screenTimeout = timeoutMs;
         DebugOut.printf("Screen Timeout: %d seconds\n", timeoutSec);
+      }
+    }
+    if (doc["settings"]["buzzerEnabled"].is<bool>()) {
+      appState.buzzerEnabled = doc["settings"]["buzzerEnabled"].as<bool>();
+      DebugOut.printf("Buzzer: %s\n",
+                      appState.buzzerEnabled ? "enabled" : "disabled");
+    }
+    if (doc["settings"]["buzzerVolume"].is<int>()) {
+      int vol = doc["settings"]["buzzerVolume"].as<int>();
+      if (vol >= 0 && vol <= 2) {
+        appState.buzzerVolume = vol;
+        DebugOut.printf("Buzzer Volume: %d\n", vol);
       }
     }
 #ifdef GUI_ENABLED
@@ -803,6 +858,8 @@ void handleDiagnostics() {
   settings["hardwareStatsInterval"] = hardwareStatsInterval;
   settings["screenTimeout"] = appState.screenTimeout;
   settings["backlightOn"] = appState.backlightOn;
+  settings["buzzerEnabled"] = appState.buzzerEnabled;
+  settings["buzzerVolume"] = appState.buzzerVolume;
 
   // ===== Smart Sensing =====
   JsonObject sensing = doc["smartSensing"].to<JsonObject>();

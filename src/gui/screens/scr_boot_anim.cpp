@@ -4,6 +4,7 @@
 #include "../gui_config.h"
 #include "../gui_theme.h"
 #include "../../app_state.h"
+#include "../../buzzer_handler.h"
 #include <Arduino.h>
 #include <lvgl.h>
 
@@ -497,10 +498,14 @@ void boot_anim_play(void) {
     /* Run selected animation setup */
     anim_table[style](scr);
 
+    /* Play startup melody alongside the animation */
+    buzzer_play(BUZZ_STARTUP);
+
     /* Blocking loop: pump LVGL until animation signals done or timeout */
     unsigned long start = millis();
     while (!anim_finished && (millis() - start < ANIM_DURATION_MS + 500)) {
         lv_timer_handler();
+        buzzer_update();
         vTaskDelay(pdMS_TO_TICKS(5));
     }
 

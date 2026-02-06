@@ -1,6 +1,7 @@
 #include "app_state.h"
 #include "auth_handler.h"
 #include "button_handler.h"
+#include "buzzer_handler.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "login_page.h"
@@ -177,6 +178,7 @@ void setup() {
 
   // Configure factory reset button with enhanced detection
   resetButton.begin();
+  buzzer_init();
   DebugOut.printf("Factory reset button configured: GPIO%d\n",
                   RESET_BUTTON_PIN);
   DebugOut.println("  Button actions:");
@@ -502,6 +504,7 @@ void loop() {
     // Handle different button press types
     switch (pressType) {
     case BTN_SHORT_PRESS:
+      buzzer_play(BUZZ_BTN_SHORT);
       DebugOut.println("=== Button: Short Press ===");
 #ifdef GUI_ENABLED
       gui_wake(); // Wake TFT screen on K0 short press
@@ -517,6 +520,7 @@ void loop() {
       break;
 
     case BTN_DOUBLE_CLICK:
+      buzzer_play(BUZZ_BTN_DOUBLE);
       DebugOut.println("=== Button: Double Click - Toggle AP Mode ===");
       if (appState.isAPMode) {
         stopAccessPoint();
@@ -526,6 +530,7 @@ void loop() {
       break;
 
     case BTN_TRIPLE_CLICK:
+      buzzer_play(BUZZ_BTN_TRIPLE);
       DebugOut.println("=== Button: Triple Click - Toggle LED Blinking ===");
       appState.setBlinkingEnabled(!appState.blinkingEnabled);
       DebugOut.printf("LED Blinking is now: %s\n",
@@ -534,12 +539,14 @@ void loop() {
       break;
 
     case BTN_LONG_PRESS:
+      buzzer_play(BUZZ_BTN_LONG);
       DebugOut.println("=== Button: Long Press - Restarting ESP32 ===");
       delay(500);
       ESP.restart();
       break;
 
     case BTN_VERY_LONG_PRESS:
+      buzzer_play(BUZZ_BTN_VERY_LONG);
       DebugOut.println("=== Button: Very Long Press - Rebooting ESP32 ===");
       sendRebootProgress(10, true);
       delay(100); // Give time for WebSocket message to send
@@ -667,6 +674,13 @@ void loop() {
     appState.clearDisplayDirty();
   }
 
+  // Broadcast buzzer state changes (GUI -> WS clients + MQTT)
+  if (appState.isBuzzerDirty()) {
+    sendBuzzerState();
+    publishMqttBuzzerState();
+    appState.clearBuzzerDirty();
+  }
+
   // Broadcast blinking state changes (GUI -> WS clients)
   if (appState.isBlinkingDirty()) {
     sendBlinkingState();
@@ -714,6 +728,9 @@ void loop() {
       DebugOut.println("Blinking stopped - LED turned OFF");
     }
   }
+
+  // Non-blocking buzzer pattern sequencer
+  buzzer_update();
 }
 
 // WiFi functions are defined in wifi_manager.h/.cpp

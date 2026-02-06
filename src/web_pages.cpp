@@ -544,6 +544,46 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        /* ===== Pin Configuration Table ===== */
+        .pin-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .pin-table th {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 2px solid var(--accent);
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pin-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pin-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .pin-cat {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+
+        .pin-cat-core { background: var(--accent); color: #fff; }
+        .pin-cat-input { background: var(--success); color: #fff; }
+        .pin-cat-display { background: var(--info); color: #fff; }
+
         /* ===== Connection Status ===== */
         .connection-bar {
             display: flex;
@@ -2299,6 +2339,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="5">Heartbeat</option>
                     </select>
                 </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Buzzer</div>
+                        <div class="toggle-sublabel">Audio feedback sounds</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="buzzerToggle" onchange="toggleBuzzer()" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Buzzer Volume</div>
+                        <div class="toggle-sublabel">Feedback sound level</div>
+                    </div>
+                    <select id="buzzerVolumeSelect" onchange="setBuzzerVolume()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="0">Low</option>
+                        <option value="1" selected>Medium</option>
+                        <option value="2">High</option>
+                    </select>
+                </div>
             </div>
 
             <!-- Security -->
@@ -2604,6 +2665,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="uptime">--</span>
                     </div>
                 </div>
+            </div>
+
+            <!-- Pin Configuration -->
+            <div class="card">
+                <div class="card-title">Pin Configuration</div>
+                <table class="pin-table">
+                    <thead>
+                        <tr><th>GPIO</th><th>Function</th><th>Category</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>1</td><td>Voltage Sense (ADC)</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>2</td><td>LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>4</td><td>Amplifier Relay</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>8</td><td>Buzzer (PWM)</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>15</td><td>Reset Button</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>5</td><td>Encoder A</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>6</td><td>Encoder B</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>7</td><td>Encoder SW</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>10</td><td>TFT CS</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>11</td><td>TFT MOSI</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>12</td><td>TFT SCLK</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>13</td><td>TFT DC</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>14</td><td>TFT RST</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>21</td><td>TFT Backlight</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                    </tbody>
+                </table>
             </div>
 
             <!-- Debug Console -->
@@ -2984,6 +3071,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         screenTimeoutSec = data.screenTimeout;
                         document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
                     }
+                } else if (data.type === 'buzzerState') {
+                    if (typeof data.enabled !== 'undefined') {
+                        document.getElementById('buzzerToggle').checked = !!data.enabled;
+                    }
+                    if (typeof data.volume !== 'undefined') {
+                        document.getElementById('buzzerVolumeSelect').value = data.volume.toString();
+                    }
                 } else if (data.type === 'mqttSettings') {
                     document.getElementById('mqttEnabled').checked = data.enabled || false;
                     document.getElementById('mqttBroker').value = data.broker || '';
@@ -3182,6 +3276,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 } else if (typeof data.bootAnimStyle !== 'undefined') {
                     document.getElementById('bootAnimSelect').value = data.bootAnimStyle.toString();
                 }
+            }
+
+            if (typeof data.buzzerEnabled !== 'undefined') {
+                document.getElementById('buzzerToggle').checked = !!data.buzzerEnabled;
+            }
+            if (typeof data.buzzerVolume !== 'undefined') {
+                document.getElementById('buzzerVolumeSelect').value = data.buzzerVolume.toString();
             }
 
             if (typeof data.enableCertValidation !== 'undefined') {
@@ -4660,6 +4761,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
+            });
+        }
+
+        function toggleBuzzer() {
+            var enabled = document.getElementById('buzzerToggle').checked;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setBuzzerEnabled', enabled: enabled }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ buzzerEnabled: enabled })
+            });
+        }
+
+        function setBuzzerVolume() {
+            var vol = parseInt(document.getElementById('buzzerVolumeSelect').value);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setBuzzerVolume', value: vol }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ buzzerVolume: vol })
             });
         }
 

@@ -6,6 +6,7 @@
 #include "../gui_input.h"
 #include "../gui_navigation.h"
 #include "../gui_theme.h"
+#include "../../buzzer_handler.h"
 #include <Arduino.h>
 
 /* Current edit state */
@@ -101,6 +102,7 @@ static void cleanup(void) {
 static void on_click(lv_event_t *e) {
     (void)e;
     Serial.println("[GUI] Value edit: CONFIRM");
+    buzzer_play(BUZZ_CONFIRM);
     if (active_cfg.on_confirm) {
         switch (active_cfg.type) {
             case VE_TOGGLE:
