@@ -2,6 +2,11 @@
 
 ## Version 1.4.2
 
+## Documentation
+- [2026-02-06] docs: Clean up RELEASE_NOTES.md formatting
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`62fd92f`)
+
 ## Technical Details
 - [2026-02-06] Update RELEASE_NOTES.md to consolidate and clarify documentation for buzzer functionality, including state management, volume control, and real-time updates via MQTT and WebSocket. (`fa91080`)
 
