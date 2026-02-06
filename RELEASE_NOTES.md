@@ -130,6 +130,13 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-06] Enhance GUI with Support Tab and Navigation Improvements
+
+- Added a new Support tab in the GUI, allowing users to access the user manual and documentation.
+- Implemented search functionality within the manual section for easier navigation.
+- Updated navigation to include the Support screen and maintain focus index across screens.
+- Adjusted layout and styles for better user experience in the Debug and Desktop screens.
+- Updated platformio.ini to set default environment for ESP32-S3 development. (`c7b8e00`)
 - [2026-02-06] Update RELEASE_NOTES.md to clarify recent enhancements in MQTT settings management and UI synchronization (`07e28c4`)
 - [2026-02-06] Update RELEASE_NOTES.md to clarify enhancements in MQTT settings management and UI synchronization (`478df44`)
 - [2026-02-06] Update RELEASE_NOTES.md to document enhancements in MQTT settings management and UI synchronization (`09f23ee`)
