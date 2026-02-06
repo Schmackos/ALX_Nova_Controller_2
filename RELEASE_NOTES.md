@@ -130,6 +130,7 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-06] Update RELEASE_NOTES.md to document enhancements in MQTT settings management and UI synchronization (`fd0c451`)
 - [2026-02-06] Enhance MQTT settings management and update UI
 
 - Added functionality to send and receive MQTT settings via WebSocket, including broker, port, username, and discovery options.
