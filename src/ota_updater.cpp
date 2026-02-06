@@ -3,6 +3,7 @@
 #include "app_state.h"
 #include "debug_serial.h"
 #include "utils.h"
+#include "buzzer_handler.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -583,6 +584,9 @@ bool performOTAUpdate(String firmwareUrl) {
     return false;
   }
   
+  // Play OTA update melody before flashing begins
+  buzzer_play_blocking(BUZZ_OTA_UPDATE, 850);
+
   // Begin OTA update
   if (!Update.begin(contentLength)) {
     LOG_E("[OTA] Failed to begin OTA, free space: %d", ESP.getFreeSketchSpace());
@@ -833,6 +837,9 @@ void handleFirmwareUploadChunk() {
     otaStatusMessage = "Receiving firmware file...";
     broadcastUpdateStatus();
     
+    // Play OTA update melody before flashing begins
+    buzzer_play_blocking(BUZZ_OTA_UPDATE, 850);
+
     // Begin OTA update with unknown size (will auto-detect)
     if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
       LOG_E("[OTA] Failed to begin update: %s", Update.errorString());

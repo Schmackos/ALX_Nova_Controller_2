@@ -88,6 +88,20 @@ static const ToneStep pat_startup[] = {
   {0, 0}
 };
 
+// OTA update melody: descending D-minor alert + rising resolution
+static const ToneStep pat_ota_update[] = {
+  {1175, 100},   // D6 - attention
+  {0, 30},
+  {880, 100},    // A5
+  {0, 30},
+  {698, 120},    // F5 - descent bottom
+  {0, 80},       // phrase gap
+  {587, 100},    // D5 - resolve start
+  {0, 30},
+  {880, 200},    // A5 - held resolve
+  {0, 0}
+};
+
 // ===== Pattern lookup =====
 static const ToneStep *get_pattern(BuzzerPattern p) {
   switch (p) {
@@ -101,6 +115,7 @@ static const ToneStep *get_pattern(BuzzerPattern p) {
     case BUZZ_BTN_TRIPLE:     return pat_btn_triple;
     case BUZZ_NAV:            return pat_nav;
     case BUZZ_STARTUP:        return pat_startup;
+    case BUZZ_OTA_UPDATE:     return pat_ota_update;
     default:                  return nullptr;
   }
 }
@@ -208,4 +223,14 @@ void buzzer_update() {
       ledcWrite(BUZZER_PWM_CHANNEL, 0);
     }
   }
+}
+
+void buzzer_play_blocking(BuzzerPattern pattern, uint16_t timeout_ms) {
+  buzzer_play(pattern);
+  unsigned long start = millis();
+  while (millis() - start < timeout_ms) {
+    buzzer_update();
+    delay(1);
+  }
+  buzzer_update();
 }

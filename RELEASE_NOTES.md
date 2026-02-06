@@ -2,6 +2,21 @@
 
 ## Version 1.4.2
 
+## New Features
+- [2026-02-06] feat: Add OTA update melody with blocking playback helper
+
+Play a descending D-minor alert melody (D6→A5→F5→D5→A5) before
+firmware flashing begins, giving audible feedback for both GitHub
+download and manual upload OTA paths. Adds buzzer_play_blocking()
+for synchronous melody playback in non-looping contexts.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`209d435`)
+
+## Documentation
+- [2026-02-06] docs: Clean up release notes for v1.4.2
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`d579432`)
+
 ### New Features
 - **Complete LVGL GUI System**: Full graphical interface on ST7735S 128x160 TFT with rotary encoder, built on LVGL v9.4 + TFT_eSPI. Desktop carousel with 7 swipeable cards, dedicated menus for Control, WiFi, MQTT, Settings, and Debug, plus reusable value editors and an LVGL keyboard for text input.
 - **Home Status Screen**: Read-only dashboard displaying amplifier state, signal voltage, auto-off timer, WiFi/MQTT status, sensing mode, firmware version, and uptime. Refreshes at 1 Hz.

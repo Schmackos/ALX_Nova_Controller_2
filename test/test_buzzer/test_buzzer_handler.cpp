@@ -29,6 +29,7 @@ enum BuzzerPattern {
   BUZZ_BTN_TRIPLE,
   BUZZ_NAV,
   BUZZ_STARTUP,
+  BUZZ_OTA_UPDATE,
 };
 
 struct ToneStep {
@@ -55,6 +56,9 @@ static const ToneStep pat_btn_very_long[] = {
     {1000, 100}, {2000, 100}, {1000, 100},
     {2000, 100}, {1000, 100}, {2000, 100},
     {0, 0}};
+static const ToneStep pat_ota_update[] = {
+    {1175, 100}, {0, 30}, {880, 100}, {0, 30}, {698, 120},
+    {0, 80}, {587, 100}, {0, 30}, {880, 200}, {0, 0}};
 
 static const ToneStep *get_pattern(BuzzerPattern p) {
   switch (p) {
@@ -78,6 +82,8 @@ static const ToneStep *get_pattern(BuzzerPattern p) {
     return pat_nav;
   case BUZZ_STARTUP:
     return pat_startup;
+  case BUZZ_OTA_UPDATE:
+    return pat_ota_update;
   default:
     return nullptr;
   }
@@ -173,6 +179,16 @@ static void buzzer_update() {
 }
 
 static void buzzer_play(BuzzerPattern pattern) { pending_pattern = pattern; }
+
+static void buzzer_play_blocking(BuzzerPattern pattern, uint16_t timeout_ms) {
+  buzzer_play(pattern);
+  unsigned long start = millis();
+  while (millis() - start < timeout_ms) {
+    buzzer_update();
+    ArduinoMock::mockMillis++;
+  }
+  buzzer_update();
+}
 
 // ===== Test setUp/tearDown =====
 
@@ -315,6 +331,102 @@ void test_silence_gap_zero_duty(void) {
   TEST_ASSERT_EQUAL(0u, ArduinoMock::ledcLastDuty);
 }
 
+// Test 8: OTA update pattern plays first tone (D6 = 1175 Hz)
+void test_ota_update_pattern_plays(void) {
+  buzzer_play(BUZZ_OTA_UPDATE);
+  buzzer_update();
+
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(1175, (int)ArduinoMock::ledcLastFreq);
+}
+
+// Test 9: OTA update pattern walks through all 9 steps correctly
+void test_ota_update_pattern_sequencing(void) {
+  buzzer_play(BUZZ_OTA_UPDATE);
+  buzzer_update();
+
+  // Step 0: D6 (1175 Hz, 100ms)
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(1175, (int)ArduinoMock::ledcLastFreq);
+
+  // Step 1: silence (30ms)
+  ArduinoMock::mockMillis = 100;
+  buzzer_update();
+  TEST_ASSERT_EQUAL(0u, ArduinoMock::ledcLastDuty);
+
+  // Step 2: A5 (880 Hz, 100ms)
+  ArduinoMock::mockMillis = 130;
+  buzzer_update();
+  TEST_ASSERT_EQUAL(880, (int)ArduinoMock::ledcLastFreq);
+
+  // Step 3: silence (30ms)
+  ArduinoMock::mockMillis = 230;
+  buzzer_update();
+  TEST_ASSERT_EQUAL(0u, ArduinoMock::ledcLastDuty);
+
+  // Step 4: F5 (698 Hz, 120ms)
+  ArduinoMock::mockMillis = 260;
+  buzzer_update();
+  TEST_ASSERT_EQUAL(698, (int)ArduinoMock::ledcLastFreq);
+
+  // Step 5: silence (80ms)
+  ArduinoMock::mockMillis = 380;
+  buzzer_update();
+  TEST_ASSERT_EQUAL(0u, ArduinoMock::ledcLastDuty);
+
+  // Step 6: D5 (587 Hz, 100ms)
+  ArduinoMock::mockMillis = 460;
+  buzzer_update();
+  TEST_ASSERT_EQUAL(587, (int)ArduinoMock::ledcLastFreq);
+
+  // Step 7: silence (30ms)
+  ArduinoMock::mockMillis = 560;
+  buzzer_update();
+  TEST_ASSERT_EQUAL(0u, ArduinoMock::ledcLastDuty);
+
+  // Step 8: A5 (880 Hz, 200ms)
+  ArduinoMock::mockMillis = 590;
+  buzzer_update();
+  TEST_ASSERT_EQUAL(880, (int)ArduinoMock::ledcLastFreq);
+
+  // Pattern complete
+  ArduinoMock::mockMillis = 790;
+  buzzer_update();
+  TEST_ASSERT_FALSE(playing);
+}
+
+// Test 10: OTA update with buzzer disabled silently skips
+void test_ota_update_disabled_skips(void) {
+  test_buzzerEnabled = false;
+  buzzer_play(BUZZ_OTA_UPDATE);
+  buzzer_update();
+
+  TEST_ASSERT_FALSE(playing);
+  TEST_ASSERT_EQUAL(0, ArduinoMock::ledcWriteToneCount);
+}
+
+// Test 11: Blocking playback completes within timeout
+void test_blocking_playback_completes(void) {
+  buzzer_play_blocking(BUZZ_CLICK, 100);
+
+  // After blocking call, mock time should have advanced
+  TEST_ASSERT_TRUE(ArduinoMock::mockMillis >= 100);
+  // Pattern should have been started (at least one tone played)
+  TEST_ASSERT_TRUE(ArduinoMock::ledcWriteToneCount > 0);
+}
+
+// Test 12: Blocking playback with disabled buzzer still advances time, no tones
+void test_blocking_playback_disabled_no_sound(void) {
+  test_buzzerEnabled = false;
+  unsigned long startTime = ArduinoMock::mockMillis;
+  buzzer_play_blocking(BUZZ_OTA_UPDATE, 100);
+
+  // Time should have advanced
+  TEST_ASSERT_TRUE(ArduinoMock::mockMillis >= startTime + 100);
+  // No tones should have been played
+  TEST_ASSERT_EQUAL(0, ArduinoMock::ledcWriteToneCount);
+}
+
 // ===== Main =====
 
 int main(int argc, char **argv) {
@@ -329,5 +441,10 @@ int main(int argc, char **argv) {
   RUN_TEST(test_pattern_sequencing_confirm);
   RUN_TEST(test_new_pattern_overrides);
   RUN_TEST(test_silence_gap_zero_duty);
+  RUN_TEST(test_ota_update_pattern_plays);
+  RUN_TEST(test_ota_update_pattern_sequencing);
+  RUN_TEST(test_ota_update_disabled_skips);
+  RUN_TEST(test_blocking_playback_completes);
+  RUN_TEST(test_blocking_playback_disabled_no_sound);
   return UNITY_END();
 }
