@@ -14,6 +14,34 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`4c922c2`)
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`62fd92f`)
 
 ## Technical Details
+- [2026-02-06] refactor: Standardize logging across all modules to LOG_* macros
+
+Replace all DebugOut.* and Serial.print* calls with LOG_D/I/W/E macros
+and add consistent [Module] tags (e.g. [Auth], [MQTT], [WiFi], [OTA],
+[GUI], [NTP]) across 22 source files for uniform log output.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`695ec39`)
+- [2026-02-06] refactor: Standardize logging across all modules to LOG_* macros
+
+Replace all DebugOut.* and Serial.print* calls with LOG_D/I/W/E macros
+and add consistent [Module] tags (e.g. [Auth], [MQTT], [WiFi], [OTA],
+[GUI], [NTP]) across 22 source files for uniform log output.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`6fd8448`)
+- [2026-02-06] refactor: Standardize logging across all modules to LOG_* macros
+
+Replace all DebugOut.* and Serial.print* calls with LOG_D/I/W/E macros
+and add consistent [Module] tags (e.g. [Auth], [MQTT], [WiFi], [OTA],
+[GUI], [NTP]) across 22 source files for uniform log output.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`2dee722`)
+- [2026-02-06] refactor: Standardize logging across all modules to LOG_* macros
+
+Replace all DebugOut.* and Serial.print* calls with LOG_D/I/W/E macros
+and add consistent [Module] tags (e.g. [Auth], [MQTT], [WiFi], [OTA],
+[GUI], [NTP]) across 22 source files for uniform log output.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`58db5c1`)
 - [2026-02-06] Update RELEASE_NOTES.md to consolidate and clarify documentation for buzzer functionality, including state management, volume control, and real-time updates via MQTT and WebSocket. (`fa91080`)
 
 ### New Features

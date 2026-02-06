@@ -8,6 +8,7 @@
 #include "../gui_navigation.h"
 #include "../../app_state.h"
 #include "../../mqtt_handler.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 
 /* ===== Value editor confirmations ===== */
@@ -19,14 +20,14 @@ static void on_mqtt_enable_confirm(int int_val, float, int) {
     if (int_val) {
         setupMqtt();
     }
-    Serial.printf("[GUI] MQTT %s\n", int_val ? "enabled" : "disabled");
+    LOG_I("[GUI] MQTT %s", int_val ? "enabled" : "disabled");
 }
 
 static void on_mqtt_port_confirm(int int_val, float, int) {
     AppState::getInstance().mqttPort = int_val;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] MQTT port set to %d\n", int_val);
+    LOG_I("[GUI] MQTT port set to %d", int_val);
 }
 
 static void on_mqtt_ha_confirm(int int_val, float, int) {
@@ -36,7 +37,7 @@ static void on_mqtt_ha_confirm(int int_val, float, int) {
     if (int_val && AppState::getInstance().mqttConnected) {
         publishHADiscovery();
     }
-    Serial.printf("[GUI] HA Discovery %s\n", int_val ? "enabled" : "disabled");
+    LOG_I("[GUI] HA Discovery %s", int_val ? "enabled" : "disabled");
 }
 
 /* ===== Keyboard callbacks ===== */
@@ -45,28 +46,28 @@ static void on_broker_done(const char *text) {
     AppState::getInstance().mqttBroker = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] MQTT broker set to %s\n", text);
+    LOG_I("[GUI] MQTT broker set to %s", text);
 }
 
 static void on_username_done(const char *text) {
     AppState::getInstance().mqttUsername = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] MQTT username set\n");
+    LOG_I("[GUI] MQTT username set");
 }
 
 static void on_password_done(const char *text) {
     AppState::getInstance().mqttPassword = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] MQTT password set\n");
+    LOG_I("[GUI] MQTT password set");
 }
 
 static void on_topic_done(const char *text) {
     AppState::getInstance().mqttBaseTopic = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] MQTT base topic set to %s\n", text);
+    LOG_I("[GUI] MQTT base topic set to %s", text);
 }
 
 /* ===== Menu action callbacks ===== */

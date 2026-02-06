@@ -5,6 +5,7 @@
 #include "../gui_navigation.h"
 #include "../gui_theme.h"
 #include "../gui_config.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 
 /* Track value labels for dynamic updates */
@@ -28,7 +29,7 @@ static void row_focus_cb(lv_event_t *e) {
 /* Generic menu item click callback */
 static void item_click_cb(lv_event_t *e) {
     menu_action_fn action = (menu_action_fn)lv_event_get_user_data(e);
-    Serial.printf("[GUI] Menu item clicked (action=%p)\n", (void *)action);
+    LOG_D("[GUI] Menu item clicked (action=%p)", (void *)action);
     if (action) {
         action();
     }

@@ -7,6 +7,7 @@
 #include "../gui_theme.h"
 #include "../../app_state.h"
 #include "../../config.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 #include <WiFi.h>
 
@@ -102,7 +103,7 @@ static void get_card_summary(int idx, char *buf, size_t len) {
 /* Event handler for card press (encoder click) */
 static void card_click_cb(lv_event_t *e) {
     int idx = (int)(intptr_t)lv_event_get_user_data(e);
-    Serial.printf("[GUI] Desktop card %d clicked\n", idx);
+    LOG_D("[GUI] Desktop card %d clicked", idx);
     if (idx >= 0 && idx < CARD_COUNT) {
         gui_nav_push(cards[idx].target_screen);
     }
@@ -120,7 +121,7 @@ static void card_focus_cb(lv_event_t *e) {
             }
         }
         gui_nav_set_focus_index(idx);
-        Serial.printf("[GUI] Desktop focus → card %d\n", idx);
+        LOG_D("[GUI] Desktop focus -> card %d", idx);
     }
 }
 
@@ -223,7 +224,7 @@ lv_obj_t *scr_desktop_create(void) {
         dot_indicators[i] = dot;
     }
 
-    Serial.println("[GUI] Desktop carousel created");
+    LOG_D("[GUI] Desktop carousel created");
     return scr;
 }
 

@@ -138,7 +138,7 @@ void handleCheckUpdate() {
     return;
   }
   
-  DebugOut.println("Manual update check requested");
+  LOG_I("[OTA] Manual update check requested");
   
   // Trigger fresh check
   checkForFirmwareUpdate();
@@ -170,7 +170,7 @@ void handleStartUpdate() {
     return;
   }
   
-  DebugOut.println("Manual OTA update started");
+  LOG_I("[OTA] Manual OTA update started");
   otaStatus = "downloading";
   otaProgress = 0;
   
@@ -182,7 +182,7 @@ void handleStartUpdate() {
   
   if (updateSuccess) {
     otaStatus = "complete";
-    DebugOut.println("OTA update successful! Rebooting...");
+    LOG_I("[OTA] Update successful, rebooting");
     saveOTASuccessFlag(firmwareVer);  // Save current version as "previous" before reboot
     delay(2000);
     ESP.restart();
@@ -241,7 +241,7 @@ void handleGetReleaseNotes() {
   // Fetch release notes from GitHub releases API with secure HTTPS
   String releaseNotesUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases/tags/" + version;
   
-  DebugOut.printf("Fetching release notes from: %s\n", releaseNotesUrl.c_str());
+  LOG_I("[OTA] Fetching release notes from: %s", releaseNotesUrl.c_str());
   
   WiFiClientSecure client;
   
@@ -303,20 +303,20 @@ void checkForFirmwareUpdate() {
     return;
   }
   
-  DebugOut.println("\n=== Checking for Firmware Update ===");
-  DebugOut.printf("Current firmware version installed: %s\n", firmwareVer);
+  LOG_I("[OTA] Checking for firmware update");
+  LOG_I("[OTA] Current firmware version: %s", firmwareVer);
   
   String latestVersion = "";
   String firmwareUrl = "";
   String checksum = "";
   
   if (!getLatestReleaseInfo(latestVersion, firmwareUrl, checksum)) {
-    DebugOut.println("Failed to retrieve release information");
+    LOG_E("[OTA] Failed to retrieve release information");
     return;
   }
   
   latestVersion.trim();
-  DebugOut.printf("Latest firmware version available: %s\n", latestVersion.c_str());
+  LOG_I("[OTA] Latest firmware version available: %s", latestVersion.c_str());
   
   // Always update cached version info
   cachedLatestVersion = latestVersion;
@@ -333,21 +333,21 @@ void checkForFirmwareUpdate() {
     if (isNewUpdate || updateDiscoveredTime == 0) {
       // Start countdown timer for new update or if timer was reset
       updateDiscoveredTime = millis();
-      DebugOut.printf("New version available: %s\n", latestVersion.c_str());
+      LOG_I("[OTA] New version available: %s", latestVersion.c_str());
       if (checksum.length() > 0) {
-        DebugOut.printf("SHA256 checksum: %s\n", checksum.c_str());
+        LOG_I("[OTA] SHA256 checksum: %s", checksum.c_str());
       }
     } else {
-      DebugOut.printf("Update still available: %s\n", latestVersion.c_str());
+      LOG_I("[OTA] Update still available: %s", latestVersion.c_str());
     }
   } else {
     // Up to date or downgrade
     updateAvailable = false;
     updateDiscoveredTime = 0;
     if (cmp == 0) {
-      DebugOut.println("Firmware is up to date!");
+      LOG_I("[OTA] Firmware is up to date");
     } else {
-      DebugOut.println("Remote firmware version is older; skipping downgrade.");
+      LOG_W("[OTA] Remote firmware version is older, skipping downgrade");
     }
   }
   
@@ -361,22 +361,22 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   WiFiClientSecure client;
   
   if (enableCertValidation) {
-    DebugOut.println("🔐 Certificate validation: ENABLED");
+    LOG_I("[OTA] Certificate validation enabled");
     client.setCACert(GITHUB_ROOT_CA);  // Use bundled GitHub root certificates
   } else {
-    DebugOut.println("⚠️  Certificate validation: DISABLED (insecure mode)");
+    LOG_W("[OTA] Certificate validation disabled (insecure mode)");
     client.setInsecure();  // Skip certificate validation
   }
-  
+
   client.setTimeout(15000);
-  
+
   HTTPClient https;
   String apiUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases/latest";
-  
-  DebugOut.printf("Fetching release info from: %s\n", apiUrl.c_str());
+
+  LOG_I("[OTA] Fetching release info from: %s", apiUrl.c_str());
   
   if (!https.begin(client, apiUrl)) {
-    DebugOut.println("❌ Failed to initialize HTTPS connection");
+    LOG_E("[OTA] Failed to initialize HTTPS connection");
     return false;
   }
   
@@ -384,22 +384,19 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   https.addHeader("User-Agent", "ESP32-OTA-Updater");
   https.setTimeout(15000);
   
-  DebugOut.println("📡 Performing HTTPS request...");
+  LOG_I("[OTA] Performing HTTPS request");
   int httpCode = https.GET();
-  
+
   if (httpCode != HTTP_CODE_OK) {
-    DebugOut.printf("❌ Failed to get release info. HTTP code: %d\n", httpCode);
+    LOG_E("[OTA] Failed to get release info, HTTP code: %d", httpCode);
     if (httpCode == -1) {
-      DebugOut.println("⚠️  Connection failed - possible causes:");
-      DebugOut.println("   - SSL certificate validation failed (check NTP time sync)");
-      DebugOut.println("   - Network/firewall blocking HTTPS");
-      DebugOut.println("   - GitHub API temporarily unavailable");
+      LOG_E("[OTA] Connection failed - check SSL certs, NTP sync, network, or GitHub availability");
     }
     https.end();
     return false;
   }
-  
-  DebugOut.println("✅ HTTPS request successful");
+
+  LOG_I("[OTA] HTTPS request successful");
   
   String payload = https.getString();
   https.end();
@@ -409,13 +406,13 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   DeserializationError error = deserializeJson(doc, payload);
   
   if (error) {
-    DebugOut.printf("JSON parsing failed: %s\n", error.c_str());
+    LOG_E("[OTA] JSON parsing failed: %s", error.c_str());
     return false;
   }
   
   // Extract version from tag_name
   if (!doc["tag_name"].is<String>()) {
-    DebugOut.println("No tag_name found in release");
+    LOG_E("[OTA] No tag_name found in release");
     return false;
   }
   
@@ -431,17 +428,17 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
     if (assetName == "firmware.bin") {
       firmwareUrl = asset["browser_download_url"].as<String>();
       foundFirmware = true;
-      DebugOut.printf("Found firmware asset: %s\n", firmwareUrl.c_str());
+      LOG_I("[OTA] Found firmware asset: %s", firmwareUrl.c_str());
     } else if (assetName == "firmware.bin.sha256") {
       // If there's a separate checksum file, we could download it
       // For now, we'll look for it in the release body
       String checksumUrl = asset["browser_download_url"].as<String>();
-      DebugOut.printf("Found checksum file: %s\n", checksumUrl.c_str());
+      LOG_I("[OTA] Found checksum file: %s", checksumUrl.c_str());
     }
   }
   
   if (!foundFirmware) {
-    DebugOut.println("firmware.bin not found in release assets");
+    LOG_E("[OTA] firmware.bin not found in release assets");
     return false;
   }
   
@@ -516,25 +513,25 @@ bool performOTAUpdate(String firmwareUrl) {
   otaProgress = 0;
   broadcastUpdateStatus();
   
-  DebugOut.println("\n=== Starting OTA Update ===");
-  DebugOut.printf("Downloading from: %s\n", firmwareUrl.c_str());
+  LOG_I("[OTA] Starting OTA update");
+  LOG_I("[OTA] Downloading from: %s", firmwareUrl.c_str());
   
   // Use secure HTTPS connection with certificate validation
   WiFiClientSecure client;
   
   if (enableCertValidation) {
-    DebugOut.println("🔐 Certificate validation: ENABLED");
+    LOG_I("[OTA] Certificate validation enabled");
     client.setCACert(GITHUB_ROOT_CA);  // Use bundled GitHub root certificates
   } else {
-    DebugOut.println("⚠️  Certificate validation: DISABLED (insecure mode)");
+    LOG_W("[OTA] Certificate validation disabled (insecure mode)");
     client.setInsecure();  // Skip certificate validation
   }
-  
+
   client.setTimeout(30000);
-  
+
   HTTPClient https;
   if (!https.begin(client, firmwareUrl)) {
-    DebugOut.println("❌ Failed to initialize HTTPS connection");
+    LOG_E("[OTA] Failed to initialize HTTPS connection");
     otaStatus = "error";
     otaStatusMessage = "Failed to initialize secure connection";
     otaInProgress = false;
@@ -551,7 +548,7 @@ bool performOTAUpdate(String firmwareUrl) {
   int httpCode = https.GET();
   
   if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY && httpCode != HTTP_CODE_FOUND) {
-    DebugOut.printf("❌ Failed to download firmware. HTTP code: %d\n", httpCode);
+    LOG_E("[OTA] Failed to download firmware, HTTP code: %d", httpCode);
     https.end();
     otaStatus = "error";
     otaStatusMessage = "Failed to connect to server";
@@ -562,10 +559,10 @@ bool performOTAUpdate(String firmwareUrl) {
   
   int contentLength = https.getSize();
   otaTotalBytes = contentLength;
-  DebugOut.printf("📦 Firmware size: %d bytes (%.2f KB)\n", contentLength, contentLength / 1024.0);
+  LOG_I("[OTA] Firmware size: %d bytes (%.2f KB)", contentLength, contentLength / 1024.0);
   
   if (contentLength <= 0) {
-    DebugOut.println("❌ Invalid firmware size");
+    LOG_E("[OTA] Invalid firmware size");
     https.end();
     otaStatus = "error";
     otaStatusMessage = "Invalid firmware file";
@@ -577,7 +574,7 @@ bool performOTAUpdate(String firmwareUrl) {
   // Check if enough space is available
   int freeSpace = ESP.getFreeSketchSpace() - 0x1000;
   if (contentLength > freeSpace) {
-    DebugOut.printf("❌ Not enough space. Need: %d, Available: %d\n", contentLength, freeSpace);
+    LOG_E("[OTA] Not enough space, need: %d, available: %d", contentLength, freeSpace);
     https.end();
     otaStatus = "error";
     otaStatusMessage = "Not enough storage space";
@@ -588,7 +585,7 @@ bool performOTAUpdate(String firmwareUrl) {
   
   // Begin OTA update
   if (!Update.begin(contentLength)) {
-    DebugOut.printf("❌ Failed to begin OTA. Free space: %d\n", ESP.getFreeSketchSpace());
+    LOG_E("[OTA] Failed to begin OTA, free space: %d", ESP.getFreeSketchSpace());
     https.end();
     otaStatus = "error";
     otaStatusMessage = "Failed to initialize update";
@@ -604,7 +601,7 @@ bool performOTAUpdate(String firmwareUrl) {
   broadcastUpdateStatus();
   webSocket.loop();  // Ensure "Downloading" status is sent before entering download loop
 
-  DebugOut.println("📥 Downloading firmware to flash...");
+  LOG_I("[OTA] Download started, writing to flash");
   
   WiFiClient* stream = https.getStreamPtr();
   
@@ -621,7 +618,7 @@ bool performOTAUpdate(String firmwareUrl) {
     mbedtls_md_init(&ctx);
     mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 0);
     mbedtls_md_starts(&ctx);
-    DebugOut.println("🔐 Checksum verification enabled");
+    LOG_I("[OTA] Checksum verification enabled");
   }
   
   while (https.connected() && (written < contentLength)) {
@@ -635,7 +632,7 @@ bool performOTAUpdate(String firmwareUrl) {
       }
       
       if (Update.write(buffer, bytesRead) != bytesRead) {
-        DebugOut.println("❌ Error writing firmware data");
+        LOG_E("[OTA] Error writing firmware data");
         Update.abort();
         if (calculatingChecksum) {
           mbedtls_md_free(&ctx);
@@ -663,7 +660,7 @@ bool performOTAUpdate(String firmwareUrl) {
         broadcastUpdateStatus();
         webSocket.loop();  // Process WebSocket to actually send the progress update
         lastBroadcast = now;
-        DebugOut.printf("📊 Progress: %d%% (%d KB / %d KB)\n", otaProgress, written / 1024, contentLength / 1024);
+        LOG_D("[OTA] Progress: %d%% (%d KB / %d KB)", otaProgress, written / 1024, contentLength / 1024);
       }
     }
     delay(1);
@@ -685,13 +682,13 @@ bool performOTAUpdate(String firmwareUrl) {
       calculatedChecksum += str;
     }
     
-    DebugOut.printf("📋 Expected checksum:   %s\n", cachedChecksum.c_str());
-    DebugOut.printf("📋 Calculated checksum: %s\n", calculatedChecksum.c_str());
-    
+    LOG_I("[OTA] Expected checksum:   %s", cachedChecksum.c_str());
+    LOG_I("[OTA] Calculated checksum: %s", calculatedChecksum.c_str());
+
     if (calculatedChecksum.equalsIgnoreCase(cachedChecksum)) {
-      DebugOut.println("✅ Checksum verification passed!");
+      LOG_I("[OTA] Checksum verification passed");
     } else {
-      DebugOut.println("❌ Checksum verification FAILED!");
+      LOG_E("[OTA] Checksum verification failed");
       Update.abort();
       otaStatus = "error";
       otaStatusMessage = "Checksum verification failed - firmware corrupted";
@@ -701,19 +698,19 @@ bool performOTAUpdate(String firmwareUrl) {
       return false;
     }
   } else {
-    DebugOut.println("⚠️  No checksum available for verification");
+    LOG_W("[OTA] No checksum available for verification");
   }
   
   otaStatusMessage = "Verifying firmware...";
   otaProgress = 100;
   broadcastUpdateStatus();
   webSocket.loop();  // Ensure "Verifying" status is sent
-  DebugOut.println("✅ Download complete. Verifying...");
+  LOG_I("[OTA] Download complete, verifying");
 
   if (Update.end()) {
     if (Update.isFinished()) {
-      DebugOut.println("✅ OTA update completed successfully!");
-      DebugOut.println("🔄 Rebooting device in 3 seconds...");
+      LOG_I("[OTA] Update completed successfully");
+      LOG_I("[OTA] Rebooting device in 3 seconds");
       otaProgress = 100;
       otaStatus = "complete";
       otaStatusMessage = "Update complete! Rebooting...";
@@ -722,7 +719,7 @@ bool performOTAUpdate(String firmwareUrl) {
       webSocket.loop();  // Ensure "complete" status is sent before reboot
       return true;
     } else {
-      DebugOut.println("❌ OTA update did not finish correctly");
+      LOG_E("[OTA] Update did not finish correctly");
       Update.abort();
       otaStatus = "error";
       otaStatusMessage = "Update verification failed";
@@ -732,7 +729,7 @@ bool performOTAUpdate(String firmwareUrl) {
       return false;
     }
   } else {
-    DebugOut.printf("❌ OTA update error: %s\n", Update.errorString());
+    LOG_E("[OTA] Update error: %s", Update.errorString());
     Update.abort();
     otaStatus = "error";
     otaStatusMessage = String("Update error: ") + Update.errorString();
@@ -752,7 +749,7 @@ void saveOTASuccessFlag(const String& previousVersion) {
   prefs.putBool("justUpdated", true);
   prefs.putString("prevVersion", previousVersion);
   prefs.end();
-  DebugOut.printf("💾 Saved OTA success flag (previous version: %s)\n", previousVersion.c_str());
+  LOG_I("[OTA] Saved OTA success flag (previous version: %s)", previousVersion.c_str());
 }
 
 // Check if device just rebooted after successful OTA and clear the flag
@@ -766,7 +763,7 @@ bool checkAndClearOTASuccessFlag(String& previousVersion) {
     // Clear the flag
     prefs.putBool("justUpdated", false);
     prefs.remove("prevVersion");
-    DebugOut.printf("✅ Device just updated from version %s\n", previousVersion.c_str());
+    LOG_I("[OTA] Device just updated from version %s", previousVersion.c_str());
   }
   
   prefs.end();
@@ -787,7 +784,7 @@ void broadcastJustUpdated() {
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
   
-  DebugOut.printf("📢 Broadcast: Firmware updated from %s to %s\n", previousFirmwareVersion.c_str(), firmwareVer);
+  LOG_I("[OTA] Broadcast: Firmware updated from %s to %s", previousFirmwareVersion.c_str(), firmwareVer);
   
   // Clear the flag after broadcasting
   justUpdated = false;
@@ -809,12 +806,12 @@ void handleFirmwareUploadChunk() {
     uploadError = false;
     uploadErrorMessage = "";
     
-    DebugOut.printf("\n=== Manual Firmware Upload Started ===\n");
-    DebugOut.printf("📁 Filename: %s\n", upload.filename.c_str());
+    LOG_I("[OTA] Manual firmware upload started");
+    LOG_I("[OTA] Filename: %s", upload.filename.c_str());
     
     // Check if already in progress
     if (otaInProgress) {
-      DebugOut.println("❌ Another update is already in progress");
+      LOG_E("[OTA] Another update is already in progress");
       uploadError = true;
       uploadErrorMessage = "Another update is already in progress";
       return;
@@ -822,7 +819,7 @@ void handleFirmwareUploadChunk() {
     
     // Validate file extension
     if (!upload.filename.endsWith(".bin")) {
-      DebugOut.println("❌ Invalid file type. Only .bin files are allowed");
+      LOG_E("[OTA] Invalid file type, only .bin files are allowed");
       uploadError = true;
       uploadErrorMessage = "Invalid file type. Only .bin files are allowed";
       return;
@@ -838,7 +835,7 @@ void handleFirmwareUploadChunk() {
     
     // Begin OTA update with unknown size (will auto-detect)
     if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-      DebugOut.printf("❌ Failed to begin update: %s\n", Update.errorString());
+      LOG_E("[OTA] Failed to begin update: %s", Update.errorString());
       uploadError = true;
       uploadErrorMessage = String("Failed to begin update: ") + Update.errorString();
       otaStatus = "error";
@@ -848,7 +845,7 @@ void handleFirmwareUploadChunk() {
       return;
     }
     
-    DebugOut.println("📥 Update initialized, receiving data...");
+    LOG_I("[OTA] Upload initialized, receiving data");
     
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     // Skip writing if there was an error
@@ -858,7 +855,7 @@ void handleFirmwareUploadChunk() {
     
     // Write chunk to flash
     if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-      DebugOut.printf("❌ Write error: %s\n", Update.errorString());
+      LOG_E("[OTA] Write error: %s", Update.errorString());
       uploadError = true;
       uploadErrorMessage = String("Write error: ") + Update.errorString();
       Update.abort();
@@ -881,7 +878,7 @@ void handleFirmwareUploadChunk() {
       broadcastUpdateStatus();
       lastBroadcast = now;
       lastBroadcastBytes = otaProgressBytes;
-      DebugOut.printf("📊 Received: %d KB\n", otaProgressBytes / 1024);
+      LOG_D("[OTA] Received: %d KB", otaProgressBytes / 1024);
     }
     
   } else if (upload.status == UPLOAD_FILE_END) {
@@ -891,7 +888,7 @@ void handleFirmwareUploadChunk() {
     }
     
     otaTotalBytes = upload.totalSize;
-    DebugOut.printf("📦 Upload complete: %d bytes (%.2f KB)\n", upload.totalSize, upload.totalSize / 1024.0);
+    LOG_I("[OTA] Upload complete: %d bytes (%.2f KB)", upload.totalSize, upload.totalSize / 1024.0);
     
     otaStatusMessage = "Verifying firmware...";
     otaProgress = 100;
@@ -900,13 +897,13 @@ void handleFirmwareUploadChunk() {
     // Finalize update
     if (Update.end(true)) {
       if (Update.isFinished()) {
-        DebugOut.println("✅ Firmware upload and verification successful!");
+        LOG_I("[OTA] Firmware upload and verification successful");
         otaStatus = "complete";
         otaStatusMessage = "Upload complete! Rebooting...";
         broadcastUpdateStatus();
         // Note: Response and reboot handled in handleFirmwareUploadComplete
       } else {
-        DebugOut.println("❌ Update did not finish correctly");
+        LOG_E("[OTA] Update did not finish correctly");
         uploadError = true;
         uploadErrorMessage = "Update verification failed";
         otaStatus = "error";
@@ -915,7 +912,7 @@ void handleFirmwareUploadChunk() {
         broadcastUpdateStatus();
       }
     } else {
-      DebugOut.printf("❌ Update finalization error: %s\n", Update.errorString());
+      LOG_E("[OTA] Update finalization error: %s", Update.errorString());
       uploadError = true;
       uploadErrorMessage = String("Update error: ") + Update.errorString();
       otaStatus = "error";
@@ -925,7 +922,7 @@ void handleFirmwareUploadChunk() {
     }
     
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    DebugOut.println("⚠️  Upload aborted by client");
+    LOG_W("[OTA] Upload aborted by client");
     Update.abort();
     uploadError = true;
     uploadErrorMessage = "Upload aborted";
@@ -965,7 +962,7 @@ void handleFirmwareUploadComplete() {
     server.send(200, "application/json", json);
     
     // Save success flag and reboot
-    DebugOut.println("🔄 Rebooting in 2 seconds...");
+    LOG_I("[OTA] Rebooting in 2 seconds");
     saveOTASuccessFlag(firmwareVer);
     delay(2000);
     ESP.restart();

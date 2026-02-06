@@ -44,7 +44,7 @@ static bool idleHookCore1() {
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
   switch(type) {
     case WStype_DISCONNECTED:
-      DebugOut.printf("Client [%u] disconnected\n", num);
+      LOG_I("[WebSocket] Client [%u] disconnected", num);
       wsAuthStatus[num] = false;
       wsAuthTimeout[num] = 0;
       break;
@@ -52,7 +52,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
     case WStype_CONNECTED:
       {
         IPAddress ip = webSocket.remoteIP(num);
-        DebugOut.printf("Client [%u] connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
+        LOG_I("[WebSocket] Client [%u] connected from %d.%d.%d.%d", num, ip[0], ip[1], ip[2], ip[3]);
 
         // Set auth timeout (5 seconds to authenticate)
         wsAuthStatus[num] = false;
@@ -65,14 +65,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
     case WStype_TEXT:
       {
-        DebugOut.printf("Received from client [%u]: %s\n", num, payload);
+        LOG_D("[WebSocket] Received from client [%u]: %s", num, payload);
 
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, (const char*)payload, length);
 
         if (error) {
-          DebugOut.print("JSON parsing failed: ");
-          DebugOut.println(error.c_str());
+          LOG_E("[WebSocket] JSON parsing failed: %s", error.c_str());
           return;
         }
 
@@ -86,7 +85,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             wsAuthStatus[num] = true;
             wsAuthTimeout[num] = 0;
             webSocket.sendTXT(num, "{\"type\":\"authSuccess\"}");
-            DebugOut.printf("WebSocket client [%u] authenticated\n", num);
+            LOG_D("[WebSocket] Client [%u] authenticated", num);
 
             // Send initial state after authentication
             sendLEDState();
@@ -116,7 +115,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
         if (msgType == "toggle") {
           blinkingEnabled = doc["enabled"];
-          DebugOut.printf("Blinking %s by client [%u]\n", blinkingEnabled ? "enabled" : "disabled", num);
+          LOG_I("[WebSocket] Blinking %s by client [%u]", blinkingEnabled ? "enabled" : "disabled", num);
           
           sendBlinkingState();
           
@@ -124,7 +123,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             ledState = false;
             digitalWrite(LED_PIN, LOW);
             sendLEDState();
-            DebugOut.println("LED turned OFF");
+            LOG_I("[WebSocket] LED turned OFF");
           }
         } else if (doc["type"] == "toggleAP") {
           bool enabled = doc["enabled"].as<bool>();
@@ -135,15 +134,15 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               WiFi.mode(WIFI_AP_STA);
               WiFi.softAP(apSSID.c_str(), apPassword);
               isAPMode = true;
-              DebugOut.println("Access Point enabled via WebSocket");
-              DebugOut.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+              LOG_I("[WebSocket] Access Point enabled");
+              LOG_I("[WebSocket] AP IP: %s", WiFi.softAPIP().toString().c_str());
             }
           } else {
             if (isAPMode && WiFi.status() == WL_CONNECTED) {
               WiFi.softAPdisconnect(true);
               WiFi.mode(WIFI_STA);
               isAPMode = false;
-              DebugOut.println("Access Point disabled via WebSocket");
+              LOG_I("[WebSocket] Access Point disabled");
             }
           }
           
@@ -154,7 +153,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (msgType == "setBacklight") {
           bool newState = doc["enabled"].as<bool>();
           AppState::getInstance().setBacklightOn(newState);
-          DebugOut.printf("WS: Backlight set to %s\n", newState ? "ON" : "OFF");
+          LOG_I("[WebSocket] Backlight set to %s", newState ? "ON" : "OFF");
           sendDisplayState();
         } else if (msgType == "setScreenTimeout") {
           int timeoutSec = doc["value"].as<int>();
@@ -163,21 +162,21 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               timeoutMs == 300000 || timeoutMs == 600000) {
             AppState::getInstance().setScreenTimeout(timeoutMs);
             saveSettings();
-            DebugOut.printf("WS: Screen timeout set to %d seconds\n", timeoutSec);
+            LOG_I("[WebSocket] Screen timeout set to %d seconds", timeoutSec);
             sendDisplayState();
           }
         } else if (msgType == "setBuzzerEnabled") {
           bool newState = doc["enabled"].as<bool>();
           AppState::getInstance().setBuzzerEnabled(newState);
           saveSettings();
-          DebugOut.printf("WS: Buzzer set to %s\n", newState ? "ON" : "OFF");
+          LOG_I("[WebSocket] Buzzer set to %s", newState ? "ON" : "OFF");
           sendBuzzerState();
         } else if (msgType == "setBuzzerVolume") {
           int newVol = doc["value"].as<int>();
           if (newVol >= 0 && newVol <= 2) {
             AppState::getInstance().setBuzzerVolume(newVol);
             saveSettings();
-            DebugOut.printf("WS: Buzzer volume set to %d\n", newVol);
+            LOG_I("[WebSocket] Buzzer volume set to %d", newVol);
             sendBuzzerState();
           }
         }

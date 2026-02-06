@@ -145,13 +145,13 @@ void initSerialNumber() {
     prefs.putString("serial", appState.deviceSerialNumber);
     prefs.putString("fw_ver", currentFwVer);
 
-    DebugOut.printf("Serial number generated: %s (firmware: %s)\n",
-                    appState.deviceSerialNumber.c_str(), currentFwVer.c_str());
+    LOG_I("[Main] Serial number generated: %s (firmware: %s)",
+          appState.deviceSerialNumber.c_str(), currentFwVer.c_str());
   } else {
     // Load existing serial number
     appState.deviceSerialNumber = prefs.getString("serial", "");
-    DebugOut.printf("Serial number loaded: %s\n",
-                    appState.deviceSerialNumber.c_str());
+    LOG_I("[Main] Serial number loaded: %s",
+          appState.deviceSerialNumber.c_str());
   }
 
   prefs.end();
@@ -161,9 +161,8 @@ void setup() {
   DebugOut.begin(9600);
   delay(1000);
 
-  DebugOut.println("\n\n=== ESP32-S3 LED Blink with WebSocket ===");
-  DebugOut.println("Initializing...");
-  DebugOut.printf("Current Firmware Version: %s\n", firmwareVer);
+  LOG_I("[Main] ESP32-S3 ALX Nova Controller starting");
+  LOG_I("[Main] Firmware version: %s", firmwareVer);
 
   // Initialize device serial number from NVS (generates on first boot or
   // firmware update)
@@ -171,7 +170,7 @@ void setup() {
 
   // Set AP SSID to the device serial number (e.g., ALX-AABBCCDDEEFF)
   appState.apSSID = appState.deviceSerialNumber;
-  DebugOut.printf("AP SSID set to: %s\n", appState.apSSID.c_str());
+  LOG_I("[Main] AP SSID set to: %s", appState.apSSID.c_str());
 
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
@@ -179,42 +178,35 @@ void setup() {
   // Configure factory reset button with enhanced detection
   resetButton.begin();
   buzzer_init();
-  DebugOut.printf("Factory reset button configured: GPIO%d\n",
-                  RESET_BUTTON_PIN);
-  DebugOut.println("  Button actions:");
-  DebugOut.println("    - Short press (< 0.5s): Print status info");
-  DebugOut.println("    - Double click: Toggle AP mode");
-  DebugOut.println("    - Triple click: Toggle LED blinking");
-  DebugOut.println("    - Long press (2s): Restart ESP32");
-  DebugOut.println("    - Very long press (10s): Reboot ESP32");
+  LOG_I("[Main] Factory reset button configured: GPIO%d", RESET_BUTTON_PIN);
+  LOG_D("[Main] Button: short=status, double=AP, triple=blink, long=restart, vlong=reboot");
 
   // Configure Smart Sensing pins
   pinMode(AMPLIFIER_PIN, OUTPUT);
   digitalWrite(AMPLIFIER_PIN, LOW); // Start with amplifier OFF (fail-safe)
   pinMode(VOLTAGE_SENSE_PIN, INPUT);
-  DebugOut.printf(
-      "Smart Sensing configured: Amplifier GPIO%d, Voltage Sense GPIO%d\n",
-      AMPLIFIER_PIN, VOLTAGE_SENSE_PIN);
+  LOG_I("[Main] Smart Sensing configured: Amplifier GPIO%d, Voltage Sense GPIO%d",
+        AMPLIFIER_PIN, VOLTAGE_SENSE_PIN);
 
   // Initialize LittleFS and load settings BEFORE GUI so boot animation
   // settings are available when gui_init() runs.
   if (!LittleFS.begin(true)) {
-    DebugOut.println("ERROR: LittleFS initialization failed!");
+    LOG_E("[Main] LittleFS initialization failed");
   } else {
-    DebugOut.println("LittleFS initialized");
+    LOG_I("[Main] LittleFS initialized");
   }
 
   // Check if device just rebooted after successful OTA update
   appState.justUpdated =
       checkAndClearOTASuccessFlag(appState.previousFirmwareVersion);
   if (appState.justUpdated) {
-    DebugOut.printf("🎉 Firmware was just updated from %s to %s\n",
-                    appState.previousFirmwareVersion.c_str(), firmwareVer);
+    LOG_I("[Main] Firmware updated from %s to %s",
+          appState.previousFirmwareVersion.c_str(), firmwareVer);
   }
 
   // Load persisted settings (e.g., auto-update preference)
   if (!loadSettings()) {
-    DebugOut.println("No settings file found, using defaults");
+    LOG_I("[Main] No settings file found, using defaults");
   }
 
 #ifdef GUI_ENABLED
@@ -225,12 +217,12 @@ void setup() {
 
   // Load Smart Sensing settings
   if (!loadSmartSensingSettings()) {
-    DebugOut.println("No Smart Sensing settings found, using defaults");
+    LOG_I("[Main] No Smart Sensing settings found, using defaults");
   }
 
   // Load MQTT settings
   if (!loadMqttSettings()) {
-    DebugOut.println("No MQTT settings found, using defaults");
+    LOG_I("[Main] No MQTT settings found, using defaults");
   }
 
   // Initialize authentication system
@@ -279,10 +271,10 @@ void setup() {
   // Redirect all unknown routes to root in AP mode (Captive Portal)
   server.onNotFound([]() {
     // Log the request for debugging
-    DebugOut.printf("404 Not Found: %s %s\n",
-                    server.method() == HTTP_GET ? "GET" :
-                    server.method() == HTTP_POST ? "POST" : "OTHER",
-                    server.uri().c_str());
+    LOG_W("[Main] 404 Not Found: %s %s",
+          server.method() == HTTP_GET ? "GET" :
+          server.method() == HTTP_POST ? "POST" : "OTHER",
+          server.uri().c_str());
 
     if (appState.isAPMode) {
       server.sendHeader("Location",
@@ -457,7 +449,7 @@ void setup() {
   // Try to connect to stored WiFi networks (tries all saved networks in
   // priority order)
   if (!connectToStoredNetworks()) {
-    DebugOut.println("No WiFi connection established. Running in AP mode.");
+    LOG_W("[Main] No WiFi connection established, running in AP mode");
   }
 
   // Always start server and WebSocket regardless of mode
@@ -465,7 +457,7 @@ void setup() {
   webSocket.onEvent(webSocketEvent);
   DebugOut.setWebSocket(&webSocket);
   server.begin();
-  DebugOut.println("Web server and WebSocket started");
+  LOG_I("[Main] Web server and WebSocket started");
 
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
@@ -490,7 +482,7 @@ void loop() {
   for (int i = 0; i < MAX_WS_CLIENTS; i++) {
     if (wsAuthTimeout[i] > 0 && millis() > wsAuthTimeout[i]) {
       if (!wsAuthStatus[i]) {
-        DebugOut.printf("WebSocket client [%u] auth timeout\n", i);
+        LOG_W("[WebSocket] Client [%u] auth timeout", i);
         webSocket.disconnect(i);
       }
       wsAuthTimeout[i] = 0;
@@ -505,23 +497,23 @@ void loop() {
     switch (pressType) {
     case BTN_SHORT_PRESS:
       buzzer_play(BUZZ_BTN_SHORT);
-      DebugOut.println("=== Button: Short Press ===");
+      LOG_I("[Button] Short press");
 #ifdef GUI_ENABLED
       gui_wake(); // Wake TFT screen on K0 short press
 #endif
-      DebugOut.printf("WiFi: %s\n", WiFi.status() == WL_CONNECTED
-                                        ? "Connected"
-                                        : "Disconnected");
-      DebugOut.printf("AP Mode: %s\n",
-                      appState.isAPMode ? "Active" : "Inactive");
-      DebugOut.printf("LED Blinking: %s\n",
-                      appState.blinkingEnabled ? "Enabled" : "Disabled");
-      DebugOut.printf("Firmware: %s\n", firmwareVer);
+      LOG_D("[Button] WiFi: %s", WiFi.status() == WL_CONNECTED
+                                    ? "Connected"
+                                    : "Disconnected");
+      LOG_D("[Button] AP Mode: %s",
+            appState.isAPMode ? "Active" : "Inactive");
+      LOG_D("[Button] LED Blinking: %s",
+            appState.blinkingEnabled ? "Enabled" : "Disabled");
+      LOG_D("[Button] Firmware: %s", firmwareVer);
       break;
 
     case BTN_DOUBLE_CLICK:
       buzzer_play(BUZZ_BTN_DOUBLE);
-      DebugOut.println("=== Button: Double Click - Toggle AP Mode ===");
+      LOG_I("[Button] Double click - toggle AP mode");
       if (appState.isAPMode) {
         stopAccessPoint();
       } else {
@@ -531,23 +523,23 @@ void loop() {
 
     case BTN_TRIPLE_CLICK:
       buzzer_play(BUZZ_BTN_TRIPLE);
-      DebugOut.println("=== Button: Triple Click - Toggle LED Blinking ===");
+      LOG_I("[Button] Triple click - toggle LED blinking");
       appState.setBlinkingEnabled(!appState.blinkingEnabled);
-      DebugOut.printf("LED Blinking is now: %s\n",
-                      appState.blinkingEnabled ? "ON" : "OFF");
+      LOG_D("[Button] LED Blinking is now: %s",
+            appState.blinkingEnabled ? "ON" : "OFF");
       sendBlinkingState();
       break;
 
     case BTN_LONG_PRESS:
       buzzer_play(BUZZ_BTN_LONG);
-      DebugOut.println("=== Button: Long Press - Restarting ESP32 ===");
+      LOG_W("[Button] Long press - restarting ESP32");
       delay(500);
       ESP.restart();
       break;
 
     case BTN_VERY_LONG_PRESS:
       buzzer_play(BUZZ_BTN_VERY_LONG);
-      DebugOut.println("=== Button: Very Long Press - Rebooting ESP32 ===");
+      LOG_W("[Button] Very long press - rebooting ESP32");
       sendRebootProgress(10, true);
       delay(100); // Give time for WebSocket message to send
       ESP.restart();
@@ -575,7 +567,7 @@ void loop() {
         static unsigned long lastProgressPrint = 0;
         if (millis() - lastProgressPrint >= 1000) {
           unsigned long secondsHeld = holdDuration / 1000;
-          DebugOut.printf("Button held for %lu seconds...\n", secondsHeld);
+          LOG_D("[Button] Held for %lu seconds", secondsHeld);
 
           // Send progress if approaching reboot (from 5 seconds onward)
           if (holdDuration >= 5000) {
@@ -617,8 +609,7 @@ void loop() {
     if (appState.amplifierState) {
       // Amplifier is ON - skip this check, will retry on next periodic check
       // Reset updateDiscoveredTime so countdown restarts when amp turns off
-      DebugOut.println("⚠️  Auto-update skipped: Amplifier is in use. Will "
-                       "retry on next check.");
+      LOG_W("[OTA] Auto-update skipped: amplifier is in use, will retry on next check");
       appState.updateDiscoveredTime = 0;
       broadcastUpdateStatus();
     } else {
@@ -635,26 +626,24 @@ void loop() {
       if (elapsed >= AUTO_UPDATE_COUNTDOWN) {
         // Double-check amplifier state before starting update
         if (appState.amplifierState) {
-          DebugOut.println("⚠️  Auto-update cancelled: Amplifier turned on "
-                           "during countdown. Will retry on next check.");
+          LOG_W("[OTA] Auto-update cancelled: amplifier turned on during countdown, will retry on next check");
           appState.updateDiscoveredTime =
               0; // Reset to retry on next periodic check
           broadcastUpdateStatus();
         } else {
-          DebugOut.println(
-              "Auto-update: Starting update (amplifier is off)...");
+          LOG_I("[OTA] Auto-update starting (amplifier is off)");
           appState.otaStatus = "downloading";
           appState.otaProgress = 0;
           appState.setFSMState(STATE_OTA_UPDATE);
 
           if (performOTAUpdate(appState.cachedFirmwareUrl)) {
-            DebugOut.println("OTA update successful! Rebooting...");
+            LOG_I("[OTA] Update successful, rebooting");
             saveOTASuccessFlag(firmwareVer); // Save current version as
                                              // "previous" before reboot
             delay(2000);
             ESP.restart();
           } else {
-            DebugOut.println("OTA update failed! Will retry on next check.");
+            LOG_W("[OTA] Update failed, will retry on next check");
             appState.otaInProgress = false;
             appState.updateDiscoveredTime =
                 0; // Reset to retry on next periodic check
@@ -725,7 +714,7 @@ void loop() {
       appState.setLedState(false);
       digitalWrite(LED_PIN, LOW);
       sendLEDState();
-      DebugOut.println("Blinking stopped - LED turned OFF");
+      LOG_I("[Main] Blinking stopped - LED turned OFF");
     }
   }
 

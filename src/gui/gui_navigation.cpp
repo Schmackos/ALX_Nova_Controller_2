@@ -3,6 +3,7 @@
 #include "gui_navigation.h"
 #include "gui_input.h"
 #include "../buzzer_handler.h"
+#include "../debug_serial.h"
 #include <Arduino.h>
 
 /* Navigation stack */
@@ -33,7 +34,7 @@ void gui_nav_register(ScreenId id, screen_create_fn creator) {
 
 static void activate_screen(ScreenId id, lv_scr_load_anim_t anim) {
     if (id >= SCR_COUNT || screen_creators[id] == nullptr) {
-        Serial.printf("[GUI Nav] No creator for screen %d\n", id);
+        LOG_E("[GUI Nav] No creator for screen %d", id);
         return;
     }
 
@@ -44,7 +45,7 @@ static void activate_screen(ScreenId id, lv_scr_load_anim_t anim) {
     /* Create the new screen */
     lv_obj_t *scr = screen_creators[id]();
     if (scr == nullptr) {
-        Serial.printf("[GUI Nav] Creator returned null for screen %d\n", id);
+        LOG_E("[GUI Nav] Creator returned null for screen %d", id);
         return;
     }
 
@@ -70,7 +71,7 @@ static void restore_focus(int target_idx) {
 
 void gui_nav_push(ScreenId id) {
     if (nav_depth >= NAV_STACK_MAX) {
-        Serial.println("[GUI Nav] Stack overflow!");
+        LOG_E("[GUI Nav] Stack overflow!");
         return;
     }
 
@@ -88,7 +89,7 @@ void gui_nav_push(ScreenId id) {
     }
 
     activate_screen(id, anim);
-    Serial.printf("[GUI Nav] Push screen %d (depth %d)\n", id, nav_depth);
+    LOG_D("[GUI Nav] Push screen %d (depth %d)", id, nav_depth);
 }
 
 void gui_nav_pop(void) {
@@ -104,7 +105,7 @@ void gui_nav_pop(void) {
     buzzer_play(BUZZ_NAV);
     activate_screen(prev, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
     restore_focus(saved_idx);
-    Serial.printf("[GUI Nav] Pop to screen %d (depth %d, focus %d)\n", prev, nav_depth, saved_idx);
+    LOG_D("[GUI Nav] Pop to screen %d (depth %d, focus %d)", prev, nav_depth, saved_idx);
 }
 
 void gui_nav_pop_to_root(void) {
@@ -114,7 +115,7 @@ void gui_nav_pop_to_root(void) {
     int saved_idx = nav_focus_index[0];
     activate_screen(nav_stack[0], LV_SCR_LOAD_ANIM_MOVE_RIGHT);
     restore_focus(saved_idx);
-    Serial.printf("[GUI Nav] Pop to root (depth %d, focus %d)\n", nav_depth, saved_idx);
+    LOG_D("[GUI Nav] Pop to root (depth %d, focus %d)", nav_depth, saved_idx);
 }
 
 ScreenId gui_nav_current(void) {

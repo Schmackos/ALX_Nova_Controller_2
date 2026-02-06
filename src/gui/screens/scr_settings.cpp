@@ -12,6 +12,7 @@
 #include "../../settings_manager.h"
 #include "../../ota_updater.h"
 #include "../gui_manager.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 
 /* Screen timeout cycle options (in milliseconds) */
@@ -28,7 +29,7 @@ static const CycleOption timeout_options[] = {
 static void on_screen_timeout_confirm(int int_val, float, int) {
     AppState::getInstance().setScreenTimeout((unsigned long)int_val);
     saveSettings();
-    Serial.printf("[GUI] Screen timeout set to %d ms\n", int_val);
+    LOG_I("[GUI] Screen timeout set to %d ms", int_val);
 }
 
 static void on_backlight_confirm(int int_val, float, int) {
@@ -37,7 +38,7 @@ static void on_backlight_confirm(int int_val, float, int) {
     } else {
         gui_sleep();
     }
-    Serial.printf("[GUI] Backlight %s\n", int_val ? "ON" : "OFF");
+    LOG_I("[GUI] Backlight %s", int_val ? "ON" : "OFF");
 }
 
 static void on_night_mode_confirm(int int_val, float, int) {
@@ -45,21 +46,21 @@ static void on_night_mode_confirm(int int_val, float, int) {
     gui_theme_set_dark(int_val != 0);
     saveSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] Night mode %s\n", int_val ? "ON" : "OFF");
+    LOG_I("[GUI] Night mode %s", int_val ? "ON" : "OFF");
 }
 
 static void on_auto_update_confirm(int int_val, float, int) {
     AppState::getInstance().autoUpdateEnabled = (int_val != 0);
     saveSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] Auto update %s\n", int_val ? "enabled" : "disabled");
+    LOG_I("[GUI] Auto update %s", int_val ? "enabled" : "disabled");
 }
 
 static void on_ssl_confirm(int int_val, float, int) {
     AppState::getInstance().enableCertValidation = (int_val != 0);
     saveSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] SSL validation %s\n", int_val ? "enabled" : "disabled");
+    LOG_I("[GUI] SSL validation %s", int_val ? "enabled" : "disabled");
 }
 
 /* Buzzer volume cycle options */
@@ -72,13 +73,13 @@ static const CycleOption buzzer_volume_options[] = {
 static void on_buzzer_enable_confirm(int int_val, float, int) {
     AppState::getInstance().setBuzzerEnabled(int_val != 0);
     saveSettings();
-    Serial.printf("[GUI] Buzzer %s\n", int_val ? "ON" : "OFF");
+    LOG_I("[GUI] Buzzer %s", int_val ? "ON" : "OFF");
 }
 
 static void on_buzzer_volume_confirm(int int_val, float, int) {
     AppState::getInstance().setBuzzerVolume(int_val);
     saveSettings();
-    Serial.printf("[GUI] Buzzer volume set to %d\n", int_val);
+    LOG_I("[GUI] Buzzer volume set to %d", int_val);
 }
 
 /* Boot animation cycle options: None + 6 styles */
@@ -96,11 +97,11 @@ static void on_boot_anim_confirm(int int_val, float, int) {
     AppState &st = AppState::getInstance();
     if (int_val < 0) {
         st.bootAnimEnabled = false;
-        Serial.println("[GUI] Boot animation disabled");
+        LOG_I("[GUI] Boot animation disabled");
     } else {
         st.bootAnimEnabled = true;
         st.bootAnimStyle = int_val;
-        Serial.printf("[GUI] Boot animation set to style %d\n", int_val);
+        LOG_I("[GUI] Boot animation set to style %d", int_val);
     }
     saveSettings();
 }
@@ -115,7 +116,7 @@ static void do_reboot(void) {
     cfg.toggle_val = false;
     cfg.on_confirm = [](int int_val, float, int) {
         if (int_val) {
-            Serial.println("[GUI] Rebooting...");
+            LOG_W("[GUI] Rebooting...");
             delay(500);
             ESP.restart();
         }
@@ -130,7 +131,7 @@ static void do_factory_reset(void) {
     cfg.toggle_val = false;
     cfg.on_confirm = [](int int_val, float, int) {
         if (int_val) {
-            Serial.println("[GUI] Factory reset...");
+            LOG_W("[GUI] Factory reset...");
             performFactoryReset();
         }
     };

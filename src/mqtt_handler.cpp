@@ -90,11 +90,8 @@ bool loadMqttSettings() {
     mqttHADiscovery = (line7.toInt() != 0);
   }
 
-  DebugOut.println("MQTT settings loaded from LittleFS");
-  DebugOut.printf("  Enabled: %s, Broker: %s:%d\n",
-                  mqttEnabled ? "true" : "false", mqttBroker.c_str(), mqttPort);
-  DebugOut.printf("  Base Topic: %s, HA Discovery: %s\n", mqttBaseTopic.c_str(),
-                  mqttHADiscovery ? "true" : "false");
+  LOG_I("[MQTT] Settings loaded - Enabled: %s, Broker: %s:%d", mqttEnabled ? "true" : "false", mqttBroker.c_str(), mqttPort);
+  LOG_I("[MQTT] Base Topic: %s, HA Discovery: %s", mqttBaseTopic.c_str(), mqttHADiscovery ? "true" : "false");
 
   return true;
 }
@@ -103,7 +100,7 @@ bool loadMqttSettings() {
 void saveMqttSettings() {
   File file = LittleFS.open("/mqtt_config.txt", "w");
   if (!file) {
-    DebugOut.println("Failed to open MQTT settings file for writing");
+    LOG_E("[MQTT] Failed to open settings file for writing");
     return;
   }
 
@@ -116,7 +113,7 @@ void saveMqttSettings() {
   file.println(mqttHADiscovery ? "1" : "0");
   file.close();
 
-  DebugOut.println("MQTT settings saved to LittleFS");
+  LOG_I("[MQTT] Settings saved to LittleFS");
 }
 
 // Get unique device ID for MQTT client ID and HA discovery
@@ -166,7 +163,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/system/check_update").c_str());
   mqttClient.subscribe((base + "/system/update/command").c_str());
 
-  DebugOut.println("MQTT: Subscribed to command topics");
+  LOG_D("[MQTT] Subscribed to command topics");
 }
 
 // MQTT callback for incoming messages
@@ -181,15 +178,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   String topicStr = String(topic);
   String base = getEffectiveMqttBaseTopic();
 
-  DebugOut.printf("MQTT received: %s = %s\n", topic, message.c_str());
+  LOG_D("[MQTT] Received: %s = %s", topic, message.c_str());
 
   // Handle LED blinking control
   if (topicStr == base + "/led/blinking/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     if (blinkingEnabled != newState) {
       blinkingEnabled = newState;
-      DebugOut.printf("MQTT: Blinking set to %s\n",
-                      blinkingEnabled ? "ON" : "OFF");
+      LOG_I("[MQTT] Blinking set to %s", blinkingEnabled ? "ON" : "OFF");
       sendBlinkingState();
 
       if (!blinkingEnabled) {
@@ -213,12 +209,12 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       newMode = SMART_AUTO;
     } else {
       validMode = false;
-      DebugOut.printf("MQTT: Invalid mode: %s\n", message.c_str());
+      LOG_W("[MQTT] Invalid mode: %s", message.c_str());
     }
 
     if (validMode && currentMode != newMode) {
       currentMode = newMode;
-      DebugOut.printf("MQTT: Mode set to %s\n", message.c_str());
+      LOG_I("[MQTT] Mode set to %s", message.c_str());
 
       if (currentMode == SMART_AUTO) {
         timerRemaining = timerDuration * 60;
@@ -259,7 +255,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 
       saveSmartSensingSettings();
       sendSmartSensingStateInternal();
-      DebugOut.printf("MQTT: Timer duration set to %d minutes\n", duration);
+      LOG_I("[MQTT] Timer duration set to %d minutes", duration);
     }
     publishMqttSmartSensingState();
   }
@@ -270,7 +266,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       voltageThreshold = threshold;
       saveSmartSensingSettings();
       sendSmartSensingStateInternal();
-      DebugOut.printf("MQTT: Voltage threshold set to %.2fV\n", threshold);
+      LOG_I("[MQTT] Voltage threshold set to %.2fV", threshold);
     }
     publishMqttSmartSensingState();
   }
@@ -284,14 +280,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         WiFi.mode(WIFI_AP_STA);
         WiFi.softAP(apSSID.c_str(), apPassword);
         isAPMode = true;
-        DebugOut.println("MQTT: Access Point enabled");
+        LOG_I("[MQTT] Access Point enabled");
       }
     } else {
       if (isAPMode && WiFi.status() == WL_CONNECTED) {
         WiFi.softAPdisconnect(true);
         WiFi.mode(WIFI_STA);
         isAPMode = false;
-        DebugOut.println("MQTT: Access Point disabled");
+        LOG_I("[MQTT] Access Point disabled");
       }
     }
 
@@ -304,7 +300,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (autoUpdateEnabled != enabled) {
       autoUpdateEnabled = enabled;
       saveSettings();
-      DebugOut.printf("MQTT: Auto-update set to %s\n", enabled ? "ON" : "OFF");
+      LOG_I("[MQTT] Auto-update set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Broadcast to web clients
     }
     publishMqttSystemStatus();
@@ -315,7 +311,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (nightMode != enabled) {
       nightMode = enabled;
       saveSettings();
-      DebugOut.printf("MQTT: Night mode set to %s\n", enabled ? "ON" : "OFF");
+      LOG_I("[MQTT] Night mode set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Night mode is part of WiFi status in web UI
     }
     publishMqttSystemStatus();
@@ -326,8 +322,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (enableCertValidation != enabled) {
       enableCertValidation = enabled;
       saveSettings();
-      DebugOut.printf("MQTT: Certificate validation set to %s\n",
-                      enabled ? "ON" : "OFF");
+      LOG_I("[MQTT] Certificate validation set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Broadcast to web clients
     }
     publishMqttSystemStatus();
@@ -340,7 +335,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         timeoutMs == 300000 || timeoutMs == 600000) {
       appState.setScreenTimeout(timeoutMs);
       saveSettings();
-      DebugOut.printf("MQTT: Screen timeout set to %d seconds\n", timeoutSec);
+      LOG_I("[MQTT] Screen timeout set to %d seconds", timeoutSec);
       sendWiFiStatus();
     }
     publishMqttDisplayState();
@@ -349,7 +344,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/display/backlight/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.setBacklightOn(newState);
-    DebugOut.printf("MQTT: Backlight set to %s\n", newState ? "ON" : "OFF");
+    LOG_I("[MQTT] Backlight set to %s", newState ? "ON" : "OFF");
     publishMqttDisplayState();
   }
   // Handle buzzer enable/disable
@@ -357,7 +352,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     appState.setBuzzerEnabled(enabled);
     saveSettings();
-    DebugOut.printf("MQTT: Buzzer set to %s\n", enabled ? "ON" : "OFF");
+    LOG_I("[MQTT] Buzzer set to %s", enabled ? "ON" : "OFF");
     publishMqttBuzzerState();
   }
   // Handle buzzer volume
@@ -366,25 +361,25 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (vol >= 0 && vol <= 2) {
       appState.setBuzzerVolume(vol);
       saveSettings();
-      DebugOut.printf("MQTT: Buzzer volume set to %d\n", vol);
+      LOG_I("[MQTT] Buzzer volume set to %d", vol);
       publishMqttBuzzerState();
     }
   }
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
-    DebugOut.println("MQTT: Reboot command received");
+    LOG_W("[MQTT] Reboot command received");
     delay(500);
     ESP.restart();
   }
   // Handle factory reset command
   else if (topicStr == base + "/system/factory_reset") {
-    DebugOut.println("MQTT: Factory reset command received");
+    LOG_W("[MQTT] Factory reset command received");
     delay(500);
     performFactoryReset();
   }
   // Handle update check command
   else if (topicStr == base + "/system/check_update") {
-    DebugOut.println("MQTT: Update check command received");
+    LOG_I("[MQTT] Update check command received");
     checkForFirmwareUpdate();
     publishMqttSystemStatus();
     publishMqttUpdateState();
@@ -392,23 +387,22 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle update install command (from HA Update entity)
   else if (topicStr == base + "/system/update/command") {
     if (message == "install") {
-      DebugOut.println(
-          "MQTT: Firmware install command received from Home Assistant");
+      LOG_I("[MQTT] Firmware install command received from Home Assistant");
       if (updateAvailable && cachedFirmwareUrl.length() > 0) {
-        DebugOut.println("MQTT: Starting OTA update...");
+        LOG_I("[MQTT] Starting OTA update...");
         // Publish in_progress state before starting
         publishMqttUpdateState();
         bool success = performOTAUpdate(cachedFirmwareUrl);
         if (success) {
-          DebugOut.println("MQTT: OTA update successful, rebooting...");
+          LOG_I("[MQTT] OTA update successful, rebooting...");
           delay(1000);
           ESP.restart();
         } else {
-          DebugOut.println("MQTT: OTA update failed");
+          LOG_E("[MQTT] OTA update failed");
           publishMqttUpdateState(); // Update state to show failure
         }
       } else {
-        DebugOut.println("MQTT: No update available or firmware URL missing");
+        LOG_W("[MQTT] No update available or firmware URL missing");
       }
     }
   }
@@ -417,15 +411,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 // Setup MQTT client
 void setupMqtt() {
   if (!mqttEnabled || mqttBroker.length() == 0) {
-    DebugOut.println("MQTT: Disabled or no broker configured");
+    LOG_I("[MQTT] Disabled or no broker configured");
     return;
   }
 
-  DebugOut.println("\n=== Setting up MQTT ===");
-  DebugOut.printf("Broker: %s:%d\n", mqttBroker.c_str(), mqttPort);
-  DebugOut.printf("Base Topic: %s\n", mqttBaseTopic.c_str());
-  DebugOut.printf("HA Discovery: %s\n",
-                  mqttHADiscovery ? "enabled" : "disabled");
+  LOG_I("[MQTT] Setting up...");
+  LOG_I("[MQTT] Broker: %s:%d", mqttBroker.c_str(), mqttPort);
+  LOG_I("[MQTT] Base Topic: %s", mqttBaseTopic.c_str());
+  LOG_I("[MQTT] HA Discovery: %s", mqttHADiscovery ? "enabled" : "disabled");
 
   mqttClient.setServer(mqttBroker.c_str(), mqttPort);
   mqttClient.setCallback(mqttCallback);
@@ -452,8 +445,7 @@ void mqttReconnect() {
   }
   lastMqttReconnect = currentMillis;
 
-  DebugOut.printf("MQTT: Connecting to broker (backoff: %lums)...",
-                  appState.mqttBackoffDelay);
+  LOG_I("[MQTT] Connecting to broker (backoff: %lums)...", appState.mqttBackoffDelay);
 
   String clientId = getMqttDeviceId();
   String lwt = mqttBaseTopic + "/status";
@@ -470,7 +462,7 @@ void mqttReconnect() {
   }
 
   if (connected) {
-    DebugOut.printf(" connected to %s:%d!\n", mqttBroker.c_str(), mqttPort);
+    LOG_I("[MQTT] Connected to %s:%d", mqttBroker.c_str(), mqttPort);
     mqttConnected = true;
     appState.resetMqttBackoff(); // Reset backoff on successful connection
 
@@ -483,16 +475,16 @@ void mqttReconnect() {
     // Publish Home Assistant discovery configs if enabled
     if (mqttHADiscovery) {
       publishHADiscovery();
-      DebugOut.println("MQTT: Home Assistant discovery published");
+      LOG_I("[MQTT] Home Assistant discovery published");
     }
 
     // Publish initial state
     publishMqttState();
   } else {
-    DebugOut.printf(" failed (rc=%d)\n", mqttClient.state());
+    LOG_W("[MQTT] Connection failed (rc=%d)", mqttClient.state());
     mqttConnected = false;
     appState.increaseMqttBackoff(); // Increase backoff on failure
-    DebugOut.printf("MQTT: Next retry in %lums\n", appState.mqttBackoffDelay);
+    LOG_W("[MQTT] Next retry in %lums", appState.mqttBackoffDelay);
   }
 }
 
@@ -890,7 +882,7 @@ void publishHADiscovery() {
   if (!mqttClient.connected() || !mqttHADiscovery)
     return;
 
-  DebugOut.println("MQTT: Publishing Home Assistant discovery configs...");
+  LOG_I("[MQTT] Publishing Home Assistant discovery configs...");
 
   String deviceId = getMqttDeviceId();
   String base = getEffectiveMqttBaseTopic();
@@ -1472,7 +1464,7 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
-  DebugOut.println("MQTT: Home Assistant discovery configs published");
+  LOG_I("[MQTT] Home Assistant discovery configs published");
 }
 
 // Remove Home Assistant auto-discovery configuration
@@ -1480,7 +1472,7 @@ void removeHADiscovery() {
   if (!mqttClient.connected())
     return;
 
-  DebugOut.println("MQTT: Removing Home Assistant discovery configs...");
+  LOG_I("[MQTT] Removing Home Assistant discovery configs...");
 
   String deviceId = getMqttDeviceId();
 
@@ -1524,7 +1516,7 @@ void removeHADiscovery() {
     mqttClient.publish(topicBuf, "", true); // Empty payload removes the config
   }
 
-  DebugOut.println("MQTT: Home Assistant discovery configs removed");
+  LOG_I("[MQTT] Home Assistant discovery configs removed");
 }
 
 // ===== MQTT HTTP API Handlers =====
@@ -1646,9 +1638,7 @@ void handleMqttUpdate() {
       mqttBaseTopic = newBaseTopic;
       settingsChanged = true;
       needReconnect = true;
-      DebugOut.printf("Base topic changed to: %s\n", newBaseTopic.length() > 0
-                                                         ? newBaseTopic.c_str()
-                                                         : "(default)");
+      LOG_I("[MQTT] Base topic changed to: %s", newBaseTopic.length() > 0 ? newBaseTopic.c_str() : "(default)");
     }
   }
 
@@ -1673,7 +1663,7 @@ void handleMqttUpdate() {
   // Save settings if changed
   if (settingsChanged) {
     saveMqttSettings();
-    DebugOut.println("MQTT settings updated");
+    LOG_I("[MQTT] Settings updated");
   }
 
   // Reconnect if needed

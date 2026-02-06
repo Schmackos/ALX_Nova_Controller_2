@@ -5,6 +5,7 @@
 #include "../gui_theme.h"
 #include "../../app_state.h"
 #include "../../buzzer_handler.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 #include <lvgl.h>
 
@@ -477,14 +478,14 @@ static const int ANIM_COUNT = sizeof(anim_table) / sizeof(anim_table[0]);
 void boot_anim_play(void) {
     AppState &st = AppState::getInstance();
     if (!st.bootAnimEnabled) {
-        Serial.println("[GUI] Boot animation disabled, skipping");
+        LOG_I("[GUI] Boot animation disabled, skipping");
         return;
     }
 
     int style = st.bootAnimStyle;
     if (style < 0 || style >= ANIM_COUNT) style = 0;
 
-    Serial.printf("[GUI] Playing boot animation %d\n", style);
+    LOG_I("[GUI] Playing boot animation %d", style);
 
     /* Create a temporary screen */
     lv_obj_t *scr = lv_obj_create(NULL);
@@ -520,7 +521,7 @@ void boot_anim_play(void) {
        prevents gui_nav_push from loading the desktop afterwards. */
     lv_obj_clean(scr);
 
-    Serial.println("[GUI] Boot animation complete");
+    LOG_I("[GUI] Boot animation complete");
 }
 
 #endif /* GUI_ENABLED */
