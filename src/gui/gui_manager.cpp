@@ -15,6 +15,7 @@
 #include "screens/scr_home.h"
 #include "screens/scr_boot_anim.h"
 #include "../app_state.h"
+#include "../buzzer_handler.h"
 #include <Arduino.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -138,6 +139,9 @@ static void gui_task(void *param) {
                 scr_home_refresh();
             }
         }
+
+        /* Process buzzer patterns with low latency (same core as encoder ISR) */
+        buzzer_update();
 
         /* Run LVGL timer handler */
         uint32_t time_till_next = lv_timer_handler();
