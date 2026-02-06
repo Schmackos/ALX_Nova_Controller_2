@@ -4,27 +4,32 @@
 #ifdef GUI_ENABLED
 
 #include <lvgl.h>
+#include "../design_tokens.h"
 
-/* Color palette — matches web design system */
-#define COLOR_PRIMARY     lv_color_hex(0xFF9800) /* Orange accent */
-#define COLOR_PRIMARY_DK  lv_color_hex(0xE68900) /* Darker orange for pressed */
-#define COLOR_BG_DARK     lv_color_hex(0x1A1A2E) /* Dark background */
-#define COLOR_BG_CARD     lv_color_hex(0x16213E) /* Card background */
-#define COLOR_BG_SURFACE  lv_color_hex(0x0F3460) /* Surface / selection */
-#define COLOR_TEXT_PRI    lv_color_hex(0xFFFFFF) /* Primary text */
-#define COLOR_TEXT_SEC    lv_color_hex(0xB0B0B0) /* Secondary text */
-#define COLOR_TEXT_DIM    lv_color_hex(0x666666) /* Dimmed text */
-#define COLOR_SUCCESS     lv_color_hex(0x4CAF50) /* Green */
-#define COLOR_WARNING     lv_color_hex(0xFFC107) /* Yellow */
-#define COLOR_ERROR       lv_color_hex(0xF44336) /* Red */
-#define COLOR_INFO        lv_color_hex(0x2196F3) /* Blue */
+/* Color palette — uses shared design tokens */
+#define COLOR_PRIMARY     lv_color_hex(DT_ACCENT)
+#define COLOR_PRIMARY_DK  lv_color_hex(DT_ACCENT_DARK)
+#define COLOR_BG_DARK     lv_color_hex(DT_DARK_BG)
+#define COLOR_BG_CARD     lv_color_hex(DT_DARK_CARD)
+#define COLOR_BG_SURFACE  lv_color_hex(DT_DARK_SURFACE)
+#define COLOR_TEXT_PRI    lv_color_hex(DT_TEXT_PRIMARY)
+#define COLOR_TEXT_SEC    lv_color_hex(DT_TEXT_SECONDARY)
+#define COLOR_TEXT_DIM    lv_color_hex(DT_TEXT_DISABLED)
+#define COLOR_SUCCESS     lv_color_hex(DT_SUCCESS)
+#define COLOR_WARNING     lv_color_hex(DT_WARNING)
+#define COLOR_ERROR       lv_color_hex(DT_ERROR)
+#define COLOR_INFO        lv_color_hex(DT_INFO)
 
 /* Light mode colors */
-#define COLOR_BG_LIGHT      lv_color_hex(0xF5F5F5)
-#define COLOR_CARD_LIGHT    lv_color_hex(0xFFFFFF)
-#define COLOR_SURFACE_LIGHT lv_color_hex(0xE0E0E0)
-#define COLOR_TEXT_PRI_LT   lv_color_hex(0x212121)
-#define COLOR_TEXT_SEC_LT   lv_color_hex(0x757575)
+#define COLOR_BG_LIGHT      lv_color_hex(DT_LIGHT_BG)
+#define COLOR_CARD_LIGHT    lv_color_hex(DT_LIGHT_CARD)
+#define COLOR_SURFACE_LIGHT lv_color_hex(DT_LIGHT_SURFACE)
+#define COLOR_TEXT_PRI_LT   lv_color_hex(DT_TEXT_PRIMARY_LT)
+#define COLOR_TEXT_SEC_LT   lv_color_hex(DT_TEXT_SEC_LT)
+
+/* Border colors from tokens */
+#define COLOR_BORDER_DARK   lv_color_hex(DT_DARK_BORDER)
+#define COLOR_BORDER_LIGHT  lv_color_hex(DT_LIGHT_BORDER)
 
 /* Initialize theme and apply to default display */
 void gui_theme_init(bool dark_mode);

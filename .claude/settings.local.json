@@ -63,7 +63,18 @@
       "Bash(\"/c/Program Files/WindowsApps/Microsoft.PowerShell_7.5.4.0_x64__8wekyb3d8bbwe/pwsh.exe\" -Command \"irm https://claude.ai/install.ps1 | iex\")",
       "Bash(wc:*)",
       "Bash(npx claude-code-templates@latest:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(code:*)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:docs.wokwi.com)",
+      "Bash(powershell -Command \"iwr https://wokwi.com/ci/install.ps1 -useb | iex\")",
+      "Bash(WOKWI_CLI_TOKEN=wok_6PT0qAGXyB0tQoZ0k1fmCzyqYuW6U0Y6f2c338db ~/bin/wokwi-cli.exe simulate:*)",
+      "Bash(WOKWI_CLI_TOKEN=wok_6PT0qAGXyB0tQoZ0k1fmCzyqYuW6U0Y6f2c338db ~/bin/wokwi-cli.exe:*)",
+      "WebFetch(domain:wokwi.com)",
+      "Bash(pio boards:*)",
+      "Bash(python3 -c \" import json try: with open\\(''.platformio/platforms/espressif32/boards/esp32-s3-devkitc-1.json'', ''r''\\) as f: b = json.load\\(f\\) print\\(''Flash mode:'', b.get\\(''build'',{}\\).get\\(''flash_mode'',''?''\\)\\) print\\(''Flash freq:'', b.get\\(''build'',{}\\).get\\(''f_flash'',''?''\\)\\) print\\(''Flash size:'', b.get\\(''upload'',{}\\).get\\(''flash_size'',''?''\\)\\) print\\(''Max size:'', b.get\\(''upload'',{}\\).get\\(''maximum_size'',''?''\\)\\) except: pass \")",
+      "Bash(xargs cat:*)",
+      "Bash(python3:*)"
     ]
   }
 }

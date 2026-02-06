@@ -18,6 +18,7 @@ static lv_obj_t *lbl_cpu = nullptr;
 static lv_obj_t *lbl_storage = nullptr;
 static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
+static lv_obj_t *lbl_pins = nullptr;
 
 /* Back button callback */
 static void on_back(lv_event_t *e) {
@@ -114,6 +115,7 @@ lv_obj_t *scr_debug_create(void) {
     lbl_storage = nullptr;
     lbl_network = nullptr;
     lbl_system = nullptr;
+    lbl_pins = nullptr;
 
     lv_obj_t *scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, gui_style_screen(), LV_PART_MAIN);
@@ -122,11 +124,11 @@ lv_obj_t *scr_debug_create(void) {
     lv_obj_t *title = lv_label_create(scr);
     lv_label_set_text(title, ICON_DEBUG " Debug");
     lv_obj_add_style(title, gui_style_title(), LV_PART_MAIN);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 4);
 
     /* Scrollable container */
     lv_obj_t *cont = lv_obj_create(scr);
-    lv_obj_set_size(cont, DISPLAY_HEIGHT, DISPLAY_WIDTH - 22);
+    lv_obj_set_size(cont, DISPLAY_HEIGHT, DISPLAY_WIDTH - 46);
     lv_obj_align(cont, LV_ALIGN_BOTTOM_MID, 0, -18);
     lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
@@ -145,6 +147,24 @@ lv_obj_t *scr_debug_create(void) {
     lbl_storage = add_section(cont, "Storage");
     lbl_network = add_section(cont, "Network");
     lbl_system  = add_section(cont, "System");
+
+    /* GPIO Pins — static, set once (no refresh needed) */
+    lbl_pins = add_section(cont, "GPIO Pins");
+    {
+        char pins_buf[128];
+        snprintf(pins_buf, sizeof(pins_buf),
+                 "Core: LED=%d Amp=%d ADC=%d\n"
+                 "  Btn=%d Buzz=%d\n"
+                 "Enc: A=%d B=%d SW=%d\n"
+                 "TFT: CS=%d MOSI=%d CLK=%d\n"
+                 "  DC=%d RST=%d BL=%d",
+                 LED_PIN, AMPLIFIER_PIN, VOLTAGE_SENSE_PIN,
+                 RESET_BUTTON_PIN, BUZZER_PIN,
+                 ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
+                 TFT_CS_PIN, TFT_MOSI_PIN, TFT_SCLK_PIN,
+                 TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN);
+        lv_label_set_text(lbl_pins, pins_buf);
+    }
 
     /* Back button at bottom */
     lv_obj_t *back_btn = lv_obj_create(scr);

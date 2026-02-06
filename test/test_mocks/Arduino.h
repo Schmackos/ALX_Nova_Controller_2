@@ -209,4 +209,44 @@ inline long random(long min, long max) {
   return (max > min) ? (min + (rand() % (max - min))) : min;
 }
 
+// Mock LEDC functions for buzzer tests
+namespace ArduinoMock {
+static uint32_t ledcLastChannel = 0;
+static double ledcLastFreq = 0;
+static uint32_t ledcLastDuty = 0;
+static uint8_t ledcSetupCount = 0;
+static uint8_t ledcAttachCount = 0;
+static uint8_t ledcWriteToneCount = 0;
+static uint8_t ledcWriteCount = 0;
+
+inline void resetLedc() {
+  ledcLastChannel = 0;
+  ledcLastFreq = 0;
+  ledcLastDuty = 0;
+  ledcSetupCount = 0;
+  ledcAttachCount = 0;
+  ledcWriteToneCount = 0;
+  ledcWriteCount = 0;
+}
+} // namespace ArduinoMock
+
+inline void ledcSetup(uint8_t channel, double freq, uint8_t resolution) {
+  ArduinoMock::ledcLastChannel = channel;
+  ArduinoMock::ledcSetupCount++;
+}
+inline void ledcAttachPin(uint8_t pin, uint8_t channel) {
+  ArduinoMock::ledcAttachCount++;
+}
+inline double ledcWriteTone(uint8_t channel, double freq) {
+  ArduinoMock::ledcLastChannel = channel;
+  ArduinoMock::ledcLastFreq = freq;
+  ArduinoMock::ledcWriteToneCount++;
+  return freq;
+}
+inline void ledcWrite(uint8_t channel, uint32_t duty) {
+  ArduinoMock::ledcLastChannel = channel;
+  ArduinoMock::ledcLastDuty = duty;
+  ArduinoMock::ledcWriteCount++;
+}
+
 #endif // ARDUINO_MOCK_H

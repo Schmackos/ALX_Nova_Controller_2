@@ -68,6 +68,23 @@ void AppState::setScreenTimeout(unsigned long timeout) {
   }
 }
 
+// ===== Buzzer State Management =====
+void AppState::setBuzzerEnabled(bool enabled) {
+  if (buzzerEnabled != enabled) {
+    buzzerEnabled = enabled;
+    _buzzerDirty = true;
+  }
+}
+
+void AppState::setBuzzerVolume(int volume) {
+  if (volume < 0) volume = 0;
+  if (volume > 2) volume = 2;
+  if (buzzerVolume != volume) {
+    buzzerVolume = volume;
+    _buzzerDirty = true;
+  }
+}
+
 // ===== Error State Management =====
 void AppState::setError(int code, const String &message) {
   errorCode = code;
@@ -102,11 +119,12 @@ void AppState::clearAllDirtyFlags() {
   _timerDirty = false;
   _voltageDirty = false;
   _displayDirty = false;
+  _buzzerDirty = false;
   _settingsDirty = false;
 }
 
 bool AppState::hasAnyDirtyFlag() const {
   return _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
          _amplifierDirty || _sensingModeDirty || _timerDirty ||
-         _voltageDirty || _displayDirty || _settingsDirty;
+         _voltageDirty || _displayDirty || _buzzerDirty || _settingsDirty;
 }

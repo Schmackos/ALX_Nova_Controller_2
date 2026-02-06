@@ -94,6 +94,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendWiFiStatus();
             sendSmartSensingStateInternal();
             sendDisplayState();
+            sendBuzzerState();
 
             // If device just updated, notify the client
             if (justUpdated) {
@@ -165,6 +166,20 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             DebugOut.printf("WS: Screen timeout set to %d seconds\n", timeoutSec);
             sendDisplayState();
           }
+        } else if (msgType == "setBuzzerEnabled") {
+          bool newState = doc["enabled"].as<bool>();
+          AppState::getInstance().setBuzzerEnabled(newState);
+          saveSettings();
+          DebugOut.printf("WS: Buzzer set to %s\n", newState ? "ON" : "OFF");
+          sendBuzzerState();
+        } else if (msgType == "setBuzzerVolume") {
+          int newVol = doc["value"].as<int>();
+          if (newVol >= 0 && newVol <= 2) {
+            AppState::getInstance().setBuzzerVolume(newVol);
+            saveSettings();
+            DebugOut.printf("WS: Buzzer volume set to %d\n", newVol);
+            sendBuzzerState();
+          }
         }
       }
       break;
@@ -226,6 +241,32 @@ void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered) {
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+void sendBuzzerState() {
+  JsonDocument doc;
+  doc["type"] = "buzzerState";
+  doc["enabled"] = AppState::getInstance().buzzerEnabled;
+  doc["volume"] = AppState::getInstance().buzzerVolume;
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+void sendMqttSettingsState() {
+  JsonDocument doc;
+  doc["type"] = "mqttSettings";
+  doc["enabled"] = appState.mqttEnabled;
+  doc["broker"] = appState.mqttBroker;
+  doc["port"] = appState.mqttPort;
+  doc["username"] = appState.mqttUsername;
+  doc["hasPassword"] = (appState.mqttPassword.length() > 0);
+  doc["baseTopic"] = appState.mqttBaseTopic;
+  doc["haDiscovery"] = appState.mqttHADiscovery;
+  doc["connected"] = appState.mqttConnected;
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t *)json.c_str(), json.length());
 }
 
 // ===== CPU Utilization Functions =====

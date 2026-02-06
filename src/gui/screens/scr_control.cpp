@@ -143,4 +143,24 @@ lv_obj_t *scr_control_create(void) {
     return scr_menu_create(&control_menu);
 }
 
+void scr_control_refresh(void) {
+    AppState &st = AppState::getInstance();
+
+    const char *mode_str = (st.currentMode == ALWAYS_ON) ? "Always On" :
+                           (st.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
+    scr_menu_set_item_value(1, mode_str);
+
+    scr_menu_set_item_value(2, st.amplifierState ? "ON" : "OFF");
+
+    static char timer_buf[12];
+    snprintf(timer_buf, sizeof(timer_buf), "%lu min", st.timerDuration);
+    scr_menu_set_item_value(3, timer_buf);
+
+    static char volt_buf[12];
+    snprintf(volt_buf, sizeof(volt_buf), "%.1fV", st.voltageThreshold);
+    scr_menu_set_item_value(4, volt_buf);
+
+    scr_menu_set_item_value(5, st.blinkingEnabled ? "ON" : "OFF");
+}
+
 #endif /* GUI_ENABLED */

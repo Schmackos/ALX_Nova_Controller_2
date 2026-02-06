@@ -2,11 +2,15 @@
 
 #include "gui_navigation.h"
 #include "gui_input.h"
+#include "../buzzer_handler.h"
 #include <Arduino.h>
 
 /* Navigation stack */
 static ScreenId nav_stack[NAV_STACK_MAX];
 static int nav_depth = 0;
+
+/* Focus index per stack level — restored on pop */
+static int nav_focus_index[NAV_STACK_MAX] = {0};
 
 /* Screen creator registry */
 static screen_create_fn screen_creators[SCR_COUNT] = {nullptr};
@@ -48,6 +52,22 @@ static void activate_screen(ScreenId id, lv_scr_load_anim_t anim) {
     lv_screen_load_anim(scr, anim, 200, 0, true);
 }
 
+void gui_nav_set_focus_index(int idx) {
+    if (nav_depth > 0) {
+        nav_focus_index[nav_depth - 1] = idx;
+    }
+}
+
+static void restore_focus(int target_idx) {
+    if (target_idx <= 0) return;
+    uint32_t count = lv_group_get_obj_count(current_group);
+    if (count == 0) return;
+    if (target_idx >= (int)count) target_idx = (int)count - 1;
+    for (int i = 0; i < target_idx; i++) {
+        lv_group_focus_next(current_group);
+    }
+}
+
 void gui_nav_push(ScreenId id) {
     if (nav_depth >= NAV_STACK_MAX) {
         Serial.println("[GUI Nav] Stack overflow!");
@@ -56,6 +76,7 @@ void gui_nav_push(ScreenId id) {
 
     nav_stack[nav_depth] = id;
     nav_depth++;
+    nav_focus_index[nav_depth - 1] = 0;
 
     /* Determine animation direction */
     lv_scr_load_anim_t anim;
@@ -63,6 +84,7 @@ void gui_nav_push(ScreenId id) {
         anim = LV_SCR_LOAD_ANIM_FADE_IN;
     } else {
         anim = LV_SCR_LOAD_ANIM_MOVE_LEFT;
+        buzzer_play(BUZZ_NAV);
     }
 
     activate_screen(id, anim);
@@ -77,17 +99,22 @@ void gui_nav_pop(void) {
 
     nav_depth--;
     ScreenId prev = nav_stack[nav_depth - 1];
+    int saved_idx = nav_focus_index[nav_depth - 1];
 
+    buzzer_play(BUZZ_NAV);
     activate_screen(prev, LV_SCR_LOAD_ANIM_MOVE_RIGHT);
-    Serial.printf("[GUI Nav] Pop to screen %d (depth %d)\n", prev, nav_depth);
+    restore_focus(saved_idx);
+    Serial.printf("[GUI Nav] Pop to screen %d (depth %d, focus %d)\n", prev, nav_depth, saved_idx);
 }
 
 void gui_nav_pop_to_root(void) {
     if (nav_depth <= 1) return;
 
     nav_depth = 1;
+    int saved_idx = nav_focus_index[0];
     activate_screen(nav_stack[0], LV_SCR_LOAD_ANIM_MOVE_RIGHT);
-    Serial.printf("[GUI Nav] Pop to root (depth %d)\n", nav_depth);
+    restore_focus(saved_idx);
+    Serial.printf("[GUI Nav] Pop to root (depth %d, focus %d)\n", nav_depth, saved_idx);
 }
 
 ScreenId gui_nav_current(void) {

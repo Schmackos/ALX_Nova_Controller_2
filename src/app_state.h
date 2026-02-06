@@ -151,6 +151,8 @@ public:
   float prevMqttVoltageReading = 0.0;
   bool prevMqttBacklightOn = true;
   unsigned long prevMqttScreenTimeout = 60000;
+  bool prevMqttBuzzerEnabled = true;
+  int prevMqttBuzzerVolume = 1;
 
   // ===== Smart Sensing Broadcast State Tracking =====
   SensingMode prevBroadcastMode = ALWAYS_ON;
@@ -166,6 +168,15 @@ public:
   void setScreenTimeout(unsigned long timeout);
   bool isDisplayDirty() const { return _displayDirty; }
   void clearDisplayDirty() { _displayDirty = false; }
+
+  // ===== Buzzer State (accessible from all interfaces) =====
+  bool buzzerEnabled = true;   // Enable/disable buzzer feedback
+  int buzzerVolume = 1;        // 0=Low, 1=Medium, 2=High
+
+  void setBuzzerEnabled(bool enabled);
+  void setBuzzerVolume(int volume);
+  bool isBuzzerDirty() const { return _buzzerDirty; }
+  void clearBuzzerDirty() { _buzzerDirty = false; }
 
   // ===== Settings Dirty Flag (for GUI -> WS/MQTT sync) =====
   bool isSettingsDirty() const { return _settingsDirty; }
@@ -213,6 +224,7 @@ private:
   bool _timerDirty = false;
   bool _voltageDirty = false;
   bool _displayDirty = false;
+  bool _buzzerDirty = false;
   bool _settingsDirty = false;
 };
 
@@ -313,6 +325,8 @@ private:
 #define prevMqttVoltageReading appState.prevMqttVoltageReading
 #define prevMqttBacklightOn appState.prevMqttBacklightOn
 #define prevMqttScreenTimeout appState.prevMqttScreenTimeout
+#define prevMqttBuzzerEnabled appState.prevMqttBuzzerEnabled
+#define prevMqttBuzzerVolume appState.prevMqttBuzzerVolume
 
 // Smart Sensing Broadcast State Tracking
 #define prevBroadcastMode appState.prevBroadcastMode

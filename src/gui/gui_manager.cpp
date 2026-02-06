@@ -11,6 +11,8 @@
 #include "screens/scr_mqtt.h"
 #include "screens/scr_settings.h"
 #include "screens/scr_debug.h"
+#include "screens/scr_support.h"
+#include "screens/scr_home.h"
 #include "screens/scr_boot_anim.h"
 #include "../app_state.h"
 #include <Arduino.h>
@@ -81,6 +83,11 @@ static void gui_task(void *param) {
 
     Serial.println("[GUI] Task started on core " + String(xPortGetCoreID()));
 
+    /* Flush one black frame to overwrite any stale display RAM
+       (e.g. desktop from previous boot), then turn on backlight. */
+    lv_timer_handler();
+    set_backlight(BL_BRIGHTNESS_MAX);
+
     /* Play boot animation and load desktop inside the task so all
        lv_timer_handler() calls originate from the same FreeRTOS context. */
     boot_anim_play();
@@ -109,7 +116,7 @@ static void gui_task(void *param) {
             }
         }
 
-        /* Refresh dashboard/debug data periodically */
+        /* Refresh active screen data periodically */
         if (millis() - last_dashboard_refresh > DASHBOARD_REFRESH_MS) {
             last_dashboard_refresh = millis();
             ScreenId cur = gui_nav_current();
@@ -117,6 +124,18 @@ static void gui_task(void *param) {
                 scr_desktop_refresh();
             } else if (cur == SCR_DEBUG_MENU) {
                 scr_debug_refresh();
+            } else if (cur == SCR_CONTROL_MENU) {
+                scr_control_refresh();
+            } else if (cur == SCR_WIFI_MENU) {
+                scr_wifi_refresh();
+            } else if (cur == SCR_WIFI_AP_MENU) {
+                scr_wifi_ap_refresh();
+            } else if (cur == SCR_MQTT_MENU) {
+                scr_mqtt_refresh();
+            } else if (cur == SCR_SETTINGS_MENU) {
+                scr_settings_refresh();
+            } else if (cur == SCR_HOME) {
+                scr_home_refresh();
             }
         }
 
@@ -139,7 +158,9 @@ static void register_screens(void) {
     gui_nav_register(SCR_WIFI_NET_MENU, scr_wifi_net_create);
     gui_nav_register(SCR_MQTT_MENU, scr_mqtt_create);
     gui_nav_register(SCR_SETTINGS_MENU, scr_settings_create);
+    gui_nav_register(SCR_SUPPORT_MENU, scr_support_create);
     gui_nav_register(SCR_DEBUG_MENU, scr_debug_create);
+    gui_nav_register(SCR_HOME, scr_home_create);
 }
 
 void gui_init(void) {
@@ -148,7 +169,7 @@ void gui_init(void) {
     /* Initialize backlight PWM */
     ledcSetup(BL_PWM_CHANNEL, BL_PWM_FREQ, BL_PWM_RESOLUTION);
     ledcAttachPin(TFT_BL_PIN, BL_PWM_CHANNEL);
-    set_backlight(BL_BRIGHTNESS_MAX);
+    set_backlight(0);  /* Keep backlight OFF until content is ready */
 
     /* Initialize TFT */
     tft.init();

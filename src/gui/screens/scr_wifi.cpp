@@ -252,4 +252,23 @@ lv_obj_t *scr_wifi_create(void) {
     return scr_menu_create(&cfg);
 }
 
+void scr_wifi_refresh(void) {
+    static char status_buf[24];
+    if (WiFi.status() == WL_CONNECTED) {
+        snprintf(status_buf, sizeof(status_buf), "Connected");
+    } else if (AppState::getInstance().isAPMode) {
+        snprintf(status_buf, sizeof(status_buf), "AP Mode");
+    } else {
+        snprintf(status_buf, sizeof(status_buf), "Disconnected");
+    }
+    scr_menu_set_item_value(1, status_buf);
+}
+
+void scr_wifi_ap_refresh(void) {
+    AppState &st = AppState::getInstance();
+    scr_menu_set_item_value(1, st.apEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(2, st.autoAPEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(3, st.apSSID.c_str());
+}
+
 #endif /* GUI_ENABLED */

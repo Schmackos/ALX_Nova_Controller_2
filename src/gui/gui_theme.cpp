@@ -45,7 +45,7 @@ static void init_styles(bool dark) {
     lv_style_set_radius(&style_card, 8);
     lv_style_set_pad_all(&style_card, 10);
     lv_style_set_border_width(&style_card, 1);
-    lv_style_set_border_color(&style_card, dark ? lv_color_hex(0x2A2A4A) : lv_color_hex(0xDDDDDD));
+    lv_style_set_border_color(&style_card, dark ? COLOR_BORDER_DARK : COLOR_BORDER_LIGHT);
     lv_style_set_border_opa(&style_card, LV_OPA_COVER);
 
     /* Card focused */
@@ -73,7 +73,7 @@ static void init_styles(bool dark) {
     lv_style_init(&style_btn);
     lv_style_set_bg_color(&style_btn, COLOR_PRIMARY);
     lv_style_set_bg_opa(&style_btn, LV_OPA_COVER);
-    lv_style_set_text_color(&style_btn, lv_color_hex(0xFFFFFF));
+    lv_style_set_text_color(&style_btn, COLOR_TEXT_PRI);
     lv_style_set_radius(&style_btn, 4);
     lv_style_set_pad_hor(&style_btn, 12);
     lv_style_set_pad_ver(&style_btn, 6);

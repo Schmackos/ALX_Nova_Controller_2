@@ -11,6 +11,8 @@
 #define ICON_MQTT       LV_SYMBOL_UPLOAD   /* Cloud-like symbol for MQTT */
 #define ICON_SETTINGS   LV_SYMBOL_SETTINGS
 #define ICON_DEBUG       LV_SYMBOL_LIST
+#define ICON_SUPPORT    LV_SYMBOL_FILE
+#define ICON_HOME       LV_SYMBOL_HOME
 
 /* Navigation icons */
 #define ICON_BACK       LV_SYMBOL_LEFT

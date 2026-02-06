@@ -2,6 +2,7 @@
 
 #include "gui_input.h"
 #include "gui_config.h"
+#include "../buzzer_handler.h"
 #include <Arduino.h>
 #include <lvgl.h>
 
@@ -50,9 +51,11 @@ static void IRAM_ATTR encoder_isr() {
         if (enc_sub_count > 0) {
             encoder_diff += 1;
             input_activity_flag = true;
+            buzzer_request_tick();
         } else if (enc_sub_count < 0) {
             encoder_diff -= 1;
             input_activity_flag = true;
+            buzzer_request_tick();
         }
         enc_sub_count = 0;
     }
@@ -64,8 +67,12 @@ static void IRAM_ATTR encoder_isr() {
 static void IRAM_ATTR encoder_sw_isr() {
     unsigned long now = millis();
     if (now - last_sw_time > ENCODER_DEBOUNCE_MS) {
-        encoder_pressed = (digitalRead(ENCODER_SW_PIN) == LOW);
+        bool pressed = (digitalRead(ENCODER_SW_PIN) == LOW);
+        encoder_pressed = pressed;
         input_activity_flag = true;
+        if (pressed) {
+            buzzer_request_click();
+        }
         last_sw_time = now;
     }
 }

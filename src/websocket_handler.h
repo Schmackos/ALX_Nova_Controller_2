@@ -20,6 +20,8 @@ void sendDisplayState();
 void sendFactoryResetProgress(unsigned long secondsHeld, bool resetTriggered);
 void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered);
 void sendHardwareStats();
+void sendMqttSettingsState();
+void sendBuzzerState();
 
 // ===== CPU Utilization Tracking =====
 void initCpuUsageMonitoring();

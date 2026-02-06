@@ -34,6 +34,14 @@ const int AMPLIFIER_PIN = 4; // GPIO 4 - relay control
 const int VOLTAGE_SENSE_PIN = 1; // GPIO 1 - voltage detection (ADC1_CH0)
 #endif
 
+#ifndef BUZZER_PIN
+const int BUZZER_PIN = 8; // GPIO 8 - passive buzzer (PWM)
+#endif
+
+// ===== Buzzer Configuration =====
+#define BUZZER_PWM_CHANNEL 1   // LEDC channel (channel 0 is TFT backlight)
+#define BUZZER_PWM_RESOLUTION 8 // 8-bit resolution (0-255 duty)
+
 // ===== Server Ports =====
 const int WEB_SERVER_PORT = 80;
 const int WEBSOCKET_PORT = 81;

@@ -26,6 +26,7 @@ enum ScreenId {
     SCR_WIFI_MENU,
     SCR_MQTT_MENU,
     SCR_SETTINGS_MENU,
+    SCR_SUPPORT_MENU,
     SCR_DEBUG_MENU,
     SCR_VALUE_EDIT,
     SCR_KEYBOARD,
@@ -33,6 +34,7 @@ enum ScreenId {
     SCR_WIFI_AP_MENU,
     SCR_WIFI_NET_MENU,
     SCR_INFO,
+    SCR_HOME,
     SCR_COUNT
 };
 

@@ -15,6 +15,7 @@ enum ScreenId {
     SCR_WIFI_MENU,
     SCR_MQTT_MENU,
     SCR_SETTINGS_MENU,
+    SCR_SUPPORT_MENU,
     SCR_DEBUG_MENU,
     SCR_VALUE_EDIT,
     SCR_KEYBOARD,
@@ -22,6 +23,7 @@ enum ScreenId {
     SCR_WIFI_AP_MENU,
     SCR_WIFI_NET_MENU,
     SCR_INFO,
+    SCR_HOME,
     SCR_COUNT
 };
 
@@ -51,6 +53,9 @@ void gui_nav_register(ScreenId id, screen_create_fn creator);
 
 /* Get the LVGL group for the current screen (for encoder binding) */
 lv_group_t *gui_nav_get_group(void);
+
+/* Save current focus index for the active screen (called by screen focus callbacks) */
+void gui_nav_set_focus_index(int idx);
 
 #endif /* GUI_ENABLED */
 #endif /* GUI_NAVIGATION_H */

@@ -22,11 +22,11 @@ const char loginPage[] PROGMEM = R"rawliteral(
             --bg-input: #E0E0E0;
             --accent: #FF9800;
             --accent-light: #FFB74D;
-            --accent-dark: #F57C00;
+            --accent-dark: #E68900;
             --text-primary: #212121;
             --text-secondary: #757575;
             --text-disabled: #9E9E9E;
-            --error: #D32F2F;
+            --error: #F44336;
             --border: #E0E0E0;
             --shadow: rgba(0, 0, 0, 0.1);
             --safe-top: env(safe-area-inset-top, 0px);
@@ -35,15 +35,15 @@ const char loginPage[] PROGMEM = R"rawliteral(
 
         /* ===== Dark Theme (Night Mode) ===== */
         body.night-mode {
-            --bg-primary: #121212;
-            --bg-surface: #1E1E1E;
-            --bg-card: #252525;
-            --bg-input: #2a2a2a;
+            --bg-primary: #1A1A2E;
+            --bg-surface: #16213E;
+            --bg-card: #1E2A4A;
+            --bg-input: #243356;
             --text-primary: #FFFFFF;
-            --text-secondary: #B3B3B3;
+            --text-secondary: #B0B0B0;
             --text-disabled: #666666;
-            --error: #CF6679;
-            --border: #333333;
+            --error: #F44336;
+            --border: #2A2A4A;
             --shadow: rgba(0, 0, 0, 0.4);
         }
 

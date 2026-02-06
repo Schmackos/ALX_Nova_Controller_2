@@ -53,6 +53,17 @@ on gui_task would call non-thread-safe WebSocket broadcasts, causing silent
 failures and poisoned change tracking. GUI now only sets dirty flags; the
 main loop handles all broadcasts.
 
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`06a0d42`)
+- [2026-02-05] feat: Add LVGL GUI with TFT display, encoder input, and fix cross-task state sync
+
+Implements complete 7-phase GUI system for ST7735S 128x160 TFT with rotary
+encoder on ESP32-S3 using LVGL v9.4 + TFT_eSPI. Includes desktop carousel,
+control/settings/WiFi/MQTT/debug screens, boot animations, dark mode, and
+screen sleep/wake. Fixes cross-task WebSocket/MQTT sync where GUI callbacks
+on gui_task would call non-thread-safe WebSocket broadcasts, causing silent
+failures and poisoned change tracking. GUI now only sets dirty flags; the
+main loop handles all broadcasts.
+
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`f8be593`)
 - [2026-02-04] feat: Implement WiFi manager unit tests using mock classes and resolve native compilation issues for existing tests. (`5820b55`)
 - [2026-02-04] feat: Introduce `WiFiManager` module for centralized WiFi connection, persistence, and API handling. (`72525b0`)
@@ -159,6 +170,45 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-06] Update RELEASE_NOTES.md to document the addition of buzzer functionality, including state management, volume control, and real-time updates via MQTT and WebSocket. (`22f1aad`)
+- [2026-02-06] Update RELEASE_NOTES.md to document the addition of buzzer functionality, including state management, volume control, and real-time updates via MQTT and WebSocket. (`8464371`)
+- [2026-02-06] Add buzzer functionality and configuration options
+
+- Introduced buzzer state management with enable/disable and volume control.
+- Updated platformio.ini to define BUZZER_PIN.
+- Enhanced GUI to include buzzer settings and controls.
+- Implemented MQTT support for buzzer state and volume adjustments.
+- Added WebSocket functionality for real-time buzzer state updates.
+- Updated RELEASE_NOTES.md to reflect these changes. (`f32ea20`)
+- [2026-02-06] Update RELEASE_NOTES.md to include recent enhancements related to the Support tab and navigation improvements in the GUI. (`1670b51`)
+- [2026-02-06] Update RELEASE_NOTES.md to include recent enhancements related to the Support tab and navigation improvements in the GUI. (`03f912c`)
+- [2026-02-06] Update RELEASE_NOTES.md to include recent enhancements related to the Support tab and navigation improvements in the GUI. (`174e8f6`)
+- [2026-02-06] Update RELEASE_NOTES.md to include recent enhancements related to the Support tab and navigation improvements in the GUI. (`1d8fa82`)
+- [2026-02-06] Update RELEASE_NOTES.md to reflect the addition of a Support tab in the GUI and navigation enhancements (`b4f9834`)
+- [2026-02-06] Update RELEASE_NOTES.md to include enhancements in GUI with new Support tab and navigation improvements (`3066a51`)
+- [2026-02-06] Enhance GUI with Support Tab and Navigation Improvements
+
+- Added a new Support tab in the GUI, allowing users to access the user manual and documentation.
+- Implemented search functionality within the manual section for easier navigation.
+- Updated navigation to include the Support screen and maintain focus index across screens.
+- Adjusted layout and styles for better user experience in the Debug and Desktop screens.
+- Updated platformio.ini to set default environment for ESP32-S3 development. (`c7b8e00`)
+- [2026-02-06] Update RELEASE_NOTES.md to clarify recent enhancements in MQTT settings management and UI synchronization (`07e28c4`)
+- [2026-02-06] Update RELEASE_NOTES.md to clarify enhancements in MQTT settings management and UI synchronization (`478df44`)
+- [2026-02-06] Update RELEASE_NOTES.md to document enhancements in MQTT settings management and UI synchronization (`09f23ee`)
+- [2026-02-06] Update RELEASE_NOTES.md to document enhancements in MQTT settings management and UI synchronization (`fd0c451`)
+- [2026-02-06] Enhance MQTT settings management and update UI
+
+- Added functionality to send and receive MQTT settings via WebSocket, including broker, port, username, and discovery options.
+- Updated the GUI to reflect changes in MQTT settings, ensuring the interface is synchronized with the application state.
+- Improved the handling of MQTT settings changes to mark the application state as dirty, prompting necessary updates.
+- Documented changes in RELEASE_NOTES.md to reflect new features and improvements in MQTT integration. (`4b1fe88`)
+- [2026-02-06] Update RELEASE_NOTES.md to document new LVGL GUI features and cross-task state sync improvements (`1bbaeab`)
+- [2026-02-05] Update RELEASE_NOTES.md to include new LVGL GUI features and cross-task state sync improvements
+
+- Added details about the implementation of a complete 7-phase GUI system for ST7735S 128x160 TFT with rotary encoder on ESP32-S3 using LVGL v9.4 + TFT_eSPI.
+- Documented features such as desktop carousel, control/settings/WiFi/MQTT/debug screens, boot animations, dark mode, and screen sleep/wake.
+- Highlighted fixes for cross-task WebSocket/MQTT sync issues, ensuring thread safety in GUI broadcasts. (`2b1fa33`)
 - [2026-02-05] Update RELEASE_NOTES.md to document the removal of obsolete skills and the addition of WebSearch functionality
 
 - Deleted SKILL.md files for brainstorming, code reviewer, frontend design, and related references to streamline the codebase.

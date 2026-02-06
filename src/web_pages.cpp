@@ -20,14 +20,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             --bg-input: #E0E0E0;
             --accent: #FF9800;
             --accent-light: #FFB74D;
-            --accent-dark: #F57C00;
+            --accent-dark: #E68900;
             --text-primary: #212121;
             --text-secondary: #757575;
             --text-disabled: #9E9E9E;
             --success: #4CAF50;
-            --error: #D32F2F;
-            --warning: #FF9800;
-            --info: #1976D2;
+            --error: #F44336;
+            --warning: #FFC107;
+            --info: #2196F3;
             --border: #E0E0E0;
             --shadow: rgba(0, 0, 0, 0.1);
             --tab-height: 56px;
@@ -37,16 +37,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         /* ===== Dark Theme (Night Mode) ===== */
         body.night-mode {
-            --bg-primary: #121212;
-            --bg-surface: #1E1E1E;
-            --bg-card: #252525;
-            --bg-input: #2a2a2a;
+            --bg-primary: #1A1A2E;
+            --bg-surface: #16213E;
+            --bg-card: #1E2A4A;
+            --bg-input: #243356;
             --text-primary: #FFFFFF;
-            --text-secondary: #B3B3B3;
+            --text-secondary: #B0B0B0;
             --text-disabled: #666666;
-            --error: #CF6679;
+            --error: #F44336;
             --info: #2196F3;
-            --border: #333333;
+            --border: #2A2A4A;
             --shadow: rgba(0, 0, 0, 0.4);
         }
 
@@ -171,7 +171,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         /* ===== Skeleton Loading ===== */
         .skeleton {
-            background: linear-gradient(90deg, var(--bg-card) 25%, #3a3a3a 50%, var(--bg-card) 75%);
+            background: linear-gradient(90deg, var(--bg-card) 25%, var(--border) 50%, var(--bg-card) 75%);
             background-size: 200% 100%;
             animation: shimmer 1.5s infinite;
             border-radius: 4px;
@@ -543,6 +543,46 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 grid-template-columns: 1fr;
             }
         }
+
+        /* ===== Pin Configuration Table ===== */
+        .pin-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .pin-table th {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 2px solid var(--accent);
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pin-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pin-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .pin-cat {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+
+        .pin-cat-core { background: var(--accent); color: #fff; }
+        .pin-cat-input { background: var(--success); color: #fff; }
+        .pin-cat-display { background: var(--info); color: #fff; }
 
         /* ===== Connection Status ===== */
         .connection-bar {
@@ -1028,6 +1068,42 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             text-align: center;
             margin-top: 4px;
         }
+
+        /* ===== Manual Rendered Content ===== */
+        .search-input {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            padding: 6px 12px;
+            font-size: 13px;
+            outline: none;
+            width: 200px;
+        }
+        .search-input:focus {
+            border-color: var(--accent);
+        }
+        .manual-rendered {
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+        .manual-rendered h1 { font-size: 20px; margin: 16px 0 8px; color: var(--accent); }
+        .manual-rendered h2 { font-size: 17px; margin: 14px 0 6px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+        .manual-rendered h3 { font-size: 15px; margin: 12px 0 4px; color: var(--text-primary); }
+        .manual-rendered p { margin: 6px 0; }
+        .manual-rendered ul, .manual-rendered ol { padding-left: 20px; margin: 6px 0; }
+        .manual-rendered li { margin: 3px 0; }
+        .manual-rendered code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+        .manual-rendered pre { background: var(--bg-secondary); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
+        .manual-rendered pre code { padding: 0; background: none; }
+        .manual-rendered a { color: var(--accent); }
+        .search-highlight { background: rgba(255, 152, 0, 0.3); border-radius: 2px; }
+        .manual-loading { color: var(--text-secondary); font-size: 13px; padding: 16px; text-align: center; }
+        .manual-search-status { color: var(--text-secondary); font-size: 12px; padding: 4px 12px; }
 
         /* ===== ADAPTIVE DESIGN ===== */
         
@@ -1778,6 +1854,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
                 <span>Settings</span>
             </button>
+            <button class="sidebar-item" data-tab="support" onclick="switchTab('support')">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                <span>Support</span>
+            </button>
             <button class="sidebar-item" data-tab="debug" onclick="switchTab('debug')">
                 <svg viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
                 <span>Debug</span>
@@ -1828,6 +1908,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         </button>
         <button class="tab" data-tab="settings" onclick="switchTab('settings')">
             <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+        <button class="tab" data-tab="support" onclick="switchTab('support')">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
         </button>
         <button class="tab" data-tab="debug" onclick="switchTab('debug')">
             <svg viewBox="0 0 24 24"><path d="M20 19V7H4v12h16m0-16c1.11 0 2 .89 2 2v14c0 1.11-.89 2-2 2H4c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h16zM7 9h10v2H7V9zm0 4h7v2H7v-2z"/></svg>
@@ -2256,6 +2339,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="5">Heartbeat</option>
                     </select>
                 </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Buzzer</div>
+                        <div class="toggle-sublabel">Audio feedback sounds</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="buzzerToggle" onchange="toggleBuzzer()" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Buzzer Volume</div>
+                        <div class="toggle-sublabel">Feedback sound level</div>
+                    </div>
+                    <select id="buzzerVolumeSelect" onchange="setBuzzerVolume()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="0">Low</option>
+                        <option value="1" selected>Medium</option>
+                        <option value="2">High</option>
+                    </select>
+                </div>
             </div>
 
             <!-- Security -->
@@ -2352,19 +2456,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <button class="btn btn-danger" onclick="startFactoryReset()">Factory Reset</button>
             </div>
 
-            <!-- User Manual -->
+        </section>
+
+        <!-- ===== SUPPORT TAB ===== -->
+        <section id="support" class="panel">
+            <!-- Manual Access -->
             <div class="card">
-                <div class="collapsible-header" onclick="toggleManualSection()">
-                    <span class="card-title" style="margin-bottom: 0;">User Manual</span>
-                    <svg viewBox="0 0 24 24" id="manualChevron"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                <div class="card-title">Manual Access</div>
+                <div class="qr-container">
+                    <div class="manual-description">Scan the QR code or click the link below to access the full user manual:</div>
+                    <div class="qr-code" id="manualQrCode"></div>
+                    <a href="#" id="manualLink" class="manual-link" target="_blank" rel="noopener noreferrer">Loading...</a>
+                    <div class="manual-description">The manual includes setup instructions, troubleshooting tips, and feature documentation.</div>
                 </div>
-                <div class="collapsible-content" id="manualContent">
-                    <div class="qr-container">
-                        <div class="manual-description">Scan the QR code or click the link below to access the full user manual:</div>
-                        <div class="qr-code" id="manualQrCode"></div>
-                        <a href="#" id="manualLink" class="manual-link" target="_blank" rel="noopener noreferrer">Loading...</a>
-                        <div class="manual-description">The manual includes setup instructions, troubleshooting tips, and feature documentation.</div>
-                    </div>
+            </div>
+
+            <!-- Documentation -->
+            <div class="card">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <div class="card-title" style="margin-bottom: 0;">Documentation</div>
+                    <input type="text" class="search-input" id="manualSearchInput" placeholder="Search..." oninput="searchManual(this.value)">
+                </div>
+                <div class="manual-search-status" id="manualSearchStatus"></div>
+                <div class="manual-rendered" id="manualRendered">
+                    <div class="manual-loading">Loading manual...</div>
                 </div>
             </div>
         </section>
@@ -2552,6 +2667,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <!-- Pin Configuration -->
+            <div class="card">
+                <div class="card-title">Pin Configuration</div>
+                <table class="pin-table">
+                    <thead>
+                        <tr><th>GPIO</th><th>Function</th><th>Category</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>1</td><td>Voltage Sense (ADC)</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>2</td><td>LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>4</td><td>Amplifier Relay</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>8</td><td>Buzzer (PWM)</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>15</td><td>Reset Button</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>5</td><td>Encoder A</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>6</td><td>Encoder B</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>7</td><td>Encoder SW</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>10</td><td>TFT CS</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>11</td><td>TFT MOSI</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>12</td><td>TFT SCLK</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>13</td><td>TFT DC</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>14</td><td>TFT RST</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>21</td><td>TFT Backlight</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
             <!-- Debug Console -->
             <div class="card">
                 <div class="card-title">Debug Console</div>
@@ -2679,6 +2820,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 startTimeUpdates();
             } else {
                 stopTimeUpdates();
+            }
+
+            // Load support content when switching to support tab
+            if (tabId === 'support') {
+                generateManualQRCode();
+                loadManualContent();
             }
         }
 
@@ -2924,6 +3071,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         screenTimeoutSec = data.screenTimeout;
                         document.getElementById('screenTimeoutSelect').value = screenTimeoutSec.toString();
                     }
+                } else if (data.type === 'buzzerState') {
+                    if (typeof data.enabled !== 'undefined') {
+                        document.getElementById('buzzerToggle').checked = !!data.enabled;
+                    }
+                    if (typeof data.volume !== 'undefined') {
+                        document.getElementById('buzzerVolumeSelect').value = data.volume.toString();
+                    }
+                } else if (data.type === 'mqttSettings') {
+                    document.getElementById('mqttEnabled').checked = data.enabled || false;
+                    document.getElementById('mqttBroker').value = data.broker || '';
+                    document.getElementById('mqttPort').value = data.port || 1883;
+                    document.getElementById('mqttUsername').value = data.username || '';
+                    document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
+                    document.getElementById('mqttHADiscovery').checked = data.haDiscovery || false;
+                    updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
                 }
             };
 
@@ -3114,6 +3276,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 } else if (typeof data.bootAnimStyle !== 'undefined') {
                     document.getElementById('bootAnimSelect').value = data.bootAnimStyle.toString();
                 }
+            }
+
+            if (typeof data.buzzerEnabled !== 'undefined') {
+                document.getElementById('buzzerToggle').checked = !!data.buzzerEnabled;
+            }
+            if (typeof data.buzzerVolume !== 'undefined') {
+                document.getElementById('buzzerVolumeSelect').value = data.buzzerVolume.toString();
             }
 
             if (typeof data.enableCertValidation !== 'undefined') {
@@ -4548,7 +4717,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function applyTheme(isNightMode) {
             if (isNightMode) {
                 document.body.classList.add('night-mode');
-                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#121212');
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1A1A2E');
             } else {
                 document.body.classList.remove('night-mode');
                 document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F5F5F5');
@@ -4592,6 +4761,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
+            });
+        }
+
+        function toggleBuzzer() {
+            var enabled = document.getElementById('buzzerToggle').checked;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setBuzzerEnabled', enabled: enabled }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ buzzerEnabled: enabled })
+            });
+        }
+
+        function setBuzzerVolume() {
+            var vol = parseInt(document.getElementById('buzzerVolumeSelect').value);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setBuzzerVolume', value: vol }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ buzzerVolume: vol })
             });
         }
 
@@ -5111,52 +5304,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             drawPsramGraph();
         }
 
-        // ===== User Manual Section =====
-        let manualCollapsed = true;
+        // ===== Support / User Manual Section =====
         let manualQrGenerated = false;
+        let manualContentLoaded = false;
+        let manualRawMarkdown = '';
         const GITHUB_REPO_OWNER = 'Schmackos';
         const GITHUB_REPO_NAME = 'ALX_Nova_Controller_2';
         const MANUAL_URL = `https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/blob/main/USER_MANUAL.md`;
-
-        function toggleManualSection() {
-            manualCollapsed = !manualCollapsed;
-            const content = document.getElementById('manualContent');
-            const chevron = document.getElementById('manualChevron');
-            
-            if (manualCollapsed) {
-                content.classList.remove('open');
-                chevron.parentElement.classList.remove('open');
-            } else {
-                content.classList.add('open');
-                chevron.parentElement.classList.add('open');
-                generateManualQRCode();
-            }
-        }
+        const MANUAL_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/main/USER_MANUAL.md`;
 
         function generateManualQRCode() {
             if (manualQrGenerated) return;
-            
+
             const qrContainer = document.getElementById('manualQrCode');
             const manualLink = document.getElementById('manualLink');
-            
-            // Set the link
+
             manualLink.href = MANUAL_URL;
             manualLink.textContent = MANUAL_URL;
-            
-            // If library already exists, render immediately
+
             if (typeof QRCode !== 'undefined') {
                 renderQR();
                 return;
             }
 
-            // Otherwise load dynamically
-            console.log('Loading QR code library dynamically...');
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
-            script.onload = () => {
-                console.log('QR library loaded');
-                renderQR();
-            };
+            script.onload = () => renderQR();
             script.onerror = () => {
                 qrContainer.innerHTML = '<div style="color: var(--text-secondary); padding: 10px; font-size: 13px;">QR code library unavailable (offline)</div>';
             };
@@ -5176,6 +5349,86 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 } catch (e) {
                     console.error('QR Generator Error:', e);
                 }
+            }
+        }
+
+        function loadManualContent() {
+            if (manualContentLoaded) return;
+            manualContentLoaded = true;
+
+            const container = document.getElementById('manualRendered');
+            container.innerHTML = '<div class="manual-loading">Loading manual...</div>';
+
+            fetch(MANUAL_RAW_URL)
+                .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+                .then(md => {
+                    manualRawMarkdown = md;
+                    loadMarkedAndRender(md);
+                })
+                .catch(() => {
+                    container.innerHTML = '<div class="manual-loading">Manual unavailable offline. Use the QR code above.</div>';
+                    manualContentLoaded = false;
+                });
+        }
+
+        function loadMarkedAndRender(md) {
+            const container = document.getElementById('manualRendered');
+
+            if (typeof marked !== 'undefined') {
+                container.innerHTML = marked.parse(md);
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+            script.onload = () => {
+                container.innerHTML = marked.parse(md);
+            };
+            script.onerror = () => {
+                container.innerHTML = '<pre style="white-space: pre-wrap;">' + md.replace(/</g, '&lt;') + '</pre>';
+            };
+            document.head.appendChild(script);
+        }
+
+        function searchManual(query) {
+            const container = document.getElementById('manualRendered');
+            const status = document.getElementById('manualSearchStatus');
+
+            if (!manualRawMarkdown || typeof marked === 'undefined') {
+                status.textContent = '';
+                return;
+            }
+
+            container.innerHTML = marked.parse(manualRawMarkdown);
+
+            if (!query || query.length < 2) {
+                status.textContent = '';
+                return;
+            }
+
+            let count = 0;
+            const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+
+            function highlightNode(node) {
+                if (node.nodeType === 3) {
+                    const text = node.textContent;
+                    if (regex.test(text)) {
+                        regex.lastIndex = 0;
+                        const span = document.createElement('span');
+                        span.innerHTML = text.replace(regex, m => { count++; return '<span class="search-highlight">' + m + '</span>'; });
+                        node.parentNode.replaceChild(span, node);
+                    }
+                } else if (node.nodeType === 1 && node.childNodes.length && !/(script|style)/i.test(node.tagName)) {
+                    Array.from(node.childNodes).forEach(highlightNode);
+                }
+            }
+
+            highlightNode(container);
+            status.textContent = count > 0 ? count + ' match' + (count !== 1 ? 'es' : '') + ' found' : 'No matches';
+
+            if (count > 0) {
+                const first = container.querySelector('.search-highlight');
+                if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
 
@@ -5922,22 +6175,22 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#121212">
+    <meta name="theme-color" content="#1A1A2E">
     <title>ALX Audio - WiFi Setup</title>
     <style>
         :root {
-            --bg-primary: #121212;
-            --bg-surface: #1E1E1E;
-            --bg-card: #252525;
-            --bg-input: #2a2a2a;
+            --bg-primary: #1A1A2E;
+            --bg-surface: #16213E;
+            --bg-card: #1E2A4A;
+            --bg-input: #243356;
             --accent: #FF9800;
-            --accent-dark: #F57C00;
+            --accent-dark: #E68900;
             --text-primary: #FFFFFF;
-            --text-secondary: #B3B3B3;
+            --text-secondary: #B0B0B0;
             --text-disabled: #666666;
             --success: #4CAF50;
-            --error: #CF6679;
-            --border: #333333;
+            --error: #F44336;
+            --border: #2A2A4A;
             --safe-top: env(safe-area-inset-top, 0px);
             --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
