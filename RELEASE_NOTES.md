@@ -3,6 +3,15 @@
 ## Version 1.5.3
 
 ## New Features
+- [2026-02-06] feat: Add dim timeout, enhanced debug screen, and GUI improvements
+
+- Add display dim timeout with configurable delay (AppState, settings, MQTT, Web, GUI)
+- Enhance debug screen with detailed memory, CPU, storage, network, and system info
+- Add GUI navigation guard (gui_nav_is_on_desktop) for context-aware behavior
+- Expand pinout tests and add dim timeout test suite
+- Misc GUI fixes: keyboard, menu, value editor, wifi screen refinements
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`4e6e570`)
 - [2026-02-06] feat: Add PCM1808 24-bit I2S audio ADC integration (Phases 1-4)
 
 Replace analogRead() voltage detection with PCM1808 stereo I2S ADC for
