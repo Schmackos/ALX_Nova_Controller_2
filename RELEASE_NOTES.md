@@ -130,6 +130,7 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-06] Update RELEASE_NOTES.md to document the addition of buzzer functionality, including state management, volume control, and real-time updates via MQTT and WebSocket. (`22f1aad`)
 - [2026-02-06] Update RELEASE_NOTES.md to document the addition of buzzer functionality, including state management, volume control, and real-time updates via MQTT and WebSocket. (`8464371`)
 - [2026-02-06] Add buzzer functionality and configuration options
 
