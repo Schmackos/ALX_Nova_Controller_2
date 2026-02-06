@@ -1033,6 +1033,7 @@ void publishHADiscovery() {
     doc["unit_of_measurement"] = "V";
     doc["device_class"] = "voltage";
     doc["state_class"] = "measurement";
+    doc["suggested_display_precision"] = 2;
     doc["icon"] = "mdi:flash";
     addHADeviceInfo(doc);
 
@@ -1661,10 +1662,10 @@ void handleMqttUpdate() {
     }
   }
 
-  // Update password (empty string clears it)
+  // Update password (empty string keeps existing, like WiFi pattern)
   if (!doc["password"].isNull()) {
     String newPassword = doc["password"].as<String>();
-    if (mqttPassword != newPassword) {
+    if (newPassword.length() > 0 && mqttPassword != newPassword) {
       mqttPassword = newPassword;
       settingsChanged = true;
       needReconnect = true;

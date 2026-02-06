@@ -2,6 +2,11 @@
 
 ## Version 1.5.2
 
+## Documentation
+- [2026-02-06] docs: Update release notes
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`e53e850`)
+
 ## New Features
 - [2026-02-06] feat: Add backlight brightness control across GUI, Web, and MQTT
 
@@ -24,6 +29,21 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`20efaac`)
 - None
 
 ## Bug Fixes
+- [2026-02-06] fix: Replace brightness slider with dropdown and add MQTT voltage precision
+
+- Replace unstyled range slider with styled select dropdown (10/25/50/75/100%)
+  matching the Screen Timeout control in the Web UI Appearance card
+- Add suggested_display_precision: 2 to MQTT voltage sensor HA discovery
+  so Home Assistant displays voltage with 2 decimal places
+- Regenerate gzipped web assets
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`5a17d59`)
+- [2026-02-06] fix: Regenerate gzipped web assets with brightness slider
+
+The device serves from web_pages_gz.cpp (gzip-compressed), which was
+stale after the brightness feature was added to web_pages.cpp.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`443ae5a`)
 - [2026-02-06] fix: Improve buzzer reliability and add shutdown melody
 
 - Add BUZZ_SHUTDOWN pattern (reversed startup chime) played before

@@ -2314,9 +2314,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="toggle-row">
                     <div>
                         <div class="toggle-label">Brightness</div>
-                        <div class="toggle-sublabel">Display brightness: <span id="brightnessLabel">100%</span></div>
+                        <div class="toggle-sublabel">Display brightness level</div>
                     </div>
-                    <input type="range" id="brightnessSlider" min="10" max="100" step="25" value="100" onchange="setBrightness()" style="width:100px;accent-color:var(--accent);">
+                    <select id="brightnessSelect" onchange="setBrightness()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="10">10%</option>
+                        <option value="25">25%</option>
+                        <option value="50">50%</option>
+                        <option value="75">75%</option>
+                        <option value="100" selected>100%</option>
+                    </select>
                 </div>
                 <div class="toggle-row">
                     <div>
@@ -2752,7 +2758,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="form-group">
                     <label class="form-label">AP Password</label>
                     <div class="password-wrapper">
-                        <input type="password" class="form-input" id="apPassword" placeholder="Min 8 characters">
+                        <input type="password" class="form-input" id="apPassword" placeholder="Min 8 characters (leave empty to keep current)">
                         <button type="button" class="password-toggle" onclick="togglePasswordVisibility('apPassword', this)">👁</button>
                     </div>
                 </div>
@@ -3082,8 +3088,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     if (typeof data.backlightBrightness !== 'undefined') {
                         backlightBrightness = data.backlightBrightness;
                         var pct = Math.round(backlightBrightness * 100 / 255);
-                        document.getElementById('brightnessSlider').value = pct;
-                        document.getElementById('brightnessLabel').textContent = pct + '%';
+                        var options = [10, 25, 50, 75, 100];
+                        var closest = options.reduce(function(a, b) { return Math.abs(b - pct) < Math.abs(a - pct) ? b : a; });
+                        document.getElementById('brightnessSelect').value = closest;
                     }
                 } else if (data.type === 'buzzerState') {
                     if (typeof data.enabled !== 'undefined') {
@@ -3287,8 +3294,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (typeof data.backlightBrightness !== 'undefined') {
                 backlightBrightness = data.backlightBrightness;
                 var pct = Math.round(backlightBrightness * 100 / 255);
-                document.getElementById('brightnessSlider').value = pct;
-                document.getElementById('brightnessLabel').textContent = pct + '%';
+                var options = [10, 25, 50, 75, 100];
+                var closest = options.reduce(function(a, b) { return Math.abs(b - pct) < Math.abs(a - pct) ? b : a; });
+                document.getElementById('brightnessSelect').value = closest;
             }
 
             if (typeof data.bootAnimEnabled !== 'undefined') {
@@ -4510,6 +4518,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('mqttBroker').value = data.broker || '';
                 document.getElementById('mqttPort').value = data.port || 1883;
                 document.getElementById('mqttUsername').value = data.username || '';
+                document.getElementById('mqttPassword').value = '';
+                document.getElementById('mqttPassword').placeholder = data.hasPassword
+                    ? 'Enter password (leave empty to keep current)'
+                    : 'Password';
                 document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
                 document.getElementById('mqttBaseTopic').placeholder = data.defaultBaseTopic || 'ALX/device-serial';
                 document.getElementById('mqttDefaultTopic').textContent = data.defaultBaseTopic || 'ALX/{serial}';
@@ -4758,8 +4770,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function setBrightness() {
-            var pct = parseInt(document.getElementById('brightnessSlider').value);
-            document.getElementById('brightnessLabel').textContent = pct + '%';
+            var pct = parseInt(document.getElementById('brightnessSelect').value);
             var pwm = Math.round(pct * 255 / 100);
             backlightBrightness = pwm;
             if (ws && ws.readyState === WebSocket.OPEN) {
