@@ -1,8 +1,32 @@
 # Release Notes
 
+## Version 1.5.3
+
+## Technical Details
+- [2026-02-06] chore: Bump version to 1.5.3
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`a5e5829`)
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.5.2
 
 ## Documentation
+- [2026-02-06] docs: Update release notes
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`2a4250f`)
 - [2026-02-06] docs: Update release notes
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`e53e850`)
