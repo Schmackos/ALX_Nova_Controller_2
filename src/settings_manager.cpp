@@ -43,6 +43,7 @@ bool loadSettings() {
   String line11 = file.readStringUntil('\n');
   String line12 = file.readStringUntil('\n');
   String line13 = file.readStringUntil('\n');
+  String line14 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -148,6 +149,16 @@ bool loadSettings() {
     }
   }
 
+  // Load dim timeout (if available, otherwise default to 0 = disabled)
+  if (line14.length() > 0) {
+    line14.trim();
+    unsigned long dimVal = line14.toInt();
+    if (dimVal == 0 || dimVal == 5000 || dimVal == 10000 ||
+        dimVal == 30000 || dimVal == 60000) {
+      appState.dimTimeout = dimVal;
+    }
+  }
+
   return true;
 }
 
@@ -176,6 +187,7 @@ void saveSettings() {
   file.println(appState.buzzerEnabled ? "1" : "0");
   file.println(appState.buzzerVolume);
   file.println(appState.backlightBrightness);
+  file.println(appState.dimTimeout);
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -268,6 +280,7 @@ void handleSettingsGet() {
   doc["buzzerEnabled"] = appState.buzzerEnabled;
   doc["buzzerVolume"] = appState.buzzerVolume;
   doc["backlightBrightness"] = appState.backlightBrightness;
+  doc["dimTimeout"] = appState.dimTimeout / 1000;
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -419,6 +432,18 @@ void handleSettingsUpdate() {
     }
   }
 
+  if (doc["dimTimeout"].is<int>()) {
+    int newDimSec = doc["dimTimeout"].as<int>();
+    unsigned long newDimMs = (unsigned long)newDimSec * 1000UL;
+    if (newDimMs == 0 || newDimMs == 5000 || newDimMs == 10000 ||
+        newDimMs == 30000 || newDimMs == 60000) {
+      if (newDimMs != appState.dimTimeout) {
+        appState.setDimTimeout(newDimMs);
+        settingsChanged = true;
+      }
+    }
+  }
+
 #ifdef GUI_ENABLED
   if (doc["bootAnimEnabled"].is<bool>()) {
     bool newBootAnim = doc["bootAnimEnabled"].as<bool>();
@@ -461,6 +486,7 @@ void handleSettingsUpdate() {
   resp["buzzerEnabled"] = appState.buzzerEnabled;
   resp["buzzerVolume"] = appState.buzzerVolume;
   resp["backlightBrightness"] = appState.backlightBrightness;
+  resp["dimTimeout"] = appState.dimTimeout / 1000;
 #ifdef GUI_ENABLED
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
@@ -506,6 +532,7 @@ void handleSettingsExport() {
   doc["settings"]["buzzerEnabled"] = appState.buzzerEnabled;
   doc["settings"]["buzzerVolume"] = appState.buzzerVolume;
   doc["settings"]["backlightBrightness"] = appState.backlightBrightness;
+  doc["settings"]["dimTimeout"] = appState.dimTimeout / 1000;
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
@@ -692,6 +719,15 @@ void handleSettingsImport() {
       if (bright >= 1 && bright <= 255) {
         appState.backlightBrightness = (uint8_t)bright;
         LOG_D("[Settings] Backlight Brightness: %d", bright);
+      }
+    }
+    if (doc["settings"]["dimTimeout"].is<int>()) {
+      int dimSec = doc["settings"]["dimTimeout"].as<int>();
+      unsigned long dimMs = (unsigned long)dimSec * 1000UL;
+      if (dimMs == 0 || dimMs == 5000 || dimMs == 10000 ||
+          dimMs == 30000 || dimMs == 60000) {
+        appState.dimTimeout = dimMs;
+        LOG_D("[Settings] Dim Timeout: %d seconds", dimSec);
       }
     }
 #ifdef GUI_ENABLED
@@ -889,6 +925,7 @@ void handleDiagnostics() {
   settings["screenTimeout"] = appState.screenTimeout;
   settings["backlightOn"] = appState.backlightOn;
   settings["backlightBrightness"] = appState.backlightBrightness;
+  settings["dimTimeout"] = appState.dimTimeout;
   settings["buzzerEnabled"] = appState.buzzerEnabled;
   settings["buzzerVolume"] = appState.buzzerVolume;
 

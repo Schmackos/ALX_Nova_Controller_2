@@ -178,6 +178,16 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_I("[WebSocket] Brightness set to %d", newBright);
             sendDisplayState();
           }
+        } else if (msgType == "setDimTimeout") {
+          int dimSec = doc["value"].as<int>();
+          unsigned long dimMs = (unsigned long)dimSec * 1000UL;
+          if (dimMs == 0 || dimMs == 5000 || dimMs == 10000 ||
+              dimMs == 30000 || dimMs == 60000) {
+            AppState::getInstance().setDimTimeout(dimMs);
+            saveSettings();
+            LOG_I("[WebSocket] Dim timeout set to %d seconds", dimSec);
+            sendDisplayState();
+          }
         } else if (msgType == "setBuzzerEnabled") {
           bool newState = doc["enabled"].as<bool>();
           AppState::getInstance().setBuzzerEnabled(newState);
@@ -231,6 +241,7 @@ void sendDisplayState() {
   doc["backlightOn"] = AppState::getInstance().backlightOn;
   doc["screenTimeout"] = AppState::getInstance().screenTimeout / 1000; // Send as seconds
   doc["backlightBrightness"] = AppState::getInstance().backlightBrightness;
+  doc["dimTimeout"] = AppState::getInstance().dimTimeout / 1000;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());

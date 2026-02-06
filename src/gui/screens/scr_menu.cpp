@@ -15,7 +15,7 @@ static int current_item_count = 0;
 /* Back button callback */
 static void back_cb(lv_event_t *e) {
     (void)e;
-    gui_nav_pop();
+    gui_nav_pop_deferred();
 }
 
 /* Scroll focused row into view and report focus index */

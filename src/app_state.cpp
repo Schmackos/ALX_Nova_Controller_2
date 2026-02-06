@@ -76,6 +76,13 @@ void AppState::setBacklightBrightness(uint8_t brightness) {
   }
 }
 
+void AppState::setDimTimeout(unsigned long timeout) {
+  if (dimTimeout != timeout) {
+    dimTimeout = timeout;
+    _displayDirty = true;
+  }
+}
+
 // ===== Buzzer State Management =====
 void AppState::setBuzzerEnabled(bool enabled) {
   if (buzzerEnabled != enabled) {

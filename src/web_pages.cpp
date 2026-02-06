@@ -2509,6 +2509,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 <div class="toggle-row">
                     <div>
+                        <div class="toggle-label">Dim Timeout</div>
+                        <div class="toggle-sublabel">Dim before sleep</div>
+                    </div>
+                    <select id="dimTimeoutSelect" onchange="setDimTimeout()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="0" selected>Off</option>
+                        <option value="5">5 sec</option>
+                        <option value="10">10 sec</option>
+                        <option value="30">30 sec</option>
+                        <option value="60">1 min</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <div>
                         <div class="toggle-label">Boot Animation</div>
                         <div class="toggle-sublabel">Animation on startup</div>
                     </div>
@@ -2954,6 +2967,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let backlightOn = true;
         let backlightBrightness = 255;
         let screenTimeoutSec = 60;
+        let dimTimeoutSec = 0;
         let enableCertValidation = true;
         let currentFirmwareVersion = '';
         let currentLatestVersion = '';
@@ -3290,6 +3304,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         var closest = options.reduce(function(a, b) { return Math.abs(b - pct) < Math.abs(a - pct) ? b : a; });
                         document.getElementById('brightnessSelect').value = closest;
                     }
+                    if (typeof data.dimTimeout !== 'undefined') {
+                        dimTimeoutSec = data.dimTimeout;
+                        document.getElementById('dimTimeoutSelect').value = dimTimeoutSec.toString();
+                    }
                 } else if (data.type === 'buzzerState') {
                     if (typeof data.enabled !== 'undefined') {
                         document.getElementById('buzzerToggle').checked = !!data.enabled;
@@ -3503,6 +3521,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 var options = [10, 25, 50, 75, 100];
                 var closest = options.reduce(function(a, b) { return Math.abs(b - pct) < Math.abs(a - pct) ? b : a; });
                 document.getElementById('brightnessSelect').value = closest;
+            }
+
+            if (typeof data.dimTimeout !== 'undefined') {
+                dimTimeoutSec = data.dimTimeout;
+                document.getElementById('dimTimeoutSelect').value = dimTimeoutSec.toString();
             }
 
             if (typeof data.bootAnimEnabled !== 'undefined') {
@@ -5165,6 +5188,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ screenTimeout: screenTimeoutSec })
+            });
+        }
+
+        function setDimTimeout() {
+            dimTimeoutSec = parseInt(document.getElementById('dimTimeoutSelect').value);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setDimTimeout', value: dimTimeoutSec }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dimTimeout: dimTimeoutSec })
             });
         }
 

@@ -121,7 +121,7 @@ static void on_click(lv_event_t *e) {
         }
     }
     cleanup();
-    gui_nav_pop();
+    gui_nav_pop_deferred();
 }
 
 static lv_obj_t *create_value_edit_screen(void) {
@@ -209,7 +209,7 @@ void scr_value_edit_open(const ValueEditConfig *config) {
 
     /* Register temporary screen creator and push */
     gui_nav_register(SCR_VALUE_EDIT, create_value_edit_screen);
-    gui_nav_push(SCR_VALUE_EDIT);
+    gui_nav_push_deferred(SCR_VALUE_EDIT);
 }
 
 #endif /* GUI_ENABLED */

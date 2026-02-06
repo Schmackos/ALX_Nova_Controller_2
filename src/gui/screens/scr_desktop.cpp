@@ -105,7 +105,7 @@ static void card_click_cb(lv_event_t *e) {
     int idx = (int)(intptr_t)lv_event_get_user_data(e);
     LOG_D("[GUI] Desktop card %d clicked", idx);
     if (idx >= 0 && idx < CARD_COUNT) {
-        gui_nav_push(cards[idx].target_screen);
+        gui_nav_push_deferred(cards[idx].target_screen);
     }
 }
 

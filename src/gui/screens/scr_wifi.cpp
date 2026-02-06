@@ -48,7 +48,7 @@ static lv_obj_t *create_wifi_info_screen(void) {
 
 static void show_wifi_info(void) {
     gui_nav_register(SCR_INFO, create_wifi_info_screen);
-    gui_nav_push(SCR_INFO);
+    gui_nav_push_deferred(SCR_INFO);
 }
 
 /* ===== WiFi Scan + Connect ===== */
@@ -120,7 +120,7 @@ static lv_obj_t *create_wifi_scan_screen(void) {
 
 static void show_wifi_scan(void) {
     gui_nav_register(SCR_WIFI_SCAN, create_wifi_scan_screen);
-    gui_nav_push(SCR_WIFI_SCAN);
+    gui_nav_push_deferred(SCR_WIFI_SCAN);
 }
 
 /* ===== Access Point Sub-menu ===== */
@@ -224,12 +224,12 @@ lv_obj_t *scr_wifi_net_create(void) {
 
 static void show_net_config(void) {
     gui_nav_register(SCR_WIFI_NET_MENU, scr_wifi_net_create);
-    gui_nav_push(SCR_WIFI_NET_MENU);
+    gui_nav_push_deferred(SCR_WIFI_NET_MENU);
 }
 
 static void show_ap_config(void) {
     gui_nav_register(SCR_WIFI_AP_MENU, scr_wifi_ap_create);
-    gui_nav_push(SCR_WIFI_AP_MENU);
+    gui_nav_push_deferred(SCR_WIFI_AP_MENU);
 }
 
 lv_obj_t *scr_wifi_create(void) {

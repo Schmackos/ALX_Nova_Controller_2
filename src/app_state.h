@@ -168,6 +168,7 @@ public:
   bool prevMqttBuzzerEnabled = true;
   int prevMqttBuzzerVolume = 1;
   uint8_t prevMqttBrightness = 255;
+  unsigned long prevMqttDimTimeout = 0;
 
   // ===== Smart Sensing Broadcast State Tracking =====
   SensingMode prevBroadcastMode = ALWAYS_ON;
@@ -179,10 +180,12 @@ public:
   unsigned long screenTimeout = 60000; // Screen timeout in ms (default 60s)
   bool backlightOn = true;             // Runtime backlight state (not persisted)
   uint8_t backlightBrightness = 255;   // Backlight brightness (1-255, persisted)
+  unsigned long dimTimeout = 0;         // Dim timeout in ms (0=disabled)
 
   void setBacklightOn(bool state);
   void setScreenTimeout(unsigned long timeout);
   void setBacklightBrightness(uint8_t brightness);
+  void setDimTimeout(unsigned long timeout);
   bool isDisplayDirty() const { return _displayDirty; }
   void clearDisplayDirty() { _displayDirty = false; }
 
@@ -345,6 +348,7 @@ private:
 #define prevMqttBuzzerEnabled appState.prevMqttBuzzerEnabled
 #define prevMqttBuzzerVolume appState.prevMqttBuzzerVolume
 #define prevMqttBrightness appState.prevMqttBrightness
+#define prevMqttDimTimeout appState.prevMqttDimTimeout
 
 // Smart Sensing Broadcast State Tracking
 #define prevBroadcastMode appState.prevBroadcastMode

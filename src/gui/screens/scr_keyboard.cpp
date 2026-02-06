@@ -21,10 +21,10 @@ static void kb_event_cb(lv_event_t *e) {
         if (active_kb_cfg.on_done && text) {
             active_kb_cfg.on_done(text);
         }
-        gui_nav_pop();
+        gui_nav_pop_deferred();
     } else if (code == LV_EVENT_CANCEL) {
         /* User pressed close */
-        gui_nav_pop();
+        gui_nav_pop_deferred();
     }
 }
 
@@ -77,7 +77,7 @@ static lv_obj_t *create_keyboard_screen(void) {
 void scr_keyboard_open(const KeyboardConfig *config) {
     active_kb_cfg = *config;
     gui_nav_register(SCR_KEYBOARD, create_keyboard_screen);
-    gui_nav_push(SCR_KEYBOARD);
+    gui_nav_push_deferred(SCR_KEYBOARD);
 }
 
 #endif /* GUI_ENABLED */
