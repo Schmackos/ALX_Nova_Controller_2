@@ -130,6 +130,11 @@ Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com> (`ee7743a`)
 
 
 ## Technical Details
+- [2026-02-05] Update RELEASE_NOTES.md to include new LVGL GUI features and cross-task state sync improvements
+
+- Added details about the implementation of a complete 7-phase GUI system for ST7735S 128x160 TFT with rotary encoder on ESP32-S3 using LVGL v9.4 + TFT_eSPI.
+- Documented features such as desktop carousel, control/settings/WiFi/MQTT/debug screens, boot animations, dark mode, and screen sleep/wake.
+- Highlighted fixes for cross-task WebSocket/MQTT sync issues, ensuring thread safety in GUI broadcasts. (`2b1fa33`)
 - [2026-02-05] Update RELEASE_NOTES.md to document the removal of obsolete skills and the addition of WebSearch functionality
 
 - Deleted SKILL.md files for brainstorming, code reviewer, frontend design, and related references to streamline the codebase.
