@@ -3,6 +3,9 @@
 ## Version 1.4.2
 
 ## Documentation
+- [2026-02-06] docs: Update release notes hook additions
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`4c922c2`)
 - [2026-02-06] docs: Clean up RELEASE_NOTES.md formatting
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`62fd92f`)
