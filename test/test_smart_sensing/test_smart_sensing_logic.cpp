@@ -14,33 +14,35 @@ namespace TestState {
     unsigned long timerDuration = 5; // 5 minutes
     unsigned long timerRemaining = 0;
     unsigned long lastTimerUpdate = 0;
-    float voltageThreshold = 0.5;
+    float audioThreshold_dBFS = -40.0f;
     bool amplifierState = false;
-    float lastVoltageReading = 0.0;
-    bool previousVoltageState = false;
-    unsigned long lastVoltageDetection = 0;
+    float audioLevel_dBFS = -96.0f;
+    bool previousSignalState = false;
+    unsigned long lastSignalDetection = 0;
 
     void reset() {
         currentMode = ALWAYS_ON;
         timerDuration = 5;
         timerRemaining = 0;
         lastTimerUpdate = 0;
-        voltageThreshold = 0.5;
+        audioThreshold_dBFS = -40.0f;
         amplifierState = false;
-        lastVoltageReading = 0.0;
-        previousVoltageState = false;
-        lastVoltageDetection = 0;
+        audioLevel_dBFS = -96.0f;
+        previousSignalState = false;
+        lastSignalDetection = 0;
 #ifdef NATIVE_TEST
         ArduinoMock::reset();
 #endif
     }
 }
 
-// Mock voltage detection function
-bool detectVoltage() {
-    int rawValue = ArduinoMock::mockAnalogValue;
-    TestState::lastVoltageReading = (rawValue / 4095.0) * 3.3;
-    return (TestState::lastVoltageReading >= TestState::voltageThreshold);
+// Mock audio level (simulates dBFS reading from I2S)
+static float mockAudioLevel_dBFS = -96.0f;
+
+// Mock signal detection function (replaces old detectVoltage)
+bool detectSignal() {
+    TestState::audioLevel_dBFS = mockAudioLevel_dBFS;
+    return (TestState::audioLevel_dBFS >= TestState::audioThreshold_dBFS);
 }
 
 // Mock amplifier state setter
@@ -53,35 +55,31 @@ void setAmplifierState(bool state) {
 void updateSmartSensingLogic() {
     unsigned long currentMillis = millis();
 
-    // Detect voltage on every call (no rate limiting for tests)
-    bool voltageDetected = detectVoltage();
+    bool signalDetected = detectSignal();
 
     switch (TestState::currentMode) {
         case TestState::ALWAYS_ON:
             setAmplifierState(true);
             TestState::timerRemaining = 0;
-            TestState::previousVoltageState = voltageDetected;
+            TestState::previousSignalState = signalDetected;
             break;
 
         case TestState::ALWAYS_OFF:
             setAmplifierState(false);
             TestState::timerRemaining = 0;
-            TestState::previousVoltageState = voltageDetected;
+            TestState::previousSignalState = signalDetected;
             break;
 
         case TestState::SMART_AUTO: {
-            if (voltageDetected) {
-                // Voltage is currently detected - keep timer at full value
+            if (signalDetected) {
                 TestState::timerRemaining = TestState::timerDuration * 60;
-                TestState::lastVoltageDetection = currentMillis;
+                TestState::lastSignalDetection = currentMillis;
                 TestState::lastTimerUpdate = currentMillis;
 
-                // Ensure amplifier is ON
                 if (!TestState::amplifierState) {
                     setAmplifierState(true);
                 }
             } else {
-                // No voltage detected - countdown timer if amplifier is ON
                 if (TestState::amplifierState && TestState::timerRemaining > 0) {
                     if (currentMillis - TestState::lastTimerUpdate >= 1000) {
                         TestState::lastTimerUpdate = currentMillis;
@@ -94,7 +92,7 @@ void updateSmartSensingLogic() {
                 }
             }
 
-            TestState::previousVoltageState = voltageDetected;
+            TestState::previousSignalState = signalDetected;
             break;
         }
     }
@@ -104,6 +102,7 @@ void updateSmartSensingLogic() {
 
 void setUp(void) {
     TestState::reset();
+    mockAudioLevel_dBFS = -96.0f;
 }
 
 void tearDown(void) {
@@ -112,70 +111,64 @@ void tearDown(void) {
 
 // ===== Tier 1.1: Smart Sensing Logic Tests =====
 
-// Test 1: Timer stays at full value when voltage is detected
-void test_timer_stays_full_when_voltage_detected(void) {
+// Test 1: Timer stays at full value when signal is detected
+void test_timer_stays_full_when_signal_detected(void) {
     TestState::currentMode = TestState::SMART_AUTO;
     TestState::timerDuration = 5; // 5 minutes = 300 seconds
-    ArduinoMock::mockAnalogValue = 2000; // Above threshold (0.5V)
+    mockAudioLevel_dBFS = -20.0f; // Above threshold (-40 dBFS)
     ArduinoMock::mockMillis = 0;
 
-    // First update - should detect voltage and set timer to full
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(300, TestState::timerRemaining);
     TEST_ASSERT_TRUE(TestState::amplifierState);
 
-    // Advance time by 5 seconds (5000ms)
     ArduinoMock::mockMillis = 5000;
 
-    // Update again - timer should still be at full value
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(300, TestState::timerRemaining);
     TEST_ASSERT_TRUE(TestState::amplifierState);
 }
 
-// Test 2: Timer counts down when no voltage detected
-void test_timer_counts_down_without_voltage(void) {
+// Test 2: Timer counts down when no signal detected
+void test_timer_counts_down_without_signal(void) {
     TestState::currentMode = TestState::SMART_AUTO;
-    TestState::timerDuration = 5; // 5 minutes = 300 seconds
-    TestState::amplifierState = true; // Start with amp ON
-    TestState::timerRemaining = 10; // 10 seconds remaining
+    TestState::timerDuration = 5;
+    TestState::amplifierState = true;
+    TestState::timerRemaining = 10;
     TestState::lastTimerUpdate = 0;
-    ArduinoMock::mockAnalogValue = 0; // No voltage
+    mockAudioLevel_dBFS = -96.0f; // No signal (silence)
     ArduinoMock::mockMillis = 0;
 
-    // First update at 0ms
     updateSmartSensingLogic();
 
-    // Advance time by 1 second
     ArduinoMock::mockMillis = 1000;
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(9, TestState::timerRemaining);
 
-    // Advance another second
     ArduinoMock::mockMillis = 2000;
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(8, TestState::timerRemaining);
 }
 
-// Test 3: Timer resets when voltage reappears during countdown
-void test_timer_resets_when_voltage_reappears(void) {
+// Test 3: Timer resets when signal reappears during countdown
+void test_timer_resets_when_signal_reappears(void) {
     TestState::currentMode = TestState::SMART_AUTO;
-    TestState::timerDuration = 5; // 5 minutes = 300 seconds
+    TestState::timerDuration = 5;
     TestState::amplifierState = true;
-    TestState::timerRemaining = 10; // Counting down
+    TestState::timerRemaining = 10;
     TestState::lastTimerUpdate = 0;
     ArduinoMock::mockMillis = 0;
 
-    // No voltage - timer should count down
-    ArduinoMock::mockAnalogValue = 0;
+    // No signal - timer should count down
+    mockAudioLevel_dBFS = -96.0f;
     updateSmartSensingLogic();
 
     ArduinoMock::mockMillis = 1000;
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(9, TestState::timerRemaining);
 
-    // Voltage reappears - timer should reset to full
-    ArduinoMock::mockAnalogValue = 2000; // Above threshold
+    // Signal reappears - timer should reset to full
+    mockAudioLevel_dBFS = -20.0f;
     ArduinoMock::mockMillis = 2000;
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(300, TestState::timerRemaining);
@@ -186,19 +179,17 @@ void test_timer_resets_when_voltage_reappears(void) {
 void test_amplifier_turns_off_at_zero(void) {
     TestState::currentMode = TestState::SMART_AUTO;
     TestState::amplifierState = true;
-    TestState::timerRemaining = 2; // 2 seconds remaining
+    TestState::timerRemaining = 2;
     TestState::lastTimerUpdate = 0;
-    ArduinoMock::mockAnalogValue = 0; // No voltage
+    mockAudioLevel_dBFS = -96.0f;
     ArduinoMock::mockMillis = 0;
 
-    // First countdown
     updateSmartSensingLogic();
     ArduinoMock::mockMillis = 1000;
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(1, TestState::timerRemaining);
     TEST_ASSERT_TRUE(TestState::amplifierState);
 
-    // Second countdown - should reach zero and turn off
     ArduinoMock::mockMillis = 2000;
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(0, TestState::timerRemaining);
@@ -208,7 +199,7 @@ void test_amplifier_turns_off_at_zero(void) {
 // Test 5: ALWAYS_ON mode keeps amplifier ON
 void test_always_on_mode(void) {
     TestState::currentMode = TestState::ALWAYS_ON;
-    ArduinoMock::mockAnalogValue = 0; // No voltage
+    mockAudioLevel_dBFS = -96.0f; // No signal
 
     updateSmartSensingLogic();
     TEST_ASSERT_TRUE(TestState::amplifierState);
@@ -218,28 +209,32 @@ void test_always_on_mode(void) {
 // Test 6: ALWAYS_OFF mode keeps amplifier OFF
 void test_always_off_mode(void) {
     TestState::currentMode = TestState::ALWAYS_OFF;
-    ArduinoMock::mockAnalogValue = 2000; // Voltage present
+    mockAudioLevel_dBFS = -20.0f; // Signal present
 
     updateSmartSensingLogic();
     TEST_ASSERT_FALSE(TestState::amplifierState);
     TEST_ASSERT_EQUAL(0, TestState::timerRemaining);
 }
 
-// Test 7: Voltage threshold detection
-void test_voltage_threshold_detection(void) {
-    TestState::voltageThreshold = 0.5; // 0.5V threshold
+// Test 7: Audio threshold detection (dBFS)
+void test_audio_threshold_detection(void) {
+    TestState::audioThreshold_dBFS = -40.0f;
 
-    // Below threshold (0V)
-    ArduinoMock::mockAnalogValue = 0;
-    TEST_ASSERT_FALSE(detectVoltage());
+    // Below threshold (silence)
+    mockAudioLevel_dBFS = -96.0f;
+    TEST_ASSERT_FALSE(detectSignal());
 
-    // Above threshold (2V = ~2482 raw value)
-    ArduinoMock::mockAnalogValue = 2482;
-    TEST_ASSERT_TRUE(detectVoltage());
+    // Above threshold
+    mockAudioLevel_dBFS = -20.0f;
+    TEST_ASSERT_TRUE(detectSignal());
 
-    // Right at threshold (0.5V = ~620 raw value)
-    ArduinoMock::mockAnalogValue = 621;
-    TEST_ASSERT_TRUE(detectVoltage());
+    // At threshold (boundary)
+    mockAudioLevel_dBFS = -40.0f;
+    TEST_ASSERT_TRUE(detectSignal());
+
+    // Just below threshold
+    mockAudioLevel_dBFS = -40.1f;
+    TEST_ASSERT_FALSE(detectSignal());
 }
 
 // Test 8: Mode transitions
@@ -254,27 +249,27 @@ void test_mode_transitions(void) {
     updateSmartSensingLogic();
     TEST_ASSERT_FALSE(TestState::amplifierState);
 
-    // Switch to SMART_AUTO with voltage
+    // Switch to SMART_AUTO with signal
     TestState::currentMode = TestState::SMART_AUTO;
-    ArduinoMock::mockAnalogValue = 2000;
+    mockAudioLevel_dBFS = -20.0f;
     updateSmartSensingLogic();
     TEST_ASSERT_TRUE(TestState::amplifierState);
     TEST_ASSERT_EQUAL(300, TestState::timerRemaining);
 }
 
-// Test 9: Rapid voltage fluctuations
-void test_rapid_voltage_fluctuations(void) {
+// Test 9: Rapid signal fluctuations
+void test_rapid_signal_fluctuations(void) {
     TestState::currentMode = TestState::SMART_AUTO;
     TestState::timerDuration = 5;
     ArduinoMock::mockMillis = 0;
 
-    // Voltage ON
-    ArduinoMock::mockAnalogValue = 2000;
+    // Signal ON
+    mockAudioLevel_dBFS = -20.0f;
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(300, TestState::timerRemaining);
 
-    // Voltage OFF for 100ms (should start countdown after 1s)
-    ArduinoMock::mockAnalogValue = 0;
+    // Signal OFF for 100ms (should start countdown after 1s)
+    mockAudioLevel_dBFS = -96.0f;
     ArduinoMock::mockMillis = 100;
     updateSmartSensingLogic();
 
@@ -282,23 +277,23 @@ void test_rapid_voltage_fluctuations(void) {
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(299, TestState::timerRemaining);
 
-    // Voltage ON again - should reset
-    ArduinoMock::mockAnalogValue = 2000;
+    // Signal ON again - should reset
+    mockAudioLevel_dBFS = -20.0f;
     ArduinoMock::mockMillis = 1200;
     updateSmartSensingLogic();
     TEST_ASSERT_EQUAL(300, TestState::timerRemaining);
 }
 
-// Test 10: Edge case - timer at 0 with voltage appearing
-void test_timer_at_zero_with_voltage(void) {
+// Test 10: Edge case - timer at 0 with signal appearing
+void test_timer_at_zero_with_signal(void) {
     TestState::currentMode = TestState::SMART_AUTO;
     TestState::timerDuration = 5;
     TestState::amplifierState = false;
     TestState::timerRemaining = 0;
     ArduinoMock::mockMillis = 0;
 
-    // Voltage appears - should turn ON and set timer
-    ArduinoMock::mockAnalogValue = 2000;
+    // Signal appears - should turn ON and set timer
+    mockAudioLevel_dBFS = -20.0f;
     updateSmartSensingLogic();
     TEST_ASSERT_TRUE(TestState::amplifierState);
     TEST_ASSERT_EQUAL(300, TestState::timerRemaining);
@@ -309,16 +304,16 @@ void test_timer_at_zero_with_voltage(void) {
 int runUnityTests(void) {
     UNITY_BEGIN();
 
-    RUN_TEST(test_timer_stays_full_when_voltage_detected);
-    RUN_TEST(test_timer_counts_down_without_voltage);
-    RUN_TEST(test_timer_resets_when_voltage_reappears);
+    RUN_TEST(test_timer_stays_full_when_signal_detected);
+    RUN_TEST(test_timer_counts_down_without_signal);
+    RUN_TEST(test_timer_resets_when_signal_reappears);
     RUN_TEST(test_amplifier_turns_off_at_zero);
     RUN_TEST(test_always_on_mode);
     RUN_TEST(test_always_off_mode);
-    RUN_TEST(test_voltage_threshold_detection);
+    RUN_TEST(test_audio_threshold_detection);
     RUN_TEST(test_mode_transitions);
-    RUN_TEST(test_rapid_voltage_fluctuations);
-    RUN_TEST(test_timer_at_zero_with_voltage);
+    RUN_TEST(test_rapid_signal_fluctuations);
+    RUN_TEST(test_timer_at_zero_with_signal);
 
     return UNITY_END();
 }

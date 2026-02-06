@@ -1,8 +1,52 @@
 # Release Notes
 
+## Version 1.5.3
+
+## New Features
+- [2026-02-06] feat: Add PCM1808 24-bit I2S audio ADC integration (Phases 1-4)
+
+Replace analogRead() voltage detection with PCM1808 stereo I2S ADC for
+professional audio analysis. Native dBFS thresholds, VU metering with
+industry-standard ballistics, 256-point waveform visualization, and
+1024-point FFT with 16-band spectrum analysis.
+
+Phase 1: Core I2S driver + DMA + RMS/dBFS detection + settings migration
+Phase 2: VU metering (300ms attack/650ms decay) + peak hold (2s hold)
+Phase 3: Waveform downsampling (256-pt uint8 snapshots at 10Hz)
+Phase 4: FFT via arduinoFFT (1024-pt, 16 musically-spaced bands)
+
+Adds dedicated Audio tab in web UI with oscilloscope waveform canvas,
+spectrum analyzer, stereo VU meters, and audio settings. WebSocket
+per-client subscription protocol for bandwidth-efficient streaming.
+
+All interfaces updated: WebSocket, MQTT/HA discovery, REST API, GUI
+screens. 34 new tests (272 total), all passing.
+
+## Technical Details
+- [2026-02-06] chore: Bump version to 1.5.3
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`a5e5829`)
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.5.2
 
 ## Documentation
+- [2026-02-06] docs: Update release notes
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`2a4250f`)
 - [2026-02-06] docs: Update release notes
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`e53e850`)

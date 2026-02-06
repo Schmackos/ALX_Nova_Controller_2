@@ -1826,6 +1826,106 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .modal-actions button:not(.primary):hover {
             background: var(--border);
         }
+
+        /* ===== Audio Tab Styles ===== */
+        .audio-canvas-wrap {
+            background: #1A1A1A;
+            border-radius: 8px;
+            padding: 8px;
+            margin-top: 8px;
+        }
+
+        .audio-canvas-wrap canvas {
+            width: 100%;
+            display: block;
+            border-radius: 4px;
+        }
+
+        .audio-canvas-wrap canvas.waveform-canvas {
+            height: 140px;
+        }
+
+        .audio-canvas-wrap canvas.spectrum-canvas {
+            height: 120px;
+        }
+
+        .vu-meter-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .vu-meter-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            width: 16px;
+            text-align: right;
+        }
+
+        .vu-meter-track {
+            flex: 1;
+            height: 18px;
+            background: var(--bg-input);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .vu-meter-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(to right, #4CAF50, #FFC107, #FF9800, #F44336);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        .vu-meter-peak {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: #FFFFFF;
+            left: 0%;
+            transition: left 0.1s linear;
+        }
+
+        .vu-meter-db {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            width: 56px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .signal-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        .signal-dot.active {
+            background: #4CAF50;
+            box-shadow: 0 0 6px #4CAF50;
+        }
+
+        .dominant-freq-readout {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 6px;
+        }
+
+        .dominant-freq-readout span {
+            color: var(--accent);
+            font-weight: 600;
+        }
     </style>
 </head>
 <body class="has-status-bar">
@@ -1841,6 +1941,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <button class="sidebar-item active" data-tab="control" onclick="switchTab('control')">
                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                 <span>Control</span>
+            </button>
+            <button class="sidebar-item" data-tab="audio" onclick="switchTab('audio')">
+                <svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+                <span>Audio</span>
             </button>
             <button class="sidebar-item" data-tab="wifi" onclick="switchTab('wifi')">
                 <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
@@ -1900,6 +2004,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         <button class="tab active" data-tab="control" onclick="switchTab('control')">
             <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
         </button>
+        <button class="tab" data-tab="audio" onclick="switchTab('audio')">
+            <svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+        </button>
         <button class="tab" data-tab="wifi" onclick="switchTab('wifi')">
             <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
         </button>
@@ -1933,12 +2040,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="wsConnectionStatus">Connecting...</span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">Voltage Detected</span>
-                        <span class="info-value" id="voltageDetected">No</span>
+                        <span class="info-label">Signal Detected</span>
+                        <span class="info-value" id="signalDetected">No</span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">Current Reading</span>
-                        <span class="info-value" id="voltageReading">0.00V</span>
+                        <span class="info-label">Audio Level</span>
+                        <span class="info-value" id="audioLevel">-96.0 dBFS</span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">Sensing Mode</span>
@@ -1949,8 +2056,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="infoTimerDuration">-- min</span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">Voltage Threshold</span>
-                        <span class="info-value" id="infoVoltageThreshold">--V</span>
+                        <span class="info-label">Audio Threshold (dBFS)</span>
+                        <span class="info-value" id="infoAudioThreshold">-- dBFS</span>
                     </div>
                 </div>
             </div>
@@ -1998,8 +2105,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <input type="number" class="form-input" id="timerDuration" inputmode="numeric" min="1" max="60" value="15" onchange="updateTimerDuration()">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Voltage Threshold (volts)</label>
-                        <input type="number" class="form-input" id="voltageThreshold" inputmode="decimal" min="0.1" max="3.3" step="0.1" value="1.0" onchange="updateVoltageThreshold()">
+                        <label class="form-label">Audio Threshold (dBFS)</label>
+                        <input type="number" class="form-input" id="audioThreshold" inputmode="decimal" min="-96" max="0" step="1" value="-40" onchange="updateAudioThreshold()">
                     </div>
                 </div>
             </div>
@@ -2011,6 +2118,69 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <button class="btn btn-success" onclick="manualOverride(true)">Turn On</button>
                     <button class="btn btn-danger" onclick="manualOverride(false)">Turn Off</button>
                 </div>
+            </div>
+        </section>
+
+        <!-- ===== AUDIO TAB ===== -->
+        <section id="audio" class="panel">
+            <!-- Audio Waveform -->
+            <div class="card">
+                <div class="card-title">Audio Waveform</div>
+                <div class="audio-canvas-wrap">
+                    <canvas class="waveform-canvas" id="audioWaveformCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Frequency Spectrum -->
+            <div class="card">
+                <div class="card-title">Frequency Spectrum</div>
+                <div class="audio-canvas-wrap">
+                    <canvas class="spectrum-canvas" id="audioSpectrumCanvas"></canvas>
+                </div>
+                <div class="dominant-freq-readout">Dominant: <span id="dominantFreq">-- Hz</span></div>
+            </div>
+
+            <!-- Audio Levels -->
+            <div class="card">
+                <div class="card-title">Audio Levels</div>
+                <div class="vu-meter-row">
+                    <span class="vu-meter-label">L</span>
+                    <div class="vu-meter-track">
+                        <div class="vu-meter-fill" id="vuFillL"></div>
+                        <div class="vu-meter-peak" id="vuPeakL"></div>
+                    </div>
+                    <span class="vu-meter-db" id="vuDbL">-inf dBFS</span>
+                </div>
+                <div class="vu-meter-row">
+                    <span class="vu-meter-label">R</span>
+                    <div class="vu-meter-track">
+                        <div class="vu-meter-fill" id="vuFillR"></div>
+                        <div class="vu-meter-peak" id="vuPeakR"></div>
+                    </div>
+                    <span class="vu-meter-db" id="vuDbR">-inf dBFS</span>
+                </div>
+                <div class="info-row" style="border-bottom: none; padding: 4px 0;">
+                    <span class="info-label"><span class="signal-dot" id="audioSignalDot"></span>Signal</span>
+                    <span class="info-value" id="audioSignalText">Not detected</span>
+                </div>
+            </div>
+
+            <!-- Audio Settings -->
+            <div class="card">
+                <div class="card-title">Audio Settings</div>
+                <div class="form-group">
+                    <label class="form-label">Sample Rate</label>
+                    <select class="form-input" id="audioSampleRateSelect">
+                        <option value="16000">16000 Hz</option>
+                        <option value="44100">44100 Hz</option>
+                        <option value="48000" selected>48000 Hz</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Detection Threshold (dBFS)</label>
+                    <input type="number" class="form-input" id="audioThresholdInput" inputmode="numeric" min="-96" max="0" step="1" value="-40">
+                </div>
+                <button class="btn btn-primary" onclick="updateAudioSettings()">Update</button>
             </div>
         </section>
 
@@ -2688,11 +2858,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <tr><th>GPIO</th><th>Function</th><th>Category</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td>1</td><td>Voltage Sense (ADC)</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
                         <tr><td>2</td><td>LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>3</td><td>I2S MCLK</td><td><span class="pin-cat pin-cat-core">Audio</span></td></tr>
                         <tr><td>4</td><td>Amplifier Relay</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
                         <tr><td>8</td><td>Buzzer (PWM)</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
                         <tr><td>15</td><td>Reset Button</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>16</td><td>I2S BCK</td><td><span class="pin-cat pin-cat-core">Audio</span></td></tr>
+                        <tr><td>17</td><td>I2S DOUT</td><td><span class="pin-cat pin-cat-core">Audio</span></td></tr>
+                        <tr><td>18</td><td>I2S LRC</td><td><span class="pin-cat pin-cat-core">Audio</span></td></tr>
                         <tr><td>5</td><td>Encoder A</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>6</td><td>Encoder B</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>7</td><td>Encoder SW</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
@@ -2791,11 +2964,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let debugLogBuffer = [];
         const DEBUG_MAX_LINES = 1000;
         let currentLogFilter = 'all'; // all, debug, info, warn, error
+        let audioSubscribed = false;
+        let currentActiveTab = 'control';
 
         // Input focus state to prevent overwrites during user input
         let inputFocusState = {
             timerDuration: false,
-            voltageThreshold: false
+            audioThreshold: false
         };
 
         // WebSocket reconnection
@@ -2841,6 +3016,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 generateManualQRCode();
                 loadManualContent();
             }
+
+            // Audio tab subscription management
+            if (tabId === 'audio' && !audioSubscribed) {
+                audioSubscribed = true;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
+                }
+                // Draw initial empty canvases
+                drawAudioWaveform(null);
+                drawSpectrumBars(null, 0);
+            } else if (tabId !== 'audio' && audioSubscribed) {
+                audioSubscribed = false;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
+                }
+            }
+
+            currentActiveTab = tabId;
         }
 
         // ===== Sidebar Toggle =====
@@ -3029,6 +3222,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     drawMemoryGraph();
                     drawPsramGraph();
 
+                    // Re-subscribe to audio stream if audio tab is active
+                    if (audioSubscribed && currentActiveTab === 'audio') {
+                        ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
+                    }
+
                     // Show reconnection notification if we were disconnected during an update
                     if (wasDisconnectedDuringUpdate) {
                         showToast('Device is back online after update!', 'success');
@@ -3107,6 +3305,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
                     document.getElementById('mqttHADiscovery').checked = data.haDiscovery || false;
                     updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
+                } else if (data.type === 'audioWaveform') {
+                    if (currentActiveTab === 'audio' && data.w) {
+                        drawAudioWaveform(data.w);
+                    }
+                } else if (data.type === 'audioSpectrum') {
+                    if (currentActiveTab === 'audio' && data.bands) {
+                        drawSpectrumBars(data.bands, data.freq || 0);
+                    }
                 }
             };
 
@@ -3461,14 +3667,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .catch(err => showToast('Failed to update timer', 'error'));
         }
 
-        function updateVoltageThreshold() {
-            const value = parseFloat(document.getElementById('voltageThreshold').value);
-            if (isNaN(value) || value < 0.1 || value > 3.3) return;
-            
+        function updateAudioThreshold() {
+            const value = parseFloat(document.getElementById('audioThreshold').value);
+            if (isNaN(value) || value < -96 || value > 0) return;
+
             apiFetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ voltageThreshold: value })
+                body: JSON.stringify({ audioThreshold: value })
             })
             .then(res => res.json())
             .then(data => {
@@ -3516,12 +3722,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('infoTimerDuration').textContent = data.timerDuration + ' min';
             }
             
-            // Update voltage threshold (only if not focused)
-            if (data.voltageThreshold !== undefined && !inputFocusState.voltageThreshold) {
-                document.getElementById('voltageThreshold').value = data.voltageThreshold.toFixed(1);
+            // Update audio threshold (only if not focused)
+            if (data.audioThreshold !== undefined && !inputFocusState.audioThreshold) {
+                document.getElementById('audioThreshold').value = Math.round(data.audioThreshold);
             }
-            if (data.voltageThreshold !== undefined) {
-                document.getElementById('infoVoltageThreshold').textContent = data.voltageThreshold.toFixed(1) + 'V';
+            if (data.audioThreshold !== undefined) {
+                document.getElementById('infoAudioThreshold').textContent = Math.round(data.audioThreshold) + ' dBFS';
             }
             
             // Update amplifier status
@@ -3540,12 +3746,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, ws && ws.readyState === WebSocket.OPEN);
             }
             
-            // Update voltage info
-            if (data.voltageDetected !== undefined) {
-                document.getElementById('voltageDetected').textContent = data.voltageDetected ? 'Yes' : 'No';
+            // Update audio info
+            if (data.signalDetected !== undefined) {
+                document.getElementById('signalDetected').textContent = data.signalDetected ? 'Yes' : 'No';
             }
-            if (data.voltageReading !== undefined) {
-                document.getElementById('voltageReading').textContent = data.voltageReading.toFixed(2) + 'V';
+            if (data.audioLevel !== undefined) {
+                document.getElementById('audioLevel').textContent = data.audioLevel.toFixed(1) + ' dBFS';
             }
             
             // Update timer display
@@ -3559,6 +3765,178 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             } else {
                 timerDisplay.classList.add('hidden');
             }
+
+            // Update Audio tab level meters (from smartSensing broadcast)
+            if (currentActiveTab === 'audio') {
+                const vuL = data.audioVuL !== undefined ? data.audioVuL : 0;
+                const vuR = data.audioVuR !== undefined ? data.audioVuR : 0;
+                const peakL = data.audioPeakL !== undefined ? data.audioPeakL : 0;
+                const peakR = data.audioPeakR !== undefined ? data.audioPeakR : 0;
+                const dBFS = data.audioLevel !== undefined ? data.audioLevel : -96;
+                const detected = data.signalDetected !== undefined ? data.signalDetected : false;
+                updateLevelMeters(vuL, vuR, peakL, peakR, dBFS, detected);
+            }
+
+            // Sync audio sample rate to Audio Settings card
+            if (data.audioSampleRate !== undefined) {
+                const sel = document.getElementById('audioSampleRateSelect');
+                if (sel) sel.value = data.audioSampleRate.toString();
+            }
+            // Sync audio threshold to Audio Settings card
+            if (data.audioThreshold !== undefined) {
+                const inp = document.getElementById('audioThresholdInput');
+                if (inp && document.activeElement !== inp) {
+                    inp.value = Math.round(data.audioThreshold);
+                }
+            }
+        }
+
+        // ===== Audio Tab Functions =====
+        function drawAudioWaveform(data) {
+            const canvas = document.getElementById('audioWaveformCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            const w = rect.width;
+            const h = rect.height;
+
+            // Background
+            ctx.fillStyle = '#1A1A1A';
+            ctx.fillRect(0, 0, w, h);
+
+            // Center line
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, h / 2);
+            ctx.lineTo(w, h / 2);
+            ctx.stroke();
+
+            if (!data || data.length === 0) return;
+
+            // Draw waveform
+            ctx.strokeStyle = '#FF9800';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            const len = data.length;
+            const step = w / (len - 1);
+            for (let i = 0; i < len; i++) {
+                const x = i * step;
+                const y = (1 - data[i] / 255) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        function drawSpectrumBars(bands, freq) {
+            const canvas = document.getElementById('audioSpectrumCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            const w = rect.width;
+            const h = rect.height;
+
+            // Background
+            ctx.fillStyle = '#1A1A1A';
+            ctx.fillRect(0, 0, w, h);
+
+            // Update dominant frequency readout
+            const freqEl = document.getElementById('dominantFreq');
+            if (freqEl) {
+                freqEl.textContent = freq > 0 ? freq.toFixed(0) + ' Hz' : '-- Hz';
+            }
+
+            if (!bands || bands.length === 0) return;
+
+            const numBands = bands.length;
+            const gap = 2;
+            const barWidth = (w - gap * (numBands - 1)) / numBands;
+
+            for (let i = 0; i < numBands; i++) {
+                const val = Math.min(Math.max(bands[i], 0), 1);
+                const barHeight = val * h;
+                const x = i * (barWidth + gap);
+                const y = h - barHeight;
+
+                // Gradient from orange to red based on intensity
+                const r = Math.round(255);
+                const g = Math.round(152 - val * 109); // 152 (orange) -> 43 (red-ish)
+                const b = Math.round(0 + val * 54);     // 0 -> 54
+                ctx.fillStyle = `rgb(${r},${g},${b})`;
+                ctx.fillRect(x, y, barWidth, barHeight);
+            }
+        }
+
+        function updateLevelMeters(vuL, vuR, peakL, peakR, dBFS, detected) {
+            // Clamp values 0-1
+            vuL = Math.min(Math.max(vuL, 0), 1);
+            vuR = Math.min(Math.max(vuR, 0), 1);
+            peakL = Math.min(Math.max(peakL, 0), 1);
+            peakR = Math.min(Math.max(peakR, 0), 1);
+
+            // Update fill widths
+            const fillL = document.getElementById('vuFillL');
+            const fillR = document.getElementById('vuFillR');
+            if (fillL) fillL.style.width = (vuL * 100) + '%';
+            if (fillR) fillR.style.width = (vuR * 100) + '%';
+
+            // Update peak markers
+            const pkL = document.getElementById('vuPeakL');
+            const pkR = document.getElementById('vuPeakR');
+            if (pkL) pkL.style.left = (peakL * 100) + '%';
+            if (pkR) pkR.style.left = (peakR * 100) + '%';
+
+            // Update dBFS readout
+            const dbL = document.getElementById('vuDbL');
+            const dbR = document.getElementById('vuDbR');
+            if (dbL) {
+                const dbValL = vuL > 0 ? (20 * Math.log10(vuL)).toFixed(1) : '-inf';
+                dbL.textContent = dbValL + ' dBFS';
+            }
+            if (dbR) {
+                const dbValR = vuR > 0 ? (20 * Math.log10(vuR)).toFixed(1) : '-inf';
+                dbR.textContent = dbValR + ' dBFS';
+            }
+
+            // Update signal detection indicator
+            const dot = document.getElementById('audioSignalDot');
+            const txt = document.getElementById('audioSignalText');
+            if (dot) {
+                dot.classList.toggle('active', detected);
+            }
+            if (txt) {
+                txt.textContent = detected ? 'Detected' : 'Not detected';
+            }
+        }
+
+        function updateAudioSettings() {
+            const sampleRate = parseInt(document.getElementById('audioSampleRateSelect').value);
+            const threshold = parseFloat(document.getElementById('audioThresholdInput').value);
+            if (isNaN(threshold) || threshold < -96 || threshold > 0) {
+                showToast('Threshold must be between -96 and 0', 'error');
+                return;
+            }
+
+            apiFetch('/api/smartsensing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audioSampleRate: sampleRate, audioThreshold: threshold })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast('Audio settings updated', 'success');
+                else showToast('Failed to update settings', 'error');
+            })
+            .catch(err => showToast('Failed to update audio settings', 'error'));
         }
 
         // ===== WiFi Configuration =====
@@ -6007,8 +6385,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             // Add input focus listeners
             document.getElementById('timerDuration').addEventListener('focus', () => inputFocusState.timerDuration = true);
             document.getElementById('timerDuration').addEventListener('blur', () => inputFocusState.timerDuration = false);
-            document.getElementById('voltageThreshold').addEventListener('focus', () => inputFocusState.voltageThreshold = true);
-            document.getElementById('voltageThreshold').addEventListener('blur', () => inputFocusState.voltageThreshold = false);
+            document.getElementById('audioThreshold').addEventListener('focus', () => inputFocusState.audioThreshold = true);
+            document.getElementById('audioThreshold').addEventListener('blur', () => inputFocusState.audioThreshold = false);
 
             // Initial status bar update
             updateStatusBar(false, null, false, false);

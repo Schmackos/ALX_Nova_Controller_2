@@ -40,9 +40,9 @@ static void format_timer(unsigned long remaining_secs, char *buf, int len) {
     }
 }
 
-static void format_signal(float voltage, float threshold, char *buf, int len) {
-    bool detected = voltage >= threshold;
-    snprintf(buf, len, "%.2fV %s", voltage, detected ? "Detected" : "\xE2\x80\x94");
+static void format_signal(float level_dBFS, float threshold_dBFS, char *buf, int len) {
+    bool detected = level_dBFS >= threshold_dBFS;
+    snprintf(buf, len, "%+.0f dBFS %s", level_dBFS, detected ? "Detected" : "\xE2\x80\x94");
 }
 
 static const char *format_wifi(bool connected, bool apMode) {
@@ -129,14 +129,14 @@ void test_home_timer_format_non_auto_mode(void) {
 /* Signal formatting */
 void test_home_signal_detected(void) {
     char buf[32];
-    format_signal(2.45f, 0.5f, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL_STRING("2.45V Detected", buf);
+    format_signal(-18.0f, -40.0f, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("-18 dBFS Detected", buf);
 }
 
 void test_home_signal_not_detected(void) {
     char buf[32];
-    format_signal(0.12f, 0.5f, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL_STRING("0.12V \xE2\x80\x94", buf);
+    format_signal(-55.0f, -40.0f, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL_STRING("-55 dBFS \xE2\x80\x94", buf);
 }
 
 /* WiFi status */

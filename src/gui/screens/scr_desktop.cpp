@@ -52,8 +52,8 @@ static void get_card_summary(int idx, char *buf, size_t len) {
         case 1: { /* Control */
             const char *mode = (st.currentMode == ALWAYS_ON) ? "Always On" :
                                (st.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
-            snprintf(buf, len, "%s\nAmp: %s\n%.2fV",
-                     mode, st.amplifierState ? "ON" : "OFF", st.lastVoltageReading);
+            snprintf(buf, len, "%s\nAmp: %s\n%+.0f dBFS",
+                     mode, st.amplifierState ? "ON" : "OFF", st.audioLevel_dBFS);
             break;
         }
         case 2: { /* WiFi */

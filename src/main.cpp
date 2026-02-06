@@ -8,6 +8,7 @@
 #include "mqtt_handler.h"
 #include "ota_updater.h"
 #include "settings_manager.h"
+#include "i2s_audio.h"
 #include "smart_sensing.h"
 #include "utils.h"
 #include "web_pages.h"
@@ -93,12 +94,12 @@ ButtonHandler resetButton(RESET_BUTTON_PIN);
 #define currentMode appState.currentMode
 #define timerDuration appState.timerDuration
 #define timerRemaining appState.timerRemaining
-#define lastVoltageDetection appState.lastVoltageDetection
+#define lastSignalDetection appState.lastSignalDetection
 #define lastTimerUpdate appState.lastTimerUpdate
-#define voltageThreshold appState.voltageThreshold
+#define audioThreshold_dBFS appState.audioThreshold_dBFS
 #define amplifierState appState.amplifierState
-#define lastVoltageReading appState.lastVoltageReading
-#define previousVoltageState appState.previousVoltageState
+#define audioLevel_dBFS appState.audioLevel_dBFS
+#define previousSignalState appState.previousSignalState
 #define lastSmartSensingHeartbeat appState.lastSmartSensingHeartbeat
 #define enableCertValidation appState.enableCertValidation
 #define hardwareStatsInterval appState.hardwareStatsInterval
@@ -184,9 +185,7 @@ void setup() {
   // Configure Smart Sensing pins
   pinMode(AMPLIFIER_PIN, OUTPUT);
   digitalWrite(AMPLIFIER_PIN, LOW); // Start with amplifier OFF (fail-safe)
-  pinMode(VOLTAGE_SENSE_PIN, INPUT);
-  LOG_I("[Main] Smart Sensing configured: Amplifier GPIO%d, Voltage Sense GPIO%d",
-        AMPLIFIER_PIN, VOLTAGE_SENSE_PIN);
+  LOG_I("[Main] Amplifier relay configured: GPIO%d", AMPLIFIER_PIN);
 
   // Initialize LittleFS and load settings BEFORE GUI so boot animation
   // settings are available when gui_init() runs.
@@ -219,6 +218,9 @@ void setup() {
   if (!loadSmartSensingSettings()) {
     LOG_I("[Main] No Smart Sensing settings found, using defaults");
   }
+
+  // Initialize I2S audio ADC (PCM1808) — uses sample rate from loaded settings
+  i2s_audio_init();
 
   // Load MQTT settings
   if (!loadMqttSettings()) {
@@ -696,6 +698,13 @@ void loop() {
   if (millis() - lastHardwareStatsBroadcast >= appState.hardwareStatsInterval) {
     lastHardwareStatsBroadcast = millis();
     sendHardwareStats();
+  }
+
+  // Send audio waveform/spectrum data to subscribed WebSocket clients (~10Hz)
+  static unsigned long lastAudioSend = 0;
+  if (millis() - lastAudioSend >= 100) {
+    lastAudioSend = millis();
+    sendAudioData();
   }
 
   // IMPORTANT: blinking must NOT depend on isAPMode

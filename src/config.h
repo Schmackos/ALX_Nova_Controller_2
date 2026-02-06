@@ -10,7 +10,7 @@
 // deviceSerialNumber in app_state.h)
 
 // ===== Firmware Version =====
-#define FIRMWARE_VERSION "1.5.2"
+#define FIRMWARE_VERSION "1.5.3"
 
 // ===== GitHub Repository Configuration =====
 #define GITHUB_REPO_OWNER "Schmackos"
@@ -30,8 +30,20 @@ const int RESET_BUTTON_PIN = 15; // Factory reset button
 const int AMPLIFIER_PIN = 4; // GPIO 4 - relay control
 #endif
 
-#ifndef VOLTAGE_SENSE_PIN
-const int VOLTAGE_SENSE_PIN = 1; // GPIO 1 - voltage detection (ADC1_CH0)
+// VOLTAGE_SENSE_PIN removed — replaced by PCM1808 I2S ADC (see i2s_audio.h)
+
+// ===== I2S Audio ADC (PCM1808) Pin Definitions =====
+#ifndef I2S_BCK_PIN
+const int I2S_BCK_PIN = 16; // GPIO 16 - I2S Bit Clock
+#endif
+#ifndef I2S_DOUT_PIN
+const int I2S_DOUT_PIN = 17; // GPIO 17 - I2S Data In (PCM1808 OUT)
+#endif
+#ifndef I2S_LRC_PIN
+const int I2S_LRC_PIN = 18; // GPIO 18 - I2S Word Select (L/R Clock)
+#endif
+#ifndef I2S_MCLK_PIN
+const int I2S_MCLK_PIN = 3; // GPIO 3 - Master Clock (APLL output)
 #endif
 
 #ifndef BUZZER_PIN
@@ -74,11 +86,13 @@ const unsigned long AUTO_UPDATE_COUNTDOWN = 30000; // 30 seconds countdown
 
 // ===== Smart Sensing Configuration =====
 const unsigned long SMART_SENSING_HEARTBEAT_INTERVAL =
-    1000; // Send heartbeat every 1 second for real-time voltage updates
+    1000; // Send heartbeat every 1 second for real-time audio level updates
 const unsigned long DEFAULT_TIMER_DURATION =
     15; // Default timer duration in minutes
-const float DEFAULT_VOLTAGE_THRESHOLD =
-    0.1; // Default voltage threshold in volts
+const float DEFAULT_AUDIO_THRESHOLD =
+    -40.0f; // Default audio threshold in dBFS (-96 to 0)
+const uint32_t DEFAULT_AUDIO_SAMPLE_RATE =
+    48000; // Default I2S sample rate (Hz)
 
 // Smart Sensing modes
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };
@@ -108,11 +122,13 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_STACK_SIZE_WEB 8192
 #define TASK_STACK_SIZE_MQTT 4096
 #define TASK_STACK_SIZE_OTA 8192
+#define TASK_STACK_SIZE_AUDIO 8192
 
 #define TASK_PRIORITY_SENSING 2 // High priority
 #define TASK_PRIORITY_WEB 1     // Medium priority
 #define TASK_PRIORITY_MQTT 1    // Medium priority
 #define TASK_PRIORITY_OTA 0     // Low priority
+#define TASK_PRIORITY_AUDIO 3   // Highest app priority (must not drop I2S samples)
 
 // ===== GUI Configuration (TFT + Rotary Encoder) =====
 #ifdef GUI_ENABLED

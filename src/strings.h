@@ -44,10 +44,10 @@
 
 // ===== Form Labels =====
 #define STR_LABEL_TIMER_DURATION            "Auto-Off Timer Duration (minutes):"
-#define STR_LABEL_VOLTAGE_THRESHOLD         "Voltage Detection Threshold (volts):"
+#define STR_LABEL_AUDIO_THRESHOLD           "Audio Detection Threshold (dBFS):"
 #define STR_LABEL_TIME_REMAINING            "Time Remaining:"
 #define STR_LABEL_AMPLIFIER_STATUS          "Amplifier Status:"
-#define STR_LABEL_VOLTAGE_DETECTED          "Voltage Detected:"
+#define STR_LABEL_SIGNAL_DETECTED           "Signal Detected:"
 #define STR_LABEL_CURRENT_READING           "Current Reading:"
 #define STR_LABEL_SSID                      "Network Name (SSID):"
 #define STR_LABEL_PASSWORD                  "Password:"

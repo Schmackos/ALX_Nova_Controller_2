@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 // ===== Smart Sensing Core Functions =====
-bool detectVoltage();
+bool detectSignal();
 void setAmplifierState(bool state);
 void updateSmartSensingLogic();
 

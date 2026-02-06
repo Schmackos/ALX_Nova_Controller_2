@@ -526,7 +526,7 @@ void handleSettingsExport() {
   }
   doc["smartSensing"]["mode"] = modeStr;
   doc["smartSensing"]["timerDuration"] = timerDuration;
-  doc["smartSensing"]["voltageThreshold"] = voltageThreshold;
+  doc["smartSensing"]["audioThreshold"] = audioThreshold_dBFS;
 
   // MQTT settings (password excluded for security)
   doc["mqtt"]["enabled"] = mqttEnabled;
@@ -730,9 +730,9 @@ void handleSettingsImport() {
       timerDuration = doc["smartSensing"]["timerDuration"].as<unsigned long>();
       LOG_D("[Settings] Timer Duration: %lu minutes", timerDuration);
     }
-    if (doc["smartSensing"]["voltageThreshold"].is<float>()) {
-      voltageThreshold = doc["smartSensing"]["voltageThreshold"].as<float>();
-      LOG_D("[Settings] Voltage Threshold: %.2fV", voltageThreshold);
+    if (doc["smartSensing"]["audioThreshold"].is<float>()) {
+      audioThreshold_dBFS = doc["smartSensing"]["audioThreshold"].as<float>();
+      LOG_D("[Settings] Audio Threshold: %+.0f dBFS", audioThreshold_dBFS);
     }
     // Save Smart Sensing settings
     saveSmartSensingSettings();
@@ -910,9 +910,9 @@ void handleDiagnostics() {
   sensing["amplifierState"] = amplifierState;
   sensing["timerDuration"] = timerDuration;
   sensing["timerRemaining"] = timerRemaining;
-  sensing["voltageThreshold"] = voltageThreshold;
-  sensing["lastVoltageReading"] = lastVoltageReading;
-  sensing["lastVoltageDetection"] = lastVoltageDetection;
+  sensing["audioThreshold"] = audioThreshold_dBFS;
+  sensing["audioLevel"] = audioLevel_dBFS;
+  sensing["lastSignalDetection"] = lastSignalDetection;
 
   // ===== MQTT Settings (password excluded) =====
   JsonObject mqtt = doc["mqtt"].to<JsonObject>();

@@ -2,6 +2,7 @@
 #include "app_state.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "i2s_audio.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <cmath>
@@ -31,9 +32,17 @@ void handleSmartSensingGet() {
   doc["timerRemaining"] = timerRemaining;
   doc["timerActive"] = (timerRemaining > 0);
   doc["amplifierState"] = amplifierState;
-  doc["voltageThreshold"] = voltageThreshold;
-  doc["voltageReading"] = lastVoltageReading;
-  doc["voltageDetected"] = (lastVoltageReading >= voltageThreshold);
+  doc["audioThreshold"] = audioThreshold_dBFS;
+  doc["audioLevel"] = audioLevel_dBFS;
+  doc["signalDetected"] = (audioLevel_dBFS >= audioThreshold_dBFS);
+  doc["audioRmsL"] = appState.audioRmsLeft;
+  doc["audioRmsR"] = appState.audioRmsRight;
+  doc["audioVuL"] = appState.audioVuLeft;
+  doc["audioVuR"] = appState.audioVuRight;
+  doc["audioPeakL"] = appState.audioPeakLeft;
+  doc["audioPeakR"] = appState.audioPeakRight;
+  doc["audioPeak"] = appState.audioPeakCombined;
+  doc["audioSampleRate"] = appState.audioSampleRate;
 
   String json;
   serializeJson(doc, json);
@@ -80,24 +89,24 @@ void handleSmartSensingUpdate() {
       settingsChanged = true;
       LOG_I("[Sensing] Mode changed to: %s", modeStr.c_str());
 
-      // When switching to SMART_AUTO mode, immediately evaluate voltage state
+      // When switching to SMART_AUTO mode, immediately evaluate signal state
       if (currentMode == SMART_AUTO) {
-        bool voltageDetected = detectVoltage();
+        bool signalDetected = detectSignal();
 
-        if (voltageDetected) {
-          // Voltage is above threshold - turn ON and set timer to full value
+        if (signalDetected) {
+          // Signal is above threshold - turn ON and set timer to full value
           timerRemaining = timerDuration * 60;
           lastTimerUpdate = millis();
-          lastVoltageDetection = millis();
+          lastSignalDetection = millis();
           setAmplifierState(true);
-          previousVoltageState = true;
-          LOG_I("[Sensing] Smart Auto activated: voltage detected, amp ON");
+          previousSignalState = true;
+          LOG_I("[Sensing] Smart Auto activated: signal detected, amp ON");
         } else {
-          // Voltage is below threshold - turn OFF
+          // Signal is below threshold - turn OFF
           timerRemaining = 0;
           setAmplifierState(false);
-          previousVoltageState = false;
-          LOG_I("[Sensing] Smart Auto activated: no voltage, amp OFF");
+          previousSignalState = false;
+          LOG_I("[Sensing] Smart Auto activated: no signal, amp OFF");
         }
       }
     }
@@ -122,8 +131,8 @@ void handleSmartSensingUpdate() {
           LOG_I("[Sensing] Timer duration changed to %d min (timer updated)", duration);
         } else {
           // Amplifier is OFF - just display new duration, countdown won't start
-          // until voltage disappears
-          LOG_I("[Sensing] Timer duration changed to %d min (countdown starts when voltage disappears)", duration);
+          // until signal disappears
+          LOG_I("[Sensing] Timer duration changed to %d min (countdown starts when signal disappears)", duration);
         }
       }
 
@@ -136,20 +145,29 @@ void handleSmartSensingUpdate() {
     }
   }
 
-  // Update voltage threshold
-  if (doc["voltageThreshold"].is<float>() ||
-      doc["voltageThreshold"].is<int>()) {
-    float threshold = doc["voltageThreshold"].as<float>();
-
-    if (threshold >= 0.1 && threshold <= 3.3) {
-      voltageThreshold = threshold;
+  // Update audio threshold
+  if (doc["audioThreshold"].is<float>() || doc["audioThreshold"].is<int>()) {
+    float threshold = doc["audioThreshold"].as<float>();
+    if (threshold >= -96.0f && threshold <= 0.0f) {
+      audioThreshold_dBFS = threshold;
       settingsChanged = true;
-      LOG_I("[Sensing] Voltage threshold set to %.2fV", threshold);
+      LOG_I("[Sensing] Audio threshold set to %+.0f dBFS", threshold);
     } else {
       server.send(400, "application/json",
-                  "{\"success\": false, \"message\": \"Voltage threshold must "
-                  "be between 0.1 and 3.3 volts\"}");
+                  "{\"success\": false, \"message\": \"Audio threshold must "
+                  "be between -96 and 0 dBFS\"}");
       return;
+    }
+  }
+
+  // Update sample rate
+  if (doc["audioSampleRate"].is<int>()) {
+    uint32_t rate = doc["audioSampleRate"].as<uint32_t>();
+    if (audio_validate_sample_rate(rate)) {
+      appState.audioSampleRate = rate;
+      i2s_audio_set_sample_rate(rate);
+      settingsChanged = true;
+      LOG_I("[Sensing] Sample rate set to %lu Hz", rate);
     }
   }
 
@@ -190,17 +208,19 @@ void handleSmartSensingUpdate() {
 
 // ===== Smart Sensing Core Functions =====
 
-// Detect voltage on the analog input pin
-bool detectVoltage() {
-  // Read analog value from GPIO 1 (ADC1_CH0 on ESP32-S3)
-  int rawValue = analogRead(VOLTAGE_SENSE_PIN);
-
-  // Convert to voltage (ESP32 ADC is 12-bit: 0-4095 maps to 0-3.3V)
-  // Note: ESP32 ADC has non-linearity; this is a basic conversion
-  lastVoltageReading = (rawValue / 4095.0) * 3.3;
-
-  // Compare with threshold
-  return (lastVoltageReading >= voltageThreshold);
+bool detectSignal() {
+  AudioAnalysis analysis = i2s_audio_get_analysis();
+  audioLevel_dBFS = analysis.dBFS;
+  appState.audioRmsLeft = analysis.rmsLeft;
+  appState.audioRmsRight = analysis.rmsRight;
+  appState.audioRmsCombined = analysis.rmsCombined;
+  appState.audioVuLeft = analysis.vuLeft;
+  appState.audioVuRight = analysis.vuRight;
+  appState.audioVuCombined = analysis.vuCombined;
+  appState.audioPeakLeft = analysis.peakLeft;
+  appState.audioPeakRight = analysis.peakRight;
+  appState.audioPeakCombined = analysis.peakCombined;
+  return analysis.signalDetected;
 }
 
 // Set amplifier state and update pin
@@ -216,14 +236,14 @@ void setAmplifierState(bool state) {
 void updateSmartSensingLogic() {
   unsigned long currentMillis = millis();
 
-  // Rate limit voltage reading to reduce CPU usage (every 50ms is sufficient)
-  static unsigned long lastVoltageRead = 0;
-  static bool voltageDetected = false;
+  // Rate limit signal reading to reduce CPU usage (every 50ms is sufficient)
+  static unsigned long lastSignalRead = 0;
+  static bool signalDetected = false;
 
-  if (currentMillis - lastVoltageRead >= 50) {
-    lastVoltageRead = currentMillis;
-    // Read voltage for real-time display, regardless of mode
-    voltageDetected = detectVoltage();
+  if (currentMillis - lastSignalRead >= 50) {
+    lastSignalRead = currentMillis;
+    // Read audio level for real-time display, regardless of mode
+    signalDetected = detectSignal();
   }
 
   switch (currentMode) {
@@ -231,31 +251,31 @@ void updateSmartSensingLogic() {
     // Always keep amplifier ON, timer disabled
     setAmplifierState(true);
     timerRemaining = 0;
-    previousVoltageState = voltageDetected; // Update state tracking
+    previousSignalState = signalDetected; // Update state tracking
     break;
 
   case ALWAYS_OFF:
     // Always keep amplifier OFF, timer disabled
     setAmplifierState(false);
     timerRemaining = 0;
-    previousVoltageState = voltageDetected; // Update state tracking
+    previousSignalState = signalDetected; // Update state tracking
     break;
 
   case SMART_AUTO: {
-    if (voltageDetected) {
-      // Voltage is currently detected - keep timer at full value and amplifier
+    if (signalDetected) {
+      // Signal is currently detected - keep timer at full value and amplifier
       // ON
       timerRemaining = timerDuration * 60; // Keep timer at full value
-      lastVoltageDetection = currentMillis;
+      lastSignalDetection = currentMillis;
       lastTimerUpdate = currentMillis;
 
       // Ensure amplifier is ON
       if (!amplifierState) {
         setAmplifierState(true);
-        LOG_D("[Sensing] Voltage detected, amp ON, timer reset");
+        LOG_D("[Sensing] Signal detected, amp ON, timer reset");
       }
     } else {
-      // No voltage detected - countdown timer if amplifier is ON
+      // No signal detected - countdown timer if amplifier is ON
       if (amplifierState && timerRemaining > 0) {
         if (currentMillis - lastTimerUpdate >= 1000) {
           lastTimerUpdate = currentMillis;
@@ -269,8 +289,8 @@ void updateSmartSensingLogic() {
       }
     }
 
-    // Update previous voltage state for next iteration
-    previousVoltageState = voltageDetected;
+    // Update previous signal state for next iteration
+    previousSignalState = signalDetected;
     break;
   }
   }
@@ -302,9 +322,16 @@ void sendSmartSensingStateInternal() {
   doc["timerRemaining"] = timerRemaining;
   doc["timerActive"] = (timerRemaining > 0);
   doc["amplifierState"] = amplifierState;
-  doc["voltageThreshold"] = voltageThreshold;
-  doc["voltageReading"] = lastVoltageReading;
-  doc["voltageDetected"] = (lastVoltageReading >= voltageThreshold);
+  doc["audioThreshold"] = audioThreshold_dBFS;
+  doc["audioLevel"] = audioLevel_dBFS;
+  doc["signalDetected"] = (audioLevel_dBFS >= audioThreshold_dBFS);
+  doc["audioRmsL"] = appState.audioRmsLeft;
+  doc["audioRmsR"] = appState.audioRmsRight;
+  doc["audioVuL"] = appState.audioVuLeft;
+  doc["audioVuR"] = appState.audioVuRight;
+  doc["audioPeakL"] = appState.audioPeakLeft;
+  doc["audioPeakR"] = appState.audioPeakRight;
+  doc["audioPeak"] = appState.audioPeakCombined;
 
   String json;
   serializeJson(doc, json);
@@ -314,7 +341,7 @@ void sendSmartSensingStateInternal() {
   prevBroadcastMode = currentMode;
   prevBroadcastAmplifierState = amplifierState;
   prevBroadcastTimerRemaining = timerRemaining;
-  prevBroadcastVoltageReading = lastVoltageReading;
+  prevBroadcastAudioLevel = audioLevel_dBFS;
   lastSmartSensingHeartbeat = millis();
 }
 
@@ -327,8 +354,8 @@ void sendSmartSensingState() {
   bool stateChanged = (currentMode != prevBroadcastMode) ||
                       (amplifierState != prevBroadcastAmplifierState) ||
                       (timerRemaining != prevBroadcastTimerRemaining) ||
-                      (fabs(lastVoltageReading - prevBroadcastVoltageReading) >
-                       0.02); // 0.02V tolerance for more frequent updates
+                      (fabs(audioLevel_dBFS - prevBroadcastAudioLevel) >
+                       0.5); // 0.5 dBFS tolerance for audio level changes
 
   // Check if heartbeat interval has elapsed
   bool heartbeatDue = (currentMillis - lastSmartSensingHeartbeat >=
@@ -355,12 +382,14 @@ bool loadSmartSensingSettings() {
 
   String line1 = file.readStringUntil('\n'); // mode
   String line2 = file.readStringUntil('\n'); // timer duration
-  String line3 = file.readStringUntil('\n'); // voltage threshold
+  String line3 = file.readStringUntil('\n'); // audio threshold
+  String line4 = file.readStringUntil('\n'); // sample rate
   file.close();
 
   line1.trim();
   line2.trim();
   line3.trim();
+  line4.trim();
 
   if (line1.length() > 0) {
     int mode = line1.toInt();
@@ -378,14 +407,20 @@ bool loadSmartSensingSettings() {
 
   if (line3.length() > 0) {
     float threshold = line3.toFloat();
-    if (threshold >= 0.1 && threshold <= 3.3) {
-      voltageThreshold = threshold;
+    // Auto-migrate: if value > 0, it's old voltage format
+    audioThreshold_dBFS = audio_migrate_voltage_threshold(threshold);
+  }
+
+  if (line4.length() > 0) {
+    uint32_t rate = (uint32_t)line4.toInt();
+    if (audio_validate_sample_rate(rate)) {
+      appState.audioSampleRate = rate;
     }
   }
 
   LOG_I("[Sensing] Settings loaded");
-  LOG_D("[Sensing]   Mode: %d, Timer: %lu min, Threshold: %.2fV", currentMode,
-        timerDuration, voltageThreshold);
+  LOG_D("[Sensing]   Mode: %d, Timer: %lu min, Threshold: %+.0f dBFS, Sample Rate: %lu Hz", currentMode,
+        timerDuration, audioThreshold_dBFS, appState.audioSampleRate);
 
   return true;
 }
@@ -400,7 +435,8 @@ void saveSmartSensingSettings() {
 
   file.println(String(currentMode));
   file.println(String(timerDuration));
-  file.println(String(voltageThreshold, 2));
+  file.println(String(audioThreshold_dBFS, 1));
+  file.println(String(appState.audioSampleRate));
   file.close();
 
   LOG_I("[Sensing] Settings saved");

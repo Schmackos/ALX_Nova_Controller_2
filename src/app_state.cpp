@@ -45,11 +45,11 @@ void AppState::setTimerRemaining(unsigned long remaining) {
   }
 }
 
-void AppState::setVoltageReading(float reading) {
+void AppState::setAudioLevel(float dBFS) {
   // Use a small threshold to avoid float comparison issues
-  if (abs(lastVoltageReading - reading) > 0.01) {
-    lastVoltageReading = reading;
-    _voltageDirty = true;
+  if (abs(audioLevel_dBFS - dBFS) > 0.1f) {
+    audioLevel_dBFS = dBFS;
+    _audioDirty = true;
   }
 }
 
@@ -125,7 +125,7 @@ void AppState::clearAllDirtyFlags() {
   _amplifierDirty = false;
   _sensingModeDirty = false;
   _timerDirty = false;
-  _voltageDirty = false;
+  _audioDirty = false;
   _displayDirty = false;
   _buzzerDirty = false;
   _settingsDirty = false;
@@ -134,5 +134,5 @@ void AppState::clearAllDirtyFlags() {
 bool AppState::hasAnyDirtyFlag() const {
   return _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
          _amplifierDirty || _sensingModeDirty || _timerDirty ||
-         _voltageDirty || _displayDirty || _buzzerDirty || _settingsDirty;
+         _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty;
 }

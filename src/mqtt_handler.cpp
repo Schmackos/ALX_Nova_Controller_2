@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "websocket_handler.h"
 #include <LittleFS.h>
+#include <cmath>
 
 // State tracking for hardware stats change detection
 static unsigned long prevMqttUptime = 0;
@@ -150,7 +151,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/smartsensing/mode/set").c_str());
   mqttClient.subscribe((base + "/smartsensing/amplifier/set").c_str());
   mqttClient.subscribe((base + "/smartsensing/timer_duration/set").c_str());
-  mqttClient.subscribe((base + "/smartsensing/voltage_threshold/set").c_str());
+  mqttClient.subscribe((base + "/smartsensing/audio_threshold/set").c_str());
   mqttClient.subscribe((base + "/ap/enabled/set").c_str());
   mqttClient.subscribe((base + "/settings/auto_update/set").c_str());
   mqttClient.subscribe((base + "/settings/night_mode/set").c_str());
@@ -261,14 +262,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     }
     publishMqttSmartSensingState();
   }
-  // Handle voltage threshold
-  else if (topicStr == base + "/smartsensing/voltage_threshold/set") {
+  // Handle audio threshold
+  else if (topicStr == base + "/smartsensing/audio_threshold/set") {
     float threshold = message.toFloat();
-    if (threshold >= 0.1 && threshold <= 3.3) {
-      voltageThreshold = threshold;
+    if (threshold >= -96.0 && threshold <= 0.0) {
+      audioThreshold_dBFS = threshold;
       saveSmartSensingSettings();
       sendSmartSensingStateInternal();
-      LOG_I("[MQTT] Voltage threshold set to %.2fV", threshold);
+      LOG_I("[MQTT] Audio threshold set to %+.0f dBFS", threshold);
     }
     publishMqttSmartSensingState();
   }
@@ -532,7 +533,7 @@ void mqttLoop() {
         (amplifierState != prevMqttAmplifierState) ||
         (currentMode != prevMqttSensingMode) ||
         (timerRemaining != prevMqttTimerRemaining) ||
-        (abs(lastVoltageReading - prevMqttVoltageReading) > 0.05) ||
+        (fabs(audioLevel_dBFS - prevMqttAudioLevel) > 0.5f) ||
         (appState.backlightOn != prevMqttBacklightOn) ||
         (appState.screenTimeout != prevMqttScreenTimeout) ||
         (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
@@ -551,7 +552,7 @@ void mqttLoop() {
       prevMqttAmplifierState = amplifierState;
       prevMqttSensingMode = currentMode;
       prevMqttTimerRemaining = timerRemaining;
-      prevMqttVoltageReading = lastVoltageReading;
+      prevMqttAudioLevel = audioLevel_dBFS;
       prevMqttBacklightOn = appState.backlightOn;
       prevMqttScreenTimeout = appState.screenTimeout;
       prevMqttBuzzerEnabled = appState.buzzerEnabled;
@@ -615,17 +616,17 @@ void publishMqttSmartSensingState() {
                      String(timerDuration).c_str(), true);
   mqttClient.publish((base + "/smartsensing/timer_remaining").c_str(),
                      String(timerRemaining).c_str(), true);
-  mqttClient.publish((base + "/smartsensing/voltage").c_str(),
-                     String(lastVoltageReading, 2).c_str(), true);
-  mqttClient.publish((base + "/smartsensing/voltage_threshold").c_str(),
-                     String(voltageThreshold, 2).c_str(), true);
-  mqttClient.publish((base + "/smartsensing/voltage_detected").c_str(),
-                     (lastVoltageReading >= voltageThreshold) ? "ON" : "OFF",
+  mqttClient.publish((base + "/smartsensing/audio_level").c_str(),
+                     String(audioLevel_dBFS, 1).c_str(), true);
+  mqttClient.publish((base + "/smartsensing/audio_threshold").c_str(),
+                     String(audioThreshold_dBFS, 1).c_str(), true);
+  mqttClient.publish((base + "/smartsensing/signal_detected").c_str(),
+                     (audioLevel_dBFS >= audioThreshold_dBFS) ? "ON" : "OFF",
                      true);
 
-  // Last voltage detection timestamp (seconds since boot, 0 if never detected)
+  // Last signal detection timestamp (seconds since boot, 0 if never detected)
   unsigned long lastDetectionSecs =
-      lastVoltageDetection > 0 ? lastVoltageDetection / 1000 : 0;
+      lastSignalDetection > 0 ? lastSignalDetection / 1000 : 0;
   mqttClient.publish((base + "/smartsensing/last_detection_time").c_str(),
                      String(lastDetectionSecs).c_str(), true);
 }
@@ -1003,43 +1004,42 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
-  // ===== Voltage Threshold Number =====
+  // ===== Audio Threshold Number =====
   {
     JsonDocument doc;
-    doc["name"] = "Voltage Threshold";
-    doc["unique_id"] = deviceId + "_voltage_threshold";
-    doc["state_topic"] = base + "/smartsensing/voltage_threshold";
-    doc["command_topic"] = base + "/smartsensing/voltage_threshold/set";
-    doc["min"] = 0.1;
-    doc["max"] = 3.3;
-    doc["step"] = 0.1;
-    doc["unit_of_measurement"] = "V";
-    doc["icon"] = "mdi:flash-outline";
+    doc["name"] = "Audio Threshold";
+    doc["unique_id"] = deviceId + "_audio_threshold";
+    doc["state_topic"] = base + "/smartsensing/audio_threshold";
+    doc["command_topic"] = base + "/smartsensing/audio_threshold/set";
+    doc["min"] = -96;
+    doc["max"] = 0;
+    doc["step"] = 1;
+    doc["unit_of_measurement"] = "dBFS";
+    doc["icon"] = "mdi:volume-vibrate";
     addHADeviceInfo(doc);
 
     String payload;
     serializeJson(doc, payload);
     String topic =
-        "homeassistant/number/" + deviceId + "/voltage_threshold/config";
+        "homeassistant/number/" + deviceId + "/audio_threshold/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
-  // ===== Voltage Sensor =====
+  // ===== Audio Level Sensor =====
   {
     JsonDocument doc;
-    doc["name"] = "Voltage";
-    doc["unique_id"] = deviceId + "_voltage";
-    doc["state_topic"] = base + "/smartsensing/voltage";
-    doc["unit_of_measurement"] = "V";
-    doc["device_class"] = "voltage";
+    doc["name"] = "Audio Level";
+    doc["unique_id"] = deviceId + "_audio_level";
+    doc["state_topic"] = base + "/smartsensing/audio_level";
+    doc["unit_of_measurement"] = "dBFS";
     doc["state_class"] = "measurement";
-    doc["suggested_display_precision"] = 2;
-    doc["icon"] = "mdi:flash";
+    doc["suggested_display_precision"] = 1;
+    doc["icon"] = "mdi:volume-vibrate";
     addHADeviceInfo(doc);
 
     String payload;
     serializeJson(doc, payload);
-    String topic = "homeassistant/sensor/" + deviceId + "/voltage/config";
+    String topic = "homeassistant/sensor/" + deviceId + "/audio_level/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
@@ -1098,12 +1098,12 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
-  // ===== Voltage Detected Binary Sensor =====
+  // ===== Signal Detected Binary Sensor =====
   {
     JsonDocument doc;
-    doc["name"] = "Voltage Detected";
-    doc["unique_id"] = deviceId + "_voltage_detected";
-    doc["state_topic"] = base + "/smartsensing/voltage_detected";
+    doc["name"] = "Signal Detected";
+    doc["unique_id"] = deviceId + "_signal_detected";
+    doc["state_topic"] = base + "/smartsensing/signal_detected";
     doc["payload_on"] = "ON";
     doc["payload_off"] = "OFF";
     doc["icon"] = "mdi:sine-wave";
@@ -1112,7 +1112,7 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     String topic =
-        "homeassistant/binary_sensor/" + deviceId + "/voltage_detected/config";
+        "homeassistant/binary_sensor/" + deviceId + "/signal_detected/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
@@ -1530,8 +1530,8 @@ void removeHADiscovery() {
       "homeassistant/switch/%s/cert_validation/config",
       "homeassistant/select/%s/mode/config",
       "homeassistant/number/%s/timer_duration/config",
-      "homeassistant/number/%s/voltage_threshold/config",
-      "homeassistant/sensor/%s/voltage/config",
+      "homeassistant/number/%s/audio_threshold/config",
+      "homeassistant/sensor/%s/audio_level/config",
       "homeassistant/sensor/%s/timer_remaining/config",
       "homeassistant/sensor/%s/rssi/config",
       "homeassistant/sensor/%s/firmware/config",
@@ -1544,7 +1544,7 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/LittleFS_used/config",
       "homeassistant/sensor/%s/wifi_channel/config",
       "homeassistant/binary_sensor/%s/wifi_connected/config",
-      "homeassistant/binary_sensor/%s/voltage_detected/config",
+      "homeassistant/binary_sensor/%s/signal_detected/config",
       "homeassistant/binary_sensor/%s/update_available/config",
       "homeassistant/button/%s/reboot/config",
       "homeassistant/button/%s/check_update/config",

@@ -36,9 +36,9 @@ static void on_timer_confirm(int int_val, float, int) {
 }
 
 static void on_voltage_confirm(int, float float_val, int) {
-    AppState::getInstance().voltageThreshold = float_val;
+    AppState::getInstance().audioThreshold_dBFS = float_val;
     saveSmartSensingSettings();
-    LOG_I("[GUI] Voltage threshold set to %.2fV", float_val);
+    LOG_I("[GUI] Audio threshold set to %+.0f dBFS", float_val);
 }
 
 static void on_blinking_confirm(int int_val, float, int) {
@@ -87,14 +87,14 @@ static void edit_timer_duration(void) {
 
 static void edit_voltage_threshold(void) {
     ValueEditConfig cfg = {};
-    cfg.title = "Voltage Thresh";
+    cfg.title = "Audio Thresh";
     cfg.type = VE_FLOAT;
-    cfg.float_val = AppState::getInstance().voltageThreshold;
-    cfg.float_min = 0.1f;
-    cfg.float_max = 3.3f;
-    cfg.float_step = 0.1f;
-    cfg.float_unit = "V";
-    cfg.float_decimals = 1;
+    cfg.float_val = AppState::getInstance().audioThreshold_dBFS;
+    cfg.float_min = -96.0f;
+    cfg.float_max = 0.0f;
+    cfg.float_step = 1.0f;
+    cfg.float_unit = "dBFS";
+    cfg.float_decimals = 0;
     cfg.on_confirm = on_voltage_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -124,7 +124,7 @@ static void build_control_menu(void) {
     snprintf(timer_str, sizeof(timer_str), "%lu min", st.timerDuration);
 
     static char volt_str[12];
-    snprintf(volt_str, sizeof(volt_str), "%.1fV", st.voltageThreshold);
+    snprintf(volt_str, sizeof(volt_str), "%+.0f dBFS", st.audioThreshold_dBFS);
 
     static char blink_str[8];
     snprintf(blink_str, sizeof(blink_str), "%s", st.blinkingEnabled ? "ON" : "OFF");
@@ -135,7 +135,7 @@ static void build_control_menu(void) {
     control_menu.items[1] = {"Sensing Mode", mode_str, ICON_SETTINGS, MENU_ACTION, edit_sensing_mode};
     control_menu.items[2] = {"Amplifier", amp_str, ICON_CONTROL, MENU_ACTION, edit_amplifier};
     control_menu.items[3] = {"Timer Duration", timer_str, nullptr, MENU_ACTION, edit_timer_duration};
-    control_menu.items[4] = {"Voltage Thresh", volt_str, nullptr, MENU_ACTION, edit_voltage_threshold};
+    control_menu.items[4] = {"Audio Thresh", volt_str, nullptr, MENU_ACTION, edit_voltage_threshold};
     control_menu.items[5] = {"LED Blinking", blink_str, nullptr, MENU_ACTION, edit_led_blinking};
 }
 
@@ -158,7 +158,7 @@ void scr_control_refresh(void) {
     scr_menu_set_item_value(3, timer_buf);
 
     static char volt_buf[12];
-    snprintf(volt_buf, sizeof(volt_buf), "%.1fV", st.voltageThreshold);
+    snprintf(volt_buf, sizeof(volt_buf), "%+.0f dBFS", st.audioThreshold_dBFS);
     scr_menu_set_item_value(4, volt_buf);
 
     scr_menu_set_item_value(5, st.blinkingEnabled ? "ON" : "OFF");

@@ -153,13 +153,17 @@ lv_obj_t *scr_debug_create(void) {
     {
         char pins_buf[128];
         snprintf(pins_buf, sizeof(pins_buf),
-                 "Core: LED=%d Amp=%d ADC=%d\n"
+                 "Core: LED=%d Amp=%d\n"
                  "  Btn=%d Buzz=%d\n"
+                 "I2S: BCK=%d DOUT=%d LRC=%d\n"
+                 "  MCLK=%d\n"
                  "Enc: A=%d B=%d SW=%d\n"
                  "TFT: CS=%d MOSI=%d CLK=%d\n"
                  "  DC=%d RST=%d BL=%d",
-                 LED_PIN, AMPLIFIER_PIN, VOLTAGE_SENSE_PIN,
+                 LED_PIN, AMPLIFIER_PIN,
                  RESET_BUTTON_PIN, BUZZER_PIN,
+                 I2S_BCK_PIN, I2S_DOUT_PIN, I2S_LRC_PIN,
+                 I2S_MCLK_PIN,
                  ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
                  TFT_CS_PIN, TFT_MOSI_PIN, TFT_SCLK_PIN,
                  TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN);
