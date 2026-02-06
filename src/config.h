@@ -149,7 +149,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #endif
 
 // GUI FreeRTOS task
-#define TASK_STACK_SIZE_GUI 8192
+#define TASK_STACK_SIZE_GUI 16384
 #define TASK_PRIORITY_GUI 1
 
 #endif // GUI_ENABLED

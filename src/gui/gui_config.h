@@ -85,7 +85,7 @@
    FreeRTOS GUI TASK
  *====================*/
 
-#define GUI_TASK_STACK_SIZE 8192
+#define GUI_TASK_STACK_SIZE 16384
 #define GUI_TASK_PRIORITY 1
 #define GUI_TASK_CORE 1
 

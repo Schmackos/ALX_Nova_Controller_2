@@ -2,7 +2,35 @@
 
 ## Version 1.4.2
 
+## Bug Fixes
+- [2026-02-06] fix: Prevent GUI freeze on screen navigation and buzzer dying
+
+Increase gui_task stack (8KB→16KB) and LVGL heap (32KB→48KB) to prevent
+stack overflow and allocation failures during complex screen transitions.
+Add FreeRTOS mutex to buzzer_update() and call it from both gui_task
+(Core 1) and main loop (Core 0) so the buzzer keeps working if gui_task
+stalls.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`4559e5c`)
+- [2026-02-06] fix: Prevent GUI freeze on screen navigation and buzzer dying
+
+Increase gui_task stack (8KB→16KB) and LVGL heap (32KB→48KB) to prevent
+stack overflow and allocation failures during complex screen transitions.
+Add FreeRTOS mutex to buzzer_update() and call it from both gui_task
+(Core 1) and main loop (Core 0) so the buzzer keeps working if gui_task
+stalls.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`b7a23b6`)
+
 ## New Features
+- [2026-02-06] feat: Add OTA update melody with blocking playback helper
+
+Play a descending D-minor alert melody (D6→A5→F5→D5→A5) before
+firmware flashing begins, giving audible feedback for both GitHub
+download and manual upload OTA paths. Adds buzzer_play_blocking()
+for synchronous melody playback in non-looping contexts.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`4f6f9df`)
 - [2026-02-06] feat: Add OTA update melody with blocking playback helper
 
 Play a descending D-minor alert melody (D6→A5→F5→D5→A5) before
