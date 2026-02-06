@@ -33,6 +33,7 @@ static lv_color_t draw_buf[DISP_BUF_SIZE];
 
 /* Screen sleep state */
 static bool screen_awake = true;
+static bool screen_dimmed = false;
 static unsigned long last_activity_time = 0;
 
 /* FreeRTOS task handle */
@@ -72,6 +73,7 @@ static void screen_sleep(void) {
 /* Wake display */
 static void screen_wake(void) {
     last_activity_time = millis();
+    screen_dimmed = false;
     if (screen_awake) return;
     screen_awake = true;
     set_backlight(AppState::getInstance().backlightBrightness);
@@ -81,6 +83,15 @@ static void screen_wake(void) {
 
 /* Track last applied brightness to detect changes */
 static uint8_t last_applied_brightness = 255;
+
+/* Dim display (reduce brightness without sleeping) */
+static void screen_dim(void) {
+    if (screen_dimmed || !screen_awake) return;
+    screen_dimmed = true;
+    set_backlight(BL_BRIGHTNESS_DIM);
+    last_applied_brightness = BL_BRIGHTNESS_DIM;
+    LOG_D("[GUI] Screen dimmed");
+}
 
 /* GUI FreeRTOS task */
 static void gui_task(void *param) {
@@ -101,9 +112,16 @@ static void gui_task(void *param) {
     last_activity_time = millis();
 
     for (;;) {
-        /* Check for input activity to wake screen */
+        /* Check for input activity to wake/undim screen */
         if (gui_input_activity()) {
-            screen_wake();
+            if (screen_dimmed) {
+                screen_dimmed = false;
+                set_backlight(AppState::getInstance().backlightBrightness);
+                last_applied_brightness = AppState::getInstance().backlightBrightness;
+                last_activity_time = millis();
+            } else {
+                screen_wake();
+            }
         }
 
         /* Poll AppState for external backlight changes (web/MQTT -> GUI) */
@@ -112,14 +130,27 @@ static void gui_task(void *param) {
             screen_wake();
         } else if (!desired && screen_awake) {
             screen_sleep();
+        } else if (desired && screen_awake && screen_dimmed) {
+            screen_dimmed = false;
+            set_backlight(AppState::getInstance().backlightBrightness);
+            last_applied_brightness = AppState::getInstance().backlightBrightness;
+            last_activity_time = millis();
         }
 
-        /* Apply brightness changes while screen is awake */
-        if (screen_awake) {
+        /* Apply brightness changes while screen is awake (not dimmed) */
+        if (screen_awake && !screen_dimmed) {
             uint8_t cur_brightness = AppState::getInstance().backlightBrightness;
             if (cur_brightness != last_applied_brightness) {
                 set_backlight(cur_brightness);
                 last_applied_brightness = cur_brightness;
+            }
+        }
+
+        /* Handle dim timeout */
+        unsigned long dim_ms = AppState::getInstance().dimTimeout;
+        if (screen_awake && !screen_dimmed && dim_ms > 0) {
+            if (millis() - last_activity_time > dim_ms) {
+                screen_dim();
             }
         }
 

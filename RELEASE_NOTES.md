@@ -31,7 +31,14 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`a5e5829`)
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-06] fix: Regenerate gzipped web assets and fix gui_manager build error
+
+Regenerate web_pages_gz.cpp to include the new Audio tab added in the
+PCM1808 integration. Fix declaration order in gui_manager.cpp where
+last_applied_brightness was used before being declared.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`aefe8e7`)
+
 
 ## Technical Details
 
