@@ -10,7 +10,7 @@
 // deviceSerialNumber in app_state.h)
 
 // ===== Firmware Version =====
-#define FIRMWARE_VERSION "1.4.4"
+#define FIRMWARE_VERSION "1.5.0"
 
 // ===== GitHub Repository Configuration =====
 #define GITHUB_REPO_OWNER "Schmackos"
