@@ -24,7 +24,23 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`20efaac`)
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-06] fix: Improve buzzer reliability and add shutdown melody
+
+- Add BUZZ_SHUTDOWN pattern (reversed startup chime) played before
+  all reboot/reset actions for audible feedback
+- Fix buzzer PWM channel conflict (1→2) to use separate timer from
+  backlight
+- Detach buzzer pin from LEDC after playback to eliminate residual
+  PWM noise
+- Reorder buzzer_update() to sequence patterns before checking ISR
+  flags, preventing missed tick sounds during active playback
+- Remove silence gap from tick pattern for snappier encoder feedback
+- Use buzzer_play_blocking() for button long/very-long press resets
+- Update CLAUDE.md with GUI architecture docs and 237 test count
+- Update release workflow test summary to reflect all 16 test modules
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`d3fde3e`)
+
 
 ## Technical Details
 - Version bump to 1.5.2
