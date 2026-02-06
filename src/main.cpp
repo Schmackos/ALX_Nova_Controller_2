@@ -531,17 +531,17 @@ void loop() {
       break;
 
     case BTN_LONG_PRESS:
-      buzzer_play(BUZZ_BTN_LONG);
+      buzzer_play_blocking(BUZZ_BTN_LONG, 400);
       LOG_W("[Button] Long press - restarting ESP32");
-      delay(500);
+      buzzer_play_blocking(BUZZ_SHUTDOWN, 1200);
       ESP.restart();
       break;
 
     case BTN_VERY_LONG_PRESS:
-      buzzer_play(BUZZ_BTN_VERY_LONG);
+      buzzer_play_blocking(BUZZ_BTN_VERY_LONG, 700);
       LOG_W("[Button] Very long press - rebooting ESP32");
       sendRebootProgress(10, true);
-      delay(100); // Give time for WebSocket message to send
+      buzzer_play_blocking(BUZZ_SHUTDOWN, 1200);
       ESP.restart();
       break;
 

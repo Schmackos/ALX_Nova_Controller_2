@@ -74,7 +74,9 @@
       "Bash(pio boards:*)",
       "Bash(python3 -c \" import json try: with open\\(''.platformio/platforms/espressif32/boards/esp32-s3-devkitc-1.json'', ''r''\\) as f: b = json.load\\(f\\) print\\(''Flash mode:'', b.get\\(''build'',{}\\).get\\(''flash_mode'',''?''\\)\\) print\\(''Flash freq:'', b.get\\(''build'',{}\\).get\\(''f_flash'',''?''\\)\\) print\\(''Flash size:'', b.get\\(''upload'',{}\\).get\\(''flash_size'',''?''\\)\\) print\\(''Max size:'', b.get\\(''upload'',{}\\).get\\(''maximum_size'',''?''\\)\\) except: pass \")",
       "Bash(xargs cat:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(git status -u)",
+      "Skill(git-commit-helper)"
     ]
   }
 }

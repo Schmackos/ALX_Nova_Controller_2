@@ -18,7 +18,6 @@ struct ToneStep {
 // ===== Pattern definitions (terminated by {0,0}) =====
 static const ToneStep pat_tick[] = {
   {1500, 8},
-  {0, 20},    // silence gap between ticks
   {0, 0}
 };
 
@@ -90,6 +89,20 @@ static const ToneStep pat_startup[] = {
   {0, 0}
 };
 
+// Shutdown melody: reversed startup chime (E6 → C6 → G5 → E5 → C5)
+static const ToneStep pat_shutdown[] = {
+  {1319, 120},   // E6
+  {0, 40},
+  {1047, 120},   // C6
+  {0, 40},
+  {784, 120},    // G5
+  {0, 40},
+  {659, 120},    // E5
+  {0, 40},
+  {523, 300},    // C5 (held longer for resolution)
+  {0, 0}
+};
+
 // OTA update melody: descending D-minor alert + rising resolution
 static const ToneStep pat_ota_update[] = {
   {1175, 100},   // D6 - attention
@@ -118,6 +131,7 @@ static const ToneStep *get_pattern(BuzzerPattern p) {
     case BUZZ_NAV:            return pat_nav;
     case BUZZ_STARTUP:        return pat_startup;
     case BUZZ_OTA_UPDATE:     return pat_ota_update;
+    case BUZZ_SHUTDOWN:       return pat_shutdown;
     default:                  return nullptr;
   }
 }
@@ -138,8 +152,9 @@ static SemaphoreHandle_t buzzer_mutex = nullptr;
 
 void buzzer_init() {
   ledcSetup(BUZZER_PWM_CHANNEL, 2000, BUZZER_PWM_RESOLUTION);
-  ledcAttachPin(BUZZER_PIN, BUZZER_PWM_CHANNEL);
-  ledcWrite(BUZZER_PWM_CHANNEL, 0);  // Start silent
+  // Start with pin detached and LOW — only attach during active playback
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
   if (buzzer_mutex == nullptr) {
     buzzer_mutex = xSemaphoreCreateMutex();
   }
@@ -154,6 +169,9 @@ static void start_pattern(const ToneStep *pat) {
   current_step = 0;
   step_start_ms = millis();
   playing = true;
+
+  // Re-attach pin to LEDC for playback
+  ledcAttachPin(BUZZER_PIN, BUZZER_PWM_CHANNEL);
 
   // Start first step
   if (pat[0].duration_ms > 0) {
@@ -173,6 +191,10 @@ static void start_pattern(const ToneStep *pat) {
 static void stop_buzzer() {
   ledcWrite(BUZZER_PWM_CHANNEL, 0);
   ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
+  // Detach pin from LEDC and drive LOW to eliminate residual PWM noise
+  ledcDetachPin(BUZZER_PIN);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
   playing = false;
   current_pattern = nullptr;
 }
@@ -181,7 +203,34 @@ void buzzer_update() {
   if (buzzer_mutex == nullptr) return;
   if (xSemaphoreTake(buzzer_mutex, 0) != pdTRUE) return;
 
-  // Check ISR-safe tick/click flags first
+  // Sequence current pattern FIRST so completed patterns free up
+  // before we check for new requests (prevents eating queued ticks)
+  if (playing && current_pattern != nullptr) {
+    unsigned long elapsed = millis() - step_start_ms;
+    if (elapsed >= current_pattern[current_step].duration_ms) {
+      // Advance to next step
+      current_step++;
+      if (current_pattern[current_step].duration_ms == 0) {
+        // Pattern complete
+        stop_buzzer();
+      } else {
+        // Start next step
+        step_start_ms = millis();
+        int vol = AppState::getInstance().buzzerVolume;
+        if (vol < 0) vol = 0;
+        if (vol > 2) vol = 2;
+        if (current_pattern[current_step].freq_hz > 0) {
+          ledcWriteTone(BUZZER_PWM_CHANNEL, current_pattern[current_step].freq_hz);
+          ledcWrite(BUZZER_PWM_CHANNEL, volume_duty[vol]);
+        } else {
+          // Silence gap
+          ledcWrite(BUZZER_PWM_CHANNEL, 0);
+        }
+      }
+    }
+  }
+
+  // Check ISR-safe tick/click flags (after sequencing, so finished patterns don't block)
   if (_buzzer_tick_pending) {
     _buzzer_tick_pending = false;
     if (AppState::getInstance().buzzerEnabled && !playing) {
@@ -204,37 +253,6 @@ void buzzer_update() {
       if (pat) {
         start_pattern(pat);
       }
-    }
-  }
-
-  // Sequence current pattern
-  if (!playing || current_pattern == nullptr) {
-    xSemaphoreGive(buzzer_mutex);
-    return;
-  }
-
-  unsigned long elapsed = millis() - step_start_ms;
-  if (elapsed >= current_pattern[current_step].duration_ms) {
-    // Advance to next step
-    current_step++;
-    if (current_pattern[current_step].duration_ms == 0) {
-      // Pattern complete
-      stop_buzzer();
-      xSemaphoreGive(buzzer_mutex);
-      return;
-    }
-
-    // Start next step
-    step_start_ms = millis();
-    int vol = AppState::getInstance().buzzerVolume;
-    if (vol < 0) vol = 0;
-    if (vol > 2) vol = 2;
-    if (current_pattern[current_step].freq_hz > 0) {
-      ledcWriteTone(BUZZER_PWM_CHANNEL, current_pattern[current_step].freq_hz);
-      ledcWrite(BUZZER_PWM_CHANNEL, volume_duty[vol]);
-    } else {
-      // Silence gap
-      ledcWrite(BUZZER_PWM_CHANNEL, 0);
     }
   }
 

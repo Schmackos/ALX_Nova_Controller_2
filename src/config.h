@@ -39,7 +39,7 @@ const int BUZZER_PIN = 8; // GPIO 8 - passive buzzer (PWM)
 #endif
 
 // ===== Buzzer Configuration =====
-#define BUZZER_PWM_CHANNEL 1   // LEDC channel (channel 0 is TFT backlight)
+#define BUZZER_PWM_CHANNEL 2   // LEDC channel (Timer 1, separate from backlight Timer 0)
 #define BUZZER_PWM_RESOLUTION 8 // 8-bit resolution (0-255 duty)
 
 // ===== Server Ports =====

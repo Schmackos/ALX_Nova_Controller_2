@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ESP32-S3 based intelligent amplifier controller (ALX Nova) with smart auto-sensing, WiFi management, MQTT/Home Assistant integration, OTA firmware updates, and a web configuration interface. Built with PlatformIO and the Arduino framework. Current firmware version is defined in `src/config.h` as `FIRMWARE_VERSION`.
+ESP32-S3 based intelligent amplifier controller (ALX Nova) with smart auto-sensing, WiFi management, MQTT/Home Assistant integration, OTA firmware updates, a web configuration interface, and an LVGL-based GUI on a ST7735S TFT display with rotary encoder input. Built with PlatformIO and the Arduino framework. Current firmware version is defined in `src/config.h` as `FIRMWARE_VERSION`.
 
 ## Build & Test Commands
 
@@ -30,7 +30,7 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework. Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (237 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`.
 
 ## Architecture
 
@@ -51,19 +51,32 @@ Each subsystem is a separate module in `src/`:
 - **settings_manager** — NVS/Preferences persistence, export/import, factory reset
 - **auth_handler** — Session token management, web password authentication
 - **button_handler** — Debouncing, short/long/very-long press and multi-click detection
+- **buzzer_handler** — Piezo buzzer with multi-pattern sequencer, ISR-safe encoder tick/click, volume control, FreeRTOS mutex for dual-core safety
 - **websocket_handler** — Real-time state broadcasting to web clients (port 81)
 - **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`)
+
+### GUI (LVGL on TFT Display)
+LVGL v9.4 + TFT_eSPI on ST7735S 128x160 (landscape 160x128). Runs on Core 1 via FreeRTOS `gui_task`. All GUI code is guarded by `-D GUI_ENABLED`.
+
+Key GUI modules in `src/gui/`:
+- **gui_manager** — Init, FreeRTOS task, screen sleep/wake, dashboard refresh
+- **gui_input** — ISR-driven rotary encoder (Gray code state machine)
+- **gui_theme** — Orange accent theme, dark/light mode
+- **gui_navigation** — Screen stack with push/pop and transition animations
+- **screens/** — Desktop carousel, Home status, Control, WiFi, MQTT, Settings, Debug, Support, Boot animations, Keyboard, Value editor
 
 ### Web Server
 HTTP server on port 80 with REST API endpoints under `/api/`. WebSocket server on port 81 for real-time updates. API endpoints are registered in `main.cpp`.
 
 ### FreeRTOS Tasks
-Concurrent tasks with configurable stack sizes and priorities defined in `src/config.h` (`TASK_STACK_SIZE_*`, `TASK_PRIORITY_*`). Task setup is in `src/tasks.h/cpp`.
+Concurrent tasks with configurable stack sizes and priorities defined in `src/config.h` (`TASK_STACK_SIZE_*`, `TASK_PRIORITY_*`). Task setup is in `src/tasks.h/cpp`. Main loop runs on Core 0; GUI task runs on Core 1. Cross-core communication uses dirty flags in AppState — GUI sets flags, main loop handles WebSocket/MQTT broadcasts.
 
 ## Pin Configuration
 
 Defined as build flags in `platformio.ini` and with fallback defaults in `src/config.h`:
-- LED: GPIO 2, Amplifier relay: GPIO 4, Voltage sense (ADC): GPIO 1, Reset button: GPIO 15
+- Core: LED=2, Amplifier=4, VoltSense(ADC)=1, Reset button=15, Buzzer=8
+- TFT: MOSI=11, SCLK=12, CS=10, DC=13, RST=14, BL=21
+- Encoder: A=5, B=6, SW=7
 
 ## Testing Conventions
 
@@ -72,6 +85,7 @@ Defined as build flags in `platformio.ini` and with fallback defaults in `src/co
 - Mock headers in `test/test_mocks/` simulate Arduino functions (`millis()`, `analogRead()`, GPIO), WiFi, MQTT (`PubSubClient`), and NVS (`Preferences`)
 - The `native` environment compiles with `-D UNIT_TEST -D NATIVE_TEST` flags — use these for conditional compilation
 - `test_build_src = no` in platformio.ini means tests don't compile `src/` directly; they include specific headers and use mocks
+- Each test module must be in its own directory to avoid duplicate `main`/`setUp`/`tearDown` symbols
 
 ## Commit Convention
 
@@ -93,3 +107,5 @@ GitHub Actions (`.github/workflows/tests.yml`): runs all native tests, then buil
 - `ArduinoJson@^7.4.2` — JSON parsing throughout the codebase
 - `WebSockets@^2.7.2` — WebSocket server for real-time UI updates
 - `PubSubClient@^2.8` — MQTT client for Home Assistant integration
+- `lvgl@^9.4` — GUI framework (guarded by `GUI_ENABLED`)
+- `TFT_eSPI@^2.5.43` — TFT display driver for ST7735S

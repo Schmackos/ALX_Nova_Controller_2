@@ -17,6 +17,7 @@ enum BuzzerPattern {
   BUZZ_NAV,            // Screen navigation transition
   BUZZ_STARTUP,        // Boot startup melody
   BUZZ_OTA_UPDATE,     // Pre-OTA update melody
+  BUZZ_SHUTDOWN,       // Reversed startup melody (before reboot)
 };
 
 // ===== Public API =====

@@ -3,6 +3,21 @@
 ## Version 1.5.2
 
 ## New Features
+- [2026-02-06] feat: Add backlight brightness control across GUI, Web, and MQTT
+
+Add a persisted backlight brightness setting (10-100%) controllable
+from all interfaces. Wake restores saved brightness instead of
+hardcoded 255. Persisted as line 13 in /settings.txt.
+
+- AppState: backlightBrightness field with dirty-flag setter
+- GUI: Settings menu brightness cycle (10/25/50/75/100%), live apply
+- gui_manager: screen_wake uses saved brightness, gui_task polls changes
+- settings_manager: save/load line 13, JSON import/export/diagnostics
+- WebSocket: setBrightness handler, backlightBrightness in displayState
+- MQTT: display/brightness topic (percentage), HA discovery number entity
+- Web UI: range slider in Appearance card with real-time sync
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`20efaac`)
 - Automated release via GitHub Actions
 
 ## Improvements
@@ -103,6 +118,15 @@ None
 ## Version 1.4.2
 
 ## Bug Fixes
+- [2026-02-06] fix: Prevent GUI freeze on screen navigation and buzzer dying
+
+Increase gui_task stack (8KB→16KB) and LVGL heap (32KB→48KB) to prevent
+stack overflow and allocation failures during complex screen transitions.
+Add FreeRTOS mutex to buzzer_update() and call it from both gui_task
+(Core 1) and main loop (Core 0) so the buzzer keeps working if gui_task
+stalls.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`49fd8e3`)
 - [2026-02-06] fix: Prevent GUI freeze on screen navigation and buzzer dying
 
 Increase gui_task stack (8KB→16KB) and LVGL heap (32KB→48KB) to prevent
