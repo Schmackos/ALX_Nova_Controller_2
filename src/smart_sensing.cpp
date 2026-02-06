@@ -78,7 +78,7 @@ void handleSmartSensingUpdate() {
     if (currentMode != newMode) {
       currentMode = newMode;
       settingsChanged = true;
-      DebugOut.printf("Mode changed to: %s\n", modeStr.c_str());
+      LOG_I("[Sensing] Mode changed to: %s", modeStr.c_str());
 
       // When switching to SMART_AUTO mode, immediately evaluate voltage state
       if (currentMode == SMART_AUTO) {
@@ -91,15 +91,13 @@ void handleSmartSensingUpdate() {
           lastVoltageDetection = millis();
           setAmplifierState(true);
           previousVoltageState = true;
-          DebugOut.println("SMART_AUTO mode activated - voltage detected, "
-                           "amplifier ON, timer at full value");
+          LOG_I("[Sensing] Smart Auto activated: voltage detected, amp ON");
         } else {
           // Voltage is below threshold - turn OFF
           timerRemaining = 0;
           setAmplifierState(false);
           previousVoltageState = false;
-          DebugOut.println(
-              "SMART_AUTO mode activated - no voltage detected, amplifier OFF");
+          LOG_I("[Sensing] Smart Auto activated: no voltage, amp OFF");
         }
       }
     }
@@ -121,19 +119,15 @@ void handleSmartSensingUpdate() {
         if (amplifierState) {
           // Amplifier is ON - update timer to new duration
           lastTimerUpdate = millis();
-          DebugOut.printf(
-              "Timer duration changed to: %d minutes (timer updated)\n",
-              duration);
+          LOG_I("[Sensing] Timer duration changed to %d min (timer updated)", duration);
         } else {
           // Amplifier is OFF - just display new duration, countdown won't start
           // until voltage disappears
-          DebugOut.printf("Timer duration changed to: %d minutes (countdown "
-                          "starts when voltage disappears)\n",
-                          duration);
+          LOG_I("[Sensing] Timer duration changed to %d min (countdown starts when voltage disappears)", duration);
         }
       }
 
-      DebugOut.printf("Timer duration set to: %d minutes\n", duration);
+      LOG_I("[Sensing] Timer duration set to %d min", duration);
     } else {
       server.send(400, "application/json",
                   "{\"success\": false, \"message\": \"Timer duration must be "
@@ -150,7 +144,7 @@ void handleSmartSensingUpdate() {
     if (threshold >= 0.1 && threshold <= 3.3) {
       voltageThreshold = threshold;
       settingsChanged = true;
-      DebugOut.printf("Voltage threshold changed to: %.2fV\n", threshold);
+      LOG_I("[Sensing] Voltage threshold set to %.2fV", threshold);
     } else {
       server.send(400, "application/json",
                   "{\"success\": false, \"message\": \"Voltage threshold must "
@@ -163,19 +157,18 @@ void handleSmartSensingUpdate() {
   if (doc["manualOverride"].is<bool>()) {
     bool state = doc["manualOverride"].as<bool>();
     setAmplifierState(state);
-    DebugOut.printf("Manual override: Amplifier set to %s\n",
-                    state ? "ON" : "OFF");
+    LOG_I("[Sensing] Manual override: amplifier %s", state ? "ON" : "OFF");
 
     if (currentMode == SMART_AUTO) {
       if (state) {
         // If turning on manually in SMART_AUTO mode, set timer to full value
         timerRemaining = timerDuration * 60;
         lastTimerUpdate = millis();
-        DebugOut.println("Manual ON: Timer set to full value");
+        LOG_D("[Sensing] Manual ON: timer set to full value");
       } else {
         // If turning off manually in SMART_AUTO mode, reset timer to 0
         timerRemaining = 0;
-        DebugOut.println("Manual OFF: Timer reset to 0");
+        LOG_D("[Sensing] Manual OFF: timer reset to 0");
       }
     }
   }
@@ -215,7 +208,7 @@ void setAmplifierState(bool state) {
   if (amplifierState != state) {
     amplifierState = state;
     digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
-    DebugOut.printf("Amplifier state changed to: %s\n", state ? "ON" : "OFF");
+    LOG_I("[Sensing] Amplifier %s", state ? "ON" : "OFF");
   }
 }
 
@@ -259,8 +252,7 @@ void updateSmartSensingLogic() {
       // Ensure amplifier is ON
       if (!amplifierState) {
         setAmplifierState(true);
-        DebugOut.println(
-            "Smart Auto: Voltage detected - amplifier ON, timer reset");
+        LOG_D("[Sensing] Voltage detected, amp ON, timer reset");
       }
     } else {
       // No voltage detected - countdown timer if amplifier is ON
@@ -271,8 +263,7 @@ void updateSmartSensingLogic() {
 
           if (timerRemaining == 0) {
             setAmplifierState(false);
-            DebugOut.println(
-                "Smart Auto: Timer expired, turning amplifier OFF");
+            LOG_I("[Sensing] Timer expired, amplifier OFF");
           }
         }
       }
@@ -392,9 +383,9 @@ bool loadSmartSensingSettings() {
     }
   }
 
-  DebugOut.println("Smart Sensing settings loaded from LittleFS");
-  DebugOut.printf("  Mode: %d, Timer: %lu min, Threshold: %.2fV\n", currentMode,
-                  timerDuration, voltageThreshold);
+  LOG_I("[Sensing] Settings loaded");
+  LOG_D("[Sensing]   Mode: %d, Timer: %lu min, Threshold: %.2fV", currentMode,
+        timerDuration, voltageThreshold);
 
   return true;
 }
@@ -403,7 +394,7 @@ bool loadSmartSensingSettings() {
 void saveSmartSensingSettings() {
   File file = LittleFS.open("/smartsensing.txt", "w");
   if (!file) {
-    DebugOut.println("Failed to open smart sensing settings file for writing");
+    LOG_E("[Sensing] Failed to open settings file for writing");
     return;
   }
 
@@ -412,5 +403,5 @@ void saveSmartSensingSettings() {
   file.println(String(voltageThreshold, 2));
   file.close();
 
-  DebugOut.println("Smart Sensing settings saved to LittleFS");
+  LOG_I("[Sensing] Settings saved");
 }

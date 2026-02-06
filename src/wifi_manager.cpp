@@ -205,10 +205,9 @@ void initializeNetworkServices() {
   DebugOut.setWebSocket(&webSocket);
   server.begin();
 
-  DebugOut.println("=== Web server started on port 80 ===");
-  DebugOut.println("=== WebSocket server started on port 81 ===");
-  DebugOut.printf("Navigate to http://%s\n",
-                  WiFi.localIP().toString().c_str());
+  LOG_I("[WiFi] Web server started on port 80");
+  LOG_I("[WiFi] WebSocket server started on port 81");
+  LOG_I("[WiFi] Navigate to http://%s", WiFi.localIP().toString().c_str());
 
   setupMqtt();
 }
@@ -220,8 +219,7 @@ void ensureAPModeWithSTA() {
     WiFi.softAP(apSSID.c_str(), apPassword);
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
     isAPMode = true;
-    DebugOut.printf("Access Point also running at: %s\n",
-                    WiFi.softAPIP().toString().c_str());
+    LOG_I("[WiFi] Access Point also running at: %s", WiFi.softAPIP().toString().c_str());
   } else if (!apEnabled && isAPMode) {
     dnsServer.stop();
     isAPMode = false;
@@ -237,12 +235,10 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 
     // Always print when actively connecting, otherwise throttle
     if (wifiConnecting) {
-      DebugOut.printf("⚠️  WiFi connection failed: %s (reason %d)\n",
-                      reasonStr.c_str(), reason);
+      LOG_W("[WiFi] Connection failed: %s (reason %d)", reasonStr.c_str(), reason);
       wifiConnectError = reasonStr;
     } else if (millis() - lastDisconnectWarning > WARNING_THROTTLE_MS) {
-      DebugOut.printf("⚠️  WiFi disconnected: %s (reason %d)\n",
-                      reasonStr.c_str(), reason);
+      LOG_W("[WiFi] Disconnected: %s (reason %d)", reasonStr.c_str(), reason);
       lastDisconnectWarning = millis();
     }
 
@@ -250,8 +246,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     if (reason == 201) {
       lastFailedSSID = WiFi.SSID();
       wifiRetryInProgress = true;
-      DebugOut.printf("Network not found (%s) - will try other saved networks\n",
-                      lastFailedSSID.c_str());
+      LOG_W("[WiFi] Network not found (%s) - will try other saved networks", lastFailedSSID.c_str());
     }
 
     wifiDisconnected = true;
@@ -261,7 +256,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
   }
 
   case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-    DebugOut.println("✓ WiFi connected to access point");
+    LOG_I("[WiFi] Connected to access point");
     wifiDisconnected = false;
     wifiConnectError = "";            // Clear any previous error
     wifiRetryInProgress = false;      // Clear retry flag on success
@@ -271,8 +266,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     break;
 
   case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-    DebugOut.printf("✓ WiFi IP address: %s\n",
-                    WiFi.localIP().toString().c_str());
+    LOG_I("[WiFi] IP address: %s", WiFi.localIP().toString().c_str());
     wifiDisconnected = false;
     wifiConnectError = "";            // Clear any previous error
     wifiRetryInProgress = false;      // Clear retry flag on success
@@ -289,7 +283,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 // Initialize WiFi event handler (call this in setup)
 void initWiFiEventHandler() {
   WiFi.onEvent(onWiFiEvent);
-  DebugOut.println("WiFi event handler initialized");
+  LOG_I("[WiFi] Event handler initialized");
 }
 
 // Check WiFi connection and attempt reconnection if needed
@@ -299,7 +293,7 @@ void checkWiFiConnection() {
     if (millis() - wifiScanStartTime > WIFI_SCAN_TIMEOUT_MS) {
       // Scan timed out, clear the flag
       wifiScanInProgress = false;
-      DebugOut.println("WiFi scan timeout - clearing scan flag");
+      LOG_W("[WiFi] Scan timeout - clearing scan flag");
     } else {
       return;
     }
@@ -307,11 +301,10 @@ void checkWiFiConnection() {
 
   // Handle immediate retry when network not found (error 201)
   if (wifiRetryInProgress && !wifiConnecting && WiFi.getMode() != WIFI_AP) {
-    DebugOut.printf("Network '%s' not found - trying other saved networks...\n",
-                    lastFailedSSID.c_str());
+    LOG_W("[WiFi] Network '%s' not found - trying other saved networks", lastFailedSSID.c_str());
 
     if (connectToStoredNetworks()) {
-      DebugOut.println("✓ Connected to alternative network!");
+      LOG_I("[WiFi] Connected to alternative network");
       wifiRetryInProgress = false;
       wifiDisconnected = false;
       currentRetryCount = 0;
@@ -319,8 +312,7 @@ void checkWiFiConnection() {
       // All networks failed, schedule full list retry
       lastFullRetryAttempt = millis();
       currentRetryCount++;
-      DebugOut.printf("All networks failed (attempt %d). Will retry in %d seconds...\n",
-                      currentRetryCount, RETRY_INTERVAL_MS / 1000);
+      LOG_W("[WiFi] All networks failed (attempt %d). Will retry in %d seconds", currentRetryCount, RETRY_INTERVAL_MS / 1000);
       wifiRetryInProgress = false; // Clear immediate retry flag
     }
     return;
@@ -338,23 +330,21 @@ void checkWiFiConnection() {
       lastFullRetryAttempt = millis();
       currentRetryCount++;
 
-      DebugOut.printf("Periodic retry attempt #%d - trying all saved networks...\n",
-                      currentRetryCount);
+      LOG_I("[WiFi] Periodic retry attempt #%d - trying all saved networks", currentRetryCount);
 
       // Try to connect to stored networks
       if (connectToStoredNetworks()) {
-        DebugOut.println("✓ Reconnection successful!");
+        LOG_I("[WiFi] Reconnection successful");
         wifiDisconnected = false;
         currentRetryCount = 0;
       } else {
         // If no networks are available and we're not already in AP mode
         if (!isAPMode && autoAPEnabled) {
-          DebugOut.println("No saved networks available. Starting AP mode...");
+          LOG_W("[WiFi] No saved networks available, starting AP mode");
           startAccessPoint();
           sendWiFiStatus();
         } else {
-          DebugOut.printf("No networks available. Next retry in %d seconds...\n",
-                          RETRY_INTERVAL_MS / 1000);
+          LOG_W("[WiFi] No networks available. Next retry in %d seconds", RETRY_INTERVAL_MS / 1000);
         }
       }
     }
@@ -365,13 +355,13 @@ void checkWiFiConnection() {
       lastReconnectAttempt = millis();
       lastFullRetryAttempt = millis();
 
-      DebugOut.println("Initial reconnection attempt to saved networks...");
+      LOG_I("[WiFi] Initial reconnection attempt to saved networks");
 
       if (connectToStoredNetworks()) {
-        DebugOut.println("✓ Reconnection successful!");
+        LOG_I("[WiFi] Reconnection successful");
         wifiDisconnected = false;
       } else if (!isAPMode && autoAPEnabled) {
-        DebugOut.println("No saved networks available. Starting AP mode...");
+        LOG_W("[WiFi] No saved networks available, starting AP mode");
         startAccessPoint();
         sendWiFiStatus();
       }
@@ -389,20 +379,19 @@ void startAccessPoint() {
   WiFi.softAP(apSSID.c_str(), apPassword);
 
   IPAddress apIP = WiFi.softAPIP();
-  DebugOut.println("\n=== Access Point Started ===");
-  DebugOut.printf("SSID: %s\n", apSSID.c_str());
-  DebugOut.printf("Password: %s\n", apPassword);
-  DebugOut.print("AP IP address: ");
-  DebugOut.println(apIP);
+  LOG_I("[WiFi] Access Point started");
+  LOG_I("[WiFi] SSID: %s", apSSID.c_str());
+  LOG_D("[WiFi] Password: %s", apPassword);
+  LOG_I("[WiFi] AP IP address: %s", apIP.toString().c_str());
 
   // Start the DNS server for Captive Portal
   dnsServer.start(DNS_PORT, "*", apIP);
-  DebugOut.println("DNS server started (Captive Portal active)");
+  LOG_I("[WiFi] DNS server started (Captive Portal active)");
 
   // We no longer overwrite "/" with a simple setup page.
   // The main dashboard routes from main.cpp will now handle requests.
 
-  DebugOut.println("Web server configured for AP Mode");
+  LOG_I("[WiFi] Web server configured for AP mode");
 }
 
 void stopAccessPoint() {
@@ -410,7 +399,7 @@ void stopAccessPoint() {
     dnsServer.stop();
     WiFi.softAPdisconnect(true);
     isAPMode = false;
-    DebugOut.println("Access Point and DNS server stopped");
+    LOG_I("[WiFi] Access Point and DNS server stopped");
   }
 }
 
@@ -419,48 +408,48 @@ bool configureStaticIP(const char *staticIP, const char *subnet,
                        const char *gateway, const char *dns1,
                        const char *dns2) {
   if (!staticIP || strlen(staticIP) == 0) {
-    DebugOut.println("No static IP provided");
+    LOG_E("[WiFi] No static IP provided");
     return false;
   }
 
   IPAddress ip, gw, sn, d1, d2;
 
   if (!ip.fromString(staticIP)) {
-    DebugOut.println("Invalid static IP address format");
+    LOG_E("[WiFi] Invalid static IP address format");
     return false;
   }
 
   if (!gw.fromString(gateway)) {
-    DebugOut.println("Invalid gateway address format");
+    LOG_E("[WiFi] Invalid gateway address format");
     return false;
   }
 
   if (!sn.fromString(subnet)) {
-    DebugOut.println("Invalid subnet mask format");
+    LOG_E("[WiFi] Invalid subnet mask format");
     return false;
   }
 
   // DNS servers are optional
   if (dns1 && strlen(dns1) > 0) {
     if (!d1.fromString(dns1)) {
-      DebugOut.println("Invalid DNS1 address format");
+      LOG_E("[WiFi] Invalid DNS1 address format");
       return false;
     }
   }
 
   if (dns2 && strlen(dns2) > 0) {
     if (!d2.fromString(dns2)) {
-      DebugOut.println("Invalid DNS2 address format");
+      LOG_E("[WiFi] Invalid DNS2 address format");
       return false;
     }
   }
 
   if (!WiFi.config(ip, gw, sn, d1, d2)) {
-    DebugOut.println("Failed to configure static IP");
+    LOG_E("[WiFi] Failed to configure static IP");
     return false;
   }
 
-  DebugOut.printf("Static IP configured: %s\n", staticIP);
+  LOG_I("[WiFi] Static IP configured: %s", staticIP);
   return true;
 }
 
@@ -477,24 +466,22 @@ void connectToWiFi(const WiFiNetworkConfig &config) {
 
   WiFi.begin(config.ssid.c_str(), config.password.c_str());
 
-  DebugOut.print("Connecting to WiFi: ");
-  DebugOut.println(config.ssid);
+  LOG_I("[WiFi] Connecting to: %s", config.ssid.c_str());
   if (config.useStaticIP) {
-    DebugOut.printf("  Using Static IP: %s\n", config.staticIP.c_str());
+    LOG_D("[WiFi] Using Static IP: %s", config.staticIP.c_str());
   } else {
-    DebugOut.println("  Using DHCP");
+    LOG_D("[WiFi] Using DHCP");
   }
 
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 40) {
     delay(500);
-    DebugOut.print(".");
     attempts++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    DebugOut.println("\nWiFi connected!");
-    DebugOut.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+    LOG_I("[WiFi] Connected");
+    LOG_I("[WiFi] IP address: %s", WiFi.localIP().toString().c_str());
 
     // Synchronize time with NTP (required for SSL certificate validation)
     syncTimeWithNTP();
@@ -505,7 +492,7 @@ void connectToWiFi(const WiFiNetworkConfig &config) {
     // Initialize network services
     initializeNetworkServices();
   } else {
-    DebugOut.println("WARNING: Failed to connect to WiFi. Starting AP mode...");
+    LOG_W("[WiFi] Failed to connect, starting AP mode");
     startAccessPoint();
   }
 }
@@ -569,8 +556,7 @@ void migrateWiFiCredentials() {
   // Load old credentials from LittleFS
   String oldSSID, oldPassword;
   if (loadWiFiCredentials(oldSSID, oldPassword)) {
-    DebugOut.println(
-        "Migrating WiFi credentials from LittleFS to Preferences...");
+    LOG_D("[WiFi] Migrating credentials from LittleFS to Preferences");
 
     // Save as first network
     prefs.putString("s0", oldSSID);
@@ -580,7 +566,7 @@ void migrateWiFiCredentials() {
     // Delete old file
     LittleFS.remove("/wifi_config.txt");
 
-    DebugOut.printf("Migrated network: %s\n", oldSSID.c_str());
+    LOG_D("[WiFi] Migrated network: %s", oldSSID.c_str());
   } else {
     // No old credentials, initialize empty
     prefs.putUChar("count", 0);
@@ -590,7 +576,7 @@ void migrateWiFiCredentials() {
   prefs.putUChar("migrated", 1);
   prefs.end();
 
-  DebugOut.println("WiFi credential migration complete");
+  LOG_D("[WiFi] Credential migration complete");
 }
 
 // Get number of saved networks
@@ -625,9 +611,7 @@ bool saveWiFiNetwork(const WiFiNetworkConfig &config) {
       }
       writeNetworkToPrefs(prefs, i, updateConfig);
       prefs.end();
-      DebugOut.printf("Updated network: %s (Static IP: %s)\n",
-                      config.ssid.c_str(),
-                      config.useStaticIP ? "enabled" : "disabled");
+      LOG_D("[WiFi] Updated network: %s (Static IP: %s)", config.ssid.c_str(), config.useStaticIP ? "enabled" : "disabled");
       return true;
     }
   }
@@ -635,7 +619,7 @@ bool saveWiFiNetwork(const WiFiNetworkConfig &config) {
   // Check if we've reached the maximum
   if (count >= MAX_WIFI_NETWORKS) {
     prefs.end();
-    DebugOut.println("Maximum number of WiFi networks reached (5)");
+    LOG_W("[WiFi] Maximum number of WiFi networks reached (5)");
     return false;
   }
 
@@ -644,9 +628,7 @@ bool saveWiFiNetwork(const WiFiNetworkConfig &config) {
   prefs.putUChar("count", count + 1);
   prefs.end();
 
-  DebugOut.printf("Saved new network: %s (total: %d, Static IP: %s)\n",
-                  config.ssid.c_str(), count + 1,
-                  config.useStaticIP ? "enabled" : "disabled");
+  LOG_D("[WiFi] Saved new network: %s (total: %d, Static IP: %s)", config.ssid.c_str(), count + 1, config.useStaticIP ? "enabled" : "disabled");
   return true;
 }
 
@@ -699,36 +681,33 @@ bool removeWiFiNetwork(int index) {
 
   int count = prefs.getUChar("count", 0);
 
-  DebugOut.printf("removeWiFiNetwork called. Index: %d, Current count: %d\n",
-                  index, count);
+  LOG_D("[WiFi] removeWiFiNetwork called. Index: %d, Current count: %d", index, count);
 
   if (index < 0 || index >= count) {
-    DebugOut.printf("Invalid index %d for count %d\n", index, count);
+    LOG_D("[WiFi] Invalid index %d for count %d", index, count);
     prefs.end();
     return false;
   }
 
   // Get SSID being removed for debug
   String removingSSID = prefs.getString(getNetworkKey("s", index).c_str(), "");
-  DebugOut.printf("Removing network at index %d: %s\n", index,
-                  removingSSID.c_str());
+  LOG_D("[WiFi] Removing network at index %d: %s", index, removingSSID.c_str());
 
   // Shift all networks after this index down by one
   for (int i = index; i < count - 1; i++) {
     WiFiNetworkConfig config;
     readNetworkFromOpenPrefs(prefs, i + 1, config);
-    DebugOut.printf("  Shifting index %d -> %d: %s\n", i + 1, i,
-                    config.ssid.c_str());
+    LOG_D("[WiFi] Shifting index %d -> %d: %s", i + 1, i, config.ssid.c_str());
     writeNetworkToPrefs(prefs, i, config);
   }
 
   // Remove the last entry
-  DebugOut.printf("Removing last entry at index %d\n", count - 1);
+  LOG_D("[WiFi] Removing last entry at index %d", count - 1);
   removeNetworkKeys(prefs, count - 1);
   prefs.putUChar("count", count - 1);
 
   prefs.end();
-  DebugOut.printf("Successfully removed network. New count: %d\n", count - 1);
+  LOG_D("[WiFi] Successfully removed network. New count: %d", count - 1);
   return true;
 }
 
@@ -741,17 +720,17 @@ bool connectToStoredNetworks() {
 
   if (count == 0) {
     prefs.end();
-    DebugOut.println("No saved WiFi networks.");
+    LOG_W("[WiFi] No saved WiFi networks");
     if (autoAPEnabled) {
-      DebugOut.println("Auto AP enabled: Starting AP mode...");
+      LOG_I("[WiFi] Auto AP enabled, starting AP mode");
       startAccessPoint();
     } else {
-      DebugOut.println("Auto AP disabled: Not starting AP mode.");
+      LOG_I("[WiFi] Auto AP disabled, not starting AP mode");
     }
     return false;
   }
 
-  DebugOut.printf("Trying %d saved network(s)...\n", count);
+  LOG_I("[WiFi] Trying %d saved network(s)", count);
 
   for (int i = 0; i < count; i++) {
     WiFiNetworkConfig config;
@@ -761,8 +740,7 @@ bool connectToStoredNetworks() {
       continue;
     }
 
-    DebugOut.printf("Attempting connection %d/%d: %s\n", i + 1, count,
-                    config.ssid.c_str());
+    LOG_I("[WiFi] Attempting connection %d/%d: %s", i + 1, count, config.ssid.c_str());
 
     WiFi.mode(WIFI_STA);
 
@@ -771,12 +749,12 @@ bool connectToStoredNetworks() {
       if (configureStaticIP(config.staticIP.c_str(), config.subnet.c_str(),
                             config.gateway.c_str(), config.dns1.c_str(),
                             config.dns2.c_str())) {
-        DebugOut.printf("  Using Static IP: %s\n", config.staticIP.c_str());
+        LOG_D("[WiFi] Using Static IP: %s", config.staticIP.c_str());
       }
     } else {
       // Reset to DHCP
       WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
-      DebugOut.println("  Using DHCP");
+      LOG_D("[WiFi] Using DHCP");
     }
 
     WiFi.begin(config.ssid.c_str(), config.password.c_str());
@@ -785,14 +763,12 @@ bool connectToStoredNetworks() {
     while (WiFi.status() != WL_CONNECTED &&
            millis() - startTime < WIFI_CONNECT_TIMEOUT_MS) {
       delay(500);
-      DebugOut.print(".");
     }
 
     if (WiFi.status() == WL_CONNECTED) {
       prefs.end();
-      DebugOut.println("\nWiFi connected!");
-      DebugOut.printf("Connected to: %s\n", config.ssid.c_str());
-      DebugOut.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+      LOG_I("[WiFi] Connected to: %s", config.ssid.c_str());
+      LOG_I("[WiFi] IP address: %s", WiFi.localIP().toString().c_str());
 
       // Move successful network to index 0 (priority) if not already there
       if (i != 0) {
@@ -810,7 +786,7 @@ bool connectToStoredNetworks() {
         writeNetworkToPrefs(prefsWrite, 0, config);
         prefsWrite.end();
 
-        DebugOut.println("Moved successful network to priority position");
+        LOG_D("[WiFi] Moved successful network to priority position");
       }
 
       // Synchronize time with NTP
@@ -824,17 +800,17 @@ bool connectToStoredNetworks() {
 
       return true;
     } else {
-      DebugOut.printf("\nFailed to connect to: %s\n", config.ssid.c_str());
+      LOG_W("[WiFi] Failed to connect to: %s", config.ssid.c_str());
     }
   }
 
   prefs.end();
-  DebugOut.println("All networks failed.");
+  LOG_W("[WiFi] All networks failed");
   if (autoAPEnabled) {
-    DebugOut.println("Auto AP enabled: Starting AP mode...");
+    LOG_I("[WiFi] Auto AP enabled, starting AP mode");
     startAccessPoint();
   } else {
-    DebugOut.println("Auto AP disabled: Not starting AP mode.");
+    LOG_I("[WiFi] Auto AP disabled, not starting AP mode");
   }
   return false;
 }
@@ -1002,8 +978,7 @@ void handleAPConfig() {
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Connection initiated\"}");
 
-  DebugOut.printf("Credentials saved. Connecting to %s in background...\n",
-                  ssid.c_str());
+  LOG_I("[WiFi] Credentials saved. Connecting to %s in background", ssid.c_str());
 }
 
 void handleAPConfigUpdate() {
@@ -1028,7 +1003,7 @@ void handleAPConfigUpdate() {
     String newPassword = doc["password"].as<String>();
     if (newPassword.length() >= 8) {
       apPassword = newPassword;
-      DebugOut.println("AP password updated");
+      LOG_D("[WiFi] AP password updated");
     } else if (newPassword.length() > 0) {
       server.send(400, "application/json",
                   "{\"success\": false, \"message\": \"Password must be at "
@@ -1038,11 +1013,11 @@ void handleAPConfigUpdate() {
     // If password is empty string, keep existing password
   }
 
-  DebugOut.printf("AP Configuration updated: SSID=%s\n", apSSID.c_str());
+  LOG_I("[WiFi] AP configuration updated: SSID=%s", apSSID.c_str());
 
   // If AP is currently running, restart it with new credentials
   if (isAPMode) {
-    DebugOut.println("Restarting AP with new configuration...");
+    LOG_I("[WiFi] Restarting AP with new configuration");
     WiFi.softAPdisconnect(true); // Disconnect all clients
     delay(100);
 
@@ -1055,8 +1030,8 @@ void handleAPConfigUpdate() {
     }
 
     WiFi.softAP(apSSID.c_str(), apPassword.c_str());
-    DebugOut.printf("AP restarted with new SSID: %s\n", apSSID.c_str());
-    DebugOut.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+    LOG_I("[WiFi] AP restarted with new SSID: %s", apSSID.c_str());
+    LOG_I("[WiFi] AP IP: %s", WiFi.softAPIP().toString().c_str());
   }
 
   sendWiFiStatus();
@@ -1082,8 +1057,8 @@ void handleAPToggle() {
       dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
       isAPMode = true;
 
-      DebugOut.println("Access Point enabled");
-      DebugOut.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+      LOG_I("[WiFi] Access Point enabled");
+      LOG_I("[WiFi] AP IP: %s", WiFi.softAPIP().toString().c_str());
     }
   } else {
     if (isAPMode) {
@@ -1100,7 +1075,7 @@ void handleAPToggle() {
         WiFi.mode(WIFI_STA);
       }
       isAPMode = false;
-      DebugOut.println("Access Point disabled");
+      LOG_I("[WiFi] Access Point disabled");
     }
   }
 
@@ -1134,8 +1109,7 @@ void handleWiFiConfig() {
       readNetworkFromOpenPrefs(prefs, i, storedConfig);
       if (storedConfig.ssid == config.ssid) {
         connectionPassword = storedConfig.password;
-        DebugOut.printf("Using stored password for network: %s\n",
-                        config.ssid.c_str());
+        LOG_D("[WiFi] Using stored password for network: %s", config.ssid.c_str());
         break;
       }
     }
@@ -1165,8 +1139,7 @@ void handleWiFiConfig() {
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Connection initiated\"}");
 
-  DebugOut.printf("Network saved. Connection request queued for %s...\n",
-                  config.ssid.c_str());
+  LOG_I("[WiFi] Network saved. Connection request queued for %s", config.ssid.c_str());
 }
 
 void handleWiFiSave() {
@@ -1195,8 +1168,7 @@ void handleWiFiSave() {
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Network settings saved\"}");
 
-  DebugOut.printf("Network saved: %s (without connecting)\n",
-                  config.ssid.c_str());
+  LOG_D("[WiFi] Network saved: %s (without connecting)", config.ssid.c_str());
 }
 
 void handleWiFiStatus() {
@@ -1210,7 +1182,7 @@ void handleWiFiStatus() {
 }
 
 void handleWiFiScan() {
-  DebugOut.println("Scanning for WiFi networks...");
+  LOG_D("[WiFi] Scanning for networks");
 
   // Mark scan as in progress to prevent reconnection logic from interfering
   if (!wifiScanInProgress) {
@@ -1238,7 +1210,7 @@ void handleWiFiScan() {
     // Start a new scan
     int result = WiFi.scanNetworks(true); // Async scan
     if (result == WIFI_SCAN_FAILED) {
-      DebugOut.println("Failed to start WiFi scan");
+      LOG_W("[WiFi] Failed to start scan");
       wifiScanInProgress = false;
       server.send(500, "application/json",
                   "{\"scanning\": false, \"networks\": [], \"error\": \"Failed "
@@ -1298,7 +1270,7 @@ void handleWiFiScan() {
   // Scan complete, clear the flag
   wifiScanInProgress = false;
 
-  DebugOut.printf("Found %d unique networks\n", networks.size());
+  LOG_D("[WiFi] Found %d unique networks", networks.size());
 
   String json;
   serializeJson(doc, json);
@@ -1358,8 +1330,7 @@ void handleWiFiRemove() {
   // Check if we're currently connected to this network
   if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == removedConfig.ssid) {
     wasConnectedToRemovedNetwork = true;
-    DebugOut.printf("Removing currently connected network: %s\n",
-                    removedConfig.ssid.c_str());
+    LOG_I("[WiFi] Removing currently connected network: %s", removedConfig.ssid.c_str());
   }
 
   if (removeWiFiNetwork(index)) {
@@ -1368,7 +1339,7 @@ void handleWiFiRemove() {
     // If we were connected to the removed network, disconnect and try to
     // reconnect
     if (wasConnectedToRemovedNetwork) {
-      DebugOut.println("Disconnecting from removed network...");
+      LOG_I("[WiFi] Disconnecting from removed network");
       WiFi.disconnect();
 
       // Stop AP if it was running in STA+AP mode
@@ -1381,7 +1352,7 @@ void handleWiFiRemove() {
       // Try to connect to other saved networks, or start AP if none available
       delay(500); // Brief delay to allow disconnect to complete
       if (!connectToStoredNetworks()) {
-        DebugOut.println("No saved networks available. AP mode started.");
+        LOG_W("[WiFi] No saved networks available, AP mode started");
       }
 
       // Broadcast updated WiFi status to all WebSocket clients
@@ -1407,7 +1378,7 @@ void updateWiFiConnection() {
       return;
     }
 
-    DebugOut.println("\n=== Processing Deferred Connection Request ===");
+    LOG_I("[WiFi] Processing deferred connection request");
     pendingConnection.requested = false;
 
     // Set global connection variables for status reporting
@@ -1417,7 +1388,7 @@ void updateWiFiConnection() {
     // IMPORTANT: Maintain AP mode if enabled so frontend doesn't lose
     // connection. This allows the UI to poll for status (success/failure)
     if (apEnabled || isAPMode) {
-      DebugOut.println("Maintaining AP mode during connection attempt...");
+      LOG_D("[WiFi] Maintaining AP mode during connection attempt");
       WiFi.mode(WIFI_AP_STA);
       // Ensure AP is up if it wasn't
       if (!isAPMode) {
@@ -1441,7 +1412,7 @@ void updateWiFiConnection() {
       if (!configureStaticIP(cfg.staticIP.c_str(), cfg.subnet.c_str(),
                              cfg.gateway.c_str(), cfg.dns1.c_str(),
                              cfg.dns2.c_str())) {
-        DebugOut.println("Failed to configure static IP");
+        LOG_E("[WiFi] Failed to configure static IP");
         wifiConnectSuccess = false;
         wifiConnectError = "Invalid Static IP Configuration";
         wifiConnecting = false;
@@ -1452,7 +1423,7 @@ void updateWiFiConnection() {
       WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
     }
 
-    DebugOut.printf("Initiating connection to: %s\n", cfg.ssid.c_str());
+    LOG_I("[WiFi] Initiating connection to: %s", cfg.ssid.c_str());
     WiFi.begin(cfg.ssid.c_str(), cfg.password.c_str());
   }
 
@@ -1472,8 +1443,8 @@ void updateWiFiConnection() {
     connectionStarted = 0;
     pendingConnection.config.clear();
 
-    DebugOut.println("\nWiFi connected in background!");
-    DebugOut.printf("IP address: %s\n", wifiNewIP.c_str());
+    LOG_I("[WiFi] Connected in background");
+    LOG_I("[WiFi] IP address: %s", wifiNewIP.c_str());
 
     // Sync time and setup services
     syncTimeWithNTP();
@@ -1491,17 +1462,16 @@ void updateWiFiConnection() {
     if (wifiConnectError.length() == 0) {
       wifiConnectError = "Connection timed out - check password and signal";
     }
-    DebugOut.printf("\nWiFi connection failed: %s\n", wifiConnectError.c_str());
+    LOG_W("[WiFi] Connection failed: %s", wifiConnectError.c_str());
 
     // Restore AP mode if it was enabled
     if (apEnabled && !isAPMode) {
-      DebugOut.println("Restoring AP mode after failed connection...");
+      LOG_I("[WiFi] Restoring AP mode after failed connection");
       WiFi.mode(WIFI_AP_STA);
       WiFi.softAP(apSSID.c_str(), apPassword);
       dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
       isAPMode = true;
-      DebugOut.printf("AP restored at: %s\n",
-                      WiFi.softAPIP().toString().c_str());
+      LOG_I("[WiFi] AP restored at: %s", WiFi.softAPIP().toString().c_str());
     }
 
     sendWiFiStatus();

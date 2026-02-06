@@ -30,19 +30,19 @@ extern WebSocketsServer webSocket;
 
 // ===== Initialization =====
 void initTasks() {
-  LOG_I("Initializing FreeRTOS tasks...");
+  LOG_I("[Tasks] Initializing FreeRTOS tasks...");
 
   // Create event queue
   eventQueue = xQueueCreate(EVENT_QUEUE_SIZE, sizeof(TaskEvent));
   if (eventQueue == NULL) {
-    LOG_E("Failed to create event queue!");
+    LOG_E("[Tasks] Failed to create event queue!");
     return;
   }
 
   // Create state mutex
   stateMutex = xSemaphoreCreateMutex();
   if (stateMutex == NULL) {
-    LOG_E("Failed to create state mutex!");
+    LOG_E("[Tasks] Failed to create state mutex!");
     return;
   }
 
@@ -70,12 +70,12 @@ void initTasks() {
                           1 // Core 1
   );
 
-  LOG_I("FreeRTOS tasks initialized successfully");
+  LOG_I("[Tasks] FreeRTOS tasks initialized successfully");
 }
 
 // ===== Smart Sensing Task (Core 0) =====
 void smartSensingTask(void *parameter) {
-  LOG_I("Smart Sensing task started on Core %d", xPortGetCoreID());
+  LOG_I("[Tasks] Smart Sensing task started on core %d", xPortGetCoreID());
 
   // Add task to watchdog
   esp_task_wdt_add(NULL);
@@ -100,7 +100,7 @@ void smartSensingTask(void *parameter) {
 
 // ===== Web Server Task (Core 1) =====
 void webServerTask(void *parameter) {
-  LOG_I("Web Server task started on Core %d", xPortGetCoreID());
+  LOG_I("[Tasks] Web Server task started on core %d", xPortGetCoreID());
 
   // Add task to watchdog
   esp_task_wdt_add(NULL);
@@ -135,7 +135,7 @@ void webServerTask(void *parameter) {
 
 // ===== MQTT Task (Core 1) =====
 void mqttTask(void *parameter) {
-  LOG_I("MQTT task started on Core %d", xPortGetCoreID());
+  LOG_I("[Tasks] MQTT task started on core %d", xPortGetCoreID());
 
   // Add task to watchdog
   esp_task_wdt_add(NULL);
@@ -157,7 +157,7 @@ void mqttTask(void *parameter) {
 
 // ===== OTA Check Task (Core 1) =====
 void otaCheckTask(void *parameter) {
-  LOG_I("OTA Check task started on Core %d", xPortGetCoreID());
+  LOG_I("[Tasks] OTA Check task started on core %d", xPortGetCoreID());
 
   // Add task to watchdog
   esp_task_wdt_add(NULL);

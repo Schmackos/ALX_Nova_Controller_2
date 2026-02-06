@@ -6,6 +6,7 @@
 #include "../gui_navigation.h"
 #include "../../app_state.h"
 #include "../../config.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 #include <WiFi.h>
 
@@ -62,7 +63,7 @@ lv_obj_t *scr_home_create(void) {
     /* Populate values immediately */
     scr_home_refresh();
 
-    Serial.println("[GUI] Home screen created");
+    LOG_D("[GUI] Home screen created");
     return scr;
 }
 

@@ -143,7 +143,7 @@ bool loadSettings() {
 void saveSettings() {
   File file = LittleFS.open("/settings.txt", "w");
   if (!file) {
-    DebugOut.println("Failed to open settings file for writing");
+    LOG_E("[Settings] Failed to open settings file for writing");
     return;
   }
 
@@ -165,27 +165,27 @@ void saveSettings() {
   file.println(appState.buzzerEnabled ? "1" : "0");
   file.println(appState.buzzerVolume);
   file.close();
-  DebugOut.println("Settings saved to LittleFS");
+  LOG_I("[Settings] Settings saved to LittleFS");
 }
 
 // ===== Factory Reset =====
 
 void performFactoryReset() {
-  DebugOut.println("\n=== FACTORY RESET INITIATED ===");
+  LOG_W("[Settings] Factory reset initiated");
   factoryResetInProgress = true;
 
   // Visual feedback: solid LED
   digitalWrite(LED_PIN, HIGH);
 
   // 1. Clear WiFi settings from NVS
-  DebugOut.println("Clearing WiFi credentials (NVS: wifi-list)...");
+  LOG_I("[Settings] Clearing WiFi credentials (NVS: wifi-list)");
   Preferences wifiPrefs;
   wifiPrefs.begin("wifi-list", false);
   wifiPrefs.clear();
   wifiPrefs.end();
 
   // 2. Clear Auth settings from NVS
-  DebugOut.println("Clearing Auth settings (NVS: auth)...");
+  LOG_I("[Settings] Clearing Auth settings (NVS: auth)");
   Preferences authPrefs;
   authPrefs.begin("auth", false);
   authPrefs.clear();
@@ -193,11 +193,11 @@ void performFactoryReset() {
 
   // 3. Format LittleFS (erases /settings.txt, /mqtt_config.txt,
   // /smartsensing.txt, etc.)
-  DebugOut.println("Formatting LittleFS...");
+  LOG_I("[Settings] Formatting LittleFS");
   if (LittleFS.format()) {
-    DebugOut.println("LittleFS formatted successfully");
+    LOG_I("[Settings] LittleFS formatted successfully");
   } else {
-    DebugOut.println("LittleFS format failed");
+    LOG_E("[Settings] LittleFS format failed");
   }
 
   // End LittleFS
@@ -207,7 +207,7 @@ void performFactoryReset() {
   apEnabled = true;
   isAPMode = true;
 
-  DebugOut.println("=== FACTORY RESET COMPLETE ===");
+  LOG_W("[Settings] Factory reset complete");
 
   // Broadcast factory reset complete message
   JsonDocument completeDoc;
@@ -222,7 +222,7 @@ void performFactoryReset() {
 
   delay(500); // Give time for message to be received
 
-  DebugOut.println("Rebooting in 2 seconds...");
+  LOG_W("[Settings] Rebooting in 2 seconds");
 
   // Broadcast rebooting message
   JsonDocument rebootDoc;
@@ -326,8 +326,8 @@ void handleSettingsUpdate() {
     if (newCertValidation != enableCertValidation) {
       enableCertValidation = newCertValidation;
       settingsChanged = true;
-      DebugOut.printf("Certificate validation %s\n",
-                      enableCertValidation ? "ENABLED" : "DISABLED");
+      LOG_I("[Settings] Certificate validation %s",
+            enableCertValidation ? "ENABLED" : "DISABLED");
     }
   }
 
@@ -340,8 +340,8 @@ void handleSettingsUpdate() {
       if (newIntervalMs != hardwareStatsInterval) {
         hardwareStatsInterval = newIntervalMs;
         settingsChanged = true;
-        DebugOut.printf("Hardware stats interval set to %d seconds\n",
-                        newInterval);
+        LOG_I("[Settings] Hardware stats interval set to %d seconds",
+              newInterval);
       }
     }
   }
@@ -351,7 +351,7 @@ void handleSettingsUpdate() {
     if (newAutoAP != autoAPEnabled) {
       autoAPEnabled = newAutoAP;
       settingsChanged = true;
-      DebugOut.printf("Auto AP %s\n", autoAPEnabled ? "enabled" : "disabled");
+      LOG_I("[Settings] Auto AP %s", autoAPEnabled ? "enabled" : "disabled");
     }
   }
 
@@ -364,7 +364,7 @@ void handleSettingsUpdate() {
       if (newTimeoutMs != appState.screenTimeout) {
         appState.setScreenTimeout(newTimeoutMs);
         settingsChanged = true;
-        DebugOut.printf("Screen timeout set to %d seconds\n", newTimeoutSec);
+        LOG_I("[Settings] Screen timeout set to %d seconds", newTimeoutSec);
       }
     }
   }
@@ -373,7 +373,7 @@ void handleSettingsUpdate() {
     bool newBacklight = doc["backlightOn"].as<bool>();
     if (newBacklight != appState.backlightOn) {
       appState.setBacklightOn(newBacklight);
-      DebugOut.printf("Backlight set to %s\n", newBacklight ? "ON" : "OFF");
+      LOG_I("[Settings] Backlight set to %s", newBacklight ? "ON" : "OFF");
     }
     // backlightOn is runtime only, no save
   }
@@ -383,7 +383,7 @@ void handleSettingsUpdate() {
     if (newBuzzer != appState.buzzerEnabled) {
       appState.setBuzzerEnabled(newBuzzer);
       settingsChanged = true;
-      DebugOut.printf("Buzzer %s\n", newBuzzer ? "enabled" : "disabled");
+      LOG_I("[Settings] Buzzer %s", newBuzzer ? "enabled" : "disabled");
     }
   }
 
@@ -392,7 +392,7 @@ void handleSettingsUpdate() {
     if (newVol >= 0 && newVol <= 2 && newVol != appState.buzzerVolume) {
       appState.setBuzzerVolume(newVol);
       settingsChanged = true;
-      DebugOut.printf("Buzzer volume set to %d\n", newVol);
+      LOG_I("[Settings] Buzzer volume set to %d", newVol);
     }
   }
 
@@ -402,8 +402,8 @@ void handleSettingsUpdate() {
     if (newBootAnim != appState.bootAnimEnabled) {
       appState.bootAnimEnabled = newBootAnim;
       settingsChanged = true;
-      DebugOut.printf("Boot animation %s\n",
-                      appState.bootAnimEnabled ? "enabled" : "disabled");
+      LOG_I("[Settings] Boot animation %s",
+            appState.bootAnimEnabled ? "enabled" : "disabled");
     }
   }
 
@@ -413,8 +413,8 @@ void handleSettingsUpdate() {
         newStyle != appState.bootAnimStyle) {
       appState.bootAnimStyle = newStyle;
       settingsChanged = true;
-      DebugOut.printf("Boot animation style set to %d\n",
-                      appState.bootAnimStyle);
+      LOG_I("[Settings] Boot animation style set to %d",
+            appState.bootAnimStyle);
     }
   }
 #endif
@@ -447,7 +447,7 @@ void handleSettingsUpdate() {
 }
 
 void handleSettingsExport() {
-  DebugOut.println("Settings export requested via web interface");
+  LOG_I("[Settings] Settings export requested via web interface");
 
   JsonDocument doc;
 
@@ -536,11 +536,11 @@ void handleSettingsExport() {
                     "attachment; filename=\"device-settings.json\"");
   server.send(200, "application/json", json);
 
-  DebugOut.println("Settings exported successfully");
+  LOG_I("[Settings] Settings exported successfully");
 }
 
 void handleSettingsImport() {
-  DebugOut.println("Settings import requested via web interface");
+  LOG_I("[Settings] Settings import requested via web interface");
 
   if (!server.hasArg("plain")) {
     server.send(400, "application/json",
@@ -552,7 +552,7 @@ void handleSettingsImport() {
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
   if (error) {
-    DebugOut.printf("JSON parsing failed: %s\n", error.c_str());
+    LOG_E("[Settings] JSON parsing failed: %s", error.c_str());
     server.send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid JSON format\"}");
     return;
@@ -566,17 +566,17 @@ void handleSettingsImport() {
     return;
   }
 
-  DebugOut.println("Importing settings...");
+  LOG_I("[Settings] Importing settings");
 
   // Import WiFi settings
   if (!doc["wifi"].isNull()) {
     if (doc["wifi"]["ssid"].is<String>()) {
       wifiSSID = doc["wifi"]["ssid"].as<String>();
-      DebugOut.printf("WiFi SSID: %s\n", wifiSSID.c_str());
+      LOG_D("[Settings] WiFi SSID: %s", wifiSSID.c_str());
     }
     if (doc["wifi"]["password"].is<String>()) {
       wifiPassword = doc["wifi"]["password"].as<String>();
-      DebugOut.println("WiFi password imported");
+      LOG_D("[Settings] WiFi password imported");
     }
     // Save WiFi credentials to multi-WiFi list
     if (wifiSSID.length() > 0) {
@@ -588,19 +588,19 @@ void handleSettingsImport() {
   if (!doc["accessPoint"].isNull()) {
     if (doc["accessPoint"]["enabled"].is<bool>()) {
       apEnabled = doc["accessPoint"]["enabled"].as<bool>();
-      DebugOut.printf("AP Enabled: %s\n", apEnabled ? "true" : "false");
+      LOG_D("[Settings] AP Enabled: %s", apEnabled ? "true" : "false");
     }
     if (doc["accessPoint"]["ssid"].is<String>()) {
       apSSID = doc["accessPoint"]["ssid"].as<String>();
-      DebugOut.printf("AP SSID: %s\n", apSSID.c_str());
+      LOG_D("[Settings] AP SSID: %s", apSSID.c_str());
     }
     if (doc["accessPoint"]["password"].is<String>()) {
       apPassword = doc["accessPoint"]["password"].as<String>();
-      DebugOut.println("AP password imported");
+      LOG_D("[Settings] AP password imported");
     }
     if (doc["accessPoint"]["autoAPEnabled"].is<bool>()) {
       autoAPEnabled = doc["accessPoint"]["autoAPEnabled"].as<bool>();
-      DebugOut.printf("Auto AP: %s\n", autoAPEnabled ? "enabled" : "disabled");
+      LOG_D("[Settings] Auto AP: %s", autoAPEnabled ? "enabled" : "disabled");
     }
   }
 
@@ -608,37 +608,37 @@ void handleSettingsImport() {
   if (!doc["settings"].isNull()) {
     if (doc["settings"]["autoUpdateEnabled"].is<bool>()) {
       autoUpdateEnabled = doc["settings"]["autoUpdateEnabled"].as<bool>();
-      DebugOut.printf("Auto Update: %s\n",
-                      autoUpdateEnabled ? "enabled" : "disabled");
+      LOG_D("[Settings] Auto Update: %s",
+            autoUpdateEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["timezoneOffset"].is<int>()) {
       timezoneOffset = doc["settings"]["timezoneOffset"].as<int>();
-      DebugOut.printf("Timezone Offset: %d\n", timezoneOffset);
+      LOG_D("[Settings] Timezone Offset: %d", timezoneOffset);
     }
     if (doc["settings"]["dstOffset"].is<int>()) {
       dstOffset = doc["settings"]["dstOffset"].as<int>();
-      DebugOut.printf("DST Offset: %d\n", dstOffset);
+      LOG_D("[Settings] DST Offset: %d", dstOffset);
     }
     if (doc["settings"]["nightMode"].is<bool>()) {
       nightMode = doc["settings"]["nightMode"].as<bool>();
-      DebugOut.printf("Night Mode: %s\n", nightMode ? "enabled" : "disabled");
+      LOG_D("[Settings] Night Mode: %s", nightMode ? "enabled" : "disabled");
     }
     if (doc["settings"]["enableCertValidation"].is<bool>()) {
       enableCertValidation = doc["settings"]["enableCertValidation"].as<bool>();
-      DebugOut.printf("Cert Validation: %s\n",
-                      enableCertValidation ? "enabled" : "disabled");
+      LOG_D("[Settings] Cert Validation: %s",
+            enableCertValidation ? "enabled" : "disabled");
     }
     if (doc["settings"]["blinkingEnabled"].is<bool>()) {
       blinkingEnabled = doc["settings"]["blinkingEnabled"].as<bool>();
-      DebugOut.printf("Blinking: %s\n",
-                      blinkingEnabled ? "enabled" : "disabled");
+      LOG_D("[Settings] Blinking: %s",
+            blinkingEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["hardwareStatsInterval"].is<int>()) {
       int interval = doc["settings"]["hardwareStatsInterval"].as<int>();
       if (interval == 1 || interval == 2 || interval == 3 || interval == 5 ||
           interval == 10) {
         hardwareStatsInterval = interval * 1000UL;
-        DebugOut.printf("Hardware Stats Interval: %d seconds\n", interval);
+        LOG_D("[Settings] Hardware Stats Interval: %d seconds", interval);
       }
     }
     if (doc["settings"]["screenTimeout"].is<int>()) {
@@ -647,32 +647,32 @@ void handleSettingsImport() {
       if (timeoutMs == 0 || timeoutMs == 30000 || timeoutMs == 60000 ||
           timeoutMs == 300000 || timeoutMs == 600000) {
         appState.screenTimeout = timeoutMs;
-        DebugOut.printf("Screen Timeout: %d seconds\n", timeoutSec);
+        LOG_D("[Settings] Screen Timeout: %d seconds", timeoutSec);
       }
     }
     if (doc["settings"]["buzzerEnabled"].is<bool>()) {
       appState.buzzerEnabled = doc["settings"]["buzzerEnabled"].as<bool>();
-      DebugOut.printf("Buzzer: %s\n",
-                      appState.buzzerEnabled ? "enabled" : "disabled");
+      LOG_D("[Settings] Buzzer: %s",
+            appState.buzzerEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["buzzerVolume"].is<int>()) {
       int vol = doc["settings"]["buzzerVolume"].as<int>();
       if (vol >= 0 && vol <= 2) {
         appState.buzzerVolume = vol;
-        DebugOut.printf("Buzzer Volume: %d\n", vol);
+        LOG_D("[Settings] Buzzer Volume: %d", vol);
       }
     }
 #ifdef GUI_ENABLED
     if (doc["settings"]["bootAnimEnabled"].is<bool>()) {
       appState.bootAnimEnabled = doc["settings"]["bootAnimEnabled"].as<bool>();
-      DebugOut.printf("Boot Animation: %s\n",
-                      appState.bootAnimEnabled ? "enabled" : "disabled");
+      LOG_D("[Settings] Boot Animation: %s",
+            appState.bootAnimEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["bootAnimStyle"].is<int>()) {
       int style = doc["settings"]["bootAnimStyle"].as<int>();
       if (style >= 0 && style <= 5) {
         appState.bootAnimStyle = style;
-        DebugOut.printf("Boot Animation Style: %d\n", style);
+        LOG_D("[Settings] Boot Animation Style: %d", style);
       }
     }
 #endif
@@ -691,16 +691,16 @@ void handleSettingsImport() {
       } else if (modeStr == "smart_auto") {
         currentMode = SMART_AUTO;
       }
-      DebugOut.printf("Smart Sensing Mode: %s\n", modeStr.c_str());
+      LOG_D("[Settings] Smart Sensing Mode: %s", modeStr.c_str());
     }
     if (doc["smartSensing"]["timerDuration"].is<int>() ||
         doc["smartSensing"]["timerDuration"].is<unsigned long>()) {
       timerDuration = doc["smartSensing"]["timerDuration"].as<unsigned long>();
-      DebugOut.printf("Timer Duration: %lu minutes\n", timerDuration);
+      LOG_D("[Settings] Timer Duration: %lu minutes", timerDuration);
     }
     if (doc["smartSensing"]["voltageThreshold"].is<float>()) {
       voltageThreshold = doc["smartSensing"]["voltageThreshold"].as<float>();
-      DebugOut.printf("Voltage Threshold: %.2fV\n", voltageThreshold);
+      LOG_D("[Settings] Voltage Threshold: %.2fV", voltageThreshold);
     }
     // Save Smart Sensing settings
     saveSmartSensingSettings();
@@ -710,28 +710,28 @@ void handleSettingsImport() {
   if (!doc["mqtt"].isNull()) {
     if (doc["mqtt"]["enabled"].is<bool>()) {
       mqttEnabled = doc["mqtt"]["enabled"].as<bool>();
-      DebugOut.printf("MQTT Enabled: %s\n", mqttEnabled ? "true" : "false");
+      LOG_D("[Settings] MQTT Enabled: %s", mqttEnabled ? "true" : "false");
     }
     if (doc["mqtt"]["broker"].is<String>()) {
       mqttBroker = doc["mqtt"]["broker"].as<String>();
-      DebugOut.printf("MQTT Broker: %s\n", mqttBroker.c_str());
+      LOG_D("[Settings] MQTT Broker: %s", mqttBroker.c_str());
     }
     if (doc["mqtt"]["port"].is<int>()) {
       mqttPort = doc["mqtt"]["port"].as<int>();
-      DebugOut.printf("MQTT Port: %d\n", mqttPort);
+      LOG_D("[Settings] MQTT Port: %d", mqttPort);
     }
     if (doc["mqtt"]["username"].is<String>()) {
       mqttUsername = doc["mqtt"]["username"].as<String>();
-      DebugOut.println("MQTT username imported");
+      LOG_D("[Settings] MQTT username imported");
     }
     if (doc["mqtt"]["baseTopic"].is<String>()) {
       mqttBaseTopic = doc["mqtt"]["baseTopic"].as<String>();
-      DebugOut.printf("MQTT Base Topic: %s\n", mqttBaseTopic.c_str());
+      LOG_D("[Settings] MQTT Base Topic: %s", mqttBaseTopic.c_str());
     }
     if (doc["mqtt"]["haDiscovery"].is<bool>()) {
       mqttHADiscovery = doc["mqtt"]["haDiscovery"].as<bool>();
-      DebugOut.printf("MQTT HA Discovery: %s\n",
-                      mqttHADiscovery ? "enabled" : "disabled");
+      LOG_D("[Settings] MQTT HA Discovery: %s",
+            mqttHADiscovery ? "enabled" : "disabled");
     }
     // Note: Password is not imported for security - user needs to re-enter it
     // Save MQTT settings
@@ -740,7 +740,7 @@ void handleSettingsImport() {
 
   // Note: Certificate import removed - now using Mozilla certificate bundle
 
-  DebugOut.println("All settings imported successfully!");
+  LOG_I("[Settings] All settings imported successfully");
 
   // Send success response
   server.send(200, "application/json",
@@ -749,13 +749,13 @@ void handleSettingsImport() {
 
   // Schedule reboot after 3 seconds
   delay(100); // Give time for response to be sent
-  DebugOut.println("Rebooting in 3 seconds...");
+  LOG_W("[Settings] Rebooting in 3 seconds");
   delay(3000);
   ESP.restart();
 }
 
 void handleFactoryReset() {
-  DebugOut.println("Factory reset requested via web interface");
+  LOG_W("[Settings] Factory reset requested via web interface");
 
   // Send success response before performing reset
   server.send(200, "application/json",
@@ -769,7 +769,7 @@ void handleFactoryReset() {
 }
 
 void handleReboot() {
-  DebugOut.println("Reboot requested via web interface");
+  LOG_W("[Settings] Reboot requested via web interface");
 
   // Send success response before rebooting
   server.send(200, "application/json",
@@ -783,7 +783,7 @@ void handleReboot() {
 }
 
 void handleDiagnostics() {
-  DebugOut.println("Diagnostics export requested via web interface");
+  LOG_I("[Settings] Diagnostics export requested via web interface");
 
   JsonDocument doc;
 
@@ -945,7 +945,7 @@ void handleDiagnostics() {
   server.sendHeader("Content-Disposition", filename);
   server.send(200, "application/json", json);
 
-  DebugOut.println("Diagnostics exported successfully");
+  LOG_I("[Settings] Diagnostics exported successfully");
 }
 
 // Note: Certificate HTTP API handlers removed - now using Mozilla certificate

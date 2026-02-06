@@ -62,20 +62,6 @@ None
 
 ## Version 1.4.2
 
-## Documentation
-- [2026-02-06] docs: Release notes hook update
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`7439c0c`)
-- [2026-02-06] docs: Update release notes hook additions
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`4c922c2`)
-- [2026-02-06] docs: Clean up RELEASE_NOTES.md formatting
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`62fd92f`)
-
-## Technical Details
-- [2026-02-06] Update RELEASE_NOTES.md to consolidate and clarify documentation for buzzer functionality, including state management, volume control, and real-time updates via MQTT and WebSocket. (`fa91080`)
-
 ### New Features
 - **Complete LVGL GUI System**: Full graphical interface on ST7735S 128x160 TFT with rotary encoder, built on LVGL v9.4 + TFT_eSPI. Desktop carousel with 7 swipeable cards, dedicated menus for Control, WiFi, MQTT, Settings, and Debug, plus reusable value editors and an LVGL keyboard for text input.
 - **Home Status Screen**: Read-only dashboard displaying amplifier state, signal voltage, auto-off timer, WiFi/MQTT status, sensing mode, firmware version, and uptime. Refreshes at 1 Hz.
@@ -89,6 +75,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`62fd92f`)
 - **Gzip Web Content**: Compressed HTML/CSS/JS delivery from ESP32, reducing transfer size.
 
 ### Improvements
+- Standardized logging across all 22 source files: replaced all `DebugOut.*` and `Serial.print*` calls with `LOG_D/I/W/E` macros and consistent `[Module]` tags
 - Cross-task state synchronization redesigned: GUI sets dirty flags, main loop handles all WebSocket/MQTT broadcasts (thread-safe)
 - WiFi credentials refactored to structured configuration approach
 - Enhanced debug console with log level filtering

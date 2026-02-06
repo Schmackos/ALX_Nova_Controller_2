@@ -7,6 +7,7 @@
 #include "../gui_navigation.h"
 #include "../../app_state.h"
 #include "../../smart_sensing.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 
 /* Sensing mode cycle options */
@@ -20,29 +21,29 @@ static const CycleOption sensing_modes[] = {
 static void on_sensing_mode_confirm(int int_val, float, int) {
     AppState::getInstance().setSensingMode((SensingMode)int_val);
     saveSmartSensingSettings();
-    Serial.printf("[GUI] Sensing mode changed to %d\n", int_val);
+    LOG_I("[GUI] Sensing mode changed to %d", int_val);
 }
 
 static void on_amplifier_confirm(int int_val, float, int) {
     setAmplifierState(int_val != 0);
-    Serial.printf("[GUI] Amplifier set to %s\n", int_val ? "ON" : "OFF");
+    LOG_I("[GUI] Amplifier set to %s", int_val ? "ON" : "OFF");
 }
 
 static void on_timer_confirm(int int_val, float, int) {
     AppState::getInstance().timerDuration = (unsigned long)int_val;
     saveSmartSensingSettings();
-    Serial.printf("[GUI] Timer duration set to %d min\n", int_val);
+    LOG_I("[GUI] Timer duration set to %d min", int_val);
 }
 
 static void on_voltage_confirm(int, float float_val, int) {
     AppState::getInstance().voltageThreshold = float_val;
     saveSmartSensingSettings();
-    Serial.printf("[GUI] Voltage threshold set to %.2fV\n", float_val);
+    LOG_I("[GUI] Voltage threshold set to %.2fV", float_val);
 }
 
 static void on_blinking_confirm(int int_val, float, int) {
     AppState::getInstance().setBlinkingEnabled(int_val != 0);
-    Serial.printf("[GUI] LED blinking set to %s\n", int_val ? "ON" : "OFF");
+    LOG_I("[GUI] LED blinking set to %s", int_val ? "ON" : "OFF");
 }
 
 /* Menu action callbacks — open value editors */

@@ -73,34 +73,33 @@ String getResetReasonString() {
 }
 
 void syncTimeWithNTP() {
-  DebugOut.println("\n=== Synchronizing Time with NTP ===");
-  DebugOut.printf("Timezone offset: %d seconds (%.1f hours)\n",
-                  appState.timezoneOffset, appState.timezoneOffset / 3600.0);
-  DebugOut.printf("DST offset: %d seconds (%.1f hours)\n",
-                  appState.dstOffset, appState.dstOffset / 3600.0);
+  LOG_I("[NTP] === Synchronizing Time with NTP ===");
+  LOG_I("[NTP] Timezone offset: %d seconds (%.1f hours)",
+        appState.timezoneOffset, appState.timezoneOffset / 3600.0);
+  LOG_I("[NTP] DST offset: %d seconds (%.1f hours)",
+        appState.dstOffset, appState.dstOffset / 3600.0);
 
   configTime(appState.timezoneOffset, appState.dstOffset, "pool.ntp.org", "time.nist.gov");
 
-  DebugOut.print("Waiting for NTP time sync: ");
+  LOG_I("[NTP] Waiting for NTP time sync...");
   time_t now = time(nullptr);
   int attempts = 0;
 
   while (now < 1000000000 && attempts < 20) {
     delay(500);
-    DebugOut.print(".");
     now = time(nullptr);
     attempts++;
   }
 
   if (now < 1000000000) {
-    DebugOut.println("\n⚠️  Failed to sync time with NTP server");
+    LOG_W("[NTP] Failed to sync time with NTP server");
   } else {
-    DebugOut.println("\n✅ Time synchronized successfully");
+    LOG_I("[NTP] Time synchronized successfully");
     struct tm timeinfo;
     if (getLocalTime(&timeinfo)) {
       char timeStr[32];
       strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
-      DebugOut.printf("📅 Current local time: %s\n", timeStr);
+      LOG_I("[NTP] Current local time: %s", timeStr);
     }
   }
 }

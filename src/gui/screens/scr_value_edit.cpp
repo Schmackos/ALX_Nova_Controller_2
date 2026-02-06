@@ -7,6 +7,7 @@
 #include "../gui_navigation.h"
 #include "../gui_theme.h"
 #include "../../buzzer_handler.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 
 /* Current edit state */
@@ -82,7 +83,7 @@ static void poll_encoder_cb(lv_timer_t *t) {
     (void)t;
     int32_t diff = gui_input_get_raw_diff();
     if (diff != 0) {
-        Serial.printf("[GUI] Value edit rotate: %d\n", (int)diff);
+        LOG_D("[GUI] Value edit rotate: %d", (int)diff);
         apply_diff(diff);
         update_display();
     }
@@ -101,7 +102,7 @@ static void cleanup(void) {
 /* Short click: save value and go back to menu */
 static void on_click(lv_event_t *e) {
     (void)e;
-    Serial.println("[GUI] Value edit: CONFIRM");
+    LOG_D("[GUI] Value edit: CONFIRM");
     buzzer_play(BUZZ_CONFIRM);
     if (active_cfg.on_confirm) {
         switch (active_cfg.type) {
@@ -201,7 +202,7 @@ void scr_value_edit_open(const ValueEditConfig *config) {
             break;
     }
 
-    Serial.printf("[GUI] Value edit open: %s\n", config->title);
+    LOG_D("[GUI] Value edit open: %s", config->title);
 
     /* Enable raw mode: rotation goes directly to value editor, not LVGL navigation */
     gui_input_set_raw_mode(true);

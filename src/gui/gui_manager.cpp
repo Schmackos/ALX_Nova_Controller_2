@@ -16,6 +16,7 @@
 #include "screens/scr_boot_anim.h"
 #include "../app_state.h"
 #include "../buzzer_handler.h"
+#include "../debug_serial.h"
 #include <Arduino.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -65,7 +66,7 @@ static void screen_sleep(void) {
     screen_awake = false;
     set_backlight(BL_BRIGHTNESS_MIN);
     AppState::getInstance().setBacklightOn(false);
-    Serial.println("[GUI] Screen sleep");
+    LOG_D("[GUI] Screen sleep");
 }
 
 /* Wake display */
@@ -75,14 +76,14 @@ static void screen_wake(void) {
     screen_awake = true;
     set_backlight(BL_BRIGHTNESS_MAX);
     AppState::getInstance().setBacklightOn(true);
-    Serial.println("[GUI] Screen wake");
+    LOG_D("[GUI] Screen wake");
 }
 
 /* GUI FreeRTOS task */
 static void gui_task(void *param) {
     (void)param;
 
-    Serial.println("[GUI] Task started on core " + String(xPortGetCoreID()));
+    LOG_I("[GUI] Task started on core %d", xPortGetCoreID());
 
     /* Flush one black frame to overwrite any stale display RAM
        (e.g. desktop from previous boot), then turn on backlight. */
@@ -168,7 +169,7 @@ static void register_screens(void) {
 }
 
 void gui_init(void) {
-    Serial.println("[GUI] Initializing...");
+    LOG_I("[GUI] Initializing...");
 
     /* Initialize backlight PWM */
     ledcSetup(BL_PWM_CHANNEL, BL_PWM_FREQ, BL_PWM_RESOLUTION);
@@ -179,12 +180,12 @@ void gui_init(void) {
     tft.init();
     tft.setRotation(1); /* Landscape: 160x128 */
     tft.fillScreen(TFT_BLACK);
-    Serial.println("[GUI] TFT initialized (ST7735S 160x128 landscape)");
+    LOG_I("[GUI] TFT initialized (ST7735S 160x128 landscape)");
 
     /* Initialize LVGL */
     lv_init();
     lv_tick_set_cb(lv_millis_cb);
-    Serial.println("[GUI] LVGL initialized");
+    LOG_I("[GUI] LVGL initialized");
 
     /* Create LVGL display with buffer */
     lv_display_t *disp = lv_display_create(DISPLAY_HEIGHT, DISPLAY_WIDTH); /* landscape: 160x128 */
@@ -217,7 +218,7 @@ void gui_init(void) {
         GUI_TASK_CORE
     );
 
-    Serial.println("[GUI] Initialization complete");
+    LOG_I("[GUI] Initialization complete");
 }
 
 void gui_wake(void) {

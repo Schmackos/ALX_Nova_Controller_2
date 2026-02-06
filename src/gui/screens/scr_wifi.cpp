@@ -9,6 +9,7 @@
 #include "../../app_state.h"
 #include "../../wifi_manager.h"
 #include "../../settings_manager.h"
+#include "../../debug_serial.h"
 #include <Arduino.h>
 #include <WiFi.h>
 
@@ -59,7 +60,7 @@ static int scan_count = 0;
 static String selected_ssid;
 
 static void on_password_entered(const char *password) {
-    Serial.printf("[GUI] Connecting to %s\n", selected_ssid.c_str());
+    LOG_I("[GUI] Connecting to %s", selected_ssid.c_str());
     WiFiNetworkConfig config;
     config.ssid = selected_ssid;
     config.password = String(password);
@@ -160,7 +161,7 @@ static void on_ap_ssid_done(const char *text) {
     AppState::getInstance().apSSID = String(text);
     saveSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] AP SSID set to: %s\n", text);
+    LOG_I("[GUI] AP SSID set to: %s", text);
 }
 
 static void edit_ap_ssid(void) {
@@ -176,7 +177,7 @@ static void on_ap_password_done(const char *text) {
     AppState::getInstance().apPassword = String(text);
     saveSettings();
     AppState::getInstance().markSettingsDirty();
-    Serial.printf("[GUI] AP password changed\n");
+    LOG_I("[GUI] AP password changed");
 }
 
 static void edit_ap_password(void) {

@@ -3,6 +3,7 @@
 #include "gui_input.h"
 #include "gui_config.h"
 #include "../buzzer_handler.h"
+#include "../debug_serial.h"
 #include <Arduino.h>
 #include <lvgl.h>
 
@@ -102,14 +103,14 @@ static void encoder_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
 
     /* Serial debug: rotation */
     if (diff != 0) {
-        Serial.printf("[INPUT] Encoder rotate: %s (%d)%s\n", diff > 0 ? "CW" : "CCW", (int)diff, raw_mode ? " [raw]" : "");
+        LOG_D("[GUI Input] Encoder rotate: %s (%d)%s", diff > 0 ? "CW" : "CCW", (int)diff, raw_mode ? " [raw]" : "");
     }
 
     /* Serial debug: press/release edges */
     if (pressed_now && !prev_pressed) {
-        Serial.println("[INPUT] Encoder button PRESSED");
+        LOG_D("[GUI Input] Encoder button pressed");
     } else if (!pressed_now && prev_pressed) {
-        Serial.println("[INPUT] Encoder button RELEASED");
+        LOG_D("[GUI Input] Encoder button released");
     }
     prev_pressed = pressed_now;
 }
@@ -136,7 +137,7 @@ void gui_input_init(void) {
     lv_indev_set_read_cb(encoder_indev, encoder_read_cb);
     lv_indev_set_mode(encoder_indev, LV_INDEV_MODE_TIMER);
 
-    Serial.println("[GUI] Input: Encoder + button initialized");
+    LOG_I("[GUI Input] Encoder + button initialized");
 }
 
 lv_indev_t *gui_get_encoder_indev(void) {
