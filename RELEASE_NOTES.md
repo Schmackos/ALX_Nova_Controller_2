@@ -3,6 +3,15 @@
 ## Version 1.5.3
 
 ## New Features
+- [2026-02-07] feat: Implement signal generator functionality and enhance display dimming features
+
+- Add signal generator with configurable waveform, frequency, amplitude, and output mode.
+- Introduce MQTT support for signal generator settings and state management.
+- Enhance display dimming capabilities with new settings for dimming enabled state and brightness.
+- Update web interface to include controls for signal generator and dimming features.
+- Refactor dark mode terminology and settings for consistency across the application.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`b09640a`)
 - [2026-02-06] feat: Add dim timeout, enhanced debug screen, and GUI improvements
 
 - Add display dim timeout with configurable delay (AppState, settings, MQTT, Web, GUI)
