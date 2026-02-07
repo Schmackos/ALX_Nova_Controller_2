@@ -3,6 +3,8 @@
 #include "buzzer_handler.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "signal_generator.h"
+#include "settings_manager.h"
 #include "utils.h"
 #include "websocket_handler.h"
 #include <LittleFS.h>
@@ -15,7 +17,7 @@ static float prevMqttCpuUsage = 0;
 static float prevMqttTemperature = 0;
 
 // State tracking for settings change detection
-static bool prevMqttNightMode = false;
+static bool prevMqttDarkMode = false;
 static bool prevMqttAutoUpdate = false;
 static bool prevMqttCertValidation = true;
 
@@ -154,18 +156,26 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/smartsensing/audio_threshold/set").c_str());
   mqttClient.subscribe((base + "/ap/enabled/set").c_str());
   mqttClient.subscribe((base + "/settings/auto_update/set").c_str());
-  mqttClient.subscribe((base + "/settings/night_mode/set").c_str());
+  mqttClient.subscribe((base + "/settings/dark_mode/set").c_str());
   mqttClient.subscribe((base + "/settings/cert_validation/set").c_str());
   mqttClient.subscribe((base + "/settings/screen_timeout/set").c_str());
+  mqttClient.subscribe((base + "/display/dim_enabled/set").c_str());
   mqttClient.subscribe((base + "/settings/dim_timeout/set").c_str());
   mqttClient.subscribe((base + "/display/backlight/set").c_str());
   mqttClient.subscribe((base + "/display/brightness/set").c_str());
+  mqttClient.subscribe((base + "/display/dim_brightness/set").c_str());
   mqttClient.subscribe((base + "/settings/buzzer/set").c_str());
   mqttClient.subscribe((base + "/settings/buzzer_volume/set").c_str());
   mqttClient.subscribe((base + "/system/reboot").c_str());
   mqttClient.subscribe((base + "/system/factory_reset").c_str());
   mqttClient.subscribe((base + "/system/check_update").c_str());
   mqttClient.subscribe((base + "/system/update/command").c_str());
+  mqttClient.subscribe((base + "/signalgenerator/enabled/set").c_str());
+  mqttClient.subscribe((base + "/signalgenerator/waveform/set").c_str());
+  mqttClient.subscribe((base + "/signalgenerator/frequency/set").c_str());
+  mqttClient.subscribe((base + "/signalgenerator/amplitude/set").c_str());
+  mqttClient.subscribe((base + "/signalgenerator/channel/set").c_str());
+  mqttClient.subscribe((base + "/signalgenerator/output_mode/set").c_str());
 
   LOG_D("[MQTT] Subscribed to command topics");
 }
@@ -310,13 +320,13 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     publishMqttSystemStatus();
   }
   // Handle night mode setting
-  else if (topicStr == base + "/settings/night_mode/set") {
+  else if (topicStr == base + "/settings/dark_mode/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
-    if (nightMode != enabled) {
-      nightMode = enabled;
+    if (darkMode != enabled) {
+      darkMode = enabled;
       saveSettings();
-      LOG_I("[MQTT] Night mode set to %s", enabled ? "ON" : "OFF");
-      sendWiFiStatus(); // Night mode is part of WiFi status in web UI
+      LOG_I("[MQTT] Dark mode set to %s", enabled ? "ON" : "OFF");
+      sendWiFiStatus(); // Dark mode is part of WiFi status in web UI
     }
     publishMqttSystemStatus();
   }
@@ -344,16 +354,41 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     }
     publishMqttDisplayState();
   }
+  // Handle dim enabled control
+  else if (topicStr == base + "/display/dim_enabled/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.setDimEnabled(newState);
+    saveSettings();
+    LOG_I("[MQTT] Dim %s", newState ? "enabled" : "disabled");
+    publishMqttDisplayState();
+  }
   // Handle dim timeout setting
   else if (topicStr == base + "/settings/dim_timeout/set") {
     int dimSec = message.toInt();
     unsigned long dimMs = (unsigned long)dimSec * 1000UL;
-    if (dimMs == 0 || dimMs == 5000 || dimMs == 10000 ||
+    if (dimMs == 5000 || dimMs == 10000 || dimMs == 15000 ||
         dimMs == 30000 || dimMs == 60000) {
       appState.setDimTimeout(dimMs);
       saveSettings();
       LOG_I("[MQTT] Dim timeout set to %d seconds", dimSec);
     }
+    publishMqttDisplayState();
+  }
+  // Handle dim brightness control
+  else if (topicStr == base + "/display/dim_brightness/set") {
+    int pct = message.toInt();
+    uint8_t pwm = 26; // default
+    if (pct == 10) pwm = 26;
+    else if (pct == 25) pwm = 64;
+    else if (pct == 50) pwm = 128;
+    else if (pct == 75) pwm = 191;
+    else {
+      publishMqttDisplayState();
+      return;
+    }
+    appState.setDimBrightness(pwm);
+    saveSettings();
+    LOG_I("[MQTT] Dim brightness set to %d%% (PWM %d)", pct, pwm);
     publishMqttDisplayState();
   }
   // Handle backlight control
@@ -391,6 +426,84 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       saveSettings();
       LOG_I("[MQTT] Buzzer volume set to %d", vol);
       publishMqttBuzzerState();
+    }
+  }
+  // Handle signal generator enable/disable
+  else if (topicStr == base + "/signalgenerator/enabled/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.sigGenEnabled = newState;
+    siggen_apply_params();
+    LOG_I("[MQTT] Signal generator %s", newState ? "enabled" : "disabled");
+    publishMqttSignalGenState();
+    sendSignalGenState();
+  }
+  // Handle signal generator waveform
+  else if (topicStr == base + "/signalgenerator/waveform/set") {
+    int wf = -1;
+    if (message == "sine") wf = 0;
+    else if (message == "square") wf = 1;
+    else if (message == "white_noise") wf = 2;
+    else if (message == "sweep") wf = 3;
+    if (wf >= 0) {
+      appState.sigGenWaveform = wf;
+      siggen_apply_params();
+      saveSignalGenSettings();
+      LOG_I("[MQTT] Signal generator waveform set to %s", message.c_str());
+      publishMqttSignalGenState();
+      sendSignalGenState();
+    }
+  }
+  // Handle signal generator frequency
+  else if (topicStr == base + "/signalgenerator/frequency/set") {
+    float freq = message.toFloat();
+    if (freq >= 1.0f && freq <= 22000.0f) {
+      appState.sigGenFrequency = freq;
+      siggen_apply_params();
+      saveSignalGenSettings();
+      LOG_I("[MQTT] Signal generator frequency set to %.0f Hz", freq);
+      publishMqttSignalGenState();
+      sendSignalGenState();
+    }
+  }
+  // Handle signal generator amplitude
+  else if (topicStr == base + "/signalgenerator/amplitude/set") {
+    float amp = message.toFloat();
+    if (amp >= -96.0f && amp <= 0.0f) {
+      appState.sigGenAmplitude = amp;
+      siggen_apply_params();
+      saveSignalGenSettings();
+      LOG_I("[MQTT] Signal generator amplitude set to %.0f dBFS", amp);
+      publishMqttSignalGenState();
+      sendSignalGenState();
+    }
+  }
+  // Handle signal generator channel
+  else if (topicStr == base + "/signalgenerator/channel/set") {
+    int ch = -1;
+    if (message == "left") ch = 0;
+    else if (message == "right") ch = 1;
+    else if (message == "both") ch = 2;
+    if (ch >= 0) {
+      appState.sigGenChannel = ch;
+      siggen_apply_params();
+      saveSignalGenSettings();
+      LOG_I("[MQTT] Signal generator channel set to %s", message.c_str());
+      publishMqttSignalGenState();
+      sendSignalGenState();
+    }
+  }
+  // Handle signal generator output mode
+  else if (topicStr == base + "/signalgenerator/output_mode/set") {
+    int mode = -1;
+    if (message == "software") mode = 0;
+    else if (message == "pwm") mode = 1;
+    if (mode >= 0) {
+      appState.sigGenOutputMode = mode;
+      siggen_apply_params();
+      saveSignalGenSettings();
+      LOG_I("[MQTT] Signal generator output mode set to %s", message.c_str());
+      publishMqttSignalGenState();
+      sendSignalGenState();
     }
   }
   // Handle reboot command
@@ -552,10 +665,17 @@ void mqttLoop() {
         (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
         (appState.buzzerVolume != prevMqttBuzzerVolume) ||
         (appState.backlightBrightness != prevMqttBrightness) ||
+        (appState.dimEnabled != appState.prevMqttDimEnabled) ||
         (appState.dimTimeout != prevMqttDimTimeout) ||
-        (nightMode != prevMqttNightMode) ||
+        (appState.dimBrightness != appState.prevMqttDimBrightness) ||
+        (darkMode != prevMqttDarkMode) ||
         (autoUpdateEnabled != prevMqttAutoUpdate) ||
-        (enableCertValidation != prevMqttCertValidation);
+        (enableCertValidation != prevMqttCertValidation) ||
+        (appState.sigGenEnabled != appState.prevMqttSigGenEnabled) ||
+        (appState.sigGenWaveform != appState.prevMqttSigGenWaveform) ||
+        (fabs(appState.sigGenFrequency - appState.prevMqttSigGenFrequency) > 0.5f) ||
+        (fabs(appState.sigGenAmplitude - appState.prevMqttSigGenAmplitude) > 0.5f) ||
+        (appState.sigGenOutputMode != appState.prevMqttSigGenOutputMode);
 
     if (stateChanged) {
       publishMqttState();
@@ -572,10 +692,17 @@ void mqttLoop() {
       prevMqttBuzzerEnabled = appState.buzzerEnabled;
       prevMqttBuzzerVolume = appState.buzzerVolume;
       prevMqttBrightness = appState.backlightBrightness;
+      appState.prevMqttDimEnabled = appState.dimEnabled;
       prevMqttDimTimeout = appState.dimTimeout;
-      prevMqttNightMode = nightMode;
+      appState.prevMqttDimBrightness = appState.dimBrightness;
+      prevMqttDarkMode = darkMode;
       prevMqttAutoUpdate = autoUpdateEnabled;
       prevMqttCertValidation = enableCertValidation;
+      appState.prevMqttSigGenEnabled = appState.sigGenEnabled;
+      appState.prevMqttSigGenWaveform = appState.sigGenWaveform;
+      appState.prevMqttSigGenFrequency = appState.sigGenFrequency;
+      appState.prevMqttSigGenAmplitude = appState.sigGenAmplitude;
+      appState.prevMqttSigGenOutputMode = appState.sigGenOutputMode;
     }
   }
 }
@@ -714,8 +841,8 @@ void publishMqttSystemStatus() {
   // Additional settings
   mqttClient.publish((base + "/settings/timezone_offset").c_str(),
                      String(timezoneOffset).c_str(), true);
-  mqttClient.publish((base + "/settings/night_mode").c_str(),
-                     nightMode ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/settings/dark_mode").c_str(),
+                     darkMode ? "ON" : "OFF", true);
   mqttClient.publish((base + "/settings/cert_validation").c_str(),
                      enableCertValidation ? "ON" : "OFF", true);
 }
@@ -878,8 +1005,48 @@ void publishMqttDisplayState() {
   mqttClient.publish((base + "/display/brightness").c_str(),
                      String(brightPct).c_str(), true);
 
+  mqttClient.publish((base + "/display/dim_enabled").c_str(),
+                     appState.dimEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/settings/dim_timeout").c_str(),
                      String(appState.dimTimeout / 1000).c_str(), true);
+
+  // Publish dim brightness as percentage
+  int dimPct = 10;
+  if (appState.dimBrightness >= 191) dimPct = 75;
+  else if (appState.dimBrightness >= 128) dimPct = 50;
+  else if (appState.dimBrightness >= 64) dimPct = 25;
+  else dimPct = 10;
+  mqttClient.publish((base + "/display/dim_brightness").c_str(),
+                     String(dimPct).c_str(), true);
+}
+
+// Publish signal generator state
+void publishMqttSignalGenState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/signalgenerator/enabled").c_str(),
+                     appState.sigGenEnabled ? "ON" : "OFF", true);
+
+  const char *waveNames[] = {"sine", "square", "white_noise", "sweep"};
+  mqttClient.publish((base + "/signalgenerator/waveform").c_str(),
+                     waveNames[appState.sigGenWaveform % 4], true);
+  mqttClient.publish((base + "/signalgenerator/frequency").c_str(),
+                     String(appState.sigGenFrequency, 0).c_str(), true);
+  mqttClient.publish((base + "/signalgenerator/amplitude").c_str(),
+                     String(appState.sigGenAmplitude, 0).c_str(), true);
+
+  const char *chanNames[] = {"left", "right", "both"};
+  mqttClient.publish((base + "/signalgenerator/channel").c_str(),
+                     chanNames[appState.sigGenChannel % 3], true);
+
+  mqttClient.publish((base + "/signalgenerator/output_mode").c_str(),
+                     appState.sigGenOutputMode == 0 ? "software" : "pwm", true);
+
+  mqttClient.publish((base + "/signalgenerator/sweep_speed").c_str(),
+                     String(appState.sigGenSweepSpeed, 0).c_str(), true);
 }
 
 // Publish all states
@@ -893,6 +1060,7 @@ void publishMqttState() {
   publishMqttHardwareStats();
   publishMqttDisplayState();
   publishMqttBuzzerState();
+  publishMqttSignalGenState();
 }
 
 // ===== Home Assistant Auto-Discovery =====
@@ -1385,13 +1553,13 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
-  // ===== Night Mode Switch =====
+  // ===== Dark Mode Switch =====
   {
     JsonDocument doc;
-    doc["name"] = "Night Mode";
-    doc["unique_id"] = deviceId + "_night_mode";
-    doc["state_topic"] = base + "/settings/night_mode";
-    doc["command_topic"] = base + "/settings/night_mode/set";
+    doc["name"] = "Dark Mode";
+    doc["unique_id"] = deviceId + "_dark_mode";
+    doc["state_topic"] = base + "/settings/dark_mode";
+    doc["command_topic"] = base + "/settings/dark_mode/set";
     doc["payload_on"] = "ON";
     doc["payload_off"] = "OFF";
     doc["entity_category"] = "config";
@@ -1400,7 +1568,7 @@ void publishHADiscovery() {
 
     String payload;
     serializeJson(doc, payload);
-    String topic = "homeassistant/switch/" + deviceId + "/night_mode/config";
+    String topic = "homeassistant/switch/" + deviceId + "/dark_mode/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
@@ -1464,6 +1632,26 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Dim Enabled Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Dim";
+    doc["unique_id"] = deviceId + "_dim_enabled";
+    doc["state_topic"] = base + "/display/dim_enabled";
+    doc["command_topic"] = base + "/display/dim_enabled/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:brightness-auto";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic =
+        "homeassistant/switch/" + deviceId + "/dim_enabled/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   // ===== Dim Timeout Number =====
   {
     JsonDocument doc;
@@ -1508,6 +1696,29 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Dim Brightness Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Dim Brightness";
+    doc["unique_id"] = deviceId + "_dim_brightness";
+    doc["state_topic"] = base + "/display/dim_brightness";
+    doc["command_topic"] = base + "/display/dim_brightness/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("10");
+    options.add("25");
+    options.add("50");
+    options.add("75");
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:brightness-4";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic =
+        "homeassistant/select/" + deviceId + "/dim_brightness/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   // ===== Buzzer Switch =====
   {
     JsonDocument doc;
@@ -1548,6 +1759,124 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Signal Generator Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Signal Generator";
+    doc["unique_id"] = deviceId + "_siggen_enabled";
+    doc["state_topic"] = base + "/signalgenerator/enabled";
+    doc["command_topic"] = base + "/signalgenerator/enabled/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/siggen_enabled/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Signal Generator Waveform Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Signal Waveform";
+    doc["unique_id"] = deviceId + "_siggen_waveform";
+    doc["state_topic"] = base + "/signalgenerator/waveform";
+    doc["command_topic"] = base + "/signalgenerator/waveform/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("sine");
+    options.add("square");
+    options.add("white_noise");
+    options.add("sweep");
+    doc["icon"] = "mdi:waveform";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/select/" + deviceId + "/siggen_waveform/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Signal Generator Frequency Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Signal Frequency";
+    doc["unique_id"] = deviceId + "_siggen_frequency";
+    doc["state_topic"] = base + "/signalgenerator/frequency";
+    doc["command_topic"] = base + "/signalgenerator/frequency/set";
+    doc["min"] = 1;
+    doc["max"] = 22000;
+    doc["step"] = 1;
+    doc["unit_of_measurement"] = "Hz";
+    doc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/number/" + deviceId + "/siggen_frequency/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Signal Generator Amplitude Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Signal Amplitude";
+    doc["unique_id"] = deviceId + "_siggen_amplitude";
+    doc["state_topic"] = base + "/signalgenerator/amplitude";
+    doc["command_topic"] = base + "/signalgenerator/amplitude/set";
+    doc["min"] = -96;
+    doc["max"] = 0;
+    doc["step"] = 1;
+    doc["unit_of_measurement"] = "dBFS";
+    doc["icon"] = "mdi:volume-high";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/number/" + deviceId + "/siggen_amplitude/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Signal Generator Channel Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Signal Channel";
+    doc["unique_id"] = deviceId + "_siggen_channel";
+    doc["state_topic"] = base + "/signalgenerator/channel";
+    doc["command_topic"] = base + "/signalgenerator/channel/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("left");
+    options.add("right");
+    options.add("both");
+    doc["icon"] = "mdi:speaker-multiple";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/select/" + deviceId + "/siggen_channel/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Signal Generator Output Mode Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Signal Output Mode";
+    doc["unique_id"] = deviceId + "_siggen_output_mode";
+    doc["state_topic"] = base + "/signalgenerator/output_mode";
+    doc["command_topic"] = base + "/signalgenerator/output_mode/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("software");
+    options.add("pwm");
+    doc["icon"] = "mdi:export";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/select/" + deviceId + "/siggen_output_mode/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   LOG_I("[MQTT] Home Assistant discovery configs published");
 }
 
@@ -1566,7 +1895,7 @@ void removeHADiscovery() {
       "homeassistant/switch/%s/amplifier/config",
       "homeassistant/switch/%s/ap/config",
       "homeassistant/switch/%s/auto_update/config",
-      "homeassistant/switch/%s/night_mode/config",
+      "homeassistant/switch/%s/dark_mode/config",
       "homeassistant/switch/%s/cert_validation/config",
       "homeassistant/select/%s/mode/config",
       "homeassistant/number/%s/timer_duration/config",
@@ -1591,10 +1920,18 @@ void removeHADiscovery() {
       "homeassistant/update/%s/firmware/config",
       "homeassistant/switch/%s/backlight/config",
       "homeassistant/number/%s/screen_timeout/config",
+      "homeassistant/switch/%s/dim_enabled/config",
       "homeassistant/number/%s/dim_timeout/config",
       "homeassistant/number/%s/brightness/config",
+      "homeassistant/select/%s/dim_brightness/config",
       "homeassistant/switch/%s/buzzer/config",
-      "homeassistant/number/%s/buzzer_volume/config"};
+      "homeassistant/number/%s/buzzer_volume/config",
+      "homeassistant/switch/%s/siggen_enabled/config",
+      "homeassistant/select/%s/siggen_waveform/config",
+      "homeassistant/number/%s/siggen_frequency/config",
+      "homeassistant/number/%s/siggen_amplitude/config",
+      "homeassistant/select/%s/siggen_channel/config",
+      "homeassistant/select/%s/siggen_output_mode/config"};
 
   char topicBuf[128];
   for (const char *topicTemplate : topics) {

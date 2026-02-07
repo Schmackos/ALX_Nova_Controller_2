@@ -28,6 +28,7 @@ void publishMqttUpdateState();
 void publishMqttHardwareStats();
 void publishMqttDisplayState();
 void publishMqttBuzzerState();
+void publishMqttSignalGenState();
 
 // ===== Home Assistant Discovery =====
 void publishHADiscovery();

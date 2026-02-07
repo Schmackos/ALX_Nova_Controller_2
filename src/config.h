@@ -54,6 +54,14 @@ const int BUZZER_PIN = 8; // GPIO 8 - passive buzzer (PWM)
 #define BUZZER_PWM_CHANNEL 2   // LEDC channel (Timer 1, separate from backlight Timer 0)
 #define BUZZER_PWM_RESOLUTION 8 // 8-bit resolution (0-255 duty)
 
+// ===== Signal Generator Configuration =====
+#ifndef SIGGEN_PWM_PIN
+const int SIGGEN_PWM_PIN = 38;   // GPIO 38 — no strapping constraints
+#endif
+#define SIGGEN_PWM_CHANNEL 4     // LEDC channel 4 (Timer 2)
+#define SIGGEN_PWM_TIMER 2       // Separate from buzzer Timer 1 & backlight Timer 0
+#define SIGGEN_PWM_RESOLUTION 10 // 10-bit (0-1023), max ~78kHz carrier
+
 // ===== Server Ports =====
 const int WEB_SERVER_PORT = 80;
 const int WEBSOCKET_PORT = 81;

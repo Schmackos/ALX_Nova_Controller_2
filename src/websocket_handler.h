@@ -22,6 +22,7 @@ void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered);
 void sendHardwareStats();
 void sendMqttSettingsState();
 void sendBuzzerState();
+void sendSignalGenState();
 
 // ===== Audio Streaming =====
 void sendAudioData();

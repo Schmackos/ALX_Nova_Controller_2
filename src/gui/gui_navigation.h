@@ -24,6 +24,7 @@ enum ScreenId {
     SCR_WIFI_NET_MENU,
     SCR_INFO,
     SCR_HOME,
+    SCR_SIGGEN_MENU,
     SCR_COUNT
 };
 

@@ -88,7 +88,7 @@ public:
   String cachedChecksum;
   int timezoneOffset = 0;
   int dstOffset = 0;
-  bool nightMode = false;
+  bool darkMode = false;
   bool updateAvailable = false;
   String cachedLatestVersion;
   unsigned long updateDiscoveredTime = 0;
@@ -168,7 +168,9 @@ public:
   bool prevMqttBuzzerEnabled = true;
   int prevMqttBuzzerVolume = 1;
   uint8_t prevMqttBrightness = 255;
-  unsigned long prevMqttDimTimeout = 0;
+  bool prevMqttDimEnabled = false;
+  unsigned long prevMqttDimTimeout = 10000;
+  uint8_t prevMqttDimBrightness = 26;
 
   // ===== Smart Sensing Broadcast State Tracking =====
   SensingMode prevBroadcastMode = ALWAYS_ON;
@@ -180,12 +182,16 @@ public:
   unsigned long screenTimeout = 60000; // Screen timeout in ms (default 60s)
   bool backlightOn = true;             // Runtime backlight state (not persisted)
   uint8_t backlightBrightness = 255;   // Backlight brightness (1-255, persisted)
-  unsigned long dimTimeout = 0;         // Dim timeout in ms (0=disabled)
+  bool dimEnabled = false;               // Dim feature enabled
+  unsigned long dimTimeout = 10000;     // Dim timeout in ms (default 10s)
+  uint8_t dimBrightness = 26;           // Dim brightness PWM (1-255, default 10%)
 
   void setBacklightOn(bool state);
   void setScreenTimeout(unsigned long timeout);
   void setBacklightBrightness(uint8_t brightness);
+  void setDimEnabled(bool enabled);
   void setDimTimeout(unsigned long timeout);
+  void setDimBrightness(uint8_t brightness);
   bool isDisplayDirty() const { return _displayDirty; }
   void clearDisplayDirty() { _displayDirty = false; }
 
@@ -203,9 +209,30 @@ public:
   void clearSettingsDirty() { _settingsDirty = false; }
   void markSettingsDirty() { _settingsDirty = true; }
 
+  // ===== Signal Generator State =====
+  bool sigGenEnabled = false;           // Always boots false
+  int sigGenWaveform = 0;               // 0=sine, 1=square, 2=noise, 3=sweep
+  float sigGenFrequency = 1000.0f;      // 1.0 - 22000.0 Hz
+  float sigGenAmplitude = -6.0f;        // -96.0 to 0.0 dBFS
+  int sigGenChannel = 2;                // 0=L, 1=R, 2=Both
+  int sigGenOutputMode = 0;             // 0=software, 1=PWM
+  float sigGenSweepSpeed = 1000.0f;     // Hz per second
+
+  void setSignalGenEnabled(bool enabled);
+  void markSignalGenDirty() { _sigGenDirty = true; }
+  bool isSignalGenDirty() const { return _sigGenDirty; }
+  void clearSignalGenDirty() { _sigGenDirty = false; }
+
+  // MQTT state tracking for signal generator
+  bool prevMqttSigGenEnabled = false;
+  int prevMqttSigGenWaveform = 0;
+  float prevMqttSigGenFrequency = 1000.0f;
+  float prevMqttSigGenAmplitude = -6.0f;
+  int prevMqttSigGenOutputMode = 0;
+
   // ===== GUI State =====
 #ifdef GUI_ENABLED
-  bool guiDarkMode = false;            // GUI dark mode (separate from web nightMode)
+  bool guiDarkMode = false;            // GUI dark mode (separate from web darkMode)
   bool bootAnimEnabled = true;         // Enable/disable boot animation
   int bootAnimStyle = 0;               // 0-5 animation style index
 #endif
@@ -246,6 +273,7 @@ private:
   bool _displayDirty = false;
   bool _buzzerDirty = false;
   bool _settingsDirty = false;
+  bool _sigGenDirty = false;
 };
 
 // Convenience macro for accessing AppState
@@ -297,7 +325,7 @@ private:
 #define cachedChecksum appState.cachedChecksum
 #define timezoneOffset appState.timezoneOffset
 #define dstOffset appState.dstOffset
-#define nightMode appState.nightMode
+#define darkMode appState.darkMode
 #define updateAvailable appState.updateAvailable
 #define cachedLatestVersion appState.cachedLatestVersion
 #define updateDiscoveredTime appState.updateDiscoveredTime

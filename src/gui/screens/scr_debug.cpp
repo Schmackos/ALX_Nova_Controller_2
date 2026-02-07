@@ -241,16 +241,16 @@ lv_obj_t *scr_debug_create(void) {
     lv_obj_t *title = lv_label_create(scr);
     lv_label_set_text(title, ICON_DEBUG " Debug");
     lv_obj_add_style(title, gui_style_title(), LV_PART_MAIN);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 4);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 2);
 
     /* Scrollable container */
     lv_obj_t *cont = lv_obj_create(scr);
-    lv_obj_set_size(cont, DISPLAY_HEIGHT, DISPLAY_WIDTH - 46);
+    lv_obj_set_size(cont, DISPLAY_HEIGHT, DISPLAY_WIDTH - 36);
     lv_obj_align(cont, LV_ALIGN_BOTTOM_MID, 0, -18);
     lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_row(cont, 3, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(cont, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(cont, 2, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont, 2, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(cont, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(cont, 0, LV_PART_MAIN);
     lv_obj_set_scrollbar_mode(cont, LV_SCROLLBAR_MODE_AUTO);

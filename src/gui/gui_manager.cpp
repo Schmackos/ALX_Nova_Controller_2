@@ -13,6 +13,7 @@
 #include "screens/scr_debug.h"
 #include "screens/scr_support.h"
 #include "screens/scr_home.h"
+#include "screens/scr_siggen.h"
 #include "screens/scr_boot_anim.h"
 #include "../app_state.h"
 #include "../buzzer_handler.h"
@@ -43,14 +44,28 @@ static TaskHandle_t gui_task_handle = nullptr;
 #define DASHBOARD_REFRESH_MS 1000
 static unsigned long last_dashboard_refresh = 0;
 
+/* Swap R and B channels in RGB565 pixel (bits 15:11 <-> bits 4:0) */
+static inline uint16_t swap_rb565(uint16_t c) {
+    uint16_t r = (c >> 11) & 0x1F;
+    uint16_t b = c & 0x1F;
+    return (b << 11) | (c & 0x07E0) | r;
+}
+
 /* LVGL display flush callback */
 static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
+    uint32_t count = w * h;
+    uint16_t *px = (uint16_t *)px_map;
+
+    /* Swap R/B channels — LVGL outputs RGB565 but ST7735S panel expects BGR565 */
+    for (uint32_t i = 0; i < count; i++) {
+        px[i] = swap_rb565(px[i]);
+    }
 
     tft.startWrite();
     tft.setAddrWindow(area->x1, area->y1, w, h);
-    tft.pushColors((uint16_t *)px_map, w * h, true);
+    tft.pushColors(px, count, true);
     tft.endWrite();
 
     lv_display_flush_ready(disp);
@@ -88,8 +103,9 @@ static uint8_t last_applied_brightness = 255;
 static void screen_dim(void) {
     if (screen_dimmed || !screen_awake) return;
     screen_dimmed = true;
-    set_backlight(BL_BRIGHTNESS_DIM);
-    last_applied_brightness = BL_BRIGHTNESS_DIM;
+    uint8_t dim_val = AppState::getInstance().dimBrightness;
+    set_backlight(dim_val);
+    last_applied_brightness = dim_val;
     LOG_D("[GUI] Screen dimmed");
 }
 
@@ -148,7 +164,7 @@ static void gui_task(void *param) {
 
         /* Handle dim timeout */
         unsigned long dim_ms = AppState::getInstance().dimTimeout;
-        if (screen_awake && !screen_dimmed && dim_ms > 0) {
+        if (screen_awake && !screen_dimmed && AppState::getInstance().dimEnabled && dim_ms > 0) {
             if (millis() - last_activity_time > dim_ms) {
                 screen_dim();
             }
@@ -182,6 +198,8 @@ static void gui_task(void *param) {
                 scr_settings_refresh();
             } else if (cur == SCR_HOME) {
                 scr_home_refresh();
+            } else if (cur == SCR_SIGGEN_MENU) {
+                scr_siggen_refresh();
             }
         }
 
@@ -213,6 +231,7 @@ static void register_screens(void) {
     gui_nav_register(SCR_SUPPORT_MENU, scr_support_create);
     gui_nav_register(SCR_DEBUG_MENU, scr_debug_create);
     gui_nav_register(SCR_HOME, scr_home_create);
+    gui_nav_register(SCR_SIGGEN_MENU, scr_siggen_create);
 }
 
 void gui_init(void) {

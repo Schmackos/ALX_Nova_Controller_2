@@ -76,9 +76,24 @@ void AppState::setBacklightBrightness(uint8_t brightness) {
   }
 }
 
+void AppState::setDimEnabled(bool enabled) {
+  if (dimEnabled != enabled) {
+    dimEnabled = enabled;
+    _displayDirty = true;
+  }
+}
+
 void AppState::setDimTimeout(unsigned long timeout) {
   if (dimTimeout != timeout) {
     dimTimeout = timeout;
+    _displayDirty = true;
+  }
+}
+
+void AppState::setDimBrightness(uint8_t brightness) {
+  if (brightness < 1) brightness = 1;
+  if (dimBrightness != brightness) {
+    dimBrightness = brightness;
     _displayDirty = true;
   }
 }
@@ -97,6 +112,14 @@ void AppState::setBuzzerVolume(int volume) {
   if (buzzerVolume != volume) {
     buzzerVolume = volume;
     _buzzerDirty = true;
+  }
+}
+
+// ===== Signal Generator State Management =====
+void AppState::setSignalGenEnabled(bool enabled) {
+  if (sigGenEnabled != enabled) {
+    sigGenEnabled = enabled;
+    _sigGenDirty = true;
   }
 }
 
@@ -136,10 +159,12 @@ void AppState::clearAllDirtyFlags() {
   _displayDirty = false;
   _buzzerDirty = false;
   _settingsDirty = false;
+  _sigGenDirty = false;
 }
 
 bool AppState::hasAnyDirtyFlag() const {
   return _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
          _amplifierDirty || _sensingModeDirty || _timerDirty ||
-         _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty;
+         _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty ||
+         _sigGenDirty;
 }

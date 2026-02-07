@@ -35,18 +35,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
 
-        /* ===== Dark Theme (Night Mode) ===== */
+        /* ===== Dark Theme ===== */
         body.night-mode {
-            --bg-primary: #1A1A2E;
-            --bg-surface: #16213E;
-            --bg-card: #1E2A4A;
-            --bg-input: #243356;
+            --bg-primary: #121212;
+            --bg-surface: #1E1E1E;
+            --bg-card: #252525;
+            --bg-input: #2C2C2C;
             --text-primary: #FFFFFF;
             --text-secondary: #B0B0B0;
             --text-disabled: #666666;
             --error: #F44336;
             --info: #2196F3;
-            --border: #2A2A4A;
+            --border: #333333;
             --shadow: rgba(0, 0, 0, 0.4);
         }
 
@@ -560,6 +560,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .pin-table th:hover {
+            color: var(--accent-light);
+        }
+
+        .pin-table th .sort-arrow {
+            margin-left: 4px;
+            font-size: 10px;
+            opacity: 0.4;
+        }
+
+        .pin-table th.sorted .sort-arrow {
+            opacity: 1;
         }
 
         .pin-table td {
@@ -583,6 +600,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .pin-cat-core { background: var(--accent); color: #fff; }
         .pin-cat-input { background: var(--success); color: #fff; }
         .pin-cat-display { background: var(--info); color: #fff; }
+        .pin-cat-audio { background: #9C27B0; color: #fff; }
 
         /* ===== Connection Status ===== */
         .connection-bar {
@@ -2036,7 +2054,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="card-title">Control Status</div>
                 <div class="info-box" id="controlStatusBox">
                     <div class="info-row">
-                        <span class="info-label">Connection</span>
+                        <span class="info-label">WebSocket</span>
                         <span class="info-value" id="wsConnectionStatus">Connecting...</span>
                     </div>
                     <div class="info-row">
@@ -2176,11 +2194,62 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="48000" selected>48000 Hz</option>
                     </select>
                 </div>
+                <button class="btn btn-primary" onclick="updateAudioSettings()">Update Sample Rate</button>
+            </div>
+
+            <!-- Test Signal Generator -->
+            <div class="card">
+                <div class="card-title">Test Signal Generator</div>
                 <div class="form-group">
-                    <label class="form-label">Detection Threshold (dBFS)</label>
-                    <input type="number" class="form-input" id="audioThresholdInput" inputmode="numeric" min="-96" max="0" step="1" value="-40">
+                    <label class="form-label">Enable</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="siggenEnable" onchange="updateSigGen()"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
                 </div>
-                <button class="btn btn-primary" onclick="updateAudioSettings()">Update</button>
+                <div class="form-group">
+                    <label class="form-label">Output Mode</label>
+                    <select class="form-input" id="siggenOutputMode" onchange="updateSigGen()">
+                        <option value="0">Software Injection</option>
+                        <option value="1">PWM Output (GPIO 38)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Waveform</label>
+                    <select class="form-input" id="siggenWaveform" onchange="updateSigGen()">
+                        <option value="0">Sine</option>
+                        <option value="1">Square</option>
+                        <option value="2">White Noise</option>
+                        <option value="3">Frequency Sweep</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Frequency: <span id="siggenFreqVal">1000</span> Hz</label>
+                    <input type="range" class="form-input" id="siggenFreq" min="1" max="22000" value="1000" step="1" oninput="document.getElementById('siggenFreqVal').textContent=this.value" onchange="updateSigGen()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Amplitude: <span id="siggenAmpVal">-6</span> dBFS</label>
+                    <input type="range" class="form-input" id="siggenAmp" min="-96" max="0" value="-6" step="1" oninput="document.getElementById('siggenAmpVal').textContent=this.value" onchange="updateSigGen()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Channel</label>
+                    <select class="form-input" id="siggenChannel" onchange="updateSigGen()">
+                        <option value="0">Left</option>
+                        <option value="1">Right</option>
+                        <option value="2" selected>Both</option>
+                    </select>
+                </div>
+                <div class="form-group" id="siggenSweepGroup" style="display:none">
+                    <label class="form-label">Sweep Speed (Hz/s)</label>
+                    <input type="number" class="form-input" id="siggenSweepSpeed" min="1" max="22000" value="1000" onchange="updateSigGen()">
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
+                    <button class="btn btn-outline" onclick="siggenPreset(0,440,-6)">440 Hz</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(0,1000,-6)">1 kHz</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(0,100,-6)">100 Hz</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(0,10000,-6)">10 kHz</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(2,1000,-6)">Noise</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(3,20000,-6)">Sweep</button>
+                </div>
+                <p id="siggenPwmNote" style="display:none;font-size:11px;color:#FFA726;margin-top:8px">PWM output requires external RC low-pass filter for sine approximation.</p>
             </div>
         </section>
 
@@ -2458,22 +2527,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
-            <!-- Appearance -->
+            <!-- General -->
             <div class="card">
-                <div class="card-title">Appearance</div>
+                <div class="card-title">General</div>
                 <div class="toggle-row">
                     <div>
-                        <div class="toggle-label">Night Mode</div>
+                        <div class="toggle-label">Dark Mode</div>
                         <div class="toggle-sublabel">Use darker theme</div>
                     </div>
                     <label class="switch">
-                        <input type="checkbox" id="nightModeToggle" onchange="toggleTheme()">
+                        <input type="checkbox" id="darkModeToggle" onchange="toggleTheme()">
                         <span class="slider"></span>
                     </label>
                 </div>
+            </div>
+
+            <!-- Display -->
+            <div class="card">
+                <div class="card-title">Display</div>
                 <div class="toggle-row">
                     <div>
-                        <div class="toggle-label">Display Backlight</div>
+                        <div class="toggle-label">Backlight</div>
                         <div class="toggle-sublabel">Turn screen on/off</div>
                     </div>
                     <label class="switch">
@@ -2509,15 +2583,37 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 <div class="toggle-row">
                     <div>
-                        <div class="toggle-label">Dim Timeout</div>
+                        <div class="toggle-label">Dim Display</div>
                         <div class="toggle-sublabel">Dim before sleep</div>
                     </div>
+                    <label class="switch">
+                        <input type="checkbox" id="dimToggle" onchange="toggleDim()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row" id="dimTimeoutRow" style="display:none;">
+                    <div>
+                        <div class="toggle-label">Dim Timeout</div>
+                        <div class="toggle-sublabel">Delay before dimming</div>
+                    </div>
                     <select id="dimTimeoutSelect" onchange="setDimTimeout()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
-                        <option value="0" selected>Off</option>
                         <option value="5">5 sec</option>
-                        <option value="10">10 sec</option>
+                        <option value="10" selected>10 sec</option>
+                        <option value="15">15 sec</option>
                         <option value="30">30 sec</option>
                         <option value="60">1 min</option>
+                    </select>
+                </div>
+                <div class="toggle-row" id="dimBrightnessRow" style="display:none;">
+                    <div>
+                        <div class="toggle-label">Dim Brightness</div>
+                        <div class="toggle-sublabel">Brightness when dimmed</div>
+                    </div>
+                    <select id="dimBrightnessSelect" onchange="setDimBrightness()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="26" selected>10%</option>
+                        <option value="64">25%</option>
+                        <option value="128">50%</option>
+                        <option value="191">75%</option>
                     </select>
                 </div>
                 <div class="toggle-row">
@@ -2535,6 +2631,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="5">Heartbeat</option>
                     </select>
                 </div>
+            </div>
+
+            <!-- Sound -->
+            <div class="card">
+                <div class="card-title">Sound</div>
                 <div class="toggle-row">
                     <div>
                         <div class="toggle-label">Buzzer</div>
@@ -2866,28 +2967,34 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- Pin Configuration -->
             <div class="card">
                 <div class="card-title">Pin Configuration</div>
-                <table class="pin-table">
+                <table class="pin-table" id="pinTable">
                     <thead>
-                        <tr><th>GPIO</th><th>Function</th><th>Category</th></tr>
+                        <tr>
+                            <th onclick="sortPinTable(0)" data-col="0">GPIO <span class="sort-arrow">&#9650;</span></th>
+                            <th onclick="sortPinTable(1)" data-col="1">Function <span class="sort-arrow">&#9650;</span></th>
+                            <th onclick="sortPinTable(2)" data-col="2">Device <span class="sort-arrow">&#9650;</span></th>
+                            <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow">&#9650;</span></th>
+                        </tr>
                     </thead>
                     <tbody>
-                        <tr><td>2</td><td>LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>3</td><td>I2S MCLK</td><td><span class="pin-cat pin-cat-core">Audio</span></td></tr>
-                        <tr><td>4</td><td>Amplifier Relay</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>8</td><td>Buzzer (PWM)</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>15</td><td>Reset Button</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>16</td><td>I2S BCK</td><td><span class="pin-cat pin-cat-core">Audio</span></td></tr>
-                        <tr><td>17</td><td>I2S DOUT</td><td><span class="pin-cat pin-cat-core">Audio</span></td></tr>
-                        <tr><td>18</td><td>I2S LRC</td><td><span class="pin-cat pin-cat-core">Audio</span></td></tr>
-                        <tr><td>5</td><td>Encoder A</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>6</td><td>Encoder B</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>7</td><td>Encoder SW</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>10</td><td>TFT CS</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>11</td><td>TFT MOSI</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>12</td><td>TFT SCLK</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>13</td><td>TFT DC</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>14</td><td>TFT RST</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>21</td><td>TFT Backlight</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>2</td><td>LED</td><td>Status LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>4</td><td>Amplifier Relay</td><td>Relay Module</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>8</td><td>Buzzer (PWM)</td><td>Piezo Buzzer</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>15</td><td>Reset Button</td><td>Tactile Switch</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>38</td><td>Signal Gen (PWM)</td><td>Signal Generator</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>3</td><td>I2S MCLK</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>10</td><td>TFT CS</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>11</td><td>TFT MOSI</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>12</td><td>TFT SCLK</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>13</td><td>TFT DC</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>14</td><td>TFT RST</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>21</td><td>TFT Backlight</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -2963,11 +3070,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let ledState = false;
         let blinkingEnabled = false;
         let autoUpdateEnabled = false;
-        let nightMode = true;
+        let darkMode = true;
         let backlightOn = true;
         let backlightBrightness = 255;
         let screenTimeoutSec = 60;
-        let dimTimeoutSec = 0;
+        let dimEnabled = false;
+        let dimTimeoutSec = 10;
+        let dimBrightnessPwm = 26;
         let enableCertValidation = true;
         let currentFirmwareVersion = '';
         let currentLatestVersion = '';
@@ -3304,9 +3413,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         var closest = options.reduce(function(a, b) { return Math.abs(b - pct) < Math.abs(a - pct) ? b : a; });
                         document.getElementById('brightnessSelect').value = closest;
                     }
+                    if (typeof data.dimEnabled !== 'undefined') {
+                        dimEnabled = !!data.dimEnabled;
+                        document.getElementById('dimToggle').checked = dimEnabled;
+                        updateDimVisibility();
+                    }
                     if (typeof data.dimTimeout !== 'undefined') {
                         dimTimeoutSec = data.dimTimeout;
                         document.getElementById('dimTimeoutSelect').value = dimTimeoutSec.toString();
+                    }
+                    if (typeof data.dimBrightness !== 'undefined') {
+                        dimBrightnessPwm = data.dimBrightness;
+                        document.getElementById('dimBrightnessSelect').value = dimBrightnessPwm.toString();
                     }
                 } else if (data.type === 'buzzerState') {
                     if (typeof data.enabled !== 'undefined') {
@@ -3331,6 +3449,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     if (currentActiveTab === 'audio' && data.bands) {
                         drawSpectrumBars(data.bands, data.freq || 0);
                     }
+                } else if (data.type === 'signalGenerator') {
+                    applySigGenState(data);
                 }
             };
 
@@ -3499,10 +3619,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('dstToggle').checked = (data.dstOffset === 3600);
             }
             
-            if (typeof data.nightMode !== 'undefined') {
-                nightMode = !!data.nightMode;
-                document.getElementById('nightModeToggle').checked = nightMode;
-                applyTheme(nightMode);
+            if (typeof data.darkMode !== 'undefined') {
+                darkMode = !!data.darkMode;
+                document.getElementById('darkModeToggle').checked = darkMode;
+                applyTheme(darkMode);
             }
 
             if (typeof data.backlightOn !== 'undefined') {
@@ -3523,9 +3643,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('brightnessSelect').value = closest;
             }
 
+            if (typeof data.dimEnabled !== 'undefined') {
+                dimEnabled = !!data.dimEnabled;
+                document.getElementById('dimToggle').checked = dimEnabled;
+                updateDimVisibility();
+            }
+
             if (typeof data.dimTimeout !== 'undefined') {
                 dimTimeoutSec = data.dimTimeout;
                 document.getElementById('dimTimeoutSelect').value = dimTimeoutSec.toString();
+            }
+
+            if (typeof data.dimBrightness !== 'undefined') {
+                dimBrightnessPwm = data.dimBrightness;
+                document.getElementById('dimBrightnessSelect').value = dimBrightnessPwm.toString();
             }
 
             if (typeof data.bootAnimEnabled !== 'undefined') {
@@ -3805,13 +3936,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 const sel = document.getElementById('audioSampleRateSelect');
                 if (sel) sel.value = data.audioSampleRate.toString();
             }
-            // Sync audio threshold to Audio Settings card
-            if (data.audioThreshold !== undefined) {
-                const inp = document.getElementById('audioThresholdInput');
-                if (inp && document.activeElement !== inp) {
-                    inp.value = Math.round(data.audioThreshold);
-                }
-            }
         }
 
         // ===== Audio Tab Functions =====
@@ -3943,23 +4067,61 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function updateAudioSettings() {
             const sampleRate = parseInt(document.getElementById('audioSampleRateSelect').value);
-            const threshold = parseFloat(document.getElementById('audioThresholdInput').value);
-            if (isNaN(threshold) || threshold < -96 || threshold > 0) {
-                showToast('Threshold must be between -96 and 0', 'error');
-                return;
-            }
 
             apiFetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audioSampleRate: sampleRate, audioThreshold: threshold })
+                body: JSON.stringify({ audioSampleRate: sampleRate })
             })
             .then(res => res.json())
             .then(data => {
-                if (data.success) showToast('Audio settings updated', 'success');
-                else showToast('Failed to update settings', 'error');
+                if (data.success) showToast('Sample rate updated', 'success');
+                else showToast('Failed to update sample rate', 'error');
             })
-            .catch(err => showToast('Failed to update audio settings', 'error'));
+            .catch(err => showToast('Failed to update sample rate', 'error'));
+        }
+
+        // ===== Signal Generator =====
+        function updateSigGen() {
+            var wf = parseInt(document.getElementById('siggenWaveform').value);
+            document.getElementById('siggenSweepGroup').style.display = wf === 3 ? '' : 'none';
+            var mode = parseInt(document.getElementById('siggenOutputMode').value);
+            document.getElementById('siggenPwmNote').style.display = mode === 1 ? '' : 'none';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'setSignalGen',
+                    enabled: document.getElementById('siggenEnable').checked,
+                    waveform: wf,
+                    frequency: parseFloat(document.getElementById('siggenFreq').value),
+                    amplitude: parseFloat(document.getElementById('siggenAmp').value),
+                    channel: parseInt(document.getElementById('siggenChannel').value),
+                    outputMode: mode,
+                    sweepSpeed: parseFloat(document.getElementById('siggenSweepSpeed').value)
+                }));
+            }
+        }
+        function siggenPreset(wf, freq, amp) {
+            document.getElementById('siggenWaveform').value = wf;
+            document.getElementById('siggenFreq').value = freq;
+            document.getElementById('siggenFreqVal').textContent = freq;
+            document.getElementById('siggenAmp').value = amp;
+            document.getElementById('siggenAmpVal').textContent = amp;
+            if (wf === 3) document.getElementById('siggenSweepSpeed').value = 1000;
+            document.getElementById('siggenEnable').checked = true;
+            updateSigGen();
+        }
+        function applySigGenState(d) {
+            document.getElementById('siggenEnable').checked = d.enabled;
+            document.getElementById('siggenWaveform').value = d.waveform;
+            document.getElementById('siggenFreq').value = d.frequency;
+            document.getElementById('siggenFreqVal').textContent = Math.round(d.frequency);
+            document.getElementById('siggenAmp').value = d.amplitude;
+            document.getElementById('siggenAmpVal').textContent = Math.round(d.amplitude);
+            document.getElementById('siggenChannel').value = d.channel;
+            document.getElementById('siggenOutputMode').value = d.outputMode;
+            document.getElementById('siggenSweepSpeed').value = d.sweepSpeed;
+            document.getElementById('siggenSweepGroup').style.display = d.waveform === 3 ? '' : 'none';
+            document.getElementById('siggenPwmNote').style.display = d.outputMode === 1 ? '' : 'none';
         }
 
         // ===== WiFi Configuration =====
@@ -5139,23 +5301,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function toggleTheme() {
-            nightMode = document.getElementById('nightModeToggle').checked;
-            applyTheme(nightMode);
+            darkMode = document.getElementById('darkModeToggle').checked;
+            applyTheme(darkMode);
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nightMode })
+                body: JSON.stringify({ darkMode })
             });
         }
 
-        function applyTheme(isNightMode) {
-            if (isNightMode) {
+        function applyTheme(isDarkMode) {
+            if (isDarkMode) {
                 document.body.classList.add('night-mode');
-                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1A1A2E');
+                document.querySelector('meta[name="theme-color"]').setAttribute('content', '#121212');
             } else {
                 document.body.classList.remove('night-mode');
                 document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F5F5F5');
             }
+            localStorage.setItem('darkMode', isDarkMode ? 'true' : 'false');
         }
 
         function toggleBacklight() {
@@ -5191,6 +5354,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             });
         }
 
+        function updateDimVisibility() {
+            var show = dimEnabled ? '' : 'none';
+            document.getElementById('dimTimeoutRow').style.display = show;
+            document.getElementById('dimBrightnessRow').style.display = show;
+        }
+
+        function toggleDim() {
+            dimEnabled = document.getElementById('dimToggle').checked;
+            updateDimVisibility();
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setDimEnabled', enabled: dimEnabled }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dimEnabled: dimEnabled })
+            });
+        }
+
         function setDimTimeout() {
             dimTimeoutSec = parseInt(document.getElementById('dimTimeoutSelect').value);
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -5200,6 +5382,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dimTimeout: dimTimeoutSec })
+            });
+        }
+
+        function setDimBrightness() {
+            dimBrightnessPwm = parseInt(document.getElementById('dimBrightnessSelect').value);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setDimBrightness', value: dimBrightnessPwm }));
+            }
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dimBrightness: dimBrightnessPwm })
             });
         }
 
@@ -6223,6 +6417,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        // ===== Pin Table Sorting =====
+        let pinSortCol = 0;
+        let pinSortAsc = true;
+        function sortPinTable(col) {
+            const table = document.getElementById('pinTable');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            if (col === pinSortCol) { pinSortAsc = !pinSortAsc; } else { pinSortCol = col; pinSortAsc = true; }
+            rows.sort((a, b) => {
+                let aVal = a.cells[col].textContent.trim();
+                let bVal = b.cells[col].textContent.trim();
+                if (col === 0) { return pinSortAsc ? parseInt(aVal) - parseInt(bVal) : parseInt(bVal) - parseInt(aVal); }
+                return pinSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+            rows.forEach(r => tbody.appendChild(r));
+            table.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sorted');
+                th.querySelector('.sort-arrow').innerHTML = '&#9650;';
+            });
+            const th = table.querySelectorAll('th')[col];
+            th.classList.add('sorted');
+            th.querySelector('.sort-arrow').innerHTML = pinSortAsc ? '&#9650;' : '&#9660;';
+        }
+
         function clearDebugConsole() {
             const console = document.getElementById('debugConsole');
             const entry = document.createElement('div');
@@ -6630,14 +6848,14 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#1A1A2E">
+    <meta name="theme-color" content="#121212">
     <title>ALX Audio - WiFi Setup</title>
     <style>
         :root {
-            --bg-primary: #1A1A2E;
-            --bg-surface: #16213E;
-            --bg-card: #1E2A4A;
-            --bg-input: #243356;
+            --bg-primary: #121212;
+            --bg-surface: #1E1E1E;
+            --bg-card: #252525;
+            --bg-input: #2C2C2C;
             --accent: #FF9800;
             --accent-dark: #E68900;
             --text-primary: #FFFFFF;
@@ -6645,7 +6863,7 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             --text-disabled: #666666;
             --success: #4CAF50;
             --error: #F44336;
-            --border: #2A2A4A;
+            --border: #333333;
             --safe-top: env(safe-area-inset-top, 0px);
             --safe-bottom: env(safe-area-inset-bottom, 0px);
         }

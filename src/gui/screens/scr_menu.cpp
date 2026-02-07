@@ -46,19 +46,23 @@ lv_obj_t *scr_menu_create(const MenuConfig *config) {
     lv_obj_t *title = lv_label_create(scr);
     lv_label_set_text(title, config->title);
     lv_obj_add_style(title, gui_style_title(), LV_PART_MAIN);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 4);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 2);
 
     /* Scrollable list container */
     lv_obj_t *list = lv_obj_create(scr);
-    lv_obj_set_size(list, DISPLAY_HEIGHT, DISPLAY_WIDTH - 28); /* Below title */
+    lv_obj_set_size(list, DISPLAY_HEIGHT, DISPLAY_WIDTH - 22); /* Below title */
     lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(list, 2, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(list, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(list, 1, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(list, 2, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(list, 8, LV_PART_MAIN);  /* Room for scrollbar */
+    lv_obj_set_style_pad_top(list, 2, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(list, 2, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(list, 0, LV_PART_MAIN);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_style_width(list, 3, LV_PART_SCROLLBAR);
 
     lv_group_t *grp = gui_nav_get_group();
 
@@ -72,8 +76,8 @@ lv_obj_t *scr_menu_create(const MenuConfig *config) {
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_add_style(row, gui_style_list_item(), LV_PART_MAIN);
         lv_obj_add_style(row, gui_style_list_item_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
-        lv_obj_set_style_pad_hor(row, 6, LV_PART_MAIN);
-        lv_obj_set_style_pad_ver(row, 6, LV_PART_MAIN);
+        lv_obj_set_style_pad_hor(row, 4, LV_PART_MAIN);
+        lv_obj_set_style_pad_ver(row, 3, LV_PART_MAIN);
         lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
         /* Left side: icon + label */
@@ -101,7 +105,7 @@ lv_obj_t *scr_menu_create(const MenuConfig *config) {
         lv_obj_t *lbl = lv_label_create(left);
         lv_label_set_text(lbl, item->label);
         lv_obj_set_width(lbl, LV_PCT(100));
-        lv_label_set_long_mode(lbl, LV_LABEL_LONG_DOT);
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
         lv_obj_add_style(lbl, gui_style_body(), LV_PART_MAIN);
         if (item->type == MENU_BACK) {
             lv_obj_set_style_text_color(lbl, COLOR_TEXT_SEC, LV_PART_MAIN);

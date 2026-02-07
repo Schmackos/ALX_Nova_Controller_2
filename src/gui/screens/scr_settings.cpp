@@ -27,11 +27,19 @@ static const CycleOption timeout_options[] = {
 
 /* Dim timeout cycle options (in milliseconds) */
 static const CycleOption dim_timeout_options[] = {
-    {"Off",    0},
     {"5 sec",  5000},
     {"10 sec", 10000},
+    {"15 sec", 15000},
     {"30 sec", 30000},
     {"1 min",  60000},
+};
+
+/* Dim brightness cycle options (PWM values) */
+static const CycleOption dim_brightness_options[] = {
+    {"10%",   26},
+    {"25%",   64},
+    {"50%",  128},
+    {"75%",  191},
 };
 
 /* ===== Value editor confirmations ===== */
@@ -46,6 +54,18 @@ static void on_dim_timeout_confirm(int int_val, float, int) {
     AppState::getInstance().setDimTimeout((unsigned long)int_val);
     saveSettings();
     LOG_I("[GUI] Dim timeout set to %d ms", int_val);
+}
+
+static void on_dim_enabled_confirm(int int_val, float, int) {
+    AppState::getInstance().setDimEnabled(int_val != 0);
+    saveSettings();
+    LOG_I("[GUI] Dim %s", int_val ? "enabled" : "disabled");
+}
+
+static void on_dim_brightness_confirm(int int_val, float, int) {
+    AppState::getInstance().setDimBrightness((uint8_t)int_val);
+    saveSettings();
+    LOG_I("[GUI] Dim brightness set to %d", int_val);
 }
 
 static void on_backlight_confirm(int int_val, float, int) {
@@ -73,12 +93,12 @@ static void on_brightness_confirm(int int_val, float, int) {
     LOG_I("[GUI] Brightness set to %d", int_val);
 }
 
-static void on_night_mode_confirm(int int_val, float, int) {
-    AppState::getInstance().nightMode = (int_val != 0);
+static void on_dark_mode_confirm(int int_val, float, int) {
+    AppState::getInstance().darkMode = (int_val != 0);
     gui_theme_set_dark(int_val != 0);
     saveSettings();
     AppState::getInstance().markSettingsDirty();
-    LOG_I("[GUI] Night mode %s", int_val ? "ON" : "OFF");
+    LOG_I("[GUI] Dark mode %s", int_val ? "ON" : "OFF");
 }
 
 static void on_auto_update_confirm(int int_val, float, int) {
@@ -188,9 +208,18 @@ static void edit_screen_timeout(void) {
     scr_value_edit_open(&cfg);
 }
 
+static void edit_dim_enabled(void) {
+    ValueEditConfig cfg = {};
+    cfg.title = "Dim Display";
+    cfg.type = VE_TOGGLE;
+    cfg.toggle_val = AppState::getInstance().dimEnabled;
+    cfg.on_confirm = on_dim_enabled_confirm;
+    scr_value_edit_open(&cfg);
+}
+
 static void edit_dim_timeout(void) {
     AppState &st = AppState::getInstance();
-    int cur = 0;
+    int cur = 1; /* default: 10 sec */
     for (int i = 0; i < 5; i++) {
         if ((unsigned long)dim_timeout_options[i].value == st.dimTimeout) { cur = i; break; }
     }
@@ -201,6 +230,22 @@ static void edit_dim_timeout(void) {
     cfg.option_count = 5;
     cfg.current_option = cur;
     cfg.on_confirm = on_dim_timeout_confirm;
+    scr_value_edit_open(&cfg);
+}
+
+static void edit_dim_brightness(void) {
+    uint8_t cur_val = AppState::getInstance().dimBrightness;
+    int cur = 0; /* default: 10% */
+    for (int i = 0; i < 4; i++) {
+        if (dim_brightness_options[i].value == (int)cur_val) { cur = i; break; }
+    }
+    ValueEditConfig cfg = {};
+    cfg.title = "Dim Brightness";
+    cfg.type = VE_CYCLE;
+    cfg.options = dim_brightness_options;
+    cfg.option_count = 4;
+    cfg.current_option = cur;
+    cfg.on_confirm = on_dim_brightness_confirm;
     scr_value_edit_open(&cfg);
 }
 
@@ -229,12 +274,12 @@ static void edit_brightness(void) {
     scr_value_edit_open(&cfg);
 }
 
-static void edit_night_mode(void) {
+static void edit_dark_mode(void) {
     ValueEditConfig cfg = {};
-    cfg.title = "Night Mode";
+    cfg.title = "Dark Mode";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().nightMode;
-    cfg.on_confirm = on_night_mode_confirm;
+    cfg.toggle_val = AppState::getInstance().darkMode;
+    cfg.on_confirm = on_dark_mode_confirm;
     scr_value_edit_open(&cfg);
 }
 
@@ -313,8 +358,11 @@ static void build_settings_menu(void) {
     }
     snprintf(timeout_str, sizeof(timeout_str), "%s", t);
 
+    static char dim_enabled_str[8];
+    snprintf(dim_enabled_str, sizeof(dim_enabled_str), "%s", st.dimEnabled ? "ON" : "OFF");
+
     static char dim_str[12];
-    const char *d = "Off";
+    const char *d = "10 sec";
     for (int i = 0; i < 5; i++) {
         if ((unsigned long)dim_timeout_options[i].value == st.dimTimeout) {
             d = dim_timeout_options[i].label;
@@ -322,6 +370,16 @@ static void build_settings_menu(void) {
         }
     }
     snprintf(dim_str, sizeof(dim_str), "%s", d);
+
+    static char dim_bright_str[8];
+    const char *db = "10%";
+    for (int i = 0; i < 4; i++) {
+        if (dim_brightness_options[i].value == (int)st.dimBrightness) {
+            db = dim_brightness_options[i].label;
+            break;
+        }
+    }
+    snprintf(dim_bright_str, sizeof(dim_bright_str), "%s", db);
 
     static char backlight_str[8];
     snprintf(backlight_str, sizeof(backlight_str), "%s", st.backlightOn ? "ON" : "OFF");
@@ -336,8 +394,8 @@ static void build_settings_menu(void) {
     }
     snprintf(brightness_str, sizeof(brightness_str), "%s", br);
 
-    static char night_str[8];
-    snprintf(night_str, sizeof(night_str), "%s", st.nightMode ? "ON" : "OFF");
+    static char dark_str[8];
+    snprintf(dark_str, sizeof(dark_str), "%s", st.darkMode ? "ON" : "OFF");
 
     static char boot_anim_str[14];
     if (!st.bootAnimEnabled) {
@@ -376,21 +434,23 @@ static void build_settings_menu(void) {
     snprintf(buzzer_vol_str, sizeof(buzzer_vol_str), "%s", vol_names[bv]);
 
     settings_menu.title = "Settings";
-    settings_menu.item_count = 14;
+    settings_menu.item_count = 16;
     settings_menu.items[0]  = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     settings_menu.items[1]  = {"Screen Timeout", timeout_str, nullptr, MENU_ACTION, edit_screen_timeout};
-    settings_menu.items[2]  = {"Dim Timeout", dim_str, nullptr, MENU_ACTION, edit_dim_timeout};
-    settings_menu.items[3]  = {"Backlight", backlight_str, nullptr, MENU_ACTION, edit_backlight};
-    settings_menu.items[4]  = {"Brightness", brightness_str, nullptr, MENU_ACTION, edit_brightness};
-    settings_menu.items[5]  = {"Night Mode", night_str, nullptr, MENU_ACTION, edit_night_mode};
-    settings_menu.items[6]  = {"Boot Animation", boot_anim_str, nullptr, MENU_ACTION, edit_boot_anim};
-    settings_menu.items[7]  = {"Buzzer", buzzer_str, nullptr, MENU_ACTION, edit_buzzer_enable};
-    settings_menu.items[8]  = {"Buzzer Volume", buzzer_vol_str, nullptr, MENU_ACTION, edit_buzzer_volume};
-    settings_menu.items[9]  = {"Auto Update", update_str, nullptr, MENU_ACTION, edit_auto_update};
-    settings_menu.items[10] = {"SSL Validation", ssl_str, nullptr, MENU_ACTION, edit_ssl_validation};
-    settings_menu.items[11] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
-    settings_menu.items[12] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
-    settings_menu.items[13] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
+    settings_menu.items[2]  = {"Dim Display", dim_enabled_str, nullptr, MENU_ACTION, edit_dim_enabled};
+    settings_menu.items[3]  = {"Dim Timeout", dim_str, nullptr, MENU_ACTION, edit_dim_timeout};
+    settings_menu.items[4]  = {"Dim Brightness", dim_bright_str, nullptr, MENU_ACTION, edit_dim_brightness};
+    settings_menu.items[5]  = {"Backlight", backlight_str, nullptr, MENU_ACTION, edit_backlight};
+    settings_menu.items[6]  = {"Brightness", brightness_str, nullptr, MENU_ACTION, edit_brightness};
+    settings_menu.items[7]  = {"Dark Mode", dark_str, nullptr, MENU_ACTION, edit_dark_mode};
+    settings_menu.items[8]  = {"Boot Animation", boot_anim_str, nullptr, MENU_ACTION, edit_boot_anim};
+    settings_menu.items[9]  = {"Buzzer", buzzer_str, nullptr, MENU_ACTION, edit_buzzer_enable};
+    settings_menu.items[10] = {"Buzzer Volume", buzzer_vol_str, nullptr, MENU_ACTION, edit_buzzer_volume};
+    settings_menu.items[11] = {"Auto Update", update_str, nullptr, MENU_ACTION, edit_auto_update};
+    settings_menu.items[12] = {"SSL Validation", ssl_str, nullptr, MENU_ACTION, edit_ssl_validation};
+    settings_menu.items[13] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
+    settings_menu.items[14] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
+    settings_menu.items[15] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
 }
 
 lv_obj_t *scr_settings_create(void) {
@@ -412,8 +472,10 @@ void scr_settings_refresh(void) {
     snprintf(timeout_buf, sizeof(timeout_buf), "%s", t);
     scr_menu_set_item_value(1, timeout_buf);
 
+    scr_menu_set_item_value(2, st.dimEnabled ? "ON" : "OFF");
+
     static char dim_buf[12];
-    const char *dt_label = "Off";
+    const char *dt_label = "10 sec";
     for (int i = 0; i < 5; i++) {
         if ((unsigned long)dim_timeout_options[i].value == st.dimTimeout) {
             dt_label = dim_timeout_options[i].label;
@@ -421,9 +483,20 @@ void scr_settings_refresh(void) {
         }
     }
     snprintf(dim_buf, sizeof(dim_buf), "%s", dt_label);
-    scr_menu_set_item_value(2, dim_buf);
+    scr_menu_set_item_value(3, dim_buf);
 
-    scr_menu_set_item_value(3, st.backlightOn ? "ON" : "OFF");
+    static char dim_bright_buf[8];
+    const char *db_label = "10%";
+    for (int i = 0; i < 4; i++) {
+        if (dim_brightness_options[i].value == (int)st.dimBrightness) {
+            db_label = dim_brightness_options[i].label;
+            break;
+        }
+    }
+    snprintf(dim_bright_buf, sizeof(dim_bright_buf), "%s", db_label);
+    scr_menu_set_item_value(4, dim_bright_buf);
+
+    scr_menu_set_item_value(5, st.backlightOn ? "ON" : "OFF");
 
     static char bright_buf[8];
     const char *br_label = "100%";
@@ -434,9 +507,9 @@ void scr_settings_refresh(void) {
         }
     }
     snprintf(bright_buf, sizeof(bright_buf), "%s", br_label);
-    scr_menu_set_item_value(4, bright_buf);
+    scr_menu_set_item_value(6, bright_buf);
 
-    scr_menu_set_item_value(5, st.nightMode ? "ON" : "OFF");
+    scr_menu_set_item_value(7, st.darkMode ? "ON" : "OFF");
 
     static char boot_anim_buf[14];
     if (!st.bootAnimEnabled) {
@@ -451,20 +524,20 @@ void scr_settings_refresh(void) {
         }
         snprintf(boot_anim_buf, sizeof(boot_anim_buf), "%s", style_name);
     }
-    scr_menu_set_item_value(6, boot_anim_buf);
+    scr_menu_set_item_value(8, boot_anim_buf);
 
-    scr_menu_set_item_value(7, st.buzzerEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(9, st.buzzerEnabled ? "ON" : "OFF");
 
     static char bvol_buf[8];
     const char *vol_names[] = {"Low", "Medium", "High"};
     int bv = st.buzzerVolume;
     if (bv < 0 || bv > 2) bv = 1;
     snprintf(bvol_buf, sizeof(bvol_buf), "%s", vol_names[bv]);
-    scr_menu_set_item_value(8, bvol_buf);
+    scr_menu_set_item_value(10, bvol_buf);
 
-    scr_menu_set_item_value(9, st.autoUpdateEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(11, st.autoUpdateEnabled ? "ON" : "OFF");
 
-    scr_menu_set_item_value(10, st.enableCertValidation ? "ON" : "OFF");
+    scr_menu_set_item_value(12, st.enableCertValidation ? "ON" : "OFF");
 
     static char fw_buf[24];
     if (st.updateAvailable) {
@@ -472,7 +545,7 @@ void scr_settings_refresh(void) {
     } else {
         snprintf(fw_buf, sizeof(fw_buf), "%s", FIRMWARE_VERSION);
     }
-    scr_menu_set_item_value(11, fw_buf);
+    scr_menu_set_item_value(13, fw_buf);
 }
 
 #endif /* GUI_ENABLED */

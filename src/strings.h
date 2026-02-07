@@ -199,9 +199,9 @@
 #define STR_REFRESH_10S                     "10s"
 
 // ===== Tooltip/Title Text =====
-#define STR_TITLE_THEME_TOGGLE              "Toggle Day/Night Mode"
-#define STR_TITLE_SWITCH_DAY                "Switch to Day Mode"
-#define STR_TITLE_SWITCH_NIGHT              "Switch to Night Mode"
+#define STR_TITLE_THEME_TOGGLE              "Toggle Dark Mode"
+#define STR_TITLE_SWITCH_DAY                "Switch to Light Mode"
+#define STR_TITLE_SWITCH_NIGHT              "Switch to Dark Mode"
 
 // ===== JavaScript Alert/Error Messages =====
 #define STR_JS_ERR_SETTINGS_FAILED          "Failed to update settings: "

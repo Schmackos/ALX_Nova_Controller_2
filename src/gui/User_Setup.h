@@ -32,7 +32,7 @@
 #define SPI_TOUCH_FREQUENCY  2500000  /* Not used (no touch) */
 
 /* ===== Color settings ===== */
-/* BGR color order — fixes orange appearing as blue on most ST7735S panels */
+/* BGR color order for ST7735S BLACKTAB panels */
 #define TFT_RGB_ORDER TFT_BGR
 
 /* Enable 16-bit parallel reads if supported by display */

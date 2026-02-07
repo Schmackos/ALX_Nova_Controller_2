@@ -43,7 +43,7 @@ static void init_styles(bool dark) {
     lv_style_set_bg_color(&style_card, dark ? COLOR_BG_CARD : COLOR_CARD_LIGHT);
     lv_style_set_bg_opa(&style_card, LV_OPA_COVER);
     lv_style_set_radius(&style_card, 8);
-    lv_style_set_pad_all(&style_card, 10);
+    lv_style_set_pad_all(&style_card, 6);
     lv_style_set_border_width(&style_card, 1);
     lv_style_set_border_color(&style_card, dark ? COLOR_BORDER_DARK : COLOR_BORDER_LIGHT);
     lv_style_set_border_opa(&style_card, LV_OPA_COVER);
@@ -56,17 +56,17 @@ static void init_styles(bool dark) {
 
     /* Title text */
     lv_style_init(&style_title);
-    lv_style_set_text_font(&style_title, &lv_font_montserrat_18);
+    lv_style_set_text_font(&style_title, &lv_font_montserrat_14);
     lv_style_set_text_color(&style_title, COLOR_PRIMARY);
 
     /* Body text */
     lv_style_init(&style_body);
-    lv_style_set_text_font(&style_body, &lv_font_montserrat_14);
+    lv_style_set_text_font(&style_body, &lv_font_montserrat_12);
     lv_style_set_text_color(&style_body, dark ? COLOR_TEXT_PRI : COLOR_TEXT_PRI_LT);
 
     /* Dimmed text */
     lv_style_init(&style_dim);
-    lv_style_set_text_font(&style_dim, &lv_font_montserrat_12);
+    lv_style_set_text_font(&style_dim, &lv_font_montserrat_10);
     lv_style_set_text_color(&style_dim, dark ? COLOR_TEXT_SEC : COLOR_TEXT_SEC_LT);
 
     /* Button */
@@ -87,7 +87,7 @@ static void init_styles(bool dark) {
     lv_style_set_bg_color(&style_list_item, dark ? COLOR_BG_CARD : COLOR_CARD_LIGHT);
     lv_style_set_bg_opa(&style_list_item, LV_OPA_COVER);
     lv_style_set_text_color(&style_list_item, dark ? COLOR_TEXT_PRI : COLOR_TEXT_PRI_LT);
-    lv_style_set_pad_all(&style_list_item, 8);
+    lv_style_set_pad_all(&style_list_item, 4);
     lv_style_set_border_width(&style_list_item, 0);
     lv_style_set_radius(&style_list_item, 4);
 
@@ -112,7 +112,7 @@ void gui_theme_init(bool dark_mode) {
         COLOR_PRIMARY,
         COLOR_PRIMARY_DK,
         dark_mode,
-        &lv_font_montserrat_14
+        &lv_font_montserrat_12
     );
     lv_display_set_theme(lv_display_get_default(), th);
 }
@@ -126,7 +126,7 @@ void gui_theme_set_dark(bool dark_mode) {
         COLOR_PRIMARY,
         COLOR_PRIMARY_DK,
         dark_mode,
-        &lv_font_montserrat_14
+        &lv_font_montserrat_12
     );
     lv_display_set_theme(lv_display_get_default(), th);
 
