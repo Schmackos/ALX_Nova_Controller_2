@@ -33,17 +33,17 @@ const char loginPage[] PROGMEM = R"rawliteral(
             --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
 
-        /* ===== Dark Theme (Night Mode) ===== */
+        /* ===== Dark Theme ===== */
         body.night-mode {
-            --bg-primary: #1A1A2E;
-            --bg-surface: #16213E;
-            --bg-card: #1E2A4A;
-            --bg-input: #243356;
+            --bg-primary: #121212;
+            --bg-surface: #1E1E1E;
+            --bg-card: #252525;
+            --bg-input: #2C2C2C;
             --text-primary: #FFFFFF;
             --text-secondary: #B0B0B0;
             --text-disabled: #666666;
             --error: #F44336;
-            --border: #2A2A4A;
+            --border: #333333;
             --shadow: rgba(0, 0, 0, 0.4);
         }
 
@@ -285,8 +285,8 @@ const char loginPage[] PROGMEM = R"rawliteral(
     </div>
 
     <script>
-        // Apply night mode if stored in localStorage
-        if (localStorage.getItem('nightMode') === 'true') {
+        // Apply dark mode if stored in localStorage
+        if (localStorage.getItem('darkMode') === 'true' || localStorage.getItem('nightMode') === 'true') {
             document.body.classList.add('night-mode');
         }
 

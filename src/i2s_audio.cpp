@@ -2,6 +2,7 @@
 #include "app_state.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "signal_generator.h"
 #include <arduinoFFT.h>
 #include <cmath>
 #include <cstring>
@@ -268,6 +269,11 @@ static void audio_capture_task(void *param) {
 
         int total_samples = bytes_read / sizeof(int32_t);
         int stereo_frames = total_samples / 2;
+
+        // Inject test signal if signal generator is active in software mode
+        if (siggen_is_active() && siggen_is_software_mode()) {
+            siggen_fill_buffer(buffer, stereo_frames, _currentSampleRate);
+        }
 
         // Compute RMS for left (channel 0) and right (channel 1)
         float rmsL = audio_compute_rms(buffer, stereo_frames, 0, 2);

@@ -63,7 +63,7 @@
 #define BL_PWM_RESOLUTION 8
 #define BL_BRIGHTNESS_MAX 255
 #define BL_BRIGHTNESS_MIN 0
-#define BL_BRIGHTNESS_DIM 40
+#define BL_BRIGHTNESS_DIM 26
 
 /*====================
    TIMING CONFIGURATION

@@ -44,6 +44,8 @@ bool loadSettings() {
   String line12 = file.readStringUntil('\n');
   String line13 = file.readStringUntil('\n');
   String line14 = file.readStringUntil('\n');
+  String line15 = file.readStringUntil('\n');
+  String line16 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -68,7 +70,7 @@ bool loadSettings() {
   // Load night mode (if available, otherwise default to false)
   if (line4.length() > 0) {
     line4.trim();
-    nightMode = (line4.toInt() != 0);
+    darkMode = (line4.toInt() != 0);
   }
 
   // Load cert validation setting (if available, otherwise default to true from
@@ -149,14 +151,33 @@ bool loadSettings() {
     }
   }
 
-  // Load dim timeout (if available, otherwise default to 0 = disabled)
+  // Load dim timeout (if available)
+  // Legacy: dimVal==0 meant disabled; now handled by dimEnabled toggle
   if (line14.length() > 0) {
     line14.trim();
     unsigned long dimVal = line14.toInt();
-    if (dimVal == 0 || dimVal == 5000 || dimVal == 10000 ||
-        dimVal == 30000 || dimVal == 60000) {
+    if (dimVal == 0) {
+      // Legacy "disabled" value — keep default timeout, dimEnabled stays false
+    } else if (dimVal == 5000 || dimVal == 10000 || dimVal == 15000 ||
+               dimVal == 30000 || dimVal == 60000) {
       appState.dimTimeout = dimVal;
     }
+  }
+
+  // Load dim brightness (if available, otherwise default to 26 = 10%)
+  if (line15.length() > 0) {
+    line15.trim();
+    int dimBright = line15.toInt();
+    if (dimBright == 26 || dimBright == 64 || dimBright == 128 ||
+        dimBright == 191) {
+      appState.dimBrightness = (uint8_t)dimBright;
+    }
+  }
+
+  // Load dim enabled (if available, otherwise default to false)
+  if (line16.length() > 0) {
+    line16.trim();
+    appState.dimEnabled = (line16 == "1");
   }
 
   return true;
@@ -172,7 +193,7 @@ void saveSettings() {
   file.println(autoUpdateEnabled ? "1" : "0");
   file.println(timezoneOffset);
   file.println(dstOffset);
-  file.println(nightMode ? "1" : "0");
+  file.println(darkMode ? "1" : "0");
   file.println(enableCertValidation ? "1" : "0");
   file.println(hardwareStatsInterval);
   file.println(autoAPEnabled ? "1" : "0");
@@ -188,8 +209,84 @@ void saveSettings() {
   file.println(appState.buzzerVolume);
   file.println(appState.backlightBrightness);
   file.println(appState.dimTimeout);
+  file.println(appState.dimBrightness);
+  file.println(appState.dimEnabled ? "1" : "0");
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
+}
+
+// ===== Signal Generator Settings =====
+
+bool loadSignalGenSettings() {
+  File file = LittleFS.open("/siggen.txt", "r", true);
+  if (!file || file.size() == 0) {
+    if (file)
+      file.close();
+    return false;
+  }
+
+  String line1 = file.readStringUntil('\n'); // waveform
+  String line2 = file.readStringUntil('\n'); // frequency
+  String line3 = file.readStringUntil('\n'); // amplitude
+  String line4 = file.readStringUntil('\n'); // channel
+  String line5 = file.readStringUntil('\n'); // outputMode
+  String line6 = file.readStringUntil('\n'); // sweepSpeed
+  file.close();
+
+  line1.trim();
+  line2.trim();
+  line3.trim();
+  line4.trim();
+  line5.trim();
+  line6.trim();
+
+  if (line1.length() > 0) {
+    int wf = line1.toInt();
+    if (wf >= 0 && wf <= 3) appState.sigGenWaveform = wf;
+  }
+  if (line2.length() > 0) {
+    float freq = line2.toFloat();
+    if (freq >= 1.0f && freq <= 22000.0f) appState.sigGenFrequency = freq;
+  }
+  if (line3.length() > 0) {
+    float amp = line3.toFloat();
+    if (amp >= -96.0f && amp <= 0.0f) appState.sigGenAmplitude = amp;
+  }
+  if (line4.length() > 0) {
+    int ch = line4.toInt();
+    if (ch >= 0 && ch <= 2) appState.sigGenChannel = ch;
+  }
+  if (line5.length() > 0) {
+    int mode = line5.toInt();
+    if (mode >= 0 && mode <= 1) appState.sigGenOutputMode = mode;
+  }
+  if (line6.length() > 0) {
+    float speed = line6.toFloat();
+    if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
+  }
+
+  // Always boot disabled regardless of saved state
+  appState.sigGenEnabled = false;
+
+  LOG_I("[Settings] Signal generator settings loaded");
+  return true;
+}
+
+void saveSignalGenSettings() {
+  File file = LittleFS.open("/siggen.txt", "w");
+  if (!file) {
+    LOG_E("[Settings] Failed to open siggen settings file for writing");
+    return;
+  }
+
+  file.println(appState.sigGenWaveform);
+  file.println(String(appState.sigGenFrequency, 1));
+  file.println(String(appState.sigGenAmplitude, 1));
+  file.println(appState.sigGenChannel);
+  file.println(appState.sigGenOutputMode);
+  file.println(String(appState.sigGenSweepSpeed, 1));
+  file.close();
+  LOG_I("[Settings] Signal generator settings saved");
 }
 
 // ===== Factory Reset =====
@@ -270,7 +367,7 @@ void handleSettingsGet() {
   doc["autoUpdateEnabled"] = autoUpdateEnabled;
   doc["timezoneOffset"] = timezoneOffset;
   doc["dstOffset"] = dstOffset;
-  doc["nightMode"] = nightMode;
+  doc["darkMode"] = darkMode;
   doc["enableCertValidation"] = enableCertValidation;
   doc["autoAPEnabled"] = autoAPEnabled;
   doc["hardwareStatsInterval"] =
@@ -280,7 +377,9 @@ void handleSettingsGet() {
   doc["buzzerEnabled"] = appState.buzzerEnabled;
   doc["buzzerVolume"] = appState.buzzerVolume;
   doc["backlightBrightness"] = appState.backlightBrightness;
+  doc["dimEnabled"] = appState.dimEnabled;
   doc["dimTimeout"] = appState.dimTimeout / 1000;
+  doc["dimBrightness"] = appState.dimBrightness;
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -339,10 +438,10 @@ void handleSettingsUpdate() {
     syncTimeWithNTP();
   }
 
-  if (doc["nightMode"].is<bool>()) {
-    bool newNightMode = doc["nightMode"].as<bool>();
-    if (newNightMode != nightMode) {
-      nightMode = newNightMode;
+  if (doc["darkMode"].is<bool>()) {
+    bool newDarkMode = doc["darkMode"].as<bool>();
+    if (newDarkMode != darkMode) {
+      darkMode = newDarkMode;
       settingsChanged = true;
     }
   }
@@ -432,15 +531,35 @@ void handleSettingsUpdate() {
     }
   }
 
+  if (doc["dimEnabled"].is<bool>()) {
+    bool newDimEnabled = doc["dimEnabled"].as<bool>();
+    if (newDimEnabled != appState.dimEnabled) {
+      appState.setDimEnabled(newDimEnabled);
+      settingsChanged = true;
+      LOG_I("[Settings] Dim %s", newDimEnabled ? "enabled" : "disabled");
+    }
+  }
+
   if (doc["dimTimeout"].is<int>()) {
     int newDimSec = doc["dimTimeout"].as<int>();
     unsigned long newDimMs = (unsigned long)newDimSec * 1000UL;
-    if (newDimMs == 0 || newDimMs == 5000 || newDimMs == 10000 ||
-        newDimMs == 30000 || newDimMs == 60000) {
+    if (newDimMs == 5000 || newDimMs == 10000 ||
+        newDimMs == 15000 || newDimMs == 30000 || newDimMs == 60000) {
       if (newDimMs != appState.dimTimeout) {
         appState.setDimTimeout(newDimMs);
         settingsChanged = true;
       }
+    }
+  }
+
+  if (doc["dimBrightness"].is<int>()) {
+    int newDimBright = doc["dimBrightness"].as<int>();
+    if ((newDimBright == 26 || newDimBright == 64 || newDimBright == 128 ||
+         newDimBright == 191) &&
+        (uint8_t)newDimBright != appState.dimBrightness) {
+      appState.setDimBrightness((uint8_t)newDimBright);
+      settingsChanged = true;
+      LOG_I("[Settings] Dim brightness set to %d", newDimBright);
     }
   }
 
@@ -476,8 +595,7 @@ void handleSettingsUpdate() {
   resp["autoUpdateEnabled"] = autoUpdateEnabled;
   resp["timezoneOffset"] = timezoneOffset;
   resp["dstOffset"] = dstOffset;
-  resp["nightMode"] = nightMode;
-  resp["nightMode"] = nightMode;
+  resp["darkMode"] = darkMode;
   resp["enableCertValidation"] = enableCertValidation;
   resp["autoAPEnabled"] = autoAPEnabled;
   resp["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
@@ -486,7 +604,9 @@ void handleSettingsUpdate() {
   resp["buzzerEnabled"] = appState.buzzerEnabled;
   resp["buzzerVolume"] = appState.buzzerVolume;
   resp["backlightBrightness"] = appState.backlightBrightness;
+  resp["dimEnabled"] = appState.dimEnabled;
   resp["dimTimeout"] = appState.dimTimeout / 1000;
+  resp["dimBrightness"] = appState.dimBrightness;
 #ifdef GUI_ENABLED
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
@@ -524,7 +644,7 @@ void handleSettingsExport() {
   doc["settings"]["autoUpdateEnabled"] = autoUpdateEnabled;
   doc["settings"]["timezoneOffset"] = timezoneOffset;
   doc["settings"]["dstOffset"] = dstOffset;
-  doc["settings"]["nightMode"] = nightMode;
+  doc["settings"]["darkMode"] = darkMode;
   doc["settings"]["enableCertValidation"] = enableCertValidation;
   doc["settings"]["blinkingEnabled"] = blinkingEnabled;
   doc["settings"]["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
@@ -532,7 +652,9 @@ void handleSettingsExport() {
   doc["settings"]["buzzerEnabled"] = appState.buzzerEnabled;
   doc["settings"]["buzzerVolume"] = appState.buzzerVolume;
   doc["settings"]["backlightBrightness"] = appState.backlightBrightness;
+  doc["settings"]["dimEnabled"] = appState.dimEnabled;
   doc["settings"]["dimTimeout"] = appState.dimTimeout / 1000;
+  doc["settings"]["dimBrightness"] = appState.dimBrightness;
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
@@ -554,6 +676,14 @@ void handleSettingsExport() {
   doc["smartSensing"]["mode"] = modeStr;
   doc["smartSensing"]["timerDuration"] = timerDuration;
   doc["smartSensing"]["audioThreshold"] = audioThreshold_dBFS;
+
+  // Signal Generator settings
+  doc["signalGenerator"]["waveform"] = appState.sigGenWaveform;
+  doc["signalGenerator"]["frequency"] = appState.sigGenFrequency;
+  doc["signalGenerator"]["amplitude"] = appState.sigGenAmplitude;
+  doc["signalGenerator"]["channel"] = appState.sigGenChannel;
+  doc["signalGenerator"]["outputMode"] = appState.sigGenOutputMode;
+  doc["signalGenerator"]["sweepSpeed"] = appState.sigGenSweepSpeed;
 
   // MQTT settings (password excluded for security)
   doc["mqtt"]["enabled"] = mqttEnabled;
@@ -671,9 +801,9 @@ void handleSettingsImport() {
       dstOffset = doc["settings"]["dstOffset"].as<int>();
       LOG_D("[Settings] DST Offset: %d", dstOffset);
     }
-    if (doc["settings"]["nightMode"].is<bool>()) {
-      nightMode = doc["settings"]["nightMode"].as<bool>();
-      LOG_D("[Settings] Night Mode: %s", nightMode ? "enabled" : "disabled");
+    if (doc["settings"]["darkMode"].is<bool>()) {
+      darkMode = doc["settings"]["darkMode"].as<bool>();
+      LOG_D("[Settings] Dark Mode: %s", darkMode ? "enabled" : "disabled");
     }
     if (doc["settings"]["enableCertValidation"].is<bool>()) {
       enableCertValidation = doc["settings"]["enableCertValidation"].as<bool>();
@@ -721,13 +851,25 @@ void handleSettingsImport() {
         LOG_D("[Settings] Backlight Brightness: %d", bright);
       }
     }
+    if (doc["settings"]["dimEnabled"].is<bool>()) {
+      appState.dimEnabled = doc["settings"]["dimEnabled"].as<bool>();
+      LOG_D("[Settings] Dim: %s", appState.dimEnabled ? "enabled" : "disabled");
+    }
     if (doc["settings"]["dimTimeout"].is<int>()) {
       int dimSec = doc["settings"]["dimTimeout"].as<int>();
       unsigned long dimMs = (unsigned long)dimSec * 1000UL;
-      if (dimMs == 0 || dimMs == 5000 || dimMs == 10000 ||
+      if (dimMs == 5000 || dimMs == 10000 || dimMs == 15000 ||
           dimMs == 30000 || dimMs == 60000) {
         appState.dimTimeout = dimMs;
         LOG_D("[Settings] Dim Timeout: %d seconds", dimSec);
+      }
+    }
+    if (doc["settings"]["dimBrightness"].is<int>()) {
+      int dimBright = doc["settings"]["dimBrightness"].as<int>();
+      if (dimBright == 26 || dimBright == 64 || dimBright == 128 ||
+          dimBright == 191) {
+        appState.dimBrightness = (uint8_t)dimBright;
+        LOG_D("[Settings] Dim Brightness: %d", dimBright);
       }
     }
 #ifdef GUI_ENABLED
@@ -804,6 +946,36 @@ void handleSettingsImport() {
     // Note: Password is not imported for security - user needs to re-enter it
     // Save MQTT settings
     saveMqttSettings();
+  }
+
+  // Import Signal Generator settings
+  if (!doc["signalGenerator"].isNull()) {
+    if (doc["signalGenerator"]["waveform"].is<int>()) {
+      int wf = doc["signalGenerator"]["waveform"].as<int>();
+      if (wf >= 0 && wf <= 3) appState.sigGenWaveform = wf;
+    }
+    if (doc["signalGenerator"]["frequency"].is<float>()) {
+      float freq = doc["signalGenerator"]["frequency"].as<float>();
+      if (freq >= 1.0f && freq <= 22000.0f) appState.sigGenFrequency = freq;
+    }
+    if (doc["signalGenerator"]["amplitude"].is<float>()) {
+      float amp = doc["signalGenerator"]["amplitude"].as<float>();
+      if (amp >= -96.0f && amp <= 0.0f) appState.sigGenAmplitude = amp;
+    }
+    if (doc["signalGenerator"]["channel"].is<int>()) {
+      int ch = doc["signalGenerator"]["channel"].as<int>();
+      if (ch >= 0 && ch <= 2) appState.sigGenChannel = ch;
+    }
+    if (doc["signalGenerator"]["outputMode"].is<int>()) {
+      int mode = doc["signalGenerator"]["outputMode"].as<int>();
+      if (mode >= 0 && mode <= 1) appState.sigGenOutputMode = mode;
+    }
+    if (doc["signalGenerator"]["sweepSpeed"].is<float>()) {
+      float speed = doc["signalGenerator"]["sweepSpeed"].as<float>();
+      if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
+    }
+    appState.sigGenEnabled = false; // Always boot disabled
+    saveSignalGenSettings();
   }
 
   // Note: Certificate import removed - now using Mozilla certificate bundle
@@ -918,14 +1090,16 @@ void handleDiagnostics() {
   settings["autoUpdateEnabled"] = autoUpdateEnabled;
   settings["timezoneOffset"] = timezoneOffset;
   settings["dstOffset"] = dstOffset;
-  settings["nightMode"] = nightMode;
+  settings["darkMode"] = darkMode;
   settings["enableCertValidation"] = enableCertValidation;
   settings["blinkingEnabled"] = blinkingEnabled;
   settings["hardwareStatsInterval"] = hardwareStatsInterval;
   settings["screenTimeout"] = appState.screenTimeout;
   settings["backlightOn"] = appState.backlightOn;
   settings["backlightBrightness"] = appState.backlightBrightness;
+  settings["dimEnabled"] = appState.dimEnabled;
   settings["dimTimeout"] = appState.dimTimeout;
+  settings["dimBrightness"] = appState.dimBrightness;
   settings["buzzerEnabled"] = appState.buzzerEnabled;
   settings["buzzerVolume"] = appState.buzzerVolume;
 

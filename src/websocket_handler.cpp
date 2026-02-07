@@ -9,6 +9,7 @@
 #include "debug_serial.h"
 #include "utils.h"
 #include "i2s_audio.h"
+#include "signal_generator.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -99,6 +100,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendSmartSensingStateInternal();
             sendDisplayState();
             sendBuzzerState();
+            sendSignalGenState();
 
             // If device just updated, notify the client
             if (justUpdated) {
@@ -178,14 +180,28 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_I("[WebSocket] Brightness set to %d", newBright);
             sendDisplayState();
           }
+        } else if (msgType == "setDimEnabled") {
+          bool newState = doc["enabled"].as<bool>();
+          AppState::getInstance().setDimEnabled(newState);
+          saveSettings();
+          LOG_I("[WebSocket] Dim %s", newState ? "enabled" : "disabled");
+          sendDisplayState();
         } else if (msgType == "setDimTimeout") {
           int dimSec = doc["value"].as<int>();
           unsigned long dimMs = (unsigned long)dimSec * 1000UL;
-          if (dimMs == 0 || dimMs == 5000 || dimMs == 10000 ||
+          if (dimMs == 5000 || dimMs == 10000 || dimMs == 15000 ||
               dimMs == 30000 || dimMs == 60000) {
             AppState::getInstance().setDimTimeout(dimMs);
             saveSettings();
             LOG_I("[WebSocket] Dim timeout set to %d seconds", dimSec);
+            sendDisplayState();
+          }
+        } else if (msgType == "setDimBrightness") {
+          int dimPwm = doc["value"].as<int>();
+          if (dimPwm == 26 || dimPwm == 64 || dimPwm == 128 || dimPwm == 191) {
+            AppState::getInstance().setDimBrightness((uint8_t)dimPwm);
+            saveSettings();
+            LOG_I("[WebSocket] Dim brightness set to %d", dimPwm);
             sendDisplayState();
           }
         } else if (msgType == "setBuzzerEnabled") {
@@ -206,6 +222,42 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           bool enabled = doc["enabled"] | false;
           _audioSubscribed[num] = enabled;
           LOG_I("[WebSocket] Client [%u] audio subscription %s", num, enabled ? "enabled" : "disabled");
+        } else if (msgType == "setSignalGen") {
+          bool changed = false;
+          if (doc["enabled"].is<bool>()) {
+            appState.sigGenEnabled = doc["enabled"].as<bool>();
+            changed = true;
+          }
+          if (doc["waveform"].is<int>()) {
+            int w = doc["waveform"].as<int>();
+            if (w >= 0 && w <= 3) { appState.sigGenWaveform = w; changed = true; }
+          }
+          if (doc["frequency"].is<float>()) {
+            float f = doc["frequency"].as<float>();
+            if (f >= 1.0f && f <= 22000.0f) { appState.sigGenFrequency = f; changed = true; }
+          }
+          if (doc["amplitude"].is<float>()) {
+            float a = doc["amplitude"].as<float>();
+            if (a >= -96.0f && a <= 0.0f) { appState.sigGenAmplitude = a; changed = true; }
+          }
+          if (doc["channel"].is<int>()) {
+            int c = doc["channel"].as<int>();
+            if (c >= 0 && c <= 2) { appState.sigGenChannel = c; changed = true; }
+          }
+          if (doc["outputMode"].is<int>()) {
+            int m = doc["outputMode"].as<int>();
+            if (m >= 0 && m <= 1) { appState.sigGenOutputMode = m; changed = true; }
+          }
+          if (doc["sweepSpeed"].is<float>()) {
+            float s = doc["sweepSpeed"].as<float>();
+            if (s >= 1.0f && s <= 22000.0f) { appState.sigGenSweepSpeed = s; changed = true; }
+          }
+          if (changed) {
+            siggen_apply_params();
+            saveSignalGenSettings();
+            sendSignalGenState();
+            LOG_I("[WebSocket] Signal generator updated by client [%u]", num);
+          }
         }
       }
       break;
@@ -241,7 +293,9 @@ void sendDisplayState() {
   doc["backlightOn"] = AppState::getInstance().backlightOn;
   doc["screenTimeout"] = AppState::getInstance().screenTimeout / 1000; // Send as seconds
   doc["backlightBrightness"] = AppState::getInstance().backlightBrightness;
+  doc["dimEnabled"] = AppState::getInstance().dimEnabled;
   doc["dimTimeout"] = AppState::getInstance().dimTimeout / 1000;
+  doc["dimBrightness"] = AppState::getInstance().dimBrightness;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -276,6 +330,21 @@ void sendBuzzerState() {
   doc["type"] = "buzzerState";
   doc["enabled"] = AppState::getInstance().buzzerEnabled;
   doc["volume"] = AppState::getInstance().buzzerVolume;
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+void sendSignalGenState() {
+  JsonDocument doc;
+  doc["type"] = "signalGenerator";
+  doc["enabled"] = appState.sigGenEnabled;
+  doc["waveform"] = appState.sigGenWaveform;
+  doc["frequency"] = appState.sigGenFrequency;
+  doc["amplitude"] = appState.sigGenAmplitude;
+  doc["channel"] = appState.sigGenChannel;
+  doc["outputMode"] = appState.sigGenOutputMode;
+  doc["sweepSpeed"] = appState.sigGenSweepSpeed;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());

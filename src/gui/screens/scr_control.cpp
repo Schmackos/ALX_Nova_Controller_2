@@ -46,6 +46,11 @@ static void on_blinking_confirm(int int_val, float, int) {
     LOG_I("[GUI] LED blinking set to %s", int_val ? "ON" : "OFF");
 }
 
+/* Navigate to signal generator sub-menu */
+static void show_siggen(void) {
+    gui_nav_push_deferred(SCR_SIGGEN_MENU);
+}
+
 /* Menu action callbacks — open value editors */
 static void edit_sensing_mode(void) {
     AppState &st = AppState::getInstance();
@@ -130,13 +135,14 @@ static void build_control_menu(void) {
     snprintf(blink_str, sizeof(blink_str), "%s", st.blinkingEnabled ? "ON" : "OFF");
 
     control_menu.title = "Control";
-    control_menu.item_count = 6;
+    control_menu.item_count = 7;
     control_menu.items[0] = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     control_menu.items[1] = {"Sensing Mode", mode_str, ICON_SETTINGS, MENU_ACTION, edit_sensing_mode};
     control_menu.items[2] = {"Amplifier", amp_str, ICON_CONTROL, MENU_ACTION, edit_amplifier};
     control_menu.items[3] = {"Timer Duration", timer_str, nullptr, MENU_ACTION, edit_timer_duration};
     control_menu.items[4] = {"Audio Thresh", volt_str, nullptr, MENU_ACTION, edit_voltage_threshold};
     control_menu.items[5] = {"LED Blinking", blink_str, nullptr, MENU_ACTION, edit_led_blinking};
+    control_menu.items[6] = {"Signal Gen", nullptr, nullptr, MENU_SUBMENU, show_siggen};
 }
 
 lv_obj_t *scr_control_create(void) {

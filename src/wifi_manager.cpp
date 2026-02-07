@@ -824,7 +824,7 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   doc["autoUpdateEnabled"] = autoUpdateEnabled;
   doc["timezoneOffset"] = timezoneOffset;
   doc["dstOffset"] = dstOffset;
-  doc["nightMode"] = nightMode;
+  doc["darkMode"] = darkMode;
   doc["enableCertValidation"] = enableCertValidation;
   doc["hardwareStatsInterval"] =
       hardwareStatsInterval / 1000; // Send as seconds

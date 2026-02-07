@@ -10,6 +10,10 @@ void saveSettings();
 // Note: Certificate management removed - now using Mozilla certificate bundle
 // via ESP32CertBundle library for automatic SSL validation
 
+// ===== Signal Generator Settings =====
+bool loadSignalGenSettings();
+void saveSignalGenSettings();
+
 // ===== Factory Reset =====
 void performFactoryReset();
 

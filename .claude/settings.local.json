@@ -76,7 +76,10 @@
       "Bash(xargs cat:*)",
       "Bash(python3:*)",
       "Bash(git status -u)",
-      "Skill(git-commit-helper)"
+      "Skill(git-commit-helper)",
+      "Bash(git merge:*)",
+      "WebFetch(domain:abarrafato.medium.com)",
+      "WebFetch(domain:audiomotion.dev)"
     ]
   }
 }

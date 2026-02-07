@@ -136,7 +136,7 @@ static lv_obj_t *create_value_edit_screen(void) {
     lv_obj_t *title = lv_label_create(scr);
     lv_label_set_text(title, active_cfg.title);
     lv_obj_add_style(title, gui_style_title(), LV_PART_MAIN);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 6);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 2);
 
     /* Value display area */
     lv_obj_t *val_container = lv_obj_create(scr);

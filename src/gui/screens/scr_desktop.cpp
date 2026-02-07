@@ -82,7 +82,7 @@ static void get_card_summary(int idx, char *buf, size_t len) {
         case 4: { /* Settings */
             snprintf(buf, len, "FW %s\n%s mode",
                      FIRMWARE_VERSION,
-                     st.nightMode ? "Night" : "Day");
+                     st.darkMode ? "Dark" : "Light");
             break;
         }
         case 5: { /* Support */
@@ -146,7 +146,7 @@ lv_obj_t *scr_desktop_create(void) {
 
         /* Card container */
         lv_obj_t *card = lv_obj_create(tile);
-        lv_obj_set_size(card, 140, 108);
+        lv_obj_set_size(card, 148, 114);
         lv_obj_align(card, LV_ALIGN_CENTER, 0, 0);
         lv_obj_add_style(card, gui_style_card(), LV_PART_MAIN);
         lv_obj_add_style(card, gui_style_card_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
@@ -161,14 +161,14 @@ lv_obj_t *scr_desktop_create(void) {
         /* Layout: vertical flex */
         lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_row(card, 4, LV_PART_MAIN);
+        lv_obj_set_style_pad_row(card, 2, LV_PART_MAIN);
 
         /* Icon + title row */
         lv_obj_t *header = lv_obj_create(card);
         lv_obj_set_size(header, LV_PCT(100), LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(header, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_column(header, 6, LV_PART_MAIN);
+        lv_obj_set_style_pad_column(header, 4, LV_PART_MAIN);
         lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, LV_PART_MAIN);
         lv_obj_set_style_border_width(header, 0, LV_PART_MAIN);
         lv_obj_set_style_pad_all(header, 0, LV_PART_MAIN);
@@ -204,19 +204,19 @@ lv_obj_t *scr_desktop_create(void) {
 
     /* Page indicator dots at the bottom */
     lv_obj_t *dots = lv_obj_create(scr);
-    lv_obj_set_size(dots, DISPLAY_HEIGHT, 12);
+    lv_obj_set_size(dots, DISPLAY_HEIGHT, 10);
     lv_obj_align(dots, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_flex_flow(dots, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(dots, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(dots, 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(dots, 4, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(dots, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(dots, 0, LV_PART_MAIN);
     lv_obj_clear_flag(dots, LV_OBJ_FLAG_SCROLLABLE);
 
     for (int i = 0; i < CARD_COUNT; i++) {
         lv_obj_t *dot = lv_obj_create(dots);
-        lv_obj_set_size(dot, 6, 6);
-        lv_obj_set_style_radius(dot, 3, LV_PART_MAIN);
+        lv_obj_set_size(dot, 5, 5);
+        lv_obj_set_style_radius(dot, 2, LV_PART_MAIN);
         lv_obj_set_style_bg_color(dot, (i == 0) ? COLOR_PRIMARY : COLOR_TEXT_DIM, LV_PART_MAIN);
         lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, LV_PART_MAIN);
         lv_obj_set_style_border_width(dot, 0, LV_PART_MAIN);

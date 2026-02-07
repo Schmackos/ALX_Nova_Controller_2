@@ -12,13 +12,13 @@
 #define DT_ACCENT_LIGHT    0xFFB74D  /* CSS: --accent-light */
 #define DT_ACCENT_DARK     0xE68900  /* CSS: --accent-dark */
 
-/* --- Dark Mode Backgrounds --- */
-#define DT_DARK_BG         0x1A1A2E  /* CSS: --bg-primary (night) */
-#define DT_DARK_CARD       0x16213E  /* CSS: --bg-surface (night) */
-#define DT_DARK_SURFACE    0x0F3460  /* LVGL focus highlight */
-#define DT_DARK_INPUT      0x1E2A4A  /* CSS: --bg-card (night) */
-#define DT_DARK_INPUT2     0x243356  /* CSS: --bg-input (night) */
-#define DT_DARK_BORDER     0x2A2A4A  /* CSS: --border (night) */
+/* --- Dark Mode Backgrounds (Neutral) --- */
+#define DT_DARK_BG         0x121212  /* CSS: --bg-primary (night) */
+#define DT_DARK_CARD       0x1E1E1E  /* CSS: --bg-surface (night) */
+#define DT_DARK_SURFACE    0x2A2A2A  /* LVGL focus highlight */
+#define DT_DARK_INPUT      0x252525  /* CSS: --bg-card (night) */
+#define DT_DARK_INPUT2     0x2C2C2C  /* CSS: --bg-input (night) */
+#define DT_DARK_BORDER     0x333333  /* CSS: --border (night) */
 
 /* --- Light Mode Backgrounds --- */
 #define DT_LIGHT_BG        0xF5F5F5  /* CSS: --bg-primary */

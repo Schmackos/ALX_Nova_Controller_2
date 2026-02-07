@@ -8,6 +8,7 @@
 #include "mqtt_handler.h"
 #include "ota_updater.h"
 #include "settings_manager.h"
+#include "signal_generator.h"
 #include "i2s_audio.h"
 #include "smart_sensing.h"
 #include "utils.h"
@@ -85,7 +86,7 @@ ButtonHandler resetButton(RESET_BUTTON_PIN);
 #define cachedFirmwareUrl appState.cachedFirmwareUrl
 #define cachedChecksum appState.cachedChecksum
 #define timezoneOffset appState.timezoneOffset
-#define nightMode appState.nightMode
+#define darkMode appState.darkMode
 #define updateAvailable appState.updateAvailable
 #define cachedLatestVersion appState.cachedLatestVersion
 #define updateDiscoveredTime appState.updateDiscoveredTime
@@ -226,6 +227,14 @@ void setup() {
   if (!loadMqttSettings()) {
     LOG_I("[Main] No MQTT settings found, using defaults");
   }
+
+  // Load Signal Generator settings (always boots disabled)
+  if (!loadSignalGenSettings()) {
+    LOG_I("[Main] No signal generator settings found, using defaults");
+  }
+
+  // Initialize Signal Generator PWM
+  siggen_init();
 
   // Initialize authentication system
   initAuth();
@@ -437,6 +446,84 @@ void setup() {
           return;
         handleFirmwareUploadChunk();
       });
+  // Signal Generator API
+  server.on("/api/signalgenerator", HTTP_GET, []() {
+    if (!requireAuth())
+      return;
+    JsonDocument doc;
+    doc["success"] = true;
+    doc["enabled"] = appState.sigGenEnabled;
+    const char *waveNames[] = {"sine", "square", "white_noise", "sweep"};
+    doc["waveform"] = waveNames[appState.sigGenWaveform % 4];
+    doc["frequency"] = appState.sigGenFrequency;
+    doc["amplitude"] = appState.sigGenAmplitude;
+    const char *chanNames[] = {"left", "right", "both"};
+    doc["channel"] = chanNames[appState.sigGenChannel % 3];
+    doc["outputMode"] = appState.sigGenOutputMode == 0 ? "software" : "pwm";
+    doc["sweepSpeed"] = appState.sigGenSweepSpeed;
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+  });
+  server.on("/api/signalgenerator", HTTP_POST, []() {
+    if (!requireAuth())
+      return;
+    if (!server.hasArg("plain")) {
+      server.send(400, "application/json",
+                  "{\"success\":false,\"message\":\"No data\"}");
+      return;
+    }
+    JsonDocument doc;
+    if (deserializeJson(doc, server.arg("plain"))) {
+      server.send(400, "application/json",
+                  "{\"success\":false,\"message\":\"Invalid JSON\"}");
+      return;
+    }
+    bool changed = false;
+    if (doc["enabled"].is<bool>()) {
+      appState.sigGenEnabled = doc["enabled"].as<bool>();
+      changed = true;
+    }
+    if (doc["waveform"].is<String>()) {
+      String w = doc["waveform"].as<String>();
+      if (w == "sine") appState.sigGenWaveform = 0;
+      else if (w == "square") appState.sigGenWaveform = 1;
+      else if (w == "white_noise") appState.sigGenWaveform = 2;
+      else if (w == "sweep") appState.sigGenWaveform = 3;
+      changed = true;
+    }
+    if (doc["frequency"].is<float>()) {
+      float f = doc["frequency"].as<float>();
+      if (f >= 1.0f && f <= 22000.0f) { appState.sigGenFrequency = f; changed = true; }
+    }
+    if (doc["amplitude"].is<float>()) {
+      float a = doc["amplitude"].as<float>();
+      if (a >= -96.0f && a <= 0.0f) { appState.sigGenAmplitude = a; changed = true; }
+    }
+    if (doc["channel"].is<String>()) {
+      String c = doc["channel"].as<String>();
+      if (c == "left") appState.sigGenChannel = 0;
+      else if (c == "right") appState.sigGenChannel = 1;
+      else if (c == "both") appState.sigGenChannel = 2;
+      changed = true;
+    }
+    if (doc["outputMode"].is<String>()) {
+      String m = doc["outputMode"].as<String>();
+      if (m == "software") appState.sigGenOutputMode = 0;
+      else if (m == "pwm") appState.sigGenOutputMode = 1;
+      changed = true;
+    }
+    if (doc["sweepSpeed"].is<float>()) {
+      float s = doc["sweepSpeed"].as<float>();
+      if (s >= 1.0f && s <= 22000.0f) { appState.sigGenSweepSpeed = s; changed = true; }
+    }
+    if (changed) {
+      siggen_apply_params();
+      saveSignalGenSettings();
+      appState.markSignalGenDirty();
+    }
+    server.send(200, "application/json", "{\"success\":true}");
+  });
   // Note: Certificate API routes removed - now using Mozilla certificate bundle
 
   // Initialize CPU usage monitoring
@@ -670,6 +757,13 @@ void loop() {
     sendBuzzerState();
     publishMqttBuzzerState();
     appState.clearBuzzerDirty();
+  }
+
+  // Broadcast signal generator state changes (GUI/API -> WS clients + MQTT)
+  if (appState.isSignalGenDirty()) {
+    sendSignalGenState();
+    publishMqttSignalGenState();
+    appState.clearSignalGenDirty();
   }
 
   // Broadcast blinking state changes (GUI -> WS clients)
