@@ -40,46 +40,15 @@ None
 
 ## Version 1.5.4
 
+## Documentation
+- [2026-02-10] docs: Clean up release notes for v1.6.0
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`1fcb463`)
+- [2026-02-10] docs: Clean up release notes for v1.6.0
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`2d26c1e`)
+
 ## New Features
-- [2026-02-10] feat: Add audio ADC diagnostics, Vrms display, graph toggles, and UI improvements
-
-- Audio ADC Diagnostics: real-time health monitoring (OK, NO_DATA,
-  NOISE_ONLY, CLIPPING, I2S_ERROR) across GUI, Web, REST API, MQTT/HA
-- Input Voltage (Vrms): computed from I2S RMS with configurable ADC
-  reference voltage (1.0-5.0V), displayed across all interfaces
-- Audio Graph Toggles: individual enable/disable for VU meter, waveform,
-  and spectrum — skips processing and WS payloads when disabled
-- Audio Tab UI: added "Enable" labels to graph toggles, relocated
-  Update Rate dropdown to Audio Settings card
-- 18 new tests (audio_diagnostics + vrms), 350 total, all passing
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`b126dcf`)
-- [2026-02-10] feat: Add audio ADC diagnostics, Vrms display, graph toggles, and UI improvements
-
-- Audio ADC Diagnostics: real-time health monitoring (OK, NO_DATA,
-  NOISE_ONLY, CLIPPING, I2S_ERROR) across GUI, Web, REST API, MQTT/HA
-- Input Voltage (Vrms): computed from I2S RMS with configurable ADC
-  reference voltage (1.0-5.0V), displayed across all interfaces
-- Audio Graph Toggles: individual enable/disable for VU meter, waveform,
-  and spectrum — skips processing and WS payloads when disabled
-- Audio Tab UI: added "Enable" labels to graph toggles, relocated
-  Update Rate dropdown to Audio Settings card
-- 18 new tests (audio_diagnostics + vrms), 350 total, all passing
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`5e88504`)
-- [2026-02-10] feat: Add audio ADC diagnostics, Vrms display, graph toggles, and UI improvements
-
-- Audio ADC Diagnostics: real-time health monitoring (OK, NO_DATA,
-  NOISE_ONLY, CLIPPING, I2S_ERROR) across GUI, Web, REST API, MQTT/HA
-- Input Voltage (Vrms): computed from I2S RMS with configurable ADC
-  reference voltage (1.0-5.0V), displayed across all interfaces
-- Audio Graph Toggles: individual enable/disable for VU meter, waveform,
-  and spectrum — skips processing and WS payloads when disabled
-- Audio Tab UI: added "Enable" labels to graph toggles, relocated
-  Update Rate dropdown to Audio Settings card
-- 18 new tests (audio_diagnostics + vrms), 350 total, all passing
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`137f924`)
 - Automated release via GitHub Actions
 
 ## Improvements
