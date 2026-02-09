@@ -23,6 +23,7 @@ void sendHardwareStats();
 void sendMqttSettingsState();
 void sendBuzzerState();
 void sendSignalGenState();
+void sendAudioGraphState();
 
 // ===== Audio Streaming =====
 void sendAudioData();

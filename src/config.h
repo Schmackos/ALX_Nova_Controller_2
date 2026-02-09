@@ -93,14 +93,15 @@ const unsigned long OTA_CHECK_INTERVAL =
 const unsigned long AUTO_UPDATE_COUNTDOWN = 30000; // 30 seconds countdown
 
 // ===== Smart Sensing Configuration =====
-const unsigned long SMART_SENSING_HEARTBEAT_INTERVAL =
-    1000; // Send heartbeat every 1 second for real-time audio level updates
+const uint16_t DEFAULT_AUDIO_UPDATE_RATE =
+    50; // Default audio/VU update rate in ms (20=50Hz, 33=30Hz, 50=20Hz, 100=10Hz)
 const unsigned long DEFAULT_TIMER_DURATION =
     15; // Default timer duration in minutes
 const float DEFAULT_AUDIO_THRESHOLD =
     -40.0f; // Default audio threshold in dBFS (-96 to 0)
 const uint32_t DEFAULT_AUDIO_SAMPLE_RATE =
     48000; // Default I2S sample rate (Hz)
+const float DEFAULT_ADC_VREF = 3.3f; // PCM1808 full-scale reference voltage (V)
 
 // Smart Sensing modes
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };

@@ -1,5 +1,43 @@
 # Release Notes
 
+## Version 1.6.0
+
+## New Features
+- **Audio ADC Diagnostics**: Real-time health monitoring for the PCM1808 I2S audio ADC with automatic status detection (OK, NO_DATA, NOISE_ONLY, CLIPPING, I2S_ERROR). Diagnostics are exposed across all interfaces — GUI Debug screen, WebSocket heartbeat, REST API (`/api/diagnostics` v1.1), and MQTT with Home Assistant discovery (`audio/adc_status` + `audio/noise_floor` diagnostic entities). Pure testable `audio_derive_health_status()` function with priority-based status derivation.
+
+- **Input Voltage (Vrms) Display**: Computed Vrms from I2S RMS data with configurable ADC reference voltage (1.0–5.0V). Displayed in the Web UI as an info-row after Audio Level, on the GUI Debug screen, and published via MQTT (`audio/input_vrms` sensor + `settings/adc_vref` number entity). REST API and WebSocket support for real-time monitoring. Persisted as line 5 in `/smartsensing.txt`.
+
+- **Audio Graph Toggles**: Individual enable/disable switches for all three audio visualizations — VU Meter, Waveform, and Spectrum. When disabled, the I2S task skips the corresponding processing (VU ballistics, waveform accumulation, or FFT) and WebSocket stops sending disabled graph payloads, reducing CPU and bandwidth. Controls available via Web UI card header toggles, WebSocket commands, MQTT switch entities with Home Assistant discovery, and persisted in settings lines 18–20.
+
+## Improvements
+- **Audio Tab UI Polish**: Added "Enable" labels to each graph card header toggle, matching the existing label style of "LED", "Segmented", and "Auto-scale" toggles. Relocated the Audio Update Rate dropdown from the Waveform card header to the Audio Settings card, since it controls all three graphs equally.
+
+- **Desktop Carousel Enhancements**: Updated card summaries to reflect new audio diagnostic data and graph toggle states.
+
+- **Home Screen Updates**: Enhanced status formatting for audio-related fields.
+
+## Bug Fixes
+- None
+
+## Technical Details
+- 28 files changed, ~5,800 lines added, ~3,700 lines removed
+- New test suites: `test_audio_diagnostics` (10 tests), `test_vrms` (8 tests)
+- Expanded test suites: `test_gui_home`, `test_smart_sensing`
+- Total unit tests: 350 (up from ~310 in 1.5.4), all passing
+- RAM usage: 41.8% (137,060 / 327,680 bytes)
+- Flash usage: 61.6% (2,059,721 / 3,342,336 bytes)
+- `AudioHealthStatus` enum and `AudioDiagnostics` struct added to `i2s_audio.h`
+- `audio_rms_to_vrms()` pure function for testable Vrms conversion
+- MQTT: 7 new Home Assistant discovery entities (2 diagnostic, 1 sensor, 1 number, 3 switches)
+- Settings persistence: 3 new lines in `/settings.txt` (audio graph toggles), 1 new line in `/smartsensing.txt` (ADC Vref)
+- REST API: `/api/diagnostics` bumped to version 1.1 with `audioAdc` object
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.5.4
 
 ## New Features
@@ -21,6 +59,11 @@ None
 - None
 
 ## Version 1.5.3
+
+## Documentation
+- [2026-02-07] docs: Update release notes for signal generator and display dimming
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`b2a39ee`)
 
 ## New Features
 - [2026-02-07] feat: Implement signal generator functionality and enhance display dimming features

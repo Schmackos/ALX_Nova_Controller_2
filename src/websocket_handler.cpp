@@ -101,6 +101,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendDisplayState();
             sendBuzzerState();
             sendSignalGenState();
+            sendAudioGraphState();
 
             // If device just updated, notify the client
             if (justUpdated) {
@@ -222,6 +223,28 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           bool enabled = doc["enabled"] | false;
           _audioSubscribed[num] = enabled;
           LOG_I("[WebSocket] Client [%u] audio subscription %s", num, enabled ? "enabled" : "disabled");
+        } else if (msgType == "setAudioUpdateRate") {
+          int rate = doc["value"].as<int>();
+          if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
+            appState.audioUpdateRate = (uint16_t)rate;
+            saveSettings();
+            LOG_I("[WebSocket] Audio update rate set to %d ms", rate);
+          }
+        } else if (msgType == "setVuMeterEnabled") {
+          appState.vuMeterEnabled = doc["enabled"].as<bool>();
+          saveSettings();
+          sendAudioGraphState();
+          LOG_I("[WebSocket] VU meter %s", appState.vuMeterEnabled ? "enabled" : "disabled");
+        } else if (msgType == "setWaveformEnabled") {
+          appState.waveformEnabled = doc["enabled"].as<bool>();
+          saveSettings();
+          sendAudioGraphState();
+          LOG_I("[WebSocket] Waveform %s", appState.waveformEnabled ? "enabled" : "disabled");
+        } else if (msgType == "setSpectrumEnabled") {
+          appState.spectrumEnabled = doc["enabled"].as<bool>();
+          saveSettings();
+          sendAudioGraphState();
+          LOG_I("[WebSocket] Spectrum %s", appState.spectrumEnabled ? "enabled" : "disabled");
         } else if (msgType == "setSignalGen") {
           bool changed = false;
           if (doc["enabled"].is<bool>()) {
@@ -345,6 +368,17 @@ void sendSignalGenState() {
   doc["channel"] = appState.sigGenChannel;
   doc["outputMode"] = appState.sigGenOutputMode;
   doc["sweepSpeed"] = appState.sigGenSweepSpeed;
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+void sendAudioGraphState() {
+  JsonDocument doc;
+  doc["type"] = "audioGraphState";
+  doc["vuMeterEnabled"] = appState.vuMeterEnabled;
+  doc["waveformEnabled"] = appState.waveformEnabled;
+  doc["spectrumEnabled"] = appState.spectrumEnabled;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -483,6 +517,23 @@ void sendHardwareStats() {
   doc["wifi"]["apClients"] = WiFi.softAPgetStationNum();
   doc["wifi"]["connected"] = (WiFi.status() == WL_CONNECTED);
   
+  // Audio ADC diagnostics
+  const char *adcStatusStr = "OK";
+  switch (appState.audioHealthStatus) {
+    case 1: adcStatusStr = "NO_DATA"; break;
+    case 2: adcStatusStr = "NOISE_ONLY"; break;
+    case 3: adcStatusStr = "CLIPPING"; break;
+    case 4: adcStatusStr = "I2S_ERROR"; break;
+  }
+  doc["audio"]["adcStatus"] = adcStatusStr;
+  doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
+  doc["audio"]["i2sErrors"] = appState.audioI2sErrors;
+  doc["audio"]["consecutiveZeros"] = appState.audioConsecutiveZeros;
+  doc["audio"]["totalBuffers"] = appState.audioTotalBuffers;
+  doc["audio"]["sampleRate"] = appState.audioSampleRate;
+  doc["audio"]["vrms"] = appState.audioVrmsCombined;
+  doc["audio"]["adcVref"] = appState.adcVref;
+
   // Uptime (milliseconds since boot)
   doc["uptime"] = millis();
 
@@ -508,9 +559,45 @@ void sendAudioData() {
   }
   if (!anySubscribed) return;
 
+  // --- Audio levels (VU, peak, RMS, diagnostics) ---
+  {
+    JsonDocument doc;
+    doc["type"] = "audioLevels";
+    doc["audioLevel"] = audioLevel_dBFS;
+    doc["signalDetected"] = (audioLevel_dBFS >= audioThreshold_dBFS);
+    doc["audioRmsL"] = appState.audioRmsLeft;
+    doc["audioRmsR"] = appState.audioRmsRight;
+    doc["audioVuL"] = appState.audioVuLeft;
+    doc["audioVuR"] = appState.audioVuRight;
+    doc["audioPeakL"] = appState.audioPeakLeft;
+    doc["audioPeakR"] = appState.audioPeakRight;
+    doc["audioPeak"] = appState.audioPeakCombined;
+    doc["audioVrmsL"] = appState.audioVrmsLeft;
+    doc["audioVrmsR"] = appState.audioVrmsRight;
+    doc["audioVrms"] = appState.audioVrmsCombined;
+    const char *adcStatusStr = "OK";
+    switch (appState.audioHealthStatus) {
+      case 1: adcStatusStr = "NO_DATA"; break;
+      case 2: adcStatusStr = "NOISE_ONLY"; break;
+      case 3: adcStatusStr = "CLIPPING"; break;
+      case 4: adcStatusStr = "I2S_ERROR"; break;
+    }
+    doc["adcStatus"] = adcStatusStr;
+    doc["adcNoiseFloor"] = appState.audioNoiseFloorDbfs;
+    doc["adcConsecutiveZeros"] = appState.audioConsecutiveZeros;
+    doc["adcI2sErrors"] = appState.audioI2sErrors;
+    String json;
+    serializeJson(doc, json);
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+      if (_audioSubscribed[i]) {
+        webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+      }
+    }
+  }
+
   // --- Waveform data ---
   uint8_t waveformBuf[WAVEFORM_BUFFER_SIZE];
-  if (i2s_audio_get_waveform(waveformBuf)) {
+  if (appState.waveformEnabled && i2s_audio_get_waveform(waveformBuf)) {
     JsonDocument doc;
     doc["type"] = "audioWaveform";
     JsonArray w = doc["w"].to<JsonArray>();
@@ -529,7 +616,7 @@ void sendAudioData() {
   // --- Spectrum data ---
   float bands[SPECTRUM_BANDS];
   float freq = 0.0f;
-  if (i2s_audio_get_spectrum(bands, &freq)) {
+  if (appState.spectrumEnabled && i2s_audio_get_spectrum(bands, &freq)) {
     JsonDocument doc;
     doc["type"] = "audioSpectrum";
     doc["freq"] = freq;

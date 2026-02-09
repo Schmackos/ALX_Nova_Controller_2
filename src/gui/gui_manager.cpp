@@ -36,6 +36,10 @@ static lv_color_t draw_buf[DISP_BUF_SIZE] __attribute__((aligned(LV_DRAW_BUF_ALI
 static bool screen_awake = true;
 static bool screen_dimmed = false;
 static unsigned long last_activity_time = 0;
+static unsigned long last_sleep_time = 0;
+
+/* Cooldown after sleep to prevent noise-triggered re-wake (ms) */
+#define SLEEP_WAKE_COOLDOWN_MS 1500
 
 /* FreeRTOS task handle */
 static TaskHandle_t gui_task_handle = nullptr;
@@ -82,6 +86,7 @@ static void screen_sleep(void) {
     screen_awake = false;
     set_backlight(BL_BRIGHTNESS_MIN);
     AppState::getInstance().setBacklightOn(false);
+    last_sleep_time = millis();
     LOG_D("[GUI] Screen sleep");
 }
 
@@ -129,24 +134,39 @@ static void gui_task(void *param) {
 
     for (;;) {
         /* Check for input activity to wake/undim screen */
-        if (gui_input_activity()) {
-            if (screen_dimmed) {
+        bool any_activity = gui_input_activity();
+        bool btn_activity = gui_input_press_activity();
+
+        if (any_activity) {
+            if (!screen_awake) {
+                /* Wake from sleep: cooldown prevents noise-triggered re-wake
+                   from encoder pin EMI right after sleep */
+                if (millis() - last_sleep_time >= SLEEP_WAKE_COOLDOWN_MS) {
+                    screen_wake();
+                }
+            } else if (screen_dimmed) {
+                /* Undim on any input (rotation or press) */
                 screen_dimmed = false;
                 set_backlight(AppState::getInstance().backlightBrightness);
                 last_applied_brightness = AppState::getInstance().backlightBrightness;
                 last_activity_time = millis();
             } else {
+                /* Already awake — reset activity timer */
                 screen_wake();
             }
         }
 
         /* Poll AppState for external backlight changes (web/MQTT -> GUI) */
+        static bool prev_desired_bl = true;
         bool desired = AppState::getInstance().backlightOn;
+        bool bl_just_enabled = (desired && !prev_desired_bl);
+        prev_desired_bl = desired;
+
         if (desired && !screen_awake) {
             screen_wake();
         } else if (!desired && screen_awake) {
             screen_sleep();
-        } else if (desired && screen_awake && screen_dimmed) {
+        } else if (bl_just_enabled && screen_awake && screen_dimmed) {
             screen_dimmed = false;
             set_backlight(AppState::getInstance().backlightBrightness);
             last_applied_brightness = AppState::getInstance().backlightBrightness;

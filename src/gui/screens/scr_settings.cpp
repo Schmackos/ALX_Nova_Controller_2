@@ -134,6 +134,20 @@ static void on_buzzer_volume_confirm(int int_val, float, int) {
     LOG_I("[GUI] Buzzer volume set to %d", int_val);
 }
 
+/* Audio update rate cycle options (in milliseconds) */
+static const CycleOption audio_rate_options[] = {
+    {"100 ms", 100},
+    {"50 ms",   50},
+    {"33 ms",   33},
+    {"20 ms",   20},
+};
+
+static void on_audio_rate_confirm(int int_val, float, int) {
+    AppState::getInstance().audioUpdateRate = (uint16_t)int_val;
+    saveSettings();
+    LOG_I("[GUI] Audio update rate set to %d ms", int_val);
+}
+
 /* Boot animation cycle options: None + 6 styles */
 static const CycleOption boot_anim_options[] = {
     {"None",       -1},
@@ -323,6 +337,22 @@ static void edit_buzzer_volume(void) {
     scr_value_edit_open(&cfg);
 }
 
+static void edit_audio_rate(void) {
+    uint16_t cur_val = AppState::getInstance().audioUpdateRate;
+    int cur = 1; /* default: 50 ms */
+    for (int i = 0; i < 4; i++) {
+        if (audio_rate_options[i].value == (int)cur_val) { cur = i; break; }
+    }
+    ValueEditConfig cfg = {};
+    cfg.title = "Audio Rate";
+    cfg.type = VE_CYCLE;
+    cfg.options = audio_rate_options;
+    cfg.option_count = 4;
+    cfg.current_option = cur;
+    cfg.on_confirm = on_audio_rate_confirm;
+    scr_value_edit_open(&cfg);
+}
+
 static void edit_boot_anim(void) {
     AppState &st = AppState::getInstance();
     int cur = 0; /* default: None */
@@ -433,8 +463,18 @@ static void build_settings_menu(void) {
     if (bv < 0 || bv > 2) bv = 1;
     snprintf(buzzer_vol_str, sizeof(buzzer_vol_str), "%s", vol_names[bv]);
 
+    static char audio_rate_str[8];
+    const char *ar = "50 ms";
+    for (int i = 0; i < 4; i++) {
+        if (audio_rate_options[i].value == (int)st.audioUpdateRate) {
+            ar = audio_rate_options[i].label;
+            break;
+        }
+    }
+    snprintf(audio_rate_str, sizeof(audio_rate_str), "%s", ar);
+
     settings_menu.title = "Settings";
-    settings_menu.item_count = 16;
+    settings_menu.item_count = 17;
     settings_menu.items[0]  = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     settings_menu.items[1]  = {"Screen Timeout", timeout_str, nullptr, MENU_ACTION, edit_screen_timeout};
     settings_menu.items[2]  = {"Dim Display", dim_enabled_str, nullptr, MENU_ACTION, edit_dim_enabled};
@@ -446,11 +486,12 @@ static void build_settings_menu(void) {
     settings_menu.items[8]  = {"Boot Animation", boot_anim_str, nullptr, MENU_ACTION, edit_boot_anim};
     settings_menu.items[9]  = {"Buzzer", buzzer_str, nullptr, MENU_ACTION, edit_buzzer_enable};
     settings_menu.items[10] = {"Buzzer Volume", buzzer_vol_str, nullptr, MENU_ACTION, edit_buzzer_volume};
-    settings_menu.items[11] = {"Auto Update", update_str, nullptr, MENU_ACTION, edit_auto_update};
-    settings_menu.items[12] = {"SSL Validation", ssl_str, nullptr, MENU_ACTION, edit_ssl_validation};
-    settings_menu.items[13] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
-    settings_menu.items[14] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
-    settings_menu.items[15] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
+    settings_menu.items[11] = {"Audio Rate", audio_rate_str, nullptr, MENU_ACTION, edit_audio_rate};
+    settings_menu.items[12] = {"Auto Update", update_str, nullptr, MENU_ACTION, edit_auto_update};
+    settings_menu.items[13] = {"SSL Validation", ssl_str, nullptr, MENU_ACTION, edit_ssl_validation};
+    settings_menu.items[14] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
+    settings_menu.items[15] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
+    settings_menu.items[16] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
 }
 
 lv_obj_t *scr_settings_create(void) {
@@ -535,9 +576,20 @@ void scr_settings_refresh(void) {
     snprintf(bvol_buf, sizeof(bvol_buf), "%s", vol_names[bv]);
     scr_menu_set_item_value(10, bvol_buf);
 
-    scr_menu_set_item_value(11, st.autoUpdateEnabled ? "ON" : "OFF");
+    static char arate_buf[8];
+    const char *ar_label = "50 ms";
+    for (int i = 0; i < 4; i++) {
+        if (audio_rate_options[i].value == (int)st.audioUpdateRate) {
+            ar_label = audio_rate_options[i].label;
+            break;
+        }
+    }
+    snprintf(arate_buf, sizeof(arate_buf), "%s", ar_label);
+    scr_menu_set_item_value(11, arate_buf);
 
-    scr_menu_set_item_value(12, st.enableCertValidation ? "ON" : "OFF");
+    scr_menu_set_item_value(12, st.autoUpdateEnabled ? "ON" : "OFF");
+
+    scr_menu_set_item_value(13, st.enableCertValidation ? "ON" : "OFF");
 
     static char fw_buf[24];
     if (st.updateAvailable) {
@@ -545,7 +597,7 @@ void scr_settings_refresh(void) {
     } else {
         snprintf(fw_buf, sizeof(fw_buf), "%s", FIRMWARE_VERSION);
     }
-    scr_menu_set_item_value(13, fw_buf);
+    scr_menu_set_item_value(14, fw_buf);
 }
 
 #endif /* GUI_ENABLED */

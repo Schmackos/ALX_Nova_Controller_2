@@ -6,7 +6,7 @@
 #include <lvgl.h>
 
 /* Maximum menu items per screen */
-#define MENU_MAX_ITEMS 16
+#define MENU_MAX_ITEMS 20
 
 /* Menu item types */
 enum MenuItemType {

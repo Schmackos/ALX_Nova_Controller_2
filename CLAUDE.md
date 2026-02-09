@@ -53,7 +53,7 @@ Each subsystem is a separate module in `src/`:
 - **button_handler** — Debouncing, short/long/very-long press and multi-click detection
 - **buzzer_handler** — Piezo buzzer with multi-pattern sequencer, ISR-safe encoder tick/click, volume control, FreeRTOS mutex for dual-core safety
 - **websocket_handler** — Real-time state broadcasting to web clients (port 81)
-- **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`). After editing `web_pages.cpp`, regenerate gzip with: `node build_web_assets.js`
+- **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`). **IMPORTANT: After ANY edit to `web_pages.cpp`, you MUST run `node build_web_assets.js` to regenerate `web_pages_gz.cpp` before building firmware.** The ESP32 serves the gzipped version — without this step, frontend changes will not take effect.
 
 ### GUI (LVGL on TFT Display)
 LVGL v9.4 + TFT_eSPI on ST7735S 128x160 (landscape 160x128). Runs on Core 1 via FreeRTOS `gui_task`. All GUI code is guarded by `-D GUI_ENABLED`.

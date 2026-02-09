@@ -118,9 +118,24 @@ public:
   float audioPeakLeft = 0.0f;     // Peak hold (instant attack, 2s hold, 300ms decay)
   float audioPeakRight = 0.0f;
   float audioPeakCombined = 0.0f;
+  float audioVrmsLeft = 0.0f;     // Input voltage Vrms (RMS * VREF)
+  float audioVrmsRight = 0.0f;
+  float audioVrmsCombined = 0.0f;
   float audioDominantFreq = 0.0f;
   float audioSpectrumBands[16] = {};
   uint32_t audioSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
+  float adcVref = DEFAULT_ADC_VREF; // ADC reference voltage (1.0-5.0V)
+
+  // Audio ADC diagnostics (updated from I2S diagnostics)
+  uint8_t audioHealthStatus = 0;         // AudioHealthStatus enum value
+  uint32_t audioI2sErrors = 0;
+  uint32_t audioAllZeroBuffers = 0;
+  uint32_t audioConsecutiveZeros = 0;
+  float audioNoiseFloorDbfs = -96.0f;
+  unsigned long audioLastNonZeroMs = 0;
+  uint32_t audioTotalBuffers = 0;
+  uint32_t audioClippedSamples = 0;
+  float audioDcOffset = 0.0f;
 
   void setAmplifierState(bool state);
   void setSensingMode(SensingMode mode);
@@ -140,6 +155,14 @@ public:
 
   // ===== Certificate Validation =====
   bool enableCertValidation = true;
+
+  // ===== Audio Update Rate =====
+  uint16_t audioUpdateRate = DEFAULT_AUDIO_UPDATE_RATE; // ms (20, 33, 50, 100)
+
+  // ===== Audio Graph Toggles =====
+  bool vuMeterEnabled = true;      // Enable VU meter computation & display
+  bool waveformEnabled = true;     // Enable waveform computation & display
+  bool spectrumEnabled = true;     // Enable FFT/spectrum computation & display
 
   // ===== Hardware Stats =====
   unsigned long hardwareStatsInterval = HARDWARE_STATS_INTERVAL;
@@ -171,6 +194,9 @@ public:
   bool prevMqttDimEnabled = false;
   unsigned long prevMqttDimTimeout = 10000;
   uint8_t prevMqttDimBrightness = 26;
+  bool prevMqttVuMeterEnabled = true;
+  bool prevMqttWaveformEnabled = true;
+  bool prevMqttSpectrumEnabled = true;
 
   // ===== Smart Sensing Broadcast State Tracking =====
   SensingMode prevBroadcastMode = ALWAYS_ON;

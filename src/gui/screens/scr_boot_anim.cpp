@@ -476,6 +476,14 @@ static const anim_setup_fn anim_table[] = {
 static const int ANIM_COUNT = sizeof(anim_table) / sizeof(anim_table[0]);
 
 void boot_anim_play(void) {
+    /* Guard against double boot (ESP32-S3 can double-reset after USB upload) */
+    static bool already_played = false;
+    if (already_played) {
+        LOG_I("[GUI] Boot animation already played, skipping");
+        return;
+    }
+    already_played = true;
+
     AppState &st = AppState::getInstance();
     if (!st.bootAnimEnabled) {
         LOG_I("[GUI] Boot animation disabled, skipping");
