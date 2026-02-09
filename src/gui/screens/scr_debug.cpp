@@ -18,6 +18,7 @@ static lv_obj_t *lbl_cpu = nullptr;
 static lv_obj_t *lbl_storage = nullptr;
 static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
+static lv_obj_t *lbl_audio_adc = nullptr;
 static lv_obj_t *lbl_pins = nullptr;
 static lv_obj_t *lbl_sort_mode = nullptr;
 
@@ -161,7 +162,7 @@ static void format_uptime(unsigned long ms, char *buf, int len) {
 void scr_debug_refresh(void) {
     if (!lbl_memory) return;
 
-    char buf[80];
+    char buf[128];
 
     /* Memory */
     uint32_t heap_free = ESP.getFreeHeap() / 1024;
@@ -206,6 +207,31 @@ void scr_debug_refresh(void) {
     format_uptime(millis(), uptime_str, sizeof(uptime_str));
     snprintf(buf, sizeof(buf), "Up: %s\nFW: %s", uptime_str, FIRMWARE_VERSION);
     lv_label_set_text(lbl_system, buf);
+
+    /* Audio ADC */
+    if (lbl_audio_adc) {
+        const char *statusStr = "OK";
+        switch (appState.audioHealthStatus) {
+            case 0: statusStr = "OK"; break;
+            case 1: statusStr = "NO DATA"; break;
+            case 2: statusStr = "NOISE ONLY"; break;
+            case 3: statusStr = "CLIPPING"; break;
+            case 4: statusStr = "I2S ERROR"; break;
+        }
+        unsigned long age = 0;
+        if (appState.audioLastNonZeroMs > 0) {
+            age = (millis() - appState.audioLastNonZeroMs) / 1000;
+        }
+        snprintf(buf, sizeof(buf), "%s  %.0fdBFS  %.3fV\nFloor:%.0f  DC:%.3f\nClip:%lu Err:%lu Bufs:%lu %lus",
+                 statusStr, appState.audioLevel_dBFS,
+                 appState.audioVrmsCombined,
+                 appState.audioNoiseFloorDbfs,
+                 appState.audioDcOffset,
+                 (unsigned long)appState.audioClippedSamples,
+                 (unsigned long)appState.audioI2sErrors,
+                 (unsigned long)appState.audioTotalBuffers, age);
+        lv_label_set_text(lbl_audio_adc, buf);
+    }
 }
 
 /* Helper to create a section with header and value label */
@@ -231,6 +257,7 @@ lv_obj_t *scr_debug_create(void) {
     lbl_storage = nullptr;
     lbl_network = nullptr;
     lbl_system = nullptr;
+    lbl_audio_adc = nullptr;
     lbl_pins = nullptr;
     lbl_sort_mode = nullptr;
 
@@ -264,6 +291,8 @@ lv_obj_t *scr_debug_create(void) {
     lbl_storage = add_section(cont, "Storage");
     lbl_network = add_section(cont, "Network");
     lbl_system  = add_section(cont, "System");
+
+    lbl_audio_adc = add_section(cont, "Audio ADC");
 
     /* GPIO Pins — sortable section */
     {

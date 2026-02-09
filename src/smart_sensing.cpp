@@ -7,6 +7,9 @@
 #include <LittleFS.h>
 #include <cmath>
 
+// Smoothed audio level for stable signal detection (EMA, α=0.15, τ≈308ms)
+static float _smoothedAudioLevel = -96.0f;
+
 // ===== Smart Sensing HTTP API Handlers =====
 
 void handleSmartSensingGet() {
@@ -34,7 +37,7 @@ void handleSmartSensingGet() {
   doc["amplifierState"] = amplifierState;
   doc["audioThreshold"] = audioThreshold_dBFS;
   doc["audioLevel"] = audioLevel_dBFS;
-  doc["signalDetected"] = (audioLevel_dBFS >= audioThreshold_dBFS);
+  doc["signalDetected"] = (_smoothedAudioLevel >= audioThreshold_dBFS);
   doc["audioRmsL"] = appState.audioRmsLeft;
   doc["audioRmsR"] = appState.audioRmsRight;
   doc["audioVuL"] = appState.audioVuLeft;
@@ -43,6 +46,10 @@ void handleSmartSensingGet() {
   doc["audioPeakR"] = appState.audioPeakRight;
   doc["audioPeak"] = appState.audioPeakCombined;
   doc["audioSampleRate"] = appState.audioSampleRate;
+  doc["audioVrmsL"] = appState.audioVrmsLeft;
+  doc["audioVrmsR"] = appState.audioVrmsRight;
+  doc["audioVrms"] = appState.audioVrmsCombined;
+  doc["adcVref"] = appState.adcVref;
 
   String json;
   serializeJson(doc, json);
@@ -92,6 +99,7 @@ void handleSmartSensingUpdate() {
       // When switching to SMART_AUTO mode, immediately evaluate signal state
       if (currentMode == SMART_AUTO) {
         bool signalDetected = detectSignal();
+        _smoothedAudioLevel = audioLevel_dBFS; // Initialize to current level
 
         if (signalDetected) {
           // Signal is above threshold - turn ON and set timer to full value
@@ -160,6 +168,16 @@ void handleSmartSensingUpdate() {
     }
   }
 
+  // Update ADC reference voltage
+  if (doc["adcVref"].is<float>() || doc["adcVref"].is<int>()) {
+    float vref = doc["adcVref"].as<float>();
+    if (vref >= 1.0f && vref <= 5.0f) {
+      appState.adcVref = vref;
+      settingsChanged = true;
+      LOG_I("[Sensing] ADC VREF set to %.2f V", vref);
+    }
+  }
+
   // Update sample rate
   if (doc["audioSampleRate"].is<int>()) {
     uint32_t rate = doc["audioSampleRate"].as<uint32_t>();
@@ -214,12 +232,30 @@ bool detectSignal() {
   appState.audioRmsLeft = analysis.rmsLeft;
   appState.audioRmsRight = analysis.rmsRight;
   appState.audioRmsCombined = analysis.rmsCombined;
-  appState.audioVuLeft = analysis.vuLeft;
-  appState.audioVuRight = analysis.vuRight;
-  appState.audioVuCombined = analysis.vuCombined;
-  appState.audioPeakLeft = analysis.peakLeft;
-  appState.audioPeakRight = analysis.peakRight;
-  appState.audioPeakCombined = analysis.peakCombined;
+  if (appState.vuMeterEnabled) {
+    appState.audioVuLeft = analysis.vuLeft;
+    appState.audioVuRight = analysis.vuRight;
+    appState.audioVuCombined = analysis.vuCombined;
+    appState.audioPeakLeft = analysis.peakLeft;
+    appState.audioPeakRight = analysis.peakRight;
+    appState.audioPeakCombined = analysis.peakCombined;
+  }
+  appState.audioVrmsLeft = audio_rms_to_vrms(analysis.rmsLeft, appState.adcVref);
+  appState.audioVrmsRight = audio_rms_to_vrms(analysis.rmsRight, appState.adcVref);
+  appState.audioVrmsCombined = audio_rms_to_vrms(analysis.rmsCombined, appState.adcVref);
+
+  // Copy ADC diagnostics into AppState
+  AudioDiagnostics diag = i2s_audio_get_diagnostics();
+  appState.audioHealthStatus = (uint8_t)diag.status;
+  appState.audioI2sErrors = diag.i2sReadErrors;
+  appState.audioAllZeroBuffers = diag.allZeroBuffers;
+  appState.audioConsecutiveZeros = diag.consecutiveZeros;
+  appState.audioNoiseFloorDbfs = diag.noiseFloorDbfs;
+  appState.audioLastNonZeroMs = diag.lastNonZeroMs;
+  appState.audioTotalBuffers = diag.totalBuffersRead;
+  appState.audioClippedSamples = diag.clippedSamples;
+  appState.audioDcOffset = diag.dcOffset;
+
   return analysis.signalDetected;
 }
 
@@ -238,31 +274,35 @@ void updateSmartSensingLogic() {
 
   // Rate limit signal reading to reduce CPU usage (every 50ms is sufficient)
   static unsigned long lastSignalRead = 0;
-  static bool signalDetected = false;
 
   if (currentMillis - lastSignalRead >= 50) {
     lastSignalRead = currentMillis;
     // Read audio level for real-time display, regardless of mode
-    signalDetected = detectSignal();
+    detectSignal();
+    // Smooth audio level for stable signal detection (α=0.15, τ≈308ms)
+    _smoothedAudioLevel += (audioLevel_dBFS - _smoothedAudioLevel) * 0.15f;
   }
+
+  // Use smoothed level for signal presence decision
+  bool signalPresent = (_smoothedAudioLevel >= audioThreshold_dBFS);
 
   switch (currentMode) {
   case ALWAYS_ON:
     // Always keep amplifier ON, timer disabled
     setAmplifierState(true);
     timerRemaining = 0;
-    previousSignalState = signalDetected; // Update state tracking
+    previousSignalState = signalPresent; // Update state tracking
     break;
 
   case ALWAYS_OFF:
     // Always keep amplifier OFF, timer disabled
     setAmplifierState(false);
     timerRemaining = 0;
-    previousSignalState = signalDetected; // Update state tracking
+    previousSignalState = signalPresent; // Update state tracking
     break;
 
   case SMART_AUTO: {
-    if (signalDetected) {
+    if (signalPresent) {
       // Signal is currently detected - keep timer at full value and amplifier
       // ON
       timerRemaining = timerDuration * 60; // Keep timer at full value
@@ -290,7 +330,7 @@ void updateSmartSensingLogic() {
     }
 
     // Update previous signal state for next iteration
-    previousSignalState = signalDetected;
+    previousSignalState = signalPresent;
     break;
   }
   }
@@ -324,14 +364,9 @@ void sendSmartSensingStateInternal() {
   doc["amplifierState"] = amplifierState;
   doc["audioThreshold"] = audioThreshold_dBFS;
   doc["audioLevel"] = audioLevel_dBFS;
-  doc["signalDetected"] = (audioLevel_dBFS >= audioThreshold_dBFS);
-  doc["audioRmsL"] = appState.audioRmsLeft;
-  doc["audioRmsR"] = appState.audioRmsRight;
-  doc["audioVuL"] = appState.audioVuLeft;
-  doc["audioVuR"] = appState.audioVuRight;
-  doc["audioPeakL"] = appState.audioPeakLeft;
-  doc["audioPeakR"] = appState.audioPeakRight;
-  doc["audioPeak"] = appState.audioPeakCombined;
+  doc["signalDetected"] = (_smoothedAudioLevel >= audioThreshold_dBFS);
+  doc["audioSampleRate"] = appState.audioSampleRate;
+  doc["audioVrms"] = appState.audioVrmsCombined;
 
   String json;
   serializeJson(doc, json);
@@ -341,7 +376,6 @@ void sendSmartSensingStateInternal() {
   prevBroadcastMode = currentMode;
   prevBroadcastAmplifierState = amplifierState;
   prevBroadcastTimerRemaining = timerRemaining;
-  prevBroadcastAudioLevel = audioLevel_dBFS;
   lastSmartSensingHeartbeat = millis();
 }
 
@@ -353,13 +387,10 @@ void sendSmartSensingState() {
   // Check if any state has changed
   bool stateChanged = (currentMode != prevBroadcastMode) ||
                       (amplifierState != prevBroadcastAmplifierState) ||
-                      (timerRemaining != prevBroadcastTimerRemaining) ||
-                      (fabs(audioLevel_dBFS - prevBroadcastAudioLevel) >
-                       0.5); // 0.5 dBFS tolerance for audio level changes
+                      (timerRemaining != prevBroadcastTimerRemaining);
 
-  // Check if heartbeat interval has elapsed
-  bool heartbeatDue = (currentMillis - lastSmartSensingHeartbeat >=
-                       SMART_SENSING_HEARTBEAT_INTERVAL);
+  // Check if heartbeat interval has elapsed (1s, matches main loop call rate)
+  bool heartbeatDue = (currentMillis - lastSmartSensingHeartbeat >= 1000);
 
   // Only broadcast if state changed or heartbeat is due
   if (stateChanged || heartbeatDue) {
@@ -384,12 +415,14 @@ bool loadSmartSensingSettings() {
   String line2 = file.readStringUntil('\n'); // timer duration
   String line3 = file.readStringUntil('\n'); // audio threshold
   String line4 = file.readStringUntil('\n'); // sample rate
+  String line5 = file.readStringUntil('\n'); // ADC VREF
   file.close();
 
   line1.trim();
   line2.trim();
   line3.trim();
   line4.trim();
+  line5.trim();
 
   if (line1.length() > 0) {
     int mode = line1.toInt();
@@ -418,6 +451,13 @@ bool loadSmartSensingSettings() {
     }
   }
 
+  if (line5.length() > 0) {
+    float vref = line5.toFloat();
+    if (vref >= 1.0f && vref <= 5.0f) {
+      appState.adcVref = vref;
+    }
+  }
+
   LOG_I("[Sensing] Settings loaded");
   LOG_D("[Sensing]   Mode: %d, Timer: %lu min, Threshold: %+.0f dBFS, Sample Rate: %lu Hz", currentMode,
         timerDuration, audioThreshold_dBFS, appState.audioSampleRate);
@@ -437,6 +477,7 @@ void saveSmartSensingSettings() {
   file.println(String(timerDuration));
   file.println(String(audioThreshold_dBFS, 1));
   file.println(String(appState.audioSampleRate));
+  file.println(String(appState.adcVref, 2));
   file.close();
 
   LOG_I("[Sensing] Settings saved");

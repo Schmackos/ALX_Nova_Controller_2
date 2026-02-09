@@ -32,6 +32,7 @@ extern void performFactoryReset();
 extern void checkForFirmwareUpdate();
 extern bool performOTAUpdate(String firmwareUrl);
 extern void setAmplifierState(bool state);
+extern void sendAudioGraphState();
 
 // ===== MQTT Settings Functions =====
 
@@ -166,6 +167,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/display/dim_brightness/set").c_str());
   mqttClient.subscribe((base + "/settings/buzzer/set").c_str());
   mqttClient.subscribe((base + "/settings/buzzer_volume/set").c_str());
+  mqttClient.subscribe((base + "/settings/audio_update_rate/set").c_str());
   mqttClient.subscribe((base + "/system/reboot").c_str());
   mqttClient.subscribe((base + "/system/factory_reset").c_str());
   mqttClient.subscribe((base + "/system/check_update").c_str());
@@ -176,6 +178,10 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/signalgenerator/amplitude/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/channel/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/output_mode/set").c_str());
+  mqttClient.subscribe((base + "/settings/adc_vref/set").c_str());
+  mqttClient.subscribe((base + "/audio/vu_meter/set").c_str());
+  mqttClient.subscribe((base + "/audio/waveform/set").c_str());
+  mqttClient.subscribe((base + "/audio/spectrum/set").c_str());
 
   LOG_D("[MQTT] Subscribed to command topics");
 }
@@ -428,6 +434,16 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       publishMqttBuzzerState();
     }
   }
+  // Handle audio update rate
+  else if (topicStr == base + "/settings/audio_update_rate/set") {
+    int rate = message.toInt();
+    if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
+      appState.audioUpdateRate = (uint16_t)rate;
+      saveSettings();
+      LOG_I("[MQTT] Audio update rate set to %d ms", rate);
+      publishMqttDisplayState();
+    }
+  }
   // Handle signal generator enable/disable
   else if (topicStr == base + "/signalgenerator/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
@@ -505,6 +521,43 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       publishMqttSignalGenState();
       sendSignalGenState();
     }
+  }
+  // Handle ADC reference voltage
+  else if (topicStr == base + "/settings/adc_vref/set") {
+    float vref = message.toFloat();
+    if (vref >= 1.0f && vref <= 5.0f) {
+      appState.adcVref = vref;
+      saveSmartSensingSettings();
+      LOG_I("[MQTT] ADC VREF set to %.2f V", vref);
+      publishMqttAudioDiagnostics();
+    }
+  }
+  // Handle VU meter toggle
+  else if (topicStr == base + "/audio/vu_meter/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.vuMeterEnabled = newState;
+    saveSettings();
+    sendAudioGraphState();
+    publishMqttAudioGraphState();
+    LOG_I("[MQTT] VU meter set to %s", newState ? "ON" : "OFF");
+  }
+  // Handle waveform toggle
+  else if (topicStr == base + "/audio/waveform/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.waveformEnabled = newState;
+    saveSettings();
+    sendAudioGraphState();
+    publishMqttAudioGraphState();
+    LOG_I("[MQTT] Waveform set to %s", newState ? "ON" : "OFF");
+  }
+  // Handle spectrum toggle
+  else if (topicStr == base + "/audio/spectrum/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.spectrumEnabled = newState;
+    saveSettings();
+    sendAudioGraphState();
+    publishMqttAudioGraphState();
+    LOG_I("[MQTT] Spectrum set to %s", newState ? "ON" : "OFF");
   }
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
@@ -675,7 +728,10 @@ void mqttLoop() {
         (appState.sigGenWaveform != appState.prevMqttSigGenWaveform) ||
         (fabs(appState.sigGenFrequency - appState.prevMqttSigGenFrequency) > 0.5f) ||
         (fabs(appState.sigGenAmplitude - appState.prevMqttSigGenAmplitude) > 0.5f) ||
-        (appState.sigGenOutputMode != appState.prevMqttSigGenOutputMode);
+        (appState.sigGenOutputMode != appState.prevMqttSigGenOutputMode) ||
+        (appState.vuMeterEnabled != appState.prevMqttVuMeterEnabled) ||
+        (appState.waveformEnabled != appState.prevMqttWaveformEnabled) ||
+        (appState.spectrumEnabled != appState.prevMqttSpectrumEnabled);
 
     if (stateChanged) {
       publishMqttState();
@@ -703,6 +759,9 @@ void mqttLoop() {
       appState.prevMqttSigGenFrequency = appState.sigGenFrequency;
       appState.prevMqttSigGenAmplitude = appState.sigGenAmplitude;
       appState.prevMqttSigGenOutputMode = appState.sigGenOutputMode;
+      appState.prevMqttVuMeterEnabled = appState.vuMeterEnabled;
+      appState.prevMqttWaveformEnabled = appState.waveformEnabled;
+      appState.prevMqttSpectrumEnabled = appState.spectrumEnabled;
     }
   }
 }
@@ -1018,6 +1077,9 @@ void publishMqttDisplayState() {
   else dimPct = 10;
   mqttClient.publish((base + "/display/dim_brightness").c_str(),
                      String(dimPct).c_str(), true);
+
+  mqttClient.publish((base + "/settings/audio_update_rate").c_str(),
+                     String(appState.audioUpdateRate).c_str(), true);
 }
 
 // Publish signal generator state
@@ -1049,6 +1111,43 @@ void publishMqttSignalGenState() {
                      String(appState.sigGenSweepSpeed, 0).c_str(), true);
 }
 
+void publishMqttAudioDiagnostics() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  const char *statusStr = "OK";
+  switch (appState.audioHealthStatus) {
+    case 1: statusStr = "NO_DATA"; break;
+    case 2: statusStr = "NOISE_ONLY"; break;
+    case 3: statusStr = "CLIPPING"; break;
+    case 4: statusStr = "I2S_ERROR"; break;
+  }
+  mqttClient.publish((base + "/audio/adc_status").c_str(), statusStr, true);
+  mqttClient.publish((base + "/audio/noise_floor").c_str(),
+                     String(appState.audioNoiseFloorDbfs, 1).c_str(), true);
+  mqttClient.publish((base + "/audio/input_vrms").c_str(),
+                     String(appState.audioVrmsCombined, 3).c_str(), true);
+  mqttClient.publish((base + "/settings/adc_vref").c_str(),
+                     String(appState.adcVref, 2).c_str(), true);
+}
+
+// Publish audio graph toggle state
+void publishMqttAudioGraphState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/audio/vu_meter").c_str(),
+                     appState.vuMeterEnabled ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/audio/waveform").c_str(),
+                     appState.waveformEnabled ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/audio/spectrum").c_str(),
+                     appState.spectrumEnabled ? "ON" : "OFF", true);
+}
+
 // Publish all states
 void publishMqttState() {
   publishMqttLedState();
@@ -1061,6 +1160,8 @@ void publishMqttState() {
   publishMqttDisplayState();
   publishMqttBuzzerState();
   publishMqttSignalGenState();
+  publishMqttAudioDiagnostics();
+  publishMqttAudioGraphState();
 }
 
 // ===== Home Assistant Auto-Discovery =====
@@ -1759,6 +1860,30 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Audio Update Rate Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Audio Update Rate";
+    doc["unique_id"] = deviceId + "_audio_update_rate";
+    doc["state_topic"] = base + "/settings/audio_update_rate";
+    doc["command_topic"] = base + "/settings/audio_update_rate/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("20");
+    options.add("33");
+    options.add("50");
+    options.add("100");
+    doc["unit_of_measurement"] = "ms";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:update";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic =
+        "homeassistant/select/" + deviceId + "/audio_update_rate/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   // ===== Signal Generator Switch =====
   {
     JsonDocument doc;
@@ -1877,6 +2002,138 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Audio ADC Status Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "ADC Status";
+    doc["unique_id"] = deviceId + "_adc_status";
+    doc["state_topic"] = base + "/audio/adc_status";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:audio-input-stereo-minijack";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/adc_status/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Audio Noise Floor Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Audio Noise Floor";
+    doc["unique_id"] = deviceId + "_noise_floor";
+    doc["state_topic"] = base + "/audio/noise_floor";
+    doc["unit_of_measurement"] = "dBFS";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:volume-low";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/noise_floor/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Input Voltage (Vrms) Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Input Voltage (Vrms)";
+    doc["unique_id"] = deviceId + "_input_vrms";
+    doc["state_topic"] = base + "/audio/input_vrms";
+    doc["unit_of_measurement"] = "V";
+    doc["device_class"] = "voltage";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["suggested_display_precision"] = 3;
+    doc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/input_vrms/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== ADC Reference Voltage Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "ADC Reference Voltage";
+    doc["unique_id"] = deviceId + "_adc_vref";
+    doc["state_topic"] = base + "/settings/adc_vref";
+    doc["command_topic"] = base + "/settings/adc_vref/set";
+    doc["min"] = 1.0;
+    doc["max"] = 5.0;
+    doc["step"] = 0.1;
+    doc["unit_of_measurement"] = "V";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:flash-triangle-outline";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/number/" + deviceId + "/adc_vref/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== VU Meter Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "VU Meter";
+    doc["unique_id"] = deviceId + "_vu_meter";
+    doc["state_topic"] = base + "/audio/vu_meter";
+    doc["command_topic"] = base + "/audio/vu_meter/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:chart-bar";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/vu_meter/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Audio Waveform Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Audio Waveform";
+    doc["unique_id"] = deviceId + "_waveform";
+    doc["state_topic"] = base + "/audio/waveform";
+    doc["command_topic"] = base + "/audio/waveform/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:waveform";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/waveform/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Frequency Spectrum Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Frequency Spectrum";
+    doc["unique_id"] = deviceId + "_spectrum";
+    doc["state_topic"] = base + "/audio/spectrum";
+    doc["command_topic"] = base + "/audio/spectrum/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:equalizer";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/spectrum/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   LOG_I("[MQTT] Home Assistant discovery configs published");
 }
 
@@ -1931,7 +2188,15 @@ void removeHADiscovery() {
       "homeassistant/number/%s/siggen_frequency/config",
       "homeassistant/number/%s/siggen_amplitude/config",
       "homeassistant/select/%s/siggen_channel/config",
-      "homeassistant/select/%s/siggen_output_mode/config"};
+      "homeassistant/select/%s/siggen_output_mode/config",
+      "homeassistant/select/%s/audio_update_rate/config",
+      "homeassistant/sensor/%s/adc_status/config",
+      "homeassistant/sensor/%s/noise_floor/config",
+      "homeassistant/sensor/%s/input_vrms/config",
+      "homeassistant/number/%s/adc_vref/config",
+      "homeassistant/switch/%s/vu_meter/config",
+      "homeassistant/switch/%s/waveform/config",
+      "homeassistant/switch/%s/spectrum/config"};
 
   char topicBuf[128];
   for (const char *topicTemplate : topics) {

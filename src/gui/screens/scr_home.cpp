@@ -1,69 +1,222 @@
 #ifdef GUI_ENABLED
 
 #include "scr_home.h"
-#include "scr_menu.h"
 #include "../gui_icons.h"
 #include "../gui_navigation.h"
+#include "../gui_theme.h"
 #include "../../app_state.h"
 #include "../../config.h"
 #include "../../debug_serial.h"
 #include <Arduino.h>
 #include <WiFi.h>
 
-/* Format uptime from milliseconds into human-readable string */
-static void format_uptime(unsigned long ms, char *buf, int len) {
-    unsigned long secs = ms / 1000;
-    unsigned long mins = secs / 60;
-    unsigned long hours = mins / 60;
-    unsigned long days = hours / 24;
-    if (days > 0) {
-        snprintf(buf, len, "%lud %luh", days, hours % 24);
-    } else if (hours > 0) {
-        snprintf(buf, len, "%luh %lum", hours, mins % 60);
-    } else if (mins > 0) {
-        snprintf(buf, len, "%lum %lus", mins, secs % 60);
-    } else {
-        snprintf(buf, len, "%lus", secs);
+/* Layout constants for 160x128 display */
+#define TITLE_H     18
+#define ROW_H       30
+#define ROW_GAP     1
+#define COL_GAP     2
+#define SIDE_PAD    2
+#define CELL_W      77
+#define CELL_PAD    3
+#define DOT_SIZE    6
+#define BACK_BTN_H  16
+
+/* Widget handles (reset in scr_home_create) */
+static lv_obj_t *lbl_title = nullptr;
+static lv_obj_t *lbl_update_icon = nullptr;
+static lv_obj_t *lbl_amp_value = nullptr;
+static lv_obj_t *dot_amp = nullptr;
+static lv_obj_t *lbl_sig_value = nullptr;
+static lv_obj_t *dot_sig = nullptr;
+static lv_obj_t *lbl_wifi_value = nullptr;
+static lv_obj_t *dot_wifi = nullptr;
+static lv_obj_t *lbl_mqtt_value = nullptr;
+static lv_obj_t *dot_mqtt = nullptr;
+static lv_obj_t *lbl_mode_value = nullptr;
+static lv_obj_t *bar_level = nullptr;
+
+/* Back button callback */
+static void on_back(lv_event_t *e) {
+    (void)e;
+    gui_nav_pop_deferred();
+}
+
+/* Set dot color helper */
+static void set_dot_color(lv_obj_t *dot, lv_color_t color) {
+    if (dot) {
+        lv_obj_set_style_bg_color(dot, color, LV_PART_MAIN);
     }
 }
 
-/* Format timer remaining (seconds) into MM:SS */
-static void format_timer(unsigned long remaining_secs, char *buf, int len) {
-    if (remaining_secs == 0) {
-        snprintf(buf, len, "Idle");
-    } else {
-        unsigned long mins = remaining_secs / 60;
-        unsigned long secs = remaining_secs % 60;
-        snprintf(buf, len, "%02lu:%02lu", mins, secs);
+/**
+ * Create a dashboard cell at absolute position (x, y).
+ * Returns: value label via *value_out, status dot via *dot_out (either can be NULL).
+ */
+static void create_cell(lv_obj_t *parent, int x, int y,
+                         const char *icon_str, const char *title_str,
+                         lv_obj_t **value_out, lv_obj_t **dot_out) {
+    lv_obj_t *cell = lv_obj_create(parent);
+    lv_obj_set_pos(cell, x, y);
+    lv_obj_set_size(cell, CELL_W, ROW_H);
+    lv_obj_clear_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
+
+    /* Cell styling — smaller than gui_style_card for compact cells */
+    lv_obj_set_style_bg_color(cell, COLOR_BG_CARD, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(cell, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cell, CELL_PAD, LV_PART_MAIN);
+    lv_obj_set_style_border_width(cell, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(cell, COLOR_BORDER_DARK, LV_PART_MAIN);
+
+    /* Header row: icon + title */
+    if (icon_str) {
+        lv_obj_t *icon = lv_label_create(cell);
+        lv_label_set_text(icon, icon_str);
+        lv_obj_set_style_text_font(icon, &lv_font_montserrat_10, LV_PART_MAIN);
+        lv_obj_set_style_text_color(icon, COLOR_PRIMARY, LV_PART_MAIN);
+        lv_obj_align(icon, LV_ALIGN_TOP_LEFT, 0, 0);
+    }
+
+    lv_obj_t *title = lv_label_create(cell);
+    lv_label_set_text(title, title_str);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_10, LV_PART_MAIN);
+    lv_obj_set_style_text_color(title, COLOR_TEXT_SEC, LV_PART_MAIN);
+    /* Offset title to the right of icon (icon ~10px + 2px gap) */
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, icon_str ? 12 : 0, 0);
+
+    /* Value label */
+    lv_obj_t *val = lv_label_create(cell);
+    lv_label_set_text(val, "---");
+    lv_obj_set_style_text_font(val, &lv_font_montserrat_12, LV_PART_MAIN);
+    lv_obj_set_style_text_color(val, COLOR_TEXT_PRI, LV_PART_MAIN);
+    lv_obj_align(val, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+
+    if (value_out) *value_out = val;
+
+    /* Status dot (6x6 circle) */
+    if (dot_out) {
+        lv_obj_t *dot = lv_obj_create(cell);
+        lv_obj_set_size(dot, DOT_SIZE, DOT_SIZE);
+        lv_obj_set_style_radius(dot, DOT_SIZE / 2, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(dot, COLOR_TEXT_DIM, LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_border_width(dot, 0, LV_PART_MAIN);
+        lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_align(dot, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+        *dot_out = dot;
     }
 }
-
-static MenuConfig home_config;
 
 lv_obj_t *scr_home_create(void) {
-    home_config = {};
-    home_config.title = "Home";
-    home_config.item_count = 9;
+    /* Reset static pointers */
+    lbl_title = nullptr;
+    lbl_update_icon = nullptr;
+    lbl_amp_value = nullptr;
+    dot_amp = nullptr;
+    lbl_sig_value = nullptr;
+    dot_sig = nullptr;
+    lbl_wifi_value = nullptr;
+    dot_wifi = nullptr;
+    lbl_mqtt_value = nullptr;
+    dot_mqtt = nullptr;
+    lbl_mode_value = nullptr;
+    bar_level = nullptr;
 
-    /* 0: Back */
-    home_config.items[0] = {ICON_BACK " Back", NULL, NULL, MENU_BACK, NULL};
+    lv_obj_t *scr = lv_obj_create(NULL);
+    lv_obj_add_style(scr, gui_style_screen(), LV_PART_MAIN);
 
-    /* 1-8: Info items */
-    home_config.items[1] = {"Amplifier",  "---", ICON_CONTROL,  MENU_INFO, NULL};
-    home_config.items[2] = {"Signal",     "---", NULL,          MENU_INFO, NULL};
-    home_config.items[3] = {"Timer",      "---", NULL,          MENU_INFO, NULL};
-    home_config.items[4] = {"WiFi",       "---", ICON_WIFI,     MENU_INFO, NULL};
-    home_config.items[5] = {"MQTT",       "---", ICON_MQTT,     MENU_INFO, NULL};
-    home_config.items[6] = {"Mode",       "---", ICON_SETTINGS, MENU_INFO, NULL};
-    home_config.items[7] = {"Firmware",   "---", NULL,          MENU_INFO, NULL};
-    home_config.items[8] = {"Uptime",     "---", ICON_REFRESH,  MENU_INFO, NULL};
+    /* === Title bar === */
+    lbl_title = lv_label_create(scr);
+    lv_label_set_text(lbl_title, "ALX Nova v" FIRMWARE_VERSION);
+    lv_obj_set_style_text_font(lbl_title, &lv_font_montserrat_12, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_title, COLOR_PRIMARY, LV_PART_MAIN);
+    lv_obj_align(lbl_title, LV_ALIGN_TOP_LEFT, SIDE_PAD, 3);
 
-    lv_obj_t *scr = scr_menu_create(&home_config);
+    lbl_update_icon = lv_label_create(scr);
+    lv_label_set_text(lbl_update_icon, ICON_DOWNLOAD);
+    lv_obj_set_style_text_font(lbl_update_icon, &lv_font_montserrat_12, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_update_icon, COLOR_TEXT_DIM, LV_PART_MAIN);
+    lv_obj_align(lbl_update_icon, LV_ALIGN_TOP_RIGHT, -SIDE_PAD, 3);
 
-    /* Populate values immediately */
+    /* === Grid: 3 rows x 2 columns === */
+    int col0_x = SIDE_PAD;
+    int col1_x = SIDE_PAD + CELL_W + COL_GAP;
+    int row0_y = TITLE_H;
+    int row1_y = TITLE_H + ROW_H + ROW_GAP;
+    int row2_y = TITLE_H + 2 * (ROW_H + ROW_GAP);
+
+    /* Row 0: Amp + Signal */
+    create_cell(scr, col0_x, row0_y, ICON_CONTROL, "Amp",
+                &lbl_amp_value, &dot_amp);
+    create_cell(scr, col1_x, row0_y, ICON_AUDIO, "Signal",
+                &lbl_sig_value, &dot_sig);
+
+    /* Row 1: WiFi + MQTT */
+    create_cell(scr, col0_x, row1_y, ICON_WIFI, "WiFi",
+                &lbl_wifi_value, &dot_wifi);
+    create_cell(scr, col1_x, row1_y, ICON_MQTT, "MQTT",
+                &lbl_mqtt_value, &dot_mqtt);
+
+    /* Row 2: Mode (no dot) + Level (bar instead of dot) */
+    create_cell(scr, col0_x, row2_y, ICON_SETTINGS, "Mode",
+                &lbl_mode_value, NULL);
+
+    /* Level cell — custom with bar */
+    {
+        lv_obj_t *cell = lv_obj_create(scr);
+        lv_obj_set_pos(cell, col1_x, row2_y);
+        lv_obj_set_size(cell, CELL_W, ROW_H);
+        lv_obj_clear_flag(cell, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_style_bg_color(cell, COLOR_BG_CARD, LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_radius(cell, 4, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(cell, CELL_PAD, LV_PART_MAIN);
+        lv_obj_set_style_border_width(cell, 1, LV_PART_MAIN);
+        lv_obj_set_style_border_color(cell, COLOR_BORDER_DARK, LV_PART_MAIN);
+
+        lv_obj_t *icon = lv_label_create(cell);
+        lv_label_set_text(icon, ICON_LEVEL);
+        lv_obj_set_style_text_font(icon, &lv_font_montserrat_10, LV_PART_MAIN);
+        lv_obj_set_style_text_color(icon, COLOR_PRIMARY, LV_PART_MAIN);
+        lv_obj_align(icon, LV_ALIGN_TOP_LEFT, 0, 0);
+
+        lv_obj_t *title = lv_label_create(cell);
+        lv_label_set_text(title, "Level");
+        lv_obj_set_style_text_font(title, &lv_font_montserrat_10, LV_PART_MAIN);
+        lv_obj_set_style_text_color(title, COLOR_TEXT_SEC, LV_PART_MAIN);
+        lv_obj_align(title, LV_ALIGN_TOP_LEFT, 12, 0);
+
+        bar_level = lv_bar_create(cell);
+        lv_obj_set_size(bar_level, CELL_W - 2 * CELL_PAD - 2, 8);
+        lv_bar_set_range(bar_level, -96, 0);
+        lv_bar_set_value(bar_level, -96, LV_ANIM_OFF);
+        lv_obj_align(bar_level, LV_ALIGN_BOTTOM_MID, 0, 0);
+        lv_obj_set_style_bg_color(bar_level, COLOR_BG_SURFACE, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(bar_level, COLOR_SUCCESS, LV_PART_INDICATOR);
+        lv_obj_set_style_bg_opa(bar_level, LV_OPA_COVER, LV_PART_INDICATOR);
+    }
+
+    /* === Back button === */
+    lv_obj_t *back_btn = lv_obj_create(scr);
+    lv_obj_set_size(back_btn, 60, BACK_BTN_H);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -2);
+    lv_obj_add_style(back_btn, gui_style_list_item(), LV_PART_MAIN);
+    lv_obj_add_style(back_btn, gui_style_list_item_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_flag(back_btn, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(back_btn, LV_OBJ_FLAG_SCROLLABLE);
+    lv_group_add_obj(gui_nav_get_group(), back_btn);
+
+    lv_obj_t *back_lbl = lv_label_create(back_btn);
+    lv_label_set_text(back_lbl, ICON_BACK " Back");
+    lv_obj_set_style_text_color(back_lbl, COLOR_TEXT_SEC, LV_PART_MAIN);
+    lv_obj_add_style(back_lbl, gui_style_dim(), LV_PART_MAIN);
+    lv_obj_center(back_lbl);
+    lv_obj_add_event_cb(back_btn, on_back, LV_EVENT_CLICKED, NULL);
+
+    /* Initial data fill */
     scr_home_refresh();
 
-    LOG_D("[GUI] Home screen created");
+    LOG_D("[GUI] Home dashboard created");
     return scr;
 }
 
@@ -71,52 +224,80 @@ void scr_home_refresh(void) {
     AppState &st = AppState::getInstance();
     char buf[32];
 
-    /* 1: Amplifier */
-    scr_menu_set_item_value(1, st.amplifierState ? "ON" : "OFF");
-
-    /* 2: Signal */
-    bool detected = st.audioLevel_dBFS >= st.audioThreshold_dBFS;
-    snprintf(buf, sizeof(buf), "%+.0f dBFS %s", st.audioLevel_dBFS,
-             detected ? "Detected" : "\xE2\x80\x94");
-    scr_menu_set_item_value(2, buf);
-
-    /* 3: Timer */
-    if (st.currentMode != SMART_AUTO || st.timerRemaining == 0) {
-        scr_menu_set_item_value(3, "Idle");
-    } else {
-        format_timer(st.timerRemaining, buf, sizeof(buf));
-        scr_menu_set_item_value(3, buf);
+    /* Update icon: orange when update available, dim when up to date */
+    if (lbl_update_icon) {
+        lv_obj_set_style_text_color(lbl_update_icon,
+            st.updateAvailable ? COLOR_PRIMARY : COLOR_TEXT_DIM, LV_PART_MAIN);
     }
 
-    /* 4: WiFi */
-    if (WiFi.status() == WL_CONNECTED) {
-        scr_menu_set_item_value(4, "Connected");
-    } else if (st.isAPMode) {
-        scr_menu_set_item_value(4, "AP Mode");
-    } else {
-        scr_menu_set_item_value(4, "Disconnected");
+    /* Amp: ON/OFF + dot green/red */
+    if (lbl_amp_value) {
+        lv_label_set_text(lbl_amp_value, st.amplifierState ? "ON" : "OFF");
+    }
+    set_dot_color(dot_amp, st.amplifierState ? COLOR_SUCCESS : COLOR_ERROR);
+
+    /* Signal: dBFS value + dot green/gray */
+    if (lbl_sig_value) {
+        bool detected = st.audioLevel_dBFS >= st.audioThreshold_dBFS;
+        snprintf(buf, sizeof(buf), "%+.0f dBFS", st.audioLevel_dBFS);
+        lv_label_set_text(lbl_sig_value, buf);
+        set_dot_color(dot_sig, detected ? COLOR_SUCCESS : COLOR_TEXT_DIM);
     }
 
-    /* 5: MQTT */
-    if (!st.mqttEnabled) {
-        scr_menu_set_item_value(5, "Disabled");
-    } else if (st.mqttConnected) {
-        scr_menu_set_item_value(5, "Connected");
-    } else {
-        scr_menu_set_item_value(5, "Disconnected");
+    /* WiFi: status text + dot green/orange/red */
+    if (lbl_wifi_value) {
+        if (WiFi.status() == WL_CONNECTED) {
+            lv_label_set_text(lbl_wifi_value, "Connected");
+            set_dot_color(dot_wifi, COLOR_SUCCESS);
+        } else if (st.isAPMode) {
+            lv_label_set_text(lbl_wifi_value, "AP Mode");
+            set_dot_color(dot_wifi, COLOR_PRIMARY);
+        } else {
+            lv_label_set_text(lbl_wifi_value, "Disconnected");
+            set_dot_color(dot_wifi, COLOR_ERROR);
+        }
     }
 
-    /* 6: Mode */
-    const char *mode = (st.currentMode == ALWAYS_ON)  ? "Always On" :
-                       (st.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
-    scr_menu_set_item_value(6, mode);
+    /* MQTT: status text + dot green/red/gray */
+    if (lbl_mqtt_value) {
+        if (!st.mqttEnabled) {
+            lv_label_set_text(lbl_mqtt_value, "Disabled");
+            set_dot_color(dot_mqtt, COLOR_TEXT_DIM);
+        } else if (st.mqttConnected) {
+            lv_label_set_text(lbl_mqtt_value, "Connected");
+            set_dot_color(dot_mqtt, COLOR_SUCCESS);
+        } else {
+            lv_label_set_text(lbl_mqtt_value, "Disconnected");
+            set_dot_color(dot_mqtt, COLOR_ERROR);
+        }
+    }
 
-    /* 7: Firmware */
-    scr_menu_set_item_value(7, FIRMWARE_VERSION);
+    /* Mode: alternates with timer countdown when Smart Auto + timer active */
+    if (lbl_mode_value) {
+        if (st.currentMode == SMART_AUTO && st.timerRemaining > 0 &&
+            (millis() / 3000) % 2 == 1) {
+            unsigned long mins = st.timerRemaining / 60;
+            unsigned long secs = st.timerRemaining % 60;
+            snprintf(buf, sizeof(buf), "%02lu:%02lu", mins, secs);
+            lv_label_set_text(lbl_mode_value, buf);
+        } else {
+            const char *mode = (st.currentMode == ALWAYS_ON)  ? "Always On" :
+                               (st.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
+            lv_label_set_text(lbl_mode_value, mode);
+        }
+    }
 
-    /* 8: Uptime */
-    format_uptime(millis(), buf, sizeof(buf));
-    scr_menu_set_item_value(8, buf);
+    /* Level bar: VU combined, indicator green when signal detected */
+    if (bar_level) {
+        int vu = (int)st.audioVuCombined;
+        if (vu < -96) vu = -96;
+        if (vu > 0) vu = 0;
+        lv_bar_set_value(bar_level, vu, LV_ANIM_ON);
+
+        bool detected = st.audioLevel_dBFS >= st.audioThreshold_dBFS;
+        lv_obj_set_style_bg_color(bar_level,
+            detected ? COLOR_SUCCESS : COLOR_TEXT_DIM, LV_PART_INDICATOR);
+    }
 }
 
 #endif /* GUI_ENABLED */

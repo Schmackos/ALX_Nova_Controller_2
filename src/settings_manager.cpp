@@ -46,6 +46,10 @@ bool loadSettings() {
   String line14 = file.readStringUntil('\n');
   String line15 = file.readStringUntil('\n');
   String line16 = file.readStringUntil('\n');
+  String line17 = file.readStringUntil('\n');
+  String line18 = file.readStringUntil('\n');
+  String line19 = file.readStringUntil('\n');
+  String line20 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -180,6 +184,29 @@ bool loadSettings() {
     appState.dimEnabled = (line16 == "1");
   }
 
+  // Load audio update rate (if available, otherwise default to 50ms)
+  if (line17.length() > 0) {
+    line17.trim();
+    int rate = line17.toInt();
+    if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
+      appState.audioUpdateRate = (uint16_t)rate;
+    }
+  }
+
+  // Load audio graph toggles (if available, default to true)
+  if (line18.length() > 0) {
+    line18.trim();
+    appState.vuMeterEnabled = (line18.toInt() != 0);
+  }
+  if (line19.length() > 0) {
+    line19.trim();
+    appState.waveformEnabled = (line19.toInt() != 0);
+  }
+  if (line20.length() > 0) {
+    line20.trim();
+    appState.spectrumEnabled = (line20.toInt() != 0);
+  }
+
   return true;
 }
 
@@ -211,6 +238,10 @@ void saveSettings() {
   file.println(appState.dimTimeout);
   file.println(appState.dimBrightness);
   file.println(appState.dimEnabled ? "1" : "0");
+  file.println(appState.audioUpdateRate);
+  file.println(appState.vuMeterEnabled ? "1" : "0");
+  file.println(appState.waveformEnabled ? "1" : "0");
+  file.println(appState.spectrumEnabled ? "1" : "0");
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -372,6 +403,7 @@ void handleSettingsGet() {
   doc["autoAPEnabled"] = autoAPEnabled;
   doc["hardwareStatsInterval"] =
       hardwareStatsInterval / 1000; // Send as seconds
+  doc["audioUpdateRate"] = appState.audioUpdateRate;
   doc["screenTimeout"] = appState.screenTimeout / 1000; // Send as seconds
   doc["backlightOn"] = appState.backlightOn;
   doc["buzzerEnabled"] = appState.buzzerEnabled;
@@ -467,6 +499,17 @@ void handleSettingsUpdate() {
         settingsChanged = true;
         LOG_I("[Settings] Hardware stats interval set to %d seconds",
               newInterval);
+      }
+    }
+  }
+
+  if (doc["audioUpdateRate"].is<int>()) {
+    int newRate = doc["audioUpdateRate"].as<int>();
+    if (newRate == 20 || newRate == 33 || newRate == 50 || newRate == 100) {
+      if ((uint16_t)newRate != appState.audioUpdateRate) {
+        appState.audioUpdateRate = (uint16_t)newRate;
+        settingsChanged = true;
+        LOG_I("[Settings] Audio update rate set to %d ms", newRate);
       }
     }
   }
@@ -599,6 +642,7 @@ void handleSettingsUpdate() {
   resp["enableCertValidation"] = enableCertValidation;
   resp["autoAPEnabled"] = autoAPEnabled;
   resp["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
+  resp["audioUpdateRate"] = appState.audioUpdateRate;
   resp["screenTimeout"] = appState.screenTimeout / 1000;
   resp["backlightOn"] = appState.backlightOn;
   resp["buzzerEnabled"] = appState.buzzerEnabled;
@@ -648,6 +692,7 @@ void handleSettingsExport() {
   doc["settings"]["enableCertValidation"] = enableCertValidation;
   doc["settings"]["blinkingEnabled"] = blinkingEnabled;
   doc["settings"]["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
+  doc["settings"]["audioUpdateRate"] = appState.audioUpdateRate;
   doc["settings"]["screenTimeout"] = appState.screenTimeout / 1000;
   doc["settings"]["buzzerEnabled"] = appState.buzzerEnabled;
   doc["settings"]["buzzerVolume"] = appState.buzzerVolume;
@@ -655,6 +700,9 @@ void handleSettingsExport() {
   doc["settings"]["dimEnabled"] = appState.dimEnabled;
   doc["settings"]["dimTimeout"] = appState.dimTimeout / 1000;
   doc["settings"]["dimBrightness"] = appState.dimBrightness;
+  doc["settings"]["vuMeterEnabled"] = appState.vuMeterEnabled;
+  doc["settings"]["waveformEnabled"] = appState.waveformEnabled;
+  doc["settings"]["spectrumEnabled"] = appState.spectrumEnabled;
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
@@ -676,6 +724,7 @@ void handleSettingsExport() {
   doc["smartSensing"]["mode"] = modeStr;
   doc["smartSensing"]["timerDuration"] = timerDuration;
   doc["smartSensing"]["audioThreshold"] = audioThreshold_dBFS;
+  doc["smartSensing"]["adcVref"] = appState.adcVref;
 
   // Signal Generator settings
   doc["signalGenerator"]["waveform"] = appState.sigGenWaveform;
@@ -823,6 +872,13 @@ void handleSettingsImport() {
         LOG_D("[Settings] Hardware Stats Interval: %d seconds", interval);
       }
     }
+    if (doc["settings"]["audioUpdateRate"].is<int>()) {
+      int rate = doc["settings"]["audioUpdateRate"].as<int>();
+      if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
+        appState.audioUpdateRate = (uint16_t)rate;
+        LOG_D("[Settings] Audio Update Rate: %d ms", rate);
+      }
+    }
     if (doc["settings"]["screenTimeout"].is<int>()) {
       int timeoutSec = doc["settings"]["screenTimeout"].as<int>();
       unsigned long timeoutMs = (unsigned long)timeoutSec * 1000UL;
@@ -872,6 +928,18 @@ void handleSettingsImport() {
         LOG_D("[Settings] Dim Brightness: %d", dimBright);
       }
     }
+    if (doc["settings"]["vuMeterEnabled"].is<bool>()) {
+      appState.vuMeterEnabled = doc["settings"]["vuMeterEnabled"].as<bool>();
+      LOG_D("[Settings] VU Meter: %s", appState.vuMeterEnabled ? "enabled" : "disabled");
+    }
+    if (doc["settings"]["waveformEnabled"].is<bool>()) {
+      appState.waveformEnabled = doc["settings"]["waveformEnabled"].as<bool>();
+      LOG_D("[Settings] Waveform: %s", appState.waveformEnabled ? "enabled" : "disabled");
+    }
+    if (doc["settings"]["spectrumEnabled"].is<bool>()) {
+      appState.spectrumEnabled = doc["settings"]["spectrumEnabled"].as<bool>();
+      LOG_D("[Settings] Spectrum: %s", appState.spectrumEnabled ? "enabled" : "disabled");
+    }
 #ifdef GUI_ENABLED
     if (doc["settings"]["bootAnimEnabled"].is<bool>()) {
       appState.bootAnimEnabled = doc["settings"]["bootAnimEnabled"].as<bool>();
@@ -911,6 +979,13 @@ void handleSettingsImport() {
     if (doc["smartSensing"]["audioThreshold"].is<float>()) {
       audioThreshold_dBFS = doc["smartSensing"]["audioThreshold"].as<float>();
       LOG_D("[Settings] Audio Threshold: %+.0f dBFS", audioThreshold_dBFS);
+    }
+    if (doc["smartSensing"]["adcVref"].is<float>()) {
+      float vref = doc["smartSensing"]["adcVref"].as<float>();
+      if (vref >= 1.0f && vref <= 5.0f) {
+        appState.adcVref = vref;
+        LOG_D("[Settings] ADC VREF: %.2f V", vref);
+      }
     }
     // Save Smart Sensing settings
     saveSmartSensingSettings();
@@ -1037,7 +1112,7 @@ void handleDiagnostics() {
     snprintf(timestamp, sizeof(timestamp), "unknown");
   }
   doc["timestamp"] = timestamp;
-  doc["diagnosticsVersion"] = "1.0";
+  doc["diagnosticsVersion"] = "1.1";
 
   // ===== Device Information =====
   JsonObject device = doc["device"].to<JsonObject>();
@@ -1094,6 +1169,7 @@ void handleDiagnostics() {
   settings["enableCertValidation"] = enableCertValidation;
   settings["blinkingEnabled"] = blinkingEnabled;
   settings["hardwareStatsInterval"] = hardwareStatsInterval;
+  settings["audioUpdateRate"] = appState.audioUpdateRate;
   settings["screenTimeout"] = appState.screenTimeout;
   settings["backlightOn"] = appState.backlightOn;
   settings["backlightBrightness"] = appState.backlightBrightness;
@@ -1102,6 +1178,9 @@ void handleDiagnostics() {
   settings["dimBrightness"] = appState.dimBrightness;
   settings["buzzerEnabled"] = appState.buzzerEnabled;
   settings["buzzerVolume"] = appState.buzzerVolume;
+  settings["vuMeterEnabled"] = appState.vuMeterEnabled;
+  settings["waveformEnabled"] = appState.waveformEnabled;
+  settings["spectrumEnabled"] = appState.spectrumEnabled;
 
   // ===== Smart Sensing =====
   JsonObject sensing = doc["smartSensing"].to<JsonObject>();
@@ -1124,6 +1203,29 @@ void handleDiagnostics() {
   sensing["audioThreshold"] = audioThreshold_dBFS;
   sensing["audioLevel"] = audioLevel_dBFS;
   sensing["lastSignalDetection"] = lastSignalDetection;
+
+  // ===== Audio ADC Diagnostics =====
+  {
+    JsonObject audioAdc = doc["audioAdc"].to<JsonObject>();
+    const char *statusStr = "OK";
+    switch (appState.audioHealthStatus) {
+      case 1: statusStr = "NO_DATA"; break;
+      case 2: statusStr = "NOISE_ONLY"; break;
+      case 3: statusStr = "CLIPPING"; break;
+      case 4: statusStr = "I2S_ERROR"; break;
+    }
+    audioAdc["healthStatus"] = statusStr;
+    audioAdc["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
+    audioAdc["i2sReadErrors"] = appState.audioI2sErrors;
+    audioAdc["allZeroBuffers"] = appState.audioAllZeroBuffers;
+    audioAdc["consecutiveZeros"] = appState.audioConsecutiveZeros;
+    audioAdc["clippedSamples"] = appState.audioClippedSamples;
+    audioAdc["lastNonZeroMs"] = appState.audioLastNonZeroMs;
+    audioAdc["totalBuffersRead"] = appState.audioTotalBuffers;
+    audioAdc["sampleRate"] = appState.audioSampleRate;
+    audioAdc["vrms"] = appState.audioVrmsCombined;
+    audioAdc["adcVref"] = appState.adcVref;
+  }
 
   // ===== MQTT Settings (password excluded) =====
   JsonObject mqtt = doc["mqtt"].to<JsonObject>();

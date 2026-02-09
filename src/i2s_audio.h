@@ -25,6 +25,31 @@ struct AudioAnalysis {
     unsigned long timestamp;
 };
 
+// ===== Audio Health Diagnostics =====
+enum AudioHealthStatus {
+    AUDIO_OK = 0,
+    AUDIO_NO_DATA = 1,
+    AUDIO_NOISE_ONLY = 2,
+    AUDIO_CLIPPING = 3,
+    AUDIO_I2S_ERROR = 4
+};
+
+struct AudioDiagnostics {
+    AudioHealthStatus status = AUDIO_OK;
+    uint32_t i2sReadErrors = 0;
+    uint32_t zeroByteReads = 0;
+    uint32_t allZeroBuffers = 0;
+    uint32_t consecutiveZeros = 0;
+    uint32_t clippedSamples = 0;
+    float noiseFloorDbfs = -96.0f;
+    float peakDbfs = -96.0f;
+    float dcOffset = 0.0f;           // DC mean as fraction of full-scale (-1.0 to 1.0)
+    unsigned long lastNonZeroMs = 0;
+    unsigned long lastReadMs = 0;
+    uint32_t totalBuffersRead = 0;
+    bool sigGenActive = false;
+};
+
 // ===== Waveform & FFT Constants =====
 static const int WAVEFORM_BUFFER_SIZE = 256;
 static const int FFT_SIZE = 1024;
@@ -33,6 +58,7 @@ static const int SPECTRUM_BANDS = 16;
 // ===== Public API =====
 void i2s_audio_init();
 AudioAnalysis i2s_audio_get_analysis();
+AudioDiagnostics i2s_audio_get_diagnostics();
 bool i2s_audio_set_sample_rate(uint32_t rate);
 
 // Waveform: returns true if a new 256-point snapshot is available
@@ -45,9 +71,12 @@ bool i2s_audio_get_waveform(uint8_t *out);
 bool i2s_audio_get_spectrum(float *bands, float *dominant_freq);
 
 // ===== Pure functions exposed for unit testing =====
+AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag);
+
 float audio_compute_rms(const int32_t *samples, int count, int channel, int channels);
 float audio_rms_to_dbfs(float rms);
 float audio_migrate_voltage_threshold(float stored_value);
+float audio_rms_to_vrms(float rms_linear, float vref);
 bool audio_validate_sample_rate(uint32_t rate);
 int32_t audio_parse_24bit_sample(int32_t raw_i2s_word);
 

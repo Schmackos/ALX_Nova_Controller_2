@@ -69,23 +69,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             min-height: 100vh;
             min-height: 100dvh;
             overflow-x: hidden;
-            padding-top: calc(var(--tab-height) + var(--safe-top));
-            padding-bottom: var(--safe-bottom);
+            padding-top: var(--safe-top);
+            padding-bottom: calc(var(--tab-height) + var(--safe-bottom));
         }
 
         /* ===== Tab Navigation Bar ===== */
         .tab-bar {
             position: fixed;
-            top: 0;
+            bottom: 0;
             left: 0;
             right: 0;
-            height: calc(var(--tab-height) + var(--safe-top));
-            padding-top: var(--safe-top);
+            height: calc(var(--tab-height) + var(--safe-bottom));
+            padding-bottom: var(--safe-bottom);
             background: var(--bg-surface);
             display: flex;
             justify-content: space-around;
             align-items: center;
-            border-bottom: 1px solid var(--border);
+            border-top: 1px solid var(--border);
             z-index: 1000;
         }
 
@@ -118,13 +118,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .tab.active::after {
             content: '';
             position: absolute;
-            bottom: 0;
+            top: 0;
             left: 50%;
             transform: translateX(-50%);
             width: 32px;
             height: 3px;
             background: var(--accent);
-            border-radius: 3px 3px 0 0;
+            border-radius: 0 0 3px 3px;
         }
 
         .tab:active {
@@ -167,6 +167,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 12px;
+        }
+
+        .graph-disabled {
+            opacity: 0.3;
+            pointer-events: none;
         }
 
         /* ===== Skeleton Loading ===== */
@@ -1128,7 +1133,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         /* --- Persistent Status Bar --- */
         .status-bar {
             position: fixed;
-            top: calc(var(--tab-height) + var(--safe-top));
+            top: var(--safe-top);
             left: 0;
             right: 0;
             height: 36px;
@@ -1178,7 +1183,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         body.has-status-bar {
-            padding-top: calc(var(--tab-height) + var(--safe-top) + 36px);
+            padding-top: calc(var(--safe-top) + 36px);
         }
 
         /* --- Sidebar Navigation (Desktop) --- */
@@ -1594,6 +1599,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             body {
                 padding-left: 240px;
                 padding-top: calc(var(--safe-top) + 36px);
+                padding-bottom: var(--safe-bottom);
             }
 
             body.sidebar-collapsed {
@@ -1847,7 +1853,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         /* ===== Audio Tab Styles ===== */
         .audio-canvas-wrap {
-            background: #1A1A1A;
+            background: var(--bg-card);
             border-radius: 8px;
             padding: 8px;
             margin-top: 8px;
@@ -1860,11 +1866,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         .audio-canvas-wrap canvas.waveform-canvas {
-            height: 140px;
+            height: 160px;
         }
 
         .audio-canvas-wrap canvas.spectrum-canvas {
-            height: 120px;
+            height: 140px;
         }
 
         .vu-meter-row {
@@ -1894,9 +1900,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .vu-meter-fill {
             height: 100%;
             border-radius: 4px;
-            background: linear-gradient(to right, #4CAF50, #FFC107, #FF9800, #F44336);
+            background: linear-gradient(to right, #4CAF50 0%, #4CAF50 50%, #FFC107 70%, #FF9800 85%, #F44336 100%);
             width: 0%;
-            transition: width 0.1s linear;
         }
 
         .vu-meter-peak {
@@ -1906,16 +1911,45 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             height: 100%;
             background: #FFFFFF;
             left: 0%;
-            transition: left 0.1s linear;
         }
 
         .vu-meter-db {
             font-size: 12px;
             font-weight: 500;
             color: var(--text-secondary);
-            width: 56px;
+            width: 72px;
             text-align: right;
             font-variant-numeric: tabular-nums;
+        }
+
+        .vu-scale {
+            flex: 1;
+            position: relative;
+            height: 14px;
+            margin-top: 2px;
+        }
+        .vu-tick {
+            position: absolute;
+            font-size: 9px;
+            color: var(--text-secondary);
+            opacity: 0.6;
+            transform: translateX(-50%);
+        }
+        .vu-tick::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: 50%;
+            width: 1px;
+            height: 3px;
+            background: var(--text-secondary);
+            opacity: 0.4;
+        }
+
+        .ppm-canvas {
+            flex: 1;
+            height: 22px;
+            border-radius: 4px;
         }
 
         .signal-dot {
@@ -2066,6 +2100,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="audioLevel">-96.0 dBFS</span>
                     </div>
                     <div class="info-row">
+                        <span class="info-label">Input Voltage</span>
+                        <span class="info-value" id="audioVrms">0.000 V</span>
+                    </div>
+                    <div class="info-row">
                         <span class="info-label">Sensing Mode</span>
                         <span class="info-value" id="infoSensingMode">--</span>
                     </div>
@@ -2143,49 +2181,136 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         <section id="audio" class="panel">
             <!-- Audio Waveform -->
             <div class="card">
-                <div class="card-title">Audio Waveform</div>
-                <div class="audio-canvas-wrap">
-                    <canvas class="waveform-canvas" id="audioWaveformCanvas"></canvas>
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Audio Waveform
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="waveformEnabledToggle" checked onchange="setGraphEnabled('waveform',this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                        <span style="font-size:11px;color:var(--text-secondary);">Auto-scale</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="waveformAutoScale" onchange="waveformAutoScaleEnabled=this.checked">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="waveformContent">
+                    <div class="audio-canvas-wrap">
+                        <canvas class="waveform-canvas" id="audioWaveformCanvas"></canvas>
+                    </div>
                 </div>
             </div>
 
             <!-- Frequency Spectrum -->
             <div class="card">
-                <div class="card-title">Frequency Spectrum</div>
-                <div class="audio-canvas-wrap">
-                    <canvas class="spectrum-canvas" id="audioSpectrumCanvas"></canvas>
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Frequency Spectrum
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="spectrumEnabledToggle" checked onchange="setGraphEnabled('spectrum',this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                        <span style="font-size:11px;color:var(--text-secondary);">LED</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="ledModeToggle" onchange="toggleLedMode()">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
                 </div>
-                <div class="dominant-freq-readout">Dominant: <span id="dominantFreq">-- Hz</span></div>
+                <div id="spectrumContent">
+                    <div class="audio-canvas-wrap">
+                        <canvas class="spectrum-canvas" id="audioSpectrumCanvas"></canvas>
+                    </div>
+                    <div class="dominant-freq-readout">Dominant: <span id="dominantFreq">-- Hz</span></div>
+                </div>
             </div>
 
             <!-- Audio Levels -->
             <div class="card">
-                <div class="card-title">Audio Levels</div>
-                <div class="vu-meter-row">
-                    <span class="vu-meter-label">L</span>
-                    <div class="vu-meter-track">
-                        <div class="vu-meter-fill" id="vuFillL"></div>
-                        <div class="vu-meter-peak" id="vuPeakL"></div>
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Audio Levels
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="vuMeterEnabledToggle" checked onchange="setGraphEnabled('vuMeter',this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                        <span style="font-size:11px;color:var(--text-secondary);">Segmented</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="vuSegmented" onchange="toggleVuMode(this.checked)">
+                            <span class="slider round"></span>
+                        </label>
                     </div>
-                    <span class="vu-meter-db" id="vuDbL">-inf dBFS</span>
                 </div>
-                <div class="vu-meter-row">
-                    <span class="vu-meter-label">R</span>
-                    <div class="vu-meter-track">
-                        <div class="vu-meter-fill" id="vuFillR"></div>
-                        <div class="vu-meter-peak" id="vuPeakR"></div>
+                <div id="vuMeterContent">
+                <!-- Continuous (Option B) -->
+                <div id="vuContinuous">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label">L</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFillL"></div>
+                            <div class="vu-meter-peak" id="vuPeakL"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDbL">-inf dBFS</span>
                     </div>
-                    <span class="vu-meter-db" id="vuDbR">-inf dBFS</span>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label">R</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFillR"></div>
+                            <div class="vu-meter-peak" id="vuPeakR"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDbR">-inf dBFS</span>
+                    </div>
+                </div>
+                <!-- Segmented PPM (Option C) -->
+                <div id="vuSegmentedDiv" style="display:none">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label">L</span>
+                        <canvas id="ppmCanvasL" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSegL">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label">R</span>
+                        <canvas id="ppmCanvasR" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSegR">-inf dBFS</span>
+                    </div>
+                </div>
+                <!-- Shared scale row -->
+                <div class="vu-meter-row" style="margin-bottom:8px">
+                    <span class="vu-meter-label"></span>
+                    <div class="vu-scale">
+                        <span class="vu-tick" style="left:0%">-60</span>
+                        <span class="vu-tick" style="left:16.7%">-50</span>
+                        <span class="vu-tick" style="left:33.3%">-40</span>
+                        <span class="vu-tick" style="left:50%">-30</span>
+                        <span class="vu-tick" style="left:66.7%">-20</span>
+                        <span class="vu-tick" style="left:83.3%">-10</span>
+                        <span class="vu-tick" style="left:100%">0</span>
+                    </div>
+                    <span class="vu-meter-db"></span>
                 </div>
                 <div class="info-row" style="border-bottom: none; padding: 4px 0;">
                     <span class="info-label"><span class="signal-dot" id="audioSignalDot"></span>Signal</span>
                     <span class="info-value" id="audioSignalText">Not detected</span>
+                </div>
                 </div>
             </div>
 
             <!-- Audio Settings -->
             <div class="card">
                 <div class="card-title">Audio Settings</div>
+                <div class="form-group">
+                    <label class="form-label">Update Rate</label>
+                    <select class="form-input" id="audioUpdateRateSelect" onchange="setAudioUpdateRate()">
+                        <option value="100">100 ms</option>
+                        <option value="50" selected>50 ms</option>
+                        <option value="33">33 ms</option>
+                        <option value="20">20 ms</option>
+                    </select>
+                </div>
                 <div class="form-group">
                     <label class="form-label">Sample Rate</label>
                     <select class="form-input" id="audioSampleRateSelect">
@@ -2205,6 +2330,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <label class="switch" style="float:right"><input type="checkbox" id="siggenEnable" onchange="updateSigGen()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
+                <div id="siggenFields" style="display:none">
                 <div class="form-group">
                     <label class="form-label">Output Mode</label>
                     <select class="form-input" id="siggenOutputMode" onchange="updateSigGen()">
@@ -2250,6 +2376,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <button class="btn btn-outline" onclick="siggenPreset(3,20000,-6)">Sweep</button>
                 </div>
                 <p id="siggenPwmNote" style="display:none;font-size:11px;color:#FFA726;margin-top:8px">PWM output requires external RC low-pass filter for sine approximation.</p>
+                </div>
             </div>
         </section>
 
@@ -2401,6 +2528,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div id="apFields" style="display:none">
                 <div class="toggle-row">
                     <div>
                         <div class="toggle-label">Auto AP Mode</div>
@@ -2412,6 +2540,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </label>
                 </div>
                 <button class="btn btn-secondary mt-12" onclick="openAPConfig()">Configure AP</button>
+                </div>
             </div>
         </section>
 
@@ -2438,6 +2567,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div id="mqttFields" style="display:none">
                 <div class="toggle-row">
                     <div>
                         <div class="toggle-label">Home Assistant Discovery</div>
@@ -2474,6 +2604,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="text-secondary" style="font-size: 11px; margin-top: 4px;">Leave empty to use: <span id="mqttDefaultTopic">ALX/{serial}</span></div>
                 </div>
                 <button class="btn btn-primary" onclick="saveMqttSettings()">Save MQTT Settings</button>
+                </div>
             </div>
         </section>
 
@@ -2646,6 +2777,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div id="buzzerFields" style="display:none">
                 <div class="toggle-row">
                     <div>
                         <div class="toggle-label">Buzzer Volume</div>
@@ -2656,6 +2788,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="1" selected>Medium</option>
                         <option value="2">High</option>
                     </select>
+                </div>
                 </div>
             </div>
 
@@ -2964,6 +3097,37 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <!-- Audio ADC Diagnostics -->
+            <div class="card">
+                <div class="card-title">Audio ADC</div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">ADC Status</span>
+                        <span class="info-value" id="adcStatus">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Noise Floor</span>
+                        <span class="info-value" id="adcNoiseFloor">-- dBFS</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">I2S Errors</span>
+                        <span class="info-value" id="adcI2sErrors">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Consecutive Zeros</span>
+                        <span class="info-value" id="adcConsecutiveZeros">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Total Buffers</span>
+                        <span class="info-value" id="adcTotalBuffers">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Sample Rate</span>
+                        <span class="info-value" id="adcSampleRate">--</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Pin Configuration -->
             <div class="card">
                 <div class="card-title">Pin Configuration</div>
@@ -3071,6 +3235,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let blinkingEnabled = false;
         let autoUpdateEnabled = false;
         let darkMode = true;
+        let waveformAutoScaleEnabled = false;
         let backlightOn = true;
         let backlightBrightness = 255;
         let screenTimeoutSec = 60;
@@ -3089,6 +3254,28 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let currentLogFilter = 'all'; // all, debug, info, warn, error
         let audioSubscribed = false;
         let currentActiveTab = 'control';
+
+        // Audio animation state (rAF interpolation)
+        let waveformCurrent = null, waveformTarget = null;
+        let spectrumCurrent = new Float32Array(16), spectrumTarget = new Float32Array(16);
+        let currentDominantFreq = 0, targetDominantFreq = 0;
+        let audioAnimFrameId = null;
+        const LERP_SPEED = 0.25;
+
+        // Spectrum peak hold state
+        let spectrumPeaks = new Float32Array(16);
+        let spectrumPeakTimes = new Float64Array(16);
+
+        // VU meter animation state (rAF LERP interpolation)
+        let vuCurrentL = 0, vuCurrentR = 0, vuTargetL = 0, vuTargetR = 0;
+        let peakCurrentL = 0, peakCurrentR = 0, peakTargetL = 0, peakTargetR = 0;
+        let vuDetected = false;
+        let vuAnimFrameId = null;
+        const VU_LERP = 0.3;
+        let vuSegmentedMode = localStorage.getItem('vuSegmented') === 'true';
+
+        // LED bar mode
+        let ledBarMode = localStorage.getItem('ledBarMode') === 'true';
 
         // Input focus state to prevent overwrites during user input
         let inputFocusState = {
@@ -3146,6 +3333,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
                 }
+                // Sync LED toggle
+                const ledToggle = document.getElementById('ledModeToggle');
+                if (ledToggle) ledToggle.checked = ledBarMode;
                 // Draw initial empty canvases
                 drawAudioWaveform(null);
                 drawSpectrumBars(null, 0);
@@ -3154,6 +3344,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
                 }
+                // Stop animation and reset state
+                if (audioAnimFrameId) { cancelAnimationFrame(audioAnimFrameId); audioAnimFrameId = null; }
+                waveformCurrent = null; waveformTarget = null;
+                spectrumCurrent.fill(0); spectrumTarget.fill(0);
+                spectrumPeaks.fill(0); spectrumPeakTimes.fill(0);
             }
 
             currentActiveTab = tabId;
@@ -3429,26 +3624,51 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 } else if (data.type === 'buzzerState') {
                     if (typeof data.enabled !== 'undefined') {
                         document.getElementById('buzzerToggle').checked = !!data.enabled;
+                        document.getElementById('buzzerFields').style.display = data.enabled ? '' : 'none';
                     }
                     if (typeof data.volume !== 'undefined') {
                         document.getElementById('buzzerVolumeSelect').value = data.volume.toString();
                     }
                 } else if (data.type === 'mqttSettings') {
                     document.getElementById('mqttEnabled').checked = data.enabled || false;
+                    document.getElementById('mqttFields').style.display = (data.enabled || false) ? '' : 'none';
                     document.getElementById('mqttBroker').value = data.broker || '';
                     document.getElementById('mqttPort').value = data.port || 1883;
                     document.getElementById('mqttUsername').value = data.username || '';
                     document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
                     document.getElementById('mqttHADiscovery').checked = data.haDiscovery || false;
                     updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
+                } else if (data.type === 'audioLevels') {
+                    if (currentActiveTab === 'audio') {
+                        vuTargetL = data.audioVuL !== undefined ? data.audioVuL : 0;
+                        vuTargetR = data.audioVuR !== undefined ? data.audioVuR : 0;
+                        peakTargetL = data.audioPeakL !== undefined ? data.audioPeakL : 0;
+                        peakTargetR = data.audioPeakR !== undefined ? data.audioPeakR : 0;
+                        vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
+                        startVuAnimation();
+                    }
                 } else if (data.type === 'audioWaveform') {
                     if (currentActiveTab === 'audio' && data.w) {
-                        drawAudioWaveform(data.w);
+                        waveformTarget = data.w;
+                        if (!waveformCurrent) waveformCurrent = data.w.slice();
+                        startAudioAnimation();
                     }
                 } else if (data.type === 'audioSpectrum') {
                     if (currentActiveTab === 'audio' && data.bands) {
-                        drawSpectrumBars(data.bands, data.freq || 0);
+                        for (let i = 0; i < data.bands.length && i < 16; i++) spectrumTarget[i] = data.bands[i];
+                        targetDominantFreq = data.freq || 0;
+                        startAudioAnimation();
                     }
+                } else if (data.type === 'audioGraphState') {
+                    var vuT = document.getElementById('vuMeterEnabledToggle');
+                    var wfT = document.getElementById('waveformEnabledToggle');
+                    var spT = document.getElementById('spectrumEnabledToggle');
+                    if (vuT) vuT.checked = data.vuMeterEnabled;
+                    if (wfT) wfT.checked = data.waveformEnabled;
+                    if (spT) spT.checked = data.spectrumEnabled;
+                    toggleGraphDisabled('vuMeterContent', !data.vuMeterEnabled);
+                    toggleGraphDisabled('waveformContent', !data.waveformEnabled);
+                    toggleGraphDisabled('spectrumContent', !data.spectrumEnabled);
                 } else if (data.type === 'signalGenerator') {
                     applySigGenState(data);
                 }
@@ -3555,16 +3775,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="info-row"><span class="info-label">Network</span><span class="info-value">${data.ssid || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">Client IP</span><span class="info-value">${data.staIP || data.ip || 'Unknown'}</span></div>
                     <div class="info-row"><span class="info-label">IP Configuration</span><span class="info-value">${ipType}</span></div>
-                    <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${data.rssi !== undefined ? (() => {
-                        const rssi = parseInt(data.rssi);
-                        let text, cls;
-                        if (rssi >= -50) { text = 'Excellent (90-100%)'; cls = 'text-success'; }
-                        else if (rssi >= -60) { text = 'Very Good (70-90%)'; cls = 'text-success'; }
-                        else if (rssi >= -70) { text = 'Fair (50-70%)'; cls = 'text-warning'; }
-                        else if (rssi >= -80) { text = 'Weak (30-50%)'; cls = 'text-error'; }
-                        else { text = 'Very Weak (0-30%)'; cls = 'text-error'; }
-                        return `<span class="${cls}">${data.rssi} dBm - ${text}</span>`;
-                    })() : 'N/A'}</span></div>
+                    <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${formatRssi(data.rssi)}</span></div>
                     <div class="info-row"><span class="info-label">Saved Networks</span><span class="info-value">${data.networkCount || 0}</span></div>
                 `;
             } else {
@@ -3597,6 +3808,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
 
             apToggle.checked = data.apEnabled || (data.mode === 'ap');
+            document.getElementById('apFields').style.display = apToggle.checked ? '' : 'none';
             statusBox.innerHTML = html;
 
             if (typeof data.autoUpdateEnabled !== 'undefined') {
@@ -3669,6 +3881,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             if (typeof data.buzzerEnabled !== 'undefined') {
                 document.getElementById('buzzerToggle').checked = !!data.buzzerEnabled;
+                document.getElementById('buzzerFields').style.display = data.buzzerEnabled ? '' : 'none';
             }
             if (typeof data.buzzerVolume !== 'undefined') {
                 document.getElementById('buzzerVolumeSelect').value = data.buzzerVolume.toString();
@@ -3682,7 +3895,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (typeof data.hardwareStatsInterval !== 'undefined') {
                 document.getElementById('statsIntervalSelect').value = data.hardwareStatsInterval.toString();
             }
-            
+
+            if (typeof data.audioUpdateRate !== 'undefined') {
+                document.getElementById('audioUpdateRateSelect').value = data.audioUpdateRate.toString();
+            }
+
             if (data.firmwareVersion) {
                 currentFirmwareVersion = data.firmwareVersion;
                 document.getElementById('currentVersion').textContent = data.firmwareVersion;
@@ -3907,7 +4124,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (data.audioLevel !== undefined) {
                 document.getElementById('audioLevel').textContent = data.audioLevel.toFixed(1) + ' dBFS';
             }
-            
+            if (data.audioVrms !== undefined) {
+                document.getElementById('audioVrms').textContent = data.audioVrms.toFixed(3) + ' V';
+            }
+
             // Update timer display
             const timerDisplay = document.getElementById('timerDisplay');
             const timerValue = document.getElementById('timerValue');
@@ -3920,17 +4140,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 timerDisplay.classList.add('hidden');
             }
 
-            // Update Audio tab level meters (from smartSensing broadcast)
-            if (currentActiveTab === 'audio') {
-                const vuL = data.audioVuL !== undefined ? data.audioVuL : 0;
-                const vuR = data.audioVuR !== undefined ? data.audioVuR : 0;
-                const peakL = data.audioPeakL !== undefined ? data.audioPeakL : 0;
-                const peakR = data.audioPeakR !== undefined ? data.audioPeakR : 0;
-                const dBFS = data.audioLevel !== undefined ? data.audioLevel : -96;
-                const detected = data.signalDetected !== undefined ? data.signalDetected : false;
-                updateLevelMeters(vuL, vuR, peakL, peakR, dBFS, detected);
-            }
-
             // Sync audio sample rate to Audio Settings card
             if (data.audioSampleRate !== undefined) {
                 const sel = document.getElementById('audioSampleRateSelect');
@@ -3939,6 +4148,63 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Audio Tab Functions =====
+        function toggleLedMode() {
+            ledBarMode = document.getElementById('ledModeToggle').checked;
+            localStorage.setItem('ledBarMode', ledBarMode.toString());
+        }
+
+        function formatFreq(f) {
+            return f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 0 : 1) + 'k' : f.toFixed(0);
+        }
+
+        function drawRoundedBar(ctx, x, y, w, h, radius) {
+            if (h < 1) return;
+            const r = Math.min(radius, w / 2, h);
+            ctx.beginPath();
+            ctx.moveTo(x, y + h);
+            ctx.lineTo(x, y + r);
+            ctx.arcTo(x, y, x + r, y, r);
+            ctx.arcTo(x + w, y, x + w, y + r, r);
+            ctx.lineTo(x + w, y + h);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function startAudioAnimation() {
+            if (!audioAnimFrameId) audioAnimFrameId = requestAnimationFrame(audioAnimLoop);
+        }
+
+        function audioAnimLoop() {
+            audioAnimFrameId = null;
+            let needsMore = false;
+
+            // Lerp waveform
+            if (waveformCurrent && waveformTarget) {
+                for (let i = 0; i < waveformCurrent.length && i < waveformTarget.length; i++) {
+                    const diff = waveformTarget[i] - waveformCurrent[i];
+                    if (Math.abs(diff) > 0.5) { waveformCurrent[i] += diff * LERP_SPEED; needsMore = true; }
+                    else waveformCurrent[i] = waveformTarget[i];
+                }
+            }
+
+            // Lerp spectrum
+            for (let i = 0; i < 16; i++) {
+                const diff = spectrumTarget[i] - spectrumCurrent[i];
+                if (Math.abs(diff) > 0.001) { spectrumCurrent[i] += diff * LERP_SPEED; needsMore = true; }
+                else spectrumCurrent[i] = spectrumTarget[i];
+            }
+
+            // Lerp dominant freq
+            const fDiff = targetDominantFreq - currentDominantFreq;
+            if (Math.abs(fDiff) > 1) { currentDominantFreq += fDiff * LERP_SPEED; needsMore = true; }
+            else currentDominantFreq = targetDominantFreq;
+
+            drawAudioWaveform(waveformCurrent);
+            drawSpectrumBars(spectrumCurrent, currentDominantFreq);
+
+            if (needsMore) audioAnimFrameId = requestAnimationFrame(audioAnimLoop);
+        }
+
         function drawAudioWaveform(data) {
             const canvas = document.getElementById('audioWaveformCanvas');
             if (!canvas) return;
@@ -3951,33 +4217,92 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const w = rect.width;
             const h = rect.height;
 
+            const isNight = document.body.classList.contains('night-mode');
+            const bgColor = isNight ? '#1E1E1E' : '#F5F5F5';
+            const gridColor = isNight ? '#333333' : '#D0D0D0';
+            const labelColor = isNight ? '#999999' : '#757575';
+
+            // Margins for axis labels
+            const plotX = 36, plotY = 4;
+            const plotW = w - 40, plotH = h - 22;
+
             // Background
-            ctx.fillStyle = '#1A1A1A';
+            ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, w, h);
 
-            // Center line
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(0, h / 2);
-            ctx.lineTo(w, h / 2);
-            ctx.stroke();
+            // Y-axis gridlines and labels
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            const yLabels = ['+1.0', '+0.5', '0', '-0.5', '-1.0'];
+            const yValues = [1.0, 0.5, 0, -0.5, -1.0];
+            for (let i = 0; i < yLabels.length; i++) {
+                const yPos = plotY + plotH * (1 - (yValues[i] + 1) / 2);
+                ctx.fillStyle = labelColor;
+                ctx.fillText(yLabels[i], plotX - 4, yPos);
+                ctx.strokeStyle = gridColor;
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(plotX, yPos);
+                ctx.lineTo(plotX + plotW, yPos);
+                ctx.stroke();
+            }
+
+            // X-axis time labels
+            const sampleRate = 48000;
+            const sel = document.getElementById('audioSampleRateSelect');
+            const sr = sel ? parseInt(sel.value) || sampleRate : sampleRate;
+            const numSamples = (data && data.length) ? data.length : 256;
+            const totalTimeMs = (numSamples / sr) * 1000;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const numXLabels = 5;
+            for (let i = 0; i <= numXLabels; i++) {
+                const xFrac = i / numXLabels;
+                const xPos = plotX + xFrac * plotW;
+                const timeVal = (xFrac * totalTimeMs).toFixed(1);
+                ctx.fillStyle = labelColor;
+                ctx.fillText(timeVal + 'ms', xPos, plotY + plotH + 4);
+                if (i > 0 && i < numXLabels) {
+                    ctx.strokeStyle = gridColor;
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, plotY);
+                    ctx.lineTo(xPos, plotY + plotH);
+                    ctx.stroke();
+                }
+            }
 
             if (!data || data.length === 0) return;
 
-            // Draw waveform
+            const len = data.length;
+            let scale = 1;
+            if (waveformAutoScaleEnabled) {
+                let maxDev = 0;
+                for (let i = 0; i < len; i++) {
+                    const dev = Math.abs(data[i] - 128);
+                    if (dev > maxDev) maxDev = dev;
+                }
+                scale = maxDev > 2 ? (0.45 * 255) / maxDev : 1;
+            }
+
+            // Draw waveform with glow
+            ctx.save();
+            ctx.shadowColor = 'rgba(255,152,0,0.4)';
+            ctx.shadowBlur = 8;
             ctx.strokeStyle = '#FF9800';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            const len = data.length;
-            const step = w / (len - 1);
+            const step = plotW / (len - 1);
             for (let i = 0; i < len; i++) {
-                const x = i * step;
-                const y = (1 - data[i] / 255) * h;
+                const x = plotX + i * step;
+                const centered = (data[i] - 128) * scale + 128;
+                const y = plotY + (1 - centered / 255) * plotH;
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
             ctx.stroke();
+            ctx.restore();
         }
 
         function drawSpectrumBars(bands, freq) {
@@ -3992,8 +4317,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const w = rect.width;
             const h = rect.height;
 
+            const isNight = document.body.classList.contains('night-mode');
+            const bgColor = isNight ? '#1E1E1E' : '#F5F5F5';
+            const gridColor = isNight ? '#333333' : '#D0D0D0';
+            const labelColor = isNight ? '#999999' : '#757575';
+
+            // Margins
+            const plotX = 32, plotY = 4;
+            const plotW = w - 36, plotH = h - 22;
+
             // Background
-            ctx.fillStyle = '#1A1A1A';
+            ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, w, h);
 
             // Update dominant frequency readout
@@ -4002,67 +4336,220 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 freqEl.textContent = freq > 0 ? freq.toFixed(0) + ' Hz' : '-- Hz';
             }
 
+            // Y-axis dB gridlines and labels
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            const dbLevels = [0, -12, -24, -36];
+            for (let i = 0; i < dbLevels.length; i++) {
+                const db = dbLevels[i];
+                const linearVal = Math.pow(10, db / 20);
+                const yPos = plotY + plotH * (1 - linearVal);
+                ctx.fillStyle = labelColor;
+                ctx.fillText(db + 'dB', plotX - 4, yPos);
+                ctx.strokeStyle = gridColor;
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(plotX, yPos);
+                ctx.lineTo(plotX + plotW, yPos);
+                ctx.stroke();
+            }
+
+            // X-axis frequency labels
+            const bandEdges = [20, 40, 80, 160, 315, 630, 1250, 2500, 5000, 8000, 10000, 12500, 14000, 16000, 18000, 20000, 24000];
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+
             if (!bands || bands.length === 0) return;
 
-            const numBands = bands.length;
+            const numBands = Math.min(bands.length, 16);
             const gap = 2;
-            const barWidth = (w - gap * (numBands - 1)) / numBands;
+            const barWidth = (plotW - gap * (numBands - 1)) / numBands;
+            const now = performance.now();
 
+            // Draw frequency labels (every other band)
+            for (let i = 0; i < numBands; i += 2) {
+                const centerFreq = Math.sqrt(bandEdges[i] * bandEdges[i + 1]);
+                const xCenter = plotX + i * (barWidth + gap) + barWidth / 2;
+                ctx.fillStyle = labelColor;
+                ctx.fillText(formatFreq(centerFreq), xCenter, plotY + plotH + 4);
+            }
+
+            // Draw bars
             for (let i = 0; i < numBands; i++) {
                 const val = Math.min(Math.max(bands[i], 0), 1);
-                const barHeight = val * h;
-                const x = i * (barWidth + gap);
-                const y = h - barHeight;
+                const barHeight = val * plotH;
+                const x = plotX + i * (barWidth + gap);
+                const y = plotY + plotH - barHeight;
 
-                // Gradient from orange to red based on intensity
-                const r = Math.round(255);
-                const g = Math.round(152 - val * 109); // 152 (orange) -> 43 (red-ish)
-                const b = Math.round(0 + val * 54);     // 0 -> 54
-                ctx.fillStyle = `rgb(${r},${g},${b})`;
-                ctx.fillRect(x, y, barWidth, barHeight);
+                if (ledBarMode) {
+                    // LED segmented bar mode
+                    const segH = 4, segGap = 1.5;
+                    const totalSegs = Math.floor(plotH / (segH + segGap));
+                    const litSegs = Math.round(val * totalSegs);
+                    for (let s = 0; s < totalSegs; s++) {
+                        const segY = plotY + plotH - (s + 1) * (segH + segGap);
+                        const frac = s / totalSegs;
+                        let r, g, b;
+                        if (frac < 0.6) { r = 76; g = 175; b = 80; }          // green
+                        else if (frac < 0.8) { r = 255; g = 193; b = 7; }      // yellow
+                        else { r = 244; g = 67; b = 54; }                        // red
+                        if (s < litSegs) {
+                            ctx.fillStyle = `rgb(${r},${g},${b})`;
+                        } else {
+                            ctx.fillStyle = `rgba(${r},${g},${b},0.05)`;
+                        }
+                        drawRoundedBar(ctx, x, segY, barWidth, segH, 1);
+                    }
+                } else {
+                    // Standard smooth bars with rounded tops
+                    const r = 255;
+                    const g = Math.round(152 - val * 109);
+                    const b = Math.round(val * 54);
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    drawRoundedBar(ctx, x, y, barWidth, barHeight, 3);
+                }
+
+                // Peak hold indicator
+                if (val > spectrumPeaks[i]) {
+                    spectrumPeaks[i] = val;
+                    spectrumPeakTimes[i] = now;
+                }
+                const elapsed = now - spectrumPeakTimes[i];
+                if (elapsed > 1500) {
+                    spectrumPeaks[i] -= 0.002 * (elapsed - 1500) / 16.67;
+                    if (spectrumPeaks[i] < val) spectrumPeaks[i] = val;
+                }
+                if (spectrumPeaks[i] > 0.01) {
+                    const peakY = plotY + plotH - spectrumPeaks[i] * plotH;
+                    ctx.fillStyle = isNight ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.6)';
+                    ctx.fillRect(x, peakY, barWidth, 2);
+                }
             }
         }
 
-        function updateLevelMeters(vuL, vuR, peakL, peakR, dBFS, detected) {
-            // Clamp values 0-1
+        function linearToDbPercent(val) {
+            if (val <= 0) return 0;
+            const db = 20 * Math.log10(val);
+            const clamped = Math.max(db, -60);
+            return ((clamped + 60) / 60) * 100;
+        }
+
+        function formatDbFS(val) {
+            if (val <= 0) return '-inf dBFS';
+            const db = 20 * Math.log10(val);
+            return db.toFixed(1) + ' dBFS';
+        }
+
+        function startVuAnimation() {
+            if (!vuAnimFrameId) vuAnimFrameId = requestAnimationFrame(vuAnimLoop);
+        }
+
+        function vuAnimLoop() {
+            vuAnimFrameId = null;
+            let needsMore = false;
+            vuCurrentL += (vuTargetL - vuCurrentL) * VU_LERP;
+            vuCurrentR += (vuTargetR - vuCurrentR) * VU_LERP;
+            if (Math.abs(vuTargetL - vuCurrentL) > 0.001 || Math.abs(vuTargetR - vuCurrentR) > 0.001) needsMore = true;
+            peakCurrentL += (peakTargetL - peakCurrentL) * VU_LERP;
+            peakCurrentR += (peakTargetR - peakCurrentR) * VU_LERP;
+            if (Math.abs(peakTargetL - peakCurrentL) > 0.001 || Math.abs(peakTargetR - peakCurrentR) > 0.001) needsMore = true;
+
+            updateLevelMeters(vuCurrentL, vuCurrentR, peakCurrentL, peakCurrentR, vuDetected);
+            if (needsMore) vuAnimFrameId = requestAnimationFrame(vuAnimLoop);
+        }
+
+        function drawPPM(canvasId, level, peak) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.offsetWidth;
+            const h = canvas.offsetHeight;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+            ctx.clearRect(0, 0, w, h);
+
+            const segments = 48;
+            const gap = 1;
+            const segW = (w - (segments - 1) * gap) / segments;
+            const pct = linearToDbPercent(level) / 100;
+            const litCount = Math.round(pct * segments);
+            const greenEnd = Math.round(segments * (40 / 60));
+            const yellowEnd = Math.round(segments * (54 / 60));
+
+            for (let i = 0; i < segments; i++) {
+                const x = i * (segW + gap);
+                if (i < litCount) {
+                    if (i < greenEnd) ctx.fillStyle = '#4CAF50';
+                    else if (i < yellowEnd) ctx.fillStyle = '#FFC107';
+                    else ctx.fillStyle = '#F44336';
+                } else {
+                    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                }
+                ctx.fillRect(x, 0, segW, h);
+            }
+
+            // Peak marker
+            const peakPct = linearToDbPercent(peak) / 100;
+            const peakSeg = Math.min(Math.round(peakPct * segments), segments - 1);
+            if (peak > 0) {
+                const px = peakSeg * (segW + gap);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(px, 0, segW, h);
+            }
+        }
+
+        function updateLevelMeters(vuL, vuR, peakL, peakR, detected) {
             vuL = Math.min(Math.max(vuL, 0), 1);
             vuR = Math.min(Math.max(vuR, 0), 1);
             peakL = Math.min(Math.max(peakL, 0), 1);
             peakR = Math.min(Math.max(peakR, 0), 1);
 
-            // Update fill widths
-            const fillL = document.getElementById('vuFillL');
-            const fillR = document.getElementById('vuFillR');
-            if (fillL) fillL.style.width = (vuL * 100) + '%';
-            if (fillR) fillR.style.width = (vuR * 100) + '%';
+            if (!vuSegmentedMode) {
+                // Continuous dB-scaled bars
+                const pctL = linearToDbPercent(vuL);
+                const pctR = linearToDbPercent(vuR);
+                const fillL = document.getElementById('vuFillL');
+                const fillR = document.getElementById('vuFillR');
+                if (fillL) fillL.style.width = pctL + '%';
+                if (fillR) fillR.style.width = pctR + '%';
 
-            // Update peak markers
-            const pkL = document.getElementById('vuPeakL');
-            const pkR = document.getElementById('vuPeakR');
-            if (pkL) pkL.style.left = (peakL * 100) + '%';
-            if (pkR) pkR.style.left = (peakR * 100) + '%';
+                const pkPctL = linearToDbPercent(peakL);
+                const pkPctR = linearToDbPercent(peakR);
+                const pkL = document.getElementById('vuPeakL');
+                const pkR = document.getElementById('vuPeakR');
+                if (pkL) pkL.style.left = pkPctL + '%';
+                if (pkR) pkR.style.left = pkPctR + '%';
 
-            // Update dBFS readout
-            const dbL = document.getElementById('vuDbL');
-            const dbR = document.getElementById('vuDbR');
-            if (dbL) {
-                const dbValL = vuL > 0 ? (20 * Math.log10(vuL)).toFixed(1) : '-inf';
-                dbL.textContent = dbValL + ' dBFS';
-            }
-            if (dbR) {
-                const dbValR = vuR > 0 ? (20 * Math.log10(vuR)).toFixed(1) : '-inf';
-                dbR.textContent = dbValR + ' dBFS';
+                const dbL = document.getElementById('vuDbL');
+                const dbR = document.getElementById('vuDbR');
+                if (dbL) dbL.textContent = formatDbFS(vuL);
+                if (dbR) dbR.textContent = formatDbFS(vuR);
+            } else {
+                // Segmented PPM canvas
+                drawPPM('ppmCanvasL', vuL, peakL);
+                drawPPM('ppmCanvasR', vuR, peakR);
+
+                const dbSegL = document.getElementById('vuDbSegL');
+                const dbSegR = document.getElementById('vuDbSegR');
+                if (dbSegL) dbSegL.textContent = formatDbFS(vuL);
+                if (dbSegR) dbSegR.textContent = formatDbFS(vuR);
             }
 
             // Update signal detection indicator
             const dot = document.getElementById('audioSignalDot');
             const txt = document.getElementById('audioSignalText');
-            if (dot) {
-                dot.classList.toggle('active', detected);
-            }
-            if (txt) {
-                txt.textContent = detected ? 'Detected' : 'Not detected';
-            }
+            if (dot) dot.classList.toggle('active', detected);
+            if (txt) txt.textContent = detected ? 'Detected' : 'Not detected';
+        }
+
+        function toggleVuMode(seg) {
+            vuSegmentedMode = seg;
+            localStorage.setItem('vuSegmented', seg);
+            document.getElementById('vuContinuous').style.display = seg ? 'none' : '';
+            document.getElementById('vuSegmentedDiv').style.display = seg ? '' : 'none';
         }
 
         function updateAudioSettings() {
@@ -4083,6 +4570,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== Signal Generator =====
         function updateSigGen() {
+            document.getElementById('siggenFields').style.display = document.getElementById('siggenEnable').checked ? '' : 'none';
             var wf = parseInt(document.getElementById('siggenWaveform').value);
             document.getElementById('siggenSweepGroup').style.display = wf === 3 ? '' : 'none';
             var mode = parseInt(document.getElementById('siggenOutputMode').value);
@@ -4112,6 +4600,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
         function applySigGenState(d) {
             document.getElementById('siggenEnable').checked = d.enabled;
+            document.getElementById('siggenFields').style.display = d.enabled ? '' : 'none';
             document.getElementById('siggenWaveform').value = d.waveform;
             document.getElementById('siggenFreq').value = d.frequency;
             document.getElementById('siggenFreqVal').textContent = Math.round(d.frequency);
@@ -5021,6 +5510,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function toggleAP() {
             const enabled = document.getElementById('apToggle').checked;
+            document.getElementById('apFields').style.display = enabled ? '' : 'none';
             apiFetch('/api/toggleap', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -5078,6 +5568,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .then(res => res.json())
             .then(data => {
                 document.getElementById('mqttEnabled').checked = data.enabled || false;
+                document.getElementById('mqttFields').style.display = (data.enabled || false) ? '' : 'none';
                 document.getElementById('mqttBroker').value = data.broker || '';
                 document.getElementById('mqttPort').value = data.port || 1883;
                 document.getElementById('mqttUsername').value = data.username || '';
@@ -5127,6 +5618,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function toggleMqttEnabled() {
             const enabled = document.getElementById('mqttEnabled').checked;
+            document.getElementById('mqttFields').style.display = enabled ? '' : 'none';
             apiFetch('/api/mqtt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -5415,6 +5907,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function toggleBuzzer() {
             var enabled = document.getElementById('buzzerToggle').checked;
+            document.getElementById('buzzerFields').style.display = enabled ? '' : 'none';
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'setBuzzerEnabled', enabled: enabled }));
             }
@@ -5477,6 +5970,33 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (data.success) showToast('Stats interval set to ' + interval + 's', 'success');
             })
             .catch(err => showToast('Failed to update interval', 'error'));
+        }
+
+        function setGraphEnabled(graph, enabled) {
+            var map = {vuMeter:'setVuMeterEnabled', waveform:'setWaveformEnabled', spectrum:'setSpectrumEnabled'};
+            var contentMap = {vuMeter:'vuMeterContent', waveform:'waveformContent', spectrum:'spectrumContent'};
+            toggleGraphDisabled(contentMap[graph], !enabled);
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:map[graph], enabled:enabled}));
+        }
+        function toggleGraphDisabled(id, disabled) {
+            var el = document.getElementById(id);
+            if (el) { if (disabled) el.classList.add('graph-disabled'); else el.classList.remove('graph-disabled'); }
+        }
+
+        function setAudioUpdateRate() {
+            const rate = parseInt(document.getElementById('audioUpdateRateSelect').value);
+            const labels = {100:'100 ms',50:'50 ms',33:'33 ms',20:'20 ms'};
+            apiFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audioUpdateRate: rate })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast('Audio rate set to ' + (labels[rate]||rate+'ms'), 'success');
+            })
+            .catch(err => showToast('Failed to update audio rate', 'error'));
         }
 
         // ===== Firmware Update =====
@@ -5874,11 +6394,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             // WiFi Stats
             if (data.wifi) {
-                document.getElementById('wifiRssi').textContent = (data.wifi.rssi || 0) + ' dBm';
+                document.getElementById('wifiRssi').innerHTML = formatRssi(data.wifi.rssi);
                 document.getElementById('wifiChannel').textContent = data.wifi.channel || '--';
                 document.getElementById('apClients').textContent = data.wifi.apClients || 0;
             }
             
+            // Audio ADC
+            if (data.audio) {
+                document.getElementById('adcStatus').textContent = data.audio.adcStatus || '--';
+                document.getElementById('adcNoiseFloor').textContent = (data.audio.noiseFloorDbfs !== undefined ? data.audio.noiseFloorDbfs.toFixed(1) + ' dBFS' : '--');
+                document.getElementById('adcI2sErrors').textContent = data.audio.i2sErrors !== undefined ? data.audio.i2sErrors : '--';
+                document.getElementById('adcConsecutiveZeros').textContent = data.audio.consecutiveZeros !== undefined ? data.audio.consecutiveZeros : '--';
+                document.getElementById('adcTotalBuffers').textContent = data.audio.totalBuffers !== undefined ? data.audio.totalBuffers : '--';
+                document.getElementById('adcSampleRate').textContent = data.audio.sampleRate ? (data.audio.sampleRate / 1000).toFixed(1) + ' kHz' : '--';
+            }
+
             // Uptime
             if (data.uptime !== undefined) {
                 document.getElementById('uptime').textContent = formatUptime(data.uptime);
@@ -5915,6 +6445,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (!reason) return '--';
             // The reset reason from the backend is already formatted as a readable string
             return reason;
+        }
+
+        function formatRssi(rssi) {
+            if (rssi === undefined || rssi === null) return 'N/A';
+            rssi = parseInt(rssi);
+            let text, cls;
+            if (rssi >= -50) { text = 'Excellent (90-100%)'; cls = 'text-success'; }
+            else if (rssi >= -60) { text = 'Very Good (70-90%)'; cls = 'text-success'; }
+            else if (rssi >= -70) { text = 'Fair (50-70%)'; cls = 'text-warning'; }
+            else if (rssi >= -80) { text = 'Weak (30-50%)'; cls = 'text-error'; }
+            else { text = 'Very Weak (0-30%)'; cls = 'text-error'; }
+            return '<span class="' + cls + '">' + rssi + ' dBm - ' + text + '</span>';
         }
 
         function addHistoryDataPoint(data) {
@@ -6081,9 +6623,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
-        function drawCpuGraph() {
-            const canvas = document.getElementById('cpuGraph');
+        function drawLineGraph(canvasId, lines, containerId) {
+            const canvas = document.getElementById(canvasId);
             if (!canvas) return;
+
+            if (containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                const psramTotal = document.getElementById('psramTotal');
+                if (!psramTotal || psramTotal.textContent === 'N/A') {
+                    container.style.display = 'none';
+                    return;
+                }
+                container.style.display = 'block';
+            }
+
             const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
             canvas.width = rect.width * window.devicePixelRatio;
@@ -6095,15 +6649,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const w = rect.width - leftMargin;
             const h = rect.height - bottomMargin;
 
-            // Background
             ctx.fillStyle = '#1A1A1A';
             ctx.fillRect(0, 0, rect.width, rect.height);
 
-            // Translate for margins
             ctx.save();
             ctx.translate(leftMargin, 0);
 
-            // Draw grid lines with Y-axis labels
             ctx.strokeStyle = '#333';
             ctx.lineWidth = 1;
             ctx.fillStyle = '#999';
@@ -6113,234 +6664,59 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             for (let i = 0; i <= 4; i++) {
                 const y = (h / 4) * i;
-                const percent = 100 - (i * 25);
-
-                // Grid line
                 ctx.beginPath();
                 ctx.moveTo(0, y);
                 ctx.lineTo(w, y);
                 ctx.stroke();
-
-                // Y-axis label
-                ctx.fillText(percent + '%', -5, y);
+                ctx.fillText((100 - i * 25) + '%', -5, y);
             }
 
-            // X-axis time labels
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            const timePoints = [0, 0.5, 1];
-            const timeLabels = ['-60s', '-30s', 'now'];
-            timePoints.forEach((point, idx) => {
-                const x = w * point;
-                ctx.fillText(timeLabels[idx], x, h + 4);
+            [0, 0.5, 1].forEach((point, idx) => {
+                ctx.fillText(['-60s', '-30s', 'now'][idx], w * point, h + 4);
             });
 
-            if (historyData.cpuTotal.length < 2) {
+            if (lines[0].data.length < 2) {
                 ctx.restore();
                 return;
             }
 
-            const step = w / (historyData.cpuTotal.length - 1);
-
-            // Draw Core 0 (light orange)
-            ctx.strokeStyle = '#FFB74D';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            historyData.cpuCore0.forEach((val, i) => {
-                const x = i * step;
-                const y = h - (val / 100) * h;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
+            const step = w / (lines[0].data.length - 1);
+            lines.forEach(line => {
+                ctx.strokeStyle = line.color;
+                ctx.lineWidth = line.width || 2;
+                ctx.beginPath();
+                line.data.forEach((val, i) => {
+                    const x = i * step;
+                    const y = h - (val / 100) * h;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
             });
-            ctx.stroke();
-
-            // Draw Core 1 (dark orange)
-            ctx.strokeStyle = '#F57C00';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            historyData.cpuCore1.forEach((val, i) => {
-                const x = i * step;
-                const y = h - (val / 100) * h;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-
-            // Draw Total (bright orange, on top)
-            ctx.strokeStyle = '#FF9800';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            historyData.cpuTotal.forEach((val, i) => {
-                const x = i * step;
-                const y = h - (val / 100) * h;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
 
             ctx.restore();
+        }
+
+        function drawCpuGraph() {
+            drawLineGraph('cpuGraph', [
+                { data: historyData.cpuCore0, color: '#FFB74D', width: 1.5 },
+                { data: historyData.cpuCore1, color: '#F57C00', width: 1.5 },
+                { data: historyData.cpuTotal, color: '#FF9800', width: 2 }
+            ]);
         }
 
         function drawMemoryGraph() {
-            const canvas = document.getElementById('memoryGraph');
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * window.devicePixelRatio;
-            canvas.height = rect.height * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-            const leftMargin = 35;
-            const bottomMargin = 20;
-            const w = rect.width - leftMargin;
-            const h = rect.height - bottomMargin;
-
-            // Background
-            ctx.fillStyle = '#1A1A1A';
-            ctx.fillRect(0, 0, rect.width, rect.height);
-
-            // Translate for margins
-            ctx.save();
-            ctx.translate(leftMargin, 0);
-
-            // Draw grid lines with Y-axis labels
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            ctx.fillStyle = '#999';
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'middle';
-
-            for (let i = 0; i <= 4; i++) {
-                const y = (h / 4) * i;
-                const percent = 100 - (i * 25);
-
-                // Grid line
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(w, y);
-                ctx.stroke();
-
-                // Y-axis label
-                ctx.fillText(percent + '%', -5, y);
-            }
-
-            // X-axis time labels
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            const timePoints = [0, 0.5, 1];
-            const timeLabels = ['-60s', '-30s', 'now'];
-            timePoints.forEach((point, idx) => {
-                const x = w * point;
-                ctx.fillText(timeLabels[idx], x, h + 4);
-            });
-
-            if (historyData.memoryPercent.length < 2) {
-                ctx.restore();
-                return;
-            }
-
-            const step = w / (historyData.memoryPercent.length - 1);
-
-            // Draw memory line (blue)
-            ctx.strokeStyle = '#2196F3';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            historyData.memoryPercent.forEach((val, i) => {
-                const x = i * step;
-                const y = h - (val / 100) * h;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-
-            ctx.restore();
+            drawLineGraph('memoryGraph', [
+                { data: historyData.memoryPercent, color: '#2196F3' }
+            ]);
         }
 
         function drawPsramGraph() {
-            const canvas = document.getElementById('psramGraph');
-            const container = document.getElementById('psramGraphContainer');
-            if (!canvas || !container) return;
-
-            // Check if PSRAM is available
-            const psramTotal = document.getElementById('psramTotal');
-            if (!psramTotal || psramTotal.textContent === 'N/A') {
-                container.style.display = 'none';
-                return;
-            }
-            container.style.display = 'block';
-
-            const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * window.devicePixelRatio;
-            canvas.height = rect.height * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-            const leftMargin = 35;
-            const bottomMargin = 20;
-            const w = rect.width - leftMargin;
-            const h = rect.height - bottomMargin;
-
-            // Background
-            ctx.fillStyle = '#1A1A1A';
-            ctx.fillRect(0, 0, rect.width, rect.height);
-
-            // Translate for margins
-            ctx.save();
-            ctx.translate(leftMargin, 0);
-
-            // Draw grid lines with Y-axis labels
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            ctx.fillStyle = '#999';
-            ctx.font = '10px sans-serif';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'middle';
-
-            for (let i = 0; i <= 4; i++) {
-                const y = (h / 4) * i;
-                const percent = 100 - (i * 25);
-
-                // Grid line
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(w, y);
-                ctx.stroke();
-
-                // Y-axis label
-                ctx.fillText(percent + '%', -5, y);
-            }
-
-            // X-axis time labels
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            const timePoints = [0, 0.5, 1];
-            const timeLabels = ['-60s', '-30s', 'now'];
-            timePoints.forEach((point, idx) => {
-                const x = w * point;
-                ctx.fillText(timeLabels[idx], x, h + 4);
-            });
-
-            if (historyData.psramPercent.length < 2) {
-                ctx.restore();
-                return;
-            }
-
-            const step = w / (historyData.psramPercent.length - 1);
-
-            // Draw PSRAM line (purple)
-            ctx.strokeStyle = '#9C27B0';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            historyData.psramPercent.forEach((val, i) => {
-                const x = i * step;
-                const y = h - (val / 100) * h;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-
-            ctx.restore();
+            drawLineGraph('psramGraph', [
+                { data: historyData.psramPercent, color: '#9C27B0' }
+            ], 'psramGraphContainer');
         }
 
         // ===== Debug Console =====
@@ -6640,6 +7016,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             document.getElementById('timerDuration').addEventListener('blur', () => inputFocusState.timerDuration = false);
             document.getElementById('audioThreshold').addEventListener('focus', () => inputFocusState.audioThreshold = true);
             document.getElementById('audioThreshold').addEventListener('blur', () => inputFocusState.audioThreshold = false);
+
+            // Restore VU meter mode from localStorage
+            if (vuSegmentedMode) {
+                document.getElementById('vuSegmented').checked = true;
+                toggleVuMode(true);
+            }
 
             // Initial status bar update
             updateStatusBar(false, null, false, false);
@@ -7186,7 +7568,7 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             document.getElementById('wifiLoader').textContent = '📶';
             document.getElementById('wifiLoader').classList.add('animate-pulse');
             document.getElementById('wifiIPInfo').classList.add('hidden');
-            document.getElementById('wifiModalActions').innerHTML = '<button type="button" class="btn-secondary" onclick="closeAPPageModal()">Cancel</button>';
+            document.getElementById('wifiModalActions').innerHTML = '<button type="button" class="btn btn-secondary" onclick="closeAPPageModal()">Cancel</button>';
             document.getElementById('wifiConnectionModal').classList.add('active');
         }
 
@@ -7210,15 +7592,15 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             if (type === 'success') {
                 loader.textContent = '✅';
                 if (ip) {
-                    ipInfo.textContent = ip;
+                    ipInfo.textContent = 'IP: ' + ip;
                     ipInfo.classList.remove('hidden');
-                    actions.innerHTML = `<button class="btn-primary" onclick="window.location.href='http://${ip}'">Go to Dashboard</button>`;
+                    actions.innerHTML = `<button class="btn btn-success" onclick="window.location.href='http://${ip}'">Go to Dashboard</button>`;
                 } else {
-                    actions.innerHTML = `<button class="btn-primary" onclick="closeAPPageModal()">Close</button>`;
+                    actions.innerHTML = `<button class="btn btn-secondary" onclick="closeAPPageModal()">Close</button>`;
                 }
             } else if (type === 'error') {
                 loader.textContent = '❌';
-                actions.innerHTML = `<button class="btn-secondary" onclick="closeAPPageModal()">Try Again</button>`;
+                actions.innerHTML = `<button class="btn btn-secondary" onclick="closeAPPageModal()">Try Again</button>`;
             }
         }
 

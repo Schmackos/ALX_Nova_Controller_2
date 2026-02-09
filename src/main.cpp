@@ -794,9 +794,9 @@ void loop() {
     sendHardwareStats();
   }
 
-  // Send audio waveform/spectrum data to subscribed WebSocket clients (~10Hz)
+  // Send audio waveform/spectrum data to subscribed WebSocket clients
   static unsigned long lastAudioSend = 0;
-  if (millis() - lastAudioSend >= 100) {
+  if (millis() - lastAudioSend >= appState.audioUpdateRate) {
     lastAudioSend = millis();
     sendAudioData();
   }

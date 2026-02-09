@@ -14,6 +14,9 @@ lv_indev_t *gui_get_encoder_indev(void);
 /* Returns true if any input activity occurred since last call (for wake detection) */
 bool gui_input_activity(void);
 
+/* Returns true if encoder button was pressed since last call (for sleep-wake) */
+bool gui_input_press_activity(void);
+
 /* Raw mode: rotation bypasses LVGL group navigation, collectable via get_raw_diff.
  * Button presses still go through LVGL normally (LV_EVENT_CLICKED). */
 void gui_input_set_raw_mode(bool raw);

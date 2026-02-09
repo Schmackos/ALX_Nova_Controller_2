@@ -11,6 +11,7 @@
 static volatile int32_t encoder_diff = 0;
 static volatile bool encoder_pressed = false;
 static volatile bool input_activity_flag = false;
+static volatile bool press_activity_flag = false;
 
 /* ISR state for encoder */
 static volatile uint8_t encoder_last_state = 0;
@@ -72,6 +73,7 @@ static void IRAM_ATTR encoder_sw_isr() {
         encoder_pressed = pressed;
         input_activity_flag = true;
         if (pressed) {
+            press_activity_flag = true;
             buzzer_request_click();
         }
         last_sw_time = now;
@@ -148,6 +150,12 @@ lv_indev_t *gui_get_encoder_indev(void) {
 bool gui_input_activity(void) {
     bool activity = input_activity_flag;
     input_activity_flag = false;
+    return activity;
+}
+
+bool gui_input_press_activity(void) {
+    bool activity = press_activity_flag;
+    press_activity_flag = false;
     return activity;
 }
 
