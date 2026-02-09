@@ -40,14 +40,6 @@ None
 
 ## Version 1.5.4
 
-## Documentation
-- [2026-02-10] docs: Clean up release notes for v1.6.0
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`1fcb463`)
-- [2026-02-10] docs: Clean up release notes for v1.6.0
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`2d26c1e`)
-
 ## New Features
 - Automated release via GitHub Actions
 
