@@ -11,6 +11,15 @@ master gate and per-feature sub-toggles. Fix I2S slave DMA timeout by passing
 BCK/LRC pins to i2s_set_pin instead of I2S_PIN_NO_CHANGE, ensuring full peripheral
 clock domain initialization. Non-blocking OTA via FreeRTOS tasks.
 
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`0773138`)
+- [2026-02-10] feat: v1.6.1 — Dual ADC, debug system, task monitor, I2S slave DMA fix
+
+Add second PCM1808 I2S ADC (slave) with per-ADC VU/waveform/spectrum/diagnostics
+across all interfaces. New FreeRTOS task monitor and debug mode toggle system with
+master gate and per-feature sub-toggles. Fix I2S slave DMA timeout by passing
+BCK/LRC pins to i2s_set_pin instead of I2S_PIN_NO_CHANGE, ensuring full peripheral
+clock domain initialization. Non-blocking OTA via FreeRTOS tasks.
+
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`715a670`)
 - [2026-02-10] feat: v1.6.1 — Dual ADC, debug system, task monitor, I2S slave DMA fix
 
@@ -48,6 +57,21 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`d9abcc7`)
 - **Debug Tab Visibility**: Debug tab tied to master `debugMode` toggle; HW Stats toggle controls individual card visibility rather than the entire tab.
 
 ## Technical Details
+- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`ed9b9b3`)
+- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`06cfe2a`)
+- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`7e1b93a`)
+- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`e9b4fa5`)
+- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`7e117da`)
 - Total unit tests: 417 (up from ~310 in 1.5.4), all passing
 - New test suites: `test_audio_diagnostics` (14), `test_vrms` (8), `test_task_monitor` (17), `test_debug_mode` (24)
 - New source modules: `task_monitor.h/.cpp`
