@@ -579,9 +579,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             border-radius: 2px;
             min-width: 4px;
         }
+        .task-table th.sortable {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .task-table th.sortable:hover {
+            color: var(--accent-light);
+        }
+        .task-table th .sort-arrow {
+            font-size: 8px;
+            opacity: 0.3;
+        }
+        .task-table th .sort-arrow.asc::after { content: '\25B2'; opacity: 1; }
+        .task-table th .sort-arrow.desc::after { content: '\25BC'; opacity: 1; }
         .task-stack-ok { background: var(--success-color); }
         .task-stack-warn { background: #f0ad4e; }
         .task-stack-crit { background: var(--error-color); }
+        .task-pct-text { font-size: 10px; }
+        .task-pct-ok { color: var(--success); }
+        .task-pct-warn { color: #f0ad4e; }
+        .task-pct-crit { color: var(--error); }
 
         /* ===== Pin Configuration Table ===== */
         .pin-table {
@@ -3213,6 +3231,45 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <!-- FreeRTOS Tasks -->
+            <div id="taskMonitorSection">
+            <div class="card">
+                <div class="card-title">FreeRTOS Tasks</div>
+                <div class="info-box">
+                    <div class="stats-grid" style="margin-bottom:8px">
+                        <div class="stat-card">
+                            <div class="stat-value" id="tmCpuTotal">--%</div>
+                            <div class="stat-label">CPU Load</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="tmLoopFreq">-- Hz</div>
+                            <div class="stat-label">Loop Freq</div>
+                        </div>
+                    </div>
+                    <div class="info-row"><span class="info-label">Core 0 Load</span><span class="info-value" id="tmCpuCore0">--</span></div>
+                    <div class="info-row"><span class="info-label">Core 1 Load</span><span class="info-value" id="tmCpuCore1">--</span></div>
+                    <div class="info-row"><span class="info-label">Task Count</span><span class="info-value" id="taskCount">--</span></div>
+                    <div class="info-row"><span class="info-label">Loop Time (avg)</span><span class="info-value" id="loopTimeAvg">--</span></div>
+                    <div class="info-row"><span class="info-label">Loop Time (max)</span><span class="info-value" id="loopTimeMax">--</span></div>
+                    <div class="divider"></div>
+                    <table class="task-table" id="taskTable">
+                        <thead>
+                            <tr>
+                                <th onclick="sortTaskTable(0)" data-col="0" class="sortable">Name <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(1)" data-col="1" class="sortable">Stack <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(2)" data-col="2" class="sortable">Used% <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(3)" data-col="3" class="sortable">Pri <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(4)" data-col="4" class="sortable">State <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(5)" data-col="5" class="sortable">Core <span class="sort-arrow"></span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="taskTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            </div>
+
             <div id="hwStatsSection">
             <!-- CPU Stats -->
             <div class="card">
@@ -3488,31 +3545,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             </div>
             </div>
 
-            <!-- FreeRTOS Tasks -->
-            <div id="taskMonitorSection">
-            <div class="card">
-                <div class="card-title">FreeRTOS Tasks</div>
-                <div class="info-box">
-                    <div class="info-row"><span class="info-label">Task Count</span><span class="info-value" id="taskCount">--</span></div>
-                    <div class="info-row"><span class="info-label">Loop Time (avg)</span><span class="info-value" id="loopTimeAvg">--</span></div>
-                    <div class="info-row"><span class="info-label">Loop Time (max)</span><span class="info-value" id="loopTimeMax">--</span></div>
-                    <div class="divider"></div>
-                    <table class="task-table" id="taskTable">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Stack</th>
-                                <th>Pri</th>
-                                <th>State</th>
-                                <th>Core</th>
-                            </tr>
-                        </thead>
-                        <tbody id="taskTableBody">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            </div>
 
             <!-- Pin Configuration -->
             <div class="card">
@@ -7065,39 +7097,29 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             }
 
-            // FreeRTOS Tasks
+            // FreeRTOS Tasks — CPU load from hardware_stats
+            if (data.cpu) {
+                var el0 = document.getElementById('tmCpuCore0');
+                if (el0) el0.textContent = Math.round(data.cpu.usageCore0 || 0) + '%';
+                var el1 = document.getElementById('tmCpuCore1');
+                if (el1) el1.textContent = Math.round(data.cpu.usageCore1 || 0) + '%';
+                var elt = document.getElementById('tmCpuTotal');
+                if (elt) elt.textContent = Math.round(data.cpu.usageTotal || 0) + '%';
+            }
             if (data.tasks) {
                 var tc = document.getElementById('taskCount');
                 if (tc) tc.textContent = data.tasks.count || 0;
+                var avgUs = data.tasks.loopAvgUs || 0;
                 var la = document.getElementById('loopTimeAvg');
-                if (la) la.textContent = (data.tasks.loopAvgUs || 0) + ' us';
+                if (la) la.textContent = avgUs + ' us';
                 var lm = document.getElementById('loopTimeMax');
                 if (lm) lm.textContent = (data.tasks.loopMaxUs || 0) + ' us';
+                var lf = document.getElementById('tmLoopFreq');
+                if (lf) lf.textContent = avgUs > 0 ? Math.round(1000000 / avgUs) + ' Hz' : '-- Hz';
 
-                var tbody = document.getElementById('taskTableBody');
-                if (tbody && data.tasks.list) {
-                    tbody.dataset.populated = '1';
-                    var stateNames = ['Run', 'Rdy', 'Blk', 'Sus', 'Del'];
-                    var html = '';
-                    for (var i = 0; i < data.tasks.list.length; i++) {
-                        var t = data.tasks.list[i];
-                        var stackFree = t.stackFree || 0;
-                        var stackAlloc = t.stackAlloc || 0;
-                        var stackStr = '';
-                        var barHtml = '';
-                        if (stackAlloc > 0) {
-                            var usedPct = Math.round((1 - stackFree / stackAlloc) * 100);
-                            var freePct = 100 - usedPct;
-                            var barClass = freePct > 50 ? 'task-stack-ok' : freePct > 25 ? 'task-stack-warn' : 'task-stack-crit';
-                            stackStr = formatBytes(stackFree) + ' / ' + formatBytes(stackAlloc);
-                            barHtml = ' <span class="task-stack-bar ' + barClass + '" style="width:' + Math.max(usedPct, 4) + 'px" title="' + usedPct + '% used"></span>';
-                        } else {
-                            stackStr = formatBytes(stackFree);
-                        }
-                        var stateName = t.state < stateNames.length ? stateNames[t.state] : '?';
-                        html += '<tr><td>' + t.name + '</td><td>' + stackStr + barHtml + '</td><td>' + t.pri + '</td><td>' + stateName + '</td><td>' + t.core + '</td></tr>';
-                    }
-                    tbody.innerHTML = html;
+                if (data.tasks.list) {
+                    _taskData = data.tasks.list;
+                    renderTaskTable();
                 }
             } else {
                 var tbody = document.getElementById('taskTableBody');
@@ -7108,7 +7130,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     if (la) la.textContent = '-';
                     var lm = document.getElementById('loopTimeMax');
                     if (lm) lm.textContent = '-';
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5">Task monitor disabled</td></tr>';
+                    var lf = document.getElementById('tmLoopFreq');
+                    if (lf) lf.textContent = '-';
+                    var el0 = document.getElementById('tmCpuCore0');
+                    if (el0) el0.textContent = '-';
+                    var el1 = document.getElementById('tmCpuCore1');
+                    if (el1) el1.textContent = '-';
+                    var elt = document.getElementById('tmCpuTotal');
+                    if (elt) elt.textContent = '--%';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5">Task monitor disabled</td></tr>';
                 }
             }
 
@@ -7130,6 +7160,82 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
             return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // ===== Task Table Sorting =====
+        var _taskData = [];
+        var _taskSortCol = 3; // default sort by priority
+        var _taskSortAsc = false; // descending by default
+
+        function sortTaskTable(col) {
+            if (_taskSortCol === col) {
+                _taskSortAsc = !_taskSortAsc;
+            } else {
+                _taskSortCol = col;
+                _taskSortAsc = (col === 0); // name ascending by default, others descending
+            }
+            renderTaskTable();
+        }
+
+        function renderTaskTable() {
+            var tbody = document.getElementById('taskTableBody');
+            if (!tbody || !_taskData.length) return;
+            tbody.dataset.populated = '1';
+
+            var stateNames = ['Run', 'Rdy', 'Blk', 'Sus', 'Del'];
+            // Build enriched rows for sorting
+            var rows = [];
+            for (var i = 0; i < _taskData.length; i++) {
+                var t = _taskData[i];
+                var stackFree = t.stackFree || 0;
+                var stackAlloc = t.stackAlloc || 0;
+                var usedPct = (stackAlloc > 0) ? Math.round((1 - stackFree / stackAlloc) * 100) : -1;
+                rows.push({ name: t.name, stackFree: stackFree, stackAlloc: stackAlloc, usedPct: usedPct, pri: t.pri, state: t.state, core: t.core });
+            }
+
+            // Sort
+            var col = _taskSortCol;
+            var asc = _taskSortAsc;
+            rows.sort(function(a, b) {
+                var va, vb;
+                switch (col) {
+                    case 0: va = a.name.toLowerCase(); vb = b.name.toLowerCase(); return asc ? (va < vb ? -1 : va > vb ? 1 : 0) : (vb < va ? -1 : vb > va ? 1 : 0);
+                    case 1: va = a.stackAlloc > 0 ? a.stackFree : 0; vb = b.stackAlloc > 0 ? b.stackFree : 0; break;
+                    case 2: va = a.usedPct; vb = b.usedPct; break;
+                    case 3: va = a.pri; vb = b.pri; break;
+                    case 4: va = a.state; vb = b.state; break;
+                    case 5: va = a.core; vb = b.core; break;
+                    default: va = 0; vb = 0;
+                }
+                return asc ? va - vb : vb - va;
+            });
+
+            // Update sort arrows
+            var ths = document.querySelectorAll('#taskTable thead th .sort-arrow');
+            for (var i = 0; i < ths.length; i++) {
+                ths[i].className = 'sort-arrow' + (i === col ? (asc ? ' asc' : ' desc') : '');
+            }
+
+            // Render rows
+            var html = '';
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                var stackStr = '', barHtml = '', pctHtml = '';
+                if (r.stackAlloc > 0) {
+                    var freePct = 100 - r.usedPct;
+                    var barClass = freePct > 50 ? 'task-stack-ok' : freePct > 25 ? 'task-stack-warn' : 'task-stack-crit';
+                    var pctClass = freePct > 50 ? 'task-pct-ok' : freePct > 25 ? 'task-pct-warn' : 'task-pct-crit';
+                    stackStr = formatBytes(r.stackFree) + '/' + formatBytes(r.stackAlloc);
+                    barHtml = ' <span class="task-stack-bar ' + barClass + '" style="width:' + Math.max(r.usedPct, 4) + 'px" title="' + r.usedPct + '% used"></span>';
+                    pctHtml = '<span class="task-pct-text ' + pctClass + '">' + r.usedPct + '%</span>';
+                } else {
+                    stackStr = formatBytes(r.stackFree);
+                    pctHtml = '<span class="task-pct-text" style="opacity:0.4">--</span>';
+                }
+                var stateName = r.state < stateNames.length ? stateNames[r.state] : '?';
+                html += '<tr><td>' + r.name + '</td><td>' + stackStr + barHtml + '</td><td>' + pctHtml + '</td><td>' + r.pri + '</td><td>' + stateName + '</td><td>' + r.core + '</td></tr>';
+            }
+            tbody.innerHTML = html;
         }
 
         function formatUptime(ms) {
