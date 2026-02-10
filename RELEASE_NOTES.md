@@ -1,44 +1,23 @@
 # Release Notes
 
+## Version 1.6.3
+
+### Bug Fixes
+- **Dual ADC I2S Fix**: Fixed ADC2 (I2S_NUM_1) never receiving data due to ESP32-S3 slave mode DMA issues. Root cause: the legacy I2S driver always calculates `bclk_div = 4` (below hardware minimum of 8), and the LL layer hard-codes `rx_clk_sel = 2` (D2CLK 160MHz) regardless of APLL settings, making all slave-mode workarounds ineffective. Solution: configure both I2S peripherals as master RX — I2S0 outputs clocks, I2S1 reads data only with no clock output. Both share the same 160MHz D2CLK with identical dividers, giving frequency-locked sampling.
+
+### Improvements
+- **Binary WebSocket Audio Data**: Waveform (258 bytes) and spectrum (70 bytes) sent as binary frames instead of JSON (~83% bandwidth reduction for dual ADC at 50Hz).
+- **Audio WebSocket Optimizations**: Canvas dimension caching, offscreen background grid cache, pre-computed spectrum color LUT, DOM reference caching, adaptive LERP scaling with update rate.
+- **VU Meter Tuning**: Decay time reduced from 650ms to 300ms for snappier digital response.
+- **Smart Sensing Rate Fix**: `detectSignal()` now uses `appState.audioUpdateRate` instead of hardcoded 50ms, with dynamically computed smoothing alpha.
+
+### Technical Details
+- 417 unit tests, all passing
+- RAM: 43.8%, Flash: 64.6%
+
+---
+
 ## Version 1.6.2
-
-## New Features
-- [2026-02-10] feat: v1.6.2 — Enhanced task manager, dark mode fix, channel label rename
-
-- FreeRTOS task manager: sortable columns, CPU utilization display, loop
-  frequency, stack usage % column. Moved to top of Debug page.
-- Dark mode flash fix: apply theme from localStorage before first paint
-  on both main page and login page.
-- Rename audio channels: Left/Right → Ch1/Ch2, Input → ADC across all
-  interfaces (WS, REST, MQTT, GUI, Web UI). Breaking MQTT topic change.
-- Default audio threshold changed from -40 to -60 dBFS.
-- I2S slave APLL fix for ESP32-S3 bclk_div >= 8 requirement.
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`dc350e4`)
-- [2026-02-10] feat: v1.6.2 — Enhanced task manager, dark mode fix, channel label rename
-
-- FreeRTOS task manager: sortable columns, CPU utilization display, loop
-  frequency, stack usage % column. Moved to top of Debug page.
-- Dark mode flash fix: apply theme from localStorage before first paint
-  on both main page and login page.
-- Rename audio channels: Left/Right → Ch1/Ch2, Input → ADC across all
-  interfaces (WS, REST, MQTT, GUI, Web UI). Breaking MQTT topic change.
-- Default audio threshold changed from -40 to -60 dBFS.
-- I2S slave APLL fix for ESP32-S3 bclk_div >= 8 requirement.
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`bdba241`)
-- [2026-02-10] feat: v1.6.2 — Enhanced task manager, dark mode fix, channel label rename
-
-- FreeRTOS task manager: sortable columns, CPU utilization display, loop
-  frequency, stack usage % column. Moved to top of Debug page.
-- Dark mode flash fix: apply theme from localStorage before first paint
-  on both main page and login page.
-- Rename audio channels: Left/Right → Ch1/Ch2, Input → ADC across all
-  interfaces (WS, REST, MQTT, GUI, Web UI). Breaking MQTT topic change.
-- Default audio threshold changed from -40 to -60 dBFS.
-- I2S slave APLL fix for ESP32-S3 bclk_div >= 8 requirement.
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`69e9f1f`)
 
 ### New Features
 - **FreeRTOS Task Manager Enhancements**: Sortable columns (click any header), CPU utilization display (per-core + total), loop frequency metric, and stack usage percentage column with color-coded indicators. Moved to top of Debug page under Debug Controls.
@@ -47,7 +26,6 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`69e9f1f`)
 - **Dark Mode Flash Fix**: Main page and login page now read localStorage immediately on load to apply dark/light theme before first paint, eliminating the light→dark flash on page load.
 - **Audio Channel Label Rename**: Replaced Left/Right stereo naming with numbered inputs (Ch1/Ch2) and Input→ADC naming for hardware ADC references across all interfaces (WS, REST, MQTT, GUI, Web UI). MQTT topic paths changed (`audio/input1/*` → `audio/adc1/*`).
 - **Default Audio Threshold**: Changed from -40 dBFS to -60 dBFS; web UI input field prefilled with new default.
-- **I2S Slave APLL Fix**: Slave ADC now uses `use_apll = true` with `fixed_mclk = sample_rate * 256` to satisfy ESP32-S3 `bclk_div >= 8` requirement, fixing potential DMA timeout.
 
 ### Breaking Changes
 - MQTT topic paths changed: `audio/input1/*` → `audio/adc1/*`, `audio/input2/*` → `audio/adc2/*` — requires Home Assistant re-discovery.
