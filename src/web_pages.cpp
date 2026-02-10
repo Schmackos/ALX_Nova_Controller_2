@@ -549,6 +549,40 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        /* ===== Task Monitor Table ===== */
+        .task-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+        }
+        .task-table th {
+            text-align: left;
+            padding: 4px 6px;
+            border-bottom: 2px solid var(--accent);
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .task-table td {
+            padding: 3px 6px;
+            border-bottom: 1px solid var(--border);
+        }
+        .task-table tr:last-child td {
+            border-bottom: none;
+        }
+        .task-stack-bar {
+            display: inline-block;
+            height: 8px;
+            border-radius: 2px;
+            min-width: 4px;
+        }
+        .task-stack-ok { background: var(--success-color); }
+        .task-stack-warn { background: #f0ad4e; }
+        .task-stack-crit { background: var(--error-color); }
+
         /* ===== Pin Configuration Table ===== */
         .pin-table {
             width: 100%;
@@ -3087,6 +3121,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileSelect(event)">
             </div>
 
+            <!-- Debug Settings -->
+            <div class="card">
+                <div class="card-title">Debug</div>
+                <div class="info-box">
+                    <div class="toggle-row">
+                        <span>Debug Mode</span>
+                        <label class="switch"><input type="checkbox" id="debugModeToggle" onchange="setDebugToggle('setDebugMode',this.checked)"><span class="slider round"></span></label>
+                    </div>
+                </div>
+            </div>
+
             <!-- Reboot & Factory Reset -->
             <div class="card">
                 <div class="card-title">Device Actions</div>
@@ -3136,6 +3181,26 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="5">5 seconds</option>
                         <option value="10">10 seconds</option>
                     </select>
+                </div>
+            </div>
+
+            <!-- Debug Controls -->
+            <div class="card">
+                <div class="card-title">Debug Controls</div>
+                <div class="info-box">
+                    <div class="toggle-row">
+                        <span>Hardware Stats</span>
+                        <label class="switch"><input type="checkbox" id="debugHwStatsToggle" onchange="setDebugToggle('setDebugHwStats',this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    <div class="input-group">
+                        <label for="debugSerialLevel" class="input-label">Serial Log Level</label>
+                        <select id="debugSerialLevel" class="select-input" onchange="setDebugSerialLevel(this.value)">
+                            <option value="0">Off</option>
+                            <option value="1">Errors Only</option>
+                            <option value="2">Info (Normal)</option>
+                            <option value="3">Debug (Verbose)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -3365,6 +3430,84 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <!-- I2S Configuration -->
+            <div id="i2sMetricsSection">
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                    I2S Configuration
+                    <label class="switch" style="margin:0"><input type="checkbox" id="debugI2sMetricsToggle" onchange="setDebugToggle('setDebugI2sMetrics',this.checked)"><span class="slider round"></span></label>
+                </div>
+                <div class="info-box">
+                    <div class="dual-canvas-grid">
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 1 (Master)</div>
+                            <div class="info-row"><span class="info-label">Mode</span><span class="info-value" id="i2sMode0">--</span></div>
+                            <div class="info-row"><span class="info-label">Sample Rate</span><span class="info-value" id="i2sSampleRate0">--</span></div>
+                            <div class="info-row"><span class="info-label">Bits</span><span class="info-value" id="i2sBits0">--</span></div>
+                            <div class="info-row"><span class="info-label">Channels</span><span class="info-value" id="i2sChannels0">--</span></div>
+                            <div class="info-row"><span class="info-label">DMA Buffers</span><span class="info-value" id="i2sDma0">--</span></div>
+                            <div class="info-row"><span class="info-label">APLL</span><span class="info-value" id="i2sApll0">--</span></div>
+                            <div class="info-row"><span class="info-label">MCLK</span><span class="info-value" id="i2sMclk0">--</span></div>
+                            <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="i2sFormat0">--</span></div>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 2 (Slave)</div>
+                            <div class="info-row"><span class="info-label">Mode</span><span class="info-value" id="i2sMode1">--</span></div>
+                            <div class="info-row"><span class="info-label">Sample Rate</span><span class="info-value" id="i2sSampleRate1">--</span></div>
+                            <div class="info-row"><span class="info-label">Bits</span><span class="info-value" id="i2sBits1">--</span></div>
+                            <div class="info-row"><span class="info-label">Channels</span><span class="info-value" id="i2sChannels1">--</span></div>
+                            <div class="info-row"><span class="info-label">DMA Buffers</span><span class="info-value" id="i2sDma1">--</span></div>
+                            <div class="info-row"><span class="info-label">APLL</span><span class="info-value" id="i2sApll1">--</span></div>
+                            <div class="info-row"><span class="info-label">MCLK</span><span class="info-value" id="i2sMclk1">--</span></div>
+                            <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="i2sFormat1">--</span></div>
+                        </div>
+                    </div>
+                    <div class="divider"></div>
+                    <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Runtime Performance</div>
+                    <div class="info-row"><span class="info-label">Audio Task Stack Free</span><span class="info-value" id="i2sStackFree">--</span></div>
+                    <div class="dual-canvas-grid">
+                        <div>
+                            <div class="info-row"><span class="info-label">ADC1 Throughput</span><span class="info-value" id="i2sThroughput0">--</span></div>
+                            <div class="info-row"><span class="info-label">ADC1 Read Latency</span><span class="info-value" id="i2sLatency0">--</span></div>
+                        </div>
+                        <div>
+                            <div class="info-row"><span class="info-label">ADC2 Throughput</span><span class="info-value" id="i2sThroughput1">--</span></div>
+                            <div class="info-row"><span class="info-label">ADC2 Read Latency</span><span class="info-value" id="i2sLatency1">--</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+
+            <!-- FreeRTOS Tasks -->
+            <div id="taskMonitorSection">
+            <div class="card">
+                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+                    FreeRTOS Tasks
+                    <label class="switch" style="margin:0"><input type="checkbox" id="debugTaskMonitorToggle" onchange="setDebugToggle('setDebugTaskMonitor',this.checked)"><span class="slider round"></span></label>
+                </div>
+                <div class="info-box">
+                    <div class="info-row"><span class="info-label">Task Count</span><span class="info-value" id="taskCount">--</span></div>
+                    <div class="info-row"><span class="info-label">Loop Time (avg)</span><span class="info-value" id="loopTimeAvg">--</span></div>
+                    <div class="info-row"><span class="info-label">Loop Time (max)</span><span class="info-value" id="loopTimeMax">--</span></div>
+                    <div class="divider"></div>
+                    <table class="task-table" id="taskTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Stack</th>
+                                <th>Pri</th>
+                                <th>State</th>
+                                <th>Core</th>
+                            </tr>
+                        </thead>
+                        <tbody id="taskTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            </div>
+
             <!-- Pin Configuration -->
             <div class="card">
                 <div class="card-title">Pin Configuration</div>
@@ -3383,10 +3526,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <tr><td>8</td><td>Buzzer (PWM)</td><td>Piezo Buzzer</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
                         <tr><td>15</td><td>Reset Button</td><td>Tactile Switch</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
                         <tr><td>38</td><td>Signal Gen (PWM)</td><td>Signal Generator</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>3</td><td>I2S MCLK</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>3</td><td>I2S MCLK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC 1</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>19</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
@@ -3957,6 +4100,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     toggleGraphDisabled('vuMeterContent', !data.vuMeterEnabled);
                     toggleGraphDisabled('waveformContent', !data.waveformEnabled);
                     toggleGraphDisabled('spectrumContent', !data.spectrumEnabled);
+                } else if (data.type === 'debugState') {
+                    applyDebugState(data);
                 } else if (data.type === 'signalGenerator') {
                     applySigGenState(data);
                 }
@@ -6353,6 +6498,56 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (el) { if (disabled) el.classList.add('graph-disabled'); else el.classList.remove('graph-disabled'); }
         }
 
+        function setDebugToggle(type, enabled) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: type, enabled: enabled}));
+            }
+        }
+
+        function setDebugSerialLevel(level) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: 'setDebugSerialLevel', level: parseInt(level)}));
+            }
+        }
+
+        function applyDebugState(d) {
+            var modeT = document.getElementById('debugModeToggle');
+            var hwT = document.getElementById('debugHwStatsToggle');
+            var i2sT = document.getElementById('debugI2sMetricsToggle');
+            var tmT = document.getElementById('debugTaskMonitorToggle');
+            var lvl = document.getElementById('debugSerialLevel');
+            if (modeT) modeT.checked = d.debugMode;
+            if (hwT) hwT.checked = d.debugHwStats;
+            if (i2sT) i2sT.checked = d.debugI2sMetrics;
+            if (tmT) tmT.checked = d.debugTaskMonitor;
+            if (lvl) lvl.value = d.debugSerialLevel;
+
+            // Hide/show I2S and Task sections when disabled
+            var i2sSec = document.getElementById('i2sMetricsSection');
+            if (i2sSec) i2sSec.style.display = (d.debugMode && d.debugI2sMetrics) ? '' : 'none';
+            var tmSec = document.getElementById('taskMonitorSection');
+            if (tmSec) tmSec.style.display = (d.debugMode && d.debugTaskMonitor) ? '' : 'none';
+
+            // Hide/show debug tab based on debugMode && debugHwStats
+            updateDebugTabVisibility(d.debugMode && d.debugHwStats);
+        }
+
+        function updateDebugTabVisibility(visible) {
+            // Sidebar item
+            var sideItem = document.querySelector('.sidebar-item[data-tab="debug"]');
+            if (sideItem) sideItem.style.display = visible ? '' : 'none';
+            // Mobile tab button
+            var tabBtn = document.querySelector('.tab[data-tab="debug"]');
+            if (tabBtn) tabBtn.style.display = visible ? '' : 'none';
+            // If currently on debug tab and hiding, switch to settings
+            if (!visible) {
+                var debugPanel = document.getElementById('debug');
+                if (debugPanel && debugPanel.classList.contains('active')) {
+                    switchTab('settings');
+                }
+            }
+        }
+
         function setAudioUpdateRate() {
             const rate = parseInt(document.getElementById('audioUpdateRateSelect').value);
             const labels = {100:'100 ms',50:'50 ms',33:'33 ms',20:'20 ms'};
@@ -6807,6 +7002,104 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     document.getElementById('adcTotalBuffers').textContent = data.audio.totalBuffers !== undefined ? data.audio.totalBuffers : '--';
                 }
                 document.getElementById('adcSampleRate').textContent = data.audio.sampleRate ? (data.audio.sampleRate / 1000).toFixed(1) + ' kHz' : '--';
+
+                // I2S Static Config
+                if (data.audio.i2sConfig && Array.isArray(data.audio.i2sConfig)) {
+                    for (var i = 0; i < data.audio.i2sConfig.length && i < 2; i++) {
+                        var c = data.audio.i2sConfig[i];
+                        var el;
+                        el = document.getElementById('i2sMode' + i); if (el) el.textContent = c.mode || '--';
+                        el = document.getElementById('i2sSampleRate' + i); if (el) el.textContent = c.sampleRate ? (c.sampleRate / 1000) + ' kHz' : '--';
+                        el = document.getElementById('i2sBits' + i); if (el) el.textContent = c.bitsPerSample ? c.bitsPerSample + '-bit (24-bit payload)' : '--';
+                        el = document.getElementById('i2sChannels' + i); if (el) el.textContent = c.channelFormat || '--';
+                        el = document.getElementById('i2sDma' + i); if (el) el.textContent = c.dmaBufCount && c.dmaBufLen ? c.dmaBufCount + ' x ' + c.dmaBufLen : '--';
+                        el = document.getElementById('i2sApll' + i); if (el) el.textContent = c.apll ? 'On' : 'Off';
+                        el = document.getElementById('i2sMclk' + i); if (el) el.textContent = c.mclkHz ? (c.mclkHz / 1e6).toFixed(3) + ' MHz' : 'N/A';
+                        el = document.getElementById('i2sFormat' + i); if (el) el.textContent = c.commFormat || '--';
+                    }
+                }
+
+                // I2S Runtime Metrics
+                if (data.audio.i2sRuntime) {
+                    var rt = data.audio.i2sRuntime;
+                    var stackEl = document.getElementById('i2sStackFree');
+                    if (stackEl) {
+                        var stackFree = rt.stackFree || 0;
+                        var stackTotal = 10240;
+                        var stackUsed = stackTotal - stackFree;
+                        var stackPct = stackTotal > 0 ? Math.round(stackUsed / stackTotal * 100) : 0;
+                        stackEl.textContent = stackFree + ' bytes (' + stackPct + '% used)';
+                        stackEl.style.color = stackFree < 1024 ? 'var(--error-color)' : '';
+                    }
+                    var expectedBps = 187.5;
+                    if (rt.buffersPerSec) {
+                        for (var i = 0; i < rt.buffersPerSec.length && i < 2; i++) {
+                            var tEl = document.getElementById('i2sThroughput' + i);
+                            if (tEl) {
+                                var bps = parseFloat(rt.buffersPerSec[i]) || 0;
+                                tEl.textContent = bps.toFixed(1) + ' buf/s';
+                                tEl.style.color = (bps > 0 && bps < expectedBps * 0.9) ? 'var(--error-color)' : '';
+                            }
+                        }
+                    }
+                    if (rt.avgReadLatencyUs) {
+                        for (var i = 0; i < rt.avgReadLatencyUs.length && i < 2; i++) {
+                            var lEl = document.getElementById('i2sLatency' + i);
+                            if (lEl) {
+                                var lat = parseFloat(rt.avgReadLatencyUs[i]) || 0;
+                                lEl.textContent = (lat / 1000).toFixed(2) + ' ms';
+                                lEl.style.color = lat > 10000 ? 'var(--error-color)' : '';
+                            }
+                        }
+                    }
+                }
+            }
+
+            // FreeRTOS Tasks
+            if (data.tasks) {
+                var tc = document.getElementById('taskCount');
+                if (tc) tc.textContent = data.tasks.count || 0;
+                var la = document.getElementById('loopTimeAvg');
+                if (la) la.textContent = (data.tasks.loopAvgUs || 0) + ' us';
+                var lm = document.getElementById('loopTimeMax');
+                if (lm) lm.textContent = (data.tasks.loopMaxUs || 0) + ' us';
+
+                var tbody = document.getElementById('taskTableBody');
+                if (tbody && data.tasks.list) {
+                    tbody.dataset.populated = '1';
+                    var stateNames = ['Run', 'Rdy', 'Blk', 'Sus', 'Del'];
+                    var html = '';
+                    for (var i = 0; i < data.tasks.list.length; i++) {
+                        var t = data.tasks.list[i];
+                        var stackFree = t.stackFree || 0;
+                        var stackAlloc = t.stackAlloc || 0;
+                        var stackStr = '';
+                        var barHtml = '';
+                        if (stackAlloc > 0) {
+                            var usedPct = Math.round((1 - stackFree / stackAlloc) * 100);
+                            var freePct = 100 - usedPct;
+                            var barClass = freePct > 50 ? 'task-stack-ok' : freePct > 25 ? 'task-stack-warn' : 'task-stack-crit';
+                            stackStr = formatBytes(stackFree) + ' / ' + formatBytes(stackAlloc);
+                            barHtml = ' <span class="task-stack-bar ' + barClass + '" style="width:' + Math.max(usedPct, 4) + 'px" title="' + usedPct + '% used"></span>';
+                        } else {
+                            stackStr = formatBytes(stackFree);
+                        }
+                        var stateName = t.state < stateNames.length ? stateNames[t.state] : '?';
+                        html += '<tr><td>' + t.name + '</td><td>' + stackStr + barHtml + '</td><td>' + t.pri + '</td><td>' + stateName + '</td><td>' + t.core + '</td></tr>';
+                    }
+                    tbody.innerHTML = html;
+                }
+            } else {
+                var tbody = document.getElementById('taskTableBody');
+                if (tbody && !tbody.dataset.populated) {
+                    var tc = document.getElementById('taskCount');
+                    if (tc) tc.textContent = 'Disabled';
+                    var la = document.getElementById('loopTimeAvg');
+                    if (la) la.textContent = '-';
+                    var lm = document.getElementById('loopTimeMax');
+                    if (lm) lm.textContent = '-';
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5">Task monitor disabled</td></tr>';
+                }
             }
 
             // Uptime

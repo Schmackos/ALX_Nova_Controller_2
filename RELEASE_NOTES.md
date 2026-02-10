@@ -40,6 +40,13 @@ None
 
 ## Version 1.5.4
 
+## Documentation
+- [2026-02-10] docs: Update RELEASE_NOTES.md for version 1.5.4
+
+- Added new features including dual ADC support, detailed audio diagnostics, and enhanced signal generator functionality.
+- Improved OTA update process with FreeRTOS tasks for non-blocking operations.
+- Expanded test coverage, increasing total tests to 376. (`ce9bbd6`)
+
 ## New Features
 - [2026-02-10] feat: Enhance audio processing and testing capabilities
 
