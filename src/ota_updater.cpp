@@ -153,15 +153,23 @@ void handleCheckUpdate() {
     return;
   }
 
+  if (isOTATaskRunning()) {
+    server.send(200, "application/json", "{\"success\": true, \"message\": \"Check already in progress\"}");
+    return;
+  }
+
   LOG_I("[OTA] Manual update check requested");
 
-  // Trigger non-blocking check (results arrive via dirty flag + WS broadcast)
+  // Launch non-blocking check — result arrives via WebSocket updateStatus broadcast
   startOTACheckTask();
 
+  // Return immediately; actual version info will be pushed via WebSocket
+  // Include any cached info we already have
   JsonDocument doc;
   doc["success"] = true;
+  doc["message"] = "Checking for updates...";
   doc["currentVersion"] = firmwareVer;
-  doc["latestVersion"] = cachedLatestVersion.length() > 0 ? cachedLatestVersion : "Unknown";
+  doc["latestVersion"] = cachedLatestVersion.length() > 0 ? cachedLatestVersion : "Checking...";
   doc["updateAvailable"] = updateAvailable;
 
   String json;
@@ -987,7 +995,7 @@ void startOTADownloadTask() {
 
   BaseType_t result = xTaskCreatePinnedToCore(
     otaDownloadTask, "OTA_DL", TASK_STACK_SIZE_OTA,
-    NULL, TASK_PRIORITY_OTA, &otaDownloadTaskHandle, 1  // Core 1
+    NULL, TASK_PRIORITY_WEB, &otaDownloadTaskHandle, 0  // Core 0 (network stack affinity)
   );
 
   if (result != pdPASS) {
@@ -1017,7 +1025,7 @@ void startOTACheckTask() {
 
   BaseType_t result = xTaskCreatePinnedToCore(
     otaCheckTaskFunc, "OTA_CHK", TASK_STACK_SIZE_OTA,
-    NULL, TASK_PRIORITY_OTA, &otaCheckTaskHandle, 1  // Core 1
+    NULL, TASK_PRIORITY_WEB, &otaCheckTaskHandle, 0  // Core 0 (network stack affinity)
   );
 
   if (result != pdPASS) {

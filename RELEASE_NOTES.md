@@ -1,36 +1,61 @@
 # Release Notes
 
-## Version 1.6.0
+## Version 1.6.1
 
 ## New Features
-- **Audio ADC Diagnostics**: Real-time health monitoring for the PCM1808 I2S audio ADC with automatic status detection (OK, NO_DATA, NOISE_ONLY, CLIPPING, I2S_ERROR). Diagnostics are exposed across all interfaces — GUI Debug screen, WebSocket heartbeat, REST API (`/api/diagnostics` v1.1), and MQTT with Home Assistant discovery (`audio/adc_status` + `audio/noise_floor` diagnostic entities). Pure testable `audio_derive_health_status()` function with priority-based status derivation.
+- [2026-02-10] feat: v1.6.1 — Dual ADC, debug system, task monitor, I2S slave DMA fix
 
-- **Input Voltage (Vrms) Display**: Computed Vrms from I2S RMS data with configurable ADC reference voltage (1.0–5.0V). Displayed in the Web UI as an info-row after Audio Level, on the GUI Debug screen, and published via MQTT (`audio/input_vrms` sensor + `settings/adc_vref` number entity). REST API and WebSocket support for real-time monitoring. Persisted as line 5 in `/smartsensing.txt`.
+Add second PCM1808 I2S ADC (slave) with per-ADC VU/waveform/spectrum/diagnostics
+across all interfaces. New FreeRTOS task monitor and debug mode toggle system with
+master gate and per-feature sub-toggles. Fix I2S slave DMA timeout by passing
+BCK/LRC pins to i2s_set_pin instead of I2S_PIN_NO_CHANGE, ensuring full peripheral
+clock domain initialization. Non-blocking OTA via FreeRTOS tasks.
 
-- **Audio Graph Toggles**: Individual enable/disable switches for all three audio visualizations — VU Meter, Waveform, and Spectrum. When disabled, the I2S task skips the corresponding processing (VU ballistics, waveform accumulation, or FFT) and WebSocket stops sending disabled graph payloads, reducing CPU and bandwidth. Controls available via Web UI card header toggles, WebSocket commands, MQTT switch entities with Home Assistant discovery, and persisted in settings lines 18–20.
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`715a670`)
+- [2026-02-10] feat: v1.6.1 — Dual ADC, debug system, task monitor, I2S slave DMA fix
+
+Add second PCM1808 I2S ADC (slave) with per-ADC VU/waveform/spectrum/diagnostics
+across all interfaces. New FreeRTOS task monitor and debug mode toggle system with
+master gate and per-feature sub-toggles. Fix I2S slave DMA timeout by passing
+BCK/LRC pins to i2s_set_pin instead of I2S_PIN_NO_CHANGE, ensuring full peripheral
+clock domain initialization. Non-blocking OTA via FreeRTOS tasks.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`d9abcc7`)
+- **Dual ADC Expansion**: Second PCM1808 I2S ADC (slave on I2S_NUM_1) sharing BCK/LRC/MCLK with ADC1 master, only new pin DOUT2=GPIO 9. Per-ADC VU meters, waveform canvases, spectrum analyzers, diagnostics, and input names across all interfaces (Web UI, WebSocket, REST, MQTT, GUI). Auto-detection hides ADC2 panels when only one ADC is connected.
+
+- **FreeRTOS Task Monitor**: Real-time monitoring of FreeRTOS task stack watermarks, priorities, core affinity, and loop timing. Web UI "FreeRTOS Tasks" card on Debug tab, MQTT diagnostic sensors, and GUI Debug screen section. Runs on a dedicated 5s timer, opt-in via `debugTaskMonitor` toggle.
+
+- **Debug Mode Toggle System**: Master debug gate with 4 per-feature sub-toggles (HW Stats, I2S Metrics, Task Monitor, Serial Level). Master OFF forces all sub-features off and serial to LOG_ERROR. Controls available in Web UI Debug tab, GUI Settings menu, MQTT, and WebSocket. 5 new settings lines persisted.
+
+- **Audio ADC Diagnostics**: Per-ADC health monitoring (OK, NO_DATA, NOISE_ONLY, CLIPPING, I2S_ERROR) with noise floor tracking. Exposed via GUI Debug screen, WebSocket, REST API (`/api/diagnostics`), and MQTT with HA discovery.
+
+- **Input Voltage (Vrms) Display**: Computed Vrms from I2S RMS data with configurable ADC reference voltage (1.0–5.0V). Displayed in Web UI, GUI Debug screen, and published via MQTT.
+
+- **Audio Graph Toggles**: Individual enable/disable for VU Meter, Waveform, and Spectrum visualizations. Disabled graphs skip processing in the I2S task and stop sending WebSocket payloads.
+
+- **Non-Blocking OTA**: OTA check and download run as one-shot FreeRTOS tasks on Core 1 instead of blocking the main loop. Dirty-flag pattern for thread-safe WebSocket/MQTT broadcasts.
 
 ## Improvements
-- **Audio Tab UI Polish**: Added "Enable" labels to each graph card header toggle, matching the existing label style of "LED", "Segmented", and "Auto-scale" toggles. Relocated the Audio Update Rate dropdown from the Waveform card header to the Audio Settings card, since it controls all three graphs equally.
-
-- **Desktop Carousel Enhancements**: Updated card summaries to reflect new audio diagnostic data and graph toggle states.
-
-- **Home Screen Updates**: Enhanced status formatting for audio-related fields.
+- **I2S Slave Pin Configuration**: Slave `i2s_set_pin()` now passes BCK/LRC pins instead of `I2S_PIN_NO_CHANGE`, ensuring full I2S peripheral clock domain initialization. Safe because slave inits before master.
+- **I2S Init Order**: Swapped master/slave port assignments (master=I2S_NUM_0, slave=I2S_NUM_1) and added GPIO matrix reconnection after master setup.
+- **Enhanced I2S Diagnostics**: One-shot ADC2 startup log, per-ADC throughput metrics (buffers/sec, read latency), and detailed periodic ADC2 status dumps distinguishing DMA timeout from no-audio conditions.
+- **Audio Tab UI Polish**: "Enable" labels on graph toggles, Audio Update Rate relocated to Audio Settings card.
+- **Desktop Carousel & Home Screen**: Updated to reflect dual ADC data and new toggle states.
 
 ## Bug Fixes
-- None
+- **I2S Slave DMA Timeout**: Fixed ADC2 slave never receiving data — `i2s_configure_slave()` was passing `I2S_PIN_NO_CHANGE` for BCK/WS which skipped internal I2S peripheral clock path initialization. The manual `esp_rom_gpio_connect_in_signal()` only updated the GPIO input mux but not the I2S controller's RX clock domain.
+- **ADC2 Diagnostics on Read Failure**: Slave read failures now properly increment `consecutiveZeros` and recompute health status instead of silently skipping.
+- **Debug Tab Visibility**: Debug tab tied to master `debugMode` toggle; HW Stats toggle controls individual card visibility rather than the entire tab.
 
 ## Technical Details
-- 28 files changed, ~5,800 lines added, ~3,700 lines removed
-- New test suites: `test_audio_diagnostics` (10 tests), `test_vrms` (8 tests)
-- Expanded test suites: `test_gui_home`, `test_smart_sensing`
-- Total unit tests: 350 (up from ~310 in 1.5.4), all passing
-- RAM usage: 41.8% (137,060 / 327,680 bytes)
-- Flash usage: 61.6% (2,059,721 / 3,342,336 bytes)
-- `AudioHealthStatus` enum and `AudioDiagnostics` struct added to `i2s_audio.h`
-- `audio_rms_to_vrms()` pure function for testable Vrms conversion
-- MQTT: 7 new Home Assistant discovery entities (2 diagnostic, 1 sensor, 1 number, 3 switches)
-- Settings persistence: 3 new lines in `/settings.txt` (audio graph toggles), 1 new line in `/smartsensing.txt` (ADC Vref)
-- REST API: `/api/diagnostics` bumped to version 1.1 with `audioAdc` object
+- Total unit tests: 417 (up from ~310 in 1.5.4), all passing
+- New test suites: `test_audio_diagnostics` (14), `test_vrms` (8), `test_task_monitor` (17), `test_debug_mode` (24)
+- New source modules: `task_monitor.h/.cpp`
+- RAM usage: 43.8% (143,580 / 327,680 bytes)
+- Flash usage: 64.2% (2,146,697 / 3,342,336 bytes)
+- MQTT: 20+ new Home Assistant discovery entities across all new features
+- Settings persistence: lines 18–25 in `/settings.txt`, `/inputnames.txt`, `/siggen.txt` line 7
+- REST API: `/api/diagnostics` with per-ADC arrays, `/api/inputnames` GET/POST
 
 ## Breaking Changes
 None
@@ -61,7 +86,14 @@ None
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-10] fix: Debug tab visibility tied to master toggle, HW Stats hides only its sections
+
+Debug tab now appears/disappears based on Debug Mode only. The Hardware
+Stats toggle controls visibility of CPU, Memory, Storage, WiFi/System,
+and Audio ADC cards rather than the entire Debug tab.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`400c99c`)
+
 
 ## Technical Details
 - [2026-02-10] refactor: Move debug sub-toggles from Settings tab to Debug tab

@@ -10,6 +10,7 @@
 #include "utils.h"
 #include "i2s_audio.h"
 #include "signal_generator.h"
+#include "task_monitor.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -102,6 +103,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendBuzzerState();
             sendSignalGenState();
             sendAudioGraphState();
+            sendDebugState();
 
             // If device just updated, notify the client
             if (justUpdated) {
@@ -305,6 +307,36 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
             LOG_I("[WebSocket] Input names updated by client [%u]", num);
           }
+        } else if (msgType == "setDebugMode") {
+          appState.debugMode = doc["enabled"].as<bool>();
+          applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+          saveSettings();
+          sendDebugState();
+          LOG_I("[WebSocket] Debug mode %s", appState.debugMode ? "enabled" : "disabled");
+        } else if (msgType == "setDebugSerialLevel") {
+          int level = doc["level"].as<int>();
+          if (level >= 0 && level <= 3) {
+            appState.debugSerialLevel = level;
+            applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+            saveSettings();
+            sendDebugState();
+            LOG_I("[WebSocket] Debug serial level set to %d", level);
+          }
+        } else if (msgType == "setDebugHwStats") {
+          appState.debugHwStats = doc["enabled"].as<bool>();
+          saveSettings();
+          sendDebugState();
+          LOG_I("[WebSocket] Debug HW stats %s", appState.debugHwStats ? "enabled" : "disabled");
+        } else if (msgType == "setDebugI2sMetrics") {
+          appState.debugI2sMetrics = doc["enabled"].as<bool>();
+          saveSettings();
+          sendDebugState();
+          LOG_I("[WebSocket] Debug I2S metrics %s", appState.debugI2sMetrics ? "enabled" : "disabled");
+        } else if (msgType == "setDebugTaskMonitor") {
+          appState.debugTaskMonitor = doc["enabled"].as<bool>();
+          saveSettings();
+          sendDebugState();
+          LOG_I("[WebSocket] Debug task monitor %s", appState.debugTaskMonitor ? "enabled" : "disabled");
         }
       }
       break;
@@ -409,6 +441,19 @@ void sendAudioGraphState() {
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
 
+void sendDebugState() {
+  JsonDocument doc;
+  doc["type"] = "debugState";
+  doc["debugMode"] = appState.debugMode;
+  doc["debugSerialLevel"] = appState.debugSerialLevel;
+  doc["debugHwStats"] = appState.debugHwStats;
+  doc["debugI2sMetrics"] = appState.debugI2sMetrics;
+  doc["debugTaskMonitor"] = appState.debugTaskMonitor;
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
 void sendMqttSettingsState() {
   JsonDocument doc;
   doc["type"] = "mqttSettings";
@@ -496,6 +541,9 @@ float getCpuUsageCore1() {
 }
 
 void sendHardwareStats() {
+  // Early return if debug HW stats is disabled
+  if (!(appState.debugMode && appState.debugHwStats)) return;
+
   // Update CPU usage before sending stats
   updateCpuUsage();
   
@@ -570,6 +618,52 @@ void sendHardwareStats() {
   doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
   doc["audio"]["vrms"] = appState.audioVrmsCombined;
 
+  // I2S Static Config
+  I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
+  JsonArray i2sCfgArr = doc["audio"]["i2sConfig"].to<JsonArray>();
+  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    JsonObject c = i2sCfgArr.add<JsonObject>();
+    c["mode"] = i2sCfg.adc[a].isMaster ? "Master RX" : "Slave RX";
+    c["sampleRate"] = i2sCfg.adc[a].sampleRate;
+    c["bitsPerSample"] = i2sCfg.adc[a].bitsPerSample;
+    c["channelFormat"] = i2sCfg.adc[a].channelFormat;
+    c["dmaBufCount"] = i2sCfg.adc[a].dmaBufCount;
+    c["dmaBufLen"] = i2sCfg.adc[a].dmaBufLen;
+    c["apll"] = i2sCfg.adc[a].apllEnabled;
+    c["mclkHz"] = i2sCfg.adc[a].mclkHz;
+    c["commFormat"] = i2sCfg.adc[a].commFormat;
+  }
+
+  // I2S Runtime Metrics
+  JsonObject i2sRt = doc["audio"]["i2sRuntime"].to<JsonObject>();
+  i2sRt["stackFree"] = appState.i2sMetrics.audioTaskStackFree;
+  JsonArray bpsArr = i2sRt["buffersPerSec"].to<JsonArray>();
+  JsonArray latArr = i2sRt["avgReadLatencyUs"].to<JsonArray>();
+  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    bpsArr.add(serialized(String(appState.i2sMetrics.buffersPerSec[a], 1)));
+    latArr.add(serialized(String(appState.i2sMetrics.avgReadLatencyUs[a], 0)));
+  }
+
+  // Task Monitor (gated by debug toggle)
+  // Note: task_monitor_update() runs on its own 5s timer in main loop
+  if (appState.debugMode && appState.debugTaskMonitor) {
+    const TaskMonitorData& tm = task_monitor_get_data();
+    doc["tasks"]["count"] = tm.taskCount;
+    doc["tasks"]["loopUs"] = tm.loopTimeUs;
+    doc["tasks"]["loopMaxUs"] = tm.loopTimeMaxUs;
+    doc["tasks"]["loopAvgUs"] = tm.loopTimeAvgUs;
+    JsonArray taskArr = doc["tasks"]["list"].to<JsonArray>();
+    for (int i = 0; i < tm.taskCount; i++) {
+      JsonObject t = taskArr.add<JsonObject>();
+      t["name"] = tm.tasks[i].name;
+      t["stackFree"] = tm.tasks[i].stackFreeBytes;
+      t["stackAlloc"] = tm.tasks[i].stackAllocBytes;
+      t["pri"] = tm.tasks[i].priority;
+      t["state"] = tm.tasks[i].state;
+      t["core"] = tm.tasks[i].coreId;
+    }
+  }
+
   // Uptime (milliseconds since boot)
   doc["uptime"] = millis();
 
@@ -609,14 +703,14 @@ void sendAudioData() {
     for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
       const AppState::AdcState &adc = appState.audioAdc[a];
       JsonObject adcObj = adcArr.add<JsonObject>();
-      adcObj["vuL"] = adc.vuLeft;
-      adcObj["vuR"] = adc.vuRight;
-      adcObj["peakL"] = adc.peakLeft;
-      adcObj["peakR"] = adc.peakRight;
-      adcObj["rmsL"] = adc.rmsLeft;
-      adcObj["rmsR"] = adc.rmsRight;
-      adcObj["vrmsL"] = adc.vrmsLeft;
-      adcObj["vrmsR"] = adc.vrmsRight;
+      adcObj["vu1"] = adc.vu1;
+      adcObj["vu2"] = adc.vu2;
+      adcObj["peak1"] = adc.peak1;
+      adcObj["peak2"] = adc.peak2;
+      adcObj["rms1"] = adc.rms1;
+      adcObj["rms2"] = adc.rms2;
+      adcObj["vrms1"] = adc.vrms1;
+      adcObj["vrms2"] = adc.vrms2;
       adcObj["dBFS"] = adc.dBFS;
       const char *statusStr = "OK";
       switch (adc.healthStatus) {
@@ -630,15 +724,15 @@ void sendAudioData() {
       adcNoiseArr.add(adc.noiseFloorDbfs);
     }
     // Legacy flat fields for backward compat (ADC 0)
-    doc["audioRmsL"] = appState.audioRmsLeft;
-    doc["audioRmsR"] = appState.audioRmsRight;
-    doc["audioVuL"] = appState.audioVuLeft;
-    doc["audioVuR"] = appState.audioVuRight;
-    doc["audioPeakL"] = appState.audioPeakLeft;
-    doc["audioPeakR"] = appState.audioPeakRight;
+    doc["audioRms1"] = appState.audioRmsLeft;
+    doc["audioRms2"] = appState.audioRmsRight;
+    doc["audioVu1"] = appState.audioVuLeft;
+    doc["audioVu2"] = appState.audioVuRight;
+    doc["audioPeak1"] = appState.audioPeakLeft;
+    doc["audioPeak2"] = appState.audioPeakRight;
     doc["audioPeak"] = appState.audioPeakCombined;
-    doc["audioVrmsL"] = appState.audioVrmsLeft;
-    doc["audioVrmsR"] = appState.audioVrmsRight;
+    doc["audioVrms1"] = appState.audioVrms1;
+    doc["audioVrms2"] = appState.audioVrms2;
     doc["audioVrms"] = appState.audioVrmsCombined;
     String json;
     serializeJson(doc, json);

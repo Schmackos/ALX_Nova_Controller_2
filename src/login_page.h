@@ -250,6 +250,7 @@ const char loginPage[] PROGMEM = R"rawliteral(
     </style>
 </head>
 <body>
+    <script>if(localStorage.getItem('darkMode')==='true'){document.body.classList.add('night-mode');document.querySelector('meta[name="theme-color"]').setAttribute('content','#121212');}</script>
     <div class="login-container">
         <div class="login-header">
             <div class="login-logo">🔊</div>
@@ -285,11 +286,6 @@ const char loginPage[] PROGMEM = R"rawliteral(
     </div>
 
     <script>
-        // Apply dark mode if stored in localStorage
-        if (localStorage.getItem('darkMode') === 'true' || localStorage.getItem('nightMode') === 'true') {
-            document.body.classList.add('night-mode');
-        }
-
         // Toggle password visibility
         function togglePassword() {
             const passwordInput = document.getElementById('password');

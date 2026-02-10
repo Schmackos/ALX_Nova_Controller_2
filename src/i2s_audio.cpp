@@ -9,6 +9,9 @@
 
 #ifndef NATIVE_TEST
 #include <driver/i2s.h>
+#include <esp_rom_gpio.h>
+#include <soc/gpio_struct.h>
+#include <soc/i2s_periph.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #endif
@@ -223,11 +226,12 @@ AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag) {
 // ===== Hardware-dependent code (ESP32 only) =====
 #ifndef NATIVE_TEST
 
-static const int I2S_PORT_MASTER = 1; // I2S_NUM_1 — master RX (ADC1)
-static const int I2S_PORT_SLAVE = 0;  // I2S_NUM_0 — slave RX (ADC2)
+static const int I2S_PORT_MASTER = 0; // I2S_NUM_0 — master RX (ADC1)
+static const int I2S_PORT_SLAVE = 1;  // I2S_NUM_1 — slave RX (ADC2)
 
 static uint32_t _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
+static TaskHandle_t _audioTaskHandle = NULL;
 static int _numAdcsDetected = 1;
 static bool _adc2InitOk = false;
 
@@ -316,12 +320,18 @@ static bool i2s_configure_slave(uint32_t sample_rate) {
         return false;
     }
 
+    // Configure BCK/WS/DOUT2 pins. Because slave is initialized BEFORE master,
+    // i2s_set_pin's internal gpio_set_direction(INPUT) is safe — no master
+    // output exists yet to disconnect. Master's subsequent i2s_set_pin restores
+    // GPIO direction to OUTPUT and routes gpio_matrix_out to master clock signals.
+    // The esp_rom_gpio_connect_in_signal calls in i2s_audio_init then re-route
+    // slave input after master's i2s_set_pin overwrites the input matrix.
     i2s_pin_config_t pins = {};
-    pins.bck_io_num = I2S_BCK_PIN;    // Same as master — input in slave mode
-    pins.ws_io_num = I2S_LRC_PIN;     // Same as master — input in slave mode
-    pins.data_in_num = I2S_DOUT2_PIN; // New pin (GPIO 19)
+    pins.bck_io_num = I2S_BCK_PIN;
+    pins.ws_io_num = I2S_LRC_PIN;
+    pins.data_in_num = I2S_DOUT2_PIN;
     pins.data_out_num = I2S_PIN_NO_CHANGE;
-    pins.mck_io_num = I2S_PIN_NO_CHANGE; // No MCLK output needed
+    pins.mck_io_num = I2S_PIN_NO_CHANGE;
 
     i2s_set_pin((i2s_port_t)I2S_PORT_SLAVE, &pins);
     i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_SLAVE);
@@ -466,14 +476,14 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
     diag.status = audio_derive_health_status(diagCopy);
 
     // Write per-ADC analysis into shared struct
-    _analysis.adc[a].rmsLeft = rmsL;
-    _analysis.adc[a].rmsRight = rmsR;
+    _analysis.adc[a].rms1 = rmsL;
+    _analysis.adc[a].rms2 = rmsR;
     _analysis.adc[a].rmsCombined = rmsC;
-    _analysis.adc[a].vuLeft = _vuL[a];
-    _analysis.adc[a].vuRight = _vuR[a];
+    _analysis.adc[a].vu1 = _vuL[a];
+    _analysis.adc[a].vu2 = _vuR[a];
     _analysis.adc[a].vuCombined = _vuC[a];
-    _analysis.adc[a].peakLeft = _peakL[a];
-    _analysis.adc[a].peakRight = _peakR[a];
+    _analysis.adc[a].peak1 = _peakL[a];
+    _analysis.adc[a].peak2 = _peakR[a];
     _analysis.adc[a].peakCombined = _peakC[a];
     _analysis.adc[a].dBFS = dBFS;
 }
@@ -485,12 +495,21 @@ static void audio_capture_task(void *param) {
 
     unsigned long prevTime = millis();
     unsigned long lastDumpTime = 0;
+    bool adc2FirstReadLogged = false;
+
+    // Metrics counters for throughput and latency
+    uint32_t bufCount[NUM_AUDIO_ADCS] = {};
+    unsigned long readLatencyAccumUs[NUM_AUDIO_ADCS] = {};
+    uint32_t readLatencyCount[NUM_AUDIO_ADCS] = {};
+    unsigned long lastMetricsTime = millis();
 
     while (true) {
         // Read ADC1 (master) — blocks until DMA ready
         size_t bytes_read1 = 0;
+        unsigned long t0 = micros();
         esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_MASTER, buf1,
                                    sizeof(buf1), &bytes_read1, portMAX_DELAY);
+        unsigned long t1 = micros();
 
         if (err1 != ESP_OK || bytes_read1 == 0) {
             if (err1 != ESP_OK) _diagnostics.adc[0].i2sReadErrors++;
@@ -498,18 +517,40 @@ static void audio_capture_task(void *param) {
             vTaskDelay(pdMS_TO_TICKS(1));
             continue;
         }
+        readLatencyAccumUs[0] += (t1 - t0);
+        readLatencyCount[0]++;
+        bufCount[0]++;
 
         // Read ADC2 (slave) — near-instant if synced DMA is ready
         size_t bytes_read2 = 0;
         bool adc2Ok = false;
         if (_adc2InitOk) {
+            unsigned long t2 = micros();
             esp_err_t err2 = i2s_read((i2s_port_t)I2S_PORT_SLAVE, buf2,
                                        sizeof(buf2), &bytes_read2, pdMS_TO_TICKS(5));
+            unsigned long t3 = micros();
             if (err2 == ESP_OK && bytes_read2 > 0) {
                 adc2Ok = true;
+                readLatencyAccumUs[1] += (t3 - t2);
+                readLatencyCount[1]++;
+                bufCount[1]++;
             } else {
                 if (err2 != ESP_OK) _diagnostics.adc[1].i2sReadErrors++;
                 if (bytes_read2 == 0) _diagnostics.adc[1].zeroByteReads++;
+            }
+
+            // One-shot startup diagnostic for ADC2
+            if (!adc2FirstReadLogged) {
+                if (adc2Ok) {
+                    LOG_I("[Audio] ADC2 first read OK: %d bytes, samples[0..3]=%08lX %08lX %08lX %08lX",
+                          (int)bytes_read2,
+                          (unsigned long)buf2[0], (unsigned long)buf2[1],
+                          (unsigned long)buf2[2], (unsigned long)buf2[3]);
+                    adc2FirstReadLogged = true;
+                } else if (_diagnostics.adc[1].zeroByteReads >= 50) {
+                    LOG_W("[Audio] ADC2 no data after 50 reads (DMA timeout — slave not clocking)");
+                    adc2FirstReadLogged = true;
+                }
             }
         }
 
@@ -538,6 +579,12 @@ static void audio_capture_task(void *param) {
         // Process ADC2 (if available)
         if (adc2Ok) {
             process_adc_buffer(1, buf2, stereo_frames2, now, dt_ms, sigGenSw);
+        } else if (_adc2InitOk) {
+            // Slave read failed — still update diagnostics so health status reflects reality
+            AdcDiagnostics &diag = _diagnostics.adc[1];
+            diag.consecutiveZeros++;
+            diag.allZeroBuffers++;
+            diag.status = audio_derive_health_status(diag);
         }
 
         // Periodic serial dump
@@ -547,14 +594,24 @@ static void audio_capture_task(void *param) {
             LOG_I("[Audio] ADC1=%.1fdB flr=%.1f adcs=%d",
                   _analysis.adc[0].dBFS, _diagnostics.adc[0].noiseFloorDbfs,
                   _numAdcsDetected);
-            if (adc2Ok) {
-                LOG_I("[Audio] ADC2=%.1fdB flr=%.1f",
-                      _analysis.adc[1].dBFS, _diagnostics.adc[1].noiseFloorDbfs);
+            if (_adc2InitOk) {
+                // Enhanced ADC2 log — distinguishes failure modes:
+                // zb high + az=0 + tot=0 → DMA timeout, slave not clocking (GPIO matrix / wiring)
+                // zb low  + az high      → Slave clocking OK, no audio (no PCM1808 #2)
+                // errs > 0               → I2S driver error (bus fault, DMA overflow)
+                LOG_I("[Audio] ADC2=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu",
+                      _analysis.adc[1].dBFS, _diagnostics.adc[1].noiseFloorDbfs,
+                      _diagnostics.adc[1].status,
+                      _diagnostics.adc[1].i2sReadErrors,
+                      _diagnostics.adc[1].zeroByteReads,
+                      _diagnostics.adc[1].allZeroBuffers,
+                      _diagnostics.adc[1].consecutiveZeros,
+                      _diagnostics.adc[1].totalBuffersRead);
             }
         }
 
         // Detect number of active ADCs (check every buffer)
-        if (adc2Ok && _diagnostics.adc[1].consecutiveZeros < 50) {
+        if (_adc2InitOk && _diagnostics.adc[1].consecutiveZeros < 50) {
             _numAdcsDetected = 2;
         } else {
             _numAdcsDetected = 1;
@@ -565,6 +622,35 @@ static void audio_capture_task(void *param) {
             prevNumAdcs = _numAdcsDetected;
         }
         _diagnostics.numAdcsDetected = _numAdcsDetected;
+
+        // Update runtime metrics every 1 second (gated by debug toggle)
+        bool metricsEnabled = AppState::getInstance().debugMode &&
+                              AppState::getInstance().debugI2sMetrics;
+        unsigned long metricsNow = millis();
+        if (metricsNow - lastMetricsTime >= 1000) {
+            float elapsed_s = (float)(metricsNow - lastMetricsTime) / 1000.0f;
+            AppState &as = AppState::getInstance();
+            if (metricsEnabled) {
+                for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+                    as.i2sMetrics.buffersPerSec[a] = bufCount[a] / elapsed_s;
+                    as.i2sMetrics.avgReadLatencyUs[a] = readLatencyCount[a] > 0
+                        ? (float)readLatencyAccumUs[a] / readLatencyCount[a] : 0;
+                }
+                if (_audioTaskHandle) {
+                    as.i2sMetrics.audioTaskStackFree =
+                        uxTaskGetStackHighWaterMark(_audioTaskHandle) * 4;
+                }
+            } else {
+                // Zero out stale metrics when disabled
+                memset(&as.i2sMetrics, 0, sizeof(as.i2sMetrics));
+            }
+            for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+                bufCount[a] = 0;
+                readLatencyAccumUs[a] = 0;
+                readLatencyCount[a] = 0;
+            }
+            lastMetricsTime = metricsNow;
+        }
 
         // Recalculate waveform target on both ADCs
         _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
@@ -605,12 +691,41 @@ void i2s_audio_init() {
         _lastFftTime[a] = 0;
     }
 
-    // Configure slave I2S (ADC2) FIRST — so master's i2s_set_pin() runs last
-    // and correctly owns BCK/LRC GPIO output routing in the ESP32 GPIO matrix
+    // Pull-down on DOUT2 so an unconnected pin reads clean zeros (→ NO_DATA)
+    // instead of floating noise that looks like valid audio (→ false OK status)
+    pinMode(I2S_DOUT2_PIN, INPUT_PULLDOWN);
+
+    // Install slave I2S driver (ADC2) first. Only DOUT2 is configured via
+    // i2s_set_pin — BCK/LRC are routed manually after master setup.
     _adc2InitOk = i2s_configure_slave(_currentSampleRate);
 
-    // Configure master I2S (ADC1) — must be last to retain clock output ownership
+    // Configure master I2S (ADC1) with full pin config — BCK/LRC as outputs.
     i2s_configure_master(_currentSampleRate);
+
+    // Now manually route BCK/LRC to slave I2S input signals.
+    // esp_rom_gpio_connect_in_signal only writes the input MUX register —
+    // does NOT touch gpio_matrix_out (master clock) or GPIO direction.
+    if (_adc2InitOk) {
+        esp_rom_gpio_connect_in_signal(I2S_BCK_PIN,
+            i2s_periph_signal[I2S_PORT_SLAVE].s_rx_bck_sig, false);
+        esp_rom_gpio_connect_in_signal(I2S_LRC_PIN,
+            i2s_periph_signal[I2S_PORT_SLAVE].s_rx_ws_sig, false);
+        // Restart slave so DMA picks up the newly routed clocks
+        i2s_stop((i2s_port_t)I2S_PORT_SLAVE);
+        i2s_start((i2s_port_t)I2S_PORT_SLAVE);
+        LOG_I("[Audio] ADC2 slave routed: BCK sig=%d, WS sig=%d",
+              i2s_periph_signal[I2S_PORT_SLAVE].s_rx_bck_sig,
+              i2s_periph_signal[I2S_PORT_SLAVE].s_rx_ws_sig);
+
+        // Verify GPIO matrix input routing took effect via peripheral struct
+        // Expected: BCK_IN=GPIO16, WS_IN=GPIO18, DIN=GPIO9
+        // If any shows 0x3F (63) = disconnected / not routed
+        uint32_t bck_sel = GPIO.func_in_sel_cfg[i2s_periph_signal[I2S_PORT_SLAVE].s_rx_bck_sig].func_sel;
+        uint32_t ws_sel  = GPIO.func_in_sel_cfg[i2s_periph_signal[I2S_PORT_SLAVE].s_rx_ws_sig].func_sel;
+        uint32_t din_sel = GPIO.func_in_sel_cfg[i2s_periph_signal[I2S_PORT_SLAVE].data_in_sig].func_sel;
+        LOG_I("[Audio] ADC2 GPIO verify: BCK_IN=GPIO%lu (expect %d), WS_IN=GPIO%lu (expect %d), DIN=GPIO%lu (expect %d)",
+              bck_sel, I2S_BCK_PIN, ws_sel, I2S_LRC_PIN, din_sel, I2S_DOUT2_PIN);
+    }
     _numAdcsDetected = 1; // Will be updated once data flows
 
     xTaskCreatePinnedToCore(
@@ -619,7 +734,7 @@ void i2s_audio_init() {
         TASK_STACK_SIZE_AUDIO,
         NULL,
         TASK_PRIORITY_AUDIO,
-        NULL,
+        &_audioTaskHandle,
         0  // Core 0
     );
 
@@ -665,6 +780,31 @@ bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex) {
     return true;
 }
 
+I2sStaticConfig i2s_audio_get_static_config() {
+    I2sStaticConfig cfg = {};
+    // ADC1 — Master
+    cfg.adc[0].isMaster = true;
+    cfg.adc[0].sampleRate = _currentSampleRate;
+    cfg.adc[0].bitsPerSample = 32;
+    cfg.adc[0].channelFormat = "Stereo R/L";
+    cfg.adc[0].dmaBufCount = DMA_BUF_COUNT;
+    cfg.adc[0].dmaBufLen = DMA_BUF_LEN;
+    cfg.adc[0].apllEnabled = true;
+    cfg.adc[0].mclkHz = _currentSampleRate * 256;
+    cfg.adc[0].commFormat = "Standard I2S";
+    // ADC2 — Slave
+    cfg.adc[1].isMaster = false;
+    cfg.adc[1].sampleRate = _currentSampleRate;
+    cfg.adc[1].bitsPerSample = 32;
+    cfg.adc[1].channelFormat = "Stereo R/L";
+    cfg.adc[1].dmaBufCount = DMA_BUF_COUNT;
+    cfg.adc[1].dmaBufLen = DMA_BUF_LEN;
+    cfg.adc[1].apllEnabled = false;
+    cfg.adc[1].mclkHz = 0;
+    cfg.adc[1].commFormat = "Standard I2S";
+    return cfg;
+}
+
 bool i2s_audio_set_sample_rate(uint32_t rate) {
     if (!audio_validate_sample_rate(rate)) return false;
     if (rate == _currentSampleRate) return true;
@@ -681,8 +821,16 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
         memset(_wfAccum[a], 0, sizeof(_wfAccum[a]));
     }
 
-    i2s_configure_master(rate);
     if (_adc2InitOk) _adc2InitOk = i2s_configure_slave(rate);
+    i2s_configure_master(rate);
+    if (_adc2InitOk) {
+        esp_rom_gpio_connect_in_signal(I2S_BCK_PIN,
+            i2s_periph_signal[I2S_PORT_SLAVE].s_rx_bck_sig, false);
+        esp_rom_gpio_connect_in_signal(I2S_LRC_PIN,
+            i2s_periph_signal[I2S_PORT_SLAVE].s_rx_ws_sig, false);
+        i2s_stop((i2s_port_t)I2S_PORT_SLAVE);
+        i2s_start((i2s_port_t)I2S_PORT_SLAVE);
+    }
 
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
     return true;
@@ -700,4 +848,26 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     return audio_validate_sample_rate(rate);
 }
 int i2s_audio_get_num_adcs() { return _nativeNumAdcs; }
+I2sStaticConfig i2s_audio_get_static_config() {
+    I2sStaticConfig cfg = {};
+    cfg.adc[0].isMaster = true;
+    cfg.adc[0].sampleRate = 48000;
+    cfg.adc[0].bitsPerSample = 32;
+    cfg.adc[0].channelFormat = "Stereo R/L";
+    cfg.adc[0].dmaBufCount = 4;
+    cfg.adc[0].dmaBufLen = 256;
+    cfg.adc[0].apllEnabled = true;
+    cfg.adc[0].mclkHz = 48000 * 256;
+    cfg.adc[0].commFormat = "Standard I2S";
+    cfg.adc[1].isMaster = false;
+    cfg.adc[1].sampleRate = 48000;
+    cfg.adc[1].bitsPerSample = 32;
+    cfg.adc[1].channelFormat = "Stereo R/L";
+    cfg.adc[1].dmaBufCount = 4;
+    cfg.adc[1].dmaBufLen = 256;
+    cfg.adc[1].apllEnabled = false;
+    cfg.adc[1].mclkHz = 0;
+    cfg.adc[1].commFormat = "Standard I2S";
+    return cfg;
+}
 #endif // NATIVE_TEST

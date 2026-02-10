@@ -2116,6 +2116,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     </style>
 </head>
 <body class="has-status-bar">
+    <script>if(localStorage.getItem('darkMode')==='true'){document.body.classList.add('night-mode');document.querySelector('meta[name="theme-color"]').setAttribute('content','#121212');}</script>
     <!-- Sidebar Navigation (Desktop) -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -2297,7 +2298,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                     <div class="form-group">
                         <label class="form-label">Audio Threshold (dBFS)</label>
-                        <input type="number" class="form-input" id="audioThreshold" inputmode="decimal" min="-96" max="0" step="1" value="-40" onchange="updateAudioThreshold()">
+                        <input type="number" class="form-input" id="audioThreshold" inputmode="decimal" min="-96" max="0" step="1" value="-60" onchange="updateAudioThreshold()">
                     </div>
                 </div>
             </div>
@@ -2334,13 +2335,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div id="waveformContent">
                     <div class="dual-canvas-grid">
                         <div class="canvas-panel">
-                            <div class="canvas-panel-title">Input 1</div>
+                            <div class="canvas-panel-title">ADC 1</div>
                             <div class="audio-canvas-wrap">
                                 <canvas class="waveform-canvas" id="audioWaveformCanvas0"></canvas>
                             </div>
                         </div>
                         <div class="canvas-panel" id="waveformPanel1">
-                            <div class="canvas-panel-title">Input 2</div>
+                            <div class="canvas-panel-title">ADC 2</div>
                             <div class="audio-canvas-wrap">
                                 <canvas class="waveform-canvas" id="audioWaveformCanvas1"></canvas>
                             </div>
@@ -2369,14 +2370,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div id="spectrumContent">
                     <div class="dual-canvas-grid">
                         <div class="canvas-panel">
-                            <div class="canvas-panel-title">Input 1</div>
+                            <div class="canvas-panel-title">ADC 1</div>
                             <div class="audio-canvas-wrap">
                                 <canvas class="spectrum-canvas" id="audioSpectrumCanvas0"></canvas>
                             </div>
                             <div class="dominant-freq-readout">Dominant: <span id="dominantFreq0">-- Hz</span></div>
                         </div>
                         <div class="canvas-panel" id="spectrumPanel1">
-                            <div class="canvas-panel-title">Input 2</div>
+                            <div class="canvas-panel-title">ADC 2</div>
                             <div class="audio-canvas-wrap">
                                 <canvas class="spectrum-canvas" id="audioSpectrumCanvas1"></canvas>
                             </div>
@@ -2404,9 +2405,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                 </div>
                 <div id="vuMeterContent">
-                <!-- ADC 0 (Input 1) -->
+                <!-- ADC 0 (ADC 1) -->
                 <div class="adc-section-header">
-                    <span class="adc-section-title">Input 1</span>
+                    <span class="adc-section-title">ADC 1</span>
                     <span class="adc-status-badge ok" id="adcStatusBadge0">OK</span>
                     <span class="clip-indicator" id="clipIndicator0">CLIP</span>
                     <span class="adc-readout" id="adcReadout0">-- dBFS | -- Vrms</span>
@@ -2444,10 +2445,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                 </div>
 
-                <!-- ADC 1 (Input 2) -->
+                <!-- ADC 1 (ADC 2) -->
                 <div id="adcSection1">
                 <div class="adc-section-header">
-                    <span class="adc-section-title">Input 2</span>
+                    <span class="adc-section-title">ADC 2</span>
                     <span class="adc-status-badge no-data" id="adcStatusBadge1">NO_DATA</span>
                     <span class="clip-indicator" id="clipIndicator1">CLIP</span>
                     <span class="adc-readout" id="adcReadout1">-- dBFS | -- Vrms</span>
@@ -2511,20 +2512,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <div class="card">
                 <div class="card-title">Input Names</div>
                 <div class="form-group">
-                    <label class="form-label">Input 1 - Left</label>
+                    <label class="form-label">ADC 1 - Input 1</label>
                     <input type="text" class="form-input" id="inputName0" placeholder="Subwoofer 1" maxlength="20">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Input 1 - Right</label>
+                    <label class="form-label">ADC 1 - Input 2</label>
                     <input type="text" class="form-input" id="inputName1" placeholder="Subwoofer 2" maxlength="20">
                 </div>
                 <div id="inputNamesAdc1">
                 <div class="form-group">
-                    <label class="form-label">Input 2 - Left</label>
+                    <label class="form-label">ADC 2 - Input 3</label>
                     <input type="text" class="form-input" id="inputName2" placeholder="Subwoofer 3" maxlength="20">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Input 2 - Right</label>
+                    <label class="form-label">ADC 2 - Input 4</label>
                     <input type="text" class="form-input" id="inputName3" placeholder="Subwoofer 4" maxlength="20">
                 </div>
                 </div>
@@ -2574,8 +2575,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="form-group">
                     <label class="form-label">Target ADC</label>
                     <select class="form-input" id="siggenTargetAdc" onchange="updateSigGen()">
-                        <option value="0">Input 1</option>
-                        <option value="1">Input 2</option>
+                        <option value="0">ADC 1</option>
+                        <option value="1">ADC 2</option>
                         <option value="2" selected>Both</option>
                     </select>
                 </div>
@@ -2600,8 +2601,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="form-group">
                     <label class="form-label">Channel</label>
                     <select class="form-input" id="siggenChannel" onchange="updateSigGen()">
-                        <option value="0">Left</option>
-                        <option value="1">Right</option>
+                        <option value="0">Ch 1</option>
+                        <option value="1">Ch 2</option>
                         <option value="2" selected>Both</option>
                     </select>
                 </div>
@@ -3192,6 +3193,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span>Hardware Stats</span>
                         <label class="switch"><input type="checkbox" id="debugHwStatsToggle" onchange="setDebugToggle('setDebugHwStats',this.checked)"><span class="slider round"></span></label>
                     </div>
+                    <div class="toggle-row">
+                        <span>I2S Metrics</span>
+                        <label class="switch"><input type="checkbox" id="debugI2sMetricsToggle" onchange="setDebugToggle('setDebugI2sMetrics',this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Task Monitor</span>
+                        <label class="switch"><input type="checkbox" id="debugTaskMonitorToggle" onchange="setDebugToggle('setDebugTaskMonitor',this.checked)"><span class="slider round"></span></label>
+                    </div>
                     <div class="input-group">
                         <label for="debugSerialLevel" class="input-label">Serial Log Level</label>
                         <select id="debugSerialLevel" class="select-input" onchange="setDebugSerialLevel(this.value)">
@@ -3377,7 +3386,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="info-box">
                     <div class="dual-canvas-grid">
                         <div>
-                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Input 1</div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 1</div>
                             <div class="info-row">
                                 <span class="info-label">ADC Status</span>
                                 <span class="info-value" id="adcStatus">--</span>
@@ -3400,7 +3409,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             </div>
                         </div>
                         <div>
-                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Input 2</div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 2</div>
                             <div class="info-row">
                                 <span class="info-label">ADC Status</span>
                                 <span class="info-value" id="adcStatus1">--</span>
@@ -3436,10 +3445,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- I2S Configuration -->
             <div id="i2sMetricsSection">
             <div class="card">
-                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-                    I2S Configuration
-                    <label class="switch" style="margin:0"><input type="checkbox" id="debugI2sMetricsToggle" onchange="setDebugToggle('setDebugI2sMetrics',this.checked)"><span class="slider round"></span></label>
-                </div>
+                <div class="card-title">I2S Configuration</div>
                 <div class="info-box">
                     <div class="dual-canvas-grid">
                         <div>
@@ -3485,10 +3491,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- FreeRTOS Tasks -->
             <div id="taskMonitorSection">
             <div class="card">
-                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-                    FreeRTOS Tasks
-                    <label class="switch" style="margin:0"><input type="checkbox" id="debugTaskMonitorToggle" onchange="setDebugToggle('setDebugTaskMonitor',this.checked)"><span class="slider round"></span></label>
-                </div>
+                <div class="card-title">FreeRTOS Tasks</div>
                 <div class="info-box">
                     <div class="info-row"><span class="info-label">Task Count</span><span class="info-value" id="taskCount">--</span></div>
                     <div class="info-row"><span class="info-label">Loop Time (avg)</span><span class="info-value" id="loopTimeAvg">--</span></div>
@@ -4046,10 +4049,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         if (data.adc && Array.isArray(data.adc)) {
                             for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
                                 const ad = data.adc[a];
-                                vuTargetArr[a][0] = ad.vuL !== undefined ? ad.vuL : 0;
-                                vuTargetArr[a][1] = ad.vuR !== undefined ? ad.vuR : 0;
-                                peakTargetArr[a][0] = ad.peakL !== undefined ? ad.peakL : 0;
-                                peakTargetArr[a][1] = ad.peakR !== undefined ? ad.peakR : 0;
+                                vuTargetArr[a][0] = ad.vu1 !== undefined ? ad.vu1 : 0;
+                                vuTargetArr[a][1] = ad.vu2 !== undefined ? ad.vu2 : 0;
+                                peakTargetArr[a][0] = ad.peak1 !== undefined ? ad.peak1 : 0;
+                                peakTargetArr[a][1] = ad.peak2 !== undefined ? ad.peak2 : 0;
                             }
                         }
                         // Per-ADC status badges and readouts
@@ -4061,7 +4064,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         if (data.adc && Array.isArray(data.adc)) {
                             for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
                                 const ad = data.adc[a];
-                                updateAdcReadout(a, ad.dBFS, ad.vrmsL, ad.vrmsR);
+                                updateAdcReadout(a, ad.dBFS, ad.vrms1, ad.vrms2);
                             }
                         }
                         vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
@@ -4616,13 +4619,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
-        function updateAdcReadout(adcIdx, dBFS, vrmsL, vrmsR) {
+        function updateAdcReadout(adcIdx, dBFS, vrms1, vrms2) {
             var el = document.getElementById('adcReadout' + adcIdx);
             if (!el) return;
             var dbStr = (dBFS !== undefined && dBFS > -95) ? dBFS.toFixed(1) + ' dBFS' : '-inf dBFS';
             var vrms = 0;
-            if (vrmsL !== undefined && vrmsR !== undefined) vrms = Math.max(vrmsL, vrmsR);
-            else if (vrmsL !== undefined) vrms = vrmsL;
+            if (vrms1 !== undefined && vrms2 !== undefined) vrms = Math.max(vrms1, vrms2);
+            else if (vrms1 !== undefined) vrms = vrms1;
             var vStr = vrms > 0.001 ? vrms.toFixed(3) + ' Vrms' : '-- Vrms';
             el.textContent = dbStr + ' | ' + vStr;
         }
@@ -5018,41 +5021,41 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
-        function updateLevelMeters(adcIdx, vuL, vuR, peakL, peakR) {
-            vuL = Math.min(Math.max(vuL, 0), 1);
-            vuR = Math.min(Math.max(vuR, 0), 1);
-            peakL = Math.min(Math.max(peakL, 0), 1);
-            peakR = Math.min(Math.max(peakR, 0), 1);
+        function updateLevelMeters(adcIdx, vu1, vu2, peak1, peak2) {
+            vu1 = Math.min(Math.max(vu1, 0), 1);
+            vu2 = Math.min(Math.max(vu2, 0), 1);
+            peak1 = Math.min(Math.max(peak1, 0), 1);
+            peak2 = Math.min(Math.max(peak2, 0), 1);
 
             if (!vuSegmentedMode) {
                 // Continuous dB-scaled bars
-                const pctL = linearToDbPercent(vuL);
-                const pctR = linearToDbPercent(vuR);
+                const pct1 = linearToDbPercent(vu1);
+                const pct2 = linearToDbPercent(vu2);
                 const fillL = document.getElementById('vuFill' + adcIdx + 'L');
                 const fillR = document.getElementById('vuFill' + adcIdx + 'R');
-                if (fillL) fillL.style.width = pctL + '%';
-                if (fillR) fillR.style.width = pctR + '%';
+                if (fillL) fillL.style.width = pct1 + '%';
+                if (fillR) fillR.style.width = pct2 + '%';
 
-                const pkPctL = linearToDbPercent(peakL);
-                const pkPctR = linearToDbPercent(peakR);
+                const pkPct1 = linearToDbPercent(peak1);
+                const pkPct2 = linearToDbPercent(peak2);
                 const pkL = document.getElementById('vuPeak' + adcIdx + 'L');
                 const pkR = document.getElementById('vuPeak' + adcIdx + 'R');
-                if (pkL) pkL.style.left = pkPctL + '%';
-                if (pkR) pkR.style.left = pkPctR + '%';
+                if (pkL) pkL.style.left = pkPct1 + '%';
+                if (pkR) pkR.style.left = pkPct2 + '%';
 
                 const dbL = document.getElementById('vuDb' + adcIdx + 'L');
                 const dbR = document.getElementById('vuDb' + adcIdx + 'R');
-                if (dbL) dbL.textContent = formatDbFS(vuL);
-                if (dbR) dbR.textContent = formatDbFS(vuR);
+                if (dbL) dbL.textContent = formatDbFS(vu1);
+                if (dbR) dbR.textContent = formatDbFS(vu2);
             } else {
                 // Segmented PPM canvas
-                drawPPM('ppmCanvas' + adcIdx + 'L', vuL, peakL);
-                drawPPM('ppmCanvas' + adcIdx + 'R', vuR, peakR);
+                drawPPM('ppmCanvas' + adcIdx + 'L', vu1, peak1);
+                drawPPM('ppmCanvas' + adcIdx + 'R', vu2, peak2);
 
                 const dbSegL = document.getElementById('vuDbSeg' + adcIdx + 'L');
                 const dbSegR = document.getElementById('vuDbSeg' + adcIdx + 'R');
-                if (dbSegL) dbSegL.textContent = formatDbFS(vuL);
-                if (dbSegR) dbSegR.textContent = formatDbFS(vuR);
+                if (dbSegL) dbSegL.textContent = formatDbFS(vu1);
+                if (dbSegR) dbSegR.textContent = formatDbFS(vu2);
             }
         }
 

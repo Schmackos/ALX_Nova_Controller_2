@@ -21,8 +21,8 @@ static const CycleOption waveform_opts[] = {
 
 /* Channel cycle options */
 static const CycleOption channel_opts[] = {
-    {"Left",  SIGCHAN_LEFT},
-    {"Right", SIGCHAN_RIGHT},
+    {"Ch 1",  SIGCHAN_CH1},
+    {"Ch 2",  SIGCHAN_CH2},
     {"Both",  SIGCHAN_BOTH},
 };
 
@@ -34,9 +34,9 @@ static const CycleOption output_opts[] = {
 
 /* Target ADC cycle options */
 static const CycleOption target_adc_opts[] = {
-    {"Input 1", SIGTARGET_ADC1},
-    {"Input 2", SIGTARGET_ADC2},
-    {"Both",    SIGTARGET_BOTH},
+    {"ADC 1", SIGTARGET_ADC1},
+    {"ADC 2", SIGTARGET_ADC2},
+    {"Both",  SIGTARGET_BOTH},
 };
 
 /* Confirmation callbacks */
@@ -214,12 +214,12 @@ static void build_siggen_menu(void) {
     static char amp_str[12];
     snprintf(amp_str, sizeof(amp_str), "%+.0f dBFS", st.sigGenAmplitude);
 
-    const char *chan_names[] = {"Left", "Right", "Both"};
+    const char *chan_names[] = {"Ch 1", "Ch 2", "Both"};
     const char *chan_str = chan_names[st.sigGenChannel % 3];
 
     const char *out_str = st.sigGenOutputMode == 0 ? "Software" : "PWM";
 
-    const char *target_names[] = {"Input 1", "Input 2", "Both"};
+    const char *target_names[] = {"ADC 1", "ADC 2", "Both"};
     const char *target_str = target_names[st.sigGenTargetAdc % 3];
 
     siggen_menu.title = "Signal Gen";
@@ -258,13 +258,13 @@ void scr_siggen_refresh(void) {
     snprintf(amp_buf, sizeof(amp_buf), "%+.0f dBFS", st.sigGenAmplitude);
     scr_menu_set_item_value(4, amp_buf);
 
-    const char *chan_names[] = {"Left", "Right", "Both"};
+    const char *chan_names[] = {"Ch 1", "Ch 2", "Both"};
     scr_menu_set_item_value(5, chan_names[st.sigGenChannel % 3]);
 
     scr_menu_set_item_value(6, st.sigGenOutputMode == 0 ? "Software" : "PWM");
 
     if (st.numAdcsDetected > 1) {
-        const char *target_names[] = {"Input 1", "Input 2", "Both"};
+        const char *target_names[] = {"ADC 1", "ADC 2", "Both"};
         scr_menu_set_item_value(7, target_names[st.sigGenTargetAdc % 3]);
     }
 }

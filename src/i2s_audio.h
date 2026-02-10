@@ -15,14 +15,14 @@ static const float PEAK_DECAY_AFTER_HOLD_MS = 300.0f; // Decay after hold expire
 
 // ===== Per-ADC Analysis Sub-struct =====
 struct AdcAnalysis {
-    float rmsLeft;         // 0.0-1.0 (linear)
-    float rmsRight;        // 0.0-1.0 (linear)
+    float rms1;         // 0.0-1.0 (linear)
+    float rms2;        // 0.0-1.0 (linear)
     float rmsCombined;     // 0.0-1.0 (linear)
-    float vuLeft;          // 0.0-1.0 (VU-smoothed with attack/decay)
-    float vuRight;         // 0.0-1.0 (VU-smoothed with attack/decay)
+    float vu1;          // 0.0-1.0 (VU-smoothed with attack/decay)
+    float vu2;         // 0.0-1.0 (VU-smoothed with attack/decay)
     float vuCombined;      // 0.0-1.0 (VU-smoothed with attack/decay)
-    float peakLeft;        // 0.0-1.0 (instant attack, hold, then decay)
-    float peakRight;       // 0.0-1.0 (instant attack, hold, then decay)
+    float peak1;        // 0.0-1.0 (instant attack, hold, then decay)
+    float peak2;       // 0.0-1.0 (instant attack, hold, then decay)
     float peakCombined;    // 0.0-1.0 (instant attack, hold, then decay)
     float dBFS;            // -96 to 0 (this ADC's combined level)
 };
@@ -74,6 +74,23 @@ struct AudioDiagnostics {
 static const int WAVEFORM_BUFFER_SIZE = 256;
 static const int FFT_SIZE = 1024;
 static const int SPECTRUM_BANDS = 16;
+
+// ===== I2S Static Configuration (for diagnostics display) =====
+struct I2sAdcConfig {
+    bool isMaster;
+    uint32_t sampleRate;
+    int bitsPerSample;           // 32
+    const char *channelFormat;   // "Stereo R/L"
+    int dmaBufCount;
+    int dmaBufLen;
+    bool apllEnabled;
+    uint32_t mclkHz;             // sampleRate * 256, or 0 for slave
+    const char *commFormat;      // "Standard I2S"
+};
+struct I2sStaticConfig {
+    I2sAdcConfig adc[NUM_AUDIO_ADCS];
+};
+I2sStaticConfig i2s_audio_get_static_config();
 
 // ===== Public API =====
 void i2s_audio_init();

@@ -35,6 +35,9 @@ static const int I2S_LRC_PIN = 18;
 #ifndef I2S_MCLK_PIN
 static const int I2S_MCLK_PIN = 3;
 #endif
+#ifndef I2S_DOUT2_PIN
+static const int I2S_DOUT2_PIN = 19;
+#endif
 #ifndef RESET_BUTTON_PIN
 static const int RESET_BUTTON_PIN = 15;
 #endif
@@ -82,10 +85,11 @@ struct PinEntry {
 };
 
 static const PinEntry all_pins[] = {
-    {"PCM1808 ADC",  "BCK",  I2S_BCK_PIN},
-    {"PCM1808 ADC",  "DOUT", I2S_DOUT_PIN},
-    {"PCM1808 ADC",  "LRC",  I2S_LRC_PIN},
-    {"PCM1808 ADC",  "MCLK", I2S_MCLK_PIN},
+    {"PCM1808 ADC 1&2", "BCK",   I2S_BCK_PIN},
+    {"PCM1808 ADC 1",   "DOUT",  I2S_DOUT_PIN},
+    {"PCM1808 ADC 2",   "DOUT2", I2S_DOUT2_PIN},
+    {"PCM1808 ADC 1&2", "LRC",   I2S_LRC_PIN},
+    {"PCM1808 ADC 1&2", "MCLK",  I2S_MCLK_PIN},
     {"ST7735S TFT",  "CS",   TFT_CS_PIN},
     {"ST7735S TFT",  "MOSI", TFT_MOSI_PIN},
     {"ST7735S TFT",  "CLK",  TFT_SCLK_PIN},
@@ -123,9 +127,9 @@ static void sort_pins(int *indices, int count, PinSortMode mode) {
 
 static void format_pin_info(char *buf, int len) {
     snprintf(buf, len,
-             "PCM1808 ADC\n"
-             "  BCK=%d DOUT=%d LRC=%d\n"
-             "  MCLK=%d\n"
+             "PCM1808 ADC 1&2\n"
+             "  BCK=%d DOUT=%d DOUT2=%d\n"
+             "  LRC=%d MCLK=%d\n"
              "ST7735S TFT 1.8\"\n"
              "  CS=%d MOSI=%d CLK=%d\n"
              "  DC=%d RST=%d BL=%d\n"
@@ -135,8 +139,8 @@ static void format_pin_info(char *buf, int len) {
              "  IO=%d\n"
              "Core\n"
              "  LED=%d Amp=%d Btn=%d",
-             I2S_BCK_PIN, I2S_DOUT_PIN, I2S_LRC_PIN,
-             I2S_MCLK_PIN,
+             I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
+             I2S_LRC_PIN, I2S_MCLK_PIN,
              TFT_CS_PIN, TFT_MOSI_PIN, TFT_SCLK_PIN,
              TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN,
              ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
@@ -145,7 +149,7 @@ static void format_pin_info(char *buf, int len) {
 }
 
 static void format_pin_sorted(char *buf, int len, PinSortMode mode) {
-    int indices[17];
+    int indices[18];
     for (int i = 0; i < PIN_COUNT; i++) indices[i] = i;
 
     if (mode == SORT_BY_DEVICE) {
@@ -206,6 +210,7 @@ void test_pin_info_i2s_pins(void) {
     format_pin_info(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "BCK=16"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT=17"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT2=19"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "LRC=18"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "MCLK=3"));
 }
@@ -257,7 +262,7 @@ void test_pin_info_first_line(void) {
     char first_line[64];
     strncpy(first_line, buf, first_line_len);
     first_line[first_line_len] = '\0';
-    TEST_ASSERT_EQUAL_STRING("PCM1808 ADC", first_line);
+    TEST_ASSERT_EQUAL_STRING("PCM1808 ADC 1&2", first_line);
 }
 
 /* Test: all 17 pin numbers are unique in output */
@@ -268,7 +273,7 @@ void test_pin_info_all_17_pins_present(void) {
     for (size_t i = 0; i < strlen(buf); i++) {
         if (buf[i] == '=') eq_count++;
     }
-    TEST_ASSERT_EQUAL(17, eq_count);
+    TEST_ASSERT_EQUAL(18, eq_count);
 }
 
 /* Test: multiline output has expected line count */
@@ -307,8 +312,8 @@ void test_sort_by_gpio_all_pins(void) {
     for (size_t i = 0; i < strlen(buf); i++) {
         if (buf[i] == '\n') line_count++;
     }
-    /* 17 pins = 16 newlines (last line has no trailing newline) */
-    TEST_ASSERT_EQUAL(16, line_count);
+    /* 18 pins = 17 newlines (last line has no trailing newline) */
+    TEST_ASSERT_EQUAL(17, line_count);
 }
 
 /* Test: sort by function produces alphabetical order */

@@ -80,7 +80,7 @@ float siggen_dbfs_to_linear(float dbfs) {
 // Enums replicated from signal_generator.h
 enum SignalWaveform  { WAVE_SINE = 0, WAVE_SQUARE, WAVE_NOISE, WAVE_SWEEP, WAVE_COUNT };
 enum SignalOutputMode { SIGOUT_SOFTWARE = 0, SIGOUT_PWM };
-enum SignalChannel   { SIGCHAN_LEFT = 0, SIGCHAN_RIGHT, SIGCHAN_BOTH };
+enum SignalChannel   { SIGCHAN_CH1 = 0, SIGCHAN_CH2, SIGCHAN_BOTH };
 
 // Simple buffer fill for testing (replicated from signal_generator.cpp core logic)
 static float _test_phase = 0.0f;
@@ -105,8 +105,8 @@ static void test_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_ra
         int li = f * 2;
         int ri = f * 2 + 1;
         switch (channel) {
-            case SIGCHAN_LEFT:  buf[li] = raw; buf[ri] = 0; break;
-            case SIGCHAN_RIGHT: buf[li] = 0;   buf[ri] = raw; break;
+            case SIGCHAN_CH1:  buf[li] = raw; buf[ri] = 0; break;
+            case SIGCHAN_CH2: buf[li] = 0;   buf[ri] = raw; break;
             case SIGCHAN_BOTH:
             default: buf[li] = raw; buf[ri] = raw; break;
         }
@@ -200,11 +200,11 @@ void test_waveform_enum_count(void) {
     TEST_ASSERT_EQUAL(4, WAVE_COUNT);
 }
 
-// 6. Channel selection: left-only zeros right channel
-void test_channel_left_zeros_right(void) {
+// 6. Channel selection: ch1-only zeros ch2
+void test_channel_ch1_zeros_ch2(void) {
     int32_t buf[256 * 2]; // 256 stereo frames
     memset(buf, 0xFF, sizeof(buf)); // Fill with non-zero
-    test_fill_buffer(buf, 256, 48000, WAVE_SINE, 1000.0f, 1.0f, SIGCHAN_LEFT);
+    test_fill_buffer(buf, 256, 48000, WAVE_SINE, 1000.0f, 1.0f, SIGCHAN_CH1);
     // Right channel should all be zero
     for (int f = 0; f < 256; f++) {
         TEST_ASSERT_EQUAL_INT32(0, buf[f * 2 + 1]);
@@ -217,11 +217,11 @@ void test_channel_left_zeros_right(void) {
     TEST_ASSERT_TRUE(hasNonZero);
 }
 
-// 7. Channel selection: right-only zeros left channel
-void test_channel_right_zeros_left(void) {
+// 7. Channel selection: ch2-only zeros ch1
+void test_channel_ch2_zeros_ch1(void) {
     int32_t buf[256 * 2];
     memset(buf, 0xFF, sizeof(buf));
-    test_fill_buffer(buf, 256, 48000, WAVE_SINE, 1000.0f, 1.0f, SIGCHAN_RIGHT);
+    test_fill_buffer(buf, 256, 48000, WAVE_SINE, 1000.0f, 1.0f, SIGCHAN_CH2);
     for (int f = 0; f < 256; f++) {
         TEST_ASSERT_EQUAL_INT32(0, buf[f * 2]);
     }
@@ -306,7 +306,7 @@ void test_noise_seed_deterministic(void) {
 // 13. Stereo interleaved format matches I2S layout (L, R, L, R)
 void test_stereo_interleaved_format(void) {
     int32_t buf[4 * 2]; // 4 frames
-    test_fill_buffer(buf, 4, 48000, WAVE_SQUARE, 1000.0f, 1.0f, SIGCHAN_LEFT);
+    test_fill_buffer(buf, 4, 48000, WAVE_SQUARE, 1000.0f, 1.0f, SIGCHAN_CH1);
     // Left channel indices: 0, 2, 4, 6
     // Right channel indices: 1, 3, 5, 7
     for (int f = 0; f < 4; f++) {
@@ -330,8 +330,8 @@ int main(void) {
     RUN_TEST(test_dbfs_minus96_equals_0);
     RUN_TEST(test_dbfs_below_floor);
     RUN_TEST(test_waveform_enum_count);
-    RUN_TEST(test_channel_left_zeros_right);
-    RUN_TEST(test_channel_right_zeros_left);
+    RUN_TEST(test_channel_ch1_zeros_ch2);
+    RUN_TEST(test_channel_ch2_zeros_ch1);
     RUN_TEST(test_channel_both_equal);
     RUN_TEST(test_frequency_accuracy_1khz);
     RUN_TEST(test_amplitude_scaling);

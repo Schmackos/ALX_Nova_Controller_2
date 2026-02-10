@@ -9,6 +9,7 @@
 #include "ota_updater.h"
 #include "settings_manager.h"
 #include "signal_generator.h"
+#include "task_monitor.h"
 #include "i2s_audio.h"
 #include "smart_sensing.h"
 #include "utils.h"
@@ -208,6 +209,9 @@ void setup() {
   if (!loadSettings()) {
     LOG_I("[Main] No settings file found, using defaults");
   }
+
+  // Apply debug serial log level from loaded settings
+  applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
 
 #ifdef GUI_ENABLED
   // Initialize TFT display + rotary encoder GUI (may play boot animation
@@ -602,12 +606,17 @@ void setup() {
   server.begin();
   LOG_I("[Main] Web server and WebSocket started");
 
+  // Initialize task monitor (loop timing + FreeRTOS task snapshots)
+  task_monitor_init();
+
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
 
 }
 
 void loop() {
+  task_monitor_loop_start();
+
   // Small delay to reduce CPU usage - allows other tasks to run
   // Without this, the loop runs as fast as possible (~49% CPU)
   delay(5);
@@ -837,11 +846,22 @@ void loop() {
     sendSmartSensingState();
   }
 
+  // Task monitor snapshot (every 5 seconds, independent of HW stats broadcast)
+  static unsigned long lastTaskMonUpdate = 0;
+  if (appState.debugMode && appState.debugTaskMonitor) {
+    if (millis() - lastTaskMonUpdate >= 5000) {
+      lastTaskMonUpdate = millis();
+      task_monitor_update();
+    }
+  }
+
   // Broadcast Hardware Stats periodically (user-configurable interval)
   static unsigned long lastHardwareStatsBroadcast = 0;
   if (millis() - lastHardwareStatsBroadcast >= appState.hardwareStatsInterval) {
     lastHardwareStatsBroadcast = millis();
-    sendHardwareStats();
+    if (appState.debugMode && appState.debugHwStats) {
+      sendHardwareStats();
+    }
   }
 
   // Send audio waveform/spectrum data to subscribed WebSocket clients
@@ -874,6 +894,8 @@ void loop() {
   // Fallback buzzer processing (primary path is gui_task on Core 1)
   // Non-blocking mutex: skips if gui_task is already processing
   buzzer_update();
+
+  task_monitor_loop_end();
 }
 
 // WiFi functions are defined in wifi_manager.h/.cpp

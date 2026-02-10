@@ -165,11 +165,11 @@ void siggen_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_rate) {
         int li = f * 2;
         int ri = f * 2 + 1;
         switch (p.channel) {
-            case SIGCHAN_LEFT:
+            case SIGCHAN_CH1:
                 buf[li] = raw;
                 buf[ri] = 0;
                 break;
-            case SIGCHAN_RIGHT:
+            case SIGCHAN_CH2:
                 buf[li] = 0;
                 buf[ri] = raw;
                 break;

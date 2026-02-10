@@ -148,6 +148,30 @@ static void on_audio_rate_confirm(int int_val, float, int) {
     LOG_I("[GUI] Audio update rate set to %d ms", int_val);
 }
 
+/* Debug serial level cycle options */
+static const CycleOption debug_level_options[] = {
+    {"Off",     0},
+    {"Errors",  1},
+    {"Info",    2},
+    {"Debug",   3},
+};
+
+static void on_debug_mode_confirm(int int_val, float, int) {
+    AppState::getInstance().debugMode = (int_val != 0);
+    applyDebugSerialLevel(AppState::getInstance().debugMode, AppState::getInstance().debugSerialLevel);
+    saveSettings();
+    AppState::getInstance().markSettingsDirty();
+    LOG_I("[GUI] Debug mode %s", int_val ? "ON" : "OFF");
+}
+
+static void on_debug_level_confirm(int int_val, float, int) {
+    AppState::getInstance().debugSerialLevel = int_val;
+    applyDebugSerialLevel(AppState::getInstance().debugMode, int_val);
+    saveSettings();
+    AppState::getInstance().markSettingsDirty();
+    LOG_I("[GUI] Debug serial level set to %d", int_val);
+}
+
 /* Boot animation cycle options: None + 6 styles */
 static const CycleOption boot_anim_options[] = {
     {"None",       -1},
@@ -371,6 +395,28 @@ static void edit_boot_anim(void) {
     scr_value_edit_open(&cfg);
 }
 
+static void edit_debug_mode(void) {
+    ValueEditConfig cfg = {};
+    cfg.title = "Debug Mode";
+    cfg.type = VE_TOGGLE;
+    cfg.toggle_val = AppState::getInstance().debugMode;
+    cfg.on_confirm = on_debug_mode_confirm;
+    scr_value_edit_open(&cfg);
+}
+
+static void edit_debug_level(void) {
+    int cur = AppState::getInstance().debugSerialLevel;
+    if (cur < 0 || cur > 3) cur = 2;
+    ValueEditConfig cfg = {};
+    cfg.title = "Serial Level";
+    cfg.type = VE_CYCLE;
+    cfg.options = debug_level_options;
+    cfg.option_count = 4;
+    cfg.current_option = cur;
+    cfg.on_confirm = on_debug_level_confirm;
+    scr_value_edit_open(&cfg);
+}
+
 /* ===== Build the settings menu ===== */
 static MenuConfig settings_menu;
 
@@ -447,6 +493,15 @@ static void build_settings_menu(void) {
     static char ssl_str[8];
     snprintf(ssl_str, sizeof(ssl_str), "%s", st.enableCertValidation ? "ON" : "OFF");
 
+    static char debug_str[8];
+    snprintf(debug_str, sizeof(debug_str), "%s", st.debugMode ? "ON" : "OFF");
+
+    static char debug_lvl_str[8];
+    const char *lvl_names[] = {"Off", "Errors", "Info", "Debug"};
+    int dl = st.debugSerialLevel;
+    if (dl < 0 || dl > 3) dl = 2;
+    snprintf(debug_lvl_str, sizeof(debug_lvl_str), "%s", lvl_names[dl]);
+
     static char fw_str[24];
     if (st.updateAvailable) {
         snprintf(fw_str, sizeof(fw_str), "%s -> %s", FIRMWARE_VERSION, st.cachedLatestVersion.c_str());
@@ -474,7 +529,7 @@ static void build_settings_menu(void) {
     snprintf(audio_rate_str, sizeof(audio_rate_str), "%s", ar);
 
     settings_menu.title = "Settings";
-    settings_menu.item_count = 17;
+    settings_menu.item_count = 19;
     settings_menu.items[0]  = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     settings_menu.items[1]  = {"Screen Timeout", timeout_str, nullptr, MENU_ACTION, edit_screen_timeout};
     settings_menu.items[2]  = {"Dim Display", dim_enabled_str, nullptr, MENU_ACTION, edit_dim_enabled};
@@ -489,9 +544,11 @@ static void build_settings_menu(void) {
     settings_menu.items[11] = {"Audio Rate", audio_rate_str, nullptr, MENU_ACTION, edit_audio_rate};
     settings_menu.items[12] = {"Auto Update", update_str, nullptr, MENU_ACTION, edit_auto_update};
     settings_menu.items[13] = {"SSL Validation", ssl_str, nullptr, MENU_ACTION, edit_ssl_validation};
-    settings_menu.items[14] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
-    settings_menu.items[15] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
-    settings_menu.items[16] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
+    settings_menu.items[14] = {"Debug Mode", debug_str, nullptr, MENU_ACTION, edit_debug_mode};
+    settings_menu.items[15] = {"Serial Level", debug_lvl_str, nullptr, MENU_ACTION, edit_debug_level};
+    settings_menu.items[16] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
+    settings_menu.items[17] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
+    settings_menu.items[18] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
 }
 
 lv_obj_t *scr_settings_create(void) {
@@ -591,13 +648,22 @@ void scr_settings_refresh(void) {
 
     scr_menu_set_item_value(13, st.enableCertValidation ? "ON" : "OFF");
 
+    scr_menu_set_item_value(14, st.debugMode ? "ON" : "OFF");
+
+    static char dlvl_buf[8];
+    const char *dlvl_names[] = {"Off", "Errors", "Info", "Debug"};
+    int dlvl = st.debugSerialLevel;
+    if (dlvl < 0 || dlvl > 3) dlvl = 2;
+    snprintf(dlvl_buf, sizeof(dlvl_buf), "%s", dlvl_names[dlvl]);
+    scr_menu_set_item_value(15, dlvl_buf);
+
     static char fw_buf[24];
     if (st.updateAvailable) {
         snprintf(fw_buf, sizeof(fw_buf), "%s -> %s", FIRMWARE_VERSION, st.cachedLatestVersion.c_str());
     } else {
         snprintf(fw_buf, sizeof(fw_buf), "%s", FIRMWARE_VERSION);
     }
-    scr_menu_set_item_value(14, fw_buf);
+    scr_menu_set_item_value(16, fw_buf);
 }
 
 #endif /* GUI_ENABLED */

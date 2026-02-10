@@ -58,27 +58,27 @@ void handleSmartSensingGet() {
   for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
     JsonObject adcObj = adcArr.add<JsonObject>();
     const AppState::AdcState &adc = appState.audioAdc[a];
-    adcObj["rmsL"] = adc.rmsLeft;
-    adcObj["rmsR"] = adc.rmsRight;
-    adcObj["vuL"] = adc.vuLeft;
-    adcObj["vuR"] = adc.vuRight;
-    adcObj["peakL"] = adc.peakLeft;
-    adcObj["peakR"] = adc.peakRight;
-    adcObj["vrmsL"] = adc.vrmsLeft;
-    adcObj["vrmsR"] = adc.vrmsRight;
+    adcObj["rms1"] = adc.rms1;
+    adcObj["rms2"] = adc.rms2;
+    adcObj["vu1"] = adc.vu1;
+    adcObj["vu2"] = adc.vu2;
+    adcObj["peak1"] = adc.peak1;
+    adcObj["peak2"] = adc.peak2;
+    adcObj["vrms1"] = adc.vrms1;
+    adcObj["vrms2"] = adc.vrms2;
     adcObj["vrms"] = adc.vrmsCombined;
     adcObj["dBFS"] = adc.dBFS;
   }
   // Legacy flat fields (ADC 0)
-  doc["audioRmsL"] = appState.audioRmsLeft;
-  doc["audioRmsR"] = appState.audioRmsRight;
-  doc["audioVuL"] = appState.audioVuLeft;
-  doc["audioVuR"] = appState.audioVuRight;
-  doc["audioPeakL"] = appState.audioPeakLeft;
-  doc["audioPeakR"] = appState.audioPeakRight;
+  doc["audioRms1"] = appState.audioRmsLeft;
+  doc["audioRms2"] = appState.audioRmsRight;
+  doc["audioVu1"] = appState.audioVuLeft;
+  doc["audioVu2"] = appState.audioVuRight;
+  doc["audioPeak1"] = appState.audioPeakLeft;
+  doc["audioPeak2"] = appState.audioPeakRight;
   doc["audioPeak"] = appState.audioPeakCombined;
-  doc["audioVrmsL"] = appState.audioVrmsLeft;
-  doc["audioVrmsR"] = appState.audioVrmsRight;
+  doc["audioVrms1"] = appState.audioVrms1;
+  doc["audioVrms2"] = appState.audioVrms2;
   doc["audioVrms"] = appState.audioVrmsCombined;
 
   String json;
@@ -264,19 +264,19 @@ bool detectSignal() {
   for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
     AppState::AdcState &dst = appState.audioAdc[a];
     const AdcAnalysis &src = analysis.adc[a];
-    dst.rmsLeft = src.rmsLeft;
-    dst.rmsRight = src.rmsRight;
+    dst.rms1 = src.rms1;
+    dst.rms2 = src.rms2;
     dst.rmsCombined = src.rmsCombined;
     if (appState.vuMeterEnabled) {
-      dst.vuLeft = src.vuLeft;
-      dst.vuRight = src.vuRight;
+      dst.vu1 = src.vu1;
+      dst.vu2 = src.vu2;
       dst.vuCombined = src.vuCombined;
-      dst.peakLeft = src.peakLeft;
-      dst.peakRight = src.peakRight;
+      dst.peak1 = src.peak1;
+      dst.peak2 = src.peak2;
       dst.peakCombined = src.peakCombined;
     }
-    dst.vrmsLeft = audio_rms_to_vrms(src.rmsLeft, appState.adcVref);
-    dst.vrmsRight = audio_rms_to_vrms(src.rmsRight, appState.adcVref);
+    dst.vrms1 = audio_rms_to_vrms(src.rms1, appState.adcVref);
+    dst.vrms2 = audio_rms_to_vrms(src.rms2, appState.adcVref);
     dst.vrmsCombined = audio_rms_to_vrms(src.rmsCombined, appState.adcVref);
     dst.dBFS = src.dBFS;
 

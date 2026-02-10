@@ -12,7 +12,8 @@ enum LogLevel {
   LOG_DEBUG = 0, // Detailed debugging info
   LOG_INFO = 1,  // General information
   LOG_WARN = 2,  // Warnings
-  LOG_ERROR = 3  // Errors
+  LOG_ERROR = 3, // Errors
+  LOG_NONE = 4   // Suppress all serial output
 };
 
 // Current minimum log level (messages below this are filtered)
@@ -53,6 +54,21 @@ private:
 };
 
 extern DebugSerial DebugOut;
+
+// Apply debug serial level from AppState debug toggles
+inline void applyDebugSerialLevel(bool masterEnabled, int level) {
+  if (!masterEnabled) {
+    DebugOut.setLogLevel(LOG_ERROR); // Master off = errors only
+    return;
+  }
+  switch (level) {
+    case 0: DebugOut.setLogLevel(LOG_NONE); break;
+    case 1: DebugOut.setLogLevel(LOG_ERROR); break;
+    case 2: DebugOut.setLogLevel(LOG_INFO); break;
+    case 3: DebugOut.setLogLevel(LOG_DEBUG); break;
+    default: DebugOut.setLogLevel(LOG_INFO); break;
+  }
+}
 
 // Convenience macros for logging
 #define LOG_D(fmt, ...) DebugOut.debug(fmt, ##__VA_ARGS__)
