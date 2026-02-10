@@ -8,6 +8,8 @@
 #include "../../app_state.h"
 #include "../../config.h"
 #include "../../websocket_handler.h"
+#include "../../i2s_audio.h"
+#include "../../task_monitor.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include <LittleFS.h>
@@ -18,7 +20,9 @@ static lv_obj_t *lbl_cpu = nullptr;
 static lv_obj_t *lbl_storage = nullptr;
 static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
-static lv_obj_t *lbl_audio_adc = nullptr;
+static lv_obj_t *lbl_audio_adc[NUM_AUDIO_ADCS] = {nullptr, nullptr};
+static lv_obj_t *lbl_i2s = nullptr;
+static lv_obj_t *lbl_tasks = nullptr;
 static lv_obj_t *lbl_pins = nullptr;
 static lv_obj_t *lbl_sort_mode = nullptr;
 
@@ -34,10 +38,11 @@ struct PinEntry {
 };
 
 static const PinEntry all_pins[] = {
-    {"PCM1808 ADC",  "BCK",  I2S_BCK_PIN},
-    {"PCM1808 ADC",  "DOUT", I2S_DOUT_PIN},
-    {"PCM1808 ADC",  "LRC",  I2S_LRC_PIN},
-    {"PCM1808 ADC",  "MCLK", I2S_MCLK_PIN},
+    {"PCM1808 ADC 1&2", "BCK",   I2S_BCK_PIN},
+    {"PCM1808 ADC 1",   "DOUT",  I2S_DOUT_PIN},
+    {"PCM1808 ADC 2",   "DOUT2", I2S_DOUT2_PIN},
+    {"PCM1808 ADC 1&2", "LRC",   I2S_LRC_PIN},
+    {"PCM1808 ADC 1&2", "MCLK",  I2S_MCLK_PIN},
     {"ST7735S TFT",  "CS",   TFT_CS_PIN},
     {"ST7735S TFT",  "MOSI", TFT_MOSI_PIN},
     {"ST7735S TFT",  "CLK",  TFT_SCLK_PIN},
@@ -79,7 +84,7 @@ static void sort_pins(int *indices, int count, PinSortMode mode) {
 static void update_pins_label(void) {
     if (!lbl_pins) return;
 
-    int indices[17];
+    int indices[18];
     for (int i = 0; i < PIN_COUNT; i++) indices[i] = i;
 
     char buf[384];
@@ -88,9 +93,9 @@ static void update_pins_label(void) {
     if (pin_sort_mode == SORT_BY_DEVICE) {
         /* Group by device — original layout */
         snprintf(buf, sizeof(buf),
-                 "PCM1808 ADC\n"
-                 "  BCK=%d DOUT=%d LRC=%d\n"
-                 "  MCLK=%d\n"
+                 "PCM1808 ADC 1&2\n"
+                 "  BCK=%d DOUT=%d DOUT2=%d\n"
+                 "  LRC=%d MCLK=%d\n"
                  "ST7735S TFT 1.8\"\n"
                  "  CS=%d MOSI=%d CLK=%d\n"
                  "  DC=%d RST=%d BL=%d\n"
@@ -100,8 +105,8 @@ static void update_pins_label(void) {
                  "  IO=%d\n"
                  "Core\n"
                  "  LED=%d Amp=%d Btn=%d",
-                 I2S_BCK_PIN, I2S_DOUT_PIN, I2S_LRC_PIN,
-                 I2S_MCLK_PIN,
+                 I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
+                 I2S_LRC_PIN, I2S_MCLK_PIN,
                  TFT_CS_PIN, TFT_MOSI_PIN, TFT_SCLK_PIN,
                  TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN,
                  ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
@@ -208,29 +213,92 @@ void scr_debug_refresh(void) {
     snprintf(buf, sizeof(buf), "Up: %s\nFW: %s", uptime_str, FIRMWARE_VERSION);
     lv_label_set_text(lbl_system, buf);
 
-    /* Audio ADC */
-    if (lbl_audio_adc) {
-        const char *statusStr = "OK";
-        switch (appState.audioHealthStatus) {
-            case 0: statusStr = "OK"; break;
-            case 1: statusStr = "NO DATA"; break;
-            case 2: statusStr = "NOISE ONLY"; break;
-            case 3: statusStr = "CLIPPING"; break;
-            case 4: statusStr = "I2S ERROR"; break;
+    /* Audio ADC — per-ADC diagnostics (always show both) */
+    {
+        static const char *status_names[] = {"OK", "NO DATA", "NOISE", "CLIP", "I2S ERR", "HW FAULT"};
+        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+            if (!lbl_audio_adc[a]) continue;
+            const AppState::AdcState &adc = appState.audioAdc[a];
+            const char *st2 = status_names[adc.healthStatus < 6 ? adc.healthStatus : 0];
+            unsigned long age = 0;
+            if (adc.lastNonZeroMs > 0) age = (millis() - adc.lastNonZeroMs) / 1000;
+            snprintf(buf, sizeof(buf), "ADC %d\n%s %.0fdB\n%.3fV\nFl:%.0f\nCl:%lu E:%lu\n%lus",
+                     a + 1, st2, adc.dBFS,
+                     (adc.vrms1 > adc.vrms2) ? adc.vrms1 : adc.vrms2,
+                     adc.noiseFloorDbfs,
+                     (unsigned long)adc.clippedSamples,
+                     (unsigned long)adc.i2sErrors, age);
+            lv_label_set_text(lbl_audio_adc[a], buf);
         }
-        unsigned long age = 0;
-        if (appState.audioLastNonZeroMs > 0) {
-            age = (millis() - appState.audioLastNonZeroMs) / 1000;
+    }
+
+    /* I2S Configuration */
+    if (lbl_i2s) {
+        if (!(appState.debugMode && appState.debugI2sMetrics)) {
+            lv_label_set_text(lbl_i2s, "Disabled");
+        } else {
+            I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
+            const auto &m = appState.i2sMetrics;
+            snprintf(buf, sizeof(buf),
+                     "Rate:%lukHz 32b(24) DMA:%dx%d\n"
+                     "APLL: M=%s S=%s\n"
+                     "Stack: %lu/%dB free\n"
+                     "Buf/s: %.0f / %.0f\n"
+                     "Lat: %.1f / %.1fms",
+                     (unsigned long)(i2sCfg.adc[0].sampleRate / 1000),
+                     i2sCfg.adc[0].dmaBufCount, i2sCfg.adc[0].dmaBufLen,
+                     i2sCfg.adc[0].apllEnabled ? "On" : "Off",
+                     i2sCfg.adc[1].apllEnabled ? "On" : "Off",
+                     (unsigned long)m.audioTaskStackFree, TASK_STACK_SIZE_AUDIO,
+                     m.buffersPerSec[0], m.buffersPerSec[1],
+                     m.avgReadLatencyUs[0] / 1000.0f,
+                     m.avgReadLatencyUs[1] / 1000.0f);
+            lv_label_set_text(lbl_i2s, buf);
         }
-        snprintf(buf, sizeof(buf), "%s  %.0fdBFS  %.3fV\nFloor:%.0f  DC:%.3f\nClip:%lu Err:%lu Bufs:%lu %lus",
-                 statusStr, appState.audioLevel_dBFS,
-                 appState.audioVrmsCombined,
-                 appState.audioNoiseFloorDbfs,
-                 appState.audioDcOffset,
-                 (unsigned long)appState.audioClippedSamples,
-                 (unsigned long)appState.audioI2sErrors,
-                 (unsigned long)appState.audioTotalBuffers, age);
-        lv_label_set_text(lbl_audio_adc, buf);
+    }
+
+    /* Tasks */
+    if (lbl_tasks) {
+        if (!(appState.debugMode && appState.debugTaskMonitor)) {
+            lv_label_set_text(lbl_tasks, "Disabled");
+        } else {
+            const TaskMonitorData& tm = task_monitor_get_data();
+            char tbuf[256];
+            int pos = 0;
+            pos += snprintf(tbuf + pos, sizeof(tbuf) - pos,
+                            "Loop: %luus / %luus max\n",
+                            (unsigned long)tm.loopTimeAvgUs,
+                            (unsigned long)tm.loopTimeMaxUs);
+            // Show app-relevant tasks only (skip IDLE, ipc, Tmr Svc, wifi, tiT)
+            for (int i = 0; i < tm.taskCount && pos < (int)sizeof(tbuf) - 40; i++) {
+                const TaskInfo& t = tm.tasks[i];
+                if (strncmp(t.name, "IDLE", 4) == 0 ||
+                    strncmp(t.name, "ipc", 3) == 0 ||
+                    strncmp(t.name, "Tmr", 3) == 0 ||
+                    strcmp(t.name, "wifi") == 0 ||
+                    strcmp(t.name, "tiT") == 0) continue;
+                if (t.stackAllocBytes > 0) {
+                    pos += snprintf(tbuf + pos, sizeof(tbuf) - pos,
+                                    "%-10s %luK/%-3luK P%d %s C%d\n",
+                                    t.name,
+                                    (unsigned long)(t.stackFreeBytes / 1024),
+                                    (unsigned long)(t.stackAllocBytes / 1024),
+                                    t.priority,
+                                    task_monitor_state_name(t.state),
+                                    t.coreId);
+                } else {
+                    pos += snprintf(tbuf + pos, sizeof(tbuf) - pos,
+                                    "%-10s %luK     P%d %s C%d\n",
+                                    t.name,
+                                    (unsigned long)(t.stackFreeBytes / 1024),
+                                    t.priority,
+                                    task_monitor_state_name(t.state),
+                                    t.coreId);
+                }
+            }
+            if (pos > 0 && tbuf[pos - 1] == '\n') tbuf[pos - 1] = '\0';
+            lv_label_set_text(lbl_tasks, tbuf);
+        }
     }
 }
 
@@ -257,7 +325,10 @@ lv_obj_t *scr_debug_create(void) {
     lbl_storage = nullptr;
     lbl_network = nullptr;
     lbl_system = nullptr;
-    lbl_audio_adc = nullptr;
+    lbl_audio_adc[0] = nullptr;
+    lbl_audio_adc[1] = nullptr;
+    lbl_i2s = nullptr;
+    lbl_tasks = nullptr;
     lbl_pins = nullptr;
     lbl_sort_mode = nullptr;
 
@@ -292,7 +363,37 @@ lv_obj_t *scr_debug_create(void) {
     lbl_network = add_section(cont, "Network");
     lbl_system  = add_section(cont, "System");
 
-    lbl_audio_adc = add_section(cont, "Audio ADC");
+    /* Audio ADC — 2-column side-by-side layout */
+    {
+        lv_obj_t *adc_hdr = lv_label_create(cont);
+        lv_label_set_text(adc_hdr, "Audio ADC");
+        lv_obj_set_style_text_color(adc_hdr, COLOR_PRIMARY, LV_PART_MAIN);
+        lv_obj_set_style_text_font(adc_hdr, &lv_font_montserrat_12, LV_PART_MAIN);
+
+        lv_obj_t *adc_row = lv_obj_create(cont);
+        lv_obj_set_size(adc_row, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(adc_row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(adc_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+        lv_obj_set_style_pad_all(adc_row, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_column(adc_row, 4, LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(adc_row, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_border_width(adc_row, 0, LV_PART_MAIN);
+        lv_obj_clear_flag(adc_row, LV_OBJ_FLAG_SCROLLABLE);
+
+        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+            lbl_audio_adc[a] = lv_label_create(adc_row);
+            lv_label_set_text(lbl_audio_adc[a], "...");
+            lv_obj_add_style(lbl_audio_adc[a], gui_style_dim(), LV_PART_MAIN);
+            lv_obj_set_flex_grow(lbl_audio_adc[a], 1);
+            lv_label_set_long_mode(lbl_audio_adc[a], LV_LABEL_LONG_WRAP);
+        }
+    }
+
+    /* I2S Configuration */
+    lbl_i2s = add_section(cont, "I2S");
+
+    /* Tasks */
+    lbl_tasks = add_section(cont, "Tasks");
 
     /* GPIO Pins — sortable section */
     {

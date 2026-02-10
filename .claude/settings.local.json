@@ -79,7 +79,11 @@
       "Skill(git-commit-helper)",
       "Bash(git merge:*)",
       "WebFetch(domain:abarrafato.medium.com)",
-      "WebFetch(domain:audiomotion.dev)"
+      "WebFetch(domain:audiomotion.dev)",
+      "Bash(nm:*)",
+      "Bash(xtensa-esp32s3-elf-nm:*)",
+      "Bash(\"C:\\\\Users\\\\Necrosis\\\\.platformio\\\\packages\\\\toolchain-xtensa-esp32s3\\\\bin\\\\xtensa-esp32s3-elf-nm.exe\" \"C:\\\\Users\\\\Necrosis\\\\.platformio\\\\packages\\\\framework-arduinoespressif32\\\\tools\\\\sdk\\\\esp32s3\\\\dio_qspi\\\\libfreertos.a\")",
+      "Bash(echo:*)"
     ]
   }
 }

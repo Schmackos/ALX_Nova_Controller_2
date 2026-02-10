@@ -3,6 +3,7 @@
 #include "buzzer_handler.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "i2s_audio.h"
 #include "mqtt_handler.h"
 #include "ota_updater.h"
 #include "smart_sensing.h"
@@ -50,6 +51,11 @@ bool loadSettings() {
   String line18 = file.readStringUntil('\n');
   String line19 = file.readStringUntil('\n');
   String line20 = file.readStringUntil('\n');
+  String line21 = file.readStringUntil('\n');
+  String line22 = file.readStringUntil('\n');
+  String line23 = file.readStringUntil('\n');
+  String line24 = file.readStringUntil('\n');
+  String line25 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -207,6 +213,31 @@ bool loadSettings() {
     appState.spectrumEnabled = (line20.toInt() != 0);
   }
 
+  // Load debug mode toggles (lines 21-25)
+  if (line21.length() > 0) {
+    line21.trim();
+    appState.debugMode = (line21.toInt() != 0);
+  }
+  if (line22.length() > 0) {
+    line22.trim();
+    int level = line22.toInt();
+    if (level >= 0 && level <= 3) {
+      appState.debugSerialLevel = level;
+    }
+  }
+  if (line23.length() > 0) {
+    line23.trim();
+    appState.debugHwStats = (line23.toInt() != 0);
+  }
+  if (line24.length() > 0) {
+    line24.trim();
+    appState.debugI2sMetrics = (line24.toInt() != 0);
+  }
+  if (line25.length() > 0) {
+    line25.trim();
+    appState.debugTaskMonitor = (line25.toInt() != 0);
+  }
+
   return true;
 }
 
@@ -242,6 +273,11 @@ void saveSettings() {
   file.println(appState.vuMeterEnabled ? "1" : "0");
   file.println(appState.waveformEnabled ? "1" : "0");
   file.println(appState.spectrumEnabled ? "1" : "0");
+  file.println(appState.debugMode ? "1" : "0");
+  file.println(appState.debugSerialLevel);
+  file.println(appState.debugHwStats ? "1" : "0");
+  file.println(appState.debugI2sMetrics ? "1" : "0");
+  file.println(appState.debugTaskMonitor ? "1" : "0");
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -262,6 +298,7 @@ bool loadSignalGenSettings() {
   String line4 = file.readStringUntil('\n'); // channel
   String line5 = file.readStringUntil('\n'); // outputMode
   String line6 = file.readStringUntil('\n'); // sweepSpeed
+  String line7 = file.readStringUntil('\n'); // targetAdc (added for dual ADC)
   file.close();
 
   line1.trim();
@@ -270,6 +307,7 @@ bool loadSignalGenSettings() {
   line4.trim();
   line5.trim();
   line6.trim();
+  line7.trim();
 
   if (line1.length() > 0) {
     int wf = line1.toInt();
@@ -295,6 +333,10 @@ bool loadSignalGenSettings() {
     float speed = line6.toFloat();
     if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
   }
+  if (line7.length() > 0) {
+    int target = line7.toInt();
+    if (target >= 0 && target <= 2) appState.sigGenTargetAdc = target;
+  }
 
   // Always boot disabled regardless of saved state
   appState.sigGenEnabled = false;
@@ -316,8 +358,51 @@ void saveSignalGenSettings() {
   file.println(appState.sigGenChannel);
   file.println(appState.sigGenOutputMode);
   file.println(String(appState.sigGenSweepSpeed, 1));
+  file.println(appState.sigGenTargetAdc);
   file.close();
   LOG_I("[Settings] Signal generator settings saved");
+}
+
+// ===== Input Names Settings =====
+
+static const char *INPUT_NAME_DEFAULTS[] = {"Subwoofer 1", "Subwoofer 2",
+                                             "Subwoofer 3", "Subwoofer 4"};
+
+bool loadInputNames() {
+  File file = LittleFS.open("/inputnames.txt", "r", true);
+  if (!file || file.size() == 0) {
+    if (file)
+      file.close();
+    // Set defaults
+    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+      appState.inputNames[i] = INPUT_NAME_DEFAULTS[i];
+    }
+    return false;
+  }
+
+  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    String line = file.readStringUntil('\n');
+    line.trim();
+    appState.inputNames[i] =
+        (line.length() > 0) ? line : String(INPUT_NAME_DEFAULTS[i]);
+  }
+  file.close();
+  LOG_I("[Settings] Input names loaded");
+  return true;
+}
+
+void saveInputNames() {
+  File file = LittleFS.open("/inputnames.txt", "w");
+  if (!file) {
+    LOG_E("[Settings] Failed to open input names file for writing");
+    return;
+  }
+
+  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    file.println(appState.inputNames[i]);
+  }
+  file.close();
+  LOG_I("[Settings] Input names saved");
 }
 
 // ===== Factory Reset =====
@@ -412,6 +497,11 @@ void handleSettingsGet() {
   doc["dimEnabled"] = appState.dimEnabled;
   doc["dimTimeout"] = appState.dimTimeout / 1000;
   doc["dimBrightness"] = appState.dimBrightness;
+  doc["debugMode"] = appState.debugMode;
+  doc["debugSerialLevel"] = appState.debugSerialLevel;
+  doc["debugHwStats"] = appState.debugHwStats;
+  doc["debugI2sMetrics"] = appState.debugI2sMetrics;
+  doc["debugTaskMonitor"] = appState.debugTaskMonitor;
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -606,6 +696,44 @@ void handleSettingsUpdate() {
     }
   }
 
+  if (doc["debugMode"].is<bool>()) {
+    bool newVal = doc["debugMode"].as<bool>();
+    if (newVal != appState.debugMode) {
+      appState.debugMode = newVal;
+      applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+      settingsChanged = true;
+    }
+  }
+  if (doc["debugSerialLevel"].is<int>()) {
+    int newLevel = doc["debugSerialLevel"].as<int>();
+    if (newLevel >= 0 && newLevel <= 3 && newLevel != appState.debugSerialLevel) {
+      appState.debugSerialLevel = newLevel;
+      applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+      settingsChanged = true;
+    }
+  }
+  if (doc["debugHwStats"].is<bool>()) {
+    bool newVal = doc["debugHwStats"].as<bool>();
+    if (newVal != appState.debugHwStats) {
+      appState.debugHwStats = newVal;
+      settingsChanged = true;
+    }
+  }
+  if (doc["debugI2sMetrics"].is<bool>()) {
+    bool newVal = doc["debugI2sMetrics"].as<bool>();
+    if (newVal != appState.debugI2sMetrics) {
+      appState.debugI2sMetrics = newVal;
+      settingsChanged = true;
+    }
+  }
+  if (doc["debugTaskMonitor"].is<bool>()) {
+    bool newVal = doc["debugTaskMonitor"].as<bool>();
+    if (newVal != appState.debugTaskMonitor) {
+      appState.debugTaskMonitor = newVal;
+      settingsChanged = true;
+    }
+  }
+
 #ifdef GUI_ENABLED
   if (doc["bootAnimEnabled"].is<bool>()) {
     bool newBootAnim = doc["bootAnimEnabled"].as<bool>();
@@ -651,6 +779,11 @@ void handleSettingsUpdate() {
   resp["dimEnabled"] = appState.dimEnabled;
   resp["dimTimeout"] = appState.dimTimeout / 1000;
   resp["dimBrightness"] = appState.dimBrightness;
+  resp["debugMode"] = appState.debugMode;
+  resp["debugSerialLevel"] = appState.debugSerialLevel;
+  resp["debugHwStats"] = appState.debugHwStats;
+  resp["debugI2sMetrics"] = appState.debugI2sMetrics;
+  resp["debugTaskMonitor"] = appState.debugTaskMonitor;
 #ifdef GUI_ENABLED
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
@@ -703,6 +836,11 @@ void handleSettingsExport() {
   doc["settings"]["vuMeterEnabled"] = appState.vuMeterEnabled;
   doc["settings"]["waveformEnabled"] = appState.waveformEnabled;
   doc["settings"]["spectrumEnabled"] = appState.spectrumEnabled;
+  doc["settings"]["debugMode"] = appState.debugMode;
+  doc["settings"]["debugSerialLevel"] = appState.debugSerialLevel;
+  doc["settings"]["debugHwStats"] = appState.debugHwStats;
+  doc["settings"]["debugI2sMetrics"] = appState.debugI2sMetrics;
+  doc["settings"]["debugTaskMonitor"] = appState.debugTaskMonitor;
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
@@ -733,6 +871,13 @@ void handleSettingsExport() {
   doc["signalGenerator"]["channel"] = appState.sigGenChannel;
   doc["signalGenerator"]["outputMode"] = appState.sigGenOutputMode;
   doc["signalGenerator"]["sweepSpeed"] = appState.sigGenSweepSpeed;
+  doc["signalGenerator"]["targetAdc"] = appState.sigGenTargetAdc;
+
+  // Input channel names
+  JsonArray names = doc["inputNames"].to<JsonArray>();
+  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    names.add(appState.inputNames[i]);
+  }
 
   // MQTT settings (password excluded for security)
   doc["mqtt"]["enabled"] = mqttEnabled;
@@ -940,6 +1085,22 @@ void handleSettingsImport() {
       appState.spectrumEnabled = doc["settings"]["spectrumEnabled"].as<bool>();
       LOG_D("[Settings] Spectrum: %s", appState.spectrumEnabled ? "enabled" : "disabled");
     }
+    if (doc["settings"]["debugMode"].is<bool>()) {
+      appState.debugMode = doc["settings"]["debugMode"].as<bool>();
+    }
+    if (doc["settings"]["debugSerialLevel"].is<int>()) {
+      int level = doc["settings"]["debugSerialLevel"].as<int>();
+      if (level >= 0 && level <= 3) appState.debugSerialLevel = level;
+    }
+    if (doc["settings"]["debugHwStats"].is<bool>()) {
+      appState.debugHwStats = doc["settings"]["debugHwStats"].as<bool>();
+    }
+    if (doc["settings"]["debugI2sMetrics"].is<bool>()) {
+      appState.debugI2sMetrics = doc["settings"]["debugI2sMetrics"].as<bool>();
+    }
+    if (doc["settings"]["debugTaskMonitor"].is<bool>()) {
+      appState.debugTaskMonitor = doc["settings"]["debugTaskMonitor"].as<bool>();
+    }
 #ifdef GUI_ENABLED
     if (doc["settings"]["bootAnimEnabled"].is<bool>()) {
       appState.bootAnimEnabled = doc["settings"]["bootAnimEnabled"].as<bool>();
@@ -1049,8 +1210,22 @@ void handleSettingsImport() {
       float speed = doc["signalGenerator"]["sweepSpeed"].as<float>();
       if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
     }
+    if (doc["signalGenerator"]["targetAdc"].is<int>()) {
+      int target = doc["signalGenerator"]["targetAdc"].as<int>();
+      if (target >= 0 && target <= 2) appState.sigGenTargetAdc = target;
+    }
     appState.sigGenEnabled = false; // Always boot disabled
     saveSignalGenSettings();
+  }
+
+  // Import input channel names
+  if (!doc["inputNames"].isNull() && doc["inputNames"].is<JsonArray>()) {
+    JsonArray names = doc["inputNames"].as<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+      String name = names[i].as<String>();
+      if (name.length() > 0) appState.inputNames[i] = name;
+    }
+    saveInputNames();
   }
 
   // Note: Certificate import removed - now using Mozilla certificate bundle
@@ -1181,6 +1356,11 @@ void handleDiagnostics() {
   settings["vuMeterEnabled"] = appState.vuMeterEnabled;
   settings["waveformEnabled"] = appState.waveformEnabled;
   settings["spectrumEnabled"] = appState.spectrumEnabled;
+  settings["debugMode"] = appState.debugMode;
+  settings["debugSerialLevel"] = appState.debugSerialLevel;
+  settings["debugHwStats"] = appState.debugHwStats;
+  settings["debugI2sMetrics"] = appState.debugI2sMetrics;
+  settings["debugTaskMonitor"] = appState.debugTaskMonitor;
 
   // ===== Smart Sensing =====
   JsonObject sensing = doc["smartSensing"].to<JsonObject>();
@@ -1206,25 +1386,65 @@ void handleDiagnostics() {
 
   // ===== Audio ADC Diagnostics =====
   {
-    JsonObject audioAdc = doc["audioAdc"].to<JsonObject>();
-    const char *statusStr = "OK";
-    switch (appState.audioHealthStatus) {
-      case 1: statusStr = "NO_DATA"; break;
-      case 2: statusStr = "NOISE_ONLY"; break;
-      case 3: statusStr = "CLIPPING"; break;
-      case 4: statusStr = "I2S_ERROR"; break;
+    JsonObject audioAdcObj = doc["audioAdc"].to<JsonObject>();
+    audioAdcObj["numAdcsDetected"] = appState.numAdcsDetected;
+    audioAdcObj["sampleRate"] = appState.audioSampleRate;
+    audioAdcObj["adcVref"] = appState.adcVref;
+    JsonArray adcArr = audioAdcObj["adcs"].to<JsonArray>();
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      JsonObject adcObj = adcArr.add<JsonObject>();
+      const AppState::AdcState &adc = appState.audioAdc[a];
+      const char *statusStr = "OK";
+      switch (adc.healthStatus) {
+        case 1: statusStr = "NO_DATA"; break;
+        case 2: statusStr = "NOISE_ONLY"; break;
+        case 3: statusStr = "CLIPPING"; break;
+        case 4: statusStr = "I2S_ERROR"; break;
+        case 5: statusStr = "HW_FAULT"; break;
+      }
+      adcObj["index"] = a;
+      adcObj["healthStatus"] = statusStr;
+      adcObj["noiseFloorDbfs"] = adc.noiseFloorDbfs;
+      adcObj["i2sReadErrors"] = adc.i2sErrors;
+      adcObj["allZeroBuffers"] = adc.allZeroBuffers;
+      adcObj["consecutiveZeros"] = adc.consecutiveZeros;
+      adcObj["clippedSamples"] = adc.clippedSamples;
+      adcObj["clipRate"] = adc.clipRate;
+      adcObj["lastNonZeroMs"] = adc.lastNonZeroMs;
+      adcObj["totalBuffersRead"] = adc.totalBuffers;
+      adcObj["vrms"] = adc.vrmsCombined;
+      adcObj["dcOffset"] = adc.dcOffset;
     }
-    audioAdc["healthStatus"] = statusStr;
-    audioAdc["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
-    audioAdc["i2sReadErrors"] = appState.audioI2sErrors;
-    audioAdc["allZeroBuffers"] = appState.audioAllZeroBuffers;
-    audioAdc["consecutiveZeros"] = appState.audioConsecutiveZeros;
-    audioAdc["clippedSamples"] = appState.audioClippedSamples;
-    audioAdc["lastNonZeroMs"] = appState.audioLastNonZeroMs;
-    audioAdc["totalBuffersRead"] = appState.audioTotalBuffers;
-    audioAdc["sampleRate"] = appState.audioSampleRate;
-    audioAdc["vrms"] = appState.audioVrmsCombined;
-    audioAdc["adcVref"] = appState.adcVref;
+    // Input names
+    JsonArray names = audioAdcObj["inputNames"].to<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+      names.add(appState.inputNames[i]);
+    }
+
+    // I2S Configuration
+    I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
+    JsonObject i2sObj = audioAdcObj["i2sConfig"].to<JsonObject>();
+    JsonArray i2sAdcArr = i2sObj["adcs"].to<JsonArray>();
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      JsonObject c = i2sAdcArr.add<JsonObject>();
+      c["mode"] = i2sCfg.adc[a].isMaster ? "Master RX" : "Slave RX";
+      c["sampleRate"] = i2sCfg.adc[a].sampleRate;
+      c["bitsPerSample"] = i2sCfg.adc[a].bitsPerSample;
+      c["channelFormat"] = i2sCfg.adc[a].channelFormat;
+      c["dmaBufCount"] = i2sCfg.adc[a].dmaBufCount;
+      c["dmaBufLen"] = i2sCfg.adc[a].dmaBufLen;
+      c["apll"] = i2sCfg.adc[a].apllEnabled;
+      c["mclkHz"] = i2sCfg.adc[a].mclkHz;
+      c["commFormat"] = i2sCfg.adc[a].commFormat;
+    }
+    JsonObject i2sRt = i2sObj["runtime"].to<JsonObject>();
+    i2sRt["audioTaskStackFree"] = appState.i2sMetrics.audioTaskStackFree;
+    JsonArray bpsArr = i2sRt["buffersPerSec"].to<JsonArray>();
+    JsonArray latArr = i2sRt["avgReadLatencyUs"].to<JsonArray>();
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      bpsArr.add(appState.i2sMetrics.buffersPerSec[a]);
+      latArr.add(appState.i2sMetrics.avgReadLatencyUs[a]);
+    }
   }
 
   // ===== MQTT Settings (password excluded) =====

@@ -14,6 +14,10 @@ void saveSettings();
 bool loadSignalGenSettings();
 void saveSignalGenSettings();
 
+// ===== Input Names Settings =====
+bool loadInputNames();
+void saveInputNames();
+
 // ===== Factory Reset =====
 void performFactoryReset();
 

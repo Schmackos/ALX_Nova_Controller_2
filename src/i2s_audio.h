@@ -3,26 +3,37 @@
 
 #include <stdint.h>
 
+#ifndef NUM_AUDIO_ADCS
+#define NUM_AUDIO_ADCS 2
+#endif
+
 // ===== VU Meter Constants =====
 static const float VU_ATTACK_MS = 300.0f;   // Industry-standard VU attack
 static const float VU_DECAY_MS = 650.0f;    // Industry-standard VU release
 static const float PEAK_HOLD_MS = 2000.0f;  // Peak hold duration
 static const float PEAK_DECAY_AFTER_HOLD_MS = 300.0f; // Decay after hold expires
 
+// ===== Per-ADC Analysis Sub-struct =====
+struct AdcAnalysis {
+    float rms1;         // 0.0-1.0 (linear)
+    float rms2;        // 0.0-1.0 (linear)
+    float rmsCombined;     // 0.0-1.0 (linear)
+    float vu1;          // 0.0-1.0 (VU-smoothed with attack/decay)
+    float vu2;         // 0.0-1.0 (VU-smoothed with attack/decay)
+    float vuCombined;      // 0.0-1.0 (VU-smoothed with attack/decay)
+    float peak1;        // 0.0-1.0 (instant attack, hold, then decay)
+    float peak2;       // 0.0-1.0 (instant attack, hold, then decay)
+    float peakCombined;    // 0.0-1.0 (instant attack, hold, then decay)
+    float dBFS;            // -96 to 0 (this ADC's combined level)
+};
+
 // ===== Audio Analysis Result (shared between I2S task and consumers) =====
 struct AudioAnalysis {
-    float rmsLeft;         // 0.0-1.0 (linear)
-    float rmsRight;        // 0.0-1.0 (linear)
-    float rmsCombined;     // 0.0-1.0 (linear)
-    float vuLeft;          // 0.0-1.0 (VU-smoothed with attack/decay)
-    float vuRight;         // 0.0-1.0 (VU-smoothed with attack/decay)
-    float vuCombined;      // 0.0-1.0 (VU-smoothed with attack/decay)
-    float peakLeft;        // 0.0-1.0 (instant attack, hold, then decay)
-    float peakRight;       // 0.0-1.0 (instant attack, hold, then decay)
-    float peakCombined;    // 0.0-1.0 (instant attack, hold, then decay)
-    float dBFS;            // -96 to 0 (combined level)
-    bool  signalDetected;  // dBFS >= threshold
+    AdcAnalysis adc[NUM_AUDIO_ADCS]; // Per-ADC data
+    float dBFS;            // -96 to 0 (overall max across all ADCs)
+    bool  signalDetected;  // any ADC above threshold
     unsigned long timestamp;
+
 };
 
 // ===== Audio Health Diagnostics =====
@@ -31,29 +42,55 @@ enum AudioHealthStatus {
     AUDIO_NO_DATA = 1,
     AUDIO_NOISE_ONLY = 2,
     AUDIO_CLIPPING = 3,
-    AUDIO_I2S_ERROR = 4
+    AUDIO_I2S_ERROR = 4,
+    AUDIO_HW_FAULT = 5
 };
 
-struct AudioDiagnostics {
+// Per-ADC diagnostics sub-struct
+struct AdcDiagnostics {
     AudioHealthStatus status = AUDIO_OK;
     uint32_t i2sReadErrors = 0;
     uint32_t zeroByteReads = 0;
     uint32_t allZeroBuffers = 0;
     uint32_t consecutiveZeros = 0;
     uint32_t clippedSamples = 0;
+    float clipRate = 0.0f;         // EMA clip rate (0.0-1.0), decays when clipping stops
     float noiseFloorDbfs = -96.0f;
     float peakDbfs = -96.0f;
     float dcOffset = 0.0f;           // DC mean as fraction of full-scale (-1.0 to 1.0)
     unsigned long lastNonZeroMs = 0;
     unsigned long lastReadMs = 0;
     uint32_t totalBuffersRead = 0;
+};
+
+struct AudioDiagnostics {
+    AdcDiagnostics adc[NUM_AUDIO_ADCS];
     bool sigGenActive = false;
+    int numAdcsDetected = 1;  // How many ADCs are actually producing data
+
 };
 
 // ===== Waveform & FFT Constants =====
 static const int WAVEFORM_BUFFER_SIZE = 256;
 static const int FFT_SIZE = 1024;
 static const int SPECTRUM_BANDS = 16;
+
+// ===== I2S Static Configuration (for diagnostics display) =====
+struct I2sAdcConfig {
+    bool isMaster;
+    uint32_t sampleRate;
+    int bitsPerSample;           // 32
+    const char *channelFormat;   // "Stereo R/L"
+    int dmaBufCount;
+    int dmaBufLen;
+    bool apllEnabled;
+    uint32_t mclkHz;             // sampleRate * 256, or 0 for slave
+    const char *commFormat;      // "Standard I2S"
+};
+struct I2sStaticConfig {
+    I2sAdcConfig adc[NUM_AUDIO_ADCS];
+};
+I2sStaticConfig i2s_audio_get_static_config();
 
 // ===== Public API =====
 void i2s_audio_init();
@@ -63,15 +100,21 @@ bool i2s_audio_set_sample_rate(uint32_t rate);
 
 // Waveform: returns true if a new 256-point snapshot is available
 // out must point to WAVEFORM_BUFFER_SIZE bytes
-bool i2s_audio_get_waveform(uint8_t *out);
+// adcIndex: 0 = ADC1 (default), 1 = ADC2
+bool i2s_audio_get_waveform(uint8_t *out, int adcIndex = 0);
 
 // Spectrum: returns true if new FFT data is available
 // bands must point to SPECTRUM_BANDS floats (0.0-1.0 normalized)
 // dominant_freq receives the dominant frequency in Hz
-bool i2s_audio_get_spectrum(float *bands, float *dominant_freq);
+// adcIndex: 0 = ADC1 (default), 1 = ADC2
+bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex = 0);
+
+// Returns number of ADCs currently detected and producing data
+int i2s_audio_get_num_adcs();
 
 // ===== Pure functions exposed for unit testing =====
-AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag);
+AudioHealthStatus audio_derive_health_status(const AdcDiagnostics &diag);
+AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag); // Legacy overload (uses adc[0])
 
 float audio_compute_rms(const int32_t *samples, int count, int channel, int channels);
 float audio_rms_to_dbfs(float rms);

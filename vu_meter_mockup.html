@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALX Nova — Dual ADC Audio Tab Mockup</title>
+<style>
+    :root {
+        --bg-body: #1A1A1A;
+        --bg-card: #252525;
+        --bg-input: #2C2C2C;
+        --accent: #FF9800;
+        --accent-light: #FFB74D;
+        --accent-dark: #E68900;
+        --text-primary: #FFFFFF;
+        --text-secondary: #B0B0B0;
+        --border: #333333;
+        --success: #4CAF50;
+        --warning: #FFC107;
+        --danger: #F44336;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        background: var(--bg-body);
+        color: var(--text-primary);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        padding: 16px;
+        max-width: 960px;
+        margin: 0 auto;
+        line-height: 1.5;
+    }
+
+    .mockup-banner {
+        background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+        color: #000;
+        padding: 10px 16px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
+        letter-spacing: 0.3px;
+    }
+
+    .card {
+        background: var(--bg-card);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+    }
+
+    .card-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+    }
+
+    /* ===== Toggle Switch ===== */
+    .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #555; border-radius: 20px; transition: 0.3s; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background: white; border-radius: 50%; transition: 0.3s; }
+    .switch input:checked + .slider { background: var(--accent); }
+    .switch input:checked + .slider:before { transform: translateX(16px); }
+
+    /* ===== Dual Grid ===== */
+    .dual-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    @media (max-width: 768px) {
+        .dual-grid { grid-template-columns: 1fr; }
+    }
+
+    .dual-grid .card { margin-bottom: 0; }
+
+    /* ===== Canvas Wrappers ===== */
+    .audio-canvas-wrap {
+        background: var(--bg-body);
+        border-radius: 8px;
+        padding: 8px;
+        margin-top: 8px;
+    }
+    .audio-canvas-wrap canvas {
+        width: 100%;
+        display: block;
+        border-radius: 4px;
+    }
+    .audio-canvas-wrap canvas.waveform-canvas { height: 160px; }
+    .audio-canvas-wrap canvas.spectrum-canvas { height: 140px; }
+
+    .dominant-freq-readout {
+        font-size: 13px;
+        color: var(--text-secondary);
+        text-align: center;
+        margin-top: 6px;
+    }
+    .dominant-freq-readout span {
+        color: var(--accent);
+        font-weight: 600;
+    }
+
+    /* ===== Card Header Flex ===== */
+    .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .card-header .card-title { margin-bottom: 0; }
+    .card-header-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .card-header-controls span {
+        font-size: 11px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== VU Meters ===== */
+    .adc-section {
+        margin-bottom: 12px;
+    }
+    .adc-section:last-of-type { margin-bottom: 8px; }
+
+    .adc-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border);
+    }
+    .adc-header:first-child { padding-top: 0; }
+
+    .adc-label {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--accent-light);
+        letter-spacing: 0.3px;
+    }
+
+    .adc-status {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 10px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    .adc-status.ok { background: rgba(76,175,80,0.2); color: #4CAF50; }
+    .adc-status.no-data { background: rgba(255,152,0,0.2); color: #FF9800; }
+    .adc-status.clipping { background: rgba(244,67,54,0.2); color: #F44336; animation: clip-pulse 0.5s ease infinite; }
+    @keyframes clip-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    .vu-meter-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .vu-meter-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        width: 80px;
+        text-align: right;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .vu-meter-track {
+        flex: 1;
+        height: 18px;
+        background: var(--bg-input);
+        border-radius: 4px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .vu-meter-fill {
+        height: 100%;
+        border-radius: 4px;
+        background: linear-gradient(to right, #4CAF50 0%, #4CAF50 50%, #FFC107 70%, #FF9800 85%, #F44336 100%);
+        width: 0%;
+        transition: width 0.08s linear;
+    }
+
+    .vu-meter-peak {
+        position: absolute;
+        top: 0;
+        width: 2px;
+        height: 100%;
+        background: #FFFFFF;
+        left: 0%;
+        transition: left 0.08s linear;
+    }
+
+    .vu-meter-db {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        width: 72px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .adc-info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 2px 0;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    .adc-info-row .value { color: var(--text-primary); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+    .vu-scale {
+        flex: 1;
+        position: relative;
+        height: 14px;
+        margin-top: 2px;
+    }
+    .vu-tick {
+        position: absolute;
+        font-size: 9px;
+        color: var(--text-secondary);
+        opacity: 0.6;
+        transform: translateX(-50%);
+    }
+    .vu-tick::before {
+        content: '';
+        position: absolute;
+        top: -3px;
+        left: 50%;
+        width: 1px;
+        height: 3px;
+        background: var(--text-secondary);
+        opacity: 0.4;
+    }
+
+    .signal-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #666;
+        vertical-align: middle;
+        margin-right: 6px;
+        transition: all 0.3s;
+    }
+    .signal-dot.active {
+        background: #4CAF50;
+        box-shadow: 0 0 6px #4CAF50;
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { font-size: 13px; color: var(--text-secondary); }
+    .info-value { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+
+    /* ===== Forms ===== */
+    .form-group { margin-bottom: 12px; }
+    .form-label {
+        display: block;
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+    }
+    .form-input {
+        width: 100%;
+        padding: 10px 12px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: #666; }
+
+    select.form-input {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23B0B0B0' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 32px;
+    }
+
+    input[type="range"] {
+        -webkit-appearance: none;
+        width: 100%;
+        height: 6px;
+        background: var(--bg-input);
+        border-radius: 3px;
+        outline: none;
+        border: none;
+        padding: 0;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--accent);
+        cursor: pointer;
+    }
+
+    .btn {
+        display: inline-block;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: var(--accent-light); }
+    .btn-outline {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    .graph-disabled { opacity: 0.3; pointer-events: none; }
+
+    /* ===== Input Names Grid ===== */
+    .names-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    @media (max-width: 500px) {
+        .names-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ===== Preset buttons ===== */
+    .preset-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 8px;
+    }
+
+    .pwm-note {
+        font-size: 11px;
+        color: var(--warning);
+        margin-top: 8px;
+        display: none;
+    }
+</style>
+</head>
+<body>
+
+<div class="mockup-banner">DUAL ADC AUDIO TAB MOCKUP — ALX Nova Controller v1.7.0</div>
+
+<!-- ===== AUDIO WAVEFORM (DUAL) ===== -->
+<div class="dual-grid" style="margin-bottom: 16px;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Waveform — Input 1</span>
+            <div class="card-header-controls">
+                <span>Enable</span>
+                <label class="switch" style="transform:scale(0.75);">
+                    <input type="checkbox" id="wf1Enable" checked onchange="toggleGraph('wf1Content',this.checked)">
+                    <span class="slider"></span>
+                </label>
+                <span>Auto-scale</span>
+                <label class="switch" style="transform:scale(0.75);">
+                    <input type="checkbox" id="wf1AutoScale">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div id="wf1Content">
+            <div class="audio-canvas-wrap">
+                <canvas class="waveform-canvas" id="waveformCanvas1"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Waveform — Input 2</span>
+            <div class="card-header-controls">
+                <span>Enable</span>
+                <label class="switch" style="transform:scale(0.75);">
+                    <input type="checkbox" id="wf2Enable" checked onchange="toggleGraph('wf2Content',this.checked)">
+                    <span class="slider"></span>
+                </label>
+                <span>Auto-scale</span>
+                <label class="switch" style="transform:scale(0.75);">
+                    <input type="checkbox" id="wf2AutoScale">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div id="wf2Content">
+            <div class="audio-canvas-wrap">
+                <canvas class="waveform-canvas" id="waveformCanvas2"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== FREQUENCY SPECTRUM (DUAL) ===== -->
+<div class="dual-grid" style="margin-bottom: 16px;">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Spectrum — Input 1</span>
+            <div class="card-header-controls">
+                <span>Enable</span>
+                <label class="switch" style="transform:scale(0.75);">
+                    <input type="checkbox" id="sp1Enable" checked onchange="toggleGraph('sp1Content',this.checked)">
+                    <span class="slider"></span>
+                </label>
+                <span>LED</span>
+                <label class="switch" style="transform:scale(0.75);">
+                    <input type="checkbox" id="sp1Led">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div id="sp1Content">
+            <div class="audio-canvas-wrap">
+                <canvas class="spectrum-canvas" id="spectrumCanvas1"></canvas>
+            </div>
+            <div class="dominant-freq-readout">Dominant: <span id="domFreq1">-- Hz</span></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Spectrum — Input 2</span>
+            <div class="card-header-controls">
+                <span>Enable</span>
+                <label class="switch" style="transform:scale(0.75);">
+                    <input type="checkbox" id="sp2Enable" checked onchange="toggleGraph('sp2Content',this.checked)">
+                    <span class="slider"></span>
+                </label>
+                <span>LED</span>
+                <label class="switch" style="transform:scale(0.75);">
+                    <input type="checkbox" id="sp2Led">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+        <div id="sp2Content">
+            <div class="audio-canvas-wrap">
+                <canvas class="spectrum-canvas" id="spectrumCanvas2"></canvas>
+            </div>
+            <div class="dominant-freq-readout">Dominant: <span id="domFreq2">-- Hz</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== AUDIO LEVELS (2x2 VU) ===== -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Audio Levels</span>
+        <div class="card-header-controls">
+            <span>Enable</span>
+            <label class="switch" style="transform:scale(0.75);">
+                <input type="checkbox" id="vuEnable" checked onchange="toggleGraph('vuContent',this.checked)">
+                <span class="slider"></span>
+            </label>
+            <span>Segmented</span>
+            <label class="switch" style="transform:scale(0.75);">
+                <input type="checkbox" id="vuSegmented">
+                <span class="slider"></span>
+            </label>
+        </div>
+    </div>
+    <div id="vuContent">
+        <!-- ADC 1 -->
+        <div class="adc-section">
+            <div class="adc-header">
+                <span class="adc-label">Input 1</span>
+                <span class="adc-status ok" id="adc1Status">OK</span>
+            </div>
+            <div class="vu-meter-row">
+                <span class="vu-meter-label" id="vuName1">Subwoofer 1</span>
+                <div class="vu-meter-track">
+                    <div class="vu-meter-fill" id="vuFill1L"></div>
+                    <div class="vu-meter-peak" id="vuPeak1L"></div>
+                </div>
+                <span class="vu-meter-db" id="vuDb1L">-inf dBFS</span>
+            </div>
+            <div class="vu-meter-row" style="margin-bottom:4px">
+                <span class="vu-meter-label" id="vuName2">Subwoofer 2</span>
+                <div class="vu-meter-track">
+                    <div class="vu-meter-fill" id="vuFill1R"></div>
+                    <div class="vu-meter-peak" id="vuPeak1R"></div>
+                </div>
+                <span class="vu-meter-db" id="vuDb1R">-inf dBFS</span>
+            </div>
+            <div class="adc-info-row">
+                <span>Level: <span class="value" id="adc1dBFS">-96.0 dBFS</span></span>
+                <span>Vrms: <span class="value" id="adc1Vrms">0.000 V</span></span>
+            </div>
+        </div>
+
+        <!-- ADC 2 -->
+        <div class="adc-section">
+            <div class="adc-header">
+                <span class="adc-label">Input 2</span>
+                <span class="adc-status ok" id="adc2Status">OK</span>
+            </div>
+            <div class="vu-meter-row">
+                <span class="vu-meter-label" id="vuName3">Subwoofer 3</span>
+                <div class="vu-meter-track">
+                    <div class="vu-meter-fill" id="vuFill2L"></div>
+                    <div class="vu-meter-peak" id="vuPeak2L"></div>
+                </div>
+                <span class="vu-meter-db" id="vuDb2L">-inf dBFS</span>
+            </div>
+            <div class="vu-meter-row" style="margin-bottom:4px">
+                <span class="vu-meter-label" id="vuName4">Subwoofer 4</span>
+                <div class="vu-meter-track">
+                    <div class="vu-meter-fill" id="vuFill2R"></div>
+                    <div class="vu-meter-peak" id="vuPeak2R"></div>
+                </div>
+                <span class="vu-meter-db" id="vuDb2R">-inf dBFS</span>
+            </div>
+            <div class="adc-info-row">
+                <span>Level: <span class="value" id="adc2dBFS">-96.0 dBFS</span></span>
+                <span>Vrms: <span class="value" id="adc2Vrms">0.000 V</span></span>
+            </div>
+        </div>
+
+        <!-- Shared scale -->
+        <div class="vu-meter-row" style="margin-bottom:8px">
+            <span class="vu-meter-label"></span>
+            <div class="vu-scale">
+                <span class="vu-tick" style="left:0%">-60</span>
+                <span class="vu-tick" style="left:16.7%">-50</span>
+                <span class="vu-tick" style="left:33.3%">-40</span>
+                <span class="vu-tick" style="left:50%">-30</span>
+                <span class="vu-tick" style="left:66.7%">-20</span>
+                <span class="vu-tick" style="left:83.3%">-10</span>
+                <span class="vu-tick" style="left:100%">0</span>
+            </div>
+            <span class="vu-meter-db"></span>
+        </div>
+
+        <!-- Signal -->
+        <div class="info-row" style="border-bottom:none;padding:4px 0;">
+            <span class="info-label"><span class="signal-dot active" id="signalDot"></span>Signal</span>
+            <span class="info-value" id="signalText" style="color:#4CAF50;font-weight:600;">Detected</span>
+        </div>
+    </div>
+</div>
+
+<!-- ===== INPUT NAMES ===== -->
+<div class="card">
+    <div class="card-title">Input Names</div>
+    <div class="names-grid">
+        <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Channel 1</label>
+            <input type="text" class="form-input" id="inputName1" placeholder="Subwoofer 1" oninput="updateVuName(1,this.value)">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Channel 2</label>
+            <input type="text" class="form-input" id="inputName2" placeholder="Subwoofer 2" oninput="updateVuName(2,this.value)">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Channel 3</label>
+            <input type="text" class="form-input" id="inputName3" placeholder="Subwoofer 3" oninput="updateVuName(3,this.value)">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Channel 4</label>
+            <input type="text" class="form-input" id="inputName4" placeholder="Subwoofer 4" oninput="updateVuName(4,this.value)">
+        </div>
+    </div>
+    <div style="margin-top:12px;text-align:right;">
+        <button class="btn btn-primary" onclick="alert('Input names saved (mockup)')">Save Names</button>
+    </div>
+</div>
+
+<!-- ===== AUDIO SETTINGS ===== -->
+<div class="card">
+    <div class="card-title">Audio Settings</div>
+    <div class="form-group">
+        <label class="form-label">Update Rate</label>
+        <select class="form-input" id="audioUpdateRate">
+            <option value="100">100 ms</option>
+            <option value="50" selected>50 ms</option>
+            <option value="33">33 ms</option>
+            <option value="20">20 ms</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Sample Rate</label>
+        <select class="form-input" id="audioSampleRate">
+            <option value="16000">16000 Hz</option>
+            <option value="44100">44100 Hz</option>
+            <option value="48000" selected>48000 Hz</option>
+        </select>
+    </div>
+    <button class="btn btn-primary" onclick="alert('Sample rate updated (mockup)')">Update Sample Rate</button>
+</div>
+
+<!-- ===== TEST SIGNAL GENERATOR ===== -->
+<div class="card">
+    <div class="card-title">Test Signal Generator</div>
+    <div class="form-group">
+        <label class="form-label">Enable</label>
+        <label class="switch" style="float:right"><input type="checkbox" id="siggenEnable" onchange="toggleSiggenFields()"><span class="slider"></span></label>
+        <div style="clear:both"></div>
+    </div>
+    <div id="siggenFields" style="display:none">
+        <div class="form-group">
+            <label class="form-label">Output Mode</label>
+            <select class="form-input" id="siggenOutputMode" onchange="togglePwmNote()">
+                <option value="0">Software Injection</option>
+                <option value="1">PWM Output (GPIO 38)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Target ADC</label>
+            <select class="form-input" id="siggenTargetAdc">
+                <option value="0">Input 1</option>
+                <option value="1">Input 2</option>
+                <option value="2" selected>Both</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Waveform</label>
+            <select class="form-input" id="siggenWaveform" onchange="toggleSweepGroup()">
+                <option value="0">Sine</option>
+                <option value="1">Square</option>
+                <option value="2">White Noise</option>
+                <option value="3">Frequency Sweep</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Frequency: <span id="siggenFreqVal">1000</span> Hz</label>
+            <input type="range" class="form-input" id="siggenFreq" min="1" max="22000" value="1000" step="1" oninput="document.getElementById('siggenFreqVal').textContent=this.value">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Amplitude: <span id="siggenAmpVal">-6</span> dBFS</label>
+            <input type="range" class="form-input" id="siggenAmp" min="-96" max="0" value="-6" step="1" oninput="document.getElementById('siggenAmpVal').textContent=this.value">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Channel</label>
+            <select class="form-input" id="siggenChannel">
+                <option value="0">Left</option>
+                <option value="1">Right</option>
+                <option value="2" selected>Both</option>
+            </select>
+        </div>
+        <div class="form-group" id="siggenSweepGroup" style="display:none">
+            <label class="form-label">Sweep Speed (Hz/s)</label>
+            <input type="number" class="form-input" id="siggenSweepSpeed" min="1" max="22000" value="1000">
+        </div>
+        <div class="preset-row">
+            <button class="btn btn-outline" onclick="siggenPreset(0,440,-6)">440 Hz</button>
+            <button class="btn btn-outline" onclick="siggenPreset(0,1000,-6)">1 kHz</button>
+            <button class="btn btn-outline" onclick="siggenPreset(0,100,-6)">100 Hz</button>
+            <button class="btn btn-outline" onclick="siggenPreset(0,10000,-6)">10 kHz</button>
+            <button class="btn btn-outline" onclick="siggenPreset(2,1000,-6)">Noise</button>
+            <button class="btn btn-outline" onclick="siggenPreset(3,20000,-6)">Sweep</button>
+        </div>
+        <p class="pwm-note" id="siggenPwmNote">PWM output requires external RC low-pass filter for sine approximation.</p>
+    </div>
+</div>
+
+<script>
+// ===== Toggle helpers =====
+function toggleGraph(id, enabled) {
+    var el = document.getElementById(id);
+    if (el) { if (enabled) el.classList.remove('graph-disabled'); else el.classList.add('graph-disabled'); }
+}
+
+function toggleSiggenFields() {
+    document.getElementById('siggenFields').style.display = document.getElementById('siggenEnable').checked ? '' : 'none';
+}
+
+function toggleSweepGroup() {
+    document.getElementById('siggenSweepGroup').style.display = document.getElementById('siggenWaveform').value === '3' ? '' : 'none';
+}
+
+function togglePwmNote() {
+    document.getElementById('siggenPwmNote').style.display = document.getElementById('siggenOutputMode').value === '1' ? '' : 'none';
+}
+
+function siggenPreset(waveform, freq, amp) {
+    document.getElementById('siggenWaveform').value = waveform;
+    document.getElementById('siggenFreq').value = freq;
+    document.getElementById('siggenFreqVal').textContent = freq;
+    document.getElementById('siggenAmp').value = amp;
+    document.getElementById('siggenAmpVal').textContent = amp;
+    toggleSweepGroup();
+}
+
+function updateVuName(ch, val) {
+    var defaults = ['Subwoofer 1','Subwoofer 2','Subwoofer 3','Subwoofer 4'];
+    document.getElementById('vuName' + ch).textContent = val || defaults[ch - 1];
+}
+
+// ===== Canvas setup =====
+function setupCanvas(canvas) {
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// ===== Waveform Drawing =====
+var wfCanvases = [];
+function initWaveforms() {
+    ['waveformCanvas1', 'waveformCanvas2'].forEach(function(id, idx) {
+        var canvas = document.getElementById(id);
+        var info = setupCanvas(canvas);
+        wfCanvases.push({ canvas: canvas, ctx: info.ctx, w: info.w, h: info.h, phase: idx * 1.5, freq: idx === 0 ? 3 : 5 });
+    });
+}
+
+function drawWaveform(wf, t) {
+    var ctx = wf.ctx, w = wf.w, h = wf.h;
+    ctx.clearRect(0, 0, w, h);
+
+    // Grid
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, h/2); ctx.lineTo(w, h/2);
+    ctx.stroke();
+    for (var g = 0.25; g < 1; g += 0.25) {
+        ctx.beginPath(); ctx.moveTo(0, h*g); ctx.lineTo(w, h*g); ctx.stroke();
+    }
+
+    // Waveform
+    ctx.strokeStyle = '#4CAF50';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 4;
+    ctx.shadowColor = '#4CAF50';
+    ctx.beginPath();
+    for (var x = 0; x < w; x++) {
+        var progress = x / w;
+        var sample = Math.sin(progress * Math.PI * 2 * wf.freq + wf.phase + t * 2)
+                   * (0.4 + 0.2 * Math.sin(t * 0.7 + wf.phase))
+                   + Math.sin(progress * Math.PI * 2 * wf.freq * 2.5 + wf.phase + t * 3.1) * 0.15;
+        var y = h/2 - sample * h * 0.4;
+        if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+}
+
+// ===== Spectrum Drawing =====
+var spCanvases = [];
+var spectrumData = [[],[]], spectrumTarget = [[],[]];
+var BANDS = 16;
+
+function initSpectrums() {
+    ['spectrumCanvas1', 'spectrumCanvas2'].forEach(function(id, idx) {
+        var canvas = document.getElementById(id);
+        var info = setupCanvas(canvas);
+        spCanvases.push({ canvas: canvas, ctx: info.ctx, w: info.w, h: info.h });
+        spectrumData[idx] = new Array(BANDS).fill(0);
+        spectrumTarget[idx] = new Array(BANDS).fill(0);
+    });
+}
+
+function updateSpectrumTargets(t) {
+    for (var adc = 0; adc < 2; adc++) {
+        for (var i = 0; i < BANDS; i++) {
+            if (Math.random() < 0.15) {
+                var base = Math.max(0, 1 - i * 0.04);
+                spectrumTarget[adc][i] = base * (0.3 + Math.random() * 0.7)
+                    * (0.6 + 0.4 * Math.sin(t * 1.5 + i * 0.5 + adc * 2));
+            }
+        }
+        for (var i = 0; i < BANDS; i++) {
+            spectrumData[adc][i] += (spectrumTarget[adc][i] - spectrumData[adc][i]) * 0.15;
+            spectrumTarget[adc][i] *= 0.95;
+        }
+    }
+}
+
+function drawSpectrum(sp, data, t, adcIdx) {
+    var ctx = sp.ctx, w = sp.w, h = sp.h;
+    ctx.clearRect(0, 0, w, h);
+
+    var barW = (w - (BANDS - 1) * 2) / BANDS;
+    var grad = ctx.createLinearGradient(0, h, 0, 0);
+    grad.addColorStop(0, '#4CAF50');
+    grad.addColorStop(0.5, '#FFC107');
+    grad.addColorStop(0.85, '#FF9800');
+    grad.addColorStop(1, '#F44336');
+
+    for (var i = 0; i < BANDS; i++) {
+        var x = i * (barW + 2);
+        var barH = data[i] * h * 0.85;
+        ctx.fillStyle = grad;
+        ctx.shadowBlur = 3;
+        ctx.shadowColor = '#FF9800';
+        ctx.fillRect(x, h - barH, barW, barH);
+    }
+    ctx.shadowBlur = 0;
+
+    // Dominant frequency simulation
+    var peak = 0, peakIdx = 0;
+    for (var i = 0; i < BANDS; i++) {
+        if (data[i] > peak) { peak = data[i]; peakIdx = i; }
+    }
+    var freqs = [31,63,125,250,500,750,1000,1500,2000,3000,4000,6000,8000,12000,16000,20000];
+    var domEl = document.getElementById('domFreq' + (adcIdx + 1));
+    if (domEl) domEl.textContent = freqs[peakIdx] + ' Hz';
+}
+
+// ===== VU Meter Animation =====
+var vuState = {
+    vu: [0,0,0,0],
+    peak: [0,0,0,0],
+    peakHold: [0,0,0,0],
+    peakTime: [0,0,0,0],
+    target: [0,0,0,0]
+};
+
+function updateVuTargets(t) {
+    for (var i = 0; i < 4; i++) {
+        if (Math.random() < 0.2) {
+            var base = 0.35 + 0.3 * Math.sin(t * 0.8 + i * 1.2);
+            vuState.target[i] = Math.max(0, Math.min(1, base + (Math.random() - 0.5) * 0.3));
+        }
+    }
+}
+
+function updateVu(dt) {
+    var now = performance.now() / 1000;
+    for (var i = 0; i < 4; i++) {
+        // VU smoothing
+        var diff = vuState.target[i] - vuState.vu[i];
+        var alpha = diff > 0 ? 0.15 : 0.05;
+        vuState.vu[i] += diff * alpha;
+
+        // Peak hold
+        if (vuState.vu[i] > vuState.peak[i]) {
+            vuState.peak[i] = vuState.vu[i];
+            vuState.peakTime[i] = now;
+        } else if (now - vuState.peakTime[i] > 2.0) {
+            vuState.peak[i] -= 0.01;
+            if (vuState.peak[i] < vuState.vu[i]) vuState.peak[i] = vuState.vu[i];
+        }
+    }
+}
+
+function vuToDb(linear) {
+    if (linear <= 0.001) return -96;
+    return 20 * Math.log10(linear);
+}
+
+function dbToPercent(db) {
+    if (db <= -60) return 0;
+    return ((db + 60) / 60) * 100;
+}
+
+function renderVu() {
+    var ids = [
+        { fill: 'vuFill1L', peak: 'vuPeak1L', db: 'vuDb1L' },
+        { fill: 'vuFill1R', peak: 'vuPeak1R', db: 'vuDb1R' },
+        { fill: 'vuFill2L', peak: 'vuPeak2L', db: 'vuDb2L' },
+        { fill: 'vuFill2R', peak: 'vuPeak2R', db: 'vuDb2R' }
+    ];
+
+    for (var i = 0; i < 4; i++) {
+        var db = vuToDb(vuState.vu[i]);
+        var peakDb = vuToDb(vuState.peak[i]);
+        var pct = dbToPercent(db);
+        var peakPct = dbToPercent(peakDb);
+
+        document.getElementById(ids[i].fill).style.width = pct + '%';
+        document.getElementById(ids[i].peak).style.left = peakPct + '%';
+        document.getElementById(ids[i].db).textContent = db > -60 ? db.toFixed(1) + ' dBFS' : '-inf dBFS';
+    }
+
+    // Per-ADC combined dBFS and Vrms
+    var adc1db = Math.max(vuToDb(vuState.vu[0]), vuToDb(vuState.vu[1]));
+    var adc2db = Math.max(vuToDb(vuState.vu[2]), vuToDb(vuState.vu[3]));
+    document.getElementById('adc1dBFS').textContent = adc1db > -60 ? adc1db.toFixed(1) + ' dBFS' : '-96.0 dBFS';
+    document.getElementById('adc2dBFS').textContent = adc2db > -60 ? adc2db.toFixed(1) + ' dBFS' : '-96.0 dBFS';
+
+    var vrms1 = Math.max(vuState.vu[0], vuState.vu[1]) * 3.3;
+    var vrms2 = Math.max(vuState.vu[2], vuState.vu[3]) * 3.3;
+    document.getElementById('adc1Vrms').textContent = vrms1.toFixed(3) + ' V';
+    document.getElementById('adc2Vrms').textContent = vrms2.toFixed(3) + ' V';
+
+    // Signal dot
+    var anySignal = adc1db > -40 || adc2db > -40;
+    var dot = document.getElementById('signalDot');
+    var txt = document.getElementById('signalText');
+    if (anySignal) {
+        dot.classList.add('active');
+        txt.textContent = 'Detected';
+        txt.style.color = '#4CAF50';
+    } else {
+        dot.classList.remove('active');
+        txt.textContent = 'Not detected';
+        txt.style.color = '';
+    }
+}
+
+// ===== Animation Loop =====
+var lastTime = 0;
+function animate(timestamp) {
+    var t = timestamp / 1000;
+    var dt = lastTime ? (timestamp - lastTime) / 1000 : 0.016;
+    lastTime = timestamp;
+
+    // Waveforms
+    wfCanvases.forEach(function(wf) { drawWaveform(wf, t); });
+
+    // Spectrums
+    updateSpectrumTargets(t);
+    spCanvases.forEach(function(sp, idx) { drawSpectrum(sp, spectrumData[idx], t, idx); });
+
+    // VU meters
+    updateVuTargets(t);
+    updateVu(dt);
+    renderVu();
+
+    requestAnimationFrame(animate);
+}
+
+// ===== Init =====
+window.addEventListener('load', function() {
+    initWaveforms();
+    initSpectrums();
+    requestAnimationFrame(animate);
+});
+
+// Handle resize
+window.addEventListener('resize', function() {
+    wfCanvases = [];
+    spCanvases = [];
+    initWaveforms();
+    initSpectrums();
+});
+</script>
+</body>
+</html>

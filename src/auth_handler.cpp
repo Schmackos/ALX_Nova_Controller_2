@@ -117,7 +117,6 @@ bool validateSession(String sessionId) {
 
       // Update last seen time
       activeSessions[i].lastSeen = now;
-      LOG_D("[Auth] Session %s validated successfully", sessionId.c_str());
       return true;
     }
   }

@@ -26,6 +26,11 @@ void handleStartUpdate();
 void handleUpdateStatus();
 void handleGetReleaseNotes();
 
+// ===== Non-Blocking OTA Task =====
+void startOTADownloadTask();
+void startOTACheckTask();
+bool isOTATaskRunning();
+
 // ===== Manual Firmware Upload Handlers =====
 void handleFirmwareUploadComplete();
 void handleFirmwareUploadChunk();

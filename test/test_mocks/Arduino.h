@@ -178,12 +178,14 @@ inline bool isDigit(char c) { return c >= '0' && c <= '9'; }
 // Mock global state for testing (header-only implementation)
 namespace ArduinoMock {
 static unsigned long mockMillis = 0;
+static unsigned long mockMicros = 0;
 static int mockAnalogValue = 0;
 static int mockDigitalPins[50] = {0};
 
 // Reset function for tests
 inline void reset() {
   mockMillis = 0;
+  mockMicros = 0;
   mockAnalogValue = 0;
   std::memset(mockDigitalPins, 0, sizeof(mockDigitalPins));
 }
@@ -191,6 +193,7 @@ inline void reset() {
 
 // Mock Arduino functions
 inline unsigned long millis() { return ArduinoMock::mockMillis; }
+inline unsigned long micros() { return ArduinoMock::mockMicros; }
 inline void delay(unsigned long ms) { ArduinoMock::mockMillis += ms; }
 inline int analogRead(uint8_t pin) { return ArduinoMock::mockAnalogValue; }
 inline void digitalWrite(uint8_t pin, uint8_t val) {

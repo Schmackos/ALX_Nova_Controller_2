@@ -10,7 +10,7 @@
 // deviceSerialNumber in app_state.h)
 
 // ===== Firmware Version =====
-#define FIRMWARE_VERSION "1.6.0"
+#define FIRMWARE_VERSION "1.6.1"
 
 // ===== GitHub Repository Configuration =====
 #define GITHUB_REPO_OWNER "Schmackos"
@@ -37,7 +37,10 @@ const int AMPLIFIER_PIN = 4; // GPIO 4 - relay control
 const int I2S_BCK_PIN = 16; // GPIO 16 - I2S Bit Clock
 #endif
 #ifndef I2S_DOUT_PIN
-const int I2S_DOUT_PIN = 17; // GPIO 17 - I2S Data In (PCM1808 OUT)
+const int I2S_DOUT_PIN = 17; // GPIO 17 - I2S Data In (PCM1808 #1 OUT)
+#endif
+#ifndef I2S_DOUT2_PIN
+const int I2S_DOUT2_PIN = 9;  // GPIO 9 - I2S Data In (PCM1808 #2 OUT)
 #endif
 #ifndef I2S_LRC_PIN
 const int I2S_LRC_PIN = 18; // GPIO 18 - I2S Word Select (L/R Clock)
@@ -98,10 +101,13 @@ const uint16_t DEFAULT_AUDIO_UPDATE_RATE =
 const unsigned long DEFAULT_TIMER_DURATION =
     15; // Default timer duration in minutes
 const float DEFAULT_AUDIO_THRESHOLD =
-    -40.0f; // Default audio threshold in dBFS (-96 to 0)
+    -60.0f; // Default audio threshold in dBFS (-96 to 0)
 const uint32_t DEFAULT_AUDIO_SAMPLE_RATE =
     48000; // Default I2S sample rate (Hz)
 const float DEFAULT_ADC_VREF = 3.3f; // PCM1808 full-scale reference voltage (V)
+
+// ===== Dual ADC Configuration =====
+#define NUM_AUDIO_ADCS 2  // Number of PCM1808 ADC modules (1 or 2)
 
 // Smart Sensing modes
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };
@@ -130,8 +136,8 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_STACK_SIZE_SENSING 4096
 #define TASK_STACK_SIZE_WEB 8192
 #define TASK_STACK_SIZE_MQTT 4096
-#define TASK_STACK_SIZE_OTA 8192
-#define TASK_STACK_SIZE_AUDIO 8192
+#define TASK_STACK_SIZE_OTA 16384
+#define TASK_STACK_SIZE_AUDIO 10240
 
 #define TASK_PRIORITY_SENSING 2 // High priority
 #define TASK_PRIORITY_WEB 1     // Medium priority
