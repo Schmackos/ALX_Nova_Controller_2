@@ -41,6 +41,13 @@ None
 ## Version 1.5.4
 
 ## New Features
+- [2026-02-10] feat: Enhance audio processing and testing capabilities
+
+- Added support for dual ADCs with new I2S audio configuration, enabling simultaneous audio input from two sources.
+- Introduced detailed audio diagnostics for each ADC, including health status and noise floor measurements.
+- Updated signal generator functionality to allow selection of target ADC for output.
+- Enhanced OTA update process with FreeRTOS tasks for non-blocking operations and improved status broadcasting.
+- Expanded test coverage with additional tests for new features, bringing total tests to 376. (`bf41307`)
 - Automated release via GitHub Actions
 
 ## Improvements
