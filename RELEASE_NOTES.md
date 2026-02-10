@@ -64,6 +64,14 @@ None
 - None
 
 ## Technical Details
+- [2026-02-10] refactor: Move debug sub-toggles from Settings tab to Debug tab
+
+Sub-toggles (HW Stats, I2S Metrics, Task Monitor, Serial Level) now
+live on the Debug tab near their respective sections instead of being
+grouped under Settings. Master Debug Mode toggle stays on Settings.
+I2S and FreeRTOS cards hide entirely when their toggle is off.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`e4e26ca`)
 - Version bump to 1.5.4
 
 ## Breaking Changes

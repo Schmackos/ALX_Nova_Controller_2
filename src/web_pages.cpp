@@ -3204,6 +3204,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <div id="hwStatsSection">
             <!-- CPU Stats -->
             <div class="card">
                 <div class="card-title">CPU</div>
@@ -3428,6 +3429,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-value" id="adcSampleRate">--</span>
                     </div>
                 </div>
+            </div>
+
             </div>
 
             <!-- I2S Configuration -->
@@ -6528,8 +6531,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var tmSec = document.getElementById('taskMonitorSection');
             if (tmSec) tmSec.style.display = (d.debugMode && d.debugTaskMonitor) ? '' : 'none';
 
-            // Hide/show debug tab based on debugMode && debugHwStats
-            updateDebugTabVisibility(d.debugMode && d.debugHwStats);
+            // Hide/show hardware stats sections when HW Stats disabled
+            var hwSec = document.getElementById('hwStatsSection');
+            if (hwSec) hwSec.style.display = (d.debugMode && d.debugHwStats) ? '' : 'none';
+
+            // Hide/show debug tab based on debugMode only
+            updateDebugTabVisibility(d.debugMode);
         }
 
         function updateDebugTabVisibility(visible) {
