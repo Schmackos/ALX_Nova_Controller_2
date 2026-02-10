@@ -312,7 +312,12 @@ static bool i2s_configure_slave(uint32_t sample_rate) {
     cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
     cfg.dma_buf_count = DMA_BUF_COUNT;
     cfg.dma_buf_len = DMA_BUF_LEN;
-    cfg.use_apll = false; // Slave doesn't generate clock
+    // ESP32-S3 requires internal clock with bclk_div >= 8 even in slave mode.
+    // Without APLL, bclk_div calculates to 4 (12.288MHz / 3.072MHz BCK) which
+    // silently prevents the RX state machine/DMA from running.
+    // Both peripherals share the same APLL frequency (sample_rate * 256).
+    cfg.use_apll = true;
+    cfg.fixed_mclk = sample_rate * 256;
 
     esp_err_t err = i2s_driver_install((i2s_port_t)I2S_PORT_SLAVE, &cfg, 0, NULL);
     if (err != ESP_OK) {

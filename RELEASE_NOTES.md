@@ -1,91 +1,87 @@
 # Release Notes
 
-## Version 1.6.1
+## Version 1.6.2
 
 ## New Features
-- [2026-02-10] feat: v1.6.1 — Dual ADC, debug system, task monitor, I2S slave DMA fix
+- [2026-02-10] feat: v1.6.2 — Enhanced task manager, dark mode fix, channel label rename
 
-Add second PCM1808 I2S ADC (slave) with per-ADC VU/waveform/spectrum/diagnostics
-across all interfaces. New FreeRTOS task monitor and debug mode toggle system with
-master gate and per-feature sub-toggles. Fix I2S slave DMA timeout by passing
-BCK/LRC pins to i2s_set_pin instead of I2S_PIN_NO_CHANGE, ensuring full peripheral
-clock domain initialization. Non-blocking OTA via FreeRTOS tasks.
+- FreeRTOS task manager: sortable columns, CPU utilization display, loop
+  frequency, stack usage % column. Moved to top of Debug page.
+- Dark mode flash fix: apply theme from localStorage before first paint
+  on both main page and login page.
+- Rename audio channels: Left/Right → Ch1/Ch2, Input → ADC across all
+  interfaces (WS, REST, MQTT, GUI, Web UI). Breaking MQTT topic change.
+- Default audio threshold changed from -40 to -60 dBFS.
+- I2S slave APLL fix for ESP32-S3 bclk_div >= 8 requirement.
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`0773138`)
-- [2026-02-10] feat: v1.6.1 — Dual ADC, debug system, task monitor, I2S slave DMA fix
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`dc350e4`)
+- [2026-02-10] feat: v1.6.2 — Enhanced task manager, dark mode fix, channel label rename
 
-Add second PCM1808 I2S ADC (slave) with per-ADC VU/waveform/spectrum/diagnostics
-across all interfaces. New FreeRTOS task monitor and debug mode toggle system with
-master gate and per-feature sub-toggles. Fix I2S slave DMA timeout by passing
-BCK/LRC pins to i2s_set_pin instead of I2S_PIN_NO_CHANGE, ensuring full peripheral
-clock domain initialization. Non-blocking OTA via FreeRTOS tasks.
+- FreeRTOS task manager: sortable columns, CPU utilization display, loop
+  frequency, stack usage % column. Moved to top of Debug page.
+- Dark mode flash fix: apply theme from localStorage before first paint
+  on both main page and login page.
+- Rename audio channels: Left/Right → Ch1/Ch2, Input → ADC across all
+  interfaces (WS, REST, MQTT, GUI, Web UI). Breaking MQTT topic change.
+- Default audio threshold changed from -40 to -60 dBFS.
+- I2S slave APLL fix for ESP32-S3 bclk_div >= 8 requirement.
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`715a670`)
-- [2026-02-10] feat: v1.6.1 — Dual ADC, debug system, task monitor, I2S slave DMA fix
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`bdba241`)
+- [2026-02-10] feat: v1.6.2 — Enhanced task manager, dark mode fix, channel label rename
 
-Add second PCM1808 I2S ADC (slave) with per-ADC VU/waveform/spectrum/diagnostics
-across all interfaces. New FreeRTOS task monitor and debug mode toggle system with
-master gate and per-feature sub-toggles. Fix I2S slave DMA timeout by passing
-BCK/LRC pins to i2s_set_pin instead of I2S_PIN_NO_CHANGE, ensuring full peripheral
-clock domain initialization. Non-blocking OTA via FreeRTOS tasks.
+- FreeRTOS task manager: sortable columns, CPU utilization display, loop
+  frequency, stack usage % column. Moved to top of Debug page.
+- Dark mode flash fix: apply theme from localStorage before first paint
+  on both main page and login page.
+- Rename audio channels: Left/Right → Ch1/Ch2, Input → ADC across all
+  interfaces (WS, REST, MQTT, GUI, Web UI). Breaking MQTT topic change.
+- Default audio threshold changed from -40 to -60 dBFS.
+- I2S slave APLL fix for ESP32-S3 bclk_div >= 8 requirement.
 
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`d9abcc7`)
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`69e9f1f`)
+
+### New Features
+- **FreeRTOS Task Manager Enhancements**: Sortable columns (click any header), CPU utilization display (per-core + total), loop frequency metric, and stack usage percentage column with color-coded indicators. Moved to top of Debug page under Debug Controls.
+
+### Improvements
+- **Dark Mode Flash Fix**: Main page and login page now read localStorage immediately on load to apply dark/light theme before first paint, eliminating the light→dark flash on page load.
+- **Audio Channel Label Rename**: Replaced Left/Right stereo naming with numbered inputs (Ch1/Ch2) and Input→ADC naming for hardware ADC references across all interfaces (WS, REST, MQTT, GUI, Web UI). MQTT topic paths changed (`audio/input1/*` → `audio/adc1/*`).
+- **Default Audio Threshold**: Changed from -40 dBFS to -60 dBFS; web UI input field prefilled with new default.
+- **I2S Slave APLL Fix**: Slave ADC now uses `use_apll = true` with `fixed_mclk = sample_rate * 256` to satisfy ESP32-S3 `bclk_div >= 8` requirement, fixing potential DMA timeout.
+
+### Breaking Changes
+- MQTT topic paths changed: `audio/input1/*` → `audio/adc1/*`, `audio/input2/*` → `audio/adc2/*` — requires Home Assistant re-discovery.
+- WebSocket JSON keys renamed: `vuL/vuR` → `vu1/vu2`, `peakL/peakR` → `peak1/peak2`, `rmsL/rmsR` → `rms1/rms2`, etc.
+- Signal generator channel enum: `SIGCHAN_LEFT/RIGHT` → `SIGCHAN_CH1/CH2`.
+
+### Technical Details
+- 417 unit tests, all passing
+- RAM: 43.8%, Flash: 64.2%
+
+---
+
+## Version 1.6.1
+
+### New Features
 - **Dual ADC Expansion**: Second PCM1808 I2S ADC (slave on I2S_NUM_1) sharing BCK/LRC/MCLK with ADC1 master, only new pin DOUT2=GPIO 9. Per-ADC VU meters, waveform canvases, spectrum analyzers, diagnostics, and input names across all interfaces (Web UI, WebSocket, REST, MQTT, GUI). Auto-detection hides ADC2 panels when only one ADC is connected.
-
 - **FreeRTOS Task Monitor**: Real-time monitoring of FreeRTOS task stack watermarks, priorities, core affinity, and loop timing. Web UI "FreeRTOS Tasks" card on Debug tab, MQTT diagnostic sensors, and GUI Debug screen section. Runs on a dedicated 5s timer, opt-in via `debugTaskMonitor` toggle.
+- **Debug Mode Toggle System**: Master debug gate with 4 per-feature sub-toggles (HW Stats, I2S Metrics, Task Monitor, Serial Level). Master OFF forces all sub-features off and serial to LOG_ERROR. Controls available in Web UI Debug tab, GUI Settings menu, MQTT, and WebSocket.
+- **Audio ADC Diagnostics**: Per-ADC health monitoring (OK, NO_DATA, NOISE_ONLY, CLIPPING, I2S_ERROR) with noise floor tracking.
+- **Input Voltage (Vrms) Display**: Computed Vrms from I2S RMS data with configurable ADC reference voltage (1.0–5.0V).
+- **Audio Graph Toggles**: Individual enable/disable for VU Meter, Waveform, and Spectrum visualizations.
+- **Non-Blocking OTA**: OTA check and download run as one-shot FreeRTOS tasks on Core 1.
 
-- **Debug Mode Toggle System**: Master debug gate with 4 per-feature sub-toggles (HW Stats, I2S Metrics, Task Monitor, Serial Level). Master OFF forces all sub-features off and serial to LOG_ERROR. Controls available in Web UI Debug tab, GUI Settings menu, MQTT, and WebSocket. 5 new settings lines persisted.
-
-- **Audio ADC Diagnostics**: Per-ADC health monitoring (OK, NO_DATA, NOISE_ONLY, CLIPPING, I2S_ERROR) with noise floor tracking. Exposed via GUI Debug screen, WebSocket, REST API (`/api/diagnostics`), and MQTT with HA discovery.
-
-- **Input Voltage (Vrms) Display**: Computed Vrms from I2S RMS data with configurable ADC reference voltage (1.0–5.0V). Displayed in Web UI, GUI Debug screen, and published via MQTT.
-
-- **Audio Graph Toggles**: Individual enable/disable for VU Meter, Waveform, and Spectrum visualizations. Disabled graphs skip processing in the I2S task and stop sending WebSocket payloads.
-
-- **Non-Blocking OTA**: OTA check and download run as one-shot FreeRTOS tasks on Core 1 instead of blocking the main loop. Dirty-flag pattern for thread-safe WebSocket/MQTT broadcasts.
-
-## Improvements
-- **I2S Slave Pin Configuration**: Slave `i2s_set_pin()` now passes BCK/LRC pins instead of `I2S_PIN_NO_CHANGE`, ensuring full I2S peripheral clock domain initialization. Safe because slave inits before master.
-- **I2S Init Order**: Swapped master/slave port assignments (master=I2S_NUM_0, slave=I2S_NUM_1) and added GPIO matrix reconnection after master setup.
-- **Enhanced I2S Diagnostics**: One-shot ADC2 startup log, per-ADC throughput metrics (buffers/sec, read latency), and detailed periodic ADC2 status dumps distinguishing DMA timeout from no-audio conditions.
-- **Audio Tab UI Polish**: "Enable" labels on graph toggles, Audio Update Rate relocated to Audio Settings card.
-- **Desktop Carousel & Home Screen**: Updated to reflect dual ADC data and new toggle states.
-
-## Bug Fixes
-- **I2S Slave DMA Timeout**: Fixed ADC2 slave never receiving data — `i2s_configure_slave()` was passing `I2S_PIN_NO_CHANGE` for BCK/WS which skipped internal I2S peripheral clock path initialization. The manual `esp_rom_gpio_connect_in_signal()` only updated the GPIO input mux but not the I2S controller's RX clock domain.
-- **ADC2 Diagnostics on Read Failure**: Slave read failures now properly increment `consecutiveZeros` and recompute health status instead of silently skipping.
+### Bug Fixes
+- **I2S Slave DMA Timeout**: Fixed ADC2 slave never receiving data — `i2s_configure_slave()` was passing `I2S_PIN_NO_CHANGE` for BCK/WS which skipped internal I2S peripheral clock path initialization.
+- **ADC2 Diagnostics on Read Failure**: Slave read failures now properly increment `consecutiveZeros` and recompute health status.
 - **Debug Tab Visibility**: Debug tab tied to master `debugMode` toggle; HW Stats toggle controls individual card visibility rather than the entire tab.
 
-## Technical Details
-- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`ed9b9b3`)
-- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`06cfe2a`)
-- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`7e1b93a`)
-- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`e9b4fa5`)
-- [2026-02-10] chore: Merge main into Dev, resolve version conflict to 1.6.1
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`7e117da`)
-- Total unit tests: 417 (up from ~310 in 1.5.4), all passing
+### Technical Details
+- 417 unit tests (up from ~310 in 1.5.4)
 - New test suites: `test_audio_diagnostics` (14), `test_vrms` (8), `test_task_monitor` (17), `test_debug_mode` (24)
 - New source modules: `task_monitor.h/.cpp`
-- RAM usage: 43.8% (143,580 / 327,680 bytes)
-- Flash usage: 64.2% (2,146,697 / 3,342,336 bytes)
-- MQTT: 20+ new Home Assistant discovery entities across all new features
-- Settings persistence: lines 18–25 in `/settings.txt`, `/inputnames.txt`, `/siggen.txt` line 7
-- REST API: `/api/diagnostics` with per-ADC arrays, `/api/inputnames` GET/POST
 
-## Breaking Changes
-None
-
-## Known Issues
-- None
+---
 
 ## Version 1.5.4
 

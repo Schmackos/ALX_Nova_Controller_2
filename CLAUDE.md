@@ -89,15 +89,17 @@ Defined as build flags in `platformio.ini` and with fallback defaults in `src/co
 
 **WARNING — ESP32-S3 GPIO 19/20**: These are the USB D-/D+ pins. The internal USB Serial/JTAG controller claims them by default, making them unusable for I2S or other peripherals. Do NOT use GPIO 19 or 20 for DOUT2 or any other signal.
 
-### Dual I2S Init Order (GPIO Matrix Constraint)
+### Dual I2S Init Order (GPIO Matrix + Clock Constraints)
 
 Both PCM1808 ADCs share BCK/LRC/MCLK clock lines. I2S_NUM_0 is master (ADC1), I2S_NUM_1 is slave (ADC2). The init order in `i2s_audio_init()` is critical:
 
-1. **Slave first** — `i2s_configure_slave()` installs driver with only DOUT2 pin configured (`I2S_PIN_NO_CHANGE` for BCK/LRC to avoid GPIO direction/matrix interference)
+1. **Slave first** — `i2s_configure_slave()` installs driver with BCK/LRC/DOUT2 pins configured. Safe because no master output exists yet to disconnect.
 2. **Master second** — `i2s_configure_master()` configures BCK/LRC as outputs via `gpio_matrix_out`
 3. **Reconnect slave inputs** — `esp_rom_gpio_connect_in_signal(BCK/LRC, i2s_periph_signal[SLAVE].s_rx_bck/ws_sig)` routes master's clock pins to slave input without touching output routing or GPIO direction, then `i2s_stop`/`i2s_start` to reset the slave DMA
 
-**WARNING**: Do NOT use `gpio_set_direction()` to fix shared-pin routing — `gpio_set_direction(INPUT)` internally calls `gpio_matrix_out(pin, SIG_GPIO_OUT_IDX)` which disconnects the master's I2S clock output signal. Even restoring to `INPUT_OUTPUT` afterward leaves the output signal as simple GPIO (constant LOW) instead of the I2S clock, breaking both ADCs. The same pattern must be applied in `i2s_audio_set_sample_rate()`. DOUT2 uses `INPUT_PULLDOWN` so an unconnected pin reads zeros (→ NO_DATA) instead of floating noise (→ false OK).
+**WARNING — `gpio_set_direction()`**: Do NOT use it to fix shared-pin routing — `gpio_set_direction(INPUT)` internally calls `gpio_matrix_out(pin, SIG_GPIO_OUT_IDX)` which disconnects the master's I2S clock output signal. The same pattern must be applied in `i2s_audio_set_sample_rate()`. DOUT2 uses `INPUT_PULLDOWN` so an unconnected pin reads zeros (→ NO_DATA) instead of floating noise (→ false OK).
+
+**WARNING — ESP32-S3 `bclk_div >= 8` requirement**: The ESP32-S3 I2S peripheral requires the internal clock divider ratio (`bclk_div`) to be >= 8 even in slave mode, or the RX state machine / DMA engine will silently fail to run. The slave MUST use `use_apll = true` with `fixed_mclk = sample_rate * 256` (same as master — both share the APLL). Without APLL, `bclk_div` calculates to 4 (12.288 MHz / 3.072 MHz BCK at 48kHz/32bit/stereo), causing DMA timeout with `bytes_read=0` despite correct GPIO routing.
 
 ## Testing Conventions
 
