@@ -9,7 +9,7 @@
 
 // ===== VU Meter Constants =====
 static const float VU_ATTACK_MS = 300.0f;   // Industry-standard VU attack
-static const float VU_DECAY_MS = 650.0f;    // Industry-standard VU release
+static const float VU_DECAY_MS = 300.0f;    // Fast digital VU release
 static const float PEAK_HOLD_MS = 2000.0f;  // Peak hold duration
 static const float PEAK_DECAY_AFTER_HOLD_MS = 300.0f; // Decay after hold expires
 

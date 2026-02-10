@@ -743,48 +743,36 @@ void sendAudioData() {
     }
   }
 
-  // --- Waveform data (per-ADC) ---
+  // --- Waveform data (per-ADC) — binary: [type:1][adc:1][samples:256] ---
   if (appState.waveformEnabled) {
-    uint8_t waveformBuf[WAVEFORM_BUFFER_SIZE];
+    uint8_t wfBin[2 + WAVEFORM_BUFFER_SIZE]; // 258 bytes
+    wfBin[0] = WS_BIN_WAVEFORM;
     for (int a = 0; a < appState.numAdcsDetected; a++) {
-      if (i2s_audio_get_waveform(waveformBuf, a)) {
-        JsonDocument doc;
-        doc["type"] = "audioWaveform";
-        doc["adc"] = a;
-        JsonArray w = doc["w"].to<JsonArray>();
-        for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
-          w.add(waveformBuf[i]);
-        }
-        String json;
-        serializeJson(doc, json);
+      if (i2s_audio_get_waveform(wfBin + 2, a)) {
+        wfBin[1] = (uint8_t)a;
         for (int i = 0; i < MAX_WS_CLIENTS; i++) {
           if (_audioSubscribed[i]) {
-            webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+            webSocket.sendBIN(i, wfBin, sizeof(wfBin));
           }
         }
       }
     }
   }
 
-  // --- Spectrum data (per-ADC) ---
+  // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:16xf32LE] ---
   if (appState.spectrumEnabled) {
+    uint8_t spBin[2 + sizeof(float) + SPECTRUM_BANDS * sizeof(float)]; // 70 bytes
+    spBin[0] = WS_BIN_SPECTRUM;
     float bands[SPECTRUM_BANDS];
     float freq = 0.0f;
     for (int a = 0; a < appState.numAdcsDetected; a++) {
       if (i2s_audio_get_spectrum(bands, &freq, a)) {
-        JsonDocument doc;
-        doc["type"] = "audioSpectrum";
-        doc["adc"] = a;
-        doc["freq"] = freq;
-        JsonArray b = doc["bands"].to<JsonArray>();
-        for (int i = 0; i < SPECTRUM_BANDS; i++) {
-          b.add(serialized(String(bands[i], 3)));
-        }
-        String json;
-        serializeJson(doc, json);
+        spBin[1] = (uint8_t)a;
+        memcpy(spBin + 2, &freq, sizeof(float));
+        memcpy(spBin + 2 + sizeof(float), bands, SPECTRUM_BANDS * sizeof(float));
         for (int i = 0; i < MAX_WS_CLIENTS; i++) {
           if (_audioSubscribed[i]) {
-            webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+            webSocket.sendBIN(i, spBin, sizeof(spBin));
           }
         }
       }

@@ -323,12 +323,23 @@ void updateSmartSensingLogic() {
   // Rate limit signal reading to reduce CPU usage (every 50ms is sufficient)
   static unsigned long lastSignalRead = 0;
 
-  if (currentMillis - lastSignalRead >= 50) {
+  // Match rate to audioUpdateRate so VU/peak data is fresh every WS send
+  const uint16_t detectInterval = appState.audioUpdateRate;
+  if (currentMillis - lastSignalRead >= detectInterval) {
     lastSignalRead = currentMillis;
     // Read audio level for real-time display, regardless of mode
     detectSignal();
-    // Smooth audio level for stable signal detection (α=0.15, τ≈308ms)
-    _smoothedAudioLevel += (audioLevel_dBFS - _smoothedAudioLevel) * 0.15f;
+    // Smoothing alpha scaled to maintain ~308ms time constant regardless of interval
+    // α = 1 - exp(-interval / 308) — precomputed for common rates
+    float alpha;
+    switch (detectInterval) {
+      case 20:  alpha = 0.063f; break;
+      case 33:  alpha = 0.102f; break;
+      case 50:  alpha = 0.15f;  break;
+      case 100: alpha = 0.278f; break;
+      default:  alpha = 1.0f - expf(-(float)detectInterval / 308.0f); break;
+    }
+    _smoothedAudioLevel += (audioLevel_dBFS - _smoothedAudioLevel) * alpha;
   }
 
   // Use smoothed level for signal presence decision

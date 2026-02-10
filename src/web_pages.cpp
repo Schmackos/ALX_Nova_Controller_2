@@ -3685,7 +3685,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let spectrumTarget = [new Float32Array(16), new Float32Array(16)];
         let currentDominantFreq = [0, 0], targetDominantFreq = [0, 0];
         let audioAnimFrameId = null;
-        const LERP_SPEED = 0.25;
+        let LERP_SPEED = 0.25;
 
         // Spectrum peak hold state — per-ADC
         let spectrumPeaks = [new Float32Array(16), new Float32Array(16)];
@@ -3696,7 +3696,86 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let peakCurrent = [[0,0],[0,0]], peakTargetArr = [[0,0],[0,0]];
         let vuDetected = false;
         let vuAnimFrameId = null;
-        const VU_LERP = 0.3;
+        let VU_LERP = 0.3;
+
+        // Canvas dimension cache — avoid GPU texture realloc every frame
+        let canvasDims = {};
+        function resizeCanvasIfNeeded(canvas) {
+            const id = canvas.id;
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio;
+            const tw = Math.round(rect.width * dpr);
+            const th = Math.round(rect.height * dpr);
+            if (tw === 0 || th === 0) return -1; // not laid out yet
+            const cached = canvasDims[id];
+            if (cached && cached.tw === tw && cached.th === th) return false;
+            canvas.width = tw;
+            canvas.height = th;
+            canvasDims[id] = { tw, th, w: rect.width, h: rect.height };
+            return true;
+        }
+
+        // Offscreen canvas background cache — static grids/labels
+        let bgCache = {};
+        function invalidateBgCache() { bgCache = {}; }
+
+        // Spectrum color LUT — 256 entries, avoids template literal per-bar per-frame
+        const spectrumColorLUT = new Array(256);
+        for (let i = 0; i < 256; i++) {
+            const val = i / 255;
+            const r = 255;
+            const g = Math.round(152 - val * 109);
+            const b = Math.round(val * 54);
+            spectrumColorLUT[i] = 'rgb(' + r + ',' + g + ',' + b + ')';
+        }
+
+        // DOM element cache for VU meters — avoid getElementById per rAF frame
+        let vuDomRefs = null;
+        function cacheVuDomRefs() {
+            vuDomRefs = {};
+            for (let a = 0; a < NUM_ADCS; a++) {
+                vuDomRefs['fillL' + a] = document.getElementById('vuFill' + a + 'L');
+                vuDomRefs['fillR' + a] = document.getElementById('vuFill' + a + 'R');
+                vuDomRefs['pkL' + a] = document.getElementById('vuPeak' + a + 'L');
+                vuDomRefs['pkR' + a] = document.getElementById('vuPeak' + a + 'R');
+                vuDomRefs['dbL' + a] = document.getElementById('vuDb' + a + 'L');
+                vuDomRefs['dbR' + a] = document.getElementById('vuDb' + a + 'R');
+                vuDomRefs['dbSegL' + a] = document.getElementById('vuDbSeg' + a + 'L');
+                vuDomRefs['dbSegR' + a] = document.getElementById('vuDbSeg' + a + 'R');
+            }
+            vuDomRefs['dot'] = document.getElementById('audioSignalDot');
+            vuDomRefs['txt'] = document.getElementById('audioSignalText');
+        }
+
+        // Adaptive LERP — scale with update rate so convergence feels consistent
+        function updateLerpFactors(rateMs) {
+            LERP_SPEED = Math.min(0.25 * (50 / rateMs), 0.7);
+            VU_LERP = Math.min(0.3 * (50 / rateMs), 0.7);
+        }
+
+        // Binary WS message handler (waveform + spectrum)
+        function handleBinaryMessage(buf) {
+            const dv = new DataView(buf);
+            const type = dv.getUint8(0);
+            const adc = dv.getUint8(1);
+            if (type === 0x01 && currentActiveTab === 'audio') {
+                // Waveform: [type:1][adc:1][samples:256]
+                if (adc < NUM_ADCS && buf.byteLength >= 258) {
+                    const samples = new Uint8Array(buf, 2, 256);
+                    waveformTarget[adc] = samples;
+                    if (!waveformCurrent[adc]) waveformCurrent[adc] = new Uint8Array(samples);
+                    startAudioAnimation();
+                }
+            } else if (type === 0x02 && currentActiveTab === 'audio') {
+                // Spectrum: [type:1][adc:1][freq:f32LE][bands:16xf32LE]
+                if (adc < NUM_ADCS && buf.byteLength >= 70) {
+                    const freq = dv.getFloat32(2, true);
+                    for (let i = 0; i < 16; i++) spectrumTarget[adc][i] = dv.getFloat32(6 + i * 4, true);
+                    targetDominantFreq[adc] = freq;
+                    startAudioAnimation();
+                }
+            }
+        }
         let vuSegmentedMode = localStorage.getItem('vuSegmented') === 'true';
 
         // LED bar mode
@@ -3761,6 +3840,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 // Sync LED toggle
                 const ledToggle = document.getElementById('ledModeToggle');
                 if (ledToggle) ledToggle.checked = ledBarMode;
+                // Cache VU DOM refs + invalidate canvas caches for fresh tab
+                cacheVuDomRefs();
+                canvasDims = {};
+                invalidateBgCache();
                 // Draw initial empty canvases for each ADC
                 for (let a = 0; a < NUM_ADCS; a++) {
                     drawAudioWaveform(null, a);
@@ -3777,11 +3860,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
                 // Stop animation and reset state
                 if (audioAnimFrameId) { cancelAnimationFrame(audioAnimFrameId); audioAnimFrameId = null; }
+                if (vuAnimFrameId) { cancelAnimationFrame(vuAnimFrameId); vuAnimFrameId = null; }
                 for (let a = 0; a < NUM_ADCS; a++) {
                     waveformCurrent[a] = null; waveformTarget[a] = null;
                     spectrumCurrent[a].fill(0); spectrumTarget[a].fill(0);
                     spectrumPeaks[a].fill(0); spectrumPeakTimes[a].fill(0);
                 }
+                vuDomRefs = null;
             }
 
             currentActiveTab = tabId;
@@ -3927,6 +4012,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsHost = window.location.hostname;
             ws = new WebSocket(`${wsProtocol}//${wsHost}:81`);
+            ws.binaryType = 'arraybuffer';
 
             ws.onopen = function() {
                 console.log('WebSocket connected');
@@ -3945,8 +4031,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             };
 
             ws.onmessage = function(event) {
+                if (event.data instanceof ArrayBuffer) { handleBinaryMessage(event.data); return; }
                 const data = JSON.parse(event.data);
-                console.log('Received:', data);
 
                 if (data.type === 'authRequired') {
                     // Server requesting authentication
@@ -4369,6 +4455,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             if (typeof data.audioUpdateRate !== 'undefined') {
                 document.getElementById('audioUpdateRateSelect').value = data.audioUpdateRate.toString();
+                updateLerpFactors(data.audioUpdateRate);
             }
 
             if (data.firmwareVersion) {
@@ -4754,69 +4841,75 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const canvas = document.getElementById('audioWaveformCanvas' + adcIndex);
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * window.devicePixelRatio;
-            canvas.height = rect.height * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-            const w = rect.width;
-            const h = rect.height;
+            const dpr = window.devicePixelRatio;
+            const resized = resizeCanvasIfNeeded(canvas);
+            if (resized === -1) return; // canvas not laid out yet (0x0)
+            const dims = canvasDims[canvas.id];
+            const w = dims.w, h = dims.h;
 
             const isNight = document.body.classList.contains('night-mode');
-            const bgColor = isNight ? '#1E1E1E' : '#F5F5F5';
-            const gridColor = isNight ? '#333333' : '#D0D0D0';
-            const labelColor = isNight ? '#999999' : '#757575';
-
-            // Margins for axis labels
             const plotX = 36, plotY = 4;
             const plotW = w - 40, plotH = h - 22;
 
-            // Background
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, w, h);
-
-            // Y-axis gridlines and labels
-            ctx.font = '10px -apple-system, sans-serif';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'middle';
-            const yLabels = ['+1.0', '+0.5', '0', '-0.5', '-1.0'];
-            const yValues = [1.0, 0.5, 0, -0.5, -1.0];
-            for (let i = 0; i < yLabels.length; i++) {
-                const yPos = plotY + plotH * (1 - (yValues[i] + 1) / 2);
-                ctx.fillStyle = labelColor;
-                ctx.fillText(yLabels[i], plotX - 4, yPos);
-                ctx.strokeStyle = gridColor;
-                ctx.lineWidth = 0.5;
-                ctx.beginPath();
-                ctx.moveTo(plotX, yPos);
-                ctx.lineTo(plotX + plotW, yPos);
-                ctx.stroke();
-            }
-
-            // X-axis time labels
-            const sampleRate = 48000;
-            const sel = document.getElementById('audioSampleRateSelect');
-            const sr = sel ? parseInt(sel.value) || sampleRate : sampleRate;
-            const numSamples = (data && data.length) ? data.length : 256;
-            const totalTimeMs = (numSamples / sr) * 1000;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            const numXLabels = 5;
-            for (let i = 0; i <= numXLabels; i++) {
-                const xFrac = i / numXLabels;
-                const xPos = plotX + xFrac * plotW;
-                const timeVal = (xFrac * totalTimeMs).toFixed(1);
-                ctx.fillStyle = labelColor;
-                ctx.fillText(timeVal + 'ms', xPos, plotY + plotH + 4);
-                if (i > 0 && i < numXLabels) {
-                    ctx.strokeStyle = gridColor;
-                    ctx.lineWidth = 0.5;
-                    ctx.beginPath();
-                    ctx.moveTo(xPos, plotY);
-                    ctx.lineTo(xPos, plotY + plotH);
-                    ctx.stroke();
+            // Offscreen background cache — grid, labels, axes drawn once
+            const bgKey = 'wf' + adcIndex;
+            if (resized || !bgCache[bgKey]) {
+                const offscreen = document.createElement('canvas');
+                offscreen.width = dims.tw;
+                offscreen.height = dims.th;
+                const bgCtx = offscreen.getContext('2d');
+                bgCtx.scale(dpr, dpr);
+                const bgColor = isNight ? '#1E1E1E' : '#F5F5F5';
+                const gridColor = isNight ? '#333333' : '#D0D0D0';
+                const labelColor = isNight ? '#999999' : '#757575';
+                bgCtx.fillStyle = bgColor;
+                bgCtx.fillRect(0, 0, w, h);
+                bgCtx.font = '10px -apple-system, sans-serif';
+                bgCtx.textAlign = 'right';
+                bgCtx.textBaseline = 'middle';
+                const yLabels = ['+1.0', '+0.5', '0', '-0.5', '-1.0'];
+                const yValues = [1.0, 0.5, 0, -0.5, -1.0];
+                for (let i = 0; i < yLabels.length; i++) {
+                    const yPos = plotY + plotH * (1 - (yValues[i] + 1) / 2);
+                    bgCtx.fillStyle = labelColor;
+                    bgCtx.fillText(yLabels[i], plotX - 4, yPos);
+                    bgCtx.strokeStyle = gridColor;
+                    bgCtx.lineWidth = 0.5;
+                    bgCtx.beginPath();
+                    bgCtx.moveTo(plotX, yPos);
+                    bgCtx.lineTo(plotX + plotW, yPos);
+                    bgCtx.stroke();
                 }
+                const sampleRate = 48000;
+                const sel = document.getElementById('audioSampleRateSelect');
+                const sr = sel ? parseInt(sel.value) || sampleRate : sampleRate;
+                const numSamples = 256;
+                const totalTimeMs = (numSamples / sr) * 1000;
+                bgCtx.textAlign = 'center';
+                bgCtx.textBaseline = 'top';
+                const numXLabels = 5;
+                for (let i = 0; i <= numXLabels; i++) {
+                    const xFrac = i / numXLabels;
+                    const xPos = plotX + xFrac * plotW;
+                    const timeVal = (xFrac * totalTimeMs).toFixed(1);
+                    bgCtx.fillStyle = labelColor;
+                    bgCtx.fillText(timeVal + 'ms', xPos, plotY + plotH + 4);
+                    if (i > 0 && i < numXLabels) {
+                        bgCtx.strokeStyle = gridColor;
+                        bgCtx.lineWidth = 0.5;
+                        bgCtx.beginPath();
+                        bgCtx.moveTo(xPos, plotY);
+                        bgCtx.lineTo(xPos, plotY + plotH);
+                        bgCtx.stroke();
+                    }
+                }
+                bgCache[bgKey] = offscreen;
             }
+
+            // Blit cached background
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.drawImage(bgCache[bgKey], 0, 0);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             if (!data || data.length === 0) return;
 
@@ -4831,10 +4924,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 scale = maxDev > 2 ? (0.45 * 255) / maxDev : 1;
             }
 
-            // Draw waveform with glow
-            ctx.save();
-            ctx.shadowColor = 'rgba(255,152,0,0.4)';
-            ctx.shadowBlur = 8;
+            // Draw waveform — no shadow blur (saves ~2-3ms GPU convolution per frame)
             ctx.strokeStyle = '#FF9800';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -4847,7 +4937,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else ctx.lineTo(x, y);
             }
             ctx.stroke();
-            ctx.restore();
         }
 
         function drawSpectrumBars(bands, freq, adcIndex) {
@@ -4855,26 +4944,67 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const canvas = document.getElementById('audioSpectrumCanvas' + adcIndex);
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
-            const rect = canvas.getBoundingClientRect();
-            canvas.width = rect.width * window.devicePixelRatio;
-            canvas.height = rect.height * window.devicePixelRatio;
-            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-            const w = rect.width;
-            const h = rect.height;
+            const dpr = window.devicePixelRatio;
+            const resized = resizeCanvasIfNeeded(canvas);
+            if (resized === -1) return; // canvas not laid out yet (0x0)
+            const dims = canvasDims[canvas.id];
+            const w = dims.w, h = dims.h;
 
             const isNight = document.body.classList.contains('night-mode');
-            const bgColor = isNight ? '#1E1E1E' : '#F5F5F5';
-            const gridColor = isNight ? '#333333' : '#D0D0D0';
-            const labelColor = isNight ? '#999999' : '#757575';
-
-            // Margins
             const plotX = 32, plotY = 4;
             const plotW = w - 36, plotH = h - 22;
 
-            // Background
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, w, h);
+            // Compute bar geometry (needed for both bg cache and bar drawing)
+            const numBands = (bands && bands.length) ? Math.min(bands.length, 16) : 16;
+            const gap = 2;
+            const barWidth = (plotW - gap * (numBands - 1)) / numBands;
+            const bandEdges = [20, 40, 80, 160, 315, 630, 1250, 2500, 5000, 8000, 10000, 12500, 14000, 16000, 18000, 20000, 24000];
+
+            // Offscreen background cache — grid, labels, axes drawn once
+            const bgKey = 'sp' + adcIndex;
+            if (resized || !bgCache[bgKey]) {
+                const offscreen = document.createElement('canvas');
+                offscreen.width = dims.tw;
+                offscreen.height = dims.th;
+                const bgCtx = offscreen.getContext('2d');
+                bgCtx.scale(dpr, dpr);
+                const bgColor = isNight ? '#1E1E1E' : '#F5F5F5';
+                const gridColor = isNight ? '#333333' : '#D0D0D0';
+                const labelColor = isNight ? '#999999' : '#757575';
+                bgCtx.fillStyle = bgColor;
+                bgCtx.fillRect(0, 0, w, h);
+                bgCtx.font = '10px -apple-system, sans-serif';
+                bgCtx.textAlign = 'right';
+                bgCtx.textBaseline = 'middle';
+                const dbLevels = [0, -12, -24, -36];
+                for (let i = 0; i < dbLevels.length; i++) {
+                    const db = dbLevels[i];
+                    const linearVal = Math.pow(10, db / 20);
+                    const yPos = plotY + plotH * (1 - linearVal);
+                    bgCtx.fillStyle = labelColor;
+                    bgCtx.fillText(db + 'dB', plotX - 4, yPos);
+                    bgCtx.strokeStyle = gridColor;
+                    bgCtx.lineWidth = 0.5;
+                    bgCtx.beginPath();
+                    bgCtx.moveTo(plotX, yPos);
+                    bgCtx.lineTo(plotX + plotW, yPos);
+                    bgCtx.stroke();
+                }
+                bgCtx.textAlign = 'center';
+                bgCtx.textBaseline = 'top';
+                for (let i = 0; i < numBands; i += 2) {
+                    const centerFreq = Math.sqrt(bandEdges[i] * bandEdges[i + 1]);
+                    const xCenter = plotX + i * (barWidth + gap) + barWidth / 2;
+                    bgCtx.fillStyle = labelColor;
+                    bgCtx.fillText(formatFreq(centerFreq), xCenter, plotY + plotH + 4);
+                }
+                bgCache[bgKey] = offscreen;
+            }
+
+            // Blit cached background
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.drawImage(bgCache[bgKey], 0, 0);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             // Update dominant frequency readout
             const freqEl = document.getElementById('dominantFreq' + adcIndex);
@@ -4882,44 +5012,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 freqEl.textContent = freq > 0 ? freq.toFixed(0) + ' Hz' : '-- Hz';
             }
 
-            // Y-axis dB gridlines and labels
-            ctx.font = '10px -apple-system, sans-serif';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'middle';
-            const dbLevels = [0, -12, -24, -36];
-            for (let i = 0; i < dbLevels.length; i++) {
-                const db = dbLevels[i];
-                const linearVal = Math.pow(10, db / 20);
-                const yPos = plotY + plotH * (1 - linearVal);
-                ctx.fillStyle = labelColor;
-                ctx.fillText(db + 'dB', plotX - 4, yPos);
-                ctx.strokeStyle = gridColor;
-                ctx.lineWidth = 0.5;
-                ctx.beginPath();
-                ctx.moveTo(plotX, yPos);
-                ctx.lineTo(plotX + plotW, yPos);
-                ctx.stroke();
-            }
-
-            // X-axis frequency labels
-            const bandEdges = [20, 40, 80, 160, 315, 630, 1250, 2500, 5000, 8000, 10000, 12500, 14000, 16000, 18000, 20000, 24000];
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-
             if (!bands || bands.length === 0) return;
 
-            const numBands = Math.min(bands.length, 16);
-            const gap = 2;
-            const barWidth = (plotW - gap * (numBands - 1)) / numBands;
             const now = performance.now();
-
-            // Draw frequency labels (every other band)
-            for (let i = 0; i < numBands; i += 2) {
-                const centerFreq = Math.sqrt(bandEdges[i] * bandEdges[i + 1]);
-                const xCenter = plotX + i * (barWidth + gap) + barWidth / 2;
-                ctx.fillStyle = labelColor;
-                ctx.fillText(formatFreq(centerFreq), xCenter, plotY + plotH + 4);
-            }
 
             // Draw bars
             for (let i = 0; i < numBands; i++) {
@@ -4948,11 +5043,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         drawRoundedBar(ctx, x, segY, barWidth, segH, 1);
                     }
                 } else {
-                    // Standard smooth bars with rounded tops
-                    const r = 255;
-                    const g = Math.round(152 - val * 109);
-                    const b = Math.round(val * 54);
-                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    // Standard smooth bars with rounded tops — use pre-computed color LUT
+                    ctx.fillStyle = spectrumColorLUT[Math.round(val * 255)];
                     drawRoundedBar(ctx, x, y, barWidth, barHeight, 3);
                 }
 
@@ -4993,22 +5085,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function vuAnimLoop() {
             vuAnimFrameId = null;
-            let needsMore = false;
             for (let a = 0; a < NUM_ADCS; a++) {
                 for (let ch = 0; ch < 2; ch++) {
                     vuCurrent[a][ch] += (vuTargetArr[a][ch] - vuCurrent[a][ch]) * VU_LERP;
-                    if (Math.abs(vuTargetArr[a][ch] - vuCurrent[a][ch]) > 0.001) needsMore = true;
                     peakCurrent[a][ch] += (peakTargetArr[a][ch] - peakCurrent[a][ch]) * VU_LERP;
-                    if (Math.abs(peakTargetArr[a][ch] - peakCurrent[a][ch]) > 0.001) needsMore = true;
                 }
                 updateLevelMeters(a, vuCurrent[a][0], vuCurrent[a][1], peakCurrent[a][0], peakCurrent[a][1]);
             }
-            // Update signal detection indicator
-            const dot = document.getElementById('audioSignalDot');
-            const txt = document.getElementById('audioSignalText');
+            // Update signal detection indicator — use cached refs if available
+            const refs = vuDomRefs || {};
+            const dot = refs['dot'] || document.getElementById('audioSignalDot');
+            const txt = refs['txt'] || document.getElementById('audioSignalText');
             if (dot) dot.classList.toggle('active', vuDetected);
             if (txt) txt.textContent = vuDetected ? 'Detected' : 'Not detected';
-            if (needsMore) vuAnimFrameId = requestAnimationFrame(vuAnimLoop);
+            if (audioSubscribed) vuAnimFrameId = requestAnimationFrame(vuAnimLoop);
         }
 
         function drawPPM(canvasId, level, peak) {
@@ -5059,24 +5149,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             peak1 = Math.min(Math.max(peak1, 0), 1);
             peak2 = Math.min(Math.max(peak2, 0), 1);
 
+            // Use cached DOM refs if available, else fallback to getElementById
+            const refs = vuDomRefs || {};
+
             if (!vuSegmentedMode) {
                 // Continuous dB-scaled bars
                 const pct1 = linearToDbPercent(vu1);
                 const pct2 = linearToDbPercent(vu2);
-                const fillL = document.getElementById('vuFill' + adcIdx + 'L');
-                const fillR = document.getElementById('vuFill' + adcIdx + 'R');
+                const fillL = refs['fillL' + adcIdx] || document.getElementById('vuFill' + adcIdx + 'L');
+                const fillR = refs['fillR' + adcIdx] || document.getElementById('vuFill' + adcIdx + 'R');
                 if (fillL) fillL.style.width = pct1 + '%';
                 if (fillR) fillR.style.width = pct2 + '%';
 
                 const pkPct1 = linearToDbPercent(peak1);
                 const pkPct2 = linearToDbPercent(peak2);
-                const pkL = document.getElementById('vuPeak' + adcIdx + 'L');
-                const pkR = document.getElementById('vuPeak' + adcIdx + 'R');
+                const pkL = refs['pkL' + adcIdx] || document.getElementById('vuPeak' + adcIdx + 'L');
+                const pkR = refs['pkR' + adcIdx] || document.getElementById('vuPeak' + adcIdx + 'R');
                 if (pkL) pkL.style.left = pkPct1 + '%';
                 if (pkR) pkR.style.left = pkPct2 + '%';
 
-                const dbL = document.getElementById('vuDb' + adcIdx + 'L');
-                const dbR = document.getElementById('vuDb' + adcIdx + 'R');
+                const dbL = refs['dbL' + adcIdx] || document.getElementById('vuDb' + adcIdx + 'L');
+                const dbR = refs['dbR' + adcIdx] || document.getElementById('vuDb' + adcIdx + 'R');
                 if (dbL) dbL.textContent = formatDbFS(vu1);
                 if (dbR) dbR.textContent = formatDbFS(vu2);
             } else {
@@ -5084,8 +5177,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 drawPPM('ppmCanvas' + adcIdx + 'L', vu1, peak1);
                 drawPPM('ppmCanvas' + adcIdx + 'R', vu2, peak2);
 
-                const dbSegL = document.getElementById('vuDbSeg' + adcIdx + 'L');
-                const dbSegR = document.getElementById('vuDbSeg' + adcIdx + 'R');
+                const dbSegL = refs['dbSegL' + adcIdx] || document.getElementById('vuDbSeg' + adcIdx + 'L');
+                const dbSegR = refs['dbSegR' + adcIdx] || document.getElementById('vuDbSeg' + adcIdx + 'R');
                 if (dbSegL) dbSegL.textContent = formatDbFS(vu1);
                 if (dbSegR) dbSegR.textContent = formatDbFS(vu2);
             }
@@ -6363,6 +6456,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F5F5F5');
             }
             localStorage.setItem('darkMode', isDarkMode ? 'true' : 'false');
+            invalidateBgCache();
         }
 
         function toggleBacklight() {
@@ -6592,6 +6686,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function setAudioUpdateRate() {
             const rate = parseInt(document.getElementById('audioUpdateRateSelect').value);
+            updateLerpFactors(rate);
             const labels = {100:'100 ms',50:'50 ms',33:'33 ms',20:'20 ms'};
             apiFetch('/api/settings', {
                 method: 'POST',

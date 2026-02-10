@@ -46,7 +46,7 @@ The application uses a finite state machine (`AppFSMState` in `app_state.h`): `S
 
 ### Handler/Module Pattern
 Each subsystem is a separate module in `src/`:
-- **smart_sensing** — Voltage detection, auto-off timer, amplifier relay control
+- **smart_sensing** — Voltage detection, auto-off timer, amplifier relay control. `detectSignal()` rate matches `appState.audioUpdateRate` (not hardcoded) with dynamically scaled smoothing alpha to maintain ~308ms time constant
 - **wifi_manager** — Multi-network WiFi client, AP mode, async connection with retry/backoff
 - **mqtt_handler** — MQTT broker connection, Home Assistant discovery, heartbeat publishing
 - **ota_updater** — GitHub release checking, firmware download with SHA256 verification
@@ -58,7 +58,7 @@ Each subsystem is a separate module in `src/`:
 - **signal_generator** — Multi-waveform test signal generator (sine, square, noise, sweep), software injection + PWM output modes
 - **task_monitor** — FreeRTOS task enumeration via `pxTaskGetNext`, stack usage, priority, core affinity. Runs on a dedicated 5s timer in main loop (decoupled from HW stats broadcast). Only scans stack watermarks for known app tasks. Opt-in via `debugTaskMonitor` (default off). Uses ESP-IDF `task_snapshot.h` API (not `uxTaskGetSystemState` which is unavailable in pre-compiled Arduino FreeRTOS lib)
 - **debug_serial** — Log-level filtered serial output (`LOG_D`/`LOG_I`/`LOG_W`/`LOG_E`/`LOG_NONE`), runtime level control via `applyDebugSerialLevel()`, WebSocket log forwarding
-- **websocket_handler** — Real-time state broadcasting to web clients (port 81)
+- **websocket_handler** — Real-time state broadcasting to web clients (port 81). Audio waveform and spectrum data use binary WebSocket frames (`sendBIN`) for efficiency; audio levels remain JSON. Binary message types defined as `WS_BIN_WAVEFORM` (0x01) and `WS_BIN_SPECTRUM` (0x02) in `websocket_handler.h`
 - **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`). **IMPORTANT: After ANY edit to `web_pages.cpp`, you MUST run `node build_web_assets.js` to regenerate `web_pages_gz.cpp` before building firmware.** The ESP32 serves the gzipped version — without this step, frontend changes will not take effect.
 
 ### GUI (LVGL on TFT Display)
@@ -89,17 +89,17 @@ Defined as build flags in `platformio.ini` and with fallback defaults in `src/co
 
 **WARNING — ESP32-S3 GPIO 19/20**: These are the USB D-/D+ pins. The internal USB Serial/JTAG controller claims them by default, making them unusable for I2S or other peripherals. Do NOT use GPIO 19 or 20 for DOUT2 or any other signal.
 
-### Dual I2S Init Order (GPIO Matrix + Clock Constraints)
+### Dual I2S Configuration (Both Masters)
 
-Both PCM1808 ADCs share BCK/LRC/MCLK clock lines. I2S_NUM_0 is master (ADC1), I2S_NUM_1 is slave (ADC2). The init order in `i2s_audio_init()` is critical:
+Both PCM1808 ADCs share BCK/LRC/MCLK clock lines. **Both I2S peripherals are configured as master RX** — I2S_NUM_0 (ADC1) outputs BCK/WS/MCLK clocks, while I2S_NUM_1 (ADC2) has NO clock output (only data_in on GPIO9). Both derive from the same 160MHz D2CLK with identical divider chains, giving frequency-locked BCK.
 
-1. **Slave first** — `i2s_configure_slave()` installs driver with BCK/LRC/DOUT2 pins configured. Safe because no master output exists yet to disconnect.
-2. **Master second** — `i2s_configure_master()` configures BCK/LRC as outputs via `gpio_matrix_out`
-3. **Reconnect slave inputs** — `esp_rom_gpio_connect_in_signal(BCK/LRC, i2s_periph_signal[SLAVE].s_rx_bck/ws_sig)` routes master's clock pins to slave input without touching output routing or GPIO direction, then `i2s_stop`/`i2s_start` to reset the slave DMA
+**Why not slave mode**: ESP32-S3 I2S slave mode has intractable DMA issues — the legacy driver always calculates `bclk_div = 4` (below the hardware minimum of 8), and the LL layer hard-codes `rx_clk_sel = 2` (D2CLK) regardless of APLL settings, making register overrides ineffective. Three separate slave-mode fixes were attempted (pin routing, APLL, direct register override) — all failed with DMA timeout.
 
-**WARNING — `gpio_set_direction()`**: Do NOT use it to fix shared-pin routing — `gpio_set_direction(INPUT)` internally calls `gpio_matrix_out(pin, SIG_GPIO_OUT_IDX)` which disconnects the master's I2S clock output signal. The same pattern must be applied in `i2s_audio_set_sample_rate()`. DOUT2 uses `INPUT_PULLDOWN` so an unconnected pin reads zeros (→ NO_DATA) instead of floating noise (→ false OK).
+Init order in `i2s_audio_init()`:
+1. **ADC2 first** — `i2s_configure_adc2()` installs master driver with only `data_in_num = GPIO9` (BCK/WS/MCK = `I2S_PIN_NO_CHANGE`)
+2. **ADC1 second** — `i2s_configure_adc1()` installs master driver with all pins (BCK=16, WS=18, MCLK=3, DOUT=17)
 
-**WARNING — ESP32-S3 `bclk_div >= 8` requirement**: The ESP32-S3 I2S peripheral requires the internal clock divider ratio (`bclk_div`) to be >= 8 even in slave mode, or the RX state machine / DMA engine will silently fail to run. The slave MUST use `use_apll = true` with `fixed_mclk = sample_rate * 256` (same as master — both share the APLL). Without APLL, `bclk_div` calculates to 4 (12.288 MHz / 3.072 MHz BCK at 48kHz/32bit/stereo), causing DMA timeout with `bytes_read=0` despite correct GPIO routing.
+DOUT2 uses `INPUT_PULLDOWN` so an unconnected pin reads zeros (→ NO_DATA) instead of floating noise (→ false OK). No GPIO matrix reconnection is needed since I2S1 uses internal clocking.
 
 ## Testing Conventions
 

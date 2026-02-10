@@ -9,9 +9,7 @@
 
 #ifndef NATIVE_TEST
 #include <driver/i2s.h>
-#include <esp_rom_gpio.h>
-#include <soc/gpio_struct.h>
-#include <soc/i2s_periph.h>
+#include <soc/i2s_struct.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #endif
@@ -226,8 +224,8 @@ AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag) {
 // ===== Hardware-dependent code (ESP32 only) =====
 #ifndef NATIVE_TEST
 
-static const int I2S_PORT_MASTER = 0; // I2S_NUM_0 — master RX (ADC1)
-static const int I2S_PORT_SLAVE = 1;  // I2S_NUM_1 — slave RX (ADC2)
+static const int I2S_PORT_ADC1 = 0; // I2S_NUM_0 — master RX (ADC1)
+static const int I2S_PORT_ADC2 = 1; // I2S_NUM_1 — master RX (ADC2, no clock output)
 
 static uint32_t _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
@@ -275,7 +273,7 @@ static float _dominantFreqOutput[NUM_AUDIO_ADCS] = {};
 static volatile bool _spectrumReady[NUM_AUDIO_ADCS] = {};
 static unsigned long _lastFftTime[NUM_AUDIO_ADCS] = {};
 
-static void i2s_configure_master(uint32_t sample_rate) {
+static void i2s_configure_adc1(uint32_t sample_rate) {
     i2s_config_t cfg = {};
     cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
     cfg.sample_rate = sample_rate;
@@ -289,7 +287,7 @@ static void i2s_configure_master(uint32_t sample_rate) {
     cfg.tx_desc_auto_clear = false;
     cfg.fixed_mclk = sample_rate * 256;
 
-    i2s_driver_install((i2s_port_t)I2S_PORT_MASTER, &cfg, 0, NULL);
+    i2s_driver_install((i2s_port_t)I2S_PORT_ADC1, &cfg, 0, NULL);
 
     i2s_pin_config_t pins = {};
     pins.bck_io_num = I2S_BCK_PIN;
@@ -298,13 +296,20 @@ static void i2s_configure_master(uint32_t sample_rate) {
     pins.data_out_num = I2S_PIN_NO_CHANGE;
     pins.mck_io_num = I2S_MCLK_PIN;
 
-    i2s_set_pin((i2s_port_t)I2S_PORT_MASTER, &pins);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_MASTER);
+    i2s_set_pin((i2s_port_t)I2S_PORT_ADC1, &pins);
+    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
 }
 
-static bool i2s_configure_slave(uint32_t sample_rate) {
+// ADC2 uses I2S_NUM_1 configured as MASTER (not slave) to bypass ESP32-S3
+// slave mode constraints (bclk_div >= 8, DMA timeout). Both I2S peripherals
+// derive from the same 160MHz D2CLK with identical divider chains, giving
+// frequency-locked BCK. I2S1 does NOT output any clocks — only data_in is
+// connected (GPIO9). The internal RX state machine samples at the same
+// frequency as I2S0's BCK, with a fixed phase offset that is well within
+// the PCM1808's data valid window (~305ns of 325ns period).
+static bool i2s_configure_adc2(uint32_t sample_rate) {
     i2s_config_t cfg = {};
-    cfg.mode = (i2s_mode_t)(I2S_MODE_SLAVE | I2S_MODE_RX);
+    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
     cfg.sample_rate = sample_rate;
     cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
     cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
@@ -312,35 +317,41 @@ static bool i2s_configure_slave(uint32_t sample_rate) {
     cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
     cfg.dma_buf_count = DMA_BUF_COUNT;
     cfg.dma_buf_len = DMA_BUF_LEN;
-    // ESP32-S3 requires internal clock with bclk_div >= 8 even in slave mode.
-    // Without APLL, bclk_div calculates to 4 (12.288MHz / 3.072MHz BCK) which
-    // silently prevents the RX state machine/DMA from running.
-    // Both peripherals share the same APLL frequency (sample_rate * 256).
     cfg.use_apll = true;
+    cfg.tx_desc_auto_clear = false;
     cfg.fixed_mclk = sample_rate * 256;
 
-    esp_err_t err = i2s_driver_install((i2s_port_t)I2S_PORT_SLAVE, &cfg, 0, NULL);
+    esp_err_t err = i2s_driver_install((i2s_port_t)I2S_PORT_ADC2, &cfg, 0, NULL);
     if (err != ESP_OK) {
-        LOG_E("[Audio] ADC2 I2S slave driver install failed: %d", err);
+        LOG_E("[Audio] ADC2 driver install failed: %d", err);
         return false;
     }
 
-    // Configure BCK/WS/DOUT2 pins. Because slave is initialized BEFORE master,
-    // i2s_set_pin's internal gpio_set_direction(INPUT) is safe — no master
-    // output exists yet to disconnect. Master's subsequent i2s_set_pin restores
-    // GPIO direction to OUTPUT and routes gpio_matrix_out to master clock signals.
-    // The esp_rom_gpio_connect_in_signal calls in i2s_audio_init then re-route
-    // slave input after master's i2s_set_pin overwrites the input matrix.
+    // Only set data input pin — I2S1 does NOT output BCK/WS/MCK.
+    // I2S0 (ADC1) provides all clock outputs to both PCM1808 boards.
     i2s_pin_config_t pins = {};
-    pins.bck_io_num = I2S_BCK_PIN;
-    pins.ws_io_num = I2S_LRC_PIN;
+    pins.bck_io_num = I2S_PIN_NO_CHANGE;
+    pins.ws_io_num = I2S_PIN_NO_CHANGE;
     pins.data_in_num = I2S_DOUT2_PIN;
     pins.data_out_num = I2S_PIN_NO_CHANGE;
     pins.mck_io_num = I2S_PIN_NO_CHANGE;
 
-    i2s_set_pin((i2s_port_t)I2S_PORT_SLAVE, &pins);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_SLAVE);
+    i2s_set_pin((i2s_port_t)I2S_PORT_ADC2, &pins);
+    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC2);
     return true;
+}
+
+// Dump key I2S registers for both peripherals (debug aid)
+static void i2s_dump_registers() {
+    for (int p = 0; p < 2; p++) {
+        i2s_dev_t *dev = (p == 0) ? &I2S0 : &I2S1;
+        LOG_I("[Audio] I2S%d regs: rx_conf=0x%08lX rx_conf1=0x%08lX "
+              "rx_clkm_conf=0x%08lX rx_clkm_div=0x%08lX",
+              p, (unsigned long)dev->rx_conf.val,
+              (unsigned long)dev->rx_conf1.val,
+              (unsigned long)dev->rx_clkm_conf.val,
+              (unsigned long)dev->rx_clkm_div_conf.val);
+    }
 }
 
 // Process a single ADC's buffer: diagnostics, DC filter, RMS, VU, peak, waveform, FFT
@@ -512,7 +523,7 @@ static void audio_capture_task(void *param) {
         // Read ADC1 (master) — blocks until DMA ready
         size_t bytes_read1 = 0;
         unsigned long t0 = micros();
-        esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_MASTER, buf1,
+        esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_ADC1, buf1,
                                    sizeof(buf1), &bytes_read1, portMAX_DELAY);
         unsigned long t1 = micros();
 
@@ -531,7 +542,7 @@ static void audio_capture_task(void *param) {
         bool adc2Ok = false;
         if (_adc2InitOk) {
             unsigned long t2 = micros();
-            esp_err_t err2 = i2s_read((i2s_port_t)I2S_PORT_SLAVE, buf2,
+            esp_err_t err2 = i2s_read((i2s_port_t)I2S_PORT_ADC2, buf2,
                                        sizeof(buf2), &bytes_read2, pdMS_TO_TICKS(5));
             unsigned long t3 = micros();
             if (err2 == ESP_OK && bytes_read2 > 0) {
@@ -700,36 +711,16 @@ void i2s_audio_init() {
     // instead of floating noise that looks like valid audio (→ false OK status)
     pinMode(I2S_DOUT2_PIN, INPUT_PULLDOWN);
 
-    // Install slave I2S driver (ADC2) first. Only DOUT2 is configured via
-    // i2s_set_pin — BCK/LRC are routed manually after master setup.
-    _adc2InitOk = i2s_configure_slave(_currentSampleRate);
+    // Both I2S peripherals configured as master RX. I2S1 (ADC2) does NOT output
+    // any clocks — I2S0 (ADC1) provides BCK/WS/MCLK to both PCM1808 boards.
+    // I2S1 uses its own internal clock chain (same PLL, same dividers) to sample
+    // data from GPIO9. This bypasses ESP32-S3 slave mode DMA issues entirely.
+    _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
+    i2s_configure_adc1(_currentSampleRate);
 
-    // Configure master I2S (ADC1) with full pin config — BCK/LRC as outputs.
-    i2s_configure_master(_currentSampleRate);
-
-    // Now manually route BCK/LRC to slave I2S input signals.
-    // esp_rom_gpio_connect_in_signal only writes the input MUX register —
-    // does NOT touch gpio_matrix_out (master clock) or GPIO direction.
+    // Dump registers for debugging
     if (_adc2InitOk) {
-        esp_rom_gpio_connect_in_signal(I2S_BCK_PIN,
-            i2s_periph_signal[I2S_PORT_SLAVE].s_rx_bck_sig, false);
-        esp_rom_gpio_connect_in_signal(I2S_LRC_PIN,
-            i2s_periph_signal[I2S_PORT_SLAVE].s_rx_ws_sig, false);
-        // Restart slave so DMA picks up the newly routed clocks
-        i2s_stop((i2s_port_t)I2S_PORT_SLAVE);
-        i2s_start((i2s_port_t)I2S_PORT_SLAVE);
-        LOG_I("[Audio] ADC2 slave routed: BCK sig=%d, WS sig=%d",
-              i2s_periph_signal[I2S_PORT_SLAVE].s_rx_bck_sig,
-              i2s_periph_signal[I2S_PORT_SLAVE].s_rx_ws_sig);
-
-        // Verify GPIO matrix input routing took effect via peripheral struct
-        // Expected: BCK_IN=GPIO16, WS_IN=GPIO18, DIN=GPIO9
-        // If any shows 0x3F (63) = disconnected / not routed
-        uint32_t bck_sel = GPIO.func_in_sel_cfg[i2s_periph_signal[I2S_PORT_SLAVE].s_rx_bck_sig].func_sel;
-        uint32_t ws_sel  = GPIO.func_in_sel_cfg[i2s_periph_signal[I2S_PORT_SLAVE].s_rx_ws_sig].func_sel;
-        uint32_t din_sel = GPIO.func_in_sel_cfg[i2s_periph_signal[I2S_PORT_SLAVE].data_in_sig].func_sel;
-        LOG_I("[Audio] ADC2 GPIO verify: BCK_IN=GPIO%lu (expect %d), WS_IN=GPIO%lu (expect %d), DIN=GPIO%lu (expect %d)",
-              bck_sel, I2S_BCK_PIN, ws_sel, I2S_LRC_PIN, din_sel, I2S_DOUT2_PIN);
+        i2s_dump_registers();
     }
     _numAdcsDetected = 1; // Will be updated once data flows
 
@@ -797,15 +788,15 @@ I2sStaticConfig i2s_audio_get_static_config() {
     cfg.adc[0].apllEnabled = true;
     cfg.adc[0].mclkHz = _currentSampleRate * 256;
     cfg.adc[0].commFormat = "Standard I2S";
-    // ADC2 — Slave
-    cfg.adc[1].isMaster = false;
+    // ADC2 — Master (no clock output, data-only)
+    cfg.adc[1].isMaster = true;
     cfg.adc[1].sampleRate = _currentSampleRate;
     cfg.adc[1].bitsPerSample = 32;
     cfg.adc[1].channelFormat = "Stereo R/L";
     cfg.adc[1].dmaBufCount = DMA_BUF_COUNT;
     cfg.adc[1].dmaBufLen = DMA_BUF_LEN;
-    cfg.adc[1].apllEnabled = false;
-    cfg.adc[1].mclkHz = 0;
+    cfg.adc[1].apllEnabled = true;
+    cfg.adc[1].mclkHz = _currentSampleRate * 256;
     cfg.adc[1].commFormat = "Standard I2S";
     return cfg;
 }
@@ -816,8 +807,8 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
     LOG_I("[Audio] Changing sample rate: %lu -> %lu Hz", _currentSampleRate, rate);
 
-    i2s_driver_uninstall((i2s_port_t)I2S_PORT_MASTER);
-    if (_adc2InitOk) i2s_driver_uninstall((i2s_port_t)I2S_PORT_SLAVE);
+    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
+    if (_adc2InitOk) i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC2);
 
     _currentSampleRate = rate;
     _wfTargetFrames = rate * AppState::getInstance().audioUpdateRate / 1000;
@@ -826,16 +817,8 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
         memset(_wfAccum[a], 0, sizeof(_wfAccum[a]));
     }
 
-    if (_adc2InitOk) _adc2InitOk = i2s_configure_slave(rate);
-    i2s_configure_master(rate);
-    if (_adc2InitOk) {
-        esp_rom_gpio_connect_in_signal(I2S_BCK_PIN,
-            i2s_periph_signal[I2S_PORT_SLAVE].s_rx_bck_sig, false);
-        esp_rom_gpio_connect_in_signal(I2S_LRC_PIN,
-            i2s_periph_signal[I2S_PORT_SLAVE].s_rx_ws_sig, false);
-        i2s_stop((i2s_port_t)I2S_PORT_SLAVE);
-        i2s_start((i2s_port_t)I2S_PORT_SLAVE);
-    }
+    if (_adc2InitOk) _adc2InitOk = i2s_configure_adc2(rate);
+    i2s_configure_adc1(rate);
 
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
     return true;
@@ -864,14 +847,14 @@ I2sStaticConfig i2s_audio_get_static_config() {
     cfg.adc[0].apllEnabled = true;
     cfg.adc[0].mclkHz = 48000 * 256;
     cfg.adc[0].commFormat = "Standard I2S";
-    cfg.adc[1].isMaster = false;
+    cfg.adc[1].isMaster = true;
     cfg.adc[1].sampleRate = 48000;
     cfg.adc[1].bitsPerSample = 32;
     cfg.adc[1].channelFormat = "Stereo R/L";
     cfg.adc[1].dmaBufCount = 4;
     cfg.adc[1].dmaBufLen = 256;
-    cfg.adc[1].apllEnabled = false;
-    cfg.adc[1].mclkHz = 0;
+    cfg.adc[1].apllEnabled = true;
+    cfg.adc[1].mclkHz = 48000 * 256;
     cfg.adc[1].commFormat = "Standard I2S";
     return cfg;
 }

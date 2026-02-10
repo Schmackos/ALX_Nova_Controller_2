@@ -6,6 +6,10 @@
 
 #define MAX_WS_CLIENTS 10
 
+// ===== Binary WebSocket Message Types =====
+#define WS_BIN_WAVEFORM 0x01  // [type:1][adc:1][samples:256] = 258 bytes
+#define WS_BIN_SPECTRUM 0x02  // [type:1][adc:1][freq:f32LE][bands:16xf32LE] = 70 bytes
+
 // ===== WebSocket Authentication =====
 extern bool wsAuthStatus[MAX_WS_CLIENTS];
 extern unsigned long wsAuthTimeout[MAX_WS_CLIENTS];
