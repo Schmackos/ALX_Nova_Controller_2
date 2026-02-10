@@ -178,6 +178,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/signalgenerator/amplitude/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/channel/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/output_mode/set").c_str());
+  mqttClient.subscribe((base + "/signalgenerator/target_adc/set").c_str());
   mqttClient.subscribe((base + "/settings/adc_vref/set").c_str());
   mqttClient.subscribe((base + "/audio/vu_meter/set").c_str());
   mqttClient.subscribe((base + "/audio/waveform/set").c_str());
@@ -518,6 +519,21 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       siggen_apply_params();
       saveSignalGenSettings();
       LOG_I("[MQTT] Signal generator output mode set to %s", message.c_str());
+      publishMqttSignalGenState();
+      sendSignalGenState();
+    }
+  }
+  // Handle signal generator target ADC
+  else if (topicStr == base + "/signalgenerator/target_adc/set") {
+    int target = -1;
+    if (message == "input1") target = 0;
+    else if (message == "input2") target = 1;
+    else if (message == "both") target = 2;
+    if (target >= 0) {
+      appState.sigGenTargetAdc = target;
+      siggen_apply_params();
+      saveSignalGenSettings();
+      LOG_I("[MQTT] Signal generator target ADC set to %s", message.c_str());
       publishMqttSignalGenState();
       sendSignalGenState();
     }
@@ -1109,6 +1125,10 @@ void publishMqttSignalGenState() {
 
   mqttClient.publish((base + "/signalgenerator/sweep_speed").c_str(),
                      String(appState.sigGenSweepSpeed, 0).c_str(), true);
+
+  const char *targetNames[] = {"input1", "input2", "both"};
+  mqttClient.publish((base + "/signalgenerator/target_adc").c_str(),
+                     targetNames[appState.sigGenTargetAdc % 3], true);
 }
 
 void publishMqttAudioDiagnostics() {
@@ -1117,12 +1137,37 @@ void publishMqttAudioDiagnostics() {
 
   String base = getEffectiveMqttBaseTopic();
 
+  // Per-ADC diagnostics (only publish detected ADCs)
+  const char *inputLabels[] = {"input1", "input2"};
+  int adcCount = appState.numAdcsDetected < NUM_AUDIO_ADCS ? appState.numAdcsDetected : NUM_AUDIO_ADCS;
+  for (int a = 0; a < adcCount; a++) {
+    const AppState::AdcState &adc = appState.audioAdc[a];
+    const char *statusStr = "OK";
+    switch (adc.healthStatus) {
+      case 1: statusStr = "NO_DATA"; break;
+      case 2: statusStr = "NOISE_ONLY"; break;
+      case 3: statusStr = "CLIPPING"; break;
+      case 4: statusStr = "I2S_ERROR"; break;
+      case 5: statusStr = "HW_FAULT"; break;
+    }
+    String prefix = base + "/audio/" + inputLabels[a];
+    mqttClient.publish((prefix + "/adc_status").c_str(), statusStr, true);
+    mqttClient.publish((prefix + "/noise_floor").c_str(),
+                       String(adc.noiseFloorDbfs, 1).c_str(), true);
+    mqttClient.publish((prefix + "/vrms").c_str(),
+                       String(adc.vrmsCombined, 3).c_str(), true);
+    mqttClient.publish((prefix + "/level").c_str(),
+                       String(adc.dBFS, 1).c_str(), true);
+  }
+
+  // Legacy combined topics (ADC 0)
   const char *statusStr = "OK";
   switch (appState.audioHealthStatus) {
     case 1: statusStr = "NO_DATA"; break;
     case 2: statusStr = "NOISE_ONLY"; break;
     case 3: statusStr = "CLIPPING"; break;
     case 4: statusStr = "I2S_ERROR"; break;
+    case 5: statusStr = "HW_FAULT"; break;
   }
   mqttClient.publish((base + "/audio/adc_status").c_str(), statusStr, true);
   mqttClient.publish((base + "/audio/noise_floor").c_str(),
@@ -2002,7 +2047,101 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
-  // ===== Audio ADC Status Sensor =====
+  // ===== Signal Generator Target ADC Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Signal Target ADC";
+    doc["unique_id"] = deviceId + "_siggen_target_adc";
+    doc["state_topic"] = base + "/signalgenerator/target_adc";
+    doc["command_topic"] = base + "/signalgenerator/target_adc/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("input1");
+    options.add("input2");
+    options.add("both");
+    doc["icon"] = "mdi:audio-input-stereo-minijack";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/select/" + deviceId + "/siggen_target_adc/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Per-ADC Audio Diagnostic Entities (only detected ADCs) =====
+  {
+    const char *inputLabels[] = {"input1", "input2"};
+    const char *inputNames[] = {"Input 1", "Input 2"};
+    int adcCount = appState.numAdcsDetected < NUM_AUDIO_ADCS ? appState.numAdcsDetected : NUM_AUDIO_ADCS;
+    for (int a = 0; a < adcCount; a++) {
+      String prefix = base + "/audio/" + inputLabels[a];
+      String idSuffix = String("_") + inputLabels[a];
+
+      // Per-ADC Level Sensor
+      {
+        JsonDocument doc;
+        doc["name"] = String(inputNames[a]) + " Audio Level";
+        doc["unique_id"] = deviceId + idSuffix + "_level";
+        doc["state_topic"] = prefix + "/level";
+        doc["unit_of_measurement"] = "dBFS";
+        doc["state_class"] = "measurement";
+        doc["icon"] = "mdi:volume-high";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_level/config").c_str(), payload.c_str(), true);
+      }
+
+      // Per-ADC Status Sensor
+      {
+        JsonDocument doc;
+        doc["name"] = String(inputNames[a]) + " ADC Status";
+        doc["unique_id"] = deviceId + idSuffix + "_adc_status";
+        doc["state_topic"] = prefix + "/adc_status";
+        doc["entity_category"] = "diagnostic";
+        doc["icon"] = "mdi:audio-input-stereo-minijack";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_adc_status/config").c_str(), payload.c_str(), true);
+      }
+
+      // Per-ADC Noise Floor Sensor
+      {
+        JsonDocument doc;
+        doc["name"] = String(inputNames[a]) + " Noise Floor";
+        doc["unique_id"] = deviceId + idSuffix + "_noise_floor";
+        doc["state_topic"] = prefix + "/noise_floor";
+        doc["unit_of_measurement"] = "dBFS";
+        doc["state_class"] = "measurement";
+        doc["entity_category"] = "diagnostic";
+        doc["icon"] = "mdi:volume-low";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_noise_floor/config").c_str(), payload.c_str(), true);
+      }
+
+      // Per-ADC Vrms Sensor
+      {
+        JsonDocument doc;
+        doc["name"] = String(inputNames[a]) + " Vrms";
+        doc["unique_id"] = deviceId + idSuffix + "_vrms";
+        doc["state_topic"] = prefix + "/vrms";
+        doc["unit_of_measurement"] = "V";
+        doc["device_class"] = "voltage";
+        doc["state_class"] = "measurement";
+        doc["entity_category"] = "diagnostic";
+        doc["suggested_display_precision"] = 3;
+        doc["icon"] = "mdi:sine-wave";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_vrms/config").c_str(), payload.c_str(), true);
+      }
+    }
+  }
+
+  // ===== Legacy Combined Audio ADC Status Sensor =====
   {
     JsonDocument doc;
     doc["name"] = "ADC Status";
@@ -2018,7 +2157,7 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
-  // ===== Audio Noise Floor Sensor =====
+  // ===== Legacy Combined Audio Noise Floor Sensor =====
   {
     JsonDocument doc;
     doc["name"] = "Audio Noise Floor";
@@ -2036,7 +2175,7 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
-  // ===== Input Voltage (Vrms) Sensor =====
+  // ===== Legacy Combined Input Voltage (Vrms) Sensor =====
   {
     JsonDocument doc;
     doc["name"] = "Input Voltage (Vrms)";

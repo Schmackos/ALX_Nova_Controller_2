@@ -275,11 +275,35 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             float s = doc["sweepSpeed"].as<float>();
             if (s >= 1.0f && s <= 22000.0f) { appState.sigGenSweepSpeed = s; changed = true; }
           }
+          if (doc["targetAdc"].is<int>()) {
+            int t = doc["targetAdc"].as<int>();
+            if (t >= 0 && t <= 2) { appState.sigGenTargetAdc = t; changed = true; }
+          }
           if (changed) {
             siggen_apply_params();
             saveSignalGenSettings();
             sendSignalGenState();
             LOG_I("[WebSocket] Signal generator updated by client [%u]", num);
+          }
+        } else if (msgType == "setInputNames") {
+          if (doc["names"].is<JsonArray>()) {
+            JsonArray names = doc["names"].as<JsonArray>();
+            for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+              String name = names[i].as<String>();
+              if (name.length() > 0) appState.inputNames[i] = name;
+            }
+            saveInputNames();
+            // Broadcast updated names
+            JsonDocument resp;
+            resp["type"] = "inputNames";
+            JsonArray outNames = resp["names"].to<JsonArray>();
+            for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+              outNames.add(appState.inputNames[i]);
+            }
+            String json;
+            serializeJson(resp, json);
+            webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+            LOG_I("[WebSocket] Input names updated by client [%u]", num);
           }
         }
       }
@@ -368,6 +392,7 @@ void sendSignalGenState() {
   doc["channel"] = appState.sigGenChannel;
   doc["outputMode"] = appState.sigGenOutputMode;
   doc["sweepSpeed"] = appState.sigGenSweepSpeed;
+  doc["targetAdc"] = appState.sigGenTargetAdc;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -517,22 +542,33 @@ void sendHardwareStats() {
   doc["wifi"]["apClients"] = WiFi.softAPgetStationNum();
   doc["wifi"]["connected"] = (WiFi.status() == WL_CONNECTED);
   
-  // Audio ADC diagnostics
-  const char *adcStatusStr = "OK";
-  switch (appState.audioHealthStatus) {
-    case 1: adcStatusStr = "NO_DATA"; break;
-    case 2: adcStatusStr = "NOISE_ONLY"; break;
-    case 3: adcStatusStr = "CLIPPING"; break;
-    case 4: adcStatusStr = "I2S_ERROR"; break;
-  }
-  doc["audio"]["adcStatus"] = adcStatusStr;
-  doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
-  doc["audio"]["i2sErrors"] = appState.audioI2sErrors;
-  doc["audio"]["consecutiveZeros"] = appState.audioConsecutiveZeros;
-  doc["audio"]["totalBuffers"] = appState.audioTotalBuffers;
+  // Audio ADC diagnostics (per-ADC)
   doc["audio"]["sampleRate"] = appState.audioSampleRate;
-  doc["audio"]["vrms"] = appState.audioVrmsCombined;
   doc["audio"]["adcVref"] = appState.adcVref;
+  doc["audio"]["numAdcsDetected"] = appState.numAdcsDetected;
+  JsonArray adcArr = doc["audio"]["adcs"].to<JsonArray>();
+  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    JsonObject adcObj = adcArr.add<JsonObject>();
+    const AppState::AdcState &adc = appState.audioAdc[a];
+    const char *statusStr = "OK";
+    switch (adc.healthStatus) {
+      case 1: statusStr = "NO_DATA"; break;
+      case 2: statusStr = "NOISE_ONLY"; break;
+      case 3: statusStr = "CLIPPING"; break;
+      case 4: statusStr = "I2S_ERROR"; break;
+      case 5: statusStr = "HW_FAULT"; break;
+    }
+    adcObj["status"] = statusStr;
+    adcObj["noiseFloorDbfs"] = adc.noiseFloorDbfs;
+    adcObj["i2sErrors"] = adc.i2sErrors;
+    adcObj["consecutiveZeros"] = adc.consecutiveZeros;
+    adcObj["totalBuffers"] = adc.totalBuffers;
+    adcObj["vrms"] = adc.vrmsCombined;
+  }
+  // Legacy flat fields for backward compat
+  doc["audio"]["adcStatus"] = adcArr[0]["status"];
+  doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
+  doc["audio"]["vrms"] = appState.audioVrmsCombined;
 
   // Uptime (milliseconds since boot)
   doc["uptime"] = millis();
@@ -565,6 +601,35 @@ void sendAudioData() {
     doc["type"] = "audioLevels";
     doc["audioLevel"] = audioLevel_dBFS;
     doc["signalDetected"] = (audioLevel_dBFS >= audioThreshold_dBFS);
+    doc["numAdcsDetected"] = appState.numAdcsDetected;
+    // Per-ADC data array
+    JsonArray adcArr = doc["adc"].to<JsonArray>();
+    JsonArray adcStatusArr = doc["adcStatus"].to<JsonArray>();
+    JsonArray adcNoiseArr = doc["adcNoiseFloor"].to<JsonArray>();
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      const AppState::AdcState &adc = appState.audioAdc[a];
+      JsonObject adcObj = adcArr.add<JsonObject>();
+      adcObj["vuL"] = adc.vuLeft;
+      adcObj["vuR"] = adc.vuRight;
+      adcObj["peakL"] = adc.peakLeft;
+      adcObj["peakR"] = adc.peakRight;
+      adcObj["rmsL"] = adc.rmsLeft;
+      adcObj["rmsR"] = adc.rmsRight;
+      adcObj["vrmsL"] = adc.vrmsLeft;
+      adcObj["vrmsR"] = adc.vrmsRight;
+      adcObj["dBFS"] = adc.dBFS;
+      const char *statusStr = "OK";
+      switch (adc.healthStatus) {
+        case 1: statusStr = "NO_DATA"; break;
+        case 2: statusStr = "NOISE_ONLY"; break;
+        case 3: statusStr = "CLIPPING"; break;
+        case 4: statusStr = "I2S_ERROR"; break;
+        case 5: statusStr = "HW_FAULT"; break;
+      }
+      adcStatusArr.add(statusStr);
+      adcNoiseArr.add(adc.noiseFloorDbfs);
+    }
+    // Legacy flat fields for backward compat (ADC 0)
     doc["audioRmsL"] = appState.audioRmsLeft;
     doc["audioRmsR"] = appState.audioRmsRight;
     doc["audioVuL"] = appState.audioVuLeft;
@@ -575,17 +640,6 @@ void sendAudioData() {
     doc["audioVrmsL"] = appState.audioVrmsLeft;
     doc["audioVrmsR"] = appState.audioVrmsRight;
     doc["audioVrms"] = appState.audioVrmsCombined;
-    const char *adcStatusStr = "OK";
-    switch (appState.audioHealthStatus) {
-      case 1: adcStatusStr = "NO_DATA"; break;
-      case 2: adcStatusStr = "NOISE_ONLY"; break;
-      case 3: adcStatusStr = "CLIPPING"; break;
-      case 4: adcStatusStr = "I2S_ERROR"; break;
-    }
-    doc["adcStatus"] = adcStatusStr;
-    doc["adcNoiseFloor"] = appState.audioNoiseFloorDbfs;
-    doc["adcConsecutiveZeros"] = appState.audioConsecutiveZeros;
-    doc["adcI2sErrors"] = appState.audioI2sErrors;
     String json;
     serializeJson(doc, json);
     for (int i = 0; i < MAX_WS_CLIENTS; i++) {
@@ -595,40 +649,50 @@ void sendAudioData() {
     }
   }
 
-  // --- Waveform data ---
-  uint8_t waveformBuf[WAVEFORM_BUFFER_SIZE];
-  if (appState.waveformEnabled && i2s_audio_get_waveform(waveformBuf)) {
-    JsonDocument doc;
-    doc["type"] = "audioWaveform";
-    JsonArray w = doc["w"].to<JsonArray>();
-    for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
-      w.add(waveformBuf[i]);
-    }
-    String json;
-    serializeJson(doc, json);
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-      if (_audioSubscribed[i]) {
-        webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+  // --- Waveform data (per-ADC) ---
+  if (appState.waveformEnabled) {
+    uint8_t waveformBuf[WAVEFORM_BUFFER_SIZE];
+    for (int a = 0; a < appState.numAdcsDetected; a++) {
+      if (i2s_audio_get_waveform(waveformBuf, a)) {
+        JsonDocument doc;
+        doc["type"] = "audioWaveform";
+        doc["adc"] = a;
+        JsonArray w = doc["w"].to<JsonArray>();
+        for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
+          w.add(waveformBuf[i]);
+        }
+        String json;
+        serializeJson(doc, json);
+        for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+          if (_audioSubscribed[i]) {
+            webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+          }
+        }
       }
     }
   }
 
-  // --- Spectrum data ---
-  float bands[SPECTRUM_BANDS];
-  float freq = 0.0f;
-  if (appState.spectrumEnabled && i2s_audio_get_spectrum(bands, &freq)) {
-    JsonDocument doc;
-    doc["type"] = "audioSpectrum";
-    doc["freq"] = freq;
-    JsonArray b = doc["bands"].to<JsonArray>();
-    for (int i = 0; i < SPECTRUM_BANDS; i++) {
-      b.add(serialized(String(bands[i], 3)));
-    }
-    String json;
-    serializeJson(doc, json);
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-      if (_audioSubscribed[i]) {
-        webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+  // --- Spectrum data (per-ADC) ---
+  if (appState.spectrumEnabled) {
+    float bands[SPECTRUM_BANDS];
+    float freq = 0.0f;
+    for (int a = 0; a < appState.numAdcsDetected; a++) {
+      if (i2s_audio_get_spectrum(bands, &freq, a)) {
+        JsonDocument doc;
+        doc["type"] = "audioSpectrum";
+        doc["adc"] = a;
+        doc["freq"] = freq;
+        JsonArray b = doc["bands"].to<JsonArray>();
+        for (int i = 0; i < SPECTRUM_BANDS; i++) {
+          b.add(serialized(String(bands[i], 3)));
+        }
+        String json;
+        serializeJson(doc, json);
+        for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+          if (_audioSubscribed[i]) {
+            webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+          }
+        }
       }
     }
   }

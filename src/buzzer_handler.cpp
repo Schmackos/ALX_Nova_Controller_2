@@ -1,6 +1,7 @@
 #include "buzzer_handler.h"
 #include "app_state.h"
 #include "config.h"
+#include "debug_serial.h"
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -158,13 +159,18 @@ void buzzer_init() {
   if (buzzer_mutex == nullptr) {
     buzzer_mutex = xSemaphoreCreateMutex();
   }
+  LOG_I("[Buzzer] Initialized on GPIO %d", BUZZER_PIN);
 }
 
 void buzzer_play(BuzzerPattern pattern) {
+  if (pattern != BUZZ_TICK && pattern != BUZZ_CLICK && pattern != BUZZ_NONE) {
+    LOG_D("[Buzzer] Play request: %d", (int)pattern);
+  }
   pending_pattern = pattern;
 }
 
 static void start_pattern(const ToneStep *pat) {
+  LOG_D("[Buzzer] Start pattern: freq=%d, dur=%d", pat[0].freq_hz, pat[0].duration_ms);
   current_pattern = pat;
   current_step = 0;
   step_start_ms = millis();
@@ -189,6 +195,7 @@ static void start_pattern(const ToneStep *pat) {
 }
 
 static void stop_buzzer() {
+  LOG_D("[Buzzer] Pattern complete");
   ledcWrite(BUZZER_PWM_CHANNEL, 0);
   ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
   // Detach pin from LEDC and drive LOW to eliminate residual PWM noise

@@ -10,6 +10,18 @@
 // Smoothed audio level for stable signal detection (EMA, α=0.15, τ≈308ms)
 static float _smoothedAudioLevel = -96.0f;
 
+static const char *audioHealthName(uint8_t status) {
+    switch (status) {
+    case AUDIO_OK:         return "OK";
+    case AUDIO_NO_DATA:    return "NO_DATA";
+    case AUDIO_NOISE_ONLY: return "NOISE_ONLY";
+    case AUDIO_CLIPPING:   return "CLIPPING";
+    case AUDIO_I2S_ERROR:  return "I2S_ERROR";
+    case AUDIO_HW_FAULT:   return "HW_FAULT";
+    default:               return "UNKNOWN";
+    }
+}
+
 // ===== Smart Sensing HTTP API Handlers =====
 
 void handleSmartSensingGet() {
@@ -38,6 +50,26 @@ void handleSmartSensingGet() {
   doc["audioThreshold"] = audioThreshold_dBFS;
   doc["audioLevel"] = audioLevel_dBFS;
   doc["signalDetected"] = (_smoothedAudioLevel >= audioThreshold_dBFS);
+  doc["audioSampleRate"] = appState.audioSampleRate;
+  doc["adcVref"] = appState.adcVref;
+  doc["numAdcsDetected"] = appState.numAdcsDetected;
+  // Per-ADC data
+  JsonArray adcArr = doc["adc"].to<JsonArray>();
+  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    JsonObject adcObj = adcArr.add<JsonObject>();
+    const AppState::AdcState &adc = appState.audioAdc[a];
+    adcObj["rmsL"] = adc.rmsLeft;
+    adcObj["rmsR"] = adc.rmsRight;
+    adcObj["vuL"] = adc.vuLeft;
+    adcObj["vuR"] = adc.vuRight;
+    adcObj["peakL"] = adc.peakLeft;
+    adcObj["peakR"] = adc.peakRight;
+    adcObj["vrmsL"] = adc.vrmsLeft;
+    adcObj["vrmsR"] = adc.vrmsRight;
+    adcObj["vrms"] = adc.vrmsCombined;
+    adcObj["dBFS"] = adc.dBFS;
+  }
+  // Legacy flat fields (ADC 0)
   doc["audioRmsL"] = appState.audioRmsLeft;
   doc["audioRmsR"] = appState.audioRmsRight;
   doc["audioVuL"] = appState.audioVuLeft;
@@ -45,11 +77,9 @@ void handleSmartSensingGet() {
   doc["audioPeakL"] = appState.audioPeakLeft;
   doc["audioPeakR"] = appState.audioPeakRight;
   doc["audioPeak"] = appState.audioPeakCombined;
-  doc["audioSampleRate"] = appState.audioSampleRate;
   doc["audioVrmsL"] = appState.audioVrmsLeft;
   doc["audioVrmsR"] = appState.audioVrmsRight;
   doc["audioVrms"] = appState.audioVrmsCombined;
-  doc["adcVref"] = appState.adcVref;
 
   String json;
   serializeJson(doc, json);
@@ -228,33 +258,51 @@ void handleSmartSensingUpdate() {
 
 bool detectSignal() {
   AudioAnalysis analysis = i2s_audio_get_analysis();
-  audioLevel_dBFS = analysis.dBFS;
-  appState.audioRmsLeft = analysis.rmsLeft;
-  appState.audioRmsRight = analysis.rmsRight;
-  appState.audioRmsCombined = analysis.rmsCombined;
-  if (appState.vuMeterEnabled) {
-    appState.audioVuLeft = analysis.vuLeft;
-    appState.audioVuRight = analysis.vuRight;
-    appState.audioVuCombined = analysis.vuCombined;
-    appState.audioPeakLeft = analysis.peakLeft;
-    appState.audioPeakRight = analysis.peakRight;
-    appState.audioPeakCombined = analysis.peakCombined;
-  }
-  appState.audioVrmsLeft = audio_rms_to_vrms(analysis.rmsLeft, appState.adcVref);
-  appState.audioVrmsRight = audio_rms_to_vrms(analysis.rmsRight, appState.adcVref);
-  appState.audioVrmsCombined = audio_rms_to_vrms(analysis.rmsCombined, appState.adcVref);
-
-  // Copy ADC diagnostics into AppState
   AudioDiagnostics diag = i2s_audio_get_diagnostics();
-  appState.audioHealthStatus = (uint8_t)diag.status;
-  appState.audioI2sErrors = diag.i2sReadErrors;
-  appState.audioAllZeroBuffers = diag.allZeroBuffers;
-  appState.audioConsecutiveZeros = diag.consecutiveZeros;
-  appState.audioNoiseFloorDbfs = diag.noiseFloorDbfs;
-  appState.audioLastNonZeroMs = diag.lastNonZeroMs;
-  appState.audioTotalBuffers = diag.totalBuffersRead;
-  appState.audioClippedSamples = diag.clippedSamples;
-  appState.audioDcOffset = diag.dcOffset;
+
+  // Copy per-ADC analysis and diagnostics into AppState
+  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    AppState::AdcState &dst = appState.audioAdc[a];
+    const AdcAnalysis &src = analysis.adc[a];
+    dst.rmsLeft = src.rmsLeft;
+    dst.rmsRight = src.rmsRight;
+    dst.rmsCombined = src.rmsCombined;
+    if (appState.vuMeterEnabled) {
+      dst.vuLeft = src.vuLeft;
+      dst.vuRight = src.vuRight;
+      dst.vuCombined = src.vuCombined;
+      dst.peakLeft = src.peakLeft;
+      dst.peakRight = src.peakRight;
+      dst.peakCombined = src.peakCombined;
+    }
+    dst.vrmsLeft = audio_rms_to_vrms(src.rmsLeft, appState.adcVref);
+    dst.vrmsRight = audio_rms_to_vrms(src.rmsRight, appState.adcVref);
+    dst.vrmsCombined = audio_rms_to_vrms(src.rmsCombined, appState.adcVref);
+    dst.dBFS = src.dBFS;
+
+    // Diagnostics
+    const AdcDiagnostics &dsrc = diag.adc[a];
+    dst.healthStatus = (uint8_t)dsrc.status;
+    static uint8_t prevHealth[NUM_AUDIO_ADCS] = {0xFF, 0xFF};
+    if (dst.healthStatus != prevHealth[a]) {
+        LOG_I("[Sensing] ADC%d health: %s -> %s", a + 1,
+              audioHealthName(prevHealth[a]), audioHealthName(dst.healthStatus));
+        prevHealth[a] = dst.healthStatus;
+    }
+    dst.i2sErrors = dsrc.i2sReadErrors;
+    dst.allZeroBuffers = dsrc.allZeroBuffers;
+    dst.consecutiveZeros = dsrc.consecutiveZeros;
+    dst.noiseFloorDbfs = dsrc.noiseFloorDbfs;
+    dst.lastNonZeroMs = dsrc.lastNonZeroMs;
+    dst.totalBuffers = dsrc.totalBuffersRead;
+    dst.clippedSamples = dsrc.clippedSamples;
+    dst.clipRate = dsrc.clipRate;
+    dst.dcOffset = dsrc.dcOffset;
+  }
+
+  // Overall level = max dBFS across all ADCs
+  audioLevel_dBFS = analysis.dBFS;
+  appState.numAdcsDetected = diag.numAdcsDetected;
 
   return analysis.signalDetected;
 }

@@ -252,6 +252,11 @@ void siggen_apply_params() {
               p.waveform, p.frequency, st.sigGenAmplitude,
               p.outputMode == SIGOUT_SOFTWARE ? "software" : "PWM");
     }
+
+    if (shouldBeActive && wasActive) {
+        LOG_I("[SigGen] Params: waveform=%d, freq=%.0f Hz, amp=%.1f dBFS, ch=%d, target=%d",
+              p.waveform, p.frequency, st.sigGenAmplitude, p.channel, st.sigGenTargetAdc);
+    }
 }
 
 #else

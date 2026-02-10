@@ -1978,6 +1978,107 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             color: var(--accent);
             font-weight: 600;
         }
+
+        /* Dual ADC responsive grid */
+        .dual-canvas-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        @media (max-width: 768px) {
+            .dual-canvas-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .dual-canvas-grid .canvas-panel {
+            min-width: 0;
+        }
+        .canvas-panel-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        /* ADC section headers in VU meters */
+        .adc-section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            margin-bottom: 6px;
+        }
+        .adc-section-header:first-child {
+            margin-top: 0;
+        }
+        .adc-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .adc-status-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .adc-status-badge.ok {
+            background: rgba(76,175,80,0.15);
+            color: #4CAF50;
+        }
+        .adc-status-badge.no-data {
+            background: rgba(158,158,158,0.15);
+            color: #9E9E9E;
+        }
+        .adc-status-badge.clipping {
+            background: rgba(244,67,54,0.15);
+            color: #F44336;
+        }
+        .adc-status-badge.noise-only {
+            background: rgba(255,193,7,0.15);
+            color: #FFC107;
+        }
+        .adc-status-badge.i2s-error {
+            background: rgba(244,67,54,0.15);
+            color: #F44336;
+        }
+        .adc-status-badge.hw-fault {
+            background: rgba(156,39,176,0.15);
+            color: #9C27B0;
+        }
+        .clip-indicator {
+            display: none;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #F44336;
+            color: #FFF;
+            letter-spacing: 0.5px;
+        }
+        .clip-indicator.active {
+            display: inline-block;
+            animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .adc-readout {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-left: auto;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* VU meter channel name labels */
+        .vu-meter-label.ch-name {
+            width: auto;
+            min-width: 24px;
+            max-width: 90px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body class="has-status-bar">
@@ -2197,8 +2298,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                 </div>
                 <div id="waveformContent">
-                    <div class="audio-canvas-wrap">
-                        <canvas class="waveform-canvas" id="audioWaveformCanvas"></canvas>
+                    <div class="dual-canvas-grid">
+                        <div class="canvas-panel">
+                            <div class="canvas-panel-title">Input 1</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="waveform-canvas" id="audioWaveformCanvas0"></canvas>
+                            </div>
+                        </div>
+                        <div class="canvas-panel" id="waveformPanel1">
+                            <div class="canvas-panel-title">Input 2</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="waveform-canvas" id="audioWaveformCanvas1"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2221,10 +2333,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                 </div>
                 <div id="spectrumContent">
-                    <div class="audio-canvas-wrap">
-                        <canvas class="spectrum-canvas" id="audioSpectrumCanvas"></canvas>
+                    <div class="dual-canvas-grid">
+                        <div class="canvas-panel">
+                            <div class="canvas-panel-title">Input 1</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="spectrum-canvas" id="audioSpectrumCanvas0"></canvas>
+                            </div>
+                            <div class="dominant-freq-readout">Dominant: <span id="dominantFreq0">-- Hz</span></div>
+                        </div>
+                        <div class="canvas-panel" id="spectrumPanel1">
+                            <div class="canvas-panel-title">Input 2</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="spectrum-canvas" id="audioSpectrumCanvas1"></canvas>
+                            </div>
+                            <div class="dominant-freq-readout">Dominant: <span id="dominantFreq1">-- Hz</span></div>
+                        </div>
                     </div>
-                    <div class="dominant-freq-readout">Dominant: <span id="dominantFreq">-- Hz</span></div>
                 </div>
             </div>
 
@@ -2246,40 +2370,90 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                 </div>
                 <div id="vuMeterContent">
-                <!-- Continuous (Option B) -->
-                <div id="vuContinuous">
+                <!-- ADC 0 (Input 1) -->
+                <div class="adc-section-header">
+                    <span class="adc-section-title">Input 1</span>
+                    <span class="adc-status-badge ok" id="adcStatusBadge0">OK</span>
+                    <span class="clip-indicator" id="clipIndicator0">CLIP</span>
+                    <span class="adc-readout" id="adcReadout0">-- dBFS | -- Vrms</span>
+                </div>
+                <!-- Continuous bars ADC 0 -->
+                <div id="vuContinuous0">
                     <div class="vu-meter-row">
-                        <span class="vu-meter-label">L</span>
+                        <span class="vu-meter-label ch-name" id="vuChName0">Ch 1</span>
                         <div class="vu-meter-track">
-                            <div class="vu-meter-fill" id="vuFillL"></div>
-                            <div class="vu-meter-peak" id="vuPeakL"></div>
+                            <div class="vu-meter-fill" id="vuFill0L"></div>
+                            <div class="vu-meter-peak" id="vuPeak0L"></div>
                         </div>
-                        <span class="vu-meter-db" id="vuDbL">-inf dBFS</span>
+                        <span class="vu-meter-db" id="vuDb0L">-inf dBFS</span>
                     </div>
                     <div class="vu-meter-row" style="margin-bottom:0">
-                        <span class="vu-meter-label">R</span>
+                        <span class="vu-meter-label ch-name" id="vuChName1">Ch 2</span>
                         <div class="vu-meter-track">
-                            <div class="vu-meter-fill" id="vuFillR"></div>
-                            <div class="vu-meter-peak" id="vuPeakR"></div>
+                            <div class="vu-meter-fill" id="vuFill0R"></div>
+                            <div class="vu-meter-peak" id="vuPeak0R"></div>
                         </div>
-                        <span class="vu-meter-db" id="vuDbR">-inf dBFS</span>
+                        <span class="vu-meter-db" id="vuDb0R">-inf dBFS</span>
                     </div>
                 </div>
-                <!-- Segmented PPM (Option C) -->
-                <div id="vuSegmentedDiv" style="display:none">
+                <!-- Segmented PPM ADC 0 -->
+                <div id="vuSegmented0" style="display:none">
                     <div class="vu-meter-row">
-                        <span class="vu-meter-label">L</span>
-                        <canvas id="ppmCanvasL" class="ppm-canvas"></canvas>
-                        <span class="vu-meter-db" id="vuDbSegL">-inf dBFS</span>
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg0">Ch 1</span>
+                        <canvas id="ppmCanvas0L" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg0L">-inf dBFS</span>
                     </div>
                     <div class="vu-meter-row" style="margin-bottom:0">
-                        <span class="vu-meter-label">R</span>
-                        <canvas id="ppmCanvasR" class="ppm-canvas"></canvas>
-                        <span class="vu-meter-db" id="vuDbSegR">-inf dBFS</span>
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg1">Ch 2</span>
+                        <canvas id="ppmCanvas0R" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg0R">-inf dBFS</span>
                     </div>
                 </div>
+
+                <!-- ADC 1 (Input 2) -->
+                <div id="adcSection1">
+                <div class="adc-section-header">
+                    <span class="adc-section-title">Input 2</span>
+                    <span class="adc-status-badge no-data" id="adcStatusBadge1">NO_DATA</span>
+                    <span class="clip-indicator" id="clipIndicator1">CLIP</span>
+                    <span class="adc-readout" id="adcReadout1">-- dBFS | -- Vrms</span>
+                </div>
+                <!-- Continuous bars ADC 1 -->
+                <div id="vuContinuous1">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name" id="vuChName2">Ch 3</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFill1L"></div>
+                            <div class="vu-meter-peak" id="vuPeak1L"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDb1L">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name" id="vuChName3">Ch 4</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFill1R"></div>
+                            <div class="vu-meter-peak" id="vuPeak1R"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDb1R">-inf dBFS</span>
+                    </div>
+                </div>
+                <!-- Segmented PPM ADC 1 -->
+                <div id="vuSegmented1" style="display:none">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg2">Ch 3</span>
+                        <canvas id="ppmCanvas1L" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg1L">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg3">Ch 4</span>
+                        <canvas id="ppmCanvas1R" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg1R">-inf dBFS</span>
+                    </div>
+                </div>
+                </div>
+
                 <!-- Shared scale row -->
-                <div class="vu-meter-row" style="margin-bottom:8px">
+                <div class="vu-meter-row" style="margin-bottom:8px;margin-top:10px">
                     <span class="vu-meter-label"></span>
                     <div class="vu-scale">
                         <span class="vu-tick" style="left:0%">-60</span>
@@ -2297,6 +2471,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <span class="info-value" id="audioSignalText">Not detected</span>
                 </div>
                 </div>
+            </div>
+
+            <!-- Input Names -->
+            <div class="card">
+                <div class="card-title">Input Names</div>
+                <div class="form-group">
+                    <label class="form-label">Input 1 - Left</label>
+                    <input type="text" class="form-input" id="inputName0" placeholder="Subwoofer 1" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Input 1 - Right</label>
+                    <input type="text" class="form-input" id="inputName1" placeholder="Subwoofer 2" maxlength="20">
+                </div>
+                <div id="inputNamesAdc1">
+                <div class="form-group">
+                    <label class="form-label">Input 2 - Left</label>
+                    <input type="text" class="form-input" id="inputName2" placeholder="Subwoofer 3" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Input 2 - Right</label>
+                    <input type="text" class="form-input" id="inputName3" placeholder="Subwoofer 4" maxlength="20">
+                </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveInputNames()">Save Names</button>
             </div>
 
             <!-- Audio Settings -->
@@ -2337,6 +2535,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="0">Software Injection</option>
                         <option value="1">PWM Output (GPIO 38)</option>
                     </select>
+                </div>
+                <div id="siggenTargetAdcGroup">
+                <div class="form-group">
+                    <label class="form-label">Target ADC</label>
+                    <select class="form-input" id="siggenTargetAdc" onchange="updateSigGen()">
+                        <option value="0">Input 1</option>
+                        <option value="1">Input 2</option>
+                        <option value="2" selected>Both</option>
+                    </select>
+                </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Waveform</label>
@@ -3101,26 +3309,55 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <div class="card">
                 <div class="card-title">Audio ADC</div>
                 <div class="info-box">
-                    <div class="info-row">
-                        <span class="info-label">ADC Status</span>
-                        <span class="info-value" id="adcStatus">--</span>
+                    <div class="dual-canvas-grid">
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Input 1</div>
+                            <div class="info-row">
+                                <span class="info-label">ADC Status</span>
+                                <span class="info-value" id="adcStatus">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Noise Floor</span>
+                                <span class="info-value" id="adcNoiseFloor">-- dBFS</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">I2S Errors</span>
+                                <span class="info-value" id="adcI2sErrors">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Consecutive Zeros</span>
+                                <span class="info-value" id="adcConsecutiveZeros">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Total Buffers</span>
+                                <span class="info-value" id="adcTotalBuffers">--</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Input 2</div>
+                            <div class="info-row">
+                                <span class="info-label">ADC Status</span>
+                                <span class="info-value" id="adcStatus1">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Noise Floor</span>
+                                <span class="info-value" id="adcNoiseFloor1">-- dBFS</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">I2S Errors</span>
+                                <span class="info-value" id="adcI2sErrors1">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Consecutive Zeros</span>
+                                <span class="info-value" id="adcConsecutiveZeros1">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Total Buffers</span>
+                                <span class="info-value" id="adcTotalBuffers1">--</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">Noise Floor</span>
-                        <span class="info-value" id="adcNoiseFloor">-- dBFS</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">I2S Errors</span>
-                        <span class="info-value" id="adcI2sErrors">--</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Consecutive Zeros</span>
-                        <span class="info-value" id="adcConsecutiveZeros">--</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Total Buffers</span>
-                        <span class="info-value" id="adcTotalBuffers">--</span>
-                    </div>
+                    <div class="divider"></div>
                     <div class="info-row">
                         <span class="info-label">Sample Rate</span>
                         <span class="info-value" id="adcSampleRate">--</span>
@@ -3150,6 +3387,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>19</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
@@ -3255,20 +3493,26 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let audioSubscribed = false;
         let currentActiveTab = 'control';
 
-        // Audio animation state (rAF interpolation)
-        let waveformCurrent = null, waveformTarget = null;
-        let spectrumCurrent = new Float32Array(16), spectrumTarget = new Float32Array(16);
-        let currentDominantFreq = 0, targetDominantFreq = 0;
+        // Dual ADC count
+        const NUM_ADCS = 2;
+        let numAdcsDetected = 1;
+        let inputNames = ['Subwoofer 1','Subwoofer 2','Subwoofer 3','Subwoofer 4'];
+
+        // Audio animation state (rAF interpolation) — per-ADC
+        let waveformCurrent = [null, null], waveformTarget = [null, null];
+        let spectrumCurrent = [new Float32Array(16), new Float32Array(16)];
+        let spectrumTarget = [new Float32Array(16), new Float32Array(16)];
+        let currentDominantFreq = [0, 0], targetDominantFreq = [0, 0];
         let audioAnimFrameId = null;
         const LERP_SPEED = 0.25;
 
-        // Spectrum peak hold state
-        let spectrumPeaks = new Float32Array(16);
-        let spectrumPeakTimes = new Float64Array(16);
+        // Spectrum peak hold state — per-ADC
+        let spectrumPeaks = [new Float32Array(16), new Float32Array(16)];
+        let spectrumPeakTimes = [new Float64Array(16), new Float64Array(16)];
 
-        // VU meter animation state (rAF LERP interpolation)
-        let vuCurrentL = 0, vuCurrentR = 0, vuTargetL = 0, vuTargetR = 0;
-        let peakCurrentL = 0, peakCurrentR = 0, peakTargetL = 0, peakTargetR = 0;
+        // VU meter animation state (rAF LERP interpolation) — per-ADC [adc][L=0,R=1]
+        let vuCurrent = [[0,0],[0,0]], vuTargetArr = [[0,0],[0,0]];
+        let peakCurrent = [[0,0],[0,0]], peakTargetArr = [[0,0],[0,0]];
         let vuDetected = false;
         let vuAnimFrameId = null;
         const VU_LERP = 0.3;
@@ -3336,9 +3580,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 // Sync LED toggle
                 const ledToggle = document.getElementById('ledModeToggle');
                 if (ledToggle) ledToggle.checked = ledBarMode;
-                // Draw initial empty canvases
-                drawAudioWaveform(null);
-                drawSpectrumBars(null, 0);
+                // Draw initial empty canvases for each ADC
+                for (let a = 0; a < NUM_ADCS; a++) {
+                    drawAudioWaveform(null, a);
+                    drawSpectrumBars(null, 0, a);
+                }
+                // Update ADC2 panel visibility
+                updateAdc2Visibility();
+                // Load input names into fields
+                loadInputNameFields();
             } else if (tabId !== 'audio' && audioSubscribed) {
                 audioSubscribed = false;
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -3346,9 +3596,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
                 // Stop animation and reset state
                 if (audioAnimFrameId) { cancelAnimationFrame(audioAnimFrameId); audioAnimFrameId = null; }
-                waveformCurrent = null; waveformTarget = null;
-                spectrumCurrent.fill(0); spectrumTarget.fill(0);
-                spectrumPeaks.fill(0); spectrumPeakTimes.fill(0);
+                for (let a = 0; a < NUM_ADCS; a++) {
+                    waveformCurrent[a] = null; waveformTarget[a] = null;
+                    spectrumCurrent[a].fill(0); spectrumTarget[a].fill(0);
+                    spectrumPeaks[a].fill(0); spectrumPeakTimes[a].fill(0);
+                }
             }
 
             currentActiveTab = tabId;
@@ -3640,24 +3892,60 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
                 } else if (data.type === 'audioLevels') {
                     if (currentActiveTab === 'audio') {
-                        vuTargetL = data.audioVuL !== undefined ? data.audioVuL : 0;
-                        vuTargetR = data.audioVuR !== undefined ? data.audioVuR : 0;
-                        peakTargetL = data.audioPeakL !== undefined ? data.audioPeakL : 0;
-                        peakTargetR = data.audioPeakR !== undefined ? data.audioPeakR : 0;
+                        if (data.numAdcsDetected !== undefined) {
+                            numAdcsDetected = data.numAdcsDetected;
+                            updateAdc2Visibility();
+                        }
+                        // Per-ADC VU/peak data
+                        if (data.adc && Array.isArray(data.adc)) {
+                            for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
+                                const ad = data.adc[a];
+                                vuTargetArr[a][0] = ad.vuL !== undefined ? ad.vuL : 0;
+                                vuTargetArr[a][1] = ad.vuR !== undefined ? ad.vuR : 0;
+                                peakTargetArr[a][0] = ad.peakL !== undefined ? ad.peakL : 0;
+                                peakTargetArr[a][1] = ad.peakR !== undefined ? ad.peakR : 0;
+                            }
+                        }
+                        // Per-ADC status badges and readouts
+                        if (data.adcStatus && Array.isArray(data.adcStatus)) {
+                            for (let a = 0; a < data.adcStatus.length && a < NUM_ADCS; a++) {
+                                updateAdcStatusBadge(a, data.adcStatus[a]);
+                            }
+                        }
+                        if (data.adc && Array.isArray(data.adc)) {
+                            for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
+                                const ad = data.adc[a];
+                                updateAdcReadout(a, ad.dBFS, ad.vrmsL, ad.vrmsR);
+                            }
+                        }
                         vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                         startVuAnimation();
                     }
                 } else if (data.type === 'audioWaveform') {
                     if (currentActiveTab === 'audio' && data.w) {
-                        waveformTarget = data.w;
-                        if (!waveformCurrent) waveformCurrent = data.w.slice();
-                        startAudioAnimation();
+                        const a = data.adc || 0;
+                        if (a < NUM_ADCS) {
+                            waveformTarget[a] = data.w;
+                            if (!waveformCurrent[a]) waveformCurrent[a] = data.w.slice();
+                            startAudioAnimation();
+                        }
                     }
                 } else if (data.type === 'audioSpectrum') {
                     if (currentActiveTab === 'audio' && data.bands) {
-                        for (let i = 0; i < data.bands.length && i < 16; i++) spectrumTarget[i] = data.bands[i];
-                        targetDominantFreq = data.freq || 0;
-                        startAudioAnimation();
+                        const a = data.adc || 0;
+                        if (a < NUM_ADCS) {
+                            for (let i = 0; i < data.bands.length && i < 16; i++) spectrumTarget[a][i] = data.bands[i];
+                            targetDominantFreq[a] = data.freq || 0;
+                            startAudioAnimation();
+                        }
+                    }
+                } else if (data.type === 'inputNames') {
+                    if (data.names && Array.isArray(data.names)) {
+                        for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
+                            inputNames[i] = data.names[i];
+                        }
+                        applyInputNames();
+                        loadInputNameFields();
                     }
                 } else if (data.type === 'audioGraphState') {
                     var vuT = document.getElementById('vuMeterEnabledToggle');
@@ -4148,6 +4436,77 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Audio Tab Functions =====
+        function updateAdc2Visibility() {
+            var show = numAdcsDetected > 1;
+            var ids = ['adcSection1', 'waveformPanel1', 'spectrumPanel1', 'inputNamesAdc1', 'siggenTargetAdcGroup'];
+            for (var i = 0; i < ids.length; i++) {
+                var el = document.getElementById(ids[i]);
+                if (el) el.style.display = show ? '' : 'none';
+            }
+            var grids = document.querySelectorAll('#audio .dual-canvas-grid');
+            for (var i = 0; i < grids.length; i++) {
+                grids[i].style.gridTemplateColumns = show ? '1fr 1fr' : '1fr';
+            }
+        }
+
+        function updateAdcStatusBadge(adcIdx, status) {
+            var el = document.getElementById('adcStatusBadge' + adcIdx);
+            if (!el) return;
+            el.textContent = status || 'OK';
+            el.className = 'adc-status-badge';
+            var s = (status || 'OK').toUpperCase();
+            if (s === 'OK') el.classList.add('ok');
+            else if (s === 'NO_DATA') el.classList.add('no-data');
+            else if (s === 'CLIPPING') el.classList.add('clipping');
+            else if (s === 'NOISE_ONLY') el.classList.add('noise-only');
+            else if (s === 'I2S_ERROR') el.classList.add('i2s-error');
+            else if (s === 'HW_FAULT') el.classList.add('hw-fault');
+            var clip = document.getElementById('clipIndicator' + adcIdx);
+            if (clip) {
+                if (s === 'CLIPPING' || s === 'HW_FAULT') clip.classList.add('active');
+                else clip.classList.remove('active');
+            }
+        }
+
+        function updateAdcReadout(adcIdx, dBFS, vrmsL, vrmsR) {
+            var el = document.getElementById('adcReadout' + adcIdx);
+            if (!el) return;
+            var dbStr = (dBFS !== undefined && dBFS > -95) ? dBFS.toFixed(1) + ' dBFS' : '-inf dBFS';
+            var vrms = 0;
+            if (vrmsL !== undefined && vrmsR !== undefined) vrms = Math.max(vrmsL, vrmsR);
+            else if (vrmsL !== undefined) vrms = vrmsL;
+            var vStr = vrms > 0.001 ? vrms.toFixed(3) + ' Vrms' : '-- Vrms';
+            el.textContent = dbStr + ' | ' + vStr;
+        }
+
+        function applyInputNames() {
+            for (var i = 0; i < NUM_ADCS * 2; i++) {
+                var el = document.getElementById('vuChName' + i);
+                if (el) el.textContent = inputNames[i] || ('Ch ' + (i + 1));
+                var segEl = document.getElementById('vuChNameSeg' + i);
+                if (segEl) segEl.textContent = inputNames[i] || ('Ch ' + (i + 1));
+            }
+        }
+
+        function loadInputNameFields() {
+            for (var i = 0; i < NUM_ADCS * 2; i++) {
+                var el = document.getElementById('inputName' + i);
+                if (el) el.value = inputNames[i] || '';
+            }
+        }
+
+        function saveInputNames() {
+            var names = [];
+            for (var i = 0; i < NUM_ADCS * 2; i++) {
+                var el = document.getElementById('inputName' + i);
+                names.push(el ? el.value : '');
+            }
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setInputNames', names: names }));
+                showToast('Input names saved', 'success');
+            }
+        }
+
         function toggleLedMode() {
             ledBarMode = document.getElementById('ledModeToggle').checked;
             localStorage.setItem('ledBarMode', ledBarMode.toString());
@@ -4178,35 +4537,38 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             audioAnimFrameId = null;
             let needsMore = false;
 
-            // Lerp waveform
-            if (waveformCurrent && waveformTarget) {
-                for (let i = 0; i < waveformCurrent.length && i < waveformTarget.length; i++) {
-                    const diff = waveformTarget[i] - waveformCurrent[i];
-                    if (Math.abs(diff) > 0.5) { waveformCurrent[i] += diff * LERP_SPEED; needsMore = true; }
-                    else waveformCurrent[i] = waveformTarget[i];
+            for (let a = 0; a < NUM_ADCS; a++) {
+                // Lerp waveform
+                if (waveformCurrent[a] && waveformTarget[a]) {
+                    for (let i = 0; i < waveformCurrent[a].length && i < waveformTarget[a].length; i++) {
+                        const diff = waveformTarget[a][i] - waveformCurrent[a][i];
+                        if (Math.abs(diff) > 0.5) { waveformCurrent[a][i] += diff * LERP_SPEED; needsMore = true; }
+                        else waveformCurrent[a][i] = waveformTarget[a][i];
+                    }
                 }
+
+                // Lerp spectrum
+                for (let i = 0; i < 16; i++) {
+                    const diff = spectrumTarget[a][i] - spectrumCurrent[a][i];
+                    if (Math.abs(diff) > 0.001) { spectrumCurrent[a][i] += diff * LERP_SPEED; needsMore = true; }
+                    else spectrumCurrent[a][i] = spectrumTarget[a][i];
+                }
+
+                // Lerp dominant freq
+                const fDiff = targetDominantFreq[a] - currentDominantFreq[a];
+                if (Math.abs(fDiff) > 1) { currentDominantFreq[a] += fDiff * LERP_SPEED; needsMore = true; }
+                else currentDominantFreq[a] = targetDominantFreq[a];
+
+                drawAudioWaveform(waveformCurrent[a], a);
+                drawSpectrumBars(spectrumCurrent[a], currentDominantFreq[a], a);
             }
-
-            // Lerp spectrum
-            for (let i = 0; i < 16; i++) {
-                const diff = spectrumTarget[i] - spectrumCurrent[i];
-                if (Math.abs(diff) > 0.001) { spectrumCurrent[i] += diff * LERP_SPEED; needsMore = true; }
-                else spectrumCurrent[i] = spectrumTarget[i];
-            }
-
-            // Lerp dominant freq
-            const fDiff = targetDominantFreq - currentDominantFreq;
-            if (Math.abs(fDiff) > 1) { currentDominantFreq += fDiff * LERP_SPEED; needsMore = true; }
-            else currentDominantFreq = targetDominantFreq;
-
-            drawAudioWaveform(waveformCurrent);
-            drawSpectrumBars(spectrumCurrent, currentDominantFreq);
 
             if (needsMore) audioAnimFrameId = requestAnimationFrame(audioAnimLoop);
         }
 
-        function drawAudioWaveform(data) {
-            const canvas = document.getElementById('audioWaveformCanvas');
+        function drawAudioWaveform(data, adcIndex) {
+            adcIndex = adcIndex || 0;
+            const canvas = document.getElementById('audioWaveformCanvas' + adcIndex);
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
@@ -4305,8 +4667,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ctx.restore();
         }
 
-        function drawSpectrumBars(bands, freq) {
-            const canvas = document.getElementById('audioSpectrumCanvas');
+        function drawSpectrumBars(bands, freq, adcIndex) {
+            adcIndex = adcIndex || 0;
+            const canvas = document.getElementById('audioSpectrumCanvas' + adcIndex);
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const rect = canvas.getBoundingClientRect();
@@ -4331,7 +4694,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ctx.fillRect(0, 0, w, h);
 
             // Update dominant frequency readout
-            const freqEl = document.getElementById('dominantFreq');
+            const freqEl = document.getElementById('dominantFreq' + adcIndex);
             if (freqEl) {
                 freqEl.textContent = freq > 0 ? freq.toFixed(0) + ' Hz' : '-- Hz';
             }
@@ -4411,17 +4774,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
 
                 // Peak hold indicator
-                if (val > spectrumPeaks[i]) {
-                    spectrumPeaks[i] = val;
-                    spectrumPeakTimes[i] = now;
+                if (val > spectrumPeaks[adcIndex][i]) {
+                    spectrumPeaks[adcIndex][i] = val;
+                    spectrumPeakTimes[adcIndex][i] = now;
                 }
-                const elapsed = now - spectrumPeakTimes[i];
+                const elapsed = now - spectrumPeakTimes[adcIndex][i];
                 if (elapsed > 1500) {
-                    spectrumPeaks[i] -= 0.002 * (elapsed - 1500) / 16.67;
-                    if (spectrumPeaks[i] < val) spectrumPeaks[i] = val;
+                    spectrumPeaks[adcIndex][i] -= 0.002 * (elapsed - 1500) / 16.67;
+                    if (spectrumPeaks[adcIndex][i] < val) spectrumPeaks[adcIndex][i] = val;
                 }
-                if (spectrumPeaks[i] > 0.01) {
-                    const peakY = plotY + plotH - spectrumPeaks[i] * plotH;
+                if (spectrumPeaks[adcIndex][i] > 0.01) {
+                    const peakY = plotY + plotH - spectrumPeaks[adcIndex][i] * plotH;
                     ctx.fillStyle = isNight ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.6)';
                     ctx.fillRect(x, peakY, barWidth, 2);
                 }
@@ -4448,14 +4811,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function vuAnimLoop() {
             vuAnimFrameId = null;
             let needsMore = false;
-            vuCurrentL += (vuTargetL - vuCurrentL) * VU_LERP;
-            vuCurrentR += (vuTargetR - vuCurrentR) * VU_LERP;
-            if (Math.abs(vuTargetL - vuCurrentL) > 0.001 || Math.abs(vuTargetR - vuCurrentR) > 0.001) needsMore = true;
-            peakCurrentL += (peakTargetL - peakCurrentL) * VU_LERP;
-            peakCurrentR += (peakTargetR - peakCurrentR) * VU_LERP;
-            if (Math.abs(peakTargetL - peakCurrentL) > 0.001 || Math.abs(peakTargetR - peakCurrentR) > 0.001) needsMore = true;
-
-            updateLevelMeters(vuCurrentL, vuCurrentR, peakCurrentL, peakCurrentR, vuDetected);
+            for (let a = 0; a < NUM_ADCS; a++) {
+                for (let ch = 0; ch < 2; ch++) {
+                    vuCurrent[a][ch] += (vuTargetArr[a][ch] - vuCurrent[a][ch]) * VU_LERP;
+                    if (Math.abs(vuTargetArr[a][ch] - vuCurrent[a][ch]) > 0.001) needsMore = true;
+                    peakCurrent[a][ch] += (peakTargetArr[a][ch] - peakCurrent[a][ch]) * VU_LERP;
+                    if (Math.abs(peakTargetArr[a][ch] - peakCurrent[a][ch]) > 0.001) needsMore = true;
+                }
+                updateLevelMeters(a, vuCurrent[a][0], vuCurrent[a][1], peakCurrent[a][0], peakCurrent[a][1]);
+            }
+            // Update signal detection indicator
+            const dot = document.getElementById('audioSignalDot');
+            const txt = document.getElementById('audioSignalText');
+            if (dot) dot.classList.toggle('active', vuDetected);
+            if (txt) txt.textContent = vuDetected ? 'Detected' : 'Not detected';
             if (needsMore) vuAnimFrameId = requestAnimationFrame(vuAnimLoop);
         }
 
@@ -4501,7 +4870,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
-        function updateLevelMeters(vuL, vuR, peakL, peakR, detected) {
+        function updateLevelMeters(adcIdx, vuL, vuR, peakL, peakR) {
             vuL = Math.min(Math.max(vuL, 0), 1);
             vuR = Math.min(Math.max(vuR, 0), 1);
             peakL = Math.min(Math.max(peakL, 0), 1);
@@ -4511,45 +4880,43 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 // Continuous dB-scaled bars
                 const pctL = linearToDbPercent(vuL);
                 const pctR = linearToDbPercent(vuR);
-                const fillL = document.getElementById('vuFillL');
-                const fillR = document.getElementById('vuFillR');
+                const fillL = document.getElementById('vuFill' + adcIdx + 'L');
+                const fillR = document.getElementById('vuFill' + adcIdx + 'R');
                 if (fillL) fillL.style.width = pctL + '%';
                 if (fillR) fillR.style.width = pctR + '%';
 
                 const pkPctL = linearToDbPercent(peakL);
                 const pkPctR = linearToDbPercent(peakR);
-                const pkL = document.getElementById('vuPeakL');
-                const pkR = document.getElementById('vuPeakR');
+                const pkL = document.getElementById('vuPeak' + adcIdx + 'L');
+                const pkR = document.getElementById('vuPeak' + adcIdx + 'R');
                 if (pkL) pkL.style.left = pkPctL + '%';
                 if (pkR) pkR.style.left = pkPctR + '%';
 
-                const dbL = document.getElementById('vuDbL');
-                const dbR = document.getElementById('vuDbR');
+                const dbL = document.getElementById('vuDb' + adcIdx + 'L');
+                const dbR = document.getElementById('vuDb' + adcIdx + 'R');
                 if (dbL) dbL.textContent = formatDbFS(vuL);
                 if (dbR) dbR.textContent = formatDbFS(vuR);
             } else {
                 // Segmented PPM canvas
-                drawPPM('ppmCanvasL', vuL, peakL);
-                drawPPM('ppmCanvasR', vuR, peakR);
+                drawPPM('ppmCanvas' + adcIdx + 'L', vuL, peakL);
+                drawPPM('ppmCanvas' + adcIdx + 'R', vuR, peakR);
 
-                const dbSegL = document.getElementById('vuDbSegL');
-                const dbSegR = document.getElementById('vuDbSegR');
+                const dbSegL = document.getElementById('vuDbSeg' + adcIdx + 'L');
+                const dbSegR = document.getElementById('vuDbSeg' + adcIdx + 'R');
                 if (dbSegL) dbSegL.textContent = formatDbFS(vuL);
                 if (dbSegR) dbSegR.textContent = formatDbFS(vuR);
             }
-
-            // Update signal detection indicator
-            const dot = document.getElementById('audioSignalDot');
-            const txt = document.getElementById('audioSignalText');
-            if (dot) dot.classList.toggle('active', detected);
-            if (txt) txt.textContent = detected ? 'Detected' : 'Not detected';
         }
 
         function toggleVuMode(seg) {
             vuSegmentedMode = seg;
             localStorage.setItem('vuSegmented', seg);
-            document.getElementById('vuContinuous').style.display = seg ? 'none' : '';
-            document.getElementById('vuSegmentedDiv').style.display = seg ? '' : 'none';
+            for (let a = 0; a < NUM_ADCS; a++) {
+                var cont = document.getElementById('vuContinuous' + a);
+                var segDiv = document.getElementById('vuSegmented' + a);
+                if (cont) cont.style.display = seg ? 'none' : '';
+                if (segDiv) segDiv.style.display = seg ? '' : 'none';
+            }
         }
 
         function updateAudioSettings() {
@@ -4584,7 +4951,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     amplitude: parseFloat(document.getElementById('siggenAmp').value),
                     channel: parseInt(document.getElementById('siggenChannel').value),
                     outputMode: mode,
-                    sweepSpeed: parseFloat(document.getElementById('siggenSweepSpeed').value)
+                    sweepSpeed: parseFloat(document.getElementById('siggenSweepSpeed').value),
+                    targetAdc: parseInt(document.getElementById('siggenTargetAdc').value)
                 }));
             }
         }
@@ -4609,6 +4977,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             document.getElementById('siggenChannel').value = d.channel;
             document.getElementById('siggenOutputMode').value = d.outputMode;
             document.getElementById('siggenSweepSpeed').value = d.sweepSpeed;
+            if (d.targetAdc !== undefined) document.getElementById('siggenTargetAdc').value = d.targetAdc;
             document.getElementById('siggenSweepGroup').style.display = d.waveform === 3 ? '' : 'none';
             document.getElementById('siggenPwmNote').style.display = d.outputMode === 1 ? '' : 'none';
         }
@@ -6342,6 +6711,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== Hardware Stats =====
         function updateHardwareStats(data) {
+            // Update ADC count from hardware_stats (fires on all tabs)
+            if (data.audio && data.audio.numAdcsDetected !== undefined) {
+                numAdcsDetected = data.audio.numAdcsDetected;
+                updateAdc2Visibility();
+            }
             // CPU Stats
             if (data.cpu) {
                 document.getElementById('cpuTotal').textContent = Math.round(data.cpu.usageTotal || 0) + '%';
@@ -6399,13 +6773,39 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('apClients').textContent = data.wifi.apClients || 0;
             }
             
-            // Audio ADC
+            // Audio ADC — per-ADC diagnostics from adcs array
             if (data.audio) {
-                document.getElementById('adcStatus').textContent = data.audio.adcStatus || '--';
-                document.getElementById('adcNoiseFloor').textContent = (data.audio.noiseFloorDbfs !== undefined ? data.audio.noiseFloorDbfs.toFixed(1) + ' dBFS' : '--');
-                document.getElementById('adcI2sErrors').textContent = data.audio.i2sErrors !== undefined ? data.audio.i2sErrors : '--';
-                document.getElementById('adcConsecutiveZeros').textContent = data.audio.consecutiveZeros !== undefined ? data.audio.consecutiveZeros : '--';
-                document.getElementById('adcTotalBuffers').textContent = data.audio.totalBuffers !== undefined ? data.audio.totalBuffers : '--';
+                if (data.audio.adcs && Array.isArray(data.audio.adcs)) {
+                    var adcs = data.audio.adcs;
+                    // Show ADC 0 in the existing fields (legacy)
+                    if (adcs.length > 0) {
+                        document.getElementById('adcStatus').textContent = adcs[0].status || '--';
+                        document.getElementById('adcNoiseFloor').textContent = adcs[0].noiseFloorDbfs !== undefined ? adcs[0].noiseFloorDbfs.toFixed(1) + ' dBFS' : '--';
+                        document.getElementById('adcI2sErrors').textContent = adcs[0].i2sErrors !== undefined ? adcs[0].i2sErrors : '--';
+                        document.getElementById('adcConsecutiveZeros').textContent = adcs[0].consecutiveZeros !== undefined ? adcs[0].consecutiveZeros : '--';
+                        document.getElementById('adcTotalBuffers').textContent = adcs[0].totalBuffers !== undefined ? adcs[0].totalBuffers : '--';
+                    }
+                    // Show ADC 1 fields if present
+                    var el2 = document.getElementById('adcStatus1');
+                    if (el2 && adcs.length > 1) {
+                        el2.textContent = adcs[1].status || '--';
+                        var nf2 = document.getElementById('adcNoiseFloor1');
+                        if (nf2) nf2.textContent = adcs[1].noiseFloorDbfs !== undefined ? adcs[1].noiseFloorDbfs.toFixed(1) + ' dBFS' : '--';
+                        var ie2 = document.getElementById('adcI2sErrors1');
+                        if (ie2) ie2.textContent = adcs[1].i2sErrors !== undefined ? adcs[1].i2sErrors : '--';
+                        var cz2 = document.getElementById('adcConsecutiveZeros1');
+                        if (cz2) cz2.textContent = adcs[1].consecutiveZeros !== undefined ? adcs[1].consecutiveZeros : '--';
+                        var tb2 = document.getElementById('adcTotalBuffers1');
+                        if (tb2) tb2.textContent = adcs[1].totalBuffers !== undefined ? adcs[1].totalBuffers : '--';
+                    }
+                } else {
+                    // Legacy flat format fallback
+                    document.getElementById('adcStatus').textContent = data.audio.adcStatus || '--';
+                    document.getElementById('adcNoiseFloor').textContent = (data.audio.noiseFloorDbfs !== undefined ? data.audio.noiseFloorDbfs.toFixed(1) + ' dBFS' : '--');
+                    document.getElementById('adcI2sErrors').textContent = data.audio.i2sErrors !== undefined ? data.audio.i2sErrors : '--';
+                    document.getElementById('adcConsecutiveZeros').textContent = data.audio.consecutiveZeros !== undefined ? data.audio.consecutiveZeros : '--';
+                    document.getElementById('adcTotalBuffers').textContent = data.audio.totalBuffers !== undefined ? data.audio.totalBuffers : '--';
+                }
                 document.getElementById('adcSampleRate').textContent = data.audio.sampleRate ? (data.audio.sampleRate / 1000).toFixed(1) + ' kHz' : '--';
             }
 
@@ -7022,6 +7422,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('vuSegmented').checked = true;
                 toggleVuMode(true);
             }
+
+            // Fetch input names
+            apiFetch('/api/inputnames')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.names && Array.isArray(d.names)) {
+                        for (var i = 0; i < d.names.length && i < NUM_ADCS * 2; i++) inputNames[i] = d.names[i];
+                        applyInputNames();
+                    }
+                })
+                .catch(function() {});
 
             // Initial status bar update
             updateStatusBar(false, null, false, false);

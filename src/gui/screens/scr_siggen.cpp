@@ -32,6 +32,13 @@ static const CycleOption output_opts[] = {
     {"PWM",      SIGOUT_PWM},
 };
 
+/* Target ADC cycle options */
+static const CycleOption target_adc_opts[] = {
+    {"Input 1", SIGTARGET_ADC1},
+    {"Input 2", SIGTARGET_ADC2},
+    {"Both",    SIGTARGET_BOTH},
+};
+
 /* Confirmation callbacks */
 static void on_enabled_confirm(int int_val, float, int) {
     AppState::getInstance().sigGenEnabled = (int_val != 0);
@@ -78,6 +85,14 @@ static void on_output_confirm(int int_val, float, int) {
     saveSignalGenSettings();
     AppState::getInstance().markSignalGenDirty();
     LOG_I("[GUI] Signal output set to %d", int_val);
+}
+
+static void on_target_adc_confirm(int int_val, float, int) {
+    AppState::getInstance().sigGenTargetAdc = int_val;
+    siggen_apply_params();
+    saveSignalGenSettings();
+    AppState::getInstance().markSignalGenDirty();
+    LOG_I("[GUI] Signal target ADC set to %d", int_val);
 }
 
 /* Menu action callbacks */
@@ -165,6 +180,22 @@ static void edit_output(void) {
     scr_value_edit_open(&cfg);
 }
 
+static void edit_target_adc(void) {
+    AppState &st = AppState::getInstance();
+    int cur = 0;
+    for (int i = 0; i < 3; i++) {
+        if (target_adc_opts[i].value == st.sigGenTargetAdc) { cur = i; break; }
+    }
+    ValueEditConfig cfg = {};
+    cfg.title = "Target";
+    cfg.type = VE_CYCLE;
+    cfg.options = target_adc_opts;
+    cfg.option_count = 3;
+    cfg.current_option = cur;
+    cfg.on_confirm = on_target_adc_confirm;
+    scr_value_edit_open(&cfg);
+}
+
 /* Build the signal generator menu */
 static MenuConfig siggen_menu;
 
@@ -188,15 +219,22 @@ static void build_siggen_menu(void) {
 
     const char *out_str = st.sigGenOutputMode == 0 ? "Software" : "PWM";
 
+    const char *target_names[] = {"Input 1", "Input 2", "Both"};
+    const char *target_str = target_names[st.sigGenTargetAdc % 3];
+
     siggen_menu.title = "Signal Gen";
-    siggen_menu.item_count = 7;
-    siggen_menu.items[0] = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
-    siggen_menu.items[1] = {"Enabled", en_str, nullptr, MENU_ACTION, edit_enabled};
-    siggen_menu.items[2] = {"Waveform", wave_str, nullptr, MENU_ACTION, edit_waveform};
-    siggen_menu.items[3] = {"Frequency", freq_str, nullptr, MENU_ACTION, edit_frequency};
-    siggen_menu.items[4] = {"Amplitude", amp_str, nullptr, MENU_ACTION, edit_amplitude};
-    siggen_menu.items[5] = {"Channel", chan_str, nullptr, MENU_ACTION, edit_channel};
-    siggen_menu.items[6] = {"Output", out_str, nullptr, MENU_ACTION, edit_output};
+    int idx = 0;
+    siggen_menu.items[idx++] = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
+    siggen_menu.items[idx++] = {"Enabled", en_str, nullptr, MENU_ACTION, edit_enabled};
+    siggen_menu.items[idx++] = {"Waveform", wave_str, nullptr, MENU_ACTION, edit_waveform};
+    siggen_menu.items[idx++] = {"Frequency", freq_str, nullptr, MENU_ACTION, edit_frequency};
+    siggen_menu.items[idx++] = {"Amplitude", amp_str, nullptr, MENU_ACTION, edit_amplitude};
+    siggen_menu.items[idx++] = {"Channel", chan_str, nullptr, MENU_ACTION, edit_channel};
+    siggen_menu.items[idx++] = {"Output", out_str, nullptr, MENU_ACTION, edit_output};
+    if (st.numAdcsDetected > 1) {
+        siggen_menu.items[idx++] = {"Target", target_str, nullptr, MENU_ACTION, edit_target_adc};
+    }
+    siggen_menu.item_count = idx;
 }
 
 lv_obj_t *scr_siggen_create(void) {
@@ -224,6 +262,11 @@ void scr_siggen_refresh(void) {
     scr_menu_set_item_value(5, chan_names[st.sigGenChannel % 3]);
 
     scr_menu_set_item_value(6, st.sigGenOutputMode == 0 ? "Software" : "PWM");
+
+    if (st.numAdcsDetected > 1) {
+        const char *target_names[] = {"Input 1", "Input 2", "Both"};
+        scr_menu_set_item_value(7, target_names[st.sigGenTargetAdc % 3]);
+    }
 }
 
 #endif /* GUI_ENABLED */

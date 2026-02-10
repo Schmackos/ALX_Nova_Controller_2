@@ -233,6 +233,11 @@ void setup() {
     LOG_I("[Main] No signal generator settings found, using defaults");
   }
 
+  // Load input channel names
+  if (!loadInputNames()) {
+    LOG_I("[Main] No input names found, using defaults");
+  }
+
   // Initialize Signal Generator PWM
   siggen_init();
 
@@ -461,6 +466,8 @@ void setup() {
     doc["channel"] = chanNames[appState.sigGenChannel % 3];
     doc["outputMode"] = appState.sigGenOutputMode == 0 ? "software" : "pwm";
     doc["sweepSpeed"] = appState.sigGenSweepSpeed;
+    const char *targetNames[] = {"input1", "input2", "both"};
+    doc["targetAdc"] = targetNames[appState.sigGenTargetAdc % 3];
     String json;
     serializeJson(doc, json);
     server.send(200, "application/json", json);
@@ -517,6 +524,13 @@ void setup() {
       float s = doc["sweepSpeed"].as<float>();
       if (s >= 1.0f && s <= 22000.0f) { appState.sigGenSweepSpeed = s; changed = true; }
     }
+    if (doc["targetAdc"].is<String>()) {
+      String t = doc["targetAdc"].as<String>();
+      if (t == "input1") appState.sigGenTargetAdc = 0;
+      else if (t == "input2") appState.sigGenTargetAdc = 1;
+      else if (t == "both") appState.sigGenTargetAdc = 2;
+      changed = true;
+    }
     if (changed) {
       siggen_apply_params();
       saveSignalGenSettings();
@@ -524,6 +538,46 @@ void setup() {
     }
     server.send(200, "application/json", "{\"success\":true}");
   });
+  // Input Names API
+  server.on("/api/inputnames", HTTP_GET, []() {
+    if (!requireAuth())
+      return;
+    JsonDocument doc;
+    doc["success"] = true;
+    JsonArray names = doc["names"].to<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+      names.add(appState.inputNames[i]);
+    }
+    doc["numAdcsDetected"] = appState.numAdcsDetected;
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+  });
+  server.on("/api/inputnames", HTTP_POST, []() {
+    if (!requireAuth())
+      return;
+    if (!server.hasArg("plain")) {
+      server.send(400, "application/json",
+                  "{\"success\":false,\"message\":\"No data\"}");
+      return;
+    }
+    JsonDocument doc;
+    if (deserializeJson(doc, server.arg("plain"))) {
+      server.send(400, "application/json",
+                  "{\"success\":false,\"message\":\"Invalid JSON\"}");
+      return;
+    }
+    if (doc["names"].is<JsonArray>()) {
+      JsonArray names = doc["names"].as<JsonArray>();
+      for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+        String name = names[i].as<String>();
+        if (name.length() > 0) appState.inputNames[i] = name;
+      }
+      saveInputNames();
+    }
+    server.send(200, "application/json", "{\"success\":true}");
+  });
+
   // Note: Certificate API routes removed - now using Mozilla certificate bundle
 
   // Initialize CPU usage monitoring
@@ -556,7 +610,7 @@ void setup() {
 void loop() {
   // Small delay to reduce CPU usage - allows other tasks to run
   // Without this, the loop runs as fast as possible (~49% CPU)
-  delay(10);
+  delay(5);
 
   server.handleClient();
   if (appState.isAPMode) {
@@ -565,7 +619,13 @@ void loop() {
   webSocket.loop();
   mqttLoop();
   updateWiFiConnection();
-  checkWiFiConnection(); // Monitor WiFi and auto-reconnect if disconnected
+
+  // Monitor WiFi and auto-reconnect (throttled to every 5 seconds)
+  static unsigned long lastWiFiCheck = 0;
+  if (millis() - lastWiFiCheck >= 5000) {
+    lastWiFiCheck = millis();
+    checkWiFiConnection();
+  }
 
   // Check WebSocket auth timeouts
   for (int i = 0; i < MAX_WS_CLIENTS; i++) {
@@ -679,65 +739,48 @@ void loop() {
     }
   }
 
-  // Periodic firmware check (every 5 minutes) - runs regardless of auto-update
-  // setting
+  // Periodic firmware check (every 5 minutes) - non-blocking via FreeRTOS task
   if (!appState.isAPMode && WiFi.status() == WL_CONNECTED &&
-      !appState.otaInProgress) {
+      !appState.otaInProgress && !isOTATaskRunning()) {
     unsigned long currentMillis = millis();
     if (currentMillis - appState.lastOTACheck >= OTA_CHECK_INTERVAL ||
         appState.lastOTACheck == 0) {
       appState.lastOTACheck = currentMillis;
-      checkForFirmwareUpdate();
+      startOTACheckTask();
     }
   }
 
   // Auto-update logic (runs on every periodic check when update is available)
   // Will retry on next periodic check (5 min) if amplifier is in use
   if (appState.autoUpdateEnabled && appState.updateAvailable &&
-      !appState.otaInProgress && appState.updateDiscoveredTime > 0) {
+      !appState.otaInProgress && !isOTATaskRunning() &&
+      appState.updateDiscoveredTime > 0) {
     if (appState.amplifierState) {
       // Amplifier is ON - skip this check, will retry on next periodic check
       // Reset updateDiscoveredTime so countdown restarts when amp turns off
       LOG_W("[OTA] Auto-update skipped: amplifier is in use, will retry on next check");
       appState.updateDiscoveredTime = 0;
-      broadcastUpdateStatus();
+      appState.markOTADirty();
     } else {
       // Amplifier is OFF - safe to proceed with countdown
       unsigned long elapsed = millis() - appState.updateDiscoveredTime;
 
-      // Broadcast countdown every second
+      // Broadcast countdown every second via dirty flag
       static unsigned long lastCountdownBroadcast = 0;
       if (millis() - lastCountdownBroadcast >= 1000) {
         lastCountdownBroadcast = millis();
-        broadcastUpdateStatus();
+        appState.markOTADirty();
       }
 
       if (elapsed >= AUTO_UPDATE_COUNTDOWN) {
         // Double-check amplifier state before starting update
         if (appState.amplifierState) {
           LOG_W("[OTA] Auto-update cancelled: amplifier turned on during countdown, will retry on next check");
-          appState.updateDiscoveredTime =
-              0; // Reset to retry on next periodic check
-          broadcastUpdateStatus();
+          appState.updateDiscoveredTime = 0;
+          appState.markOTADirty();
         } else {
           LOG_I("[OTA] Auto-update starting (amplifier is off)");
-          appState.otaStatus = "downloading";
-          appState.otaProgress = 0;
-          appState.setFSMState(STATE_OTA_UPDATE);
-
-          if (performOTAUpdate(appState.cachedFirmwareUrl)) {
-            LOG_I("[OTA] Update successful, rebooting");
-            saveOTASuccessFlag(firmwareVer); // Save current version as
-                                             // "previous" before reboot
-            delay(2000);
-            ESP.restart();
-          } else {
-            LOG_W("[OTA] Update failed, will retry on next check");
-            appState.otaInProgress = false;
-            appState.updateDiscoveredTime =
-                0; // Reset to retry on next periodic check
-            appState.setFSMState(STATE_IDLE);
-          }
+          startOTADownloadTask();
         }
       }
     }
@@ -745,6 +788,13 @@ void loop() {
 
   // Smart Sensing logic update
   updateSmartSensingLogic();
+
+  // Broadcast OTA status changes (OTA task -> WS clients)
+  if (appState.isOTADirty()) {
+    broadcastUpdateStatus();
+    sendWiFiStatus();
+    appState.clearOTADirty();
+  }
 
   // Broadcast display state changes (GUI auto-sleep/wake -> WS clients + MQTT)
   if (appState.isDisplayDirty()) {

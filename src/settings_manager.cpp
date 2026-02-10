@@ -262,6 +262,7 @@ bool loadSignalGenSettings() {
   String line4 = file.readStringUntil('\n'); // channel
   String line5 = file.readStringUntil('\n'); // outputMode
   String line6 = file.readStringUntil('\n'); // sweepSpeed
+  String line7 = file.readStringUntil('\n'); // targetAdc (added for dual ADC)
   file.close();
 
   line1.trim();
@@ -270,6 +271,7 @@ bool loadSignalGenSettings() {
   line4.trim();
   line5.trim();
   line6.trim();
+  line7.trim();
 
   if (line1.length() > 0) {
     int wf = line1.toInt();
@@ -295,6 +297,10 @@ bool loadSignalGenSettings() {
     float speed = line6.toFloat();
     if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
   }
+  if (line7.length() > 0) {
+    int target = line7.toInt();
+    if (target >= 0 && target <= 2) appState.sigGenTargetAdc = target;
+  }
 
   // Always boot disabled regardless of saved state
   appState.sigGenEnabled = false;
@@ -316,8 +322,51 @@ void saveSignalGenSettings() {
   file.println(appState.sigGenChannel);
   file.println(appState.sigGenOutputMode);
   file.println(String(appState.sigGenSweepSpeed, 1));
+  file.println(appState.sigGenTargetAdc);
   file.close();
   LOG_I("[Settings] Signal generator settings saved");
+}
+
+// ===== Input Names Settings =====
+
+static const char *INPUT_NAME_DEFAULTS[] = {"Subwoofer 1", "Subwoofer 2",
+                                             "Subwoofer 3", "Subwoofer 4"};
+
+bool loadInputNames() {
+  File file = LittleFS.open("/inputnames.txt", "r", true);
+  if (!file || file.size() == 0) {
+    if (file)
+      file.close();
+    // Set defaults
+    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+      appState.inputNames[i] = INPUT_NAME_DEFAULTS[i];
+    }
+    return false;
+  }
+
+  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    String line = file.readStringUntil('\n');
+    line.trim();
+    appState.inputNames[i] =
+        (line.length() > 0) ? line : String(INPUT_NAME_DEFAULTS[i]);
+  }
+  file.close();
+  LOG_I("[Settings] Input names loaded");
+  return true;
+}
+
+void saveInputNames() {
+  File file = LittleFS.open("/inputnames.txt", "w");
+  if (!file) {
+    LOG_E("[Settings] Failed to open input names file for writing");
+    return;
+  }
+
+  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    file.println(appState.inputNames[i]);
+  }
+  file.close();
+  LOG_I("[Settings] Input names saved");
 }
 
 // ===== Factory Reset =====
@@ -733,6 +782,13 @@ void handleSettingsExport() {
   doc["signalGenerator"]["channel"] = appState.sigGenChannel;
   doc["signalGenerator"]["outputMode"] = appState.sigGenOutputMode;
   doc["signalGenerator"]["sweepSpeed"] = appState.sigGenSweepSpeed;
+  doc["signalGenerator"]["targetAdc"] = appState.sigGenTargetAdc;
+
+  // Input channel names
+  JsonArray names = doc["inputNames"].to<JsonArray>();
+  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    names.add(appState.inputNames[i]);
+  }
 
   // MQTT settings (password excluded for security)
   doc["mqtt"]["enabled"] = mqttEnabled;
@@ -1049,8 +1105,22 @@ void handleSettingsImport() {
       float speed = doc["signalGenerator"]["sweepSpeed"].as<float>();
       if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
     }
+    if (doc["signalGenerator"]["targetAdc"].is<int>()) {
+      int target = doc["signalGenerator"]["targetAdc"].as<int>();
+      if (target >= 0 && target <= 2) appState.sigGenTargetAdc = target;
+    }
     appState.sigGenEnabled = false; // Always boot disabled
     saveSignalGenSettings();
+  }
+
+  // Import input channel names
+  if (!doc["inputNames"].isNull() && doc["inputNames"].is<JsonArray>()) {
+    JsonArray names = doc["inputNames"].as<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+      String name = names[i].as<String>();
+      if (name.length() > 0) appState.inputNames[i] = name;
+    }
+    saveInputNames();
   }
 
   // Note: Certificate import removed - now using Mozilla certificate bundle
@@ -1206,25 +1276,40 @@ void handleDiagnostics() {
 
   // ===== Audio ADC Diagnostics =====
   {
-    JsonObject audioAdc = doc["audioAdc"].to<JsonObject>();
-    const char *statusStr = "OK";
-    switch (appState.audioHealthStatus) {
-      case 1: statusStr = "NO_DATA"; break;
-      case 2: statusStr = "NOISE_ONLY"; break;
-      case 3: statusStr = "CLIPPING"; break;
-      case 4: statusStr = "I2S_ERROR"; break;
+    JsonObject audioAdcObj = doc["audioAdc"].to<JsonObject>();
+    audioAdcObj["numAdcsDetected"] = appState.numAdcsDetected;
+    audioAdcObj["sampleRate"] = appState.audioSampleRate;
+    audioAdcObj["adcVref"] = appState.adcVref;
+    JsonArray adcArr = audioAdcObj["adcs"].to<JsonArray>();
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      JsonObject adcObj = adcArr.add<JsonObject>();
+      const AppState::AdcState &adc = appState.audioAdc[a];
+      const char *statusStr = "OK";
+      switch (adc.healthStatus) {
+        case 1: statusStr = "NO_DATA"; break;
+        case 2: statusStr = "NOISE_ONLY"; break;
+        case 3: statusStr = "CLIPPING"; break;
+        case 4: statusStr = "I2S_ERROR"; break;
+        case 5: statusStr = "HW_FAULT"; break;
+      }
+      adcObj["index"] = a;
+      adcObj["healthStatus"] = statusStr;
+      adcObj["noiseFloorDbfs"] = adc.noiseFloorDbfs;
+      adcObj["i2sReadErrors"] = adc.i2sErrors;
+      adcObj["allZeroBuffers"] = adc.allZeroBuffers;
+      adcObj["consecutiveZeros"] = adc.consecutiveZeros;
+      adcObj["clippedSamples"] = adc.clippedSamples;
+      adcObj["clipRate"] = adc.clipRate;
+      adcObj["lastNonZeroMs"] = adc.lastNonZeroMs;
+      adcObj["totalBuffersRead"] = adc.totalBuffers;
+      adcObj["vrms"] = adc.vrmsCombined;
+      adcObj["dcOffset"] = adc.dcOffset;
     }
-    audioAdc["healthStatus"] = statusStr;
-    audioAdc["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
-    audioAdc["i2sReadErrors"] = appState.audioI2sErrors;
-    audioAdc["allZeroBuffers"] = appState.audioAllZeroBuffers;
-    audioAdc["consecutiveZeros"] = appState.audioConsecutiveZeros;
-    audioAdc["clippedSamples"] = appState.audioClippedSamples;
-    audioAdc["lastNonZeroMs"] = appState.audioLastNonZeroMs;
-    audioAdc["totalBuffersRead"] = appState.audioTotalBuffers;
-    audioAdc["sampleRate"] = appState.audioSampleRate;
-    audioAdc["vrms"] = appState.audioVrmsCombined;
-    audioAdc["adcVref"] = appState.adcVref;
+    // Input names
+    JsonArray names = audioAdcObj["inputNames"].to<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+      names.add(appState.inputNames[i]);
+    }
   }
 
   // ===== MQTT Settings (password excluded) =====

@@ -108,34 +108,59 @@ public:
   float audioLevel_dBFS = -96.0f;
   bool previousSignalState = false;
 
-  // Audio analysis fields (updated by I2S audio task)
-  float audioRmsLeft = 0.0f;
-  float audioRmsRight = 0.0f;
-  float audioRmsCombined = 0.0f;
-  float audioVuLeft = 0.0f;       // VU-smoothed (300ms attack, 650ms decay)
-  float audioVuRight = 0.0f;
-  float audioVuCombined = 0.0f;
-  float audioPeakLeft = 0.0f;     // Peak hold (instant attack, 2s hold, 300ms decay)
-  float audioPeakRight = 0.0f;
-  float audioPeakCombined = 0.0f;
-  float audioVrmsLeft = 0.0f;     // Input voltage Vrms (RMS * VREF)
-  float audioVrmsRight = 0.0f;
-  float audioVrmsCombined = 0.0f;
+  // ===== Per-ADC Audio State =====
+  struct AdcState {
+    float rmsLeft = 0.0f, rmsRight = 0.0f, rmsCombined = 0.0f;
+    float vuLeft = 0.0f, vuRight = 0.0f, vuCombined = 0.0f;
+    float peakLeft = 0.0f, peakRight = 0.0f, peakCombined = 0.0f;
+    float vrmsLeft = 0.0f, vrmsRight = 0.0f, vrmsCombined = 0.0f;
+    float dBFS = -96.0f;
+    // Diagnostics
+    uint8_t healthStatus = 0;      // AudioHealthStatus enum value
+    uint32_t i2sErrors = 0;
+    uint32_t allZeroBuffers = 0;
+    uint32_t consecutiveZeros = 0;
+    float noiseFloorDbfs = -96.0f;
+    float dcOffset = 0.0f;
+    unsigned long lastNonZeroMs = 0;
+    uint32_t totalBuffers = 0;
+    uint32_t clippedSamples = 0;
+    float clipRate = 0.0f;           // EMA clip rate (0.0-1.0)
+  };
+  AdcState audioAdc[NUM_AUDIO_ADCS];
+  int numAdcsDetected = 1; // How many ADCs are currently producing data
+
+  // Legacy flat accessors (convenience aliases for audioAdc[0], used by existing WS/MQTT code)
+  float &audioRmsLeft = audioAdc[0].rmsLeft;
+  float &audioRmsRight = audioAdc[0].rmsRight;
+  float &audioRmsCombined = audioAdc[0].rmsCombined;
+  float &audioVuLeft = audioAdc[0].vuLeft;
+  float &audioVuRight = audioAdc[0].vuRight;
+  float &audioVuCombined = audioAdc[0].vuCombined;
+  float &audioPeakLeft = audioAdc[0].peakLeft;
+  float &audioPeakRight = audioAdc[0].peakRight;
+  float &audioPeakCombined = audioAdc[0].peakCombined;
+  float &audioVrmsLeft = audioAdc[0].vrmsLeft;
+  float &audioVrmsRight = audioAdc[0].vrmsRight;
+  float &audioVrmsCombined = audioAdc[0].vrmsCombined;
+  uint8_t &audioHealthStatus = audioAdc[0].healthStatus;
+  uint32_t &audioI2sErrors = audioAdc[0].i2sErrors;
+  uint32_t &audioAllZeroBuffers = audioAdc[0].allZeroBuffers;
+  uint32_t &audioConsecutiveZeros = audioAdc[0].consecutiveZeros;
+  float &audioNoiseFloorDbfs = audioAdc[0].noiseFloorDbfs;
+  unsigned long &audioLastNonZeroMs = audioAdc[0].lastNonZeroMs;
+  uint32_t &audioTotalBuffers = audioAdc[0].totalBuffers;
+  uint32_t &audioClippedSamples = audioAdc[0].clippedSamples;
+  float &audioClipRate = audioAdc[0].clipRate;
+  float &audioDcOffset = audioAdc[0].dcOffset;
+
   float audioDominantFreq = 0.0f;
   float audioSpectrumBands[16] = {};
   uint32_t audioSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
   float adcVref = DEFAULT_ADC_VREF; // ADC reference voltage (1.0-5.0V)
 
-  // Audio ADC diagnostics (updated from I2S diagnostics)
-  uint8_t audioHealthStatus = 0;         // AudioHealthStatus enum value
-  uint32_t audioI2sErrors = 0;
-  uint32_t audioAllZeroBuffers = 0;
-  uint32_t audioConsecutiveZeros = 0;
-  float audioNoiseFloorDbfs = -96.0f;
-  unsigned long audioLastNonZeroMs = 0;
-  uint32_t audioTotalBuffers = 0;
-  uint32_t audioClippedSamples = 0;
-  float audioDcOffset = 0.0f;
+  // Input channel names (user-configurable, 4 channels = 2 ADCs x 2 channels)
+  String inputNames[NUM_AUDIO_ADCS * 2];
 
   void setAmplifierState(bool state);
   void setSensingMode(SensingMode mode);
@@ -235,6 +260,11 @@ public:
   void clearSettingsDirty() { _settingsDirty = false; }
   void markSettingsDirty() { _settingsDirty = true; }
 
+  // ===== OTA Dirty Flag (for OTA task -> main loop WS broadcast) =====
+  bool isOTADirty() const { return _otaDirty; }
+  void clearOTADirty() { _otaDirty = false; }
+  void markOTADirty() { _otaDirty = true; }
+
   // ===== Signal Generator State =====
   bool sigGenEnabled = false;           // Always boots false
   int sigGenWaveform = 0;               // 0=sine, 1=square, 2=noise, 3=sweep
@@ -243,6 +273,7 @@ public:
   int sigGenChannel = 2;                // 0=L, 1=R, 2=Both
   int sigGenOutputMode = 0;             // 0=software, 1=PWM
   float sigGenSweepSpeed = 1000.0f;     // Hz per second
+  int sigGenTargetAdc = 2;              // 0=Input 1, 1=Input 2, 2=Both
 
   void setSignalGenEnabled(bool enabled);
   void markSignalGenDirty() { _sigGenDirty = true; }
@@ -300,6 +331,7 @@ private:
   bool _buzzerDirty = false;
   bool _settingsDirty = false;
   bool _sigGenDirty = false;
+  bool _otaDirty = false;
 };
 
 // Convenience macro for accessing AppState

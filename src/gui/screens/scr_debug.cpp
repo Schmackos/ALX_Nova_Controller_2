@@ -18,7 +18,7 @@ static lv_obj_t *lbl_cpu = nullptr;
 static lv_obj_t *lbl_storage = nullptr;
 static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
-static lv_obj_t *lbl_audio_adc = nullptr;
+static lv_obj_t *lbl_audio_adc[NUM_AUDIO_ADCS] = {nullptr, nullptr};
 static lv_obj_t *lbl_pins = nullptr;
 static lv_obj_t *lbl_sort_mode = nullptr;
 
@@ -208,29 +208,23 @@ void scr_debug_refresh(void) {
     snprintf(buf, sizeof(buf), "Up: %s\nFW: %s", uptime_str, FIRMWARE_VERSION);
     lv_label_set_text(lbl_system, buf);
 
-    /* Audio ADC */
-    if (lbl_audio_adc) {
-        const char *statusStr = "OK";
-        switch (appState.audioHealthStatus) {
-            case 0: statusStr = "OK"; break;
-            case 1: statusStr = "NO DATA"; break;
-            case 2: statusStr = "NOISE ONLY"; break;
-            case 3: statusStr = "CLIPPING"; break;
-            case 4: statusStr = "I2S ERROR"; break;
+    /* Audio ADC — per-ADC diagnostics (always show both) */
+    {
+        static const char *status_names[] = {"OK", "NO DATA", "NOISE", "CLIP", "I2S ERR", "HW FAULT"};
+        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+            if (!lbl_audio_adc[a]) continue;
+            const AppState::AdcState &adc = appState.audioAdc[a];
+            const char *st2 = status_names[adc.healthStatus < 6 ? adc.healthStatus : 0];
+            unsigned long age = 0;
+            if (adc.lastNonZeroMs > 0) age = (millis() - adc.lastNonZeroMs) / 1000;
+            snprintf(buf, sizeof(buf), "Input %d\n%s %.0fdB\n%.3fV\nFl:%.0f\nCl:%lu E:%lu\n%lus",
+                     a + 1, st2, adc.dBFS,
+                     (adc.vrmsLeft > adc.vrmsRight) ? adc.vrmsLeft : adc.vrmsRight,
+                     adc.noiseFloorDbfs,
+                     (unsigned long)adc.clippedSamples,
+                     (unsigned long)adc.i2sErrors, age);
+            lv_label_set_text(lbl_audio_adc[a], buf);
         }
-        unsigned long age = 0;
-        if (appState.audioLastNonZeroMs > 0) {
-            age = (millis() - appState.audioLastNonZeroMs) / 1000;
-        }
-        snprintf(buf, sizeof(buf), "%s  %.0fdBFS  %.3fV\nFloor:%.0f  DC:%.3f\nClip:%lu Err:%lu Bufs:%lu %lus",
-                 statusStr, appState.audioLevel_dBFS,
-                 appState.audioVrmsCombined,
-                 appState.audioNoiseFloorDbfs,
-                 appState.audioDcOffset,
-                 (unsigned long)appState.audioClippedSamples,
-                 (unsigned long)appState.audioI2sErrors,
-                 (unsigned long)appState.audioTotalBuffers, age);
-        lv_label_set_text(lbl_audio_adc, buf);
     }
 }
 
@@ -257,7 +251,8 @@ lv_obj_t *scr_debug_create(void) {
     lbl_storage = nullptr;
     lbl_network = nullptr;
     lbl_system = nullptr;
-    lbl_audio_adc = nullptr;
+    lbl_audio_adc[0] = nullptr;
+    lbl_audio_adc[1] = nullptr;
     lbl_pins = nullptr;
     lbl_sort_mode = nullptr;
 
@@ -292,7 +287,31 @@ lv_obj_t *scr_debug_create(void) {
     lbl_network = add_section(cont, "Network");
     lbl_system  = add_section(cont, "System");
 
-    lbl_audio_adc = add_section(cont, "Audio ADC");
+    /* Audio ADC — 2-column side-by-side layout */
+    {
+        lv_obj_t *adc_hdr = lv_label_create(cont);
+        lv_label_set_text(adc_hdr, "Audio ADC");
+        lv_obj_set_style_text_color(adc_hdr, COLOR_PRIMARY, LV_PART_MAIN);
+        lv_obj_set_style_text_font(adc_hdr, &lv_font_montserrat_12, LV_PART_MAIN);
+
+        lv_obj_t *adc_row = lv_obj_create(cont);
+        lv_obj_set_size(adc_row, LV_PCT(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(adc_row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(adc_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+        lv_obj_set_style_pad_all(adc_row, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_column(adc_row, 4, LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(adc_row, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_border_width(adc_row, 0, LV_PART_MAIN);
+        lv_obj_clear_flag(adc_row, LV_OBJ_FLAG_SCROLLABLE);
+
+        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+            lbl_audio_adc[a] = lv_label_create(adc_row);
+            lv_label_set_text(lbl_audio_adc[a], "...");
+            lv_obj_add_style(lbl_audio_adc[a], gui_style_dim(), LV_PART_MAIN);
+            lv_obj_set_flex_grow(lbl_audio_adc[a], 1);
+            lv_label_set_long_mode(lbl_audio_adc[a], LV_LABEL_LONG_WRAP);
+        }
+    }
 
     /* GPIO Pins — sortable section */
     {

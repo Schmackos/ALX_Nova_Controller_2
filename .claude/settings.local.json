@@ -79,7 +79,8 @@
       "Skill(git-commit-helper)",
       "Bash(git merge:*)",
       "WebFetch(domain:abarrafato.medium.com)",
-      "WebFetch(domain:audiomotion.dev)"
+      "WebFetch(domain:audiomotion.dev)",
+      "Bash(nm:*)"
     ]
   }
 }

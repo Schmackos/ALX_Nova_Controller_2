@@ -14,10 +14,14 @@
 #endif
 
 // ===== Constants =====
-static const int I2S_PORT = 1; // I2S_NUM_1
 static const int DMA_BUF_COUNT = 4;
 static const int DMA_BUF_LEN = 256;
 static const float DBFS_FLOOR = -96.0f;
+
+// ===== Clip Rate EMA Constants =====
+static const float CLIP_RATE_ALPHA = 0.1f;      // EMA smoothing factor
+static const float CLIP_RATE_HW_FAULT = 0.3f;   // >30% clipping = hardware fault
+static const float CLIP_RATE_CLIPPING = 0.001f;  // >0.1% clipping = signal too hot
 
 // ===== Shared state (written by I2S task, read by main loop) =====
 static volatile AudioAnalysis _analysis = {};
@@ -195,298 +199,386 @@ void audio_aggregate_fft_bands(const float *magnitudes, int fft_size,
 }
 
 // ===== Health status derivation (pure, testable) =====
-AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag) {
+AudioHealthStatus audio_derive_health_status(const AdcDiagnostics &diag) {
     // I2S bus errors take highest priority
     if (diag.i2sReadErrors > 10) return AUDIO_I2S_ERROR;
     // ADC not sending any data
     if (diag.consecutiveZeros > 100) return AUDIO_NO_DATA;
-    // Clipping (only flag when siggen is off — siggen can intentionally clip)
-    if (diag.clippedSamples > 0 && !diag.sigGenActive) return AUDIO_CLIPPING;
+    // Hardware fault: sustained high clip rate (>30%) = power loss / floating pins
+    if (diag.clipRate > CLIP_RATE_HW_FAULT) return AUDIO_HW_FAULT;
+    // Signal clipping: occasional clips (recoverable via EMA decay)
+    if (diag.clipRate > CLIP_RATE_CLIPPING) return AUDIO_CLIPPING;
     // Thermal noise only (no meaningful audio)
     if (diag.noiseFloorDbfs < -75.0f && diag.noiseFloorDbfs > -96.0f) return AUDIO_NOISE_ONLY;
     return AUDIO_OK;
 }
 
+// Legacy overload for backward compatibility
+AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag) {
+    AdcDiagnostics masked = diag.adc[0];
+    if (diag.sigGenActive) masked.clipRate = 0.0f; // Mask siggen-induced clipping
+    return audio_derive_health_status(masked);
+}
+
 // ===== Hardware-dependent code (ESP32 only) =====
 #ifndef NATIVE_TEST
 
+static const int I2S_PORT_MASTER = 1; // I2S_NUM_1 — master RX (ADC1)
+static const int I2S_PORT_SLAVE = 0;  // I2S_NUM_0 — slave RX (ADC2)
+
 static uint32_t _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
+static int _numAdcsDetected = 1;
+static bool _adc2InitOk = false;
 
-// Waveform accumulation state (written by capture task only)
+// Per-ADC state arrays
 static const float MAX_24BIT_F = 8388607.0f;
-static float _wfAccum[WAVEFORM_BUFFER_SIZE];
-static uint8_t _wfOutput[WAVEFORM_BUFFER_SIZE];
-static volatile bool _wfReady = false;
-static int _wfFramesSeen = 0;
-static int _wfTargetFrames = 2400; // recalculated from audioUpdateRate
 
-// FFT state (written by capture task only)
+// VU meter state per ADC
+static float _vuL[NUM_AUDIO_ADCS] = {};
+static float _vuR[NUM_AUDIO_ADCS] = {};
+static float _vuC[NUM_AUDIO_ADCS] = {};
+
+// Peak hold state per ADC
+static float _peakL[NUM_AUDIO_ADCS] = {};
+static float _peakR[NUM_AUDIO_ADCS] = {};
+static float _peakC[NUM_AUDIO_ADCS] = {};
+static unsigned long _holdStartL[NUM_AUDIO_ADCS] = {};
+static unsigned long _holdStartR[NUM_AUDIO_ADCS] = {};
+static unsigned long _holdStartC[NUM_AUDIO_ADCS] = {};
+
+// DC-blocking IIR filter state per ADC
+static int32_t _dcPrevInL[NUM_AUDIO_ADCS] = {};
+static int32_t _dcPrevInR[NUM_AUDIO_ADCS] = {};
+static float _dcPrevOutL[NUM_AUDIO_ADCS] = {};
+static float _dcPrevOutR[NUM_AUDIO_ADCS] = {};
+
+// Waveform accumulation state per ADC
+static float _wfAccum[NUM_AUDIO_ADCS][WAVEFORM_BUFFER_SIZE];
+static uint8_t _wfOutput[NUM_AUDIO_ADCS][WAVEFORM_BUFFER_SIZE];
+static volatile bool _wfReady[NUM_AUDIO_ADCS] = {};
+static int _wfFramesSeen[NUM_AUDIO_ADCS] = {};
+static int _wfTargetFrames = 2400; // shared, recalculated from audioUpdateRate
+
+// FFT state per ADC
 static ArduinoFFT<float> _fft;
-static float _fftRing[FFT_SIZE];           // Ring buffer of mono samples
-static int _fftRingPos = 0;
-static float _fftReal[FFT_SIZE];           // FFT working buffers
+static float _fftRing[NUM_AUDIO_ADCS][FFT_SIZE];
+static int _fftRingPos[NUM_AUDIO_ADCS] = {};
+static float _fftReal[FFT_SIZE]; // Shared working buffer (used sequentially)
 static float _fftImag[FFT_SIZE];
-static float _spectrumOutput[SPECTRUM_BANDS];
-static float _dominantFreqOutput = 0.0f;
-static volatile bool _spectrumReady = false;
-static unsigned long _lastFftTime = 0;
+static float _spectrumOutput[NUM_AUDIO_ADCS][SPECTRUM_BANDS];
+static float _dominantFreqOutput[NUM_AUDIO_ADCS] = {};
+static volatile bool _spectrumReady[NUM_AUDIO_ADCS] = {};
+static unsigned long _lastFftTime[NUM_AUDIO_ADCS] = {};
 
-static void i2s_configure(uint32_t sample_rate) {
-    i2s_config_t i2s_config = {};
-    i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
-    i2s_config.sample_rate = sample_rate;
-    i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
-    i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    i2s_config.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-    i2s_config.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-    i2s_config.dma_buf_count = DMA_BUF_COUNT;
-    i2s_config.dma_buf_len = DMA_BUF_LEN;
-    i2s_config.use_apll = true;
-    i2s_config.tx_desc_auto_clear = false;
-    i2s_config.fixed_mclk = sample_rate * 256;
+static void i2s_configure_master(uint32_t sample_rate) {
+    i2s_config_t cfg = {};
+    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
+    cfg.sample_rate = sample_rate;
+    cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
+    cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
+    cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
+    cfg.dma_buf_count = DMA_BUF_COUNT;
+    cfg.dma_buf_len = DMA_BUF_LEN;
+    cfg.use_apll = true;
+    cfg.tx_desc_auto_clear = false;
+    cfg.fixed_mclk = sample_rate * 256;
 
-    i2s_driver_install((i2s_port_t)I2S_PORT, &i2s_config, 0, NULL);
+    i2s_driver_install((i2s_port_t)I2S_PORT_MASTER, &cfg, 0, NULL);
 
-    i2s_pin_config_t pin_config = {};
-    pin_config.bck_io_num = I2S_BCK_PIN;
-    pin_config.ws_io_num = I2S_LRC_PIN;
-    pin_config.data_in_num = I2S_DOUT_PIN;
-    pin_config.data_out_num = I2S_PIN_NO_CHANGE;
-    pin_config.mck_io_num = I2S_MCLK_PIN;
+    i2s_pin_config_t pins = {};
+    pins.bck_io_num = I2S_BCK_PIN;
+    pins.ws_io_num = I2S_LRC_PIN;
+    pins.data_in_num = I2S_DOUT_PIN;
+    pins.data_out_num = I2S_PIN_NO_CHANGE;
+    pins.mck_io_num = I2S_MCLK_PIN;
 
-    i2s_set_pin((i2s_port_t)I2S_PORT, &pin_config);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT);
+    i2s_set_pin((i2s_port_t)I2S_PORT_MASTER, &pins);
+    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_MASTER);
+}
+
+static bool i2s_configure_slave(uint32_t sample_rate) {
+    i2s_config_t cfg = {};
+    cfg.mode = (i2s_mode_t)(I2S_MODE_SLAVE | I2S_MODE_RX);
+    cfg.sample_rate = sample_rate;
+    cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
+    cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
+    cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
+    cfg.dma_buf_count = DMA_BUF_COUNT;
+    cfg.dma_buf_len = DMA_BUF_LEN;
+    cfg.use_apll = false; // Slave doesn't generate clock
+
+    esp_err_t err = i2s_driver_install((i2s_port_t)I2S_PORT_SLAVE, &cfg, 0, NULL);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC2 I2S slave driver install failed: %d", err);
+        return false;
+    }
+
+    i2s_pin_config_t pins = {};
+    pins.bck_io_num = I2S_BCK_PIN;    // Same as master — input in slave mode
+    pins.ws_io_num = I2S_LRC_PIN;     // Same as master — input in slave mode
+    pins.data_in_num = I2S_DOUT2_PIN; // New pin (GPIO 19)
+    pins.data_out_num = I2S_PIN_NO_CHANGE;
+    pins.mck_io_num = I2S_PIN_NO_CHANGE; // No MCLK output needed
+
+    i2s_set_pin((i2s_port_t)I2S_PORT_SLAVE, &pins);
+    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_SLAVE);
+    return true;
+}
+
+// Process a single ADC's buffer: diagnostics, DC filter, RMS, VU, peak, waveform, FFT
+static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
+                                unsigned long now, float dt_ms, bool sigGenSw) {
+    int total_samples = stereo_frames * 2;
+    AdcDiagnostics &diag = _diagnostics.adc[a];
+
+    // --- Diagnostics: scan raw buffer BEFORE siggen overwrites it ---
+    diag.totalBuffersRead++;
+    diag.lastReadMs = now;
+    {
+        bool allZero = true;
+        uint32_t clipCount = 0;
+        const int32_t CLIP_THRESHOLD = 8300000;
+        for (int i = 0; i < total_samples; i++) {
+            int32_t parsed = audio_parse_24bit_sample(buffer[i]);
+            if (parsed != 0) allZero = false;
+            if (parsed > CLIP_THRESHOLD || parsed < -CLIP_THRESHOLD) clipCount++;
+        }
+        if (allZero) {
+            diag.allZeroBuffers++;
+            diag.consecutiveZeros++;
+        } else {
+            diag.consecutiveZeros = 0;
+            diag.lastNonZeroMs = now;
+        }
+        diag.clippedSamples += clipCount;
+        // EMA clip rate: naturally decays when clipping stops
+        float bufferClipRate = (total_samples > 0) ? (float)clipCount / (float)total_samples : 0.0f;
+        diag.clipRate = diag.clipRate * (1.0f - CLIP_RATE_ALPHA) + bufferClipRate * CLIP_RATE_ALPHA;
+    }
+
+    // DC offset tracking
+    {
+        double sum = 0.0;
+        for (int i = 0; i < total_samples; i++) {
+            sum += (double)audio_parse_24bit_sample(buffer[i]);
+        }
+        float mean = (float)(sum / total_samples) / 8388607.0f;
+        diag.dcOffset += (mean - diag.dcOffset) * 0.01f;
+    }
+
+    // DC-blocking IIR filter
+    static const float DC_BLOCK_ALPHA = 0.9987f;
+    for (int f = 0; f < stereo_frames; f++) {
+        int32_t inL = buffer[f * 2];
+        float outL = (float)(inL - _dcPrevInL[a]) + DC_BLOCK_ALPHA * _dcPrevOutL[a];
+        _dcPrevInL[a] = inL;
+        _dcPrevOutL[a] = outL;
+        buffer[f * 2] = (int32_t)outL;
+
+        int32_t inR = buffer[f * 2 + 1];
+        float outR = (float)(inR - _dcPrevInR[a]) + DC_BLOCK_ALPHA * _dcPrevOutR[a];
+        _dcPrevInR[a] = inR;
+        _dcPrevOutR[a] = outR;
+        buffer[f * 2 + 1] = (int32_t)outR;
+    }
+
+    // Compute RMS
+    float rmsL = audio_compute_rms(buffer, stereo_frames, 0, 2);
+    float rmsR = audio_compute_rms(buffer, stereo_frames, 1, 2);
+    float rmsC = sqrtf((rmsL * rmsL + rmsR * rmsR) / 2.0f);
+    float dBFS = audio_rms_to_dbfs(rmsC);
+
+    // VU metering
+    if (AppState::getInstance().vuMeterEnabled) {
+        _vuL[a] = audio_vu_update(_vuL[a], rmsL, dt_ms);
+        _vuR[a] = audio_vu_update(_vuR[a], rmsR, dt_ms);
+        _vuC[a] = audio_vu_update(_vuC[a], rmsC, dt_ms);
+        _peakL[a] = audio_peak_hold_update(_peakL[a], rmsL, &_holdStartL[a], now, dt_ms);
+        _peakR[a] = audio_peak_hold_update(_peakR[a], rmsR, &_holdStartR[a], now, dt_ms);
+        _peakC[a] = audio_peak_hold_update(_peakC[a], rmsC, &_holdStartC[a], now, dt_ms);
+    } else {
+        _vuL[a] = _vuR[a] = _vuC[a] = 0.0f;
+        _peakL[a] = _peakR[a] = _peakC[a] = 0.0f;
+    }
+
+    // Waveform accumulation
+    if (AppState::getInstance().waveformEnabled) {
+        for (int f = 0; f < stereo_frames; f++) {
+            int bin = (int)((long)(_wfFramesSeen[a] + f) * WAVEFORM_BUFFER_SIZE / _wfTargetFrames);
+            if (bin >= WAVEFORM_BUFFER_SIZE) break;
+            float sL = (float)audio_parse_24bit_sample(buffer[f * 2]) / MAX_24BIT_F;
+            float sR = (float)audio_parse_24bit_sample(buffer[f * 2 + 1]) / MAX_24BIT_F;
+            float combined = (sL + sR) / 2.0f;
+            if (fabsf(combined) > fabsf(_wfAccum[a][bin])) {
+                _wfAccum[a][bin] = combined;
+            }
+        }
+        _wfFramesSeen[a] += stereo_frames;
+        if (_wfFramesSeen[a] >= _wfTargetFrames) {
+            for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
+                _wfOutput[a][i] = audio_quantize_sample(_wfAccum[a][i]);
+                _wfAccum[a][i] = 0.0f;
+            }
+            _wfFramesSeen[a] = 0;
+            _wfReady[a] = true;
+        }
+    }
+
+    // FFT ring buffer + compute
+    if (AppState::getInstance().spectrumEnabled) {
+        for (int f = 0; f < stereo_frames; f++) {
+            float sL = (float)audio_parse_24bit_sample(buffer[f * 2]) / MAX_24BIT_F;
+            float sR = (float)audio_parse_24bit_sample(buffer[f * 2 + 1]) / MAX_24BIT_F;
+            _fftRing[a][_fftRingPos[a]] = (sL + sR) / 2.0f;
+            _fftRingPos[a] = (_fftRingPos[a] + 1) % FFT_SIZE;
+        }
+        if (now - _lastFftTime[a] >= AppState::getInstance().audioUpdateRate) {
+            _lastFftTime[a] = now;
+            for (int i = 0; i < FFT_SIZE; i++) {
+                _fftReal[i] = _fftRing[a][(_fftRingPos[a] + i) % FFT_SIZE];
+                _fftImag[i] = 0.0f;
+            }
+            _fft.windowing(_fftReal, FFT_SIZE, FFTWindow::Hamming, FFTDirection::Forward);
+            _fft.compute(_fftReal, _fftImag, FFT_SIZE, FFTDirection::Forward);
+            _fft.complexToMagnitude(_fftReal, _fftImag, FFT_SIZE);
+            _dominantFreqOutput[a] = _fft.majorPeak(_fftReal, FFT_SIZE, (float)_currentSampleRate);
+            audio_aggregate_fft_bands(_fftReal, FFT_SIZE, (float)_currentSampleRate,
+                                      _spectrumOutput[a], SPECTRUM_BANDS);
+            _spectrumReady[a] = true;
+        }
+    }
+
+    // Noise floor and peak tracking (only when siggen is off)
+    if (!sigGenSw) {
+        if (dBFS > diag.noiseFloorDbfs) {
+            diag.noiseFloorDbfs += (dBFS - diag.noiseFloorDbfs) * 0.01f;
+        } else {
+            diag.noiseFloorDbfs += (dBFS - diag.noiseFloorDbfs) * 0.001f;
+        }
+        if (dBFS > diag.peakDbfs) diag.peakDbfs = dBFS;
+    }
+    // Clipping check for health: only flag when siggen is off
+    AdcDiagnostics diagCopy = diag;
+    if (sigGenSw) diagCopy.clipRate = 0.0f; // Mask siggen-induced clipping
+    diag.status = audio_derive_health_status(diagCopy);
+
+    // Write per-ADC analysis into shared struct
+    _analysis.adc[a].rmsLeft = rmsL;
+    _analysis.adc[a].rmsRight = rmsR;
+    _analysis.adc[a].rmsCombined = rmsC;
+    _analysis.adc[a].vuLeft = _vuL[a];
+    _analysis.adc[a].vuRight = _vuR[a];
+    _analysis.adc[a].vuCombined = _vuC[a];
+    _analysis.adc[a].peakLeft = _peakL[a];
+    _analysis.adc[a].peakRight = _peakR[a];
+    _analysis.adc[a].peakCombined = _peakC[a];
+    _analysis.adc[a].dBFS = dBFS;
 }
 
 static void audio_capture_task(void *param) {
-    // Buffer for one DMA read: 256 stereo samples × 4 bytes = 2048 bytes
     const int BUFFER_SAMPLES = DMA_BUF_LEN * 2; // stereo
-    int32_t buffer[BUFFER_SAMPLES];
-
-    // VU meter state (smoothed with attack/decay ballistics)
-    float vuL = 0.0f, vuR = 0.0f, vuC = 0.0f;
-
-    // Peak hold state (instant attack, 2s hold, then decay)
-    float peakL = 0.0f, peakR = 0.0f, peakC = 0.0f;
-    unsigned long holdStartL = 0, holdStartR = 0, holdStartC = 0;
+    int32_t buf1[BUFFER_SAMPLES];
+    int32_t buf2[BUFFER_SAMPLES];
 
     unsigned long prevTime = millis();
-    unsigned long lastDumpTime = 0; // Periodic raw sample dump
-
-    // DC-blocking IIR filter state (per channel)
-    // y[n] = x[n] - x[n-1] + alpha * y[n-1], alpha ~0.9987 = ~10 Hz cutoff at 48kHz
-    static const float DC_BLOCK_ALPHA = 0.9987f;
-    int32_t dcPrevInL = 0, dcPrevInR = 0;
-    float dcPrevOutL = 0.0f, dcPrevOutR = 0.0f;
+    unsigned long lastDumpTime = 0;
 
     while (true) {
-        size_t bytes_read = 0;
-        esp_err_t err = i2s_read((i2s_port_t)I2S_PORT, buffer,
-                                  sizeof(buffer), &bytes_read, portMAX_DELAY);
+        // Read ADC1 (master) — blocks until DMA ready
+        size_t bytes_read1 = 0;
+        esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_MASTER, buf1,
+                                   sizeof(buf1), &bytes_read1, portMAX_DELAY);
 
-        if (err != ESP_OK || bytes_read == 0) {
-            if (err != ESP_OK) _diagnostics.i2sReadErrors++;
-            if (bytes_read == 0) _diagnostics.zeroByteReads++;
+        if (err1 != ESP_OK || bytes_read1 == 0) {
+            if (err1 != ESP_OK) _diagnostics.adc[0].i2sReadErrors++;
+            if (bytes_read1 == 0) _diagnostics.adc[0].zeroByteReads++;
             vTaskDelay(pdMS_TO_TICKS(1));
             continue;
+        }
+
+        // Read ADC2 (slave) — near-instant if synced DMA is ready
+        size_t bytes_read2 = 0;
+        bool adc2Ok = false;
+        if (_adc2InitOk) {
+            esp_err_t err2 = i2s_read((i2s_port_t)I2S_PORT_SLAVE, buf2,
+                                       sizeof(buf2), &bytes_read2, pdMS_TO_TICKS(5));
+            if (err2 == ESP_OK && bytes_read2 > 0) {
+                adc2Ok = true;
+            } else {
+                if (err2 != ESP_OK) _diagnostics.adc[1].i2sReadErrors++;
+                if (bytes_read2 == 0) _diagnostics.adc[1].zeroByteReads++;
+            }
         }
 
         unsigned long now = millis();
         float dt_ms = (float)(now - prevTime);
         prevTime = now;
 
-        int total_samples = bytes_read / sizeof(int32_t);
-        int stereo_frames = total_samples / 2;
-
-        // --- Diagnostics: scan raw PCM1808 buffer BEFORE siggen overwrites it ---
-        _diagnostics.totalBuffersRead++;
-        _diagnostics.lastReadMs = now;
-        {
-            bool allZero = true;
-            uint32_t clipCount = 0;
-            const int32_t CLIP_THRESHOLD = 8300000; // ~98.9% of 2^23-1
-            for (int i = 0; i < total_samples; i++) {
-                int32_t parsed = audio_parse_24bit_sample(buffer[i]);
-                if (parsed != 0) allZero = false;
-                if (parsed > CLIP_THRESHOLD || parsed < -CLIP_THRESHOLD) clipCount++;
-            }
-            if (allZero) {
-                _diagnostics.allZeroBuffers++;
-                _diagnostics.consecutiveZeros++;
-            } else {
-                _diagnostics.consecutiveZeros = 0;
-                _diagnostics.lastNonZeroMs = now;
-            }
-            _diagnostics.clippedSamples += clipCount;
-        }
-
-        // DC offset: compute mean of parsed samples (tracks slowly)
-        {
-            double sum = 0.0;
-            for (int i = 0; i < total_samples; i++) {
-                sum += (double)audio_parse_24bit_sample(buffer[i]);
-            }
-            float mean = (float)(sum / total_samples) / 8388607.0f;
-            // Slow exponential average
-            _diagnostics.dcOffset += (mean - _diagnostics.dcOffset) * 0.01f;
-        }
-
-        // Flag for periodic serial dump (every 5 seconds)
-        bool doDump = (now - lastDumpTime >= 5000);
-        if (doDump) lastDumpTime = now;
-
-        // Pre-filter RMS for serial dump comparison
-        float preL = 0, preR = 0, preC = 0;
-        if (doDump) {
-            preL = audio_compute_rms(buffer, stereo_frames, 0, 2);
-            preR = audio_compute_rms(buffer, stereo_frames, 1, 2);
-            preC = sqrtf((preL * preL + preR * preR) / 2.0f);
-        }
+        int stereo_frames1 = (bytes_read1 / sizeof(int32_t)) / 2;
+        int stereo_frames2 = adc2Ok ? (bytes_read2 / sizeof(int32_t)) / 2 : 0;
 
         bool sigGenSw = siggen_is_active() && siggen_is_software_mode();
         _diagnostics.sigGenActive = sigGenSw;
 
-        // Inject test signal if signal generator is active in software mode
-        if (siggen_is_active() && siggen_is_software_mode()) {
-            siggen_fill_buffer(buffer, stereo_frames, _currentSampleRate);
+        // Signal generator injection (before per-ADC processing)
+        int targetAdc = AppState::getInstance().sigGenTargetAdc;
+        if (sigGenSw) {
+            if (targetAdc == 0 || targetAdc == 2)
+                siggen_fill_buffer(buf1, stereo_frames1, _currentSampleRate);
+            if ((targetAdc == 1 || targetAdc == 2) && adc2Ok)
+                siggen_fill_buffer(buf2, stereo_frames2, _currentSampleRate);
         }
 
-        // DC-blocking IIR filter: y[n] = x[n] - x[n-1] + alpha * y[n-1]
-        // Removes DC offset and sub-10Hz content that masks real audio
-        for (int f = 0; f < stereo_frames; f++) {
-            int32_t inL = buffer[f * 2];
-            float outL = (float)(inL - dcPrevInL) + DC_BLOCK_ALPHA * dcPrevOutL;
-            dcPrevInL = inL;
-            dcPrevOutL = outL;
-            buffer[f * 2] = (int32_t)outL;
+        // Process ADC1
+        process_adc_buffer(0, buf1, stereo_frames1, now, dt_ms, sigGenSw);
 
-            int32_t inR = buffer[f * 2 + 1];
-            float outR = (float)(inR - dcPrevInR) + DC_BLOCK_ALPHA * dcPrevOutR;
-            dcPrevInR = inR;
-            dcPrevOutR = outR;
-            buffer[f * 2 + 1] = (int32_t)outR;
+        // Process ADC2 (if available)
+        if (adc2Ok) {
+            process_adc_buffer(1, buf2, stereo_frames2, now, dt_ms, sigGenSw);
         }
 
-        // Compute RMS for left (channel 0) and right (channel 1)
-        float rmsL = audio_compute_rms(buffer, stereo_frames, 0, 2);
-        float rmsR = audio_compute_rms(buffer, stereo_frames, 1, 2);
-        float rmsC = sqrtf((rmsL * rmsL + rmsR * rmsR) / 2.0f);
-
-        // Periodic serial dump: single LOG call to avoid watchdog timeout
+        // Periodic serial dump
+        bool doDump = (now - lastDumpTime >= 5000);
         if (doDump) {
-            int32_t pL0 = audio_parse_24bit_sample(dcPrevInL);
-            int32_t pR0 = audio_parse_24bit_sample(dcPrevInR);
-            LOG_I("[Audio] PRE=%.1f/%.1f/%.1f POST=%.1f/%.1f/%.1f DC=%.4f raw=%.3f/%.3f flr=%.1f clip=%lu",
-                  audio_rms_to_dbfs(preL), audio_rms_to_dbfs(preR), audio_rms_to_dbfs(preC),
-                  audio_rms_to_dbfs(rmsL), audio_rms_to_dbfs(rmsR), audio_rms_to_dbfs(rmsC),
-                  _diagnostics.dcOffset, pL0 / 8388607.0f, pR0 / 8388607.0f,
-                  _diagnostics.noiseFloorDbfs, (unsigned long)_diagnostics.clippedSamples);
+            lastDumpTime = now;
+            LOG_I("[Audio] ADC1=%.1fdB flr=%.1f adcs=%d",
+                  _analysis.adc[0].dBFS, _diagnostics.adc[0].noiseFloorDbfs,
+                  _numAdcsDetected);
+            if (adc2Ok) {
+                LOG_I("[Audio] ADC2=%.1fdB flr=%.1f",
+                      _analysis.adc[1].dBFS, _diagnostics.adc[1].noiseFloorDbfs);
+            }
         }
 
-        // VU metering with industry-standard ballistics
-        if (AppState::getInstance().vuMeterEnabled) {
-            vuL = audio_vu_update(vuL, rmsL, dt_ms);
-            vuR = audio_vu_update(vuR, rmsR, dt_ms);
-            vuC = audio_vu_update(vuC, rmsC, dt_ms);
-
-            // Peak hold (instant attack, 2s hold, then 300ms decay)
-            peakL = audio_peak_hold_update(peakL, rmsL, &holdStartL, now, dt_ms);
-            peakR = audio_peak_hold_update(peakR, rmsR, &holdStartR, now, dt_ms);
-            peakC = audio_peak_hold_update(peakC, rmsC, &holdStartC, now, dt_ms);
+        // Detect number of active ADCs (check every buffer)
+        if (adc2Ok && _diagnostics.adc[1].consecutiveZeros < 50) {
+            _numAdcsDetected = 2;
         } else {
-            vuL = vuR = vuC = 0.0f;
-            peakL = peakR = peakC = 0.0f;
+            _numAdcsDetected = 1;
         }
-
-        // Waveform accumulation: map DMA frames to 256-point waveform bins
-        if (AppState::getInstance().waveformEnabled) {
-            for (int f = 0; f < stereo_frames; f++) {
-                int bin = (int)((long)(_wfFramesSeen + f) * WAVEFORM_BUFFER_SIZE / _wfTargetFrames);
-                if (bin >= WAVEFORM_BUFFER_SIZE) break;
-
-                float sL = (float)audio_parse_24bit_sample(buffer[f * 2]) / MAX_24BIT_F;
-                float sR = (float)audio_parse_24bit_sample(buffer[f * 2 + 1]) / MAX_24BIT_F;
-                float combined = (sL + sR) / 2.0f;
-
-                if (fabsf(combined) > fabsf(_wfAccum[bin])) {
-                    _wfAccum[bin] = combined;
-                }
-            }
-            _wfFramesSeen += stereo_frames;
-
-            if (_wfFramesSeen >= _wfTargetFrames) {
-                for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
-                    _wfOutput[i] = audio_quantize_sample(_wfAccum[i]);
-                    _wfAccum[i] = 0.0f;
-                }
-                _wfFramesSeen = 0;
-                _wfReady = true;
-                // Recalculate window from dynamic rate setting
-                _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
-            }
+        static int prevNumAdcs = 1;
+        if (_numAdcsDetected != prevNumAdcs) {
+            LOG_I("[Audio] ADCs detected: %d -> %d", prevNumAdcs, _numAdcsDetected);
+            prevNumAdcs = _numAdcsDetected;
         }
+        _diagnostics.numAdcsDetected = _numAdcsDetected;
 
-        // FFT ring buffer: accumulate mono samples
-        if (AppState::getInstance().spectrumEnabled) {
-            for (int f = 0; f < stereo_frames; f++) {
-                float sL = (float)audio_parse_24bit_sample(buffer[f * 2]) / MAX_24BIT_F;
-                float sR = (float)audio_parse_24bit_sample(buffer[f * 2 + 1]) / MAX_24BIT_F;
-                _fftRing[_fftRingPos] = (sL + sR) / 2.0f;
-                _fftRingPos = (_fftRingPos + 1) % FFT_SIZE;
-            }
+        // Recalculate waveform target on both ADCs
+        _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
 
-            // Compute FFT at configurable rate
-            if (now - _lastFftTime >= AppState::getInstance().audioUpdateRate) {
-                _lastFftTime = now;
-
-                // Copy ring buffer into FFT working buffer (unwrap)
-                for (int i = 0; i < FFT_SIZE; i++) {
-                    _fftReal[i] = _fftRing[(_fftRingPos + i) % FFT_SIZE];
-                    _fftImag[i] = 0.0f;
-                }
-
-                _fft.windowing(_fftReal, FFT_SIZE, FFTWindow::Hamming, FFTDirection::Forward);
-                _fft.compute(_fftReal, _fftImag, FFT_SIZE, FFTDirection::Forward);
-                _fft.complexToMagnitude(_fftReal, _fftImag, FFT_SIZE);
-
-                _dominantFreqOutput = _fft.majorPeak(_fftReal, FFT_SIZE, (float)_currentSampleRate);
-                audio_aggregate_fft_bands(_fftReal, FFT_SIZE, (float)_currentSampleRate,
-                                          _spectrumOutput, SPECTRUM_BANDS);
-                _spectrumReady = true;
-            }
+        // Combined analysis: overall dBFS = max across ADCs, signal detected = any
+        float overallDbfs = _analysis.adc[0].dBFS;
+        if (_numAdcsDetected >= 2 && _analysis.adc[1].dBFS > overallDbfs) {
+            overallDbfs = _analysis.adc[1].dBFS;
         }
-
-        float dBFS = audio_rms_to_dbfs(rmsC);
         float threshold = AppState::getInstance().audioThreshold_dBFS;
 
-        // Track noise floor and peak when signal generator is off
-        if (!sigGenSw) {
-            // Exponential moving average for noise floor (slow adaptation)
-            if (dBFS > _diagnostics.noiseFloorDbfs) {
-                _diagnostics.noiseFloorDbfs += (dBFS - _diagnostics.noiseFloorDbfs) * 0.01f;
-            } else {
-                _diagnostics.noiseFloorDbfs += (dBFS - _diagnostics.noiseFloorDbfs) * 0.001f;
-            }
-            if (dBFS > _diagnostics.peakDbfs) {
-                _diagnostics.peakDbfs = dBFS;
-            }
-        }
-        _diagnostics.status = audio_derive_health_status(_diagnostics);
-
-        // Update shared analysis struct atomically
         portENTER_CRITICAL_ISR(&spinlock);
-        _analysis.rmsLeft = rmsL;
-        _analysis.rmsRight = rmsR;
-        _analysis.rmsCombined = rmsC;
-        _analysis.vuLeft = vuL;
-        _analysis.vuRight = vuR;
-        _analysis.vuCombined = vuC;
-        _analysis.peakLeft = peakL;
-        _analysis.peakRight = peakR;
-        _analysis.peakCombined = peakC;
-        _analysis.dBFS = dBFS;
-        _analysis.signalDetected = (dBFS >= threshold);
+        _analysis.dBFS = overallDbfs;
+        _analysis.signalDetected = (overallDbfs >= threshold);
         _analysis.timestamp = now;
         _analysisReady = true;
         portEXIT_CRITICAL_ISR(&spinlock);
@@ -503,16 +595,23 @@ void i2s_audio_init() {
     _diagnostics = AudioDiagnostics{};
 
     _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
-    memset(_wfAccum, 0, sizeof(_wfAccum));
-    _wfFramesSeen = 0;
-    _wfReady = false;
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        memset(_wfAccum[a], 0, sizeof(_wfAccum[a]));
+        _wfFramesSeen[a] = 0;
+        _wfReady[a] = false;
+        memset(_fftRing[a], 0, sizeof(_fftRing[a]));
+        _fftRingPos[a] = 0;
+        _spectrumReady[a] = false;
+        _lastFftTime[a] = 0;
+    }
 
-    memset(_fftRing, 0, sizeof(_fftRing));
-    _fftRingPos = 0;
-    _spectrumReady = false;
-    _lastFftTime = 0;
+    // Configure slave I2S (ADC2) FIRST — so master's i2s_set_pin() runs last
+    // and correctly owns BCK/LRC GPIO output routing in the ESP32 GPIO matrix
+    _adc2InitOk = i2s_configure_slave(_currentSampleRate);
 
-    i2s_configure(_currentSampleRate);
+    // Configure master I2S (ADC1) — must be last to retain clock output ownership
+    i2s_configure_master(_currentSampleRate);
+    _numAdcsDetected = 1; // Will be updated once data flows
 
     xTaskCreatePinnedToCore(
         audio_capture_task,
@@ -524,8 +623,13 @@ void i2s_audio_init() {
         0  // Core 0
     );
 
-    LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT=%d, LRC=%d, MCLK=%d",
-          _currentSampleRate, I2S_BCK_PIN, I2S_DOUT_PIN, I2S_LRC_PIN, I2S_MCLK_PIN);
+    LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",
+          _currentSampleRate, I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
+          I2S_LRC_PIN, I2S_MCLK_PIN, _adc2InitOk ? "OK" : "FAIL");
+}
+
+int i2s_audio_get_num_adcs() {
+    return _numAdcsDetected;
 }
 
 AudioAnalysis i2s_audio_get_analysis() {
@@ -544,18 +648,20 @@ AudioDiagnostics i2s_audio_get_diagnostics() {
     return result;
 }
 
-bool i2s_audio_get_waveform(uint8_t *out) {
-    if (!_wfReady) return false;
-    memcpy(out, (const void *)_wfOutput, WAVEFORM_BUFFER_SIZE);
-    _wfReady = false;
+bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) {
+    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_ADCS) return false;
+    if (!_wfReady[adcIndex]) return false;
+    memcpy(out, (const void *)_wfOutput[adcIndex], WAVEFORM_BUFFER_SIZE);
+    _wfReady[adcIndex] = false;
     return true;
 }
 
-bool i2s_audio_get_spectrum(float *bands, float *dominant_freq) {
-    if (!_spectrumReady) return false;
-    memcpy(bands, (const void *)_spectrumOutput, SPECTRUM_BANDS * sizeof(float));
-    *dominant_freq = _dominantFreqOutput;
-    _spectrumReady = false;
+bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex) {
+    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_ADCS) return false;
+    if (!_spectrumReady[adcIndex]) return false;
+    memcpy(bands, (const void *)_spectrumOutput[adcIndex], SPECTRUM_BANDS * sizeof(float));
+    *dominant_freq = _dominantFreqOutput[adcIndex];
+    _spectrumReady[adcIndex] = false;
     return true;
 }
 
@@ -565,12 +671,18 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
     LOG_I("[Audio] Changing sample rate: %lu -> %lu Hz", _currentSampleRate, rate);
 
-    i2s_driver_uninstall((i2s_port_t)I2S_PORT);
+    i2s_driver_uninstall((i2s_port_t)I2S_PORT_MASTER);
+    if (_adc2InitOk) i2s_driver_uninstall((i2s_port_t)I2S_PORT_SLAVE);
+
     _currentSampleRate = rate;
     _wfTargetFrames = rate * AppState::getInstance().audioUpdateRate / 1000;
-    _wfFramesSeen = 0;
-    memset(_wfAccum, 0, sizeof(_wfAccum));
-    i2s_configure(rate);
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        _wfFramesSeen[a] = 0;
+        memset(_wfAccum[a], 0, sizeof(_wfAccum[a]));
+    }
+
+    i2s_configure_master(rate);
+    if (_adc2InitOk) _adc2InitOk = i2s_configure_slave(rate);
 
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
     return true;
@@ -578,12 +690,14 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
 #else
 // Native test stubs
+static int _nativeNumAdcs = 1;
 void i2s_audio_init() {}
 AudioAnalysis i2s_audio_get_analysis() { return AudioAnalysis{}; }
 AudioDiagnostics i2s_audio_get_diagnostics() { return AudioDiagnostics{}; }
-bool i2s_audio_get_waveform(uint8_t *out) { return false; }
-bool i2s_audio_get_spectrum(float *bands, float *dominant_freq) { return false; }
+bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) { return false; }
+bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex) { return false; }
 bool i2s_audio_set_sample_rate(uint32_t rate) {
     return audio_validate_sample_rate(rate);
 }
+int i2s_audio_get_num_adcs() { return _nativeNumAdcs; }
 #endif // NATIVE_TEST

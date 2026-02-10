@@ -12,6 +12,8 @@
 #include <mbedtls/md.h>
 #include <time.h>
 #include <Preferences.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // Root CA certificates for GitHub (api.github.com, github.com, and objects.githubusercontent.com)
 // GitHub migrated to Sectigo/USERTrust in March 2024
@@ -97,6 +99,18 @@ static const char* GITHUB_ROOT_CA = \
 extern int compareVersions(const String& v1, const String& v2);
 extern void sendWiFiStatus();
 
+// ===== FreeRTOS Task Handles =====
+static TaskHandle_t otaDownloadTaskHandle = NULL;
+static TaskHandle_t otaCheckTaskHandle = NULL;
+
+// ===== OTA Progress Helper (thread-safe via dirty flag) =====
+static void setOTAProgress(const char* status, const char* message, int progress) {
+  appState.otaStatus = status;
+  appState.otaStatusMessage = message;
+  appState.otaProgress = progress;
+  appState.markOTADirty();
+}
+
 // ===== OTA Status Broadcasting =====
 void broadcastUpdateStatus() {
   JsonDocument doc;
@@ -138,59 +152,46 @@ void handleCheckUpdate() {
     server.send(200, "application/json", "{\"success\": false, \"message\": \"Not connected to WiFi\"}");
     return;
   }
-  
+
   LOG_I("[OTA] Manual update check requested");
-  
-  // Trigger fresh check
-  checkForFirmwareUpdate();
-  
+
+  // Trigger non-blocking check (results arrive via dirty flag + WS broadcast)
+  startOTACheckTask();
+
   JsonDocument doc;
   doc["success"] = true;
   doc["currentVersion"] = firmwareVer;
   doc["latestVersion"] = cachedLatestVersion.length() > 0 ? cachedLatestVersion : "Unknown";
   doc["updateAvailable"] = updateAvailable;
-  
+
   String json;
   serializeJson(doc, json);
   server.send(200, "application/json", json);
 }
 
 void handleStartUpdate() {
-  if (otaInProgress) {
+  if (otaInProgress || isOTATaskRunning()) {
     server.send(200, "application/json", "{\"success\": false, \"message\": \"OTA update already in progress\"}");
     return;
   }
-  
+
   if (WiFi.status() != WL_CONNECTED) {
     server.send(200, "application/json", "{\"success\": false, \"message\": \"Not connected to WiFi\"}");
     return;
   }
-  
+
   if (!updateAvailable || cachedLatestVersion.length() == 0 || cachedFirmwareUrl.length() == 0) {
     server.send(200, "application/json", "{\"success\": false, \"message\": \"No update available\"}");
     return;
   }
-  
+
   LOG_I("[OTA] Manual OTA update started");
-  otaStatus = "downloading";
-  otaProgress = 0;
-  
+
+  // Send HTTP response immediately (non-blocking)
   server.send(200, "application/json", "{\"success\": true, \"message\": \"Update started\"}");
-  
-  // Perform update in background (non-blocking)
-  // Note: This is a simplified approach. In production, you might want to use a task
-  bool updateSuccess = performOTAUpdate(cachedFirmwareUrl);
-  
-  if (updateSuccess) {
-    otaStatus = "complete";
-    LOG_I("[OTA] Update successful, rebooting");
-    saveOTASuccessFlag(firmwareVer);  // Save current version as "previous" before reboot
-    delay(2000);
-    ESP.restart();
-  } else {
-    otaStatus = "error";
-    otaInProgress = false;
-  }
+
+  // Launch OTA download in a FreeRTOS task
+  startOTADownloadTask();
 }
 
 void handleUpdateStatus() {
@@ -352,9 +353,8 @@ void checkForFirmwareUpdate() {
     }
   }
   
-  // Always broadcast status to update UI
-  broadcastUpdateStatus();
-  sendWiFiStatus();
+  // Signal main loop to broadcast status update via dirty flag
+  appState.markOTADirty();
 }
 
 // Get latest release information from GitHub API
@@ -509,17 +509,14 @@ String calculateSHA256(uint8_t* data, size_t len) {
 
 bool performOTAUpdate(String firmwareUrl) {
   otaInProgress = true;
-  otaStatus = "preparing";
-  otaStatusMessage = "Preparing for update...";
-  otaProgress = 0;
-  broadcastUpdateStatus();
-  
+  setOTAProgress("preparing", "Preparing for update...", 0);
+
   LOG_I("[OTA] Starting OTA update");
   LOG_I("[OTA] Downloading from: %s", firmwareUrl.c_str());
-  
+
   // Use secure HTTPS connection with certificate validation
   WiFiClientSecure client;
-  
+
   if (enableCertValidation) {
     LOG_I("[OTA] Certificate validation enabled");
     client.setCACert(GITHUB_ROOT_CA);  // Use bundled GitHub root certificates
@@ -533,57 +530,48 @@ bool performOTAUpdate(String firmwareUrl) {
   HTTPClient https;
   if (!https.begin(client, firmwareUrl)) {
     LOG_E("[OTA] Failed to initialize HTTPS connection");
-    otaStatus = "error";
-    otaStatusMessage = "Failed to initialize secure connection";
+    setOTAProgress("error", "Failed to initialize secure connection", 0);
     otaInProgress = false;
-    broadcastUpdateStatus();
     return false;
   }
-  
+
   https.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   https.setTimeout(30000);
-  
-  otaStatusMessage = "Connecting to server...";
-  broadcastUpdateStatus();
-  
+
+  setOTAProgress("preparing", "Connecting to server...", 0);
+
   int httpCode = https.GET();
-  
+
   if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY && httpCode != HTTP_CODE_FOUND) {
     LOG_E("[OTA] Failed to download firmware, HTTP code: %d", httpCode);
     https.end();
-    otaStatus = "error";
-    otaStatusMessage = "Failed to connect to server";
+    setOTAProgress("error", "Failed to connect to server", 0);
     otaInProgress = false;
-    broadcastUpdateStatus();
     return false;
   }
-  
+
   int contentLength = https.getSize();
   otaTotalBytes = contentLength;
   LOG_I("[OTA] Firmware size: %d bytes (%.2f KB)", contentLength, contentLength / 1024.0);
-  
+
   if (contentLength <= 0) {
     LOG_E("[OTA] Invalid firmware size");
     https.end();
-    otaStatus = "error";
-    otaStatusMessage = "Invalid firmware file";
+    setOTAProgress("error", "Invalid firmware file", 0);
     otaInProgress = false;
-    broadcastUpdateStatus();
     return false;
   }
-  
+
   // Check if enough space is available
   int freeSpace = ESP.getFreeSketchSpace() - 0x1000;
   if (contentLength > freeSpace) {
     LOG_E("[OTA] Not enough space, need: %d, available: %d", contentLength, freeSpace);
     https.end();
-    otaStatus = "error";
-    otaStatusMessage = "Not enough storage space";
+    setOTAProgress("error", "Not enough storage space", 0);
     otaInProgress = false;
-    broadcastUpdateStatus();
     return false;
   }
-  
+
   // Play OTA update melody before flashing begins
   buzzer_play_blocking(BUZZ_OTA_UPDATE, 850);
 
@@ -591,50 +579,44 @@ bool performOTAUpdate(String firmwareUrl) {
   if (!Update.begin(contentLength)) {
     LOG_E("[OTA] Failed to begin OTA, free space: %d", ESP.getFreeSketchSpace());
     https.end();
-    otaStatus = "error";
-    otaStatusMessage = "Failed to initialize update";
+    setOTAProgress("error", "Failed to initialize update", 0);
     otaInProgress = false;
-    broadcastUpdateStatus();
     return false;
   }
-  
-  otaProgress = 0;
+
   otaProgressBytes = 0;
-  otaStatus = "downloading";
-  otaStatusMessage = "Downloading firmware...";
-  broadcastUpdateStatus();
-  webSocket.loop();  // Ensure "Downloading" status is sent before entering download loop
+  setOTAProgress("downloading", "Downloading firmware...", 0);
 
   LOG_I("[OTA] Download started, writing to flash");
-  
+
   WiFiClient* stream = https.getStreamPtr();
-  
+
   size_t written = 0;
   uint8_t buffer[1024];
-  unsigned long lastBroadcast = 0;
-  
+  unsigned long lastProgressUpdate = 0;
+
   // For checksum calculation
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
   bool calculatingChecksum = (cachedChecksum.length() == 64);
-  
+
   if (calculatingChecksum) {
     mbedtls_md_init(&ctx);
     mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 0);
     mbedtls_md_starts(&ctx);
     LOG_I("[OTA] Checksum verification enabled");
   }
-  
+
   while (https.connected() && (written < contentLength)) {
     size_t available = stream->available();
     if (available) {
       int bytesRead = stream->readBytes(buffer, min(available, sizeof(buffer)));
-      
+
       // Update checksum calculation
       if (calculatingChecksum) {
         mbedtls_md_update(&ctx, buffer, bytesRead);
       }
-      
+
       if (Update.write(buffer, bytesRead) != bytesRead) {
         LOG_E("[OTA] Error writing firmware data");
         Update.abort();
@@ -642,42 +624,36 @@ bool performOTAUpdate(String firmwareUrl) {
           mbedtls_md_free(&ctx);
         }
         https.end();
-        otaStatus = "error";
-        otaStatusMessage = "Write error during download";
+        setOTAProgress("error", "Write error during download", 0);
         otaInProgress = false;
-        broadcastUpdateStatus();
-        webSocket.loop();  // Ensure error status is sent
         return false;
       }
-      
+
       written += bytesRead;
       otaProgressBytes = written;
-      
-      // Update progress percentage
+
+      // Update progress every 1% change or every 2 seconds
       int newProgress = (written * 100) / contentLength;
-      
-      // Broadcast every 1% change or every 2 seconds (same as manual upload)
       unsigned long now = millis();
-      if (newProgress != otaProgress || (now - lastBroadcast) >= 2000) {
-        otaProgress = newProgress;
-        otaStatusMessage = String("Downloading: ") + String(written / 1024) + " / " + String(contentLength / 1024) + " KB";
-        broadcastUpdateStatus();
-        webSocket.loop();  // Process WebSocket to actually send the progress update
-        lastBroadcast = now;
-        LOG_D("[OTA] Progress: %d%% (%d KB / %d KB)", otaProgress, written / 1024, contentLength / 1024);
+      if (newProgress != otaProgress || (now - lastProgressUpdate) >= 2000) {
+        appState.otaProgress = newProgress;
+        appState.otaStatusMessage = String("Downloading: ") + String(written / 1024) + " / " + String(contentLength / 1024) + " KB";
+        appState.markOTADirty();
+        lastProgressUpdate = now;
+        LOG_D("[OTA] Progress: %d%% (%d KB / %d KB)", newProgress, written / 1024, contentLength / 1024);
       }
     }
-    delay(1);
+    delay(1);  // Yield to FreeRTOS scheduler
   }
-  
+
   https.end();
-  
+
   // Verify checksum if available
   if (calculatingChecksum) {
     byte shaResult[32];
     mbedtls_md_finish(&ctx, shaResult);
     mbedtls_md_free(&ctx);
-    
+
     // Convert to hex string
     String calculatedChecksum = "";
     for (int i = 0; i < 32; i++) {
@@ -685,7 +661,7 @@ bool performOTAUpdate(String firmwareUrl) {
       sprintf(str, "%02x", shaResult[i]);
       calculatedChecksum += str;
     }
-    
+
     LOG_I("[OTA] Expected checksum:   %s", cachedChecksum.c_str());
     LOG_I("[OTA] Calculated checksum: %s", calculatedChecksum.c_str());
 
@@ -694,52 +670,38 @@ bool performOTAUpdate(String firmwareUrl) {
     } else {
       LOG_E("[OTA] Checksum verification failed");
       Update.abort();
-      otaStatus = "error";
-      otaStatusMessage = "Checksum verification failed - firmware corrupted";
+      setOTAProgress("error", "Checksum verification failed - firmware corrupted", 0);
       otaInProgress = false;
-      broadcastUpdateStatus();
-      webSocket.loop();  // Ensure error status is sent
       return false;
     }
   } else {
     LOG_W("[OTA] No checksum available for verification");
   }
-  
-  otaStatusMessage = "Verifying firmware...";
-  otaProgress = 100;
-  broadcastUpdateStatus();
-  webSocket.loop();  // Ensure "Verifying" status is sent
+
+  setOTAProgress("downloading", "Verifying firmware...", 100);
   LOG_I("[OTA] Download complete, verifying");
 
   if (Update.end()) {
     if (Update.isFinished()) {
       LOG_I("[OTA] Update completed successfully");
       LOG_I("[OTA] Rebooting device in 3 seconds");
-      otaProgress = 100;
-      otaStatus = "complete";
-      otaStatusMessage = "Update complete! Rebooting...";
-      otaInProgress = false;
-      broadcastUpdateStatus();
-      webSocket.loop();  // Ensure "complete" status is sent before reboot
+      setOTAProgress("complete", "Update complete! Rebooting...", 100);
       return true;
     } else {
       LOG_E("[OTA] Update did not finish correctly");
       Update.abort();
-      otaStatus = "error";
-      otaStatusMessage = "Update verification failed";
+      setOTAProgress("error", "Update verification failed", 0);
       otaInProgress = false;
-      broadcastUpdateStatus();
-      webSocket.loop();  // Ensure error status is sent
       return false;
     }
   } else {
     LOG_E("[OTA] Update error: %s", Update.errorString());
     Update.abort();
-    otaStatus = "error";
-    otaStatusMessage = String("Update error: ") + Update.errorString();
+    appState.otaStatus = "error";
+    appState.otaStatusMessage = String("Update error: ") + Update.errorString();
+    appState.otaProgress = 0;
+    appState.markOTADirty();
     otaInProgress = false;
-    broadcastUpdateStatus();
-    webSocket.loop();  // Ensure error status is sent
     return false;
   }
 }
@@ -835,7 +797,7 @@ void handleFirmwareUploadChunk() {
     otaProgressBytes = 0;
     otaTotalBytes = 0;  // Unknown until upload completes
     otaStatusMessage = "Receiving firmware file...";
-    broadcastUpdateStatus();
+    appState.markOTADirty();
     
     // Play OTA update melody before flashing begins
     buzzer_play_blocking(BUZZ_OTA_UPDATE, 850);
@@ -848,10 +810,10 @@ void handleFirmwareUploadChunk() {
       otaStatus = "error";
       otaStatusMessage = uploadErrorMessage;
       otaInProgress = false;
-      broadcastUpdateStatus();
+      appState.markOTADirty();
       return;
     }
-    
+
     LOG_I("[OTA] Upload initialized, receiving data");
     
   } else if (upload.status == UPLOAD_FILE_WRITE) {
@@ -869,45 +831,45 @@ void handleFirmwareUploadChunk() {
       otaStatus = "error";
       otaStatusMessage = uploadErrorMessage;
       otaInProgress = false;
-      broadcastUpdateStatus();
+      appState.markOTADirty();
       return;
     }
-    
+
     otaProgressBytes += upload.currentSize;
-    
-    // Broadcast progress periodically (every ~10KB or every 2 seconds)
+
+    // Signal progress periodically (every ~10KB or every 2 seconds)
     static unsigned long lastBroadcast = 0;
     static size_t lastBroadcastBytes = 0;
     unsigned long now = millis();
-    
+
     if ((otaProgressBytes - lastBroadcastBytes) >= 10240 || (now - lastBroadcast) >= 2000) {
       otaStatusMessage = String("Uploading: ") + String(otaProgressBytes / 1024) + " KB received...";
-      broadcastUpdateStatus();
+      appState.markOTADirty();
       lastBroadcast = now;
       lastBroadcastBytes = otaProgressBytes;
       LOG_D("[OTA] Received: %d KB", otaProgressBytes / 1024);
     }
-    
+
   } else if (upload.status == UPLOAD_FILE_END) {
     // Skip finalization if there was an error
     if (uploadError) {
       return;
     }
-    
+
     otaTotalBytes = upload.totalSize;
     LOG_I("[OTA] Upload complete: %d bytes (%.2f KB)", upload.totalSize, upload.totalSize / 1024.0);
-    
+
     otaStatusMessage = "Verifying firmware...";
     otaProgress = 100;
-    broadcastUpdateStatus();
-    
+    appState.markOTADirty();
+
     // Finalize update
     if (Update.end(true)) {
       if (Update.isFinished()) {
         LOG_I("[OTA] Firmware upload and verification successful");
         otaStatus = "complete";
         otaStatusMessage = "Upload complete! Rebooting...";
-        broadcastUpdateStatus();
+        appState.markOTADirty();
         // Note: Response and reboot handled in handleFirmwareUploadComplete
       } else {
         LOG_E("[OTA] Update did not finish correctly");
@@ -916,7 +878,7 @@ void handleFirmwareUploadChunk() {
         otaStatus = "error";
         otaStatusMessage = uploadErrorMessage;
         otaInProgress = false;
-        broadcastUpdateStatus();
+        appState.markOTADirty();
       }
     } else {
       LOG_E("[OTA] Update finalization error: %s", Update.errorString());
@@ -925,9 +887,9 @@ void handleFirmwareUploadChunk() {
       otaStatus = "error";
       otaStatusMessage = uploadErrorMessage;
       otaInProgress = false;
-      broadcastUpdateStatus();
+      appState.markOTADirty();
     }
-    
+
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
     LOG_W("[OTA] Upload aborted by client");
     Update.abort();
@@ -936,7 +898,7 @@ void handleFirmwareUploadChunk() {
     otaStatus = "error";
     otaStatusMessage = "Upload aborted";
     otaInProgress = false;
-    broadcastUpdateStatus();
+    appState.markOTADirty();
   }
 }
 
@@ -984,4 +946,85 @@ void handleFirmwareUploadComplete() {
   
   // Reset OTA state
   otaInProgress = false;
+}
+
+// ===== Non-Blocking OTA FreeRTOS Tasks =====
+
+// OTA download task — runs performOTAUpdate() on a separate core
+static void otaDownloadTask(void* param) {
+  String firmwareUrl = appState.cachedFirmwareUrl;
+  bool success = performOTAUpdate(firmwareUrl);
+
+  if (success) {
+    LOG_I("[OTA] Update successful, rebooting in 3 seconds");
+    saveOTASuccessFlag(firmwareVer);
+    vTaskDelay(pdMS_TO_TICKS(3000));  // Let main loop broadcast final status
+    ESP.restart();
+  } else {
+    LOG_W("[OTA] Update failed");
+    appState.otaInProgress = false;
+    appState.updateDiscoveredTime = 0;
+    appState.setFSMState(STATE_IDLE);
+    appState.markOTADirty();
+  }
+
+  otaDownloadTaskHandle = NULL;
+  vTaskDelete(NULL);
+}
+
+void startOTADownloadTask() {
+  if (otaDownloadTaskHandle != NULL || appState.otaInProgress) {
+    LOG_W("[OTA] Download task already running or OTA in progress");
+    return;
+  }
+
+  appState.otaInProgress = true;
+  appState.otaStatus = "preparing";
+  appState.otaStatusMessage = "Preparing for update...";
+  appState.otaProgress = 0;
+  appState.setFSMState(STATE_OTA_UPDATE);
+  appState.markOTADirty();
+
+  BaseType_t result = xTaskCreatePinnedToCore(
+    otaDownloadTask, "OTA_DL", TASK_STACK_SIZE_OTA,
+    NULL, TASK_PRIORITY_OTA, &otaDownloadTaskHandle, 1  // Core 1
+  );
+
+  if (result != pdPASS) {
+    LOG_E("[OTA] Failed to create download task");
+    appState.otaInProgress = false;
+    setOTAProgress("error", "Failed to start update task", 0);
+    appState.setFSMState(STATE_IDLE);
+  }
+}
+
+// OTA check task — runs checkForFirmwareUpdate() on a separate core
+static void otaCheckTaskFunc(void* param) {
+  checkForFirmwareUpdate();
+
+  // Also refresh WiFi status after check (needs dirty flag, not direct WS call)
+  appState.markOTADirty();
+
+  otaCheckTaskHandle = NULL;
+  vTaskDelete(NULL);
+}
+
+void startOTACheckTask() {
+  if (otaCheckTaskHandle != NULL || appState.otaInProgress) {
+    LOG_D("[OTA] Check task already running or OTA in progress, skipping");
+    return;
+  }
+
+  BaseType_t result = xTaskCreatePinnedToCore(
+    otaCheckTaskFunc, "OTA_CHK", TASK_STACK_SIZE_OTA,
+    NULL, TASK_PRIORITY_OTA, &otaCheckTaskHandle, 1  // Core 1
+  );
+
+  if (result != pdPASS) {
+    LOG_E("[OTA] Failed to create check task");
+  }
+}
+
+bool isOTATaskRunning() {
+  return otaDownloadTaskHandle != NULL || otaCheckTaskHandle != NULL;
 }
