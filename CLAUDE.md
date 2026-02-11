@@ -121,6 +121,8 @@ test: Add/update tests
 chore: Maintenance tasks
 ```
 
+**IMPORTANT**: Never add `Co-Authored-By` trailers (e.g., `Co-Authored-By: Claude ...<noreply@anthropic.com>`) to commit messages. Commits should not contain any AI attribution lines.
+
 ## CI/CD
 
 GitHub Actions (`.github/workflows/tests.yml`): runs all native tests, then builds ESP32-S3 firmware. Triggers on push/PR to `main` and `develop` branches. A separate `release.yml` workflow handles automated releases.

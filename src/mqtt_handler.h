@@ -33,6 +33,10 @@ void publishMqttAudioDiagnostics();
 void publishMqttAudioGraphState();
 void publishMqttDebugState();
 void publishMqttCrashDiagnostics();
+void publishMqttInputNames();
+#ifdef GUI_ENABLED
+void publishMqttBootAnimState();
+#endif
 
 // ===== Home Assistant Discovery =====
 void publishHADiscovery();

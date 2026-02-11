@@ -9,6 +9,7 @@
 #include "settings_manager.h"
 #include "utils.h"
 #include "websocket_handler.h"
+#include "ota_updater.h"
 #include <LittleFS.h>
 #include <cmath>
 
@@ -32,7 +33,6 @@ extern void sendWiFiStatus();
 extern void saveSettings();
 extern void performFactoryReset();
 extern void checkForFirmwareUpdate();
-extern bool performOTAUpdate(String firmwareUrl);
 extern void setAmplifierState(bool state);
 extern void sendAudioGraphState();
 extern void sendDebugState();
@@ -191,6 +191,15 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/debug/hw_stats/set").c_str());
   mqttClient.subscribe((base + "/debug/i2s_metrics/set").c_str());
   mqttClient.subscribe((base + "/debug/task_monitor/set").c_str());
+  mqttClient.subscribe((base + "/signalgenerator/sweep_speed/set").c_str());
+  mqttClient.subscribe((base + "/settings/timezone_offset/set").c_str());
+#ifdef GUI_ENABLED
+  mqttClient.subscribe((base + "/settings/boot_animation/set").c_str());
+  mqttClient.subscribe((base + "/settings/boot_animation_style/set").c_str());
+#endif
+
+  // Subscribe to HA birth message for re-discovery after HA restart
+  mqttClient.subscribe("homeassistant/status");
 
   LOG_D("[MQTT] Subscribed to command topics");
 }
@@ -208,6 +217,16 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   String base = getEffectiveMqttBaseTopic();
 
   LOG_D("[MQTT] Received: %s = %s", topic, message.c_str());
+
+  // Handle Home Assistant restart — re-publish discovery so HA picks up current device info
+  if (topicStr == "homeassistant/status") {
+    if (message == "online") {
+      LOG_I("[MQTT] Home Assistant restarted, re-publishing discovery");
+      if (mqttHADiscovery) publishHADiscovery();
+      publishMqttState();
+    }
+    return;
+  }
 
   // Handle LED blinking control
   if (topicStr == base + "/led/blinking/set") {
@@ -632,6 +651,54 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     publishMqttDebugState();
     LOG_I("[MQTT] Debug task monitor set to %s", newState ? "ON" : "OFF");
   }
+  // Handle timezone offset
+  else if (topicStr == base + "/settings/timezone_offset/set") {
+    int offset = message.toInt();
+    if (offset >= -12 && offset <= 14) {
+      timezoneOffset = offset;
+      saveSettings();
+      LOG_I("[MQTT] Timezone offset set to %d", offset);
+      publishMqttSystemStatus();
+    }
+  }
+  // Handle signal generator sweep speed
+  else if (topicStr == base + "/signalgenerator/sweep_speed/set") {
+    float speed = message.toFloat();
+    if (speed >= 0.1f && speed <= 10.0f) {
+      appState.sigGenSweepSpeed = speed;
+      siggen_apply_params();
+      saveSignalGenSettings();
+      LOG_I("[MQTT] Signal generator sweep speed set to %.1f Hz/s", speed);
+      publishMqttSignalGenState();
+      sendSignalGenState();
+    }
+  }
+#ifdef GUI_ENABLED
+  // Handle boot animation enabled
+  else if (topicStr == base + "/settings/boot_animation/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.bootAnimEnabled = newState;
+    saveSettings();
+    LOG_I("[MQTT] Boot animation set to %s", newState ? "ON" : "OFF");
+    publishMqttBootAnimState();
+  }
+  // Handle boot animation style
+  else if (topicStr == base + "/settings/boot_animation_style/set") {
+    int style = -1;
+    if (message == "wave_pulse") style = 0;
+    else if (message == "speaker_ripple") style = 1;
+    else if (message == "waveform") style = 2;
+    else if (message == "beat_bounce") style = 3;
+    else if (message == "freq_bars") style = 4;
+    else if (message == "heartbeat") style = 5;
+    if (style >= 0) {
+      appState.bootAnimStyle = style;
+      saveSettings();
+      LOG_I("[MQTT] Boot animation style set to %s", message.c_str());
+      publishMqttBootAnimState();
+    }
+  }
+#endif
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
     LOG_W("[MQTT] Reboot command received");
@@ -656,18 +723,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (message == "install") {
       LOG_I("[MQTT] Firmware install command received from Home Assistant");
       if (updateAvailable && cachedFirmwareUrl.length() > 0) {
-        LOG_I("[MQTT] Starting OTA update...");
-        // Publish in_progress state before starting
-        publishMqttUpdateState();
-        bool success = performOTAUpdate(cachedFirmwareUrl);
-        if (success) {
-          LOG_I("[MQTT] OTA update successful, rebooting...");
-          delay(1000);
-          ESP.restart();
-        } else {
-          LOG_E("[MQTT] OTA update failed");
-          publishMqttUpdateState(); // Update state to show failure
-        }
+        startOTADownloadTask();  // Non-blocking FreeRTOS task
       } else {
         LOG_W("[MQTT] No update available or firmware URL missing");
       }
@@ -715,7 +771,7 @@ void mqttReconnect() {
   LOG_I("[MQTT] Connecting to broker (backoff: %lums)...", appState.mqttBackoffDelay);
 
   String clientId = getMqttDeviceId();
-  String lwt = mqttBaseTopic + "/status";
+  String lwt = getEffectiveMqttBaseTopic() + "/status";
 
   bool connected = false;
 
@@ -809,7 +865,13 @@ void mqttLoop() {
         (appState.debugSerialLevel != appState.prevMqttDebugSerialLevel) ||
         (appState.debugHwStats != appState.prevMqttDebugHwStats) ||
         (appState.debugI2sMetrics != appState.prevMqttDebugI2sMetrics) ||
-        (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor);
+        (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor) ||
+        (fabs(appState.sigGenSweepSpeed - appState.prevMqttSigGenSweepSpeed) > 0.05f)
+#ifdef GUI_ENABLED
+        || (appState.bootAnimEnabled != appState.prevMqttBootAnimEnabled)
+        || (appState.bootAnimStyle != appState.prevMqttBootAnimStyle)
+#endif
+        ;
 
     if (stateChanged) {
       publishMqttState();
@@ -837,6 +899,7 @@ void mqttLoop() {
       appState.prevMqttSigGenFrequency = appState.sigGenFrequency;
       appState.prevMqttSigGenAmplitude = appState.sigGenAmplitude;
       appState.prevMqttSigGenOutputMode = appState.sigGenOutputMode;
+      appState.prevMqttSigGenSweepSpeed = appState.sigGenSweepSpeed;
       appState.prevMqttVuMeterEnabled = appState.vuMeterEnabled;
       appState.prevMqttWaveformEnabled = appState.waveformEnabled;
       appState.prevMqttSpectrumEnabled = appState.spectrumEnabled;
@@ -845,6 +908,10 @@ void mqttLoop() {
       appState.prevMqttDebugHwStats = appState.debugHwStats;
       appState.prevMqttDebugI2sMetrics = appState.debugI2sMetrics;
       appState.prevMqttDebugTaskMonitor = appState.debugTaskMonitor;
+#ifdef GUI_ENABLED
+      appState.prevMqttBootAnimEnabled = appState.bootAnimEnabled;
+      appState.prevMqttBootAnimStyle = appState.bootAnimStyle;
+#endif
     }
   }
 }
@@ -1005,6 +1072,11 @@ void publishMqttUpdateState() {
   doc["release_url"] = String("https://github.com/") + GITHUB_REPO_OWNER + "/" +
                        GITHUB_REPO_NAME + "/releases";
   doc["in_progress"] = otaInProgress;
+  if (otaInProgress) {
+    doc["update_percentage"] = otaProgress;
+  } else {
+    doc["update_percentage"] = (char*)nullptr; // JSON null
+  }
 
   // Add release summary if update available
   if (updateAvailable && cachedLatestVersion.length() > 0) {
@@ -1329,6 +1401,37 @@ void publishMqttCrashDiagnostics() {
   }
 }
 
+// Publish input names as read-only sensors
+void publishMqttInputNames() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  const char *labels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
+  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    mqttClient.publish((base + "/audio/" + labels[i]).c_str(),
+                       appState.inputNames[i].c_str(), true);
+  }
+}
+
+#ifdef GUI_ENABLED
+// Publish boot animation state
+void publishMqttBootAnimState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/settings/boot_animation").c_str(),
+                     appState.bootAnimEnabled ? "ON" : "OFF", true);
+
+  const char *styleNames[] = {"wave_pulse", "speaker_ripple", "waveform", "beat_bounce", "freq_bars", "heartbeat"};
+  mqttClient.publish((base + "/settings/boot_animation_style").c_str(),
+                     styleNames[appState.bootAnimStyle % 6], true);
+}
+#endif
+
 // Publish all states
 void publishMqttState() {
   publishMqttLedState();
@@ -1345,6 +1448,10 @@ void publishMqttState() {
   publishMqttAudioGraphState();
   publishMqttDebugState();
   publishMqttCrashDiagnostics();
+  publishMqttInputNames();
+#ifdef GUI_ENABLED
+  publishMqttBootAnimState();
+#endif
 }
 
 // ===== Home Assistant Auto-Discovery =====
@@ -1367,6 +1474,15 @@ void addHADeviceInfo(JsonDocument &doc) {
   device["manufacturer"] = MANUFACTURER_NAME;
   device["serial_number"] = deviceSerialNumber;
   device["sw_version"] = firmwareVer;
+  device["configuration_url"] = "http://" + WiFi.localIP().toString();
+
+  // Availability — tells HA which topic indicates online/offline
+  String availBase = getEffectiveMqttBaseTopic();
+  JsonArray avail = doc["availability"].to<JsonArray>();
+  JsonObject a = avail.add<JsonObject>();
+  a["topic"] = availBase + "/status";
+  a["payload_available"] = "online";
+  a["payload_not_available"] = "offline";
 }
 
 // Publish Home Assistant auto-discovery configuration
@@ -1669,6 +1785,23 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     String topic = "homeassistant/button/" + deviceId + "/check_update/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== Factory Reset Button =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Factory Reset";
+    doc["unique_id"] = deviceId + "_factory_reset";
+    doc["command_topic"] = base + "/system/factory_reset";
+    doc["payload_press"] = "RESET";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:factory";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/button/" + deviceId + "/factory_reset/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
@@ -2617,6 +2750,102 @@ void publishHADiscovery() {
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/heap_max_block/config").c_str(), payload.c_str(), true);
   }
 
+  // ===== Timezone Offset Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Timezone Offset";
+    doc["unique_id"] = deviceId + "_timezone_offset";
+    doc["state_topic"] = base + "/settings/timezone_offset";
+    doc["command_topic"] = base + "/settings/timezone_offset/set";
+    doc["min"] = -12;
+    doc["max"] = 14;
+    doc["step"] = 1;
+    doc["unit_of_measurement"] = "h";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:map-clock-outline";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/number/" + deviceId + "/timezone_offset/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Signal Generator Sweep Speed Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Signal Sweep Speed";
+    doc["unique_id"] = deviceId + "_siggen_sweep_speed";
+    doc["state_topic"] = base + "/signalgenerator/sweep_speed";
+    doc["command_topic"] = base + "/signalgenerator/sweep_speed/set";
+    doc["min"] = 0.1;
+    doc["max"] = 10.0;
+    doc["step"] = 0.1;
+    doc["unit_of_measurement"] = "Hz/s";
+    doc["icon"] = "mdi:speedometer";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/number/" + deviceId + "/siggen_sweep_speed/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Input Names (4 read-only sensors) =====
+  {
+    const char *inputLabels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
+    const char *inputDisplayNames[] = {"Input 1 Left Name", "Input 1 Right Name", "Input 2 Left Name", "Input 2 Right Name"};
+    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+      JsonDocument doc;
+      doc["name"] = inputDisplayNames[i];
+      doc["unique_id"] = deviceId + "_" + inputLabels[i];
+      doc["state_topic"] = base + "/audio/" + inputLabels[i];
+      doc["entity_category"] = "diagnostic";
+      doc["icon"] = "mdi:label-outline";
+      addHADeviceInfo(doc);
+      String payload;
+      serializeJson(doc, payload);
+      mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[i] + "/config").c_str(), payload.c_str(), true);
+    }
+  }
+
+#ifdef GUI_ENABLED
+  // ===== Boot Animation Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Boot Animation";
+    doc["unique_id"] = deviceId + "_boot_animation";
+    doc["state_topic"] = base + "/settings/boot_animation";
+    doc["command_topic"] = base + "/settings/boot_animation/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:animation-play";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/switch/" + deviceId + "/boot_animation/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Boot Animation Style Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Boot Animation Style";
+    doc["unique_id"] = deviceId + "_boot_animation_style";
+    doc["state_topic"] = base + "/settings/boot_animation_style";
+    doc["command_topic"] = base + "/settings/boot_animation_style/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("wave_pulse");
+    options.add("speaker_ripple");
+    options.add("waveform");
+    options.add("beat_bounce");
+    options.add("freq_bars");
+    options.add("heartbeat");
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:animation";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/select/" + deviceId + "/boot_animation_style/config").c_str(), payload.c_str(), true);
+  }
+#endif
+
   LOG_I("[MQTT] Home Assistant discovery configs published");
 }
 
@@ -2688,9 +2917,39 @@ void removeHADiscovery() {
       "homeassistant/number/%s/debug_serial_level/config",
       "homeassistant/switch/%s/debug_hw_stats/config",
       "homeassistant/switch/%s/debug_i2s_metrics/config",
-      "homeassistant/switch/%s/debug_task_monitor/config"};
+      "homeassistant/switch/%s/debug_task_monitor/config",
+      // Per-ADC entities
+      "homeassistant/sensor/%s/adc1_level/config",
+      "homeassistant/sensor/%s/adc1_adc_status/config",
+      "homeassistant/sensor/%s/adc1_noise_floor/config",
+      "homeassistant/sensor/%s/adc1_vrms/config",
+      "homeassistant/sensor/%s/adc2_level/config",
+      "homeassistant/sensor/%s/adc2_adc_status/config",
+      "homeassistant/sensor/%s/adc2_noise_floor/config",
+      "homeassistant/sensor/%s/adc2_vrms/config",
+      // Signal generator target ADC
+      "homeassistant/select/%s/siggen_target_adc/config",
+      // Crash diagnostics
+      "homeassistant/sensor/%s/reset_reason/config",
+      "homeassistant/binary_sensor/%s/was_crash/config",
+      "homeassistant/binary_sensor/%s/heap_critical/config",
+      "homeassistant/sensor/%s/heap_max_block/config",
+      // Factory reset button
+      "homeassistant/button/%s/factory_reset/config",
+      // Timezone offset
+      "homeassistant/number/%s/timezone_offset/config",
+      // Sweep speed
+      "homeassistant/number/%s/siggen_sweep_speed/config",
+      // Input names
+      "homeassistant/sensor/%s/input1_name_l/config",
+      "homeassistant/sensor/%s/input1_name_r/config",
+      "homeassistant/sensor/%s/input2_name_l/config",
+      "homeassistant/sensor/%s/input2_name_r/config",
+      // Boot animation
+      "homeassistant/switch/%s/boot_animation/config",
+      "homeassistant/select/%s/boot_animation_style/config"};
 
-  char topicBuf[128];
+  char topicBuf[160];
   for (const char *topicTemplate : topics) {
     snprintf(topicBuf, sizeof(topicBuf), topicTemplate, deviceId.c_str());
     mqttClient.publish(topicBuf, "", true); // Empty payload removes the config

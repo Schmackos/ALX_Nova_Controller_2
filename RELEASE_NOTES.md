@@ -43,6 +43,63 @@ None
 ## Version 1.6.3
 
 ## New Features
+- [2026-02-11] feat: MQTT HA integration overhaul — availability, OTA progress, new entities
+
+Infrastructure fixes:
+- Subscribe to homeassistant/status for HA restart re-discovery
+- Add update_percentage to OTA state JSON for HA progress bar
+- Replace blocking performOTAUpdate with startOTADownloadTask in MQTT callback
+- Fix LWT topic to use getEffectiveMqttBaseTopic() instead of raw mqttBaseTopic
+- Add availability block to all HA discovery entities
+- Add configuration_url to device info (links to web UI)
+- Complete removeHADiscovery() cleanup list (was missing 20+ entities)
+
+New HA entities:
+- Factory Reset button, Timezone Offset number (-12 to +14h)
+- Signal Generator Sweep Speed number (0.1-10.0 Hz/s)
+- 4 Input Name read-only diagnostic sensors
+- Boot Animation switch + style select (GUI_ENABLED guarded)
+
+20 new MQTT tests (461 total), ESP32-S3 build: 44.0% RAM / 65.1% Flash (`a4e4de2`)
+- [2026-02-11] feat: MQTT HA integration overhaul — availability, OTA progress, new entities
+
+Infrastructure fixes:
+- Subscribe to homeassistant/status for HA restart re-discovery
+- Add update_percentage to OTA state JSON for HA progress bar
+- Replace blocking performOTAUpdate with startOTADownloadTask in MQTT callback
+- Fix LWT topic to use getEffectiveMqttBaseTopic() instead of raw mqttBaseTopic
+- Add availability block to all HA discovery entities
+- Add configuration_url to device info (links to web UI)
+- Complete removeHADiscovery() cleanup list (was missing 20+ entities)
+
+New HA entities:
+- Factory Reset button, Timezone Offset number (-12 to +14h)
+- Signal Generator Sweep Speed number (0.1-10.0 Hz/s)
+- 4 Input Name read-only diagnostic sensors
+- Boot Animation switch + style select (GUI_ENABLED guarded)
+
+20 new MQTT tests (461 total), ESP32-S3 build: 44.0% RAM / 65.1% Flash (`bdcf56e`)
+- [2026-02-11] feat: Crash resilience — watchdog, I2S timeout recovery, heap monitor, crash log
+
+Overnight freeze revealed zero crash forensics and no watchdog protection.
+Root cause: i2s_read() with portMAX_DELAY blocks forever if DMA hangs,
+starving the main loop on the same core.
+
+- Crash log: 10-entry ring buffer persisted to /crashlog.bin, records
+  reset reason + heap stats on every boot, backfills NTP timestamp
+- Task watchdog: 15s TWDT on main loop, audio task, and GUI task;
+  OTA download task unsubscribes during long transfers
+- I2S timeout: 500ms timeout replaces portMAX_DELAY, auto-recovers
+  after 10 consecutive timeouts by reinstalling the I2S driver
+- Heap monitor: checks largest free block every 30s, flags critical
+  when below 20KB, published via MQTT (always-on, not debug-gated)
+- Audio task moved from Core 0 to Core 1 so WiFi/MQTT/HTTP stay
+  responsive even if audio hangs
+- MQTT HA discovery: reset_reason, was_crash, heap_critical, heap_max_block
+- Exception decoder enabled in platformio.ini monitor_filters
+- 24 new tests (441 total), firmware builds at 44.0% RAM / 64.8% Flash
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`bcb01b4`)
 - [2026-02-11] feat: Crash resilience — watchdog, I2S timeout recovery, heap monitor, crash log
 
 Overnight freeze revealed zero crash forensics and no watchdog protection.

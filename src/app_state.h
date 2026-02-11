@@ -310,6 +310,13 @@ public:
   float prevMqttSigGenFrequency = 1000.0f;
   float prevMqttSigGenAmplitude = -6.0f;
   int prevMqttSigGenOutputMode = 0;
+  float prevMqttSigGenSweepSpeed = 1000.0f;
+
+  // MQTT state tracking for boot animation
+#ifdef GUI_ENABLED
+  bool prevMqttBootAnimEnabled = true;
+  int prevMqttBootAnimStyle = 0;
+#endif
 
   // ===== GUI State =====
 #ifdef GUI_ENABLED
