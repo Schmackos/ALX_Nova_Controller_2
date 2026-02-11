@@ -1,5 +1,45 @@
 # Release Notes
 
+## Version 1.6.5
+
+## New Features
+- Automated release via GitHub Actions
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+- Version bump to 1.6.5
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
+## Version 1.6.4
+
+## New Features
+- Automated release via GitHub Actions
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+- Version bump to 1.6.4
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.6.3
 
 ## New Features
