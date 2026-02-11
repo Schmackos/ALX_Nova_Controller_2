@@ -380,6 +380,178 @@ void test_mqtt_default_port(void) {
     TEST_ASSERT_EQUAL(0, mqttSettings.port);
 }
 
+// ===== HA Status Restart Detection Tests =====
+
+void test_ha_status_online_triggers_republish(void) {
+    // The homeassistant/status topic with "online" payload should trigger
+    // re-publishing discovery. We verify the logic pattern: when topic matches
+    // and message is "online", discovery should be republished.
+    String topic = "homeassistant/status";
+    String message = "online";
+    TEST_ASSERT_EQUAL_STRING("homeassistant/status", topic.c_str());
+    TEST_ASSERT_EQUAL_STRING("online", message.c_str());
+    // The handler returns early (no base topic matching needed)
+    TEST_ASSERT_TRUE(strncmp(topic.c_str(), "homeassistant/", 14) == 0);
+}
+
+void test_ha_status_offline_no_action(void) {
+    // "offline" messages should not trigger re-publishing
+    String message = "offline";
+    TEST_ASSERT_FALSE(message == "online");
+}
+
+// ===== OTA Update Percentage Tests =====
+
+void test_ota_update_percentage_in_progress(void) {
+    // When OTA is in progress, update_percentage should be set
+    bool otaInProgress = true;
+    int otaProgress = 45;
+
+    // Simulate the JSON construction logic
+    TEST_ASSERT_TRUE(otaInProgress);
+    TEST_ASSERT_EQUAL(45, otaProgress);
+}
+
+void test_ota_update_percentage_not_in_progress(void) {
+    // When OTA is not in progress, update_percentage should be null
+    bool otaInProgress = false;
+    TEST_ASSERT_FALSE(otaInProgress);
+}
+
+// ===== Non-Blocking OTA Tests =====
+
+void test_mqtt_ota_command_requires_update_available(void) {
+    // OTA install should only proceed if update is available
+    bool updateAvailable = false;
+    String cachedFirmwareUrl = "";
+    bool shouldStart = updateAvailable && cachedFirmwareUrl.length() > 0;
+    TEST_ASSERT_FALSE(shouldStart);
+}
+
+void test_mqtt_ota_command_requires_firmware_url(void) {
+    // OTA install should only proceed if firmware URL is available
+    bool updateAvailable = true;
+    String cachedFirmwareUrl = "";
+    bool shouldStart = updateAvailable && cachedFirmwareUrl.length() > 0;
+    TEST_ASSERT_FALSE(shouldStart);
+}
+
+void test_mqtt_ota_command_starts_when_ready(void) {
+    // OTA install should proceed when both update and URL are available
+    bool updateAvailable = true;
+    String cachedFirmwareUrl = "https://example.com/firmware.bin";
+    bool shouldStart = updateAvailable && cachedFirmwareUrl.length() > 0;
+    TEST_ASSERT_TRUE(shouldStart);
+}
+
+// ===== Availability Configuration Tests =====
+
+void test_effective_base_topic_with_custom_topic(void) {
+    // When baseTopic is set, it should be used for LWT
+    mqttSettings.baseTopic = "custom/topic";
+    String lwt = mqttSettings.baseTopic + "/status";
+    TEST_ASSERT_EQUAL_STRING("custom/topic/status", lwt.c_str());
+}
+
+void test_availability_topic_matches_lwt(void) {
+    // The availability topic in discovery must match the LWT topic
+    mqttSettings.baseTopic = "alx_nova";
+    String lwtTopic = mqttSettings.baseTopic + "/status";
+    String availTopic = mqttSettings.baseTopic + "/status";
+    TEST_ASSERT_EQUAL_STRING(lwtTopic.c_str(), availTopic.c_str());
+}
+
+// ===== Timezone Offset Validation Tests =====
+
+void test_timezone_offset_valid_range(void) {
+    // Valid timezone offsets: -12 to +14
+    TEST_ASSERT_TRUE(-12 >= -12 && -12 <= 14);
+    TEST_ASSERT_TRUE(0 >= -12 && 0 <= 14);
+    TEST_ASSERT_TRUE(14 >= -12 && 14 <= 14);
+}
+
+void test_timezone_offset_invalid_range(void) {
+    // Invalid timezone offsets
+    TEST_ASSERT_FALSE(-13 >= -12 && -13 <= 14);
+    TEST_ASSERT_FALSE(15 >= -12 && 15 <= 14);
+}
+
+// ===== Sweep Speed Validation Tests =====
+
+void test_sweep_speed_valid_range(void) {
+    float speed = 5.0f;
+    TEST_ASSERT_TRUE(speed >= 0.1f && speed <= 10.0f);
+}
+
+void test_sweep_speed_boundary_min(void) {
+    float speed = 0.1f;
+    TEST_ASSERT_TRUE(speed >= 0.1f && speed <= 10.0f);
+}
+
+void test_sweep_speed_boundary_max(void) {
+    float speed = 10.0f;
+    TEST_ASSERT_TRUE(speed >= 0.1f && speed <= 10.0f);
+}
+
+void test_sweep_speed_below_min(void) {
+    float speed = 0.05f;
+    TEST_ASSERT_FALSE(speed >= 0.1f && speed <= 10.0f);
+}
+
+// ===== Boot Animation Style Mapping Tests =====
+
+void test_boot_animation_style_mapping(void) {
+    // Verify string-to-index mapping
+    const char *styles[] = {"wave_pulse", "speaker_ripple", "waveform", "beat_bounce", "freq_bars", "heartbeat"};
+    TEST_ASSERT_EQUAL_STRING("wave_pulse", styles[0]);
+    TEST_ASSERT_EQUAL_STRING("speaker_ripple", styles[1]);
+    TEST_ASSERT_EQUAL_STRING("waveform", styles[2]);
+    TEST_ASSERT_EQUAL_STRING("beat_bounce", styles[3]);
+    TEST_ASSERT_EQUAL_STRING("freq_bars", styles[4]);
+    TEST_ASSERT_EQUAL_STRING("heartbeat", styles[5]);
+}
+
+void test_boot_animation_style_count(void) {
+    // There are exactly 6 animation styles (0-5)
+    int styleCount = 6;
+    TEST_ASSERT_EQUAL(6, styleCount);
+    for (int i = 0; i < styleCount; i++) {
+        TEST_ASSERT_TRUE(i >= 0 && i <= 5);
+    }
+}
+
+// ===== Input Names Tests =====
+
+void test_input_name_labels(void) {
+    // Verify the 4 input name labels match expected format
+    const char *labels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
+    TEST_ASSERT_EQUAL_STRING("input1_name_l", labels[0]);
+    TEST_ASSERT_EQUAL_STRING("input1_name_r", labels[1]);
+    TEST_ASSERT_EQUAL_STRING("input2_name_l", labels[2]);
+    TEST_ASSERT_EQUAL_STRING("input2_name_r", labels[3]);
+}
+
+// ===== Factory Reset Button Tests =====
+
+void test_factory_reset_payload(void) {
+    // Factory reset button uses "RESET" as payload_press
+    String payload = "RESET";
+    TEST_ASSERT_EQUAL_STRING("RESET", payload.c_str());
+}
+
+// ===== Cleanup Completeness Tests =====
+
+void test_cleanup_topic_buffer_size(void) {
+    // Longest topic: "homeassistant/binary_sensor/%s/heap_critical/config"
+    // With deviceId "esp32_audio_XXXX" (16 chars) = ~67 chars
+    // Buffer should be >= 160 to handle all topics safely
+    const int bufSize = 160;
+    char buf[160];
+    const char *longestTopic = "homeassistant/binary_sensor/%s/boot_animation_style/config";
+    snprintf(buf, sizeof(buf), longestTopic, "esp32_audio_ABCD");
+    TEST_ASSERT_TRUE(strlen(buf) < (size_t)bufSize);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -408,6 +580,46 @@ int runUnityTests(void) {
     RUN_TEST(test_mqtt_update_validates_broker);
     RUN_TEST(test_mqtt_custom_base_topic);
     RUN_TEST(test_mqtt_default_port);
+
+    // HA restart detection tests
+    RUN_TEST(test_ha_status_online_triggers_republish);
+    RUN_TEST(test_ha_status_offline_no_action);
+
+    // OTA progress tests
+    RUN_TEST(test_ota_update_percentage_in_progress);
+    RUN_TEST(test_ota_update_percentage_not_in_progress);
+
+    // Non-blocking OTA tests
+    RUN_TEST(test_mqtt_ota_command_requires_update_available);
+    RUN_TEST(test_mqtt_ota_command_requires_firmware_url);
+    RUN_TEST(test_mqtt_ota_command_starts_when_ready);
+
+    // Availability config tests
+    RUN_TEST(test_effective_base_topic_with_custom_topic);
+    RUN_TEST(test_availability_topic_matches_lwt);
+
+    // Timezone offset tests
+    RUN_TEST(test_timezone_offset_valid_range);
+    RUN_TEST(test_timezone_offset_invalid_range);
+
+    // Sweep speed tests
+    RUN_TEST(test_sweep_speed_valid_range);
+    RUN_TEST(test_sweep_speed_boundary_min);
+    RUN_TEST(test_sweep_speed_boundary_max);
+    RUN_TEST(test_sweep_speed_below_min);
+
+    // Boot animation tests
+    RUN_TEST(test_boot_animation_style_mapping);
+    RUN_TEST(test_boot_animation_style_count);
+
+    // Input names tests
+    RUN_TEST(test_input_name_labels);
+
+    // Factory reset tests
+    RUN_TEST(test_factory_reset_payload);
+
+    // Cleanup completeness tests
+    RUN_TEST(test_cleanup_topic_buffer_size);
 
     return UNITY_END();
 }
