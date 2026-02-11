@@ -335,13 +335,13 @@ public:
 
   // ===== Reconnection Backoff =====
   unsigned long wifiBackoffDelay = 1000;
-  unsigned long mqttBackoffDelay = 1000;
+  unsigned long mqttBackoffDelay = 5000;
   static const unsigned long MAX_BACKOFF_DELAY = 60000;
 
   void increaseWiFiBackoff();
   void increaseMqttBackoff();
   void resetWiFiBackoff() { wifiBackoffDelay = 1000; }
-  void resetMqttBackoff() { mqttBackoffDelay = 1000; }
+  void resetMqttBackoff() { mqttBackoffDelay = 5000; }
 
   // ===== Utility Methods =====
   void clearAllDirtyFlags();

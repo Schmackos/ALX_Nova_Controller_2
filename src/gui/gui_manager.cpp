@@ -137,6 +137,8 @@ static void gui_task(void *param) {
     last_activity_time = millis();
 
     for (;;) {
+        esp_task_wdt_reset();  // Feed watchdog at top of each GUI iteration
+
         /* Check for input activity to wake/undim screen */
         bool any_activity = gui_input_activity();
         bool btn_activity = gui_input_press_activity();
@@ -240,8 +242,6 @@ static void gui_task(void *param) {
         uint32_t delay_ms = (time_till_next < GUI_TICK_PERIOD_MS) ? time_till_next : GUI_TICK_PERIOD_MS;
         if (delay_ms < GUI_TICK_PERIOD_MS) delay_ms = GUI_TICK_PERIOD_MS;
         vTaskDelay(pdMS_TO_TICKS(delay_ms));
-
-        esp_task_wdt_reset();  // Feed watchdog after each GUI iteration
     }
 }
 
