@@ -757,7 +757,7 @@ void i2s_audio_init() {
         NULL,
         TASK_PRIORITY_AUDIO,
         &_audioTaskHandle,
-        1  // Core 1 — isolate from main loop (Core 0) so WiFi/MQTT/HTTP stay responsive
+        0  // Core 0 — 500ms timeout + recovery prevents the original portMAX_DELAY hang
     );
 
     LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",

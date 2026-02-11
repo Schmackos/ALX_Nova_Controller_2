@@ -623,10 +623,11 @@ void setup() {
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
 
-  // Configure Task Watchdog Timer (TWDT) — 15s timeout, triggers panic on hang
-  esp_task_wdt_init(15, true);     // 15s timeout, panic=true (resets device)
+  // Subscribe main loop to the Arduino-managed Task Watchdog Timer
+  // Timeout is set to 15s via CONFIG_ESP_TASK_WDT_TIMEOUT_S build flag in platformio.ini
+  // Do NOT call esp_task_wdt_init() — Arduino framework already initializes the WDT
   esp_task_wdt_add(NULL);          // Register main loop (loopTask)
-  LOG_I("[Main] Task watchdog configured: 15s timeout, panic on hang");
+  LOG_I("[Main] Main loop subscribed to task watchdog");
 }
 
 void loop() {
@@ -910,7 +911,8 @@ void loop() {
       appState.setLedState(!appState.ledState);
       digitalWrite(LED_PIN, appState.ledState);
 
-      sendLEDState();
+      // Don't broadcast every toggle — client animates locally from blinkingEnabled state.
+      // Only sendLEDState() on explicit user actions (toggle blink on/off).
     }
   } else {
     if (appState.ledState) {

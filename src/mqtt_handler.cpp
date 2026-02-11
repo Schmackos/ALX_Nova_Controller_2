@@ -770,6 +770,19 @@ void mqttReconnect() {
 
   LOG_I("[MQTT] Connecting to broker (backoff: %lums)...", appState.mqttBackoffDelay);
 
+  // Pre-establish TCP connection with 1s timeout (default is 3s).
+  // If the broker is unreachable this limits the main loop block to ~1s.
+  // PubSubClient.connect() will reuse the existing TCP connection.
+  if (!mqttWifiClient.connected()) {
+    if (!mqttWifiClient.connect(mqttBroker.c_str(), mqttPort, 1000)) {
+      LOG_W("[MQTT] TCP connect timeout (1s) to %s:%d", mqttBroker.c_str(), mqttPort);
+      mqttConnected = false;
+      appState.increaseMqttBackoff();
+      LOG_W("[MQTT] Next retry in %lums", appState.mqttBackoffDelay);
+      return;
+    }
+  }
+
   String clientId = getMqttDeviceId();
   String lwt = getEffectiveMqttBaseTopic() + "/status";
 
@@ -834,14 +847,18 @@ void mqttLoop() {
       (currentMillis - lastMqttPublish >= MQTT_PUBLISH_INTERVAL)) {
     lastMqttPublish = currentMillis;
 
-    // Check for state changes and publish
+    // Check for audio level change separately — only publish audio topics
+    // (avoids 65+ publishes on every 0.5dBFS fluctuation)
+    bool audioLevelChanged =
+        (fabs(audioLevel_dBFS - prevMqttAudioLevel) > 0.5f);
+
+    // Check for non-audio state changes that warrant full state publish
     bool stateChanged =
         (ledState != prevMqttLedState) ||
         (blinkingEnabled != prevMqttBlinkingEnabled) ||
         (amplifierState != prevMqttAmplifierState) ||
         (currentMode != prevMqttSensingMode) ||
         (timerRemaining != prevMqttTimerRemaining) ||
-        (fabs(audioLevel_dBFS - prevMqttAudioLevel) > 0.5f) ||
         (appState.backlightOn != prevMqttBacklightOn) ||
         (appState.screenTimeout != prevMqttScreenTimeout) ||
         (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
@@ -875,7 +892,14 @@ void mqttLoop() {
 
     if (stateChanged) {
       publishMqttState();
+    } else if (audioLevelChanged) {
+      // Only publish audio-related topics (3-4 publishes instead of 65+)
+      publishMqttSmartSensingState();
+      publishMqttAudioDiagnostics();
+      prevMqttAudioLevel = audioLevel_dBFS;
+    }
 
+    if (stateChanged) {
       // Update tracked state
       prevMqttLedState = ledState;
       prevMqttBlinkingEnabled = blinkingEnabled;
