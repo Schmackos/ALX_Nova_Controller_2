@@ -2,6 +2,7 @@
 #include "app_state.h"
 #include "buzzer_handler.h"
 #include "config.h"
+#include "crash_log.h"
 #include "debug_serial.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
@@ -1298,6 +1299,36 @@ void publishMqttDebugState() {
                      appState.debugTaskMonitor ? "ON" : "OFF", true);
 }
 
+// Publish crash diagnostics and heap health (always-on, not debug-gated)
+void publishMqttCrashDiagnostics() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  // Reset reason for current boot
+  mqttClient.publish((base + "/diagnostics/reset_reason").c_str(),
+                     getResetReasonString().c_str(), true);
+  mqttClient.publish((base + "/diagnostics/was_crash").c_str(),
+                     crashlog_last_was_crash() ? "ON" : "OFF", true);
+
+  // Heap health
+  mqttClient.publish((base + "/diagnostics/heap_free").c_str(),
+                     String(ESP.getFreeHeap()).c_str(), true);
+  mqttClient.publish((base + "/diagnostics/heap_max_block").c_str(),
+                     String(ESP.getMaxAllocHeap()).c_str(), true);
+  mqttClient.publish((base + "/diagnostics/heap_critical").c_str(),
+                     appState.heapCritical ? "ON" : "OFF", true);
+
+  // Per-ADC I2S recovery counts
+  mqttClient.publish((base + "/diagnostics/i2s_recoveries_adc1").c_str(),
+                     String(appState.audioAdc[0].i2sRecoveries).c_str(), true);
+  if (appState.numAdcsDetected >= 2) {
+    mqttClient.publish((base + "/diagnostics/i2s_recoveries_adc2").c_str(),
+                       String(appState.audioAdc[1].i2sRecoveries).c_str(), true);
+  }
+}
+
 // Publish all states
 void publishMqttState() {
   publishMqttLedState();
@@ -1313,6 +1344,7 @@ void publishMqttState() {
   publishMqttAudioDiagnostics();
   publishMqttAudioGraphState();
   publishMqttDebugState();
+  publishMqttCrashDiagnostics();
 }
 
 // ===== Home Assistant Auto-Discovery =====
@@ -2521,6 +2553,68 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/min_stack_free/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Crash Diagnostics — Reset Reason (diagnostic sensor) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Reset Reason";
+    doc["unique_id"] = deviceId + "_reset_reason";
+    doc["state_topic"] = base + "/diagnostics/reset_reason";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:restart-alert";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/reset_reason/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Crash Diagnostics — Was Crash (binary sensor) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Last Boot Was Crash";
+    doc["unique_id"] = deviceId + "_was_crash";
+    doc["state_topic"] = base + "/diagnostics/was_crash";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["device_class"] = "problem";
+    doc["entity_category"] = "diagnostic";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/was_crash/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Heap Health — Heap Critical (binary sensor) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Heap Critical";
+    doc["unique_id"] = deviceId + "_heap_critical";
+    doc["state_topic"] = base + "/diagnostics/heap_critical";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["device_class"] = "problem";
+    doc["entity_category"] = "diagnostic";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/heap_critical/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Heap Health — Max Alloc Block (diagnostic sensor) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Heap Max Block";
+    doc["unique_id"] = deviceId + "_heap_max_block";
+    doc["state_topic"] = base + "/diagnostics/heap_max_block";
+    doc["unit_of_measurement"] = "B";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:memory";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/heap_max_block/config").c_str(), payload.c_str(), true);
   }
 
   LOG_I("[MQTT] Home Assistant discovery configs published");

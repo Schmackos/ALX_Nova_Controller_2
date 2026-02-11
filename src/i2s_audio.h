@@ -61,6 +61,7 @@ struct AdcDiagnostics {
     unsigned long lastNonZeroMs = 0;
     unsigned long lastReadMs = 0;
     uint32_t totalBuffersRead = 0;
+    uint32_t i2sRecoveries = 0;      // I2S driver restart count (timeout recovery)
 };
 
 struct AudioDiagnostics {

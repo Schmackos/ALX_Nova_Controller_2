@@ -126,6 +126,7 @@ public:
     uint32_t totalBuffers = 0;
     uint32_t clippedSamples = 0;
     float clipRate = 0.0f;           // EMA clip rate (0.0-1.0)
+    uint32_t i2sRecoveries = 0;      // I2S driver restart count (timeout recovery)
   };
   AdcState audioAdc[NUM_AUDIO_ADCS];
   int numAdcsDetected = 1; // How many ADCs are currently producing data
@@ -196,6 +197,9 @@ public:
   bool vuMeterEnabled = true;      // Enable VU meter computation & display
   bool waveformEnabled = true;     // Enable waveform computation & display
   bool spectrumEnabled = true;     // Enable FFT/spectrum computation & display
+
+  // ===== Heap Health =====
+  bool heapCritical = false;       // True when largest free block < 20KB
 
   // ===== Debug Mode Toggles =====
   bool debugMode = true;           // Master debug gate

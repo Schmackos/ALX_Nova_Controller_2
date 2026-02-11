@@ -1,5 +1,6 @@
 #include "utils.h"
 #include "app_state.h"
+#include "crash_log.h"
 #include "debug_serial.h"
 #include <esp_system.h>
 
@@ -101,5 +102,7 @@ void syncTimeWithNTP() {
       strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
       LOG_I("[NTP] Current local time: %s", timeStr);
     }
+    // Backfill crash log timestamp now that NTP is available
+    crashlog_update_timestamp();
   }
 }

@@ -2,6 +2,7 @@
 #include "app_state.h"
 #include "buzzer_handler.h"
 #include "config.h"
+#include "crash_log.h"
 #include "debug_serial.h"
 #include "i2s_audio.h"
 #include "mqtt_handler.h"
@@ -1306,6 +1307,8 @@ void handleDiagnostics() {
   JsonObject system = doc["system"].to<JsonObject>();
   system["uptimeSeconds"] = millis() / 1000;
   system["resetReason"] = getResetReasonString();
+  system["wasCrash"] = crashlog_last_was_crash();
+  system["heapCritical"] = appState.heapCritical;
   system["sdkVersion"] = ESP.getSdkVersion();
   system["freeHeap"] = ESP.getFreeHeap();
   system["heapSize"] = ESP.getHeapSize();
@@ -1315,6 +1318,22 @@ void handleDiagnostics() {
   system["freePsram"] = ESP.getFreePsram();
   system["flashSize"] = ESP.getFlashChipSize();
   system["flashSpeed"] = ESP.getFlashChipSpeed();
+
+  // ===== Crash History =====
+  const CrashLogData &clog = crashlog_get();
+  JsonArray crashArr = system["crashHistory"].to<JsonArray>();
+  for (int i = 0; i < (int)clog.count && i < CRASH_LOG_MAX_ENTRIES; i++) {
+    const CrashLogEntry *entry = crashlog_get_recent(i);
+    if (!entry) break;
+    JsonObject obj = crashArr.add<JsonObject>();
+    obj["reason"] = entry->reason;
+    obj["heapFree"] = entry->heapFree;
+    obj["heapMinFree"] = entry->heapMinFree;
+    if (entry->timestamp[0] != '\0') {
+      obj["timestamp"] = entry->timestamp;
+    }
+    obj["wasCrash"] = crashlog_was_crash(entry->reason);
+  }
 
   // ===== WiFi Status =====
   JsonObject wifi = doc["wifi"].to<JsonObject>();

@@ -19,6 +19,7 @@
 #include "../buzzer_handler.h"
 #include "../debug_serial.h"
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <lvgl.h>
@@ -119,6 +120,9 @@ static void gui_task(void *param) {
     (void)param;
 
     LOG_I("[GUI] Task started on core %d", xPortGetCoreID());
+
+    // Register GUI task with Task Watchdog Timer
+    esp_task_wdt_add(NULL);
 
     /* Flush one black frame to overwrite any stale display RAM
        (e.g. desktop from previous boot), then turn on backlight. */
@@ -236,6 +240,8 @@ static void gui_task(void *param) {
         uint32_t delay_ms = (time_till_next < GUI_TICK_PERIOD_MS) ? time_till_next : GUI_TICK_PERIOD_MS;
         if (delay_ms < GUI_TICK_PERIOD_MS) delay_ms = GUI_TICK_PERIOD_MS;
         vTaskDelay(pdMS_TO_TICKS(delay_ms));
+
+        esp_task_wdt_reset();  // Feed watchdog after each GUI iteration
     }
 }
 
