@@ -12,6 +12,7 @@
 #include <mbedtls/md.h>
 #include <time.h>
 #include <Preferences.h>
+#include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -960,6 +961,9 @@ void handleFirmwareUploadComplete() {
 
 // OTA download task — runs performOTAUpdate() on a separate core
 static void otaDownloadTask(void* param) {
+  // OTA download can take minutes — unsubscribe from watchdog
+  esp_task_wdt_delete(NULL);
+
   String firmwareUrl = appState.cachedFirmwareUrl;
   bool success = performOTAUpdate(firmwareUrl);
 

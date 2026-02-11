@@ -9,6 +9,7 @@
 
 #ifndef NATIVE_TEST
 #include <driver/i2s.h>
+#include <esp_task_wdt.h>
 #include <soc/i2s_struct.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -519,20 +520,45 @@ static void audio_capture_task(void *param) {
     uint32_t readLatencyCount[NUM_AUDIO_ADCS] = {};
     unsigned long lastMetricsTime = millis();
 
+    // I2S timeout recovery state
+    uint32_t consecutiveTimeouts = 0;
+    static const uint32_t TIMEOUT_RECOVERY_THRESHOLD = 10; // ~5s at 500ms timeout
+
+    // Register this task with the Task Watchdog Timer
+    esp_task_wdt_add(NULL);
+
     while (true) {
-        // Read ADC1 (master) — blocks until DMA ready
+        // Feed watchdog at the top of every iteration (even on timeout path)
+        esp_task_wdt_reset();
+
+        // Read ADC1 (master) — 500ms timeout instead of portMAX_DELAY
         size_t bytes_read1 = 0;
         unsigned long t0 = micros();
         esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_ADC1, buf1,
-                                   sizeof(buf1), &bytes_read1, portMAX_DELAY);
+                                   sizeof(buf1), &bytes_read1, pdMS_TO_TICKS(500));
         unsigned long t1 = micros();
 
         if (err1 != ESP_OK || bytes_read1 == 0) {
             if (err1 != ESP_OK) _diagnostics.adc[0].i2sReadErrors++;
             if (bytes_read1 == 0) _diagnostics.adc[0].zeroByteReads++;
+
+            // Track consecutive timeouts for I2S recovery
+            consecutiveTimeouts++;
+            if (consecutiveTimeouts >= TIMEOUT_RECOVERY_THRESHOLD) {
+                LOG_W("[Audio] ADC1 %lu consecutive timeouts — attempting I2S recovery",
+                      (unsigned long)consecutiveTimeouts);
+                i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
+                vTaskDelay(pdMS_TO_TICKS(50));
+                i2s_configure_adc1(_currentSampleRate);
+                _diagnostics.adc[0].i2sRecoveries++;
+                consecutiveTimeouts = 0;
+                LOG_I("[Audio] I2S recovery #%lu complete",
+                      (unsigned long)_diagnostics.adc[0].i2sRecoveries);
+            }
             vTaskDelay(pdMS_TO_TICKS(1));
             continue;
         }
+        consecutiveTimeouts = 0; // Reset on successful read
         readLatencyAccumUs[0] += (t1 - t0);
         readLatencyCount[0]++;
         bufCount[0]++;
@@ -731,7 +757,7 @@ void i2s_audio_init() {
         NULL,
         TASK_PRIORITY_AUDIO,
         &_audioTaskHandle,
-        0  // Core 0
+        1  // Core 1 — isolate from main loop (Core 0) so WiFi/MQTT/HTTP stay responsive
     );
 
     LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",

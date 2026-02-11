@@ -2,6 +2,7 @@
 #include "auth_handler.h"
 #include "config.h"
 #include "app_state.h"
+#include "crash_log.h"
 #include "settings_manager.h"
 #include "wifi_manager.h"
 #include "smart_sensing.h"
@@ -669,6 +670,30 @@ void sendHardwareStats() {
 
   // Reset reason
   doc["resetReason"] = getResetReasonString();
+
+  // Heap health
+  doc["heapCritical"] = appState.heapCritical;
+
+  // Crash history (ring buffer, most recent first)
+  const CrashLogData &clog = crashlog_get();
+  JsonArray crashArr = doc["crashHistory"].to<JsonArray>();
+  for (int i = 0; i < (int)clog.count && i < CRASH_LOG_MAX_ENTRIES; i++) {
+    const CrashLogEntry *entry = crashlog_get_recent(i);
+    if (!entry) break;
+    JsonObject obj = crashArr.add<JsonObject>();
+    obj["reason"] = entry->reason;
+    obj["heapFree"] = entry->heapFree;
+    obj["heapMinFree"] = entry->heapMinFree;
+    if (entry->timestamp[0] != '\0') {
+      obj["timestamp"] = entry->timestamp;
+    }
+    obj["wasCrash"] = crashlog_was_crash(entry->reason);
+  }
+
+  // Per-ADC I2S recovery counts
+  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    doc["audio"]["adcs"][a]["i2sRecoveries"] = appState.audioAdc[a].i2sRecoveries;
+  }
 
   // Broadcast to all WebSocket clients
   String json;

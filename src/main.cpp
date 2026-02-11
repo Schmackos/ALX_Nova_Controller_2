@@ -3,6 +3,7 @@
 #include "button_handler.h"
 #include "buzzer_handler.h"
 #include "config.h"
+#include "crash_log.h"
 #include "debug_serial.h"
 #include "login_page.h"
 #include "mqtt_handler.h"
@@ -30,6 +31,7 @@
 #include <WebSocketsServer.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 #include <mbedtls/md.h>
 #include <time.h>
 
@@ -195,6 +197,15 @@ void setup() {
     LOG_E("[Main] LittleFS initialization failed");
   } else {
     LOG_I("[Main] LittleFS initialized");
+  }
+
+  // Record reset reason to crash log ring buffer (persisted in LittleFS)
+  String resetReason = getResetReasonString();
+  crashlog_record(resetReason);
+  if (crashlog_last_was_crash()) {
+    LOG_W("[Main] *** CRASH DETECTED: previous reset was '%s' ***", resetReason.c_str());
+  } else {
+    LOG_I("[Main] Reset reason: %s", resetReason.c_str());
   }
 
   // Check if device just rebooted after successful OTA update
@@ -612,9 +623,14 @@ void setup() {
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
 
+  // Configure Task Watchdog Timer (TWDT) — 15s timeout, triggers panic on hang
+  esp_task_wdt_init(15, true);     // 15s timeout, panic=true (resets device)
+  esp_task_wdt_add(NULL);          // Register main loop (loopTask)
+  LOG_I("[Main] Task watchdog configured: 15s timeout, panic on hang");
 }
 
 void loop() {
+  esp_task_wdt_reset();  // Feed watchdog at top of every loop iteration
   task_monitor_loop_start();
 
   // Small delay to reduce CPU usage - allows other tasks to run
@@ -852,6 +868,20 @@ void loop() {
     if (millis() - lastTaskMonUpdate >= 5000) {
       lastTaskMonUpdate = millis();
       task_monitor_update();
+    }
+  }
+
+  // Heap health monitor — detect fragmentation before OOM crash (every 30s)
+  static unsigned long lastHeapCheck = 0;
+  if (millis() - lastHeapCheck >= 30000) {
+    lastHeapCheck = millis();
+    uint32_t maxBlock = ESP.getMaxAllocHeap();
+    bool wasCritical = appState.heapCritical;
+    appState.heapCritical = (maxBlock < 20000);
+    if (appState.heapCritical && !wasCritical) {
+      LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<20KB)", (unsigned long)maxBlock);
+    } else if (!appState.heapCritical && wasCritical) {
+      LOG_I("[Main] Heap recovered: largest free block=%lu bytes", (unsigned long)maxBlock);
     }
   }
 

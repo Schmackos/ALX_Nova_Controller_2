@@ -2,6 +2,71 @@
 
 ## Version 1.6.3
 
+## New Features
+- [2026-02-11] feat: Crash resilience — watchdog, I2S timeout recovery, heap monitor, crash log
+
+Overnight freeze revealed zero crash forensics and no watchdog protection.
+Root cause: i2s_read() with portMAX_DELAY blocks forever if DMA hangs,
+starving the main loop on the same core.
+
+- Crash log: 10-entry ring buffer persisted to /crashlog.bin, records
+  reset reason + heap stats on every boot, backfills NTP timestamp
+- Task watchdog: 15s TWDT on main loop, audio task, and GUI task;
+  OTA download task unsubscribes during long transfers
+- I2S timeout: 500ms timeout replaces portMAX_DELAY, auto-recovers
+  after 10 consecutive timeouts by reinstalling the I2S driver
+- Heap monitor: checks largest free block every 30s, flags critical
+  when below 20KB, published via MQTT (always-on, not debug-gated)
+- Audio task moved from Core 0 to Core 1 so WiFi/MQTT/HTTP stay
+  responsive even if audio hangs
+- MQTT HA discovery: reset_reason, was_crash, heap_critical, heap_max_block
+- Exception decoder enabled in platformio.ini monitor_filters
+- 24 new tests (441 total), firmware builds at 44.0% RAM / 64.8% Flash
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`f5d9f64`)
+- [2026-02-11] feat: Crash resilience — watchdog, I2S timeout recovery, heap monitor, crash log
+
+Overnight freeze revealed zero crash forensics and no watchdog protection.
+Root cause: i2s_read() with portMAX_DELAY blocks forever if DMA hangs,
+starving the main loop on the same core.
+
+- Crash log: 10-entry ring buffer persisted to /crashlog.bin, records
+  reset reason + heap stats on every boot, backfills NTP timestamp
+- Task watchdog: 15s TWDT on main loop, audio task, and GUI task;
+  OTA download task unsubscribes during long transfers
+- I2S timeout: 500ms timeout replaces portMAX_DELAY, auto-recovers
+  after 10 consecutive timeouts by reinstalling the I2S driver
+- Heap monitor: checks largest free block every 30s, flags critical
+  when below 20KB, published via MQTT (always-on, not debug-gated)
+- Audio task moved from Core 0 to Core 1 so WiFi/MQTT/HTTP stay
+  responsive even if audio hangs
+- MQTT HA discovery: reset_reason, was_crash, heap_critical, heap_max_block
+- Exception decoder enabled in platformio.ini monitor_filters
+- 24 new tests (441 total), firmware builds at 44.0% RAM / 64.8% Flash
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`95f7d64`)
+- [2026-02-11] feat: Crash resilience — watchdog, I2S timeout recovery, heap monitor, crash log
+
+Overnight freeze revealed zero crash forensics and no watchdog protection.
+Root cause: i2s_read() with portMAX_DELAY blocks forever if DMA hangs,
+starving the main loop on the same core.
+
+- Crash log: 10-entry ring buffer persisted to /crashlog.bin, records
+  reset reason + heap stats on every boot, backfills NTP timestamp
+- Task watchdog: 15s TWDT on main loop, audio task, and GUI task;
+  OTA download task unsubscribes during long transfers
+- I2S timeout: 500ms timeout replaces portMAX_DELAY, auto-recovers
+  after 10 consecutive timeouts by reinstalling the I2S driver
+- Heap monitor: checks largest free block every 30s, flags critical
+  when below 20KB, published via MQTT (always-on, not debug-gated)
+- Audio task moved from Core 0 to Core 1 so WiFi/MQTT/HTTP stay
+  responsive even if audio hangs
+- MQTT HA discovery: reset_reason, was_crash, heap_critical, heap_max_block
+- Exception decoder enabled in platformio.ini monitor_filters
+- 24 new tests (441 total), firmware builds at 44.0% RAM / 64.8% Flash
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com> (`736258a`)
+
 ### Bug Fixes
 - **Dual ADC I2S Fix**: Fixed ADC2 (I2S_NUM_1) never receiving data due to ESP32-S3 slave mode DMA issues. Root cause: the legacy I2S driver always calculates `bclk_div = 4` (below hardware minimum of 8), and the LL layer hard-codes `rx_clk_sel = 2` (D2CLK 160MHz) regardless of APLL settings, making all slave-mode workarounds ineffective. Solution: configure both I2S peripherals as master RX — I2S0 outputs clocks, I2S1 reads data only with no clock output. Both share the same 160MHz D2CLK with identical dividers, giving frequency-locked sampling.
 
