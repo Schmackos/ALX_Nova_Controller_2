@@ -2266,6 +2266,43 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             text-align: right;
             font-variant-numeric: tabular-nums;
         }
+        .dsp-step-btn {
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 22px;
+            text-align: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            user-select: none;
+        }
+        .dsp-step-btn:hover { background: var(--accent); color: #fff; }
+        .dsp-step-btn:active { transform: scale(0.92); }
+        .dsp-num-input {
+            width: 58px;
+            padding: 2px 4px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-weight: 600;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            flex-shrink: 0;
+        }
+        .dsp-num-input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+        .dsp-unit {
+            font-size: 11px;
+            color: var(--text-secondary);
+            min-width: 28px;
+            flex-shrink: 0;
+        }
         .dsp-add-btn {
             display: block;
             width: 100%;
@@ -2611,6 +2648,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             </div>
                             <div class="dominant-freq-readout">Dominant: <span id="dominantFreq1">-- Hz</span></div>
                         </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                        <span style="font-size:12px;color:var(--text-secondary);">Window:</span>
+                        <select id="fftWindowSelect" style="font-size:12px;padding:2px 4px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;" onchange="setFftWindow(this.value)">
+                            <option value="0">Hann</option>
+                            <option value="1">Blackman</option>
+                            <option value="2">Blackman-Harris</option>
+                            <option value="3">Blackman-Nuttall</option>
+                            <option value="4">Nuttall</option>
+                            <option value="5">Flat-Top</option>
+                        </select>
+                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">SNR: <span id="audioSnr0">--</span> dB</span>
+                        <span style="font-size:11px;color:var(--text-secondary);">SFDR: <span id="audioSfdr0">--</span> dB</span>
                     </div>
                 </div>
             </div>
@@ -2962,11 +3012,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <div class="form-group">
                         <label class="form-label">Slope</label>
                         <select class="form-input" id="dspXoverType">
-                            <option value="lr2">Linkwitz-Riley 2nd (LR2)</option>
-                            <option value="lr4" selected>Linkwitz-Riley 4th (LR4)</option>
-                            <option value="lr8">Linkwitz-Riley 8th (LR8)</option>
-                            <option value="bw2">Butterworth 2nd</option>
-                            <option value="bw4">Butterworth 4th</option>
+                            <optgroup label="Butterworth">
+                                <option value="bw1">BW1 — 1st order (6 dB/oct)</option>
+                                <option value="bw2">BW2 — 2nd order (12 dB/oct)</option>
+                                <option value="bw3">BW3 — 3rd order (18 dB/oct)</option>
+                                <option value="bw4">BW4 — 4th order (24 dB/oct)</option>
+                                <option value="bw5">BW5 — 5th order (30 dB/oct)</option>
+                                <option value="bw6">BW6 — 6th order (36 dB/oct)</option>
+                                <option value="bw7">BW7 — 7th order (42 dB/oct)</option>
+                                <option value="bw8">BW8 — 8th order (48 dB/oct)</option>
+                            </optgroup>
+                            <optgroup label="Linkwitz-Riley">
+                                <option value="lr2">LR2 — 2nd order (12 dB/oct)</option>
+                                <option value="lr4" selected>LR4 — 4th order (24 dB/oct)</option>
+                                <option value="lr6">LR6 — 6th order (36 dB/oct)</option>
+                                <option value="lr8">LR8 — 8th order (48 dB/oct)</option>
+                                <option value="lr12">LR12 — 12th order (72 dB/oct)</option>
+                                <option value="lr16">LR16 — 16th order (96 dB/oct)</option>
+                                <option value="lr24">LR24 — 24th order (144 dB/oct)</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div class="form-group">
@@ -3874,7 +3938,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="i2sFormat0">--</span></div>
                         </div>
                         <div>
-                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 2 (Slave)</div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 2 (Master)</div>
                             <div class="info-row"><span class="info-label">Mode</span><span class="info-value" id="i2sMode1">--</span></div>
                             <div class="info-row"><span class="info-label">Sample Rate</span><span class="info-value" id="i2sSampleRate1">--</span></div>
                             <div class="info-row"><span class="info-label">Bits</span><span class="info-value" id="i2sBits1">--</span></div>
@@ -4584,6 +4648,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     if (vuT) vuT.checked = data.vuMeterEnabled;
                     if (wfT) wfT.checked = data.waveformEnabled;
                     if (spT) spT.checked = data.spectrumEnabled;
+                    var fftSel = document.getElementById('fftWindowSelect');
+                    if (fftSel && data.fftWindowType !== undefined) fftSel.value = data.fftWindowType;
                     toggleGraphDisabled('vuMeterContent', !data.vuMeterEnabled);
                     toggleGraphDisabled('waveformContent', !data.waveformEnabled);
                     toggleGraphDisabled('spectrumContent', !data.spectrumEnabled);
@@ -5123,6 +5189,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 var segEl = document.getElementById('vuChNameSeg' + i);
                 if (segEl) segEl.textContent = inputNames[i] || ('Ch ' + (i + 1));
             }
+            if (typeof dspRenderChannelTabs === 'function') dspRenderChannelTabs();
+            if (typeof dspRenderRouting === 'function') dspRenderRouting();
         }
 
         function loadInputNameFields() {
@@ -5325,7 +5393,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const numBands = (bands && bands.length) ? Math.min(bands.length, 16) : 16;
             const gap = 2;
             const barWidth = (plotW - gap * (numBands - 1)) / numBands;
-            const bandEdges = [20, 40, 80, 160, 315, 630, 1250, 2500, 5000, 8000, 10000, 12500, 14000, 16000, 18000, 20000, 24000];
+            const bandEdges = [0, 40, 80, 160, 315, 630, 1250, 2500, 5000, 8000, 10000, 12500, 14000, 16000, 18000, 20000, 24000];
 
             // Offscreen background cache — grid, labels, axes drawn once
             const bgKey = 'sp' + adcIndex;
@@ -6992,6 +7060,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({type:map[graph], enabled:enabled}));
         }
+        function setFftWindow(val) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:'setFftWindowType', value:parseInt(val)}));
+        }
         function toggleGraphDisabled(id, disabled) {
             var el = document.getElementById(id);
             if (el) { if (disabled) el.classList.add('graph-disabled'); else el.classList.remove('graph-disabled'); }
@@ -7483,6 +7555,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         document.getElementById('adcI2sErrors').textContent = adcs[0].i2sErrors !== undefined ? adcs[0].i2sErrors : '--';
                         document.getElementById('adcConsecutiveZeros').textContent = adcs[0].consecutiveZeros !== undefined ? adcs[0].consecutiveZeros : '--';
                         document.getElementById('adcTotalBuffers').textContent = adcs[0].totalBuffers !== undefined ? adcs[0].totalBuffers : '--';
+                        var snr0 = document.getElementById('audioSnr0');
+                        if (snr0 && adcs[0].snrDb !== undefined) snr0.textContent = adcs[0].snrDb.toFixed(1);
+                        var sfdr0 = document.getElementById('audioSfdr0');
+                        if (sfdr0 && adcs[0].sfdrDb !== undefined) sfdr0.textContent = adcs[0].sfdrDb.toFixed(1);
                     }
                     // Show ADC 1 fields if present
                     var el2 = document.getElementById('adcStatus1');
@@ -8506,6 +8582,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor'];
         const DSP_MAX_CH = 4;
         const DSP_CH_NAMES = ['L1','R1','L2','R2'];
+        function dspChLabel(c) { return inputNames[c] || DSP_CH_NAMES[c]; }
         let dspState = null;
         let dspCh = 0; // selected channel
         let dspOpenStage = -1; // expanded stage index
@@ -8564,7 +8641,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var html = '';
             for (var c = 0; c < DSP_MAX_CH; c++) {
                 var cnt = dspState.channels[c] ? dspState.channels[c].stageCount : 0;
-                html += '<button class="dsp-ch-tab' + (c === dspCh ? ' active' : '') + '" onclick="dspSelectChannel(' + c + ')">' + DSP_CH_NAMES[c] + '<span class="badge">' + cnt + '</span></button>';
+                html += '<button class="dsp-ch-tab' + (c === dspCh ? ' active' : '') + '" onclick="dspSelectChannel(' + c + ')">' + dspChLabel(c) + '<span class="badge">' + cnt + '</span></button>';
             }
             el.innerHTML = html;
             var byp = document.getElementById('dspChBypassToggle');
@@ -8617,13 +8694,35 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             return h;
         }
 
+        function dspParamSync(idx, key, val, min, max, step) {
+            val = Math.min(max, Math.max(min, parseFloat(val) || 0));
+            var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
+            var id = 'dsp_' + idx + '_' + key;
+            var sl = document.getElementById(id + '_s');
+            var ni = document.getElementById(id + '_n');
+            if (sl) sl.value = val;
+            if (ni) ni.value = val.toFixed(dec);
+            dspUpdateParam(idx, key, val);
+        }
+        function dspParamStep(idx, key, delta, min, max, step) {
+            var id = 'dsp_' + idx + '_' + key;
+            var sl = document.getElementById(id + '_s');
+            var cur = sl ? parseFloat(sl.value) : 0;
+            dspParamSync(idx, key, cur + delta, min, max, step);
+        }
         function dspSlider(idx, key, label, val, min, max, step, unit) {
             var numVal = parseFloat(val) || 0;
+            var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
+            var id = 'dsp_' + idx + '_' + key;
             return '<div class="dsp-param"><label>' + label + '</label>' +
-                '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + numVal + '" ' +
-                'oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(' + (step < 1 ? (step < 0.1 ? 2 : 1) : 0) + ')+\' ' + unit + '\'" ' +
-                'onchange="dspUpdateParam(' + idx + ',\'' + key + '\',parseFloat(this.value))">' +
-                '<span class="dsp-val">' + numVal.toFixed(step < 1 ? (step < 0.1 ? 2 : 1) : 0) + ' ' + unit + '</span></div>';
+                '<button class="dsp-step-btn" onclick="dspParamStep(' + idx + ',\'' + key + '\',' + (-step) + ',' + min + ',' + max + ',' + step + ')" title="Decrease">&lsaquo;</button>' +
+                '<input type="range" id="' + id + '_s" min="' + min + '" max="' + max + '" step="' + step + '" value="' + numVal + '" ' +
+                'oninput="document.getElementById(\'' + id + '_n\').value=parseFloat(this.value).toFixed(' + dec + ')" ' +
+                'onchange="dspParamSync(' + idx + ',\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
+                '<button class="dsp-step-btn" onclick="dspParamStep(' + idx + ',\'' + key + '\',' + step + ',' + min + ',' + max + ',' + step + ')" title="Increase">&rsaquo;</button>' +
+                '<input type="number" class="dsp-num-input" id="' + id + '_n" value="' + numVal.toFixed(dec) + '" min="' + min + '" max="' + max + '" step="' + step + '" ' +
+                'onchange="dspParamSync(' + idx + ',\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
+                '<span class="dsp-unit">' + unit + '</span></div>';
         }
 
         function dspRenderStages() {
@@ -8697,7 +8796,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var padL = 35 * dpr, padR = 10 * dpr, padT = 10 * dpr, padB = 20 * dpr;
             var gw = w - padL - padR, gh = h - padT - padB;
             var yMin = -24, yMax = 24;
-            var fMin = 20, fMax = 20000;
+            var fMin = 5, fMax = 24000;
             var logMin = Math.log10(fMin), logRange = Math.log10(fMax) - logMin;
 
             // Grid lines
@@ -8723,8 +8822,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim();
             ctx.lineWidth = 0.5 * dpr;
             ctx.textAlign = 'center';
-            var freqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
-            var labels = ['20','50','100','200','500','1k','2k','5k','10k','20k'];
+            var freqs = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+            var labels = ['5','10','20','50','100','200','500','1k','2k','5k','10k','20k'];
             for (var fi = 0; fi < freqs.length; fi++) {
                 var x = padL + gw * (Math.log10(freqs[fi]) - logMin) / logRange;
                 ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + gh); ctx.stroke();
@@ -8882,10 +8981,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (!el || !dspRouting) return;
             var h = '<table style="border-collapse:collapse;font-size:12px;width:100%;">';
             h += '<tr><td></td>';
-            for (var i = 0; i < DSP_MAX_CH; i++) h += '<td style="padding:4px;text-align:center;font-weight:600;color:var(--text-secondary);">' + DSP_CH_NAMES[i] + '</td>';
+            for (var i = 0; i < DSP_MAX_CH; i++) h += '<td style="padding:4px;text-align:center;font-weight:600;color:var(--text-secondary);">' + dspChLabel(i) + '</td>';
             h += '</tr>';
             for (var o = 0; o < DSP_MAX_CH; o++) {
-                h += '<tr><td style="padding:4px;font-weight:600;color:var(--text-secondary);">' + DSP_CH_NAMES[o] + '</td>';
+                h += '<tr><td style="padding:4px;font-weight:600;color:var(--text-secondary);">' + dspChLabel(o) + '</td>';
                 for (var i = 0; i < DSP_MAX_CH; i++) {
                     var v = dspRouting[o] ? dspRouting[o][i] : 0;
                     var db = v <= 0.0001 ? '-inf' : (20 * Math.log10(v)).toFixed(1);
@@ -8900,7 +8999,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function dspEditRoutingCell(o, i) {
             var current = dspRouting && dspRouting[o] ? dspRouting[o][i] : 0;
             var currentDb = current <= 0.0001 ? '-inf' : (20 * Math.log10(current)).toFixed(1);
-            var val = prompt('Gain for ' + DSP_CH_NAMES[o] + ' <- ' + DSP_CH_NAMES[i] + ' (dB, or -inf for silence):', currentDb);
+            var val = prompt('Gain for ' + dspChLabel(o) + ' <- ' + dspChLabel(i) + ' (dB, or -inf for silence):', currentDb);
             if (val === null) return;
             var gainDb = val === '-inf' || val === '' ? -200 : parseFloat(val);
             if (isNaN(gainDb)) return;

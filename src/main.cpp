@@ -927,7 +927,7 @@ void loop() {
   static unsigned long lastHardwareStatsBroadcast = 0;
   if (millis() - lastHardwareStatsBroadcast >= appState.hardwareStatsInterval) {
     lastHardwareStatsBroadcast = millis();
-    if (appState.debugMode && appState.debugHwStats) {
+    if (appState.debugMode && (appState.debugHwStats || appState.debugI2sMetrics || appState.debugTaskMonitor)) {
       sendHardwareStats();
     }
   }

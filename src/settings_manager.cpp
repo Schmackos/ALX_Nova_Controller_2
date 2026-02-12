@@ -57,6 +57,7 @@ bool loadSettings() {
   String line23 = file.readStringUntil('\n');
   String line24 = file.readStringUntil('\n');
   String line25 = file.readStringUntil('\n');
+  String line26 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -238,6 +239,12 @@ bool loadSettings() {
     line25.trim();
     appState.debugTaskMonitor = (line25.toInt() != 0);
   }
+  if (line26.length() > 0) {
+    line26.trim();
+    int wt = line26.toInt();
+    if (wt >= 0 && wt < FFT_WINDOW_COUNT)
+      appState.fftWindowType = (FftWindowType)wt;
+  }
 
   return true;
 }
@@ -279,6 +286,7 @@ void saveSettings() {
   file.println(appState.debugHwStats ? "1" : "0");
   file.println(appState.debugI2sMetrics ? "1" : "0");
   file.println(appState.debugTaskMonitor ? "1" : "0");
+  file.println((int)appState.fftWindowType);
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -503,6 +511,7 @@ void handleSettingsGet() {
   doc["debugHwStats"] = appState.debugHwStats;
   doc["debugI2sMetrics"] = appState.debugI2sMetrics;
   doc["debugTaskMonitor"] = appState.debugTaskMonitor;
+  doc["fftWindowType"] = (int)appState.fftWindowType;
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -734,6 +743,13 @@ void handleSettingsUpdate() {
       settingsChanged = true;
     }
   }
+  if (doc["fftWindowType"].is<int>()) {
+    int newWt = doc["fftWindowType"].as<int>();
+    if (newWt >= 0 && newWt < FFT_WINDOW_COUNT && newWt != (int)appState.fftWindowType) {
+      appState.fftWindowType = (FftWindowType)newWt;
+      settingsChanged = true;
+    }
+  }
 
 #ifdef GUI_ENABLED
   if (doc["bootAnimEnabled"].is<bool>()) {
@@ -785,6 +801,7 @@ void handleSettingsUpdate() {
   resp["debugHwStats"] = appState.debugHwStats;
   resp["debugI2sMetrics"] = appState.debugI2sMetrics;
   resp["debugTaskMonitor"] = appState.debugTaskMonitor;
+  resp["fftWindowType"] = (int)appState.fftWindowType;
 #ifdef GUI_ENABLED
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
@@ -842,6 +859,7 @@ void handleSettingsExport() {
   doc["settings"]["debugHwStats"] = appState.debugHwStats;
   doc["settings"]["debugI2sMetrics"] = appState.debugI2sMetrics;
   doc["settings"]["debugTaskMonitor"] = appState.debugTaskMonitor;
+  doc["settings"]["fftWindowType"] = (int)appState.fftWindowType;
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
@@ -1101,6 +1119,10 @@ void handleSettingsImport() {
     }
     if (doc["settings"]["debugTaskMonitor"].is<bool>()) {
       appState.debugTaskMonitor = doc["settings"]["debugTaskMonitor"].as<bool>();
+    }
+    if (doc["settings"]["fftWindowType"].is<int>()) {
+      int wt = doc["settings"]["fftWindowType"].as<int>();
+      if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.fftWindowType = (FftWindowType)wt;
     }
 #ifdef GUI_ENABLED
     if (doc["settings"]["bootAnimEnabled"].is<bool>()) {
@@ -1380,6 +1402,7 @@ void handleDiagnostics() {
   settings["debugHwStats"] = appState.debugHwStats;
   settings["debugI2sMetrics"] = appState.debugI2sMetrics;
   settings["debugTaskMonitor"] = appState.debugTaskMonitor;
+  settings["fftWindowType"] = (int)appState.fftWindowType;
 
   // ===== Smart Sensing =====
   JsonObject sensing = doc["smartSensing"].to<JsonObject>();
@@ -1433,6 +1456,8 @@ void handleDiagnostics() {
       adcObj["totalBuffersRead"] = adc.totalBuffers;
       adcObj["vrms"] = adc.vrmsCombined;
       adcObj["dcOffset"] = adc.dcOffset;
+      adcObj["snrDb"] = appState.audioSnrDb[a];
+      adcObj["sfdrDb"] = appState.audioSfdrDb[a];
     }
     // Input names
     JsonArray names = audioAdcObj["inputNames"].to<JsonArray>();

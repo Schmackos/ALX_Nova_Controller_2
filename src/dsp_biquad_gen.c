@@ -223,3 +223,41 @@ int dsp_gen_highShelf_f32(float *coeffs, float freq, float gain, float qFactor)
     normalize(coeffs, a0);
     return 0;
 }
+
+// First-order LPF as biquad: H(z) = w/(1+w) * (1 + z^-1) / (1 - ((w-1)/(w+1)) * z^-1)
+// where w = tan(pi * freq_normalized)
+int dsp_gen_lpf1_f32(float *coeffs, float freq)
+{
+    if (!coeffs || freq <= 0.0f || freq >= 0.5f) {
+        return -1;
+    }
+    float w = tanf((float)M_PI * freq);
+    float n = 1.0f / (1.0f + w);
+
+    coeffs[0] = w * n;              // b0
+    coeffs[1] = w * n;              // b1
+    coeffs[2] = 0.0f;               // b2
+    coeffs[3] = (w - 1.0f) * n;     // a1
+    coeffs[4] = 0.0f;               // a2
+
+    return 0;
+}
+
+// First-order HPF as biquad: H(z) = 1/(1+w) * (1 - z^-1) / (1 - ((w-1)/(w+1)) * z^-1)
+// where w = tan(pi * freq_normalized)
+int dsp_gen_hpf1_f32(float *coeffs, float freq)
+{
+    if (!coeffs || freq <= 0.0f || freq >= 0.5f) {
+        return -1;
+    }
+    float w = tanf((float)M_PI * freq);
+    float n = 1.0f / (1.0f + w);
+
+    coeffs[0] = n;                   // b0
+    coeffs[1] = -n;                  // b1
+    coeffs[2] = 0.0f;               // b2
+    coeffs[3] = (w - 1.0f) * n;     // a1
+    coeffs[4] = 0.0f;               // a2
+
+    return 0;
+}

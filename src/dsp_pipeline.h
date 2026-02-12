@@ -29,8 +29,15 @@ enum DspStageType : uint8_t {
     DSP_POLARITY,
     DSP_MUTE,
     DSP_COMPRESSOR,
+    DSP_BIQUAD_LPF_1ST = 19,   // First-order LPF (b2=0, a2=0)
+    DSP_BIQUAD_HPF_1ST = 20,   // First-order HPF (b2=0, a2=0)
     DSP_STAGE_TYPE_COUNT
 };
+
+// Check if a stage type is a biquad-processed type (including first-order filters)
+inline bool dsp_is_biquad_type(DspStageType type) {
+    return type <= DSP_BIQUAD_CUSTOM || type == DSP_BIQUAD_LPF_1ST || type == DSP_BIQUAD_HPF_1ST;
+}
 
 // ===== Biquad Parameters =====
 struct DspBiquadParams {
@@ -208,6 +215,8 @@ inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
         dsp_init_mute_params(s.mute);
     } else if (t == DSP_COMPRESSOR) {
         dsp_init_compressor_params(s.compressor);
+    } else if (dsp_is_biquad_type(t)) {
+        dsp_init_biquad_params(s.biquad);
     } else {
         dsp_init_biquad_params(s.biquad);
     }

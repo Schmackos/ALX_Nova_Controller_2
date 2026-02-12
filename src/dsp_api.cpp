@@ -271,6 +271,8 @@ static DspStageType typeFromString(const char *name) {
     if (strcmp(name, "POLARITY") == 0) return DSP_POLARITY;
     if (strcmp(name, "MUTE") == 0) return DSP_MUTE;
     if (strcmp(name, "COMPRESSOR") == 0) return DSP_COMPRESSOR;
+    if (strcmp(name, "LPF_1ST") == 0) return DSP_BIQUAD_LPF_1ST;
+    if (strcmp(name, "HPF_1ST") == 0) return DSP_BIQUAD_HPF_1ST;
     return DSP_BIQUAD_PEQ;
 }
 
@@ -410,7 +412,7 @@ void registerDspApiEndpoints() {
         }
 
         JsonObject params = doc["params"];
-        if (type <= DSP_BIQUAD_CUSTOM && !params.isNull()) {
+        if (dsp_is_biquad_type(type) && !params.isNull()) {
             if (params["frequency"].is<float>()) s.biquad.frequency = params["frequency"].as<float>();
             if (params["gain"].is<float>()) s.biquad.gain = params["gain"].as<float>();
             if (params["Q"].is<float>()) s.biquad.Q = params["Q"].as<float>();
@@ -479,7 +481,7 @@ void registerDspApiEndpoints() {
         }
 
         JsonObject params = doc["params"];
-        if (s.type <= DSP_BIQUAD_CUSTOM && !params.isNull()) {
+        if (dsp_is_biquad_type(s.type) && !params.isNull()) {
             if (params["frequency"].is<float>()) s.biquad.frequency = params["frequency"].as<float>();
             if (params["gain"].is<float>()) s.biquad.gain = params["gain"].as<float>();
             if (params["Q"].is<float>()) s.biquad.Q = params["Q"].as<float>();
@@ -761,15 +763,11 @@ void registerDspApiEndpoints() {
         dsp_copy_active_to_inactive();
 
         int result = -1;
-        if (strcmp(typeStr, "lr2") == 0) {
-            result = dsp_insert_crossover_lr2(ch, freq, role);
-        } else if (strcmp(typeStr, "lr4") == 0) {
-            result = dsp_insert_crossover_lr4(ch, freq, role);
-        } else if (strcmp(typeStr, "lr8") == 0) {
-            result = dsp_insert_crossover_lr8(ch, freq, role);
+        if (strncmp(typeStr, "lr", 2) == 0) {
+            int order = atoi(typeStr + 2);
+            result = dsp_insert_crossover_lr(ch, freq, order, role);
         } else if (strncmp(typeStr, "bw", 2) == 0) {
             int order = atoi(typeStr + 2);
-            if (order < 2) order = 2;
             result = dsp_insert_crossover_butterworth(ch, freq, order, role);
         } else {
             sendJsonError(400, "Unknown crossover type");

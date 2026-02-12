@@ -253,17 +253,24 @@ void handleGetReleaseNotes() {
   String releaseNotesUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases/tags/" + version;
   
   LOG_I("[OTA] Fetching release notes from: %s", releaseNotesUrl.c_str());
-  
+
+  uint32_t maxBlock = ESP.getMaxAllocHeap();
+  if (maxBlock < 50000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes", (unsigned long)maxBlock);
+    server.send(200, "application/json", "{\"success\": false, \"message\": \"Insufficient memory for secure connection\"}");
+    return;
+  }
+
   WiFiClientSecure client;
-  
+
   if (enableCertValidation) {
     client.setCACert(GITHUB_ROOT_CA);  // Use bundled GitHub root certificates
   } else {
     client.setInsecure();  // Skip certificate validation
   }
-  
+
   client.setTimeout(10000);
-  
+
   HTTPClient https;
   if (!https.begin(client, releaseNotesUrl)) {
     server.send(200, "application/json", "{\"success\": false, \"message\": \"Failed to initialize secure connection\"}");
@@ -368,8 +375,15 @@ void checkForFirmwareUpdate() {
 
 // Get latest release information from GitHub API
 bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum) {
+  // TLS handshake needs ~40-50KB contiguous heap for MbedTLS buffers
+  uint32_t maxBlock = ESP.getMaxAllocHeap();
+  if (maxBlock < 50000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<50KB), skipping", (unsigned long)maxBlock);
+    return false;
+  }
+
   WiFiClientSecure client;
-  
+
   if (enableCertValidation) {
     LOG_I("[OTA] Certificate validation enabled");
     client.setCACert(GITHUB_ROOT_CA);  // Use bundled GitHub root certificates
@@ -522,6 +536,15 @@ bool performOTAUpdate(String firmwareUrl) {
 
   LOG_I("[OTA] Starting OTA update");
   LOG_I("[OTA] Downloading from: %s", firmwareUrl.c_str());
+
+  // TLS handshake needs ~40-50KB contiguous heap
+  uint32_t maxBlock = ESP.getMaxAllocHeap();
+  if (maxBlock < 50000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<50KB)", (unsigned long)maxBlock);
+    setOTAProgress("error", "Insufficient memory for secure download", 0);
+    otaInProgress = false;
+    return false;
+  }
 
   // Use secure HTTPS connection with certificate validation
   WiFiClientSecure client;

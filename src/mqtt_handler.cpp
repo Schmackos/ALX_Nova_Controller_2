@@ -16,6 +16,18 @@
 #include <LittleFS.h>
 #include <cmath>
 
+// FFT window type name helper
+static const char* fftWindowName(FftWindowType t) {
+  switch (t) {
+    case FFT_WINDOW_BLACKMAN: return "blackman";
+    case FFT_WINDOW_BLACKMAN_HARRIS: return "blackman_harris";
+    case FFT_WINDOW_BLACKMAN_NUTTALL: return "blackman_nuttall";
+    case FFT_WINDOW_NUTTALL: return "nuttall";
+    case FFT_WINDOW_FLAT_TOP: return "flat_top";
+    default: return "hann";
+  }
+}
+
 // State tracking for hardware stats change detection
 static unsigned long prevMqttUptime = 0;
 static uint32_t prevMqttHeapFree = 0;
@@ -192,6 +204,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/audio/vu_meter/set").c_str());
   mqttClient.subscribe((base + "/audio/waveform/set").c_str());
   mqttClient.subscribe((base + "/audio/spectrum/set").c_str());
+  mqttClient.subscribe((base + "/audio/fft_window/set").c_str());
   mqttClient.subscribe((base + "/debug/mode/set").c_str());
   mqttClient.subscribe((base + "/debug/serial_level/set").c_str());
   mqttClient.subscribe((base + "/debug/hw_stats/set").c_str());
@@ -615,6 +628,21 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     publishMqttAudioGraphState();
     LOG_I("[MQTT] Spectrum set to %s", newState ? "ON" : "OFF");
   }
+  // Handle FFT window type
+  else if (topicStr == base + "/audio/fft_window/set") {
+    // Accept window name strings: hann, blackman, blackman_harris, blackman_nuttall, nuttall, flat_top
+    FftWindowType wt = FFT_WINDOW_HANN;
+    if (message == "blackman") wt = FFT_WINDOW_BLACKMAN;
+    else if (message == "blackman_harris") wt = FFT_WINDOW_BLACKMAN_HARRIS;
+    else if (message == "blackman_nuttall") wt = FFT_WINDOW_BLACKMAN_NUTTALL;
+    else if (message == "nuttall") wt = FFT_WINDOW_NUTTALL;
+    else if (message == "flat_top") wt = FFT_WINDOW_FLAT_TOP;
+    appState.fftWindowType = wt;
+    saveSettings();
+    sendAudioGraphState();
+    publishMqttAudioGraphState();
+    LOG_I("[MQTT] FFT window set to %d", (int)wt);
+  }
   // Handle debug mode toggle
   else if (topicStr == base + "/debug/mode/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
@@ -935,6 +963,7 @@ void mqttLoop() {
         (appState.vuMeterEnabled != appState.prevMqttVuMeterEnabled) ||
         (appState.waveformEnabled != appState.prevMqttWaveformEnabled) ||
         (appState.spectrumEnabled != appState.prevMqttSpectrumEnabled) ||
+        (appState.fftWindowType != appState.prevMqttFftWindowType) ||
         (appState.debugMode != appState.prevMqttDebugMode) ||
         (appState.debugSerialLevel != appState.prevMqttDebugSerialLevel) ||
         (appState.debugHwStats != appState.prevMqttDebugHwStats) ||
@@ -988,6 +1017,7 @@ void mqttLoop() {
       appState.prevMqttVuMeterEnabled = appState.vuMeterEnabled;
       appState.prevMqttWaveformEnabled = appState.waveformEnabled;
       appState.prevMqttSpectrumEnabled = appState.spectrumEnabled;
+      appState.prevMqttFftWindowType = appState.fftWindowType;
       appState.prevMqttDebugMode = appState.debugMode;
       appState.prevMqttDebugSerialLevel = appState.debugSerialLevel;
       appState.prevMqttDebugHwStats = appState.debugHwStats;
@@ -1406,6 +1436,10 @@ void publishMqttAudioDiagnostics() {
                        String(adc.vrmsCombined, 3).c_str(), true);
     mqttClient.publish((prefix + "/level").c_str(),
                        String(adc.dBFS, 1).c_str(), true);
+    mqttClient.publish((prefix + "/snr").c_str(),
+                       String(appState.audioSnrDb[a], 1).c_str(), true);
+    mqttClient.publish((prefix + "/sfdr").c_str(),
+                       String(appState.audioSfdrDb[a], 1).c_str(), true);
   }
 
   // Legacy combined topics (ADC 0)
@@ -1439,6 +1473,8 @@ void publishMqttAudioGraphState() {
                      appState.waveformEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/audio/spectrum").c_str(),
                      appState.spectrumEnabled ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/audio/fft_window").c_str(),
+                     fftWindowName(appState.fftWindowType), true);
 }
 
 // Publish debug mode state
@@ -2535,6 +2571,38 @@ void publishHADiscovery() {
         serializeJson(doc, payload);
         mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_vrms/config").c_str(), payload.c_str(), true);
       }
+
+      // Per-ADC SNR Sensor
+      {
+        JsonDocument doc;
+        doc["name"] = String(inputNames[a]) + " SNR";
+        doc["unique_id"] = deviceId + idSuffix + "_snr";
+        doc["state_topic"] = prefix + "/snr";
+        doc["unit_of_measurement"] = "dB";
+        doc["state_class"] = "measurement";
+        doc["entity_category"] = "diagnostic";
+        doc["icon"] = "mdi:signal";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_snr/config").c_str(), payload.c_str(), true);
+      }
+
+      // Per-ADC SFDR Sensor
+      {
+        JsonDocument doc;
+        doc["name"] = String(inputNames[a]) + " SFDR";
+        doc["unique_id"] = deviceId + idSuffix + "_sfdr";
+        doc["state_topic"] = prefix + "/sfdr";
+        doc["unit_of_measurement"] = "dB";
+        doc["state_class"] = "measurement";
+        doc["entity_category"] = "diagnostic";
+        doc["icon"] = "mdi:signal-variant";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_sfdr/config").c_str(), payload.c_str(), true);
+      }
     }
   }
 
@@ -2667,6 +2735,30 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/spectrum/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== FFT Window Type Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "FFT Window";
+    doc["unique_id"] = deviceId + "_fft_window";
+    doc["state_topic"] = base + "/audio/fft_window";
+    doc["command_topic"] = base + "/audio/fft_window/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("hann");
+    options.add("blackman");
+    options.add("blackman_harris");
+    options.add("blackman_nuttall");
+    options.add("nuttall");
+    options.add("flat_top");
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:window-shutter-settings";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/select/" + deviceId + "/fft_window/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
@@ -3160,6 +3252,11 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/adc2_adc_status/config",
       "homeassistant/sensor/%s/adc2_noise_floor/config",
       "homeassistant/sensor/%s/adc2_vrms/config",
+      "homeassistant/sensor/%s/adc1_snr/config",
+      "homeassistant/sensor/%s/adc1_sfdr/config",
+      "homeassistant/sensor/%s/adc2_snr/config",
+      "homeassistant/sensor/%s/adc2_sfdr/config",
+      "homeassistant/select/%s/fft_window/config",
       // Signal generator target ADC
       "homeassistant/select/%s/siggen_target_adc/config",
       // Crash diagnostics

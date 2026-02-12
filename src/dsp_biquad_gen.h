@@ -27,6 +27,12 @@ int dsp_gen_peakingEQ_f32(float *coeffs, float freq, float gain, float qFactor);
 int dsp_gen_lowShelf_f32(float *coeffs, float freq, float gain, float qFactor);
 int dsp_gen_highShelf_f32(float *coeffs, float freq, float gain, float qFactor);
 
+// First-order filters (stored as biquad coefficients with b2=0, a2=0).
+// freq: normalized frequency = f_Hz / f_sample (must be 0 < freq < 0.5)
+// No Q parameter needed.
+int dsp_gen_lpf1_f32(float *coeffs, float freq);
+int dsp_gen_hpf1_f32(float *coeffs, float freq);
+
 #ifdef __cplusplus
 }
 #endif

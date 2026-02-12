@@ -4,6 +4,7 @@
 #include "dsp_coefficients.h"
 #include "dsps_biquad.h"
 #include "dsps_fir.h"
+#include "dsps_mulc.h"
 #include <math.h>
 #include <string.h>
 
@@ -234,7 +235,7 @@ void dsp_swap_config() {
             DspStage &newS = newCh.stages[s];
 
             if (oldS.type == newS.type) {
-                if (newS.type <= DSP_BIQUAD_CUSTOM) {
+                if (dsp_is_biquad_type(newS.type)) {
                     newS.biquad.delay[0] = oldS.biquad.delay[0];
                     newS.biquad.delay[1] = oldS.biquad.delay[1];
                 } else if (newS.type == DSP_FIR && oldS.fir.firSlot >= 0 && newS.fir.firSlot >= 0) {
@@ -357,21 +358,12 @@ static void dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int s
         DspStage &s = ch.stages[i];
         if (!s.enabled) continue;
 
+        if (dsp_is_biquad_type(s.type)) {
+            dsps_biquad_f32(buf, buf, len, s.biquad.coeffs, s.biquad.delay);
+            continue;
+        }
+
         switch (s.type) {
-            case DSP_BIQUAD_LPF:
-            case DSP_BIQUAD_HPF:
-            case DSP_BIQUAD_BPF:
-            case DSP_BIQUAD_NOTCH:
-            case DSP_BIQUAD_PEQ:
-            case DSP_BIQUAD_LOW_SHELF:
-            case DSP_BIQUAD_HIGH_SHELF:
-            case DSP_BIQUAD_ALLPASS:
-            case DSP_BIQUAD_ALLPASS_360:
-            case DSP_BIQUAD_ALLPASS_180:
-            case DSP_BIQUAD_BPF_0DB:
-            case DSP_BIQUAD_CUSTOM:
-                dsps_biquad_f32(buf, buf, len, s.biquad.coeffs, s.biquad.delay);
-                break;
             case DSP_LIMITER:
                 dsp_limiter_process(s.limiter, buf, len, cfg->sampleRate);
                 break;
@@ -465,10 +457,7 @@ static void dsp_fir_process(DspFirParams &fir, float *buf, int len, int stateIdx
 // ===== Gain =====
 
 static void dsp_gain_process(DspGainParams &gain, float *buf, int len) {
-    float g = gain.gainLinear;
-    for (int i = 0; i < len; i++) {
-        buf[i] *= g;
-    }
+    dsps_mulc_f32(buf, buf, len, gain.gainLinear, 1, 1);
 }
 
 // ===== Delay =====
@@ -497,9 +486,7 @@ static void dsp_delay_process(DspDelayParams &dly, float *buf, int len, int stat
 // ===== Polarity =====
 
 static void dsp_polarity_process(float *buf, int len) {
-    for (int i = 0; i < len; i++) {
-        buf[i] = -buf[i];
-    }
+    dsps_mulc_f32(buf, buf, len, -1.0f, 1, 1);
 }
 
 // ===== Mute =====
@@ -604,7 +591,7 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
     ch.stageCount++;
 
     // Compute coefficients for new stage
-    if (type <= DSP_BIQUAD_CUSTOM) {
+    if (dsp_is_biquad_type(type)) {
         dsp_compute_biquad_coeffs(ch.stages[pos].biquad, type, cfg->sampleRate);
     } else if (type == DSP_GAIN) {
         dsp_compute_gain_linear(ch.stages[pos].gain);
@@ -697,6 +684,8 @@ static const char *stage_type_name(DspStageType t) {
         case DSP_POLARITY:          return "POLARITY";
         case DSP_MUTE:              return "MUTE";
         case DSP_COMPRESSOR:        return "COMPRESSOR";
+        case DSP_BIQUAD_LPF_1ST:   return "LPF_1ST";
+        case DSP_BIQUAD_HPF_1ST:   return "HPF_1ST";
         default: return "UNKNOWN";
     }
 }
@@ -722,6 +711,8 @@ static DspStageType stage_type_from_name(const char *name) {
     if (strcmp(name, "POLARITY") == 0) return DSP_POLARITY;
     if (strcmp(name, "MUTE") == 0) return DSP_MUTE;
     if (strcmp(name, "COMPRESSOR") == 0) return DSP_COMPRESSOR;
+    if (strcmp(name, "LPF_1ST") == 0) return DSP_BIQUAD_LPF_1ST;
+    if (strcmp(name, "HPF_1ST") == 0) return DSP_BIQUAD_HPF_1ST;
     return DSP_BIQUAD_PEQ;
 }
 
@@ -743,7 +734,7 @@ void dsp_export_config_to_json(int channel, char *buf, int bufSize) {
         stageObj["type"] = stage_type_name(s.type);
         if (s.label[0]) stageObj["label"] = s.label;
 
-        if (s.type <= DSP_BIQUAD_CUSTOM) {
+        if (dsp_is_biquad_type(s.type)) {
             JsonObject params = stageObj["params"].to<JsonObject>();
             params["frequency"] = s.biquad.frequency;
             params["gain"] = s.biquad.gain;
@@ -896,7 +887,7 @@ void dsp_export_full_config_json(char *buf, int bufSize) {
             stageObj["type"] = stage_type_name(s.type);
             if (s.label[0]) stageObj["label"] = s.label;
 
-            if (s.type <= DSP_BIQUAD_CUSTOM) {
+            if (dsp_is_biquad_type(s.type)) {
                 JsonObject params = stageObj["params"].to<JsonObject>();
                 params["frequency"] = s.biquad.frequency;
                 params["gain"] = s.biquad.gain;
@@ -985,7 +976,7 @@ void dsp_import_full_config_json(const char *json) {
                     }
 
                     JsonObject params = stageObj["params"];
-                    if (type <= DSP_BIQUAD_CUSTOM) {
+                    if (dsp_is_biquad_type(type)) {
                         if (params["frequency"].is<float>()) s.biquad.frequency = params["frequency"].as<float>();
                         if (params["gain"].is<float>()) s.biquad.gain = params["gain"].as<float>();
                         if (params["Q"].is<float>()) s.biquad.Q = params["Q"].as<float>();

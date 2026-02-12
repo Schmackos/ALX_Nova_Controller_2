@@ -32,7 +32,7 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (540 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (574 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`.
 
 ## Architecture
 
@@ -54,10 +54,10 @@ Each subsystem is a separate module in `src/`:
 - **auth_handler** — Session token management, web password authentication
 - **button_handler** — Debouncing, short/long/very-long press and multi-click detection
 - **buzzer_handler** — Piezo buzzer with multi-pattern sequencer, ISR-safe encoder tick/click, volume control, FreeRTOS mutex for dual-core safety
-- **i2s_audio** — Dual PCM1808 I2S ADC driver, RMS/dBFS, VU metering, peak hold, waveform downsampling, FFT spectrum analysis (ESP-DSP on ESP32, arduinoFFT on native), audio health diagnostics
+- **i2s_audio** — Dual PCM1808 I2S ADC driver, RMS/dBFS, VU metering, peak hold, waveform downsampling, FFT spectrum analysis (Radix-4 ESP-DSP on ESP32, arduinoFFT on native), 6 selectable FFT window types, SNR/SFDR analysis, audio health diagnostics
 - **dsp_pipeline** — 4-channel audio DSP engine: biquad IIR, FIR, limiter, gain, delay, polarity, mute, compressor. Double-buffered config with glitch-free swap. ESP32 uses pre-built `libespressif__esp-dsp.a` (S3 assembly-optimized); native tests use `lib/esp_dsp_lite/` (ANSI C fallback, `lib_ignore`d on ESP32). Delay lines use PSRAM (`ps_calloc`) when available, with heap pre-flight check (40KB reserve) on fallback. `dsp_add_stage()` rolls back on pool exhaustion; config imports skip failed stages
 - **dsp_coefficients** — RBJ Audio EQ Cookbook biquad coefficient computation via `dsp_gen_*` functions in `src/dsp_biquad_gen.h/.c` (renamed from `dsps_biquad_gen_*` to avoid symbol conflicts with pre-built ESP-DSP)
-- **dsp_crossover** — Crossover presets (LR2/LR4/LR8, Butterworth), bass management, 4x4 routing matrix
+- **dsp_crossover** — Crossover presets (LR2/LR4/LR8, Butterworth), bass management, 4x4 routing matrix (SIMD-accelerated via dsps_mulc/dsps_add)
 - **dsp_rew_parser** — Equalizer APO + miniDSP import/export, FIR text, WAV IR loading
 - **dsp_api** — REST API endpoints for DSP config CRUD, persistence (LittleFS), debounced save
 - **signal_generator** — Multi-waveform test signal generator (sine, square, noise, sweep), software injection + PWM output modes
@@ -168,4 +168,4 @@ When adding logging to new modules, follow these conventions:
 - `lvgl@^9.4` — GUI framework (guarded by `GUI_ENABLED`)
 - `TFT_eSPI@^2.5.43` — TFT display driver for ST7735S
 - `arduinoFFT@^2.0` — FFT spectrum analysis (**native tests only**; ESP32 uses pre-built ESP-DSP FFT)
-- **ESP-DSP pre-built library** (`libespressif__esp-dsp.a`) — S3 assembly-optimized biquad IIR, FIR, and FFT processing. Include paths added via `-I` flags in `platformio.ini`. `lib/esp_dsp_lite/` provides ANSI C fallbacks for native tests only (`lib_ignore = esp_dsp_lite` in ESP32 envs)
+- **ESP-DSP pre-built library** (`libespressif__esp-dsp.a`) — S3 assembly-optimized biquad IIR, FIR, Radix-4 FFT, window functions, vector math (mulc/mul/add), dot product, SNR/SFDR analysis. Include paths added via `-I` flags in `platformio.ini`. `lib/esp_dsp_lite/` provides ANSI C fallbacks for native tests only (`lib_ignore = esp_dsp_lite` in ESP32 envs)

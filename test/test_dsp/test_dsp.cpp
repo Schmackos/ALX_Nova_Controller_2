@@ -769,6 +769,8 @@ void test_crossover_lr2_inserts_one_biquad(void) {
     DspState *cfg = dsp_get_inactive_config();
     TEST_ASSERT_EQUAL_INT(1, cfg->channels[0].stageCount);
     TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[0].type);
+    // LR2 should use Q=0.5 (not 0.707 which is BW2)
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.5f, cfg->channels[0].stages[0].biquad.Q);
 }
 
 void test_crossover_lr8_inserts_four_biquads(void) {
@@ -777,21 +779,28 @@ void test_crossover_lr8_inserts_four_biquads(void) {
     TEST_ASSERT_TRUE(first >= 0);
 
     DspState *cfg = dsp_get_inactive_config();
+    // LR8 = BW4^2 = 2 pairs of BW4 Q values: {0.5412, 1.3066, 0.5412, 1.3066}
     TEST_ASSERT_EQUAL_INT(4, cfg->channels[0].stageCount);
     for (int i = 0; i < 4; i++) {
         TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[i].type);
         TEST_ASSERT_FLOAT_WITHIN(1.0f, 500.0f, cfg->channels[0].stages[i].biquad.frequency);
     }
+    // BW4 Q values: Q1=0.5412, Q2=1.3066 (repeated twice for LR8)
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[0].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[1].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[2].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[3].biquad.Q);
 }
 
 void test_crossover_butterworth_rejects_invalid(void) {
     dsp_init();
-    // Odd order
-    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 3, 0));
-    // Order 1 (too low)
-    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 1, 0));
-    // Order 10 (too high)
+    // Order 0 (too low)
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 0, 0));
+    // Order 9+ (too high)
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 9, 0));
     TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 10, 0));
+    // Odd orders 1,3,5,7 are now VALID
+    TEST_ASSERT_TRUE(dsp_insert_crossover_butterworth(0, 1000.0f, 1, 0) >= 0);
 }
 
 void test_crossover_lr4_sum_flat(void) {
@@ -935,6 +944,135 @@ void test_routing_mono_sum(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, ch1[0]);
 }
 
+// ===== Expanded Crossover Tests =====
+
+void test_crossover_bw4_q_values(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_butterworth(0, 1000.0f, 4, 0); // LPF BW4
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
+    // BW4: Q1 = 1/(2*sin(pi/8)) = 0.5412, Q2 = 1/(2*sin(3*pi/8)) = 1.3066
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[0].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[1].biquad.Q);
+}
+
+void test_crossover_bw3_first_order_plus_biquad(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_butterworth(0, 1000.0f, 3, 0); // LPF BW3
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    // BW3 = 1 first-order + 1 biquad
+    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[0].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
+    // BW3 biquad Q = 1.0
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, cfg->channels[0].stages[1].biquad.Q);
+}
+
+void test_crossover_bw1_first_order_only(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_butterworth(0, 1000.0f, 1, 0); // LPF BW1
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(1, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[0].type);
+}
+
+void test_crossover_bw1_hpf(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_butterworth(0, 1000.0f, 1, 1); // HPF BW1
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(1, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF_1ST, cfg->channels[0].stages[0].type);
+}
+
+void test_crossover_lr12_stage_count(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_lr(0, 1000.0f, 12, 0); // LPF LR12
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    // LR12 = BW6^2. BW6 = 3 biquads. So LR12 = 6 biquads
+    TEST_ASSERT_EQUAL_INT(6, cfg->channels[0].stageCount);
+}
+
+void test_crossover_lr16_stage_count(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_lr(0, 1000.0f, 16, 0); // LPF LR16
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    // LR16 = BW8^2. BW8 = 4 biquads. So LR16 = 8 biquads
+    TEST_ASSERT_EQUAL_INT(8, cfg->channels[0].stageCount);
+}
+
+void test_crossover_lr24_stage_count(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_lr(0, 1000.0f, 24, 0); // LPF LR24
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    // LR24 = BW12^2. BW12 = 6 biquads. So LR24 = 12 biquads
+    TEST_ASSERT_EQUAL_INT(12, cfg->channels[0].stageCount);
+}
+
+void test_crossover_lr6_has_first_order_sections(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_lr(0, 1000.0f, 6, 0); // LPF LR6
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    // LR6 = BW3^2. BW3 = 1 first-order + 1 biquad. So LR6 = 2 first-order + 2 biquads = 4 stages
+    TEST_ASSERT_EQUAL_INT(4, cfg->channels[0].stageCount);
+    // First BW3 pass: 1st-order + biquad
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[0].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
+    // Second BW3 pass: 1st-order + biquad
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[2].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[3].type);
+}
+
+void test_crossover_lr_rejects_invalid(void) {
+    dsp_init();
+    // Odd LR orders are invalid
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_lr(0, 1000.0f, 3, 0));
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_lr(0, 1000.0f, 5, 0));
+    // LR0 is invalid
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_lr(0, 1000.0f, 0, 0));
+}
+
+void test_first_order_lpf_dc_gain(void) {
+    // First-order LPF should have DC gain ~1.0
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_LPF_1ST, 48000);
+
+    // DC gain: (b0 + b1 + b2) / (1 + a1 + a2) — with b2=0, a2=0
+    float dcGain = (p.coeffs[0] + p.coeffs[1] + p.coeffs[2]) /
+                   (1.0f + p.coeffs[3] + p.coeffs[4]);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, dcGain);
+}
+
+void test_first_order_hpf_dc_gain(void) {
+    // First-order HPF should have DC gain ~0.0
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_HPF_1ST, 48000);
+
+    // DC gain: (b0 + b1 + b2) / (1 + a1 + a2)
+    float dcGain = (p.coeffs[0] + p.coeffs[1] + p.coeffs[2]) /
+                   (1.0f + p.coeffs[3] + p.coeffs[4]);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, dcGain);
+}
+
 // ===== Metrics Test =====
 
 void test_metrics_initial(void) {
@@ -1026,6 +1164,19 @@ int main(int argc, char **argv) {
     RUN_TEST(test_crossover_lr8_inserts_four_biquads);
     RUN_TEST(test_crossover_butterworth_rejects_invalid);
     RUN_TEST(test_crossover_lr4_sum_flat);
+
+    // Expanded crossover tests
+    RUN_TEST(test_crossover_bw4_q_values);
+    RUN_TEST(test_crossover_bw3_first_order_plus_biquad);
+    RUN_TEST(test_crossover_bw1_first_order_only);
+    RUN_TEST(test_crossover_bw1_hpf);
+    RUN_TEST(test_crossover_lr12_stage_count);
+    RUN_TEST(test_crossover_lr16_stage_count);
+    RUN_TEST(test_crossover_lr24_stage_count);
+    RUN_TEST(test_crossover_lr6_has_first_order_sections);
+    RUN_TEST(test_crossover_lr_rejects_invalid);
+    RUN_TEST(test_first_order_lpf_dc_gain);
+    RUN_TEST(test_first_order_hpf_dc_gain);
 
     // Bass management
     RUN_TEST(test_bass_management_setup);

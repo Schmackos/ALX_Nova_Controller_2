@@ -255,6 +255,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           saveSettings();
           sendAudioGraphState();
           LOG_I("[WebSocket] Spectrum %s", appState.spectrumEnabled ? "enabled" : "disabled");
+        } else if (msgType == "setFftWindowType") {
+          int wt = doc["value"].as<int>();
+          if (wt >= 0 && wt < FFT_WINDOW_COUNT) {
+            appState.fftWindowType = (FftWindowType)wt;
+            saveSettings();
+            sendAudioGraphState();
+            LOG_I("[WebSocket] FFT window type: %d", wt);
+          }
         } else if (msgType == "setSignalGen") {
           bool changed = false;
           if (doc["enabled"].is<bool>()) {
@@ -579,6 +587,7 @@ void sendAudioGraphState() {
   doc["vuMeterEnabled"] = appState.vuMeterEnabled;
   doc["waveformEnabled"] = appState.waveformEnabled;
   doc["spectrumEnabled"] = appState.spectrumEnabled;
+  doc["fftWindowType"] = (int)appState.fftWindowType;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -757,112 +766,153 @@ float getCpuUsageCore1() {
 }
 
 void sendHardwareStats() {
-  // Early return if debug HW stats is disabled
-  if (!(appState.debugMode && appState.debugHwStats)) return;
+  // Master debug gate — if debug mode is off, send nothing
+  if (!appState.debugMode) return;
 
-  // Update CPU usage before sending stats
-  updateCpuUsage();
-  
+  // At least one sub-toggle must be on to justify a broadcast
+  if (!appState.debugHwStats && !appState.debugI2sMetrics && !appState.debugTaskMonitor) return;
+
   JsonDocument doc;
   doc["type"] = "hardware_stats";
-  
-  // Memory - Internal Heap
-  doc["memory"]["heapTotal"] = ESP.getHeapSize();
-  doc["memory"]["heapFree"] = ESP.getFreeHeap();
-  doc["memory"]["heapMinFree"] = ESP.getMinFreeHeap();
-  doc["memory"]["heapMaxBlock"] = ESP.getMaxAllocHeap();
-  
-  // Memory - PSRAM (external, may not be available)
-  doc["memory"]["psramTotal"] = ESP.getPsramSize();
-  doc["memory"]["psramFree"] = ESP.getFreePsram();
-  
-  // CPU Information
-  doc["cpu"]["freqMHz"] = ESP.getCpuFreqMHz();
-  doc["cpu"]["model"] = ESP.getChipModel();
-  doc["cpu"]["revision"] = ESP.getChipRevision();
-  doc["cpu"]["cores"] = ESP.getChipCores();
-  
-  // CPU Utilization per core
-  doc["cpu"]["usageCore0"] = cpuUsageCore0;
-  doc["cpu"]["usageCore1"] = cpuUsageCore1;
-  doc["cpu"]["usageTotal"] = (cpuUsageCore0 + cpuUsageCore1) / 2.0;
-  
-  // Temperature - ESP32-S3 internal sensor
-  // temperatureRead() returns temperature in Celsius
-  doc["cpu"]["temperature"] = temperatureRead();
-  
-  // Storage - Flash
-  doc["storage"]["flashSize"] = ESP.getFlashChipSize();
-  doc["storage"]["sketchSize"] = ESP.getSketchSize();
-  doc["storage"]["sketchFree"] = ESP.getFreeSketchSpace();
-  
-  // Storage - LittleFS
-  doc["storage"]["LittleFSTotal"] = LittleFS.totalBytes();
-  doc["storage"]["LittleFSUsed"] = LittleFS.usedBytes();
-  
-  // WiFi Information
-  doc["wifi"]["rssi"] = WiFi.RSSI();
-  doc["wifi"]["channel"] = WiFi.channel();
-  doc["wifi"]["apClients"] = WiFi.softAPgetStationNum();
-  doc["wifi"]["connected"] = (WiFi.status() == WL_CONNECTED);
-  
-  // Audio ADC diagnostics (per-ADC)
-  doc["audio"]["sampleRate"] = appState.audioSampleRate;
-  doc["audio"]["adcVref"] = appState.adcVref;
-  doc["audio"]["numAdcsDetected"] = appState.numAdcsDetected;
-  JsonArray adcArr = doc["audio"]["adcs"].to<JsonArray>();
-  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
-    JsonObject adcObj = adcArr.add<JsonObject>();
-    const AppState::AdcState &adc = appState.audioAdc[a];
-    const char *statusStr = "OK";
-    switch (adc.healthStatus) {
-      case 1: statusStr = "NO_DATA"; break;
-      case 2: statusStr = "NOISE_ONLY"; break;
-      case 3: statusStr = "CLIPPING"; break;
-      case 4: statusStr = "I2S_ERROR"; break;
-      case 5: statusStr = "HW_FAULT"; break;
+
+  // === Hardware Stats sections (gated by debugHwStats) ===
+  if (appState.debugHwStats) {
+    // Update CPU usage before sending stats
+    updateCpuUsage();
+
+    // Memory - Internal Heap
+    doc["memory"]["heapTotal"] = ESP.getHeapSize();
+    doc["memory"]["heapFree"] = ESP.getFreeHeap();
+    doc["memory"]["heapMinFree"] = ESP.getMinFreeHeap();
+    doc["memory"]["heapMaxBlock"] = ESP.getMaxAllocHeap();
+
+    // Memory - PSRAM (external, may not be available)
+    doc["memory"]["psramTotal"] = ESP.getPsramSize();
+    doc["memory"]["psramFree"] = ESP.getFreePsram();
+
+    // CPU Information
+    doc["cpu"]["freqMHz"] = ESP.getCpuFreqMHz();
+    doc["cpu"]["model"] = ESP.getChipModel();
+    doc["cpu"]["revision"] = ESP.getChipRevision();
+    doc["cpu"]["cores"] = ESP.getChipCores();
+
+    // CPU Utilization per core
+    doc["cpu"]["usageCore0"] = cpuUsageCore0;
+    doc["cpu"]["usageCore1"] = cpuUsageCore1;
+    doc["cpu"]["usageTotal"] = (cpuUsageCore0 + cpuUsageCore1) / 2.0;
+
+    // Temperature - ESP32-S3 internal sensor
+    doc["cpu"]["temperature"] = temperatureRead();
+
+    // Storage - Flash
+    doc["storage"]["flashSize"] = ESP.getFlashChipSize();
+    doc["storage"]["sketchSize"] = ESP.getSketchSize();
+    doc["storage"]["sketchFree"] = ESP.getFreeSketchSpace();
+
+    // Storage - LittleFS
+    doc["storage"]["LittleFSTotal"] = LittleFS.totalBytes();
+    doc["storage"]["LittleFSUsed"] = LittleFS.usedBytes();
+
+    // WiFi Information
+    doc["wifi"]["rssi"] = WiFi.RSSI();
+    doc["wifi"]["channel"] = WiFi.channel();
+    doc["wifi"]["apClients"] = WiFi.softAPgetStationNum();
+    doc["wifi"]["connected"] = (WiFi.status() == WL_CONNECTED);
+
+    // Audio ADC diagnostics (per-ADC)
+    doc["audio"]["sampleRate"] = appState.audioSampleRate;
+    doc["audio"]["adcVref"] = appState.adcVref;
+    doc["audio"]["numAdcsDetected"] = appState.numAdcsDetected;
+    JsonArray adcArr = doc["audio"]["adcs"].to<JsonArray>();
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      JsonObject adcObj = adcArr.add<JsonObject>();
+      const AppState::AdcState &adc = appState.audioAdc[a];
+      const char *statusStr = "OK";
+      switch (adc.healthStatus) {
+        case 1: statusStr = "NO_DATA"; break;
+        case 2: statusStr = "NOISE_ONLY"; break;
+        case 3: statusStr = "CLIPPING"; break;
+        case 4: statusStr = "I2S_ERROR"; break;
+        case 5: statusStr = "HW_FAULT"; break;
+      }
+      adcObj["status"] = statusStr;
+      adcObj["noiseFloorDbfs"] = adc.noiseFloorDbfs;
+      adcObj["i2sErrors"] = adc.i2sErrors;
+      adcObj["consecutiveZeros"] = adc.consecutiveZeros;
+      adcObj["totalBuffers"] = adc.totalBuffers;
+      adcObj["vrms"] = adc.vrmsCombined;
+      adcObj["snrDb"] = appState.audioSnrDb[a];
+      adcObj["sfdrDb"] = appState.audioSfdrDb[a];
     }
-    adcObj["status"] = statusStr;
-    adcObj["noiseFloorDbfs"] = adc.noiseFloorDbfs;
-    adcObj["i2sErrors"] = adc.i2sErrors;
-    adcObj["consecutiveZeros"] = adc.consecutiveZeros;
-    adcObj["totalBuffers"] = adc.totalBuffers;
-    adcObj["vrms"] = adc.vrmsCombined;
-  }
-  // Legacy flat fields for backward compat
-  doc["audio"]["adcStatus"] = adcArr[0]["status"];
-  doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
-  doc["audio"]["vrms"] = appState.audioVrmsCombined;
+    doc["audio"]["fftWindowType"] = (int)appState.fftWindowType;
+    // Legacy flat fields for backward compat
+    doc["audio"]["adcStatus"] = adcArr[0]["status"];
+    doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
+    doc["audio"]["vrms"] = appState.audioVrmsCombined;
 
-  // I2S Static Config
-  I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
-  JsonArray i2sCfgArr = doc["audio"]["i2sConfig"].to<JsonArray>();
-  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
-    JsonObject c = i2sCfgArr.add<JsonObject>();
-    c["mode"] = i2sCfg.adc[a].isMaster ? "Master RX" : "Slave RX";
-    c["sampleRate"] = i2sCfg.adc[a].sampleRate;
-    c["bitsPerSample"] = i2sCfg.adc[a].bitsPerSample;
-    c["channelFormat"] = i2sCfg.adc[a].channelFormat;
-    c["dmaBufCount"] = i2sCfg.adc[a].dmaBufCount;
-    c["dmaBufLen"] = i2sCfg.adc[a].dmaBufLen;
-    c["apll"] = i2sCfg.adc[a].apllEnabled;
-    c["mclkHz"] = i2sCfg.adc[a].mclkHz;
-    c["commFormat"] = i2sCfg.adc[a].commFormat;
+    // Uptime (milliseconds since boot)
+    doc["uptime"] = millis();
+
+    // Reset reason
+    doc["resetReason"] = getResetReasonString();
+
+    // Heap health
+    doc["heapCritical"] = appState.heapCritical;
+
+    // Crash history (ring buffer, most recent first)
+    const CrashLogData &clog = crashlog_get();
+    JsonArray crashArr = doc["crashHistory"].to<JsonArray>();
+    for (int i = 0; i < (int)clog.count && i < CRASH_LOG_MAX_ENTRIES; i++) {
+      const CrashLogEntry *entry = crashlog_get_recent(i);
+      if (!entry) break;
+      JsonObject obj = crashArr.add<JsonObject>();
+      obj["reason"] = entry->reason;
+      obj["heapFree"] = entry->heapFree;
+      obj["heapMinFree"] = entry->heapMinFree;
+      if (entry->timestamp[0] != '\0') {
+        obj["timestamp"] = entry->timestamp;
+      }
+      obj["wasCrash"] = crashlog_was_crash(entry->reason);
+    }
+
+    // Per-ADC I2S recovery counts
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      doc["audio"]["adcs"][a]["i2sRecoveries"] = appState.audioAdc[a].i2sRecoveries;
+    }
   }
 
-  // I2S Runtime Metrics
-  JsonObject i2sRt = doc["audio"]["i2sRuntime"].to<JsonObject>();
-  i2sRt["stackFree"] = appState.i2sMetrics.audioTaskStackFree;
-  JsonArray bpsArr = i2sRt["buffersPerSec"].to<JsonArray>();
-  JsonArray latArr = i2sRt["avgReadLatencyUs"].to<JsonArray>();
-  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
-    bpsArr.add(serialized(String(appState.i2sMetrics.buffersPerSec[a], 1)));
-    latArr.add(serialized(String(appState.i2sMetrics.avgReadLatencyUs[a], 0)));
+  // === I2S Metrics sections (gated by debugI2sMetrics) ===
+  if (appState.debugI2sMetrics) {
+    // I2S Static Config
+    I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
+    JsonArray i2sCfgArr = doc["audio"]["i2sConfig"].to<JsonArray>();
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      JsonObject c = i2sCfgArr.add<JsonObject>();
+      c["mode"] = i2sCfg.adc[a].isMaster ? "Master RX" : "Slave RX";
+      c["sampleRate"] = i2sCfg.adc[a].sampleRate;
+      c["bitsPerSample"] = i2sCfg.adc[a].bitsPerSample;
+      c["channelFormat"] = i2sCfg.adc[a].channelFormat;
+      c["dmaBufCount"] = i2sCfg.adc[a].dmaBufCount;
+      c["dmaBufLen"] = i2sCfg.adc[a].dmaBufLen;
+      c["apll"] = i2sCfg.adc[a].apllEnabled;
+      c["mclkHz"] = i2sCfg.adc[a].mclkHz;
+      c["commFormat"] = i2sCfg.adc[a].commFormat;
+    }
+
+    // I2S Runtime Metrics
+    JsonObject i2sRt = doc["audio"]["i2sRuntime"].to<JsonObject>();
+    i2sRt["stackFree"] = appState.i2sMetrics.audioTaskStackFree;
+    JsonArray bpsArr = i2sRt["buffersPerSec"].to<JsonArray>();
+    JsonArray latArr = i2sRt["avgReadLatencyUs"].to<JsonArray>();
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+      bpsArr.add(serialized(String(appState.i2sMetrics.buffersPerSec[a], 1)));
+      latArr.add(serialized(String(appState.i2sMetrics.avgReadLatencyUs[a], 0)));
+    }
   }
 
-  // Task Monitor (gated by debug toggle)
+  // === Task Monitor section (gated by debugTaskMonitor) ===
   // Note: task_monitor_update() runs on its own 5s timer in main loop
-  if (appState.debugMode && appState.debugTaskMonitor) {
+  if (appState.debugTaskMonitor) {
     const TaskMonitorData& tm = task_monitor_get_data();
     doc["tasks"]["count"] = tm.taskCount;
     doc["tasks"]["loopUs"] = tm.loopTimeUs;
@@ -878,36 +928,6 @@ void sendHardwareStats() {
       t["state"] = tm.tasks[i].state;
       t["core"] = tm.tasks[i].coreId;
     }
-  }
-
-  // Uptime (milliseconds since boot)
-  doc["uptime"] = millis();
-
-  // Reset reason
-  doc["resetReason"] = getResetReasonString();
-
-  // Heap health
-  doc["heapCritical"] = appState.heapCritical;
-
-  // Crash history (ring buffer, most recent first)
-  const CrashLogData &clog = crashlog_get();
-  JsonArray crashArr = doc["crashHistory"].to<JsonArray>();
-  for (int i = 0; i < (int)clog.count && i < CRASH_LOG_MAX_ENTRIES; i++) {
-    const CrashLogEntry *entry = crashlog_get_recent(i);
-    if (!entry) break;
-    JsonObject obj = crashArr.add<JsonObject>();
-    obj["reason"] = entry->reason;
-    obj["heapFree"] = entry->heapFree;
-    obj["heapMinFree"] = entry->heapMinFree;
-    if (entry->timestamp[0] != '\0') {
-      obj["timestamp"] = entry->timestamp;
-    }
-    obj["wasCrash"] = crashlog_was_crash(entry->reason);
-  }
-
-  // Per-ADC I2S recovery counts
-  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
-    doc["audio"]["adcs"][a]["i2sRecoveries"] = appState.audioAdc[a].i2sRecoveries;
   }
 
   // Broadcast to all WebSocket clients
@@ -999,7 +1019,7 @@ void sendAudioData() {
     }
   }
 
-  // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:16xf32LE] ---
+  // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:Nxf32LE] ---
   if (appState.spectrumEnabled) {
     uint8_t spBin[2 + sizeof(float) + SPECTRUM_BANDS * sizeof(float)]; // 70 bytes
     spBin[0] = WS_BIN_SPECTRUM;

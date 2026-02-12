@@ -20,9 +20,9 @@ static const int FFT_SIZE = 1024;
 static const int SPECTRUM_BANDS = 16;
 static const float PI_F = 3.14159265358979f;
 
-// Band edge frequencies (mirrors i2s_audio.cpp)
+// Band edge frequencies (mirrors i2s_audio.cpp — starts from 0 Hz)
 static const float BAND_EDGES[SPECTRUM_BANDS + 1] = {
-    20, 40, 80, 160, 315, 630, 1250, 2500,
+    0, 40, 80, 160, 315, 630, 1250, 2500,
     5000, 8000, 10000, 12500, 14000, 16000, 18000, 20000, 24000
 };
 
@@ -44,7 +44,7 @@ void audio_aggregate_fft_bands(const float *magnitudes, int fft_size,
 
         int low_bin = (int)(low_freq / bin_width);
         int high_bin = (int)(high_freq / bin_width);
-        if (low_bin < 1) low_bin = 1;
+        if (low_bin < 0) low_bin = 0;
         if (high_bin >= half) high_bin = half - 1;
 
         if (low_bin > high_bin || low_bin >= half) {

@@ -1,5 +1,81 @@
 # Release Notes
 
+## Version 1.7.1
+
+## New Features
+- [2026-02-12] feat: ESP-DSP extended features, decouple debug toggle gating, version 1.7.1
+
+ESP-DSP optimizations:
+- Radix-4 FFT (dsps_fft4r_fc32) replaces Radix-2 for 20-27% speedup on S3
+- 6 selectable FFT window types (Hann, Blackman, Blackman-Harris, Blackman-Nuttall, Nuttall, Flat-Top)
+- SNR/SFDR per-ADC analysis via dsps_snr_f32/dsps_sfdr_f32
+- Vector math SIMD (dsps_mulc_f32) replaces manual gain/polarity loops in DSP pipeline
+- Routing matrix SIMD (dsps_mulc_f32 + dsps_add_f32) replaces per-sample inner loops
+- Spectrum band edges start at 0 Hz (bin 0 included)
+- Native test fallbacks in lib/esp_dsp_lite/ (23 new tests)
+- MQTT HA discovery entities for FFT window select, per-ADC SNR/SFDR sensors
+
+Debug toggle decoupling:
+- Each debug sub-toggle now independently gates its own WebSocket data
+- Hardware Stats toggle gates CPU/memory/storage/WiFi/ADC/crash data
+- I2S Metrics toggle independently gates I2S config and runtime data
+- Task Monitor already correctly gated
+- Main loop broadcasts when any sub-toggle is active (not just HW Stats)
+- Fixed "ADC 2 (Slave)" label to "ADC 2 (Master)" in web UI (`6a6ab60`)
+- [2026-02-12] feat: ESP-DSP extended features, decouple debug toggle gating, version 1.7.1
+
+ESP-DSP optimizations:
+- Radix-4 FFT (dsps_fft4r_fc32) replaces Radix-2 for 20-27% speedup on S3
+- 6 selectable FFT window types (Hann, Blackman, Blackman-Harris, Blackman-Nuttall, Nuttall, Flat-Top)
+- SNR/SFDR per-ADC analysis via dsps_snr_f32/dsps_sfdr_f32
+- Vector math SIMD (dsps_mulc_f32) replaces manual gain/polarity loops in DSP pipeline
+- Routing matrix SIMD (dsps_mulc_f32 + dsps_add_f32) replaces per-sample inner loops
+- Spectrum band edges start at 0 Hz (bin 0 included)
+- Native test fallbacks in lib/esp_dsp_lite/ (23 new tests)
+- MQTT HA discovery entities for FFT window select, per-ADC SNR/SFDR sensors
+
+Debug toggle decoupling:
+- Each debug sub-toggle now independently gates its own WebSocket data
+- Hardware Stats toggle gates CPU/memory/storage/WiFi/ADC/crash data
+- I2S Metrics toggle independently gates I2S config and runtime data
+- Task Monitor already correctly gated
+- Main loop broadcasts when any sub-toggle is active (not just HW Stats)
+- Fixed "ADC 2 (Slave)" label to "ADC 2 (Master)" in web UI (`387ea8b`)
+- [2026-02-12] feat: ESP-DSP extended features, decouple debug toggle gating, version 1.7.1
+
+ESP-DSP optimizations:
+- Radix-4 FFT (dsps_fft4r_fc32) replaces Radix-2 for 20-27% speedup on S3
+- 6 selectable FFT window types (Hann, Blackman, Blackman-Harris, Blackman-Nuttall, Nuttall, Flat-Top)
+- SNR/SFDR per-ADC analysis via dsps_snr_f32/dsps_sfdr_f32
+- Vector math SIMD (dsps_mulc_f32) replaces manual gain/polarity loops in DSP pipeline
+- Routing matrix SIMD (dsps_mulc_f32 + dsps_add_f32) replaces per-sample inner loops
+- Spectrum band edges start at 0 Hz (bin 0 included)
+- Native test fallbacks in lib/esp_dsp_lite/ (23 new tests)
+- MQTT HA discovery entities for FFT window select, per-ADC SNR/SFDR sensors
+
+Debug toggle decoupling:
+- Each debug sub-toggle now independently gates its own WebSocket data
+- Hardware Stats toggle gates CPU/memory/storage/WiFi/ADC/crash data
+- I2S Metrics toggle independently gates I2S config and runtime data
+- Task Monitor already correctly gated
+- Main loop broadcasts when any sub-toggle is active (not just HW Stats)
+- Fixed "ADC 2 (Slave)" label to "ADC 2 (Master)" in web UI (`8c75527`)
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+- None
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.7.0
 
 ### New Features

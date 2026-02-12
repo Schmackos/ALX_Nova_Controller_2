@@ -7,20 +7,20 @@
 
 // ===== Crossover Presets =====
 // These insert biquad stages to implement crossover filters.
-
-// Insert Linkwitz-Riley 2nd order (1 Butterworth biquad)
 // role: 0 = LPF, 1 = HPF
-int dsp_insert_crossover_lr2(int channel, float freq, int role);
 
-// Insert Linkwitz-Riley 4th order (2 cascaded Butterworth biquads)
-int dsp_insert_crossover_lr4(int channel, float freq, int role);
-
-// Insert Linkwitz-Riley 8th order (4 cascaded Butterworth biquads)
-int dsp_insert_crossover_lr8(int channel, float freq, int role);
-
-// Insert Butterworth filter of given order (1 biquad per 2nd order)
-// order must be 2, 4, 6, or 8
+// Insert Butterworth filter of given order (1-8).
+// Odd orders include a first-order section + biquad sections with correct per-section Q.
 int dsp_insert_crossover_butterworth(int channel, float freq, int order, int role);
+
+// Insert Linkwitz-Riley filter of given order (2,4,6,8,12,16,24).
+// LR(2M) = BW(M) squared — each BW(M) section appears twice.
+int dsp_insert_crossover_lr(int channel, float freq, int order, int role);
+
+// Legacy convenience functions (delegate to generic implementations)
+int dsp_insert_crossover_lr2(int channel, float freq, int role);
+int dsp_insert_crossover_lr4(int channel, float freq, int role);
+int dsp_insert_crossover_lr8(int channel, float freq, int role);
 
 // ===== Bass Management =====
 // Sets up sub + main crossover at given frequency with LR4 slopes.

@@ -7,9 +7,19 @@
 #include "dsp_pipeline.h"
 #endif
 #ifndef NATIVE_TEST
-#include "dsps_fft2r.h"
-#include "dsps_wind_hann.h"
+#include "dsps_fft4r.h"
+#include "dsps_wind.h"
+#include "dsps_wind_blackman.h"
+#include "dsps_wind_blackman_harris.h"
+#include "dsps_wind_blackman_nuttall.h"
+#include "dsps_wind_nuttall.h"
+#include "dsps_wind_flat_top.h"
+#include "dsps_snr.h"
+#include "dsps_sfdr.h"
 #else
+#include "dsps_wind.h"
+#include "dsps_snr.h"
+#include "dsps_sfdr.h"
 #include <arduinoFFT.h>
 #endif
 #include <cmath>
@@ -17,6 +27,7 @@
 
 #ifndef NATIVE_TEST
 #include <driver/i2s.h>
+#include <driver/gpio.h>
 #include <esp_task_wdt.h>
 #include <soc/i2s_struct.h>
 #include <freertos/FreeRTOS.h>
@@ -163,9 +174,9 @@ void audio_downsample_waveform(const int32_t *stereo_frames, int frame_count,
 }
 
 // ===== Spectrum Band Definitions (Hz boundaries) =====
-// 16 musically-spaced bands covering 20 Hz - 20 kHz
+// 16 musically-spaced bands covering 0 Hz - 24 kHz
 static const float BAND_EDGES[SPECTRUM_BANDS + 1] = {
-    20, 40, 80, 160, 315, 630, 1250, 2500,
+    0, 40, 80, 160, 315, 630, 1250, 2500,
     5000, 8000, 10000, 12500, 14000, 16000, 18000, 20000, 24000
 };
 
@@ -187,7 +198,7 @@ void audio_aggregate_fft_bands(const float *magnitudes, int fft_size,
         // Map frequency range to bin indices
         int low_bin = (int)(low_freq / bin_width);
         int high_bin = (int)(high_freq / bin_width);
-        if (low_bin < 1) low_bin = 1;           // skip DC bin
+        if (low_bin < 0) low_bin = 0;
         if (high_bin >= half) high_bin = half - 1;
 
         if (low_bin > high_bin || low_bin >= half) {
@@ -275,12 +286,38 @@ static int _wfTargetFrames = 2400; // shared, recalculated from audioUpdateRate
 static float _fftRing[NUM_AUDIO_ADCS][FFT_SIZE];
 static int _fftRingPos[NUM_AUDIO_ADCS] = {};
 static float _fftData[FFT_SIZE * 2];      // ESP-DSP interleaved [Re,Im,...] / arduinoFFT real array
-static float _fftWindow[FFT_SIZE];         // Pre-computed Hann window
+static float _fftWindow[FFT_SIZE];         // Pre-computed window
+static FftWindowType _currentWindowType = FFT_WINDOW_HANN;
 static bool _fftInitialized = false;
 static float _spectrumOutput[NUM_AUDIO_ADCS][SPECTRUM_BANDS];
 static float _dominantFreqOutput[NUM_AUDIO_ADCS] = {};
 static volatile bool _spectrumReady[NUM_AUDIO_ADCS] = {};
 static unsigned long _lastFftTime[NUM_AUDIO_ADCS] = {};
+
+// Apply the selected FFT window function to the window buffer
+static void i2s_audio_apply_window(FftWindowType type) {
+    switch (type) {
+        case FFT_WINDOW_BLACKMAN:
+            dsps_wind_blackman_f32(_fftWindow, FFT_SIZE);
+            break;
+        case FFT_WINDOW_BLACKMAN_HARRIS:
+            dsps_wind_blackman_harris_f32(_fftWindow, FFT_SIZE);
+            break;
+        case FFT_WINDOW_BLACKMAN_NUTTALL:
+            dsps_wind_blackman_nuttall_f32(_fftWindow, FFT_SIZE);
+            break;
+        case FFT_WINDOW_NUTTALL:
+            dsps_wind_nuttall_f32(_fftWindow, FFT_SIZE);
+            break;
+        case FFT_WINDOW_FLAT_TOP:
+            dsps_wind_flat_top_f32(_fftWindow, FFT_SIZE);
+            break;
+        default: // FFT_WINDOW_HANN
+            dsps_wind_hann_f32(_fftWindow, FFT_SIZE);
+            break;
+    }
+    _currentWindowType = type;
+}
 
 static void i2s_configure_adc1(uint32_t sample_rate) {
     i2s_config_t cfg = {};
@@ -480,18 +517,25 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
         if (now - _lastFftTime[a] >= AppState::getInstance().audioUpdateRate) {
             _lastFftTime[a] = now;
 
-            // Copy ring buffer into interleaved complex format with Hann window
+            // Check if window type changed at runtime
+            FftWindowType wantedWindow = AppState::getInstance().fftWindowType;
+            if (wantedWindow != _currentWindowType) {
+                i2s_audio_apply_window(wantedWindow);
+            }
+
+            // Copy ring buffer into interleaved complex format with window
             for (int i = 0; i < FFT_SIZE; i++) {
                 float sample = _fftRing[a][(_fftRingPos[a] + i) % FFT_SIZE];
                 _fftData[i * 2] = sample * _fftWindow[i];     // Real
                 _fftData[i * 2 + 1] = 0.0f;                   // Imaginary
             }
 
-            // ESP-DSP radix-2 FFT + bit reversal
-            dsps_fft2r_fc32(_fftData, FFT_SIZE);
-            dsps_bit_rev_fc32(_fftData, FFT_SIZE);
+            // ESP-DSP Radix-4 FFT + bit reversal (20-27% faster than Radix-2)
+            dsps_fft4r_fc32(_fftData, FFT_SIZE);
+            dsps_bit_rev4r_fc32(_fftData, FFT_SIZE);
+            dsps_cplx2real_fc32(_fftData, FFT_SIZE);
 
-            // Compute magnitudes in-place (overwrite first FFT_SIZE entries)
+            // Compute magnitudes in-place (overwrite first FFT_SIZE/2 entries)
             float maxMag = 0.0f;
             int maxBin = 0;
             for (int i = 0; i < FFT_SIZE / 2; i++) {
@@ -505,6 +549,10 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
                 }
             }
             _dominantFreqOutput[a] = (float)maxBin * (float)_currentSampleRate / (float)FFT_SIZE;
+
+            // SNR/SFDR analysis (computed from magnitude spectrum)
+            AppState::getInstance().audioSnrDb[a] = dsps_snr_f32(_fftData, FFT_SIZE / 2, 0);
+            AppState::getInstance().audioSfdrDb[a] = dsps_sfdr_f32(_fftData, FFT_SIZE / 2, 0);
 
             audio_aggregate_fft_bands(_fftData, FFT_SIZE, (float)_currentSampleRate,
                                       _spectrumOutput[a], SPECTRUM_BANDS);
@@ -772,16 +820,12 @@ void i2s_audio_init() {
         _lastFftTime[a] = 0;
     }
 
-    // Initialize ESP-DSP FFT tables and Hann window
+    // Initialize ESP-DSP Radix-4 FFT tables and window
     if (!_fftInitialized) {
-        dsps_fft2r_init_fc32(NULL, FFT_SIZE);
-        dsps_wind_hann_f32(_fftWindow, FFT_SIZE);
+        dsps_fft4r_init_fc32(NULL, FFT_SIZE);
+        i2s_audio_apply_window(AppState::getInstance().fftWindowType);
         _fftInitialized = true;
     }
-
-    // Pull-down on DOUT2 so an unconnected pin reads clean zeros (→ NO_DATA)
-    // instead of floating noise that looks like valid audio (→ false OK status)
-    pinMode(I2S_DOUT2_PIN, INPUT_PULLDOWN);
 
     // Both I2S peripherals configured as master RX. I2S1 (ADC2) does NOT output
     // any clocks — I2S0 (ADC1) provides BCK/WS/MCLK to both PCM1808 boards.
@@ -789,6 +833,11 @@ void i2s_audio_init() {
     // data from GPIO9. This bypasses ESP32-S3 slave mode DMA issues entirely.
     _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
     i2s_configure_adc1(_currentSampleRate);
+
+    // Pull-down on DOUT2 AFTER i2s_set_pin() — the I2S driver reconfigures
+    // the GPIO via gpio_matrix, stripping any prior pulldown. Without this,
+    // an unconnected pin floats high → reads all-1s → false CLIPPING status.
+    gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
 
     // Dump registers for debugging
     if (_adc2InitOk) {

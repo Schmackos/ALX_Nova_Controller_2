@@ -8,6 +8,17 @@
 #include <WebSocketsServer.h>
 #include <WiFi.h>
 
+// ===== FFT Window Types =====
+enum FftWindowType : uint8_t {
+  FFT_WINDOW_HANN = 0,
+  FFT_WINDOW_BLACKMAN,
+  FFT_WINDOW_BLACKMAN_HARRIS,
+  FFT_WINDOW_BLACKMAN_NUTTALL,
+  FFT_WINDOW_NUTTALL,
+  FFT_WINDOW_FLAT_TOP,
+  FFT_WINDOW_COUNT
+};
+
 // ===== FSM Application States =====
 enum AppFSMState {
   STATE_IDLE,
@@ -198,6 +209,13 @@ public:
   bool waveformEnabled = true;     // Enable waveform computation & display
   bool spectrumEnabled = true;     // Enable FFT/spectrum computation & display
 
+  // ===== FFT Window Type =====
+  FftWindowType fftWindowType = FFT_WINDOW_HANN; // Default to Hann
+
+  // ===== ADC Signal Quality Metrics =====
+  float audioSnrDb[NUM_AUDIO_ADCS] = {};         // Signal-to-Noise Ratio (dB)
+  float audioSfdrDb[NUM_AUDIO_ADCS] = {};        // Spurious-Free Dynamic Range (dB)
+
   // ===== Heap Health =====
   bool heapCritical = false;       // True when largest free block < 20KB
 
@@ -246,6 +264,7 @@ public:
   bool prevMqttDebugHwStats = true;
   bool prevMqttDebugI2sMetrics = true;
   bool prevMqttDebugTaskMonitor = true;
+  FftWindowType prevMqttFftWindowType = FFT_WINDOW_HANN;
 
   // ===== Smart Sensing Broadcast State Tracking =====
   SensingMode prevBroadcastMode = ALWAYS_ON;

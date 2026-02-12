@@ -222,10 +222,11 @@ void scr_debug_refresh(void) {
             const char *st2 = status_names[adc.healthStatus < 6 ? adc.healthStatus : 0];
             unsigned long age = 0;
             if (adc.lastNonZeroMs > 0) age = (millis() - adc.lastNonZeroMs) / 1000;
-            snprintf(buf, sizeof(buf), "ADC %d\n%s %.0fdB\n%.3fV\nFl:%.0f\nCl:%lu E:%lu\n%lus",
+            snprintf(buf, sizeof(buf), "ADC %d\n%s %.0fdB\n%.3fV\nFl:%.0f\nSNR:%.0f SFDR:%.0f\nCl:%lu E:%lu\n%lus",
                      a + 1, st2, adc.dBFS,
                      (adc.vrms1 > adc.vrms2) ? adc.vrms1 : adc.vrms2,
                      adc.noiseFloorDbfs,
+                     appState.audioSnrDb[a], appState.audioSfdrDb[a],
                      (unsigned long)adc.clippedSamples,
                      (unsigned long)adc.i2sErrors, age);
             lv_label_set_text(lbl_audio_adc[a], buf);

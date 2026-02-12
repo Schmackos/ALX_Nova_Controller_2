@@ -51,6 +51,12 @@ void dsp_compute_biquad_coeffs(DspBiquadParams &params, DspStageType type, uint3
         case DSP_BIQUAD_CUSTOM:
             // Custom coefficients already loaded — don't overwrite
             break;
+        case DSP_BIQUAD_LPF_1ST:
+            dsp_gen_lpf1_f32(params.coeffs, freq);
+            break;
+        case DSP_BIQUAD_HPF_1ST:
+            dsp_gen_hpf1_f32(params.coeffs, freq);
+            break;
         default:
             // Non-biquad types: set passthrough
             params.coeffs[0] = 1.0f;
@@ -73,7 +79,7 @@ void dsp_load_custom_coeffs(DspBiquadParams &params, float b0, float b1, float b
 void dsp_recompute_channel_coeffs(DspChannelConfig &ch, uint32_t sampleRate) {
     for (int i = 0; i < ch.stageCount; i++) {
         DspStage &s = ch.stages[i];
-        if (s.type <= DSP_BIQUAD_CUSTOM) {
+        if (dsp_is_biquad_type(s.type)) {
             dsp_compute_biquad_coeffs(s.biquad, s.type, sampleRate);
         } else if (s.type == DSP_GAIN) {
             dsp_compute_gain_linear(s.gain);
