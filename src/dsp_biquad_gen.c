@@ -1,6 +1,8 @@
-// ESP-DSP Lite — Biquad coefficient generators (Robert Bristow-Johnson Audio EQ Cookbook)
+// Biquad coefficient generators (Robert Bristow-Johnson Audio EQ Cookbook)
+// Renamed from dsps_biquad_gen_* to dsp_gen_* to avoid symbol conflicts
+// with the pre-built ESP-DSP library (which has different signatures).
 // Based on ESP-DSP by Espressif Systems (Apache 2.0 License)
-#include "dsps_biquad_gen.h"
+#include "dsp_biquad_gen.h"
 #include <math.h>
 
 #ifndef M_PI
@@ -18,10 +20,10 @@ static void normalize(float *coeffs, float a0)
     coeffs[4] *= inv_a0; // a2
 }
 
-esp_err_t dsps_biquad_gen_lpf_f32(float *coeffs, float freq, float qFactor)
+int dsp_gen_lpf_f32(float *coeffs, float freq, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
     float w0 = 2.0f * (float)M_PI * freq;
     float sinW0 = sinf(w0);
@@ -36,13 +38,13 @@ esp_err_t dsps_biquad_gen_lpf_f32(float *coeffs, float freq, float qFactor)
     coeffs[4] = 1.0f - alpha;           // a2
 
     normalize(coeffs, a0);
-    return ESP_OK;
+    return 0;
 }
 
-esp_err_t dsps_biquad_gen_hpf_f32(float *coeffs, float freq, float qFactor)
+int dsp_gen_hpf_f32(float *coeffs, float freq, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
     float w0 = 2.0f * (float)M_PI * freq;
     float sinW0 = sinf(w0);
@@ -57,13 +59,13 @@ esp_err_t dsps_biquad_gen_hpf_f32(float *coeffs, float freq, float qFactor)
     coeffs[4] = 1.0f - alpha;            // a2
 
     normalize(coeffs, a0);
-    return ESP_OK;
+    return 0;
 }
 
-esp_err_t dsps_biquad_gen_bpf_f32(float *coeffs, float freq, float qFactor)
+int dsp_gen_bpf_f32(float *coeffs, float freq, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
     float w0 = 2.0f * (float)M_PI * freq;
     float sinW0 = sinf(w0);
@@ -71,20 +73,20 @@ esp_err_t dsps_biquad_gen_bpf_f32(float *coeffs, float freq, float qFactor)
     float alpha = sinW0 / (2.0f * qFactor);
 
     float a0 = 1.0f + alpha;
-    coeffs[0] = alpha;                   // b0 (constant-0-dB-peak-gain BPF)
+    coeffs[0] = alpha;                   // b0
     coeffs[1] = 0.0f;                    // b1
     coeffs[2] = -alpha;                  // b2
     coeffs[3] = -2.0f * cosW0;          // a1
     coeffs[4] = 1.0f - alpha;           // a2
 
     normalize(coeffs, a0);
-    return ESP_OK;
+    return 0;
 }
 
-esp_err_t dsps_biquad_gen_notch_f32(float *coeffs, float freq, float qFactor)
+int dsp_gen_notch_f32(float *coeffs, float freq, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
     float w0 = 2.0f * (float)M_PI * freq;
     float sinW0 = sinf(w0);
@@ -99,13 +101,13 @@ esp_err_t dsps_biquad_gen_notch_f32(float *coeffs, float freq, float qFactor)
     coeffs[4] = 1.0f - alpha;           // a2
 
     normalize(coeffs, a0);
-    return ESP_OK;
+    return 0;
 }
 
-esp_err_t dsps_biquad_gen_allpass_f32(float *coeffs, float freq, float qFactor)
+int dsp_gen_allpass_f32(float *coeffs, float freq, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
     float w0 = 2.0f * (float)M_PI * freq;
     float sinW0 = sinf(w0);
@@ -120,23 +122,22 @@ esp_err_t dsps_biquad_gen_allpass_f32(float *coeffs, float freq, float qFactor)
     coeffs[4] = 1.0f - alpha;           // a2
 
     normalize(coeffs, a0);
-    return ESP_OK;
+    return 0;
 }
 
-// Allpass 360° — same as standard second-order allpass
-esp_err_t dsps_biquad_gen_allpass360_f32(float *coeffs, float freq, float qFactor)
+// Allpass 360 -- same as standard second-order allpass
+int dsp_gen_allpass360_f32(float *coeffs, float freq, float qFactor)
 {
-    return dsps_biquad_gen_allpass_f32(coeffs, freq, qFactor);
+    return dsp_gen_allpass_f32(coeffs, freq, qFactor);
 }
 
-// Allpass 180° — first-order allpass for 180° phase shift at target frequency
-esp_err_t dsps_biquad_gen_allpass180_f32(float *coeffs, float freq, float qFactor)
+// Allpass 180 -- first-order allpass for 180 phase shift at target frequency
+int dsp_gen_allpass180_f32(float *coeffs, float freq, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
-    // First-order allpass: H(z) = (a + z^-1) / (1 + a*z^-1)
-    // where a = (tan(pi*f) - 1) / (tan(pi*f) + 1)
+    (void)qFactor; // Not used for first-order allpass
     float t = tanf((float)M_PI * freq);
     float a = (t - 1.0f) / (t + 1.0f);
 
@@ -146,21 +147,19 @@ esp_err_t dsps_biquad_gen_allpass180_f32(float *coeffs, float freq, float qFacto
     coeffs[3] = a;       // a1
     coeffs[4] = 0.0f;   // a2
 
-    return ESP_OK;
+    return 0;
 }
 
-// BPF with 0dB peak gain — RBJ cookbook "constant 0 dB peak gain" variant
-// This uses b0=alpha (not sin(w0)/2 which gives peak gain = Q)
-esp_err_t dsps_biquad_gen_bpf0db_f32(float *coeffs, float freq, float qFactor)
+// BPF with 0dB peak gain
+int dsp_gen_bpf0db_f32(float *coeffs, float freq, float qFactor)
 {
-    // Same as dsps_biquad_gen_bpf_f32 — both use the 0dB peak gain formula
-    return dsps_biquad_gen_bpf_f32(coeffs, freq, qFactor);
+    return dsp_gen_bpf_f32(coeffs, freq, qFactor);
 }
 
-esp_err_t dsps_biquad_gen_peakingEQ_f32(float *coeffs, float freq, float gain, float qFactor)
+int dsp_gen_peakingEQ_f32(float *coeffs, float freq, float gain, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
     float A = powf(10.0f, gain / 40.0f); // sqrt(10^(dB/20))
     float w0 = 2.0f * (float)M_PI * freq;
@@ -176,13 +175,13 @@ esp_err_t dsps_biquad_gen_peakingEQ_f32(float *coeffs, float freq, float gain, f
     coeffs[4] = 1.0f - alpha / A;       // a2
 
     normalize(coeffs, a0);
-    return ESP_OK;
+    return 0;
 }
 
-esp_err_t dsps_biquad_gen_lowShelf_f32(float *coeffs, float freq, float gain, float qFactor)
+int dsp_gen_lowShelf_f32(float *coeffs, float freq, float gain, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
     float A = powf(10.0f, gain / 40.0f);
     float w0 = 2.0f * (float)M_PI * freq;
@@ -199,13 +198,13 @@ esp_err_t dsps_biquad_gen_lowShelf_f32(float *coeffs, float freq, float gain, fl
     coeffs[4] = (A + 1.0f) + (A - 1.0f) * cosW0 - twoSqrtAalpha;       // a2
 
     normalize(coeffs, a0);
-    return ESP_OK;
+    return 0;
 }
 
-esp_err_t dsps_biquad_gen_highShelf_f32(float *coeffs, float freq, float gain, float qFactor)
+int dsp_gen_highShelf_f32(float *coeffs, float freq, float gain, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
-        return ESP_ERR_DSP_INVALID_PARAM;
+        return -1;
     }
     float A = powf(10.0f, gain / 40.0f);
     float w0 = 2.0f * (float)M_PI * freq;
@@ -222,5 +221,5 @@ esp_err_t dsps_biquad_gen_highShelf_f32(float *coeffs, float freq, float gain, f
     coeffs[4] = (A + 1.0f) - (A - 1.0f) * cosW0 - twoSqrtAalpha;       // a2
 
     normalize(coeffs, a0);
-    return ESP_OK;
+    return 0;
 }

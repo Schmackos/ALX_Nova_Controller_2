@@ -14,6 +14,7 @@
 #include "task_monitor.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
+#include "dsp_coefficients.h"
 #endif
 #include <WiFi.h>
 #include <ArduinoJson.h>
@@ -352,6 +353,133 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           appState.markDspConfigDirty();
           LOG_I("[WebSocket] DSP enabled=%d bypass=%d", appState.dspEnabled, appState.dspBypass);
         }
+        else if (msgType == "addDspStage") {
+          int ch = doc["ch"] | -1;
+          int typeInt = doc["stageType"] | (int)DSP_BIQUAD_PEQ;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            dsp_copy_active_to_inactive();
+            int idx = dsp_add_stage(ch, (DspStageType)typeInt);
+            if (idx >= 0) {
+              dsp_swap_config();
+              extern void saveDspSettingsDebounced();
+              saveDspSettingsDebounced();
+              appState.markDspConfigDirty();
+              LOG_I("[WebSocket] DSP stage added ch=%d type=%d idx=%d", ch, typeInt, idx);
+            } else {
+              JsonDocument errDoc;
+              errDoc["type"] = "dspError";
+              errDoc["message"] = "Resource pool full (FIR/delay slots exhausted)";
+              char errBuf[128];
+              serializeJson(errDoc, errBuf, sizeof(errBuf));
+              webSocket.sendTXT(num, errBuf);
+            }
+          }
+        }
+        else if (msgType == "removeDspStage") {
+          int ch = doc["ch"] | -1;
+          int si = doc["stage"] | -1;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            dsp_copy_active_to_inactive();
+            if (dsp_remove_stage(ch, si)) {
+              dsp_swap_config();
+              extern void saveDspSettingsDebounced();
+              saveDspSettingsDebounced();
+              appState.markDspConfigDirty();
+              LOG_I("[WebSocket] DSP stage removed ch=%d stage=%d", ch, si);
+            }
+          }
+        }
+        else if (msgType == "updateDspStage") {
+          int ch = doc["ch"] | -1;
+          int si = doc["stage"] | -1;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            if (si >= 0 && si < cfg->channels[ch].stageCount) {
+              DspStage &s = cfg->channels[ch].stages[si];
+              if (doc["enabled"].is<bool>()) s.enabled = doc["enabled"].as<bool>();
+              if (s.type <= DSP_BIQUAD_CUSTOM) {
+                if (doc["freq"].is<float>()) s.biquad.frequency = doc["freq"].as<float>();
+                if (doc["gain"].is<float>()) s.biquad.gain = doc["gain"].as<float>();
+                if (doc["Q"].is<float>()) s.biquad.Q = doc["Q"].as<float>();
+                dsp_compute_biquad_coeffs(s.biquad, s.type, cfg->sampleRate);
+              } else if (s.type == DSP_LIMITER) {
+                if (doc["thresholdDb"].is<float>()) s.limiter.thresholdDb = doc["thresholdDb"].as<float>();
+                if (doc["attackMs"].is<float>()) s.limiter.attackMs = doc["attackMs"].as<float>();
+                if (doc["releaseMs"].is<float>()) s.limiter.releaseMs = doc["releaseMs"].as<float>();
+                if (doc["ratio"].is<float>()) s.limiter.ratio = doc["ratio"].as<float>();
+              } else if (s.type == DSP_GAIN) {
+                if (doc["gainDb"].is<float>()) s.gain.gainDb = doc["gainDb"].as<float>();
+                extern void dsp_compute_gain_linear(DspGainParams &p);
+                dsp_compute_gain_linear(s.gain);
+              } else if (s.type == DSP_DELAY) {
+                if (doc["delaySamples"].is<int>()) {
+                  uint16_t ds = doc["delaySamples"].as<uint16_t>();
+                  s.delay.delaySamples = ds > DSP_MAX_DELAY_SAMPLES ? DSP_MAX_DELAY_SAMPLES : ds;
+                }
+              } else if (s.type == DSP_POLARITY) {
+                if (doc["inverted"].is<bool>()) s.polarity.inverted = doc["inverted"].as<bool>();
+              } else if (s.type == DSP_MUTE) {
+                if (doc["muted"].is<bool>()) s.mute.muted = doc["muted"].as<bool>();
+              } else if (s.type == DSP_COMPRESSOR) {
+                if (doc["thresholdDb"].is<float>()) s.compressor.thresholdDb = doc["thresholdDb"].as<float>();
+                if (doc["attackMs"].is<float>()) s.compressor.attackMs = doc["attackMs"].as<float>();
+                if (doc["releaseMs"].is<float>()) s.compressor.releaseMs = doc["releaseMs"].as<float>();
+                if (doc["ratio"].is<float>()) s.compressor.ratio = doc["ratio"].as<float>();
+                if (doc["kneeDb"].is<float>()) s.compressor.kneeDb = doc["kneeDb"].as<float>();
+                if (doc["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = doc["makeupGainDb"].as<float>();
+                extern void dsp_compute_compressor_makeup(DspCompressorParams &p);
+                dsp_compute_compressor_makeup(s.compressor);
+              }
+              dsp_swap_config();
+              extern void saveDspSettingsDebounced();
+              saveDspSettingsDebounced();
+              appState.markDspConfigDirty();
+            }
+          }
+        }
+        else if (msgType == "reorderDspStage") {
+          int ch = doc["ch"] | -1;
+          int from = doc["from"] | -1;
+          int to = doc["to"] | -1;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS && from >= 0 && to >= 0) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            int cnt = cfg->channels[ch].stageCount;
+            if (from < cnt && to < cnt && from != to) {
+              int order[DSP_MAX_STAGES];
+              for (int i = 0; i < cnt; i++) order[i] = i;
+              // Move 'from' to 'to' position
+              int tmp = order[from];
+              if (from < to) {
+                for (int i = from; i < to; i++) order[i] = order[i+1];
+              } else {
+                for (int i = from; i > to; i--) order[i] = order[i-1];
+              }
+              order[to] = tmp;
+              if (dsp_reorder_stages(ch, order, cnt)) {
+                dsp_swap_config();
+                extern void saveDspSettingsDebounced();
+                saveDspSettingsDebounced();
+                appState.markDspConfigDirty();
+                LOG_I("[WebSocket] DSP stage reordered ch=%d from=%d to=%d", ch, from, to);
+              }
+            }
+          }
+        }
+        else if (msgType == "setDspChannelBypass") {
+          int ch = doc["ch"] | -1;
+          bool bypass = doc["bypass"] | false;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            cfg->channels[ch].bypass = bypass;
+            dsp_swap_config();
+            extern void saveDspSettingsDebounced();
+            saveDspSettingsDebounced();
+            appState.markDspConfigDirty();
+          }
+        }
 #endif
       }
       break;
@@ -477,11 +605,51 @@ void sendDspState() {
   doc["dspBypass"] = appState.dspBypass;
   DspState *cfg = dsp_get_active_config();
   doc["globalBypass"] = cfg->globalBypass;
+  doc["sampleRate"] = cfg->sampleRate;
   JsonArray channels = doc["channels"].to<JsonArray>();
   for (int c = 0; c < DSP_MAX_CHANNELS; c++) {
     JsonObject ch = channels.add<JsonObject>();
     ch["bypass"] = cfg->channels[c].bypass;
     ch["stageCount"] = cfg->channels[c].stageCount;
+    JsonArray stages = ch["stages"].to<JsonArray>();
+    for (int s = 0; s < cfg->channels[c].stageCount; s++) {
+      const DspStage &st = cfg->channels[c].stages[s];
+      JsonObject so = stages.add<JsonObject>();
+      so["enabled"] = st.enabled;
+      so["type"] = (int)st.type;
+      if (st.label[0]) so["label"] = st.label;
+      if (st.type <= DSP_BIQUAD_CUSTOM) {
+        so["freq"] = st.biquad.frequency;
+        so["gain"] = st.biquad.gain;
+        so["Q"] = st.biquad.Q;
+        JsonArray co = so["coeffs"].to<JsonArray>();
+        for (int j = 0; j < 5; j++) co.add(st.biquad.coeffs[j]);
+      } else if (st.type == DSP_LIMITER) {
+        so["thresholdDb"] = st.limiter.thresholdDb;
+        so["attackMs"] = st.limiter.attackMs;
+        so["releaseMs"] = st.limiter.releaseMs;
+        so["ratio"] = st.limiter.ratio;
+        so["gr"] = st.limiter.gainReduction;
+      } else if (st.type == DSP_GAIN) {
+        so["gainDb"] = st.gain.gainDb;
+      } else if (st.type == DSP_FIR) {
+        so["numTaps"] = st.fir.numTaps;
+      } else if (st.type == DSP_DELAY) {
+        so["delaySamples"] = st.delay.delaySamples;
+      } else if (st.type == DSP_POLARITY) {
+        so["inverted"] = st.polarity.inverted;
+      } else if (st.type == DSP_MUTE) {
+        so["muted"] = st.mute.muted;
+      } else if (st.type == DSP_COMPRESSOR) {
+        so["thresholdDb"] = st.compressor.thresholdDb;
+        so["attackMs"] = st.compressor.attackMs;
+        so["releaseMs"] = st.compressor.releaseMs;
+        so["ratio"] = st.compressor.ratio;
+        so["kneeDb"] = st.compressor.kneeDb;
+        so["makeupGainDb"] = st.compressor.makeupGainDb;
+        so["gr"] = st.compressor.gainReduction;
+      }
+    }
   }
   String json;
   serializeJson(doc, json);

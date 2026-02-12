@@ -10,6 +10,9 @@
 #include "utils.h"
 #include "websocket_handler.h"
 #include "ota_updater.h"
+#ifdef DSP_ENABLED
+#include "dsp_pipeline.h"
+#endif
 #include <LittleFS.h>
 #include <cmath>
 
@@ -36,6 +39,9 @@ extern void checkForFirmwareUpdate();
 extern void setAmplifierState(bool state);
 extern void sendAudioGraphState();
 extern void sendDebugState();
+#ifdef DSP_ENABLED
+extern void saveDspSettingsDebounced();
+#endif
 
 // ===== MQTT Settings Functions =====
 
@@ -196,6 +202,13 @@ void subscribeToMqttTopics() {
 #ifdef GUI_ENABLED
   mqttClient.subscribe((base + "/settings/boot_animation/set").c_str());
   mqttClient.subscribe((base + "/settings/boot_animation_style/set").c_str());
+#endif
+#ifdef DSP_ENABLED
+  mqttClient.subscribe((base + "/dsp/enabled/set").c_str());
+  mqttClient.subscribe((base + "/dsp/bypass/set").c_str());
+  for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
+    mqttClient.subscribe((base + "/dsp/channel_" + String(ch) + "/bypass/set").c_str());
+  }
 #endif
 
   // Subscribe to HA birth message for re-discovery after HA restart
@@ -699,6 +712,50 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     }
   }
 #endif
+#ifdef DSP_ENABLED
+  // Handle DSP enable/disable
+  else if (topicStr == base + "/dsp/enabled/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.dspEnabled = newState;
+    saveDspSettingsDebounced();
+    sendDspState();
+    publishMqttDspState();
+    LOG_I("[MQTT] DSP set to %s", newState ? "ON" : "OFF");
+  }
+  // Handle DSP global bypass
+  else if (topicStr == base + "/dsp/bypass/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.dspBypass = newState;
+    DspState *cfg = dsp_get_inactive_config();
+    dsp_copy_active_to_inactive();
+    cfg->globalBypass = newState;
+    dsp_swap_config();
+    saveDspSettingsDebounced();
+    sendDspState();
+    publishMqttDspState();
+    LOG_I("[MQTT] DSP bypass set to %s", newState ? "ON" : "OFF");
+  }
+  // Handle per-channel DSP bypass
+  else if (topicStr.startsWith(base + "/dsp/channel_") && topicStr.endsWith("/bypass/set")) {
+    // Extract channel number from topic
+    int chStart = (base + "/dsp/channel_").length();
+    int chEnd = topicStr.indexOf("/bypass/set");
+    if (chEnd > chStart) {
+      int ch = topicStr.substring(chStart, chEnd).toInt();
+      if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
+        bool newState = (message == "ON" || message == "1" || message == "true");
+        dsp_copy_active_to_inactive();
+        DspState *cfg = dsp_get_inactive_config();
+        cfg->channels[ch].bypass = newState;
+        dsp_swap_config();
+        saveDspSettingsDebounced();
+        sendDspState();
+        publishMqttDspState();
+        LOG_I("[MQTT] DSP channel %d bypass set to %s", ch, newState ? "ON" : "OFF");
+      }
+    }
+  }
+#endif
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
     LOG_W("[MQTT] Reboot command received");
@@ -888,6 +945,10 @@ void mqttLoop() {
         || (appState.bootAnimEnabled != appState.prevMqttBootAnimEnabled)
         || (appState.bootAnimStyle != appState.prevMqttBootAnimStyle)
 #endif
+#ifdef DSP_ENABLED
+        || (appState.dspEnabled != appState.prevMqttDspEnabled)
+        || (appState.dspBypass != appState.prevMqttDspBypass)
+#endif
         ;
 
     if (stateChanged) {
@@ -935,6 +996,10 @@ void mqttLoop() {
 #ifdef GUI_ENABLED
       appState.prevMqttBootAnimEnabled = appState.bootAnimEnabled;
       appState.prevMqttBootAnimStyle = appState.bootAnimStyle;
+#endif
+#ifdef DSP_ENABLED
+      appState.prevMqttDspEnabled = appState.dspEnabled;
+      appState.prevMqttDspBypass = appState.dspBypass;
 #endif
     }
   }
@@ -1395,6 +1460,40 @@ void publishMqttDebugState() {
                      appState.debugTaskMonitor ? "ON" : "OFF", true);
 }
 
+#ifdef DSP_ENABLED
+// Publish DSP pipeline state
+void publishMqttDspState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/dsp/enabled").c_str(),
+                     appState.dspEnabled ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/dsp/bypass").c_str(),
+                     appState.dspBypass ? "ON" : "OFF", true);
+
+  // Per-channel bypass and stage count
+  DspState *cfg = dsp_get_active_config();
+  for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
+    String prefix = base + "/dsp/channel_" + String(ch);
+    mqttClient.publish((prefix + "/bypass").c_str(),
+                       cfg->channels[ch].bypass ? "ON" : "OFF", true);
+    mqttClient.publish((prefix + "/stage_count").c_str(),
+                       String(cfg->channels[ch].stageCount).c_str(), true);
+  }
+
+  // DSP metrics
+  DspMetrics m = dsp_get_metrics();
+  mqttClient.publish((base + "/dsp/cpu_load").c_str(),
+                     String(m.cpuLoadPercent, 1).c_str(), true);
+  for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
+    mqttClient.publish((base + "/dsp/channel_" + String(ch) + "/limiter_gr").c_str(),
+                       String(m.limiterGrDb[ch], 1).c_str(), true);
+  }
+}
+#endif
+
 // Publish crash diagnostics and heap health (always-on, not debug-gated)
 void publishMqttCrashDiagnostics() {
   if (!mqttClient.connected())
@@ -1473,6 +1572,9 @@ void publishMqttState() {
   publishMqttDebugState();
   publishMqttCrashDiagnostics();
   publishMqttInputNames();
+#ifdef DSP_ENABLED
+  publishMqttDspState();
+#endif
 #ifdef GUI_ENABLED
   publishMqttBootAnimState();
 #endif
@@ -2829,6 +2931,113 @@ void publishHADiscovery() {
     }
   }
 
+#ifdef DSP_ENABLED
+  // ===== DSP Enabled Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "DSP";
+    doc["unique_id"] = deviceId + "_dsp_enabled";
+    doc["state_topic"] = base + "/dsp/enabled";
+    doc["command_topic"] = base + "/dsp/enabled/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["icon"] = "mdi:equalizer";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/switch/" + deviceId + "/dsp_enabled/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== DSP Bypass Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "DSP Bypass";
+    doc["unique_id"] = deviceId + "_dsp_bypass";
+    doc["state_topic"] = base + "/dsp/bypass";
+    doc["command_topic"] = base + "/dsp/bypass/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["icon"] = "mdi:debug-step-over";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/switch/" + deviceId + "/dsp_bypass/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== DSP CPU Load Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "DSP CPU Load";
+    doc["unique_id"] = deviceId + "_dsp_cpu_load";
+    doc["state_topic"] = base + "/dsp/cpu_load";
+    doc["unit_of_measurement"] = "%";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:cpu-64-bit";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/dsp_cpu_load/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Per-Channel DSP Entities =====
+  {
+    const char *chNames[] = {"L1", "R1", "L2", "R2"};
+    for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
+      String chPrefix = base + "/dsp/channel_" + String(ch);
+      String idSuffix = String("_dsp_ch") + String(ch);
+
+      // Per-channel bypass switch
+      {
+        JsonDocument doc;
+        doc["name"] = String("DSP ") + chNames[ch] + " Bypass";
+        doc["unique_id"] = deviceId + idSuffix + "_bypass";
+        doc["state_topic"] = chPrefix + "/bypass";
+        doc["command_topic"] = chPrefix + "/bypass/set";
+        doc["payload_on"] = "ON";
+        doc["payload_off"] = "OFF";
+        doc["entity_category"] = "config";
+        doc["icon"] = "mdi:debug-step-over";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/switch/" + deviceId + "/dsp_ch" + String(ch) + "_bypass/config").c_str(), payload.c_str(), true);
+      }
+
+      // Per-channel stage count sensor
+      {
+        JsonDocument doc;
+        doc["name"] = String("DSP ") + chNames[ch] + " Stages";
+        doc["unique_id"] = deviceId + idSuffix + "_stages";
+        doc["state_topic"] = chPrefix + "/stage_count";
+        doc["state_class"] = "measurement";
+        doc["entity_category"] = "diagnostic";
+        doc["icon"] = "mdi:filter";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/dsp_ch" + String(ch) + "_stages/config").c_str(), payload.c_str(), true);
+      }
+
+      // Per-channel limiter gain reduction sensor
+      {
+        JsonDocument doc;
+        doc["name"] = String("DSP ") + chNames[ch] + " Limiter GR";
+        doc["unique_id"] = deviceId + idSuffix + "_limiter_gr";
+        doc["state_topic"] = chPrefix + "/limiter_gr";
+        doc["unit_of_measurement"] = "dB";
+        doc["state_class"] = "measurement";
+        doc["entity_category"] = "diagnostic";
+        doc["icon"] = "mdi:arrow-collapse-down";
+        addHADeviceInfo(doc);
+        String payload;
+        serializeJson(doc, payload);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/dsp_ch" + String(ch) + "_limiter_gr/config").c_str(), payload.c_str(), true);
+      }
+    }
+  }
+#endif
+
 #ifdef GUI_ENABLED
   // ===== Boot Animation Switch =====
   {
@@ -2971,7 +3180,23 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/input2_name_r/config",
       // Boot animation
       "homeassistant/switch/%s/boot_animation/config",
-      "homeassistant/select/%s/boot_animation_style/config"};
+      "homeassistant/select/%s/boot_animation_style/config",
+      // DSP entities
+      "homeassistant/switch/%s/dsp_enabled/config",
+      "homeassistant/switch/%s/dsp_bypass/config",
+      "homeassistant/sensor/%s/dsp_cpu_load/config",
+      "homeassistant/switch/%s/dsp_ch0_bypass/config",
+      "homeassistant/switch/%s/dsp_ch1_bypass/config",
+      "homeassistant/switch/%s/dsp_ch2_bypass/config",
+      "homeassistant/switch/%s/dsp_ch3_bypass/config",
+      "homeassistant/sensor/%s/dsp_ch0_stages/config",
+      "homeassistant/sensor/%s/dsp_ch1_stages/config",
+      "homeassistant/sensor/%s/dsp_ch2_stages/config",
+      "homeassistant/sensor/%s/dsp_ch3_stages/config",
+      "homeassistant/sensor/%s/dsp_ch0_limiter_gr/config",
+      "homeassistant/sensor/%s/dsp_ch1_limiter_gr/config",
+      "homeassistant/sensor/%s/dsp_ch2_limiter_gr/config",
+      "homeassistant/sensor/%s/dsp_ch3_limiter_gr/config"};
 
   char topicBuf[160];
   for (const char *topicTemplate : topics) {

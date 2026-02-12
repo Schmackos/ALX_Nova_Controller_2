@@ -4,9 +4,9 @@
 
 // Include DSP sources directly (test_build_src = no)
 #include "../../lib/esp_dsp_lite/src/dsps_biquad_f32_ansi.c"
-#include "../../lib/esp_dsp_lite/src/dsps_biquad_gen_f32.c"
 #include "../../lib/esp_dsp_lite/src/dsps_fir_f32_ansi.c"
 #include "../../lib/esp_dsp_lite/src/dsps_fir_init_f32.c"
+#include "../../src/dsp_biquad_gen.c"
 
 #include "../../src/dsp_pipeline.h"
 #include "../../src/dsp_coefficients.h"

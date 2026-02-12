@@ -14,6 +14,9 @@
 #include "screens/scr_support.h"
 #include "screens/scr_home.h"
 #include "screens/scr_siggen.h"
+#ifdef DSP_ENABLED
+#include "screens/scr_dsp.h"
+#endif
 #include "screens/scr_boot_anim.h"
 #include "../app_state.h"
 #include "../buzzer_handler.h"
@@ -227,6 +230,11 @@ static void gui_task(void *param) {
             } else if (cur == SCR_SIGGEN_MENU) {
                 scr_siggen_refresh();
             }
+#ifdef DSP_ENABLED
+            else if (cur == SCR_DSP_MENU) {
+                scr_dsp_refresh();
+            }
+#endif
         }
 
         /* Process buzzer patterns with low latency (same core as encoder ISR) */
@@ -258,6 +266,9 @@ static void register_screens(void) {
     gui_nav_register(SCR_DEBUG_MENU, scr_debug_create);
     gui_nav_register(SCR_HOME, scr_home_create);
     gui_nav_register(SCR_SIGGEN_MENU, scr_siggen_create);
+#ifdef DSP_ENABLED
+    gui_nav_register(SCR_DSP_MENU, scr_dsp_create);
+#endif
 }
 
 void gui_init(void) {

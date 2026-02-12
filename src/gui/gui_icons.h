@@ -28,6 +28,7 @@
 #define ICON_DOWNLOAD   LV_SYMBOL_DOWNLOAD
 #define ICON_AUDIO      LV_SYMBOL_AUDIO
 #define ICON_LEVEL      LV_SYMBOL_VOLUME_MID
+#define ICON_DSP        LV_SYMBOL_SHUFFLE
 
 #endif /* GUI_ENABLED */
 #endif /* GUI_ICONS_H */

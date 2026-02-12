@@ -29,10 +29,17 @@ static volatile int _activeIndex = 0;
 static DspMetrics _metrics;
 
 // ===== FIR Data Pool (separate from DspStage union to save DRAM) =====
-// Each slot: taps[256] + delay[256] = 2KB. 2 states × 2 slots × 2KB = 8KB total
+// Each slot: taps[256] + delay[256+8] ~= 2.1KB. 2 states × 2 slots × 2.1KB ~= 8.3KB total
+// Delay array is DSP_MAX_FIR_TAPS + 8 because ESP-DSP S3 SIMD reads ahead of the delay line.
 static float _firTaps[2][DSP_MAX_FIR_SLOTS][DSP_MAX_FIR_TAPS];
-static float _firDelay[2][DSP_MAX_FIR_SLOTS][DSP_MAX_FIR_TAPS];
+static float _firDelay[2][DSP_MAX_FIR_SLOTS][DSP_MAX_FIR_TAPS + 8];
 static bool _firSlotUsed[DSP_MAX_FIR_SLOTS];
+
+// ===== Delay Data Pool (dynamically allocated to save DRAM) =====
+// Each slot: line[4800] = 19.2KB. Allocated on-demand when delay stages are added.
+// Saves 76.8KB of static RAM when no delay stages are in use (common case).
+static float *_delayLine[2][DSP_MAX_DELAY_SLOTS];  // Heap-allocated on demand
+static bool _delaySlotUsed[DSP_MAX_DELAY_SLOTS];
 
 // ===== Conversion Buffers (static to avoid stack allocation) =====
 static float _dspBufL[256];
@@ -43,6 +50,10 @@ static void dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int s
 static void dsp_limiter_process(DspLimiterParams &lim, float *buf, int len, uint32_t sampleRate);
 static void dsp_gain_process(DspGainParams &gain, float *buf, int len);
 static void dsp_fir_process(DspFirParams &fir, float *buf, int len, int stateIdx);
+static void dsp_delay_process(DspDelayParams &dly, float *buf, int len, int stateIdx);
+static void dsp_polarity_process(float *buf, int len);
+static void dsp_mute_process(float *buf, int len);
+static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int len, uint32_t sampleRate);
 
 // ===== FIR Pool Management =====
 
@@ -53,8 +64,8 @@ int dsp_fir_alloc_slot() {
             // Zero both states' data for this slot
             memset(_firTaps[0][i], 0, sizeof(float) * DSP_MAX_FIR_TAPS);
             memset(_firTaps[1][i], 0, sizeof(float) * DSP_MAX_FIR_TAPS);
-            memset(_firDelay[0][i], 0, sizeof(float) * DSP_MAX_FIR_TAPS);
-            memset(_firDelay[1][i], 0, sizeof(float) * DSP_MAX_FIR_TAPS);
+            memset(_firDelay[0][i], 0, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
+            memset(_firDelay[1][i], 0, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
             return i;
         }
     }
@@ -79,6 +90,76 @@ float* dsp_fir_get_delay(int stateIndex, int firSlot) {
     return _firDelay[stateIndex][firSlot];
 }
 
+// ===== Delay Pool Management =====
+
+int dsp_delay_alloc_slot() {
+#ifndef NATIVE_TEST
+    // Pre-flight heap check when PSRAM is not available
+    if (ESP.getPsramSize() == 0) {
+        uint32_t needed = DSP_MAX_DELAY_SAMPLES * sizeof(float) * 2; // Both state pools
+        uint32_t available = ESP.getMaxAllocHeap();
+        if (available < needed + 40000) { // Keep 40KB reserve for WiFi/MQTT/HTTP
+            LOG_E("[DSP] Delay alloc blocked: need %lu + 40KB reserve, only %lu available",
+                  (unsigned long)needed, (unsigned long)available);
+            return -1;
+        }
+    }
+#endif
+    for (int i = 0; i < DSP_MAX_DELAY_SLOTS; i++) {
+        if (!_delaySlotUsed[i]) {
+            // Dynamically allocate delay lines for both state pools
+            for (int s = 0; s < 2; s++) {
+                if (!_delayLine[s][i]) {
+#ifndef NATIVE_TEST
+                    // Use PSRAM when available, fall back to internal heap
+                    if (ESP.getPsramSize() > 0) {
+                        _delayLine[s][i] = (float *)ps_calloc(DSP_MAX_DELAY_SAMPLES, sizeof(float));
+                    } else {
+                        _delayLine[s][i] = (float *)calloc(DSP_MAX_DELAY_SAMPLES, sizeof(float));
+                    }
+#else
+                    _delayLine[s][i] = (float *)calloc(DSP_MAX_DELAY_SAMPLES, sizeof(float));
+#endif
+                    if (!_delayLine[s][i]) {
+                        // Free the other pool if first succeeded
+                        if (s == 1 && _delayLine[0][i]) {
+                            free(_delayLine[0][i]);
+                            _delayLine[0][i] = nullptr;
+                        }
+                        LOG_E("[DSP] Delay slot %d alloc failed (need %d bytes)",
+                              i, (int)(DSP_MAX_DELAY_SAMPLES * sizeof(float)));
+                        return -1;
+                    }
+                } else {
+                    memset(_delayLine[s][i], 0, sizeof(float) * DSP_MAX_DELAY_SAMPLES);
+                }
+            }
+            _delaySlotUsed[i] = true;
+            return i;
+        }
+    }
+    return -1;
+}
+
+void dsp_delay_free_slot(int slot) {
+    if (slot >= 0 && slot < DSP_MAX_DELAY_SLOTS) {
+        _delaySlotUsed[slot] = false;
+        // Free heap memory when slot is released
+        for (int s = 0; s < 2; s++) {
+            if (_delayLine[s][slot]) {
+                free(_delayLine[s][slot]);
+                _delayLine[s][slot] = nullptr;
+            }
+        }
+    }
+}
+
+float* dsp_delay_get_line(int stateIndex, int delaySlot) {
+    if (stateIndex < 0 || stateIndex > 1 || delaySlot < 0 || delaySlot >= DSP_MAX_DELAY_SLOTS)
+        return nullptr;
+    return _delayLine[stateIndex][delaySlot];
+}
+
 // ===== Initialization =====
 
 void dsp_init() {
@@ -92,8 +173,14 @@ void dsp_init() {
     memset(_firDelay, 0, sizeof(_firDelay));
     memset(_firSlotUsed, 0, sizeof(_firSlotUsed));
 
-    LOG_I("[DSP] Pipeline initialized (double-buffered, %d channels, max %d stages/ch, %d FIR slots)",
-          DSP_MAX_CHANNELS, DSP_MAX_STAGES, DSP_MAX_FIR_SLOTS);
+    // Clear delay pool (pointers only — actual memory is heap-allocated on demand)
+    for (int s = 0; s < 2; s++)
+        for (int i = 0; i < DSP_MAX_DELAY_SLOTS; i++)
+            _delayLine[s][i] = nullptr;
+    memset(_delaySlotUsed, 0, sizeof(_delaySlotUsed));
+
+    LOG_I("[DSP] Pipeline initialized (double-buffered, %d channels, max %d stages/ch)",
+          DSP_MAX_CHANNELS, DSP_MAX_STAGES);
 }
 
 // ===== Config Access =====
@@ -119,7 +206,15 @@ void dsp_copy_active_to_inactive() {
             memcpy(_firTaps[inactiveIdx][s], _firTaps[activeIdx][s],
                    sizeof(float) * DSP_MAX_FIR_TAPS);
             memcpy(_firDelay[inactiveIdx][s], _firDelay[activeIdx][s],
-                   sizeof(float) * DSP_MAX_FIR_TAPS);
+                   sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
+        }
+    }
+
+    // Copy delay pool data for used slots (both pointers must be valid)
+    for (int s = 0; s < DSP_MAX_DELAY_SLOTS; s++) {
+        if (_delaySlotUsed[s] && _delayLine[activeIdx][s] && _delayLine[inactiveIdx][s]) {
+            memcpy(_delayLine[inactiveIdx][s], _delayLine[activeIdx][s],
+                   sizeof(float) * DSP_MAX_DELAY_SAMPLES);
         }
     }
 }
@@ -143,14 +238,23 @@ void dsp_swap_config() {
                     newS.biquad.delay[0] = oldS.biquad.delay[0];
                     newS.biquad.delay[1] = oldS.biquad.delay[1];
                 } else if (newS.type == DSP_FIR && oldS.fir.firSlot >= 0 && newS.fir.firSlot >= 0) {
-                    // Copy FIR delay from old active's pool to new active's pool
                     memcpy(_firDelay[newActive][newS.fir.firSlot],
                            _firDelay[oldActive][oldS.fir.firSlot],
-                           sizeof(float) * DSP_MAX_FIR_TAPS);
+                           sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
                     newS.fir.delayPos = oldS.fir.delayPos;
                 } else if (newS.type == DSP_LIMITER) {
                     newS.limiter.envelope = oldS.limiter.envelope;
                     newS.limiter.gainReduction = oldS.limiter.gainReduction;
+                } else if (newS.type == DSP_DELAY && oldS.delay.delaySlot >= 0 && newS.delay.delaySlot >= 0
+                           && _delayLine[newActive][newS.delay.delaySlot]
+                           && _delayLine[oldActive][oldS.delay.delaySlot]) {
+                    memcpy(_delayLine[newActive][newS.delay.delaySlot],
+                           _delayLine[oldActive][oldS.delay.delaySlot],
+                           sizeof(float) * DSP_MAX_DELAY_SAMPLES);
+                    newS.delay.writePos = oldS.delay.writePos;
+                } else if (newS.type == DSP_COMPRESSOR) {
+                    newS.compressor.envelope = oldS.compressor.envelope;
+                    newS.compressor.gainReduction = oldS.compressor.gainReduction;
                 }
             }
         }
@@ -227,14 +331,16 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
         _metrics.cpuLoadPercent = (float)elapsed / bufferPeriodUs * 100.0f;
     }
 
-    // Collect limiter GR from active channels
+    // Collect limiter/compressor GR from active channels (worst = most reduction)
     for (int c = chL; c <= chR; c++) {
         _metrics.limiterGrDb[c] = 0.0f;
         DspChannelConfig &ch = cfg->channels[c];
         for (int s = 0; s < ch.stageCount; s++) {
-            if (ch.stages[s].type == DSP_LIMITER && ch.stages[s].enabled) {
-                _metrics.limiterGrDb[c] = ch.stages[s].limiter.gainReduction;
-                break;
+            if (ch.stages[s].enabled) {
+                float gr = 0.0f;
+                if (ch.stages[s].type == DSP_LIMITER) gr = ch.stages[s].limiter.gainReduction;
+                else if (ch.stages[s].type == DSP_COMPRESSOR) gr = ch.stages[s].compressor.gainReduction;
+                if (gr < _metrics.limiterGrDb[c]) _metrics.limiterGrDb[c] = gr;
             }
         }
     }
@@ -260,6 +366,9 @@ static void dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int s
             case DSP_BIQUAD_LOW_SHELF:
             case DSP_BIQUAD_HIGH_SHELF:
             case DSP_BIQUAD_ALLPASS:
+            case DSP_BIQUAD_ALLPASS_360:
+            case DSP_BIQUAD_ALLPASS_180:
+            case DSP_BIQUAD_BPF_0DB:
             case DSP_BIQUAD_CUSTOM:
                 dsps_biquad_f32(buf, buf, len, s.biquad.coeffs, s.biquad.delay);
                 break;
@@ -271,6 +380,18 @@ static void dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int s
                 break;
             case DSP_GAIN:
                 dsp_gain_process(s.gain, buf, len);
+                break;
+            case DSP_DELAY:
+                dsp_delay_process(s.delay, buf, len, stateIdx);
+                break;
+            case DSP_POLARITY:
+                if (s.polarity.inverted) dsp_polarity_process(buf, len);
+                break;
+            case DSP_MUTE:
+                if (s.mute.muted) dsp_mute_process(buf, len);
+                break;
+            case DSP_COMPRESSOR:
+                dsp_compressor_process(s.compressor, buf, len, cfg->sampleRate);
                 break;
             default:
                 break;
@@ -326,9 +447,14 @@ static void dsp_fir_process(DspFirParams &fir, float *buf, int len, int stateIdx
     float *delay = _firDelay[stateIdx][fir.firSlot];
 
     fir_f32_t firState;
+    memset(&firState, 0, sizeof(firState)); // Zero extra fields (decim, use_delay on ESP32)
     firState.coeffs = taps;
     firState.delay = delay;
+#ifdef NATIVE_TEST
     firState.numTaps = fir.numTaps;
+#else
+    firState.N = fir.numTaps;
+#endif
     firState.pos = fir.delayPos;
 
     dsps_fir_f32(&firState, buf, buf, len);
@@ -343,6 +469,96 @@ static void dsp_gain_process(DspGainParams &gain, float *buf, int len) {
     for (int i = 0; i < len; i++) {
         buf[i] *= g;
     }
+}
+
+// ===== Delay =====
+
+static void dsp_delay_process(DspDelayParams &dly, float *buf, int len, int stateIdx) {
+    if (dly.delaySamples == 0 || dly.delaySlot < 0 || dly.delaySlot >= DSP_MAX_DELAY_SLOTS) return;
+
+    float *line = _delayLine[stateIdx][dly.delaySlot];
+    if (!line) return;  // Slot not allocated
+    uint16_t delaySamples = dly.delaySamples;
+    if (delaySamples > DSP_MAX_DELAY_SAMPLES) delaySamples = DSP_MAX_DELAY_SAMPLES;
+    uint16_t wp = dly.writePos;
+
+    for (int i = 0; i < len; i++) {
+        // Write current sample into delay line
+        line[wp] = buf[i];
+        // Read from delay position behind write
+        uint16_t readPos = (wp + DSP_MAX_DELAY_SAMPLES - delaySamples) % DSP_MAX_DELAY_SAMPLES;
+        buf[i] = line[readPos];
+        wp = (wp + 1) % DSP_MAX_DELAY_SAMPLES;
+    }
+
+    dly.writePos = wp;
+}
+
+// ===== Polarity =====
+
+static void dsp_polarity_process(float *buf, int len) {
+    for (int i = 0; i < len; i++) {
+        buf[i] = -buf[i];
+    }
+}
+
+// ===== Mute =====
+
+static void dsp_mute_process(float *buf, int len) {
+    memset(buf, 0, len * sizeof(float));
+}
+
+// ===== Compressor =====
+
+static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int len, uint32_t sampleRate) {
+    if (len <= 0 || sampleRate == 0) return;
+
+    float threshLin = powf(10.0f, comp.thresholdDb / 20.0f);
+    float attackCoeff = expf(-1.0f / (comp.attackMs * 0.001f * (float)sampleRate));
+    float releaseCoeff = expf(-1.0f / (comp.releaseMs * 0.001f * (float)sampleRate));
+    float makeupLin = comp.makeupLinear;
+
+    float env = comp.envelope;
+    float maxGr = 0.0f;
+
+    for (int i = 0; i < len; i++) {
+        float absSample = fabsf(buf[i]);
+
+        // Envelope follower (peak detector)
+        if (absSample > env) {
+            env = attackCoeff * env + (1.0f - attackCoeff) * absSample;
+        } else {
+            env = releaseCoeff * env + (1.0f - releaseCoeff) * absSample;
+        }
+
+        // Gain computation with soft knee
+        float gainLin = 1.0f;
+        if (env > 0.0f) {
+            float envDb = 20.0f * log10f(env);
+            float overDb = envDb - comp.thresholdDb;
+
+            float grDb = 0.0f;
+            if (comp.kneeDb > 0.0f && overDb > -comp.kneeDb / 2.0f && overDb < comp.kneeDb / 2.0f) {
+                // Soft knee region
+                float x = overDb + comp.kneeDb / 2.0f;
+                grDb = (1.0f - 1.0f / comp.ratio) * x * x / (2.0f * comp.kneeDb);
+            } else if (overDb >= comp.kneeDb / 2.0f) {
+                // Above knee
+                grDb = overDb * (1.0f - 1.0f / comp.ratio);
+            }
+            // Below knee: grDb = 0 (no compression)
+
+            if (grDb > 0.0f) {
+                gainLin = powf(10.0f, -grDb / 20.0f);
+                if (grDb > maxGr) maxGr = grDb;
+            }
+        }
+
+        buf[i] *= gainLin * makeupLin;
+    }
+
+    comp.envelope = env;
+    comp.gainReduction = -maxGr;
 }
 
 // ===== Stage CRUD =====
@@ -364,13 +580,25 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
 
     dsp_init_stage(ch.stages[pos], type);
 
-    // Allocate FIR slot if needed
+    // Allocate pool slots if needed — fail and rollback if exhausted
     if (type == DSP_FIR) {
         int slot = dsp_fir_alloc_slot();
-        ch.stages[pos].fir.firSlot = (int8_t)slot;
         if (slot < 0) {
             LOG_W("[DSP] No FIR slots available (max %d)", DSP_MAX_FIR_SLOTS);
+            // Undo: shift stages back down
+            for (int i = pos; i < ch.stageCount; i++) ch.stages[i] = ch.stages[i + 1];
+            return -1;
         }
+        ch.stages[pos].fir.firSlot = (int8_t)slot;
+    } else if (type == DSP_DELAY) {
+        int slot = dsp_delay_alloc_slot();
+        if (slot < 0) {
+            LOG_W("[DSP] No delay slots available (max %d)", DSP_MAX_DELAY_SLOTS);
+            // Undo: shift stages back down
+            for (int i = pos; i < ch.stageCount; i++) ch.stages[i] = ch.stages[i + 1];
+            return -1;
+        }
+        ch.stages[pos].delay.delaySlot = (int8_t)slot;
     }
 
     ch.stageCount++;
@@ -380,6 +608,8 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
         dsp_compute_biquad_coeffs(ch.stages[pos].biquad, type, cfg->sampleRate);
     } else if (type == DSP_GAIN) {
         dsp_compute_gain_linear(ch.stages[pos].gain);
+    } else if (type == DSP_COMPRESSOR) {
+        dsp_compute_compressor_makeup(ch.stages[pos].compressor);
     }
 
     return pos;
@@ -391,9 +621,11 @@ bool dsp_remove_stage(int channel, int stageIndex) {
     DspChannelConfig &ch = cfg->channels[channel];
     if (stageIndex < 0 || stageIndex >= ch.stageCount) return false;
 
-    // Free FIR slot if removing a FIR stage
+    // Free pool slots if removing a pooled stage
     if (ch.stages[stageIndex].type == DSP_FIR) {
         dsp_fir_free_slot(ch.stages[stageIndex].fir.firSlot);
+    } else if (ch.stages[stageIndex].type == DSP_DELAY) {
+        dsp_delay_free_slot(ch.stages[stageIndex].delay.delaySlot);
     }
 
     // Shift stages down
@@ -454,10 +686,17 @@ static const char *stage_type_name(DspStageType t) {
         case DSP_BIQUAD_LOW_SHELF:  return "LOW_SHELF";
         case DSP_BIQUAD_HIGH_SHELF: return "HIGH_SHELF";
         case DSP_BIQUAD_ALLPASS:    return "ALLPASS";
+        case DSP_BIQUAD_ALLPASS_360: return "ALLPASS_360";
+        case DSP_BIQUAD_ALLPASS_180: return "ALLPASS_180";
+        case DSP_BIQUAD_BPF_0DB:   return "BPF_0DB";
         case DSP_BIQUAD_CUSTOM:     return "CUSTOM";
         case DSP_LIMITER:           return "LIMITER";
         case DSP_FIR:               return "FIR";
         case DSP_GAIN:              return "GAIN";
+        case DSP_DELAY:             return "DELAY";
+        case DSP_POLARITY:          return "POLARITY";
+        case DSP_MUTE:              return "MUTE";
+        case DSP_COMPRESSOR:        return "COMPRESSOR";
         default: return "UNKNOWN";
     }
 }
@@ -472,10 +711,17 @@ static DspStageType stage_type_from_name(const char *name) {
     if (strcmp(name, "LOW_SHELF") == 0) return DSP_BIQUAD_LOW_SHELF;
     if (strcmp(name, "HIGH_SHELF") == 0) return DSP_BIQUAD_HIGH_SHELF;
     if (strcmp(name, "ALLPASS") == 0) return DSP_BIQUAD_ALLPASS;
+    if (strcmp(name, "ALLPASS_360") == 0) return DSP_BIQUAD_ALLPASS_360;
+    if (strcmp(name, "ALLPASS_180") == 0) return DSP_BIQUAD_ALLPASS_180;
+    if (strcmp(name, "BPF_0DB") == 0) return DSP_BIQUAD_BPF_0DB;
     if (strcmp(name, "CUSTOM") == 0) return DSP_BIQUAD_CUSTOM;
     if (strcmp(name, "LIMITER") == 0) return DSP_LIMITER;
     if (strcmp(name, "FIR") == 0) return DSP_FIR;
     if (strcmp(name, "GAIN") == 0) return DSP_GAIN;
+    if (strcmp(name, "DELAY") == 0) return DSP_DELAY;
+    if (strcmp(name, "POLARITY") == 0) return DSP_POLARITY;
+    if (strcmp(name, "MUTE") == 0) return DSP_MUTE;
+    if (strcmp(name, "COMPRESSOR") == 0) return DSP_COMPRESSOR;
     return DSP_BIQUAD_PEQ;
 }
 
@@ -519,6 +765,23 @@ void dsp_export_config_to_json(int channel, char *buf, int bufSize) {
             JsonObject params = stageObj["params"].to<JsonObject>();
             params["numTaps"] = s.fir.numTaps;
             params["firSlot"] = s.fir.firSlot;
+        } else if (s.type == DSP_DELAY) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["delaySamples"] = s.delay.delaySamples;
+        } else if (s.type == DSP_POLARITY) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["inverted"] = s.polarity.inverted;
+        } else if (s.type == DSP_MUTE) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["muted"] = s.mute.muted;
+        } else if (s.type == DSP_COMPRESSOR) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["thresholdDb"] = s.compressor.thresholdDb;
+            params["attackMs"] = s.compressor.attackMs;
+            params["releaseMs"] = s.compressor.releaseMs;
+            params["ratio"] = s.compressor.ratio;
+            params["kneeDb"] = s.compressor.kneeDb;
+            params["makeupGainDb"] = s.compressor.makeupGainDb;
         }
     }
 
@@ -531,10 +794,12 @@ void dsp_load_config_from_json(const char *json, int channel) {
     int inactiveIdx = 1 - _activeIndex;
     DspChannelConfig &ch = cfg->channels[channel];
 
-    // Free any existing FIR slots for this channel
+    // Free any existing pool slots for this channel
     for (int i = 0; i < ch.stageCount; i++) {
         if (ch.stages[i].type == DSP_FIR) {
             dsp_fir_free_slot(ch.stages[i].fir.firSlot);
+        } else if (ch.stages[i].type == DSP_DELAY) {
+            dsp_delay_free_slot(ch.stages[i].delay.delaySlot);
         }
     }
 
@@ -580,8 +845,29 @@ void dsp_load_config_from_json(const char *json, int channel) {
                 dsp_compute_gain_linear(s.gain);
             } else if (type == DSP_FIR) {
                 int slot = dsp_fir_alloc_slot();
+                if (slot < 0) { LOG_W("[DSP] Import: FIR slot alloc failed, skipping stage"); continue; }
                 s.fir.firSlot = (int8_t)slot;
                 if (params["numTaps"].is<int>()) s.fir.numTaps = params["numTaps"].as<uint16_t>();
+            } else if (type == DSP_DELAY) {
+                int slot = dsp_delay_alloc_slot();
+                if (slot < 0) { LOG_W("[DSP] Import: delay slot alloc failed, skipping stage"); continue; }
+                s.delay.delaySlot = (int8_t)slot;
+                if (params["delaySamples"].is<int>()) {
+                    uint16_t ds = params["delaySamples"].as<uint16_t>();
+                    s.delay.delaySamples = ds > DSP_MAX_DELAY_SAMPLES ? DSP_MAX_DELAY_SAMPLES : ds;
+                }
+            } else if (type == DSP_POLARITY) {
+                if (params["inverted"].is<bool>()) s.polarity.inverted = params["inverted"].as<bool>();
+            } else if (type == DSP_MUTE) {
+                if (params["muted"].is<bool>()) s.mute.muted = params["muted"].as<bool>();
+            } else if (type == DSP_COMPRESSOR) {
+                if (params["thresholdDb"].is<float>()) s.compressor.thresholdDb = params["thresholdDb"].as<float>();
+                if (params["attackMs"].is<float>()) s.compressor.attackMs = params["attackMs"].as<float>();
+                if (params["releaseMs"].is<float>()) s.compressor.releaseMs = params["releaseMs"].as<float>();
+                if (params["ratio"].is<float>()) s.compressor.ratio = params["ratio"].as<float>();
+                if (params["kneeDb"].is<float>()) s.compressor.kneeDb = params["kneeDb"].as<float>();
+                if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
+                dsp_compute_compressor_makeup(s.compressor);
             }
             ch.stageCount++;
         }
@@ -632,6 +918,23 @@ void dsp_export_full_config_json(char *buf, int bufSize) {
                 JsonObject params = stageObj["params"].to<JsonObject>();
                 params["numTaps"] = s.fir.numTaps;
                 params["firSlot"] = s.fir.firSlot;
+            } else if (s.type == DSP_DELAY) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["delaySamples"] = s.delay.delaySamples;
+            } else if (s.type == DSP_POLARITY) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["inverted"] = s.polarity.inverted;
+            } else if (s.type == DSP_MUTE) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["muted"] = s.mute.muted;
+            } else if (s.type == DSP_COMPRESSOR) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["thresholdDb"] = s.compressor.thresholdDb;
+                params["attackMs"] = s.compressor.attackMs;
+                params["releaseMs"] = s.compressor.releaseMs;
+                params["ratio"] = s.compressor.ratio;
+                params["kneeDb"] = s.compressor.kneeDb;
+                params["makeupGainDb"] = s.compressor.makeupGainDb;
             }
         }
     }
@@ -643,11 +946,13 @@ void dsp_import_full_config_json(const char *json) {
     if (!json) return;
     DspState *cfg = dsp_get_inactive_config();
 
-    // Free all existing FIR slots
+    // Free all existing pool slots
     for (int c = 0; c < DSP_MAX_CHANNELS; c++) {
         for (int i = 0; i < cfg->channels[c].stageCount; i++) {
             if (cfg->channels[c].stages[i].type == DSP_FIR) {
                 dsp_fir_free_slot(cfg->channels[c].stages[i].fir.firSlot);
+            } else if (cfg->channels[c].stages[i].type == DSP_DELAY) {
+                dsp_delay_free_slot(cfg->channels[c].stages[i].delay.delaySlot);
             }
         }
     }
@@ -701,8 +1006,29 @@ void dsp_import_full_config_json(const char *json) {
                         dsp_compute_gain_linear(s.gain);
                     } else if (type == DSP_FIR) {
                         int slot = dsp_fir_alloc_slot();
+                        if (slot < 0) { LOG_W("[DSP] Import: FIR slot alloc failed, skipping stage"); continue; }
                         s.fir.firSlot = (int8_t)slot;
                         if (params["numTaps"].is<int>()) s.fir.numTaps = params["numTaps"].as<uint16_t>();
+                    } else if (type == DSP_DELAY) {
+                        int slot = dsp_delay_alloc_slot();
+                        if (slot < 0) { LOG_W("[DSP] Import: delay slot alloc failed, skipping stage"); continue; }
+                        s.delay.delaySlot = (int8_t)slot;
+                        if (params["delaySamples"].is<int>()) {
+                            uint16_t ds = params["delaySamples"].as<uint16_t>();
+                            s.delay.delaySamples = ds > DSP_MAX_DELAY_SAMPLES ? DSP_MAX_DELAY_SAMPLES : ds;
+                        }
+                    } else if (type == DSP_POLARITY) {
+                        if (params["inverted"].is<bool>()) s.polarity.inverted = params["inverted"].as<bool>();
+                    } else if (type == DSP_MUTE) {
+                        if (params["muted"].is<bool>()) s.mute.muted = params["muted"].as<bool>();
+                    } else if (type == DSP_COMPRESSOR) {
+                        if (params["thresholdDb"].is<float>()) s.compressor.thresholdDb = params["thresholdDb"].as<float>();
+                        if (params["attackMs"].is<float>()) s.compressor.attackMs = params["attackMs"].as<float>();
+                        if (params["releaseMs"].is<float>()) s.compressor.releaseMs = params["releaseMs"].as<float>();
+                        if (params["ratio"].is<float>()) s.compressor.ratio = params["ratio"].as<float>();
+                        if (params["kneeDb"].is<float>()) s.compressor.kneeDb = params["kneeDb"].as<float>();
+                        if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
+                        dsp_compute_compressor_makeup(s.compressor);
                     }
                     ch.stageCount++;
                 }

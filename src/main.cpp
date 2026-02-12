@@ -627,6 +627,9 @@ void setup() {
   server.begin();
   LOG_I("[Main] Web server and WebSocket started");
 
+  LOG_I("[Main] Free heap: %lu bytes, largest block: %lu bytes",
+        (unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getMaxAllocHeap());
+
   // Initialize task monitor (loop timing + FreeRTOS task snapshots)
   task_monitor_init();
 
@@ -637,6 +640,12 @@ void setup() {
   // Timeout is set to 15s via CONFIG_ESP_TASK_WDT_TIMEOUT_S build flag in platformio.ini
   // Do NOT call esp_task_wdt_init() — Arduino framework already initializes the WDT
   esp_task_wdt_add(NULL);          // Register main loop (loopTask)
+
+  // Unsubscribe IDLE0 from WDT — audio_cap (priority 3) + OTA TLS crypto on Core 0
+  // can starve IDLE0 for >15s. All important tasks (loopTask, audio_cap, gui_task)
+  // have their own WDT entries and feed them explicitly.
+  esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(0));
+
   LOG_I("[Main] Main loop subscribed to task watchdog");
 }
 
@@ -906,9 +915,9 @@ void loop() {
     lastHeapCheck = millis();
     uint32_t maxBlock = ESP.getMaxAllocHeap();
     bool wasCritical = appState.heapCritical;
-    appState.heapCritical = (maxBlock < 20000);
+    appState.heapCritical = (maxBlock < 40000);
     if (appState.heapCritical && !wasCritical) {
-      LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<20KB)", (unsigned long)maxBlock);
+      LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB)", (unsigned long)maxBlock);
     } else if (!appState.heapCritical && wasCritical) {
       LOG_I("[Main] Heap recovered: largest free block=%lu bytes", (unsigned long)maxBlock);
     }

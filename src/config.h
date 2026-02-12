@@ -71,6 +71,8 @@ const int SIGGEN_PWM_PIN = 38;   // GPIO 38 — no strapping constraints
 #define DSP_MAX_FIR_TAPS     256   // Max FIR taps (direct convolution)
 #define DSP_MAX_FIR_SLOTS    2     // Max concurrent FIR stages (pool-allocated, not inline)
 #define DSP_MAX_CHANNELS     4     // L1, R1, L2, R2
+#define DSP_MAX_DELAY_SLOTS  2     // Max concurrent delay stages (pool-allocated)
+#define DSP_MAX_DELAY_SAMPLES 4800 // Max delay = 100ms @ 48kHz
 #define DSP_DEFAULT_Q        0.707f
 #define DSP_CPU_WARN_PERCENT 80.0f
 #endif

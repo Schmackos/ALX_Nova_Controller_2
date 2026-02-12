@@ -34,6 +34,9 @@ void publishMqttAudioGraphState();
 void publishMqttDebugState();
 void publishMqttCrashDiagnostics();
 void publishMqttInputNames();
+#ifdef DSP_ENABLED
+void publishMqttDspState();
+#endif
 #ifdef GUI_ENABLED
 void publishMqttBootAnimState();
 #endif

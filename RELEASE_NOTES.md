@@ -2,75 +2,36 @@
 
 ## Version 1.7.0
 
-## New Features
-- [2026-02-12] feat: Audio DSP pipeline — 4-channel biquad/FIR/limiter/gain processing engine
+### New Features
+- **Audio DSP Pipeline**: Full 4-channel configurable DSP engine for active crossover and speaker management. Processes dual PCM1808 I2S ADC inputs into 4 mono channels with up to 20 processing stages each.
+  - **Core engine** (Phase 1): Double-buffered DspState with glitch-free config swap, biquad IIR filters (LPF, HPF, BPF, Notch, PEQ, Low/High Shelf, Allpass, Custom), FIR convolution with pool-allocated taps/delay, peak limiter with envelope follower, gain stage, CPU load metrics
+  - **Extended processing** (Phase 2): Delay lines (up to 100ms @48kHz), polarity inversion, mute, compressor with makeup gain. Crossover presets (LR2/LR4/LR8, Butterworth), bass management, 4x4 routing matrix
+  - **Web UI** (Phase 3): DSP tab with stage list, add/remove/reorder/enable, client-side frequency response graph (biquad transfer function), crossover preset UI, routing matrix UI, import/export (REW APO text, JSON backup)
+  - **ESP-DSP S3 assembly** (Phase 4): Pre-built `libespressif__esp-dsp.a` replaces ANSI C biquad/FIR processing (~30% biquad, 3-4x FIR speedup). ESP-DSP FFT replaces arduinoFFT for spectrum analysis. Renamed coefficient gen (`dsp_gen_*`) avoids symbol conflicts
+  - **MQTT/HA + TFT** (Phase 5): HA discovery entities for DSP enable/bypass/CPU load + per-channel bypass/stages/limiter GR. TFT DSP menu screen + desktop carousel card
+  - **Import/Export**: Equalizer APO text (REW), miniDSP biquad coefficients, FIR text, WAV impulse response (16/32-bit PCM, IEEE float), full JSON backup
+  - **Integration**: 18 REST API endpoints, WebSocket real-time sync, LittleFS persistence with 5s debounced save
 
-Phase 1 implementation of configurable audio DSP pipeline for active crossover
-and speaker management. Processes dual PCM1808 I2S ADC inputs into 4 mono
-channels with up to 20 stages each.
+### Improvements
+- **PSRAM delay line allocation**: DSP delay buffers now use `ps_calloc()` for the 8MB PSRAM when available, keeping internal SRAM free for WiFi/MQTT buffers
+- **Heap safety hardening**: `dsp_add_stage()` rolls back on pool exhaustion instead of creating broken stages. Config imports skip stages on allocation failure. WebSocket sends `dspError` message to client on failure. Pre-flight heap check blocks delay allocation when free heap would drop below 40KB reserve
 
-Core engine:
-- Double-buffered DspState with glitch-free config swap (delay line carry-over)
-- Biquad filters: LPF, HPF, BPF, Notch, PEQ, Low/High Shelf, Allpass, Custom
-- FIR convolution with pool-allocated taps/delay (avoids 331KB DRAM overflow)
-- Peak limiter with envelope follower and gain reduction metering
-- Gain stage with dB-to-linear precomputation
-- CPU load monitoring and per-channel limiter GR metrics
+### Bug Fixes
+- **Web server unreachable**: Static 76.8KB delay line pool consumed nearly all heap (9KB left), starving WiFi RX buffers. Converted to dynamic allocation — saves 76.8KB when no delay stages are in use
+- **WDT crash (OTA check)**: TLS handshake during OTA firmware check took 5-10s of CPU on Core 0 without yielding, starving IDLE0 watchdog. Added `esp_task_wdt_delete()` to OTA check task
+- **WDT crash (IDLE0 starvation)**: audio_cap (priority 3) + OTA_CHK on Core 0 prevented IDLE0 from feeding WDT. Unsubscribed IDLE0 from WDT — all important tasks have their own entries
+- **Heap critical threshold**: Raised from 20KB to 40KB to match actual WiFi + HTTP + MQTT minimum requirements
 
-Import/Export:
-- Equalizer APO text format (REW compatible)
-- miniDSP biquad coefficients (sign-negated a1/a2 convention)
-- FIR text (one tap per line) and WAV impulse response (16/32-bit PCM, IEEE float)
+### Technical Details
+- 540 unit tests (57 DSP core + 22 REW parser + existing), all passing
+- RAM: 51.6% (169008 / 327680 bytes)
+- Flash: 68.9% (2302989 / 3342336 bytes)
+- ESP-DSP pre-built library for S3 assembly-optimized processing (native tests use ANSI C fallbacks)
 
-Integration:
-- REST API: 18 endpoints for config CRUD, import/export, metrics
-- WebSocket: real-time state sync and metrics broadcast
-- LittleFS persistence with 5s debounced save
-- esp_dsp_lite library: ANSI C biquad/FIR from Espressif ESP-DSP (Apache 2.0)
-
-Tests: 50 new native tests (28 DSP core + 22 REW parser), 511 total passing
-Build: RAM 50.1%, Flash 66.4% (`65c8ce8`)
-- [2026-02-12] feat: Audio DSP pipeline — 4-channel biquad/FIR/limiter/gain processing engine
-
-Phase 1 implementation of configurable audio DSP pipeline for active crossover
-and speaker management. Processes dual PCM1808 I2S ADC inputs into 4 mono
-channels with up to 20 stages each.
-
-Core engine:
-- Double-buffered DspState with glitch-free config swap (delay line carry-over)
-- Biquad filters: LPF, HPF, BPF, Notch, PEQ, Low/High Shelf, Allpass, Custom
-- FIR convolution with pool-allocated taps/delay (avoids 331KB DRAM overflow)
-- Peak limiter with envelope follower and gain reduction metering
-- Gain stage with dB-to-linear precomputation
-- CPU load monitoring and per-channel limiter GR metrics
-
-Import/Export:
-- Equalizer APO text format (REW compatible)
-- miniDSP biquad coefficients (sign-negated a1/a2 convention)
-- FIR text (one tap per line) and WAV impulse response (16/32-bit PCM, IEEE float)
-
-Integration:
-- REST API: 18 endpoints for config CRUD, import/export, metrics
-- WebSocket: real-time state sync and metrics broadcast
-- LittleFS persistence with 5s debounced save
-- esp_dsp_lite library: ANSI C biquad/FIR from Espressif ESP-DSP (Apache 2.0)
-
-Tests: 50 new native tests (28 DSP core + 22 REW parser), 511 total passing
-Build: RAM 50.1%, Flash 66.4% (`ed65b72`)
-
-## Improvements
-- None
-
-## Bug Fixes
-- None
-
-## Technical Details
-- None
-
-## Breaking Changes
+### Breaking Changes
 None
 
-## Known Issues
+### Known Issues
 - None
 
 ## Version 1.6.6

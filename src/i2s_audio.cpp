@@ -6,7 +6,12 @@
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #endif
+#ifndef NATIVE_TEST
+#include "dsps_fft2r.h"
+#include "dsps_wind_hann.h"
+#else
 #include <arduinoFFT.h>
+#endif
 #include <cmath>
 #include <cstring>
 
@@ -267,11 +272,11 @@ static int _wfFramesSeen[NUM_AUDIO_ADCS] = {};
 static int _wfTargetFrames = 2400; // shared, recalculated from audioUpdateRate
 
 // FFT state per ADC
-static ArduinoFFT<float> _fft;
 static float _fftRing[NUM_AUDIO_ADCS][FFT_SIZE];
 static int _fftRingPos[NUM_AUDIO_ADCS] = {};
-static float _fftReal[FFT_SIZE]; // Shared working buffer (used sequentially)
-static float _fftImag[FFT_SIZE];
+static float _fftData[FFT_SIZE * 2];      // ESP-DSP interleaved [Re,Im,...] / arduinoFFT real array
+static float _fftWindow[FFT_SIZE];         // Pre-computed Hann window
+static bool _fftInitialized = false;
 static float _spectrumOutput[NUM_AUDIO_ADCS][SPECTRUM_BANDS];
 static float _dominantFreqOutput[NUM_AUDIO_ADCS] = {};
 static volatile bool _spectrumReady[NUM_AUDIO_ADCS] = {};
@@ -474,15 +479,34 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
         }
         if (now - _lastFftTime[a] >= AppState::getInstance().audioUpdateRate) {
             _lastFftTime[a] = now;
+
+            // Copy ring buffer into interleaved complex format with Hann window
             for (int i = 0; i < FFT_SIZE; i++) {
-                _fftReal[i] = _fftRing[a][(_fftRingPos[a] + i) % FFT_SIZE];
-                _fftImag[i] = 0.0f;
+                float sample = _fftRing[a][(_fftRingPos[a] + i) % FFT_SIZE];
+                _fftData[i * 2] = sample * _fftWindow[i];     // Real
+                _fftData[i * 2 + 1] = 0.0f;                   // Imaginary
             }
-            _fft.windowing(_fftReal, FFT_SIZE, FFTWindow::Hamming, FFTDirection::Forward);
-            _fft.compute(_fftReal, _fftImag, FFT_SIZE, FFTDirection::Forward);
-            _fft.complexToMagnitude(_fftReal, _fftImag, FFT_SIZE);
-            _dominantFreqOutput[a] = _fft.majorPeak(_fftReal, FFT_SIZE, (float)_currentSampleRate);
-            audio_aggregate_fft_bands(_fftReal, FFT_SIZE, (float)_currentSampleRate,
+
+            // ESP-DSP radix-2 FFT + bit reversal
+            dsps_fft2r_fc32(_fftData, FFT_SIZE);
+            dsps_bit_rev_fc32(_fftData, FFT_SIZE);
+
+            // Compute magnitudes in-place (overwrite first FFT_SIZE entries)
+            float maxMag = 0.0f;
+            int maxBin = 0;
+            for (int i = 0; i < FFT_SIZE / 2; i++) {
+                float re = _fftData[i * 2];
+                float im = _fftData[i * 2 + 1];
+                float mag = sqrtf(re * re + im * im);
+                _fftData[i] = mag;
+                if (i > 0 && mag > maxMag) {
+                    maxMag = mag;
+                    maxBin = i;
+                }
+            }
+            _dominantFreqOutput[a] = (float)maxBin * (float)_currentSampleRate / (float)FFT_SIZE;
+
+            audio_aggregate_fft_bands(_fftData, FFT_SIZE, (float)_currentSampleRate,
                                       _spectrumOutput[a], SPECTRUM_BANDS);
             _spectrumReady[a] = true;
         }
@@ -720,6 +744,11 @@ static void audio_capture_task(void *param) {
         _analysis.timestamp = now;
         _analysisReady = true;
         portEXIT_CRITICAL_ISR(&spinlock);
+
+        // Yield 1 tick so IDLE0 can feed the Task Watchdog Timer.
+        // Without this, audio_cap (priority 3) runs in a tight loop
+        // draining I2S DMA buffers and starves IDLE0 (priority 0).
+        vTaskDelay(1);
     }
 }
 
@@ -741,6 +770,13 @@ void i2s_audio_init() {
         _fftRingPos[a] = 0;
         _spectrumReady[a] = false;
         _lastFftTime[a] = 0;
+    }
+
+    // Initialize ESP-DSP FFT tables and Hann window
+    if (!_fftInitialized) {
+        dsps_fft2r_init_fc32(NULL, FFT_SIZE);
+        dsps_wind_hann_f32(_fftWindow, FFT_SIZE);
+        _fftInitialized = true;
     }
 
     // Pull-down on DOUT2 so an unconnected pin reads clean zeros (→ NO_DATA)

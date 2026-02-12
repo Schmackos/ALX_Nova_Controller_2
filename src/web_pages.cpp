@@ -2131,6 +2131,209 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             white-space: nowrap;
             font-size: 11px;
         }
+
+        /* ===== DSP Tab Styles ===== */
+        .dsp-ch-tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .dsp-ch-tab {
+            padding: 6px 14px;
+            border-radius: 16px;
+            border: 1.5px solid var(--border);
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .dsp-ch-tab.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .dsp-ch-tab .badge {
+            display: inline-block;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 8px;
+            margin-left: 4px;
+        }
+        .dsp-ch-tab.active .badge {
+            background: rgba(255,255,255,0.25);
+            color: #fff;
+        }
+        .dsp-stage-card {
+            background: var(--bg-card);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .dsp-stage-card.disabled {
+            opacity: 0.5;
+        }
+        .dsp-stage-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            cursor: pointer;
+        }
+        .dsp-stage-type {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: var(--accent);
+            color: #fff;
+            letter-spacing: 0.3px;
+            flex-shrink: 0;
+        }
+        .dsp-stage-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .dsp-stage-info {
+            font-size: 11px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+        .dsp-stage-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .dsp-stage-actions button {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 6px;
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+        .dsp-stage-actions button:hover {
+            background: var(--border);
+        }
+        .dsp-stage-actions button.del:hover {
+            background: var(--error);
+            color: #fff;
+        }
+        .dsp-stage-body {
+            display: none;
+            padding: 0 12px 12px;
+        }
+        .dsp-stage-body.open {
+            display: block;
+        }
+        .dsp-param {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .dsp-param label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            width: 70px;
+            flex-shrink: 0;
+        }
+        .dsp-param input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent);
+        }
+        .dsp-param .dsp-val {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            min-width: 55px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .dsp-add-btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            background: transparent;
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .dsp-add-btn:hover {
+            border-color: var(--accent);
+            background: rgba(255, 152, 0, 0.05);
+        }
+        .dsp-add-menu {
+            display: none;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px 0;
+            margin-top: 4px;
+            box-shadow: 0 4px 16px var(--shadow);
+        }
+        .dsp-add-menu.open { display: block; }
+        .dsp-add-menu .menu-cat {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-disabled);
+            padding: 8px 16px 4px;
+            letter-spacing: 0.5px;
+        }
+        .dsp-add-menu .menu-item {
+            padding: 8px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text-primary);
+            transition: background 0.1s;
+        }
+        .dsp-add-menu .menu-item:hover {
+            background: var(--bg-card);
+        }
+        .dsp-cpu-bar {
+            height: 6px;
+            background: var(--bg-card);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .dsp-cpu-bar .fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        .dsp-freq-canvas {
+            width: 100%;
+            height: 160px;
+            border-radius: 8px;
+            background: var(--bg-card);
+        }
+        @media (max-width: 767px) {
+            .dsp-freq-canvas { height: 120px; }
+        }
     </style>
 </head>
 <body class="has-status-bar">
@@ -2151,6 +2354,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <button class="sidebar-item" data-tab="audio" onclick="switchTab('audio')">
                 <svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
                 <span>Audio</span>
+            </button>
+            <button class="sidebar-item" data-tab="dsp" onclick="switchTab('dsp')">
+                <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm-8 8h2v-4H3v4zm12-6v8h2V8h-2zm4 2v4h2v-4h-2z"/></svg>
+                <span>DSP</span>
             </button>
             <button class="sidebar-item" data-tab="wifi" onclick="switchTab('wifi')">
                 <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
@@ -2212,6 +2419,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         </button>
         <button class="tab" data-tab="audio" onclick="switchTab('audio')">
             <svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+        </button>
+        <button class="tab" data-tab="dsp" onclick="switchTab('dsp')">
+            <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm-8 8h2v-4H3v4zm12-6v8h2V8h-2zm4 2v4h2v-4h-2z"/></svg>
         </button>
         <button class="tab" data-tab="wifi" onclick="switchTab('wifi')">
             <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
@@ -2637,6 +2847,153 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <button class="btn btn-outline" onclick="siggenPreset(3,20000,-6)">Sweep</button>
                 </div>
                 <p id="siggenPwmNote" style="display:none;font-size:11px;color:#FFA726;margin-top:8px">PWM output requires external RC low-pass filter for sine approximation.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== DSP TAB ===== -->
+        <section id="dsp" class="panel">
+            <!-- DSP Control -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    DSP Control
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="dspEnableToggle" onchange="dspSetEnabled(this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Global Bypass</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="dspBypassToggle" onchange="dspSetBypass(this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">DSP CPU</span>
+                        <span class="info-value" id="dspCpuText">0%</span>
+                    </div>
+                    <div class="dsp-cpu-bar"><div class="fill" id="dspCpuBar" style="width:0%"></div></div>
+                    <div class="info-row" style="margin-top:8px;">
+                        <span class="info-label">Sample Rate</span>
+                        <span class="info-value" id="dspSampleRate">48000 Hz</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Channel Selector -->
+            <div class="card">
+                <div class="card-title">Channel</div>
+                <div class="dsp-ch-tabs" id="dspChTabs"></div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Channel Bypass</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="dspChBypassToggle" onchange="dspSetChBypass(this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frequency Response Graph -->
+            <div class="card">
+                <div class="card-title">Frequency Response</div>
+                <canvas class="dsp-freq-canvas" id="dspFreqCanvas"></canvas>
+            </div>
+
+            <!-- Filter Stages -->
+            <div class="card">
+                <div class="card-title" id="dspStageTitle">Filter Stages (0 / 20)</div>
+                <div id="dspStageList"></div>
+                <button class="dsp-add-btn" id="dspAddBtn" onclick="dspToggleAddMenu()">+ Add Filter Stage</button>
+                <div class="dsp-add-menu" id="dspAddMenu">
+                    <div class="menu-cat">Biquad Filters</div>
+                    <div class="menu-item" onclick="dspAddStage(0)">Low Pass (LPF)</div>
+                    <div class="menu-item" onclick="dspAddStage(1)">High Pass (HPF)</div>
+                    <div class="menu-item" onclick="dspAddStage(2)">Band Pass (BPF)</div>
+                    <div class="menu-item" onclick="dspAddStage(3)">Notch</div>
+                    <div class="menu-item" onclick="dspAddStage(4)">Parametric EQ (PEQ)</div>
+                    <div class="menu-item" onclick="dspAddStage(5)">Low Shelf</div>
+                    <div class="menu-item" onclick="dspAddStage(6)">High Shelf</div>
+                    <div class="menu-item" onclick="dspAddStage(7)">Allpass</div>
+                    <div class="menu-item" onclick="dspAddStage(8)">Allpass 360</div>
+                    <div class="menu-item" onclick="dspAddStage(9)">Allpass 180</div>
+                    <div class="menu-item" onclick="dspAddStage(10)">BPF 0dB</div>
+                    <div class="menu-cat">Dynamics</div>
+                    <div class="menu-item" onclick="dspAddStage(12)">Limiter</div>
+                    <div class="menu-item" onclick="dspAddStage(18)">Compressor</div>
+                    <div class="menu-cat">Utility</div>
+                    <div class="menu-item" onclick="dspAddStage(14)">Gain</div>
+                    <div class="menu-item" onclick="dspAddStage(15)">Delay</div>
+                    <div class="menu-item" onclick="dspAddStage(16)">Polarity Invert</div>
+                    <div class="menu-item" onclick="dspAddStage(17)">Mute</div>
+                    <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
+                </div>
+            </div>
+
+            <!-- Import / Export -->
+            <div class="card">
+                <div class="card-title">Import / Export</div>
+                <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
+                    <button class="btn btn-secondary" onclick="dspImportApo()">Import REW</button>
+                    <button class="btn btn-secondary" onclick="dspExportApo()">Export REW</button>
+                    <button class="btn btn-secondary" onclick="dspImportJson()">Import JSON</button>
+                    <button class="btn btn-secondary" onclick="dspExportJson()">Export JSON</button>
+                </div>
+                <input type="file" id="dspFileInput" accept=".txt,.json" style="display:none" onchange="dspHandleFileImport(event)">
+            </div>
+
+            <!-- Quick Setup: Crossover Presets -->
+            <div class="card">
+                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                    <span class="card-title" style="margin-bottom:0;">Crossover Presets</span>
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" style="margin-top:8px;">
+                    <div class="form-group">
+                        <label class="form-label">Crossover Frequency (Hz)</label>
+                        <input type="number" class="form-input" id="dspXoverFreq" value="2000" min="20" max="20000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Slope</label>
+                        <select class="form-input" id="dspXoverType">
+                            <option value="lr2">Linkwitz-Riley 2nd (LR2)</option>
+                            <option value="lr4" selected>Linkwitz-Riley 4th (LR4)</option>
+                            <option value="lr8">Linkwitz-Riley 8th (LR8)</option>
+                            <option value="bw2">Butterworth 2nd</option>
+                            <option value="bw4">Butterworth 4th</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Role</label>
+                        <select class="form-input" id="dspXoverRole">
+                            <option value="0">Low Pass (LPF)</option>
+                            <option value="1">High Pass (HPF)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="dspApplyCrossover()">Apply to Channel</button>
+                </div>
+            </div>
+
+            <!-- Quick Setup: Routing Matrix -->
+            <div class="card">
+                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                    <span class="card-title" style="margin-bottom:0;">Routing Matrix</span>
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" style="margin-top:8px;">
+                    <div class="btn-row" style="flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('identity')">1:1</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('mono_sum')">Mono Sum</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('swap_lr')">Swap L/R</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('sub_sum')">Sub Sum</button>
+                    </div>
+                    <div id="dspRoutingGrid" style="overflow-x:auto;"></div>
                 </div>
             </div>
         </section>
@@ -3568,7 +3925,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC 1</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>19</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>9</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
@@ -3829,6 +4186,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (tabId === 'support') {
                 generateManualQRCode();
                 loadManualContent();
+            }
+
+            // DSP tab: redraw frequency response and load routing on entry
+            if (tabId === 'dsp') {
+                setTimeout(dspDrawFreqResponse, 50);
+                dspLoadRouting();
             }
 
             // Audio tab subscription management
@@ -4228,6 +4591,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     applyDebugState(data);
                 } else if (data.type === 'signalGenerator') {
                     applySigGenState(data);
+                } else if (data.type === 'dspState') {
+                    dspHandleState(data);
+                } else if (data.type === 'dspMetrics') {
+                    dspHandleMetrics(data);
                 }
             };
 
@@ -8133,6 +8500,418 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     localStorage.clear();
                     window.location.href = '/login';
                 });
+        }
+
+        // ===== DSP Tab =====
+        const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor'];
+        const DSP_MAX_CH = 4;
+        const DSP_CH_NAMES = ['L1','R1','L2','R2'];
+        let dspState = null;
+        let dspCh = 0; // selected channel
+        let dspOpenStage = -1; // expanded stage index
+        let dspImportMode = ''; // 'apo' or 'json'
+
+        function dspSetEnabled(en) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'setDspBypass', enabled: en, bypass: dspState ? dspState.dspBypass : false }));
+        }
+        function dspSetBypass(bp) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'setDspBypass', enabled: dspState ? dspState.dspEnabled : false, bypass: bp }));
+        }
+        function dspSetChBypass(bp) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'setDspChannelBypass', ch: dspCh, bypass: bp }));
+        }
+        function dspAddStage(typeInt) {
+            document.getElementById('dspAddMenu').classList.remove('open');
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'addDspStage', ch: dspCh, stageType: typeInt }));
+        }
+        function dspRemoveStage(idx) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'removeDspStage', ch: dspCh, stage: idx }));
+        }
+        function dspMoveStage(from, to) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'reorderDspStage', ch: dspCh, from: from, to: to }));
+        }
+        function dspToggleAddMenu() {
+            document.getElementById('dspAddMenu').classList.toggle('open');
+        }
+        function dspUpdateParam(idx, key, val) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                var msg = { type: 'updateDspStage', ch: dspCh, stage: idx };
+                msg[key] = val;
+                ws.send(JSON.stringify(msg));
+            }
+        }
+        function dspToggleStageEnabled(idx, en) {
+            dspUpdateParam(idx, 'enabled', en);
+        }
+
+        function dspSelectChannel(ch) {
+            dspCh = ch;
+            dspOpenStage = -1;
+            dspRenderChannelTabs();
+            dspRenderStages();
+            dspDrawFreqResponse();
+        }
+
+        function dspRenderChannelTabs() {
+            var el = document.getElementById('dspChTabs');
+            if (!el || !dspState) return;
+            var html = '';
+            for (var c = 0; c < DSP_MAX_CH; c++) {
+                var cnt = dspState.channels[c] ? dspState.channels[c].stageCount : 0;
+                html += '<button class="dsp-ch-tab' + (c === dspCh ? ' active' : '') + '" onclick="dspSelectChannel(' + c + ')">' + DSP_CH_NAMES[c] + '<span class="badge">' + cnt + '</span></button>';
+            }
+            el.innerHTML = html;
+            var byp = document.getElementById('dspChBypassToggle');
+            if (byp && dspState.channels[dspCh]) byp.checked = dspState.channels[dspCh].bypass;
+        }
+
+        function dspStageSummary(s) {
+            var t = s.type;
+            if (t <= 11) return (s.freq || 1000).toFixed(0) + ' Hz' + (s.gain ? ' ' + (s.gain > 0 ? '+' : '') + s.gain.toFixed(1) + ' dB' : '') + ' Q=' + (s.Q || 0.707).toFixed(2);
+            if (t === 12) return s.thresholdDb.toFixed(1) + ' dBFS ' + s.ratio.toFixed(0) + ':1';
+            if (t === 13) return s.numTaps + ' taps';
+            if (t === 14) return (s.gainDb > 0 ? '+' : '') + s.gainDb.toFixed(1) + ' dB';
+            if (t === 15) return s.delaySamples + ' smp';
+            if (t === 16) return s.inverted ? 'Inverted' : 'Normal';
+            if (t === 17) return s.muted ? 'Muted' : 'Active';
+            if (t === 18) return s.thresholdDb.toFixed(1) + ' dBFS ' + s.ratio.toFixed(1) + ':1';
+            return '';
+        }
+
+        function dspParamSliders(idx, s) {
+            var t = s.type;
+            var h = '';
+            if (t <= 11) {
+                h += dspSlider(idx, 'freq', 'Frequency', s.freq || 1000, 20, 20000, 1, 'Hz');
+                if (t === 4 || t === 5 || t === 6) h += dspSlider(idx, 'gain', 'Gain', s.gain || 0, -24, 24, 0.5, 'dB');
+                h += dspSlider(idx, 'Q', 'Q Factor', s.Q || 0.707, 0.1, 20, 0.01, '');
+            } else if (t === 12 || t === 18) {
+                h += dspSlider(idx, 'thresholdDb', 'Threshold', s.thresholdDb, -60, 0, 0.5, 'dBFS');
+                h += dspSlider(idx, 'attackMs', 'Attack', s.attackMs, 0.1, 100, 0.1, 'ms');
+                h += dspSlider(idx, 'releaseMs', 'Release', s.releaseMs, 1, 1000, 1, 'ms');
+                h += dspSlider(idx, 'ratio', 'Ratio', s.ratio, 1, 100, 0.5, ':1');
+                if (t === 18) {
+                    h += dspSlider(idx, 'kneeDb', 'Knee', s.kneeDb, 0, 24, 0.5, 'dB');
+                    h += dspSlider(idx, 'makeupGainDb', 'Makeup', s.makeupGainDb, 0, 24, 0.5, 'dB');
+                }
+                if (s.gr !== undefined) h += '<div class="dsp-param"><label>GR</label><span class="dsp-val" style="color:var(--error)">' + s.gr.toFixed(1) + ' dB</span></div>';
+            } else if (t === 14) {
+                h += dspSlider(idx, 'gainDb', 'Gain', s.gainDb, -60, 24, 0.5, 'dB');
+            } else if (t === 15) {
+                h += dspSlider(idx, 'delaySamples', 'Delay', s.delaySamples, 0, 4800, 1, 'smp');
+                var ms = (s.delaySamples / (dspState.sampleRate || 48000) * 1000).toFixed(2);
+                h += '<div class="dsp-param"><label>Time</label><span class="dsp-val">' + ms + ' ms</span></div>';
+            } else if (t === 16) {
+                h += '<div class="dsp-param"><label>Invert</label><label class="switch" style="transform:scale(0.75);"><input type="checkbox" ' + (s.inverted ? 'checked' : '') + ' onchange="dspUpdateParam(' + idx + ',\'inverted\',this.checked)"><span class="slider round"></span></label></div>';
+            } else if (t === 17) {
+                h += '<div class="dsp-param"><label>Mute</label><label class="switch" style="transform:scale(0.75);"><input type="checkbox" ' + (s.muted ? 'checked' : '') + ' onchange="dspUpdateParam(' + idx + ',\'muted\',this.checked)"><span class="slider round"></span></label></div>';
+            } else if (t === 13) {
+                h += '<div class="dsp-param"><label>Taps</label><span class="dsp-val">' + (s.numTaps || 0) + '</span></div>';
+            }
+            return h;
+        }
+
+        function dspSlider(idx, key, label, val, min, max, step, unit) {
+            var numVal = parseFloat(val) || 0;
+            return '<div class="dsp-param"><label>' + label + '</label>' +
+                '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + numVal + '" ' +
+                'oninput="this.nextElementSibling.textContent=parseFloat(this.value).toFixed(' + (step < 1 ? (step < 0.1 ? 2 : 1) : 0) + ')+\' ' + unit + '\'" ' +
+                'onchange="dspUpdateParam(' + idx + ',\'' + key + '\',parseFloat(this.value))">' +
+                '<span class="dsp-val">' + numVal.toFixed(step < 1 ? (step < 0.1 ? 2 : 1) : 0) + ' ' + unit + '</span></div>';
+        }
+
+        function dspRenderStages() {
+            if (!dspState || !dspState.channels[dspCh]) return;
+            var ch = dspState.channels[dspCh];
+            var list = document.getElementById('dspStageList');
+            var title = document.getElementById('dspStageTitle');
+            if (title) title.textContent = 'Filter Stages (' + ch.stageCount + ' / 20)';
+            if (!list) return;
+            var html = '';
+            var stages = ch.stages || [];
+            for (var i = 0; i < stages.length; i++) {
+                var s = stages[i];
+                var typeName = DSP_TYPES[s.type] || 'Unknown';
+                var label = s.label || typeName;
+                var open = (i === dspOpenStage);
+                html += '<div class="dsp-stage-card' + (!s.enabled ? ' disabled' : '') + '">';
+                html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : i) + ';dspRenderStages();dspDrawFreqResponse();">';
+                html += '<span class="dsp-stage-type">' + typeName + '</span>';
+                html += '<span class="dsp-stage-name">' + label + '</span>';
+                html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
+                html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
+                html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
+                if (i > 0) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
+                if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down">&#9660;</button>';
+                html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete">&times;</button>';
+                html += '</div></div>';
+                html += '<div class="dsp-stage-body' + (open ? ' open' : '') + '">' + (open ? dspParamSliders(i, s) : '') + '</div>';
+                html += '</div>';
+            }
+            list.innerHTML = html;
+        }
+
+        function dspHandleState(d) {
+            dspState = d;
+            var enTgl = document.getElementById('dspEnableToggle');
+            var bpTgl = document.getElementById('dspBypassToggle');
+            if (enTgl) enTgl.checked = d.dspEnabled;
+            if (bpTgl) bpTgl.checked = d.globalBypass;
+            var sr = document.getElementById('dspSampleRate');
+            if (sr) sr.textContent = (d.sampleRate || 48000) + ' Hz';
+            dspRenderChannelTabs();
+            dspRenderStages();
+            dspDrawFreqResponse();
+        }
+
+        function dspHandleMetrics(d) {
+            var cpuText = document.getElementById('dspCpuText');
+            var cpuBar = document.getElementById('dspCpuBar');
+            if (cpuText) cpuText.textContent = (d.cpuLoad || 0).toFixed(1) + '%';
+            if (cpuBar) cpuBar.style.width = Math.min(d.cpuLoad || 0, 100) + '%';
+        }
+
+        // ===== Frequency Response Graph =====
+        function dspDrawFreqResponse() {
+            var canvas = document.getElementById('dspFreqCanvas');
+            if (!canvas || !dspState || currentActiveTab !== 'dsp') return;
+            var ctx = canvas.getContext('2d');
+            var resized = resizeCanvasIfNeeded(canvas);
+            if (resized === -1) return;
+            var dims = canvasDims[canvas.id];
+            var w = dims.tw, h = dims.th;
+            var dpr = window.devicePixelRatio;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // Background
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-card').trim();
+            ctx.fillRect(0, 0, w, h);
+
+            var padL = 35 * dpr, padR = 10 * dpr, padT = 10 * dpr, padB = 20 * dpr;
+            var gw = w - padL - padR, gh = h - padT - padB;
+            var yMin = -24, yMax = 24;
+            var fMin = 20, fMax = 20000;
+            var logMin = Math.log10(fMin), logRange = Math.log10(fMax) - logMin;
+
+            // Grid lines
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim();
+            ctx.lineWidth = 0.5 * dpr;
+            ctx.font = (9 * dpr) + 'px sans-serif';
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-disabled').trim();
+
+            // Y grid (every 6 dB)
+            for (var db = yMin; db <= yMax; db += 6) {
+                var y = padT + gh * (1 - (db - yMin) / (yMax - yMin));
+                ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+                ctx.textAlign = 'right';
+                ctx.fillText(db + '', padL - 4 * dpr, y + 3 * dpr);
+            }
+            // 0 dB reference
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text-secondary').trim();
+            ctx.lineWidth = 1 * dpr;
+            var y0 = padT + gh * (1 - (0 - yMin) / (yMax - yMin));
+            ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(w - padR, y0); ctx.stroke();
+
+            // X grid (decades)
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim();
+            ctx.lineWidth = 0.5 * dpr;
+            ctx.textAlign = 'center';
+            var freqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+            var labels = ['20','50','100','200','500','1k','2k','5k','10k','20k'];
+            for (var fi = 0; fi < freqs.length; fi++) {
+                var x = padL + gw * (Math.log10(freqs[fi]) - logMin) / logRange;
+                ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + gh); ctx.stroke();
+                ctx.fillText(labels[fi], x, h - 2 * dpr);
+            }
+
+            // Compute and draw individual + combined response
+            var ch = dspState.channels[dspCh];
+            if (!ch || !ch.stages || ch.stages.length === 0) return;
+            var fs = dspState.sampleRate || 48000;
+            var nPts = 256;
+            var combined = new Float32Array(nPts);
+            var hasAny = false;
+
+            for (var si = 0; si < ch.stages.length; si++) {
+                var s = ch.stages[si];
+                if (s.type > 11 || !s.coeffs) continue; // Only biquads have freq response
+                hasAny = true;
+                var b0=s.coeffs[0], b1=s.coeffs[1], b2=s.coeffs[2], a1=s.coeffs[3], a2=s.coeffs[4];
+
+                // Draw individual curve (dimmed)
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255,152,0,0.25)';
+                ctx.lineWidth = 1 * dpr;
+                for (var p = 0; p < nPts; p++) {
+                    var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
+                    var omega = 2 * Math.PI * f / fs;
+                    var cosW = Math.cos(omega), sinW = Math.sin(omega);
+                    var cos2W = Math.cos(2*omega), sin2W = Math.sin(2*omega);
+                    var numR = b0 + b1*cosW + b2*cos2W;
+                    var numI = -(b1*sinW + b2*sin2W);
+                    var denR = 1 + a1*cosW + a2*cos2W;
+                    var denI = -(a1*sinW + a2*sin2W);
+                    var magSq = (numR*numR + numI*numI) / (denR*denR + denI*denI);
+                    var magDb = 10 * Math.log10(Math.max(magSq, 1e-20));
+                    combined[p] += magDb;
+                    var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
+                    var xp = padL + gw * p / (nPts - 1);
+                    if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
+                }
+                ctx.stroke();
+            }
+
+            // Draw combined curve
+            if (hasAny) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#FF9800';
+                ctx.lineWidth = 2 * dpr;
+                for (var p = 0; p < nPts; p++) {
+                    var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, combined[p])) - yMin) / (yMax - yMin));
+                    var xp = padL + gw * p / (nPts - 1);
+                    if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
+                }
+                ctx.stroke();
+            }
+
+            // Highlight selected stage
+            if (dspOpenStage >= 0 && dspOpenStage < ch.stages.length) {
+                var ss = ch.stages[dspOpenStage];
+                if (ss.type <= 11 && ss.coeffs) {
+                    var b0=ss.coeffs[0], b1=ss.coeffs[1], b2=ss.coeffs[2], a1=ss.coeffs[3], a2=ss.coeffs[4];
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#FF9800';
+                    ctx.lineWidth = 3 * dpr;
+                    ctx.setLineDash([4*dpr, 4*dpr]);
+                    for (var p = 0; p < nPts; p++) {
+                        var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
+                        var omega = 2 * Math.PI * f / fs;
+                        var cosW = Math.cos(omega), sinW = Math.sin(omega);
+                        var cos2W = Math.cos(2*omega), sin2W = Math.sin(2*omega);
+                        var numR = b0 + b1*cosW + b2*cos2W;
+                        var numI = -(b1*sinW + b2*sin2W);
+                        var denR = 1 + a1*cosW + a2*cos2W;
+                        var denI = -(a1*sinW + a2*sin2W);
+                        var magSq = (numR*numR + numI*numI) / (denR*denR + denI*denI);
+                        var magDb = 10 * Math.log10(Math.max(magSq, 1e-20));
+                        var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
+                        var xp = padL + gw * p / (nPts - 1);
+                        if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
+                    }
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+        }
+
+        // ===== DSP Import/Export =====
+        function dspImportApo() {
+            dspImportMode = 'apo';
+            document.getElementById('dspFileInput').accept = '.txt';
+            document.getElementById('dspFileInput').click();
+        }
+        function dspImportJson() {
+            dspImportMode = 'json';
+            document.getElementById('dspFileInput').accept = '.json';
+            document.getElementById('dspFileInput').click();
+        }
+        function dspHandleFileImport(ev) {
+            var file = ev.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var url = dspImportMode === 'apo' ? '/api/dsp/import/apo?ch=' + dspCh : '/api/dsp';
+                var method = dspImportMode === 'apo' ? 'POST' : 'PUT';
+                fetch(url, { method: method, headers: { 'Content-Type': dspImportMode === 'json' ? 'application/json' : 'text/plain' }, body: e.target.result })
+                    .then(r => r.json())
+                    .then(d => { if (d.success) showToast('Import successful'); else showToast('Import failed: ' + (d.message || ''), true); })
+                    .catch(err => showToast('Import error: ' + err, true));
+            };
+            reader.readAsText(file);
+            ev.target.value = '';
+        }
+        function dspExportApo() {
+            window.open('/api/dsp/export/apo?ch=' + dspCh, '_blank');
+        }
+        function dspExportJson() {
+            window.open('/api/dsp/export/json', '_blank');
+        }
+
+        // ===== DSP Crossover Presets =====
+        function dspApplyCrossover() {
+            var freq = parseInt(document.getElementById('dspXoverFreq').value) || 2000;
+            var type = document.getElementById('dspXoverType').value;
+            var role = parseInt(document.getElementById('dspXoverRole').value);
+            fetch('/api/dsp/crossover?ch=' + dspCh, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ freq: freq, type: type, role: role })
+            })
+            .then(r => r.json())
+            .then(d => { if (d.success) showToast('Crossover applied'); else showToast('Failed: ' + (d.message || ''), true); })
+            .catch(err => showToast('Error: ' + err, true));
+        }
+
+        // ===== DSP Routing Matrix =====
+        let dspRouting = null;
+        function dspRoutingPreset(name) {
+            fetch('/api/dsp/routing', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ preset: name })
+            })
+            .then(r => r.json())
+            .then(d => { if (d.success) { showToast('Routing: ' + name); dspLoadRouting(); } })
+            .catch(err => showToast('Error: ' + err, true));
+        }
+        function dspLoadRouting() {
+            fetch('/api/dsp/routing')
+                .then(r => r.json())
+                .then(d => { dspRouting = d.matrix; dspRenderRouting(); })
+                .catch(() => {});
+        }
+        function dspRenderRouting() {
+            var el = document.getElementById('dspRoutingGrid');
+            if (!el || !dspRouting) return;
+            var h = '<table style="border-collapse:collapse;font-size:12px;width:100%;">';
+            h += '<tr><td></td>';
+            for (var i = 0; i < DSP_MAX_CH; i++) h += '<td style="padding:4px;text-align:center;font-weight:600;color:var(--text-secondary);">' + DSP_CH_NAMES[i] + '</td>';
+            h += '</tr>';
+            for (var o = 0; o < DSP_MAX_CH; o++) {
+                h += '<tr><td style="padding:4px;font-weight:600;color:var(--text-secondary);">' + DSP_CH_NAMES[o] + '</td>';
+                for (var i = 0; i < DSP_MAX_CH; i++) {
+                    var v = dspRouting[o] ? dspRouting[o][i] : 0;
+                    var db = v <= 0.0001 ? '-inf' : (20 * Math.log10(v)).toFixed(1);
+                    var bg = v > 0.001 ? 'rgba(255,152,0,0.15)' : 'transparent';
+                    h += '<td style="padding:4px;text-align:center;background:' + bg + ';border:1px solid var(--border);cursor:pointer;border-radius:4px;" onclick="dspEditRoutingCell(' + o + ',' + i + ')">' + db + '</td>';
+                }
+                h += '</tr>';
+            }
+            h += '</table>';
+            el.innerHTML = h;
+        }
+        function dspEditRoutingCell(o, i) {
+            var current = dspRouting && dspRouting[o] ? dspRouting[o][i] : 0;
+            var currentDb = current <= 0.0001 ? '-inf' : (20 * Math.log10(current)).toFixed(1);
+            var val = prompt('Gain for ' + DSP_CH_NAMES[o] + ' <- ' + DSP_CH_NAMES[i] + ' (dB, or -inf for silence):', currentDb);
+            if (val === null) return;
+            var gainDb = val === '-inf' || val === '' ? -200 : parseFloat(val);
+            if (isNaN(gainDb)) return;
+            fetch('/api/dsp/routing', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ output: o, input: i, gainDb: gainDb })
+            })
+            .then(r => r.json())
+            .then(d => { if (d.success) dspLoadRouting(); })
+            .catch(err => showToast('Error: ' + err, true));
         }
     </script>
 </body>

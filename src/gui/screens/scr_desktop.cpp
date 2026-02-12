@@ -8,11 +8,18 @@
 #include "../../app_state.h"
 #include "../../config.h"
 #include "../../debug_serial.h"
+#ifdef DSP_ENABLED
+#include "../../dsp_pipeline.h"
+#endif
 #include <Arduino.h>
 #include <WiFi.h>
 
 /* Number of dashboard cards */
+#ifdef DSP_ENABLED
+#define CARD_COUNT 8
+#else
 #define CARD_COUNT 7
+#endif
 
 /* Compact dashboard cell constants (for Home card 0) */
 #define DASH_CELL_W    66
@@ -38,6 +45,9 @@ static const CardDef cards[CARD_COUNT] = {
     {ICON_SETTINGS, "Settings", SCR_SETTINGS_MENU},
     {ICON_SUPPORT,  "Support",  SCR_SUPPORT_MENU},
     {ICON_DEBUG,    "Debug",    SCR_DEBUG_MENU},
+#ifdef DSP_ENABLED
+    {ICON_DSP,      "DSP",      SCR_DSP_MENU},
+#endif
 };
 
 /* References to summary labels for live updates (cards 1-6) */
@@ -109,6 +119,16 @@ static void get_card_summary(int idx, char *buf, size_t len) {
                      millis() / 1000);
             break;
         }
+#ifdef DSP_ENABLED
+        case 7: { /* DSP */
+            DspMetrics m = dsp_get_metrics();
+            snprintf(buf, len, "%s%s\nCPU: %.0f%%",
+                     st.dspEnabled ? "Enabled" : "Disabled",
+                     st.dspBypass ? " (BYP)" : "",
+                     m.cpuLoadPercent);
+            break;
+        }
+#endif
         default:
             snprintf(buf, len, "---");
     }

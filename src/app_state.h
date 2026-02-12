@@ -328,6 +328,7 @@ public:
   // MQTT state tracking for DSP
   bool prevMqttDspEnabled = false;
   bool prevMqttDspBypass = false;
+  bool prevMqttDspChBypass[DSP_MAX_CHANNELS] = {};
 #endif
 
   // MQTT state tracking for boot animation

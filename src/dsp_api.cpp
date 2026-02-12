@@ -4,14 +4,88 @@
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
 #include "dsp_rew_parser.h"
+#include "dsp_crossover.h"
 #include "app_state.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
 #include <ArduinoJson.h>
 #include <WebServer.h>
 #include <LittleFS.h>
+#include <sys/stat.h>
 
 extern WebServer server;
+
+// Check if a LittleFS file exists without triggering VFS "no permits" error log.
+// Arduino's dspFileExists() internally calls open("r") which logs the error.
+static bool dspFileExists(const char *path) {
+    struct stat st;
+    String fullPath = String("/littlefs") + path;
+    return (stat(fullPath.c_str(), &st) == 0);
+}
+
+// ===== Global Routing Matrix =====
+static DspRoutingMatrix _routingMatrix;
+static bool _routingMatrixLoaded = false;
+
+DspRoutingMatrix* dsp_get_routing_matrix() {
+    if (!_routingMatrixLoaded) {
+        dsp_routing_init(_routingMatrix);
+        _routingMatrixLoaded = true;
+    }
+    return &_routingMatrix;
+}
+
+// ===== Routing Matrix Persistence =====
+
+static void loadRoutingMatrix() {
+    if (!dspFileExists("/dsp_routing.json")) {
+        dsp_routing_init(_routingMatrix);
+        _routingMatrixLoaded = true;
+        return;
+    }
+    File f = LittleFS.open("/dsp_routing.json", "r");
+    if (f && f.size() > 0) {
+        String json = f.readString();
+        f.close();
+
+        JsonDocument doc;
+        if (!deserializeJson(doc, json)) {
+            JsonArray mat = doc["matrix"].as<JsonArray>();
+            if (!mat.isNull()) {
+                for (int o = 0; o < DSP_MAX_CHANNELS && o < (int)mat.size(); o++) {
+                    JsonArray row = mat[o].as<JsonArray>();
+                    if (row.isNull()) continue;
+                    for (int i = 0; i < DSP_MAX_CHANNELS && i < (int)row.size(); i++) {
+                        _routingMatrix.matrix[o][i] = row[i].as<float>();
+                    }
+                }
+            }
+        }
+        _routingMatrixLoaded = true;
+        LOG_I("[DSP] Routing matrix loaded from LittleFS");
+    } else {
+        if (f) f.close();
+        dsp_routing_init(_routingMatrix);
+        _routingMatrixLoaded = true;
+    }
+}
+
+static void saveRoutingMatrix() {
+    JsonDocument doc;
+    JsonArray mat = doc["matrix"].to<JsonArray>();
+    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
+        JsonArray row = mat.add<JsonArray>();
+        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
+            row.add(_routingMatrix.matrix[o][i]);
+        }
+    }
+
+    String json;
+    serializeJson(doc, json);
+    File f = LittleFS.open("/dsp_routing.json", "w");
+    if (f) { f.print(json); f.close(); }
+    LOG_I("[DSP] Routing matrix saved to LittleFS");
+}
 
 // ===== DSP Settings Persistence =====
 
@@ -20,38 +94,43 @@ static bool _dspSavePending = false;
 static const unsigned long DSP_SAVE_DEBOUNCE_MS = 5000;
 
 void loadDspSettings() {
-    // Load global settings
-    File f = LittleFS.open("/dsp_global.json", "r");
-    if (f && f.size() > 0) {
-        String json = f.readString();
-        f.close();
+    // Load global settings (skip open if file missing to avoid VFS error log)
+    if (dspFileExists("/dsp_global.json")) {
+        File f = LittleFS.open("/dsp_global.json", "r");
+        if (f && f.size() > 0) {
+            String json = f.readString();
+            f.close();
 
-        JsonDocument doc;
-        if (!deserializeJson(doc, json)) {
-            DspState *cfg = dsp_get_inactive_config();
-            if (doc["globalBypass"].is<bool>()) cfg->globalBypass = doc["globalBypass"].as<bool>();
-            if (doc["sampleRate"].is<unsigned int>()) cfg->sampleRate = doc["sampleRate"].as<uint32_t>();
-            if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
+            JsonDocument doc;
+            if (!deserializeJson(doc, json)) {
+                DspState *cfg = dsp_get_inactive_config();
+                if (doc["globalBypass"].is<bool>()) cfg->globalBypass = doc["globalBypass"].as<bool>();
+                if (doc["sampleRate"].is<unsigned int>()) cfg->sampleRate = doc["sampleRate"].as<uint32_t>();
+                if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
+            }
+        } else if (f) {
+            f.close();
         }
-    } else if (f) {
-        f.close();
     }
 
     // Load per-channel configs
     for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
         char path[24];
         snprintf(path, sizeof(path), "/dsp_ch%d.json", ch);
-        File cf = LittleFS.open(path, "r");
-        if (cf && cf.size() > 0) {
-            String json = cf.readString();
-            cf.close();
-            dsp_load_config_from_json(json.c_str(), ch);
-        } else if (cf) {
-            cf.close();
+        if (dspFileExists(path)) {
+            File cf = LittleFS.open(path, "r");
+            if (cf && cf.size() > 0) {
+                String json = cf.readString();
+                cf.close();
+                dsp_load_config_from_json(json.c_str(), ch);
+            } else if (cf) {
+                cf.close();
+            }
         }
 
         // Load FIR binary data if present
         snprintf(path, sizeof(path), "/dsp_fir%d.bin", ch);
+        if (!dspFileExists(path)) continue;
         File ff = LittleFS.open(path, "r");
         if (ff && ff.size() > 0) {
             DspState *cfg = dsp_get_inactive_config();
@@ -77,6 +156,9 @@ void loadDspSettings() {
             ff.close();
         }
     }
+
+    // Load routing matrix
+    loadRoutingMatrix();
 
     // Recompute all coefficients and swap to make loaded config active
     DspState *cfg = dsp_get_inactive_config();
@@ -178,10 +260,17 @@ static DspStageType typeFromString(const char *name) {
     if (strcmp(name, "LOW_SHELF") == 0) return DSP_BIQUAD_LOW_SHELF;
     if (strcmp(name, "HIGH_SHELF") == 0) return DSP_BIQUAD_HIGH_SHELF;
     if (strcmp(name, "ALLPASS") == 0) return DSP_BIQUAD_ALLPASS;
+    if (strcmp(name, "ALLPASS_360") == 0) return DSP_BIQUAD_ALLPASS_360;
+    if (strcmp(name, "ALLPASS_180") == 0) return DSP_BIQUAD_ALLPASS_180;
+    if (strcmp(name, "BPF_0DB") == 0) return DSP_BIQUAD_BPF_0DB;
     if (strcmp(name, "CUSTOM") == 0) return DSP_BIQUAD_CUSTOM;
     if (strcmp(name, "LIMITER") == 0) return DSP_LIMITER;
     if (strcmp(name, "FIR") == 0) return DSP_FIR;
     if (strcmp(name, "GAIN") == 0) return DSP_GAIN;
+    if (strcmp(name, "DELAY") == 0) return DSP_DELAY;
+    if (strcmp(name, "POLARITY") == 0) return DSP_POLARITY;
+    if (strcmp(name, "MUTE") == 0) return DSP_MUTE;
+    if (strcmp(name, "COMPRESSOR") == 0) return DSP_COMPRESSOR;
     return DSP_BIQUAD_PEQ;
 }
 
@@ -334,6 +423,23 @@ void registerDspApiEndpoints() {
         } else if (type == DSP_GAIN && !params.isNull()) {
             if (params["gainDb"].is<float>()) s.gain.gainDb = params["gainDb"].as<float>();
             dsp_compute_gain_linear(s.gain);
+        } else if (type == DSP_DELAY && !params.isNull()) {
+            if (params["delaySamples"].is<int>()) {
+                uint16_t ds = params["delaySamples"].as<uint16_t>();
+                s.delay.delaySamples = ds > DSP_MAX_DELAY_SAMPLES ? DSP_MAX_DELAY_SAMPLES : ds;
+            }
+        } else if (type == DSP_POLARITY && !params.isNull()) {
+            if (params["inverted"].is<bool>()) s.polarity.inverted = params["inverted"].as<bool>();
+        } else if (type == DSP_MUTE && !params.isNull()) {
+            if (params["muted"].is<bool>()) s.mute.muted = params["muted"].as<bool>();
+        } else if (type == DSP_COMPRESSOR && !params.isNull()) {
+            if (params["thresholdDb"].is<float>()) s.compressor.thresholdDb = params["thresholdDb"].as<float>();
+            if (params["attackMs"].is<float>()) s.compressor.attackMs = params["attackMs"].as<float>();
+            if (params["releaseMs"].is<float>()) s.compressor.releaseMs = params["releaseMs"].as<float>();
+            if (params["ratio"].is<float>()) s.compressor.ratio = params["ratio"].as<float>();
+            if (params["kneeDb"].is<float>()) s.compressor.kneeDb = params["kneeDb"].as<float>();
+            if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
+            dsp_compute_compressor_makeup(s.compressor);
         }
 
         dsp_swap_config();
@@ -392,6 +498,23 @@ void registerDspApiEndpoints() {
         } else if (s.type == DSP_GAIN && !params.isNull()) {
             if (params["gainDb"].is<float>()) s.gain.gainDb = params["gainDb"].as<float>();
             dsp_compute_gain_linear(s.gain);
+        } else if (s.type == DSP_DELAY && !params.isNull()) {
+            if (params["delaySamples"].is<int>()) {
+                uint16_t ds = params["delaySamples"].as<uint16_t>();
+                s.delay.delaySamples = ds > DSP_MAX_DELAY_SAMPLES ? DSP_MAX_DELAY_SAMPLES : ds;
+            }
+        } else if (s.type == DSP_POLARITY && !params.isNull()) {
+            if (params["inverted"].is<bool>()) s.polarity.inverted = params["inverted"].as<bool>();
+        } else if (s.type == DSP_MUTE && !params.isNull()) {
+            if (params["muted"].is<bool>()) s.mute.muted = params["muted"].as<bool>();
+        } else if (s.type == DSP_COMPRESSOR && !params.isNull()) {
+            if (params["thresholdDb"].is<float>()) s.compressor.thresholdDb = params["thresholdDb"].as<float>();
+            if (params["attackMs"].is<float>()) s.compressor.attackMs = params["attackMs"].as<float>();
+            if (params["releaseMs"].is<float>()) s.compressor.releaseMs = params["releaseMs"].as<float>();
+            if (params["ratio"].is<float>()) s.compressor.ratio = params["ratio"].as<float>();
+            if (params["kneeDb"].is<float>()) s.compressor.kneeDb = params["kneeDb"].as<float>();
+            if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
+            dsp_compute_compressor_makeup(s.compressor);
         }
 
         dsp_swap_config();
@@ -617,6 +740,150 @@ void registerDspApiEndpoints() {
         char buf[8192];
         dsp_export_full_config_json(buf, sizeof(buf));
         server.send(200, "application/json", buf);
+    });
+
+    // ===== Crossover & Bass Management Endpoints =====
+
+    // POST /api/dsp/crossover?ch=N — apply crossover filter
+    server.on("/api/dsp/crossover", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        int ch = parseChannelParam();
+        if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
+        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+
+        JsonDocument doc;
+        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
+
+        float freq = doc["freq"] | 1000.0f;
+        int role = doc["role"] | 0; // 0 = LPF, 1 = HPF
+        const char *typeStr = doc["type"] | "lr4";
+
+        dsp_copy_active_to_inactive();
+
+        int result = -1;
+        if (strcmp(typeStr, "lr2") == 0) {
+            result = dsp_insert_crossover_lr2(ch, freq, role);
+        } else if (strcmp(typeStr, "lr4") == 0) {
+            result = dsp_insert_crossover_lr4(ch, freq, role);
+        } else if (strcmp(typeStr, "lr8") == 0) {
+            result = dsp_insert_crossover_lr8(ch, freq, role);
+        } else if (strncmp(typeStr, "bw", 2) == 0) {
+            int order = atoi(typeStr + 2);
+            if (order < 2) order = 2;
+            result = dsp_insert_crossover_butterworth(ch, freq, order, role);
+        } else {
+            sendJsonError(400, "Unknown crossover type");
+            return;
+        }
+
+        if (result < 0) { sendJsonError(400, "Failed to insert crossover"); return; }
+
+        dsp_swap_config();
+        saveDspSettingsDebounced();
+        appState.markDspConfigDirty();
+
+        char resp[64];
+        snprintf(resp, sizeof(resp), "{\"success\":true,\"firstStage\":%d}", result);
+        server.send(200, "application/json", resp);
+        LOG_I("[DSP] Crossover applied: ch=%d type=%s freq=%.0f role=%d", ch, typeStr, freq, role);
+    });
+
+    // POST /api/dsp/bassmanagement — setup bass management
+    server.on("/api/dsp/bassmanagement", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+
+        JsonDocument doc;
+        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
+
+        int subChannel = doc["subChannel"] | 0;
+        float crossoverFreq = doc["freq"] | 80.0f;
+
+        if (!doc["mainChannels"].is<JsonArray>()) {
+            sendJsonError(400, "Missing mainChannels array");
+            return;
+        }
+
+        JsonArray mains = doc["mainChannels"].as<JsonArray>();
+        int mainChannels[DSP_MAX_CHANNELS];
+        int numMains = 0;
+        for (JsonVariant v : mains) {
+            if (numMains >= DSP_MAX_CHANNELS) break;
+            mainChannels[numMains++] = v.as<int>();
+        }
+
+        dsp_copy_active_to_inactive();
+
+        int result = dsp_setup_bass_management(subChannel, mainChannels, numMains, crossoverFreq);
+        if (result < 0) { sendJsonError(400, "Failed to setup bass management"); return; }
+
+        dsp_swap_config();
+        saveDspSettingsDebounced();
+        appState.markDspConfigDirty();
+        server.send(200, "application/json", "{\"success\":true}");
+        LOG_I("[DSP] Bass management: sub=%d mains=%d freq=%.0f", subChannel, numMains, crossoverFreq);
+    });
+
+    // ===== Routing Matrix Endpoints =====
+
+    // GET /api/dsp/routing — get routing matrix
+    server.on("/api/dsp/routing", HTTP_GET, []() {
+        if (!requireAuth()) return;
+
+        DspRoutingMatrix *rm = dsp_get_routing_matrix();
+        JsonDocument doc;
+        JsonArray mat = doc["matrix"].to<JsonArray>();
+        for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
+            JsonArray row = mat.add<JsonArray>();
+            for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
+                row.add(rm->matrix[o][i]);
+            }
+        }
+
+        String json;
+        serializeJson(doc, json);
+        server.send(200, "application/json", json);
+    });
+
+    // PUT /api/dsp/routing — set routing matrix
+    server.on("/api/dsp/routing", HTTP_PUT, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+
+        JsonDocument doc;
+        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
+
+        DspRoutingMatrix *rm = dsp_get_routing_matrix();
+
+        // Check for preset shortcut
+        const char *preset = doc["preset"] | (const char *)nullptr;
+        if (preset) {
+            if (strcmp(preset, "identity") == 0) dsp_routing_preset_identity(*rm);
+            else if (strcmp(preset, "mono_sum") == 0) dsp_routing_preset_mono_sum(*rm);
+            else if (strcmp(preset, "swap_lr") == 0) dsp_routing_preset_swap_lr(*rm);
+            else if (strcmp(preset, "sub_sum") == 0) dsp_routing_preset_sub_sum(*rm);
+            else { sendJsonError(400, "Unknown preset"); return; }
+        } else if (doc["matrix"].is<JsonArray>()) {
+            JsonArray mat = doc["matrix"].as<JsonArray>();
+            for (int o = 0; o < DSP_MAX_CHANNELS && o < (int)mat.size(); o++) {
+                JsonArray row = mat[o].as<JsonArray>();
+                if (row.isNull()) continue;
+                for (int i = 0; i < DSP_MAX_CHANNELS && i < (int)row.size(); i++) {
+                    rm->matrix[o][i] = row[i].as<float>();
+                }
+            }
+        } else if (doc["output"].is<int>() && doc["input"].is<int>() && doc["gainDb"].is<float>()) {
+            // Single cell update
+            dsp_routing_set_gain_db(*rm, doc["output"].as<int>(), doc["input"].as<int>(), doc["gainDb"].as<float>());
+        } else {
+            sendJsonError(400, "Provide preset, matrix, or output/input/gainDb");
+            return;
+        }
+
+        saveRoutingMatrix();
+        appState.markDspConfigDirty();
+        server.send(200, "application/json", "{\"success\":true}");
+        LOG_I("[DSP] Routing matrix updated");
     });
 
     LOG_I("[DSP] REST API endpoints registered");

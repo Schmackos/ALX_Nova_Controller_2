@@ -18,5 +18,8 @@ void dsp_recompute_channel_coeffs(DspChannelConfig &ch, uint32_t sampleRate);
 // Precompute linear gain from dB: gainLinear = 10^(gainDb/20).
 void dsp_compute_gain_linear(DspGainParams &params);
 
+// Precompute compressor makeup gain from dB.
+void dsp_compute_compressor_makeup(DspCompressorParams &params);
+
 #endif // DSP_ENABLED
 #endif // DSP_COEFFICIENTS_H

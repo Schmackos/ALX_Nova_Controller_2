@@ -17,11 +17,18 @@ enum DspStageType : uint8_t {
     DSP_BIQUAD_PEQ,
     DSP_BIQUAD_LOW_SHELF,
     DSP_BIQUAD_HIGH_SHELF,
-    DSP_BIQUAD_ALLPASS,
+    DSP_BIQUAD_ALLPASS,     // allpass (alias for 360° phase shift)
+    DSP_BIQUAD_ALLPASS_360, // allpass 360° (same as ALLPASS, explicit)
+    DSP_BIQUAD_ALLPASS_180, // allpass 180° phase shift
+    DSP_BIQUAD_BPF_0DB,    // bandpass 0dB peak gain
     DSP_BIQUAD_CUSTOM,
     DSP_LIMITER,
     DSP_FIR,
     DSP_GAIN,
+    DSP_DELAY,
+    DSP_POLARITY,
+    DSP_MUTE,
+    DSP_COMPRESSOR,
     DSP_STAGE_TYPE_COUNT
 };
 
@@ -57,6 +64,36 @@ struct DspGainParams {
     float gainLinear;   // Pre-computed linear gain (10^(dB/20))
 };
 
+// ===== Delay Parameters (delay line stored in external pool) =====
+struct DspDelayParams {
+    uint16_t delaySamples;  // Delay in samples (max DSP_MAX_DELAY_SAMPLES)
+    uint16_t writePos;      // Current write position in circular buffer
+    int8_t delaySlot;       // Index into static delay pool (-1 = unassigned)
+};
+
+// ===== Polarity Parameters =====
+struct DspPolarityParams {
+    bool inverted;          // true = phase invert (multiply by -1)
+};
+
+// ===== Mute Parameters =====
+struct DspMuteParams {
+    bool muted;             // true = output silence
+};
+
+// ===== Compressor Parameters =====
+struct DspCompressorParams {
+    float thresholdDb;      // Threshold in dBFS
+    float attackMs;         // Attack time (ms)
+    float releaseMs;        // Release time (ms)
+    float ratio;            // Compression ratio (1:1 to inf:1)
+    float kneeDb;           // Soft knee width in dB (0 = hard knee)
+    float makeupGainDb;     // Makeup gain in dB
+    float makeupLinear;     // Pre-computed linear makeup gain
+    float envelope;         // Current envelope level (runtime)
+    float gainReduction;    // Current GR in dB (runtime, for metering)
+};
+
 // ===== Generic DSP Stage =====
 struct DspStage {
     bool enabled;
@@ -68,6 +105,10 @@ struct DspStage {
         DspLimiterParams limiter;
         DspFirParams fir;
         DspGainParams gain;
+        DspDelayParams delay;
+        DspPolarityParams polarity;
+        DspMuteParams mute;
+        DspCompressorParams compressor;
     };
 };
 
@@ -123,6 +164,32 @@ inline void dsp_init_gain_params(DspGainParams &p) {
     p.gainLinear = 1.0f;
 }
 
+inline void dsp_init_delay_params(DspDelayParams &p) {
+    p.delaySamples = 0;
+    p.writePos = 0;
+    p.delaySlot = -1;
+}
+
+inline void dsp_init_polarity_params(DspPolarityParams &p) {
+    p.inverted = true;
+}
+
+inline void dsp_init_mute_params(DspMuteParams &p) {
+    p.muted = true;
+}
+
+inline void dsp_init_compressor_params(DspCompressorParams &p) {
+    p.thresholdDb = -12.0f;
+    p.attackMs = 10.0f;
+    p.releaseMs = 100.0f;
+    p.ratio = 4.0f;
+    p.kneeDb = 6.0f;
+    p.makeupGainDb = 0.0f;
+    p.makeupLinear = 1.0f;
+    p.envelope = 0.0f;
+    p.gainReduction = 0.0f;
+}
+
 inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
     s.enabled = true;
     s.type = t;
@@ -133,6 +200,14 @@ inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
         dsp_init_fir_params(s.fir);
     } else if (t == DSP_GAIN) {
         dsp_init_gain_params(s.gain);
+    } else if (t == DSP_DELAY) {
+        dsp_init_delay_params(s.delay);
+    } else if (t == DSP_POLARITY) {
+        dsp_init_polarity_params(s.polarity);
+    } else if (t == DSP_MUTE) {
+        dsp_init_mute_params(s.mute);
+    } else if (t == DSP_COMPRESSOR) {
+        dsp_init_compressor_params(s.compressor);
     } else {
         dsp_init_biquad_params(s.biquad);
     }
@@ -187,6 +262,11 @@ int dsp_fir_alloc_slot();                              // Allocate slot, returns
 void dsp_fir_free_slot(int slot);                      // Release slot
 float* dsp_fir_get_taps(int stateIndex, int firSlot);  // Get taps array [DSP_MAX_FIR_TAPS]
 float* dsp_fir_get_delay(int stateIndex, int firSlot); // Get delay array [DSP_MAX_FIR_TAPS]
+
+// Delay pool access (delay lines stored outside DspStage union to save DRAM)
+int dsp_delay_alloc_slot();                                   // Allocate slot, returns index or -1
+void dsp_delay_free_slot(int slot);                           // Release slot
+float* dsp_delay_get_line(int stateIndex, int delaySlot);     // Get delay line [DSP_MAX_DELAY_SAMPLES]
 
 // Persistence helpers
 void dsp_load_config_from_json(const char *json, int channel);

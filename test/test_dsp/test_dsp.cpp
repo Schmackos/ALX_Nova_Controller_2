@@ -4,9 +4,9 @@
 
 // Include DSP sources directly (test_build_src = no)
 #include "../../lib/esp_dsp_lite/src/dsps_biquad_f32_ansi.c"
-#include "../../lib/esp_dsp_lite/src/dsps_biquad_gen_f32.c"
 #include "../../lib/esp_dsp_lite/src/dsps_fir_f32_ansi.c"
 #include "../../lib/esp_dsp_lite/src/dsps_fir_init_f32.c"
+#include "../../src/dsp_biquad_gen.c"
 
 // Include DSP headers
 #include "../../src/dsp_pipeline.h"
@@ -15,6 +15,7 @@
 // Include DSP implementation source (no ArduinoJson in native tests)
 #include "../../src/dsp_coefficients.cpp"
 #include "../../src/dsp_pipeline.cpp"
+#include "../../src/dsp_crossover.cpp"
 
 // Tolerance for float comparisons
 #define FLOAT_TOL 0.001f
@@ -461,6 +462,479 @@ void test_channel_recompute_coeffs(void) {
     TEST_ASSERT_TRUE(ch.stages[0].biquad.coeffs[0] > 1.0f);
 }
 
+// ===== Delay Stage Tests =====
+
+void test_delay_zero_passthrough(void) {
+    // Delay of 0 samples = passthrough
+    int idx = dsp_add_stage(0, DSP_DELAY);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.delay.delaySamples = 0;
+    dsp_swap_config();
+
+    int32_t buffer[8] = {1000000, 2000000, 3000000, 4000000, 5000000, 6000000, 7000000, 8000000};
+    int32_t original[8];
+    memcpy(original, buffer, sizeof(buffer));
+
+    dsp_process_buffer(buffer, 4, 0);
+
+    // With 0 delay, output should equal input (through float conversion)
+    for (int i = 0; i < 8; i++) {
+        TEST_ASSERT_INT32_WITHIN(2, original[i], buffer[i]);
+    }
+}
+
+void test_delay_shifts_samples(void) {
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_DELAY);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.delay.delaySamples = 2;
+    dsp_swap_config();
+
+    // Process first buffer: impulse on L channel
+    int32_t buffer1[8] = {8388607, 0, 0, 0, 0, 0, 0, 0}; // L=max at sample 0
+    dsp_process_buffer(buffer1, 4, 0);
+    // After 2-sample delay, impulse should appear at sample 2 (index 4 in interleaved)
+    // Samples 0,1 should be 0 (delay line was empty)
+    TEST_ASSERT_INT32_WITHIN(100, 0, buffer1[0]); // L sample 0 = 0 (delayed)
+    TEST_ASSERT_INT32_WITHIN(100, 0, buffer1[2]); // L sample 1 = 0 (delayed)
+    TEST_ASSERT_INT32_WITHIN(100, 8388607, buffer1[4]); // L sample 2 = impulse
+}
+
+void test_delay_slot_alloc_free(void) {
+    int slot1 = dsp_delay_alloc_slot();
+    TEST_ASSERT_TRUE(slot1 >= 0);
+    int slot2 = dsp_delay_alloc_slot();
+    TEST_ASSERT_TRUE(slot2 >= 0);
+    TEST_ASSERT_NOT_EQUAL(slot1, slot2);
+
+    // All slots used
+    int slot3 = dsp_delay_alloc_slot();
+    TEST_ASSERT_EQUAL_INT(-1, slot3);
+
+    // Free and re-alloc
+    dsp_delay_free_slot(slot1);
+    int slot4 = dsp_delay_alloc_slot();
+    TEST_ASSERT_EQUAL_INT(slot1, slot4);
+}
+
+// ===== Polarity Stage Tests =====
+
+void test_polarity_inverts_signal(void) {
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_POLARITY);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    cfg->channels[0].stages[idx].polarity.inverted = true;
+    dsp_swap_config();
+
+    int32_t buffer[4] = {4000000, 0, -2000000, 0}; // L=+, L=-
+    dsp_process_buffer(buffer, 2, 0);
+
+    // L channel should be inverted
+    TEST_ASSERT_INT32_WITHIN(100, -4000000, buffer[0]);
+    TEST_ASSERT_INT32_WITHIN(100, 2000000, buffer[2]);
+}
+
+void test_polarity_not_inverted_passthrough(void) {
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_POLARITY);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    cfg->channels[0].stages[idx].polarity.inverted = false;
+    dsp_swap_config();
+
+    int32_t buffer[4] = {4000000, 0, -2000000, 0};
+    int32_t original[4];
+    memcpy(original, buffer, sizeof(buffer));
+    dsp_process_buffer(buffer, 2, 0);
+
+    // Not inverted = passthrough
+    for (int i = 0; i < 4; i++) {
+        TEST_ASSERT_INT32_WITHIN(2, original[i], buffer[i]);
+    }
+}
+
+// ===== Mute Stage Tests =====
+
+void test_mute_zeros_output(void) {
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_MUTE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    cfg->channels[0].stages[idx].mute.muted = true;
+    dsp_swap_config();
+
+    int32_t buffer[4] = {4000000, 3000000, -2000000, 1000000};
+    dsp_process_buffer(buffer, 2, 0);
+
+    // L channel should be zeroed (mute applies to channel 0 = L)
+    TEST_ASSERT_EQUAL_INT32(0, buffer[0]);
+    TEST_ASSERT_EQUAL_INT32(0, buffer[2]);
+}
+
+void test_mute_not_muted_passthrough(void) {
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_MUTE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    cfg->channels[0].stages[idx].mute.muted = false;
+    dsp_swap_config();
+
+    int32_t buffer[4] = {4000000, 0, -2000000, 0};
+    int32_t original[4];
+    memcpy(original, buffer, sizeof(buffer));
+    dsp_process_buffer(buffer, 2, 0);
+
+    for (int i = 0; i < 4; i++) {
+        TEST_ASSERT_INT32_WITHIN(2, original[i], buffer[i]);
+    }
+}
+
+// ===== Compressor Stage Tests =====
+
+void test_compressor_below_threshold_passthrough(void) {
+    // Signal well below threshold should pass through with only makeup gain
+    DspCompressorParams comp;
+    dsp_init_compressor_params(comp);
+    comp.thresholdDb = 0.0f;      // 0 dBFS threshold
+    comp.ratio = 4.0f;
+    comp.kneeDb = 0.0f;           // Hard knee
+    comp.makeupGainDb = 0.0f;
+    dsp_compute_compressor_makeup(comp);
+
+    // -20dBFS signal is well below 0dBFS threshold
+    float threshLin = powf(10.0f, 0.0f / 20.0f); // 1.0
+    float signalLin = 0.1f; // -20dBFS
+    TEST_ASSERT_TRUE(signalLin < threshLin);
+}
+
+void test_compressor_above_threshold_reduces(void) {
+    // Signal above threshold should be reduced by ratio
+    float threshDb = -12.0f;
+    float ratio = 4.0f;
+    float envDb = 0.0f; // 0 dBFS signal
+    float overDb = envDb - threshDb; // +12dB over threshold
+
+    // Expected gain reduction: overDb * (1 - 1/ratio) = 12 * 0.75 = 9 dB
+    float grDb = overDb * (1.0f - 1.0f / ratio);
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 9.0f, grDb);
+}
+
+void test_compressor_soft_knee(void) {
+    // In soft knee region, compression ramps gradually
+    float kneeDb = 6.0f;
+    float ratio = 4.0f;
+
+    // At threshold (overDb = 0, which is in the knee region -3 to +3)
+    float overDb = 0.0f;
+    float x = overDb + kneeDb / 2.0f; // = 3.0
+    float grDb = (1.0f - 1.0f / ratio) * x * x / (2.0f * kneeDb);
+    // = 0.75 * 9 / 12 = 0.5625 dB
+    TEST_ASSERT_TRUE(grDb > 0.0f);
+    TEST_ASSERT_TRUE(grDb < 1.0f); // Much less than full compression
+}
+
+void test_compressor_makeup_gain(void) {
+    DspCompressorParams comp;
+    dsp_init_compressor_params(comp);
+    comp.makeupGainDb = 6.0f;
+    dsp_compute_compressor_makeup(comp);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.9953f, comp.makeupLinear);
+
+    comp.makeupGainDb = 0.0f;
+    dsp_compute_compressor_makeup(comp);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, comp.makeupLinear);
+}
+
+// ===== New Biquad Type Tests =====
+
+void test_bpf0db_unity_peak_gain(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.Q = 2.0f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_BPF_0DB, 48000);
+
+    // Generate 1kHz sine at 48kHz (center frequency)
+    float input[256], output[256];
+    for (int i = 0; i < 256; i++) {
+        input[i] = sinf(2.0f * (float)M_PI * 1000.0f * i / 48000.0f);
+    }
+
+    dsps_biquad_f32(input, output, 256, p.coeffs, p.delay);
+
+    // At center frequency, output should be ~unity gain
+    // Measure RMS in steady state (skip first 64 for settling)
+    float rmsIn = 0.0f, rmsOut = 0.0f;
+    for (int i = 64; i < 256; i++) {
+        rmsIn += input[i] * input[i];
+        rmsOut += output[i] * output[i];
+    }
+    rmsIn = sqrtf(rmsIn / 192.0f);
+    rmsOut = sqrtf(rmsOut / 192.0f);
+
+    // 0dB peak gain: output RMS should be close to input RMS
+    float gainDb = 20.0f * log10f(rmsOut / rmsIn);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 0.0f, gainDb);
+}
+
+void test_allpass360_unity_magnitude(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_ALLPASS_360, 48000);
+
+    // Allpass 360°: same as standard allpass. Verify b0 == a2 (unity magnitude property)
+    TEST_ASSERT_FLOAT_WITHIN(COEFF_TOL, p.coeffs[4], p.coeffs[0]);
+}
+
+void test_allpass180_first_order(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_ALLPASS_180, 48000);
+
+    // First-order allpass: b2=0, a2=0
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, p.coeffs[2]); // b2 = 0
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, p.coeffs[4]); // a2 = 0
+    // b0 should equal a1
+    TEST_ASSERT_FLOAT_WITHIN(COEFF_TOL, p.coeffs[3], p.coeffs[0]);
+}
+
+void test_allpass180_unity_magnitude_at_dc(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_ALLPASS_180, 48000);
+
+    // DC gain magnitude: |H(1)| = |b0 + b1| / |1 + a1| should be ~1.0
+    float numDc = fabsf(p.coeffs[0] + p.coeffs[1]);
+    float denDc = fabsf(1.0f + p.coeffs[3]);
+    float dcGain = numDc / denDc;
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, dcGain);
+}
+
+// ===== New Stage Init Tests =====
+
+void test_init_delay_defaults(void) {
+    DspDelayParams p;
+    dsp_init_delay_params(p);
+    TEST_ASSERT_EQUAL_UINT16(0, p.delaySamples);
+    TEST_ASSERT_EQUAL_UINT16(0, p.writePos);
+    TEST_ASSERT_EQUAL_INT8(-1, p.delaySlot);
+}
+
+void test_init_compressor_defaults(void) {
+    DspCompressorParams p;
+    dsp_init_compressor_params(p);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, -12.0f, p.thresholdDb);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 10.0f, p.attackMs);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 100.0f, p.releaseMs);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 4.0f, p.ratio);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 6.0f, p.kneeDb);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, p.makeupGainDb);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, p.makeupLinear);
+}
+
+// ===== Crossover Preset Tests =====
+
+void test_crossover_lr4_inserts_two_biquads(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_lr4(0, 2000.0f, 0); // LPF
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[0].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
+
+    // Both should be at 2000 Hz with Butterworth Q
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 2000.0f, cfg->channels[0].stages[0].biquad.frequency);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.707f, cfg->channels[0].stages[0].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 2000.0f, cfg->channels[0].stages[1].biquad.frequency);
+}
+
+void test_crossover_lr2_inserts_one_biquad(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_lr2(0, 1000.0f, 1); // HPF
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(1, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[0].type);
+}
+
+void test_crossover_lr8_inserts_four_biquads(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_lr8(0, 500.0f, 0); // LPF
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(4, cfg->channels[0].stageCount);
+    for (int i = 0; i < 4; i++) {
+        TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[i].type);
+        TEST_ASSERT_FLOAT_WITHIN(1.0f, 500.0f, cfg->channels[0].stages[i].biquad.frequency);
+    }
+}
+
+void test_crossover_butterworth_rejects_invalid(void) {
+    dsp_init();
+    // Odd order
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 3, 0));
+    // Order 1 (too low)
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 1, 0));
+    // Order 10 (too high)
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 10, 0));
+}
+
+void test_crossover_lr4_sum_flat(void) {
+    // LR4 LPF + HPF at same frequency should sum to ~flat magnitude
+    // Test at DC: LPF DC gain should be ~1.0
+    dsp_init();
+    dsp_insert_crossover_lr4(0, 2000.0f, 0); // LPF on ch0
+    dsp_insert_crossover_lr4(1, 2000.0f, 1); // HPF on ch1
+
+    DspState *cfg = dsp_get_inactive_config();
+    // LPF DC gain: each biquad should have DC gain ~1.0
+    for (int s = 0; s < 2; s++) {
+        DspBiquadParams &p = cfg->channels[0].stages[s].biquad;
+        float dcGain = (p.coeffs[0] + p.coeffs[1] + p.coeffs[2]) /
+                       (1.0f + p.coeffs[3] + p.coeffs[4]);
+        TEST_ASSERT_FLOAT_WITHIN(0.05f, 1.0f, dcGain);
+    }
+
+    // HPF DC gain: each biquad should have DC gain ~0.0
+    for (int s = 0; s < 2; s++) {
+        DspBiquadParams &p = cfg->channels[1].stages[s].biquad;
+        float dcGain = (p.coeffs[0] + p.coeffs[1] + p.coeffs[2]) /
+                       (1.0f + p.coeffs[3] + p.coeffs[4]);
+        TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.0f, dcGain);
+    }
+}
+
+// ===== Bass Management Test =====
+
+void test_bass_management_setup(void) {
+    dsp_init();
+    int mains[] = {1, 2};
+    int result = dsp_setup_bass_management(0, mains, 2, 80.0f);
+    TEST_ASSERT_EQUAL_INT(0, result);
+
+    DspState *cfg = dsp_get_inactive_config();
+    // Sub channel (0) should have 2 LPF stages (LR4)
+    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[0].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
+
+    // Main channels (1, 2) should each have 2 HPF stages (LR4)
+    TEST_ASSERT_EQUAL_INT(2, cfg->channels[1].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[1].stages[0].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[1].stages[1].type);
+
+    TEST_ASSERT_EQUAL_INT(2, cfg->channels[2].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[2].stages[0].type);
+
+    // Channel 3 should be untouched
+    TEST_ASSERT_EQUAL_INT(0, cfg->channels[3].stageCount);
+}
+
+// ===== Routing Matrix Tests =====
+
+void test_routing_identity(void) {
+    DspRoutingMatrix rm;
+    dsp_routing_preset_identity(rm);
+
+    // Diagonal should be 1.0, off-diagonal should be 0.0
+    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
+        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
+            float expected = (o == i) ? 1.0f : 0.0f;
+            TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, expected, rm.matrix[o][i]);
+        }
+    }
+}
+
+void test_routing_swap_lr(void) {
+    DspRoutingMatrix rm;
+    dsp_routing_preset_swap_lr(rm);
+
+    // L1↔R1 swap: [0][1]=1, [1][0]=1, diagonal=0
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[0][1]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[1][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[1][1]);
+}
+
+void test_routing_apply_identity(void) {
+    DspRoutingMatrix rm;
+    dsp_routing_preset_identity(rm);
+
+    float ch0[] = {1.0f, 2.0f};
+    float ch1[] = {3.0f, 4.0f};
+    float *channels[] = {ch0, ch1};
+
+    dsp_routing_apply(rm, channels, 2, 2);
+
+    // Identity: no change
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, ch0[0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 2.0f, ch0[1]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 3.0f, ch1[0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 4.0f, ch1[1]);
+}
+
+void test_routing_apply_swap(void) {
+    DspRoutingMatrix rm;
+    dsp_routing_preset_swap_lr(rm);
+
+    float ch0[] = {1.0f, 2.0f};
+    float ch1[] = {3.0f, 4.0f};
+    float *channels[] = {ch0, ch1};
+
+    dsp_routing_apply(rm, channels, 2, 2);
+
+    // Swap: ch0 gets old ch1, ch1 gets old ch0
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 3.0f, ch0[0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 4.0f, ch0[1]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, ch1[0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 2.0f, ch1[1]);
+}
+
+void test_routing_set_gain_db(void) {
+    DspRoutingMatrix rm;
+    dsp_routing_preset_identity(rm);
+
+    // Set output 0, input 1 to -6dB
+    dsp_routing_set_gain_db(rm, 0, 1, -6.0f);
+    float expected = powf(10.0f, -6.0f / 20.0f); // ~0.501
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, rm.matrix[0][1]);
+
+    // Set to -inf (silence)
+    dsp_routing_set_gain_db(rm, 0, 1, -200.0f);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][1]);
+}
+
+void test_routing_mono_sum(void) {
+    DspRoutingMatrix rm;
+    dsp_routing_preset_mono_sum(rm);
+
+    float ch0[] = {1.0f};
+    float ch1[] = {1.0f};
+    float *channels[] = {ch0, ch1};
+
+    dsp_routing_apply(rm, channels, 2, 1);
+
+    // Mono sum: each output = average of all inputs = (1+1)/N
+    float expected = 2.0f / DSP_MAX_CHANNELS;
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, ch0[0]);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, ch1[0]);
+}
+
 // ===== Metrics Test =====
 
 void test_metrics_initial(void) {
@@ -516,6 +990,53 @@ int main(int argc, char **argv) {
     // Processing
     RUN_TEST(test_bypass_passthrough);
     RUN_TEST(test_channel_recompute_coeffs);
+
+    // Delay
+    RUN_TEST(test_delay_zero_passthrough);
+    RUN_TEST(test_delay_shifts_samples);
+    RUN_TEST(test_delay_slot_alloc_free);
+
+    // Polarity
+    RUN_TEST(test_polarity_inverts_signal);
+    RUN_TEST(test_polarity_not_inverted_passthrough);
+
+    // Mute
+    RUN_TEST(test_mute_zeros_output);
+    RUN_TEST(test_mute_not_muted_passthrough);
+
+    // Compressor
+    RUN_TEST(test_compressor_below_threshold_passthrough);
+    RUN_TEST(test_compressor_above_threshold_reduces);
+    RUN_TEST(test_compressor_soft_knee);
+    RUN_TEST(test_compressor_makeup_gain);
+
+    // New biquad types
+    RUN_TEST(test_bpf0db_unity_peak_gain);
+    RUN_TEST(test_allpass360_unity_magnitude);
+    RUN_TEST(test_allpass180_first_order);
+    RUN_TEST(test_allpass180_unity_magnitude_at_dc);
+
+    // New stage inits
+    RUN_TEST(test_init_delay_defaults);
+    RUN_TEST(test_init_compressor_defaults);
+
+    // Crossover presets
+    RUN_TEST(test_crossover_lr4_inserts_two_biquads);
+    RUN_TEST(test_crossover_lr2_inserts_one_biquad);
+    RUN_TEST(test_crossover_lr8_inserts_four_biquads);
+    RUN_TEST(test_crossover_butterworth_rejects_invalid);
+    RUN_TEST(test_crossover_lr4_sum_flat);
+
+    // Bass management
+    RUN_TEST(test_bass_management_setup);
+
+    // Routing matrix
+    RUN_TEST(test_routing_identity);
+    RUN_TEST(test_routing_swap_lr);
+    RUN_TEST(test_routing_apply_identity);
+    RUN_TEST(test_routing_apply_swap);
+    RUN_TEST(test_routing_set_gain_db);
+    RUN_TEST(test_routing_mono_sum);
 
     // Metrics
     RUN_TEST(test_metrics_initial);

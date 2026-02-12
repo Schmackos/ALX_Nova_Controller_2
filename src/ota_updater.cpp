@@ -1012,6 +1012,10 @@ void startOTADownloadTask() {
 
 // OTA check task — runs checkForFirmwareUpdate() on a separate core
 static void otaCheckTaskFunc(void* param) {
+  // TLS handshake (ECDSA verification) can take 5-10s without yielding —
+  // unsubscribe from watchdog to prevent IDLE0 starvation panic on Core 0
+  esp_task_wdt_delete(NULL);
+
   checkForFirmwareUpdate();
 
   // Also refresh WiFi status after check (needs dirty flag, not direct WS call)

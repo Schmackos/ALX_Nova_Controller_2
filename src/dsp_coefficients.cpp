@@ -1,7 +1,7 @@
 #ifdef DSP_ENABLED
 
 #include "dsp_coefficients.h"
-#include "dsps_biquad_gen.h"
+#include "dsp_biquad_gen.h"
 #include <math.h>
 
 static float clamp_freq(float freq, uint32_t sampleRate) {
@@ -18,28 +18,35 @@ void dsp_compute_biquad_coeffs(DspBiquadParams &params, DspStageType type, uint3
 
     switch (type) {
         case DSP_BIQUAD_LPF:
-            dsps_biquad_gen_lpf_f32(params.coeffs, freq, Q);
+            dsp_gen_lpf_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_HPF:
-            dsps_biquad_gen_hpf_f32(params.coeffs, freq, Q);
+            dsp_gen_hpf_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_BPF:
-            dsps_biquad_gen_bpf_f32(params.coeffs, freq, Q);
+            dsp_gen_bpf_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_NOTCH:
-            dsps_biquad_gen_notch_f32(params.coeffs, freq, Q);
+            dsp_gen_notch_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_PEQ:
-            dsps_biquad_gen_peakingEQ_f32(params.coeffs, freq, params.gain, Q);
+            dsp_gen_peakingEQ_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_LOW_SHELF:
-            dsps_biquad_gen_lowShelf_f32(params.coeffs, freq, params.gain, Q);
+            dsp_gen_lowShelf_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_HIGH_SHELF:
-            dsps_biquad_gen_highShelf_f32(params.coeffs, freq, params.gain, Q);
+            dsp_gen_highShelf_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_ALLPASS:
-            dsps_biquad_gen_allpass_f32(params.coeffs, freq, Q);
+        case DSP_BIQUAD_ALLPASS_360:
+            dsp_gen_allpass360_f32(params.coeffs, freq, Q);
+            break;
+        case DSP_BIQUAD_ALLPASS_180:
+            dsp_gen_allpass180_f32(params.coeffs, freq, Q);
+            break;
+        case DSP_BIQUAD_BPF_0DB:
+            dsp_gen_bpf0db_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_CUSTOM:
             // Custom coefficients already loaded — don't overwrite
@@ -70,12 +77,18 @@ void dsp_recompute_channel_coeffs(DspChannelConfig &ch, uint32_t sampleRate) {
             dsp_compute_biquad_coeffs(s.biquad, s.type, sampleRate);
         } else if (s.type == DSP_GAIN) {
             dsp_compute_gain_linear(s.gain);
+        } else if (s.type == DSP_COMPRESSOR) {
+            dsp_compute_compressor_makeup(s.compressor);
         }
     }
 }
 
 void dsp_compute_gain_linear(DspGainParams &params) {
     params.gainLinear = powf(10.0f, params.gainDb / 20.0f);
+}
+
+void dsp_compute_compressor_makeup(DspCompressorParams &params) {
+    params.makeupLinear = powf(10.0f, params.makeupGainDb / 20.0f);
 }
 
 #endif // DSP_ENABLED
