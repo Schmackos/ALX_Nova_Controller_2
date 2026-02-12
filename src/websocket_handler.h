@@ -29,6 +29,10 @@ void sendBuzzerState();
 void sendSignalGenState();
 void sendAudioGraphState();
 void sendDebugState();
+#ifdef DSP_ENABLED
+void sendDspState();
+void sendDspMetrics();
+#endif
 
 // ===== Audio Streaming =====
 void sendAudioData();

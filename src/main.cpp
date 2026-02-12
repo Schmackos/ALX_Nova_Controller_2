@@ -12,6 +12,10 @@
 #include "signal_generator.h"
 #include "task_monitor.h"
 #include "i2s_audio.h"
+#ifdef DSP_ENABLED
+#include "dsp_api.h"
+#include "dsp_pipeline.h"
+#endif
 #include "smart_sensing.h"
 #include "utils.h"
 #include "web_pages.h"
@@ -595,6 +599,12 @@ void setup() {
 
   // Note: Certificate API routes removed - now using Mozilla certificate bundle
 
+#ifdef DSP_ENABLED
+  // Register DSP API endpoints and load persisted config
+  registerDspApiEndpoints();
+  loadDspSettings();
+#endif
+
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
 
@@ -841,6 +851,24 @@ void loop() {
     publishMqttSignalGenState();
     appState.clearSignalGenDirty();
   }
+
+#ifdef DSP_ENABLED
+  // Broadcast DSP config changes (API -> WS clients)
+  if (appState.isDspConfigDirty()) {
+    sendDspState();
+    appState.clearDspConfigDirty();
+  }
+
+  // DSP metrics broadcast (1s interval when DSP is active)
+  static unsigned long lastDspMetricsBroadcast = 0;
+  if (appState.dspEnabled && millis() - lastDspMetricsBroadcast >= 1000) {
+    lastDspMetricsBroadcast = millis();
+    sendDspMetrics();
+  }
+
+  // Check for debounced DSP settings save
+  dsp_check_debounced_save();
+#endif
 
   // Broadcast blinking state changes (GUI -> WS clients)
   if (appState.isBlinkingDirty()) {

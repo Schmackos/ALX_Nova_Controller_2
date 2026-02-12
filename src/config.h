@@ -10,7 +10,7 @@
 // deviceSerialNumber in app_state.h)
 
 // ===== Firmware Version =====
-#define FIRMWARE_VERSION "1.6.6"
+#define FIRMWARE_VERSION "1.7.0"
 
 // ===== GitHub Repository Configuration =====
 #define GITHUB_REPO_OWNER "Schmackos"
@@ -64,6 +64,16 @@ const int SIGGEN_PWM_PIN = 38;   // GPIO 38 — no strapping constraints
 #define SIGGEN_PWM_CHANNEL 4     // LEDC channel 4 (Timer 2)
 #define SIGGEN_PWM_TIMER 2       // Separate from buzzer Timer 1 & backlight Timer 0
 #define SIGGEN_PWM_RESOLUTION 10 // 10-bit (0-1023), max ~78kHz carrier
+
+// ===== DSP Pipeline Configuration =====
+#ifdef DSP_ENABLED
+#define DSP_MAX_STAGES       20    // Max filter stages per channel
+#define DSP_MAX_FIR_TAPS     256   // Max FIR taps (direct convolution)
+#define DSP_MAX_FIR_SLOTS    2     // Max concurrent FIR stages (pool-allocated, not inline)
+#define DSP_MAX_CHANNELS     4     // L1, R1, L2, R2
+#define DSP_DEFAULT_Q        0.707f
+#define DSP_CPU_WARN_PERCENT 80.0f
+#endif
 
 // ===== Server Ports =====
 const int WEB_SERVER_PORT = 80;
@@ -137,7 +147,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_STACK_SIZE_WEB 8192
 #define TASK_STACK_SIZE_MQTT 4096
 #define TASK_STACK_SIZE_OTA 16384
-#define TASK_STACK_SIZE_AUDIO 10240
+#define TASK_STACK_SIZE_AUDIO 12288
 
 #define TASK_PRIORITY_SENSING 2 // High priority
 #define TASK_PRIORITY_WEB 1     // Medium priority

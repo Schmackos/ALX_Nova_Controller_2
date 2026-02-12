@@ -312,6 +312,24 @@ public:
   int prevMqttSigGenOutputMode = 0;
   float prevMqttSigGenSweepSpeed = 1000.0f;
 
+  // ===== DSP Pipeline State =====
+#ifdef DSP_ENABLED
+  bool dspEnabled = false;     // Master DSP enable
+  bool dspBypass = false;      // Master bypass (pass-through)
+
+  void markDspConfigDirty() { _dspConfigDirty = true; }
+  bool isDspConfigDirty() const { return _dspConfigDirty; }
+  void clearDspConfigDirty() { _dspConfigDirty = false; }
+
+  void markDspMetricsDirty() { _dspMetricsDirty = true; }
+  bool isDspMetricsDirty() const { return _dspMetricsDirty; }
+  void clearDspMetricsDirty() { _dspMetricsDirty = false; }
+
+  // MQTT state tracking for DSP
+  bool prevMqttDspEnabled = false;
+  bool prevMqttDspBypass = false;
+#endif
+
   // MQTT state tracking for boot animation
 #ifdef GUI_ENABLED
   bool prevMqttBootAnimEnabled = true;
@@ -363,6 +381,10 @@ private:
   bool _settingsDirty = false;
   bool _sigGenDirty = false;
   bool _otaDirty = false;
+#ifdef DSP_ENABLED
+  bool _dspConfigDirty = false;
+  bool _dspMetricsDirty = false;
+#endif
 };
 
 // Convenience macro for accessing AppState

@@ -1,0 +1,11 @@
+{
+    "name": "esp_dsp_lite",
+    "version": "1.0.0",
+    "description": "Lightweight ANSI C biquad and FIR DSP functions extracted from ESP-DSP",
+    "license": "Apache-2.0",
+    "platforms": "*",
+    "build": {
+        "srcFilter": ["+<*>"],
+        "includeDir": "include"
+    }
+}

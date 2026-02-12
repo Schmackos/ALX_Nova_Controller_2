@@ -12,6 +12,9 @@
 #include "i2s_audio.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
+#ifdef DSP_ENABLED
+#include "dsp_pipeline.h"
+#endif
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -105,6 +108,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendSignalGenState();
             sendAudioGraphState();
             sendDebugState();
+#ifdef DSP_ENABLED
+            sendDspState();
+#endif
 
             // If device just updated, notify the client
             if (justUpdated) {
@@ -339,6 +345,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           sendDebugState();
           LOG_I("[WebSocket] Debug task monitor %s", appState.debugTaskMonitor ? "enabled" : "disabled");
         }
+#ifdef DSP_ENABLED
+        else if (msgType == "setDspBypass") {
+          if (doc["enabled"].is<bool>()) appState.dspEnabled = doc["enabled"].as<bool>();
+          if (doc["bypass"].is<bool>()) appState.dspBypass = doc["bypass"].as<bool>();
+          appState.markDspConfigDirty();
+          LOG_I("[WebSocket] DSP enabled=%d bypass=%d", appState.dspEnabled, appState.dspBypass);
+        }
+#endif
       }
       break;
       
@@ -454,6 +468,39 @@ void sendDebugState() {
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
+
+#ifdef DSP_ENABLED
+void sendDspState() {
+  JsonDocument doc;
+  doc["type"] = "dspState";
+  doc["dspEnabled"] = appState.dspEnabled;
+  doc["dspBypass"] = appState.dspBypass;
+  DspState *cfg = dsp_get_active_config();
+  doc["globalBypass"] = cfg->globalBypass;
+  JsonArray channels = doc["channels"].to<JsonArray>();
+  for (int c = 0; c < DSP_MAX_CHANNELS; c++) {
+    JsonObject ch = channels.add<JsonObject>();
+    ch["bypass"] = cfg->channels[c].bypass;
+    ch["stageCount"] = cfg->channels[c].stageCount;
+  }
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+void sendDspMetrics() {
+  DspMetrics m = dsp_get_metrics();
+  JsonDocument doc;
+  doc["type"] = "dspMetrics";
+  doc["processTimeUs"] = m.processTimeUs;
+  doc["cpuLoad"] = m.cpuLoadPercent;
+  JsonArray gr = doc["limiterGr"].to<JsonArray>();
+  for (int i = 0; i < DSP_MAX_CHANNELS; i++) gr.add(m.limiterGrDb[i]);
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+#endif
 
 void sendMqttSettingsState() {
   JsonDocument doc;

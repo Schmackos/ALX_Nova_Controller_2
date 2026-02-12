@@ -3,6 +3,9 @@
 #include "config.h"
 #include "debug_serial.h"
 #include "signal_generator.h"
+#ifdef DSP_ENABLED
+#include "dsp_pipeline.h"
+#endif
 #include <arduinoFFT.h>
 #include <cmath>
 #include <cstring>
@@ -412,6 +415,13 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
         buffer[f * 2 + 1] = (int32_t)outR;
     }
 
+    // DSP pipeline processing (after DC filter, before analysis)
+#ifdef DSP_ENABLED
+    if (AppState::getInstance().dspEnabled && !AppState::getInstance().dspBypass) {
+        dsp_process_buffer(buffer, stereo_frames, a);
+    }
+#endif
+
     // Compute RMS
     float rmsL = audio_compute_rms(buffer, stereo_frames, 0, 2);
     float rmsR = audio_compute_rms(buffer, stereo_frames, 1, 2);
@@ -749,6 +759,10 @@ void i2s_audio_init() {
         i2s_dump_registers();
     }
     _numAdcsDetected = 1; // Will be updated once data flows
+
+#ifdef DSP_ENABLED
+    dsp_init();
+#endif
 
     xTaskCreatePinnedToCore(
         audio_capture_task,

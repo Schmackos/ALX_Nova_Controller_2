@@ -1,5 +1,78 @@
 # Release Notes
 
+## Version 1.7.0
+
+## New Features
+- [2026-02-12] feat: Audio DSP pipeline — 4-channel biquad/FIR/limiter/gain processing engine
+
+Phase 1 implementation of configurable audio DSP pipeline for active crossover
+and speaker management. Processes dual PCM1808 I2S ADC inputs into 4 mono
+channels with up to 20 stages each.
+
+Core engine:
+- Double-buffered DspState with glitch-free config swap (delay line carry-over)
+- Biquad filters: LPF, HPF, BPF, Notch, PEQ, Low/High Shelf, Allpass, Custom
+- FIR convolution with pool-allocated taps/delay (avoids 331KB DRAM overflow)
+- Peak limiter with envelope follower and gain reduction metering
+- Gain stage with dB-to-linear precomputation
+- CPU load monitoring and per-channel limiter GR metrics
+
+Import/Export:
+- Equalizer APO text format (REW compatible)
+- miniDSP biquad coefficients (sign-negated a1/a2 convention)
+- FIR text (one tap per line) and WAV impulse response (16/32-bit PCM, IEEE float)
+
+Integration:
+- REST API: 18 endpoints for config CRUD, import/export, metrics
+- WebSocket: real-time state sync and metrics broadcast
+- LittleFS persistence with 5s debounced save
+- esp_dsp_lite library: ANSI C biquad/FIR from Espressif ESP-DSP (Apache 2.0)
+
+Tests: 50 new native tests (28 DSP core + 22 REW parser), 511 total passing
+Build: RAM 50.1%, Flash 66.4% (`65c8ce8`)
+- [2026-02-12] feat: Audio DSP pipeline — 4-channel biquad/FIR/limiter/gain processing engine
+
+Phase 1 implementation of configurable audio DSP pipeline for active crossover
+and speaker management. Processes dual PCM1808 I2S ADC inputs into 4 mono
+channels with up to 20 stages each.
+
+Core engine:
+- Double-buffered DspState with glitch-free config swap (delay line carry-over)
+- Biquad filters: LPF, HPF, BPF, Notch, PEQ, Low/High Shelf, Allpass, Custom
+- FIR convolution with pool-allocated taps/delay (avoids 331KB DRAM overflow)
+- Peak limiter with envelope follower and gain reduction metering
+- Gain stage with dB-to-linear precomputation
+- CPU load monitoring and per-channel limiter GR metrics
+
+Import/Export:
+- Equalizer APO text format (REW compatible)
+- miniDSP biquad coefficients (sign-negated a1/a2 convention)
+- FIR text (one tap per line) and WAV impulse response (16/32-bit PCM, IEEE float)
+
+Integration:
+- REST API: 18 endpoints for config CRUD, import/export, metrics
+- WebSocket: real-time state sync and metrics broadcast
+- LittleFS persistence with 5s debounced save
+- esp_dsp_lite library: ANSI C biquad/FIR from Espressif ESP-DSP (Apache 2.0)
+
+Tests: 50 new native tests (28 DSP core + 22 REW parser), 511 total passing
+Build: RAM 50.1%, Flash 66.4% (`ed65b72`)
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+- None
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.6.6
 
 ## New Features
