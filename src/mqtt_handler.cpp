@@ -201,6 +201,8 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/signalgenerator/output_mode/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/target_adc/set").c_str());
   mqttClient.subscribe((base + "/settings/adc_vref/set").c_str());
+  mqttClient.subscribe((base + "/audio/input1/enabled/set").c_str());
+  mqttClient.subscribe((base + "/audio/input2/enabled/set").c_str());
   mqttClient.subscribe((base + "/audio/vu_meter/set").c_str());
   mqttClient.subscribe((base + "/audio/waveform/set").c_str());
   mqttClient.subscribe((base + "/audio/spectrum/set").c_str());
@@ -223,6 +225,7 @@ void subscribeToMqttTopics() {
     mqttClient.subscribe((base + "/dsp/channel_" + String(ch) + "/bypass/set").c_str());
   }
   mqttClient.subscribe((base + "/dsp/peq/bypass/set").c_str());
+  mqttClient.subscribe((base + "/dsp/preset/set").c_str());
 #endif
 
   // Subscribe to HA birth message for re-discovery after HA restart
@@ -605,6 +608,21 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       publishMqttAudioDiagnostics();
     }
   }
+  // Handle per-ADC enable/disable
+  else if (topicStr == base + "/audio/input1/enabled/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.adcEnabled[0] = newState;
+    saveSettings();
+    appState.markAdcEnabledDirty();
+    LOG_I("[MQTT] ADC1 set to %s", newState ? "ON" : "OFF");
+  }
+  else if (topicStr == base + "/audio/input2/enabled/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.adcEnabled[1] = newState;
+    saveSettings();
+    appState.markAdcEnabledDirty();
+    LOG_I("[MQTT] ADC2 set to %s", newState ? "ON" : "OFF");
+  }
   // Handle VU meter toggle
   else if (topicStr == base + "/audio/vu_meter/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
@@ -819,6 +837,19 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     saveDspSettingsDebounced();
     appState.markDspConfigDirty();
     LOG_I("[MQTT] PEQ bypass set to %s", bypass ? "ON" : "OFF");
+  }
+  // DSP config preset select
+  else if (topicStr == base + "/dsp/preset/set") {
+    int slot = message.toInt();
+    if (message == "Custom" || message == "-1") {
+      // No action — "Custom" means user manually modified config
+    } else if (slot >= 0 && slot < 4) {
+      extern bool dsp_preset_load(int);
+      if (dsp_preset_load(slot)) {
+        appState.markDspConfigDirty();
+        LOG_I("[MQTT] DSP preset %d loaded", slot);
+      }
+    }
   }
 #endif
   // Handle reboot command
@@ -1074,6 +1105,10 @@ void mqttLoop() {
       appState.prevMqttSpectrumEnabled = appState.spectrumEnabled;
       appState.prevMqttFftWindowType = appState.fftWindowType;
     }
+    if (appState.isAdcEnabledDirty()) {
+      publishMqttAdcEnabledState();
+      appState.clearAdcEnabledDirty();
+    }
     if (debugChanged) {
       publishMqttDebugState();
       appState.prevMqttDebugMode = appState.debugMode;
@@ -1092,10 +1127,12 @@ void mqttLoop() {
 #endif
 #ifdef DSP_ENABLED
     if ((appState.dspEnabled != appState.prevMqttDspEnabled) ||
-        (appState.dspBypass != appState.prevMqttDspBypass)) {
+        (appState.dspBypass != appState.prevMqttDspBypass) ||
+        (appState.dspPresetIndex != appState.prevMqttDspPresetIndex)) {
       publishMqttDspState();
       appState.prevMqttDspEnabled = appState.dspEnabled;
       appState.prevMqttDspBypass = appState.dspBypass;
+      appState.prevMqttDspPresetIndex = appState.dspPresetIndex;
     }
 #endif
   }
@@ -1563,6 +1600,18 @@ void publishMqttAudioGraphState() {
                      fftWindowName(appState.fftWindowType), true);
 }
 
+// Publish per-ADC enabled state
+void publishMqttAdcEnabledState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+  mqttClient.publish((base + "/audio/input1/enabled").c_str(),
+                     appState.adcEnabled[0] ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/audio/input2/enabled").c_str(),
+                     appState.adcEnabled[1] ? "ON" : "OFF", true);
+}
+
 // Publish debug mode state
 void publishMqttDebugState() {
   if (!mqttClient.connected())
@@ -1594,6 +1643,14 @@ void publishMqttDspState() {
                      appState.dspEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/dsp/bypass").c_str(),
                      appState.dspBypass ? "ON" : "OFF", true);
+
+  // Preset state
+  if (appState.dspPresetIndex >= 0 && appState.dspPresetIndex < 4) {
+    mqttClient.publish((base + "/dsp/preset").c_str(),
+                       appState.dspPresetNames[appState.dspPresetIndex], true);
+  } else {
+    mqttClient.publish((base + "/dsp/preset").c_str(), "Custom", true);
+  }
 
   // Per-channel bypass and stage count
   DspState *cfg = dsp_get_active_config();
@@ -1707,6 +1764,7 @@ void publishMqttState() {
   publishMqttSignalGenState();
   publishMqttAudioDiagnostics();
   publishMqttAudioGraphState();
+  publishMqttAdcEnabledState();
   publishMqttDebugState();
   publishMqttCrashDiagnostics();
   publishMqttInputNames();
@@ -2758,6 +2816,29 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+  // ===== Per-ADC Enable Switches =====
+  {
+    const char *adcNames[] = {"ADC Input 1", "ADC Input 2"};
+    const char *adcIds[] = {"input1_enabled", "input2_enabled"};
+    const char *adcTopics[] = {"/audio/input1/enabled", "/audio/input2/enabled"};
+    for (int a = 0; a < 2; a++) {
+      JsonDocument doc;
+      doc["name"] = adcNames[a];
+      doc["unique_id"] = deviceId + "_" + adcIds[a];
+      doc["state_topic"] = base + adcTopics[a];
+      doc["command_topic"] = base + String(adcTopics[a]) + "/set";
+      doc["payload_on"] = "ON";
+      doc["payload_off"] = "OFF";
+      doc["entity_category"] = "config";
+      doc["icon"] = "mdi:audio-input-stereo-minijack";
+      addHADeviceInfo(doc);
+      String payload;
+      serializeJson(doc, payload);
+      String topic = "homeassistant/switch/" + deviceId + "/" + adcIds[a] + "/config";
+      mqttClient.publish(topic.c_str(), payload.c_str(), true);
+    }
+  }
+
   // ===== VU Meter Switch =====
   {
     JsonDocument doc;
@@ -3151,6 +3232,26 @@ void publishHADiscovery() {
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/dsp_cpu_load/config").c_str(), payload.c_str(), true);
   }
 
+  // ===== DSP Preset Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "DSP Preset";
+    doc["unique_id"] = deviceId + "_dsp_preset";
+    doc["state_topic"] = base + "/dsp/preset";
+    doc["command_topic"] = base + "/dsp/preset/set";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:playlist-music";
+    JsonArray opts = doc["options"].to<JsonArray>();
+    opts.add("Custom");
+    for (int i = 0; i < 4; i++) {
+      if (appState.dspPresetNames[i][0]) opts.add(appState.dspPresetNames[i]);
+    }
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/select/" + deviceId + "/dsp_preset/config").c_str(), payload.c_str(), true);
+  }
+
   // ===== Per-Channel DSP Entities =====
   {
     const char *chNames[] = {"L1", "R1", "L2", "R2"};
@@ -3330,6 +3431,8 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/noise_floor/config",
       "homeassistant/sensor/%s/input_vrms/config",
       "homeassistant/number/%s/adc_vref/config",
+      "homeassistant/switch/%s/input1_enabled/config",
+      "homeassistant/switch/%s/input2_enabled/config",
       "homeassistant/switch/%s/vu_meter/config",
       "homeassistant/switch/%s/waveform/config",
       "homeassistant/switch/%s/spectrum/config",

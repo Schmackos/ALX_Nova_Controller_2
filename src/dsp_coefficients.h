@@ -21,5 +21,9 @@ void dsp_compute_gain_linear(DspGainParams &params);
 // Precompute compressor makeup gain from dB.
 void dsp_compute_compressor_makeup(DspCompressorParams &params);
 
+// Design windowed-sinc anti-aliasing LPF for decimation.
+// Writes numTaps floats to taps[]. Cutoff = sampleRate / (2 * decimFactor).
+void dsp_compute_decimation_filter(float *taps, int numTaps, int decimFactor, float sampleRate);
+
 #endif // DSP_ENABLED
 #endif // DSP_COEFFICIENTS_H

@@ -842,7 +842,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         /* ===== Notification Toast ===== */
         .toast {
             position: fixed;
-            bottom: calc(20px + var(--safe-bottom));
+            bottom: calc(20px + var(--tab-height) + var(--safe-bottom));
             left: 16px;
             right: 16px;
             max-width: 400px;
@@ -1647,12 +1647,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .status-bar {
                 gap: 24px;
             }
+
+            .dsp-freq-canvas {
+                height: 220px;
+            }
         }
 
         /* Desktop (1024px+) - Enable sidebar */
         @media (min-width: 1024px) {
             .tab-bar {
                 display: none;
+            }
+
+            .toast {
+                bottom: calc(20px + var(--safe-bottom));
             }
 
             .sidebar {
@@ -2423,13 +2431,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             transition: width 0.3s;
         }
         .dsp-freq-canvas {
+            display: block;
             width: 100%;
             height: 160px;
             border-radius: 8px;
             background: var(--bg-card);
         }
         @media (max-width: 767px) {
-            .dsp-freq-canvas { height: 120px; }
+            .dsp-freq-canvas { height: 150px; }
         }
         /* ===== PEQ Band Styles ===== */
         .peq-band-strip {
@@ -2919,6 +2928,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <div class="card">
                 <div class="card-title">Audio Settings</div>
                 <div class="form-group">
+                    <label class="form-label">ADC Input 1</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="adcEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ADC Input 2</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="adcEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div class="form-group">
                     <label class="form-label">Update Rate</label>
                     <select class="form-input" id="audioUpdateRateSelect" onchange="setAudioUpdateRate()">
                         <option value="100">100 ms</option>
@@ -2936,6 +2955,28 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </select>
                 </div>
                 <button class="btn btn-primary" onclick="updateAudioSettings()">Update Sample Rate</button>
+            </div>
+
+            <!-- USB Audio Input -->
+            <div class="card" id="usbAudioCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    USB Audio Input
+                    <span id="usbAudioBadge" class="badge" style="font-size:10px;padding:2px 6px;background:#9E9E9E;color:#fff">Disabled</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Enable</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="usbAudioEnable" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div id="usbAudioFields" style="display:none">
+                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="usbAudioStatus">Disconnected</span></div>
+                <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="usbAudioFormat">—</span></div>
+                <div class="info-row"><span class="info-label">Host Volume</span><span class="info-value" id="usbAudioVolume">—</span></div>
+                <div id="usbAudioDetails" style="display:none">
+                    <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
+                    <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
+                </div>
+                </div>
             </div>
 
             <!-- DAC Output -->
@@ -3147,6 +3188,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <!-- DSP Presets -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Presets
+                    <button class="btn btn-secondary" onclick="dspSavePresetDialog()" style="padding:2px 8px;font-size:11px;">Save</button>
+                </div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;" id="dspPresetBar"></div>
+                <span id="dspPresetModified" style="font-size:10px;color:var(--accent);display:none;margin-top:4px;">Modified</span>
+            </div>
+
             <!-- Channel Selector -->
             <div class="card">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3177,7 +3228,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <button class="btn btn-secondary peq-graph-tog active" id="togChain" onclick="peqToggleGraphLayer('chain')" style="padding:2px 6px;font-size:10px;">Chain</button>
                     </div>
                 </div>
-                <canvas class="dsp-freq-canvas" id="dspFreqCanvas" style="height:220px;cursor:crosshair;"></canvas>
+                <canvas class="dsp-freq-canvas" id="dspFreqCanvas" style="cursor:crosshair;"></canvas>
             </div>
 
             <!-- PEQ Bands -->
@@ -3185,8 +3236,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
                     EQ Bands
                     <div style="display:flex;gap:4px;">
-                        <button class="btn btn-secondary" onclick="peqEnableAll(true)" style="padding:2px 8px;font-size:11px;">Enable All</button>
-                        <button class="btn btn-secondary" onclick="peqEnableAll(false)" style="padding:2px 8px;font-size:11px;">Disable All</button>
+                        <button id="peqToggleAllBtn" class="btn btn-secondary" onclick="peqToggleAll()" style="padding:2px 8px;font-size:11px;">Enable All</button>
                         <select id="peqCopyTo" class="select-sm" style="font-size:11px;" onchange="peqCopyChannel(this.value);this.value=''">
                             <option value="">Copy to...</option>
                             <option value="0">L1</option>
@@ -3264,6 +3314,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                 <option value="bw6">BW6 — 6th order (36 dB/oct)</option>
                                 <option value="bw7">BW7 — 7th order (42 dB/oct)</option>
                                 <option value="bw8">BW8 — 8th order (48 dB/oct)</option>
+                                <option value="bw9">BW9 — 9th order (54 dB/oct)</option>
+                                <option value="bw10">BW10 — 10th order (60 dB/oct)</option>
+                                <option value="bw11">BW11 — 11th order (66 dB/oct)</option>
+                                <option value="bw12">BW12 — 12th order (72 dB/oct)</option>
                             </optgroup>
                             <optgroup label="Linkwitz-Riley">
                                 <option value="lr2">LR2 — 2nd order (12 dB/oct)</option>
@@ -4227,6 +4281,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                     <div class="divider"></div>
                     <div class="info-row">
+                        <span class="info-label">I2S TX Active</span>
+                        <span class="info-value" id="dacI2sTxEnabled">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Volume Gain</span>
+                        <span class="info-value" id="dacVolumeGain">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Writes</span>
+                        <span class="info-value" id="dacTxWrites">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Data</span>
+                        <span class="info-value" id="dacTxData">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Peak Sample</span>
+                        <span class="info-value" id="dacTxPeak">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Zero Frames</span>
+                        <span class="info-value" id="dacTxZeroFrames">0</span>
+                    </div>
+                    <div class="info-row">
                         <span class="info-label">TX Underruns</span>
                         <span class="info-value" id="dacTxUnderruns">0</span>
                     </div>
@@ -5021,6 +5099,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     applyDebugState(data);
                 } else if (data.type === 'signalGenerator') {
                     applySigGenState(data);
+                } else if (data.type === 'adcState') {
+                    if (Array.isArray(data.enabled)) {
+                        for (var ai = 0; ai < data.enabled.length; ai++) {
+                            var cb = document.getElementById('adcEnable' + ai);
+                            if (cb) cb.checked = !!data.enabled[ai];
+                        }
+                    }
+                } else if (data.type === 'usbAudioState') {
+                    handleUsbAudioState(data);
                 } else if (data.type === 'dacState') {
                     handleDacState(data);
                     if (data.eeprom) handleEepromDiag(data.eeprom);
@@ -6017,6 +6104,68 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else showToast('Failed to update sample rate', 'error');
             })
             .catch(err => showToast('Failed to update sample rate', 'error'));
+        }
+
+        // ===== Per-ADC Input Enable/Disable =====
+        function setAdcEnabled(adc, en) {
+            wsSend(JSON.stringify({type:'setAdcEnabled',adc:adc,enabled:en}));
+        }
+
+        // ===== USB Audio Input =====
+        function setUsbAudioEnabled(en) {
+            wsSend(JSON.stringify({type:'setUsbAudioEnabled',enabled:en}));
+        }
+
+        function handleUsbAudioState(d) {
+            var enableCb = document.getElementById('usbAudioEnable');
+            var fields = document.getElementById('usbAudioFields');
+            if (enableCb) enableCb.checked = !!d.enabled;
+            if (fields) fields.style.display = d.enabled ? '' : 'none';
+
+            var badge = document.getElementById('usbAudioBadge');
+            var statusEl = document.getElementById('usbAudioStatus');
+            var formatEl = document.getElementById('usbAudioFormat');
+            var volEl = document.getElementById('usbAudioVolume');
+            var details = document.getElementById('usbAudioDetails');
+            if (!d.enabled) {
+                if (badge) { badge.textContent = 'Disabled'; badge.style.background = '#9E9E9E'; }
+            } else if (d.streaming) {
+                if (badge) { badge.textContent = 'Streaming'; badge.style.background = '#4CAF50'; }
+                if (statusEl) statusEl.textContent = 'Streaming';
+                if (details) details.style.display = '';
+            } else if (d.connected) {
+                if (badge) { badge.textContent = 'Connected'; badge.style.background = '#FF9800'; }
+                if (statusEl) statusEl.textContent = 'Connected (idle)';
+                if (details) details.style.display = '';
+            } else {
+                if (badge) { badge.textContent = 'Disconnected'; badge.style.background = '#9E9E9E'; }
+                if (statusEl) statusEl.textContent = 'Disconnected';
+                if (details) details.style.display = 'none';
+            }
+            if (formatEl) {
+                if (d.connected) {
+                    formatEl.textContent = (d.sampleRate/1000) + ' kHz / ' + d.bitDepth + '-bit ' + (d.channels === 1 ? 'mono' : 'stereo');
+                } else {
+                    formatEl.textContent = '\u2014';
+                }
+            }
+            if (volEl) {
+                if (d.connected) {
+                    if (d.mute) {
+                        volEl.textContent = 'Muted';
+                    } else {
+                        var dbVal = (d.volume / 256).toFixed(1);
+                        var pct = Math.round(d.volumeLinear * 100);
+                        volEl.textContent = dbVal + ' dB (' + pct + '%)';
+                    }
+                } else {
+                    volEl.textContent = '\u2014';
+                }
+            }
+            var ovr = document.getElementById('usbAudioOverruns');
+            if (ovr) ovr.textContent = d.overruns || 0;
+            var udr = document.getElementById('usbAudioUnderruns');
+            if (udr) udr.textContent = d.underruns || 0;
         }
 
         // ===== DAC Output =====
@@ -8139,9 +8288,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             // CPU Stats
             if (data.cpu) {
-                document.getElementById('cpuTotal').textContent = Math.round(data.cpu.usageTotal || 0) + '%';
-                document.getElementById('cpuCore0').textContent = Math.round(data.cpu.usageCore0 || 0) + '%';
-                document.getElementById('cpuCore1').textContent = Math.round(data.cpu.usageCore1 || 0) + '%';
+                var cpuCalibrating = (data.cpu.usageCore0 < 0 || data.cpu.usageCore1 < 0);
+                document.getElementById('cpuTotal').textContent = cpuCalibrating ? 'Calibrating...' : Math.round(data.cpu.usageTotal || 0) + '%';
+                document.getElementById('cpuCore0').textContent = cpuCalibrating ? '...' : Math.round(data.cpu.usageCore0 || 0) + '%';
+                document.getElementById('cpuCore1').textContent = cpuCalibrating ? '...' : Math.round(data.cpu.usageCore1 || 0) + '%';
                 document.getElementById('cpuTemp').textContent = (data.cpu.temperature || 0).toFixed(1) + '°C';
                 document.getElementById('cpuFreq').textContent = (data.cpu.freqMHz || 0) + ' MHz';
                 document.getElementById('cpuModel').textContent = data.cpu.model || '--';
@@ -8257,6 +8407,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 el = document.getElementById('dacI2cControl'); if (el) el.textContent = d.i2cControl ? 'Yes' : 'No';
                 el = document.getElementById('dacIndepClock'); if (el) el.textContent = d.independentClock ? 'Yes' : 'No';
                 el = document.getElementById('dacHasFilters'); if (el) el.textContent = d.hasFilters ? 'Yes' : 'No';
+                // TX diagnostics
+                if (d.tx) {
+                    el = document.getElementById('dacI2sTxEnabled'); if (el) {
+                        el.textContent = d.tx.i2sTxEnabled ? 'Yes' : 'No';
+                        el.style.color = d.tx.i2sTxEnabled ? 'var(--success-color)' : 'var(--error-color)';
+                    }
+                    el = document.getElementById('dacVolumeGain'); if (el) el.textContent = d.tx.volumeGain !== undefined ? parseFloat(d.tx.volumeGain).toFixed(4) : '--';
+                    el = document.getElementById('dacTxWrites'); if (el) el.textContent = d.tx.writeCount || 0;
+                    el = document.getElementById('dacTxData'); if (el) {
+                        var written = d.tx.bytesWritten || 0;
+                        var expected = d.tx.bytesExpected || 0;
+                        var wKB = (written / 1024).toFixed(0);
+                        var eKB = (expected / 1024).toFixed(0);
+                        el.textContent = wKB + 'KB / ' + eKB + 'KB';
+                        el.style.color = (expected > 0 && written < expected) ? 'var(--warning-color)' : '';
+                    }
+                    el = document.getElementById('dacTxPeak'); if (el) el.textContent = d.tx.peakSample || 0;
+                    el = document.getElementById('dacTxZeroFrames'); if (el) el.textContent = d.tx.zeroFrames || 0;
+                }
                 el = document.getElementById('dacTxUnderruns'); if (el) {
                     el.textContent = d.txUnderruns || 0;
                     el.style.color = d.txUnderruns > 0 ? 'var(--warning-color)' : '';
@@ -8320,12 +8489,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             // FreeRTOS Tasks — CPU load from hardware_stats
             if (data.cpu) {
+                var tmCal = (data.cpu.usageCore0 < 0 || data.cpu.usageCore1 < 0);
                 var el0 = document.getElementById('tmCpuCore0');
-                if (el0) el0.textContent = Math.round(data.cpu.usageCore0 || 0) + '%';
+                if (el0) el0.textContent = tmCal ? '...' : Math.round(data.cpu.usageCore0 || 0) + '%';
                 var el1 = document.getElementById('tmCpuCore1');
-                if (el1) el1.textContent = Math.round(data.cpu.usageCore1 || 0) + '%';
+                if (el1) el1.textContent = tmCal ? '...' : Math.round(data.cpu.usageCore1 || 0) + '%';
                 var elt = document.getElementById('tmCpuTotal');
-                if (elt) elt.textContent = Math.round(data.cpu.usageTotal || 0) + '%';
+                if (elt) elt.textContent = tmCal ? '...' : Math.round(data.cpu.usageTotal || 0) + '%';
             }
             if (data.tasks) {
                 var tc = document.getElementById('taskCount');
@@ -8491,9 +8661,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function addHistoryDataPoint(data) {
             historyData.timestamps.push(Date.now());
-            historyData.cpuTotal.push(data.cpu ? (data.cpu.usageTotal || 0) : 0);
-            historyData.cpuCore0.push(data.cpu ? (data.cpu.usageCore0 || 0) : 0);
-            historyData.cpuCore1.push(data.cpu ? (data.cpu.usageCore1 || 0) : 0);
+            var c0 = data.cpu ? data.cpu.usageCore0 : 0;
+            var c1 = data.cpu ? data.cpu.usageCore1 : 0;
+            var ct = data.cpu ? data.cpu.usageTotal : 0;
+            historyData.cpuTotal.push(ct >= 0 ? ct : 0);
+            historyData.cpuCore0.push(c0 >= 0 ? c0 : 0);
+            historyData.cpuCore1.push(c1 >= 0 ? c1 : 0);
 
             if (data.memory && data.memory.heapTotal > 0) {
                 const memPercent = (1 - data.memory.heapFree / data.memory.heapTotal) * 100;
@@ -9030,9 +9203,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         window.addEventListener('resize', function() {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(function() {
+                canvasDims = {};
+                invalidateBgCache();
                 drawCpuGraph();
                 drawMemoryGraph();
                 drawPsramGraph();
+                dspDrawFreqResponse();
             }, 250);
         });
 
@@ -9265,7 +9441,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== DSP Tab =====
-        const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor'];
+        const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor','LPF 1st','HPF 1st','Linkwitz'];
         const DSP_MAX_CH = 4;
         const DSP_CH_NAMES = ['L1','R1','L2','R2'];
         function dspChLabel(c) { return inputNames[c] || DSP_CH_NAMES[c]; }
@@ -9332,7 +9508,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             html += '<button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;margin-left:auto;" onclick="peqResetBand(' + peqSelectedBand + ')">Reset</button>';
             html += '<span style="font-size:11px;color:var(--text-secondary);">Band ' + (peqSelectedBand + 1) + '</span>';
             html += '</div>';
-            html += peqSlider('freq', 'Frequency', b.freq || 1000, 20, 20000, 1, 'Hz');
+            html += peqSlider('freq', 'Frequency', b.freq || 1000, 5, 20000, 1, 'Hz');
             if (hasGain) html += peqSlider('gain', 'Gain', b.gain || 0, -24, 24, 0.5, 'dB');
             html += peqSlider('Q', 'Q Factor', b.Q || 0.707, 0.1, 25, 0.01, '');
             html += '</div>';
@@ -9407,10 +9583,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 btn.style.color = peqLinked ? '#fff' : '';
             }
         }
-        function peqEnableAll(en) {
+        function peqToggleAll() {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            var bands = peqGetBands();
+            var allEnabled = bands.length > 0 && bands.every(function(b) { return b && b.enabled; });
+            var en = !allEnabled;
             ws.send(JSON.stringify({ type: 'setPeqAllEnabled', ch: dspCh, enabled: en }));
             if (peqLinked) ws.send(JSON.stringify({ type: 'setPeqAllEnabled', ch: dspCh ^ 1, enabled: en }));
+        }
+        function peqUpdateToggleAllBtn() {
+            var btn = document.getElementById('peqToggleAllBtn');
+            if (!btn) return;
+            var bands = peqGetBands();
+            var allEnabled = bands.length > 0 && bands.every(function(b) { return b && b.enabled; });
+            btn.textContent = allEnabled ? 'Disable All' : 'Enable All';
         }
         function peqCopyChannel(target) {
             if (!target || !ws || ws.readyState !== WebSocket.OPEN) return;
@@ -9495,7 +9681,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var normY = (y - padT) / gh;
             var freq = Math.pow(10, logMin + logRange * normX);
             var gain = 24 - normY * 48;
-            return { freq: Math.max(20, Math.min(20000, Math.round(freq))), gain: Math.max(-24, Math.min(24, Math.round(gain * 2) / 2)) };
+            return { freq: Math.max(5, Math.min(20000, Math.round(freq))), gain: Math.max(-24, Math.min(24, Math.round(gain * 2) / 2)) };
         }
         function peqFreqGainToCanvas(canvas, freq, gain) {
             var dpr = window.devicePixelRatio || 1;
@@ -9658,6 +9844,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             dspRenderChannelTabs();
             peqRenderBandStrip();
             peqRenderBandDetail();
+            peqUpdateToggleAllBtn();
             dspRenderStages();
             dspDrawFreqResponse();
         }
@@ -9683,9 +9870,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (byp && dspState.channels[dspCh]) byp.checked = dspState.channels[dspCh].bypass;
         }
 
+        function dspIsBiquad(t) { return t <= 11 || t === 19 || t === 20 || t === 21; }
         function dspStageSummary(s) {
             var t = s.type;
-            if (t <= 11) return (s.freq || 1000).toFixed(0) + ' Hz' + (s.gain ? ' ' + (s.gain > 0 ? '+' : '') + s.gain.toFixed(1) + ' dB' : '') + ' Q=' + (s.Q || 0.707).toFixed(2);
+            if (t === 21) return 'F0=' + (s.freq || 50).toFixed(0) + ' Q0=' + (s.Q || 0.707).toFixed(2) + ' Fp=' + (s.gain || 25).toFixed(0) + ' Qp=' + (s.Q2 || 0.5).toFixed(2);
+            if (dspIsBiquad(t)) return (s.freq || 1000).toFixed(0) + ' Hz' + (s.gain ? ' ' + (s.gain > 0 ? '+' : '') + s.gain.toFixed(1) + ' dB' : '') + ' Q=' + (s.Q || 0.707).toFixed(2);
             if (t === 12) return s.thresholdDb.toFixed(1) + ' dBFS ' + s.ratio.toFixed(0) + ':1';
             if (t === 13) return s.numTaps + ' taps';
             if (t === 14) return (s.gainDb > 0 ? '+' : '') + s.gainDb.toFixed(1) + ' dB';
@@ -9699,10 +9888,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function dspParamSliders(idx, s) {
             var t = s.type;
             var h = '';
-            if (t <= 11) {
-                h += dspSlider(idx, 'freq', 'Frequency', s.freq || 1000, 20, 20000, 1, 'Hz');
+            if (t === 21) {
+                h += dspSlider(idx, 'freq', 'F0 (Speaker Fs)', s.freq || 50, 20, 200, 1, 'Hz');
+                h += dspSlider(idx, 'Q', 'Q0 (Speaker Qts)', s.Q || 0.707, 0.1, 2.0, 0.01, '');
+                h += dspSlider(idx, 'gain', 'Fp (Target Fs)', s.gain || 25, 10, 100, 1, 'Hz');
+                h += dspSlider(idx, 'Q2', 'Qp (Target Qts)', s.Q2 || 0.5, 0.1, 2.0, 0.01, '');
+            } else if (t <= 11 || t === 19 || t === 20) {
+                h += dspSlider(idx, 'freq', 'Frequency', s.freq || 1000, 5, 20000, 1, 'Hz');
                 if (t === 4 || t === 5 || t === 6) h += dspSlider(idx, 'gain', 'Gain', s.gain || 0, -24, 24, 0.5, 'dB');
-                h += dspSlider(idx, 'Q', 'Q Factor', s.Q || 0.707, 0.1, 20, 0.01, '');
+                if (t !== 19 && t !== 20) h += dspSlider(idx, 'Q', 'Q Factor', s.Q || 0.707, 0.1, 20, 0.01, '');
             } else if (t === 18) {
                 var cHook = ';dspDrawCompressorGraph(' + idx + ')';
                 h += '<div class="comp-graph-wrap"><canvas id="compCanvas_' + idx + '" height="180"></canvas></div>';
@@ -9858,6 +10052,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ctx.restore();
         }
 
+        function dspIsCrossoverLabel(label) {
+            return label && (label.indexOf('LR') === 0 || label.indexOf('BW') === 0);
+        }
+        function dspToggleGroupEnabled(firstIdx, count, en) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            for (var k = 0; k < count; k++) {
+                ws.send(JSON.stringify({ type: 'updateDspStage', ch: dspCh, stage: firstIdx + k, enabled: en }));
+            }
+        }
+        function dspRemoveGroup(firstIdx, count) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            // Remove from last to first so indices stay valid
+            for (var k = count - 1; k >= 0; k--) {
+                ws.send(JSON.stringify({ type: 'removeDspStage', ch: dspCh, stage: firstIdx + k }));
+            }
+        }
         function dspRenderStages() {
             if (!dspState || !dspState.channels[dspCh]) return;
             var ch = dspState.channels[dspCh];
@@ -9868,24 +10078,64 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (!list) return;
             var html = '';
             var stages = ch.stages || [];
-            for (var i = DSP_PEQ_BANDS; i < stages.length; i++) {
+            var i = DSP_PEQ_BANDS;
+            while (i < stages.length) {
                 var s = stages[i];
                 var typeName = DSP_TYPES[s.type] || 'Unknown';
                 var label = s.label || typeName;
-                var open = (i === dspOpenStage);
-                html += '<div class="dsp-stage-card' + (!s.enabled ? ' disabled' : '') + '">';
-                html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : i) + ';dspRenderStages();dspDrawFreqResponse();">';
-                html += '<span class="dsp-stage-type">' + typeName + '</span>';
-                html += '<span class="dsp-stage-name">' + label + '</span>';
-                html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
-                html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
-                html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
-                if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
-                if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down">&#9660;</button>';
-                html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete">&times;</button>';
-                html += '</div></div>';
-                html += '<div class="dsp-stage-body' + (open ? ' open' : '') + '">' + (open ? dspParamSliders(i, s) : '') + '</div>';
-                html += '</div>';
+                // Group consecutive crossover stages with same label
+                if (dspIsCrossoverLabel(label)) {
+                    var groupStart = i;
+                    var groupLabel = label;
+                    var groupCount = 0;
+                    var allEnabled = true;
+                    while (i < stages.length && stages[i].label === groupLabel) {
+                        if (!stages[i].enabled) allEnabled = false;
+                        groupCount++;
+                        i++;
+                    }
+                    var freq = stages[groupStart].freq || stages[groupStart].frequency || 0;
+                    var open = (dspOpenStage >= groupStart && dspOpenStage < groupStart + groupCount);
+                    html += '<div class="dsp-stage-card' + (!allEnabled ? ' disabled' : '') + '">';
+                    html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : groupStart) + ';dspRenderStages();dspDrawFreqResponse();">';
+                    html += '<span class="dsp-stage-type" style="background:var(--accent);color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;">' + groupLabel + '</span>';
+                    html += '<span class="dsp-stage-name">' + groupLabel + '</span>';
+                    html += '<span class="dsp-stage-info">' + Math.round(freq) + ' Hz (' + groupCount + (groupCount === 1 ? ' section)' : ' sections)') + '</span>';
+                    html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
+                    html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (allEnabled ? 'checked' : '') + ' onchange="dspToggleGroupEnabled(' + groupStart + ',' + groupCount + ',this.checked)"><span class="slider round"></span></label>';
+                    html += '<button class="del" onclick="dspRemoveGroup(' + groupStart + ',' + groupCount + ')" title="Delete">&times;</button>';
+                    html += '</div></div>';
+                    // Expandable detail showing individual sections
+                    if (open) {
+                        html += '<div class="dsp-stage-body open" style="padding:4px 8px;">';
+                        for (var g = 0; g < groupCount; g++) {
+                            var gs = stages[groupStart + g];
+                            var gt = DSP_TYPES[gs.type] || '?';
+                            html += '<div style="font-size:11px;color:var(--text-secondary);padding:2px 0;">' + gt + ' ' + Math.round(gs.freq || gs.frequency || 0) + ' Hz Q=' + (gs.Q || gs.qFactor || 0).toFixed(2) + '</div>';
+                        }
+                        html += '</div>';
+                    } else {
+                        html += '<div class="dsp-stage-body"></div>';
+                    }
+                    html += '</div>';
+                } else {
+                    // Regular (non-crossover) stage — render as before
+                    var open = (i === dspOpenStage);
+                    html += '<div class="dsp-stage-card' + (!s.enabled ? ' disabled' : '') + '">';
+                    html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : i) + ';dspRenderStages();dspDrawFreqResponse();">';
+                    html += '<span class="dsp-stage-type">' + typeName + '</span>';
+                    html += '<span class="dsp-stage-name">' + label + '</span>';
+                    html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
+                    html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
+                    html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
+                    if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
+                    if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down">&#9660;</button>';
+                    html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete">&times;</button>';
+                    html += '</div></div>';
+                    html += '<div class="dsp-stage-body' + (open ? ' open' : '') + '">' + (open ? dspParamSliders(i, s) : '') + '</div>';
+                    html += '</div>';
+                    i++;
+                }
             }
             list.innerHTML = html;
             if (dspOpenStage >= DSP_PEQ_BANDS && stages[dspOpenStage] && stages[dspOpenStage].type === 18) {
@@ -9901,11 +10151,62 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (bpTgl) bpTgl.checked = d.globalBypass;
             var sr = document.getElementById('dspSampleRate');
             if (sr) sr.textContent = (d.sampleRate || 48000) + ' Hz';
+            dspRenderPresetBar(d);
             dspRenderChannelTabs();
             peqRenderBandStrip();
             peqRenderBandDetail();
+            peqUpdateToggleAllBtn();
             dspRenderStages();
             dspDrawFreqResponse();
+        }
+
+        // ===== DSP Config Presets =====
+        function dspRenderPresetBar(d) {
+            var bar = document.getElementById('dspPresetBar');
+            var mod = document.getElementById('dspPresetModified');
+            if (!bar) return;
+            var names = d.presetNames || ['','','',''];
+            var idx = d.presetIndex != null ? d.presetIndex : -1;
+            var html = '';
+            var anyExists = false;
+            for (var i = 0; i < 4; i++) {
+                var label = names[i] || ('Slot ' + (i+1));
+                var exists = names[i] && names[i].length > 0;
+                if (exists) anyExists = true;
+                var active = (i === idx) ? ' btn-primary' : ' btn-secondary';
+                var opacity = exists ? '' : ' style="opacity:0.5"';
+                html += '<button class="btn' + active + '" onclick="dspLoadPreset(' + i + ')"' + opacity + ' style="padding:3px 10px;font-size:11px;flex:1;min-width:0;' + (i === idx ? '' : 'opacity:' + (exists ? '1' : '0.5')) + '">';
+                html += label;
+                html += '</button>';
+            }
+            bar.innerHTML = html;
+            if (mod) mod.style.display = (idx === -1 && anyExists) ? 'inline' : 'none';
+        }
+        function dspLoadPreset(slot) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'loadDspPreset', slot: slot }));
+        }
+        function dspSavePresetDialog() {
+            var name = prompt('Preset name (max 20 chars):', '');
+            if (name === null) return;
+            name = name.substring(0, 20);
+            // Find first empty slot, or use current + 1
+            var slot = -1;
+            if (dspState && dspState.presetIndex >= 0) {
+                slot = dspState.presetIndex;
+            } else {
+                var names = dspState ? dspState.presetNames || [] : [];
+                for (var i = 0; i < 4; i++) {
+                    if (!names[i] || names[i].length === 0) { slot = i; break; }
+                }
+                if (slot < 0) slot = 0;
+            }
+            var slotStr = prompt('Save to slot (0-3):', String(slot));
+            if (slotStr === null) return;
+            slot = parseInt(slotStr);
+            if (isNaN(slot) || slot < 0 || slot > 3) { alert('Invalid slot'); return; }
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'saveDspPreset', slot: slot, name: name }));
         }
 
         function dspHandleMetrics(d) {
@@ -10119,7 +10420,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 var cx = padL + gw * (Math.log10(freq) - logMin) / logRange;
                 var cy = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, gain)) - yMin) / (yMax - yMin));
                 var isSelected = (i === peqSelectedBand);
-                var radius = isSelected ? 8 * dpr : 6 * dpr;
+                var radius = isSelected ? 11 * dpr : 9 * dpr;
                 ctx.beginPath();
                 ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
                 if (b.enabled) {
@@ -10133,7 +10434,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     ctx.stroke();
                 }
                 // Band number label inside dot
-                ctx.font = 'bold ' + (isSelected ? 9 * dpr : 8 * dpr) + 'px sans-serif';
+                ctx.font = 'bold ' + (isSelected ? 11 * dpr : 10 * dpr) + 'px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = b.enabled ? '#fff' : PEQ_COLORS[i];
@@ -10225,7 +10526,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 h += '<tr><td style="padding:4px;font-weight:600;color:var(--text-secondary);">' + dspChLabel(o) + '</td>';
                 for (var i = 0; i < DSP_MAX_CH; i++) {
                     var v = dspRouting[o] ? dspRouting[o][i] : 0;
-                    var db = v <= 0.0001 ? '-inf' : (20 * Math.log10(v)).toFixed(1);
+                    var db = v <= 0.0001 ? 'Off' : (20 * Math.log10(v)).toFixed(1);
                     var bg = v > 0.001 ? 'rgba(255,152,0,0.15)' : 'transparent';
                     h += '<td style="padding:4px;text-align:center;background:' + bg + ';border:1px solid var(--border);cursor:pointer;border-radius:4px;" onclick="dspEditRoutingCell(' + o + ',' + i + ')">' + db + '</td>';
                 }
@@ -10236,10 +10537,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
         function dspEditRoutingCell(o, i) {
             var current = dspRouting && dspRouting[o] ? dspRouting[o][i] : 0;
-            var currentDb = current <= 0.0001 ? '-inf' : (20 * Math.log10(current)).toFixed(1);
-            var val = prompt('Gain for ' + dspChLabel(o) + ' <- ' + dspChLabel(i) + ' (dB, or -inf for silence):', currentDb);
+            var currentDb = current <= 0.0001 ? 'Off' : (20 * Math.log10(current)).toFixed(1);
+            var val = prompt('Gain for ' + dspChLabel(o) + ' <- ' + dspChLabel(i) + ' (dB, or "off" for silence):', currentDb);
             if (val === null) return;
-            var gainDb = val === '-inf' || val === '' ? -200 : parseFloat(val);
+            var lv = val.trim().toLowerCase();
+            var gainDb = lv === 'off' || lv === '-inf' || lv === '' ? -200 : parseFloat(val);
             if (isNaN(gainDb)) return;
             fetch('/api/dsp/routing', {
                 method: 'PUT',

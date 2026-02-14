@@ -57,6 +57,13 @@ void dsp_compute_biquad_coeffs(DspBiquadParams &params, DspStageType type, uint3
         case DSP_BIQUAD_HPF_1ST:
             dsp_gen_hpf1_f32(params.coeffs, freq);
             break;
+        case DSP_BIQUAD_LINKWITZ: {
+            float fp_norm = clamp_freq(params.gain, sampleRate); // gain field repurposed as Fp Hz
+            float Q2 = params.Q2;
+            if (Q2 <= 0.0f) Q2 = DSP_DEFAULT_Q;
+            dsp_gen_linkwitz_f32(params.coeffs, freq, Q, fp_norm, Q2);
+            break;
+        }
         default:
             // Non-biquad types: set passthrough
             params.coeffs[0] = 1.0f;
@@ -91,10 +98,45 @@ void dsp_recompute_channel_coeffs(DspChannelConfig &ch, uint32_t sampleRate) {
 
 void dsp_compute_gain_linear(DspGainParams &params) {
     params.gainLinear = powf(10.0f, params.gainDb / 20.0f);
+    params.currentLinear = params.gainLinear; // No ramp on init/load
 }
 
 void dsp_compute_compressor_makeup(DspCompressorParams &params) {
     params.makeupLinear = powf(10.0f, params.makeupGainDb / 20.0f);
+}
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+void dsp_compute_decimation_filter(float *taps, int numTaps, int decimFactor, float sampleRate) {
+    if (!taps || numTaps <= 0 || decimFactor <= 0 || sampleRate <= 0.0f) return;
+
+    // Normalized cutoff frequency (0..1, where 1 = Fs/2)
+    float fc = 1.0f / (float)decimFactor;  // Cutoff at Fs_new / 2
+    int M = numTaps - 1;
+    float sum = 0.0f;
+
+    for (int i = 0; i < numTaps; i++) {
+        float n = (float)i - (float)M / 2.0f;
+        // Windowed-sinc: sinc(2*fc*n) * Blackman window
+        float sinc;
+        if (fabsf(n) < 1e-6f) {
+            sinc = 2.0f * fc;
+        } else {
+            sinc = sinf(2.0f * (float)M_PI * fc * n) / ((float)M_PI * n);
+        }
+        // Blackman window
+        float w = 0.42f - 0.5f * cosf(2.0f * (float)M_PI * (float)i / (float)M)
+                  + 0.08f * cosf(4.0f * (float)M_PI * (float)i / (float)M);
+        taps[i] = sinc * w;
+        sum += taps[i];
+    }
+
+    // Normalize to unity DC gain
+    if (fabsf(sum) > 1e-10f) {
+        for (int i = 0; i < numTaps; i++) taps[i] /= sum;
+    }
 }
 
 #endif // DSP_ENABLED

@@ -39,8 +39,8 @@
 #endif
 
 // ===== Constants =====
-static const int DMA_BUF_COUNT = 4;
-static const int DMA_BUF_LEN = 256;
+static const int DMA_BUF_COUNT = I2S_DMA_BUF_COUNT;
+static const int DMA_BUF_LEN = I2S_DMA_BUF_LEN;
 static const float DBFS_FLOOR = -96.0f;
 
 // ===== Clip Rate EMA Constants =====
@@ -52,6 +52,10 @@ static const float CLIP_RATE_CLIPPING = 0.001f;  // >0.1% clipping = signal too 
 static volatile AudioAnalysis _analysis = {};
 static volatile bool _analysisReady = false;
 static AudioDiagnostics _diagnostics = {};
+
+// Periodic dump: audio task sets flag, main loop does the actual LOG calls
+// (Serial.print at 9600-115200 baud blocks for tens-hundreds of ms, starving I2S DMA)
+static volatile bool _dumpReady = false;
 
 // ===== Pure computation functions (testable without hardware) =====
 
@@ -335,8 +339,16 @@ static void i2s_audio_apply_window(FftWindowType type) {
 }
 
 static void i2s_configure_adc1(uint32_t sample_rate) {
+    // Check if DAC TX is active — preserve full-duplex mode during recovery
+    bool dacTxActive = false;
+#ifdef DAC_ENABLED
+    dacTxActive = AppState::getInstance().dacEnabled && AppState::getInstance().dacReady;
+#endif
+
     i2s_config_t cfg = {};
-    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
+    cfg.mode = dacTxActive
+        ? (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_TX)
+        : (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
     cfg.sample_rate = sample_rate;
     cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
     cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
@@ -345,7 +357,7 @@ static void i2s_configure_adc1(uint32_t sample_rate) {
     cfg.dma_buf_count = DMA_BUF_COUNT;
     cfg.dma_buf_len = DMA_BUF_LEN;
     cfg.use_apll = true;
-    cfg.tx_desc_auto_clear = false;
+    cfg.tx_desc_auto_clear = dacTxActive;
     cfg.fixed_mclk = sample_rate * 256;
 
     i2s_driver_install((i2s_port_t)I2S_PORT_ADC1, &cfg, 0, NULL);
@@ -354,11 +366,15 @@ static void i2s_configure_adc1(uint32_t sample_rate) {
     pins.bck_io_num = I2S_BCK_PIN;
     pins.ws_io_num = I2S_LRC_PIN;
     pins.data_in_num = I2S_DOUT_PIN;
-    pins.data_out_num = I2S_PIN_NO_CHANGE;
+    pins.data_out_num = dacTxActive ? I2S_TX_DATA_PIN : I2S_PIN_NO_CHANGE;
     pins.mck_io_num = I2S_MCLK_PIN;
 
     i2s_set_pin((i2s_port_t)I2S_PORT_ADC1, &pins);
     i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
+
+    if (dacTxActive) {
+        LOG_I("[Audio] I2S0 recovery preserved TX full-duplex (data_out=GPIO%d)", I2S_TX_DATA_PIN);
+    }
 }
 
 // ADC2 uses I2S_NUM_1 configured as MASTER (not slave) to bypass ESP32-S3
@@ -473,9 +489,22 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
     }
 
     // DSP pipeline processing (after DC filter, before analysis)
+    // Buffer contains raw left-justified I2S data (24-bit in bits [31:8]).
+    // DSP normalizes by MAX_24BIT (8388607) so we must parse to right-justified
+    // 24-bit first, then left-justify back after DSP for DAC output and analysis.
 #ifdef DSP_ENABLED
     if (AppState::getInstance().dspEnabled && !AppState::getInstance().dspBypass) {
+        // Parse: left-justified → right-justified 24-bit (>> 8)
+        for (int i = 0; i < stereo_frames * 2; i++) {
+            buffer[i] = audio_parse_24bit_sample(buffer[i]);
+        }
         dsp_process_buffer(buffer, stereo_frames, a);
+        // Restore: right-justified → left-justified (<< 8) for DAC + analysis
+        for (int i = 0; i < stereo_frames * 2; i++) {
+            buffer[i] = buffer[i] << 8;
+        }
+    } else {
+        dsp_clear_cpu_load();
     }
 #endif
 
@@ -636,42 +665,64 @@ static void audio_capture_task(void *param) {
         // Feed watchdog at the top of every iteration (even on timeout path)
         esp_task_wdt_reset();
 
-        // Read ADC1 (master) — 500ms timeout instead of portMAX_DELAY
-        size_t bytes_read1 = 0;
-        unsigned long t0 = micros();
-        esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_ADC1, buf1,
-                                   sizeof(buf1), &bytes_read1, pdMS_TO_TICKS(500));
-        unsigned long t1 = micros();
-
-        if (err1 != ESP_OK || bytes_read1 == 0) {
-            if (err1 != ESP_OK) _diagnostics.adc[0].i2sReadErrors++;
-            if (bytes_read1 == 0) _diagnostics.adc[0].zeroByteReads++;
-
-            // Track consecutive timeouts for I2S recovery
-            consecutiveTimeouts++;
-            if (consecutiveTimeouts >= TIMEOUT_RECOVERY_THRESHOLD) {
-                LOG_W("[Audio] ADC1 %lu consecutive timeouts — attempting I2S recovery",
-                      (unsigned long)consecutiveTimeouts);
-                i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
-                vTaskDelay(pdMS_TO_TICKS(50));
-                i2s_configure_adc1(_currentSampleRate);
-                _diagnostics.adc[0].i2sRecoveries++;
-                consecutiveTimeouts = 0;
-                LOG_I("[Audio] I2S recovery #%lu complete",
-                      (unsigned long)_diagnostics.adc[0].i2sRecoveries);
-            }
-            vTaskDelay(pdMS_TO_TICKS(1));
+        // Pause I2S reads when DAC is reinitializing the I2S driver
+        if (AppState::getInstance().audioPaused) {
+            vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
-        consecutiveTimeouts = 0; // Reset on successful read
-        readLatencyAccumUs[0] += (t1 - t0);
-        readLatencyCount[0]++;
-        bufCount[0]++;
 
-        // Read ADC2 (slave) — near-instant if synced DMA is ready
+        size_t bytes_read1 = 0;
         size_t bytes_read2 = 0;
         bool adc2Ok = false;
-        if (_adc2InitOk) {
+
+        // If both ADCs are disabled, sleep longer to reduce CPU usage
+        if (!AppState::getInstance().adcEnabled[0] && !AppState::getInstance().adcEnabled[1]) {
+            memset(buf1, 0, sizeof(buf1));
+            memset(buf2, 0, sizeof(buf2));
+            bytes_read1 = sizeof(buf1);
+            vTaskDelay(pdMS_TO_TICKS(50));
+            // Fall through to downstream processing with zero-filled buffers
+        } else {
+
+        // Read ADC1 (master) — 500ms timeout instead of portMAX_DELAY
+        if (AppState::getInstance().adcEnabled[0]) {
+            unsigned long t0 = micros();
+            esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_ADC1, buf1,
+                                       sizeof(buf1), &bytes_read1, pdMS_TO_TICKS(500));
+            unsigned long t1 = micros();
+
+            if (err1 != ESP_OK || bytes_read1 == 0) {
+                if (err1 != ESP_OK) _diagnostics.adc[0].i2sReadErrors++;
+                if (bytes_read1 == 0) _diagnostics.adc[0].zeroByteReads++;
+
+                // Track consecutive timeouts for I2S recovery
+                consecutiveTimeouts++;
+                if (consecutiveTimeouts >= TIMEOUT_RECOVERY_THRESHOLD) {
+                    LOG_W("[Audio] ADC1 %lu consecutive timeouts — attempting I2S recovery",
+                          (unsigned long)consecutiveTimeouts);
+                    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                    i2s_configure_adc1(_currentSampleRate);
+                    _diagnostics.adc[0].i2sRecoveries++;
+                    consecutiveTimeouts = 0;
+                    LOG_I("[Audio] I2S recovery #%lu complete",
+                          (unsigned long)_diagnostics.adc[0].i2sRecoveries);
+                }
+                vTaskDelay(pdMS_TO_TICKS(1));
+                continue;
+            }
+            consecutiveTimeouts = 0; // Reset on successful read
+            readLatencyAccumUs[0] += (t1 - t0);
+            readLatencyCount[0]++;
+            bufCount[0]++;
+        } else {
+            // ADC1 disabled — zero-fill buffer, still need ADC2 timing from I2S0 clocks
+            memset(buf1, 0, sizeof(buf1));
+            bytes_read1 = sizeof(buf1);
+        }
+
+        // Read ADC2 — near-instant if synced DMA is ready
+        if (_adc2InitOk && AppState::getInstance().adcEnabled[1]) {
             unsigned long t2 = micros();
             esp_err_t err2 = i2s_read((i2s_port_t)I2S_PORT_ADC2, buf2,
                                        sizeof(buf2), &bytes_read2, pdMS_TO_TICKS(5));
@@ -685,21 +736,26 @@ static void audio_capture_task(void *param) {
                 if (err2 != ESP_OK) _diagnostics.adc[1].i2sReadErrors++;
                 if (bytes_read2 == 0) _diagnostics.adc[1].zeroByteReads++;
             }
+        } else if (!AppState::getInstance().adcEnabled[1]) {
+            // ADC2 disabled — zero-fill
+            memset(buf2, 0, sizeof(buf2));
+        }
 
-            // One-shot startup diagnostic for ADC2
-            if (!adc2FirstReadLogged) {
-                if (adc2Ok) {
-                    LOG_I("[Audio] ADC2 first read OK: %d bytes, samples[0..3]=%08lX %08lX %08lX %08lX",
-                          (int)bytes_read2,
-                          (unsigned long)buf2[0], (unsigned long)buf2[1],
-                          (unsigned long)buf2[2], (unsigned long)buf2[3]);
-                    adc2FirstReadLogged = true;
-                } else if (_diagnostics.adc[1].zeroByteReads >= 50) {
-                    LOG_W("[Audio] ADC2 no data after 50 reads (DMA timeout — slave not clocking)");
-                    adc2FirstReadLogged = true;
-                }
+        // One-shot startup diagnostic for ADC2
+        if (!adc2FirstReadLogged) {
+            if (adc2Ok) {
+                LOG_I("[Audio] ADC2 first read OK: %d bytes, samples[0..3]=%08lX %08lX %08lX %08lX",
+                      (int)bytes_read2,
+                      (unsigned long)buf2[0], (unsigned long)buf2[1],
+                      (unsigned long)buf2[2], (unsigned long)buf2[3]);
+                adc2FirstReadLogged = true;
+            } else if (_diagnostics.adc[1].zeroByteReads >= 50) {
+                LOG_W("[Audio] ADC2 no data after 50 reads (DMA timeout — slave not clocking)");
+                adc2FirstReadLogged = true;
             }
         }
+
+        } // end of else (at least one ADC enabled)
 
         unsigned long now = millis();
         float dt_ms = (float)(now - prevTime);
@@ -734,36 +790,11 @@ static void audio_capture_task(void *param) {
             diag.status = audio_derive_health_status(diag);
         }
 
-        // Periodic serial dump
-        bool doDump = (now - lastDumpTime >= 5000);
-        if (doDump) {
+        // Periodic dump: just set flag, main loop does the actual LOG calls.
+        // Serial.print blocks at low baud rates, starving I2S DMA buffers.
+        if (now - lastDumpTime >= 5000) {
             lastDumpTime = now;
-            // Per-ADC log — distinguishes failure modes:
-            // zb high + az=0 + tot=0 → DMA timeout, slave not clocking (GPIO matrix / wiring)
-            // zb low  + az high      → Slave clocking OK, no audio (no PCM1808)
-            // errs > 0               → I2S driver error (bus fault, DMA overflow)
-            LOG_I("[Audio] ADC1=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu adcs=%d",
-                  _analysis.adc[0].dBFS, _diagnostics.adc[0].noiseFloorDbfs,
-                  _diagnostics.adc[0].status,
-                  _diagnostics.adc[0].i2sReadErrors,
-                  _diagnostics.adc[0].zeroByteReads,
-                  _diagnostics.adc[0].allZeroBuffers,
-                  _diagnostics.adc[0].consecutiveZeros,
-                  _diagnostics.adc[0].totalBuffersRead,
-                  _numAdcsDetected);
-            if (_adc2InitOk) {
-                LOG_I("[Audio] ADC2=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu",
-                      _analysis.adc[1].dBFS, _diagnostics.adc[1].noiseFloorDbfs,
-                      _diagnostics.adc[1].status,
-                      _diagnostics.adc[1].i2sReadErrors,
-                      _diagnostics.adc[1].zeroByteReads,
-                      _diagnostics.adc[1].allZeroBuffers,
-                      _diagnostics.adc[1].consecutiveZeros,
-                      _diagnostics.adc[1].totalBuffersRead);
-            }
-#ifdef DAC_ENABLED
-            dac_periodic_log();
-#endif
+            _dumpReady = true;
         }
 
         // Detect number of active ADCs (check every buffer)
@@ -919,7 +950,7 @@ void i2s_audio_init() {
         NULL,
         TASK_PRIORITY_AUDIO,
         &_audioTaskHandle,
-        0  // Core 0 — 500ms timeout + recovery prevents the original portMAX_DELAY hang
+        TASK_CORE_AUDIO  // Core 1 — isolates audio from WiFi system tasks on Core 0
     );
 
     LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",
@@ -945,6 +976,38 @@ AudioDiagnostics i2s_audio_get_diagnostics() {
     result = _diagnostics;
     portEXIT_CRITICAL(&spinlock);
     return result;
+}
+
+void audio_periodic_dump() {
+    if (!_dumpReady) return;
+    _dumpReady = false;
+
+    // Per-ADC log — distinguishes failure modes:
+    // zb high + az=0 + tot=0 → DMA timeout, slave not clocking
+    // zb low  + az high      → Slave clocking OK, no audio
+    // errs > 0               → I2S driver error (bus fault, DMA overflow)
+    LOG_I("[Audio] ADC1=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu adcs=%d",
+          _analysis.adc[0].dBFS, _diagnostics.adc[0].noiseFloorDbfs,
+          _diagnostics.adc[0].status,
+          _diagnostics.adc[0].i2sReadErrors,
+          _diagnostics.adc[0].zeroByteReads,
+          _diagnostics.adc[0].allZeroBuffers,
+          _diagnostics.adc[0].consecutiveZeros,
+          _diagnostics.adc[0].totalBuffersRead,
+          _numAdcsDetected);
+    if (_adc2InitOk) {
+        LOG_I("[Audio] ADC2=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu",
+              _analysis.adc[1].dBFS, _diagnostics.adc[1].noiseFloorDbfs,
+              _diagnostics.adc[1].status,
+              _diagnostics.adc[1].i2sReadErrors,
+              _diagnostics.adc[1].zeroByteReads,
+              _diagnostics.adc[1].allZeroBuffers,
+              _diagnostics.adc[1].consecutiveZeros,
+              _diagnostics.adc[1].totalBuffersRead);
+    }
+#ifdef DAC_ENABLED
+    dac_periodic_log();
+#endif
 }
 
 bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) {
@@ -1024,6 +1087,7 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     return audio_validate_sample_rate(rate);
 }
 int i2s_audio_get_num_adcs() { return _nativeNumAdcs; }
+void audio_periodic_dump() {}
 I2sStaticConfig i2s_audio_get_static_config() {
     I2sStaticConfig cfg = {};
     cfg.adc[0].isMaster = true;

@@ -159,6 +159,7 @@ void AppState::clearAllDirtyFlags() {
   _displayDirty = false;
   _buzzerDirty = false;
   _settingsDirty = false;
+  _adcEnabledDirty = false;
   _sigGenDirty = false;
   _otaDirty = false;
 }
@@ -167,5 +168,5 @@ bool AppState::hasAnyDirtyFlag() const {
   return _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
          _amplifierDirty || _sensingModeDirty || _timerDirty ||
          _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty ||
-         _sigGenDirty || _otaDirty;
+         _adcEnabledDirty || _sigGenDirty || _otaDirty;
 }

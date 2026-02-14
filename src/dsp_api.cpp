@@ -5,6 +5,7 @@
 #include "dsp_coefficients.h"
 #include "dsp_rew_parser.h"
 #include "dsp_crossover.h"
+#include "delay_alignment.h"
 #include "app_state.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
@@ -12,6 +13,7 @@
 #include <WebServer.h>
 #include <LittleFS.h>
 #include <sys/stat.h>
+#include <esp_heap_caps.h>
 
 extern WebServer server;
 
@@ -107,6 +109,15 @@ void loadDspSettings() {
                 if (doc["globalBypass"].is<bool>()) cfg->globalBypass = doc["globalBypass"].as<bool>();
                 if (doc["sampleRate"].is<unsigned int>()) cfg->sampleRate = doc["sampleRate"].as<uint32_t>();
                 if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
+                if (doc["presetIndex"].is<int>()) appState.dspPresetIndex = doc["presetIndex"].as<int8_t>();
+                if (doc["presetNames"].is<JsonArray>()) {
+                    JsonArray names = doc["presetNames"].as<JsonArray>();
+                    for (int i = 0; i < 4 && i < (int)names.size(); i++) {
+                        const char *n = names[i] | "";
+                        strncpy(appState.dspPresetNames[i], n, 20);
+                        appState.dspPresetNames[i][20] = '\0';
+                    }
+                }
             }
         } else if (f) {
             f.close();
@@ -177,6 +188,9 @@ void saveDspSettings() {
     globalDoc["globalBypass"] = cfg->globalBypass;
     globalDoc["sampleRate"] = cfg->sampleRate;
     globalDoc["dspEnabled"] = appState.dspEnabled;
+    globalDoc["presetIndex"] = appState.dspPresetIndex;
+    JsonArray names = globalDoc["presetNames"].to<JsonArray>();
+    for (int i = 0; i < 4; i++) names.add(appState.dspPresetNames[i]);
 
     String globalJson;
     serializeJson(globalDoc, globalJson);
@@ -188,10 +202,13 @@ void saveDspSettings() {
         char path[24];
         snprintf(path, sizeof(path), "/dsp_ch%d.json", ch);
 
-        char buf[4096];
-        dsp_export_config_to_json(ch, buf, sizeof(buf));
+        char *buf = (char *)heap_caps_malloc(4096, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!buf) buf = (char *)malloc(4096);
+        if (!buf) continue;
+        dsp_export_config_to_json(ch, buf, 4096);
         File cf = LittleFS.open(path, "w");
         if (cf) { cf.print(buf); cf.close(); }
+        free(buf);
 
         // Save FIR binary if channel has a FIR stage
         DspChannelConfig &chCfg = cfg->channels[ch];
@@ -228,6 +245,150 @@ static void checkDspSave() {
     if (_dspSavePending && (millis() - _lastDspSaveRequest >= DSP_SAVE_DEBOUNCE_MS)) {
         saveDspSettings();
     }
+}
+
+// ===== DSP Preset Management =====
+
+bool dsp_preset_exists(int slot) {
+    if (slot < 0 || slot >= 4) return false;
+    char path[24];
+    snprintf(path, sizeof(path), "/dsp_preset_%d.json", slot);
+    return dspFileExists(path);
+}
+
+bool dsp_preset_save(int slot, const char *name) {
+    if (slot < 0 || slot >= 4) return false;
+
+    // Export full config from active state (heap-allocated to avoid stack overflow)
+    char *configBuf = (char *)heap_caps_malloc(8192, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!configBuf) configBuf = (char *)malloc(8192);
+    if (!configBuf) {
+        LOG_E("[DSP] Preset save: heap alloc failed");
+        return false;
+    }
+    dsp_export_full_config_json(configBuf, 8192);
+
+    // Parse and augment with routing matrix + name
+    JsonDocument doc;
+    if (deserializeJson(doc, configBuf)) { free(configBuf); return false; }
+
+    doc["name"] = name ? name : "";
+    doc["dspEnabled"] = appState.dspEnabled;
+
+    // Add routing matrix
+    DspRoutingMatrix *rm = dsp_get_routing_matrix();
+    JsonArray routing = doc["routing"].to<JsonArray>();
+    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
+        JsonArray row = routing.add<JsonArray>();
+        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
+            row.add(rm->matrix[o][i]);
+        }
+    }
+
+    // Write to file
+    char path[24];
+    snprintf(path, sizeof(path), "/dsp_preset_%d.json", slot);
+    String json;
+    serializeJson(doc, json);
+    File f = LittleFS.open(path, "w");
+    if (!f) { free(configBuf); return false; }
+    f.print(json);
+    f.close();
+    free(configBuf);
+
+    // Update AppState
+    if (name) {
+        strncpy(appState.dspPresetNames[slot], name, 20);
+        appState.dspPresetNames[slot][20] = '\0';
+    }
+    appState.dspPresetIndex = slot;
+    appState.markDspPresetDirty();
+
+    // Persist preset index in global settings (debounced to avoid stacking another 4KB alloc)
+    saveDspSettingsDebounced();
+
+    LOG_I("[DSP] Preset %d saved: %s", slot, name ? name : "");
+    return true;
+}
+
+bool dsp_preset_load(int slot) {
+    if (slot < 0 || slot >= 4) return false;
+
+    char path[24];
+    snprintf(path, sizeof(path), "/dsp_preset_%d.json", slot);
+    if (!dspFileExists(path)) return false;
+
+    File f = LittleFS.open(path, "r");
+    if (!f || f.size() == 0) { if (f) f.close(); return false; }
+    String json = f.readString();
+    f.close();
+
+    JsonDocument doc;
+    if (deserializeJson(doc, json)) return false;
+
+    // Load full config into inactive buffer
+    dsp_copy_active_to_inactive();
+    dsp_import_full_config_json(json.c_str());
+
+    // Load dspEnabled
+    if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
+
+    // Load routing matrix
+    if (doc["routing"].is<JsonArray>()) {
+        DspRoutingMatrix *rm = dsp_get_routing_matrix();
+        JsonArray routing = doc["routing"].as<JsonArray>();
+        for (int o = 0; o < DSP_MAX_CHANNELS && o < (int)routing.size(); o++) {
+            JsonArray row = routing[o].as<JsonArray>();
+            if (row.isNull()) continue;
+            for (int i = 0; i < DSP_MAX_CHANNELS && i < (int)row.size(); i++) {
+                rm->matrix[o][i] = row[i].as<float>();
+            }
+        }
+    }
+
+    // Recompute all coefficients
+    DspState *cfg = dsp_get_inactive_config();
+    for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
+        extern void dsp_recompute_channel_coeffs(DspChannelConfig &ch, uint32_t sampleRate);
+        dsp_recompute_channel_coeffs(cfg->channels[ch], cfg->sampleRate);
+    }
+
+    dsp_swap_config();
+
+    // Mark config dirty first (this invalidates preset to -1), then restore
+    appState.markDspConfigDirty();
+
+    // Update AppState — set preset index AFTER markDspConfigDirty (which resets to -1)
+    const char *name = doc["name"] | "";
+    strncpy(appState.dspPresetNames[slot], name, 20);
+    appState.dspPresetNames[slot][20] = '\0';
+    appState.dspPresetIndex = slot;
+    appState.markDspPresetDirty();
+
+    // Save as active config + persist preset index
+    saveDspSettings();
+
+    LOG_I("[DSP] Preset %d loaded: %s", slot, name);
+    return true;
+}
+
+bool dsp_preset_delete(int slot) {
+    if (slot < 0 || slot >= 4) return false;
+
+    char path[24];
+    snprintf(path, sizeof(path), "/dsp_preset_%d.json", slot);
+    if (dspFileExists(path)) {
+        LittleFS.remove(path);
+    }
+
+    appState.dspPresetNames[slot][0] = '\0';
+    if (appState.dspPresetIndex == slot) {
+        appState.dspPresetIndex = -1;
+    }
+    appState.markDspPresetDirty();
+
+    LOG_I("[DSP] Preset %d deleted", slot);
+    return true;
 }
 
 // ===== Helpers =====
@@ -273,7 +434,17 @@ static DspStageType typeFromString(const char *name) {
     if (strcmp(name, "COMPRESSOR") == 0) return DSP_COMPRESSOR;
     if (strcmp(name, "LPF_1ST") == 0) return DSP_BIQUAD_LPF_1ST;
     if (strcmp(name, "HPF_1ST") == 0) return DSP_BIQUAD_HPF_1ST;
+    if (strcmp(name, "LINKWITZ") == 0) return DSP_BIQUAD_LINKWITZ;
     return DSP_BIQUAD_PEQ;
+}
+
+// ===== Stereo Link Helper =====
+
+static void autoMirrorIfLinked(int ch) {
+    int partner = dsp_get_linked_partner(ch);
+    if (partner >= 0) {
+        dsp_mirror_channel_config(ch, partner);
+    }
 }
 
 // ===== API Endpoint Registration =====
@@ -416,6 +587,7 @@ void registerDspApiEndpoints() {
             if (params["frequency"].is<float>()) s.biquad.frequency = params["frequency"].as<float>();
             if (params["gain"].is<float>()) s.biquad.gain = params["gain"].as<float>();
             if (params["Q"].is<float>()) s.biquad.Q = params["Q"].as<float>();
+            if (params["Q2"].is<float>()) s.biquad.Q2 = params["Q2"].as<float>();
             dsp_compute_biquad_coeffs(s.biquad, type, inactive->sampleRate);
         } else if (type == DSP_LIMITER && !params.isNull()) {
             if (params["thresholdDb"].is<float>()) s.limiter.thresholdDb = params["thresholdDb"].as<float>();
@@ -444,6 +616,7 @@ void registerDspApiEndpoints() {
             dsp_compute_compressor_makeup(s.compressor);
         }
 
+        autoMirrorIfLinked(ch);
         dsp_swap_config();
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
@@ -485,6 +658,7 @@ void registerDspApiEndpoints() {
             if (params["frequency"].is<float>()) s.biquad.frequency = params["frequency"].as<float>();
             if (params["gain"].is<float>()) s.biquad.gain = params["gain"].as<float>();
             if (params["Q"].is<float>()) s.biquad.Q = params["Q"].as<float>();
+            if (params["Q2"].is<float>()) s.biquad.Q2 = params["Q2"].as<float>();
             if (s.type == DSP_BIQUAD_CUSTOM && params["coeffs"].is<JsonArray>()) {
                 JsonArray c = params["coeffs"].as<JsonArray>();
                 for (int j = 0; j < 5 && j < (int)c.size(); j++)
@@ -519,6 +693,7 @@ void registerDspApiEndpoints() {
             dsp_compute_compressor_makeup(s.compressor);
         }
 
+        autoMirrorIfLinked(ch);
         dsp_swap_config();
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
@@ -540,6 +715,7 @@ void registerDspApiEndpoints() {
             return;
         }
 
+        autoMirrorIfLinked(ch);
         dsp_swap_config();
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
@@ -1023,6 +1199,141 @@ void registerDspApiEndpoints() {
         LittleFS.remove(path);
         server.send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] PEQ preset deleted: %s", server.arg("name").c_str());
+    });
+
+    // ===== DSP Config Preset Endpoints (4 slots) =====
+
+    // GET /api/dsp/presets — list all 4 slots
+    server.on("/api/dsp/presets", HTTP_GET, []() {
+        if (!requireAuth()) return;
+        JsonDocument doc;
+        doc["activeIndex"] = appState.dspPresetIndex;
+        JsonArray slots = doc["slots"].to<JsonArray>();
+        for (int i = 0; i < 4; i++) {
+            JsonObject slot = slots.add<JsonObject>();
+            slot["index"] = i;
+            slot["name"] = appState.dspPresetNames[i];
+            slot["exists"] = dsp_preset_exists(i);
+        }
+        String json;
+        serializeJson(doc, json);
+        server.send(200, "application/json", json);
+    });
+
+    // POST /api/dsp/presets/save?slot=N — save current config to slot
+    server.on("/api/dsp/presets/save", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
+        int slot = server.arg("slot").toInt();
+        if (slot < 0 || slot >= 4) { sendJsonError(400, "Invalid slot (0-3)"); return; }
+
+        const char *name = "";
+        JsonDocument doc;
+        if (server.hasArg("plain") && !deserializeJson(doc, server.arg("plain"))) {
+            name = doc["name"] | "";
+        }
+
+        if (dsp_preset_save(slot, name)) {
+            server.send(200, "application/json", "{\"success\":true}");
+        } else {
+            sendJsonError(500, "Failed to save preset");
+        }
+    });
+
+    // POST /api/dsp/presets/load?slot=N — load preset into active config
+    server.on("/api/dsp/presets/load", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
+        int slot = server.arg("slot").toInt();
+        if (slot < 0 || slot >= 4) { sendJsonError(400, "Invalid slot (0-3)"); return; }
+
+        if (dsp_preset_load(slot)) {
+            server.send(200, "application/json", "{\"success\":true}");
+        } else {
+            sendJsonError(404, "Preset not found or load failed");
+        }
+    });
+
+    // DELETE /api/dsp/presets?slot=N — delete preset
+    server.on("/api/dsp/presets", HTTP_DELETE, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
+        int slot = server.arg("slot").toInt();
+        if (slot < 0 || slot >= 4) { sendJsonError(400, "Invalid slot (0-3)"); return; }
+
+        if (dsp_preset_delete(slot)) {
+            saveDspSettings();
+            server.send(200, "application/json", "{\"success\":true}");
+        } else {
+            sendJsonError(500, "Failed to delete preset");
+        }
+    });
+
+    // GET /api/dsp/align — get last delay alignment result
+    server.on("/api/dsp/align", HTTP_GET, []() {
+        if (!requireAuth()) return;
+        char buf[128];
+        snprintf(buf, sizeof(buf),
+            "{\"delaySamples\":%d,\"delayMs\":%.3f,\"confidence\":%.2f,\"valid\":%s}",
+            appState.delayAlignSamples, appState.delayAlignMs,
+            appState.delayAlignConfidence, appState.delayAlignValid ? "true" : "false");
+        server.send(200, "application/json", buf);
+    });
+
+    // POST /api/dsp/align/measure — trigger delay alignment measurement
+    server.on("/api/dsp/align/measure", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        appState.markDelayAlignDirty();
+        server.send(200, "application/json", "{\"success\":true,\"status\":\"measuring\"}");
+    });
+
+    // POST /api/dsp/align/apply — apply measured delay to DSP pipeline
+    server.on("/api/dsp/align/apply", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        if (!appState.delayAlignValid) {
+            sendJsonError(400, "No valid measurement");
+            return;
+        }
+        DelayAlignResult r;
+        r.delaySamples = appState.delayAlignSamples;
+        r.confidence = appState.delayAlignConfidence;
+        r.delayMs = appState.delayAlignMs;
+        r.valid = appState.delayAlignValid;
+        delay_align_auto_apply(r, 1);
+        saveDspSettingsDebounced();
+        appState.markDspConfigDirty();
+        server.send(200, "application/json", "{\"success\":true}");
+    });
+
+    // POST /api/dsp/channel/stereolink — toggle stereo link for a channel pair
+    server.on("/api/dsp/channel/stereolink", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+
+        JsonDocument doc;
+        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
+
+        int pair = doc["pair"] | -1; // 0 = ch0+1, 1 = ch2+3
+        if (pair < 0 || pair > 1) { sendJsonError(400, "Invalid pair (0 or 1)"); return; }
+        bool linked = doc["linked"] | true;
+
+        dsp_copy_active_to_inactive();
+        DspState *inactive = dsp_get_inactive_config();
+        int chA = pair * 2;
+        int chB = pair * 2 + 1;
+        inactive->channels[chA].stereoLink = linked;
+        inactive->channels[chB].stereoLink = linked;
+
+        if (linked) {
+            // Mirror A → B on link enable
+            dsp_mirror_channel_config(chA, chB);
+        }
+
+        dsp_swap_config();
+        saveDspSettingsDebounced();
+        appState.markDspConfigDirty();
+        server.send(200, "application/json", "{\"success\":true}");
+        LOG_I("[DSP] Stereo link pair %d: %s", pair, linked ? "linked" : "unlinked");
     });
 
     LOG_I("[DSP] REST API endpoints registered");

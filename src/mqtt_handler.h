@@ -34,6 +34,7 @@ void publishMqttBuzzerState();
 void publishMqttSignalGenState();
 void publishMqttAudioDiagnostics();
 void publishMqttAudioGraphState();
+void publishMqttAdcEnabledState();
 void publishMqttDebugState();
 void publishMqttCrashDiagnostics();
 void publishMqttInputNames();

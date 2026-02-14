@@ -21,6 +21,9 @@
 #include "dac_registry.h"
 #include "dac_api.h"
 #endif
+#ifdef USB_AUDIO_ENABLED
+#include "usb_audio.h"
+#endif
 #include "smart_sensing.h"
 #include "utils.h"
 #include "web_pages.h"
@@ -172,7 +175,7 @@ void initSerialNumber() {
 }
 
 void setup() {
-  DebugOut.begin(9600);
+  DebugOut.begin(115200);
   delay(1000);
 
   LOG_I("[Main] ESP32-S3 ALX Nova Controller starting");
@@ -232,6 +235,16 @@ void setup() {
 
   // Apply debug serial log level from loaded settings
   applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+
+#ifdef USB_AUDIO_ENABLED
+  // Initialize USB Audio (TinyUSB UAC2 speaker device on native USB port)
+  // Must be called before WiFi since TinyUSB init happens here
+  if (appState.usbAudioEnabled) {
+    usb_audio_init();
+  } else {
+    LOG_I("[Main] USB Audio disabled in settings, skipping init");
+  }
+#endif
 
 #ifdef GUI_ENABLED
   // Initialize TFT display + rotary encoder GUI (may play boot animation
@@ -882,11 +895,16 @@ void loop() {
     appState.clearDspConfigDirty();
   }
 
-  // DSP metrics broadcast (1s interval when DSP is active)
+  // DSP metrics broadcast (1s interval when DSP is active, one final 0% when disabled/bypassed)
   static unsigned long lastDspMetricsBroadcast = 0;
-  if (appState.dspEnabled && millis() - lastDspMetricsBroadcast >= 1000) {
-    lastDspMetricsBroadcast = millis();
-    sendDspMetrics();
+  static bool lastDspMetricsActive = false;
+  bool dspActive = appState.dspEnabled && !appState.dspBypass;
+  if (millis() - lastDspMetricsBroadcast >= 1000) {
+    if (dspActive || lastDspMetricsActive) {
+      lastDspMetricsBroadcast = millis();
+      sendDspMetrics();
+    }
+    lastDspMetricsActive = dspActive;
   }
 
   // Check for debounced DSP settings save
@@ -903,6 +921,13 @@ void loop() {
   if (appState.isEepromDirty()) {
     sendDacState();  // dacState includes EEPROM diag data
     appState.clearEepromDirty();
+  }
+#endif
+
+#ifdef USB_AUDIO_ENABLED
+  if (appState.isUsbAudioDirty()) {
+    sendUsbAudioState();
+    appState.clearUsbAudioDirty();
   }
 #endif
 
@@ -951,20 +976,28 @@ void loop() {
   }
 
   // Broadcast Hardware Stats periodically (user-configurable interval)
+  // Stagger with audio data to avoid back-to-back large WebSocket sends
   static unsigned long lastHardwareStatsBroadcast = 0;
+  bool hwStatsJustSent = false;
   if (millis() - lastHardwareStatsBroadcast >= appState.hardwareStatsInterval) {
     lastHardwareStatsBroadcast = millis();
     if (appState.debugMode) {
       sendHardwareStats();
+      hwStatsJustSent = true;
     }
   }
 
   // Send audio waveform/spectrum data to subscribed WebSocket clients
+  // Skip this iteration if hwStats just sent — prevents WiFi TX burst that starves I2S DMA
   static unsigned long lastAudioSend = 0;
-  if (millis() - lastAudioSend >= appState.audioUpdateRate) {
+  if (!hwStatsJustSent && millis() - lastAudioSend >= appState.audioUpdateRate) {
     lastAudioSend = millis();
     sendAudioData();
   }
+
+  // Flush periodic audio/DAC diagnostic logs from main loop context.
+  // (Moved out of audio_capture_task to avoid Serial blocking I2S DMA.)
+  audio_periodic_dump();
 
   // IMPORTANT: blinking must NOT depend on isAPMode
   if (appState.blinkingEnabled) {

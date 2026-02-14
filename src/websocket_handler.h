@@ -36,12 +36,16 @@ void sendDspMetrics();
 #ifdef DAC_ENABLED
 void sendDacState();
 #endif
+#ifdef USB_AUDIO_ENABLED
+void sendUsbAudioState();
+#endif
 
 // ===== Audio Streaming =====
 void sendAudioData();
 
 // ===== CPU Utilization Tracking =====
 void initCpuUsageMonitoring();
+void deinitCpuUsageMonitoring();
 void updateCpuUsage();
 float getCpuUsageCore0();
 float getCpuUsageCore1();

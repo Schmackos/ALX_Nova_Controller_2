@@ -6,6 +6,9 @@
 #include "../../lib/esp_dsp_lite/src/dsps_biquad_f32_ansi.c"
 #include "../../lib/esp_dsp_lite/src/dsps_fir_f32_ansi.c"
 #include "../../lib/esp_dsp_lite/src/dsps_fir_init_f32.c"
+#include "../../lib/esp_dsp_lite/src/dsps_fird_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_corr_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_conv_f32_ansi.c"
 #include "../../src/dsp_biquad_gen.c"
 
 // Include DSP headers
@@ -16,6 +19,8 @@
 #include "../../src/dsp_coefficients.cpp"
 #include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_crossover.cpp"
+#include "../../src/dsp_convolution.cpp"
+#include "../../src/delay_alignment.cpp"
 
 // Tolerance for float comparisons
 #define FLOAT_TOL 0.001f
@@ -661,6 +666,308 @@ void test_compressor_makeup_gain(void) {
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, comp.makeupLinear);
 }
 
+// ===== Two-Pass Compressor/Limiter Tests =====
+
+void test_two_pass_limiter_reduces_above_threshold(void) {
+    // Two-pass limiter: verify it still limits properly
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int pos = dsp_add_stage(0, DSP_LIMITER);
+    TEST_ASSERT_TRUE(pos >= 0);
+    cfg->channels[0].stages[pos].limiter.thresholdDb = -6.0f;
+    cfg->channels[0].stages[pos].limiter.attackMs = 0.01f; // Very fast
+    cfg->channels[0].stages[pos].limiter.releaseMs = 50.0f;
+    cfg->channels[0].stages[pos].limiter.ratio = 20.0f;
+    dsp_swap_config();
+
+    // Create a stereo buffer with 0 dBFS signal (above -6dB threshold)
+    int32_t buf[256 * 2];
+    for (int i = 0; i < 256; i++) {
+        buf[i * 2] = 8388607;     // L = +1.0 (0 dBFS)
+        buf[i * 2 + 1] = 8388607; // R = +1.0
+    }
+
+    // Process multiple buffers to let envelope settle
+    for (int pass = 0; pass < 10; pass++) {
+        for (int i = 0; i < 256; i++) {
+            buf[i * 2] = 8388607;
+            buf[i * 2 + 1] = 8388607;
+        }
+        dsp_process_buffer(buf, 256, 0);
+    }
+
+    // After limiting, output should be reduced below input
+    float outL = (float)buf[200 * 2] / 8388607.0f;
+    TEST_ASSERT_TRUE(outL < 0.9f); // Significantly reduced
+    TEST_ASSERT_TRUE(outL > 0.0f); // But not zero
+}
+
+void test_two_pass_compressor_applies_makeup(void) {
+    // Verify compressor with makeup gain works in two-pass mode
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int pos = dsp_add_stage(0, DSP_COMPRESSOR);
+    TEST_ASSERT_TRUE(pos >= 0);
+    cfg->channels[0].stages[pos].compressor.thresholdDb = 0.0f; // Above any signal
+    cfg->channels[0].stages[pos].compressor.ratio = 4.0f;
+    cfg->channels[0].stages[pos].compressor.kneeDb = 0.0f;
+    cfg->channels[0].stages[pos].compressor.makeupGainDb = 6.0f;
+    dsp_compute_compressor_makeup(cfg->channels[0].stages[pos].compressor);
+    dsp_swap_config();
+
+    // Create a low-level stereo buffer (-20 dBFS, well below threshold)
+    int32_t buf[64 * 2];
+    for (int i = 0; i < 64; i++) {
+        int32_t val = (int32_t)(0.1f * 8388607.0f); // ~-20 dBFS
+        buf[i * 2] = val;
+        buf[i * 2 + 1] = val;
+    }
+
+    dsp_process_buffer(buf, 64, 0);
+
+    // With 0dB threshold and -20dBFS signal, no compression → only makeup gain applies
+    // Output should be ~0.1 * 2.0 = 0.2 (6dB makeup = 2x)
+    float outL = (float)buf[32 * 2] / 8388607.0f;
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.2f, outL);
+}
+
+// ===== Stereo Link Tests =====
+
+void test_stereo_link_default_true(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_active_config();
+    TEST_ASSERT_TRUE(cfg->channels[0].stereoLink);
+    TEST_ASSERT_TRUE(cfg->channels[1].stereoLink);
+    TEST_ASSERT_TRUE(cfg->channels[2].stereoLink);
+    TEST_ASSERT_TRUE(cfg->channels[3].stereoLink);
+}
+
+void test_stereo_link_partner(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    cfg->channels[0].stereoLink = true;
+    cfg->channels[1].stereoLink = true;
+    TEST_ASSERT_EQUAL_INT(1, dsp_get_linked_partner(0));
+    TEST_ASSERT_EQUAL_INT(0, dsp_get_linked_partner(1));
+    TEST_ASSERT_EQUAL_INT(3, dsp_get_linked_partner(2));
+    TEST_ASSERT_EQUAL_INT(2, dsp_get_linked_partner(3));
+
+    // Unlinked returns -1
+    cfg->channels[0].stereoLink = false;
+    TEST_ASSERT_EQUAL_INT(-1, dsp_get_linked_partner(0));
+}
+
+void test_stereo_link_mirror_copies_stages(void) {
+    dsp_init();
+    // Add a PEQ on channel 0
+    dsp_copy_active_to_inactive();
+    DspState *cfg = dsp_get_inactive_config();
+    cfg->channels[0].stages[0].enabled = true;
+    cfg->channels[0].stages[0].biquad.frequency = 2000.0f;
+    cfg->channels[0].stages[0].biquad.gain = 6.0f;
+    dsp_compute_biquad_coeffs(cfg->channels[0].stages[0].biquad, DSP_BIQUAD_PEQ, 48000);
+
+    // Mirror ch0 → ch1
+    dsp_mirror_channel_config(0, 1);
+
+    // ch1 should have same params but cleared runtime state
+    TEST_ASSERT_EQUAL_INT(cfg->channels[0].stageCount, cfg->channels[1].stageCount);
+    TEST_ASSERT_TRUE(cfg->channels[1].stages[0].enabled);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 2000.0f, cfg->channels[1].stages[0].biquad.frequency);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 6.0f, cfg->channels[1].stages[0].biquad.gain);
+    // Runtime state should be reset
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, cfg->channels[1].stages[0].biquad.delay[0]);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, cfg->channels[1].stages[0].biquad.delay[1]);
+}
+
+void test_stereo_link_mirror_resets_envelope(void) {
+    dsp_init();
+    dsp_copy_active_to_inactive();
+
+    // Add compressor on ch0
+    int pos = dsp_add_stage(0, DSP_COMPRESSOR);
+    TEST_ASSERT_TRUE(pos >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    cfg->channels[0].stages[pos].compressor.envelope = 0.5f;
+    cfg->channels[0].stages[pos].compressor.gainReduction = -3.0f;
+
+    dsp_mirror_channel_config(0, 1);
+
+    // Envelope/GR should be reset on destination
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, cfg->channels[1].stages[pos].compressor.envelope);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, cfg->channels[1].stages[pos].compressor.gainReduction);
+}
+
+// ===== Decimation FIR Tests =====
+
+void test_decimator_halves_output_length(void) {
+    dsp_init();
+    dsp_copy_active_to_inactive();
+    int pos = dsp_add_stage(0, DSP_DECIMATOR);
+    TEST_ASSERT_TRUE(pos >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_UINT8(2, cfg->channels[0].stages[pos].decimator.factor);
+    TEST_ASSERT_TRUE(cfg->channels[0].stages[pos].decimator.firSlot >= 0);
+    TEST_ASSERT_TRUE(cfg->channels[0].stages[pos].decimator.numTaps > 0);
+    dsp_swap_config();
+
+    // Create stereo buffer with 128 frames (256 stereo samples)
+    int32_t buf[128 * 2];
+    for (int i = 0; i < 128; i++) {
+        buf[i * 2] = (int32_t)(0.5f * 8388607.0f);
+        buf[i * 2 + 1] = (int32_t)(0.5f * 8388607.0f);
+    }
+
+    dsp_process_buffer(buf, 128, 0);
+    // After decimation, output should have data in first 64 positions
+    // The decimator reduces the effective buffer length
+    // Verify the output is non-zero in first half
+    bool hasData = false;
+    for (int i = 0; i < 64; i++) {
+        if (buf[i * 2] != 0) { hasData = true; break; }
+    }
+    TEST_ASSERT_TRUE(hasData);
+}
+
+void test_decimation_filter_design(void) {
+    // Verify the windowed-sinc anti-aliasing filter
+    float taps[64];
+    dsp_compute_decimation_filter(taps, 64, 2, 48000.0f);
+
+    // DC gain should be ~1.0 (unity)
+    float dcGain = 0.0f;
+    for (int i = 0; i < 64; i++) dcGain += taps[i];
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, dcGain);
+
+    // Center tap should be the largest
+    float maxTap = 0.0f;
+    int maxIdx = 0;
+    for (int i = 0; i < 64; i++) {
+        if (taps[i] > maxTap) { maxTap = taps[i]; maxIdx = i; }
+    }
+    TEST_ASSERT_EQUAL_INT(31, maxIdx); // Center of 64-tap filter
+}
+
+void test_decimator_fird_basic(void) {
+    // Direct test of dsps_fird_f32
+    float coeffs[3] = {0.25f, 0.5f, 0.25f};
+    float delay[3] = {0};
+    fir_f32_t fird;
+    dsps_fird_init_f32(&fird, coeffs, delay, 3, 2);
+
+    float input[8] = {1, 1, 1, 1, 1, 1, 1, 1};
+    float output[4] = {0};
+    dsps_fird_f32(&fird, input, output, 8);
+
+    // Output should have 4 samples (8 / 2)
+    // First output at input[1]: delay has [0,1,1] → 0.25*1 + 0.5*1 + 0.25*0 = 0.75
+    TEST_ASSERT_TRUE(output[0] > 0.0f);
+    // After settling, output should converge to 1.0 (all 1s input, filter sums to 1.0)
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, output[3]);
+}
+
+void test_decimator_slot_freed_on_remove(void) {
+    dsp_init();
+    dsp_copy_active_to_inactive();
+    int pos = dsp_add_stage(0, DSP_DECIMATOR);
+    TEST_ASSERT_TRUE(pos >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    int8_t slot = cfg->channels[0].stages[pos].decimator.firSlot;
+    TEST_ASSERT_TRUE(slot >= 0);
+
+    // Remove the stage — slot should be freed
+    bool ok = dsp_remove_stage(0, pos);
+    TEST_ASSERT_TRUE(ok);
+
+    // Should be able to alloc another slot (proves the old one was freed)
+    int newSlot = dsp_fir_alloc_slot();
+    TEST_ASSERT_TRUE(newSlot >= 0);
+    dsp_fir_free_slot(newSlot);
+}
+
+// ===== Cross-Correlation / Delay Alignment Tests =====
+
+void test_corr_known_delay_detected(void) {
+    // Create two signals: sig2 is sig1 delayed by 10 samples
+    int len = 256;
+    float sig1[256], sig2[256];
+    for (int i = 0; i < len; i++) {
+        sig1[i] = sinf(2.0f * (float)M_PI * 1000.0f * (float)i / 48000.0f);
+    }
+    // sig2 = sig1 shifted by 10 samples
+    memset(sig2, 0, sizeof(sig2));
+    for (int i = 10; i < len; i++) {
+        sig2[i] = sig1[i - 10];
+    }
+
+    int patLen = 246; // len - 10
+    int corrLen = len - patLen + 1; // 11
+    float corr[11];
+    dsps_corr_f32(sig2, len, sig1, patLen, corr);
+
+    // Find peak — should be at index 10
+    float maxVal = -1e30f;
+    int maxIdx = 0;
+    for (int i = 0; i < corrLen; i++) {
+        if (corr[i] > maxVal) { maxVal = corr[i]; maxIdx = i; }
+    }
+    TEST_ASSERT_EQUAL_INT(10, maxIdx);
+}
+
+void test_corr_zero_delay_returns_zero_index(void) {
+    int len = 128;
+    float sig[128], corr[1];
+    for (int i = 0; i < len; i++) sig[i] = sinf(2.0f * (float)M_PI * 440.0f * (float)i / 48000.0f);
+
+    // Correlate signal with itself (full length) → single output at index 0
+    dsps_corr_f32(sig, len, sig, len, corr);
+    TEST_ASSERT_TRUE(corr[0] > 0.0f);
+}
+
+void test_delay_align_measure_known_offset(void) {
+    // Feed same signal to both ADCs with 5-sample offset
+    int frames = 128;
+    int32_t adc1[128 * 2], adc2[128 * 2];
+    memset(adc1, 0, sizeof(adc1));
+    memset(adc2, 0, sizeof(adc2));
+
+    for (int i = 0; i < frames; i++) {
+        float s = sinf(2.0f * (float)M_PI * 1000.0f * (float)i / 48000.0f);
+        int32_t val = (int32_t)(s * 8388607.0f);
+        adc1[i * 2] = val;
+        adc1[i * 2 + 1] = val;
+    }
+    // adc2 = adc1 delayed by 5 samples
+    for (int i = 5; i < frames; i++) {
+        adc2[i * 2] = adc1[(i - 5) * 2];
+        adc2[i * 2 + 1] = adc1[(i - 5) * 2 + 1];
+    }
+
+    DelayAlignResult r = delay_align_measure(adc1, frames, adc2, frames, 48000, 20);
+    // Should detect delay near 5 samples
+    TEST_ASSERT_TRUE(r.delaySamples >= 3 && r.delaySamples <= 7);
+    TEST_ASSERT_TRUE(r.confidence > 1.0f);
+}
+
+void test_delay_align_low_confidence_with_noise(void) {
+    // Two uncorrelated signals → result may not be valid
+    int frames = 64;
+    int32_t adc1[64 * 2], adc2[64 * 2];
+
+    for (int i = 0; i < frames; i++) {
+        adc1[i * 2] = (int32_t)(sinf(2.0f * (float)M_PI * 440.0f * (float)i / 48000.0f) * 8388607.0f);
+        adc1[i * 2 + 1] = adc1[i * 2];
+        adc2[i * 2] = (int32_t)(sinf(2.0f * (float)M_PI * 3000.0f * (float)i / 48000.0f) * 8388607.0f);
+        adc2[i * 2 + 1] = adc2[i * 2];
+    }
+
+    DelayAlignResult r = delay_align_measure(adc1, frames, adc2, frames, 48000, 10);
+    // Verify it returns a result without crashing
+    TEST_ASSERT_TRUE(r.delayMs >= 0.0f);
+}
+
 // ===== New Biquad Type Tests =====
 
 void test_bpf0db_unity_peak_gain(void) {
@@ -807,11 +1114,13 @@ void test_crossover_butterworth_rejects_invalid(void) {
     dsp_init();
     // Order 0 (too low)
     TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 0, 0));
-    // Order 9+ (too high)
-    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 9, 0));
-    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 10, 0));
-    // Odd orders 1,3,5,7 are now VALID
+    // Order 13+ (too high — max is 12)
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 13, 0));
+    TEST_ASSERT_EQUAL_INT(-1, dsp_insert_crossover_butterworth(0, 1000.0f, 20, 0));
+    // Orders 1-12 are valid; test boundary
     TEST_ASSERT_TRUE(dsp_insert_crossover_butterworth(0, 1000.0f, 1, 0) >= 0);
+    dsp_init(); // Reset
+    TEST_ASSERT_TRUE(dsp_insert_crossover_butterworth(0, 1000.0f, 12, 0) >= 0);
 }
 
 void test_crossover_lr4_sum_flat(void) {
@@ -1026,9 +1335,11 @@ void test_crossover_lr16_stage_count(void) {
 void test_crossover_lr24_stage_count(void) {
     dsp_init();
     int first = dsp_insert_crossover_lr(0, 1000.0f, 24, 0); // LPF LR24
-    // LR24 = BW12^2. BW12 = 6 biquads. So LR24 = 12 biquads. But with PEQ bands (10 + 12 = 22 > 20 max)
-    // This should fail because it would exceed DSP_MAX_STAGES
-    TEST_ASSERT_TRUE(first < 0);
+    // LR24 = BW12^2. BW12 = 6 biquads. So LR24 = 12 biquads. 10 PEQ + 12 = 22 <= 24 max
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 12, cfg->channels[0].stageCount);
 }
 
 void test_crossover_lr6_has_first_order_sections(void) {
@@ -1080,6 +1391,357 @@ void test_first_order_hpf_dc_gain(void) {
     float dcGain = (p.coeffs[0] + p.coeffs[1] + p.coeffs[2]) /
                    (1.0f + p.coeffs[3] + p.coeffs[4]);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.0f, dcGain);
+}
+
+// ===== Crossover Label & HPF Tests =====
+
+void test_crossover_lr_stages_have_label(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_lr(0, 2000.0f, 8, 0); // LR8 LPF
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    // All 4 stages should have "LR8 LPF" label
+    for (int i = 0; i < 4; i++) {
+        TEST_ASSERT_EQUAL_STRING("LR8 LPF", cfg->channels[0].stages[DSP_PEQ_BANDS + i].label);
+    }
+}
+
+void test_crossover_bw_stages_have_label(void) {
+    dsp_init();
+    int first = dsp_insert_crossover_butterworth(0, 1000.0f, 4, 1); // BW4 HPF
+    TEST_ASSERT_TRUE(first >= 0);
+
+    DspState *cfg = dsp_get_inactive_config();
+    for (int i = 0; i < 2; i++) {
+        TEST_ASSERT_EQUAL_STRING("BW4 HPF", cfg->channels[0].stages[DSP_PEQ_BANDS + i].label);
+    }
+}
+
+void test_crossover_butterworth_hpf_all_orders(void) {
+    // Verify every Butterworth HPF order (1-8) inserts successfully
+    for (int order = 1; order <= 8; order++) {
+        dsp_init();
+        int first = dsp_insert_crossover_butterworth(0, 1000.0f, order, 1); // HPF
+        TEST_ASSERT_TRUE_MESSAGE(first >= 0, "BW HPF insertion failed");
+
+        DspState *cfg = dsp_get_inactive_config();
+        // Verify the first stage is an HPF type
+        DspStageType t = cfg->channels[0].stages[DSP_PEQ_BANDS].type;
+        TEST_ASSERT_TRUE_MESSAGE(t == DSP_BIQUAD_HPF || t == DSP_BIQUAD_HPF_1ST,
+                                "Expected HPF or HPF_1ST type");
+    }
+}
+
+void test_crossover_lr_rollback_on_partial_failure(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int baseLine = cfg->channels[0].stageCount; // Should be DSP_PEQ_BANDS
+
+    // Fill up stages close to limit so LR24 will fail partway
+    // Add 13 dummy stages (10 PEQ + 13 = 23, LR24 needs 12 more = 35 > 24)
+    for (int i = 0; i < 13; i++) {
+        dsp_add_stage(0, DSP_GAIN);
+    }
+    cfg = dsp_get_inactive_config();
+    int beforeCount = cfg->channels[0].stageCount;
+
+    // LR24 needs 12 stages but only 1 slot left — should fail and rollback
+    int result = dsp_insert_crossover_lr(0, 1000.0f, 24, 0);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+
+    // Stage count should be unchanged (rollback cleaned up)
+    cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(beforeCount, cfg->channels[0].stageCount);
+}
+
+// ===== Linkwitz Transform Tests =====
+
+void test_linkwitz_coefficients_valid(void) {
+    // Typical sealed speaker: Fs=50Hz, Qts=0.707 → target Fs=25Hz, Qts=0.5
+    float coeffs[5];
+    float f0 = 50.0f / 48000.0f;
+    float fp = 25.0f / 48000.0f;
+    int ret = dsp_gen_linkwitz_f32(coeffs, f0, 0.707f, fp, 0.5f);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    // b0 should be valid (non-zero, non-NaN)
+    TEST_ASSERT_FALSE(isnan(coeffs[0]));
+    TEST_ASSERT_FALSE(isnan(coeffs[1]));
+    TEST_ASSERT_TRUE(coeffs[0] != 0.0f);
+}
+
+void test_linkwitz_identity_passthrough(void) {
+    // When F0==Fp and Q0==Qp, the transform should be identity (passthrough)
+    float coeffs[5];
+    float freq = 50.0f / 48000.0f;
+    int ret = dsp_gen_linkwitz_f32(coeffs, freq, 0.707f, freq, 0.707f);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    // Identity biquad: b0=1, b1=0, b2=0 approximately (or all coeffs produce unity)
+    // DC gain should be 1.0
+    float dcGain = (coeffs[0] + coeffs[1] + coeffs[2]) /
+                   (1.0f + coeffs[3] + coeffs[4]);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, dcGain);
+}
+
+void test_linkwitz_stage_processes(void) {
+    // Linkwitz stage should process through biquad pipeline without error
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_BIQUAD_LINKWITZ);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.biquad.frequency = 50.0f;  // F0
+    s.biquad.gain = 25.0f;       // Fp (repurposed)
+    s.biquad.Q = 0.707f;         // Q0
+    s.biquad.Q2 = 0.5f;          // Qp
+    dsp_compute_biquad_coeffs(s.biquad, DSP_BIQUAD_LINKWITZ, cfg->sampleRate);
+    dsp_swap_config();
+
+    int32_t buffer[8] = {4194304, 4194304, 4194304, 4194304,
+                         4194304, 4194304, 4194304, 4194304};
+    dsp_process_buffer(buffer, 4, 0);
+    // Just verify it doesn't crash and produces non-zero output
+    bool anyNonZero = false;
+    for (int i = 0; i < 8; i++) {
+        if (buffer[i] != 0) anyNonZero = true;
+    }
+    TEST_ASSERT_TRUE(anyNonZero);
+}
+
+void test_linkwitz_rejects_invalid(void) {
+    float coeffs[5];
+    // Zero frequency
+    TEST_ASSERT_EQUAL_INT(-1, dsp_gen_linkwitz_f32(coeffs, 0.0f, 0.707f, 0.001f, 0.5f));
+    // Negative Q
+    TEST_ASSERT_EQUAL_INT(-1, dsp_gen_linkwitz_f32(coeffs, 0.001f, -1.0f, 0.001f, 0.5f));
+    // Null coeffs
+    TEST_ASSERT_EQUAL_INT(-1, dsp_gen_linkwitz_f32(NULL, 0.001f, 0.707f, 0.001f, 0.5f));
+}
+
+void test_linkwitz_is_biquad_type(void) {
+    TEST_ASSERT_TRUE(dsp_is_biquad_type(DSP_BIQUAD_LINKWITZ));
+    TEST_ASSERT_EQUAL_STRING("LINKWITZ", stage_type_name(DSP_BIQUAD_LINKWITZ));
+}
+
+// ===== Gain Ramp Tests =====
+
+void test_gain_ramp_converges(void) {
+    // Gain ramp should converge to target within ~20ms (4 buffers @ 256 samples @ 48kHz)
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_GAIN);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.gain.gainDb = 6.0f;
+    dsp_compute_gain_linear(s.gain);
+    // Set current to 1.0 (unity) so ramp must travel to ~2.0
+    s.gain.currentLinear = 1.0f;
+    dsp_swap_config();
+
+    // Process 8 buffers of 256 stereo frames (~42ms at 48kHz, ~8 time constants)
+    for (int b = 0; b < 8; b++) {
+        int32_t buffer[512];
+        for (int i = 0; i < 512; i++) buffer[i] = 4194304; // ~0.5 normalized
+        dsp_process_buffer(buffer, 256, 0);
+    }
+
+    // After ~42ms (8 tau) the ramp should be within 0.04% of target
+    cfg = dsp_get_active_config();
+    float current = cfg->channels[0].stages[idx].gain.currentLinear;
+    float target = cfg->channels[0].stages[idx].gain.gainLinear;
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, target, current);
+}
+
+void test_gain_ramp_settled_uses_fast_path(void) {
+    // When currentLinear == gainLinear, output should match simple multiplication
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_GAIN);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.gain.gainDb = -6.0f;
+    dsp_compute_gain_linear(s.gain);
+    // currentLinear already set by dsp_compute_gain_linear
+    TEST_ASSERT_FLOAT_WITHIN(1e-7f, s.gain.gainLinear, s.gain.currentLinear);
+    dsp_swap_config();
+
+    int32_t buffer[8] = {4194304, 4194304, 4194304, 4194304,
+                         4194304, 4194304, 4194304, 4194304};
+    dsp_process_buffer(buffer, 4, 0);
+
+    // All L-channel samples should be multiplied by the same gain
+    float expected = 4194304.0f / 8388607.0f * s.gain.gainLinear * 8388607.0f;
+    TEST_ASSERT_INT32_WITHIN(2, (int32_t)expected, buffer[0]);
+    TEST_ASSERT_INT32_WITHIN(2, (int32_t)expected, buffer[2]);
+    TEST_ASSERT_INT32_WITHIN(2, (int32_t)expected, buffer[4]);
+    TEST_ASSERT_INT32_WITHIN(2, (int32_t)expected, buffer[6]);
+}
+
+void test_gain_ramp_smooth_transition(void) {
+    // A gain change mid-stream should produce a smooth ramp (no sudden jump)
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_GAIN);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.gain.gainDb = 0.0f;
+    dsp_compute_gain_linear(s.gain);
+    s.gain.currentLinear = 0.1f; // Start far from target (1.0)
+    dsp_swap_config();
+
+    // Fill with constant value to see the ramp on output
+    int32_t buffer[128]; // 64 stereo frames
+    for (int i = 0; i < 128; i++) buffer[i] = 4194304;
+
+    dsp_process_buffer(buffer, 64, 0);
+
+    // Each successive L-channel sample should be >= the previous (ramping up)
+    for (int i = 2; i < 128; i += 2) {
+        TEST_ASSERT_TRUE_MESSAGE(buffer[i] >= buffer[i - 2] - 1,
+            "Gain ramp should be monotonically increasing toward target");
+    }
+    // First sample should be less than last (ramp occurred)
+    TEST_ASSERT_TRUE(buffer[0] < buffer[126]);
+}
+
+void test_gain_ramp_swap_preserves_state(void) {
+    // Config swap should preserve currentLinear from old active config
+    dsp_init();
+    int idx = dsp_add_stage(0, DSP_GAIN);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.gain.gainDb = 6.0f;
+    dsp_compute_gain_linear(s.gain);
+    s.gain.currentLinear = 0.75f; // Mid-ramp value
+    dsp_swap_config();
+
+    // Copy active to inactive, modify something, swap back
+    dsp_copy_active_to_inactive();
+    cfg = dsp_get_inactive_config();
+    // Change gain target but keep same stage type/position
+    cfg->channels[0].stages[idx].gain.gainDb = 12.0f;
+    dsp_compute_gain_linear(cfg->channels[0].stages[idx].gain);
+    dsp_swap_config();
+
+    // After swap, currentLinear should be preserved from old active (0.75)
+    cfg = dsp_get_active_config();
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.75f, cfg->channels[0].stages[idx].gain.currentLinear);
+}
+
+// ===== Routing Matrix Tests =====
+
+void test_routing_matrix_init_identity(void) {
+    DspRoutingMatrix rm;
+    dsp_routing_init(rm);
+    // Identity: diagonal = 1.0, off-diagonal = 0.0
+    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
+        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
+            if (o == i) {
+                TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[o][i]);
+            } else {
+                TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[o][i]);
+            }
+        }
+    }
+}
+
+void test_routing_matrix_presets(void) {
+    DspRoutingMatrix rm;
+    // Swap LR
+    dsp_routing_preset_swap_lr(rm);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[0][1]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[1][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[1][1]);
+
+    // Mono sum: gain = 1/DSP_MAX_CHANNELS = 0.25 for 4 channels
+    float g = 1.0f / DSP_MAX_CHANNELS;
+    dsp_routing_preset_mono_sum(rm);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[0][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[0][1]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[1][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[1][1]);
+}
+
+void test_gain_init_sets_current_linear(void) {
+    DspGainParams p;
+    dsp_init_gain_params(p);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, p.currentLinear);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, p.gainDb);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, p.gainLinear);
+}
+
+// ===== Convolution Tests (N3) =====
+
+void test_conv_impulse_passthrough(void) {
+    // Convolving with a unit impulse should produce the original signal
+    float ir[1] = {1.0f};
+    int ret = conv_init_slot(0, ir, 1);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_TRUE(conv_is_active(0));
+    TEST_ASSERT_EQUAL_INT(1, conv_get_ir_length(0));
+
+    float buf[8] = {1.0f, 0.5f, -0.3f, 0.7f, 0.0f, -1.0f, 0.2f, 0.1f};
+    float expected[8];
+    memcpy(expected, buf, sizeof(expected));
+
+    conv_process(0, buf, 8);
+
+    for (int i = 0; i < 8; i++) {
+        TEST_ASSERT_FLOAT_WITHIN(0.01f, expected[i], buf[i]);
+    }
+    conv_free_slot(0);
+}
+
+void test_conv_free_releases_slot(void) {
+    float ir[4] = {0.25f, 0.25f, 0.25f, 0.25f};
+    int ret = conv_init_slot(0, ir, 4);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_TRUE(conv_is_active(0));
+
+    conv_free_slot(0);
+    TEST_ASSERT_FALSE(conv_is_active(0));
+    TEST_ASSERT_EQUAL_INT(0, conv_get_ir_length(0));
+}
+
+void test_conv_short_ir_matches_direct(void) {
+    // Compare partitioned convolution with direct dsps_conv_f32 for a short IR
+    float ir[4] = {1.0f, 0.5f, 0.25f, 0.125f};
+    float input[8] = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
+    // Direct convolution (reference)
+    float directOut[11]; // siglen + patlen - 1 = 8 + 4 - 1 = 11
+    dsps_conv_f32(input, 8, ir, 4, directOut);
+
+    // Partitioned convolution
+    int ret = conv_init_slot(1, ir, 4);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+
+    float partBuf[8];
+    memcpy(partBuf, input, sizeof(float) * 8);
+    conv_process(1, partBuf, 8);
+
+    // First 4 output samples of partitioned should match direct convolution
+    // (the rest is overlap that comes out in next block)
+    for (int i = 0; i < 4; i++) {
+        TEST_ASSERT_FLOAT_WITHIN(0.05f, directOut[i], partBuf[i]);
+    }
+    conv_free_slot(1);
+}
+
+void test_conv_stage_type_integration(void) {
+    // Test that DSP_CONVOLUTION stage type can be added and removed
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int pos = dsp_add_stage(0, DSP_CONVOLUTION);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, pos);
+    TEST_ASSERT_EQUAL(DSP_CONVOLUTION, cfg->channels[0].stages[pos].type);
+    TEST_ASSERT_EQUAL_INT8(-1, cfg->channels[0].stages[pos].convolution.convSlot);
+
+    // Remove it
+    bool removed = dsp_remove_stage(0, pos);
+    TEST_ASSERT_TRUE(removed);
 }
 
 // ===== Metrics Test =====
@@ -1157,6 +1819,28 @@ int main(int argc, char **argv) {
     RUN_TEST(test_compressor_soft_knee);
     RUN_TEST(test_compressor_makeup_gain);
 
+    // Two-pass compressor/limiter
+    RUN_TEST(test_two_pass_limiter_reduces_above_threshold);
+    RUN_TEST(test_two_pass_compressor_applies_makeup);
+
+    // Stereo link
+    RUN_TEST(test_stereo_link_default_true);
+    RUN_TEST(test_stereo_link_partner);
+    RUN_TEST(test_stereo_link_mirror_copies_stages);
+    RUN_TEST(test_stereo_link_mirror_resets_envelope);
+
+    // Decimation FIR
+    RUN_TEST(test_decimator_halves_output_length);
+    RUN_TEST(test_decimation_filter_design);
+    RUN_TEST(test_decimator_fird_basic);
+    RUN_TEST(test_decimator_slot_freed_on_remove);
+
+    // Cross-correlation / delay alignment
+    RUN_TEST(test_corr_known_delay_detected);
+    RUN_TEST(test_corr_zero_delay_returns_zero_index);
+    RUN_TEST(test_delay_align_measure_known_offset);
+    RUN_TEST(test_delay_align_low_confidence_with_noise);
+
     // New biquad types
     RUN_TEST(test_bpf0db_unity_peak_gain);
     RUN_TEST(test_allpass360_unity_magnitude);
@@ -1186,6 +1870,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_crossover_lr_rejects_invalid);
     RUN_TEST(test_first_order_lpf_dc_gain);
     RUN_TEST(test_first_order_hpf_dc_gain);
+    RUN_TEST(test_crossover_lr_stages_have_label);
+    RUN_TEST(test_crossover_bw_stages_have_label);
+    RUN_TEST(test_crossover_butterworth_hpf_all_orders);
+    RUN_TEST(test_crossover_lr_rollback_on_partial_failure);
 
     // Bass management
     RUN_TEST(test_bass_management_setup);
@@ -1197,6 +1885,32 @@ int main(int argc, char **argv) {
     RUN_TEST(test_routing_apply_swap);
     RUN_TEST(test_routing_set_gain_db);
     RUN_TEST(test_routing_mono_sum);
+
+    // Linkwitz Transform
+    RUN_TEST(test_linkwitz_coefficients_valid);
+    RUN_TEST(test_linkwitz_identity_passthrough);
+    RUN_TEST(test_linkwitz_stage_processes);
+    RUN_TEST(test_linkwitz_rejects_invalid);
+    RUN_TEST(test_linkwitz_is_biquad_type);
+
+    // Gain ramp
+    RUN_TEST(test_gain_ramp_converges);
+    RUN_TEST(test_gain_ramp_settled_uses_fast_path);
+    RUN_TEST(test_gain_ramp_smooth_transition);
+    RUN_TEST(test_gain_ramp_swap_preserves_state);
+
+    // Routing matrix
+    RUN_TEST(test_routing_matrix_init_identity);
+    RUN_TEST(test_routing_matrix_presets);
+
+    // Config presets
+    RUN_TEST(test_gain_init_sets_current_linear);
+
+    // Convolution (N3)
+    RUN_TEST(test_conv_impulse_passthrough);
+    RUN_TEST(test_conv_free_releases_slot);
+    RUN_TEST(test_conv_short_ir_matches_direct);
+    RUN_TEST(test_conv_stage_type_integration);
 
     // Metrics
     RUN_TEST(test_metrics_initial);

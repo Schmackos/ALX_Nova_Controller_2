@@ -133,15 +133,19 @@ void dac_periodic_log() {
 
 // I2S port definitions (match i2s_audio.cpp)
 #define I2S_PORT_ADC1 0
-#define DMA_BUF_COUNT 4
-#define DMA_BUF_LEN   256
+#define DMA_BUF_COUNT I2S_DMA_BUF_COUNT
+#define DMA_BUF_LEN   I2S_DMA_BUF_LEN
 
 bool dac_enable_i2s_tx(uint32_t sampleRate) {
     if (_i2sTxEnabled) return true;
 
     LOG_I("[DAC] Enabling I2S TX full-duplex on I2S_NUM_0, data_out=GPIO%d", I2S_TX_DATA_PIN);
 
-    // Uninstall I2S0 (brief ~5ms glitch, happens once at boot)
+    // Pause audio_capture_task so it doesn't call i2s_read during driver reinstall
+    AppState::getInstance().audioPaused = true;
+    vTaskDelay(pdMS_TO_TICKS(50)); // Wait for audio task to exit i2s_read
+
+    // Uninstall I2S0
     i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
 
     // Reinstall with TX+RX mode
@@ -174,6 +178,7 @@ bool dac_enable_i2s_tx(uint32_t sampleRate) {
         pins.mck_io_num = I2S_MCLK_PIN;
         i2s_set_pin((i2s_port_t)I2S_PORT_ADC1, &pins);
         i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
+        AppState::getInstance().audioPaused = false; // Resume audio task
         return false;
     }
 
@@ -188,6 +193,7 @@ bool dac_enable_i2s_tx(uint32_t sampleRate) {
     i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
 
     _i2sTxEnabled = true;
+    AppState::getInstance().audioPaused = false; // Resume audio task
     LOG_I("[DAC] I2S TX full-duplex enabled: rate=%luHz data_out=GPIO%d APLL=%s MCLK=%luHz DMA=%dx%d",
           (unsigned long)sampleRate, I2S_TX_DATA_PIN,
           cfg.use_apll ? "on" : "off",
@@ -200,6 +206,10 @@ void dac_disable_i2s_tx() {
     if (!_i2sTxEnabled) return;
 
     LOG_I("[DAC] Disabling I2S TX, reverting to RX-only");
+
+    // Pause audio_capture_task so it doesn't call i2s_read during driver reinstall
+    AppState::getInstance().audioPaused = true;
+    vTaskDelay(pdMS_TO_TICKS(50));
 
     i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
 
@@ -228,6 +238,7 @@ void dac_disable_i2s_tx() {
     i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
 
     _i2sTxEnabled = false;
+    AppState::getInstance().audioPaused = false; // Resume audio task
     LOG_I("[DAC] Reverted to RX-only mode");
 }
 
@@ -293,7 +304,7 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
             }
             size_t bytes_written = 0;
             i2s_write((i2s_port_t)I2S_PORT_ADC1, txBuf,
-                      chunk * sizeof(int32_t), &bytes_written, 0); // Non-blocking
+                      chunk * sizeof(int32_t), &bytes_written, pdMS_TO_TICKS(20));
             _txBytesWritten += bytes_written;
             if (bytes_written < (size_t)(chunk * sizeof(int32_t))) {
                 as.dacTxUnderruns++;
@@ -305,7 +316,7 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
         // Unity gain — write buffer directly
         size_t bytes_written = 0;
         i2s_write((i2s_port_t)I2S_PORT_ADC1, buffer,
-                  total_samples * sizeof(int32_t), &bytes_written, 0);
+                  total_samples * sizeof(int32_t), &bytes_written, pdMS_TO_TICKS(20));
         _txBytesWritten += bytes_written;
         if (bytes_written < (size_t)(total_samples * sizeof(int32_t))) {
             as.dacTxUnderruns++;
@@ -315,6 +326,20 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
     (void)total_samples;
     (void)needSoftwareVolume;
 #endif
+}
+
+// ===== TX Diagnostics Snapshot =====
+DacTxDiag dac_get_tx_diagnostics() {
+    DacTxDiag d = {};
+    d.i2sTxEnabled = _i2sTxEnabled;
+    d.volumeGain = _volumeGain;
+    d.writeCount = _txWriteCount;
+    d.bytesWritten = _txBytesWritten;
+    d.bytesExpected = _txBytesExpected;
+    d.peakSample = _txPeakSample;
+    d.zeroFrames = _txZeroFrames;
+    d.underruns = AppState::getInstance().dacTxUnderruns;
+    return d;
 }
 
 // ===== Settings Persistence =====

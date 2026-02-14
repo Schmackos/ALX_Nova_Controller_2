@@ -15,16 +15,21 @@
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
+#include "delay_alignment.h"
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
 #include "dac_registry.h"
 #include "dac_eeprom.h"
 #endif
+#ifdef USB_AUDIO_ENABLED
+#include "usb_audio.h"
+#endif
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include "esp_freertos_hooks.h"
+#include "esp_timer.h"
 
 // ===== WebSocket Authentication Tracking =====
 bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
@@ -34,24 +39,44 @@ unsigned long wsAuthTimeout[MAX_WS_CLIENTS] = {0};
 static bool _audioSubscribed[MAX_WS_CLIENTS] = {};
 
 // ===== CPU Utilization Tracking =====
-// Using FreeRTOS idle hooks to measure CPU usage
-static volatile uint32_t idleCounter0 = 0;
-static volatile uint32_t idleCounter1 = 0;
-static uint32_t lastIdleCount0 = 0;
-static uint32_t lastIdleCount1 = 0;
-static unsigned long lastCpuMeasureTime = 0;
-static float cpuUsageCore0 = 0.0;
-static float cpuUsageCore1 = 0.0;
+// Uses FreeRTOS idle hooks with microsecond wall-clock timing.
+// Each hook accumulates actual wall-clock microseconds spent in idle,
+// not iteration counts (which are affected by WiFi interrupt overhead).
+static volatile int64_t idleTimeUs0 = 0;   // Accumulated idle microseconds
+static volatile int64_t idleTimeUs1 = 0;
+static int64_t lastIdleTimeUs0 = 0;        // Previous snapshot
+static int64_t lastIdleTimeUs1 = 0;
+static int64_t lastCpuMeasureTimeUs = 0;   // Wall clock at last measurement
+static float cpuUsageCore0 = -1.0f;
+static float cpuUsageCore1 = -1.0f;
 static bool cpuHooksInstalled = false;
+static int cpuWarmupCycles = 0;            // Skip first 2 measurements for stability
 
-// Idle hook callbacks - called when core is idle
+// Track entry time per-core (local to each core, no cross-core cache contention)
+static volatile int64_t idleEntryUs0 = 0;
+static volatile int64_t idleEntryUs1 = 0;
+
+// Idle hook: measure wall-clock time between calls using esp_timer_get_time().
+// Each call = one iteration of the idle task loop. We accumulate the delta
+// between consecutive calls, which represents time spent in idle (not in ISRs/tasks).
 static bool idleHookCore0() {
-  idleCounter0++;
-  return false; // Don't yield
+  int64_t now = esp_timer_get_time();
+  if (idleEntryUs0 > 0) {
+    int64_t delta = now - idleEntryUs0;
+    // Only count short deltas (<1ms) — longer gaps mean we were preempted
+    if (delta < 1000) idleTimeUs0 += delta;
+  }
+  idleEntryUs0 = now;
+  return false;
 }
 
 static bool idleHookCore1() {
-  idleCounter1++;
+  int64_t now = esp_timer_get_time();
+  if (idleEntryUs1 > 0) {
+    int64_t delta = now - idleEntryUs1;
+    if (delta < 1000) idleTimeUs1 += delta;
+  }
+  idleEntryUs1 = now;
   return false;
 }
 
@@ -114,11 +139,24 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendSignalGenState();
             sendAudioGraphState();
             sendDebugState();
+            // Send per-ADC enabled state
+            {
+              JsonDocument adcDoc;
+              adcDoc["type"] = "adcState";
+              JsonArray arr = adcDoc["enabled"].to<JsonArray>();
+              for (int i = 0; i < NUM_AUDIO_ADCS; i++) arr.add(appState.adcEnabled[i]);
+              String adcJson;
+              serializeJson(adcDoc, adcJson);
+              webSocket.sendTXT(num, adcJson.c_str());
+            }
 #ifdef DSP_ENABLED
             sendDspState();
 #endif
 #ifdef DAC_ENABLED
             sendDacState();
+#endif
+#ifdef USB_AUDIO_ENABLED
+            sendUsbAudioState();
 #endif
 
             // If device just updated, notify the client
@@ -366,6 +404,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "setDspBypass") {
           if (doc["enabled"].is<bool>()) appState.dspEnabled = doc["enabled"].as<bool>();
           if (doc["bypass"].is<bool>()) appState.dspBypass = doc["bypass"].as<bool>();
+          // Sync bypass to DSP config (must match appState for UI + pipeline consistency)
+          dsp_copy_active_to_inactive();
+          DspState *cfg = dsp_get_inactive_config();
+          cfg->globalBypass = appState.dspBypass;
+          dsp_swap_config();
           extern void saveDspSettingsDebounced();
           saveDspSettingsDebounced();
           appState.markDspConfigDirty();
@@ -416,10 +459,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             if (si >= 0 && si < cfg->channels[ch].stageCount) {
               DspStage &s = cfg->channels[ch].stages[si];
               if (doc["enabled"].is<bool>()) s.enabled = doc["enabled"].as<bool>();
-              if (s.type <= DSP_BIQUAD_CUSTOM) {
+              if (dsp_is_biquad_type(s.type)) {
                 if (doc["freq"].is<float>()) s.biquad.frequency = doc["freq"].as<float>();
                 if (doc["gain"].is<float>()) s.biquad.gain = doc["gain"].as<float>();
                 if (doc["Q"].is<float>()) s.biquad.Q = doc["Q"].as<float>();
+                if (doc["Q2"].is<float>()) s.biquad.Q2 = doc["Q2"].as<float>();
                 dsp_compute_biquad_coeffs(s.biquad, s.type, cfg->sampleRate);
               } else if (s.type == DSP_LIMITER) {
                 if (doc["thresholdDb"].is<float>()) s.limiter.thresholdDb = doc["thresholdDb"].as<float>();
@@ -498,6 +542,23 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             appState.markDspConfigDirty();
           }
         }
+        else if (msgType == "setDspStereoLink") {
+          int pair = doc["pair"] | -1;
+          bool linked = doc["linked"] | true;
+          if (pair >= 0 && pair <= 1) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            int chA = pair * 2;
+            int chB = pair * 2 + 1;
+            cfg->channels[chA].stereoLink = linked;
+            cfg->channels[chB].stereoLink = linked;
+            if (linked) dsp_mirror_channel_config(chA, chB);
+            dsp_swap_config();
+            extern void saveDspSettingsDebounced();
+            saveDspSettingsDebounced();
+            appState.markDspConfigDirty();
+          }
+        }
         // ===== PEQ Band Handlers =====
         else if (msgType == "updatePeqBand") {
           int ch = doc["ch"] | -1;
@@ -511,9 +572,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               if (doc["gain"].is<float>()) s.biquad.gain = doc["gain"].as<float>();
               if (doc["Q"].is<float>()) s.biquad.Q = doc["Q"].as<float>();
               if (doc["enabled"].is<bool>()) s.enabled = doc["enabled"].as<bool>();
-              if (doc["filterType"].is<const char *>()) {
-                extern DspStageType typeFromString(const char *);
-                // Use inline lookup for filter type
+              if (doc["filterType"].is<int>()) {
+                int ft = doc["filterType"].as<int>();
+                if (ft >= 0 && ft < DSP_STAGE_TYPE_COUNT && dsp_is_biquad_type((DspStageType)ft)) {
+                  s.type = (DspStageType)ft;
+                }
+              } else if (doc["filterType"].is<const char *>()) {
                 const char *ft = doc["filterType"].as<const char *>();
                 DspStageType newType = DSP_BIQUAD_PEQ;
                 if (strcmp(ft, "PEQ") == 0) newType = DSP_BIQUAD_PEQ;
@@ -532,6 +596,16 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                   s.biquad.coeffs[j] = co[j].as<float>();
               } else {
                 dsp_compute_biquad_coeffs(s.biquad, s.type, cfg->sampleRate);
+              }
+              // Auto-mirror PEQ to linked partner (preserve delay lines — zeroing causes pops)
+              int partner = dsp_get_linked_partner(ch);
+              if (partner >= 0 && band < cfg->channels[partner].stageCount) {
+                // Copy everything except delay lines (biquad state)
+                float savedDelay0 = cfg->channels[partner].stages[band].biquad.delay[0];
+                float savedDelay1 = cfg->channels[partner].stages[band].biquad.delay[1];
+                cfg->channels[partner].stages[band] = cfg->channels[ch].stages[band];
+                cfg->channels[partner].stages[band].biquad.delay[0] = savedDelay0;
+                cfg->channels[partner].stages[band].biquad.delay[1] = savedDelay1;
               }
               dsp_swap_config();
               extern void saveDspSettingsDebounced();
@@ -696,16 +770,67 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           serializeJson(resp, json);
           webSocket.sendTXT(num, json.c_str());
         }
+        // ===== DSP Config Preset Commands =====
+        else if (msgType == "saveDspPreset") {
+          int slot = doc["slot"] | -1;
+          const char *name = doc["name"] | "";
+          if (slot >= 0 && slot < 4) {
+            extern bool dsp_preset_save(int, const char*);
+            if (dsp_preset_save(slot, name)) {
+              sendDspState();
+              LOG_I("[WebSocket] DSP preset saved: slot=%d name=%s", slot, name);
+            }
+          }
+        }
+        else if (msgType == "loadDspPreset") {
+          int slot = doc["slot"] | -1;
+          if (slot >= 0 && slot < 4) {
+            extern bool dsp_preset_load(int);
+            if (dsp_preset_load(slot)) {
+              sendDspState();
+              LOG_I("[WebSocket] DSP preset loaded: slot=%d", slot);
+            }
+          }
+        }
+        else if (msgType == "deleteDspPreset") {
+          int slot = doc["slot"] | -1;
+          if (slot >= 0 && slot < 4) {
+            extern bool dsp_preset_delete(int);
+            dsp_preset_delete(slot);
+            extern void saveDspSettings();
+            saveDspSettings();
+            sendDspState();
+            LOG_I("[WebSocket] DSP preset deleted: slot=%d", slot);
+          }
+        }
+        else if (msgType == "measureDelayAlignment") {
+          // Trigger measurement — handled in main loop via dirty flag
+          appState.markDelayAlignDirty();
+        }
+        else if (msgType == "applyDelayAlignment") {
+          if (appState.delayAlignValid) {
+            extern void delay_align_auto_apply(const struct DelayAlignResult &, int);
+            DelayAlignResult r;
+            r.delaySamples = appState.delayAlignSamples;
+            r.confidence = appState.delayAlignConfidence;
+            r.delayMs = appState.delayAlignMs;
+            r.valid = appState.delayAlignValid;
+            delay_align_auto_apply(r, 1);
+            extern void saveDspSettingsDebounced();
+            saveDspSettingsDebounced();
+            appState.markDspConfigDirty();
+          }
+        }
 #endif
 #ifdef DAC_ENABLED
         else if (msgType == "setDacEnabled") {
           appState.dacEnabled = doc["enabled"].as<bool>();
+          dac_save_settings();  // Save BEFORE init so dac_output_init() loads correct value
           if (appState.dacEnabled && !appState.dacReady) {
             dac_output_init();
           } else if (!appState.dacEnabled) {
             dac_output_deinit();
           }
-          dac_save_settings();
           appState.markDacDirty();
           LOG_I("[WebSocket] DAC %s", appState.dacEnabled ? "enabled" : "disabled");
         }
@@ -870,9 +995,45 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           webSocket.sendTXT(num, rJson.c_str());
         }
 #endif
+        // ===== Per-ADC Enable/Disable =====
+        else if (msgType == "setAdcEnabled") {
+          int adc = doc["adc"] | -1;
+          bool newVal = doc["enabled"].as<bool>();
+          if (adc >= 0 && adc < NUM_AUDIO_ADCS && newVal != appState.adcEnabled[adc]) {
+            appState.adcEnabled[adc] = newVal;
+            appState.markAdcEnabledDirty();
+            saveSettings();
+            // Broadcast new state to all clients
+            JsonDocument resp;
+            resp["type"] = "adcState";
+            JsonArray arr = resp["enabled"].to<JsonArray>();
+            for (int i = 0; i < NUM_AUDIO_ADCS; i++) arr.add(appState.adcEnabled[i]);
+            String rJson;
+            serializeJson(resp, rJson);
+            webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
+            LOG_I("[WebSocket] ADC%d %s", adc + 1, newVal ? "enabled" : "disabled");
+          }
+        }
+#ifdef USB_AUDIO_ENABLED
+        // ===== USB Audio Enable/Disable =====
+        else if (msgType == "setUsbAudioEnabled") {
+          bool newVal = doc["enabled"].as<bool>();
+          if (newVal != appState.usbAudioEnabled) {
+            appState.usbAudioEnabled = newVal;
+            saveSettings();
+            if (newVal) {
+              usb_audio_init();
+            } else {
+              usb_audio_deinit();
+            }
+            appState.markUsbAudioDirty();
+            LOG_I("[WebSocket] USB Audio %s", newVal ? "enabled" : "disabled");
+          }
+        }
+#endif
       }
       break;
-      
+
     default:
       break;
   }
@@ -993,6 +1154,9 @@ void sendDspState() {
   doc["type"] = "dspState";
   doc["dspEnabled"] = appState.dspEnabled;
   doc["dspBypass"] = appState.dspBypass;
+  doc["presetIndex"] = appState.dspPresetIndex;
+  JsonArray presetNames = doc["presetNames"].to<JsonArray>();
+  for (int i = 0; i < 4; i++) presetNames.add(appState.dspPresetNames[i]);
   DspState *cfg = dsp_get_active_config();
   doc["globalBypass"] = cfg->globalBypass;
   doc["sampleRate"] = cfg->sampleRate;
@@ -1000,6 +1164,7 @@ void sendDspState() {
   for (int c = 0; c < DSP_MAX_CHANNELS; c++) {
     JsonObject ch = channels.add<JsonObject>();
     ch["bypass"] = cfg->channels[c].bypass;
+    ch["stereoLink"] = cfg->channels[c].stereoLink;
     ch["stageCount"] = cfg->channels[c].stageCount;
     JsonArray stages = ch["stages"].to<JsonArray>();
     for (int s = 0; s < cfg->channels[c].stageCount; s++) {
@@ -1008,10 +1173,11 @@ void sendDspState() {
       so["enabled"] = st.enabled;
       so["type"] = (int)st.type;
       if (st.label[0]) so["label"] = st.label;
-      if (st.type <= DSP_BIQUAD_CUSTOM) {
+      if (dsp_is_biquad_type(st.type)) {
         so["freq"] = st.biquad.frequency;
         so["gain"] = st.biquad.gain;
         so["Q"] = st.biquad.Q;
+        if (st.type == DSP_BIQUAD_LINKWITZ) so["Q2"] = st.biquad.Q2;
         // Only send coefficients for enabled stages (saves ~3KB for 40 disabled PEQ bands)
         if (st.enabled) {
           JsonArray co = so["coeffs"].to<JsonArray>();
@@ -1077,6 +1243,18 @@ void sendDacState() {
   doc["ready"] = appState.dacReady;
   doc["filterMode"] = appState.dacFilterMode;
   doc["txUnderruns"] = appState.dacTxUnderruns;
+  // TX diagnostics snapshot
+  {
+    DacTxDiag txd = dac_get_tx_diagnostics();
+    JsonObject tx = doc["tx"].to<JsonObject>();
+    tx["i2sTxEnabled"] = txd.i2sTxEnabled;
+    tx["volumeGain"] = serialized(String(txd.volumeGain, 4));
+    tx["writeCount"] = txd.writeCount;
+    tx["bytesWritten"] = txd.bytesWritten;
+    tx["bytesExpected"] = txd.bytesExpected;
+    tx["peakSample"] = txd.peakSample;
+    tx["zeroFrames"] = txd.zeroFrames;
+  }
   // Include available drivers
   JsonArray drivers = doc["drivers"].to<JsonArray>();
   const DacRegistryEntry* entries = dac_registry_get_entries();
@@ -1126,6 +1304,27 @@ void sendDacState() {
 }
 #endif
 
+#ifdef USB_AUDIO_ENABLED
+void sendUsbAudioState() {
+  JsonDocument doc;
+  doc["type"] = "usbAudioState";
+  doc["enabled"] = appState.usbAudioEnabled;
+  doc["connected"] = appState.usbAudioConnected;
+  doc["streaming"] = appState.usbAudioStreaming;
+  doc["sampleRate"] = appState.usbAudioSampleRate;
+  doc["bitDepth"] = appState.usbAudioBitDepth;
+  doc["channels"] = appState.usbAudioChannels;
+  doc["volume"] = appState.usbAudioVolume;
+  doc["volumeLinear"] = usb_audio_get_volume_linear();
+  doc["mute"] = appState.usbAudioMute;
+  doc["overruns"] = appState.usbAudioBufferOverruns;
+  doc["underruns"] = appState.usbAudioBufferUnderruns;
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+#endif
+
 void sendMqttSettingsState() {
   JsonDocument doc;
   doc["type"] = "mqttSettings";
@@ -1146,62 +1345,79 @@ void sendMqttSettingsState() {
 
 void initCpuUsageMonitoring() {
   if (!cpuHooksInstalled) {
-    // Register idle hooks for both cores
     esp_register_freertos_idle_hook_for_cpu(idleHookCore0, 0);
     esp_register_freertos_idle_hook_for_cpu(idleHookCore1, 1);
     cpuHooksInstalled = true;
-    lastCpuMeasureTime = millis();
+    cpuWarmupCycles = 0;
+    idleTimeUs0 = 0;
+    idleTimeUs1 = 0;
+    idleEntryUs0 = 0;
+    idleEntryUs1 = 0;
+    lastIdleTimeUs0 = 0;
+    lastIdleTimeUs1 = 0;
+    lastCpuMeasureTimeUs = esp_timer_get_time();
+    cpuUsageCore0 = -1.0f;
+    cpuUsageCore1 = -1.0f;
+  }
+}
+
+void deinitCpuUsageMonitoring() {
+  if (cpuHooksInstalled) {
+    esp_deregister_freertos_idle_hook_for_cpu(idleHookCore0, 0);
+    esp_deregister_freertos_idle_hook_for_cpu(idleHookCore1, 1);
+    cpuHooksInstalled = false;
+    cpuUsageCore0 = -1.0f;
+    cpuUsageCore1 = -1.0f;
   }
 }
 
 void updateCpuUsage() {
-  // Initialize hooks if not done yet
   if (!cpuHooksInstalled) {
     initCpuUsageMonitoring();
     return;
   }
-  
-  unsigned long currentTime = millis();
-  unsigned long elapsed = currentTime - lastCpuMeasureTime;
-  
-  // Only update every 500ms minimum for stable readings
-  if (elapsed < 500) {
+
+  int64_t nowUs = esp_timer_get_time();
+  int64_t elapsedUs = nowUs - lastCpuMeasureTimeUs;
+
+  // Only update every 2 seconds for stable readings
+  if (elapsedUs < 2000000) return;
+
+  // Snapshot idle accumulations (volatile reads)
+  int64_t curIdle0 = idleTimeUs0;
+  int64_t curIdle1 = idleTimeUs1;
+
+  // Delta idle microseconds since last measurement
+  int64_t deltaIdle0 = curIdle0 - lastIdleTimeUs0;
+  int64_t deltaIdle1 = curIdle1 - lastIdleTimeUs1;
+
+  lastIdleTimeUs0 = curIdle0;
+  lastIdleTimeUs1 = curIdle1;
+  lastCpuMeasureTimeUs = nowUs;
+
+  // Skip the first 2 cycles — hooks need time to accumulate stable data
+  if (cpuWarmupCycles < 2) {
+    cpuWarmupCycles++;
+    cpuUsageCore0 = -1.0f;
+    cpuUsageCore1 = -1.0f;
     return;
   }
-  
-  // Calculate idle iterations since last measurement
-  uint32_t idleDelta0 = idleCounter0 - lastIdleCount0;
-  uint32_t idleDelta1 = idleCounter1 - lastIdleCount1;
-  
-  // Save current counts for next calculation
-  lastIdleCount0 = idleCounter0;
-  lastIdleCount1 = idleCounter1;
-  lastCpuMeasureTime = currentTime;
-  
-  // The maximum idle count represents 100% idle (0% CPU usage)
-  // We need to calibrate this - typically idle hook runs many times per ms when idle
-  // A good estimate is about 10000-50000 iterations per second when fully idle
-  // We'll use a dynamic max based on the highest count seen
-  static uint32_t maxIdlePerSecond0 = 100000;
-  static uint32_t maxIdlePerSecond1 = 100000;
-  
-  // Scale to per-second rate
-  float idlePerSecond0 = (float)idleDelta0 * 1000.0f / (float)elapsed;
-  float idlePerSecond1 = (float)idleDelta1 * 1000.0f / (float)elapsed;
-  
-  // Update max if we see higher (indicating lower CPU usage baseline)
-  if (idlePerSecond0 > maxIdlePerSecond0) maxIdlePerSecond0 = idlePerSecond0;
-  if (idlePerSecond1 > maxIdlePerSecond1) maxIdlePerSecond1 = idlePerSecond1;
-  
-  // Calculate CPU usage: 100% - (idle% of max)
-  cpuUsageCore0 = 100.0f - (idlePerSecond0 / maxIdlePerSecond0 * 100.0f);
-  cpuUsageCore1 = 100.0f - (idlePerSecond1 / maxIdlePerSecond1 * 100.0f);
-  
-  // Clamp values
-  if (cpuUsageCore0 < 0) cpuUsageCore0 = 0;
-  if (cpuUsageCore0 > 100) cpuUsageCore0 = 100;
-  if (cpuUsageCore1 < 0) cpuUsageCore1 = 0;
-  if (cpuUsageCore1 > 100) cpuUsageCore1 = 100;
+
+  // CPU = 100% - (idle_time / total_time * 100%)
+  // idle_time is actual microseconds the idle task ran (not counting ISR time)
+  // total_time is wall-clock elapsed microseconds
+  if (elapsedUs > 0) {
+    float idlePct0 = (float)deltaIdle0 / (float)elapsedUs * 100.0f;
+    float idlePct1 = (float)deltaIdle1 / (float)elapsedUs * 100.0f;
+    cpuUsageCore0 = 100.0f - idlePct0;
+    cpuUsageCore1 = 100.0f - idlePct1;
+
+    // Clamp
+    if (cpuUsageCore0 < 0) cpuUsageCore0 = 0;
+    if (cpuUsageCore0 > 100) cpuUsageCore0 = 100;
+    if (cpuUsageCore1 < 0) cpuUsageCore1 = 0;
+    if (cpuUsageCore1 > 100) cpuUsageCore1 = 100;
+  }
 }
 
 float getCpuUsageCore0() {
@@ -1213,8 +1429,11 @@ float getCpuUsageCore1() {
 }
 
 void sendHardwareStats() {
-  // Master debug gate — if debug mode is off, send nothing
-  if (!appState.debugMode) return;
+  // Master debug gate — if debug mode is off, deregister hooks and send nothing
+  if (!appState.debugMode) {
+    if (cpuHooksInstalled) deinitCpuUsageMonitoring();
+    return;
+  }
 
   JsonDocument doc;
   doc["type"] = "hardware_stats";
@@ -1225,9 +1444,11 @@ void sendHardwareStats() {
   doc["cpu"]["model"] = ESP.getChipModel();
   doc["cpu"]["revision"] = ESP.getChipRevision();
   doc["cpu"]["cores"] = ESP.getChipCores();
-  doc["cpu"]["usageCore0"] = cpuUsageCore0;
-  doc["cpu"]["usageCore1"] = cpuUsageCore1;
-  doc["cpu"]["usageTotal"] = (cpuUsageCore0 + cpuUsageCore1) / 2.0;
+  // During warm-up, report -1 (UI shows "Calibrating...")
+  bool cpuValid = (cpuUsageCore0 >= 0 && cpuUsageCore1 >= 0);
+  doc["cpu"]["usageCore0"] = cpuValid ? cpuUsageCore0 : -1;
+  doc["cpu"]["usageCore1"] = cpuValid ? cpuUsageCore1 : -1;
+  doc["cpu"]["usageTotal"] = cpuValid ? (cpuUsageCore0 + cpuUsageCore1) / 2.0f : -1;
   // temperatureRead() uses SAR ADC spinlock which can deadlock with I2S ADC,
   // causing interrupt WDT on Core 1. Cache the value on a slow timer instead.
   {
@@ -1352,11 +1573,25 @@ void sendHardwareStats() {
         dac["independentClock"] = caps.needsIndependentClock;
         dac["hasFilters"] = caps.hasFilterModes;
       }
+      // TX diagnostics snapshot
+      {
+        DacTxDiag txd = dac_get_tx_diagnostics();
+        JsonObject tx = dac["tx"].to<JsonObject>();
+        tx["i2sTxEnabled"] = txd.i2sTxEnabled;
+        tx["volumeGain"] = serialized(String(txd.volumeGain, 4));
+        tx["writeCount"] = txd.writeCount;
+        tx["bytesWritten"] = txd.bytesWritten;
+        tx["bytesExpected"] = txd.bytesExpected;
+        tx["peakSample"] = txd.peakSample;
+        tx["zeroFrames"] = txd.zeroFrames;
+      }
       // EEPROM diagnostics
       const AppState::EepromDiag& ed = appState.eepromDiag;
       JsonObject eep = dac["eeprom"].to<JsonObject>();
+      eep["scanned"] = ed.scanned;
       eep["found"] = ed.found;
       eep["addr"] = ed.eepromAddr;
+      eep["i2cMask"] = ed.i2cDevicesMask;
       eep["i2cDevices"] = ed.i2cTotalDevices;
       eep["readErrors"] = ed.readErrors;
       eep["writeErrors"] = ed.writeErrors;

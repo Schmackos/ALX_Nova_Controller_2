@@ -261,3 +261,41 @@ int dsp_gen_hpf1_f32(float *coeffs, float freq)
 
     return 0;
 }
+
+// Linkwitz Transform: maps (F0, Q0) -> (Fp, Qp) using bilinear transform.
+// This reshapes a sealed speaker's bass rolloff from Fs/Qts to a new target.
+// H(s) = (s^2 + s*W0/Q0 + W0^2) / (s^2 + s*Wp/Qp + Wp^2)
+// with frequency pre-warping: W = tan(pi * f_normalized)
+int dsp_gen_linkwitz_f32(float *coeffs, float f0, float q0, float fp, float qp)
+{
+    if (!coeffs || f0 <= 0.0f || f0 >= 0.5f || fp <= 0.0f || fp >= 0.5f
+        || q0 <= 0.0f || qp <= 0.0f) {
+        return -1;
+    }
+
+    // Pre-warp analog frequencies
+    float W0 = tanf((float)M_PI * f0);
+    float Wp = tanf((float)M_PI * fp);
+    float W0sq = W0 * W0;
+    float Wpsq = Wp * Wp;
+
+    // Numerator (original speaker poles become zeros of the LT filter)
+    float num0 = 1.0f + W0 / q0 + W0sq;
+    float num1 = -2.0f + 2.0f * W0sq;
+    float num2 = 1.0f - W0 / q0 + W0sq;
+
+    // Denominator (target poles)
+    float den0 = 1.0f + Wp / qp + Wpsq;
+    float den1 = -2.0f + 2.0f * Wpsq;
+    float den2 = 1.0f - Wp / qp + Wpsq;
+
+    float inv_den0 = 1.0f / den0;
+
+    coeffs[0] = num0 * inv_den0;  // b0
+    coeffs[1] = num1 * inv_den0;  // b1
+    coeffs[2] = num2 * inv_den0;  // b2
+    coeffs[3] = den1 * inv_den0;  // a1
+    coeffs[4] = den2 * inv_den0;  // a2
+
+    return 0;
+}

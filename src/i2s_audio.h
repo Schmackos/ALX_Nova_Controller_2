@@ -113,6 +113,11 @@ bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex = 0
 // Returns number of ADCs currently detected and producing data
 int i2s_audio_get_num_adcs();
 
+// Call from main loop to flush periodic audio/DAC diagnostic logs.
+// The audio task sets a flag every 5s; this function does the actual
+// Serial output from the main loop context to avoid blocking I2S DMA.
+void audio_periodic_dump();
+
 // ===== Pure functions exposed for unit testing =====
 AudioHealthStatus audio_derive_health_status(const AdcDiagnostics &diag);
 AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag); // Legacy overload (uses adc[0])

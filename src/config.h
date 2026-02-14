@@ -80,7 +80,7 @@ const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
 
 // ===== DSP Pipeline Configuration =====
 #ifdef DSP_ENABLED
-#define DSP_MAX_STAGES       20    // Max filter stages per channel
+#define DSP_MAX_STAGES       24    // Max filter stages per channel (10 PEQ + 14 chain)
 #define DSP_PEQ_BANDS        10    // PEQ bands occupy stages 0-9; chain stages use 10-19
 #define DSP_MAX_FIR_TAPS     256   // Max FIR taps (direct convolution)
 #define DSP_MAX_FIR_SLOTS    2     // Max concurrent FIR stages (pool-allocated, not inline)
@@ -89,6 +89,17 @@ const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
 #define DSP_MAX_DELAY_SAMPLES 4800 // Max delay = 100ms @ 48kHz
 #define DSP_DEFAULT_Q        0.707f
 #define DSP_CPU_WARN_PERCENT 80.0f
+#endif
+
+// ===== USB Audio Configuration =====
+#ifdef USB_AUDIO_ENABLED
+#define USB_AUDIO_DEFAULT_SAMPLE_RATE 48000
+#define USB_AUDIO_DEFAULT_BIT_DEPTH   16
+#define USB_AUDIO_RING_BUFFER_MS      20    // Ring buffer capacity in ms
+#define USB_AUDIO_RING_BUFFER_FRAMES  ((USB_AUDIO_DEFAULT_SAMPLE_RATE * USB_AUDIO_RING_BUFFER_MS) / 1000)
+#define USB_AUDIO_TASK_STACK_SIZE     4096
+#define USB_AUDIO_TASK_PRIORITY       1     // Same as main loop — must not preempt audio
+#define USB_AUDIO_TASK_CORE           0     // TinyUSB task on Core 0 (separate from audio on Core 1)
 #endif
 
 // ===== Server Ports =====
@@ -170,6 +181,11 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_PRIORITY_MQTT 1    // Medium priority
 #define TASK_PRIORITY_OTA 0     // Low priority
 #define TASK_PRIORITY_AUDIO 3   // Highest app priority (must not drop I2S samples)
+#define TASK_CORE_AUDIO     1   // Core 1 — isolates audio from WiFi system tasks on Core 0
+
+// ===== I2S DMA Configuration =====
+#define I2S_DMA_BUF_COUNT 8     // 8 buffers x 256 samples = ~42ms runway at 48kHz
+#define I2S_DMA_BUF_LEN   256
 
 // ===== GUI Configuration (TFT + Rotary Encoder) =====
 #ifdef GUI_ENABLED

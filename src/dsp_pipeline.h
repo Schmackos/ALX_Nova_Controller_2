@@ -31,21 +31,29 @@ enum DspStageType : uint8_t {
     DSP_COMPRESSOR,
     DSP_BIQUAD_LPF_1ST = 19,   // First-order LPF (b2=0, a2=0)
     DSP_BIQUAD_HPF_1ST = 20,   // First-order HPF (b2=0, a2=0)
+    DSP_BIQUAD_LINKWITZ = 21,  // Linkwitz Transform (F0, Q0, Fp, Qp)
+    DSP_DECIMATOR = 22,        // Decimation FIR (integer downsampling)
+    DSP_CONVOLUTION = 23,      // Partitioned convolution (room correction IR)
     DSP_STAGE_TYPE_COUNT
 };
 
 // Check if a stage type is a biquad-processed type (including first-order filters)
 inline bool dsp_is_biquad_type(DspStageType type) {
-    return type <= DSP_BIQUAD_CUSTOM || type == DSP_BIQUAD_LPF_1ST || type == DSP_BIQUAD_HPF_1ST;
+    return type <= DSP_BIQUAD_CUSTOM || type == DSP_BIQUAD_LPF_1ST || type == DSP_BIQUAD_HPF_1ST
+           || type == DSP_BIQUAD_LINKWITZ;
 }
 
 // ===== Biquad Parameters =====
 struct DspBiquadParams {
-    float frequency;    // Center/corner frequency (Hz)
-    float gain;         // Gain in dB (PEQ, shelf types)
-    float Q;            // Quality factor
+    float frequency;    // Center/corner frequency (Hz); F0 for Linkwitz
+    float gain;         // Gain in dB (PEQ, shelf); Fp Hz for Linkwitz
+    float Q;            // Quality factor; Q0 for Linkwitz
+    float Q2;           // Second Q factor (Qp for Linkwitz Transform)
     float coeffs[5];    // [b0, b1, b2, a1, a2]
     float delay[2];     // Biquad delay line (state)
+    // Coefficient morphing for glitch-free PEQ updates
+    float targetCoeffs[5]; // Target coefficients (when morphing)
+    uint16_t morphRemaining; // Samples remaining in morph (0 = settled)
 };
 
 // ===== Limiter Parameters =====
@@ -69,6 +77,7 @@ struct DspFirParams {
 struct DspGainParams {
     float gainDb;       // Gain in dB
     float gainLinear;   // Pre-computed linear gain (10^(dB/20))
+    float currentLinear;// Current ramping value (runtime state, not persisted)
 };
 
 // ===== Delay Parameters (delay line stored in external pool) =====
@@ -101,6 +110,21 @@ struct DspCompressorParams {
     float gainReduction;    // Current GR in dB (runtime, for metering)
 };
 
+// ===== Decimator Parameters =====
+struct DspDecimatorParams {
+    uint8_t  factor;    // Decimation factor (2, 4, or 8)
+    int8_t   firSlot;   // Index into FIR pool (-1 = unassigned)
+    uint16_t numTaps;   // Anti-aliasing filter tap count
+    uint16_t delayPos;  // Current position in FIR delay line
+};
+
+// ===== Convolution Parameters =====
+struct DspConvolutionParams {
+    int8_t convSlot;    // Index into convolution slot pool (-1 = unassigned)
+    uint16_t irLength;  // Original IR length in samples
+    char irFilename[32]; // Source WAV filename
+};
+
 // ===== Generic DSP Stage =====
 struct DspStage {
     bool enabled;
@@ -116,12 +140,15 @@ struct DspStage {
         DspPolarityParams polarity;
         DspMuteParams mute;
         DspCompressorParams compressor;
+        DspDecimatorParams decimator;
+        DspConvolutionParams convolution;
     };
 };
 
 // ===== Channel Configuration =====
 struct DspChannelConfig {
     bool bypass;
+    bool stereoLink;    // When true, channels 0+1 and 2+3 are linked pairs
     uint8_t stageCount;
     DspStage stages[DSP_MAX_STAGES];
 };
@@ -146,6 +173,7 @@ inline void dsp_init_biquad_params(DspBiquadParams &p) {
     p.frequency = 1000.0f;
     p.gain = 0.0f;
     p.Q = DSP_DEFAULT_Q;
+    p.Q2 = DSP_DEFAULT_Q;
     p.coeffs[0] = 1.0f; p.coeffs[1] = 0; p.coeffs[2] = 0;
     p.coeffs[3] = 0; p.coeffs[4] = 0;
     p.delay[0] = 0; p.delay[1] = 0;
@@ -169,6 +197,7 @@ inline void dsp_init_fir_params(DspFirParams &p) {
 inline void dsp_init_gain_params(DspGainParams &p) {
     p.gainDb = 0.0f;
     p.gainLinear = 1.0f;
+    p.currentLinear = 1.0f;
 }
 
 inline void dsp_init_delay_params(DspDelayParams &p) {
@@ -197,6 +226,19 @@ inline void dsp_init_compressor_params(DspCompressorParams &p) {
     p.gainReduction = 0.0f;
 }
 
+inline void dsp_init_decimator_params(DspDecimatorParams &p) {
+    p.factor = 2;
+    p.firSlot = -1;
+    p.numTaps = 0;
+    p.delayPos = 0;
+}
+
+inline void dsp_init_convolution_params(DspConvolutionParams &p) {
+    p.convSlot = -1;
+    p.irLength = 0;
+    p.irFilename[0] = '\0';
+}
+
 inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
     s.enabled = true;
     s.type = t;
@@ -215,6 +257,10 @@ inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
         dsp_init_mute_params(s.mute);
     } else if (t == DSP_COMPRESSOR) {
         dsp_init_compressor_params(s.compressor);
+    } else if (t == DSP_DECIMATOR) {
+        dsp_init_decimator_params(s.decimator);
+    } else if (t == DSP_CONVOLUTION) {
+        dsp_init_convolution_params(s.convolution);
     } else if (dsp_is_biquad_type(t)) {
         dsp_init_biquad_params(s.biquad);
     } else {
@@ -224,6 +270,7 @@ inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
 
 inline void dsp_init_channel(DspChannelConfig &ch) {
     ch.bypass = false;
+    ch.stereoLink = true;
     ch.stageCount = 0;
 }
 
@@ -318,6 +365,7 @@ void dsp_copy_active_to_inactive();
 // Metrics
 DspMetrics dsp_get_metrics();
 void dsp_reset_max_metrics();
+void dsp_clear_cpu_load();
 
 // Stage CRUD (operates on inactive config)
 int dsp_add_stage(int channel, DspStageType type, int position = -1);
@@ -328,6 +376,10 @@ bool dsp_set_stage_enabled(int channel, int stageIndex, bool enabled);
 // Chain stage wrappers (operate only on indices >= DSP_PEQ_BANDS)
 int dsp_add_chain_stage(int channel, DspStageType type, int chainPosition = -1);
 bool dsp_remove_chain_stage(int channel, int chainIndex);
+
+// Stereo link helpers
+void dsp_mirror_channel_config(int srcCh, int dstCh);  // Copy stage config (preserving runtime state)
+int  dsp_get_linked_partner(int channel);               // Returns partner channel, or -1 if unlinked
 
 // PEQ band helpers
 void dsp_ensure_peq_bands(DspState *cfg);  // Ensure all channels have PEQ bands

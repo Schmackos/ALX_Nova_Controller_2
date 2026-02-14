@@ -61,6 +61,8 @@ bool loadSettings() {
   String line24 = file.readStringUntil('\n');
   String line25 = file.readStringUntil('\n');
   String line26 = file.readStringUntil('\n');
+  String line27 = file.readStringUntil('\n');
+  String line28 = file.readStringUntil('\n');
   file.close();
 
   line1.trim();
@@ -249,6 +251,30 @@ bool loadSettings() {
       appState.fftWindowType = (FftWindowType)wt;
   }
 
+  // Load per-ADC enabled (if available, default true)
+  if (line27.length() > 0) {
+    line27.trim();
+    int commaIdx = line27.indexOf(',');
+    if (commaIdx > 0) {
+      // New format: "1,1" (per-ADC)
+      appState.adcEnabled[0] = (line27.substring(0, commaIdx).toInt() != 0);
+      appState.adcEnabled[1] = (line27.substring(commaIdx + 1).toInt() != 0);
+    } else {
+      // Old format: single "1" or "0" — apply to both
+      bool val = (line27.toInt() != 0);
+      appState.adcEnabled[0] = val;
+      appState.adcEnabled[1] = val;
+    }
+  }
+
+#ifdef USB_AUDIO_ENABLED
+  // Load USB audio enabled (if available, default false)
+  if (line28.length() > 0) {
+    line28.trim();
+    appState.usbAudioEnabled = (line28.toInt() != 0);
+  }
+#endif
+
   return true;
 }
 
@@ -290,6 +316,19 @@ void saveSettings() {
   file.println(appState.debugI2sMetrics ? "1" : "0");
   file.println(appState.debugTaskMonitor ? "1" : "0");
   file.println((int)appState.fftWindowType);
+  // Per-ADC enabled: "1,1" format
+  {
+    String adcLine;
+    adcLine += (appState.adcEnabled[0] ? "1" : "0");
+    adcLine += ",";
+    adcLine += (appState.adcEnabled[1] ? "1" : "0");
+    file.println(adcLine);
+  }
+#ifdef USB_AUDIO_ENABLED
+  file.println(appState.usbAudioEnabled ? "1" : "0");
+#else
+  file.println("0"); // placeholder for usbAudioEnabled
+#endif
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -515,6 +554,13 @@ void handleSettingsGet() {
   doc["debugI2sMetrics"] = appState.debugI2sMetrics;
   doc["debugTaskMonitor"] = appState.debugTaskMonitor;
   doc["fftWindowType"] = (int)appState.fftWindowType;
+  {
+    JsonArray adcArr = doc["adcEnabled"].to<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+  }
+#ifdef USB_AUDIO_ENABLED
+  doc["usbAudioEnabled"] = appState.usbAudioEnabled;
+#endif
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -754,6 +800,38 @@ void handleSettingsUpdate() {
     }
   }
 
+  if (doc["adcEnabled"].is<JsonArray>()) {
+    JsonArray arr = doc["adcEnabled"].as<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS && i < (int)arr.size(); i++) {
+      bool newVal = arr[i].as<bool>();
+      if (newVal != appState.adcEnabled[i]) {
+        appState.adcEnabled[i] = newVal;
+        settingsChanged = true;
+        LOG_I("[Settings] ADC%d %s", i + 1, newVal ? "enabled" : "disabled");
+      }
+    }
+  } else if (doc["adcEnabled"].is<bool>()) {
+    // Legacy single bool — apply to both
+    bool newVal = doc["adcEnabled"].as<bool>();
+    for (int i = 0; i < NUM_AUDIO_ADCS; i++) {
+      if (newVal != appState.adcEnabled[i]) {
+        appState.adcEnabled[i] = newVal;
+        settingsChanged = true;
+      }
+    }
+  }
+
+#ifdef USB_AUDIO_ENABLED
+  if (doc["usbAudioEnabled"].is<bool>()) {
+    bool newVal = doc["usbAudioEnabled"].as<bool>();
+    if (newVal != appState.usbAudioEnabled) {
+      appState.usbAudioEnabled = newVal;
+      settingsChanged = true;
+      LOG_I("[Settings] USB Audio %s", newVal ? "enabled" : "disabled");
+    }
+  }
+#endif
+
 #ifdef GUI_ENABLED
   if (doc["bootAnimEnabled"].is<bool>()) {
     bool newBootAnim = doc["bootAnimEnabled"].as<bool>();
@@ -805,6 +883,13 @@ void handleSettingsUpdate() {
   resp["debugI2sMetrics"] = appState.debugI2sMetrics;
   resp["debugTaskMonitor"] = appState.debugTaskMonitor;
   resp["fftWindowType"] = (int)appState.fftWindowType;
+  {
+    JsonArray adcArr = resp["adcEnabled"].to<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+  }
+#ifdef USB_AUDIO_ENABLED
+  resp["usbAudioEnabled"] = appState.usbAudioEnabled;
+#endif
 #ifdef GUI_ENABLED
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
@@ -863,6 +948,13 @@ void handleSettingsExport() {
   doc["settings"]["debugI2sMetrics"] = appState.debugI2sMetrics;
   doc["settings"]["debugTaskMonitor"] = appState.debugTaskMonitor;
   doc["settings"]["fftWindowType"] = (int)appState.fftWindowType;
+  {
+    JsonArray adcArr = doc["settings"]["adcEnabled"].to<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+  }
+#ifdef USB_AUDIO_ENABLED
+  doc["settings"]["usbAudioEnabled"] = appState.usbAudioEnabled;
+#endif
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
@@ -1137,6 +1229,23 @@ void handleSettingsImport() {
       int wt = doc["settings"]["fftWindowType"].as<int>();
       if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.fftWindowType = (FftWindowType)wt;
     }
+    if (doc["settings"]["adcEnabled"].is<JsonArray>()) {
+      JsonArray arr = doc["settings"]["adcEnabled"].as<JsonArray>();
+      for (int i = 0; i < NUM_AUDIO_ADCS && i < (int)arr.size(); i++) {
+        appState.adcEnabled[i] = arr[i].as<bool>();
+        LOG_D("[Settings] ADC%d: %s", i + 1, appState.adcEnabled[i] ? "enabled" : "disabled");
+      }
+    } else if (doc["settings"]["adcEnabled"].is<bool>()) {
+      bool val = doc["settings"]["adcEnabled"].as<bool>();
+      for (int i = 0; i < NUM_AUDIO_ADCS; i++) appState.adcEnabled[i] = val;
+      LOG_D("[Settings] ADC: %s", val ? "enabled" : "disabled");
+    }
+#ifdef USB_AUDIO_ENABLED
+    if (doc["settings"]["usbAudioEnabled"].is<bool>()) {
+      appState.usbAudioEnabled = doc["settings"]["usbAudioEnabled"].as<bool>();
+      LOG_D("[Settings] USB Audio: %s", appState.usbAudioEnabled ? "enabled" : "disabled");
+    }
+#endif
 #ifdef GUI_ENABLED
     if (doc["settings"]["bootAnimEnabled"].is<bool>()) {
       appState.bootAnimEnabled = doc["settings"]["bootAnimEnabled"].as<bool>();
@@ -1445,6 +1554,13 @@ void handleDiagnostics() {
   settings["debugI2sMetrics"] = appState.debugI2sMetrics;
   settings["debugTaskMonitor"] = appState.debugTaskMonitor;
   settings["fftWindowType"] = (int)appState.fftWindowType;
+  {
+    JsonArray adcArr = settings["adcEnabled"].to<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+  }
+#ifdef USB_AUDIO_ENABLED
+  settings["usbAudioEnabled"] = appState.usbAudioEnabled;
+#endif
 
   // ===== Smart Sensing =====
   JsonObject sensing = doc["smartSensing"].to<JsonObject>();

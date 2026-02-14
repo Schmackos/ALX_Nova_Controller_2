@@ -99,5 +99,18 @@ DacDriver* dac_get_driver();
 bool dac_enable_i2s_tx(uint32_t sampleRate);
 void dac_disable_i2s_tx();
 
+// ===== TX Diagnostics (snapshot of interval counters) =====
+struct DacTxDiag {
+    bool i2sTxEnabled;          // I2S TX full-duplex active
+    float volumeGain;           // Current linear gain
+    uint32_t writeCount;        // i2s_write() calls since last reset
+    uint32_t bytesWritten;      // Bytes actually written
+    uint32_t bytesExpected;     // Bytes expected to write
+    int32_t  peakSample;        // Peak absolute sample value
+    uint32_t zeroFrames;        // All-zero stereo frames
+    uint32_t underruns;         // Cumulative TX underruns (from AppState)
+};
+DacTxDiag dac_get_tx_diagnostics();
+
 #endif // DAC_ENABLED
 #endif // DAC_HAL_H

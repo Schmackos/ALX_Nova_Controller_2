@@ -8,6 +8,7 @@
 #include "../../app_state.h"
 #include "../../dsp_pipeline.h"
 #include "../../dsp_coefficients.h"
+#include "../../dsp_api.h"
 #include "../../debug_serial.h"
 
 extern void saveDspSettingsDebounced();
@@ -16,6 +17,7 @@ extern void saveDspSettingsDebounced();
 static char en_str[4];
 static char bypass_str[4];
 static char cpu_str[12];
+static char preset_str[24];
 static char ch_str[DSP_MAX_CHANNELS][24];
 
 /* Menu config */
@@ -24,6 +26,7 @@ static MenuConfig dsp_menu;
 /* Forward declarations */
 static void edit_enabled(void);
 static void edit_bypass(void);
+static void cycle_preset(void);
 static void edit_ch_bypass_0(void);
 static void edit_ch_bypass_1(void);
 static void edit_ch_bypass_2(void);
@@ -53,11 +56,19 @@ static void build_dsp_menu(void) {
                  cfg->channels[ch].bypass ? " BYP" : "");
     }
 
+    // Preset string
+    if (st.dspPresetIndex >= 0 && st.dspPresetIndex < 4 && st.dspPresetNames[st.dspPresetIndex][0]) {
+        snprintf(preset_str, sizeof(preset_str), "%s", st.dspPresetNames[st.dspPresetIndex]);
+    } else {
+        snprintf(preset_str, sizeof(preset_str), "Custom");
+    }
+
     dsp_menu.title = "DSP";
     int idx = 0;
     dsp_menu.items[idx++] = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     dsp_menu.items[idx++] = {"Enabled", en_str, nullptr, MENU_ACTION, edit_enabled};
     dsp_menu.items[idx++] = {"Bypass", bypass_str, nullptr, MENU_ACTION, edit_bypass};
+    dsp_menu.items[idx++] = {"Preset", preset_str, nullptr, MENU_ACTION, cycle_preset};
     dsp_menu.items[idx++] = {"CPU Load", cpu_str, nullptr, MENU_INFO, nullptr};
     dsp_menu.items[idx++] = {"PEQ Bands", nullptr, nullptr, MENU_ACTION, open_peq};
 
@@ -112,6 +123,19 @@ static void edit_bypass(void) {
     scr_value_edit_open(&cfg);
 }
 
+/* Cycle through presets (next existing slot, wrap around) */
+static void cycle_preset(void) {
+    AppState &st = AppState::getInstance();
+    int current = st.dspPresetIndex;
+    for (int i = 1; i <= 4; i++) {
+        int slot = (current + i) % 4;
+        if (dsp_preset_exists(slot)) {
+            dsp_preset_load(slot);
+            return;
+        }
+    }
+}
+
 /* Per-channel bypass toggles */
 static void toggle_ch_bypass(int ch) {
     dsp_copy_active_to_inactive();
@@ -143,10 +167,17 @@ void scr_dsp_refresh(void) {
     snprintf(bypass_str, sizeof(bypass_str), "%s", st.dspBypass ? "ON" : "OFF");
     scr_menu_set_item_value(2, bypass_str);
 
-    snprintf(cpu_str, sizeof(cpu_str), "%.1f%%", m.cpuLoadPercent);
-    scr_menu_set_item_value(3, cpu_str);
+    if (st.dspPresetIndex >= 0 && st.dspPresetIndex < 4 && st.dspPresetNames[st.dspPresetIndex][0]) {
+        snprintf(preset_str, sizeof(preset_str), "%s", st.dspPresetNames[st.dspPresetIndex]);
+    } else {
+        snprintf(preset_str, sizeof(preset_str), "Custom");
+    }
+    scr_menu_set_item_value(3, preset_str);
 
-    // PEQ Bands item at index 4, channels start at index 5
+    snprintf(cpu_str, sizeof(cpu_str), "%.1f%%", m.cpuLoadPercent);
+    scr_menu_set_item_value(4, cpu_str);
+
+    // PEQ Bands item at index 5, channels start at index 6
     for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
         int chainStages = dsp_chain_stage_count(cfg->channels[ch]);
         int peqActive = 0;
@@ -156,7 +187,7 @@ void scr_dsp_refresh(void) {
         snprintf(ch_str[ch], sizeof(ch_str[ch]), "%dP %dC%s",
                  peqActive, chainStages,
                  cfg->channels[ch].bypass ? " BYP" : "");
-        scr_menu_set_item_value(5 + ch, ch_str[ch]);
+        scr_menu_set_item_value(6 + ch, ch_str[ch]);
     }
 }
 

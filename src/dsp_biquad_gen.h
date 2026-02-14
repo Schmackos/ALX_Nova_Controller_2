@@ -33,6 +33,12 @@ int dsp_gen_highShelf_f32(float *coeffs, float freq, float gain, float qFactor);
 int dsp_gen_lpf1_f32(float *coeffs, float freq);
 int dsp_gen_hpf1_f32(float *coeffs, float freq);
 
+// Linkwitz Transform: reshapes sealed speaker bass rolloff.
+// f0: original speaker Fs (normalized), q0: original Qts
+// fp: target Fs (normalized), qp: target Qts
+// All frequencies normalized = f_Hz / f_sample (must be 0 < f < 0.5)
+int dsp_gen_linkwitz_f32(float *coeffs, float f0, float q0, float fp, float qp);
+
 #ifdef __cplusplus
 }
 #endif

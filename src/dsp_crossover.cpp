@@ -6,6 +6,7 @@
 #include "dsps_add.h"
 #include <math.h>
 #include <string.h>
+#include <stdio.h>
 
 // ===== Crossover Presets =====
 
@@ -36,35 +37,49 @@ static int butterworth_q_values(int order, float *qValues, bool &hasFirstOrder) 
 }
 
 // Insert a Butterworth filter of given order with proper per-section Q values.
+// label: if non-null, set on all inserted stages for UI grouping.
+// Self-contained rollback: if insertion fails partway, all stages from this call are removed.
 static int insert_butterworth_filter(int channel, float freq, int order,
-                                     DspStageType type2nd, DspStageType type1st) {
+                                     DspStageType type2nd, DspStageType type1st,
+                                     const char *label = nullptr) {
     float qValues[12]; // max 12 sections for LR24 = BW12 x 2
     bool hasFirstOrder;
     int numSections = butterworth_q_values(order, qValues, hasFirstOrder);
 
     int firstIdx = -1;
+    int localAdded = 0;
 
     // Insert first-order section if odd order
     if (hasFirstOrder) {
         int idx = dsp_add_stage(channel, type1st);
         if (idx < 0) return -1;
         firstIdx = idx;
+        localAdded++;
         DspState *cfg = dsp_get_inactive_config();
         DspStage &s = cfg->channels[channel].stages[idx];
         s.biquad.frequency = freq;
         s.biquad.Q = 0.0f; // Not used for 1st-order
+        if (label) strncpy(s.label, label, sizeof(s.label) - 1);
         dsp_compute_biquad_coeffs(s.biquad, type1st, cfg->sampleRate);
     }
 
     // Insert 2nd-order sections with correct Q values
     for (int i = 0; i < numSections; i++) {
         int idx = dsp_add_stage(channel, type2nd);
-        if (idx < 0) return -1;
+        if (idx < 0) {
+            // Rollback all stages this call added
+            for (int r = 0; r < localAdded; r++) {
+                dsp_remove_stage(channel, firstIdx);
+            }
+            return -1;
+        }
         if (firstIdx < 0) firstIdx = idx;
+        localAdded++;
         DspState *cfg = dsp_get_inactive_config();
         DspStage &s = cfg->channels[channel].stages[idx];
         s.biquad.frequency = freq;
         s.biquad.Q = qValues[i];
+        if (label) strncpy(s.label, label, sizeof(s.label) - 1);
         dsp_compute_biquad_coeffs(s.biquad, type2nd, cfg->sampleRate);
     }
 
@@ -86,10 +101,12 @@ void dsp_clear_crossover_stages(int channel) {
 }
 
 int dsp_insert_crossover_butterworth(int channel, float freq, int order, int role) {
-    if (order < 1 || order > 8) return -1;
+    if (order < 1 || order > 12) return -1;
     DspStageType type2nd = role == 0 ? DSP_BIQUAD_LPF : DSP_BIQUAD_HPF;
     DspStageType type1st = role == 0 ? DSP_BIQUAD_LPF_1ST : DSP_BIQUAD_HPF_1ST;
-    return insert_butterworth_filter(channel, freq, order, type2nd, type1st);
+    char label[16];
+    snprintf(label, sizeof(label), "BW%d %s", order, role == 0 ? "LPF" : "HPF");
+    return insert_butterworth_filter(channel, freq, order, type2nd, type1st, label);
 }
 
 int dsp_insert_crossover_lr(int channel, float freq, int order, int role) {
@@ -101,6 +118,8 @@ int dsp_insert_crossover_lr(int channel, float freq, int order, int role) {
 
     DspStageType type2nd = role == 0 ? DSP_BIQUAD_LPF : DSP_BIQUAD_HPF;
     DspStageType type1st = role == 0 ? DSP_BIQUAD_LPF_1ST : DSP_BIQUAD_HPF_1ST;
+    char label[16];
+    snprintf(label, sizeof(label), "LR%d %s", order, role == 0 ? "LPF" : "HPF");
 
     // Special case: LR2 = BW1^2 = single 2nd-order biquad with Q=0.5
     if (order == 2) {
@@ -110,15 +129,30 @@ int dsp_insert_crossover_lr(int channel, float freq, int order, int role) {
         DspStage &s = cfg->channels[channel].stages[idx];
         s.biquad.frequency = freq;
         s.biquad.Q = 0.5f;
+        strncpy(s.label, label, sizeof(s.label) - 1);
         dsp_compute_biquad_coeffs(s.biquad, type2nd, cfg->sampleRate);
         return idx;
     }
 
-    // Insert BW(halfOrder) twice
-    int firstIdx = insert_butterworth_filter(channel, freq, halfOrder, type2nd, type1st);
+    // Insert BW(halfOrder) twice — each call self-rollbacks on internal failure
+    DspState *cfg = dsp_get_inactive_config();
+    int countBefore = cfg->channels[channel].stageCount;
+
+    int firstIdx = insert_butterworth_filter(channel, freq, halfOrder, type2nd, type1st, label);
     if (firstIdx < 0) return -1;
-    int secondIdx = insert_butterworth_filter(channel, freq, halfOrder, type2nd, type1st);
-    if (secondIdx < 0) return -1;
+
+    // Count how many stages the first BW call added
+    cfg = dsp_get_inactive_config();
+    int firstBwStages = cfg->channels[channel].stageCount - countBefore;
+
+    int secondIdx = insert_butterworth_filter(channel, freq, halfOrder, type2nd, type1st, label);
+    if (secondIdx < 0) {
+        // Second call self-rolled-back; now rollback first BW section too
+        for (int i = 0; i < firstBwStages; i++) {
+            dsp_remove_stage(channel, firstIdx);
+        }
+        return -1;
+    }
     return firstIdx;
 }
 

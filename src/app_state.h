@@ -178,6 +178,8 @@ public:
   float audioSpectrumBands[16] = {};
   uint32_t audioSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
   float adcVref = DEFAULT_ADC_VREF; // ADC reference voltage (1.0-5.0V)
+  bool adcEnabled[NUM_AUDIO_ADCS] = {true, true}; // Per-ADC input enable (persisted)
+  volatile bool audioPaused = false; // Set true to pause audio_capture_task I2S reads (for I2S reinit)
 
   // Input channel names (user-configurable, 4 channels = 2 ADCs x 2 channels)
   String inputNames[NUM_AUDIO_ADCS * 2];
@@ -298,6 +300,11 @@ public:
   bool isBuzzerDirty() const { return _buzzerDirty; }
   void clearBuzzerDirty() { _buzzerDirty = false; }
 
+  // ===== ADC Enabled Dirty Flag (for WS/MQTT sync) =====
+  void markAdcEnabledDirty() { _adcEnabledDirty = true; }
+  bool isAdcEnabledDirty() const { return _adcEnabledDirty; }
+  void clearAdcEnabledDirty() { _adcEnabledDirty = false; }
+
   // ===== Settings Dirty Flag (for GUI -> WS/MQTT sync) =====
   bool isSettingsDirty() const { return _settingsDirty; }
   void clearSettingsDirty() { _settingsDirty = false; }
@@ -336,7 +343,14 @@ public:
   bool dspEnabled = false;     // Master DSP enable
   bool dspBypass = false;      // Master bypass (pass-through)
 
-  void markDspConfigDirty() { _dspConfigDirty = true; }
+  // DSP Presets (4 named slots)
+  int8_t dspPresetIndex = -1;         // -1 = custom/no preset, 0-3 = active preset
+  char dspPresetNames[4][21] = {};    // 20 char max + null
+
+  void markDspConfigDirty() {
+    _dspConfigDirty = true;
+    if (dspPresetIndex >= 0) { dspPresetIndex = -1; _dspPresetDirty = true; }
+  }
   bool isDspConfigDirty() const { return _dspConfigDirty; }
   void clearDspConfigDirty() { _dspConfigDirty = false; }
 
@@ -344,10 +358,42 @@ public:
   bool isDspMetricsDirty() const { return _dspMetricsDirty; }
   void clearDspMetricsDirty() { _dspMetricsDirty = false; }
 
+  void markDspPresetDirty() { _dspPresetDirty = true; }
+  bool isDspPresetDirty() const { return _dspPresetDirty; }
+  void clearDspPresetDirty() { _dspPresetDirty = false; }
+
+  // Delay alignment result
+  int   delayAlignSamples = 0;
+  float delayAlignMs = 0.0f;
+  float delayAlignConfidence = 0.0f;
+  bool  delayAlignValid = false;
+  void markDelayAlignDirty() { _delayAlignDirty = true; }
+  bool isDelayAlignDirty() const { return _delayAlignDirty; }
+  void clearDelayAlignDirty() { _delayAlignDirty = false; }
+
   // MQTT state tracking for DSP
   bool prevMqttDspEnabled = false;
   bool prevMqttDspBypass = false;
   bool prevMqttDspChBypass[DSP_MAX_CHANNELS] = {};
+  int8_t prevMqttDspPresetIndex = -1;
+#endif
+
+  // ===== USB Audio State =====
+#ifdef USB_AUDIO_ENABLED
+  bool usbAudioEnabled = false;      // USB audio enable (persisted, default off — avoids EMI when unused)
+  bool usbAudioConnected = false;    // USB host connected
+  bool usbAudioStreaming = false;    // Host is actively sending audio
+  uint32_t usbAudioSampleRate = 48000;
+  uint8_t usbAudioBitDepth = 16;
+  uint8_t usbAudioChannels = 2;
+  int16_t usbAudioVolume = 0;       // Host volume in 1/256 dB units (-32768 to 0)
+  bool usbAudioMute = false;        // Host mute state
+  uint32_t usbAudioBufferUnderruns = 0;
+  uint32_t usbAudioBufferOverruns = 0;
+
+  void markUsbAudioDirty() { _usbAudioDirty = true; }
+  bool isUsbAudioDirty() const { return _usbAudioDirty; }
+  void clearUsbAudioDirty() { _usbAudioDirty = false; }
 #endif
 
   // ===== DAC Output State =====
@@ -449,11 +495,17 @@ private:
   bool _displayDirty = false;
   bool _buzzerDirty = false;
   bool _settingsDirty = false;
+  bool _adcEnabledDirty = false;
   bool _sigGenDirty = false;
   bool _otaDirty = false;
 #ifdef DSP_ENABLED
   bool _dspConfigDirty = false;
   bool _dspMetricsDirty = false;
+  bool _dspPresetDirty = false;
+  bool _delayAlignDirty = false;
+#endif
+#ifdef USB_AUDIO_ENABLED
+  bool _usbAudioDirty = false;
 #endif
 #ifdef DAC_ENABLED
   bool _dacDirty = false;

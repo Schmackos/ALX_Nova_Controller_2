@@ -5,6 +5,8 @@
 #include "dsps_biquad.h"
 #include "dsps_fir.h"
 #include "dsps_mulc.h"
+#include "dsps_mul.h"
+#include "dsp_convolution.h"
 #include <math.h>
 #include <string.h>
 
@@ -57,20 +59,23 @@ static bool _delaySlotUsed[DSP_MAX_DELAY_SLOTS];
 #ifdef NATIVE_TEST
 static float _dspBufL[256];
 static float _dspBufR[256];
+static float _gainBuf[256];
 #else
 static float *_dspBufL = nullptr;
 static float *_dspBufR = nullptr;
+static float *_gainBuf = nullptr;
 #endif
 
 // ===== Forward Declarations =====
-static void dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int stateIdx);
+static int  dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int stateIdx);
 static void dsp_limiter_process(DspLimiterParams &lim, float *buf, int len, uint32_t sampleRate);
-static void dsp_gain_process(DspGainParams &gain, float *buf, int len);
+static void dsp_gain_process(DspGainParams &gain, float *buf, int len, uint32_t sampleRate);
 static void dsp_fir_process(DspFirParams &fir, float *buf, int len, int stateIdx);
 static void dsp_delay_process(DspDelayParams &dly, float *buf, int len, int stateIdx);
 static void dsp_polarity_process(float *buf, int len);
 static void dsp_mute_process(float *buf, int len);
 static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int len, uint32_t sampleRate);
+static int  dsp_decimator_process(DspDecimatorParams &dec, float *buf, int len, int stateIdx);
 
 // ===== FIR Pool Management =====
 
@@ -219,8 +224,10 @@ void dsp_init() {
     if (!_dspBufL) {
         _dspBufL = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
         _dspBufR = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
+        _gainBuf = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
         if (!_dspBufL) _dspBufL = (float *)calloc(256, sizeof(float));
         if (!_dspBufR) _dspBufR = (float *)calloc(256, sizeof(float));
+        if (!_gainBuf) _gainBuf = (float *)calloc(256, sizeof(float));
     }
 #endif
 
@@ -311,6 +318,24 @@ void dsp_swap_config() {
                 if (dsp_is_biquad_type(newS.type)) {
                     newS.biquad.delay[0] = oldS.biquad.delay[0];
                     newS.biquad.delay[1] = oldS.biquad.delay[1];
+                    // Detect coefficient changes — initiate morphing to avoid pops
+                    bool coeffChanged = false;
+                    for (int c = 0; c < 5; c++) {
+                        if (newS.biquad.coeffs[c] != oldS.biquad.coeffs[c]) {
+                            coeffChanged = true;
+                            break;
+                        }
+                    }
+                    if (coeffChanged) {
+                        // Store new coefficients as target, start from old coefficients
+                        for (int c = 0; c < 5; c++) {
+                            newS.biquad.targetCoeffs[c] = newS.biquad.coeffs[c];
+                            newS.biquad.coeffs[c] = oldS.biquad.coeffs[c];
+                        }
+                        newS.biquad.morphRemaining = 64; // ~1.3ms at 48kHz
+                    } else {
+                        newS.biquad.morphRemaining = 0;
+                    }
                 } else if (newS.type == DSP_FIR && oldS.fir.firSlot >= 0 && newS.fir.firSlot >= 0) {
                     float *srcD = dsp_fir_get_delay(oldActive, oldS.fir.firSlot);
                     float *dstD = dsp_fir_get_delay(newActive, newS.fir.firSlot);
@@ -327,9 +352,17 @@ void dsp_swap_config() {
                            _delayLine[oldActive][oldS.delay.delaySlot],
                            sizeof(float) * DSP_MAX_DELAY_SAMPLES);
                     newS.delay.writePos = oldS.delay.writePos;
+                } else if (newS.type == DSP_GAIN) {
+                    newS.gain.currentLinear = oldS.gain.currentLinear;
                 } else if (newS.type == DSP_COMPRESSOR) {
                     newS.compressor.envelope = oldS.compressor.envelope;
                     newS.compressor.gainReduction = oldS.compressor.gainReduction;
+                } else if (newS.type == DSP_DECIMATOR && oldS.decimator.firSlot >= 0 && newS.decimator.firSlot >= 0) {
+                    float *srcD = dsp_fir_get_delay(oldActive, oldS.decimator.firSlot);
+                    float *dstD = dsp_fir_get_delay(newActive, newS.decimator.firSlot);
+                    if (srcD && dstD)
+                        memcpy(dstD, srcD, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
+                    newS.decimator.delayPos = oldS.decimator.delayPos;
                 }
             }
         }
@@ -350,6 +383,11 @@ void dsp_reset_max_metrics() {
     _metrics.maxProcessTimeUs = 0;
 }
 
+void dsp_clear_cpu_load() {
+    _metrics.processTimeUs = 0;
+    _metrics.cpuLoadPercent = 0.0f;
+}
+
 // ===== Main Processing Entry Point =====
 
 void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
@@ -363,7 +401,11 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
 
     int stateIdx = _activeIndex;
     DspState *cfg = &_states[stateIdx];
-    if (cfg->globalBypass) return;
+    if (cfg->globalBypass) {
+        _metrics.processTimeUs = 0;
+        _metrics.cpuLoadPercent = 0.0f;
+        return;
+    }
 
     // Map ADC index to channel pair: ADC0 → ch0(L), ch1(R); ADC1 → ch2(L), ch3(R)
     int chL = adcIndex * 2;
@@ -423,46 +465,92 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
 
 // ===== Per-Channel Processing =====
 
-static void dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int stateIdx) {
-    if (ch.bypass) return;
+static int dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int stateIdx) {
+    if (ch.bypass) return len;
 
     DspState *cfg = &_states[stateIdx];
+    int curLen = len;
 
     for (int i = 0; i < ch.stageCount; i++) {
         DspStage &s = ch.stages[i];
         if (!s.enabled) continue;
 
         if (dsp_is_biquad_type(s.type)) {
-            dsps_biquad_f32(buf, buf, len, s.biquad.coeffs, s.biquad.delay);
+            if (s.biquad.morphRemaining > 0) {
+                // Coefficient morphing: interpolate coeffs over remaining samples
+                int remaining = s.biquad.morphRemaining;
+                int processed = 0;
+                while (processed < curLen && remaining > 0) {
+                    // Interpolate coefficients
+                    float t = 1.0f - (float)remaining / 64.0f;
+                    float interpCoeffs[5];
+                    for (int c = 0; c < 5; c++) {
+                        interpCoeffs[c] = s.biquad.coeffs[c] + t * (s.biquad.targetCoeffs[c] - s.biquad.coeffs[c]);
+                    }
+                    // Process 8 samples at a time for efficiency
+                    int chunk = curLen - processed;
+                    if (chunk > 8) chunk = 8;
+                    if (chunk > remaining) chunk = remaining;
+                    dsps_biquad_f32(buf + processed, buf + processed, chunk, interpCoeffs, s.biquad.delay);
+                    processed += chunk;
+                    remaining -= chunk;
+                }
+                if (remaining <= 0) {
+                    // Morph complete — snap to target coefficients
+                    for (int c = 0; c < 5; c++) {
+                        s.biquad.coeffs[c] = s.biquad.targetCoeffs[c];
+                    }
+                    s.biquad.morphRemaining = 0;
+                    // Process any remaining samples with final coefficients
+                    if (processed < curLen) {
+                        dsps_biquad_f32(buf + processed, buf + processed, curLen - processed, s.biquad.coeffs, s.biquad.delay);
+                    }
+                } else {
+                    s.biquad.morphRemaining = (uint16_t)remaining;
+                }
+            } else {
+                dsps_biquad_f32(buf, buf, curLen, s.biquad.coeffs, s.biquad.delay);
+            }
             continue;
         }
 
         switch (s.type) {
             case DSP_LIMITER:
-                dsp_limiter_process(s.limiter, buf, len, cfg->sampleRate);
+                dsp_limiter_process(s.limiter, buf, curLen, cfg->sampleRate);
                 break;
             case DSP_FIR:
-                dsp_fir_process(s.fir, buf, len, stateIdx);
+                dsp_fir_process(s.fir, buf, curLen, stateIdx);
                 break;
             case DSP_GAIN:
-                dsp_gain_process(s.gain, buf, len);
+                dsp_gain_process(s.gain, buf, curLen, cfg->sampleRate);
                 break;
             case DSP_DELAY:
-                dsp_delay_process(s.delay, buf, len, stateIdx);
+                dsp_delay_process(s.delay, buf, curLen, stateIdx);
                 break;
             case DSP_POLARITY:
-                if (s.polarity.inverted) dsp_polarity_process(buf, len);
+                if (s.polarity.inverted) dsp_polarity_process(buf, curLen);
                 break;
             case DSP_MUTE:
-                if (s.mute.muted) dsp_mute_process(buf, len);
+                if (s.mute.muted) dsp_mute_process(buf, curLen);
                 break;
             case DSP_COMPRESSOR:
-                dsp_compressor_process(s.compressor, buf, len, cfg->sampleRate);
+                dsp_compressor_process(s.compressor, buf, curLen, cfg->sampleRate);
+                break;
+            case DSP_DECIMATOR: {
+                int newLen = dsp_decimator_process(s.decimator, buf, curLen, stateIdx);
+                if (newLen > 0) curLen = newLen;
+                break;
+            }
+            case DSP_CONVOLUTION:
+                if (s.convolution.convSlot >= 0) {
+                    conv_process(s.convolution.convSlot, buf, curLen);
+                }
                 break;
             default:
                 break;
         }
     }
+    return curLen;
 }
 
 // ===== Limiter =====
@@ -477,17 +565,16 @@ static void dsp_limiter_process(DspLimiterParams &lim, float *buf, int len, uint
     float env = lim.envelope;
     float maxGr = 0.0f;
 
+    // Pass 1: Envelope detection → gain buffer
     for (int i = 0; i < len; i++) {
         float absSample = fabsf(buf[i]);
 
-        // Envelope follower (peak detector)
         if (absSample > env) {
             env = attackCoeff * env + (1.0f - attackCoeff) * absSample;
         } else {
             env = releaseCoeff * env + (1.0f - releaseCoeff) * absSample;
         }
 
-        // Gain computation
         float gainLin = 1.0f;
         if (env > threshLin && env > 0.0f) {
             float envDb = 20.0f * log10f(env);
@@ -497,8 +584,11 @@ static void dsp_limiter_process(DspLimiterParams &lim, float *buf, int len, uint
             if (grDb > maxGr) maxGr = grDb;
         }
 
-        buf[i] *= gainLin;
+        _gainBuf[i] = gainLin;
     }
+
+    // Pass 2: Apply gain via SIMD element-wise multiply
+    dsps_mul_f32(buf, _gainBuf, buf, len, 1, 1, 1);
 
     lim.envelope = env;
     lim.gainReduction = -maxGr;
@@ -531,8 +621,28 @@ static void dsp_fir_process(DspFirParams &fir, float *buf, int len, int stateIdx
 
 // ===== Gain =====
 
-static void dsp_gain_process(DspGainParams &gain, float *buf, int len) {
-    dsps_mulc_f32(buf, buf, len, gain.gainLinear, 1, 1);
+static void dsp_gain_process(DspGainParams &gain, float *buf, int len, uint32_t sampleRate) {
+    float target = gain.gainLinear;
+    float current = gain.currentLinear;
+
+    // If already at target (within ~0.001 dB), use fast SIMD path
+    float diff = fabsf(current - target);
+    if (diff < 1e-6f) {
+        gain.currentLinear = target; // snap
+        dsps_mulc_f32(buf, buf, len, target, 1, 1);
+        return;
+    }
+
+    // Exponential ramp: ~5ms time constant (240 samples @ 48kHz)
+    float tau = 0.005f;
+    float coeff = expf(-1.0f / (tau * (float)sampleRate));
+    float oneMinusCoeff = 1.0f - coeff;
+
+    for (int i = 0; i < len; i++) {
+        current = coeff * current + oneMinusCoeff * target;
+        buf[i] *= current;
+    }
+    gain.currentLinear = current;
 }
 
 // ===== Delay =====
@@ -583,17 +693,16 @@ static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int le
     float env = comp.envelope;
     float maxGr = 0.0f;
 
+    // Pass 1: Envelope detection → gain buffer (includes makeup gain)
     for (int i = 0; i < len; i++) {
         float absSample = fabsf(buf[i]);
 
-        // Envelope follower (peak detector)
         if (absSample > env) {
             env = attackCoeff * env + (1.0f - attackCoeff) * absSample;
         } else {
             env = releaseCoeff * env + (1.0f - releaseCoeff) * absSample;
         }
 
-        // Gain computation with soft knee
         float gainLin = 1.0f;
         if (env > 0.0f) {
             float envDb = 20.0f * log10f(env);
@@ -601,14 +710,11 @@ static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int le
 
             float grDb = 0.0f;
             if (comp.kneeDb > 0.0f && overDb > -comp.kneeDb / 2.0f && overDb < comp.kneeDb / 2.0f) {
-                // Soft knee region
                 float x = overDb + comp.kneeDb / 2.0f;
                 grDb = (1.0f - 1.0f / comp.ratio) * x * x / (2.0f * comp.kneeDb);
             } else if (overDb >= comp.kneeDb / 2.0f) {
-                // Above knee
                 grDb = overDb * (1.0f - 1.0f / comp.ratio);
             }
-            // Below knee: grDb = 0 (no compression)
 
             if (grDb > 0.0f) {
                 gainLin = powf(10.0f, -grDb / 20.0f);
@@ -616,11 +722,43 @@ static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int le
             }
         }
 
-        buf[i] *= gainLin * makeupLin;
+        _gainBuf[i] = gainLin * makeupLin;
     }
+
+    // Pass 2: Apply gain via SIMD element-wise multiply
+    dsps_mul_f32(buf, _gainBuf, buf, len, 1, 1, 1);
 
     comp.envelope = env;
     comp.gainReduction = -maxGr;
+}
+
+// ===== Decimator =====
+
+static int dsp_decimator_process(DspDecimatorParams &dec, float *buf, int len, int stateIdx) {
+    if (dec.factor <= 1 || dec.firSlot < 0 || dec.firSlot >= DSP_MAX_FIR_SLOTS) return len;
+
+    float *taps = dsp_fir_get_taps(stateIdx, dec.firSlot);
+    float *delay = dsp_fir_get_delay(stateIdx, dec.firSlot);
+    if (!taps || !delay || dec.numTaps == 0) return len;
+
+    fir_f32_t fird;
+    memset(&fird, 0, sizeof(fird));
+    fird.coeffs = taps;
+    fird.delay = delay;
+#ifdef NATIVE_TEST
+    fird.numTaps = dec.numTaps;
+#else
+    fird.N = dec.numTaps;
+#endif
+    fird.pos = dec.delayPos;
+    fird.decim = dec.factor;
+
+    // Decimate in-place: output goes into the same buffer (fewer samples)
+    int outLen = len / dec.factor;
+    dsps_fird_f32(&fird, buf, buf, len);
+
+    dec.delayPos = (uint16_t)fird.pos;
+    return outLen;
 }
 
 // ===== Stage CRUD =====
@@ -661,6 +799,30 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
             return -1;
         }
         ch.stages[pos].delay.delaySlot = (int8_t)slot;
+    } else if (type == DSP_DECIMATOR) {
+        int slot = dsp_fir_alloc_slot();
+        if (slot < 0) {
+            LOG_W("[DSP] No FIR slots for decimator (max %d)", DSP_MAX_FIR_SLOTS);
+            for (int i = pos; i < ch.stageCount; i++) ch.stages[i] = ch.stages[i + 1];
+            return -1;
+        }
+        ch.stages[pos].decimator.firSlot = (int8_t)slot;
+        ch.stages[pos].decimator.factor = 2;
+        // Design anti-aliasing filter (use half the max taps for efficiency)
+        int numTaps = DSP_MAX_FIR_TAPS / 2;
+        if (numTaps > DSP_MAX_FIR_TAPS) numTaps = DSP_MAX_FIR_TAPS;
+        ch.stages[pos].decimator.numTaps = (uint16_t)numTaps;
+        int inactiveIdx = 1 - _activeIndex;
+        float *taps = dsp_fir_get_taps(inactiveIdx, slot);
+        if (taps) {
+            dsp_compute_decimation_filter(taps, numTaps, 2, (float)cfg->sampleRate);
+        }
+    } else if (type == DSP_CONVOLUTION) {
+        // Convolution slots are initialized separately via conv_init_slot()
+        // Just mark as unassigned; user loads IR via API
+        ch.stages[pos].convolution.convSlot = -1;
+        ch.stages[pos].convolution.irLength = 0;
+        ch.stages[pos].convolution.irFilename[0] = '\0';
     }
 
     ch.stageCount++;
@@ -688,6 +850,12 @@ bool dsp_remove_stage(int channel, int stageIndex) {
         dsp_fir_free_slot(ch.stages[stageIndex].fir.firSlot);
     } else if (ch.stages[stageIndex].type == DSP_DELAY) {
         dsp_delay_free_slot(ch.stages[stageIndex].delay.delaySlot);
+    } else if (ch.stages[stageIndex].type == DSP_DECIMATOR) {
+        dsp_fir_free_slot(ch.stages[stageIndex].decimator.firSlot);
+    } else if (ch.stages[stageIndex].type == DSP_CONVOLUTION) {
+        if (ch.stages[stageIndex].convolution.convSlot >= 0) {
+            conv_free_slot(ch.stages[stageIndex].convolution.convSlot);
+        }
     }
 
     // Shift stages down
@@ -777,6 +945,95 @@ void dsp_copy_peq_bands(int srcChannel, int dstChannel) {
     }
 }
 
+// ===== Stereo Link =====
+
+int dsp_get_linked_partner(int channel) {
+    if (channel < 0 || channel >= DSP_MAX_CHANNELS) return -1;
+    DspState *cfg = dsp_get_inactive_config();
+    if (!cfg->channels[channel].stereoLink) return -1;
+    // Pairs: 0↔1, 2↔3
+    return (channel % 2 == 0) ? channel + 1 : channel - 1;
+}
+
+void dsp_mirror_channel_config(int srcCh, int dstCh) {
+    if (srcCh < 0 || srcCh >= DSP_MAX_CHANNELS) return;
+    if (dstCh < 0 || dstCh >= DSP_MAX_CHANNELS) return;
+    if (srcCh == dstCh) return;
+
+    DspState *cfg = dsp_get_inactive_config();
+    DspChannelConfig &src = cfg->channels[srcCh];
+    DspChannelConfig &dst = cfg->channels[dstCh];
+
+    // Free existing pool slots on destination
+    for (int i = 0; i < dst.stageCount; i++) {
+        if (dst.stages[i].type == DSP_FIR) dsp_fir_free_slot(dst.stages[i].fir.firSlot);
+        else if (dst.stages[i].type == DSP_DELAY) dsp_delay_free_slot(dst.stages[i].delay.delaySlot);
+        else if (dst.stages[i].type == DSP_DECIMATOR) dsp_fir_free_slot(dst.stages[i].decimator.firSlot);
+        else if (dst.stages[i].type == DSP_CONVOLUTION && dst.stages[i].convolution.convSlot >= 0)
+            conv_free_slot(dst.stages[i].convolution.convSlot);
+    }
+
+    // Copy config params (bypass, stageCount, all stage params)
+    dst.bypass = src.bypass;
+    dst.stageCount = src.stageCount;
+
+    for (int i = 0; i < src.stageCount; i++) {
+        dst.stages[i] = src.stages[i];
+
+        // Reset runtime state on destination
+        if (dsp_is_biquad_type(dst.stages[i].type)) {
+            dst.stages[i].biquad.delay[0] = 0.0f;
+            dst.stages[i].biquad.delay[1] = 0.0f;
+        } else if (dst.stages[i].type == DSP_LIMITER) {
+            dst.stages[i].limiter.envelope = 0.0f;
+            dst.stages[i].limiter.gainReduction = 0.0f;
+        } else if (dst.stages[i].type == DSP_COMPRESSOR) {
+            dst.stages[i].compressor.envelope = 0.0f;
+            dst.stages[i].compressor.gainReduction = 0.0f;
+        } else if (dst.stages[i].type == DSP_GAIN) {
+            dst.stages[i].gain.currentLinear = dst.stages[i].gain.gainLinear;
+        } else if (dst.stages[i].type == DSP_FIR) {
+            // Allocate new FIR slot for destination, copy taps
+            int newSlot = dsp_fir_alloc_slot();
+            if (newSlot >= 0) {
+                dst.stages[i].fir.firSlot = (int8_t)newSlot;
+                dst.stages[i].fir.delayPos = 0;
+                int inactiveIdx = 1 - _activeIndex;
+                float *srcTaps = dsp_fir_get_taps(inactiveIdx, src.stages[i].fir.firSlot);
+                float *dstTaps = dsp_fir_get_taps(inactiveIdx, newSlot);
+                if (srcTaps && dstTaps) memcpy(dstTaps, srcTaps, sizeof(float) * DSP_MAX_FIR_TAPS);
+            } else {
+                dst.stages[i].fir.firSlot = -1;
+            }
+        } else if (dst.stages[i].type == DSP_DELAY) {
+            // Allocate new delay slot for destination
+            int newSlot = dsp_delay_alloc_slot();
+            if (newSlot >= 0) {
+                dst.stages[i].delay.delaySlot = (int8_t)newSlot;
+                dst.stages[i].delay.writePos = 0;
+            } else {
+                dst.stages[i].delay.delaySlot = -1;
+            }
+        } else if (dst.stages[i].type == DSP_DECIMATOR) {
+            int newSlot = dsp_fir_alloc_slot();
+            if (newSlot >= 0) {
+                dst.stages[i].decimator.firSlot = (int8_t)newSlot;
+                dst.stages[i].decimator.delayPos = 0;
+                int inactiveIdx = 1 - _activeIndex;
+                float *srcTaps = dsp_fir_get_taps(inactiveIdx, src.stages[i].decimator.firSlot);
+                float *dstTaps = dsp_fir_get_taps(inactiveIdx, newSlot);
+                if (srcTaps && dstTaps) memcpy(dstTaps, srcTaps, sizeof(float) * DSP_MAX_FIR_TAPS);
+            } else {
+                dst.stages[i].decimator.firSlot = -1;
+            }
+        } else if (dst.stages[i].type == DSP_CONVOLUTION) {
+            // Convolution slots are shared resources loaded from IR files.
+            // For mirror, mark as unassigned — user must load IR separately.
+            dst.stages[i].convolution.convSlot = -1;
+        }
+    }
+}
+
 // ===== JSON Serialization =====
 
 #ifndef NATIVE_TEST
@@ -806,6 +1063,9 @@ const char *stage_type_name(DspStageType t) {
         case DSP_COMPRESSOR:        return "COMPRESSOR";
         case DSP_BIQUAD_LPF_1ST:   return "LPF_1ST";
         case DSP_BIQUAD_HPF_1ST:   return "HPF_1ST";
+        case DSP_BIQUAD_LINKWITZ:  return "LINKWITZ";
+        case DSP_DECIMATOR:        return "DECIMATOR";
+        case DSP_CONVOLUTION:      return "CONVOLUTION";
         default: return "UNKNOWN";
     }
 }
@@ -833,6 +1093,9 @@ static DspStageType stage_type_from_name(const char *name) {
     if (strcmp(name, "COMPRESSOR") == 0) return DSP_COMPRESSOR;
     if (strcmp(name, "LPF_1ST") == 0) return DSP_BIQUAD_LPF_1ST;
     if (strcmp(name, "HPF_1ST") == 0) return DSP_BIQUAD_HPF_1ST;
+    if (strcmp(name, "LINKWITZ") == 0) return DSP_BIQUAD_LINKWITZ;
+    if (strcmp(name, "DECIMATOR") == 0) return DSP_DECIMATOR;
+    if (strcmp(name, "CONVOLUTION") == 0) return DSP_CONVOLUTION;
     return DSP_BIQUAD_PEQ;
 }
 
@@ -845,6 +1108,7 @@ void dsp_export_config_to_json(int channel, char *buf, int bufSize) {
 
     JsonDocument doc;
     doc["bypass"] = ch.bypass;
+    doc["stereoLink"] = ch.stereoLink;
     JsonArray stages = doc["stages"].to<JsonArray>();
 
     for (int i = 0; i < ch.stageCount; i++) {
@@ -859,6 +1123,9 @@ void dsp_export_config_to_json(int channel, char *buf, int bufSize) {
             params["frequency"] = s.biquad.frequency;
             params["gain"] = s.biquad.gain;
             params["Q"] = s.biquad.Q;
+            if (s.type == DSP_BIQUAD_LINKWITZ) {
+                params["Q2"] = s.biquad.Q2;
+            }
             if (s.type == DSP_BIQUAD_CUSTOM) {
                 JsonArray c = params["coeffs"].to<JsonArray>();
                 for (int j = 0; j < 5; j++) c.add(s.biquad.coeffs[j]);
@@ -893,6 +1160,12 @@ void dsp_export_config_to_json(int channel, char *buf, int bufSize) {
             params["ratio"] = s.compressor.ratio;
             params["kneeDb"] = s.compressor.kneeDb;
             params["makeupGainDb"] = s.compressor.makeupGainDb;
+        } else if (s.type == DSP_CONVOLUTION) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["convSlot"] = s.convolution.convSlot;
+            params["irLength"] = s.convolution.irLength;
+            if (s.convolution.irFilename[0])
+                params["irFilename"] = s.convolution.irFilename;
         }
     }
 
@@ -911,6 +1184,10 @@ void dsp_load_config_from_json(const char *json, int channel) {
             dsp_fir_free_slot(ch.stages[i].fir.firSlot);
         } else if (ch.stages[i].type == DSP_DELAY) {
             dsp_delay_free_slot(ch.stages[i].delay.delaySlot);
+        } else if (ch.stages[i].type == DSP_DECIMATOR) {
+            dsp_fir_free_slot(ch.stages[i].decimator.firSlot);
+        } else if (ch.stages[i].type == DSP_CONVOLUTION && ch.stages[i].convolution.convSlot >= 0) {
+            conv_free_slot(ch.stages[i].convolution.convSlot);
         }
     }
 
@@ -918,6 +1195,7 @@ void dsp_load_config_from_json(const char *json, int channel) {
     if (deserializeJson(doc, json)) return;
 
     if (doc["bypass"].is<bool>()) ch.bypass = doc["bypass"].as<bool>();
+    if (doc["stereoLink"].is<bool>()) ch.stereoLink = doc["stereoLink"].as<bool>();
 
     if (doc["stages"].is<JsonArray>()) {
         ch.stageCount = 0;
@@ -955,10 +1233,11 @@ void dsp_load_config_from_json(const char *json, int channel) {
             }
 
             JsonObject params = stageObj["params"];
-            if (type <= DSP_BIQUAD_CUSTOM) {
+            if (dsp_is_biquad_type(type)) {
                 if (params["frequency"].is<float>()) s.biquad.frequency = params["frequency"].as<float>();
                 if (params["gain"].is<float>()) s.biquad.gain = params["gain"].as<float>();
                 if (params["Q"].is<float>()) s.biquad.Q = params["Q"].as<float>();
+                if (params["Q2"].is<float>()) s.biquad.Q2 = params["Q2"].as<float>();
                 if (type == DSP_BIQUAD_CUSTOM && params["coeffs"].is<JsonArray>()) {
                     JsonArray c = params["coeffs"].as<JsonArray>();
                     for (int j = 0; j < 5 && j < (int)c.size(); j++) {
@@ -1000,6 +1279,14 @@ void dsp_load_config_from_json(const char *json, int channel) {
                 if (params["kneeDb"].is<float>()) s.compressor.kneeDb = params["kneeDb"].as<float>();
                 if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
                 dsp_compute_compressor_makeup(s.compressor);
+            } else if (type == DSP_CONVOLUTION) {
+                // Convolution slot must be loaded separately via IR upload API
+                s.convolution.convSlot = -1;
+                if (params["irLength"].is<int>()) s.convolution.irLength = params["irLength"].as<uint16_t>();
+                if (params["irFilename"].is<const char *>()) {
+                    strncpy(s.convolution.irFilename, params["irFilename"].as<const char *>(), sizeof(s.convolution.irFilename) - 1);
+                    s.convolution.irFilename[sizeof(s.convolution.irFilename) - 1] = '\0';
+                }
             }
             loadIdx++;
             ch.stageCount = loadIdx;
@@ -1020,6 +1307,7 @@ void dsp_export_full_config_json(char *buf, int bufSize) {
         JsonObject chObj = channels.add<JsonObject>();
         DspChannelConfig &ch = cfg->channels[c];
         chObj["bypass"] = ch.bypass;
+        chObj["stereoLink"] = ch.stereoLink;
         JsonArray stages = chObj["stages"].to<JsonArray>();
 
         for (int i = 0; i < ch.stageCount; i++) {
@@ -1034,6 +1322,9 @@ void dsp_export_full_config_json(char *buf, int bufSize) {
                 params["frequency"] = s.biquad.frequency;
                 params["gain"] = s.biquad.gain;
                 params["Q"] = s.biquad.Q;
+                if (s.type == DSP_BIQUAD_LINKWITZ) {
+                    params["Q2"] = s.biquad.Q2;
+                }
                 if (s.type == DSP_BIQUAD_CUSTOM) {
                     JsonArray co = params["coeffs"].to<JsonArray>();
                     for (int j = 0; j < 5; j++) co.add(s.biquad.coeffs[j]);
@@ -1068,6 +1359,12 @@ void dsp_export_full_config_json(char *buf, int bufSize) {
                 params["ratio"] = s.compressor.ratio;
                 params["kneeDb"] = s.compressor.kneeDb;
                 params["makeupGainDb"] = s.compressor.makeupGainDb;
+            } else if (s.type == DSP_CONVOLUTION) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["convSlot"] = s.convolution.convSlot;
+                params["irLength"] = s.convolution.irLength;
+                if (s.convolution.irFilename[0])
+                    params["irFilename"] = s.convolution.irFilename;
             }
         }
     }
@@ -1086,6 +1383,10 @@ void dsp_import_full_config_json(const char *json) {
                 dsp_fir_free_slot(cfg->channels[c].stages[i].fir.firSlot);
             } else if (cfg->channels[c].stages[i].type == DSP_DELAY) {
                 dsp_delay_free_slot(cfg->channels[c].stages[i].delay.delaySlot);
+            } else if (cfg->channels[c].stages[i].type == DSP_DECIMATOR) {
+                dsp_fir_free_slot(cfg->channels[c].stages[i].decimator.firSlot);
+            } else if (cfg->channels[c].stages[i].type == DSP_CONVOLUTION && cfg->channels[c].stages[i].convolution.convSlot >= 0) {
+                conv_free_slot(cfg->channels[c].stages[i].convolution.convSlot);
             }
         }
     }
@@ -1103,6 +1404,7 @@ void dsp_import_full_config_json(const char *json) {
             if (c >= DSP_MAX_CHANNELS) break;
             DspChannelConfig &ch = cfg->channels[c];
             if (chObj["bypass"].is<bool>()) ch.bypass = chObj["bypass"].as<bool>();
+            if (chObj["stereoLink"].is<bool>()) ch.stereoLink = chObj["stereoLink"].as<bool>();
             ch.stageCount = 0;
 
             if (chObj["stages"].is<JsonArray>()) {
@@ -1182,6 +1484,13 @@ void dsp_import_full_config_json(const char *json) {
                         if (params["kneeDb"].is<float>()) s.compressor.kneeDb = params["kneeDb"].as<float>();
                         if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
                         dsp_compute_compressor_makeup(s.compressor);
+                    } else if (type == DSP_CONVOLUTION) {
+                        s.convolution.convSlot = -1;
+                        if (params["irLength"].is<int>()) s.convolution.irLength = params["irLength"].as<uint16_t>();
+                        if (params["irFilename"].is<const char *>()) {
+                            strncpy(s.convolution.irFilename, params["irFilename"].as<const char *>(), sizeof(s.convolution.irFilename) - 1);
+                            s.convolution.irFilename[sizeof(s.convolution.irFilename) - 1] = '\0';
+                        }
                     }
                     loadIdx++;
                     ch.stageCount = loadIdx;
