@@ -509,10 +509,6 @@ int dac_i2c_scan(uint8_t* eepromMask) {
                 *eepromMask |= (1 << (addr - DAC_EEPROM_ADDR_START));
             }
         }
-        // Log error details for EEPROM address range (helps diagnose wiring issues)
-        else if (addr >= DAC_EEPROM_ADDR_START && addr <= DAC_EEPROM_ADDR_END) {
-            LOG_D("[DAC] No ACK at 0x%02X (err=%d)", addr, err);
-        }
     }
 
     LOG_I("[DAC] I2C scan: %d devices found (EEPROM mask=0x%02X)",

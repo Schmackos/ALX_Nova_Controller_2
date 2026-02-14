@@ -3,6 +3,18 @@
 ## Version 1.8.0
 
 ## Bug Fixes
+- [2026-02-14] fix: OTA exponential backoff, ADC health debounce, EEPROM scan cleanup
+
+OTA: Exponential backoff after consecutive failures (5min → 15min → 30min
+→ 60min). Heap pre-flight check (60KB) inside OTA task before TLS
+handshake prevents transient HEAP CRITICAL dips.
+
+ADC health: 3-second debounce on health state transition logging to
+eliminate 33K+ lines/session from ADC2 oscillating at CLIPPING boundary.
+
+EEPROM: dac_eeprom_scan() now accepts I2C bus scan mask — only probes
+addresses that ACK'd, eliminating 7 Wire error lines per scan from
+absent 0x51-0x57 addresses. (`330c187`)
 - [2026-02-14] fix: temperatureRead() SAR ADC spinlock crash + OTA heap guard
 
 Cache temperatureRead() every 10s to avoid SAR ADC spinlock deadlock
