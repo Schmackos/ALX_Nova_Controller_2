@@ -3,6 +3,28 @@
 ## Version 1.8.0
 
 ## Bug Fixes
+- [2026-02-14] fix: Debug console scroll, move debug toggle to General, persist DSP bypass
+
+Debug console: Only auto-scroll when user is at bottom of log. Scrolling
+up to read older entries no longer gets interrupted by new messages.
+
+Settings UI: Debug Mode toggle moved from standalone card into General
+section. PEQ graph dots now show band numbers inside circles.
+
+WebSocket: DSP enable/bypass changes now persist via saveDspSettingsDebounced(). (`a98e107`)
+- [2026-02-14] fix: Debug console scroll, move debug toggle to General, persist DSP bypass
+
+Debug console: Only auto-scroll when user is at bottom of log. Scrolling
+up to read older entries no longer gets interrupted by new messages.
+
+Settings UI: Debug Mode toggle moved from standalone card into General
+section. PEQ graph dots now show band numbers inside circles.
+
+WebSocket: DSP enable/bypass changes now persist via saveDspSettingsDebounced(). (`9c001c5`)
+- [2026-02-14] fix: remove noisy No ACK debug logs from I2C bus scan
+
+The summary line already reports device count and EEPROM mask — per-address
+NACK logs for 0x51-0x57 added no diagnostic value and cluttered output. (`e282a50`)
 - [2026-02-14] fix: OTA exponential backoff, ADC health debounce, EEPROM scan cleanup
 
 OTA: Exponential backoff after consecutive failures (5min → 15min → 30min

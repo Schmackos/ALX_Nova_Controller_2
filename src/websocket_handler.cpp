@@ -366,6 +366,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "setDspBypass") {
           if (doc["enabled"].is<bool>()) appState.dspEnabled = doc["enabled"].as<bool>();
           if (doc["bypass"].is<bool>()) appState.dspBypass = doc["bypass"].as<bool>();
+          extern void saveDspSettingsDebounced();
+          saveDspSettingsDebounced();
           appState.markDspConfigDirty();
           LOG_I("[WebSocket] DSP enabled=%d bypass=%d", appState.dspEnabled, appState.dspBypass);
         }

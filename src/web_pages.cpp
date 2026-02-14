@@ -3596,6 +3596,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Debug Mode</div>
+                        <div class="toggle-sublabel">Enable debug tools</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="debugModeToggle" onchange="setDebugToggle('setDebugMode',this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
             </div>
 
             <!-- Display -->
@@ -3802,17 +3812,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Import</button>
                 </div>
                 <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileSelect(event)">
-            </div>
-
-            <!-- Debug Settings -->
-            <div class="card">
-                <div class="card-title">Debug</div>
-                <div class="info-box">
-                    <div class="toggle-row">
-                        <span>Debug Mode</span>
-                        <label class="switch"><input type="checkbox" id="debugModeToggle" onchange="setDebugToggle('setDebugMode',this.checked)"><span class="slider round"></span></label>
-                    </div>
-                </div>
             </div>
 
             <!-- Reboot & Factory Reset -->
@@ -8789,6 +8788,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 entry.style.display = 'none';
             }
 
+            // Check if user is near the bottom before adding (within 40px)
+            const wasAtBottom = (console.scrollHeight - console.scrollTop - console.clientHeight) < 40;
+
             console.appendChild(entry);
 
             // Limit entries
@@ -8796,8 +8798,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 console.removeChild(console.firstChild);
             }
 
-            // Only scroll if entry is visible
-            if (entry.style.display !== 'none') {
+            // Only auto-scroll if user was already at the bottom
+            if (wasAtBottom && entry.style.display !== 'none') {
                 console.scrollTop = console.scrollHeight;
             }
         }
@@ -10110,24 +10112,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             }
 
-            // Layer 6: PEQ control point circles
+            // Layer 6: PEQ control point circles with band numbers
             for (var i = 0; i < peqBands.length; i++) {
                 var b = peqBands[i];
                 var freq = b.freq || 1000, gain = b.gain || 0;
                 var cx = padL + gw * (Math.log10(freq) - logMin) / logRange;
                 var cy = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, gain)) - yMin) / (yMax - yMin));
                 var isSelected = (i === peqSelectedBand);
-                var radius = isSelected ? 7 * dpr : 5 * dpr;
+                var radius = isSelected ? 8 * dpr : 6 * dpr;
                 ctx.beginPath();
                 ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
                 if (b.enabled) {
                     ctx.fillStyle = PEQ_COLORS[i];
                     ctx.fill();
                 } else {
+                    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-card').trim();
+                    ctx.fill();
                     ctx.strokeStyle = PEQ_COLORS[i];
                     ctx.lineWidth = 1.5 * dpr;
                     ctx.stroke();
                 }
+                // Band number label inside dot
+                ctx.font = 'bold ' + (isSelected ? 9 * dpr : 8 * dpr) + 'px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = b.enabled ? '#fff' : PEQ_COLORS[i];
+                ctx.fillText('' + (i + 1), cx, cy + 0.5 * dpr);
                 if (isSelected) {
                     ctx.beginPath();
                     ctx.arc(cx, cy, radius + 3 * dpr, 0, 2 * Math.PI);
