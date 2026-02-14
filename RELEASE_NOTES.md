@@ -2,6 +2,15 @@
 
 ## Version 1.8.0
 
+## Bug Fixes
+- [2026-02-14] fix: temperatureRead() SAR ADC spinlock crash + OTA heap guard
+
+Cache temperatureRead() every 10s to avoid SAR ADC spinlock deadlock
+with I2S ADC that caused Core 1 interrupt WDT crash after ~2.5h.
+Skip OTA checks when heap is already critical to prevent recurring
+HEAP CRITICAL from TLS buffer allocation. Clean up duplicate entries
+in RELEASE_NOTES.md. (`cc1c44a`)
+
 ### DAC Output HAL
 - Plugin driver architecture with DacDriver abstract class and compile-time registry
 - PCM5102A driver: I2S-only, software volume via log-perceptual curve

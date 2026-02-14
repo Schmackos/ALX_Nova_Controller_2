@@ -228,13 +228,18 @@ static void i2c_init() {
     delay(2);               // Bus stabilization
 }
 
-bool dac_eeprom_scan(DacEepromData* out) {
+bool dac_eeprom_scan(DacEepromData* out, uint8_t eepromMask) {
     if (!out) return false;
     memset(out, 0, sizeof(DacEepromData));
 
     i2c_init();
 
     for (uint8_t addr = DAC_EEPROM_ADDR_START; addr <= DAC_EEPROM_ADDR_END; addr++) {
+        // Skip addresses that didn't ACK during the I2C bus scan
+        uint8_t bit = (uint8_t)(1 << (addr - DAC_EEPROM_ADDR_START));
+        if (!(eepromMask & bit)) {
+            continue;
+        }
         // Try to read the magic bytes first
         uint8_t magic[DAC_EEPROM_MAGIC_LEN];
         if (!eeprom_read_block(addr, 0x00, magic, DAC_EEPROM_MAGIC_LEN)) {
@@ -301,14 +306,64 @@ bool dac_eeprom_read_raw(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, int len
 // ===== ACK Polling =====
 // After a page write, the AT24C02 goes busy for up to 10ms (typ 5ms).
 // ACK polling: repeatedly address the device until it ACKs (write cycle complete).
-static bool eeprom_wait_ready(uint8_t i2cAddr, int timeoutMs) {
+// Returns wait time in ms (0 = immediate ACK, which may indicate WP issue).
+static int eeprom_wait_ready(uint8_t i2cAddr, int timeoutMs) {
     unsigned long start = millis();
     while ((millis() - start) < (unsigned long)timeoutMs) {
         Wire.beginTransmission(i2cAddr);
-        if (Wire.endTransmission() == 0) return true;
+        if (Wire.endTransmission() == 0) return (int)(millis() - start);
         delay(1);
     }
-    return false;
+    return -1; // timeout
+}
+
+// ===== Write Probe Test =====
+// Write a single byte and read it back to verify the EEPROM is writable.
+// Detects write-protect (WP pin HIGH) and defective chips early.
+static bool eeprom_write_probe(uint8_t i2cAddr) {
+    // Read current value at offset 0x00
+    uint8_t original = 0;
+    if (!eeprom_read_block(i2cAddr, 0x00, &original, 1)) {
+        LOG_E("[DAC] EEPROM probe: cannot read address 0x00");
+        return false;
+    }
+
+    // Write complement value
+    uint8_t probe = (uint8_t)(~original);
+    Wire.beginTransmission(i2cAddr);
+    Wire.write((uint8_t)0x00);  // Memory address
+    Wire.write(probe);
+    if (Wire.endTransmission() != 0) {
+        LOG_E("[DAC] EEPROM probe: I2C write NACK");
+        return false;
+    }
+
+    // Wait for write cycle
+    int waitMs = eeprom_wait_ready(i2cAddr, 20);
+    if (waitMs < 0) {
+        LOG_E("[DAC] EEPROM probe: device busy timeout after write");
+        return false;
+    }
+
+    // Read back and verify
+    uint8_t readback = 0;
+    if (!eeprom_read_block(i2cAddr, 0x00, &readback, 1)) {
+        LOG_E("[DAC] EEPROM probe: cannot read back after write");
+        return false;
+    }
+
+    if (readback != probe) {
+        LOG_E("[DAC] EEPROM probe FAILED: wrote 0x%02X, read 0x%02X (original 0x%02X)",
+              probe, readback, original);
+        if (readback == original) {
+            LOG_E("[DAC] EEPROM appears write-protected (WP pin HIGH?) — "
+                  "ensure WP pin is connected to GND");
+        }
+        return false;
+    }
+
+    LOG_D("[DAC] EEPROM probe OK (wrote 0x%02X, ACK wait %dms)", probe, waitMs);
+    return true;
 }
 
 // ===== Page-Aware Write with Verification =====
@@ -316,6 +371,15 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
     if (!data || len <= 0 || len > DAC_EEPROM_TOTAL_SIZE) return false;
 
     LOG_I("[DAC] EEPROM write: addr=0x%02X len=%d", i2cAddr, len);
+
+    // Ensure I2C bus is in known-good state
+    i2c_init();
+
+    // Probe test: write a single byte to detect write-protection early
+    if (!eeprom_write_probe(i2cAddr)) {
+        LOG_E("[DAC] EEPROM write aborted — probe test failed");
+        return false;
+    }
 
     int offset = 0;
     while (offset < len) {
@@ -331,17 +395,18 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
             Wire.write(data[offset + i]);
         }
         if (Wire.endTransmission() != 0) {
-            LOG_E("[DAC] EEPROM write failed at offset 0x%02X", offset);
+            LOG_E("[DAC] EEPROM write failed at offset 0x%02X (I2C NACK)", offset);
             return false;
         }
 
         // ACK poll: wait for write cycle to complete (max 20ms, typ 5ms)
-        if (!eeprom_wait_ready(i2cAddr, 20)) {
-            LOG_E("[DAC] EEPROM not ready after write at offset 0x%02X", offset);
+        int waitMs = eeprom_wait_ready(i2cAddr, 20);
+        if (waitMs < 0) {
+            LOG_E("[DAC] EEPROM not ready after write at offset 0x%02X (timeout)", offset);
             return false;
         }
 
-        LOG_D("[DAC] EEPROM wrote %d bytes at offset 0x%02X", chunk, offset);
+        LOG_D("[DAC] EEPROM wrote %d bytes at offset 0x%02X (ACK %dms)", chunk, offset, waitMs);
         offset += chunk;
     }
 
@@ -357,12 +422,17 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
     }
     if (memcmp(data, verifyBuf, verifyLen) != 0) {
         // Log first mismatch for debugging
+        int mismatches = 0;
         for (int i = 0; i < verifyLen; i++) {
             if (data[i] != verifyBuf[i]) {
-                LOG_E("[DAC] EEPROM verify mismatch at byte %d: wrote 0x%02X read 0x%02X", i, data[i], verifyBuf[i]);
-                break;
+                if (mismatches < 3) {
+                    LOG_E("[DAC] EEPROM verify mismatch at byte %d: wrote 0x%02X read 0x%02X",
+                          i, data[i], verifyBuf[i]);
+                }
+                mismatches++;
             }
         }
+        LOG_E("[DAC] EEPROM verify: %d/%d bytes mismatched", mismatches, verifyLen);
         return false;
     }
 
@@ -375,8 +445,14 @@ bool dac_eeprom_erase(uint8_t i2cAddr) {
     LOG_I("[DAC] EEPROM erase: addr=0x%02X (%d pages)", i2cAddr,
           DAC_EEPROM_TOTAL_SIZE / DAC_EEPROM_PAGE_SIZE);
 
-    uint8_t ffPage[DAC_EEPROM_PAGE_SIZE];
-    memset(ffPage, 0xFF, DAC_EEPROM_PAGE_SIZE);
+    // Ensure I2C bus is in known-good state
+    i2c_init();
+
+    // Probe test first
+    if (!eeprom_write_probe(i2cAddr)) {
+        LOG_E("[DAC] EEPROM erase aborted — probe test failed");
+        return false;
+    }
 
     for (int page = 0; page < DAC_EEPROM_TOTAL_SIZE / DAC_EEPROM_PAGE_SIZE; page++) {
         uint8_t addr = (uint8_t)(page * DAC_EEPROM_PAGE_SIZE);
@@ -389,15 +465,22 @@ bool dac_eeprom_erase(uint8_t i2cAddr) {
             LOG_E("[DAC] EEPROM erase failed at page %d (addr 0x%02X)", page, addr);
             return false;
         }
-        delay(5);  // Write cycle time
+        // ACK poll instead of fixed delay
+        int waitMs = eeprom_wait_ready(i2cAddr, 20);
+        if (waitMs < 0) {
+            LOG_E("[DAC] EEPROM erase: timeout after page %d", page);
+            return false;
+        }
     }
 
-    // Verify first 8 bytes are 0xFF
-    uint8_t check[8];
-    if (dac_eeprom_read_raw(i2cAddr, 0, check, 8)) {
-        for (int i = 0; i < 8; i++) {
+    delay(10); // Extra settling
+
+    // Verify first 16 bytes are 0xFF
+    uint8_t check[16];
+    if (dac_eeprom_read_raw(i2cAddr, 0, check, 16)) {
+        for (int i = 0; i < 16; i++) {
             if (check[i] != 0xFF) {
-                LOG_E("[DAC] EEPROM erase verify failed at byte %d", i);
+                LOG_E("[DAC] EEPROM erase verify failed at byte %d (read 0x%02X)", i, check[i]);
                 return false;
             }
         }
@@ -439,7 +522,8 @@ int dac_i2c_scan(uint8_t* eepromMask) {
 
 #else
 // Native test stubs
-bool dac_eeprom_scan(DacEepromData* out) {
+bool dac_eeprom_scan(DacEepromData* out, uint8_t eepromMask) {
+    (void)eepromMask;
     if (out) out->valid = false;
     return false;
 }

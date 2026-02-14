@@ -746,7 +746,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           ed.scanned = true;
           ed.lastScanMs = millis();
           DacEepromData eepData;
-          if (dac_eeprom_scan(&eepData)) {
+          if (dac_eeprom_scan(&eepData, eepMask)) {
             ed.found = true;
             ed.eepromAddr = eepData.i2cAddress;
             ed.deviceId = eepData.deviceId;
@@ -806,10 +806,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           bool ok = (sz > 0) && dac_eeprom_write(tAddr, buf, sz);
           if (!ok) appState.eepromDiag.writeErrors++;
 
-          // Re-scan
+          // Re-scan (use cached mask from prior scan)
           DacEepromData scanned;
           AppState::EepromDiag& ed = appState.eepromDiag;
-          if (dac_eeprom_scan(&scanned)) {
+          if (dac_eeprom_scan(&scanned, ed.i2cDevicesMask)) {
             ed.found = true;
             ed.eepromAddr = scanned.i2cAddress;
             ed.deviceId = scanned.deviceId;

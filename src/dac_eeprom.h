@@ -51,7 +51,9 @@ int dac_eeprom_serialize(const DacEepromData* data, uint8_t* outBuf, int bufLen)
 
 // Scan I2C bus for EEPROM with ALXD magic (requires Wire to be initialized)
 // Returns true if a valid EEPROM is found, fills out with parsed data
-bool dac_eeprom_scan(DacEepromData* out);
+// eepromMask: bitmask from dac_i2c_scan() — only addresses with bit set are probed.
+//             Pass 0xFF to probe all 0x50-0x57 (legacy behavior).
+bool dac_eeprom_scan(DacEepromData* out, uint8_t eepromMask = 0xFF);
 
 // Read raw bytes from EEPROM (public wrapper for hex dump diagnostics)
 bool dac_eeprom_read_raw(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, int len);

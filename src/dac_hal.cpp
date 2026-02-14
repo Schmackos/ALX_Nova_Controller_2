@@ -442,7 +442,7 @@ void dac_output_init() {
         ed.lastScanMs = millis();
 
         DacEepromData eepData;
-        if (dac_eeprom_scan(&eepData)) {
+        if (dac_eeprom_scan(&eepData, eepMask)) {
             ed.found = true;
             ed.eepromAddr = eepData.i2cAddress;
             ed.deviceId = eepData.deviceId;

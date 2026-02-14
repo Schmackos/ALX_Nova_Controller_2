@@ -283,11 +283,25 @@ bool detectSignal() {
     // Diagnostics
     const AdcDiagnostics &dsrc = diag.adc[a];
     dst.healthStatus = (uint8_t)dsrc.status;
+    // Debounced health transition logging: only log after new state is stable for 3 seconds.
+    // Prevents 33K+ log lines/session from ADC2 oscillating at the CLIPPING boundary.
     static uint8_t prevHealth[NUM_AUDIO_ADCS] = {0xFF, 0xFF};
+    static uint8_t pendingHealth[NUM_AUDIO_ADCS] = {0xFF, 0xFF};
+    static unsigned long pendingSince[NUM_AUDIO_ADCS] = {0, 0};
     if (dst.healthStatus != prevHealth[a]) {
-        LOG_I("[Sensing] ADC%d health: %s -> %s", a + 1,
-              audioHealthName(prevHealth[a]), audioHealthName(dst.healthStatus));
-        prevHealth[a] = dst.healthStatus;
+        if (dst.healthStatus != pendingHealth[a]) {
+            // New candidate state — start hold timer
+            pendingHealth[a] = dst.healthStatus;
+            pendingSince[a] = millis();
+        } else if (millis() - pendingSince[a] >= 3000) {
+            // Candidate held stable for 3s — commit the transition
+            LOG_I("[Sensing] ADC%d health: %s -> %s", a + 1,
+                  audioHealthName(prevHealth[a]), audioHealthName(dst.healthStatus));
+            prevHealth[a] = dst.healthStatus;
+        }
+    } else {
+        // Status returned to current — cancel any pending transition
+        pendingHealth[a] = dst.healthStatus;
     }
     dst.i2sErrors = dsrc.i2sReadErrors;
     dst.allZeroBuffers = dsrc.allZeroBuffers;

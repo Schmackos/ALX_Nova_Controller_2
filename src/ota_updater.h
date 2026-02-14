@@ -30,6 +30,7 @@ void handleGetReleaseNotes();
 void startOTADownloadTask();
 void startOTACheckTask();
 bool isOTATaskRunning();
+unsigned long getOTAEffectiveInterval();  // Backoff-aware check interval
 
 // ===== Manual Firmware Upload Handlers =====
 void handleFirmwareUploadComplete();

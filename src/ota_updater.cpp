@@ -104,6 +104,21 @@ extern void sendWiFiStatus();
 static TaskHandle_t otaDownloadTaskHandle = NULL;
 static TaskHandle_t otaCheckTaskHandle = NULL;
 
+// ===== OTA Backoff State =====
+static int _otaConsecutiveFailures = 0;
+
+// Returns backoff-aware check interval (ms) based on consecutive failures:
+//   0-2 failures: 5 min (300s) — normal
+//   3-5 failures: 15 min (900s)
+//   6-9 failures: 30 min (1800s)
+//   10+ failures: 60 min (3600s)
+unsigned long getOTAEffectiveInterval() {
+    if (_otaConsecutiveFailures >= 10) return 3600000UL;
+    if (_otaConsecutiveFailures >= 6)  return 1800000UL;
+    if (_otaConsecutiveFailures >= 3)  return 900000UL;
+    return OTA_CHECK_INTERVAL;  // 300000 (5 min)
+}
+
 // ===== OTA Progress Helper (thread-safe via dirty flag) =====
 static void setOTAProgress(const char* status, const char* message, int progress) {
   appState.otaStatus = status;
@@ -332,9 +347,18 @@ void checkForFirmwareUpdate() {
   String checksum = "";
   
   if (!getLatestReleaseInfo(latestVersion, firmwareUrl, checksum)) {
-    LOG_E("[OTA] Failed to retrieve release information");
+    _otaConsecutiveFailures++;
+    unsigned long nextInterval = getOTAEffectiveInterval();
+    LOG_E("[OTA] Failed to retrieve release information (failures=%d, next check in %lus)",
+          _otaConsecutiveFailures, nextInterval / 1000);
     return;
   }
+
+  // Success — reset backoff
+  if (_otaConsecutiveFailures > 0) {
+    LOG_I("[OTA] Connection restored after %d consecutive failures", _otaConsecutiveFailures);
+  }
+  _otaConsecutiveFailures = 0;
   
   latestVersion.trim();
   LOG_I("[OTA] Latest firmware version available: %s", latestVersion.c_str());
@@ -1046,6 +1070,18 @@ static void otaCheckTaskFunc(void* param) {
   // TLS handshake (ECDSA verification) can take 5-10s without yielding —
   // unsubscribe from watchdog to prevent IDLE0 starvation panic on Core 0
   esp_task_wdt_delete(NULL);
+
+  // Heap pre-flight: TLS handshake allocates ~55KB temporarily from internal SRAM.
+  // If largest free block is below 60KB, skip to avoid pushing heap into critical zone.
+  uint32_t maxBlock = ESP.getMaxAllocHeap();
+  if (maxBlock < 60000) {
+    LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<60KB), skipping", (unsigned long)maxBlock);
+    _otaConsecutiveFailures++;
+    appState.markOTADirty();
+    otaCheckTaskHandle = NULL;
+    vTaskDelete(NULL);
+    return;
+  }
 
   checkForFirmwareUpdate();
 

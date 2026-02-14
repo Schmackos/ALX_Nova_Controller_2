@@ -322,10 +322,10 @@ void registerDacApiEndpoints() {
             return;
         }
 
-        // Re-scan to update diagnostics
+        // Re-scan to update diagnostics (use cached mask from prior scan)
         DacEepromData scanned;
         AppState::EepromDiag& ed = appState.eepromDiag;
-        if (dac_eeprom_scan(&scanned)) {
+        if (dac_eeprom_scan(&scanned, ed.i2cDevicesMask)) {
             ed.found = true;
             ed.eepromAddr = scanned.i2cAddress;
             ed.deviceId = scanned.deviceId;
@@ -413,7 +413,7 @@ void registerDacApiEndpoints() {
         ed.lastScanMs = millis();
 
         DacEepromData eepData;
-        if (dac_eeprom_scan(&eepData)) {
+        if (dac_eeprom_scan(&eepData, eepMask)) {
             ed.found = true;
             ed.eepromAddr = eepData.i2cAddress;
             ed.deviceId = eepData.deviceId;
