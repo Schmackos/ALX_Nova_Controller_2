@@ -27,6 +27,8 @@ enum ScreenId {
     SCR_SIGGEN_MENU,
 #ifdef DSP_ENABLED
     SCR_DSP_MENU,
+    SCR_PEQ_MENU,
+    SCR_PEQ_BAND_EDIT,
 #endif
     SCR_COUNT
 };

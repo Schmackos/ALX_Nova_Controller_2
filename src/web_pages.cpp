@@ -1024,6 +1024,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             border-color: var(--accent);
         }
 
+        .select-sm {
+            padding: 4px 8px;
+            font-size: 12px;
+            color: var(--text-primary);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            outline: none;
+        }
+        .select-sm:focus { border-color: var(--accent); }
+
         /* ===== Divider ===== */
         .divider {
             height: 1px;
@@ -1146,7 +1157,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         /* ===== Manual Rendered Content ===== */
         .search-input {
-            background: var(--bg-secondary);
+            background: var(--bg-input);
             border: 1px solid var(--border);
             border-radius: 8px;
             color: var(--text-primary);
@@ -1172,8 +1183,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .manual-rendered p { margin: 6px 0; }
         .manual-rendered ul, .manual-rendered ol { padding-left: 20px; margin: 6px 0; }
         .manual-rendered li { margin: 3px 0; }
-        .manual-rendered code { background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-        .manual-rendered pre { background: var(--bg-secondary); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
+        .manual-rendered code { background: var(--bg-input); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+        .manual-rendered pre { background: var(--bg-input); padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
         .manual-rendered pre code { padding: 0; background: none; }
         .manual-rendered a { color: var(--accent); }
         .search-highlight { background: rgba(255, 152, 0, 0.3); border-radius: 2px; }
@@ -2135,37 +2146,43 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         /* ===== DSP Tab Styles ===== */
         .dsp-ch-tabs {
             display: flex;
-            gap: 6px;
+            gap: 4px;
             margin-bottom: 12px;
             flex-wrap: wrap;
         }
         .dsp-ch-tab {
-            padding: 6px 14px;
-            border-radius: 16px;
-            border: 1.5px solid var(--border);
-            background: var(--bg-surface);
+            padding: 7px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
             color: var(--text-secondary);
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all 0.18s ease;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            position: relative;
         }
+        .dsp-ch-tab:hover { background: var(--bg-input); }
         .dsp-ch-tab.active {
-            background: var(--accent);
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark, #E68900));
             color: #fff;
             border-color: var(--accent);
+            box-shadow: 0 2px 8px rgba(255,152,0,0.3);
         }
         .dsp-ch-tab .badge {
             display: inline-block;
-            background: var(--bg-card);
+            background: var(--bg-surface);
             color: var(--text-secondary);
-            font-size: 10px;
+            font-size: 9px;
             padding: 1px 5px;
-            border-radius: 8px;
+            border-radius: 4px;
             margin-left: 4px;
+            font-weight: 600;
         }
         .dsp-ch-tab.active .badge {
-            background: rgba(255,255,255,0.25);
+            background: rgba(255,255,255,0.2);
             color: #fff;
         }
         .dsp-stage-card {
@@ -2272,7 +2289,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             padding: 0;
             border: 1px solid var(--border);
             border-radius: 4px;
-            background: var(--bg-secondary);
+            background: var(--bg-input);
             color: var(--text-primary);
             font-size: 14px;
             line-height: 22px;
@@ -2288,7 +2305,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             padding: 2px 4px;
             border: 1px solid var(--border);
             border-radius: 4px;
-            background: var(--bg-secondary);
+            background: var(--bg-input);
             color: var(--text-primary);
             font-size: 12px;
             font-weight: 600;
@@ -2302,6 +2319,49 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             color: var(--text-secondary);
             min-width: 28px;
             flex-shrink: 0;
+        }
+        .comp-graph-wrap {
+            margin-bottom: 8px;
+            border-radius: 6px;
+            overflow: hidden;
+            background: rgba(0,0,0,0.25);
+        }
+        .comp-graph-wrap canvas {
+            display: block;
+            width: 100%;
+        }
+        .comp-gr-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        .comp-gr-wrap label {
+            color: var(--text-secondary);
+            width: 70px;
+            flex-shrink: 0;
+        }
+        .comp-gr-track {
+            flex: 1;
+            height: 10px;
+            background: var(--bg-input);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .comp-gr-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--error), #ff7043);
+            border-radius: 5px;
+            transition: width 0.15s;
+        }
+        .comp-gr-val {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--error);
+            min-width: 60px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
         }
         .dsp-add-btn {
             display: block;
@@ -2370,6 +2430,51 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
         @media (max-width: 767px) {
             .dsp-freq-canvas { height: 120px; }
+        }
+        /* ===== PEQ Band Styles ===== */
+        .peq-band-strip {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .peq-band-pill {
+            width: 32px;
+            height: 28px;
+            border-radius: 6px;
+            border: 1.5px solid var(--border);
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            border-bottom: 3px solid var(--band-color, var(--border));
+            transition: all 0.15s;
+            padding: 0;
+        }
+        .peq-band-pill.active {
+            border-color: var(--band-color, var(--accent));
+            background: var(--bg-card);
+            color: var(--text-primary);
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.15);
+        }
+        .peq-band-pill.enabled {
+            background: color-mix(in srgb, var(--band-color, var(--accent)) 20%, var(--bg-surface));
+            color: var(--text-primary);
+        }
+        .peq-detail-panel {
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border-radius: 8px;
+        }
+        .peq-graph-tog {
+            opacity: 0.5;
+            transition: opacity 0.15s;
+        }
+        .peq-graph-tog.active {
+            opacity: 1;
+            background: var(--accent) !important;
+            color: #fff !important;
         }
     </style>
 </head>
@@ -2651,7 +2756,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
                         <span style="font-size:12px;color:var(--text-secondary);">Window:</span>
-                        <select id="fftWindowSelect" style="font-size:12px;padding:2px 4px;background:var(--card-bg);color:var(--text-primary);border:1px solid var(--border-color);border-radius:4px;" onchange="setFftWindow(this.value)">
+                        <select id="fftWindowSelect" class="select-sm" onchange="setFftWindow(this.value)">
                             <option value="0">Hann</option>
                             <option value="1">Blackman</option>
                             <option value="2">Blackman-Harris</option>
@@ -2833,6 +2938,113 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <button class="btn btn-primary" onclick="updateAudioSettings()">Update Sample Rate</button>
             </div>
 
+            <!-- DAC Output -->
+            <div class="card" id="dacCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    DAC Output
+                    <span id="dacReadyBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Ready</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Enable</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="dacEnable" onchange="updateDac()"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div id="dacFields" style="display:none">
+                <div class="info-row"><span class="info-label">Model</span><span class="info-value" id="dacModel">—</span></div>
+                <div class="form-group">
+                    <label class="form-label">Volume: <span id="dacVolVal">80</span>%</label>
+                    <input type="range" class="form-input" id="dacVolume" min="0" max="100" value="80" step="1" oninput="document.getElementById('dacVolVal').textContent=this.value" onchange="updateDac()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mute</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="dacMute" onchange="updateDac()"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div class="form-group" id="dacFilterGroup" style="display:none">
+                    <label class="form-label">Filter Mode</label>
+                    <select class="form-input" id="dacFilterMode" onchange="updateDacFilter()"></select>
+                </div>
+                <div class="info-row"><span class="info-label">TX Underruns</span><span class="info-value" id="dacUnderruns">0</span></div>
+                <div class="form-group">
+                    <label class="form-label">DAC Driver</label>
+                    <select class="form-input" id="dacDriverSelect" onchange="changeDacDriver()"></select>
+                </div>
+                </div>
+            </div>
+
+            <!-- EEPROM Programming -->
+            <div class="card" id="eepromCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    EEPROM Programming
+                    <span id="eepromFoundBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Found</span>
+                </div>
+                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="eepromStatus">Not scanned</span></div>
+                <div class="info-row"><span class="info-label">I2C Address</span><span class="info-value" id="eepromI2cAddr">—</span></div>
+                <div class="info-row"><span class="info-label">I2C Devices</span><span class="info-value" id="eepromI2cCount">—</span></div>
+                <div style="margin:8px 0">
+                    <button class="btn btn-secondary" onclick="eepromScan()">Scan I2C Bus</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Driver Preset</label>
+                    <select class="form-input" id="eepromPreset" onchange="eepromFillPreset()">
+                        <option value="">— Select preset —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device ID (hex)</label>
+                    <input type="text" class="form-input" id="eepromDeviceId" placeholder="0x0001">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device Name</label>
+                    <input type="text" class="form-input" id="eepromDeviceName" maxlength="32" placeholder="PCM5102A">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Manufacturer</label>
+                    <input type="text" class="form-input" id="eepromManufacturer" maxlength="32" placeholder="Texas Instruments">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">HW Revision</label>
+                    <input type="number" class="form-input" id="eepromHwRev" min="0" max="255" value="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Channels</label>
+                    <input type="number" class="form-input" id="eepromMaxCh" min="1" max="8" value="2">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">DAC I2C Address (hex, 0=none)</label>
+                    <input type="text" class="form-input" id="eepromDacAddr" placeholder="0x00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Flags</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:4px">
+                        <label><input type="checkbox" id="eepromFlagClock"> Indep. Clock</label>
+                        <label><input type="checkbox" id="eepromFlagVol"> HW Volume</label>
+                        <label><input type="checkbox" id="eepromFlagFilter"> Filters</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Sample Rates (comma-separated)</label>
+                    <input type="text" class="form-input" id="eepromRates" placeholder="44100,48000,96000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Target EEPROM Address</label>
+                    <select class="form-input" id="eepromTargetAddr">
+                        <option value="80">0x50</option>
+                        <option value="81">0x51</option>
+                        <option value="82">0x52</option>
+                        <option value="83">0x53</option>
+                        <option value="84">0x54</option>
+                        <option value="85">0x55</option>
+                        <option value="86">0x56</option>
+                        <option value="87">0x57</option>
+                    </select>
+                </div>
+                <div class="btn-row" style="margin-top:8px">
+                    <button class="btn btn-primary" onclick="eepromProgram()">Program</button>
+                    <button class="btn btn-danger" onclick="eepromErase()">Erase</button>
+                </div>
+            </div>
+
             <!-- Test Signal Generator -->
             <div class="card">
                 <div class="card-title">Test Signal Generator</div>
@@ -2937,7 +3149,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             <!-- Channel Selector -->
             <div class="card">
-                <div class="card-title">Channel</div>
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Channel
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button class="btn btn-secondary" id="peqLinkBtn" onclick="peqToggleLink()" style="padding:2px 8px;font-size:11px;" title="Link L/R channels">Link L/R</button>
+                    </div>
+                </div>
                 <div class="dsp-ch-tabs" id="dspChTabs"></div>
                 <div class="info-box">
                     <div class="info-row">
@@ -2952,37 +3169,63 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             <!-- Frequency Response Graph -->
             <div class="card">
-                <div class="card-title">Frequency Response</div>
-                <canvas class="dsp-freq-canvas" id="dspFreqCanvas"></canvas>
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Frequency Response
+                    <div style="display:flex;gap:4px;" id="peqGraphToggles">
+                        <button class="btn btn-secondary peq-graph-tog active" id="togIndividual" onclick="peqToggleGraphLayer('individual')" style="padding:2px 6px;font-size:10px;">Individual</button>
+                        <button class="btn btn-secondary peq-graph-tog" id="togRta" onclick="peqToggleGraphLayer('rta')" style="padding:2px 6px;font-size:10px;">RTA</button>
+                        <button class="btn btn-secondary peq-graph-tog active" id="togChain" onclick="peqToggleGraphLayer('chain')" style="padding:2px 6px;font-size:10px;">Chain</button>
+                    </div>
+                </div>
+                <canvas class="dsp-freq-canvas" id="dspFreqCanvas" style="height:220px;cursor:crosshair;"></canvas>
             </div>
 
-            <!-- Filter Stages -->
+            <!-- PEQ Bands -->
             <div class="card">
-                <div class="card-title" id="dspStageTitle">Filter Stages (0 / 20)</div>
-                <div id="dspStageList"></div>
-                <button class="dsp-add-btn" id="dspAddBtn" onclick="dspToggleAddMenu()">+ Add Filter Stage</button>
-                <div class="dsp-add-menu" id="dspAddMenu">
-                    <div class="menu-cat">Biquad Filters</div>
-                    <div class="menu-item" onclick="dspAddStage(0)">Low Pass (LPF)</div>
-                    <div class="menu-item" onclick="dspAddStage(1)">High Pass (HPF)</div>
-                    <div class="menu-item" onclick="dspAddStage(2)">Band Pass (BPF)</div>
-                    <div class="menu-item" onclick="dspAddStage(3)">Notch</div>
-                    <div class="menu-item" onclick="dspAddStage(4)">Parametric EQ (PEQ)</div>
-                    <div class="menu-item" onclick="dspAddStage(5)">Low Shelf</div>
-                    <div class="menu-item" onclick="dspAddStage(6)">High Shelf</div>
-                    <div class="menu-item" onclick="dspAddStage(7)">Allpass</div>
-                    <div class="menu-item" onclick="dspAddStage(8)">Allpass 360</div>
-                    <div class="menu-item" onclick="dspAddStage(9)">Allpass 180</div>
-                    <div class="menu-item" onclick="dspAddStage(10)">BPF 0dB</div>
-                    <div class="menu-cat">Dynamics</div>
-                    <div class="menu-item" onclick="dspAddStage(12)">Limiter</div>
-                    <div class="menu-item" onclick="dspAddStage(18)">Compressor</div>
-                    <div class="menu-cat">Utility</div>
-                    <div class="menu-item" onclick="dspAddStage(14)">Gain</div>
-                    <div class="menu-item" onclick="dspAddStage(15)">Delay</div>
-                    <div class="menu-item" onclick="dspAddStage(16)">Polarity Invert</div>
-                    <div class="menu-item" onclick="dspAddStage(17)">Mute</div>
-                    <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    EQ Bands
+                    <div style="display:flex;gap:4px;">
+                        <button class="btn btn-secondary" onclick="peqEnableAll(true)" style="padding:2px 8px;font-size:11px;">Enable All</button>
+                        <button class="btn btn-secondary" onclick="peqEnableAll(false)" style="padding:2px 8px;font-size:11px;">Disable All</button>
+                        <select id="peqCopyTo" class="select-sm" style="font-size:11px;" onchange="peqCopyChannel(this.value);this.value=''">
+                            <option value="">Copy to...</option>
+                            <option value="0">L1</option>
+                            <option value="1">R1</option>
+                            <option value="2">L2</option>
+                            <option value="3">R2</option>
+                            <option value="all">All Channels</option>
+                        </select>
+                        <select id="peqPresetSel" class="select-sm" style="font-size:11px;" onchange="peqPresetAction(this.value);this.value=''">
+                            <option value="">Presets...</option>
+                            <option value="_save">Save Preset...</option>
+                            <option value="_load">Load Preset...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="peq-band-strip" id="peqBandStrip"></div>
+                <div id="peqBandDetail"></div>
+            </div>
+
+            <!-- Additional Processing (chain stages) -->
+            <div class="card">
+                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                    <span class="card-title" style="margin-bottom:0;" id="dspStageTitle">Additional Processing (0)</span>
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" style="margin-top:8px;">
+                    <div id="dspStageList"></div>
+                    <button class="dsp-add-btn" id="dspAddBtn" onclick="dspToggleAddMenu()">+ Add Stage</button>
+                    <div class="dsp-add-menu" id="dspAddMenu">
+                        <div class="menu-cat">Dynamics</div>
+                        <div class="menu-item" onclick="dspAddStage(12)">Limiter</div>
+                        <div class="menu-item" onclick="dspAddStage(18)">Compressor</div>
+                        <div class="menu-cat">Utility</div>
+                        <div class="menu-item" onclick="dspAddStage(14)">Gain</div>
+                        <div class="menu-item" onclick="dspAddStage(15)">Delay</div>
+                        <div class="menu-item" onclick="dspAddStage(16)">Polarity Invert</div>
+                        <div class="menu-item" onclick="dspAddStage(17)">Mute</div>
+                        <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
+                    </div>
                 </div>
             </div>
 
@@ -3609,21 +3852,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         <!-- ===== DEBUG TAB ===== -->
         <section id="debug" class="panel">
-            <!-- Stats Refresh Interval -->
-            <div class="card">
-                <div class="card-title">Refresh Rate</div>
-                <div class="input-group">
-                    <label for="statsIntervalSelect" class="input-label">Update Interval</label>
-                    <select id="statsIntervalSelect" class="select-input" onchange="setStatsInterval()">
-                        <option value="1">1 second</option>
-                        <option value="2" selected>2 seconds</option>
-                        <option value="3">3 seconds</option>
-                        <option value="5">5 seconds</option>
-                        <option value="10">10 seconds</option>
-                    </select>
-                </div>
-            </div>
-
             <!-- Debug Controls -->
             <div class="card">
                 <div class="card-title">Debug Controls</div>
@@ -3640,13 +3868,29 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span>Task Monitor</span>
                         <label class="switch"><input type="checkbox" id="debugTaskMonitorToggle" onchange="setDebugToggle('setDebugTaskMonitor',this.checked)"><span class="slider round"></span></label>
                     </div>
-                    <div class="input-group">
-                        <label for="debugSerialLevel" class="input-label">Serial Log Level</label>
-                        <select id="debugSerialLevel" class="select-input" onchange="setDebugSerialLevel(this.value)">
+                    <div class="toggle-row">
+                        <div>
+                            <div class="toggle-label">Serial Log Level</div>
+                            <div class="toggle-sublabel">Debug output verbosity</div>
+                        </div>
+                        <select id="debugSerialLevel" onchange="setDebugSerialLevel(this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
                             <option value="0">Off</option>
                             <option value="1">Errors Only</option>
                             <option value="2">Info (Normal)</option>
                             <option value="3">Debug (Verbose)</option>
+                        </select>
+                    </div>
+                    <div class="toggle-row">
+                        <div>
+                            <div class="toggle-label">Refresh Rate</div>
+                            <div class="toggle-sublabel">Stats update interval</div>
+                        </div>
+                        <select id="statsIntervalSelect" onchange="setStatsInterval()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                            <option value="1">1 second</option>
+                            <option value="2" selected>2 seconds</option>
+                            <option value="3">3 seconds</option>
+                            <option value="5">5 seconds</option>
+                            <option value="10">10 seconds</option>
                         </select>
                     </div>
                 </div>
@@ -3691,8 +3935,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             </div>
             </div>
 
-            <div id="hwStatsSection">
-            <!-- CPU Stats -->
+            <!-- CPU Stats (always visible when debug tab is shown) -->
             <div class="card">
                 <div class="card-title">CPU</div>
                 <div class="stats-grid">
@@ -3737,6 +3980,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <div id="hwStatsSection">
             <!-- Memory Stats -->
             <div class="card">
                 <div class="card-title">Memory</div>
@@ -3920,6 +4164,105 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             </div>
 
+            <!-- Audio DAC Diagnostics -->
+            <div class="card">
+                <div class="card-title">Audio DAC</div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Status</span>
+                        <span class="info-value" id="dacStatus">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Model</span>
+                        <span class="info-value" id="dacModel">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Manufacturer</span>
+                        <span class="info-value" id="dacManufacturer">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Device ID</span>
+                        <span class="info-value" id="dacDeviceId">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Detection</span>
+                        <span class="info-value" id="dacDetection">--</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="info-row">
+                        <span class="info-label">Enabled</span>
+                        <span class="info-value" id="dacDbgEnabled">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Volume</span>
+                        <span class="info-value" id="dacDbgVolume">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Mute</span>
+                        <span class="info-value" id="dacDbgMute">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Output Channels</span>
+                        <span class="info-value" id="dacDbgChannels">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Filter Mode</span>
+                        <span class="info-value" id="dacDbgFilter">--</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="info-row">
+                        <span class="info-label">HW Volume</span>
+                        <span class="info-value" id="dacHwVolume">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">I2C Control</span>
+                        <span class="info-value" id="dacI2cControl">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Independent Clock</span>
+                        <span class="info-value" id="dacIndepClock">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Filter Support</span>
+                        <span class="info-value" id="dacHasFilters">--</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="info-row">
+                        <span class="info-label">TX Underruns</span>
+                        <span class="info-value" id="dacTxUnderruns">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EEPROM / I2C Diagnostics -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    EEPROM / I2C
+                    <button class="btn btn-secondary btn-small" onclick="eepromScan()">Re-Scan</button>
+                </div>
+                <div class="info-box">
+                    <div class="info-row"><span class="info-label">EEPROM Found</span><span class="info-value" id="dbgEepromFound">--</span></div>
+                    <div class="info-row"><span class="info-label">I2C Address</span><span class="info-value" id="dbgEepromAddr">--</span></div>
+                    <div class="info-row"><span class="info-label">Device ID</span><span class="info-value" id="dbgEepromDeviceId">--</span></div>
+                    <div class="info-row"><span class="info-label">Device Name</span><span class="info-value" id="dbgEepromName">--</span></div>
+                    <div class="info-row"><span class="info-label">Manufacturer</span><span class="info-value" id="dbgEepromMfr">--</span></div>
+                    <div class="info-row"><span class="info-label">HW Revision</span><span class="info-value" id="dbgEepromRev">--</span></div>
+                    <div class="info-row"><span class="info-label">Channels</span><span class="info-value" id="dbgEepromCh">--</span></div>
+                    <div class="info-row"><span class="info-label">DAC I2C Addr</span><span class="info-value" id="dbgEepromDacAddr">--</span></div>
+                    <div class="info-row"><span class="info-label">Flags</span><span class="info-value" id="dbgEepromFlags">--</span></div>
+                    <div class="info-row"><span class="info-label">Sample Rates</span><span class="info-value" id="dbgEepromRates">--</span></div>
+                    <div class="divider"></div>
+                    <div class="info-row"><span class="info-label">I2C Devices</span><span class="info-value" id="dbgI2cCount">--</span></div>
+                    <div class="info-row"><span class="info-label">Read Errors</span><span class="info-value" id="dbgEepromRdErr">0</span></div>
+                    <div class="info-row"><span class="info-label">Write Errors</span><span class="info-value" id="dbgEepromWrErr">0</span></div>
+                    <div class="divider"></div>
+                    <div style="margin-top:4px">
+                        <button class="btn btn-secondary btn-small" onclick="eepromLoadHex()">Load Hex Dump</button>
+                    </div>
+                    <pre id="dbgEepromHex" style="display:none;font-size:10px;overflow-x:auto;max-height:200px;background:var(--bg-secondary);padding:6px;border-radius:4px;margin-top:4px;word-break:break-all"></pre>
+                </div>
+            </div>
+
             <!-- I2S Configuration -->
             <div id="i2sMetricsSection">
             <div class="card">
@@ -3990,6 +4333,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC 1</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>9</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>40</td><td>I2S TX Data</td><td>DAC Output</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>41</td><td>I2C SDA</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>42</td><td>I2C SCL</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
                         <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
                         <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
@@ -4008,7 +4354,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="card-title">Debug Console</div>
                 <div class="form-row mb-12">
                     <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
-                    <select id="logLevelFilter" onchange="setLogFilter(this.value)" style="flex: 0 0 auto; min-width: 120px;">
+                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
                         <option value="all">All Levels</option>
                         <option value="debug">Debug</option>
                         <option value="info">Info</option>
@@ -4187,13 +4533,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     if (!waveformCurrent[adc]) waveformCurrent[adc] = new Uint8Array(samples);
                     startAudioAnimation();
                 }
-            } else if (type === 0x02 && currentActiveTab === 'audio') {
+            } else if (type === 0x02) {
                 // Spectrum: [type:1][adc:1][freq:f32LE][bands:16xf32LE]
                 if (adc < NUM_ADCS && buf.byteLength >= 70) {
                     const freq = dv.getFloat32(2, true);
                     for (let i = 0; i < 16; i++) spectrumTarget[adc][i] = dv.getFloat32(6 + i * 4, true);
                     targetDominantFreq[adc] = freq;
-                    startAudioAnimation();
+                    if (currentActiveTab === 'audio') startAudioAnimation();
+                    // Feed RTA overlay for DSP tab
+                    if (currentActiveTab === 'dsp' && adc === 0) {
+                        peqRtaData = new Float32Array(16);
+                        for (let i = 0; i < 16; i++) peqRtaData[i] = spectrumTarget[0][i];
+                        if (peqGraphLayers.rta) dspDrawFreqResponse();
+                    }
                 }
             }
         }
@@ -4252,10 +4604,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 loadManualContent();
             }
 
-            // DSP tab: redraw frequency response and load routing on entry
+            // DSP tab: redraw frequency response, load routing, subscribe audio for RTA
             if (tabId === 'dsp') {
+                canvasDims = {};
                 setTimeout(dspDrawFreqResponse, 50);
                 dspLoadRouting();
+                if (peqGraphLayers.rta && ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
+                    ws.send(JSON.stringify({ type: 'setSpectrumEnabled', enabled: true }));
+                }
+            } else if (currentActiveTab === 'dsp' && peqGraphLayers.rta && tabId !== 'audio') {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
+                }
             }
 
             // Audio tab subscription management
@@ -4282,7 +4643,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 loadInputNameFields();
             } else if (tabId !== 'audio' && audioSubscribed) {
                 audioSubscribed = false;
-                if (ws && ws.readyState === WebSocket.OPEN) {
+                var dspRtaTakeover = (tabId === 'dsp' && peqGraphLayers.rta);
+                if (!dspRtaTakeover && ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
                 }
                 // Stop animation and reset state
@@ -4290,7 +4652,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (vuAnimFrameId) { cancelAnimationFrame(vuAnimFrameId); vuAnimFrameId = null; }
                 for (let a = 0; a < NUM_ADCS; a++) {
                     waveformCurrent[a] = null; waveformTarget[a] = null;
-                    spectrumCurrent[a].fill(0); spectrumTarget[a].fill(0);
+                    if (!dspRtaTakeover) { spectrumTarget[a].fill(0); }
+                    spectrumCurrent[a].fill(0);
                     spectrumPeaks[a].fill(0); spectrumPeakTimes[a].fill(0);
                 }
                 vuDomRefs = null;
@@ -4486,8 +4849,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     drawMemoryGraph();
                     drawPsramGraph();
 
-                    // Re-subscribe to audio stream if audio tab is active
+                    // Re-subscribe to audio stream if audio tab or DSP RTA is active
                     if (audioSubscribed && currentActiveTab === 'audio') {
+                        ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
+                    } else if (currentActiveTab === 'dsp' && peqGraphLayers.rta) {
                         ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
                     }
 
@@ -4657,10 +5022,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     applyDebugState(data);
                 } else if (data.type === 'signalGenerator') {
                     applySigGenState(data);
+                } else if (data.type === 'dacState') {
+                    handleDacState(data);
+                    if (data.eeprom) handleEepromDiag(data.eeprom);
+                } else if (data.type === 'eepromProgramResult') {
+                    showToast(data.success ? 'EEPROM programmed' : 'EEPROM program failed', data.success ? 'success' : 'error');
+                } else if (data.type === 'eepromEraseResult') {
+                    showToast(data.success ? 'EEPROM erased' : 'EEPROM erase failed', data.success ? 'success' : 'error');
                 } else if (data.type === 'dspState') {
                     dspHandleState(data);
                 } else if (data.type === 'dspMetrics') {
                     dspHandleMetrics(data);
+                } else if (data.type === 'peqPresets') {
+                    peqHandlePresetsList(data.presets);
                 }
             };
 
@@ -5644,6 +6018,283 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 else showToast('Failed to update sample rate', 'error');
             })
             .catch(err => showToast('Failed to update sample rate', 'error'));
+        }
+
+        // ===== DAC Output =====
+        function updateDac() {
+            var en = document.getElementById('dacEnable').checked;
+            document.getElementById('dacFields').style.display = en ? '' : 'none';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setDacEnabled', enabled: en }));
+                ws.send(JSON.stringify({
+                    type: 'setDacVolume',
+                    volume: parseInt(document.getElementById('dacVolume').value)
+                }));
+                ws.send(JSON.stringify({
+                    type: 'setDacMute',
+                    mute: document.getElementById('dacMute').checked
+                }));
+            }
+        }
+        function updateDacFilter() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'setDacFilter',
+                    filterMode: parseInt(document.getElementById('dacFilterMode').value)
+                }));
+            }
+        }
+        function changeDacDriver() {
+            var id = parseInt(document.getElementById('dacDriverSelect').value);
+            apiFetch('/api/dac', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast('DAC driver changed', 'success');
+                else showToast(data.message || 'Failed', 'error');
+            })
+            .catch(() => showToast('Failed to change DAC driver', 'error'));
+        }
+        function handleDacState(d) {
+            var enEl = document.getElementById('dacEnable');
+            if (enEl) enEl.checked = d.enabled;
+            var fields = document.getElementById('dacFields');
+            if (fields) fields.style.display = d.enabled ? '' : 'none';
+            var model = document.getElementById('dacModel');
+            if (model) model.textContent = d.modelName || '—';
+            var volSlider = document.getElementById('dacVolume');
+            if (volSlider) { volSlider.value = d.volume; document.getElementById('dacVolVal').textContent = d.volume; }
+            var muteEl = document.getElementById('dacMute');
+            if (muteEl) muteEl.checked = d.mute;
+            var badge = document.getElementById('dacReadyBadge');
+            if (badge) {
+                badge.style.display = d.enabled ? '' : 'none';
+                badge.textContent = d.ready ? 'Ready' : 'Not Ready';
+                badge.style.background = d.ready ? '#4CAF50' : '#F44336';
+                badge.style.color = '#fff';
+            }
+            var und = document.getElementById('dacUnderruns');
+            if (und) und.textContent = d.txUnderruns || 0;
+            // Filter modes
+            var fg = document.getElementById('dacFilterGroup');
+            if (d.filterModes && d.filterModes.length > 0) {
+                if (fg) fg.style.display = '';
+                var sel = document.getElementById('dacFilterMode');
+                if (sel) {
+                    sel.innerHTML = '';
+                    d.filterModes.forEach(function(name, i) {
+                        var opt = document.createElement('option');
+                        opt.value = i; opt.textContent = name;
+                        sel.appendChild(opt);
+                    });
+                    sel.value = d.filterMode || 0;
+                }
+            } else if (fg) {
+                fg.style.display = 'none';
+            }
+            // Driver select
+            if (d.drivers) {
+                var drvSel = document.getElementById('dacDriverSelect');
+                if (drvSel) {
+                    drvSel.innerHTML = '';
+                    d.drivers.forEach(function(drv) {
+                        var opt = document.createElement('option');
+                        opt.value = drv.id; opt.textContent = drv.name;
+                        drvSel.appendChild(opt);
+                    });
+                    drvSel.value = d.deviceId;
+                }
+            }
+        }
+
+        // ===== EEPROM Programming =====
+        var _eepromPresetsLoaded = false;
+        function eepromScan() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'eepromScan' }));
+                showToast('Scanning I2C bus...', 'info');
+            }
+        }
+        function eepromLoadPresets() {
+            if (_eepromPresetsLoaded) return;
+            apiFetch('/api/dac/eeprom/presets')
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) return;
+                var sel = document.getElementById('eepromPreset');
+                if (!sel) return;
+                d.presets.forEach(function(p) {
+                    var opt = document.createElement('option');
+                    opt.value = JSON.stringify(p);
+                    opt.textContent = p.deviceName + ' (' + p.manufacturer + ')';
+                    sel.appendChild(opt);
+                });
+                _eepromPresetsLoaded = true;
+            }).catch(function(){});
+        }
+        function eepromFillPreset() {
+            var sel = document.getElementById('eepromPreset');
+            if (!sel || !sel.value) return;
+            var p = JSON.parse(sel.value);
+            document.getElementById('eepromDeviceId').value = '0x' + p.deviceId.toString(16).padStart(4,'0');
+            document.getElementById('eepromDeviceName').value = p.deviceName || '';
+            document.getElementById('eepromManufacturer').value = p.manufacturer || '';
+            document.getElementById('eepromMaxCh').value = p.maxChannels || 2;
+            document.getElementById('eepromDacAddr').value = p.dacI2cAddress ? '0x' + p.dacI2cAddress.toString(16).padStart(2,'0') : '0x00';
+            document.getElementById('eepromFlagClock').checked = !!(p.flags & 1);
+            document.getElementById('eepromFlagVol').checked = !!(p.flags & 2);
+            document.getElementById('eepromFlagFilter').checked = !!(p.flags & 4);
+            document.getElementById('eepromRates').value = (p.sampleRates || []).join(',');
+        }
+        function eepromProgram() {
+            var rates = document.getElementById('eepromRates').value.split(',').map(Number).filter(function(n){return n>0;});
+            var flags = {};
+            flags.independentClock = document.getElementById('eepromFlagClock').checked;
+            flags.hwVolume = document.getElementById('eepromFlagVol').checked;
+            flags.filters = document.getElementById('eepromFlagFilter').checked;
+            var payload = {
+                address: parseInt(document.getElementById('eepromTargetAddr').value),
+                deviceId: parseInt(document.getElementById('eepromDeviceId').value),
+                deviceName: document.getElementById('eepromDeviceName').value,
+                manufacturer: document.getElementById('eepromManufacturer').value,
+                hwRevision: parseInt(document.getElementById('eepromHwRev').value) || 1,
+                maxChannels: parseInt(document.getElementById('eepromMaxCh').value) || 2,
+                dacI2cAddress: parseInt(document.getElementById('eepromDacAddr').value),
+                flags: flags,
+                sampleRates: rates
+            };
+            apiFetch('/api/dac/eeprom', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) showToast('EEPROM programmed successfully','success');
+                else showToast(d.message || 'Program failed','error');
+            })
+            .catch(function(){ showToast('EEPROM program failed','error'); });
+        }
+        function eepromErase() {
+            if (!confirm('Erase EEPROM? This will clear all stored DAC identification data.')) return;
+            var addr = parseInt(document.getElementById('eepromTargetAddr').value);
+            apiFetch('/api/dac/eeprom/erase', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ address: addr })
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) showToast('EEPROM erased','success');
+                else showToast(d.message || 'Erase failed','error');
+            })
+            .catch(function(){ showToast('EEPROM erase failed','error'); });
+        }
+        function eepromLoadHex() {
+            apiFetch('/api/dac/eeprom')
+            .then(r => r.json())
+            .then(d => {
+                var el = document.getElementById('dbgEepromHex');
+                if (!el) return;
+                if (d.rawHex) {
+                    var hex = d.rawHex;
+                    var lines = [];
+                    for (var i = 0; i < hex.length; i += 32) {
+                        var addr = (i/2).toString(16).padStart(4,'0').toUpperCase();
+                        var row = hex.substring(i, i+32).match(/.{2}/g).join(' ');
+                        lines.push(addr + ': ' + row);
+                    }
+                    el.textContent = lines.join('\n');
+                    el.style.display = '';
+                } else {
+                    el.textContent = 'No EEPROM data available';
+                    el.style.display = '';
+                }
+            })
+            .catch(function(){
+                var el = document.getElementById('dbgEepromHex');
+                if (el) { el.textContent = 'Failed to load'; el.style.display = ''; }
+            });
+        }
+        function handleEepromDiag(eep) {
+            if (!eep) return;
+            // Determine EEPROM state: chip detected on I2C but no ALXD = "empty"
+            var chipDetected = eep.scanned && eep.i2cMask > 0;
+            var chipEmpty = chipDetected && !eep.found;
+            // Find first EEPROM address from mask
+            var chipAddr = 0;
+            if (eep.i2cMask > 0) {
+                for (var b = 0; b < 8; b++) { if (eep.i2cMask & (1 << b)) { chipAddr = 0x50 + b; break; } }
+            }
+            // Audio tab status
+            var st = document.getElementById('eepromStatus');
+            if (st) {
+                if (eep.found) st.textContent = 'Programmed';
+                else if (chipEmpty) st.textContent = 'Empty (blank)';
+                else if (eep.scanned) st.textContent = 'No EEPROM detected';
+                else st.textContent = 'Not scanned';
+            }
+            var addr = document.getElementById('eepromI2cAddr');
+            if (addr) addr.textContent = (eep.found || chipDetected) ? '0x' + (eep.found ? eep.addr : chipAddr).toString(16).padStart(2,'0').toUpperCase() : '—';
+            var cnt = document.getElementById('eepromI2cCount');
+            if (cnt) cnt.textContent = eep.scanned ? eep.i2cDevices : '—';
+            var badge = document.getElementById('eepromFoundBadge');
+            if (badge) {
+                badge.style.display = eep.scanned ? '' : 'none';
+                if (eep.found) { badge.textContent = 'Programmed'; badge.style.background = '#4CAF50'; }
+                else if (chipEmpty) { badge.textContent = 'Empty'; badge.style.background = '#FF9800'; }
+                else { badge.textContent = 'Not Found'; badge.style.background = '#F44336'; }
+                badge.style.color = '#fff';
+            }
+            // Debug tab
+            var el;
+            el = document.getElementById('dbgEepromFound');
+            if (el) {
+                if (eep.found) el.textContent = 'Yes @ 0x' + eep.addr.toString(16).padStart(2,'0').toUpperCase();
+                else if (chipEmpty) el.textContent = 'Empty (blank) @ 0x' + chipAddr.toString(16).padStart(2,'0').toUpperCase();
+                else if (eep.scanned) el.textContent = 'No';
+                else el.textContent = '—';
+            }
+            el = document.getElementById('dbgEepromAddr');
+            if (el) el.textContent = (eep.found || chipDetected) ? '0x' + (eep.found ? eep.addr : chipAddr).toString(16).padStart(2,'0').toUpperCase() : '—';
+            el = document.getElementById('dbgI2cCount');
+            if (el) el.textContent = eep.i2cDevices != null ? eep.i2cDevices : '—';
+            el = document.getElementById('dbgEepromRdErr');
+            if (el) el.textContent = eep.readErrors || 0;
+            el = document.getElementById('dbgEepromWrErr');
+            if (el) el.textContent = eep.writeErrors || 0;
+            if (eep.found) {
+                el = document.getElementById('dbgEepromDeviceId');
+                if (el) el.textContent = '0x' + (eep.deviceId||0).toString(16).padStart(4,'0').toUpperCase();
+                el = document.getElementById('dbgEepromName');
+                if (el) el.textContent = eep.deviceName || '—';
+                el = document.getElementById('dbgEepromMfr');
+                if (el) el.textContent = eep.manufacturer || '—';
+                el = document.getElementById('dbgEepromRev');
+                if (el) el.textContent = eep.hwRevision != null ? eep.hwRevision : '—';
+                el = document.getElementById('dbgEepromCh');
+                if (el) el.textContent = eep.maxChannels || '—';
+                el = document.getElementById('dbgEepromDacAddr');
+                if (el) el.textContent = eep.dacI2cAddress ? '0x' + eep.dacI2cAddress.toString(16).padStart(2,'0') : 'None';
+                var flagStrs = [];
+                if (eep.flags & 1) flagStrs.push('IndepClk');
+                if (eep.flags & 2) flagStrs.push('HW Vol');
+                if (eep.flags & 4) flagStrs.push('Filters');
+                el = document.getElementById('dbgEepromFlags');
+                if (el) el.textContent = flagStrs.length ? flagStrs.join(', ') : 'None';
+                el = document.getElementById('dbgEepromRates');
+                if (el) el.textContent = (eep.sampleRates || []).join(', ') || '—';
+            } else {
+                ['dbgEepromDeviceId','dbgEepromName','dbgEepromMfr','dbgEepromRev','dbgEepromCh','dbgEepromDacAddr','dbgEepromFlags','dbgEepromRates'].forEach(function(id){
+                    el = document.getElementById(id);
+                    if (el) el.textContent = '—';
+                });
+            }
+            // Lazy-load presets on first eeprom data
+            eepromLoadPresets();
         }
 
         // ===== Signal Generator =====
@@ -7582,7 +8233,40 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     document.getElementById('adcTotalBuffers').textContent = data.audio.totalBuffers !== undefined ? data.audio.totalBuffers : '--';
                 }
                 document.getElementById('adcSampleRate').textContent = data.audio.sampleRate ? (data.audio.sampleRate / 1000).toFixed(1) + ' kHz' : '--';
+            }
 
+            // Audio DAC diagnostics
+            if (data.dac) {
+                var d = data.dac;
+                var statusEl = document.getElementById('dacStatus');
+                if (statusEl) {
+                    var statusText = d.ready ? 'Ready' : (d.enabled ? 'Not Ready' : 'Disabled');
+                    statusEl.textContent = statusText;
+                    statusEl.style.color = d.ready ? 'var(--success-color)' : (d.enabled ? 'var(--error-color)' : '');
+                }
+                var el;
+                el = document.getElementById('dacModel'); if (el) el.textContent = d.model || '--';
+                el = document.getElementById('dacManufacturer'); if (el) el.textContent = d.manufacturer || '--';
+                el = document.getElementById('dacDeviceId'); if (el) el.textContent = d.deviceId !== undefined ? '0x' + ('0000' + d.deviceId.toString(16)).slice(-4).toUpperCase() : '--';
+                el = document.getElementById('dacDetection'); if (el) el.textContent = d.detected ? 'EEPROM (Auto)' : 'Manual';
+                el = document.getElementById('dacDbgEnabled'); if (el) el.textContent = d.enabled ? 'Yes' : 'No';
+                el = document.getElementById('dacDbgVolume'); if (el) el.textContent = d.volume !== undefined ? d.volume + '%' : '--';
+                el = document.getElementById('dacDbgMute'); if (el) el.textContent = d.mute ? 'Yes' : 'No';
+                el = document.getElementById('dacDbgChannels'); if (el) el.textContent = d.outputChannels || '--';
+                el = document.getElementById('dacDbgFilter'); if (el) el.textContent = d.filterMode !== undefined ? d.filterMode : '--';
+                el = document.getElementById('dacHwVolume'); if (el) el.textContent = d.hwVolume ? 'Yes' : 'No';
+                el = document.getElementById('dacI2cControl'); if (el) el.textContent = d.i2cControl ? 'Yes' : 'No';
+                el = document.getElementById('dacIndepClock'); if (el) el.textContent = d.independentClock ? 'Yes' : 'No';
+                el = document.getElementById('dacHasFilters'); if (el) el.textContent = d.hasFilters ? 'Yes' : 'No';
+                el = document.getElementById('dacTxUnderruns'); if (el) {
+                    el.textContent = d.txUnderruns || 0;
+                    el.style.color = d.txUnderruns > 0 ? 'var(--warning-color)' : '';
+                }
+                // EEPROM diagnostics from hardware_stats
+                if (d.eeprom) handleEepromDiag(d.eeprom);
+            }
+
+            if (data.audio) {
                 // I2S Static Config
                 if (data.audio.i2sConfig && Array.isArray(data.audio.i2sConfig)) {
                     for (var i = 0; i < data.audio.i2sConfig.length && i < 2; i++) {
@@ -8588,6 +9272,344 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let dspOpenStage = -1; // expanded stage index
         let dspImportMode = ''; // 'apo' or 'json'
 
+        // ===== PEQ State =====
+        const DSP_PEQ_BANDS = 10;
+        const PEQ_COLORS = ['#F44336','#E91E63','#9C27B0','#3F51B5','#2196F3','#00BCD4','#4CAF50','#8BC34A','#FFC107','#FF5722'];
+        const PEQ_FILTER_TYPES = [
+            {value:4,label:'PEQ'},{value:5,label:'Low Shelf'},{value:6,label:'High Shelf'},
+            {value:3,label:'Notch'},{value:2,label:'BPF'},{value:0,label:'LPF'},
+            {value:1,label:'HPF'},{value:7,label:'Allpass'}
+        ];
+        let peqSelectedBand = 0;
+        let peqLinked = false;
+        let peqGraphLayers = { individual: true, rta: false, chain: true };
+        let peqRtaData = null;
+        let peqDragging = null;
+        let peqCanvasInited = false;
+
+        function peqGetBands() {
+            if (!dspState || !dspState.channels[dspCh]) return [];
+            return (dspState.channels[dspCh].stages || []).slice(0, DSP_PEQ_BANDS);
+        }
+        function peqRenderBandStrip() {
+            var el = document.getElementById('peqBandStrip');
+            if (!el) return;
+            var bands = peqGetBands();
+            var html = '';
+            for (var i = 0; i < DSP_PEQ_BANDS; i++) {
+                var b = bands[i];
+                var active = (i === peqSelectedBand);
+                var enabled = b && b.enabled;
+                html += '<button class="peq-band-pill' + (active ? ' active' : '') + (enabled ? ' enabled' : '') + '" onclick="peqSelectBand(' + i + ')" style="--band-color:' + PEQ_COLORS[i] + ';">' + (i + 1) + '</button>';
+            }
+            el.innerHTML = html;
+        }
+        function peqSelectBand(band) {
+            peqSelectedBand = band;
+            peqRenderBandStrip();
+            peqRenderBandDetail();
+            dspDrawFreqResponse();
+        }
+        function peqRenderBandDetail() {
+            var el = document.getElementById('peqBandDetail');
+            if (!el || !dspState || !dspState.channels[dspCh]) return;
+            var bands = peqGetBands();
+            var b = bands[peqSelectedBand];
+            if (!b) { el.innerHTML = ''; return; }
+            var t = b.type;
+            var hasGain = (t === 4 || t === 5 || t === 6);
+            var html = '<div class="peq-detail-panel" style="border-left:3px solid ' + PEQ_COLORS[peqSelectedBand] + ';">';
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+            html += '<label class="switch" style="transform:scale(0.75);"><input type="checkbox" ' + (b.enabled ? 'checked' : '') + ' onchange="peqSetBandEnabled(' + peqSelectedBand + ',this.checked)"><span class="slider round"></span></label>';
+            html += '<select class="select-sm" onchange="peqSetBandType(' + peqSelectedBand + ',parseInt(this.value))">';
+            for (var fi = 0; fi < PEQ_FILTER_TYPES.length; fi++) {
+                var ft = PEQ_FILTER_TYPES[fi];
+                html += '<option value="' + ft.value + '"' + (t === ft.value ? ' selected' : '') + '>' + ft.label + '</option>';
+            }
+            html += '</select>';
+            html += '<button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;margin-left:auto;" onclick="peqResetBand(' + peqSelectedBand + ')">Reset</button>';
+            html += '<span style="font-size:11px;color:var(--text-secondary);">Band ' + (peqSelectedBand + 1) + '</span>';
+            html += '</div>';
+            html += peqSlider('freq', 'Frequency', b.freq || 1000, 20, 20000, 1, 'Hz');
+            if (hasGain) html += peqSlider('gain', 'Gain', b.gain || 0, -24, 24, 0.5, 'dB');
+            html += peqSlider('Q', 'Q Factor', b.Q || 0.707, 0.1, 25, 0.01, '');
+            html += '</div>';
+            el.innerHTML = html;
+        }
+        function peqSlider(key, label, val, min, max, step, unit) {
+            var numVal = parseFloat(val) || 0;
+            var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
+            var id = 'peq_' + peqSelectedBand + '_' + key;
+            return '<div class="dsp-param"><label>' + label + '</label>' +
+                '<button class="dsp-step-btn" onclick="peqParamStep(\'' + key + '\',' + (-step) + ',' + min + ',' + max + ',' + step + ')">&lsaquo;</button>' +
+                '<input type="range" id="' + id + '_s" min="' + min + '" max="' + max + '" step="' + step + '" value="' + numVal + '" ' +
+                'oninput="document.getElementById(\'' + id + '_n\').value=parseFloat(this.value).toFixed(' + dec + ')" ' +
+                'onchange="peqParamSync(\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
+                '<button class="dsp-step-btn" onclick="peqParamStep(\'' + key + '\',' + step + ',' + min + ',' + max + ',' + step + ')">&rsaquo;</button>' +
+                '<input type="number" class="dsp-num-input" id="' + id + '_n" value="' + numVal.toFixed(dec) + '" min="' + min + '" max="' + max + '" step="' + step + '" ' +
+                'onchange="peqParamSync(\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
+                '<span class="dsp-unit">' + unit + '</span></div>';
+        }
+        function peqParamSync(key, val, min, max, step) {
+            val = Math.min(max, Math.max(min, parseFloat(val) || 0));
+            peqUpdateBandParam(peqSelectedBand, key, val);
+        }
+        function peqParamStep(key, delta, min, max, step) {
+            var id = 'peq_' + peqSelectedBand + '_' + key;
+            var sl = document.getElementById(id + '_s');
+            var cur = sl ? parseFloat(sl.value) : 0;
+            var newVal = Math.min(max, Math.max(min, cur + delta));
+            var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
+            if (sl) sl.value = newVal;
+            var ni = document.getElementById(id + '_n');
+            if (ni) ni.value = newVal.toFixed(dec);
+            peqUpdateBandParam(peqSelectedBand, key, newVal);
+        }
+        function peqUpdateBandParam(band, key, val) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            var bands = peqGetBands();
+            var b = bands[band];
+            if (!b) return;
+            var msg = { type: 'updatePeqBand', ch: dspCh, band: band,
+                freq: b.freq || 1000, gain: b.gain || 0, Q: b.Q || 0.707,
+                filterType: b.type, enabled: b.enabled };
+            if (key === 'filterType') msg.filterType = val;
+            else msg[key] = val;
+            ws.send(JSON.stringify(msg));
+            if (peqLinked) {
+                ws.send(JSON.stringify(Object.assign({}, msg, { ch: dspCh ^ 1 })));
+            }
+        }
+        function peqSetBandEnabled(band, en) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            ws.send(JSON.stringify({ type: 'setPeqBandEnabled', ch: dspCh, band: band, enabled: en }));
+            if (peqLinked) ws.send(JSON.stringify({ type: 'setPeqBandEnabled', ch: dspCh ^ 1, band: band, enabled: en }));
+        }
+        function peqSetBandType(band, typeInt) {
+            peqUpdateBandParam(band, 'filterType', typeInt);
+        }
+        const PEQ_DEFAULT_FREQS = [31,63,125,250,500,1000,2000,4000,8000,16000];
+        function peqResetBand(band) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            var msg = { type: 'updatePeqBand', ch: dspCh, band: band,
+                freq: PEQ_DEFAULT_FREQS[band] || 1000, gain: 0, Q: 1.0, filterType: 4, enabled: true };
+            ws.send(JSON.stringify(msg));
+            if (peqLinked) ws.send(JSON.stringify(Object.assign({}, msg, { ch: dspCh ^ 1 })));
+        }
+        function peqToggleLink() {
+            peqLinked = !peqLinked;
+            var btn = document.getElementById('peqLinkBtn');
+            if (btn) {
+                btn.classList.toggle('active', peqLinked);
+                btn.style.background = peqLinked ? 'var(--accent)' : '';
+                btn.style.color = peqLinked ? '#fff' : '';
+            }
+        }
+        function peqEnableAll(en) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            ws.send(JSON.stringify({ type: 'setPeqAllEnabled', ch: dspCh, enabled: en }));
+            if (peqLinked) ws.send(JSON.stringify({ type: 'setPeqAllEnabled', ch: dspCh ^ 1, enabled: en }));
+        }
+        function peqCopyChannel(target) {
+            if (!target || !ws || ws.readyState !== WebSocket.OPEN) return;
+            if (target === 'all') {
+                for (var c = 0; c < DSP_MAX_CH; c++) {
+                    if (c !== dspCh) ws.send(JSON.stringify({ type: 'copyPeqChannel', from: dspCh, to: c }));
+                }
+            } else {
+                ws.send(JSON.stringify({ type: 'copyPeqChannel', from: dspCh, to: parseInt(target) }));
+            }
+        }
+        function peqPresetAction(val) {
+            if (!val) return;
+            if (val === '_save') {
+                var name = prompt('Preset name (max 20 chars):');
+                if (!name) return;
+                if (ws && ws.readyState === WebSocket.OPEN)
+                    ws.send(JSON.stringify({ type: 'savePeqPreset', ch: dspCh, name: name.substring(0, 20) }));
+            } else if (val === '_load') {
+                if (ws && ws.readyState === WebSocket.OPEN)
+                    ws.send(JSON.stringify({ type: 'listPeqPresets' }));
+            } else {
+                if (ws && ws.readyState === WebSocket.OPEN)
+                    ws.send(JSON.stringify({ type: 'loadPeqPreset', ch: dspCh, name: val }));
+            }
+        }
+        function peqToggleGraphLayer(layer) {
+            peqGraphLayers[layer] = !peqGraphLayers[layer];
+            var btn = document.getElementById('tog' + layer.charAt(0).toUpperCase() + layer.slice(1));
+            if (btn) btn.classList.toggle('active', peqGraphLayers[layer]);
+            if (layer === 'rta' && ws && ws.readyState === WebSocket.OPEN) {
+                if (peqGraphLayers.rta) {
+                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
+                    ws.send(JSON.stringify({ type: 'setSpectrumEnabled', enabled: true }));
+                } else if (!audioSubscribed) {
+                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
+                }
+            }
+            dspDrawFreqResponse();
+        }
+        function peqHandlePresetsList(presets) {
+            var sel = document.getElementById('peqPresetSel');
+            if (!sel) return;
+            var html = '<option value="">Presets...</option><option value="_save">Save Preset...</option><option value="_load">Refresh List</option>';
+            if (presets && presets.length > 0) {
+                html += '<option disabled>──────────</option>';
+                for (var i = 0; i < presets.length; i++) {
+                    html += '<option value="' + presets[i] + '">' + presets[i] + '</option>';
+                }
+            }
+            sel.innerHTML = html;
+            showToast('Found ' + (presets ? presets.length : 0) + ' presets');
+        }
+
+        // ===== PEQ Canvas Interaction (drag control points) =====
+        function peqInitCanvas() {
+            if (peqCanvasInited) return;
+            var canvas = document.getElementById('dspFreqCanvas');
+            if (!canvas) return;
+            peqCanvasInited = true;
+            canvas.addEventListener('mousedown', peqCanvasMouseDown);
+            canvas.addEventListener('mousemove', peqCanvasMouseMove);
+            canvas.addEventListener('mouseup', peqCanvasMouseUp);
+            canvas.addEventListener('mouseleave', peqCanvasMouseUp);
+            canvas.addEventListener('touchstart', peqCanvasTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', peqCanvasTouchMove, { passive: false });
+            canvas.addEventListener('touchend', peqCanvasMouseUp);
+        }
+        function peqCanvasCoords(canvas, clientX, clientY) {
+            var rect = canvas.getBoundingClientRect();
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+        function peqCanvasToFreqGain(canvas, x, y) {
+            var dpr = window.devicePixelRatio || 1;
+            var dims = canvasDims[canvas.id];
+            if (!dims) return null;
+            var w = dims.tw / dpr, h = dims.th / dpr;
+            var padL = 35, padR = 10, padT = 10, padB = 20;
+            var gw = w - padL - padR, gh = h - padT - padB;
+            var logMin = Math.log10(5), logRange = Math.log10(24000) - logMin;
+            var normX = (x - padL) / gw;
+            var normY = (y - padT) / gh;
+            var freq = Math.pow(10, logMin + logRange * normX);
+            var gain = 24 - normY * 48;
+            return { freq: Math.max(20, Math.min(20000, Math.round(freq))), gain: Math.max(-24, Math.min(24, Math.round(gain * 2) / 2)) };
+        }
+        function peqFreqGainToCanvas(canvas, freq, gain) {
+            var dpr = window.devicePixelRatio || 1;
+            var dims = canvasDims[canvas.id];
+            if (!dims) return null;
+            var w = dims.tw / dpr, h = dims.th / dpr;
+            var padL = 35, padR = 10, padT = 10, padB = 20;
+            var gw = w - padL - padR, gh = h - padT - padB;
+            var logMin = Math.log10(5), logRange = Math.log10(24000) - logMin;
+            return {
+                x: padL + gw * (Math.log10(freq) - logMin) / logRange,
+                y: padT + gh * (1 - (gain + 24) / 48)
+            };
+        }
+        function peqFindNearestBand(canvas, x, y, maxDist) {
+            var bands = peqGetBands();
+            var closest = -1, closestDist = maxDist || 25;
+            for (var i = 0; i < bands.length; i++) {
+                var b = bands[i];
+                var pos = peqFreqGainToCanvas(canvas, b.freq || 1000, b.gain || 0);
+                if (!pos) continue;
+                var dist = Math.sqrt(Math.pow(x - pos.x, 2) + Math.pow(y - pos.y, 2));
+                if (dist < closestDist) { closestDist = dist; closest = i; }
+            }
+            return closest;
+        }
+        function peqCanvasMouseDown(e) {
+            var canvas = e.target;
+            var pos = peqCanvasCoords(canvas, e.clientX, e.clientY);
+            var band = peqFindNearestBand(canvas, pos.x, pos.y, 20);
+            if (band >= 0) {
+                peqSelectBand(band);
+                peqDragging = { band: band };
+                canvas.style.cursor = 'grabbing';
+                e.preventDefault();
+            } else {
+                var nearest = peqFindNearestBand(canvas, pos.x, pos.y, Infinity);
+                if (nearest >= 0) peqSelectBand(nearest);
+            }
+        }
+        function peqCanvasMouseMove(e) {
+            var canvas = e.target;
+            var pos = peqCanvasCoords(canvas, e.clientX, e.clientY);
+            if (!peqDragging) {
+                var hover = peqFindNearestBand(canvas, pos.x, pos.y, 20);
+                canvas.style.cursor = hover >= 0 ? 'grab' : 'crosshair';
+                return;
+            }
+            var fg = peqCanvasToFreqGain(canvas, pos.x, pos.y);
+            if (!fg) return;
+            var b = peqDragging.band;
+            var bands = peqGetBands();
+            if (bands[b]) {
+                bands[b].freq = fg.freq;
+                bands[b].gain = fg.gain;
+            }
+            var freqSl = document.getElementById('peq_' + b + '_freq_s');
+            var freqNi = document.getElementById('peq_' + b + '_freq_n');
+            var gainSl = document.getElementById('peq_' + b + '_gain_s');
+            var gainNi = document.getElementById('peq_' + b + '_gain_n');
+            if (freqSl) freqSl.value = fg.freq;
+            if (freqNi) freqNi.value = fg.freq;
+            if (gainSl) gainSl.value = fg.gain.toFixed(1);
+            if (gainNi) gainNi.value = fg.gain.toFixed(1);
+            dspDrawFreqResponse();
+            e.preventDefault();
+        }
+        function peqCanvasMouseUp(e) {
+            if (!peqDragging) return;
+            var canvas = e.target || document.getElementById('dspFreqCanvas');
+            canvas.style.cursor = 'crosshair';
+            var b = peqDragging.band;
+            peqDragging = null;
+            var bands = peqGetBands();
+            if (bands[b]) {
+                peqUpdateBandParam(b, 'freq', bands[b].freq);
+                setTimeout(function() { peqUpdateBandParam(b, 'gain', bands[b].gain); }, 10);
+            }
+        }
+        function peqCanvasTouchStart(e) {
+            if (e.touches.length !== 1) return;
+            var canvas = e.target;
+            var touch = e.touches[0];
+            var pos = peqCanvasCoords(canvas, touch.clientX, touch.clientY);
+            var band = peqFindNearestBand(canvas, pos.x, pos.y, 30);
+            if (band >= 0) {
+                peqSelectBand(band);
+                peqDragging = { band: band };
+                e.preventDefault();
+            }
+        }
+        function peqCanvasTouchMove(e) {
+            if (!peqDragging || e.touches.length !== 1) return;
+            var canvas = e.target;
+            var touch = e.touches[0];
+            var pos = peqCanvasCoords(canvas, touch.clientX, touch.clientY);
+            var fg = peqCanvasToFreqGain(canvas, pos.x, pos.y);
+            if (!fg) return;
+            var b = peqDragging.band;
+            var bands = peqGetBands();
+            if (bands[b]) {
+                bands[b].freq = fg.freq;
+                bands[b].gain = fg.gain;
+            }
+            var freqSl = document.getElementById('peq_' + b + '_freq_s');
+            var freqNi = document.getElementById('peq_' + b + '_freq_n');
+            var gainSl = document.getElementById('peq_' + b + '_gain_s');
+            var gainNi = document.getElementById('peq_' + b + '_gain_n');
+            if (freqSl) freqSl.value = fg.freq;
+            if (freqNi) freqNi.value = fg.freq;
+            if (gainSl) gainSl.value = fg.gain.toFixed(1);
+            if (gainNi) gainNi.value = fg.gain.toFixed(1);
+            dspDrawFreqResponse();
+            e.preventDefault();
+        }
+
         function dspSetEnabled(en) {
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({ type: 'setDspBypass', enabled: en, bypass: dspState ? dspState.dspBypass : false }));
@@ -8630,7 +9652,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function dspSelectChannel(ch) {
             dspCh = ch;
             dspOpenStage = -1;
+            peqSelectedBand = 0;
             dspRenderChannelTabs();
+            peqRenderBandStrip();
+            peqRenderBandDetail();
             dspRenderStages();
             dspDrawFreqResponse();
         }
@@ -8640,8 +9665,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (!el || !dspState) return;
             var html = '';
             for (var c = 0; c < DSP_MAX_CH; c++) {
-                var cnt = dspState.channels[c] ? dspState.channels[c].stageCount : 0;
-                html += '<button class="dsp-ch-tab' + (c === dspCh ? ' active' : '') + '" onclick="dspSelectChannel(' + c + ')">' + dspChLabel(c) + '<span class="badge">' + cnt + '</span></button>';
+                var ch = dspState.channels[c];
+                var peqActive = 0, chainCount = 0;
+                if (ch && ch.stages) {
+                    for (var i = 0; i < Math.min(DSP_PEQ_BANDS, ch.stages.length); i++) {
+                        if (ch.stages[i] && ch.stages[i].enabled) peqActive++;
+                    }
+                    chainCount = Math.max(0, (ch.stageCount || 0) - DSP_PEQ_BANDS);
+                }
+                var badge = peqActive + 'P' + (chainCount > 0 ? ' ' + chainCount + 'C' : '');
+                html += '<button class="dsp-ch-tab' + (c === dspCh ? ' active' : '') + '" onclick="dspSelectChannel(' + c + ')">' + dspChLabel(c) + '<span class="badge">' + badge + '</span></button>';
             }
             el.innerHTML = html;
             var byp = document.getElementById('dspChBypassToggle');
@@ -8668,15 +9701,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 h += dspSlider(idx, 'freq', 'Frequency', s.freq || 1000, 20, 20000, 1, 'Hz');
                 if (t === 4 || t === 5 || t === 6) h += dspSlider(idx, 'gain', 'Gain', s.gain || 0, -24, 24, 0.5, 'dB');
                 h += dspSlider(idx, 'Q', 'Q Factor', s.Q || 0.707, 0.1, 20, 0.01, '');
-            } else if (t === 12 || t === 18) {
+            } else if (t === 18) {
+                var cHook = ';dspDrawCompressorGraph(' + idx + ')';
+                h += '<div class="comp-graph-wrap"><canvas id="compCanvas_' + idx + '" height="180"></canvas></div>';
+                h += dspSlider(idx, 'thresholdDb', 'Threshold', s.thresholdDb, -60, 0, 0.5, 'dBFS', cHook);
+                h += dspSlider(idx, 'ratio', 'Ratio', s.ratio, 1, 100, 0.5, ':1', cHook);
+                h += dspSlider(idx, 'attackMs', 'Attack', s.attackMs, 0.1, 100, 0.1, 'ms');
+                h += dspSlider(idx, 'releaseMs', 'Release', s.releaseMs, 1, 1000, 1, 'ms');
+                h += dspSlider(idx, 'kneeDb', 'Knee', s.kneeDb, 0, 24, 0.5, 'dB', cHook);
+                h += dspSlider(idx, 'makeupGainDb', 'Makeup', s.makeupGainDb, 0, 24, 0.5, 'dB', cHook);
+                var gr = s.gr !== undefined ? s.gr : 0;
+                h += '<div class="comp-gr-wrap"><label>GR</label><div class="comp-gr-track"><div class="comp-gr-fill" id="compGr_' + idx + '" style="width:' + Math.min(100, Math.abs(gr) / 24 * 100).toFixed(1) + '%"></div></div><span class="comp-gr-val" id="compGrVal_' + idx + '">' + gr.toFixed(1) + ' dB</span></div>';
+            } else if (t === 12) {
                 h += dspSlider(idx, 'thresholdDb', 'Threshold', s.thresholdDb, -60, 0, 0.5, 'dBFS');
                 h += dspSlider(idx, 'attackMs', 'Attack', s.attackMs, 0.1, 100, 0.1, 'ms');
                 h += dspSlider(idx, 'releaseMs', 'Release', s.releaseMs, 1, 1000, 1, 'ms');
                 h += dspSlider(idx, 'ratio', 'Ratio', s.ratio, 1, 100, 0.5, ':1');
-                if (t === 18) {
-                    h += dspSlider(idx, 'kneeDb', 'Knee', s.kneeDb, 0, 24, 0.5, 'dB');
-                    h += dspSlider(idx, 'makeupGainDb', 'Makeup', s.makeupGainDb, 0, 24, 0.5, 'dB');
-                }
                 if (s.gr !== undefined) h += '<div class="dsp-param"><label>GR</label><span class="dsp-val" style="color:var(--error)">' + s.gr.toFixed(1) + ' dB</span></div>';
             } else if (t === 14) {
                 h += dspSlider(idx, 'gainDb', 'Gain', s.gainDb, -60, 24, 0.5, 'dB');
@@ -8701,6 +9741,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var sl = document.getElementById(id + '_s');
             var ni = document.getElementById(id + '_n');
             if (sl) sl.value = val;
+            dspDrawCompressorGraph(idx);
             if (ni) ni.value = val.toFixed(dec);
             dspUpdateParam(idx, key, val);
         }
@@ -8710,14 +9751,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var cur = sl ? parseFloat(sl.value) : 0;
             dspParamSync(idx, key, cur + delta, min, max, step);
         }
-        function dspSlider(idx, key, label, val, min, max, step, unit) {
+        function dspSlider(idx, key, label, val, min, max, step, unit, extraOninput) {
             var numVal = parseFloat(val) || 0;
             var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
             var id = 'dsp_' + idx + '_' + key;
+            var oninp = 'document.getElementById(\'' + id + '_n\').value=parseFloat(this.value).toFixed(' + dec + ')' + (extraOninput || '');
             return '<div class="dsp-param"><label>' + label + '</label>' +
                 '<button class="dsp-step-btn" onclick="dspParamStep(' + idx + ',\'' + key + '\',' + (-step) + ',' + min + ',' + max + ',' + step + ')" title="Decrease">&lsaquo;</button>' +
                 '<input type="range" id="' + id + '_s" min="' + min + '" max="' + max + '" step="' + step + '" value="' + numVal + '" ' +
-                'oninput="document.getElementById(\'' + id + '_n\').value=parseFloat(this.value).toFixed(' + dec + ')" ' +
+                'oninput="' + oninp + '" ' +
                 'onchange="dspParamSync(' + idx + ',\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
                 '<button class="dsp-step-btn" onclick="dspParamStep(' + idx + ',\'' + key + '\',' + step + ',' + min + ',' + max + ',' + step + ')" title="Increase">&rsaquo;</button>' +
                 '<input type="number" class="dsp-num-input" id="' + id + '_n" value="' + numVal.toFixed(dec) + '" min="' + min + '" max="' + max + '" step="' + step + '" ' +
@@ -8725,16 +9767,106 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 '<span class="dsp-unit">' + unit + '</span></div>';
         }
 
+        function dspDrawCompressorGraph(idx) {
+            var canvas = document.getElementById('compCanvas_' + idx);
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+            var getVal = function(key, def) {
+                var el = document.getElementById('dsp_' + idx + '_' + key + '_s');
+                return el ? parseFloat(el.value) : def;
+            };
+            var threshold = getVal('thresholdDb', -20);
+            var ratio = getVal('ratio', 4);
+            var knee = getVal('kneeDb', 6);
+            var makeup = getVal('makeupGainDb', 0);
+            var dpr = window.devicePixelRatio || 1;
+            var rect = canvas.getBoundingClientRect();
+            var w = rect.width || 300;
+            var h = 180;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            canvas.style.height = h + 'px';
+            ctx.scale(dpr, dpr);
+            var pad = { l: 34, r: 8, t: 10, b: 22 };
+            var gw = w - pad.l - pad.r;
+            var gh = h - pad.t - pad.b;
+            var dbMin = -60, dbMax = 0;
+            var xOf = function(db) { return pad.l + (db - dbMin) / (dbMax - dbMin) * gw; };
+            var yOf = function(db) { return pad.t + (1 - (db - dbMin) / (dbMax - dbMin)) * gh; };
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.fillRect(pad.l, pad.t, gw, gh);
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 0.5;
+            var grid = [-48, -36, -24, -12];
+            for (var g = 0; g < grid.length; g++) {
+                ctx.beginPath(); ctx.moveTo(xOf(grid[g]), pad.t); ctx.lineTo(xOf(grid[g]), pad.t + gh); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(pad.l, yOf(grid[g])); ctx.lineTo(pad.l + gw, yOf(grid[g])); ctx.stroke();
+            }
+            ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            for (var g = 0; g < grid.length; g++) ctx.fillText(grid[g], xOf(grid[g]), pad.t + gh + 4);
+            ctx.fillText('0', xOf(0), pad.t + gh + 4);
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (var g = 0; g < grid.length; g++) ctx.fillText(grid[g], pad.l - 4, yOf(grid[g]));
+            ctx.fillText('0', pad.l - 4, yOf(0));
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(xOf(dbMin), yOf(dbMin)); ctx.lineTo(xOf(dbMax), yOf(dbMax)); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 1;
+            if (threshold >= dbMin && threshold <= dbMax) {
+                ctx.beginPath(); ctx.moveTo(xOf(threshold), pad.t); ctx.lineTo(xOf(threshold), pad.t + gh); ctx.stroke();
+            }
+            ctx.setLineDash([]);
+            ctx.strokeStyle = '#FF9800';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            var first = true;
+            for (var inDb = dbMin; inDb <= dbMax; inDb += 0.5) {
+                var overDb = inDb - threshold;
+                var halfK = knee / 2;
+                var grDb = 0;
+                if (knee > 0 && overDb > -halfK && overDb < halfK) {
+                    grDb = (1 - 1 / ratio) * (overDb + halfK) * (overDb + halfK) / (2 * knee);
+                } else if (overDb >= halfK) {
+                    grDb = overDb * (1 - 1 / ratio);
+                }
+                var outDb = inDb - grDb + makeup;
+                var py = yOf(Math.max(dbMin, Math.min(dbMax, outDb)));
+                if (first) { ctx.moveTo(xOf(inDb), py); first = false; } else ctx.lineTo(xOf(inDb), py);
+            }
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.font = '9px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('Input (dBFS)', pad.l + gw / 2, h - 1);
+            ctx.save();
+            ctx.translate(9, pad.t + gh / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('Output', 0, 0);
+            ctx.restore();
+        }
+
         function dspRenderStages() {
             if (!dspState || !dspState.channels[dspCh]) return;
             var ch = dspState.channels[dspCh];
             var list = document.getElementById('dspStageList');
             var title = document.getElementById('dspStageTitle');
-            if (title) title.textContent = 'Filter Stages (' + ch.stageCount + ' / 20)';
+            var chainCount = Math.max(0, (ch.stageCount || 0) - DSP_PEQ_BANDS);
+            if (title) title.textContent = 'Additional Processing (' + chainCount + ')';
             if (!list) return;
             var html = '';
             var stages = ch.stages || [];
-            for (var i = 0; i < stages.length; i++) {
+            for (var i = DSP_PEQ_BANDS; i < stages.length; i++) {
                 var s = stages[i];
                 var typeName = DSP_TYPES[s.type] || 'Unknown';
                 var label = s.label || typeName;
@@ -8746,7 +9878,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
                 html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
                 html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
-                if (i > 0) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
+                if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
                 if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down">&#9660;</button>';
                 html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete">&times;</button>';
                 html += '</div></div>';
@@ -8754,6 +9886,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 html += '</div>';
             }
             list.innerHTML = html;
+            if (dspOpenStage >= DSP_PEQ_BANDS && stages[dspOpenStage] && stages[dspOpenStage].type === 18) {
+                requestAnimationFrame(function() { dspDrawCompressorGraph(dspOpenStage); });
+            }
         }
 
         function dspHandleState(d) {
@@ -8765,6 +9900,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var sr = document.getElementById('dspSampleRate');
             if (sr) sr.textContent = (d.sampleRate || 48000) + ' Hz';
             dspRenderChannelTabs();
+            peqRenderBandStrip();
+            peqRenderBandDetail();
             dspRenderStages();
             dspDrawFreqResponse();
         }
@@ -8776,10 +9913,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (cpuBar) cpuBar.style.width = Math.min(d.cpuLoad || 0, 100) + '%';
         }
 
-        // ===== Frequency Response Graph =====
+        // ===== Frequency Response Graph (PEQ-aware) =====
+        function dspBiquadMagDb(coeffs, f, fs) {
+            var b0=coeffs[0], b1=coeffs[1], b2=coeffs[2], a1=coeffs[3], a2=coeffs[4];
+            var omega = 2 * Math.PI * f / fs;
+            var cosW = Math.cos(omega), sinW = Math.sin(omega);
+            var cos2W = Math.cos(2*omega), sin2W = Math.sin(2*omega);
+            var numR = b0 + b1*cosW + b2*cos2W, numI = -(b1*sinW + b2*sin2W);
+            var denR = 1 + a1*cosW + a2*cos2W, denI = -(a1*sinW + a2*sin2W);
+            return 10 * Math.log10(Math.max((numR*numR + numI*numI) / (denR*denR + denI*denI), 1e-20));
+        }
+
         function dspDrawFreqResponse() {
             var canvas = document.getElementById('dspFreqCanvas');
             if (!canvas || !dspState || currentActiveTab !== 'dsp') return;
+            peqInitCanvas();
             var ctx = canvas.getContext('2d');
             var resized = resizeCanvasIfNeeded(canvas);
             if (resized === -1) return;
@@ -8788,8 +9936,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var dpr = window.devicePixelRatio;
 
             ctx.clearRect(0, 0, w, h);
-
-            // Background
             ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-card').trim();
             ctx.fillRect(0, 0, w, h);
 
@@ -8799,26 +9945,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var fMin = 5, fMax = 24000;
             var logMin = Math.log10(fMin), logRange = Math.log10(fMax) - logMin;
 
-            // Grid lines
+            // Grid
             ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim();
             ctx.lineWidth = 0.5 * dpr;
             ctx.font = (9 * dpr) + 'px sans-serif';
             ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-disabled').trim();
-
-            // Y grid (every 6 dB)
             for (var db = yMin; db <= yMax; db += 6) {
                 var y = padT + gh * (1 - (db - yMin) / (yMax - yMin));
                 ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
                 ctx.textAlign = 'right';
                 ctx.fillText(db + '', padL - 4 * dpr, y + 3 * dpr);
             }
-            // 0 dB reference
             ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text-secondary').trim();
             ctx.lineWidth = 1 * dpr;
             var y0 = padT + gh * (1 - (0 - yMin) / (yMax - yMin));
             ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(w - padR, y0); ctx.stroke();
-
-            // X grid (decades)
             ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim();
             ctx.lineWidth = 0.5 * dpr;
             ctx.textAlign = 'center';
@@ -8830,82 +9971,169 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 ctx.fillText(labels[fi], x, h - 2 * dpr);
             }
 
-            // Compute and draw individual + combined response
             var ch = dspState.channels[dspCh];
-            if (!ch || !ch.stages || ch.stages.length === 0) return;
+            if (!ch || !ch.stages) return;
             var fs = dspState.sampleRate || 48000;
             var nPts = 256;
-            var combined = new Float32Array(nPts);
-            var hasAny = false;
+            var stages = ch.stages || [];
 
-            for (var si = 0; si < ch.stages.length; si++) {
-                var s = ch.stages[si];
-                if (s.type > 11 || !s.coeffs) continue; // Only biquads have freq response
-                hasAny = true;
-                var b0=s.coeffs[0], b1=s.coeffs[1], b2=s.coeffs[2], a1=s.coeffs[3], a2=s.coeffs[4];
-
-                // Draw individual curve (dimmed)
+            // Layer 1: RTA overlay (dBFS spectrum mapped to full graph height)
+            if (peqGraphLayers.rta && peqRtaData && peqRtaData.length >= 16) {
+                var BAND_EDGES = [0, 60, 150, 250, 400, 600, 1000, 2500, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 20000, 24000];
+                var rtaFloor = -96, rtaCeil = 0;
                 ctx.beginPath();
-                ctx.strokeStyle = 'rgba(255,152,0,0.25)';
-                ctx.lineWidth = 1 * dpr;
+                ctx.moveTo(padL, padT + gh);
+                for (var bi = 0; bi < 16; bi++) {
+                    var midF = Math.max(fMin, (BAND_EDGES[bi] + BAND_EDGES[bi+1]) / 2);
+                    var xb = padL + gw * (Math.log10(midF) - logMin) / logRange;
+                    var rtaNorm = Math.max(0, Math.min(1, (peqRtaData[bi] - rtaFloor) / (rtaCeil - rtaFloor)));
+                    var rtaY = padT + gh * (1 - rtaNorm);
+                    ctx.lineTo(xb, rtaY);
+                }
+                ctx.lineTo(w - padR, padT + gh);
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(76,175,80,0.12)';
+                ctx.fill();
+                // RTA line stroke
+                ctx.beginPath();
+                for (var bi = 0; bi < 16; bi++) {
+                    var midF = Math.max(fMin, (BAND_EDGES[bi] + BAND_EDGES[bi+1]) / 2);
+                    var xb = padL + gw * (Math.log10(midF) - logMin) / logRange;
+                    var rtaNorm = Math.max(0, Math.min(1, (peqRtaData[bi] - rtaFloor) / (rtaCeil - rtaFloor)));
+                    var rtaY = padT + gh * (1 - rtaNorm);
+                    if (bi === 0) ctx.moveTo(xb, rtaY); else ctx.lineTo(xb, rtaY);
+                }
+                ctx.strokeStyle = 'rgba(76,175,80,0.5)';
+                ctx.lineWidth = 1.5 * dpr;
+                ctx.stroke();
+            }
+
+            // Separate PEQ bands (0-9) from chain stages (10+)
+            var peqBands = stages.slice(0, DSP_PEQ_BANDS);
+            var chainStages = stages.slice(DSP_PEQ_BANDS);
+            var peqCombined = new Float32Array(nPts);
+            var chainCombined = new Float32Array(nPts);
+            var hasPeq = false, hasChain = false;
+
+            // Layer 2: Individual PEQ band curves
+            for (var si = 0; si < peqBands.length; si++) {
+                var s = peqBands[si];
+                if (s.type > 11 || !s.coeffs || !s.enabled) continue;
+                hasPeq = true;
+                if (peqGraphLayers.individual) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = PEQ_COLORS[si] + '40';
+                    ctx.lineWidth = 1 * dpr;
+                }
                 for (var p = 0; p < nPts; p++) {
                     var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
-                    var omega = 2 * Math.PI * f / fs;
-                    var cosW = Math.cos(omega), sinW = Math.sin(omega);
-                    var cos2W = Math.cos(2*omega), sin2W = Math.sin(2*omega);
-                    var numR = b0 + b1*cosW + b2*cos2W;
-                    var numI = -(b1*sinW + b2*sin2W);
-                    var denR = 1 + a1*cosW + a2*cos2W;
-                    var denI = -(a1*sinW + a2*sin2W);
-                    var magSq = (numR*numR + numI*numI) / (denR*denR + denI*denI);
-                    var magDb = 10 * Math.log10(Math.max(magSq, 1e-20));
-                    combined[p] += magDb;
-                    var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
-                    var xp = padL + gw * p / (nPts - 1);
-                    if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
+                    var magDb = dspBiquadMagDb(s.coeffs, f, fs);
+                    peqCombined[p] += magDb;
+                    if (peqGraphLayers.individual) {
+                        var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
+                        var xp = padL + gw * p / (nPts - 1);
+                        if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
+                    }
                 }
-                ctx.stroke();
+                if (peqGraphLayers.individual) ctx.stroke();
             }
 
-            // Draw combined curve
-            if (hasAny) {
+            // Layer 3: Chain biquad curves
+            for (var si = 0; si < chainStages.length; si++) {
+                var s = chainStages[si];
+                if (s.type > 11 || !s.coeffs || !s.enabled) continue;
+                hasChain = true;
+                if (peqGraphLayers.chain) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = 'rgba(180,180,180,0.15)';
+                    ctx.lineWidth = 1 * dpr;
+                }
+                for (var p = 0; p < nPts; p++) {
+                    var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
+                    var magDb = dspBiquadMagDb(s.coeffs, f, fs);
+                    chainCombined[p] += magDb;
+                    if (peqGraphLayers.chain) {
+                        var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
+                        var xp = padL + gw * p / (nPts - 1);
+                        if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
+                    }
+                }
+                if (peqGraphLayers.chain) ctx.stroke();
+            }
+
+            // Layer 4: Combined PEQ response (orange dashed)
+            if (hasPeq) {
                 ctx.beginPath();
                 ctx.strokeStyle = '#FF9800';
-                ctx.lineWidth = 2 * dpr;
+                ctx.lineWidth = 1.5 * dpr;
+                ctx.setLineDash([4*dpr, 4*dpr]);
                 for (var p = 0; p < nPts; p++) {
-                    var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, combined[p])) - yMin) / (yMax - yMin));
+                    var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, peqCombined[p])) - yMin) / (yMax - yMin));
+                    var xp = padL + gw * p / (nPts - 1);
+                    if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Layer 5: Combined total response (PEQ + chain, orange solid)
+            if (hasPeq || hasChain) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#FF9800';
+                ctx.lineWidth = 2.5 * dpr;
+                for (var p = 0; p < nPts; p++) {
+                    var total = peqCombined[p] + chainCombined[p];
+                    var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, total)) - yMin) / (yMax - yMin));
                     var xp = padL + gw * p / (nPts - 1);
                     if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
                 }
                 ctx.stroke();
             }
 
-            // Highlight selected stage
-            if (dspOpenStage >= 0 && dspOpenStage < ch.stages.length) {
-                var ss = ch.stages[dspOpenStage];
+            // Highlight selected chain stage (if expanded)
+            if (dspOpenStage >= DSP_PEQ_BANDS && dspOpenStage < stages.length) {
+                var ss = stages[dspOpenStage];
                 if (ss.type <= 11 && ss.coeffs) {
-                    var b0=ss.coeffs[0], b1=ss.coeffs[1], b2=ss.coeffs[2], a1=ss.coeffs[3], a2=ss.coeffs[4];
                     ctx.beginPath();
-                    ctx.strokeStyle = '#FF9800';
-                    ctx.lineWidth = 3 * dpr;
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.lineWidth = 2 * dpr;
                     ctx.setLineDash([4*dpr, 4*dpr]);
                     for (var p = 0; p < nPts; p++) {
                         var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
-                        var omega = 2 * Math.PI * f / fs;
-                        var cosW = Math.cos(omega), sinW = Math.sin(omega);
-                        var cos2W = Math.cos(2*omega), sin2W = Math.sin(2*omega);
-                        var numR = b0 + b1*cosW + b2*cos2W;
-                        var numI = -(b1*sinW + b2*sin2W);
-                        var denR = 1 + a1*cosW + a2*cos2W;
-                        var denI = -(a1*sinW + a2*sin2W);
-                        var magSq = (numR*numR + numI*numI) / (denR*denR + denI*denI);
-                        var magDb = 10 * Math.log10(Math.max(magSq, 1e-20));
+                        var magDb = dspBiquadMagDb(ss.coeffs, f, fs);
                         var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
                         var xp = padL + gw * p / (nPts - 1);
                         if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
                     }
                     ctx.stroke();
                     ctx.setLineDash([]);
+                }
+            }
+
+            // Layer 6: PEQ control point circles
+            for (var i = 0; i < peqBands.length; i++) {
+                var b = peqBands[i];
+                var freq = b.freq || 1000, gain = b.gain || 0;
+                var cx = padL + gw * (Math.log10(freq) - logMin) / logRange;
+                var cy = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, gain)) - yMin) / (yMax - yMin));
+                var isSelected = (i === peqSelectedBand);
+                var radius = isSelected ? 7 * dpr : 5 * dpr;
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+                if (b.enabled) {
+                    ctx.fillStyle = PEQ_COLORS[i];
+                    ctx.fill();
+                } else {
+                    ctx.strokeStyle = PEQ_COLORS[i];
+                    ctx.lineWidth = 1.5 * dpr;
+                    ctx.stroke();
+                }
+                if (isSelected) {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, radius + 3 * dpr, 0, 2 * Math.PI);
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1.5 * dpr;
+                    ctx.stroke();
                 }
             }
         }

@@ -16,6 +16,11 @@
 #include "dsp_api.h"
 #include "dsp_pipeline.h"
 #endif
+#ifdef DAC_ENABLED
+#include "dac_hal.h"
+#include "dac_registry.h"
+#include "dac_api.h"
+#endif
 #include "smart_sensing.h"
 #include "utils.h"
 #include "web_pages.h"
@@ -605,6 +610,11 @@ void setup() {
   loadDspSettings();
 #endif
 
+#ifdef DAC_ENABLED
+  // Register DAC REST API endpoints
+  registerDacApiEndpoints();
+#endif
+
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
 
@@ -862,9 +872,10 @@ void loop() {
   }
 
 #ifdef DSP_ENABLED
-  // Broadcast DSP config changes (API -> WS clients)
+  // Broadcast DSP config changes (API/MQTT -> WS clients + MQTT)
   if (appState.isDspConfigDirty()) {
     sendDspState();
+    publishMqttDspState();
     appState.clearDspConfigDirty();
   }
 
@@ -877,6 +888,19 @@ void loop() {
 
   // Check for debounced DSP settings save
   dsp_check_debounced_save();
+#endif
+
+#ifdef DAC_ENABLED
+  // Broadcast DAC state changes (WS/API/MQTT -> all clients)
+  if (appState.isDacDirty()) {
+    sendDacState();
+    appState.clearDacDirty();
+  }
+  // Broadcast EEPROM state changes
+  if (appState.isEepromDirty()) {
+    sendDacState();  // dacState includes EEPROM diag data
+    appState.clearEepromDirty();
+  }
 #endif
 
   // Broadcast blinking state changes (GUI -> WS clients)
@@ -927,7 +951,7 @@ void loop() {
   static unsigned long lastHardwareStatsBroadcast = 0;
   if (millis() - lastHardwareStatsBroadcast >= appState.hardwareStatsInterval) {
     lastHardwareStatsBroadcast = millis();
-    if (appState.debugMode && (appState.debugHwStats || appState.debugI2sMetrics || appState.debugTaskMonitor)) {
+    if (appState.debugMode) {
       sendHardwareStats();
     }
   }

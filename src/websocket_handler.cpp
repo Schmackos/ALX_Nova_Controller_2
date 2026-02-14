@@ -16,6 +16,11 @@
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
 #endif
+#ifdef DAC_ENABLED
+#include "dac_hal.h"
+#include "dac_registry.h"
+#include "dac_eeprom.h"
+#endif
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -111,6 +116,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendDebugState();
 #ifdef DSP_ENABLED
             sendDspState();
+#endif
+#ifdef DAC_ENABLED
+            sendDacState();
 #endif
 
             // If device just updated, notify the client
@@ -488,6 +496,377 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             appState.markDspConfigDirty();
           }
         }
+        // ===== PEQ Band Handlers =====
+        else if (msgType == "updatePeqBand") {
+          int ch = doc["ch"] | -1;
+          int band = doc["band"] | -1;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS && band >= 0 && band < DSP_PEQ_BANDS) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            if (band < cfg->channels[ch].stageCount) {
+              DspStage &s = cfg->channels[ch].stages[band];
+              if (doc["freq"].is<float>()) s.biquad.frequency = doc["freq"].as<float>();
+              if (doc["gain"].is<float>()) s.biquad.gain = doc["gain"].as<float>();
+              if (doc["Q"].is<float>()) s.biquad.Q = doc["Q"].as<float>();
+              if (doc["enabled"].is<bool>()) s.enabled = doc["enabled"].as<bool>();
+              if (doc["filterType"].is<const char *>()) {
+                extern DspStageType typeFromString(const char *);
+                // Use inline lookup for filter type
+                const char *ft = doc["filterType"].as<const char *>();
+                DspStageType newType = DSP_BIQUAD_PEQ;
+                if (strcmp(ft, "PEQ") == 0) newType = DSP_BIQUAD_PEQ;
+                else if (strcmp(ft, "LOW_SHELF") == 0) newType = DSP_BIQUAD_LOW_SHELF;
+                else if (strcmp(ft, "HIGH_SHELF") == 0) newType = DSP_BIQUAD_HIGH_SHELF;
+                else if (strcmp(ft, "NOTCH") == 0) newType = DSP_BIQUAD_NOTCH;
+                else if (strcmp(ft, "BPF") == 0) newType = DSP_BIQUAD_BPF;
+                else if (strcmp(ft, "LPF") == 0) newType = DSP_BIQUAD_LPF;
+                else if (strcmp(ft, "HPF") == 0) newType = DSP_BIQUAD_HPF;
+                else if (strcmp(ft, "ALLPASS") == 0) newType = DSP_BIQUAD_ALLPASS;
+                s.type = newType;
+              }
+              if (doc["coeffs"].is<JsonArray>() && s.type == DSP_BIQUAD_CUSTOM) {
+                JsonArray co = doc["coeffs"].as<JsonArray>();
+                for (int j = 0; j < 5 && j < (int)co.size(); j++)
+                  s.biquad.coeffs[j] = co[j].as<float>();
+              } else {
+                dsp_compute_biquad_coeffs(s.biquad, s.type, cfg->sampleRate);
+              }
+              dsp_swap_config();
+              extern void saveDspSettingsDebounced();
+              saveDspSettingsDebounced();
+              appState.markDspConfigDirty();
+            }
+          }
+        }
+        else if (msgType == "setPeqBandEnabled") {
+          int ch = doc["ch"] | -1;
+          int band = doc["band"] | -1;
+          bool en = doc["enabled"] | true;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS && band >= 0 && band < DSP_PEQ_BANDS) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            if (band < cfg->channels[ch].stageCount) {
+              cfg->channels[ch].stages[band].enabled = en;
+              dsp_swap_config();
+              extern void saveDspSettingsDebounced();
+              saveDspSettingsDebounced();
+              appState.markDspConfigDirty();
+            }
+          }
+        }
+        else if (msgType == "setPeqAllEnabled") {
+          int ch = doc["ch"] | -1;
+          bool en = doc["enabled"] | true;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            dsp_copy_active_to_inactive();
+            DspState *cfg = dsp_get_inactive_config();
+            int limit = cfg->channels[ch].stageCount < DSP_PEQ_BANDS ? cfg->channels[ch].stageCount : DSP_PEQ_BANDS;
+            for (int b = 0; b < limit; b++) {
+              cfg->channels[ch].stages[b].enabled = en;
+            }
+            dsp_swap_config();
+            extern void saveDspSettingsDebounced();
+            saveDspSettingsDebounced();
+            appState.markDspConfigDirty();
+          }
+        }
+        else if (msgType == "copyPeqChannel") {
+          int from = doc["from"] | -1;
+          int to = doc["to"] | -1;
+          if (from >= 0 && from < DSP_MAX_CHANNELS && to >= 0 && to < DSP_MAX_CHANNELS && from != to) {
+            dsp_copy_active_to_inactive();
+            dsp_copy_peq_bands(from, to);
+            dsp_swap_config();
+            extern void saveDspSettingsDebounced();
+            saveDspSettingsDebounced();
+            appState.markDspConfigDirty();
+            LOG_I("[WebSocket] PEQ bands copied ch%d -> ch%d", from, to);
+          }
+        }
+        else if (msgType == "savePeqPreset") {
+          const char *name = doc["name"] | (const char *)nullptr;
+          int ch = doc["ch"] | 0;
+          if (name && strlen(name) > 0 && strlen(name) <= 20 && ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            char safeName[24];
+            int j = 0;
+            for (int i = 0; name[i] && j < 20; i++) {
+              char c = name[i];
+              if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')
+                safeName[j++] = c;
+            }
+            safeName[j] = '\0';
+            if (j > 0) {
+              char path[40];
+              snprintf(path, sizeof(path), "/peq_%s.json", safeName);
+              JsonDocument preset;
+              preset["name"] = safeName;
+              JsonArray bands = preset["bands"].to<JsonArray>();
+              DspState *cfg = dsp_get_active_config();
+              for (int b = 0; b < DSP_PEQ_BANDS && b < cfg->channels[ch].stageCount; b++) {
+                const DspStage &s = cfg->channels[ch].stages[b];
+                JsonObject band = bands.add<JsonObject>();
+                band["type"] = (int)s.type;
+                band["freq"] = s.biquad.frequency;
+                band["gain"] = s.biquad.gain;
+                band["Q"] = s.biquad.Q;
+                band["enabled"] = s.enabled;
+              }
+              String json;
+              serializeJson(preset, json);
+              File f = LittleFS.open(path, "w");
+              if (f) { f.print(json); f.close(); }
+
+              // Respond with success
+              JsonDocument resp;
+              resp["type"] = "peqPresetSaved";
+              resp["name"] = safeName;
+              char buf[64];
+              serializeJson(resp, buf, sizeof(buf));
+              webSocket.sendTXT(num, buf);
+              LOG_I("[WebSocket] PEQ preset saved: %s", safeName);
+            }
+          }
+        }
+        else if (msgType == "loadPeqPreset") {
+          const char *name = doc["name"] | (const char *)nullptr;
+          int ch = doc["ch"] | 0;
+          if (name && ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            char path[40];
+            snprintf(path, sizeof(path), "/peq_%s.json", name);
+            File f = LittleFS.open(path, "r");
+            if (f && f.size() > 0) {
+              String json = f.readString();
+              f.close();
+              JsonDocument preset;
+              if (!deserializeJson(preset, json) && preset["bands"].is<JsonArray>()) {
+                dsp_copy_active_to_inactive();
+                DspState *cfg = dsp_get_inactive_config();
+                JsonArray bands = preset["bands"].as<JsonArray>();
+                int b = 0;
+                for (JsonObject band : bands) {
+                  if (b >= DSP_PEQ_BANDS || b >= cfg->channels[ch].stageCount) break;
+                  DspStage &s = cfg->channels[ch].stages[b];
+                  if (band["type"].is<int>()) s.type = (DspStageType)band["type"].as<int>();
+                  if (band["freq"].is<float>()) s.biquad.frequency = band["freq"].as<float>();
+                  if (band["gain"].is<float>()) s.biquad.gain = band["gain"].as<float>();
+                  if (band["Q"].is<float>()) s.biquad.Q = band["Q"].as<float>();
+                  if (band["enabled"].is<bool>()) s.enabled = band["enabled"].as<bool>();
+                  dsp_compute_biquad_coeffs(s.biquad, s.type, cfg->sampleRate);
+                  b++;
+                }
+                dsp_swap_config();
+                extern void saveDspSettingsDebounced();
+                saveDspSettingsDebounced();
+                appState.markDspConfigDirty();
+                LOG_I("[WebSocket] PEQ preset loaded: %s to ch%d", name, ch);
+              }
+            } else {
+              if (f) f.close();
+            }
+          }
+        }
+        else if (msgType == "deletePeqPreset") {
+          const char *name = doc["name"] | (const char *)nullptr;
+          if (name) {
+            char path[40];
+            snprintf(path, sizeof(path), "/peq_%s.json", name);
+            LittleFS.remove(path);
+            LOG_I("[WebSocket] PEQ preset deleted: %s", name);
+          }
+        }
+        else if (msgType == "listPeqPresets") {
+          JsonDocument resp;
+          resp["type"] = "peqPresets";
+          JsonArray names = resp["presets"].to<JsonArray>();
+          File root = LittleFS.open("/");
+          if (root && root.isDirectory()) {
+            File f = root.openNextFile();
+            while (f) {
+              String fname = f.name();
+              if (fname.startsWith("/")) fname = fname.substring(1);
+              if (fname.startsWith("peq_") && fname.endsWith(".json")) {
+                names.add(fname.substring(4, fname.length() - 5));
+              }
+              f = root.openNextFile();
+            }
+          }
+          String json;
+          serializeJson(resp, json);
+          webSocket.sendTXT(num, json.c_str());
+        }
+#endif
+#ifdef DAC_ENABLED
+        else if (msgType == "setDacEnabled") {
+          appState.dacEnabled = doc["enabled"].as<bool>();
+          if (appState.dacEnabled && !appState.dacReady) {
+            dac_output_init();
+          } else if (!appState.dacEnabled) {
+            dac_output_deinit();
+          }
+          dac_save_settings();
+          appState.markDacDirty();
+          LOG_I("[WebSocket] DAC %s", appState.dacEnabled ? "enabled" : "disabled");
+        }
+        else if (msgType == "setDacVolume") {
+          int v = doc["volume"].as<int>();
+          if (v >= 0 && v <= 100) {
+            appState.dacVolume = (uint8_t)v;
+            dac_update_volume(appState.dacVolume);
+            dac_save_settings();
+            appState.markDacDirty();
+          }
+        }
+        else if (msgType == "setDacMute") {
+          bool wasMuted = appState.dacMute;
+          appState.dacMute = doc["mute"].as<bool>();
+          DacDriver *drv = dac_get_driver();
+          if (drv) drv->setMute(appState.dacMute);
+          dac_save_settings();
+          appState.markDacDirty();
+          if (wasMuted != appState.dacMute) {
+            LOG_I("[DAC] Mute: %s -> %s", wasMuted ? "ON" : "OFF", appState.dacMute ? "ON" : "OFF");
+          }
+        }
+        else if (msgType == "setDacFilter") {
+          uint8_t prevFilter = appState.dacFilterMode;
+          int fm = doc["filterMode"].as<int>();
+          appState.dacFilterMode = (uint8_t)fm;
+          DacDriver *drv = dac_get_driver();
+          if (drv) drv->setFilterMode(appState.dacFilterMode);
+          dac_save_settings();
+          appState.markDacDirty();
+          LOG_I("[DAC] Filter mode: %d -> %d", prevFilter, appState.dacFilterMode);
+        }
+        else if (msgType == "eepromScan") {
+          LOG_I("[WebSocket] EEPROM scan requested");
+          AppState::EepromDiag& ed = appState.eepromDiag;
+          uint8_t eepMask = 0;
+          ed.i2cTotalDevices = dac_i2c_scan(&eepMask);
+          ed.i2cDevicesMask = eepMask;
+          ed.scanned = true;
+          ed.lastScanMs = millis();
+          DacEepromData eepData;
+          if (dac_eeprom_scan(&eepData)) {
+            ed.found = true;
+            ed.eepromAddr = eepData.i2cAddress;
+            ed.deviceId = eepData.deviceId;
+            ed.hwRevision = eepData.hwRevision;
+            strncpy(ed.deviceName, eepData.deviceName, 32);
+            ed.deviceName[32] = '\0';
+            strncpy(ed.manufacturer, eepData.manufacturer, 32);
+            ed.manufacturer[32] = '\0';
+            ed.maxChannels = eepData.maxChannels;
+            ed.dacI2cAddress = eepData.dacI2cAddress;
+            ed.flags = eepData.flags;
+            ed.numSampleRates = eepData.numSampleRates;
+            for (int i = 0; i < eepData.numSampleRates && i < 4; i++)
+              ed.sampleRates[i] = eepData.sampleRates[i];
+          } else {
+            ed.found = false;
+            ed.eepromAddr = 0;
+            memset(ed.deviceName, 0, sizeof(ed.deviceName));
+            memset(ed.manufacturer, 0, sizeof(ed.manufacturer));
+            ed.deviceId = 0;
+          }
+          appState.markEepromDirty();
+        }
+        else if (msgType == "eepromProgram") {
+          LOG_I("[WebSocket] EEPROM program requested");
+          DacEepromData eepData;
+          memset(&eepData, 0, sizeof(eepData));
+          eepData.deviceId = (uint16_t)doc["deviceId"].as<int>();
+          eepData.hwRevision = (uint8_t)doc["hwRevision"].as<int>();
+          eepData.maxChannels = (uint8_t)doc["maxChannels"].as<int>();
+          eepData.dacI2cAddress = (uint8_t)doc["dacI2cAddress"].as<int>();
+          const char* eName = doc["deviceName"] | "";
+          strncpy(eepData.deviceName, eName, 32);
+          eepData.deviceName[32] = '\0';
+          const char* eMfr = doc["manufacturer"] | "";
+          strncpy(eepData.manufacturer, eMfr, 32);
+          eepData.manufacturer[32] = '\0';
+          uint8_t eFlags = 0;
+          if (doc["independentClock"].as<bool>()) eFlags |= DAC_FLAG_INDEPENDENT_CLOCK;
+          if (doc["hwVolume"].as<bool>()) eFlags |= DAC_FLAG_HW_VOLUME;
+          if (doc["filters"].as<bool>()) eFlags |= DAC_FLAG_FILTERS;
+          eepData.flags = eFlags;
+          JsonArray rArr = doc["sampleRates"].as<JsonArray>();
+          if (rArr) {
+            int cnt = 0;
+            for (JsonVariant v : rArr) {
+              if (cnt >= DAC_EEPROM_MAX_RATES) break;
+              eepData.sampleRates[cnt++] = v.as<uint32_t>();
+            }
+            eepData.numSampleRates = cnt;
+          }
+          uint8_t tAddr = (uint8_t)doc["address"].as<int>();
+          if (tAddr < DAC_EEPROM_ADDR_START || tAddr > DAC_EEPROM_ADDR_END) tAddr = DAC_EEPROM_ADDR_START;
+
+          uint8_t buf[DAC_EEPROM_DATA_SIZE];
+          int sz = dac_eeprom_serialize(&eepData, buf, sizeof(buf));
+          bool ok = (sz > 0) && dac_eeprom_write(tAddr, buf, sz);
+          if (!ok) appState.eepromDiag.writeErrors++;
+
+          // Re-scan
+          DacEepromData scanned;
+          AppState::EepromDiag& ed = appState.eepromDiag;
+          if (dac_eeprom_scan(&scanned)) {
+            ed.found = true;
+            ed.eepromAddr = scanned.i2cAddress;
+            ed.deviceId = scanned.deviceId;
+            ed.hwRevision = scanned.hwRevision;
+            strncpy(ed.deviceName, scanned.deviceName, 32);
+            ed.deviceName[32] = '\0';
+            strncpy(ed.manufacturer, scanned.manufacturer, 32);
+            ed.manufacturer[32] = '\0';
+            ed.maxChannels = scanned.maxChannels;
+            ed.dacI2cAddress = scanned.dacI2cAddress;
+            ed.flags = scanned.flags;
+            ed.numSampleRates = scanned.numSampleRates;
+            for (int i = 0; i < scanned.numSampleRates && i < 4; i++)
+              ed.sampleRates[i] = scanned.sampleRates[i];
+          }
+          ed.lastScanMs = millis();
+          appState.markEepromDirty();
+
+          // Send result to requesting client
+          JsonDocument resp;
+          resp["type"] = "eepromProgramResult";
+          resp["success"] = ok;
+          String rJson;
+          serializeJson(resp, rJson);
+          webSocket.sendTXT(num, rJson.c_str());
+        }
+        else if (msgType == "eepromErase") {
+          LOG_I("[WebSocket] EEPROM erase requested");
+          uint8_t tAddr = appState.eepromDiag.eepromAddr;
+          if (doc["address"].is<int>()) tAddr = (uint8_t)doc["address"].as<int>();
+          if (tAddr < DAC_EEPROM_ADDR_START || tAddr > DAC_EEPROM_ADDR_END) tAddr = DAC_EEPROM_ADDR_START;
+
+          bool ok = dac_eeprom_erase(tAddr);
+          if (!ok) appState.eepromDiag.writeErrors++;
+
+          AppState::EepromDiag& ed = appState.eepromDiag;
+          ed.found = false;
+          ed.eepromAddr = 0;
+          memset(ed.deviceName, 0, sizeof(ed.deviceName));
+          memset(ed.manufacturer, 0, sizeof(ed.manufacturer));
+          ed.deviceId = 0;
+          ed.hwRevision = 0;
+          ed.maxChannels = 0;
+          ed.dacI2cAddress = 0;
+          ed.flags = 0;
+          ed.numSampleRates = 0;
+          memset(ed.sampleRates, 0, sizeof(ed.sampleRates));
+          ed.lastScanMs = millis();
+          appState.markEepromDirty();
+
+          JsonDocument resp;
+          resp["type"] = "eepromEraseResult";
+          resp["success"] = ok;
+          String rJson;
+          serializeJson(resp, rJson);
+          webSocket.sendTXT(num, rJson.c_str());
+        }
 #endif
       }
       break;
@@ -631,8 +1010,11 @@ void sendDspState() {
         so["freq"] = st.biquad.frequency;
         so["gain"] = st.biquad.gain;
         so["Q"] = st.biquad.Q;
-        JsonArray co = so["coeffs"].to<JsonArray>();
-        for (int j = 0; j < 5; j++) co.add(st.biquad.coeffs[j]);
+        // Only send coefficients for enabled stages (saves ~3KB for 40 disabled PEQ bands)
+        if (st.enabled) {
+          JsonArray co = so["coeffs"].to<JsonArray>();
+          for (int j = 0; j < 5; j++) co.add(st.biquad.coeffs[j]);
+        }
       } else if (st.type == DSP_LIMITER) {
         so["thresholdDb"] = st.limiter.thresholdDb;
         so["attackMs"] = st.limiter.attackMs;
@@ -673,6 +1055,69 @@ void sendDspMetrics() {
   doc["cpuLoad"] = m.cpuLoadPercent;
   JsonArray gr = doc["limiterGr"].to<JsonArray>();
   for (int i = 0; i < DSP_MAX_CHANNELS; i++) gr.add(m.limiterGrDb[i]);
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+#endif
+
+#ifdef DAC_ENABLED
+void sendDacState() {
+  JsonDocument doc;
+  doc["type"] = "dacState";
+  doc["enabled"] = appState.dacEnabled;
+  doc["volume"] = appState.dacVolume;
+  doc["mute"] = appState.dacMute;
+  doc["deviceId"] = appState.dacDeviceId;
+  doc["modelName"] = appState.dacModelName;
+  doc["outputChannels"] = appState.dacOutputChannels;
+  doc["detected"] = appState.dacDetected;
+  doc["ready"] = appState.dacReady;
+  doc["filterMode"] = appState.dacFilterMode;
+  doc["txUnderruns"] = appState.dacTxUnderruns;
+  // Include available drivers
+  JsonArray drivers = doc["drivers"].to<JsonArray>();
+  const DacRegistryEntry* entries = dac_registry_get_entries();
+  int count = dac_registry_get_count();
+  for (int i = 0; i < count; i++) {
+    JsonObject drv = drivers.add<JsonObject>();
+    drv["id"] = entries[i].deviceId;
+    drv["name"] = entries[i].name;
+  }
+  // Filter modes from current driver
+  DacDriver* drv = dac_get_driver();
+  if (drv && drv->getCapabilities().hasFilterModes) {
+    JsonArray filters = doc["filterModes"].to<JsonArray>();
+    for (uint8_t f = 0; f < drv->getCapabilities().numFilterModes; f++) {
+      const char* name = drv->getFilterModeName(f);
+      filters.add(name ? name : "Unknown");
+    }
+  }
+  // EEPROM diagnostics
+  {
+    const AppState::EepromDiag& ed = appState.eepromDiag;
+    JsonObject eep = doc["eeprom"].to<JsonObject>();
+    eep["scanned"] = ed.scanned;
+    eep["found"] = ed.found;
+    eep["addr"] = ed.eepromAddr;
+    eep["i2cDevices"] = ed.i2cTotalDevices;
+    eep["i2cMask"] = ed.i2cDevicesMask;
+    eep["readErrors"] = ed.readErrors;
+    eep["writeErrors"] = ed.writeErrors;
+    if (ed.found) {
+      eep["deviceName"] = ed.deviceName;
+      eep["manufacturer"] = ed.manufacturer;
+      eep["deviceId"] = ed.deviceId;
+      eep["hwRevision"] = ed.hwRevision;
+      eep["maxChannels"] = ed.maxChannels;
+      eep["dacI2cAddress"] = ed.dacI2cAddress;
+      eep["flags"] = ed.flags;
+      JsonArray rates = eep["sampleRates"].to<JsonArray>();
+      for (int i = 0; i < ed.numSampleRates; i++) {
+        rates.add(ed.sampleRates[i]);
+      }
+    }
+  }
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -769,17 +1214,22 @@ void sendHardwareStats() {
   // Master debug gate — if debug mode is off, send nothing
   if (!appState.debugMode) return;
 
-  // At least one sub-toggle must be on to justify a broadcast
-  if (!appState.debugHwStats && !appState.debugI2sMetrics && !appState.debugTaskMonitor) return;
-
   JsonDocument doc;
   doc["type"] = "hardware_stats";
 
+  // === CPU stats — always included when debugMode is on ===
+  updateCpuUsage();
+  doc["cpu"]["freqMHz"] = ESP.getCpuFreqMHz();
+  doc["cpu"]["model"] = ESP.getChipModel();
+  doc["cpu"]["revision"] = ESP.getChipRevision();
+  doc["cpu"]["cores"] = ESP.getChipCores();
+  doc["cpu"]["usageCore0"] = cpuUsageCore0;
+  doc["cpu"]["usageCore1"] = cpuUsageCore1;
+  doc["cpu"]["usageTotal"] = (cpuUsageCore0 + cpuUsageCore1) / 2.0;
+  doc["cpu"]["temperature"] = temperatureRead();
+
   // === Hardware Stats sections (gated by debugHwStats) ===
   if (appState.debugHwStats) {
-    // Update CPU usage before sending stats
-    updateCpuUsage();
-
     // Memory - Internal Heap
     doc["memory"]["heapTotal"] = ESP.getHeapSize();
     doc["memory"]["heapFree"] = ESP.getFreeHeap();
@@ -789,20 +1239,6 @@ void sendHardwareStats() {
     // Memory - PSRAM (external, may not be available)
     doc["memory"]["psramTotal"] = ESP.getPsramSize();
     doc["memory"]["psramFree"] = ESP.getFreePsram();
-
-    // CPU Information
-    doc["cpu"]["freqMHz"] = ESP.getCpuFreqMHz();
-    doc["cpu"]["model"] = ESP.getChipModel();
-    doc["cpu"]["revision"] = ESP.getChipRevision();
-    doc["cpu"]["cores"] = ESP.getChipCores();
-
-    // CPU Utilization per core
-    doc["cpu"]["usageCore0"] = cpuUsageCore0;
-    doc["cpu"]["usageCore1"] = cpuUsageCore1;
-    doc["cpu"]["usageTotal"] = (cpuUsageCore0 + cpuUsageCore1) / 2.0;
-
-    // Temperature - ESP32-S3 internal sensor
-    doc["cpu"]["temperature"] = temperatureRead();
 
     // Storage - Flash
     doc["storage"]["flashSize"] = ESP.getFlashChipSize();
@@ -879,6 +1315,40 @@ void sendHardwareStats() {
     for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
       doc["audio"]["adcs"][a]["i2sRecoveries"] = appState.audioAdc[a].i2sRecoveries;
     }
+
+#ifdef DAC_ENABLED
+    // DAC Output diagnostics
+    {
+      JsonObject dac = doc["dac"].to<JsonObject>();
+      dac["enabled"] = appState.dacEnabled;
+      dac["ready"] = appState.dacReady;
+      dac["detected"] = appState.dacDetected;
+      dac["model"] = appState.dacModelName;
+      dac["deviceId"] = appState.dacDeviceId;
+      dac["volume"] = appState.dacVolume;
+      dac["mute"] = appState.dacMute;
+      dac["filterMode"] = appState.dacFilterMode;
+      dac["outputChannels"] = appState.dacOutputChannels;
+      dac["txUnderruns"] = appState.dacTxUnderruns;
+      DacDriver* drv = dac_get_driver();
+      if (drv) {
+        const DacCapabilities& caps = drv->getCapabilities();
+        dac["manufacturer"] = caps.manufacturer;
+        dac["hwVolume"] = caps.hasHardwareVolume;
+        dac["i2cControl"] = caps.hasI2cControl;
+        dac["independentClock"] = caps.needsIndependentClock;
+        dac["hasFilters"] = caps.hasFilterModes;
+      }
+      // EEPROM diagnostics
+      const AppState::EepromDiag& ed = appState.eepromDiag;
+      JsonObject eep = dac["eeprom"].to<JsonObject>();
+      eep["found"] = ed.found;
+      eep["addr"] = ed.eepromAddr;
+      eep["i2cDevices"] = ed.i2cTotalDevices;
+      eep["readErrors"] = ed.readErrors;
+      eep["writeErrors"] = ed.writeErrors;
+    }
+#endif
   }
 
   // === I2S Metrics sections (gated by debugI2sMetrics) ===

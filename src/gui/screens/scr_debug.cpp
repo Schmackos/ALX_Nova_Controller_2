@@ -10,6 +10,9 @@
 #include "../../websocket_handler.h"
 #include "../../i2s_audio.h"
 #include "../../task_monitor.h"
+#ifdef DAC_ENABLED
+#include "../../dac_hal.h"
+#endif
 #include <Arduino.h>
 #include <WiFi.h>
 #include <LittleFS.h>
@@ -22,6 +25,10 @@ static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
 static lv_obj_t *lbl_audio_adc[NUM_AUDIO_ADCS] = {nullptr, nullptr};
 static lv_obj_t *lbl_i2s = nullptr;
+#ifdef DAC_ENABLED
+static lv_obj_t *lbl_dac = nullptr;
+static lv_obj_t *lbl_eeprom = nullptr;
+#endif
 static lv_obj_t *lbl_tasks = nullptr;
 static lv_obj_t *lbl_pins = nullptr;
 static lv_obj_t *lbl_sort_mode = nullptr;
@@ -43,6 +50,11 @@ static const PinEntry all_pins[] = {
     {"PCM1808 ADC 2",   "DOUT2", I2S_DOUT2_PIN},
     {"PCM1808 ADC 1&2", "LRC",   I2S_LRC_PIN},
     {"PCM1808 ADC 1&2", "MCLK",  I2S_MCLK_PIN},
+#ifdef DAC_ENABLED
+    {"DAC Output",   "DOUT", I2S_TX_DATA_PIN},
+    {"DAC I2C",      "SDA",  DAC_I2C_SDA_PIN},
+    {"DAC I2C",      "SCL",  DAC_I2C_SCL_PIN},
+#endif
     {"ST7735S TFT",  "CS",   TFT_CS_PIN},
     {"ST7735S TFT",  "MOSI", TFT_MOSI_PIN},
     {"ST7735S TFT",  "CLK",  TFT_SCLK_PIN},
@@ -84,18 +96,27 @@ static void sort_pins(int *indices, int count, PinSortMode mode) {
 static void update_pins_label(void) {
     if (!lbl_pins) return;
 
-    int indices[18];
+    int indices[PIN_COUNT];
     for (int i = 0; i < PIN_COUNT; i++) indices[i] = i;
 
-    char buf[384];
+    char buf[512];
     int pos = 0;
 
     if (pin_sort_mode == SORT_BY_DEVICE) {
         /* Group by device — original layout */
-        snprintf(buf, sizeof(buf),
+        pos = snprintf(buf, sizeof(buf),
                  "PCM1808 ADC 1&2\n"
                  "  BCK=%d DOUT=%d DOUT2=%d\n"
-                 "  LRC=%d MCLK=%d\n"
+                 "  LRC=%d MCLK=%d\n",
+                 I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
+                 I2S_LRC_PIN, I2S_MCLK_PIN);
+#ifdef DAC_ENABLED
+        pos += snprintf(buf + pos, sizeof(buf) - pos,
+                 "DAC Output\n"
+                 "  DOUT=%d SDA=%d SCL=%d\n",
+                 I2S_TX_DATA_PIN, DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
+#endif
+        pos += snprintf(buf + pos, sizeof(buf) - pos,
                  "ST7735S TFT 1.8\"\n"
                  "  CS=%d MOSI=%d CLK=%d\n"
                  "  DC=%d RST=%d BL=%d\n"
@@ -105,8 +126,6 @@ static void update_pins_label(void) {
                  "  IO=%d\n"
                  "Core\n"
                  "  LED=%d Amp=%d Btn=%d",
-                 I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
-                 I2S_LRC_PIN, I2S_MCLK_PIN,
                  TFT_CS_PIN, TFT_MOSI_PIN, TFT_SCLK_PIN,
                  TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN,
                  ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
@@ -233,6 +252,44 @@ void scr_debug_refresh(void) {
         }
     }
 
+    /* Audio DAC */
+#ifdef DAC_ENABLED
+    if (lbl_dac) {
+        DacDriver* drv = dac_get_driver();
+        const char* model = appState.dacModelName;
+        const char* statusStr = appState.dacReady ? "Ready" : (appState.dacEnabled ? "Not Ready" : "Off");
+        snprintf(buf, sizeof(buf), "%s  %s\nVol:%u%% %s %s\nCh:%u Det:%s\nTX Underruns:%lu",
+                 model, statusStr,
+                 (unsigned)appState.dacVolume,
+                 appState.dacMute ? "MUTE" : "",
+                 appState.dacEnabled ? "ON" : "OFF",
+                 (unsigned)appState.dacOutputChannels,
+                 appState.dacDetected ? "EEPROM" : "Manual",
+                 (unsigned long)appState.dacTxUnderruns);
+        lv_label_set_text(lbl_dac, buf);
+    }
+    if (lbl_eeprom) {
+        const AppState::EepromDiag& ed = appState.eepromDiag;
+        if (!ed.scanned) {
+            lv_label_set_text(lbl_eeprom, "Not scanned");
+        } else if (!ed.found) {
+            snprintf(buf, sizeof(buf), "No EEPROM found\nI2C devs: %d\nR/W err: %lu/%lu",
+                     ed.i2cTotalDevices,
+                     (unsigned long)ed.readErrors,
+                     (unsigned long)ed.writeErrors);
+            lv_label_set_text(lbl_eeprom, buf);
+        } else {
+            snprintf(buf, sizeof(buf), "0x%02X %s\n%s rev%u\nCh:%u ID:0x%04X\nR/W err: %lu/%lu",
+                     ed.eepromAddr, ed.deviceName,
+                     ed.manufacturer, (unsigned)ed.hwRevision,
+                     (unsigned)ed.maxChannels, ed.deviceId,
+                     (unsigned long)ed.readErrors,
+                     (unsigned long)ed.writeErrors);
+            lv_label_set_text(lbl_eeprom, buf);
+        }
+    }
+#endif
+
     /* I2S Configuration */
     if (lbl_i2s) {
         if (!(appState.debugMode && appState.debugI2sMetrics)) {
@@ -329,6 +386,9 @@ lv_obj_t *scr_debug_create(void) {
     lbl_audio_adc[0] = nullptr;
     lbl_audio_adc[1] = nullptr;
     lbl_i2s = nullptr;
+#ifdef DAC_ENABLED
+    lbl_dac = nullptr;
+#endif
     lbl_tasks = nullptr;
     lbl_pins = nullptr;
     lbl_sort_mode = nullptr;
@@ -389,6 +449,12 @@ lv_obj_t *scr_debug_create(void) {
             lv_label_set_long_mode(lbl_audio_adc[a], LV_LABEL_LONG_WRAP);
         }
     }
+
+    /* Audio DAC */
+#ifdef DAC_ENABLED
+    lbl_dac = add_section(cont, "Audio DAC");
+    lbl_eeprom = add_section(cont, "EEPROM");
+#endif
 
     /* I2S Configuration */
     lbl_i2s = add_section(cont, "I2S");

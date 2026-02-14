@@ -761,6 +761,7 @@ void registerDspApiEndpoints() {
         const char *typeStr = doc["type"] | "lr4";
 
         dsp_copy_active_to_inactive();
+        dsp_clear_crossover_stages(ch);
 
         int result = -1;
         if (strncmp(typeStr, "lr", 2) == 0) {
@@ -882,6 +883,146 @@ void registerDspApiEndpoints() {
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] Routing matrix updated");
+    });
+
+    // ===== PEQ Preset Endpoints =====
+
+    // GET /api/dsp/peq/presets — list preset names
+    server.on("/api/dsp/peq/presets", HTTP_GET, []() {
+        if (!requireAuth()) return;
+        JsonDocument doc;
+        JsonArray names = doc["presets"].to<JsonArray>();
+
+        File root = LittleFS.open("/");
+        if (root && root.isDirectory()) {
+            File f = root.openNextFile();
+            while (f) {
+                String name = f.name();
+                // LittleFS may return name with or without leading /
+                if (name.startsWith("/")) name = name.substring(1);
+                if (name.startsWith("peq_") && name.endsWith(".json")) {
+                    // Extract preset name: peq_MyPreset.json → MyPreset
+                    String presetName = name.substring(4, name.length() - 5);
+                    names.add(presetName);
+                }
+                f = root.openNextFile();
+            }
+        }
+
+        String json;
+        serializeJson(doc, json);
+        server.send(200, "application/json", json);
+    });
+
+    // POST /api/dsp/peq/presets — save preset
+    server.on("/api/dsp/peq/presets", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+
+        JsonDocument doc;
+        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
+
+        const char *name = doc["name"] | (const char *)nullptr;
+        if (!name || strlen(name) == 0 || strlen(name) > 20) {
+            sendJsonError(400, "Name required (max 20 chars)");
+            return;
+        }
+
+        // Sanitize name for filesystem
+        char safeName[24];
+        int j = 0;
+        for (int i = 0; name[i] && j < 20; i++) {
+            char c = name[i];
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') || c == '_' || c == '-') {
+                safeName[j++] = c;
+            }
+        }
+        safeName[j] = '\0';
+        if (j == 0) { sendJsonError(400, "Invalid name"); return; }
+
+        // Check preset limit (max 10)
+        int presetCount = 0;
+        File root = LittleFS.open("/");
+        if (root && root.isDirectory()) {
+            File f = root.openNextFile();
+            while (f) {
+                String fname = f.name();
+                if (fname.startsWith("/")) fname = fname.substring(1);
+                if (fname.startsWith("peq_") && fname.endsWith(".json")) presetCount++;
+                f = root.openNextFile();
+            }
+        }
+
+        // Check if we're overwriting an existing preset
+        char path[40];
+        snprintf(path, sizeof(path), "/peq_%s.json", safeName);
+        bool overwriting = dspFileExists(path);
+
+        if (!overwriting && presetCount >= 10) {
+            sendJsonError(400, "Max 10 presets");
+            return;
+        }
+
+        // Build preset from current PEQ bands if no bands provided
+        JsonDocument preset;
+        preset["name"] = safeName;
+        if (doc["bands"].is<JsonArray>()) {
+            preset["bands"] = doc["bands"];
+        } else {
+            // Save current PEQ bands from specified channel (default ch 0)
+            int ch = doc["ch"] | 0;
+            if (ch < 0 || ch >= DSP_MAX_CHANNELS) ch = 0;
+            DspState *cfg = dsp_get_active_config();
+            JsonArray bands = preset["bands"].to<JsonArray>();
+            for (int b = 0; b < DSP_PEQ_BANDS && b < cfg->channels[ch].stageCount; b++) {
+                const DspStage &s = cfg->channels[ch].stages[b];
+                JsonObject band = bands.add<JsonObject>();
+                band["type"] = stage_type_name(s.type);
+                band["freq"] = s.biquad.frequency;
+                band["gain"] = s.biquad.gain;
+                band["Q"] = s.biquad.Q;
+                band["enabled"] = s.enabled;
+                if (s.label[0]) band["label"] = s.label;
+            }
+        }
+
+        String json;
+        serializeJson(preset, json);
+        File f = LittleFS.open(path, "w");
+        if (f) { f.print(json); f.close(); }
+        server.send(200, "application/json", "{\"success\":true}");
+        LOG_I("[DSP] PEQ preset saved: %s", safeName);
+    });
+
+    // GET /api/dsp/peq/preset?name=X — load preset
+    server.on("/api/dsp/peq/preset", HTTP_GET, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("name")) { sendJsonError(400, "Name required"); return; }
+
+        char path[40];
+        snprintf(path, sizeof(path), "/peq_%s.json", server.arg("name").c_str());
+        if (!dspFileExists(path)) { sendJsonError(404, "Preset not found"); return; }
+
+        File f = LittleFS.open(path, "r");
+        if (!f) { sendJsonError(500, "Read error"); return; }
+        String json = f.readString();
+        f.close();
+        server.send(200, "application/json", json);
+    });
+
+    // DELETE /api/dsp/peq/preset?name=X — delete preset
+    server.on("/api/dsp/peq/preset", HTTP_DELETE, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("name")) { sendJsonError(400, "Name required"); return; }
+
+        char path[40];
+        snprintf(path, sizeof(path), "/peq_%s.json", server.arg("name").c_str());
+        if (!dspFileExists(path)) { sendJsonError(404, "Preset not found"); return; }
+
+        LittleFS.remove(path);
+        server.send(200, "application/json", "{\"success\":true}");
+        LOG_I("[DSP] PEQ preset deleted: %s", server.arg("name").c_str());
     });
 
     LOG_I("[DSP] REST API endpoints registered");

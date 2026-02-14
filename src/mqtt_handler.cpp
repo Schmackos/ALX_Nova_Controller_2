@@ -222,6 +222,7 @@ void subscribeToMqttTopics() {
   for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
     mqttClient.subscribe((base + "/dsp/channel_" + String(ch) + "/bypass/set").c_str());
   }
+  mqttClient.subscribe((base + "/dsp/peq/bypass/set").c_str());
 #endif
 
   // Subscribe to HA birth message for re-discovery after HA restart
@@ -249,6 +250,9 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (message == "online") {
       LOG_I("[MQTT] Home Assistant restarted, re-publishing discovery");
       if (mqttHADiscovery) publishHADiscovery();
+      publishMqttSystemStatusStatic();
+      publishMqttHardwareStatsStatic();
+      publishMqttCrashDiagnosticsStatic();
       publishMqttState();
     }
     return;
@@ -746,21 +750,19 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.dspEnabled = newState;
     saveDspSettingsDebounced();
-    sendDspState();
-    publishMqttDspState();
+    appState.markDspConfigDirty();
     LOG_I("[MQTT] DSP set to %s", newState ? "ON" : "OFF");
   }
   // Handle DSP global bypass
   else if (topicStr == base + "/dsp/bypass/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.dspBypass = newState;
-    DspState *cfg = dsp_get_inactive_config();
     dsp_copy_active_to_inactive();
+    DspState *cfg = dsp_get_inactive_config();
     cfg->globalBypass = newState;
     dsp_swap_config();
     saveDspSettingsDebounced();
-    sendDspState();
-    publishMqttDspState();
+    appState.markDspConfigDirty();
     LOG_I("[MQTT] DSP bypass set to %s", newState ? "ON" : "OFF");
   }
   // Handle per-channel DSP bypass
@@ -777,11 +779,46 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         cfg->channels[ch].bypass = newState;
         dsp_swap_config();
         saveDspSettingsDebounced();
-        sendDspState();
-        publishMqttDspState();
+        appState.markDspConfigDirty();
         LOG_I("[MQTT] DSP channel %d bypass set to %s", ch, newState ? "ON" : "OFF");
       }
     }
+  }
+  // PEQ band enable/disable (L1/R1 = channels 0/1)
+  else if (topicStr.startsWith(base + "/dsp/channel_") && topicStr.indexOf("/peq/band") > 0 && topicStr.endsWith("/set")) {
+    int chStart = (base + "/dsp/channel_").length();
+    int chEnd = topicStr.indexOf("/peq/band");
+    int bandStart = chEnd + 9;
+    int bandEnd = topicStr.indexOf("/set", bandStart);
+    if (chEnd > chStart && bandEnd > bandStart) {
+      int ch = topicStr.substring(chStart, chEnd).toInt();
+      int band = topicStr.substring(bandStart, bandEnd).toInt() - 1;
+      if (ch >= 0 && ch < 2 && band >= 0 && band < DSP_PEQ_BANDS) {
+        bool newState = (message == "ON" || message == "1" || message == "true");
+        dsp_copy_active_to_inactive();
+        DspState *cfg = dsp_get_inactive_config();
+        cfg->channels[ch].stages[band].enabled = newState;
+        dsp_swap_config();
+        saveDspSettingsDebounced();
+        appState.markDspConfigDirty();
+        LOG_I("[MQTT] PEQ ch%d band%d set to %s", ch, band + 1, newState ? "ON" : "OFF");
+      }
+    }
+  }
+  // PEQ bypass (disable/enable all PEQ bands on all channels)
+  else if (topicStr == base + "/dsp/peq/bypass/set") {
+    bool bypass = (message == "ON" || message == "1" || message == "true");
+    dsp_copy_active_to_inactive();
+    DspState *cfg = dsp_get_inactive_config();
+    for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
+      for (int b = 0; b < DSP_PEQ_BANDS && b < cfg->channels[ch].stageCount; b++) {
+        cfg->channels[ch].stages[b].enabled = !bypass;
+      }
+    }
+    dsp_swap_config();
+    saveDspSettingsDebounced();
+    appState.markDspConfigDirty();
+    LOG_I("[MQTT] PEQ bypass set to %s", bypass ? "ON" : "OFF");
   }
 #endif
   // Handle reboot command
@@ -899,7 +936,12 @@ void mqttReconnect() {
       LOG_I("[MQTT] Home Assistant discovery published");
     }
 
-    // Publish initial state
+    // Publish static info (once per connection — never changes at runtime)
+    publishMqttSystemStatusStatic();
+    publishMqttHardwareStatsStatic();
+    publishMqttCrashDiagnosticsStatic();
+
+    // Publish initial dynamic state
     publishMqttState();
   } else {
     LOG_W("[MQTT] Connection failed (rc=%d)", mqttClient.state());
@@ -926,112 +968,150 @@ void mqttLoop() {
 
   mqttClient.loop();
 
-  // Periodic state publishing
+  // Periodic state publishing — per-category selective dispatch
   unsigned long currentMillis = millis();
   if (mqttClient.connected() &&
       (currentMillis - lastMqttPublish >= MQTT_PUBLISH_INTERVAL)) {
     lastMqttPublish = currentMillis;
 
-    // Check for audio level change separately — only publish audio topics
-    // (avoids 65+ publishes on every 0.5dBFS fluctuation)
+    // Per-category change detection
     bool audioLevelChanged =
         (fabs(audioLevel_dBFS - prevMqttAudioLevel) > 0.5f);
-
-    // Check for non-audio state changes that warrant full state publish
-    bool stateChanged =
-        (ledState != prevMqttLedState) ||
-        (blinkingEnabled != prevMqttBlinkingEnabled) ||
+    bool ledChanged = (ledState != prevMqttLedState);
+    bool blinkingChanged = (blinkingEnabled != prevMqttBlinkingEnabled);
+    bool sensingChanged =
         (amplifierState != prevMqttAmplifierState) ||
         (currentMode != prevMqttSensingMode) ||
-        (timerRemaining != prevMqttTimerRemaining) ||
+        (timerRemaining != prevMqttTimerRemaining);
+    bool displayChanged =
         (appState.backlightOn != prevMqttBacklightOn) ||
         (appState.screenTimeout != prevMqttScreenTimeout) ||
-        (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
-        (appState.buzzerVolume != prevMqttBuzzerVolume) ||
         (appState.backlightBrightness != prevMqttBrightness) ||
         (appState.dimEnabled != appState.prevMqttDimEnabled) ||
         (appState.dimTimeout != prevMqttDimTimeout) ||
-        (appState.dimBrightness != appState.prevMqttDimBrightness) ||
+        (appState.dimBrightness != appState.prevMqttDimBrightness);
+    bool settingsChanged =
         (darkMode != prevMqttDarkMode) ||
         (autoUpdateEnabled != prevMqttAutoUpdate) ||
-        (enableCertValidation != prevMqttCertValidation) ||
+        (enableCertValidation != prevMqttCertValidation);
+    bool buzzerChanged =
+        (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
+        (appState.buzzerVolume != prevMqttBuzzerVolume);
+    bool siggenChanged =
         (appState.sigGenEnabled != appState.prevMqttSigGenEnabled) ||
         (appState.sigGenWaveform != appState.prevMqttSigGenWaveform) ||
         (fabs(appState.sigGenFrequency - appState.prevMqttSigGenFrequency) > 0.5f) ||
         (fabs(appState.sigGenAmplitude - appState.prevMqttSigGenAmplitude) > 0.5f) ||
         (appState.sigGenOutputMode != appState.prevMqttSigGenOutputMode) ||
+        (fabs(appState.sigGenSweepSpeed - appState.prevMqttSigGenSweepSpeed) > 0.05f);
+    bool audioGraphChanged =
         (appState.vuMeterEnabled != appState.prevMqttVuMeterEnabled) ||
         (appState.waveformEnabled != appState.prevMqttWaveformEnabled) ||
         (appState.spectrumEnabled != appState.prevMqttSpectrumEnabled) ||
-        (appState.fftWindowType != appState.prevMqttFftWindowType) ||
+        (appState.fftWindowType != appState.prevMqttFftWindowType);
+    bool debugChanged =
         (appState.debugMode != appState.prevMqttDebugMode) ||
         (appState.debugSerialLevel != appState.prevMqttDebugSerialLevel) ||
         (appState.debugHwStats != appState.prevMqttDebugHwStats) ||
         (appState.debugI2sMetrics != appState.prevMqttDebugI2sMetrics) ||
-        (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor) ||
-        (fabs(appState.sigGenSweepSpeed - appState.prevMqttSigGenSweepSpeed) > 0.05f)
-#ifdef GUI_ENABLED
-        || (appState.bootAnimEnabled != appState.prevMqttBootAnimEnabled)
-        || (appState.bootAnimStyle != appState.prevMqttBootAnimStyle)
-#endif
-#ifdef DSP_ENABLED
-        || (appState.dspEnabled != appState.prevMqttDspEnabled)
-        || (appState.dspBypass != appState.prevMqttDspBypass)
-#endif
-        ;
+        (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor);
 
-    if (stateChanged) {
-      publishMqttState();
-    } else if (audioLevelChanged) {
-      // Only publish audio-related topics (3-4 publishes instead of 65+)
-      publishMqttSmartSensingState();
-      publishMqttAudioDiagnostics();
-      prevMqttAudioLevel = audioLevel_dBFS;
-    }
-
-    if (stateChanged) {
-      // Update tracked state
+    // Selective dispatch — only publish categories that actually changed
+    if (ledChanged) {
+      publishMqttLedState();
       prevMqttLedState = ledState;
+    }
+    if (blinkingChanged) {
+      publishMqttBlinkingState();
       prevMqttBlinkingEnabled = blinkingEnabled;
-      prevMqttAmplifierState = amplifierState;
-      prevMqttSensingMode = currentMode;
-      prevMqttTimerRemaining = timerRemaining;
-      prevMqttAudioLevel = audioLevel_dBFS;
+    }
+    // Smart sensing + audio level (combined to avoid double-publishing)
+    if (sensingChanged || audioLevelChanged) {
+      publishMqttSmartSensingState();
+      if (audioLevelChanged) {
+        publishMqttAudioDiagnostics();
+        prevMqttAudioLevel = audioLevel_dBFS;
+      }
+      if (sensingChanged) {
+        prevMqttAmplifierState = amplifierState;
+        prevMqttSensingMode = currentMode;
+        prevMqttTimerRemaining = timerRemaining;
+      }
+    }
+    if (displayChanged) {
+      publishMqttDisplayState();
       prevMqttBacklightOn = appState.backlightOn;
       prevMqttScreenTimeout = appState.screenTimeout;
-      prevMqttBuzzerEnabled = appState.buzzerEnabled;
-      prevMqttBuzzerVolume = appState.buzzerVolume;
       prevMqttBrightness = appState.backlightBrightness;
       appState.prevMqttDimEnabled = appState.dimEnabled;
       prevMqttDimTimeout = appState.dimTimeout;
       appState.prevMqttDimBrightness = appState.dimBrightness;
+    }
+    if (settingsChanged) {
+      publishMqttSystemStatus();
       prevMqttDarkMode = darkMode;
       prevMqttAutoUpdate = autoUpdateEnabled;
       prevMqttCertValidation = enableCertValidation;
+    }
+    if (buzzerChanged) {
+      publishMqttBuzzerState();
+      prevMqttBuzzerEnabled = appState.buzzerEnabled;
+      prevMqttBuzzerVolume = appState.buzzerVolume;
+    }
+    if (siggenChanged) {
+      publishMqttSignalGenState();
       appState.prevMqttSigGenEnabled = appState.sigGenEnabled;
       appState.prevMqttSigGenWaveform = appState.sigGenWaveform;
       appState.prevMqttSigGenFrequency = appState.sigGenFrequency;
       appState.prevMqttSigGenAmplitude = appState.sigGenAmplitude;
       appState.prevMqttSigGenOutputMode = appState.sigGenOutputMode;
       appState.prevMqttSigGenSweepSpeed = appState.sigGenSweepSpeed;
+    }
+    if (audioGraphChanged) {
+      publishMqttAudioGraphState();
       appState.prevMqttVuMeterEnabled = appState.vuMeterEnabled;
       appState.prevMqttWaveformEnabled = appState.waveformEnabled;
       appState.prevMqttSpectrumEnabled = appState.spectrumEnabled;
       appState.prevMqttFftWindowType = appState.fftWindowType;
+    }
+    if (debugChanged) {
+      publishMqttDebugState();
       appState.prevMqttDebugMode = appState.debugMode;
       appState.prevMqttDebugSerialLevel = appState.debugSerialLevel;
       appState.prevMqttDebugHwStats = appState.debugHwStats;
       appState.prevMqttDebugI2sMetrics = appState.debugI2sMetrics;
       appState.prevMqttDebugTaskMonitor = appState.debugTaskMonitor;
+    }
 #ifdef GUI_ENABLED
+    if ((appState.bootAnimEnabled != appState.prevMqttBootAnimEnabled) ||
+        (appState.bootAnimStyle != appState.prevMqttBootAnimStyle)) {
+      publishMqttBootAnimState();
       appState.prevMqttBootAnimEnabled = appState.bootAnimEnabled;
       appState.prevMqttBootAnimStyle = appState.bootAnimStyle;
+    }
 #endif
 #ifdef DSP_ENABLED
+    if ((appState.dspEnabled != appState.prevMqttDspEnabled) ||
+        (appState.dspBypass != appState.prevMqttDspBypass)) {
+      publishMqttDspState();
       appState.prevMqttDspEnabled = appState.dspEnabled;
       appState.prevMqttDspBypass = appState.dspBypass;
-#endif
     }
+#endif
+  }
+
+  // 60-second heartbeat — essential status even when nothing changes
+  static unsigned long lastMqttHeartbeat = 0;
+  if (mqttClient.connected() &&
+      (currentMillis - lastMqttHeartbeat >= MQTT_HEARTBEAT_INTERVAL)) {
+    lastMqttHeartbeat = currentMillis;
+    publishMqttSmartSensingState();
+    publishMqttWifiStatus();
+    publishMqttCrashDiagnostics();
+    publishMqttHardwareStats();
+    String base = getEffectiveMqttBaseTopic();
+    mqttClient.publish((base + "/system/uptime").c_str(),
+                       String(millis() / 1000).c_str(), true);
   }
 }
 
@@ -1134,14 +1214,13 @@ void publishMqttWifiStatus() {
   }
 }
 
-// Publish system status
-void publishMqttSystemStatus() {
+// Publish static system info (called once on MQTT connect)
+void publishMqttSystemStatusStatic() {
   if (!mqttClient.connected())
     return;
 
   String base = getEffectiveMqttBaseTopic();
 
-  // Device information
   mqttClient.publish((base + "/system/manufacturer").c_str(), MANUFACTURER_NAME,
                      true);
   mqttClient.publish((base + "/system/model").c_str(), MANUFACTURER_MODEL,
@@ -1149,24 +1228,27 @@ void publishMqttSystemStatus() {
   mqttClient.publish((base + "/system/serial_number").c_str(),
                      deviceSerialNumber.c_str(), true);
   mqttClient.publish((base + "/system/firmware").c_str(), firmwareVer, true);
+  mqttClient.publish((base + "/system/mac").c_str(), WiFi.macAddress().c_str(),
+                     true);
+  mqttClient.publish((base + "/system/reset_reason").c_str(),
+                     getResetReasonString().c_str(), true);
+}
+
+// Publish dynamic system status (on settings change)
+void publishMqttSystemStatus() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
   mqttClient.publish((base + "/system/update_available").c_str(),
                      updateAvailable ? "ON" : "OFF", true);
-
   if (cachedLatestVersion.length() > 0) {
     mqttClient.publish((base + "/system/latest_version").c_str(),
                        cachedLatestVersion.c_str(), true);
   }
-
   mqttClient.publish((base + "/settings/auto_update").c_str(),
                      autoUpdateEnabled ? "ON" : "OFF", true);
-  mqttClient.publish((base + "/system/mac").c_str(), WiFi.macAddress().c_str(),
-                     true);
-
-  // Reset/boot reason
-  mqttClient.publish((base + "/system/reset_reason").c_str(),
-                     getResetReasonString().c_str(), true);
-
-  // Additional settings
   mqttClient.publish((base + "/settings/timezone_offset").c_str(),
                      String(timezoneOffset).c_str(), true);
   mqttClient.publish((base + "/settings/dark_mode").c_str(),
@@ -1229,19 +1311,48 @@ void publishMqttUpdateState() {
   }
 }
 
-// Publish hardware statistics
-void publishMqttHardwareStats() {
+// Publish static hardware stats (called once on MQTT connect)
+void publishMqttHardwareStatsStatic() {
   if (!mqttClient.connected())
     return;
 
-  // Update CPU usage before reading
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/hardware/cpu_model").c_str(), ESP.getChipModel(),
+                     true);
+  mqttClient.publish((base + "/hardware/cpu_cores").c_str(),
+                     String(ESP.getChipCores()).c_str(), true);
+  mqttClient.publish((base + "/hardware/cpu_freq").c_str(),
+                     String(ESP.getCpuFreqMHz()).c_str(), true);
+  mqttClient.publish((base + "/hardware/flash_size").c_str(),
+                     String(ESP.getFlashChipSize()).c_str(), true);
+  mqttClient.publish((base + "/hardware/sketch_size").c_str(),
+                     String(ESP.getSketchSize()).c_str(), true);
+  mqttClient.publish((base + "/hardware/sketch_free").c_str(),
+                     String(ESP.getFreeSketchSpace()).c_str(), true);
+  mqttClient.publish((base + "/hardware/heap_total").c_str(),
+                     String(ESP.getHeapSize()).c_str(), true);
+  mqttClient.publish((base + "/hardware/LittleFS_total").c_str(),
+                     String(LittleFS.totalBytes()).c_str(), true);
+  uint32_t psramSize = ESP.getPsramSize();
+  if (psramSize > 0) {
+    mqttClient.publish((base + "/hardware/psram_total").c_str(),
+                       String(psramSize).c_str(), true);
+  }
+}
+
+// Publish dynamic hardware stats (gated by debugMode && debugHwStats, called on heartbeat)
+void publishMqttHardwareStats() {
+  if (!mqttClient.connected())
+    return;
+  if (!appState.debugMode || !appState.debugHwStats)
+    return;
+
   updateCpuUsage();
 
   String base = getEffectiveMqttBaseTopic();
 
-  // Memory - Internal Heap
-  mqttClient.publish((base + "/hardware/heap_total").c_str(),
-                     String(ESP.getHeapSize()).c_str(), true);
+  // Dynamic heap
   mqttClient.publish((base + "/hardware/heap_free").c_str(),
                      String(ESP.getFreeHeap()).c_str(), true);
   mqttClient.publish((base + "/hardware/heap_min_free").c_str(),
@@ -1249,22 +1360,11 @@ void publishMqttHardwareStats() {
   mqttClient.publish((base + "/hardware/heap_max_block").c_str(),
                      String(ESP.getMaxAllocHeap()).c_str(), true);
 
-  // Memory - PSRAM (if available)
-  uint32_t psramSize = ESP.getPsramSize();
-  if (psramSize > 0) {
-    mqttClient.publish((base + "/hardware/psram_total").c_str(),
-                       String(psramSize).c_str(), true);
+  // Dynamic PSRAM
+  if (ESP.getPsramSize() > 0) {
     mqttClient.publish((base + "/hardware/psram_free").c_str(),
                        String(ESP.getFreePsram()).c_str(), true);
   }
-
-  // CPU Information
-  mqttClient.publish((base + "/hardware/cpu_freq").c_str(),
-                     String(ESP.getCpuFreqMHz()).c_str(), true);
-  mqttClient.publish((base + "/hardware/cpu_model").c_str(), ESP.getChipModel(),
-                     true);
-  mqttClient.publish((base + "/hardware/cpu_cores").c_str(),
-                     String(ESP.getChipCores()).c_str(), true);
 
   // CPU Utilization
   float cpuCore0 = getCpuUsageCore0();
@@ -1282,17 +1382,7 @@ void publishMqttHardwareStats() {
   mqttClient.publish((base + "/hardware/temperature").c_str(),
                      String(temp, 1).c_str(), true);
 
-  // Storage - Flash
-  mqttClient.publish((base + "/hardware/flash_size").c_str(),
-                     String(ESP.getFlashChipSize()).c_str(), true);
-  mqttClient.publish((base + "/hardware/sketch_size").c_str(),
-                     String(ESP.getSketchSize()).c_str(), true);
-  mqttClient.publish((base + "/hardware/sketch_free").c_str(),
-                     String(ESP.getFreeSketchSpace()).c_str(), true);
-
-  // Storage - LittleFS
-  mqttClient.publish((base + "/hardware/LittleFS_total").c_str(),
-                     String(LittleFS.totalBytes()).c_str(), true);
+  // Dynamic storage
   mqttClient.publish((base + "/hardware/LittleFS_used").c_str(),
                      String(LittleFS.usedBytes()).c_str(), true);
 
@@ -1301,11 +1391,6 @@ void publishMqttHardwareStats() {
                      String(WiFi.channel()).c_str(), true);
   mqttClient.publish((base + "/ap/clients").c_str(),
                      String(WiFi.softAPgetStationNum()).c_str(), true);
-
-  // Uptime (in seconds for easier reading)
-  unsigned long uptimeSeconds = millis() / 1000;
-  mqttClient.publish((base + "/system/uptime").c_str(),
-                     String(uptimeSeconds).c_str(), true);
 
   // Task monitor
   const TaskMonitorData& tm = task_monitor_get_data();
@@ -1316,7 +1401,6 @@ void publishMqttHardwareStats() {
   mqttClient.publish((base + "/hardware/loop_time_max_us").c_str(),
                      String(tm.loopTimeMaxUs).c_str(), true);
 
-  // Find minimum stack free across all known app tasks
   uint32_t minStackFree = UINT32_MAX;
   for (int i = 0; i < tm.taskCount; i++) {
     if (tm.tasks[i].stackAllocBytes > 0 && tm.tasks[i].stackFreeBytes < minStackFree) {
@@ -1436,10 +1520,12 @@ void publishMqttAudioDiagnostics() {
                        String(adc.vrmsCombined, 3).c_str(), true);
     mqttClient.publish((prefix + "/level").c_str(),
                        String(adc.dBFS, 1).c_str(), true);
-    mqttClient.publish((prefix + "/snr").c_str(),
-                       String(appState.audioSnrDb[a], 1).c_str(), true);
-    mqttClient.publish((prefix + "/sfdr").c_str(),
-                       String(appState.audioSfdrDb[a], 1).c_str(), true);
+    if (appState.debugMode) {
+      mqttClient.publish((prefix + "/snr").c_str(),
+                         String(appState.audioSnrDb[a], 1).c_str(), true);
+      mqttClient.publish((prefix + "/sfdr").c_str(),
+                         String(appState.audioSfdrDb[a], 1).c_str(), true);
+    }
   }
 
   // Legacy combined topics (ADC 0)
@@ -1519,6 +1605,16 @@ void publishMqttDspState() {
                        String(cfg->channels[ch].stageCount).c_str(), true);
   }
 
+  // Global PEQ bypass (derived from all channels)
+  bool anyPeqBypassed = true;
+  for (int ch = 0; ch < 2; ch++) {
+    for (int b = 0; b < DSP_PEQ_BANDS && b < cfg->channels[ch].stageCount; b++) {
+      if (cfg->channels[ch].stages[b].enabled) { anyPeqBypassed = false; break; }
+    }
+    if (!anyPeqBypassed) break;
+  }
+  mqttClient.publish((base + "/dsp/peq/bypass").c_str(), anyPeqBypassed ? "ON" : "OFF", true);
+
   // DSP metrics
   DspMetrics m = dsp_get_metrics();
   mqttClient.publish((base + "/dsp/cpu_load").c_str(),
@@ -1530,20 +1626,26 @@ void publishMqttDspState() {
 }
 #endif
 
-// Publish crash diagnostics and heap health (always-on, not debug-gated)
+// Publish static crash info (called once on MQTT connect — never changes per boot)
+void publishMqttCrashDiagnosticsStatic() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/diagnostics/reset_reason").c_str(),
+                     getResetReasonString().c_str(), true);
+  mqttClient.publish((base + "/diagnostics/was_crash").c_str(),
+                     crashlog_last_was_crash() ? "ON" : "OFF", true);
+}
+
+// Publish dynamic crash diagnostics (heap health — called on heartbeat)
 void publishMqttCrashDiagnostics() {
   if (!mqttClient.connected())
     return;
 
   String base = getEffectiveMqttBaseTopic();
 
-  // Reset reason for current boot
-  mqttClient.publish((base + "/diagnostics/reset_reason").c_str(),
-                     getResetReasonString().c_str(), true);
-  mqttClient.publish((base + "/diagnostics/was_crash").c_str(),
-                     crashlog_last_was_crash() ? "ON" : "OFF", true);
-
-  // Heap health
   mqttClient.publish((base + "/diagnostics/heap_free").c_str(),
                      String(ESP.getFreeHeap()).c_str(), true);
   mqttClient.publish((base + "/diagnostics/heap_max_block").c_str(),
@@ -1864,6 +1966,7 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+
   // ===== Update Available Binary Sensor =====
   {
     JsonDocument doc;
@@ -2021,6 +2124,7 @@ void publishHADiscovery() {
     String topic = "homeassistant/sensor/" + deviceId + "/ip/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
+
 
   // ===== Hardware Diagnostics =====
 
@@ -2338,6 +2442,7 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+
   // ===== Audio Update Rate Select =====
   {
     JsonDocument doc;
@@ -2500,6 +2605,7 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+
   // ===== Per-ADC Audio Diagnostic Entities (only detected ADCs) =====
   {
     const char *inputLabels[] = {"adc1", "adc2"};
@@ -2572,37 +2678,8 @@ void publishHADiscovery() {
         mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_vrms/config").c_str(), payload.c_str(), true);
       }
 
-      // Per-ADC SNR Sensor
-      {
-        JsonDocument doc;
-        doc["name"] = String(inputNames[a]) + " SNR";
-        doc["unique_id"] = deviceId + idSuffix + "_snr";
-        doc["state_topic"] = prefix + "/snr";
-        doc["unit_of_measurement"] = "dB";
-        doc["state_class"] = "measurement";
-        doc["entity_category"] = "diagnostic";
-        doc["icon"] = "mdi:signal";
-        addHADeviceInfo(doc);
-        String payload;
-        serializeJson(doc, payload);
-        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_snr/config").c_str(), payload.c_str(), true);
-      }
-
-      // Per-ADC SFDR Sensor
-      {
-        JsonDocument doc;
-        doc["name"] = String(inputNames[a]) + " SFDR";
-        doc["unique_id"] = deviceId + idSuffix + "_sfdr";
-        doc["state_topic"] = prefix + "/sfdr";
-        doc["unit_of_measurement"] = "dB";
-        doc["state_class"] = "measurement";
-        doc["entity_category"] = "diagnostic";
-        doc["icon"] = "mdi:signal-variant";
-        addHADeviceInfo(doc);
-        String payload;
-        serializeJson(doc, payload);
-        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_sfdr/config").c_str(), payload.c_str(), true);
-      }
+      // SNR/SFDR discovery removed — debug-only data, accessible via REST/WS/GUI.
+      // Cleanup of orphaned entities is handled in removeHADiscovery().
     }
   }
 
@@ -2761,6 +2838,7 @@ void publishHADiscovery() {
     String topic = "homeassistant/select/" + deviceId + "/fft_window/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
+
 
   // ===== Debug Mode Switch =====
   {
@@ -3023,6 +3101,7 @@ void publishHADiscovery() {
     }
   }
 
+
 #ifdef DSP_ENABLED
   // ===== DSP Enabled Switch =====
   {
@@ -3128,6 +3207,26 @@ void publishHADiscovery() {
       }
     }
   }
+
+  // ===== PEQ Bypass Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "PEQ Bypass";
+    doc["unique_id"] = deviceId + "_peq_bypass";
+    doc["state_topic"] = base + "/dsp/peq/bypass";
+    doc["command_topic"] = base + "/dsp/peq/bypass/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:equalizer";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/switch/" + deviceId + "/peq_bypass/config").c_str(), payload.c_str(), true);
+  }
+
+  // PEQ band switches removed — controlled via DSP API / WebSocket only.
+  // Cleanup of orphaned PEQ band entities is handled in removeHADiscovery().
 #endif
 
 #ifdef GUI_ENABLED
@@ -3293,12 +3392,22 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/dsp_ch0_limiter_gr/config",
       "homeassistant/sensor/%s/dsp_ch1_limiter_gr/config",
       "homeassistant/sensor/%s/dsp_ch2_limiter_gr/config",
-      "homeassistant/sensor/%s/dsp_ch3_limiter_gr/config"};
+      "homeassistant/sensor/%s/dsp_ch3_limiter_gr/config",
+      // PEQ bypass
+      "homeassistant/switch/%s/peq_bypass/config"};
 
   char topicBuf[160];
   for (const char *topicTemplate : topics) {
     snprintf(topicBuf, sizeof(topicBuf), topicTemplate, deviceId.c_str());
     mqttClient.publish(topicBuf, "", true); // Empty payload removes the config
+  }
+
+  // Remove orphaned PEQ band switch entities (20 = 2 channels x 10 bands)
+  for (int ch = 0; ch < 2; ch++) {
+    for (int b = 0; b < DSP_PEQ_BANDS; b++) {
+      String topic = "homeassistant/switch/" + deviceId + "/peq_ch" + String(ch) + "_band" + String(b + 1) + "/config";
+      mqttClient.publish(topic.c_str(), "", true);
+    }
   }
 
   LOG_I("[MQTT] Home Assistant discovery configs removed");

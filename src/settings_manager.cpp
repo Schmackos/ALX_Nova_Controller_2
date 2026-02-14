@@ -10,6 +10,9 @@
 #include "smart_sensing.h"
 #include "utils.h"
 #include "wifi_manager.h"
+#ifdef DAC_ENABLED
+#include "dac_hal.h"
+#endif
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -892,6 +895,16 @@ void handleSettingsExport() {
   doc["signalGenerator"]["sweepSpeed"] = appState.sigGenSweepSpeed;
   doc["signalGenerator"]["targetAdc"] = appState.sigGenTargetAdc;
 
+#ifdef DAC_ENABLED
+  // DAC Output settings
+  doc["dacOutput"]["enabled"] = appState.dacEnabled;
+  doc["dacOutput"]["volume"] = appState.dacVolume;
+  doc["dacOutput"]["mute"] = appState.dacMute;
+  doc["dacOutput"]["deviceId"] = appState.dacDeviceId;
+  doc["dacOutput"]["modelName"] = appState.dacModelName;
+  doc["dacOutput"]["filterMode"] = appState.dacFilterMode;
+#endif
+
   // Input channel names
   JsonArray names = doc["inputNames"].to<JsonArray>();
   for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
@@ -1240,6 +1253,35 @@ void handleSettingsImport() {
     appState.sigGenEnabled = false; // Always boot disabled
     saveSignalGenSettings();
   }
+
+#ifdef DAC_ENABLED
+  // Import DAC Output settings
+  if (!doc["dacOutput"].isNull()) {
+    if (doc["dacOutput"]["enabled"].is<bool>()) {
+      appState.dacEnabled = doc["dacOutput"]["enabled"].as<bool>();
+    }
+    if (doc["dacOutput"]["volume"].is<int>()) {
+      int v = doc["dacOutput"]["volume"].as<int>();
+      if (v >= 0 && v <= 100) appState.dacVolume = (uint8_t)v;
+    }
+    if (doc["dacOutput"]["mute"].is<bool>()) {
+      appState.dacMute = doc["dacOutput"]["mute"].as<bool>();
+    }
+    if (doc["dacOutput"]["deviceId"].is<int>()) {
+      appState.dacDeviceId = (uint16_t)doc["dacOutput"]["deviceId"].as<int>();
+    }
+    if (doc["dacOutput"]["modelName"].is<const char*>()) {
+      strncpy(appState.dacModelName, doc["dacOutput"]["modelName"].as<const char*>(),
+              sizeof(appState.dacModelName) - 1);
+      appState.dacModelName[sizeof(appState.dacModelName) - 1] = '\0';
+    }
+    if (doc["dacOutput"]["filterMode"].is<int>()) {
+      appState.dacFilterMode = (uint8_t)doc["dacOutput"]["filterMode"].as<int>();
+    }
+    dac_save_settings();
+    LOG_I("[Settings] DAC output settings imported");
+  }
+#endif
 
   // Import input channel names
   if (!doc["inputNames"].isNull() && doc["inputNames"].is<JsonArray>()) {

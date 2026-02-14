@@ -37,6 +37,7 @@ void gui_nav_register(ScreenId id, screen_create_fn creator) {
 }
 
 static void activate_screen(ScreenId id, lv_scr_load_anim_t anim) {
+    (void)anim; /* Animation disabled to prevent dual-screen LVGL OOM */
     if (id >= SCR_COUNT || screen_creators[id] == nullptr) {
         LOG_E("[GUI Nav] No creator for screen %d", id);
         return;
@@ -46,15 +47,26 @@ static void activate_screen(ScreenId id, lv_scr_load_anim_t anim) {
     lv_group_remove_all_objs(current_group);
     lv_group_set_editing(current_group, false);
 
-    /* Create the new screen */
+    /* Delete old screen BEFORE creating new one to stay within 48KB LVGL pool.
+     * With animated transitions, both screens coexist for 200ms and heavy
+     * screens (Settings: 79 widgets) exhaust draw task memory.
+     * A temporary blank screen keeps LVGL happy while we free the old one. */
+    lv_obj_t *old_scr = lv_screen_active();
+    lv_obj_t *blank = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(blank, lv_color_black(), 0);
+    lv_screen_load(blank);
+    if (old_scr) lv_obj_delete(old_scr);
+
+    /* Create the new screen with freed LVGL memory */
     lv_obj_t *scr = screen_creators[id]();
     if (scr == nullptr) {
         LOG_E("[GUI Nav] Creator returned null for screen %d", id);
         return;
     }
 
-    /* Animate screen transition */
-    lv_screen_load_anim(scr, anim, 200, 0, true);
+    /* Load new screen and discard the blank */
+    lv_screen_load(scr);
+    lv_obj_delete(blank);
 }
 
 void gui_nav_set_focus_index(int idx) {

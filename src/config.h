@@ -10,7 +10,7 @@
 // deviceSerialNumber in app_state.h)
 
 // ===== Firmware Version =====
-#define FIRMWARE_VERSION "1.7.1"
+#define FIRMWARE_VERSION "1.8.0"
 
 // ===== GitHub Repository Configuration =====
 #define GITHUB_REPO_OWNER "Schmackos"
@@ -65,9 +65,23 @@ const int SIGGEN_PWM_PIN = 38;   // GPIO 38 — no strapping constraints
 #define SIGGEN_PWM_TIMER 2       // Separate from buzzer Timer 1 & backlight Timer 0
 #define SIGGEN_PWM_RESOLUTION 10 // 10-bit (0-1023), max ~78kHz carrier
 
+// ===== DAC Output Pin Definitions =====
+#ifdef DAC_ENABLED
+#ifndef I2S_TX_DATA_PIN
+const int I2S_TX_DATA_PIN = 40;  // GPIO 40 - I2S TX data to DAC
+#endif
+#ifndef DAC_I2C_SDA_PIN
+const int DAC_I2C_SDA_PIN = 41;  // GPIO 41 - I2C SDA (EEPROM + I2C DACs)
+#endif
+#ifndef DAC_I2C_SCL_PIN
+const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
+#endif
+#endif // DAC_ENABLED
+
 // ===== DSP Pipeline Configuration =====
 #ifdef DSP_ENABLED
 #define DSP_MAX_STAGES       20    // Max filter stages per channel
+#define DSP_PEQ_BANDS        10    // PEQ bands occupy stages 0-9; chain stages use 10-19
 #define DSP_MAX_FIR_TAPS     256   // Max FIR taps (direct convolution)
 #define DSP_MAX_FIR_SLOTS    2     // Max concurrent FIR stages (pool-allocated, not inline)
 #define DSP_MAX_CHANNELS     4     // L1, R1, L2, R2
@@ -148,8 +162,8 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_STACK_SIZE_SENSING 4096
 #define TASK_STACK_SIZE_WEB 8192
 #define TASK_STACK_SIZE_MQTT 4096
-#define TASK_STACK_SIZE_OTA 16384
-#define TASK_STACK_SIZE_AUDIO 12288
+#define TASK_STACK_SIZE_OTA 12288
+#define TASK_STACK_SIZE_AUDIO 8192
 
 #define TASK_PRIORITY_SENSING 2 // High priority
 #define TASK_PRIORITY_WEB 1     // Medium priority

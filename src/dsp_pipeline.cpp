@@ -11,6 +11,7 @@
 #ifndef NATIVE_TEST
 #include "app_state.h"
 #include "debug_serial.h"
+#include <esp_heap_caps.h>
 #else
 // Stubs for native test builds
 #define LOG_I(...)
@@ -24,16 +25,26 @@ static inline unsigned long mock_micros() { return _mockMicros; }
 // ===== Constants =====
 static const float MAX_24BIT_F = 8388607.0f;
 
-// ===== Double-buffered State =====
+// ===== Double-buffered State (PSRAM on ESP32, static on native) =====
+#ifdef NATIVE_TEST
 static DspState _states[2];
+#else
+static DspState *_states = nullptr;
+#endif
 static volatile int _activeIndex = 0;
 static DspMetrics _metrics;
 
-// ===== FIR Data Pool (separate from DspStage union to save DRAM) =====
+// ===== FIR Data Pool (PSRAM on ESP32, static on native) =====
 // Each slot: taps[256] + delay[256+8] ~= 2.1KB. 2 states × 2 slots × 2.1KB ~= 8.3KB total
 // Delay array is DSP_MAX_FIR_TAPS + 8 because ESP-DSP S3 SIMD reads ahead of the delay line.
+#ifdef NATIVE_TEST
 static float _firTaps[2][DSP_MAX_FIR_SLOTS][DSP_MAX_FIR_TAPS];
 static float _firDelay[2][DSP_MAX_FIR_SLOTS][DSP_MAX_FIR_TAPS + 8];
+#else
+// Flat 1D pools — indexed as [stateIndex * DSP_MAX_FIR_SLOTS + firSlot] * elements
+static float *_firTapsPool = nullptr;   // 2 * DSP_MAX_FIR_SLOTS * DSP_MAX_FIR_TAPS floats
+static float *_firDelayPool = nullptr;  // 2 * DSP_MAX_FIR_SLOTS * (DSP_MAX_FIR_TAPS + 8) floats
+#endif
 static bool _firSlotUsed[DSP_MAX_FIR_SLOTS];
 
 // ===== Delay Data Pool (dynamically allocated to save DRAM) =====
@@ -42,9 +53,14 @@ static bool _firSlotUsed[DSP_MAX_FIR_SLOTS];
 static float *_delayLine[2][DSP_MAX_DELAY_SLOTS];  // Heap-allocated on demand
 static bool _delaySlotUsed[DSP_MAX_DELAY_SLOTS];
 
-// ===== Conversion Buffers (static to avoid stack allocation) =====
+// ===== Conversion Buffers (PSRAM on ESP32, static on native) =====
+#ifdef NATIVE_TEST
 static float _dspBufL[256];
 static float _dspBufR[256];
+#else
+static float *_dspBufL = nullptr;
+static float *_dspBufR = nullptr;
+#endif
 
 // ===== Forward Declarations =====
 static void dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int stateIdx);
@@ -58,15 +74,27 @@ static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int le
 
 // ===== FIR Pool Management =====
 
+#ifndef NATIVE_TEST
+// Flat pool index helpers for PSRAM-allocated FIR data
+static inline float* _fir_taps_at(int stateIndex, int firSlot) {
+    return _firTapsPool + (stateIndex * DSP_MAX_FIR_SLOTS + firSlot) * DSP_MAX_FIR_TAPS;
+}
+static inline float* _fir_delay_at(int stateIndex, int firSlot) {
+    return _firDelayPool + (stateIndex * DSP_MAX_FIR_SLOTS + firSlot) * (DSP_MAX_FIR_TAPS + 8);
+}
+#endif
+
 int dsp_fir_alloc_slot() {
     for (int i = 0; i < DSP_MAX_FIR_SLOTS; i++) {
         if (!_firSlotUsed[i]) {
             _firSlotUsed[i] = true;
             // Zero both states' data for this slot
-            memset(_firTaps[0][i], 0, sizeof(float) * DSP_MAX_FIR_TAPS);
-            memset(_firTaps[1][i], 0, sizeof(float) * DSP_MAX_FIR_TAPS);
-            memset(_firDelay[0][i], 0, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
-            memset(_firDelay[1][i], 0, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
+            for (int s = 0; s < 2; s++) {
+                float *taps = dsp_fir_get_taps(s, i);
+                float *delay = dsp_fir_get_delay(s, i);
+                if (taps) memset(taps, 0, sizeof(float) * DSP_MAX_FIR_TAPS);
+                if (delay) memset(delay, 0, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
+            }
             return i;
         }
     }
@@ -82,13 +110,23 @@ void dsp_fir_free_slot(int slot) {
 float* dsp_fir_get_taps(int stateIndex, int firSlot) {
     if (stateIndex < 0 || stateIndex > 1 || firSlot < 0 || firSlot >= DSP_MAX_FIR_SLOTS)
         return nullptr;
+#ifdef NATIVE_TEST
     return _firTaps[stateIndex][firSlot];
+#else
+    if (!_firTapsPool) return nullptr;
+    return _fir_taps_at(stateIndex, firSlot);
+#endif
 }
 
 float* dsp_fir_get_delay(int stateIndex, int firSlot) {
     if (stateIndex < 0 || stateIndex > 1 || firSlot < 0 || firSlot >= DSP_MAX_FIR_SLOTS)
         return nullptr;
+#ifdef NATIVE_TEST
     return _firDelay[stateIndex][firSlot];
+#else
+    if (!_firDelayPool) return nullptr;
+    return _fir_delay_at(stateIndex, firSlot);
+#endif
 }
 
 // ===== Delay Pool Management =====
@@ -164,14 +202,45 @@ float* dsp_delay_get_line(int stateIndex, int delaySlot) {
 // ===== Initialization =====
 
 void dsp_init() {
+#ifndef NATIVE_TEST
+    // Allocate large DSP buffers from PSRAM (one-time)
+    if (!_states) {
+        _states = (DspState *)heap_caps_calloc(2, sizeof(DspState), MALLOC_CAP_SPIRAM);
+        if (!_states) _states = (DspState *)calloc(2, sizeof(DspState));
+    }
+    if (!_firTapsPool) {
+        size_t tapsSize = 2 * DSP_MAX_FIR_SLOTS * DSP_MAX_FIR_TAPS;
+        size_t delaySize = 2 * DSP_MAX_FIR_SLOTS * (DSP_MAX_FIR_TAPS + 8);
+        _firTapsPool  = (float *)heap_caps_calloc(tapsSize, sizeof(float), MALLOC_CAP_SPIRAM);
+        _firDelayPool = (float *)heap_caps_calloc(delaySize, sizeof(float), MALLOC_CAP_SPIRAM);
+        if (!_firTapsPool)  _firTapsPool  = (float *)calloc(tapsSize, sizeof(float));
+        if (!_firDelayPool) _firDelayPool = (float *)calloc(delaySize, sizeof(float));
+    }
+    if (!_dspBufL) {
+        _dspBufL = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
+        _dspBufR = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
+        if (!_dspBufL) _dspBufL = (float *)calloc(256, sizeof(float));
+        if (!_dspBufR) _dspBufR = (float *)calloc(256, sizeof(float));
+    }
+#endif
+
     dsp_init_state(_states[0]);
     dsp_init_state(_states[1]);
     dsp_init_metrics(_metrics);
     _activeIndex = 0;
 
     // Clear FIR pool
+#ifdef NATIVE_TEST
     memset(_firTaps, 0, sizeof(_firTaps));
     memset(_firDelay, 0, sizeof(_firDelay));
+#else
+    if (_firTapsPool) {
+        size_t tapsBytes = 2 * DSP_MAX_FIR_SLOTS * DSP_MAX_FIR_TAPS * sizeof(float);
+        size_t delayBytes = 2 * DSP_MAX_FIR_SLOTS * (DSP_MAX_FIR_TAPS + 8) * sizeof(float);
+        memset(_firTapsPool, 0, tapsBytes);
+        memset(_firDelayPool, 0, delayBytes);
+    }
+#endif
     memset(_firSlotUsed, 0, sizeof(_firSlotUsed));
 
     // Clear delay pool (pointers only — actual memory is heap-allocated on demand)
@@ -204,10 +273,14 @@ void dsp_copy_active_to_inactive() {
     // Copy FIR pool data for used slots
     for (int s = 0; s < DSP_MAX_FIR_SLOTS; s++) {
         if (_firSlotUsed[s]) {
-            memcpy(_firTaps[inactiveIdx][s], _firTaps[activeIdx][s],
-                   sizeof(float) * DSP_MAX_FIR_TAPS);
-            memcpy(_firDelay[inactiveIdx][s], _firDelay[activeIdx][s],
-                   sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
+            float *srcTaps = dsp_fir_get_taps(activeIdx, s);
+            float *dstTaps = dsp_fir_get_taps(inactiveIdx, s);
+            float *srcDelay = dsp_fir_get_delay(activeIdx, s);
+            float *dstDelay = dsp_fir_get_delay(inactiveIdx, s);
+            if (srcTaps && dstTaps)
+                memcpy(dstTaps, srcTaps, sizeof(float) * DSP_MAX_FIR_TAPS);
+            if (srcDelay && dstDelay)
+                memcpy(dstDelay, srcDelay, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
         }
     }
 
@@ -239,9 +312,10 @@ void dsp_swap_config() {
                     newS.biquad.delay[0] = oldS.biquad.delay[0];
                     newS.biquad.delay[1] = oldS.biquad.delay[1];
                 } else if (newS.type == DSP_FIR && oldS.fir.firSlot >= 0 && newS.fir.firSlot >= 0) {
-                    memcpy(_firDelay[newActive][newS.fir.firSlot],
-                           _firDelay[oldActive][oldS.fir.firSlot],
-                           sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
+                    float *srcD = dsp_fir_get_delay(oldActive, oldS.fir.firSlot);
+                    float *dstD = dsp_fir_get_delay(newActive, newS.fir.firSlot);
+                    if (srcD && dstD)
+                        memcpy(dstD, srcD, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
                     newS.fir.delayPos = oldS.fir.delayPos;
                 } else if (newS.type == DSP_LIMITER) {
                     newS.limiter.envelope = oldS.limiter.envelope;
@@ -435,8 +509,9 @@ static void dsp_limiter_process(DspLimiterParams &lim, float *buf, int len, uint
 static void dsp_fir_process(DspFirParams &fir, float *buf, int len, int stateIdx) {
     if (fir.numTaps == 0 || fir.firSlot < 0 || fir.firSlot >= DSP_MAX_FIR_SLOTS) return;
 
-    float *taps = _firTaps[stateIdx][fir.firSlot];
-    float *delay = _firDelay[stateIdx][fir.firSlot];
+    float *taps = dsp_fir_get_taps(stateIdx, fir.firSlot);
+    float *delay = dsp_fir_get_delay(stateIdx, fir.firSlot);
+    if (!taps || !delay) return;
 
     fir_f32_t firState;
     memset(&firState, 0, sizeof(firState)); // Zero extra fields (decim, use_delay on ESP32)
@@ -657,13 +732,58 @@ bool dsp_set_stage_enabled(int channel, int stageIndex, bool enabled) {
     return true;
 }
 
+// ===== Chain Stage Wrappers (PEQ-aware) =====
+
+int dsp_add_chain_stage(int channel, DspStageType type, int chainPosition) {
+    // Convert chain-relative position to absolute position
+    int absPos;
+    if (chainPosition < 0) {
+        absPos = -1;  // Append (dsp_add_stage handles -1 as append)
+    } else {
+        absPos = DSP_PEQ_BANDS + chainPosition;
+    }
+    return dsp_add_stage(channel, type, absPos);
+}
+
+bool dsp_remove_chain_stage(int channel, int chainIndex) {
+    int absIndex = DSP_PEQ_BANDS + chainIndex;
+    // Prevent removing PEQ bands
+    if (absIndex < DSP_PEQ_BANDS) return false;
+    return dsp_remove_stage(channel, absIndex);
+}
+
+void dsp_ensure_peq_bands(DspState *cfg) {
+    if (!cfg) return;
+    for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
+        if (!dsp_has_peq_bands(cfg->channels[ch])) {
+            dsp_init_peq_bands(cfg->channels[ch]);
+        }
+    }
+}
+
+void dsp_copy_peq_bands(int srcChannel, int dstChannel) {
+    if (srcChannel < 0 || srcChannel >= DSP_MAX_CHANNELS) return;
+    if (dstChannel < 0 || dstChannel >= DSP_MAX_CHANNELS) return;
+    if (srcChannel == dstChannel) return;
+
+    DspState *cfg = dsp_get_inactive_config();
+    DspChannelConfig &src = cfg->channels[srcChannel];
+    DspChannelConfig &dst = cfg->channels[dstChannel];
+
+    // Copy PEQ bands (stages 0 through DSP_PEQ_BANDS-1)
+    int peqCount = src.stageCount < DSP_PEQ_BANDS ? src.stageCount : DSP_PEQ_BANDS;
+    for (int i = 0; i < peqCount; i++) {
+        dst.stages[i] = src.stages[i];
+    }
+}
+
 // ===== JSON Serialization =====
 
 #ifndef NATIVE_TEST
 #include <ArduinoJson.h>
 #endif
 
-static const char *stage_type_name(DspStageType t) {
+const char *stage_type_name(DspStageType t) {
     switch (t) {
         case DSP_BIQUAD_LPF:        return "LPF";
         case DSP_BIQUAD_HPF:        return "HPF";
@@ -802,9 +922,30 @@ void dsp_load_config_from_json(const char *json, int channel) {
     if (doc["stages"].is<JsonArray>()) {
         ch.stageCount = 0;
         JsonArray stages = doc["stages"].as<JsonArray>();
+
+        // Check if this is a legacy config (no PEQ bands) or PEQ-aware
+        bool hasPeqBands = false;
+        if (stages.size() >= (unsigned)DSP_PEQ_BANDS) {
+            JsonObject first = stages[0].as<JsonObject>();
+            const char *lbl = first["label"] | "";
+            hasPeqBands = (lbl[0] == 'P' && lbl[1] == 'E' && lbl[2] == 'Q');
+        }
+
+        if (!hasPeqBands) {
+            // Legacy config: init PEQ bands first, then load stages into chain region
+            dsp_init_peq_bands(ch);
+            // Recompute PEQ band coefficients
+            for (int b = 0; b < DSP_PEQ_BANDS; b++) {
+                dsp_compute_biquad_coeffs(ch.stages[b].biquad, ch.stages[b].type, cfg->sampleRate);
+            }
+        }
+
+        int loadIdx = hasPeqBands ? 0 : DSP_PEQ_BANDS;
+        if (hasPeqBands) ch.stageCount = 0;
+
         for (JsonObject stageObj : stages) {
-            if (ch.stageCount >= DSP_MAX_STAGES) break;
-            DspStage &s = ch.stages[ch.stageCount];
+            if (loadIdx >= DSP_MAX_STAGES) break;
+            DspStage &s = ch.stages[loadIdx];
             DspStageType type = stage_type_from_name(stageObj["type"].as<const char *>());
             dsp_init_stage(s, type);
             if (stageObj["enabled"].is<bool>()) s.enabled = stageObj["enabled"].as<bool>();
@@ -860,7 +1001,8 @@ void dsp_load_config_from_json(const char *json, int channel) {
                 if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
                 dsp_compute_compressor_makeup(s.compressor);
             }
-            ch.stageCount++;
+            loadIdx++;
+            ch.stageCount = loadIdx;
         }
     }
 }
@@ -964,9 +1106,29 @@ void dsp_import_full_config_json(const char *json) {
             ch.stageCount = 0;
 
             if (chObj["stages"].is<JsonArray>()) {
-                for (JsonObject stageObj : chObj["stages"].as<JsonArray>()) {
-                    if (ch.stageCount >= DSP_MAX_STAGES) break;
-                    DspStage &s = ch.stages[ch.stageCount];
+                JsonArray stages = chObj["stages"].as<JsonArray>();
+
+                // Check if this channel has PEQ bands
+                bool hasPeqBands = false;
+                if (stages.size() >= (unsigned)DSP_PEQ_BANDS) {
+                    JsonObject first = stages[0].as<JsonObject>();
+                    const char *lbl = first["label"] | "";
+                    hasPeqBands = (lbl[0] == 'P' && lbl[1] == 'E' && lbl[2] == 'Q');
+                }
+
+                if (!hasPeqBands) {
+                    dsp_init_peq_bands(ch);
+                    for (int b = 0; b < DSP_PEQ_BANDS; b++) {
+                        dsp_compute_biquad_coeffs(ch.stages[b].biquad, ch.stages[b].type, cfg->sampleRate);
+                    }
+                }
+
+                int loadIdx = hasPeqBands ? 0 : DSP_PEQ_BANDS;
+                if (hasPeqBands) ch.stageCount = 0;
+
+                for (JsonObject stageObj : stages) {
+                    if (loadIdx >= DSP_MAX_STAGES) break;
+                    DspStage &s = ch.stages[loadIdx];
                     DspStageType type = stage_type_from_name(stageObj["type"].as<const char *>());
                     dsp_init_stage(s, type);
                     if (stageObj["enabled"].is<bool>()) s.enabled = stageObj["enabled"].as<bool>();
@@ -1021,7 +1183,8 @@ void dsp_import_full_config_json(const char *json) {
                         if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
                         dsp_compute_compressor_makeup(s.compressor);
                     }
-                    ch.stageCount++;
+                    loadIdx++;
+                    ch.stageCount = loadIdx;
                 }
             }
             c++;

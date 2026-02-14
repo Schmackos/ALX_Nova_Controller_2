@@ -312,59 +312,70 @@ void test_gain_buffer_multiply(void) {
 
 void test_add_stage_append(void) {
     int idx = dsp_add_stage(0, DSP_BIQUAD_PEQ);
-    TEST_ASSERT_EQUAL_INT(0, idx);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS, idx); // Appends after PEQ bands
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL_INT(1, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_PEQ, cfg->channels[0].stages[0].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 1, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_PEQ, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
 }
 
 void test_add_stage_insert(void) {
-    dsp_add_stage(0, DSP_BIQUAD_LPF);
-    dsp_add_stage(0, DSP_BIQUAD_HPF);
-    int idx = dsp_add_stage(0, DSP_BIQUAD_PEQ, 1); // Insert at position 1
-    TEST_ASSERT_EQUAL_INT(1, idx);
+    // Insert stages into chain region (after PEQ bands)
+    dsp_add_stage(0, DSP_BIQUAD_LPF);   // goes to index 10
+    dsp_add_stage(0, DSP_BIQUAD_HPF);   // goes to index 11
+    int idx = dsp_add_stage(0, DSP_BIQUAD_PEQ, DSP_PEQ_BANDS + 1); // Insert at chain pos 1
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 1, idx);
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL_INT(3, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[0].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_PEQ, cfg->channels[0].stages[1].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[2].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 3, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_PEQ, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 2].type);
 }
 
 void test_remove_stage(void) {
-    dsp_add_stage(0, DSP_BIQUAD_LPF);
-    dsp_add_stage(0, DSP_BIQUAD_PEQ);
-    dsp_add_stage(0, DSP_BIQUAD_HPF);
+    dsp_add_stage(0, DSP_BIQUAD_LPF);   // index 10
+    dsp_add_stage(0, DSP_BIQUAD_PEQ);   // index 11
+    dsp_add_stage(0, DSP_BIQUAD_HPF);   // index 12
 
-    bool ok = dsp_remove_stage(0, 1); // Remove PEQ
+    bool ok = dsp_remove_stage(0, DSP_PEQ_BANDS + 1); // Remove the PEQ at chain index 1
     TEST_ASSERT_TRUE(ok);
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[0].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[1].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].type);
 }
 
 void test_reorder_stages(void) {
-    dsp_add_stage(0, DSP_BIQUAD_LPF);
-    dsp_add_stage(0, DSP_BIQUAD_PEQ);
-    dsp_add_stage(0, DSP_BIQUAD_HPF);
+    dsp_add_stage(0, DSP_BIQUAD_LPF);   // index 10
+    dsp_add_stage(0, DSP_BIQUAD_PEQ);   // index 11
+    dsp_add_stage(0, DSP_BIQUAD_HPF);   // index 12
 
-    int order[] = {2, 0, 1};
-    bool ok = dsp_reorder_stages(0, order, 3);
+    // Reorder must cover ALL stages including PEQ bands
+    int cnt = DSP_PEQ_BANDS + 3;
+    int order[DSP_MAX_STAGES];
+    // Keep PEQ bands in place (0-9)
+    for (int i = 0; i < DSP_PEQ_BANDS; i++) order[i] = i;
+    // Reorder chain stages: HPF, LPF, PEQ → indices 12, 10, 11
+    order[DSP_PEQ_BANDS + 0] = DSP_PEQ_BANDS + 2;
+    order[DSP_PEQ_BANDS + 1] = DSP_PEQ_BANDS + 0;
+    order[DSP_PEQ_BANDS + 2] = DSP_PEQ_BANDS + 1;
+    bool ok = dsp_reorder_stages(0, order, cnt);
     TEST_ASSERT_TRUE(ok);
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[0].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_PEQ, cfg->channels[0].stages[2].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_PEQ, cfg->channels[0].stages[DSP_PEQ_BANDS + 2].type);
 }
 
 void test_max_stage_limit(void) {
-    for (int i = 0; i < DSP_MAX_STAGES; i++) {
+    // PEQ bands already fill 0-9, so only 10 more chain stages can be added
+    int chainSlots = DSP_MAX_STAGES - DSP_PEQ_BANDS;
+    for (int i = 0; i < chainSlots; i++) {
         int idx = dsp_add_stage(0, DSP_BIQUAD_PEQ);
-        TEST_ASSERT_EQUAL_INT(i, idx);
+        TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + i, idx);
     }
     // Next add should fail
     int idx = dsp_add_stage(0, DSP_BIQUAD_PEQ);
@@ -751,14 +762,14 @@ void test_crossover_lr4_inserts_two_biquads(void) {
     TEST_ASSERT_TRUE(first >= 0);
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[0].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].type);
 
     // Both should be at 2000 Hz with Butterworth Q
-    TEST_ASSERT_FLOAT_WITHIN(1.0f, 2000.0f, cfg->channels[0].stages[0].biquad.frequency);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.707f, cfg->channels[0].stages[0].biquad.Q);
-    TEST_ASSERT_FLOAT_WITHIN(1.0f, 2000.0f, cfg->channels[0].stages[1].biquad.frequency);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 2000.0f, cfg->channels[0].stages[DSP_PEQ_BANDS].biquad.frequency);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.707f, cfg->channels[0].stages[DSP_PEQ_BANDS].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 2000.0f, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].biquad.frequency);
 }
 
 void test_crossover_lr2_inserts_one_biquad(void) {
@@ -767,10 +778,10 @@ void test_crossover_lr2_inserts_one_biquad(void) {
     TEST_ASSERT_TRUE(first >= 0);
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL_INT(1, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[0].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 1, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
     // LR2 should use Q=0.5 (not 0.707 which is BW2)
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.5f, cfg->channels[0].stages[0].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.5f, cfg->channels[0].stages[DSP_PEQ_BANDS].biquad.Q);
 }
 
 void test_crossover_lr8_inserts_four_biquads(void) {
@@ -780,16 +791,16 @@ void test_crossover_lr8_inserts_four_biquads(void) {
 
     DspState *cfg = dsp_get_inactive_config();
     // LR8 = BW4^2 = 2 pairs of BW4 Q values: {0.5412, 1.3066, 0.5412, 1.3066}
-    TEST_ASSERT_EQUAL_INT(4, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 4, cfg->channels[0].stageCount);
     for (int i = 0; i < 4; i++) {
-        TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[i].type);
-        TEST_ASSERT_FLOAT_WITHIN(1.0f, 500.0f, cfg->channels[0].stages[i].biquad.frequency);
+        TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS + i].type);
+        TEST_ASSERT_FLOAT_WITHIN(1.0f, 500.0f, cfg->channels[0].stages[DSP_PEQ_BANDS + i].biquad.frequency);
     }
     // BW4 Q values: Q1=0.5412, Q2=1.3066 (repeated twice for LR8)
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[0].biquad.Q);
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[1].biquad.Q);
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[2].biquad.Q);
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[3].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[DSP_PEQ_BANDS].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[DSP_PEQ_BANDS + 2].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[DSP_PEQ_BANDS + 3].biquad.Q);
 }
 
 void test_crossover_butterworth_rejects_invalid(void) {
@@ -813,7 +824,7 @@ void test_crossover_lr4_sum_flat(void) {
     DspState *cfg = dsp_get_inactive_config();
     // LPF DC gain: each biquad should have DC gain ~1.0
     for (int s = 0; s < 2; s++) {
-        DspBiquadParams &p = cfg->channels[0].stages[s].biquad;
+        DspBiquadParams &p = cfg->channels[0].stages[DSP_PEQ_BANDS + s].biquad;
         float dcGain = (p.coeffs[0] + p.coeffs[1] + p.coeffs[2]) /
                        (1.0f + p.coeffs[3] + p.coeffs[4]);
         TEST_ASSERT_FLOAT_WITHIN(0.05f, 1.0f, dcGain);
@@ -821,7 +832,7 @@ void test_crossover_lr4_sum_flat(void) {
 
     // HPF DC gain: each biquad should have DC gain ~0.0
     for (int s = 0; s < 2; s++) {
-        DspBiquadParams &p = cfg->channels[1].stages[s].biquad;
+        DspBiquadParams &p = cfg->channels[1].stages[DSP_PEQ_BANDS + s].biquad;
         float dcGain = (p.coeffs[0] + p.coeffs[1] + p.coeffs[2]) /
                        (1.0f + p.coeffs[3] + p.coeffs[4]);
         TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.0f, dcGain);
@@ -837,21 +848,21 @@ void test_bass_management_setup(void) {
     TEST_ASSERT_EQUAL_INT(0, result);
 
     DspState *cfg = dsp_get_inactive_config();
-    // Sub channel (0) should have 2 LPF stages (LR4)
-    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[0].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
+    // Sub channel (0) should have PEQ bands + 2 LPF stages (LR4)
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].type);
 
-    // Main channels (1, 2) should each have 2 HPF stages (LR4)
-    TEST_ASSERT_EQUAL_INT(2, cfg->channels[1].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[1].stages[0].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[1].stages[1].type);
+    // Main channels (1, 2) should each have PEQ bands + 2 HPF stages (LR4)
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[1].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[1].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[1].stages[DSP_PEQ_BANDS + 1].type);
 
-    TEST_ASSERT_EQUAL_INT(2, cfg->channels[2].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[2].stages[0].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[2].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF, cfg->channels[2].stages[DSP_PEQ_BANDS].type);
 
-    // Channel 3 should be untouched
-    TEST_ASSERT_EQUAL_INT(0, cfg->channels[3].stageCount);
+    // Channel 3 should only have PEQ bands (untouched)
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS, cfg->channels[3].stageCount);
 }
 
 // ===== Routing Matrix Tests =====
@@ -952,10 +963,10 @@ void test_crossover_bw4_q_values(void) {
     TEST_ASSERT_TRUE(first >= 0);
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[0].stageCount);
     // BW4: Q1 = 1/(2*sin(pi/8)) = 0.5412, Q2 = 1/(2*sin(3*pi/8)) = 1.3066
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[0].biquad.Q);
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[1].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5412f, cfg->channels[0].stages[DSP_PEQ_BANDS].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.3066f, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].biquad.Q);
 }
 
 void test_crossover_bw3_first_order_plus_biquad(void) {
@@ -965,11 +976,11 @@ void test_crossover_bw3_first_order_plus_biquad(void) {
 
     DspState *cfg = dsp_get_inactive_config();
     // BW3 = 1 first-order + 1 biquad
-    TEST_ASSERT_EQUAL_INT(2, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[0].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].type);
     // BW3 biquad Q = 1.0
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, cfg->channels[0].stages[1].biquad.Q);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].biquad.Q);
 }
 
 void test_crossover_bw1_first_order_only(void) {
@@ -978,8 +989,8 @@ void test_crossover_bw1_first_order_only(void) {
     TEST_ASSERT_TRUE(first >= 0);
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL_INT(1, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[0].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 1, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
 }
 
 void test_crossover_bw1_hpf(void) {
@@ -988,8 +999,8 @@ void test_crossover_bw1_hpf(void) {
     TEST_ASSERT_TRUE(first >= 0);
 
     DspState *cfg = dsp_get_inactive_config();
-    TEST_ASSERT_EQUAL_INT(1, cfg->channels[0].stageCount);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF_1ST, cfg->channels[0].stages[0].type);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 1, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_HPF_1ST, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
 }
 
 void test_crossover_lr12_stage_count(void) {
@@ -999,7 +1010,7 @@ void test_crossover_lr12_stage_count(void) {
 
     DspState *cfg = dsp_get_inactive_config();
     // LR12 = BW6^2. BW6 = 3 biquads. So LR12 = 6 biquads
-    TEST_ASSERT_EQUAL_INT(6, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 6, cfg->channels[0].stageCount);
 }
 
 void test_crossover_lr16_stage_count(void) {
@@ -1009,17 +1020,15 @@ void test_crossover_lr16_stage_count(void) {
 
     DspState *cfg = dsp_get_inactive_config();
     // LR16 = BW8^2. BW8 = 4 biquads. So LR16 = 8 biquads
-    TEST_ASSERT_EQUAL_INT(8, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 8, cfg->channels[0].stageCount);
 }
 
 void test_crossover_lr24_stage_count(void) {
     dsp_init();
     int first = dsp_insert_crossover_lr(0, 1000.0f, 24, 0); // LPF LR24
-    TEST_ASSERT_TRUE(first >= 0);
-
-    DspState *cfg = dsp_get_inactive_config();
-    // LR24 = BW12^2. BW12 = 6 biquads. So LR24 = 12 biquads
-    TEST_ASSERT_EQUAL_INT(12, cfg->channels[0].stageCount);
+    // LR24 = BW12^2. BW12 = 6 biquads. So LR24 = 12 biquads. But with PEQ bands (10 + 12 = 22 > 20 max)
+    // This should fail because it would exceed DSP_MAX_STAGES
+    TEST_ASSERT_TRUE(first < 0);
 }
 
 void test_crossover_lr6_has_first_order_sections(void) {
@@ -1029,13 +1038,13 @@ void test_crossover_lr6_has_first_order_sections(void) {
 
     DspState *cfg = dsp_get_inactive_config();
     // LR6 = BW3^2. BW3 = 1 first-order + 1 biquad. So LR6 = 2 first-order + 2 biquads = 4 stages
-    TEST_ASSERT_EQUAL_INT(4, cfg->channels[0].stageCount);
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 4, cfg->channels[0].stageCount);
     // First BW3 pass: 1st-order + biquad
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[0].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[1].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 1].type);
     // Second BW3 pass: 1st-order + biquad
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[2].type);
-    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[3].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF_1ST, cfg->channels[0].stages[DSP_PEQ_BANDS + 2].type);
+    TEST_ASSERT_EQUAL(DSP_BIQUAD_LPF, cfg->channels[0].stages[DSP_PEQ_BANDS + 3].type);
 }
 
 void test_crossover_lr_rejects_invalid(void) {

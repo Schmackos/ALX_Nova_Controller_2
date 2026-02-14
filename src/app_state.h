@@ -350,6 +350,56 @@ public:
   bool prevMqttDspChBypass[DSP_MAX_CHANNELS] = {};
 #endif
 
+  // ===== DAC Output State =====
+#ifdef DAC_ENABLED
+  bool dacEnabled = false;          // Master DAC enable
+  uint8_t dacVolume = 80;           // 0-100 percent
+  bool dacMute = false;             // Mute output
+  uint16_t dacDeviceId = 0x0001;    // DAC_ID_PCM5102A default
+  char dacModelName[33] = "PCM5102A";
+  uint8_t dacOutputChannels = 2;    // From driver capabilities
+  bool dacDetected = false;         // EEPROM or manual selection made
+  bool dacReady = false;            // Driver init + I2S TX active
+  uint8_t dacFilterMode = 0;        // Digital filter mode (DAC-specific)
+  uint32_t dacTxUnderruns = 0;      // TX DMA full count
+
+  void markDacDirty() { _dacDirty = true; }
+  bool isDacDirty() const { return _dacDirty; }
+  void clearDacDirty() { _dacDirty = false; }
+
+  // ===== EEPROM Diagnostics =====
+  struct EepromDiag {
+    bool scanned = false;           // Has a scan been performed?
+    bool found = false;             // Was a valid ALXD EEPROM found?
+    uint8_t eepromAddr = 0;         // I2C address where EEPROM was found
+    uint8_t i2cDevicesMask = 0;     // Bitmask of 0x50-0x57 that ACK'd
+    int i2cTotalDevices = 0;        // Total I2C devices found on bus
+    uint32_t readErrors = 0;
+    uint32_t writeErrors = 0;
+    unsigned long lastScanMs = 0;
+    // Parsed EEPROM fields (duplicated for WS/GUI access without re-reading)
+    uint16_t deviceId = 0;
+    uint8_t hwRevision = 0;
+    char deviceName[33] = {};
+    char manufacturer[33] = {};
+    uint8_t maxChannels = 0;
+    uint8_t dacI2cAddress = 0;
+    uint8_t flags = 0;
+    uint8_t numSampleRates = 0;
+    uint32_t sampleRates[4] = {};
+  };
+  EepromDiag eepromDiag;
+
+  void markEepromDirty() { _eepromDirty = true; }
+  bool isEepromDirty() const { return _eepromDirty; }
+  void clearEepromDirty() { _eepromDirty = false; }
+
+  // MQTT state tracking for DAC
+  bool prevMqttDacEnabled = false;
+  uint8_t prevMqttDacVolume = 80;
+  bool prevMqttDacMute = false;
+#endif
+
   // MQTT state tracking for boot animation
 #ifdef GUI_ENABLED
   bool prevMqttBootAnimEnabled = true;
@@ -404,6 +454,10 @@ private:
 #ifdef DSP_ENABLED
   bool _dspConfigDirty = false;
   bool _dspMetricsDirty = false;
+#endif
+#ifdef DAC_ENABLED
+  bool _dacDirty = false;
+  bool _eepromDirty = false;
 #endif
 };
 

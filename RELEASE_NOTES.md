@@ -1,8 +1,104 @@
 # Release Notes
 
+## Version 1.8.0
+
+## New Features
+- [2026-02-14] feat: DAC output HAL, EEPROM programming, DSP PEQ enhancements, version 1.8.0
+
+DAC Output HAL:
+- Plugin driver architecture (DacDriver abstract + registry + PCM5102A driver)
+- I2S full-duplex on I2S_NUM_0 (TX+RX shared clocks), software volume
+- Web UI, WebSocket, REST API integration, LittleFS settings persistence
+
+EEPROM Programming & Diagnostics:
+- AT24C02 auto-detect with ALXD format, serialize/write/erase/scan
+- I2C bus recovery, ACK polling for reliable writes, page-aware programming
+- Web UI programming card + debug diagnostics card with hex dump
+- TFT GUI debug screen EEPROM section
+- Clear state display: Programmed/Empty/Not Found
+- 28 native tests (parse + serialize)
+
+DSP Enhancements:
+- 10-band parametric EQ per channel, crossover presets, routing matrix
+- DSP settings export/import, bass management
+
+25 DAC HAL tests, 28 EEPROM tests, PEQ tests (`7642bab`)
+- [2026-02-14] feat: DAC output HAL, EEPROM programming, DSP PEQ enhancements, version 1.8.0
+
+DAC Output HAL:
+- Plugin driver architecture (DacDriver abstract + registry + PCM5102A driver)
+- I2S full-duplex on I2S_NUM_0 (TX+RX shared clocks), software volume
+- Web UI, WebSocket, REST API integration, LittleFS settings persistence
+
+EEPROM Programming & Diagnostics:
+- AT24C02 auto-detect with ALXD format, serialize/write/erase/scan
+- I2C bus recovery, ACK polling for reliable writes, page-aware programming
+- Web UI programming card + debug diagnostics card with hex dump
+- TFT GUI debug screen EEPROM section
+- Clear state display: Programmed/Empty/Not Found
+- 28 native tests (parse + serialize)
+
+DSP Enhancements:
+- 10-band parametric EQ per channel, crossover presets, routing matrix
+- DSP settings export/import, bass management
+
+25 DAC HAL tests, 28 EEPROM tests, PEQ tests (`3960b43`)
+
+### DAC Output HAL
+- Plugin driver architecture with DacDriver abstract class and compile-time registry
+- PCM5102A driver: I2S-only, software volume via log-perceptual curve
+- I2S full-duplex on I2S_NUM_0 (TX+RX), GPIO 40 data out, shared clocks with ADC1
+- Settings persistence in `/dac_config.json` on LittleFS
+- Web UI: "DAC Output" card on Audio tab (enable, volume, mute, driver select)
+- WebSocket: `sendDacState()`, commands for enable/volume/mute/filter
+- REST API: GET/POST `/api/dac`, GET `/api/dac/drivers`
+
+### EEPROM Programming & Diagnostics
+- AT24C02 EEPROM auto-detect on I2C bus (0x50-0x57) with ALXD format
+- Serialize, page-aware write (ACK polling), erase, raw read, full I2C bus scan
+- I2C bus recovery (SCL toggling for stuck SDA lines)
+- Web UI: "EEPROM Programming" card (Audio tab) with driver presets, form fields, program/erase
+- Web UI: "EEPROM / I2C" diagnostics card (Debug tab) with parsed fields, hex dump, re-scan
+- Clear EEPROM state display: Programmed (green), Empty (orange), Not Found (red)
+- TFT GUI: EEPROM section on Debug screen
+- REST API: GET/POST `/api/dac/eeprom`, erase, scan, presets endpoints
+- WebSocket: eepromScan, eepromProgram, eepromErase commands
+- 28 native tests (17 parse + 11 serialize)
+
+### DSP Enhancements
+- 10-band parametric EQ (PEQ) per channel with dedicated stage slots
+- Crossover bass management and 4x4 routing matrix presets
+- DSP settings export/import via REST API
+
+### Other Improvements
+- MQTT HA discovery for DAC entities (deferred to future release)
+- OTA updater robustness improvements
+- GUI navigation and DSP screen enhancements
+
+---
+
 ## Version 1.7.1
 
 ## New Features
+- [2026-02-12] feat: ESP-DSP extended features, decouple debug toggle gating, version 1.7.1
+
+ESP-DSP optimizations:
+- Radix-4 FFT (dsps_fft4r_fc32) replaces Radix-2 for 20-27% speedup on S3
+- 6 selectable FFT window types (Hann, Blackman, Blackman-Harris, Blackman-Nuttall, Nuttall, Flat-Top)
+- SNR/SFDR per-ADC analysis via dsps_snr_f32/dsps_sfdr_f32
+- Vector math SIMD (dsps_mulc_f32) replaces manual gain/polarity loops in DSP pipeline
+- Routing matrix SIMD (dsps_mulc_f32 + dsps_add_f32) replaces per-sample inner loops
+- Spectrum band edges start at 0 Hz (bin 0 included)
+- Native test fallbacks in lib/esp_dsp_lite/ (23 new tests)
+- MQTT HA discovery entities for FFT window select, per-ADC SNR/SFDR sensors
+
+Debug toggle decoupling:
+- Each debug sub-toggle now independently gates its own WebSocket data
+- Hardware Stats toggle gates CPU/memory/storage/WiFi/ADC/crash data
+- I2S Metrics toggle independently gates I2S config and runtime data
+- Task Monitor already correctly gated
+- Main loop broadcasts when any sub-toggle is active (not just HW Stats)
+- Fixed "ADC 2 (Slave)" label to "ADC 2 (Master)" in web UI (`f2576c4`)
 - [2026-02-12] feat: ESP-DSP extended features, decouple debug toggle gating, version 1.7.1
 
 ESP-DSP optimizations:

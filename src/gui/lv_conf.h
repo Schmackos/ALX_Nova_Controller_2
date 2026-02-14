@@ -23,15 +23,13 @@
    MEMORY SETTINGS
  *====================*/
 
-/* Size of the memory available for `lv_malloc()` in bytes (>= 2kB) */
-#define LV_MEM_SIZE (48 * 1024U) /* 48KB */
-
-/* Set an address for the memory pool instead of allocating it as a normal array.
- * Can be in external SRAM too. */
-#define LV_MEM_ADR 0 /* 0: unused */
-
-/* Use the standard `malloc` and `free` instead of LVGL's built-in allocator */
-#define LV_MEM_CUSTOM 0
+/* Use PSRAM-backed heap_caps allocator instead of LVGL's built-in 48KB pool.
+ * This frees ~48KB of internal SRAM for WiFi/MQTT/WebSocket buffers. */
+#define LV_MEM_CUSTOM 1
+#define LV_MEM_CUSTOM_INCLUDE <esp_heap_caps.h>
+#define LV_MEM_CUSTOM_ALLOC(size)      heap_caps_malloc(size, MALLOC_CAP_SPIRAM)
+#define LV_MEM_CUSTOM_FREE(p)          heap_caps_free(p)
+#define LV_MEM_CUSTOM_REALLOC(p, size) heap_caps_realloc(p, size, MALLOC_CAP_SPIRAM)
 
 /*====================
    HAL SETTINGS

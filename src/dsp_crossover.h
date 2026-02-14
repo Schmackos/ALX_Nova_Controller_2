@@ -17,6 +17,10 @@ int dsp_insert_crossover_butterworth(int channel, float freq, int order, int rol
 // LR(2M) = BW(M) squared — each BW(M) section appears twice.
 int dsp_insert_crossover_lr(int channel, float freq, int order, int role);
 
+// Remove existing LPF/HPF chain stages (>= DSP_PEQ_BANDS) on a channel
+// Call before inserting new crossover to avoid duplication.
+void dsp_clear_crossover_stages(int channel);
+
 // Legacy convenience functions (delegate to generic implementations)
 int dsp_insert_crossover_lr2(int channel, float freq, int role);
 int dsp_insert_crossover_lr4(int channel, float freq, int role);

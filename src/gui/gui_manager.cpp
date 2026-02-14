@@ -23,6 +23,7 @@
 #include "../debug_serial.h"
 #include <Arduino.h>
 #include <esp_task_wdt.h>
+#include <esp_heap_caps.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <lvgl.h>
@@ -233,6 +234,10 @@ static void gui_task(void *param) {
 #ifdef DSP_ENABLED
             else if (cur == SCR_DSP_MENU) {
                 scr_dsp_refresh();
+            } else if (cur == SCR_PEQ_MENU) {
+                scr_peq_refresh();
+            } else if (cur == SCR_PEQ_BAND_EDIT) {
+                scr_peq_band_refresh();
             }
 #endif
         }
@@ -268,6 +273,8 @@ static void register_screens(void) {
     gui_nav_register(SCR_SIGGEN_MENU, scr_siggen_create);
 #ifdef DSP_ENABLED
     gui_nav_register(SCR_DSP_MENU, scr_dsp_create);
+    gui_nav_register(SCR_PEQ_MENU, scr_peq_create);
+    gui_nav_register(SCR_PEQ_BAND_EDIT, scr_peq_band_create);
 #endif
 }
 
@@ -310,7 +317,9 @@ void gui_init(void) {
     /* Boot animation + desktop push happen inside gui_task so all
        lv_timer_handler() calls stay in one FreeRTOS context. */
 
-    /* Start FreeRTOS GUI task on Core 1 */
+    /* Start FreeRTOS GUI task on Core 1
+     * NOTE: Task stacks MUST be in internal SRAM on ESP32 — PSRAM fails
+     * xPortcheckValidStackMem() assertion in FreeRTOS port. */
     xTaskCreatePinnedToCore(
         gui_task,
         "gui_task",

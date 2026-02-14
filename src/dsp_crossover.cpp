@@ -71,6 +71,20 @@ static int insert_butterworth_filter(int channel, float freq, int order,
     return firstIdx;
 }
 
+void dsp_clear_crossover_stages(int channel) {
+    if (channel < 0 || channel >= DSP_MAX_CHANNELS) return;
+    DspState *cfg = dsp_get_inactive_config();
+    DspChannelConfig &ch = cfg->channels[channel];
+    // Walk backwards through chain stages (>= DSP_PEQ_BANDS) and remove LPF/HPF types
+    for (int i = ch.stageCount - 1; i >= DSP_PEQ_BANDS; i--) {
+        DspStageType t = ch.stages[i].type;
+        if (t == DSP_BIQUAD_LPF || t == DSP_BIQUAD_HPF ||
+            t == DSP_BIQUAD_LPF_1ST || t == DSP_BIQUAD_HPF_1ST) {
+            dsp_remove_stage(channel, i);
+        }
+    }
+}
+
 int dsp_insert_crossover_butterworth(int channel, float freq, int order, int role) {
     if (order < 1 || order > 8) return -1;
     DspStageType type2nd = role == 0 ? DSP_BIQUAD_LPF : DSP_BIQUAD_HPF;

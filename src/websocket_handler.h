@@ -33,6 +33,9 @@ void sendDebugState();
 void sendDspState();
 void sendDspMetrics();
 #endif
+#ifdef DAC_ENABLED
+void sendDacState();
+#endif
 
 // ===== Audio Streaming =====
 void sendAudioData();

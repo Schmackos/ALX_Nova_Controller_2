@@ -227,11 +227,70 @@ inline void dsp_init_channel(DspChannelConfig &ch) {
     ch.stageCount = 0;
 }
 
+// Initialize PEQ bands (stages 0 through DSP_PEQ_BANDS-1) as disabled PEQ filters.
+// Existing stages (if any) are shifted to chain region (index >= DSP_PEQ_BANDS).
+inline void dsp_init_peq_bands(DspChannelConfig &ch) {
+    // Shift existing stages to chain region
+    if (ch.stageCount > 0) {
+        int chainCount = ch.stageCount;
+        if (chainCount + DSP_PEQ_BANDS > DSP_MAX_STAGES)
+            chainCount = DSP_MAX_STAGES - DSP_PEQ_BANDS;
+        // Move from end to avoid overlap
+        for (int i = chainCount - 1; i >= 0; i--) {
+            ch.stages[DSP_PEQ_BANDS + i] = ch.stages[i];
+        }
+        ch.stageCount = DSP_PEQ_BANDS + chainCount;
+    } else {
+        ch.stageCount = DSP_PEQ_BANDS;
+    }
+    // Initialize PEQ bands as disabled, spread logarithmically across spectrum
+    static const float peqDefaultFreqs[10] = {
+        31.0f, 63.0f, 125.0f, 250.0f, 500.0f,
+        1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f
+    };
+    for (int i = 0; i < DSP_PEQ_BANDS; i++) {
+        dsp_init_stage(ch.stages[i], DSP_BIQUAD_PEQ);
+        ch.stages[i].enabled = false;
+        ch.stages[i].biquad.frequency = (i < 10) ? peqDefaultFreqs[i] : 1000.0f;
+        ch.stages[i].biquad.gain = 0.0f;
+        ch.stages[i].biquad.Q = 1.0f;
+        char label[16];
+        // snprintf may not be available in all inline contexts, use simple construction
+        ch.stages[i].label[0] = 'P'; ch.stages[i].label[1] = 'E';
+        ch.stages[i].label[2] = 'Q'; ch.stages[i].label[3] = ' ';
+        if (i < 9) {
+            ch.stages[i].label[4] = '1' + i;
+            ch.stages[i].label[5] = '\0';
+        } else {
+            ch.stages[i].label[4] = '1';
+            ch.stages[i].label[5] = '0';
+            ch.stages[i].label[6] = '\0';
+        }
+    }
+}
+
+// Check if a stage index is in the PEQ region (0 through DSP_PEQ_BANDS-1).
+inline bool dsp_is_peq_index(int stageIndex) {
+    return stageIndex >= 0 && stageIndex < DSP_PEQ_BANDS;
+}
+
+// Count chain stages (index >= DSP_PEQ_BANDS).
+inline int dsp_chain_stage_count(const DspChannelConfig &ch) {
+    return ch.stageCount > DSP_PEQ_BANDS ? ch.stageCount - DSP_PEQ_BANDS : 0;
+}
+
+// Check if channel has PEQ bands initialized (stages 0-9 are biquad type with "PEQ" prefix labels).
+inline bool dsp_has_peq_bands(const DspChannelConfig &ch) {
+    if (ch.stageCount < DSP_PEQ_BANDS) return false;
+    return ch.stages[0].label[0] == 'P' && ch.stages[0].label[1] == 'E' && ch.stages[0].label[2] == 'Q';
+}
+
 inline void dsp_init_state(DspState &st) {
     st.globalBypass = false;
     st.sampleRate = 48000;
     for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
         dsp_init_channel(st.channels[i]);
+        dsp_init_peq_bands(st.channels[i]);
     }
 }
 
@@ -265,6 +324,15 @@ int dsp_add_stage(int channel, DspStageType type, int position = -1);
 bool dsp_remove_stage(int channel, int stageIndex);
 bool dsp_reorder_stages(int channel, const int *newOrder, int count);
 bool dsp_set_stage_enabled(int channel, int stageIndex, bool enabled);
+
+// Chain stage wrappers (operate only on indices >= DSP_PEQ_BANDS)
+int dsp_add_chain_stage(int channel, DspStageType type, int chainPosition = -1);
+bool dsp_remove_chain_stage(int channel, int chainIndex);
+
+// PEQ band helpers
+void dsp_ensure_peq_bands(DspState *cfg);  // Ensure all channels have PEQ bands
+void dsp_copy_peq_bands(int srcChannel, int dstChannel);  // Copy PEQ bands between channels
+const char *stage_type_name(DspStageType t);               // Stage type to string name
 
 // FIR pool access (taps/delay stored outside DspStage union to save DRAM)
 int dsp_fir_alloc_slot();                              // Allocate slot, returns index or -1

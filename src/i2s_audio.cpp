@@ -6,6 +6,9 @@
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #endif
+#ifdef DAC_ENABLED
+#include "dac_hal.h"
+#endif
 #ifndef NATIVE_TEST
 #include "dsps_fft4r.h"
 #include "dsps_wind.h"
@@ -29,6 +32,7 @@
 #include <driver/i2s.h>
 #include <driver/gpio.h>
 #include <esp_task_wdt.h>
+#include <esp_heap_caps.h>
 #include <soc/i2s_struct.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -275,18 +279,29 @@ static int32_t _dcPrevInR[NUM_AUDIO_ADCS] = {};
 static float _dcPrevOutL[NUM_AUDIO_ADCS] = {};
 static float _dcPrevOutR[NUM_AUDIO_ADCS] = {};
 
-// Waveform accumulation state per ADC
+// Waveform accumulation state per ADC — PSRAM-allocated on ESP32, static on native
+#ifdef NATIVE_TEST
 static float _wfAccum[NUM_AUDIO_ADCS][WAVEFORM_BUFFER_SIZE];
 static uint8_t _wfOutput[NUM_AUDIO_ADCS][WAVEFORM_BUFFER_SIZE];
+#else
+static float *_wfAccum[NUM_AUDIO_ADCS] = {};
+static uint8_t *_wfOutput[NUM_AUDIO_ADCS] = {};
+#endif
 static volatile bool _wfReady[NUM_AUDIO_ADCS] = {};
 static int _wfFramesSeen[NUM_AUDIO_ADCS] = {};
 static int _wfTargetFrames = 2400; // shared, recalculated from audioUpdateRate
 
-// FFT state per ADC
+// FFT state per ADC — PSRAM-allocated on ESP32, static on native
+#ifdef NATIVE_TEST
 static float _fftRing[NUM_AUDIO_ADCS][FFT_SIZE];
+static float _fftData[FFT_SIZE * 2];
+static float _fftWindow[FFT_SIZE];
+#else
+static float *_fftRing[NUM_AUDIO_ADCS] = {};
+static float *_fftData = nullptr;
+static float *_fftWindow = nullptr;
+#endif
 static int _fftRingPos[NUM_AUDIO_ADCS] = {};
-static float _fftData[FFT_SIZE * 2];      // ESP-DSP interleaved [Re,Im,...] / arduinoFFT real array
-static float _fftWindow[FFT_SIZE];         // Pre-computed window
 static FftWindowType _currentWindowType = FFT_WINDOW_HANN;
 static bool _fftInitialized = false;
 static float _spectrumOutput[NUM_AUDIO_ADCS][SPECTRUM_BANDS];
@@ -464,6 +479,13 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
     }
 #endif
 
+    // DAC output: route ADC1 post-DSP audio to I2S TX (non-blocking)
+#ifdef DAC_ENABLED
+    if (a == 0 && AppState::getInstance().dacEnabled && AppState::getInstance().dacReady) {
+        dac_output_write(buffer, stereo_frames);
+    }
+#endif
+
     // Compute RMS
     float rmsL = audio_compute_rms(buffer, stereo_frames, 0, 2);
     float rmsR = audio_compute_rms(buffer, stereo_frames, 1, 2);
@@ -589,8 +611,9 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
 
 static void audio_capture_task(void *param) {
     const int BUFFER_SAMPLES = DMA_BUF_LEN * 2; // stereo
-    int32_t buf1[BUFFER_SAMPLES];
-    int32_t buf2[BUFFER_SAMPLES];
+    // Static to keep off task stack (4KB) — safe since only one audio task instance
+    static int32_t buf1[BUFFER_SAMPLES];
+    static int32_t buf2[BUFFER_SAMPLES];
 
     unsigned long prevTime = millis();
     unsigned long lastDumpTime = 0;
@@ -715,14 +738,20 @@ static void audio_capture_task(void *param) {
         bool doDump = (now - lastDumpTime >= 5000);
         if (doDump) {
             lastDumpTime = now;
-            LOG_I("[Audio] ADC1=%.1fdB flr=%.1f adcs=%d",
+            // Per-ADC log — distinguishes failure modes:
+            // zb high + az=0 + tot=0 → DMA timeout, slave not clocking (GPIO matrix / wiring)
+            // zb low  + az high      → Slave clocking OK, no audio (no PCM1808)
+            // errs > 0               → I2S driver error (bus fault, DMA overflow)
+            LOG_I("[Audio] ADC1=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu adcs=%d",
                   _analysis.adc[0].dBFS, _diagnostics.adc[0].noiseFloorDbfs,
+                  _diagnostics.adc[0].status,
+                  _diagnostics.adc[0].i2sReadErrors,
+                  _diagnostics.adc[0].zeroByteReads,
+                  _diagnostics.adc[0].allZeroBuffers,
+                  _diagnostics.adc[0].consecutiveZeros,
+                  _diagnostics.adc[0].totalBuffersRead,
                   _numAdcsDetected);
             if (_adc2InitOk) {
-                // Enhanced ADC2 log — distinguishes failure modes:
-                // zb high + az=0 + tot=0 → DMA timeout, slave not clocking (GPIO matrix / wiring)
-                // zb low  + az high      → Slave clocking OK, no audio (no PCM1808 #2)
-                // errs > 0               → I2S driver error (bus fault, DMA overflow)
                 LOG_I("[Audio] ADC2=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu",
                       _analysis.adc[1].dBFS, _diagnostics.adc[1].noiseFloorDbfs,
                       _diagnostics.adc[1].status,
@@ -732,6 +761,9 @@ static void audio_capture_task(void *param) {
                       _diagnostics.adc[1].consecutiveZeros,
                       _diagnostics.adc[1].totalBuffersRead);
             }
+#ifdef DAC_ENABLED
+            dac_periodic_log();
+#endif
         }
 
         // Detect number of active ADCs (check every buffer)
@@ -809,12 +841,39 @@ void i2s_audio_init() {
     // Reset diagnostics
     _diagnostics = AudioDiagnostics{};
 
+    // Allocate FFT/waveform buffers from PSRAM (one-time, ~22.5KB off internal SRAM)
+    // Use heap_caps_calloc directly — ps_calloc requires psramFound() which may not
+    // be initialized on all board configs, but MALLOC_CAP_SPIRAM works via heap_caps.
+    if (!_fftData) {
+        _fftData    = (float *)heap_caps_calloc(FFT_SIZE * 2, sizeof(float), MALLOC_CAP_SPIRAM);
+        _fftWindow  = (float *)heap_caps_calloc(FFT_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
+        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+            _fftRing[a]  = (float *)heap_caps_calloc(FFT_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
+            _wfAccum[a]  = (float *)heap_caps_calloc(WAVEFORM_BUFFER_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
+            _wfOutput[a] = (uint8_t *)heap_caps_calloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t), MALLOC_CAP_SPIRAM);
+        }
+        // Fallback to internal SRAM if PSRAM unavailable
+        if (!_fftData)   _fftData   = (float *)calloc(FFT_SIZE * 2, sizeof(float));
+        if (!_fftWindow) _fftWindow = (float *)calloc(FFT_SIZE, sizeof(float));
+        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+            if (!_fftRing[a])  _fftRing[a]  = (float *)calloc(FFT_SIZE, sizeof(float));
+            if (!_wfAccum[a])  _wfAccum[a]  = (float *)calloc(WAVEFORM_BUFFER_SIZE, sizeof(float));
+            if (!_wfOutput[a]) _wfOutput[a] = (uint8_t *)calloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t));
+        }
+        if (!_fftData || !_fftWindow) {
+            LOG_E("[Audio] FATAL: FFT buffer allocation failed!");
+            return;
+        }
+        LOG_I("[Audio] FFT/waveform buffers allocated (%s)",
+              heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0 ? "PSRAM" : "internal");
+    }
+
     _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
     for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
-        memset(_wfAccum[a], 0, sizeof(_wfAccum[a]));
+        if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
         _wfFramesSeen[a] = 0;
         _wfReady[a] = false;
-        memset(_fftRing[a], 0, sizeof(_fftRing[a]));
+        if (_fftRing[a]) memset(_fftRing[a], 0, FFT_SIZE * sizeof(float));
         _fftRingPos[a] = 0;
         _spectrumReady[a] = false;
         _lastFftTime[a] = 0;
@@ -847,6 +906,10 @@ void i2s_audio_init() {
 
 #ifdef DSP_ENABLED
     dsp_init();
+#endif
+
+#ifdef DAC_ENABLED
+    dac_output_init();
 #endif
 
     xTaskCreatePinnedToCore(
@@ -939,7 +1002,7 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     _wfTargetFrames = rate * AppState::getInstance().audioUpdateRate / 1000;
     for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
         _wfFramesSeen[a] = 0;
-        memset(_wfAccum[a], 0, sizeof(_wfAccum[a]));
+        if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
     }
 
     if (_adc2InitOk) _adc2InitOk = i2s_configure_adc2(rate);

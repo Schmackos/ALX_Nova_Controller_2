@@ -8,5 +8,11 @@
 lv_obj_t *scr_dsp_create(void);
 void scr_dsp_refresh(void);
 
+lv_obj_t *scr_peq_create(void);
+void scr_peq_refresh(void);
+
+lv_obj_t *scr_peq_band_create(void);
+void scr_peq_band_refresh(void);
+
 #endif /* GUI_ENABLED && DSP_ENABLED */
 #endif /* SCR_DSP_H */
