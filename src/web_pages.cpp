@@ -2927,15 +2927,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- Audio Settings -->
             <div class="card">
                 <div class="card-title">Audio Settings</div>
-                <div class="form-group">
-                    <label class="form-label">ADC Input 1</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="adcEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
+                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
+                    <label class="form-label" style="margin:0">ADC Input 1</label>
+                    <label class="switch"><input type="checkbox" id="adcEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">ADC Input 2</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="adcEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
+                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
+                    <label class="form-label" style="margin:0">ADC Input 2</label>
+                    <label class="switch"><input type="checkbox" id="adcEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Update Rate</label>

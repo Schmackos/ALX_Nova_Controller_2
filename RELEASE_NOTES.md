@@ -15,6 +15,19 @@
 - Convolution engine with ESP-DSP lite fallbacks (conv, corr, fird)
 - DSP_MAX_STAGES bumped 20→24 for PEQ + chain headroom
 - MQTT/WS/REST/GUI integration for all new features
+- 708 native tests passing (`722b25e`)
+- [2026-02-15] feat: DSP presets, gain ramp, Linkwitz transform, USB audio, ADC toggle, convolution engine
+
+- DSP config presets: 4 named slots, save/load full config + routing matrix
+- Fix preset save crash (stack overflow): heap-allocate 8KB/4KB buffers, debounced save
+- Gain ramp: exponential per-sample smoothing (5ms tau) prevents audible clicks
+- Linkwitz Transform biquad filter type for subwoofer alignment
+- USB digital audio input via TinyUSB UAC2 on native USB OTG
+- Per-ADC enable/disable toggle with I2S driver reinit safety (audioPaused flag)
+- Delay alignment measurement module
+- Convolution engine with ESP-DSP lite fallbacks (conv, corr, fird)
+- DSP_MAX_STAGES bumped 20→24 for PEQ + chain headroom
+- MQTT/WS/REST/GUI integration for all new features
 - 708 native tests passing (`8203891`)
 - [2026-02-15] feat: DSP presets, gain ramp, Linkwitz transform, USB audio, ADC toggle, convolution engine
 
@@ -35,7 +48,10 @@
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-15] fix: Align ADC Input labels with toggle switches in Audio Settings
+
+Use flexbox instead of float:right so label and switch sit on the same row. (`b8f8ed0`)
+
 
 ## Technical Details
 - Version bump to 1.8.1
