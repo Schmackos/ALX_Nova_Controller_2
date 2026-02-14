@@ -1226,7 +1226,18 @@ void sendHardwareStats() {
   doc["cpu"]["usageCore0"] = cpuUsageCore0;
   doc["cpu"]["usageCore1"] = cpuUsageCore1;
   doc["cpu"]["usageTotal"] = (cpuUsageCore0 + cpuUsageCore1) / 2.0;
-  doc["cpu"]["temperature"] = temperatureRead();
+  // temperatureRead() uses SAR ADC spinlock which can deadlock with I2S ADC,
+  // causing interrupt WDT on Core 1. Cache the value on a slow timer instead.
+  {
+    static float cachedTemp = 0.0f;
+    static unsigned long lastTempRead = 0;
+    unsigned long now = millis();
+    if (now - lastTempRead > 10000 || lastTempRead == 0) {
+      lastTempRead = now;
+      cachedTemp = temperatureRead();
+    }
+    doc["cpu"]["temperature"] = cachedTemp;
+  }
 
   // === Hardware Stats sections (gated by debugHwStats) ===
   if (appState.debugHwStats) {

@@ -795,8 +795,10 @@ void loop() {
   }
 
   // Periodic firmware check (every 5 minutes) - non-blocking via FreeRTOS task
+  // Skip when heap is critical — TLS buffers need ~16KB and would worsen fragmentation
   if (!appState.isAPMode && WiFi.status() == WL_CONNECTED &&
-      !appState.otaInProgress && !isOTATaskRunning()) {
+      !appState.otaInProgress && !isOTATaskRunning() &&
+      !appState.heapCritical) {
     unsigned long currentMillis = millis();
     if (currentMillis - appState.lastOTACheck >= OTA_CHECK_INTERVAL ||
         appState.lastOTACheck == 0) {
