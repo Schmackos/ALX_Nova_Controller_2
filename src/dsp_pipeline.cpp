@@ -1177,6 +1177,12 @@ static void dsp_multiband_comp_process(DspMultibandCompParams &mb, float *buf, i
 
 int dsp_add_stage(int channel, DspStageType type, int position) {
     if (channel < 0 || channel >= DSP_MAX_CHANNELS) return -1;
+#ifndef NATIVE_TEST
+    if (AppState::getInstance().heapCritical) {
+        LOG_W("[DSP] Heap critical — refusing to add stage");
+        return -1;
+    }
+#endif
     DspState *cfg = dsp_get_inactive_config();
     DspChannelConfig &ch = cfg->channels[channel];
     if (ch.stageCount >= DSP_MAX_STAGES) return -1;

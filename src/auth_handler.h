@@ -7,12 +7,12 @@
 extern WebServer server;
 
 #define MAX_SESSIONS 5
-#define SESSION_TIMEOUT 3600000 // 1 hour in milliseconds
+#define SESSION_TIMEOUT_US 3600000000ULL // 1 hour in microseconds
 
 struct Session {
   String sessionId;
-  unsigned long createdAt;
-  unsigned long lastSeen;
+  uint64_t createdAt;
+  uint64_t lastSeen;
 };
 
 extern Session activeSessions[MAX_SESSIONS];

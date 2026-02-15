@@ -458,6 +458,9 @@ bool dac_output_is_ready() {
 void dac_output_init() {
     AppState& as = AppState::getInstance();
 
+    // Initialize I2C mutex for thread-safe EEPROM access
+    dac_eeprom_init_mutex();
+
     // Load persisted settings
     dac_load_settings();
 

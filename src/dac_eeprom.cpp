@@ -6,6 +6,27 @@
 
 #ifndef NATIVE_TEST
 #include <Wire.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
+static SemaphoreHandle_t _i2c_mutex = nullptr;
+
+void dac_eeprom_init_mutex() {
+    if (!_i2c_mutex) {
+        _i2c_mutex = xSemaphoreCreateRecursiveMutex();
+    }
+}
+
+static bool i2c_mutex_take(TickType_t timeout = pdMS_TO_TICKS(1000)) {
+    if (!_i2c_mutex) return true; // No mutex yet, allow access
+    return xSemaphoreTakeRecursive(_i2c_mutex, timeout) == pdTRUE;
+}
+
+static void i2c_mutex_give() {
+    if (_i2c_mutex) xSemaphoreGiveRecursive(_i2c_mutex);
+}
+#else
+void dac_eeprom_init_mutex() {} // No-op for native tests
 #endif
 
 // ===== EEPROM Format Layout =====
@@ -232,6 +253,11 @@ bool dac_eeprom_scan(DacEepromData* out, uint8_t eepromMask) {
     if (!out) return false;
     memset(out, 0, sizeof(DacEepromData));
 
+    if (!i2c_mutex_take()) {
+        LOG_W("[DAC] EEPROM scan: I2C mutex timeout");
+        return false;
+    }
+
     i2c_init();
 
     for (uint8_t addr = DAC_EEPROM_ADDR_START; addr <= DAC_EEPROM_ADDR_END; addr++) {
@@ -277,17 +303,23 @@ bool dac_eeprom_scan(DacEepromData* out, uint8_t eepromMask) {
             out->i2cAddress = addr;
             LOG_I("[DAC] EEPROM parsed: %s by %s (ID=0x%04X, rev=%d)",
                   out->deviceName, out->manufacturer, out->deviceId, out->hwRevision);
+            i2c_mutex_give();
             return true;
         }
     }
 
     LOG_I("[DAC] No EEPROM found on I2C bus");
+    i2c_mutex_give();
     return false;
 }
 
 // ===== Public Read Raw (for hex dump) =====
 bool dac_eeprom_read_raw(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, int len) {
     if (!buf || len <= 0) return false;
+    if (!i2c_mutex_take()) {
+        LOG_W("[DAC] EEPROM read_raw: I2C mutex timeout");
+        return false;
+    }
     // Read in 16-byte chunks (AT24C02 can do sequential reads up to page boundary)
     int remaining = len;
     int offset = 0;
@@ -295,11 +327,13 @@ bool dac_eeprom_read_raw(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, int len
         int chunk = (remaining > 16) ? 16 : remaining;
         if (!eeprom_read_block(i2cAddr, (uint8_t)(memAddr + offset), &buf[offset], chunk)) {
             LOG_W("[DAC] EEPROM raw read failed at 0x%02X+0x%02X", i2cAddr, memAddr + offset);
+            i2c_mutex_give();
             return false;
         }
         offset += chunk;
         remaining -= chunk;
     }
+    i2c_mutex_give();
     return true;
 }
 
@@ -370,6 +404,11 @@ static bool eeprom_write_probe(uint8_t i2cAddr) {
 bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
     if (!data || len <= 0 || len > DAC_EEPROM_TOTAL_SIZE) return false;
 
+    if (!i2c_mutex_take()) {
+        LOG_W("[DAC] EEPROM write: I2C mutex timeout");
+        return false;
+    }
+
     LOG_I("[DAC] EEPROM write: addr=0x%02X len=%d", i2cAddr, len);
 
     // Ensure I2C bus is in known-good state
@@ -378,6 +417,7 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
     // Probe test: write a single byte to detect write-protection early
     if (!eeprom_write_probe(i2cAddr)) {
         LOG_E("[DAC] EEPROM write aborted — probe test failed");
+        i2c_mutex_give();
         return false;
     }
 
@@ -396,6 +436,7 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
         }
         if (Wire.endTransmission() != 0) {
             LOG_E("[DAC] EEPROM write failed at offset 0x%02X (I2C NACK)", offset);
+            i2c_mutex_give();
             return false;
         }
 
@@ -403,6 +444,7 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
         int waitMs = eeprom_wait_ready(i2cAddr, 20);
         if (waitMs < 0) {
             LOG_E("[DAC] EEPROM not ready after write at offset 0x%02X (timeout)", offset);
+            i2c_mutex_give();
             return false;
         }
 
@@ -418,6 +460,7 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
     int verifyLen = (len > (int)sizeof(verifyBuf)) ? (int)sizeof(verifyBuf) : len;
     if (!dac_eeprom_read_raw(i2cAddr, 0, verifyBuf, verifyLen)) {
         LOG_E("[DAC] EEPROM verify read-back failed");
+        i2c_mutex_give();
         return false;
     }
     if (memcmp(data, verifyBuf, verifyLen) != 0) {
@@ -433,15 +476,22 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
             }
         }
         LOG_E("[DAC] EEPROM verify: %d/%d bytes mismatched", mismatches, verifyLen);
+        i2c_mutex_give();
         return false;
     }
 
     LOG_I("[DAC] EEPROM write+verify OK (%d bytes)", len);
+    i2c_mutex_give();
     return true;
 }
 
 // ===== Erase EEPROM (fill with 0xFF) =====
 bool dac_eeprom_erase(uint8_t i2cAddr) {
+    if (!i2c_mutex_take()) {
+        LOG_W("[DAC] EEPROM erase: I2C mutex timeout");
+        return false;
+    }
+
     LOG_I("[DAC] EEPROM erase: addr=0x%02X (%d pages)", i2cAddr,
           DAC_EEPROM_TOTAL_SIZE / DAC_EEPROM_PAGE_SIZE);
 
@@ -451,6 +501,7 @@ bool dac_eeprom_erase(uint8_t i2cAddr) {
     // Probe test first
     if (!eeprom_write_probe(i2cAddr)) {
         LOG_E("[DAC] EEPROM erase aborted — probe test failed");
+        i2c_mutex_give();
         return false;
     }
 
@@ -463,12 +514,14 @@ bool dac_eeprom_erase(uint8_t i2cAddr) {
         }
         if (Wire.endTransmission() != 0) {
             LOG_E("[DAC] EEPROM erase failed at page %d (addr 0x%02X)", page, addr);
+            i2c_mutex_give();
             return false;
         }
         // ACK poll instead of fixed delay
         int waitMs = eeprom_wait_ready(i2cAddr, 20);
         if (waitMs < 0) {
             LOG_E("[DAC] EEPROM erase: timeout after page %d", page);
+            i2c_mutex_give();
             return false;
         }
     }
@@ -481,12 +534,14 @@ bool dac_eeprom_erase(uint8_t i2cAddr) {
         for (int i = 0; i < 16; i++) {
             if (check[i] != 0xFF) {
                 LOG_E("[DAC] EEPROM erase verify failed at byte %d (read 0x%02X)", i, check[i]);
+                i2c_mutex_give();
                 return false;
             }
         }
     }
 
     LOG_I("[DAC] EEPROM erase complete");
+    i2c_mutex_give();
     return true;
 }
 
@@ -494,6 +549,11 @@ bool dac_eeprom_erase(uint8_t i2cAddr) {
 int dac_i2c_scan(uint8_t* eepromMask) {
     if (eepromMask) *eepromMask = 0;
     int totalDevices = 0;
+
+    if (!i2c_mutex_take()) {
+        LOG_W("[DAC] I2C scan: mutex timeout");
+        return 0;
+    }
 
     i2c_init();
     LOG_I("[DAC] I2C bus scan starting (SDA=%d SCL=%d, 0x08-0x77)", DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
@@ -513,6 +573,7 @@ int dac_i2c_scan(uint8_t* eepromMask) {
 
     LOG_I("[DAC] I2C scan: %d devices found (EEPROM mask=0x%02X)",
           totalDevices, eepromMask ? *eepromMask : 0);
+    i2c_mutex_give();
     return totalDevices;
 }
 

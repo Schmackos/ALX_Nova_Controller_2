@@ -461,13 +461,18 @@ void registerDspApiEndpoints() {
     // GET /api/dsp — full config
     server.on("/api/dsp", HTTP_GET, []() {
         if (!requireAuth()) return;
-        char buf[8192];
-        dsp_export_full_config_json(buf, sizeof(buf));
+        const int bufSize = 8192;
+        char *buf = (char *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!buf) buf = (char *)malloc(bufSize);
+        if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
+
+        dsp_export_full_config_json(buf, bufSize);
 
         // Wrap with dspEnabled
         JsonDocument doc;
         deserializeJson(doc, buf);
         doc["dspEnabled"] = appState.dspEnabled;
+        free(buf);
 
         String json;
         serializeJson(doc, json);
@@ -535,9 +540,14 @@ void registerDspApiEndpoints() {
         int ch = parseChannelParam();
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
 
-        char buf[4096];
-        dsp_export_config_to_json(ch, buf, sizeof(buf));
+        const int bufSize = 4096;
+        char *buf = (char *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!buf) buf = (char *)malloc(bufSize);
+        if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
+
+        dsp_export_config_to_json(ch, buf, bufSize);
         server.send(200, "application/json", buf);
+        free(buf);
     });
 
     // POST /api/dsp/channel/bypass?ch=N — toggle channel bypass
@@ -995,9 +1005,14 @@ void registerDspApiEndpoints() {
     // GET /api/dsp/export/json
     server.on("/api/dsp/export/json", HTTP_GET, []() {
         if (!requireAuth()) return;
-        char buf[8192];
-        dsp_export_full_config_json(buf, sizeof(buf));
+        const int bufSize = 8192;
+        char *buf = (char *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!buf) buf = (char *)malloc(bufSize);
+        if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
+
+        dsp_export_full_config_json(buf, bufSize);
         server.send(200, "application/json", buf);
+        free(buf);
     });
 
     // ===== Crossover & Bass Management Endpoints =====

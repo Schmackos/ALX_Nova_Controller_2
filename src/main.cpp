@@ -968,10 +968,13 @@ void loop() {
     uint32_t maxBlock = ESP.getMaxAllocHeap();
     bool wasCritical = appState.heapCritical;
     appState.heapCritical = (maxBlock < 40000);
-    if (appState.heapCritical && !wasCritical) {
-      LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB)", (unsigned long)maxBlock);
-    } else if (!appState.heapCritical && wasCritical) {
-      LOG_I("[Main] Heap recovered: largest free block=%lu bytes", (unsigned long)maxBlock);
+    if (appState.heapCritical != wasCritical) {
+      if (appState.heapCritical) {
+        LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB)", (unsigned long)maxBlock);
+      } else {
+        LOG_I("[Main] Heap recovered: largest free block=%lu bytes", (unsigned long)maxBlock);
+      }
+      // heapCritical is included in next sendHardwareStats() cycle
     }
   }
 

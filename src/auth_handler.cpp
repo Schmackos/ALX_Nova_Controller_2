@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <esp_random.h>
+#include <esp_timer.h>
 #include <mbedtls/md.h>
 
 Session activeSessions[MAX_SESSIONS];
@@ -13,8 +14,8 @@ Preferences authPrefs;
 
 // Rate limiting state
 static int _loginFailCount = 0;
-static unsigned long _lastFailTime = 0;
-static const unsigned long LOGIN_COOLDOWN_MS = 300000; // 5 minutes
+static uint64_t _lastFailTime = 0;
+static const uint64_t LOGIN_COOLDOWN_US = 300000000ULL; // 5 minutes in microseconds
 
 // Timing-safe string comparison — constant time regardless of where strings differ
 bool timingSafeCompare(const String &a, const String &b) {
@@ -142,7 +143,7 @@ String generateSessionId() {
 
 // Create a new session
 bool createSession(String &sessionId) {
-  unsigned long now = millis();
+  uint64_t now = (uint64_t)esp_timer_get_time();
 
   // Try to find an empty slot
   for (int i = 0; i < MAX_SESSIONS; i++) {
@@ -159,7 +160,7 @@ bool createSession(String &sessionId) {
 
   // No empty slot, evict oldest session
   int oldestIndex = 0;
-  unsigned long oldestTime = activeSessions[0].lastSeen;
+  uint64_t oldestTime = activeSessions[0].lastSeen;
 
   for (int i = 1; i < MAX_SESSIONS; i++) {
     if (activeSessions[i].lastSeen < oldestTime) {
@@ -189,12 +190,12 @@ bool validateSession(String sessionId) {
     return false;
   }
 
-  unsigned long now = millis();
+  uint64_t now = (uint64_t)esp_timer_get_time();
 
   for (int i = 0; i < MAX_SESSIONS; i++) {
-    if (activeSessions[i].sessionId == sessionId) {
+    if (timingSafeCompare(activeSessions[i].sessionId, sessionId)) {
       // Check if expired
-      if (now - activeSessions[i].lastSeen > SESSION_TIMEOUT) {
+      if (now - activeSessions[i].lastSeen > SESSION_TIMEOUT_US) {
         LOG_D("[Auth] Session %s... expired",
               sessionId.substring(0, 8).c_str());
         activeSessions[i].sessionId = "";
@@ -214,7 +215,7 @@ bool validateSession(String sessionId) {
 // Remove a session
 void removeSession(String sessionId) {
   for (int i = 0; i < MAX_SESSIONS; i++) {
-    if (activeSessions[i].sessionId == sessionId) {
+    if (timingSafeCompare(activeSessions[i].sessionId, sessionId)) {
       LOG_D("[Auth] Session %s... removed from slot %d",
             sessionId.substring(0, 8).c_str(), i);
       activeSessions[i].sessionId = "";
@@ -357,8 +358,8 @@ void handleLogin() {
   String password = doc["password"].as<String>();
 
   // Auto-reset fail counter after cooldown period of no attempts
-  unsigned long now = millis();
-  if (_loginFailCount > 0 && (now - _lastFailTime) > LOGIN_COOLDOWN_MS) {
+  uint64_t now = (uint64_t)esp_timer_get_time();
+  if (_loginFailCount > 0 && (now - _lastFailTime) > LOGIN_COOLDOWN_US) {
     _loginFailCount = 0;
   }
 
@@ -366,7 +367,7 @@ void handleLogin() {
   if (!timingSafeCompare(hashPassword(password), appState.webPassword)) {
     // Progressive rate limiting
     _loginFailCount++;
-    _lastFailTime = millis();
+    _lastFailTime = (uint64_t)esp_timer_get_time();
     unsigned long delayMs = getLoginDelay();
     delay(delayMs);
 

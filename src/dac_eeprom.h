@@ -40,6 +40,10 @@ struct DacEepromData {
 #define DAC_EEPROM_TOTAL_SIZE 256
 #define DAC_EEPROM_PAGE_SIZE  8
 
+// Initialize I2C mutex for thread-safe EEPROM access.
+// Call once from dac_output_init() before any EEPROM operations.
+void dac_eeprom_init_mutex();
+
 // Parse raw EEPROM bytes into DacEepromData
 // rawData must be at least 92 bytes (0x5C)
 bool dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData* out);

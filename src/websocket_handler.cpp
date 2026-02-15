@@ -1835,7 +1835,7 @@ void sendAudioData() {
   }
 
   // --- Waveform data (per-ADC) — binary: [type:1][adc:1][samples:256] ---
-  if (appState.waveformEnabled) {
+  if (appState.waveformEnabled && !appState.heapCritical) {
     uint8_t wfBin[2 + WAVEFORM_BUFFER_SIZE]; // 258 bytes
     wfBin[0] = WS_BIN_WAVEFORM;
     for (int a = 0; a < appState.numAdcsDetected; a++) {
@@ -1851,7 +1851,7 @@ void sendAudioData() {
   }
 
   // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:Nxf32LE] ---
-  if (appState.spectrumEnabled) {
+  if (appState.spectrumEnabled && !appState.heapCritical) {
     uint8_t spBin[2 + sizeof(float) + SPECTRUM_BANDS * sizeof(float)]; // 70 bytes
     spBin[0] = WS_BIN_SPECTRUM;
     float bands[SPECTRUM_BANDS];

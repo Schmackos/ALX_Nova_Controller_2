@@ -7,22 +7,24 @@
 #include "../test_mocks/Arduino.h"
 #include "../test_mocks/Preferences.h"
 #include "../test_mocks/esp_random.h"
+#include "../test_mocks/esp_timer.h"
 #include "../test_mocks/mbedtls/md.h"
 #else
 #include <Arduino.h>
 #include <Preferences.h>
 #include <esp_random.h>
+#include <esp_timer.h>
 #include <mbedtls/md.h>
 #endif
 
 #define MAX_SESSIONS 5
-#define SESSION_TIMEOUT 3600000 // 1 hour in milliseconds
+#define SESSION_TIMEOUT_US 3600000000ULL // 1 hour in microseconds
 
-// Mock Session structure
+// Mock Session structure (matches production auth_handler.h)
 struct Session {
   String sessionId;
-  unsigned long createdAt;
-  unsigned long lastSeen;
+  uint64_t createdAt;
+  uint64_t lastSeen;
 };
 
 // Global test state
@@ -98,6 +100,7 @@ void reset() {
   EspRandomMock::reset();
 #ifdef NATIVE_TEST
   ArduinoMock::reset();
+  ArduinoMock::mockTimerUs = 0;
 #endif
 }
 } // namespace TestAuthState
@@ -124,7 +127,7 @@ String generateSessionId() {
 
 // Create a new session
 bool createSession(String &sessionId) {
-  unsigned long now = millis();
+  uint64_t now = (uint64_t)esp_timer_get_time();
 
   // Try to find an empty slot
   for (int i = 0; i < MAX_SESSIONS; i++) {
@@ -139,7 +142,7 @@ bool createSession(String &sessionId) {
 
   // No empty slot, evict oldest session
   int oldestIndex = 0;
-  unsigned long oldestTime = activeSessions[0].lastSeen;
+  uint64_t oldestTime = activeSessions[0].lastSeen;
 
   for (int i = 1; i < MAX_SESSIONS; i++) {
     if (activeSessions[i].lastSeen < oldestTime) {
@@ -157,17 +160,18 @@ bool createSession(String &sessionId) {
 }
 
 // Validate a session (check if exists and not expired)
+// Uses timing-safe compare (mirrors production auth_handler.cpp)
 bool validateSession(String sessionId) {
   if (sessionId.length() == 0) {
     return false;
   }
 
-  unsigned long now = millis();
+  uint64_t now = (uint64_t)esp_timer_get_time();
 
   for (int i = 0; i < MAX_SESSIONS; i++) {
-    if (activeSessions[i].sessionId == sessionId) {
+    if (timingSafeCompare(activeSessions[i].sessionId, sessionId)) {
       // Check if expired
-      if (now - activeSessions[i].lastSeen > SESSION_TIMEOUT) {
+      if (now - activeSessions[i].lastSeen > SESSION_TIMEOUT_US) {
         activeSessions[i].sessionId = "";
         return false;
       }
@@ -184,7 +188,7 @@ bool validateSession(String sessionId) {
 // Remove a session
 void removeSession(String sessionId) {
   for (int i = 0; i < MAX_SESSIONS; i++) {
-    if (activeSessions[i].sessionId == sessionId) {
+    if (timingSafeCompare(activeSessions[i].sessionId, sessionId)) {
       activeSessions[i].sessionId = "";
       activeSessions[i].createdAt = 0;
       activeSessions[i].lastSeen = 0;
@@ -281,7 +285,7 @@ void test_session_creation_full_eviction(void) {
   String sessionIds[6];
   for (int i = 0; i < 5; i++) {
     createSession(sessionIds[i]);
-    ArduinoMock::mockMillis += 1000; // Advance time
+    ArduinoMock::mockTimerUs += 1000000; // Advance time 1s
   }
 
   // Create 6th session - should evict oldest (first one)
@@ -310,7 +314,7 @@ void test_session_validation_expired(void) {
   createSession(sessionId);
 
   // Advance time past expiration
-  ArduinoMock::mockMillis += SESSION_TIMEOUT + 1000;
+  ArduinoMock::mockTimerUs += SESSION_TIMEOUT_US + 1000000;
 
   // Session should be expired
   TEST_ASSERT_FALSE(validateSession(sessionId));
@@ -345,7 +349,7 @@ void test_session_lastSeen_updates(void) {
   unsigned long initialLastSeen = activeSessions[0].lastSeen;
 
   // Advance time and validate
-  ArduinoMock::mockMillis += 5000;
+  ArduinoMock::mockTimerUs += 5000000;
   validateSession(sessionId);
 
   // lastSeen should be updated
@@ -436,7 +440,7 @@ void test_multiple_sessions_independent_validation(void) {
   createSession(session1);
 
   // Advance time
-  ArduinoMock::mockMillis += 100;
+  ArduinoMock::mockTimerUs += 100000;
 
   createSession(session2);
 
@@ -445,7 +449,7 @@ void test_multiple_sessions_independent_validation(void) {
   TEST_ASSERT_TRUE(validateSession(session2));
 
   // Expire both
-  ArduinoMock::mockMillis += SESSION_TIMEOUT + 1000;
+  ArduinoMock::mockTimerUs += SESSION_TIMEOUT_US + 1000000;
 
   // Both should be expired now
   TEST_ASSERT_FALSE(validateSession(session1));
@@ -476,7 +480,7 @@ void test_session_revalidation_catches_expiry(void) {
   TEST_ASSERT_TRUE(validateSession(sessionId));
 
   // Time passes beyond session timeout
-  ArduinoMock::mockMillis += SESSION_TIMEOUT + 1;
+  ArduinoMock::mockTimerUs += SESSION_TIMEOUT_US + 1;
 
   // Re-validation on next WS command should fail
   TEST_ASSERT_FALSE(validateSession(sessionId));
@@ -486,7 +490,7 @@ void test_removed_session_does_not_affect_others(void) {
   // Two clients with separate sessions
   String session1, session2;
   createSession(session1);
-  ArduinoMock::mockMillis += 10;
+  ArduinoMock::mockTimerUs += 10000;
   createSession(session2);
 
   // Remove session1 (logout)
@@ -601,6 +605,36 @@ void test_progressive_login_delay_values(void) {
   TEST_ASSERT_EQUAL(30000, expected[4]);
 }
 
+// ===== Timing-safe session validation tests (Group 4A) =====
+
+void test_session_validation_uses_timing_safe_compare(void) {
+  // Create a session and verify it validates through timing-safe path
+  String sessionId;
+  createSession(sessionId);
+
+  // Validate using the exact same ID (timing-safe compare)
+  TEST_ASSERT_TRUE(validateSession(sessionId));
+
+  // Create a copy of the session ID string — should still match
+  String sessionIdCopy = String(sessionId.c_str());
+  TEST_ASSERT_TRUE(validateSession(sessionIdCopy));
+}
+
+void test_session_expiry_with_64bit_timestamps(void) {
+  // Verify session expires correctly with 64-bit microsecond timestamps
+  String sessionId;
+  createSession(sessionId);
+
+  // Just before expiry — should still be valid (also refreshes lastSeen)
+  ArduinoMock::mockTimerUs += SESSION_TIMEOUT_US - 1;
+  TEST_ASSERT_TRUE(validateSession(sessionId));
+  // lastSeen is now updated to SESSION_TIMEOUT_US - 1
+
+  // Advance past timeout from the refreshed lastSeen — should expire
+  ArduinoMock::mockTimerUs += SESSION_TIMEOUT_US + 1;
+  TEST_ASSERT_FALSE(validateSession(sessionId));
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -650,6 +684,10 @@ int runUnityTests(void) {
 
   // Rate limiting tests
   RUN_TEST(test_progressive_login_delay_values);
+
+  // Timing-safe session validation (Group 4A)
+  RUN_TEST(test_session_validation_uses_timing_safe_compare);
+  RUN_TEST(test_session_expiry_with_64bit_timestamps);
 
   return UNITY_END();
 }

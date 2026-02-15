@@ -2,6 +2,9 @@
 
 ## Version 1.8.3
 
+## Documentation
+- [2026-02-15] docs: map existing codebase (`824ba3e`)
+
 ## New Features
 - [2026-02-15] feat: Auth security hardening and USB audio init fix
 
@@ -27,6 +30,74 @@ double-init crashes on enable/disable toggle. (`fa721ee`)
 - None
 
 ## Bug Fixes
+- [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
+
+Address CONCERNS.md audit findings across security, robustness, and test gaps:
+
+Security:
+- Use timingSafeCompare() for session ID lookup in validateSession/removeSession
+- Atomic crash log ring buffer validation (reset all on any inconsistency)
+- Cap OTA consecutive failure counter at 20 to prevent unbounded growth
+
+Robustness:
+- Add recursive mutex to all I2C EEPROM operations (dac_eeprom.cpp)
+- Move 3 large DSP API buffers (4-8KB) from stack to PSRAM heap
+- Gate WS binary sends (waveform/spectrum) on !heapCritical
+- Block dsp_add_stage() when heap is critical
+
+Auth migration:
+- Session timestamps: millis() (32-bit ms) → esp_timer_get_time() (64-bit μs)
+- SESSION_TIMEOUT → SESSION_TIMEOUT_US (3600000000 μs)
+- Rate-limit state updated to 64-bit microseconds
+
+Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruption) (`efd8e0f`)
+- [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
+
+Address CONCERNS.md audit findings across security, robustness, and test gaps:
+
+Security:
+- Use timingSafeCompare() for session ID lookup in validateSession/removeSession
+- Atomic crash log ring buffer validation (reset all on any inconsistency)
+- Cap OTA consecutive failure counter at 20 to prevent unbounded growth
+
+Robustness:
+- Add recursive mutex to all I2C EEPROM operations (dac_eeprom.cpp)
+- Move 3 large DSP API buffers (4-8KB) from stack to PSRAM heap
+- Gate WS binary sends (waveform/spectrum) on !heapCritical
+- Block dsp_add_stage() when heap is critical
+
+Auth migration:
+- Session timestamps: millis() (32-bit ms) → esp_timer_get_time() (64-bit μs)
+- SESSION_TIMEOUT → SESSION_TIMEOUT_US (3600000000 μs)
+- Rate-limit state updated to 64-bit microseconds
+
+Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruption) (`d29a0dd`)
+- [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
+
+Address CONCERNS.md audit findings across security, robustness, and test gaps:
+
+Security:
+- Use timingSafeCompare() for session ID lookup in validateSession/removeSession
+- Atomic crash log ring buffer validation (reset all on any inconsistency)
+- Cap OTA consecutive failure counter at 20 to prevent unbounded growth
+
+Robustness:
+- Add recursive mutex to all I2C EEPROM operations (dac_eeprom.cpp)
+- Move 3 large DSP API buffers (4-8KB) from stack to PSRAM heap
+- Gate WS binary sends (waveform/spectrum) on !heapCritical
+- Block dsp_add_stage() when heap is critical
+
+Auth migration:
+- Session timestamps: millis() (32-bit ms) → esp_timer_get_time() (64-bit μs)
+- SESSION_TIMEOUT → SESSION_TIMEOUT_US (3600000000 μs)
+- Rate-limit state updated to 64-bit microseconds
+
+Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruption) (`c779119`)
+- [2026-02-15] fix: USB audio control transfer handling and clock rate validation
+
+Remove redundant SET_INTERFACE handler (TinyUSB handles it internally
+via driver open callback). Add SET_CUR clock rate validation in DATA
+stage. Improve control request logging. (`6d0e343`)
 - [2026-02-15] fix: USB audio control transfer handling and clock rate validation
 
 Remove redundant SET_INTERFACE handler (TinyUSB handles it internally

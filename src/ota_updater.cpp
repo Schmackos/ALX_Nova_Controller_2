@@ -348,6 +348,7 @@ void checkForFirmwareUpdate() {
   
   if (!getLatestReleaseInfo(latestVersion, firmwareUrl, checksum)) {
     _otaConsecutiveFailures++;
+    if (_otaConsecutiveFailures > 20) _otaConsecutiveFailures = 20;
     unsigned long nextInterval = getOTAEffectiveInterval();
     LOG_E("[OTA] Failed to retrieve release information (failures=%d, next check in %lus)",
           _otaConsecutiveFailures, nextInterval / 1000);
@@ -1078,6 +1079,7 @@ static void otaCheckTaskFunc(void* param) {
   if (maxBlock < 30000) {
     LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<30KB), skipping", (unsigned long)maxBlock);
     _otaConsecutiveFailures++;
+    if (_otaConsecutiveFailures > 20) _otaConsecutiveFailures = 20;
     appState.markOTADirty();
     otaCheckTaskHandle = NULL;
     vTaskDelete(NULL);

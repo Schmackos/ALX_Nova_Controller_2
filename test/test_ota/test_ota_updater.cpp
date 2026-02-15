@@ -314,6 +314,61 @@ void test_firmware_size_validation(void) {
     TEST_ASSERT_LESS_THAN(maxSize, testSize + 1);
 }
 
+// ===== OTA Backoff Tests (Group 4B) =====
+
+// Test-local reimplementation of backoff logic (mirrors ota_updater.cpp)
+static int _testOtaFailures = 0;
+
+static unsigned long testGetOTAEffectiveInterval() {
+    if (_testOtaFailures >= 10) return 3600000UL;
+    if (_testOtaFailures >= 6)  return 1800000UL;
+    if (_testOtaFailures >= 3)  return 900000UL;
+    return 300000UL;
+}
+
+static void testOtaRecordFailure() {
+    _testOtaFailures++;
+    if (_testOtaFailures > 20) _testOtaFailures = 20;
+}
+
+void test_ota_backoff_counter_caps_at_20(void) {
+    _testOtaFailures = 0;
+    // Record 100 failures
+    for (int i = 0; i < 100; i++) {
+        testOtaRecordFailure();
+    }
+    // Counter should be capped at 20
+    TEST_ASSERT_EQUAL(20, _testOtaFailures);
+}
+
+void test_ota_backoff_interval_progression(void) {
+    _testOtaFailures = 0;
+    TEST_ASSERT_EQUAL(300000UL, testGetOTAEffectiveInterval());  // 0 failures: 5min
+
+    _testOtaFailures = 3;
+    TEST_ASSERT_EQUAL(900000UL, testGetOTAEffectiveInterval());  // 3 failures: 15min
+
+    _testOtaFailures = 6;
+    TEST_ASSERT_EQUAL(1800000UL, testGetOTAEffectiveInterval()); // 6 failures: 30min
+
+    _testOtaFailures = 10;
+    TEST_ASSERT_EQUAL(3600000UL, testGetOTAEffectiveInterval()); // 10 failures: 1hr
+}
+
+void test_ota_backoff_reset_on_success(void) {
+    _testOtaFailures = 0;
+    // Accumulate some failures
+    for (int i = 0; i < 15; i++) {
+        testOtaRecordFailure();
+    }
+    TEST_ASSERT_EQUAL(15, _testOtaFailures);
+
+    // Simulate success reset
+    _testOtaFailures = 0;
+    TEST_ASSERT_EQUAL(0, _testOtaFailures);
+    TEST_ASSERT_EQUAL(300000UL, testGetOTAEffectiveInterval());
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -344,6 +399,11 @@ int runUnityTests(void) {
     RUN_TEST(test_check_update_api_update_available);
     RUN_TEST(test_check_update_api_no_update);
     RUN_TEST(test_firmware_size_validation);
+
+    // OTA backoff tests (Group 4B)
+    RUN_TEST(test_ota_backoff_counter_caps_at_20);
+    RUN_TEST(test_ota_backoff_interval_progression);
+    RUN_TEST(test_ota_backoff_reset_on_success);
 
     return UNITY_END();
 }

@@ -22,9 +22,18 @@ static void crashlog_load() {
     f.read((uint8_t *)&_crashLog, sizeof(CrashLogData));
     f.close();
 
-    // Sanity check
-    if (_crashLog.count > CRASH_LOG_MAX_ENTRIES) _crashLog.count = 0;
-    if (_crashLog.writeIndex >= CRASH_LOG_MAX_ENTRIES) _crashLog.writeIndex = 0;
+    // Sanity check — atomic reset if any field is corrupt or inconsistent
+    bool corrupt = false;
+    if (_crashLog.count > CRASH_LOG_MAX_ENTRIES) corrupt = true;
+    if (_crashLog.writeIndex >= CRASH_LOG_MAX_ENTRIES) corrupt = true;
+    // If buffer isn't full, writeIndex must equal count (sequential fill)
+    if (!corrupt && _crashLog.count < CRASH_LOG_MAX_ENTRIES &&
+        _crashLog.writeIndex != _crashLog.count) corrupt = true;
+    if (corrupt) {
+        LOG_W("[CrashLog] Corrupt ring buffer (count=%d, writeIndex=%d) — resetting",
+              _crashLog.count, _crashLog.writeIndex);
+        _crashLog = {};
+    }
 }
 
 static void crashlog_save() {

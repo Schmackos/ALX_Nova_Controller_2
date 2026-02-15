@@ -310,6 +310,84 @@ void test_i2s_recovery_threshold() {
     TEST_ASSERT_EQUAL_UINT32(threshold, timeouts);
 }
 
+// ===== Crash Log Corruption Recovery Tests (Group 4C) =====
+// Replicates the atomic validation logic from crash_log.cpp crashlog_load()
+
+static void test_crashlog_validate(CrashLogData *log) {
+    bool corrupt = false;
+    if (log->count > CRASH_LOG_MAX_ENTRIES) corrupt = true;
+    if (log->writeIndex >= CRASH_LOG_MAX_ENTRIES) corrupt = true;
+    if (!corrupt && log->count < CRASH_LOG_MAX_ENTRIES &&
+        log->writeIndex != log->count) corrupt = true;
+    if (corrupt) {
+        memset(log, 0, sizeof(CrashLogData));
+    }
+}
+
+void test_corrupt_count_resets_all(void) {
+    CrashLogData log = {};
+    log.count = 255; // Way beyond max
+    log.writeIndex = 3;
+    strncpy(log.entries[0].reason, "test", 23);
+
+    test_crashlog_validate(&log);
+
+    TEST_ASSERT_EQUAL(0, log.count);
+    TEST_ASSERT_EQUAL(0, log.writeIndex);
+    TEST_ASSERT_EQUAL_STRING("", log.entries[0].reason);
+}
+
+void test_corrupt_writeIndex_resets_all(void) {
+    CrashLogData log = {};
+    log.count = 3;
+    log.writeIndex = 99; // Way beyond max
+    strncpy(log.entries[0].reason, "test", 23);
+
+    test_crashlog_validate(&log);
+
+    TEST_ASSERT_EQUAL(0, log.count);
+    TEST_ASSERT_EQUAL(0, log.writeIndex);
+}
+
+void test_inconsistent_count_writeIndex_resets(void) {
+    CrashLogData log = {};
+    log.count = 3;      // Not full
+    log.writeIndex = 7; // Should equal count when not full
+
+    test_crashlog_validate(&log);
+
+    TEST_ASSERT_EQUAL(0, log.count);
+    TEST_ASSERT_EQUAL(0, log.writeIndex);
+}
+
+void test_valid_state_preserved(void) {
+    CrashLogData log = {};
+    log.count = 5;
+    log.writeIndex = 5; // Correct: count == writeIndex when not full
+    strncpy(log.entries[0].reason, "power_on", 23);
+
+    test_crashlog_validate(&log);
+
+    TEST_ASSERT_EQUAL(5, log.count);
+    TEST_ASSERT_EQUAL(5, log.writeIndex);
+    TEST_ASSERT_EQUAL_STRING("power_on", log.entries[0].reason);
+}
+
+void test_full_ring_any_writeIndex_valid(void) {
+    // When ring is full (count == MAX), writeIndex can be anywhere 0..MAX-1
+    for (int wi = 0; wi < CRASH_LOG_MAX_ENTRIES; wi++) {
+        CrashLogData log = {};
+        log.count = CRASH_LOG_MAX_ENTRIES;
+        log.writeIndex = (uint8_t)wi;
+
+        test_crashlog_validate(&log);
+
+        // Full ring with any valid writeIndex should be preserved
+        TEST_ASSERT_EQUAL(CRASH_LOG_MAX_ENTRIES, log.count);
+        TEST_ASSERT_EQUAL(wi, log.writeIndex);
+    }
+}
+
 // ===== Test Runner =====
 
 int main(int argc, char **argv) {
@@ -348,6 +426,13 @@ int main(int argc, char **argv) {
     RUN_TEST(test_heap_critical_below_threshold);
     RUN_TEST(test_heap_critical_above_threshold);
     RUN_TEST(test_heap_critical_at_boundary);
+
+    // Crash log corruption recovery (Group 4C)
+    RUN_TEST(test_corrupt_count_resets_all);
+    RUN_TEST(test_corrupt_writeIndex_resets_all);
+    RUN_TEST(test_inconsistent_count_writeIndex_resets);
+    RUN_TEST(test_valid_state_preserved);
+    RUN_TEST(test_full_ring_any_writeIndex_valid);
 
     return UNITY_END();
 }
