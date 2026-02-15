@@ -7,6 +7,10 @@
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#ifndef NATIVE_TEST
+#include <esp_heap_caps.h>
+#endif
 
 // ===== Crossover Presets =====
 
@@ -84,6 +88,74 @@ static int insert_butterworth_filter(int channel, float freq, int order,
     }
 
     return firstIdx;
+}
+
+// ===== Bessel Crossover =====
+// Pre-computed Q values for Bessel filters (from polynomial factorization).
+// These produce maximally-flat group delay response.
+
+static const float _besselQ2[] = { 0.5774f };                          // Order 2: 1 section
+static const float _besselQ4[] = { 0.5219f, 0.8055f };                 // Order 4: 2 sections
+static const float _besselQ6[] = { 0.5103f, 0.6112f, 1.0234f };       // Order 6: 3 sections
+static const float _besselQ8[] = { 0.5060f, 0.5606f, 0.7109f, 1.2258f }; // Order 8: 4 sections
+
+static const float *bessel_q_table(int order, int &numSections) {
+    switch (order) {
+        case 2: numSections = 1; return _besselQ2;
+        case 4: numSections = 2; return _besselQ4;
+        case 6: numSections = 3; return _besselQ6;
+        case 8: numSections = 4; return _besselQ8;
+        default: numSections = 0; return nullptr;
+    }
+}
+
+int dsp_insert_crossover_bessel(int channel, float freq, int order, int role) {
+    int numSections;
+    const float *qValues = bessel_q_table(order, numSections);
+    if (!qValues || numSections == 0) return -1;
+
+    DspStageType type2nd = role == 0 ? DSP_BIQUAD_LPF : DSP_BIQUAD_HPF;
+    char label[16];
+    snprintf(label, sizeof(label), "BS%d %s", order, role == 0 ? "LPF" : "HPF");
+
+    int firstIdx = -1;
+    int localAdded = 0;
+
+    for (int i = 0; i < numSections; i++) {
+        int idx = dsp_add_stage(channel, type2nd);
+        if (idx < 0) {
+            // Rollback
+            for (int r = 0; r < localAdded; r++) {
+                dsp_remove_stage(channel, firstIdx);
+            }
+            return -1;
+        }
+        if (firstIdx < 0) firstIdx = idx;
+        localAdded++;
+        DspState *cfg = dsp_get_inactive_config();
+        DspStage &s = cfg->channels[channel].stages[idx];
+        s.biquad.frequency = freq;
+        s.biquad.Q = qValues[i];
+        strncpy(s.label, label, sizeof(s.label) - 1);
+        dsp_compute_biquad_coeffs(s.biquad, type2nd, cfg->sampleRate);
+    }
+
+    return firstIdx;
+}
+
+// ===== Baffle Step Correction =====
+BaffleStepResult dsp_baffle_step_correction(float baffleWidthMm) {
+    BaffleStepResult result;
+    if (baffleWidthMm <= 0.0f) {
+        result.frequency = 500.0f;  // Safe default
+        result.gainDb = 6.0f;
+        return result;
+    }
+    // f = speed_of_sound / (pi * width)
+    // speed_of_sound = 343000 mm/s
+    result.frequency = 343000.0f / ((float)M_PI * baffleWidthMm);
+    result.gainDb = 6.0f;  // Baffle step is always ~6 dB
+    return result;
 }
 
 void dsp_clear_crossover_stages(int channel) {
@@ -251,11 +323,28 @@ void dsp_routing_apply(const DspRoutingMatrix &rm, float *channels[], int numCha
     int nc = numChannels < DSP_MAX_CHANNELS ? numChannels : DSP_MAX_CHANNELS;
 
     // Copy input channels (routing reads all inputs before writing outputs)
-    static float inputCopy[DSP_MAX_CHANNELS][256];
-    static float temp[256];
+    // Buffers allocated in PSRAM to save ~5KB internal SRAM
+    static float *inputCopy = nullptr;  // [DSP_MAX_CHANNELS * 256]
+    static float *temp = nullptr;       // [256]
+    if (!inputCopy) {
+#ifndef NATIVE_TEST
+        inputCopy = (float *)heap_caps_calloc(DSP_MAX_CHANNELS * 256, sizeof(float), MALLOC_CAP_SPIRAM);
+        if (!inputCopy)
+#endif
+        inputCopy = (float *)calloc(DSP_MAX_CHANNELS * 256, sizeof(float));
+    }
+    if (!temp) {
+#ifndef NATIVE_TEST
+        temp = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
+        if (!temp)
+#endif
+        temp = (float *)calloc(256, sizeof(float));
+    }
+    if (!inputCopy || !temp) return;
+
     int n = len > 256 ? 256 : len;
     for (int i = 0; i < nc; i++) {
-        memcpy(inputCopy[i], channels[i], n * sizeof(float));
+        memcpy(&inputCopy[i * 256], channels[i], n * sizeof(float));
     }
 
     // Compute each output channel using SIMD mulc + add
@@ -264,7 +353,7 @@ void dsp_routing_apply(const DspRoutingMatrix &rm, float *channels[], int numCha
         for (int i = 0; i < nc; i++) {
             float coeff = rm.matrix[o][i];
             if (coeff == 0.0f) continue;
-            dsps_mulc_f32(inputCopy[i], temp, n, coeff, 1, 1);
+            dsps_mulc_f32(&inputCopy[i * 256], temp, n, coeff, 1, 1);
             dsps_add_f32(channels[o], temp, channels[o], n, 1, 1, 1);
         }
     }

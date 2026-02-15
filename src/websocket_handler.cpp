@@ -15,6 +15,8 @@
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
+#include "dsp_crossover.h"
+#include "thd_measurement.h"
 #include "delay_alignment.h"
 #endif
 #ifdef DAC_ENABLED
@@ -492,6 +494,44 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 if (doc["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = doc["makeupGainDb"].as<float>();
                 extern void dsp_compute_compressor_makeup(DspCompressorParams &p);
                 dsp_compute_compressor_makeup(s.compressor);
+              } else if (s.type == DSP_NOISE_GATE) {
+                if (doc["thresholdDb"].is<float>()) s.noiseGate.thresholdDb = doc["thresholdDb"].as<float>();
+                if (doc["attackMs"].is<float>()) s.noiseGate.attackMs = doc["attackMs"].as<float>();
+                if (doc["holdMs"].is<float>()) s.noiseGate.holdMs = doc["holdMs"].as<float>();
+                if (doc["releaseMs"].is<float>()) s.noiseGate.releaseMs = doc["releaseMs"].as<float>();
+                if (doc["ratio"].is<float>()) s.noiseGate.ratio = doc["ratio"].as<float>();
+                if (doc["rangeDb"].is<float>()) s.noiseGate.rangeDb = doc["rangeDb"].as<float>();
+              } else if (s.type == DSP_TONE_CTRL) {
+                if (doc["bassGain"].is<float>()) s.toneCtrl.bassGain = doc["bassGain"].as<float>();
+                if (doc["midGain"].is<float>()) s.toneCtrl.midGain = doc["midGain"].as<float>();
+                if (doc["trebleGain"].is<float>()) s.toneCtrl.trebleGain = doc["trebleGain"].as<float>();
+                extern void dsp_compute_tone_ctrl_coeffs(DspToneCtrlParams &, uint32_t);
+                dsp_compute_tone_ctrl_coeffs(s.toneCtrl, cfg->sampleRate);
+              } else if (s.type == DSP_SPEAKER_PROT) {
+                if (doc["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = doc["powerRatingW"].as<float>();
+                if (doc["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = doc["impedanceOhms"].as<float>();
+                if (doc["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = doc["thermalTauMs"].as<float>();
+                if (doc["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = doc["excursionLimitMm"].as<float>();
+                if (doc["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = doc["driverDiameterMm"].as<float>();
+                if (doc["maxTempC"].is<float>()) s.speakerProt.maxTempC = doc["maxTempC"].as<float>();
+              } else if (s.type == DSP_STEREO_WIDTH) {
+                if (doc["width"].is<float>()) s.stereoWidth.width = doc["width"].as<float>();
+                if (doc["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = doc["centerGainDb"].as<float>();
+                extern void dsp_compute_stereo_width(DspStereoWidthParams &);
+                dsp_compute_stereo_width(s.stereoWidth);
+              } else if (s.type == DSP_LOUDNESS) {
+                if (doc["referenceLevelDb"].is<float>()) s.loudness.referenceLevelDb = doc["referenceLevelDb"].as<float>();
+                if (doc["currentLevelDb"].is<float>()) s.loudness.currentLevelDb = doc["currentLevelDb"].as<float>();
+                if (doc["amount"].is<float>()) s.loudness.amount = doc["amount"].as<float>();
+                extern void dsp_compute_loudness_coeffs(DspLoudnessParams &, uint32_t);
+                dsp_compute_loudness_coeffs(s.loudness, cfg->sampleRate);
+              } else if (s.type == DSP_BASS_ENHANCE) {
+                if (doc["frequency"].is<float>()) s.bassEnhance.frequency = doc["frequency"].as<float>();
+                if (doc["harmonicGainDb"].is<float>()) s.bassEnhance.harmonicGainDb = doc["harmonicGainDb"].as<float>();
+                if (doc["mix"].is<float>()) s.bassEnhance.mix = doc["mix"].as<float>();
+                if (doc["order"].is<int>()) s.bassEnhance.order = doc["order"].as<uint8_t>();
+                extern void dsp_compute_bass_enhance_coeffs(DspBassEnhanceParams &, uint32_t);
+                dsp_compute_bass_enhance_coeffs(s.bassEnhance, cfg->sampleRate);
               }
               dsp_swap_config();
               extern void saveDspSettingsDebounced();
@@ -819,6 +859,39 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             extern void saveDspSettingsDebounced();
             saveDspSettingsDebounced();
             appState.markDspConfigDirty();
+          }
+        }
+        else if (msgType == "startThdMeasurement") {
+          float freq = doc["freq"] | 1000.0f;
+          int avg = doc["averages"] | 8;
+          extern void thd_start_measurement(float, uint16_t);
+          thd_start_measurement(freq, (uint16_t)avg);
+          LOG_I("[WebSocket] THD measurement started: %.0f Hz, %d avg", freq, avg);
+        }
+        else if (msgType == "stopThdMeasurement") {
+          extern void thd_stop_measurement();
+          thd_stop_measurement();
+          LOG_I("[WebSocket] THD measurement stopped");
+        }
+        else if (msgType == "applyBaffleStep") {
+          int ch = doc["ch"] | 0;
+          float widthMm = doc["baffleWidthMm"] | 250.0f;
+          if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
+            BaffleStepResult bsr = dsp_baffle_step_correction(widthMm);
+            dsp_copy_active_to_inactive();
+            int idx = dsp_add_stage(ch, DSP_BIQUAD_HIGH_SHELF);
+            if (idx >= 0) {
+              DspState *cfg = dsp_get_inactive_config();
+              cfg->channels[ch].stages[idx].biquad.frequency = bsr.frequency;
+              cfg->channels[ch].stages[idx].biquad.gain = bsr.gainDb;
+              cfg->channels[ch].stages[idx].biquad.Q = 0.707f;
+              dsp_compute_biquad_coeffs(cfg->channels[ch].stages[idx].biquad, DSP_BIQUAD_HIGH_SHELF, cfg->sampleRate);
+              dsp_swap_config();
+              extern void saveDspSettingsDebounced();
+              saveDspSettingsDebounced();
+              appState.markDspConfigDirty();
+              LOG_I("[WebSocket] Baffle step: ch=%d width=%.0fmm freq=%.0fHz gain=%.1fdB", ch, widthMm, bsr.frequency, bsr.gainDb);
+            }
           }
         }
 #endif
@@ -1207,6 +1280,41 @@ void sendDspState() {
         so["kneeDb"] = st.compressor.kneeDb;
         so["makeupGainDb"] = st.compressor.makeupGainDb;
         so["gr"] = st.compressor.gainReduction;
+      } else if (st.type == DSP_NOISE_GATE) {
+        so["thresholdDb"] = st.noiseGate.thresholdDb;
+        so["attackMs"] = st.noiseGate.attackMs;
+        so["holdMs"] = st.noiseGate.holdMs;
+        so["releaseMs"] = st.noiseGate.releaseMs;
+        so["ratio"] = st.noiseGate.ratio;
+        so["rangeDb"] = st.noiseGate.rangeDb;
+        so["gr"] = st.noiseGate.gainReduction;
+      } else if (st.type == DSP_TONE_CTRL) {
+        so["bassGain"] = st.toneCtrl.bassGain;
+        so["midGain"] = st.toneCtrl.midGain;
+        so["trebleGain"] = st.toneCtrl.trebleGain;
+      } else if (st.type == DSP_SPEAKER_PROT) {
+        so["powerRatingW"] = st.speakerProt.powerRatingW;
+        so["impedanceOhms"] = st.speakerProt.impedanceOhms;
+        so["thermalTauMs"] = st.speakerProt.thermalTauMs;
+        so["excursionLimitMm"] = st.speakerProt.excursionLimitMm;
+        so["driverDiameterMm"] = st.speakerProt.driverDiameterMm;
+        so["maxTempC"] = st.speakerProt.maxTempC;
+        so["currentTempC"] = st.speakerProt.currentTempC;
+        so["gr"] = st.speakerProt.gainReduction;
+      } else if (st.type == DSP_STEREO_WIDTH) {
+        so["width"] = st.stereoWidth.width;
+        so["centerGainDb"] = st.stereoWidth.centerGainDb;
+      } else if (st.type == DSP_LOUDNESS) {
+        so["referenceLevelDb"] = st.loudness.referenceLevelDb;
+        so["currentLevelDb"] = st.loudness.currentLevelDb;
+        so["amount"] = st.loudness.amount;
+      } else if (st.type == DSP_BASS_ENHANCE) {
+        so["frequency"] = st.bassEnhance.frequency;
+        so["harmonicGainDb"] = st.bassEnhance.harmonicGainDb;
+        so["mix"] = st.bassEnhance.mix;
+        so["order"] = st.bassEnhance.order;
+      } else if (st.type == DSP_MULTIBAND_COMP) {
+        so["numBands"] = st.multibandComp.numBands;
       }
     }
   }

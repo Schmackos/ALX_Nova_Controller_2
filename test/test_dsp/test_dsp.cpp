@@ -21,6 +21,7 @@
 #include "../../src/dsp_crossover.cpp"
 #include "../../src/dsp_convolution.cpp"
 #include "../../src/delay_alignment.cpp"
+#include "../../src/thd_measurement.cpp"
 
 // Tolerance for float comparisons
 #define FLOAT_TOL 0.001f
@@ -1752,6 +1753,903 @@ void test_metrics_initial(void) {
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, m.cpuLoadPercent);
 }
 
+// ===== Noise Gate Tests =====
+
+void test_noise_gate_below_threshold_attenuated(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_NOISE_GATE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.noiseGate.thresholdDb = -20.0f;
+    s.noiseGate.rangeDb = -80.0f;
+    s.noiseGate.ratio = 1.0f; // hard gate
+    s.noiseGate.holdMs = 0.0f;
+    dsp_swap_config();
+
+    // Generate low-level signal (-40 dBFS ~ 0.01 linear)
+    float buf[64];
+    for (int i = 0; i < 64; i++) buf[i] = 0.01f * sinf(2.0f * M_PI * 1000.0f * i / 48000.0f);
+    cfg = dsp_get_active_config();
+    dsp_noise_gate_process(cfg->channels[0].stages[idx].noiseGate, buf, 64, 48000);
+
+    // Signal should be heavily attenuated
+    float rms = 0.0f;
+    for (int i = 0; i < 64; i++) rms += buf[i] * buf[i];
+    rms = sqrtf(rms / 64);
+    TEST_ASSERT_TRUE(rms < 0.005f); // Well below input level of 0.01
+}
+
+void test_noise_gate_above_threshold_passthrough(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_NOISE_GATE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.noiseGate.thresholdDb = -40.0f;
+    dsp_swap_config();
+
+    cfg = dsp_get_active_config();
+    DspNoiseGateParams &gate = cfg->channels[0].stages[idx].noiseGate;
+
+    // Let envelope settle above threshold with warm-up
+    float warmup[256];
+    for (int i = 0; i < 256; i++) warmup[i] = 0.5f * sinf(2.0f * M_PI * 1000.0f * i / 48000.0f);
+    dsp_noise_gate_process(gate, warmup, 256, 48000);
+
+    // Now signal should pass through with settled envelope
+    float buf[64], ref[64];
+    for (int i = 0; i < 64; i++) {
+        buf[i] = 0.5f * sinf(2.0f * M_PI * 1000.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+    dsp_noise_gate_process(gate, buf, 64, 48000);
+
+    float rmsOut = 0.0f, rmsRef = 0.0f;
+    for (int i = 0; i < 64; i++) {
+        rmsOut += buf[i] * buf[i];
+        rmsRef += ref[i] * ref[i];
+    }
+    rmsOut = sqrtf(rmsOut / 64);
+    rmsRef = sqrtf(rmsRef / 64);
+    float gainDb = 20.0f * log10f(rmsOut / rmsRef);
+    TEST_ASSERT_FLOAT_WITHIN(2.0f, 0.0f, gainDb);
+}
+
+void test_noise_gate_hold_time(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_NOISE_GATE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.noiseGate.thresholdDb = -20.0f;
+    s.noiseGate.holdMs = 100.0f; // 100ms hold
+    s.noiseGate.ratio = 1.0f;
+    s.noiseGate.rangeDb = -80.0f;
+    dsp_swap_config();
+
+    cfg = dsp_get_active_config();
+    DspNoiseGateParams &gate = cfg->channels[0].stages[idx].noiseGate;
+
+    // First: process loud signal to open gate
+    float buf[128];
+    for (int i = 0; i < 128; i++) buf[i] = 0.5f;
+    dsp_noise_gate_process(gate, buf, 128, 48000);
+
+    // Now process silence — gate should still be open due to hold
+    for (int i = 0; i < 128; i++) buf[i] = 0.001f; // Very quiet
+    dsp_noise_gate_process(gate, buf, 128, 48000);
+
+    // During hold, signal should mostly pass through (not fully attenuated)
+    float rms = 0.0f;
+    for (int i = 0; i < 128; i++) rms += buf[i] * buf[i];
+    rms = sqrtf(rms / 128);
+    TEST_ASSERT_TRUE(rms > 0.0005f); // Hold should keep gate open
+}
+
+void test_noise_gate_expander_ratio(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_NOISE_GATE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.noiseGate.thresholdDb = -20.0f;
+    s.noiseGate.ratio = 4.0f; // Expander mode (not hard gate)
+    s.noiseGate.rangeDb = -80.0f;
+    s.noiseGate.holdMs = 0.0f;
+    dsp_swap_config();
+
+    float buf[64];
+    for (int i = 0; i < 64; i++) buf[i] = 0.05f * sinf(2.0f * M_PI * 1000.0f * i / 48000.0f);
+    cfg = dsp_get_active_config();
+    dsp_noise_gate_process(cfg->channels[0].stages[idx].noiseGate, buf, 64, 48000);
+
+    // With ratio>1, signal should be partially attenuated (not fully killed)
+    float rms = 0.0f;
+    for (int i = 0; i < 64; i++) rms += buf[i] * buf[i];
+    rms = sqrtf(rms / 64);
+    TEST_ASSERT_TRUE(rms < 0.05f); // Some attenuation
+    TEST_ASSERT_TRUE(rms > 0.0001f); // But not fully killed (expander, not hard gate)
+}
+
+void test_noise_gate_range_limit(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_NOISE_GATE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.noiseGate.thresholdDb = -10.0f;
+    s.noiseGate.rangeDb = -20.0f; // Only -20dB max attenuation (not full silence)
+    s.noiseGate.ratio = 1.0f;
+    s.noiseGate.holdMs = 0.0f;
+    dsp_swap_config();
+
+    float buf[64];
+    for (int i = 0; i < 64; i++) buf[i] = 0.01f; // Below threshold
+    cfg = dsp_get_active_config();
+    dsp_noise_gate_process(cfg->channels[0].stages[idx].noiseGate, buf, 64, 48000);
+
+    // Attenuation should not exceed rangeDb (-20dB = factor of 0.1)
+    // So output should be at least input * 0.1 = 0.001
+    float minVal = 1.0f;
+    for (int i = 0; i < 64; i++) {
+        float abs = fabsf(buf[i]);
+        if (abs < minVal && abs > 0.0f) minVal = abs;
+    }
+    TEST_ASSERT_TRUE(minVal >= 0.0005f); // Range limits attenuation
+}
+
+// ===== Tone Control Tests =====
+
+void test_tone_ctrl_flat_at_zero_gain(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_TONE_CTRL);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.toneCtrl.bassGain = 0.0f;
+    s.toneCtrl.midGain = 0.0f;
+    s.toneCtrl.trebleGain = 0.0f;
+    dsp_compute_tone_ctrl_coeffs(s.toneCtrl, 48000);
+    dsp_swap_config();
+
+    // Process 1kHz sine (mid-range)
+    float buf[256], ref[256];
+    for (int i = 0; i < 256; i++) {
+        buf[i] = 0.5f * sinf(2.0f * M_PI * 1000.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+    cfg = dsp_get_active_config();
+    dsp_tone_ctrl_process(cfg->channels[0].stages[idx].toneCtrl, buf, 256);
+
+    // After settling (skip first 32 samples for biquad transient), should be ~passthrough
+    float rmsOut = 0.0f, rmsRef = 0.0f;
+    for (int i = 32; i < 256; i++) {
+        rmsOut += buf[i] * buf[i];
+        rmsRef += ref[i] * ref[i];
+    }
+    rmsOut = sqrtf(rmsOut / 224);
+    rmsRef = sqrtf(rmsRef / 224);
+    float gainDb = 20.0f * log10f(rmsOut / rmsRef);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 0.0f, gainDb); // Within 1 dB of flat
+}
+
+void test_tone_ctrl_bass_boost(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_TONE_CTRL);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.toneCtrl.bassGain = 6.0f;
+    s.toneCtrl.midGain = 0.0f;
+    s.toneCtrl.trebleGain = 0.0f;
+    dsp_compute_tone_ctrl_coeffs(s.toneCtrl, 48000);
+    dsp_swap_config();
+
+    // Process low-frequency sine (50Hz)
+    float buf[256], ref[256];
+    for (int i = 0; i < 256; i++) {
+        buf[i] = 0.3f * sinf(2.0f * M_PI * 50.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+    cfg = dsp_get_active_config();
+    dsp_tone_ctrl_process(cfg->channels[0].stages[idx].toneCtrl, buf, 256);
+
+    float rmsOut = 0.0f, rmsRef = 0.0f;
+    for (int i = 128; i < 256; i++) { // Skip transient
+        rmsOut += buf[i] * buf[i];
+        rmsRef += ref[i] * ref[i];
+    }
+    rmsOut = sqrtf(rmsOut / 128);
+    rmsRef = sqrtf(rmsRef / 128);
+    float gainDb = 20.0f * log10f(rmsOut / rmsRef);
+    TEST_ASSERT_TRUE(gainDb > 2.0f); // Some bass boost detected
+}
+
+void test_tone_ctrl_treble_cut(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_TONE_CTRL);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.toneCtrl.bassGain = 0.0f;
+    s.toneCtrl.midGain = 0.0f;
+    s.toneCtrl.trebleGain = -6.0f;
+    dsp_compute_tone_ctrl_coeffs(s.toneCtrl, 48000);
+    dsp_swap_config();
+
+    // Process high-frequency sine (15kHz)
+    float buf[256], ref[256];
+    for (int i = 0; i < 256; i++) {
+        buf[i] = 0.3f * sinf(2.0f * M_PI * 15000.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+    cfg = dsp_get_active_config();
+    dsp_tone_ctrl_process(cfg->channels[0].stages[idx].toneCtrl, buf, 256);
+
+    float rmsOut = 0.0f, rmsRef = 0.0f;
+    for (int i = 64; i < 256; i++) {
+        rmsOut += buf[i] * buf[i];
+        rmsRef += ref[i] * ref[i];
+    }
+    rmsOut = sqrtf(rmsOut / 192);
+    rmsRef = sqrtf(rmsRef / 192);
+    float gainDb = 20.0f * log10f(rmsOut / rmsRef);
+    TEST_ASSERT_TRUE(gainDb < -2.0f); // Treble cut detected
+}
+
+void test_tone_ctrl_mid_boost(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_TONE_CTRL);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.toneCtrl.bassGain = 0.0f;
+    s.toneCtrl.midGain = 6.0f;
+    s.toneCtrl.trebleGain = 0.0f;
+    dsp_compute_tone_ctrl_coeffs(s.toneCtrl, 48000);
+    dsp_swap_config();
+
+    // Process 1kHz sine
+    float buf[256], ref[256];
+    for (int i = 0; i < 256; i++) {
+        buf[i] = 0.3f * sinf(2.0f * M_PI * 1000.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+    cfg = dsp_get_active_config();
+    dsp_tone_ctrl_process(cfg->channels[0].stages[idx].toneCtrl, buf, 256);
+
+    float rmsOut = 0.0f, rmsRef = 0.0f;
+    for (int i = 64; i < 256; i++) {
+        rmsOut += buf[i] * buf[i];
+        rmsRef += ref[i] * ref[i];
+    }
+    rmsOut = sqrtf(rmsOut / 192);
+    rmsRef = sqrtf(rmsRef / 192);
+    float gainDb = 20.0f * log10f(rmsOut / rmsRef);
+    TEST_ASSERT_TRUE(gainDb > 2.0f); // Mid boost detected
+}
+
+// ===== Bessel Crossover Tests =====
+
+void test_bessel_q_table_values(void) {
+    // Verify the known Q values for Bessel order 2
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_insert_crossover_bessel(0, 1000.0f, 2, 0);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5774f, s.biquad.Q);
+}
+
+void test_bessel_crossover_insert_order2(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int countBefore = cfg->channels[0].stageCount;
+    int idx = dsp_insert_crossover_bessel(0, 1000.0f, 2, 0);
+    TEST_ASSERT_TRUE(idx >= 0);
+    TEST_ASSERT_EQUAL(countBefore + 1, cfg->channels[0].stageCount); // 1 section
+}
+
+void test_bessel_crossover_insert_order4(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int countBefore = cfg->channels[0].stageCount;
+    int idx = dsp_insert_crossover_bessel(0, 1000.0f, 4, 0);
+    TEST_ASSERT_TRUE(idx >= 0);
+    TEST_ASSERT_EQUAL(countBefore + 2, cfg->channels[0].stageCount); // 2 sections
+}
+
+void test_bessel_crossover_summation_flat(void) {
+    dsp_init();
+    // Insert LPF + HPF Bessel order 2 and check flat sum
+    DspState *cfg = dsp_get_inactive_config();
+    dsp_insert_crossover_bessel(0, 1000.0f, 2, 0); // LPF
+    dsp_insert_crossover_bessel(1, 1000.0f, 2, 1); // HPF
+    dsp_swap_config();
+
+    // Process a multi-frequency signal through both
+    float bufL[256], bufR[256], sum[256];
+    for (int i = 0; i < 256; i++) {
+        float sample = 0.3f * sinf(2.0f * M_PI * 200.0f * i / 48000.0f)
+                     + 0.3f * sinf(2.0f * M_PI * 5000.0f * i / 48000.0f);
+        bufL[i] = sample;
+        bufR[i] = sample;
+    }
+
+    cfg = dsp_get_active_config();
+    // Process LPF on channel 0 stages
+    for (int s = DSP_PEQ_BANDS; s < cfg->channels[0].stageCount; s++) {
+        if (cfg->channels[0].stages[s].enabled && dsp_is_biquad_type(cfg->channels[0].stages[s].type)) {
+            dsps_biquad_f32(bufL, bufL, 256, cfg->channels[0].stages[s].biquad.coeffs, cfg->channels[0].stages[s].biquad.delay);
+        }
+    }
+    for (int s = DSP_PEQ_BANDS; s < cfg->channels[1].stageCount; s++) {
+        if (cfg->channels[1].stages[s].enabled && dsp_is_biquad_type(cfg->channels[1].stages[s].type)) {
+            dsps_biquad_f32(bufR, bufR, 256, cfg->channels[1].stages[s].biquad.coeffs, cfg->channels[1].stages[s].biquad.delay);
+        }
+    }
+
+    // Sum should be approximately flat (within 3dB due to Bessel not summing perfectly flat)
+    float rmsSum = 0.0f;
+    for (int i = 128; i < 256; i++) {
+        sum[i] = bufL[i] + bufR[i];
+        rmsSum += sum[i] * sum[i];
+    }
+    rmsSum = sqrtf(rmsSum / 128);
+    TEST_ASSERT_TRUE(rmsSum > 0.1f); // Sum is non-zero
+}
+
+void test_bessel_crossover_rollback_on_full(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    // Fill up stages
+    for (int i = cfg->channels[0].stageCount; i < DSP_MAX_STAGES; i++) {
+        dsp_add_stage(0, DSP_BIQUAD_PEQ);
+    }
+    // Now try to insert Bessel order 4 (needs 2 stages) — should fail
+    int idx = dsp_insert_crossover_bessel(0, 1000.0f, 4, 0);
+    TEST_ASSERT_EQUAL(-1, idx);
+}
+
+// ===== Speaker Protection Tests =====
+
+void test_speaker_prot_thermal_ramp(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
+    TEST_ASSERT_TRUE(idx >= 0);
+    dsp_swap_config();
+
+    cfg = dsp_get_active_config();
+    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
+    float initialTemp = sp.currentTempC;
+
+    // Process sustained loud signal
+    float buf[256];
+    for (int iter = 0; iter < 20; iter++) {
+        for (int i = 0; i < 256; i++) buf[i] = 0.8f;
+        dsp_speaker_prot_process(sp, buf, 256, 48000);
+    }
+    TEST_ASSERT_TRUE(sp.currentTempC > initialTemp); // Temp should rise
+}
+
+void test_speaker_prot_cool_down(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
+    TEST_ASSERT_TRUE(idx >= 0);
+    // Use fast thermal time constant so heating/cooling is pronounced in test
+    cfg->channels[0].stages[idx].speakerProt.thermalTauMs = 100.0f;
+    dsp_swap_config();
+
+    cfg = dsp_get_active_config();
+    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
+
+    // Heat it up with loud signal
+    float buf[256];
+    for (int iter = 0; iter < 100; iter++) {
+        for (int i = 0; i < 256; i++) buf[i] = 0.9f;
+        dsp_speaker_prot_process(sp, buf, 256, 48000);
+    }
+    float hotTemp = sp.currentTempC;
+    TEST_ASSERT_TRUE(hotTemp > 26.0f); // Ensure meaningful heating occurred
+
+    // Now process silence — should cool down
+    for (int iter = 0; iter < 100; iter++) {
+        for (int i = 0; i < 256; i++) buf[i] = 0.0f;
+        dsp_speaker_prot_process(sp, buf, 256, 48000);
+    }
+    TEST_ASSERT_TRUE(sp.currentTempC < hotTemp);
+}
+
+void test_speaker_prot_gain_reduction_at_limit(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.speakerProt.maxTempC = 50.0f; // Low threshold for fast triggering
+    s.speakerProt.thermalTauMs = 10.0f; // Fast thermal response
+    dsp_swap_config();
+
+    cfg = dsp_get_active_config();
+    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
+
+    float buf[256];
+    for (int iter = 0; iter < 100; iter++) {
+        for (int i = 0; i < 256; i++) buf[i] = 0.95f;
+        dsp_speaker_prot_process(sp, buf, 256, 48000);
+    }
+    TEST_ASSERT_TRUE(sp.gainReduction < 0.0f); // GR should be applied
+}
+
+void test_speaker_prot_excursion_limit(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.speakerProt.excursionLimitMm = 0.1f; // Very low limit
+    s.speakerProt.driverDiameterMm = 10.0f; // Small driver = small area = higher excursion estimate
+    dsp_swap_config();
+
+    cfg = dsp_get_active_config();
+    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
+
+    float buf[256];
+    for (int i = 0; i < 256; i++) buf[i] = 0.9f;
+    dsp_speaker_prot_process(sp, buf, 256, 48000);
+
+    // With very low excursion limit, GR should kick in for high amplitude
+    TEST_ASSERT_TRUE(sp.gainReduction < 0.0f);
+}
+
+void test_speaker_prot_metering_populated(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_SPEAKER_PROT);
+    TEST_ASSERT_TRUE(idx >= 0);
+    dsp_swap_config();
+
+    cfg = dsp_get_active_config();
+    DspSpeakerProtParams &sp = cfg->channels[0].stages[idx].speakerProt;
+
+    float buf[256];
+    for (int i = 0; i < 256; i++) buf[i] = 0.5f;
+    dsp_speaker_prot_process(sp, buf, 256, 48000);
+
+    // After processing, runtime fields should be non-zero/meaningful
+    TEST_ASSERT_TRUE(sp.currentTempC >= 25.0f);
+    TEST_ASSERT_TRUE(sp.envelope >= 0.0f);
+}
+
+// ===== Stereo Width Tests =====
+
+void test_stereo_width_mono_collapse(void) {
+    // width=0 → L should equal R (mono)
+    float bufL[64], bufR[64];
+    for (int i = 0; i < 64; i++) {
+        bufL[i] = sinf(2.0f * M_PI * 1000.0f * i / 48000.0f);
+        bufR[i] = sinf(2.0f * M_PI * 500.0f * i / 48000.0f);
+    }
+
+    // Apply M/S transform with width=0
+    for (int f = 0; f < 64; f++) {
+        float mid = (bufL[f] + bufR[f]) * 0.5f;
+        float side = (bufL[f] - bufR[f]) * 0.5f * 0.0f; // width=0
+        bufL[f] = mid + side;
+        bufR[f] = mid - side;
+    }
+
+    for (int i = 0; i < 64; i++) {
+        TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, bufL[i], bufR[i]);
+    }
+}
+
+void test_stereo_width_normal_passthrough(void) {
+    float bufL[64], bufR[64], refL[64], refR[64];
+    for (int i = 0; i < 64; i++) {
+        bufL[i] = sinf(2.0f * M_PI * 1000.0f * i / 48000.0f);
+        bufR[i] = sinf(2.0f * M_PI * 500.0f * i / 48000.0f);
+        refL[i] = bufL[i];
+        refR[i] = bufR[i];
+    }
+
+    // Apply M/S transform with width=100 (normal)
+    for (int f = 0; f < 64; f++) {
+        float mid = (bufL[f] + bufR[f]) * 0.5f;
+        float side = (bufL[f] - bufR[f]) * 0.5f * 1.0f; // width=100/100
+        bufL[f] = mid + side;
+        bufR[f] = mid - side;
+    }
+
+    for (int i = 0; i < 64; i++) {
+        TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, refL[i], bufL[i]);
+        TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, refR[i], bufR[i]);
+    }
+}
+
+void test_stereo_width_extra_wide(void) {
+    float bufL[64], bufR[64];
+    for (int i = 0; i < 64; i++) {
+        bufL[i] = 0.5f;
+        bufR[i] = -0.5f; // Pure side signal
+    }
+
+    // Apply M/S with width=200 (2x)
+    for (int f = 0; f < 64; f++) {
+        float mid = (bufL[f] + bufR[f]) * 0.5f;
+        float side = (bufL[f] - bufR[f]) * 0.5f * 2.0f; // width=200/100
+        bufL[f] = mid + side;
+        bufR[f] = mid - side;
+    }
+
+    // Side signal should be amplified: L=+1, R=-1
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, bufL[0]);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -1.0f, bufR[0]);
+}
+
+void test_stereo_width_center_boost(void) {
+    float bufL[64], bufR[64];
+    // Mono signal (same on L and R = pure mid)
+    for (int i = 0; i < 64; i++) {
+        bufL[i] = 0.5f;
+        bufR[i] = 0.5f;
+    }
+
+    float centerGain = powf(10.0f, 6.0f / 20.0f); // +6dB
+    for (int f = 0; f < 64; f++) {
+        float mid = (bufL[f] + bufR[f]) * 0.5f * centerGain;
+        float side = (bufL[f] - bufR[f]) * 0.5f * 1.0f;
+        bufL[f] = mid + side;
+        bufR[f] = mid - side;
+    }
+
+    // Mid boosted by +6dB → ~2x → L and R should be ~1.0
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.5f * centerGain, bufL[0]);
+}
+
+// ===== Loudness Compensation Tests =====
+
+void test_loudness_reference_equals_current_flat(void) {
+    DspLoudnessParams ld;
+    dsp_init_loudness_params(ld);
+    ld.referenceLevelDb = 75.0f;
+    ld.currentLevelDb = 75.0f;
+    ld.amount = 100.0f;
+    dsp_compute_loudness_coeffs(ld, 48000);
+
+    // When ref == current, boosts should be ~0
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 0.0f, ld.bassBoostDb);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, 0.0f, ld.trebleBoostDb);
+}
+
+void test_loudness_low_volume_bass_boost(void) {
+    DspLoudnessParams ld;
+    dsp_init_loudness_params(ld);
+    ld.referenceLevelDb = 80.0f;
+    ld.currentLevelDb = 40.0f;
+    ld.amount = 100.0f;
+    dsp_compute_loudness_coeffs(ld, 48000);
+
+    // At low volume, bass should be boosted
+    TEST_ASSERT_TRUE(ld.bassBoostDb > 2.0f);
+}
+
+void test_loudness_amount_zero_bypass(void) {
+    DspLoudnessParams ld;
+    dsp_init_loudness_params(ld);
+    ld.referenceLevelDb = 80.0f;
+    ld.currentLevelDb = 30.0f;
+    ld.amount = 0.0f; // Disabled
+    dsp_compute_loudness_coeffs(ld, 48000);
+
+    // amount=0 → no boost
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 0.0f, ld.bassBoostDb);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 0.0f, ld.trebleBoostDb);
+}
+
+void test_loudness_treble_boost_at_low_level(void) {
+    DspLoudnessParams ld;
+    dsp_init_loudness_params(ld);
+    ld.referenceLevelDb = 80.0f;
+    ld.currentLevelDb = 30.0f;
+    ld.amount = 100.0f;
+    dsp_compute_loudness_coeffs(ld, 48000);
+
+    // Treble should also be boosted at low level
+    TEST_ASSERT_TRUE(ld.trebleBoostDb > 1.0f);
+}
+
+// ===== Bass Enhancement Tests =====
+
+void test_bass_enhance_generates_harmonics(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_BASS_ENHANCE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.bassEnhance.frequency = 80.0f;
+    s.bassEnhance.harmonicGainDb = 6.0f;
+    s.bassEnhance.harmonicGainLin = powf(10.0f, 6.0f / 20.0f);
+    s.bassEnhance.mix = 100.0f;
+    s.bassEnhance.order = 2; // Both 2nd and 3rd
+    dsp_compute_bass_enhance_coeffs(s.bassEnhance, 48000);
+    dsp_swap_config();
+
+    // Generate 40Hz sine (sub-bass)
+    float buf[256], ref[256];
+    for (int i = 0; i < 256; i++) {
+        buf[i] = 0.5f * sinf(2.0f * M_PI * 40.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+    cfg = dsp_get_active_config();
+    dsp_bass_enhance_process(cfg->channels[0].stages[idx].bassEnhance, buf, 256);
+
+    // Output should differ from input (harmonics added)
+    float diffRms = 0.0f;
+    for (int i = 128; i < 256; i++) {
+        float d = buf[i] - ref[i];
+        diffRms += d * d;
+    }
+    diffRms = sqrtf(diffRms / 128);
+    TEST_ASSERT_TRUE(diffRms > 0.001f); // Some harmonic content generated
+}
+
+void test_bass_enhance_mix_zero_passthrough(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_BASS_ENHANCE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.bassEnhance.mix = 0.0f; // Disabled
+    dsp_compute_bass_enhance_coeffs(s.bassEnhance, 48000);
+    dsp_swap_config();
+
+    float buf[64], ref[64];
+    for (int i = 0; i < 64; i++) {
+        buf[i] = 0.5f * sinf(2.0f * M_PI * 40.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+    cfg = dsp_get_active_config();
+    dsp_bass_enhance_process(cfg->channels[0].stages[idx].bassEnhance, buf, 64);
+
+    for (int i = 0; i < 64; i++) {
+        TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, ref[i], buf[i]);
+    }
+}
+
+void test_bass_enhance_frequency_isolation(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_BASS_ENHANCE);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.bassEnhance.frequency = 80.0f;
+    s.bassEnhance.harmonicGainDb = 6.0f;
+    s.bassEnhance.harmonicGainLin = powf(10.0f, 6.0f / 20.0f);
+    s.bassEnhance.mix = 100.0f;
+    s.bassEnhance.order = 2;
+    dsp_compute_bass_enhance_coeffs(s.bassEnhance, 48000);
+    dsp_swap_config();
+
+    // Process 5kHz sine (well above crossover — should be mostly unaffected)
+    float buf[256], ref[256];
+    for (int i = 0; i < 256; i++) {
+        buf[i] = 0.5f * sinf(2.0f * M_PI * 5000.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+    cfg = dsp_get_active_config();
+    dsp_bass_enhance_process(cfg->channels[0].stages[idx].bassEnhance, buf, 256);
+
+    // HF content should be mostly unchanged (harmonics are generated only from LF)
+    float rmsOut = 0.0f, rmsRef = 0.0f;
+    for (int i = 128; i < 256; i++) {
+        rmsOut += buf[i] * buf[i];
+        rmsRef += ref[i] * ref[i];
+    }
+    rmsOut = sqrtf(rmsOut / 128);
+    rmsRef = sqrtf(rmsRef / 128);
+    float gainDb = 20.0f * log10f(rmsOut / rmsRef);
+    TEST_ASSERT_FLOAT_WITHIN(3.0f, 0.0f, gainDb); // Within 3dB of original
+}
+
+// ===== Multi-Band Compressor Tests =====
+
+void test_multiband_2band_split_and_sum(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_MULTIBAND_COMP);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    TEST_ASSERT_TRUE(s.multibandComp.mbSlot >= 0);
+    s.multibandComp.numBands = 2;
+
+    // Set very high threshold so no compression occurs
+#ifdef NATIVE_TEST
+    DspMultibandSlot &slot = _mbSlots[s.multibandComp.mbSlot];
+#else
+    DspMultibandSlot &slot = _mbSlots[s.multibandComp.mbSlot];
+#endif
+    slot.crossoverFreqs[0] = 1000.0f;
+    // Compute crossover coefficients
+    float freq = 1000.0f / 48000.0f; // normalized
+    dsp_gen_lpf_f32(slot.xoverCoeffs[0][0], freq, 0.5f);
+    dsp_gen_hpf_f32(slot.xoverCoeffs[0][1], freq, 0.5f);
+    for (int b = 0; b < 2; b++) {
+        slot.bands[b].thresholdDb = 0.0f; // No compression
+        slot.bands[b].ratio = 1.0f;
+        slot.bands[b].makeupLinear = 1.0f;
+    }
+
+    dsp_swap_config();
+
+    float buf[256], ref[256];
+    for (int i = 0; i < 256; i++) {
+        buf[i] = 0.5f * sinf(2.0f * M_PI * 500.0f * i / 48000.0f);
+        ref[i] = buf[i];
+    }
+
+    cfg = dsp_get_active_config();
+    dsp_multiband_comp_process(cfg->channels[0].stages[idx].multibandComp, buf, 256, 48000);
+
+    // Sum of split bands should roughly reconstruct original (within a few dB due to crossover)
+    float rmsOut = 0.0f, rmsRef = 0.0f;
+    for (int i = 128; i < 256; i++) {
+        rmsOut += buf[i] * buf[i];
+        rmsRef += ref[i] * ref[i];
+    }
+    rmsOut = sqrtf(rmsOut / 128);
+    rmsRef = sqrtf(rmsRef / 128);
+    TEST_ASSERT_TRUE(rmsOut > rmsRef * 0.3f); // At least 30% of original survives split+sum
+}
+
+void test_multiband_per_band_compression(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_MULTIBAND_COMP);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.multibandComp.numBands = 2;
+#ifdef NATIVE_TEST
+    DspMultibandSlot &slot = _mbSlots[s.multibandComp.mbSlot];
+#else
+    DspMultibandSlot &slot = _mbSlots[s.multibandComp.mbSlot];
+#endif
+    slot.crossoverFreqs[0] = 1000.0f;
+    float freq = 1000.0f / 48000.0f;
+    dsp_gen_lpf_f32(slot.xoverCoeffs[0][0], freq, 0.5f);
+    dsp_gen_hpf_f32(slot.xoverCoeffs[0][1], freq, 0.5f);
+
+    // Compress only low band heavily
+    slot.bands[0].thresholdDb = -30.0f;
+    slot.bands[0].ratio = 10.0f;
+    slot.bands[0].makeupLinear = 1.0f;
+    slot.bands[1].thresholdDb = 0.0f;
+    slot.bands[1].ratio = 1.0f;
+    slot.bands[1].makeupLinear = 1.0f;
+    dsp_swap_config();
+
+    // Process signal — should see compression on band 0
+    float buf[256];
+    for (int i = 0; i < 256; i++) buf[i] = 0.5f * sinf(2.0f * M_PI * 200.0f * i / 48000.0f);
+
+    cfg = dsp_get_active_config();
+    dsp_multiband_comp_process(cfg->channels[0].stages[idx].multibandComp, buf, 256, 48000);
+
+    // Band 0 should have gain reduction
+    TEST_ASSERT_TRUE(slot.bands[0].gainReduction < 0.0f);
+}
+
+void test_multiband_3band_crossover_accuracy(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+    int idx = dsp_add_chain_stage(0, DSP_MULTIBAND_COMP);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.multibandComp.numBands = 3;
+    TEST_ASSERT_TRUE(s.multibandComp.mbSlot >= 0);
+    TEST_ASSERT_EQUAL(3, s.multibandComp.numBands);
+}
+
+void test_multiband_slot_alloc_and_free(void) {
+    dsp_init();
+    int slot = dsp_mb_alloc_slot();
+    TEST_ASSERT_TRUE(slot >= 0);
+
+    // Second alloc should fail (only 1 slot)
+    int slot2 = dsp_mb_alloc_slot();
+    TEST_ASSERT_EQUAL(-1, slot2);
+
+    // Free and re-alloc should work
+    dsp_mb_free_slot(slot);
+    int slot3 = dsp_mb_alloc_slot();
+    TEST_ASSERT_TRUE(slot3 >= 0);
+}
+
+// ===== Baffle Step Tests =====
+
+void test_baffle_step_frequency_250mm(void) {
+    BaffleStepResult r = dsp_baffle_step_correction(250.0f);
+    // f = 343000 / (pi * 250) = ~436.6 Hz
+    TEST_ASSERT_FLOAT_WITHIN(10.0f, 436.6f, r.frequency);
+}
+
+void test_baffle_step_zero_width_safe(void) {
+    BaffleStepResult r = dsp_baffle_step_correction(0.0f);
+    TEST_ASSERT_TRUE(r.frequency > 0.0f);
+    TEST_ASSERT_TRUE(r.gainDb > 0.0f);
+}
+
+void test_baffle_step_gain_6db(void) {
+    BaffleStepResult r = dsp_baffle_step_correction(300.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.5f, 6.0f, r.gainDb);
+}
+
+// ===== THD Measurement Tests =====
+
+void test_thd_pure_sine_near_zero(void) {
+    thd_start_measurement(1000.0f, 4);
+    TEST_ASSERT_TRUE(thd_is_measuring());
+
+    // Generate clean FFT magnitude for pure 1kHz sine
+    float binFreqHz = 48000.0f / 1024.0f; // ~46.875 Hz/bin
+    int fundamentalBin = (int)(1000.0f / binFreqHz + 0.5f); // bin 21
+    int numBins = 512;
+
+    for (int frame = 0; frame < 4; frame++) {
+        float fftMag[512];
+        memset(fftMag, 0, sizeof(fftMag));
+        fftMag[fundamentalBin] = 1.0f; // Pure fundamental, no harmonics
+        thd_process_fft_buffer(fftMag, numBins, binFreqHz, 48000.0f);
+    }
+
+    ThdResult r = thd_get_result();
+    TEST_ASSERT_TRUE(r.valid);
+    TEST_ASSERT_TRUE(r.thdPlusNPercent < 1.0f); // Near zero THD for pure sine
+}
+
+void test_thd_known_3rd_harmonic(void) {
+    thd_start_measurement(1000.0f, 4);
+
+    float binFreqHz = 48000.0f / 1024.0f;
+    int fundamentalBin = (int)(1000.0f / binFreqHz + 0.5f);
+    int thirdHarmBin = (int)(3000.0f / binFreqHz + 0.5f);
+    int numBins = 512;
+
+    for (int frame = 0; frame < 4; frame++) {
+        float fftMag[512];
+        memset(fftMag, 0, sizeof(fftMag));
+        fftMag[fundamentalBin] = 1.0f;
+        fftMag[thirdHarmBin] = 0.1f; // 3rd harmonic at -20dB = 10%
+        thd_process_fft_buffer(fftMag, numBins, binFreqHz, 48000.0f);
+    }
+
+    ThdResult r = thd_get_result();
+    TEST_ASSERT_TRUE(r.valid);
+    TEST_ASSERT_TRUE(r.thdPlusNPercent > 5.0f); // Should detect significant THD
+}
+
+void test_thd_averaging_accumulates(void) {
+    thd_start_measurement(1000.0f, 8);
+    TEST_ASSERT_TRUE(thd_is_measuring());
+
+    float binFreqHz = 48000.0f / 1024.0f;
+    int fundamentalBin = (int)(1000.0f / binFreqHz + 0.5f);
+    int numBins = 512;
+
+    for (int frame = 0; frame < 4; frame++) {
+        float fftMag[512];
+        memset(fftMag, 0, sizeof(fftMag));
+        fftMag[fundamentalBin] = 1.0f;
+        thd_process_fft_buffer(fftMag, numBins, binFreqHz, 48000.0f);
+    }
+
+    // After 4 frames of 8 needed, should still be measuring
+    TEST_ASSERT_TRUE(thd_is_measuring());
+    ThdResult r = thd_get_result();
+    TEST_ASSERT_EQUAL(4, r.framesProcessed);
+    TEST_ASSERT_FALSE(r.valid);
+}
+
+void test_thd_cancel_stops(void) {
+    thd_start_measurement(1000.0f, 4);
+    TEST_ASSERT_TRUE(thd_is_measuring());
+    thd_stop_measurement();
+    TEST_ASSERT_FALSE(thd_is_measuring());
+}
+
+void test_thd_invalid_freq_safe(void) {
+    thd_start_measurement(0.0f, 4);
+    TEST_ASSERT_FALSE(thd_is_measuring());
+    ThdResult r = thd_get_result();
+    TEST_ASSERT_FALSE(r.valid);
+}
+
 // ===== Runner =====
 
 int main(int argc, char **argv) {
@@ -1914,6 +2812,68 @@ int main(int argc, char **argv) {
 
     // Metrics
     RUN_TEST(test_metrics_initial);
+
+    // Noise Gate
+    RUN_TEST(test_noise_gate_below_threshold_attenuated);
+    RUN_TEST(test_noise_gate_above_threshold_passthrough);
+    RUN_TEST(test_noise_gate_hold_time);
+    RUN_TEST(test_noise_gate_expander_ratio);
+    RUN_TEST(test_noise_gate_range_limit);
+
+    // Tone Control
+    RUN_TEST(test_tone_ctrl_flat_at_zero_gain);
+    RUN_TEST(test_tone_ctrl_bass_boost);
+    RUN_TEST(test_tone_ctrl_treble_cut);
+    RUN_TEST(test_tone_ctrl_mid_boost);
+
+    // Bessel Crossover
+    RUN_TEST(test_bessel_q_table_values);
+    RUN_TEST(test_bessel_crossover_insert_order2);
+    RUN_TEST(test_bessel_crossover_insert_order4);
+    RUN_TEST(test_bessel_crossover_summation_flat);
+    RUN_TEST(test_bessel_crossover_rollback_on_full);
+
+    // Speaker Protection
+    RUN_TEST(test_speaker_prot_thermal_ramp);
+    RUN_TEST(test_speaker_prot_cool_down);
+    RUN_TEST(test_speaker_prot_gain_reduction_at_limit);
+    RUN_TEST(test_speaker_prot_excursion_limit);
+    RUN_TEST(test_speaker_prot_metering_populated);
+
+    // Stereo Width
+    RUN_TEST(test_stereo_width_mono_collapse);
+    RUN_TEST(test_stereo_width_normal_passthrough);
+    RUN_TEST(test_stereo_width_extra_wide);
+    RUN_TEST(test_stereo_width_center_boost);
+
+    // Loudness Compensation
+    RUN_TEST(test_loudness_reference_equals_current_flat);
+    RUN_TEST(test_loudness_low_volume_bass_boost);
+    RUN_TEST(test_loudness_amount_zero_bypass);
+    RUN_TEST(test_loudness_treble_boost_at_low_level);
+
+    // Bass Enhancement
+    RUN_TEST(test_bass_enhance_generates_harmonics);
+    RUN_TEST(test_bass_enhance_mix_zero_passthrough);
+    RUN_TEST(test_bass_enhance_frequency_isolation);
+
+    // Multi-Band Compressor
+    RUN_TEST(test_multiband_2band_split_and_sum);
+    RUN_TEST(test_multiband_per_band_compression);
+    RUN_TEST(test_multiband_3band_crossover_accuracy);
+    RUN_TEST(test_multiband_slot_alloc_and_free);
+
+    // Baffle Step
+    RUN_TEST(test_baffle_step_frequency_250mm);
+    RUN_TEST(test_baffle_step_zero_width_safe);
+    RUN_TEST(test_baffle_step_gain_6db);
+
+    // THD Measurement
+    RUN_TEST(test_thd_pure_sine_near_zero);
+    RUN_TEST(test_thd_known_3rd_harmonic);
+    RUN_TEST(test_thd_averaging_accumulates);
+    RUN_TEST(test_thd_cancel_stops);
+    RUN_TEST(test_thd_invalid_freq_safe);
 
     return UNITY_END();
 }

@@ -284,8 +284,19 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
 
     if (needSoftwareVolume && _volumeGain < 1.0f) {
         // Convert int32 → float, apply volume, convert back
-        // Use a small stack buffer for chunks to avoid large allocation
-        static float fBuf[512]; // 512 floats = 256 stereo frames
+        // Buffers allocated in PSRAM to save ~4KB internal SRAM
+        static float *fBuf = nullptr;     // 512 floats = 256 stereo frames
+        static int32_t *txBuf = nullptr;  // 512 int32s for I2S TX
+        if (!fBuf) {
+            fBuf = (float *)heap_caps_calloc(512, sizeof(float), MALLOC_CAP_SPIRAM);
+            if (!fBuf) fBuf = (float *)calloc(512, sizeof(float));
+        }
+        if (!txBuf) {
+            txBuf = (int32_t *)heap_caps_calloc(512, sizeof(int32_t), MALLOC_CAP_SPIRAM);
+            if (!txBuf) txBuf = (int32_t *)calloc(512, sizeof(int32_t));
+        }
+        if (!fBuf || !txBuf) return;  // Allocation failed
+
         const int32_t* src = buffer;
         int remaining = total_samples;
 
@@ -297,8 +308,6 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
             }
             dac_apply_software_volume(fBuf, chunk, _volumeGain);
             // Convert back to int32
-            // Write directly to I2S TX — static buffer reused
-            static int32_t txBuf[512];
             for (int i = 0; i < chunk; i++) {
                 txBuf[i] = (int32_t)(fBuf[i] * 2147483647.0f);
             }

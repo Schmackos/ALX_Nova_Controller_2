@@ -472,6 +472,40 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
         diag.dcOffset += (mean - diag.dcOffset) * 0.01f;
     }
 
+    // === SILENCE FAST-PATH ===
+    // When buffer is confirmed zeros and siggen is off, skip heavy processing
+    // (DC filter, DSP, RMS, waveform, FFT). Still decay VU/peak meters.
+    if (diag.consecutiveZeros > 0 && !sigGenSw) {
+        if (AppState::getInstance().vuMeterEnabled) {
+            _vuL[a] = audio_vu_update(_vuL[a], 0.0f, dt_ms);
+            _vuR[a] = audio_vu_update(_vuR[a], 0.0f, dt_ms);
+            _vuC[a] = audio_vu_update(_vuC[a], 0.0f, dt_ms);
+            _peakL[a] = audio_peak_hold_update(_peakL[a], 0.0f, &_holdStartL[a], now, dt_ms);
+            _peakR[a] = audio_peak_hold_update(_peakR[a], 0.0f, &_holdStartR[a], now, dt_ms);
+            _peakC[a] = audio_peak_hold_update(_peakC[a], 0.0f, &_holdStartC[a], now, dt_ms);
+        } else {
+            _vuL[a] = _vuR[a] = _vuC[a] = 0.0f;
+            _peakL[a] = _peakR[a] = _peakC[a] = 0.0f;
+        }
+#ifdef DSP_ENABLED
+        dsp_clear_cpu_load();
+#endif
+        diag.noiseFloorDbfs += (DBFS_FLOOR - diag.noiseFloorDbfs) * 0.001f;
+        diag.status = audio_derive_health_status(diag);
+
+        _analysis.adc[a].rms1 = 0.0f;
+        _analysis.adc[a].rms2 = 0.0f;
+        _analysis.adc[a].rmsCombined = 0.0f;
+        _analysis.adc[a].vu1 = _vuL[a];
+        _analysis.adc[a].vu2 = _vuR[a];
+        _analysis.adc[a].vuCombined = _vuC[a];
+        _analysis.adc[a].peak1 = _peakL[a];
+        _analysis.adc[a].peak2 = _peakR[a];
+        _analysis.adc[a].peakCombined = _peakC[a];
+        _analysis.adc[a].dBFS = DBFS_FLOOR;
+        return;
+    }
+
     // DC-blocking IIR filter
     static const float DC_BLOCK_ALPHA = 0.9987f;
     for (int f = 0; f < stereo_frames; f++) {
@@ -856,10 +890,9 @@ static void audio_capture_task(void *param) {
         _analysisReady = true;
         portEXIT_CRITICAL_ISR(&spinlock);
 
-        // Yield 1 tick so IDLE0 can feed the Task Watchdog Timer.
-        // Without this, audio_cap (priority 3) runs in a tight loop
-        // draining I2S DMA buffers and starves IDLE0 (priority 0).
-        vTaskDelay(1);
+        // Yield 2 ticks so IDLE0 can feed the Task Watchdog Timer.
+        // DMA has 8 buffers = ~42ms runway, so 2ms yield is safe.
+        vTaskDelay(2);
     }
 }
 

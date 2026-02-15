@@ -34,8 +34,8 @@ static uint32_t lv_millis_cb(void) { return (uint32_t)millis(); }
 /* TFT driver instance */
 static TFT_eSPI tft = TFT_eSPI();
 
-/* LVGL display buffer (must be aligned per LV_DRAW_BUF_ALIGN) */
-static lv_color_t draw_buf[DISP_BUF_SIZE] __attribute__((aligned(LV_DRAW_BUF_ALIGN)));
+/* LVGL display buffer — allocated in PSRAM to save ~4KB internal SRAM */
+static lv_color_t *draw_buf = nullptr;
 
 /* Screen sleep state */
 static bool screen_awake = true;
@@ -208,8 +208,8 @@ static void gui_task(void *param) {
             }
         }
 
-        /* Refresh active screen data periodically */
-        if (millis() - last_dashboard_refresh > DASHBOARD_REFRESH_MS) {
+        /* Refresh active screen data periodically (skip when screen is asleep) */
+        if (screen_awake && millis() - last_dashboard_refresh > DASHBOARD_REFRESH_MS) {
             last_dashboard_refresh = millis();
             ScreenId cur = gui_nav_current();
             if (cur == SCR_DESKTOP) {
@@ -251,10 +251,16 @@ static void gui_task(void *param) {
         /* Process deferred navigation (safe: outside LVGL event context) */
         gui_nav_process_deferred();
 
-        /* Delay until next LVGL tick needed */
-        uint32_t delay_ms = (time_till_next < GUI_TICK_PERIOD_MS) ? time_till_next : GUI_TICK_PERIOD_MS;
-        if (delay_ms < GUI_TICK_PERIOD_MS) delay_ms = GUI_TICK_PERIOD_MS;
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        /* Delay until next LVGL tick needed.
+           When screen is asleep, poll at 100ms to save CPU —
+           wake-on-encoder latency is imperceptible. */
+        if (screen_awake) {
+            uint32_t delay_ms = (time_till_next < GUI_TICK_PERIOD_MS) ? time_till_next : GUI_TICK_PERIOD_MS;
+            if (delay_ms < GUI_TICK_PERIOD_MS) delay_ms = GUI_TICK_PERIOD_MS;
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
     }
 }
 
@@ -297,10 +303,20 @@ void gui_init(void) {
     lv_tick_set_cb(lv_millis_cb);
     LOG_I("[GUI] LVGL initialized");
 
+    /* Allocate LVGL draw buffer in PSRAM (aligned per LV_DRAW_BUF_ALIGN) */
+    if (!draw_buf) {
+        draw_buf = (lv_color_t *)heap_caps_aligned_alloc(
+            LV_DRAW_BUF_ALIGN, DISP_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+        if (!draw_buf) {
+            draw_buf = (lv_color_t *)heap_caps_aligned_alloc(
+                LV_DRAW_BUF_ALIGN, DISP_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DEFAULT);
+        }
+    }
+
     /* Create LVGL display with buffer */
     lv_display_t *disp = lv_display_create(DISPLAY_HEIGHT, DISPLAY_WIDTH); /* landscape: 160x128 */
     lv_display_set_flush_cb(disp, disp_flush_cb);
-    lv_display_set_buffers(disp, draw_buf, NULL, sizeof(draw_buf), LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(disp, draw_buf, NULL, DISP_BUF_SIZE * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
 
     /* Initialize theme (dark mode by default) */
     gui_theme_init(true);

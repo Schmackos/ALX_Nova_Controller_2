@@ -5,6 +5,7 @@
 #include "dsp_coefficients.h"
 #include "dsp_rew_parser.h"
 #include "dsp_crossover.h"
+#include "thd_measurement.h"
 #include "delay_alignment.h"
 #include "app_state.h"
 #include "auth_handler.h"
@@ -435,6 +436,13 @@ static DspStageType typeFromString(const char *name) {
     if (strcmp(name, "LPF_1ST") == 0) return DSP_BIQUAD_LPF_1ST;
     if (strcmp(name, "HPF_1ST") == 0) return DSP_BIQUAD_HPF_1ST;
     if (strcmp(name, "LINKWITZ") == 0) return DSP_BIQUAD_LINKWITZ;
+    if (strcmp(name, "NOISE_GATE") == 0) return DSP_NOISE_GATE;
+    if (strcmp(name, "TONE_CTRL") == 0) return DSP_TONE_CTRL;
+    if (strcmp(name, "SPEAKER_PROT") == 0) return DSP_SPEAKER_PROT;
+    if (strcmp(name, "STEREO_WIDTH") == 0) return DSP_STEREO_WIDTH;
+    if (strcmp(name, "LOUDNESS") == 0) return DSP_LOUDNESS;
+    if (strcmp(name, "BASS_ENHANCE") == 0) return DSP_BASS_ENHANCE;
+    if (strcmp(name, "MULTIBAND_COMP") == 0) return DSP_MULTIBAND_COMP;
     return DSP_BIQUAD_PEQ;
 }
 
@@ -614,6 +622,42 @@ void registerDspApiEndpoints() {
             if (params["kneeDb"].is<float>()) s.compressor.kneeDb = params["kneeDb"].as<float>();
             if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
             dsp_compute_compressor_makeup(s.compressor);
+        } else if (type == DSP_NOISE_GATE && !params.isNull()) {
+            if (params["thresholdDb"].is<float>()) s.noiseGate.thresholdDb = params["thresholdDb"].as<float>();
+            if (params["attackMs"].is<float>()) s.noiseGate.attackMs = params["attackMs"].as<float>();
+            if (params["holdMs"].is<float>()) s.noiseGate.holdMs = params["holdMs"].as<float>();
+            if (params["releaseMs"].is<float>()) s.noiseGate.releaseMs = params["releaseMs"].as<float>();
+            if (params["ratio"].is<float>()) s.noiseGate.ratio = params["ratio"].as<float>();
+            if (params["rangeDb"].is<float>()) s.noiseGate.rangeDb = params["rangeDb"].as<float>();
+        } else if (type == DSP_TONE_CTRL && !params.isNull()) {
+            if (params["bassGain"].is<float>()) s.toneCtrl.bassGain = params["bassGain"].as<float>();
+            if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
+            if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
+            dsp_compute_tone_ctrl_coeffs(s.toneCtrl, inactive->sampleRate);
+        } else if (type == DSP_SPEAKER_PROT && !params.isNull()) {
+            if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
+            if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
+            if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
+            if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
+            if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
+            if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
+        } else if (type == DSP_STEREO_WIDTH && !params.isNull()) {
+            if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
+            if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();
+            dsp_compute_stereo_width(s.stereoWidth);
+        } else if (type == DSP_LOUDNESS && !params.isNull()) {
+            if (params["referenceLevelDb"].is<float>()) s.loudness.referenceLevelDb = params["referenceLevelDb"].as<float>();
+            if (params["currentLevelDb"].is<float>()) s.loudness.currentLevelDb = params["currentLevelDb"].as<float>();
+            if (params["amount"].is<float>()) s.loudness.amount = params["amount"].as<float>();
+            dsp_compute_loudness_coeffs(s.loudness, inactive->sampleRate);
+        } else if (type == DSP_BASS_ENHANCE && !params.isNull()) {
+            if (params["frequency"].is<float>()) s.bassEnhance.frequency = params["frequency"].as<float>();
+            if (params["harmonicGainDb"].is<float>()) s.bassEnhance.harmonicGainDb = params["harmonicGainDb"].as<float>();
+            if (params["mix"].is<float>()) s.bassEnhance.mix = params["mix"].as<float>();
+            if (params["order"].is<int>()) s.bassEnhance.order = params["order"].as<uint8_t>();
+            dsp_compute_bass_enhance_coeffs(s.bassEnhance, inactive->sampleRate);
+        } else if (type == DSP_MULTIBAND_COMP && !params.isNull()) {
+            if (params["numBands"].is<int>()) s.multibandComp.numBands = params["numBands"].as<uint8_t>();
         }
 
         autoMirrorIfLinked(ch);
@@ -691,6 +735,42 @@ void registerDspApiEndpoints() {
             if (params["kneeDb"].is<float>()) s.compressor.kneeDb = params["kneeDb"].as<float>();
             if (params["makeupGainDb"].is<float>()) s.compressor.makeupGainDb = params["makeupGainDb"].as<float>();
             dsp_compute_compressor_makeup(s.compressor);
+        } else if (s.type == DSP_NOISE_GATE && !params.isNull()) {
+            if (params["thresholdDb"].is<float>()) s.noiseGate.thresholdDb = params["thresholdDb"].as<float>();
+            if (params["attackMs"].is<float>()) s.noiseGate.attackMs = params["attackMs"].as<float>();
+            if (params["holdMs"].is<float>()) s.noiseGate.holdMs = params["holdMs"].as<float>();
+            if (params["releaseMs"].is<float>()) s.noiseGate.releaseMs = params["releaseMs"].as<float>();
+            if (params["ratio"].is<float>()) s.noiseGate.ratio = params["ratio"].as<float>();
+            if (params["rangeDb"].is<float>()) s.noiseGate.rangeDb = params["rangeDb"].as<float>();
+        } else if (s.type == DSP_TONE_CTRL && !params.isNull()) {
+            if (params["bassGain"].is<float>()) s.toneCtrl.bassGain = params["bassGain"].as<float>();
+            if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
+            if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
+            dsp_compute_tone_ctrl_coeffs(s.toneCtrl, inactive->sampleRate);
+        } else if (s.type == DSP_SPEAKER_PROT && !params.isNull()) {
+            if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
+            if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
+            if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
+            if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
+            if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
+            if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
+        } else if (s.type == DSP_STEREO_WIDTH && !params.isNull()) {
+            if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
+            if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();
+            dsp_compute_stereo_width(s.stereoWidth);
+        } else if (s.type == DSP_LOUDNESS && !params.isNull()) {
+            if (params["referenceLevelDb"].is<float>()) s.loudness.referenceLevelDb = params["referenceLevelDb"].as<float>();
+            if (params["currentLevelDb"].is<float>()) s.loudness.currentLevelDb = params["currentLevelDb"].as<float>();
+            if (params["amount"].is<float>()) s.loudness.amount = params["amount"].as<float>();
+            dsp_compute_loudness_coeffs(s.loudness, inactive->sampleRate);
+        } else if (s.type == DSP_BASS_ENHANCE && !params.isNull()) {
+            if (params["frequency"].is<float>()) s.bassEnhance.frequency = params["frequency"].as<float>();
+            if (params["harmonicGainDb"].is<float>()) s.bassEnhance.harmonicGainDb = params["harmonicGainDb"].as<float>();
+            if (params["mix"].is<float>()) s.bassEnhance.mix = params["mix"].as<float>();
+            if (params["order"].is<int>()) s.bassEnhance.order = params["order"].as<uint8_t>();
+            dsp_compute_bass_enhance_coeffs(s.bassEnhance, inactive->sampleRate);
+        } else if (s.type == DSP_MULTIBAND_COMP && !params.isNull()) {
+            if (params["numBands"].is<int>()) s.multibandComp.numBands = params["numBands"].as<uint8_t>();
         }
 
         autoMirrorIfLinked(ch);
@@ -946,6 +1026,10 @@ void registerDspApiEndpoints() {
         } else if (strncmp(typeStr, "bw", 2) == 0) {
             int order = atoi(typeStr + 2);
             result = dsp_insert_crossover_butterworth(ch, freq, order, role);
+        } else if (strncmp(typeStr, "bessel", 6) == 0) {
+            int order = atoi(typeStr + 6);
+            if (order == 0) order = 4;
+            result = dsp_insert_crossover_bessel(ch, freq, order, role);
         } else {
             sendJsonError(400, "Unknown crossover type");
             return;
@@ -997,6 +1081,83 @@ void registerDspApiEndpoints() {
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] Bass management: sub=%d mains=%d freq=%.0f", subChannel, numMains, crossoverFreq);
+    });
+
+    // ===== Baffle Step & THD Endpoints =====
+
+    // POST /api/dsp/bafflestep?ch=N — apply baffle step correction
+    server.on("/api/dsp/bafflestep", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        int ch = parseChannelParam();
+        if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
+        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+
+        JsonDocument doc;
+        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
+
+        float widthMm = doc["baffleWidthMm"] | 250.0f;
+        BaffleStepResult bsr = dsp_baffle_step_correction(widthMm);
+
+        dsp_copy_active_to_inactive();
+        DspState *inactive = dsp_get_inactive_config();
+        int idx = dsp_add_stage(ch, DSP_BIQUAD_HIGH_SHELF);
+        if (idx < 0) { sendJsonError(400, "No room for stage"); return; }
+
+        DspStage &s = inactive->channels[ch].stages[idx];
+        s.biquad.frequency = bsr.frequency;
+        s.biquad.gain = bsr.gainDb;
+        s.biquad.Q = 0.707f;
+        dsp_compute_biquad_coeffs(s.biquad, DSP_BIQUAD_HIGH_SHELF, inactive->sampleRate);
+
+        autoMirrorIfLinked(ch);
+        dsp_swap_config();
+        saveDspSettingsDebounced();
+        appState.markDspConfigDirty();
+
+        char resp[128];
+        snprintf(resp, sizeof(resp), "{\"success\":true,\"frequency\":%.1f,\"gainDb\":%.1f,\"index\":%d}", bsr.frequency, bsr.gainDb, idx);
+        server.send(200, "application/json", resp);
+        LOG_I("[DSP] Baffle step: ch=%d width=%.0fmm freq=%.0fHz", ch, widthMm, bsr.frequency);
+    });
+
+    // GET /api/thd — get THD measurement result
+    server.on("/api/thd", HTTP_GET, []() {
+        if (!requireAuth()) return;
+        ThdResult r = thd_get_result();
+        JsonDocument doc;
+        doc["measuring"] = thd_is_measuring();
+        doc["testFreq"] = thd_get_test_freq();
+        doc["valid"] = r.valid;
+        doc["thdPlusNPercent"] = r.thdPlusNPercent;
+        doc["thdPlusNDb"] = r.thdPlusNDb;
+        doc["fundamentalDbfs"] = r.fundamentalDbfs;
+        doc["framesProcessed"] = r.framesProcessed;
+        doc["framesTarget"] = r.framesTarget;
+        JsonArray harmonics = doc["harmonicLevels"].to<JsonArray>();
+        for (int h = 0; h < THD_MAX_HARMONICS; h++) harmonics.add(r.harmonicLevels[h]);
+        String json;
+        serializeJson(doc, json);
+        server.send(200, "application/json", json);
+    });
+
+    // POST /api/thd — start THD measurement
+    server.on("/api/thd", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+        JsonDocument doc;
+        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
+        float freq = doc["freq"] | 1000.0f;
+        int avg = doc["averages"] | 8;
+        thd_start_measurement(freq, (uint16_t)avg);
+        server.send(200, "application/json", "{\"success\":true}");
+        LOG_I("[DSP] THD measurement started: %.0f Hz, %d avg", freq, avg);
+    });
+
+    // DELETE /api/thd — stop THD measurement
+    server.on("/api/thd", HTTP_DELETE, []() {
+        if (!requireAuth()) return;
+        thd_stop_measurement();
+        server.send(200, "application/json", "{\"success\":true}");
     });
 
     // ===== Routing Matrix Endpoints =====

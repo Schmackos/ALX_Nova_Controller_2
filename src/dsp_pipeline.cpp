@@ -55,6 +55,81 @@ static bool _firSlotUsed[DSP_MAX_FIR_SLOTS];
 static float *_delayLine[2][DSP_MAX_DELAY_SLOTS];  // Heap-allocated on demand
 static bool _delaySlotUsed[DSP_MAX_DELAY_SLOTS];
 
+// ===== Multi-Band Compressor Pool =====
+#define DSP_MULTIBAND_MAX_SLOTS 1
+#define DSP_MULTIBAND_MAX_BANDS 4
+
+struct DspMultibandBand {
+    float thresholdDb;
+    float attackMs;
+    float releaseMs;
+    float ratio;
+    float kneeDb;
+    float makeupGainDb;
+    float makeupLinear;
+    float envelope;       // runtime
+    float gainReduction;  // runtime
+};
+
+struct DspMultibandSlot {
+    float crossoverFreqs[3];  // Up to 3 crossover boundaries for 4 bands
+    DspMultibandBand bands[DSP_MULTIBAND_MAX_BANDS];
+    float xoverCoeffs[3][2][5]; // [boundary][lpf/hpf][coeffs]
+    float xoverDelay[3][2][2];  // [boundary][lpf/hpf][delay]
+    float bandBuf[DSP_MULTIBAND_MAX_BANDS][256]; // Per-band processing buffers
+};
+
+#ifdef NATIVE_TEST
+static DspMultibandSlot _mbSlots[DSP_MULTIBAND_MAX_SLOTS];
+#else
+static DspMultibandSlot *_mbSlots = nullptr;
+#endif
+static bool _mbSlotUsed[DSP_MULTIBAND_MAX_SLOTS];
+
+int dsp_mb_alloc_slot() {
+    for (int i = 0; i < DSP_MULTIBAND_MAX_SLOTS; i++) {
+        if (!_mbSlotUsed[i]) {
+            _mbSlotUsed[i] = true;
+#ifdef NATIVE_TEST
+            memset(&_mbSlots[i], 0, sizeof(DspMultibandSlot));
+#else
+            if (_mbSlots) memset(&_mbSlots[i], 0, sizeof(DspMultibandSlot));
+#endif
+            // Set default band params
+            DspMultibandSlot *slot;
+#ifdef NATIVE_TEST
+            slot = &_mbSlots[i];
+#else
+            slot = _mbSlots ? &_mbSlots[i] : nullptr;
+#endif
+            if (slot) {
+                slot->crossoverFreqs[0] = 200.0f;
+                slot->crossoverFreqs[1] = 2000.0f;
+                slot->crossoverFreqs[2] = 8000.0f;
+                for (int b = 0; b < DSP_MULTIBAND_MAX_BANDS; b++) {
+                    slot->bands[b].thresholdDb = -12.0f;
+                    slot->bands[b].attackMs = 10.0f;
+                    slot->bands[b].releaseMs = 100.0f;
+                    slot->bands[b].ratio = 4.0f;
+                    slot->bands[b].kneeDb = 6.0f;
+                    slot->bands[b].makeupGainDb = 0.0f;
+                    slot->bands[b].makeupLinear = 1.0f;
+                    slot->bands[b].envelope = 0.0f;
+                    slot->bands[b].gainReduction = 0.0f;
+                }
+            }
+            return i;
+        }
+    }
+    return -1;
+}
+
+void dsp_mb_free_slot(int slot) {
+    if (slot >= 0 && slot < DSP_MULTIBAND_MAX_SLOTS) {
+        _mbSlotUsed[slot] = false;
+    }
+}
+
 // ===== Conversion Buffers (PSRAM on ESP32, static on native) =====
 #ifdef NATIVE_TEST
 static float _dspBufL[256];
@@ -76,6 +151,12 @@ static void dsp_polarity_process(float *buf, int len);
 static void dsp_mute_process(float *buf, int len);
 static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int len, uint32_t sampleRate);
 static int  dsp_decimator_process(DspDecimatorParams &dec, float *buf, int len, int stateIdx);
+static void dsp_noise_gate_process(DspNoiseGateParams &gate, float *buf, int len, uint32_t sampleRate);
+static void dsp_tone_ctrl_process(DspToneCtrlParams &tc, float *buf, int len);
+static void dsp_speaker_prot_process(DspSpeakerProtParams &sp, float *buf, int len, uint32_t sampleRate);
+static void dsp_loudness_process(DspLoudnessParams &ld, float *buf, int len);
+static void dsp_bass_enhance_process(DspBassEnhanceParams &be, float *buf, int len);
+static void dsp_multiband_comp_process(DspMultibandCompParams &mb, float *buf, int len, uint32_t sampleRate);
 
 // ===== FIR Pool Management =====
 
@@ -256,6 +337,15 @@ void dsp_init() {
             _delayLine[s][i] = nullptr;
     memset(_delaySlotUsed, 0, sizeof(_delaySlotUsed));
 
+    // Clear multiband compressor pool
+#ifndef NATIVE_TEST
+    if (!_mbSlots) {
+        _mbSlots = (DspMultibandSlot *)heap_caps_calloc(DSP_MULTIBAND_MAX_SLOTS, sizeof(DspMultibandSlot), MALLOC_CAP_SPIRAM);
+        if (!_mbSlots) _mbSlots = (DspMultibandSlot *)calloc(DSP_MULTIBAND_MAX_SLOTS, sizeof(DspMultibandSlot));
+    }
+#endif
+    memset(_mbSlotUsed, 0, sizeof(_mbSlotUsed));
+
     LOG_I("[DSP] Pipeline initialized (double-buffered, %d channels, max %d stages/ch)",
           DSP_MAX_CHANNELS, DSP_MAX_STAGES);
 }
@@ -363,6 +453,24 @@ void dsp_swap_config() {
                     if (srcD && dstD)
                         memcpy(dstD, srcD, sizeof(float) * (DSP_MAX_FIR_TAPS + 8));
                     newS.decimator.delayPos = oldS.decimator.delayPos;
+                } else if (newS.type == DSP_NOISE_GATE) {
+                    newS.noiseGate.envelope = oldS.noiseGate.envelope;
+                    newS.noiseGate.gainReduction = oldS.noiseGate.gainReduction;
+                    newS.noiseGate.holdCounter = oldS.noiseGate.holdCounter;
+                } else if (newS.type == DSP_TONE_CTRL) {
+                    memcpy(newS.toneCtrl.bassDelay, oldS.toneCtrl.bassDelay, sizeof(float) * 2);
+                    memcpy(newS.toneCtrl.midDelay, oldS.toneCtrl.midDelay, sizeof(float) * 2);
+                    memcpy(newS.toneCtrl.trebleDelay, oldS.toneCtrl.trebleDelay, sizeof(float) * 2);
+                } else if (newS.type == DSP_SPEAKER_PROT) {
+                    newS.speakerProt.currentTempC = oldS.speakerProt.currentTempC;
+                    newS.speakerProt.envelope = oldS.speakerProt.envelope;
+                    newS.speakerProt.gainReduction = oldS.speakerProt.gainReduction;
+                } else if (newS.type == DSP_LOUDNESS) {
+                    memcpy(newS.loudness.bassDelay, oldS.loudness.bassDelay, sizeof(float) * 2);
+                    memcpy(newS.loudness.trebleDelay, oldS.loudness.trebleDelay, sizeof(float) * 2);
+                } else if (newS.type == DSP_BASS_ENHANCE) {
+                    memcpy(newS.bassEnhance.hpfDelay, oldS.bassEnhance.hpfDelay, sizeof(float) * 2);
+                    memcpy(newS.bassEnhance.bpfDelay, oldS.bassEnhance.bpfDelay, sizeof(float) * 2);
                 }
             }
         }
@@ -422,6 +530,23 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
     dsp_process_channel(_dspBufL, stereoFrames, cfg->channels[chL], stateIdx);
     dsp_process_channel(_dspBufR, stereoFrames, cfg->channels[chR], stateIdx);
 
+    // Apply stereo width (mid-side processing) — operates on L+R pair, placed on L channel
+    DspChannelConfig &chLeft = cfg->channels[chL];
+    for (int i = 0; i < chLeft.stageCount; i++) {
+        DspStage &s = chLeft.stages[i];
+        if (s.enabled && s.type == DSP_STEREO_WIDTH) {
+            float widthScale = s.stereoWidth.width / 100.0f;
+            float centerGain = s.stereoWidth.centerGainLin;
+            for (int f = 0; f < stereoFrames; f++) {
+                float mid  = (_dspBufL[f] + _dspBufR[f]) * 0.5f * centerGain;
+                float side = (_dspBufL[f] - _dspBufR[f]) * 0.5f * widthScale;
+                _dspBufL[f] = mid + side;
+                _dspBufR[f] = mid - side;
+            }
+            break; // Only one stereo width stage per pair
+        }
+    }
+
     // Re-interleave float → int32 with clamp
     for (int f = 0; f < stereoFrames; f++) {
         float sL = _dspBufL[f];
@@ -448,7 +573,7 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
         _metrics.cpuLoadPercent = (float)elapsed / bufferPeriodUs * 100.0f;
     }
 
-    // Collect limiter/compressor GR from active channels (worst = most reduction)
+    // Collect limiter/compressor/gate GR from active channels (worst = most reduction)
     for (int c = chL; c <= chR; c++) {
         _metrics.limiterGrDb[c] = 0.0f;
         DspChannelConfig &ch = cfg->channels[c];
@@ -457,6 +582,8 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
                 float gr = 0.0f;
                 if (ch.stages[s].type == DSP_LIMITER) gr = ch.stages[s].limiter.gainReduction;
                 else if (ch.stages[s].type == DSP_COMPRESSOR) gr = ch.stages[s].compressor.gainReduction;
+                else if (ch.stages[s].type == DSP_NOISE_GATE) gr = ch.stages[s].noiseGate.gainReduction;
+                else if (ch.stages[s].type == DSP_SPEAKER_PROT) gr = ch.stages[s].speakerProt.gainReduction;
                 if (gr < _metrics.limiterGrDb[c]) _metrics.limiterGrDb[c] = gr;
             }
         }
@@ -544,6 +671,29 @@ static int dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int st
             case DSP_CONVOLUTION:
                 if (s.convolution.convSlot >= 0) {
                     conv_process(s.convolution.convSlot, buf, curLen);
+                }
+                break;
+            case DSP_NOISE_GATE:
+                dsp_noise_gate_process(s.noiseGate, buf, curLen, cfg->sampleRate);
+                break;
+            case DSP_TONE_CTRL:
+                dsp_tone_ctrl_process(s.toneCtrl, buf, curLen);
+                break;
+            case DSP_SPEAKER_PROT:
+                dsp_speaker_prot_process(s.speakerProt, buf, curLen, cfg->sampleRate);
+                break;
+            case DSP_STEREO_WIDTH:
+                // Stereo width is handled post-channel in dsp_process_buffer()
+                break;
+            case DSP_LOUDNESS:
+                dsp_loudness_process(s.loudness, buf, curLen);
+                break;
+            case DSP_BASS_ENHANCE:
+                dsp_bass_enhance_process(s.bassEnhance, buf, curLen);
+                break;
+            case DSP_MULTIBAND_COMP:
+                if (s.multibandComp.mbSlot >= 0) {
+                    dsp_multiband_comp_process(s.multibandComp, buf, curLen, cfg->sampleRate);
                 }
                 break;
             default:
@@ -761,6 +911,278 @@ static int dsp_decimator_process(DspDecimatorParams &dec, float *buf, int len, i
     return outLen;
 }
 
+// ===== Noise Gate =====
+
+static void dsp_noise_gate_process(DspNoiseGateParams &gate, float *buf, int len, uint32_t sampleRate) {
+    if (len <= 0 || sampleRate == 0) return;
+
+    float threshLin = powf(10.0f, gate.thresholdDb / 20.0f);
+    float attackCoeff = expf(-1.0f / (gate.attackMs * 0.001f * (float)sampleRate));
+    float releaseCoeff = expf(-1.0f / (gate.releaseMs * 0.001f * (float)sampleRate));
+    float holdSamples = gate.holdMs * 0.001f * (float)sampleRate;
+    float rangeLin = powf(10.0f, gate.rangeDb / 20.0f);
+
+    float env = gate.envelope;
+    float holdCnt = gate.holdCounter;
+    float maxGr = 0.0f;
+
+    // Pass 1: Envelope → gain buffer
+    for (int i = 0; i < len; i++) {
+        float absSample = fabsf(buf[i]);
+
+        if (absSample > env) {
+            env = attackCoeff * env + (1.0f - attackCoeff) * absSample;
+        } else {
+            env = releaseCoeff * env + (1.0f - releaseCoeff) * absSample;
+        }
+
+        float gainLin = 1.0f;
+        if (env < threshLin) {
+            // Signal below threshold — apply gate/expansion
+            if (holdCnt > 0.0f) {
+                holdCnt -= 1.0f;
+                // During hold: no attenuation
+            } else {
+                // Compute gate attenuation
+                if (gate.ratio <= 1.0f) {
+                    // Hard gate: full range attenuation
+                    gainLin = rangeLin;
+                } else {
+                    // Expander: ratio-based attenuation
+                    float envDb = (env > 1e-10f) ? 20.0f * log10f(env) : -100.0f;
+                    float underDb = gate.thresholdDb - envDb;
+                    if (underDb > 0.0f) {
+                        float grDb = underDb * (1.0f - 1.0f / gate.ratio);
+                        gainLin = powf(10.0f, -grDb / 20.0f);
+                        // Clamp to range
+                        if (gainLin < rangeLin) gainLin = rangeLin;
+                        if (grDb > maxGr) maxGr = grDb;
+                    }
+                }
+                float grDb = -20.0f * log10f(gainLin > 1e-10f ? gainLin : 1e-10f);
+                if (grDb > maxGr) maxGr = grDb;
+            }
+        } else {
+            // Signal above threshold — reset hold timer
+            holdCnt = holdSamples;
+        }
+
+        _gainBuf[i] = gainLin;
+    }
+
+    // Pass 2: Apply gain via SIMD
+    dsps_mul_f32(buf, _gainBuf, buf, len, 1, 1, 1);
+
+    gate.envelope = env;
+    gate.holdCounter = holdCnt;
+    gate.gainReduction = -maxGr;
+}
+
+// ===== Tone Control =====
+
+static void dsp_tone_ctrl_process(DspToneCtrlParams &tc, float *buf, int len) {
+    // Cascade 3 biquads: bass shelf → mid peak → treble shelf
+    dsps_biquad_f32(buf, buf, len, tc.bassCoeffs, tc.bassDelay);
+    dsps_biquad_f32(buf, buf, len, tc.midCoeffs, tc.midDelay);
+    dsps_biquad_f32(buf, buf, len, tc.trebleCoeffs, tc.trebleDelay);
+}
+
+// ===== Speaker Protection =====
+
+static void dsp_speaker_prot_process(DspSpeakerProtParams &sp, float *buf, int len, uint32_t sampleRate) {
+    if (len <= 0 || sampleRate == 0) return;
+
+    float dt = 1.0f / (float)sampleRate;
+    float thermalTau = sp.thermalTauMs * 0.001f;
+    float thermalLimit = sp.maxTempC * 0.7f;  // Start limiting at 70%
+    float excursionLimit = sp.excursionLimitMm * 0.7f;
+
+    float temp = sp.currentTempC;
+    float env = sp.envelope;
+    float maxGr = 0.0f;
+
+    // Thermal mass: power to heat with time constant
+    float thermalMass = thermalTau > 0.0f ? thermalTau : 2.0f;
+
+    for (int i = 0; i < len; i++) {
+        float sample = buf[i];
+        float v2 = sample * sample;
+        float power = v2 / sp.impedanceOhms;  // Normalized power
+
+        // Smooth power envelope
+        float alphaUp = expf(-dt / 0.010f);   // 10ms attack
+        float alphaDn = expf(-dt / 0.050f);    // 50ms release
+        if (power > env) env = alphaUp * env + (1.0f - alphaUp) * power;
+        else             env = alphaDn * env + (1.0f - alphaDn) * power;
+
+        // Thermal model: heat up based on power, cool down toward ambient (25C)
+        temp += (env * sp.powerRatingW) * dt / thermalMass - (temp - 25.0f) * dt / thermalMass;
+        if (temp < 25.0f) temp = 25.0f;
+
+        // Thermal gain reduction (soft knee at 70% of max)
+        float thermalGain = 1.0f;
+        if (temp > thermalLimit && thermalLimit > 25.0f) {
+            float over = (temp - thermalLimit) / (sp.maxTempC - thermalLimit);
+            if (over > 1.0f) over = 1.0f;
+            thermalGain = 1.0f - over * 0.9f;  // Max 90% reduction
+        }
+
+        // Excursion estimation (amplitude-based, scaled by driver area)
+        float amplitude = fabsf(sample);
+        float driverArea = sp.driverDiameterMm * sp.driverDiameterMm * 0.7854f; // pi/4 * d^2
+        float estimatedExcursion = amplitude * 10.0f * 1000.0f / (driverArea > 0.0f ? driverArea : 1.0f);
+        float excursionGain = 1.0f;
+        if (estimatedExcursion > excursionLimit && excursionLimit > 0.0f) {
+            excursionGain = excursionLimit / estimatedExcursion;
+        }
+
+        float gain = thermalGain < excursionGain ? thermalGain : excursionGain;
+        if (gain < 0.01f) gain = 0.01f;
+
+        float grDb = -20.0f * log10f(gain);
+        if (grDb > maxGr) maxGr = grDb;
+
+        _gainBuf[i] = gain;
+    }
+
+    dsps_mul_f32(buf, _gainBuf, buf, len, 1, 1, 1);
+
+    sp.currentTempC = temp;
+    sp.envelope = env;
+    sp.gainReduction = -maxGr;
+}
+
+// ===== Loudness Compensation =====
+
+static void dsp_loudness_process(DspLoudnessParams &ld, float *buf, int len) {
+    // Cascade 2 biquads: bass shelf → treble shelf
+    dsps_biquad_f32(buf, buf, len, ld.bassCoeffs, ld.bassDelay);
+    dsps_biquad_f32(buf, buf, len, ld.trebleCoeffs, ld.trebleDelay);
+}
+
+// ===== Bass Enhancement =====
+
+static void dsp_bass_enhance_process(DspBassEnhanceParams &be, float *buf, int len) {
+    if (be.mix <= 0.0f) return;
+
+    float mixScale = be.mix / 100.0f * be.harmonicGainLin;
+
+    // Copy buf → _gainBuf (scratch), apply HPF to get high-freq content
+    memcpy(_gainBuf, buf, len * sizeof(float));
+    dsps_biquad_f32(_gainBuf, _gainBuf, len, be.hpfCoeffs, be.hpfDelay);
+
+    // Subtract HPF from original to get low-freq content (in _gainBuf temporarily)
+    // Actually: sub-bass = buf - HPF(buf)
+    for (int i = 0; i < len; i++) {
+        _gainBuf[i] = buf[i] - _gainBuf[i];  // LPF content (sub-bass)
+    }
+
+    // Generate harmonics from sub-bass
+    for (int i = 0; i < len; i++) {
+        float x = _gainBuf[i];
+        float harmonic = 0.0f;
+        if (be.order == 0 || be.order == 2) {
+            harmonic += x * x;  // 2nd harmonic (sign-preserving would need abs, but x^2 generates 2f0)
+        }
+        if (be.order == 1 || be.order == 2) {
+            harmonic += x * x * x;  // 3rd harmonic
+        }
+        _gainBuf[i] = harmonic;
+    }
+
+    // BPF to limit harmonic range
+    dsps_biquad_f32(_gainBuf, _gainBuf, len, be.bpfCoeffs, be.bpfDelay);
+
+    // Mix back
+    for (int i = 0; i < len; i++) {
+        buf[i] += _gainBuf[i] * mixScale;
+    }
+}
+
+// ===== Multi-Band Compressor =====
+
+static void dsp_multiband_comp_process(DspMultibandCompParams &mb, float *buf, int len, uint32_t sampleRate) {
+    if (mb.mbSlot < 0 || mb.mbSlot >= DSP_MULTIBAND_MAX_SLOTS) return;
+#ifdef NATIVE_TEST
+    DspMultibandSlot &slot = _mbSlots[mb.mbSlot];
+#else
+    if (!_mbSlots) return;
+    DspMultibandSlot &slot = _mbSlots[mb.mbSlot];
+#endif
+
+    int numBands = mb.numBands;
+    if (numBands < 2) numBands = 2;
+    if (numBands > DSP_MULTIBAND_MAX_BANDS) numBands = DSP_MULTIBAND_MAX_BANDS;
+
+    // Split into bands using crossover filters (LR2 = single biquad per boundary)
+    // Band 0: LPF at freq[0]
+    // Band N-1: HPF at freq[N-2]
+    // Middle bands: BPF between freq[i-1] and freq[i]
+    int n = len > 256 ? 256 : len;
+
+    // Copy input to all band buffers initially
+    for (int b = 0; b < numBands; b++) {
+        memcpy(slot.bandBuf[b], buf, n * sizeof(float));
+    }
+
+    // Apply crossover filters
+    for (int boundary = 0; boundary < numBands - 1; boundary++) {
+        // LPF for lower band
+        dsps_biquad_f32(slot.bandBuf[boundary], slot.bandBuf[boundary], n,
+                        slot.xoverCoeffs[boundary][0], slot.xoverDelay[boundary][0]);
+        // HPF for upper band
+        dsps_biquad_f32(slot.bandBuf[boundary + 1], slot.bandBuf[boundary + 1], n,
+                        slot.xoverCoeffs[boundary][1], slot.xoverDelay[boundary][1]);
+    }
+
+    // Compress each band
+    for (int b = 0; b < numBands; b++) {
+        DspMultibandBand &band = slot.bands[b];
+        float threshLin = powf(10.0f, band.thresholdDb / 20.0f);
+        float attackCoeff = expf(-1.0f / (band.attackMs * 0.001f * (float)sampleRate));
+        float releaseCoeff = expf(-1.0f / (band.releaseMs * 0.001f * (float)sampleRate));
+
+        float env = band.envelope;
+        float maxGr = 0.0f;
+
+        for (int i = 0; i < n; i++) {
+            float absSample = fabsf(slot.bandBuf[b][i]);
+            if (absSample > env)
+                env = attackCoeff * env + (1.0f - attackCoeff) * absSample;
+            else
+                env = releaseCoeff * env + (1.0f - releaseCoeff) * absSample;
+
+            float gainLin = band.makeupLinear;
+            if (env > 0.0f && env > threshLin) {
+                float envDb = 20.0f * log10f(env);
+                float overDb = envDb - band.thresholdDb;
+                float grDb = 0.0f;
+                if (band.kneeDb > 0.0f && overDb > -band.kneeDb / 2.0f && overDb < band.kneeDb / 2.0f) {
+                    float x = overDb + band.kneeDb / 2.0f;
+                    grDb = (1.0f - 1.0f / band.ratio) * x * x / (2.0f * band.kneeDb);
+                } else if (overDb >= band.kneeDb / 2.0f) {
+                    grDb = overDb * (1.0f - 1.0f / band.ratio);
+                }
+                if (grDb > 0.0f) {
+                    gainLin *= powf(10.0f, -grDb / 20.0f);
+                    if (grDb > maxGr) maxGr = grDb;
+                }
+            }
+            slot.bandBuf[b][i] *= gainLin;
+        }
+        band.envelope = env;
+        band.gainReduction = -maxGr;
+    }
+
+    // Sum bands back
+    memset(buf, 0, n * sizeof(float));
+    for (int b = 0; b < numBands; b++) {
+        for (int i = 0; i < n; i++) {
+            buf[i] += slot.bandBuf[b][i];
+        }
+    }
+}
+
 // ===== Stage CRUD =====
 
 int dsp_add_stage(int channel, DspStageType type, int position) {
@@ -823,6 +1245,14 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
         ch.stages[pos].convolution.convSlot = -1;
         ch.stages[pos].convolution.irLength = 0;
         ch.stages[pos].convolution.irFilename[0] = '\0';
+    } else if (type == DSP_MULTIBAND_COMP) {
+        int slot = dsp_mb_alloc_slot();
+        if (slot < 0) {
+            LOG_W("[DSP] No multiband comp slots available (max %d)", DSP_MULTIBAND_MAX_SLOTS);
+            for (int i = pos; i < ch.stageCount; i++) ch.stages[i] = ch.stages[i + 1];
+            return -1;
+        }
+        ch.stages[pos].multibandComp.mbSlot = (int8_t)slot;
     }
 
     ch.stageCount++;
@@ -834,6 +1264,14 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
         dsp_compute_gain_linear(ch.stages[pos].gain);
     } else if (type == DSP_COMPRESSOR) {
         dsp_compute_compressor_makeup(ch.stages[pos].compressor);
+    } else if (type == DSP_TONE_CTRL) {
+        dsp_compute_tone_ctrl_coeffs(ch.stages[pos].toneCtrl, cfg->sampleRate);
+    } else if (type == DSP_LOUDNESS) {
+        dsp_compute_loudness_coeffs(ch.stages[pos].loudness, cfg->sampleRate);
+    } else if (type == DSP_BASS_ENHANCE) {
+        dsp_compute_bass_enhance_coeffs(ch.stages[pos].bassEnhance, cfg->sampleRate);
+    } else if (type == DSP_STEREO_WIDTH) {
+        dsp_compute_stereo_width(ch.stages[pos].stereoWidth);
     }
 
     return pos;
@@ -856,6 +1294,8 @@ bool dsp_remove_stage(int channel, int stageIndex) {
         if (ch.stages[stageIndex].convolution.convSlot >= 0) {
             conv_free_slot(ch.stages[stageIndex].convolution.convSlot);
         }
+    } else if (ch.stages[stageIndex].type == DSP_MULTIBAND_COMP) {
+        dsp_mb_free_slot(ch.stages[stageIndex].multibandComp.mbSlot);
     }
 
     // Shift stages down
@@ -971,6 +1411,8 @@ void dsp_mirror_channel_config(int srcCh, int dstCh) {
         else if (dst.stages[i].type == DSP_DECIMATOR) dsp_fir_free_slot(dst.stages[i].decimator.firSlot);
         else if (dst.stages[i].type == DSP_CONVOLUTION && dst.stages[i].convolution.convSlot >= 0)
             conv_free_slot(dst.stages[i].convolution.convSlot);
+        else if (dst.stages[i].type == DSP_MULTIBAND_COMP)
+            dsp_mb_free_slot(dst.stages[i].multibandComp.mbSlot);
     }
 
     // Copy config params (bypass, stageCount, all stage params)
@@ -1030,6 +1472,28 @@ void dsp_mirror_channel_config(int srcCh, int dstCh) {
             // Convolution slots are shared resources loaded from IR files.
             // For mirror, mark as unassigned — user must load IR separately.
             dst.stages[i].convolution.convSlot = -1;
+        } else if (dst.stages[i].type == DSP_NOISE_GATE) {
+            dst.stages[i].noiseGate.envelope = 0.0f;
+            dst.stages[i].noiseGate.gainReduction = 0.0f;
+            dst.stages[i].noiseGate.holdCounter = 0.0f;
+        } else if (dst.stages[i].type == DSP_TONE_CTRL) {
+            memset(dst.stages[i].toneCtrl.bassDelay, 0, sizeof(float) * 2);
+            memset(dst.stages[i].toneCtrl.midDelay, 0, sizeof(float) * 2);
+            memset(dst.stages[i].toneCtrl.trebleDelay, 0, sizeof(float) * 2);
+        } else if (dst.stages[i].type == DSP_SPEAKER_PROT) {
+            dst.stages[i].speakerProt.currentTempC = 25.0f;
+            dst.stages[i].speakerProt.envelope = 0.0f;
+            dst.stages[i].speakerProt.gainReduction = 0.0f;
+        } else if (dst.stages[i].type == DSP_LOUDNESS) {
+            memset(dst.stages[i].loudness.bassDelay, 0, sizeof(float) * 2);
+            memset(dst.stages[i].loudness.trebleDelay, 0, sizeof(float) * 2);
+        } else if (dst.stages[i].type == DSP_BASS_ENHANCE) {
+            memset(dst.stages[i].bassEnhance.hpfDelay, 0, sizeof(float) * 2);
+            memset(dst.stages[i].bassEnhance.bpfDelay, 0, sizeof(float) * 2);
+        } else if (dst.stages[i].type == DSP_MULTIBAND_COMP) {
+            // Multiband comp slots are scarce — allocate new for destination
+            int newSlot = dsp_mb_alloc_slot();
+            dst.stages[i].multibandComp.mbSlot = (int8_t)newSlot;
         }
     }
 }
@@ -1066,6 +1530,13 @@ const char *stage_type_name(DspStageType t) {
         case DSP_BIQUAD_LINKWITZ:  return "LINKWITZ";
         case DSP_DECIMATOR:        return "DECIMATOR";
         case DSP_CONVOLUTION:      return "CONVOLUTION";
+        case DSP_NOISE_GATE:       return "NOISE_GATE";
+        case DSP_TONE_CTRL:        return "TONE_CTRL";
+        case DSP_SPEAKER_PROT:     return "SPEAKER_PROT";
+        case DSP_STEREO_WIDTH:     return "STEREO_WIDTH";
+        case DSP_LOUDNESS:         return "LOUDNESS";
+        case DSP_BASS_ENHANCE:     return "BASS_ENHANCE";
+        case DSP_MULTIBAND_COMP:   return "MULTIBAND_COMP";
         default: return "UNKNOWN";
     }
 }
@@ -1096,6 +1567,13 @@ static DspStageType stage_type_from_name(const char *name) {
     if (strcmp(name, "LINKWITZ") == 0) return DSP_BIQUAD_LINKWITZ;
     if (strcmp(name, "DECIMATOR") == 0) return DSP_DECIMATOR;
     if (strcmp(name, "CONVOLUTION") == 0) return DSP_CONVOLUTION;
+    if (strcmp(name, "NOISE_GATE") == 0) return DSP_NOISE_GATE;
+    if (strcmp(name, "TONE_CTRL") == 0) return DSP_TONE_CTRL;
+    if (strcmp(name, "SPEAKER_PROT") == 0) return DSP_SPEAKER_PROT;
+    if (strcmp(name, "STEREO_WIDTH") == 0) return DSP_STEREO_WIDTH;
+    if (strcmp(name, "LOUDNESS") == 0) return DSP_LOUDNESS;
+    if (strcmp(name, "BASS_ENHANCE") == 0) return DSP_BASS_ENHANCE;
+    if (strcmp(name, "MULTIBAND_COMP") == 0) return DSP_MULTIBAND_COMP;
     return DSP_BIQUAD_PEQ;
 }
 
@@ -1166,6 +1644,45 @@ void dsp_export_config_to_json(int channel, char *buf, int bufSize) {
             params["irLength"] = s.convolution.irLength;
             if (s.convolution.irFilename[0])
                 params["irFilename"] = s.convolution.irFilename;
+        } else if (s.type == DSP_NOISE_GATE) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["thresholdDb"] = s.noiseGate.thresholdDb;
+            params["attackMs"] = s.noiseGate.attackMs;
+            params["holdMs"] = s.noiseGate.holdMs;
+            params["releaseMs"] = s.noiseGate.releaseMs;
+            params["ratio"] = s.noiseGate.ratio;
+            params["rangeDb"] = s.noiseGate.rangeDb;
+        } else if (s.type == DSP_TONE_CTRL) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["bassGain"] = s.toneCtrl.bassGain;
+            params["midGain"] = s.toneCtrl.midGain;
+            params["trebleGain"] = s.toneCtrl.trebleGain;
+        } else if (s.type == DSP_SPEAKER_PROT) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["powerRatingW"] = s.speakerProt.powerRatingW;
+            params["impedanceOhms"] = s.speakerProt.impedanceOhms;
+            params["thermalTauMs"] = s.speakerProt.thermalTauMs;
+            params["excursionLimitMm"] = s.speakerProt.excursionLimitMm;
+            params["driverDiameterMm"] = s.speakerProt.driverDiameterMm;
+            params["maxTempC"] = s.speakerProt.maxTempC;
+        } else if (s.type == DSP_STEREO_WIDTH) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["width"] = s.stereoWidth.width;
+            params["centerGainDb"] = s.stereoWidth.centerGainDb;
+        } else if (s.type == DSP_LOUDNESS) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["referenceLevelDb"] = s.loudness.referenceLevelDb;
+            params["currentLevelDb"] = s.loudness.currentLevelDb;
+            params["amount"] = s.loudness.amount;
+        } else if (s.type == DSP_BASS_ENHANCE) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["frequency"] = s.bassEnhance.frequency;
+            params["harmonicGainDb"] = s.bassEnhance.harmonicGainDb;
+            params["mix"] = s.bassEnhance.mix;
+            params["order"] = s.bassEnhance.order;
+        } else if (s.type == DSP_MULTIBAND_COMP) {
+            JsonObject params = stageObj["params"].to<JsonObject>();
+            params["numBands"] = s.multibandComp.numBands;
         }
     }
 
@@ -1287,6 +1804,46 @@ void dsp_load_config_from_json(const char *json, int channel) {
                     strncpy(s.convolution.irFilename, params["irFilename"].as<const char *>(), sizeof(s.convolution.irFilename) - 1);
                     s.convolution.irFilename[sizeof(s.convolution.irFilename) - 1] = '\0';
                 }
+            } else if (type == DSP_NOISE_GATE) {
+                if (params["thresholdDb"].is<float>()) s.noiseGate.thresholdDb = params["thresholdDb"].as<float>();
+                if (params["attackMs"].is<float>()) s.noiseGate.attackMs = params["attackMs"].as<float>();
+                if (params["holdMs"].is<float>()) s.noiseGate.holdMs = params["holdMs"].as<float>();
+                if (params["releaseMs"].is<float>()) s.noiseGate.releaseMs = params["releaseMs"].as<float>();
+                if (params["ratio"].is<float>()) s.noiseGate.ratio = params["ratio"].as<float>();
+                if (params["rangeDb"].is<float>()) s.noiseGate.rangeDb = params["rangeDb"].as<float>();
+            } else if (type == DSP_TONE_CTRL) {
+                if (params["bassGain"].is<float>()) s.toneCtrl.bassGain = params["bassGain"].as<float>();
+                if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
+                if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
+                dsp_compute_tone_ctrl_coeffs(s.toneCtrl, cfg->sampleRate);
+            } else if (type == DSP_SPEAKER_PROT) {
+                if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
+                if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
+                if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
+                if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
+                if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
+                if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
+                dsp_compute_speaker_prot(s.speakerProt);
+            } else if (type == DSP_STEREO_WIDTH) {
+                if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
+                if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();
+                dsp_compute_stereo_width(s.stereoWidth);
+            } else if (type == DSP_LOUDNESS) {
+                if (params["referenceLevelDb"].is<float>()) s.loudness.referenceLevelDb = params["referenceLevelDb"].as<float>();
+                if (params["currentLevelDb"].is<float>()) s.loudness.currentLevelDb = params["currentLevelDb"].as<float>();
+                if (params["amount"].is<float>()) s.loudness.amount = params["amount"].as<float>();
+                dsp_compute_loudness_coeffs(s.loudness, cfg->sampleRate);
+            } else if (type == DSP_BASS_ENHANCE) {
+                if (params["frequency"].is<float>()) s.bassEnhance.frequency = params["frequency"].as<float>();
+                if (params["harmonicGainDb"].is<float>()) s.bassEnhance.harmonicGainDb = params["harmonicGainDb"].as<float>();
+                if (params["mix"].is<float>()) s.bassEnhance.mix = params["mix"].as<float>();
+                if (params["order"].is<int>()) s.bassEnhance.order = params["order"].as<uint8_t>();
+                dsp_compute_bass_enhance_coeffs(s.bassEnhance, cfg->sampleRate);
+            } else if (type == DSP_MULTIBAND_COMP) {
+                if (params["numBands"].is<int>()) s.multibandComp.numBands = params["numBands"].as<uint8_t>();
+                int slot = dsp_mb_alloc_slot();
+                if (slot < 0) { LOG_W("[DSP] Import: multiband slot alloc failed, skipping"); continue; }
+                s.multibandComp.mbSlot = (int8_t)slot;
             }
             loadIdx++;
             ch.stageCount = loadIdx;
@@ -1365,6 +1922,45 @@ void dsp_export_full_config_json(char *buf, int bufSize) {
                 params["irLength"] = s.convolution.irLength;
                 if (s.convolution.irFilename[0])
                     params["irFilename"] = s.convolution.irFilename;
+            } else if (s.type == DSP_NOISE_GATE) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["thresholdDb"] = s.noiseGate.thresholdDb;
+                params["attackMs"] = s.noiseGate.attackMs;
+                params["holdMs"] = s.noiseGate.holdMs;
+                params["releaseMs"] = s.noiseGate.releaseMs;
+                params["ratio"] = s.noiseGate.ratio;
+                params["rangeDb"] = s.noiseGate.rangeDb;
+            } else if (s.type == DSP_TONE_CTRL) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["bassGain"] = s.toneCtrl.bassGain;
+                params["midGain"] = s.toneCtrl.midGain;
+                params["trebleGain"] = s.toneCtrl.trebleGain;
+            } else if (s.type == DSP_SPEAKER_PROT) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["powerRatingW"] = s.speakerProt.powerRatingW;
+                params["impedanceOhms"] = s.speakerProt.impedanceOhms;
+                params["thermalTauMs"] = s.speakerProt.thermalTauMs;
+                params["excursionLimitMm"] = s.speakerProt.excursionLimitMm;
+                params["driverDiameterMm"] = s.speakerProt.driverDiameterMm;
+                params["maxTempC"] = s.speakerProt.maxTempC;
+            } else if (s.type == DSP_STEREO_WIDTH) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["width"] = s.stereoWidth.width;
+                params["centerGainDb"] = s.stereoWidth.centerGainDb;
+            } else if (s.type == DSP_LOUDNESS) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["referenceLevelDb"] = s.loudness.referenceLevelDb;
+                params["currentLevelDb"] = s.loudness.currentLevelDb;
+                params["amount"] = s.loudness.amount;
+            } else if (s.type == DSP_BASS_ENHANCE) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["frequency"] = s.bassEnhance.frequency;
+                params["harmonicGainDb"] = s.bassEnhance.harmonicGainDb;
+                params["mix"] = s.bassEnhance.mix;
+                params["order"] = s.bassEnhance.order;
+            } else if (s.type == DSP_MULTIBAND_COMP) {
+                JsonObject params = stageObj["params"].to<JsonObject>();
+                params["numBands"] = s.multibandComp.numBands;
             }
         }
     }
@@ -1387,6 +1983,8 @@ void dsp_import_full_config_json(const char *json) {
                 dsp_fir_free_slot(cfg->channels[c].stages[i].decimator.firSlot);
             } else if (cfg->channels[c].stages[i].type == DSP_CONVOLUTION && cfg->channels[c].stages[i].convolution.convSlot >= 0) {
                 conv_free_slot(cfg->channels[c].stages[i].convolution.convSlot);
+            } else if (cfg->channels[c].stages[i].type == DSP_MULTIBAND_COMP) {
+                dsp_mb_free_slot(cfg->channels[c].stages[i].multibandComp.mbSlot);
             }
         }
     }
@@ -1491,6 +2089,46 @@ void dsp_import_full_config_json(const char *json) {
                             strncpy(s.convolution.irFilename, params["irFilename"].as<const char *>(), sizeof(s.convolution.irFilename) - 1);
                             s.convolution.irFilename[sizeof(s.convolution.irFilename) - 1] = '\0';
                         }
+                    } else if (type == DSP_NOISE_GATE) {
+                        if (params["thresholdDb"].is<float>()) s.noiseGate.thresholdDb = params["thresholdDb"].as<float>();
+                        if (params["attackMs"].is<float>()) s.noiseGate.attackMs = params["attackMs"].as<float>();
+                        if (params["holdMs"].is<float>()) s.noiseGate.holdMs = params["holdMs"].as<float>();
+                        if (params["releaseMs"].is<float>()) s.noiseGate.releaseMs = params["releaseMs"].as<float>();
+                        if (params["ratio"].is<float>()) s.noiseGate.ratio = params["ratio"].as<float>();
+                        if (params["rangeDb"].is<float>()) s.noiseGate.rangeDb = params["rangeDb"].as<float>();
+                    } else if (type == DSP_TONE_CTRL) {
+                        if (params["bassGain"].is<float>()) s.toneCtrl.bassGain = params["bassGain"].as<float>();
+                        if (params["midGain"].is<float>()) s.toneCtrl.midGain = params["midGain"].as<float>();
+                        if (params["trebleGain"].is<float>()) s.toneCtrl.trebleGain = params["trebleGain"].as<float>();
+                        dsp_compute_tone_ctrl_coeffs(s.toneCtrl, cfg->sampleRate);
+                    } else if (type == DSP_SPEAKER_PROT) {
+                        if (params["powerRatingW"].is<float>()) s.speakerProt.powerRatingW = params["powerRatingW"].as<float>();
+                        if (params["impedanceOhms"].is<float>()) s.speakerProt.impedanceOhms = params["impedanceOhms"].as<float>();
+                        if (params["thermalTauMs"].is<float>()) s.speakerProt.thermalTauMs = params["thermalTauMs"].as<float>();
+                        if (params["excursionLimitMm"].is<float>()) s.speakerProt.excursionLimitMm = params["excursionLimitMm"].as<float>();
+                        if (params["driverDiameterMm"].is<float>()) s.speakerProt.driverDiameterMm = params["driverDiameterMm"].as<float>();
+                        if (params["maxTempC"].is<float>()) s.speakerProt.maxTempC = params["maxTempC"].as<float>();
+                        dsp_compute_speaker_prot(s.speakerProt);
+                    } else if (type == DSP_STEREO_WIDTH) {
+                        if (params["width"].is<float>()) s.stereoWidth.width = params["width"].as<float>();
+                        if (params["centerGainDb"].is<float>()) s.stereoWidth.centerGainDb = params["centerGainDb"].as<float>();
+                        dsp_compute_stereo_width(s.stereoWidth);
+                    } else if (type == DSP_LOUDNESS) {
+                        if (params["referenceLevelDb"].is<float>()) s.loudness.referenceLevelDb = params["referenceLevelDb"].as<float>();
+                        if (params["currentLevelDb"].is<float>()) s.loudness.currentLevelDb = params["currentLevelDb"].as<float>();
+                        if (params["amount"].is<float>()) s.loudness.amount = params["amount"].as<float>();
+                        dsp_compute_loudness_coeffs(s.loudness, cfg->sampleRate);
+                    } else if (type == DSP_BASS_ENHANCE) {
+                        if (params["frequency"].is<float>()) s.bassEnhance.frequency = params["frequency"].as<float>();
+                        if (params["harmonicGainDb"].is<float>()) s.bassEnhance.harmonicGainDb = params["harmonicGainDb"].as<float>();
+                        if (params["mix"].is<float>()) s.bassEnhance.mix = params["mix"].as<float>();
+                        if (params["order"].is<int>()) s.bassEnhance.order = params["order"].as<uint8_t>();
+                        dsp_compute_bass_enhance_coeffs(s.bassEnhance, cfg->sampleRate);
+                    } else if (type == DSP_MULTIBAND_COMP) {
+                        if (params["numBands"].is<int>()) s.multibandComp.numBands = params["numBands"].as<uint8_t>();
+                        int slot = dsp_mb_alloc_slot();
+                        if (slot < 0) { LOG_W("[DSP] Import: multiband slot alloc failed, skipping"); continue; }
+                        s.multibandComp.mbSlot = (int8_t)slot;
                     }
                     loadIdx++;
                     ch.stageCount = loadIdx;

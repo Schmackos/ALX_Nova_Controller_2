@@ -6,6 +6,7 @@
 #include "../gui_navigation.h"
 #include "../gui_theme.h"
 #include <Arduino.h>
+#include <esp_heap_caps.h>
 
 /* QR code bitmap — version 5, 37x37 modules, EC level M
    URL: https://github.com/Schmackos/ALX_Nova_Controller_2/blob/main/USER_MANUAL.md
@@ -86,9 +87,16 @@ lv_obj_t *scr_support_create(void) {
     /* Make scrollable for encoder */
     lv_group_add_obj(gui_nav_get_group(), cont);
 
-    /* QR code rendered via lv_image with a pre-filled RGB565 buffer */
-    static uint16_t qr_img_buf[QR_PX * QR_PX];
+    /* QR code rendered via lv_image with a pre-filled RGB565 buffer
+       Allocated in PSRAM to save ~10.7KB internal SRAM */
+    static uint16_t *qr_img_buf = nullptr;
     static lv_image_dsc_t qr_img_dsc;
+
+    if (!qr_img_buf) {
+        qr_img_buf = (uint16_t *)heap_caps_calloc(QR_PX * QR_PX, sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+        if (!qr_img_buf) qr_img_buf = (uint16_t *)calloc(QR_PX * QR_PX, sizeof(uint16_t));
+        if (!qr_img_buf) return scr;  // Allocation failed
+    }
 
     /* Fill the pixel buffer from the 1-bit QR bitmap */
     const uint16_t black16 = 0x0000;
@@ -112,7 +120,7 @@ lv_obj_t *scr_support_create(void) {
     qr_img_dsc.header.h = QR_PX;
     qr_img_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
     qr_img_dsc.header.stride = QR_PX * 2;
-    qr_img_dsc.data_size = sizeof(qr_img_buf);
+    qr_img_dsc.data_size = QR_PX * QR_PX * sizeof(uint16_t);
     qr_img_dsc.data = (const uint8_t *)qr_img_buf;
 
     lv_obj_t *qr_img = lv_image_create(cont);

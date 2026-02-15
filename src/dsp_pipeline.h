@@ -34,6 +34,13 @@ enum DspStageType : uint8_t {
     DSP_BIQUAD_LINKWITZ = 21,  // Linkwitz Transform (F0, Q0, Fp, Qp)
     DSP_DECIMATOR = 22,        // Decimation FIR (integer downsampling)
     DSP_CONVOLUTION = 23,      // Partitioned convolution (room correction IR)
+    DSP_NOISE_GATE = 24,       // Noise gate / expander
+    DSP_TONE_CTRL = 25,        // 3-band bass/mid/treble tone controls
+    DSP_SPEAKER_PROT = 26,     // Speaker protection (thermal + excursion)
+    DSP_STEREO_WIDTH = 27,     // Stereo width / mid-side processing
+    DSP_LOUDNESS = 28,         // Fletcher-Munson loudness compensation
+    DSP_BASS_ENHANCE = 29,     // Psychoacoustic bass enhancement
+    DSP_MULTIBAND_COMP = 30,   // Multi-band compressor (2-4 bands)
     DSP_STAGE_TYPE_COUNT
 };
 
@@ -125,6 +132,77 @@ struct DspConvolutionParams {
     char irFilename[32]; // Source WAV filename
 };
 
+// ===== Noise Gate Parameters =====
+struct DspNoiseGateParams {
+    float thresholdDb;  // Threshold in dBFS (-80..0)
+    float attackMs;     // Attack time (ms)
+    float holdMs;       // Hold time after signal drops (ms)
+    float releaseMs;    // Release time (ms)
+    float ratio;        // Expansion ratio (1=hard gate, >1=expander)
+    float rangeDb;      // Maximum attenuation (dB, -80..0)
+    float envelope;     // Current envelope level (runtime)
+    float gainReduction;// Current GR in dB (runtime)
+    float holdCounter;  // Hold timer in samples (runtime)
+};
+
+// ===== Tone Control Parameters =====
+struct DspToneCtrlParams {
+    float bassGain;     // Bass gain in dB (-12..+12)
+    float midGain;      // Mid gain in dB (-12..+12)
+    float trebleGain;   // Treble gain in dB (-12..+12)
+    float bassCoeffs[5];   float bassDelay[2];
+    float midCoeffs[5];    float midDelay[2];
+    float trebleCoeffs[5]; float trebleDelay[2];
+};
+
+// ===== Speaker Protection Parameters =====
+struct DspSpeakerProtParams {
+    float powerRatingW;      // Speaker power rating (W)
+    float impedanceOhms;     // Speaker impedance (Ohms)
+    float thermalTauMs;      // Thermal time constant (ms)
+    float excursionLimitMm;  // Maximum excursion (mm)
+    float driverDiameterMm;  // Driver diameter (mm)
+    float maxTempC;          // Maximum voice coil temp (C)
+    float currentTempC;      // Current estimated temp (runtime)
+    float envelope;          // Power envelope (runtime)
+    float gainReduction;     // Current GR in dB (runtime)
+};
+
+// ===== Stereo Width Parameters =====
+struct DspStereoWidthParams {
+    float width;           // 0=mono, 100=normal, 200=extra wide
+    float centerGainDb;    // Center/mid channel gain (-12..+12 dB)
+    float centerGainLin;   // Precomputed linear gain
+};
+
+// ===== Loudness Compensation Parameters =====
+struct DspLoudnessParams {
+    float referenceLevelDb;  // Reference level (dB SPL at max volume)
+    float currentLevelDb;    // Current listening level (dB SPL)
+    float amount;            // Amount 0-100%
+    float bassBoostDb;       // Computed bass boost (runtime)
+    float trebleBoostDb;     // Computed treble boost (runtime)
+    float bassCoeffs[5];  float bassDelay[2];
+    float trebleCoeffs[5]; float trebleDelay[2];
+};
+
+// ===== Bass Enhancement Parameters =====
+struct DspBassEnhanceParams {
+    float frequency;       // Crossover frequency (Hz)
+    float harmonicGainDb;  // Harmonic gain (-12..+12 dB)
+    float harmonicGainLin; // Precomputed linear gain
+    float mix;             // Wet/dry mix 0-100%
+    uint8_t order;         // 0=2nd, 1=3rd, 2=both
+    float hpfCoeffs[5]; float hpfDelay[2];
+    float bpfCoeffs[5]; float bpfDelay[2];
+};
+
+// ===== Multi-Band Compressor Parameters (slim — band data in pool) =====
+struct DspMultibandCompParams {
+    uint8_t numBands;    // 2-4 bands
+    int8_t mbSlot;       // Pool slot index (-1 = unassigned)
+};
+
 // ===== Generic DSP Stage =====
 struct DspStage {
     bool enabled;
@@ -142,6 +220,13 @@ struct DspStage {
         DspCompressorParams compressor;
         DspDecimatorParams decimator;
         DspConvolutionParams convolution;
+        DspNoiseGateParams noiseGate;
+        DspToneCtrlParams toneCtrl;
+        DspSpeakerProtParams speakerProt;
+        DspStereoWidthParams stereoWidth;
+        DspLoudnessParams loudness;
+        DspBassEnhanceParams bassEnhance;
+        DspMultibandCompParams multibandComp;
     };
 };
 
@@ -239,6 +324,76 @@ inline void dsp_init_convolution_params(DspConvolutionParams &p) {
     p.irFilename[0] = '\0';
 }
 
+inline void dsp_init_noise_gate_params(DspNoiseGateParams &p) {
+    p.thresholdDb = -40.0f;
+    p.attackMs = 1.0f;
+    p.holdMs = 50.0f;
+    p.releaseMs = 100.0f;
+    p.ratio = 1.0f;  // Hard gate
+    p.rangeDb = -80.0f;
+    p.envelope = 0.0f;
+    p.gainReduction = 0.0f;
+    p.holdCounter = 0.0f;
+}
+
+inline void dsp_init_tone_ctrl_params(DspToneCtrlParams &p) {
+    p.bassGain = 0.0f;
+    p.midGain = 0.0f;
+    p.trebleGain = 0.0f;
+    for (int i = 0; i < 5; i++) { p.bassCoeffs[i] = 0; p.midCoeffs[i] = 0; p.trebleCoeffs[i] = 0; }
+    p.bassCoeffs[0] = 1.0f; p.midCoeffs[0] = 1.0f; p.trebleCoeffs[0] = 1.0f;
+    p.bassDelay[0] = p.bassDelay[1] = 0;
+    p.midDelay[0] = p.midDelay[1] = 0;
+    p.trebleDelay[0] = p.trebleDelay[1] = 0;
+}
+
+inline void dsp_init_speaker_prot_params(DspSpeakerProtParams &p) {
+    p.powerRatingW = 100.0f;
+    p.impedanceOhms = 8.0f;
+    p.thermalTauMs = 2000.0f;
+    p.excursionLimitMm = 5.0f;
+    p.driverDiameterMm = 165.0f;
+    p.maxTempC = 180.0f;
+    p.currentTempC = 25.0f;
+    p.envelope = 0.0f;
+    p.gainReduction = 0.0f;
+}
+
+inline void dsp_init_stereo_width_params(DspStereoWidthParams &p) {
+    p.width = 100.0f;
+    p.centerGainDb = 0.0f;
+    p.centerGainLin = 1.0f;
+}
+
+inline void dsp_init_loudness_params(DspLoudnessParams &p) {
+    p.referenceLevelDb = 85.0f;
+    p.currentLevelDb = 75.0f;
+    p.amount = 100.0f;
+    p.bassBoostDb = 0.0f;
+    p.trebleBoostDb = 0.0f;
+    for (int i = 0; i < 5; i++) { p.bassCoeffs[i] = 0; p.trebleCoeffs[i] = 0; }
+    p.bassCoeffs[0] = 1.0f; p.trebleCoeffs[0] = 1.0f;
+    p.bassDelay[0] = p.bassDelay[1] = 0;
+    p.trebleDelay[0] = p.trebleDelay[1] = 0;
+}
+
+inline void dsp_init_bass_enhance_params(DspBassEnhanceParams &p) {
+    p.frequency = 80.0f;
+    p.harmonicGainDb = 0.0f;
+    p.harmonicGainLin = 1.0f;
+    p.mix = 50.0f;
+    p.order = 2;  // Both 2nd and 3rd
+    for (int i = 0; i < 5; i++) { p.hpfCoeffs[i] = 0; p.bpfCoeffs[i] = 0; }
+    p.hpfCoeffs[0] = 1.0f; p.bpfCoeffs[0] = 1.0f;
+    p.hpfDelay[0] = p.hpfDelay[1] = 0;
+    p.bpfDelay[0] = p.bpfDelay[1] = 0;
+}
+
+inline void dsp_init_multiband_comp_params(DspMultibandCompParams &p) {
+    p.numBands = 3;
+    p.mbSlot = -1;
+}
+
 inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
     s.enabled = true;
     s.type = t;
@@ -261,6 +416,20 @@ inline void dsp_init_stage(DspStage &s, DspStageType t = DSP_BIQUAD_PEQ) {
         dsp_init_decimator_params(s.decimator);
     } else if (t == DSP_CONVOLUTION) {
         dsp_init_convolution_params(s.convolution);
+    } else if (t == DSP_NOISE_GATE) {
+        dsp_init_noise_gate_params(s.noiseGate);
+    } else if (t == DSP_TONE_CTRL) {
+        dsp_init_tone_ctrl_params(s.toneCtrl);
+    } else if (t == DSP_SPEAKER_PROT) {
+        dsp_init_speaker_prot_params(s.speakerProt);
+    } else if (t == DSP_STEREO_WIDTH) {
+        dsp_init_stereo_width_params(s.stereoWidth);
+    } else if (t == DSP_LOUDNESS) {
+        dsp_init_loudness_params(s.loudness);
+    } else if (t == DSP_BASS_ENHANCE) {
+        dsp_init_bass_enhance_params(s.bassEnhance);
+    } else if (t == DSP_MULTIBAND_COMP) {
+        dsp_init_multiband_comp_params(s.multibandComp);
     } else if (dsp_is_biquad_type(t)) {
         dsp_init_biquad_params(s.biquad);
     } else {
@@ -385,6 +554,10 @@ int  dsp_get_linked_partner(int channel);               // Returns partner chann
 void dsp_ensure_peq_bands(DspState *cfg);  // Ensure all channels have PEQ bands
 void dsp_copy_peq_bands(int srcChannel, int dstChannel);  // Copy PEQ bands between channels
 const char *stage_type_name(DspStageType t);               // Stage type to string name
+
+// Multi-band compressor pool
+int dsp_mb_alloc_slot();
+void dsp_mb_free_slot(int slot);
 
 // FIR pool access (taps/delay stored outside DspStage union to save DRAM)
 int dsp_fir_alloc_slot();                              // Allocate slot, returns index or -1
