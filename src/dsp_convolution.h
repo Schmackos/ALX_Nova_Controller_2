@@ -19,20 +19,20 @@ struct ConvState {
 
 // Initialize a convolution slot with an IR buffer.
 // Returns 0 on success, -1 on failure (memory, too long, etc.)
-int conv_init_slot(int slot, const float *ir, int irLength);
+int dsp_conv_init_slot(int slot, const float *ir, int irLength);
 
 // Free all resources for a convolution slot.
-void conv_free_slot(int slot);
+void dsp_conv_free_slot(int slot);
 
 // Process one buffer through convolution (overlap-add, time-domain).
 // buf must have exactly CONV_PARTITION_SIZE samples.
-void conv_process(int slot, float *buf, int len);
+void dsp_conv_process(int slot, float *buf, int len);
 
 // Check if a slot is active.
-bool conv_is_active(int slot);
+bool dsp_conv_is_active(int slot);
 
 // Get the IR length (in samples) for a slot.
-int conv_get_ir_length(int slot);
+int dsp_conv_get_ir_length(int slot);
 
 #endif // DSP_ENABLED
 #endif // DSP_CONVOLUTION_H

@@ -15,7 +15,7 @@ extern "C" {
 typedef struct {
     float *coeffs;      // Pointer to coefficient array
     float *delay;       // Pointer to delay line (caller-allocated)
-    int    numTaps;     // Number of FIR taps (named 'N' in official ESP-DSP)
+    int    N;           // Number of FIR taps (matches official ESP-DSP field name)
     int    pos;         // Current position in circular delay line
     int    decim;       // Decimation factor (used by dsps_fird_*)
 } fir_f32_t;

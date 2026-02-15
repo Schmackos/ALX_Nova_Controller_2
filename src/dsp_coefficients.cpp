@@ -30,13 +30,13 @@ void dsp_compute_biquad_coeffs(DspBiquadParams &params, DspStageType type, uint3
             dsp_gen_notch_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_PEQ:
-            dsp_gen_peakingEQ_f32(params.coeffs, freq, params.gain, Q);
+            dsp_gen_peaking_eq_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_LOW_SHELF:
-            dsp_gen_lowShelf_f32(params.coeffs, freq, params.gain, Q);
+            dsp_gen_low_shelf_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_HIGH_SHELF:
-            dsp_gen_highShelf_f32(params.coeffs, freq, params.gain, Q);
+            dsp_gen_high_shelf_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_ALLPASS:
         case DSP_BIQUAD_ALLPASS_360:
@@ -155,9 +155,9 @@ void dsp_compute_tone_ctrl_coeffs(DspToneCtrlParams &params, uint32_t sampleRate
     float midFreq = clamp_freq(1000.0f, sampleRate);
     float trebleFreq = clamp_freq(10000.0f, sampleRate);
 
-    dsp_gen_lowShelf_f32(params.bassCoeffs, bassFreq, params.bassGain, 0.7f);
-    dsp_gen_peakingEQ_f32(params.midCoeffs, midFreq, params.midGain, 1.0f);
-    dsp_gen_highShelf_f32(params.trebleCoeffs, trebleFreq, params.trebleGain, 0.7f);
+    dsp_gen_low_shelf_f32(params.bassCoeffs, bassFreq, params.bassGain, 0.7f);
+    dsp_gen_peaking_eq_f32(params.midCoeffs, midFreq, params.midGain, 1.0f);
+    dsp_gen_high_shelf_f32(params.trebleCoeffs, trebleFreq, params.trebleGain, 0.7f);
 }
 
 // ===== Loudness Compensation Coefficients =====
@@ -191,8 +191,8 @@ void dsp_compute_loudness_coeffs(DspLoudnessParams &params, uint32_t sampleRate)
     float bassFreq = clamp_freq(100.0f, sampleRate);
     float trebleFreq = clamp_freq(10000.0f, sampleRate);
 
-    dsp_gen_lowShelf_f32(params.bassCoeffs, bassFreq, params.bassBoostDb, 0.7f);
-    dsp_gen_highShelf_f32(params.trebleCoeffs, trebleFreq, params.trebleBoostDb, 0.7f);
+    dsp_gen_low_shelf_f32(params.bassCoeffs, bassFreq, params.bassBoostDb, 0.7f);
+    dsp_gen_high_shelf_f32(params.trebleCoeffs, trebleFreq, params.trebleBoostDb, 0.7f);
 }
 
 // ===== Bass Enhancement Coefficients =====

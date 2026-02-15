@@ -6,6 +6,7 @@
 #include "dsps_fir.h"
 #include "dsps_mulc.h"
 #include "dsps_mul.h"
+#include "dsps_add.h"
 #include "dsp_convolution.h"
 #include <math.h>
 #include <string.h>
@@ -670,7 +671,7 @@ static int dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int st
             }
             case DSP_CONVOLUTION:
                 if (s.convolution.convSlot >= 0) {
-                    conv_process(s.convolution.convSlot, buf, curLen);
+                    dsp_conv_process(s.convolution.convSlot, buf, curLen);
                 }
                 break;
             case DSP_NOISE_GATE:
@@ -708,9 +709,9 @@ static int dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int st
 static void dsp_limiter_process(DspLimiterParams &lim, float *buf, int len, uint32_t sampleRate) {
     if (len <= 0 || sampleRate == 0) return;
 
-    float threshLin = powf(10.0f, lim.thresholdDb / 20.0f);
-    float attackCoeff = expf(-1.0f / (lim.attackMs * 0.001f * (float)sampleRate));
-    float releaseCoeff = expf(-1.0f / (lim.releaseMs * 0.001f * (float)sampleRate));
+    float threshLin = dsp_db_to_linear(lim.thresholdDb);
+    float attackCoeff = dsp_time_coeff(lim.attackMs, (float)sampleRate);
+    float releaseCoeff = dsp_time_coeff(lim.releaseMs, (float)sampleRate);
 
     float env = lim.envelope;
     float maxGr = 0.0f;
@@ -730,7 +731,7 @@ static void dsp_limiter_process(DspLimiterParams &lim, float *buf, int len, uint
             float envDb = 20.0f * log10f(env);
             float overDb = envDb - lim.thresholdDb;
             float grDb = overDb * (1.0f - 1.0f / lim.ratio);
-            gainLin = powf(10.0f, -grDb / 20.0f);
+            gainLin = dsp_db_to_linear(-grDb);
             if (grDb > maxGr) maxGr = grDb;
         }
 
@@ -757,11 +758,7 @@ static void dsp_fir_process(DspFirParams &fir, float *buf, int len, int stateIdx
     memset(&firState, 0, sizeof(firState)); // Zero extra fields (decim, use_delay on ESP32)
     firState.coeffs = taps;
     firState.delay = delay;
-#ifdef NATIVE_TEST
-    firState.numTaps = fir.numTaps;
-#else
     firState.N = fir.numTaps;
-#endif
     firState.pos = fir.delayPos;
 
     dsps_fir_f32(&firState, buf, buf, len);
@@ -784,8 +781,8 @@ static void dsp_gain_process(DspGainParams &gain, float *buf, int len, uint32_t 
     }
 
     // Exponential ramp: ~5ms time constant (240 samples @ 48kHz)
-    float tau = 0.005f;
-    float coeff = expf(-1.0f / (tau * (float)sampleRate));
+    float tau = 5.0f; // ms
+    float coeff = dsp_time_coeff(tau, (float)sampleRate);
     float oneMinusCoeff = 1.0f - coeff;
 
     for (int i = 0; i < len; i++) {
@@ -835,9 +832,9 @@ static void dsp_mute_process(float *buf, int len) {
 static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int len, uint32_t sampleRate) {
     if (len <= 0 || sampleRate == 0) return;
 
-    float threshLin = powf(10.0f, comp.thresholdDb / 20.0f);
-    float attackCoeff = expf(-1.0f / (comp.attackMs * 0.001f * (float)sampleRate));
-    float releaseCoeff = expf(-1.0f / (comp.releaseMs * 0.001f * (float)sampleRate));
+    float threshLin = dsp_db_to_linear(comp.thresholdDb);
+    float attackCoeff = dsp_time_coeff(comp.attackMs, (float)sampleRate);
+    float releaseCoeff = dsp_time_coeff(comp.releaseMs, (float)sampleRate);
     float makeupLin = comp.makeupLinear;
 
     float env = comp.envelope;
@@ -867,7 +864,7 @@ static void dsp_compressor_process(DspCompressorParams &comp, float *buf, int le
             }
 
             if (grDb > 0.0f) {
-                gainLin = powf(10.0f, -grDb / 20.0f);
+                gainLin = dsp_db_to_linear(-grDb);
                 if (grDb > maxGr) maxGr = grDb;
             }
         }
@@ -895,11 +892,7 @@ static int dsp_decimator_process(DspDecimatorParams &dec, float *buf, int len, i
     memset(&fird, 0, sizeof(fird));
     fird.coeffs = taps;
     fird.delay = delay;
-#ifdef NATIVE_TEST
-    fird.numTaps = dec.numTaps;
-#else
     fird.N = dec.numTaps;
-#endif
     fird.pos = dec.delayPos;
     fird.decim = dec.factor;
 
@@ -916,11 +909,11 @@ static int dsp_decimator_process(DspDecimatorParams &dec, float *buf, int len, i
 static void dsp_noise_gate_process(DspNoiseGateParams &gate, float *buf, int len, uint32_t sampleRate) {
     if (len <= 0 || sampleRate == 0) return;
 
-    float threshLin = powf(10.0f, gate.thresholdDb / 20.0f);
-    float attackCoeff = expf(-1.0f / (gate.attackMs * 0.001f * (float)sampleRate));
-    float releaseCoeff = expf(-1.0f / (gate.releaseMs * 0.001f * (float)sampleRate));
+    float threshLin = dsp_db_to_linear(gate.thresholdDb);
+    float attackCoeff = dsp_time_coeff(gate.attackMs, (float)sampleRate);
+    float releaseCoeff = dsp_time_coeff(gate.releaseMs, (float)sampleRate);
     float holdSamples = gate.holdMs * 0.001f * (float)sampleRate;
-    float rangeLin = powf(10.0f, gate.rangeDb / 20.0f);
+    float rangeLin = dsp_db_to_linear(gate.rangeDb);
 
     float env = gate.envelope;
     float holdCnt = gate.holdCounter;
@@ -953,7 +946,7 @@ static void dsp_noise_gate_process(DspNoiseGateParams &gate, float *buf, int len
                     float underDb = gate.thresholdDb - envDb;
                     if (underDb > 0.0f) {
                         float grDb = underDb * (1.0f - 1.0f / gate.ratio);
-                        gainLin = powf(10.0f, -grDb / 20.0f);
+                        gainLin = dsp_db_to_linear(-grDb);
                         // Clamp to range
                         if (gainLin < rangeLin) gainLin = rangeLin;
                         if (grDb > maxGr) maxGr = grDb;
@@ -1093,10 +1086,9 @@ static void dsp_bass_enhance_process(DspBassEnhanceParams &be, float *buf, int l
     // BPF to limit harmonic range
     dsps_biquad_f32(_gainBuf, _gainBuf, len, be.bpfCoeffs, be.bpfDelay);
 
-    // Mix back
-    for (int i = 0; i < len; i++) {
-        buf[i] += _gainBuf[i] * mixScale;
-    }
+    // Mix back (SIMD-accelerated: scale harmonics then add to dry signal)
+    dsps_mulc_f32(_gainBuf, _gainBuf, len, mixScale, 1, 1);
+    dsps_add_f32(buf, _gainBuf, buf, len, 1, 1, 1);
 }
 
 // ===== Multi-Band Compressor =====
@@ -1138,9 +1130,9 @@ static void dsp_multiband_comp_process(DspMultibandCompParams &mb, float *buf, i
     // Compress each band
     for (int b = 0; b < numBands; b++) {
         DspMultibandBand &band = slot.bands[b];
-        float threshLin = powf(10.0f, band.thresholdDb / 20.0f);
-        float attackCoeff = expf(-1.0f / (band.attackMs * 0.001f * (float)sampleRate));
-        float releaseCoeff = expf(-1.0f / (band.releaseMs * 0.001f * (float)sampleRate));
+        float threshLin = dsp_db_to_linear(band.thresholdDb);
+        float attackCoeff = dsp_time_coeff(band.attackMs, (float)sampleRate);
+        float releaseCoeff = dsp_time_coeff(band.releaseMs, (float)sampleRate);
 
         float env = band.envelope;
         float maxGr = 0.0f;
@@ -1164,7 +1156,7 @@ static void dsp_multiband_comp_process(DspMultibandCompParams &mb, float *buf, i
                     grDb = overDb * (1.0f - 1.0f / band.ratio);
                 }
                 if (grDb > 0.0f) {
-                    gainLin *= powf(10.0f, -grDb / 20.0f);
+                    gainLin *= dsp_db_to_linear(-grDb);
                     if (grDb > maxGr) maxGr = grDb;
                 }
             }
@@ -1174,12 +1166,10 @@ static void dsp_multiband_comp_process(DspMultibandCompParams &mb, float *buf, i
         band.gainReduction = -maxGr;
     }
 
-    // Sum bands back
-    memset(buf, 0, n * sizeof(float));
-    for (int b = 0; b < numBands; b++) {
-        for (int i = 0; i < n; i++) {
-            buf[i] += slot.bandBuf[b][i];
-        }
+    // Sum bands back (SIMD-accelerated)
+    memcpy(buf, slot.bandBuf[0], n * sizeof(float));
+    for (int b = 1; b < numBands; b++) {
+        dsps_add_f32(buf, slot.bandBuf[b], buf, n, 1, 1, 1);
     }
 }
 
@@ -1240,7 +1230,7 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
             dsp_compute_decimation_filter(taps, numTaps, 2, (float)cfg->sampleRate);
         }
     } else if (type == DSP_CONVOLUTION) {
-        // Convolution slots are initialized separately via conv_init_slot()
+        // Convolution slots are initialized separately via dsp_conv_init_slot()
         // Just mark as unassigned; user loads IR via API
         ch.stages[pos].convolution.convSlot = -1;
         ch.stages[pos].convolution.irLength = 0;
@@ -1292,7 +1282,7 @@ bool dsp_remove_stage(int channel, int stageIndex) {
         dsp_fir_free_slot(ch.stages[stageIndex].decimator.firSlot);
     } else if (ch.stages[stageIndex].type == DSP_CONVOLUTION) {
         if (ch.stages[stageIndex].convolution.convSlot >= 0) {
-            conv_free_slot(ch.stages[stageIndex].convolution.convSlot);
+            dsp_conv_free_slot(ch.stages[stageIndex].convolution.convSlot);
         }
     } else if (ch.stages[stageIndex].type == DSP_MULTIBAND_COMP) {
         dsp_mb_free_slot(ch.stages[stageIndex].multibandComp.mbSlot);
@@ -1410,7 +1400,7 @@ void dsp_mirror_channel_config(int srcCh, int dstCh) {
         else if (dst.stages[i].type == DSP_DELAY) dsp_delay_free_slot(dst.stages[i].delay.delaySlot);
         else if (dst.stages[i].type == DSP_DECIMATOR) dsp_fir_free_slot(dst.stages[i].decimator.firSlot);
         else if (dst.stages[i].type == DSP_CONVOLUTION && dst.stages[i].convolution.convSlot >= 0)
-            conv_free_slot(dst.stages[i].convolution.convSlot);
+            dsp_conv_free_slot(dst.stages[i].convolution.convSlot);
         else if (dst.stages[i].type == DSP_MULTIBAND_COMP)
             dsp_mb_free_slot(dst.stages[i].multibandComp.mbSlot);
     }
@@ -1704,7 +1694,7 @@ void dsp_load_config_from_json(const char *json, int channel) {
         } else if (ch.stages[i].type == DSP_DECIMATOR) {
             dsp_fir_free_slot(ch.stages[i].decimator.firSlot);
         } else if (ch.stages[i].type == DSP_CONVOLUTION && ch.stages[i].convolution.convSlot >= 0) {
-            conv_free_slot(ch.stages[i].convolution.convSlot);
+            dsp_conv_free_slot(ch.stages[i].convolution.convSlot);
         }
     }
 
@@ -1982,7 +1972,7 @@ void dsp_import_full_config_json(const char *json) {
             } else if (cfg->channels[c].stages[i].type == DSP_DECIMATOR) {
                 dsp_fir_free_slot(cfg->channels[c].stages[i].decimator.firSlot);
             } else if (cfg->channels[c].stages[i].type == DSP_CONVOLUTION && cfg->channels[c].stages[i].convolution.convSlot >= 0) {
-                conv_free_slot(cfg->channels[c].stages[i].convolution.convSlot);
+                dsp_conv_free_slot(cfg->channels[c].stages[i].convolution.convSlot);
             } else if (cfg->channels[c].stages[i].type == DSP_MULTIBAND_COMP) {
                 dsp_mb_free_slot(cfg->channels[c].stages[i].multibandComp.mbSlot);
             }
