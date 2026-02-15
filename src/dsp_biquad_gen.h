@@ -23,9 +23,9 @@ int dsp_gen_allpass_f32(float *coeffs, float freq, float qFactor);
 int dsp_gen_allpass360_f32(float *coeffs, float freq, float qFactor);
 int dsp_gen_allpass180_f32(float *coeffs, float freq, float qFactor);
 int dsp_gen_bpf0db_f32(float *coeffs, float freq, float qFactor);
-int dsp_gen_peakingEQ_f32(float *coeffs, float freq, float gain, float qFactor);
-int dsp_gen_lowShelf_f32(float *coeffs, float freq, float gain, float qFactor);
-int dsp_gen_highShelf_f32(float *coeffs, float freq, float gain, float qFactor);
+int dsp_gen_peaking_eq_f32(float *coeffs, float freq, float gain, float qFactor);
+int dsp_gen_low_shelf_f32(float *coeffs, float freq, float gain, float qFactor);
+int dsp_gen_high_shelf_f32(float *coeffs, float freq, float gain, float qFactor);
 
 // First-order filters (stored as biquad coefficients with b2=0, a2=0).
 // freq: normalized frequency = f_Hz / f_sample (must be 0 < freq < 0.5)

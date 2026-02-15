@@ -7,6 +7,7 @@
 #include "config.h"
 #endif
 #include <stdint.h>
+#include <math.h>
 
 // ===== Stage Types =====
 enum DspStageType : uint8_t {
@@ -470,8 +471,7 @@ inline void dsp_init_peq_bands(DspChannelConfig &ch) {
         ch.stages[i].biquad.frequency = (i < 10) ? peqDefaultFreqs[i] : 1000.0f;
         ch.stages[i].biquad.gain = 0.0f;
         ch.stages[i].biquad.Q = 1.0f;
-        char label[16];
-        // snprintf may not be available in all inline contexts, use simple construction
+        // Simple label construction (snprintf may not be available in all inline contexts)
         ch.stages[i].label[0] = 'P'; ch.stages[i].label[1] = 'E';
         ch.stages[i].label[2] = 'Q'; ch.stages[i].label[3] = ' ';
         if (i < 9) {
@@ -517,6 +517,18 @@ inline void dsp_init_metrics(DspMetrics &m) {
     for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
         m.limiterGrDb[i] = 0.0f;
     }
+}
+
+// ===== Conversion Helpers =====
+
+// Convert dB to linear gain: 10^(dB/20)
+inline float dsp_db_to_linear(float dB) {
+    return powf(10.0f, dB / 20.0f);
+}
+
+// Compute single-pole envelope time constant from milliseconds
+inline float dsp_time_coeff(float ms, float sampleRate) {
+    return expf(-1.0f / (ms * 0.001f * sampleRate));
 }
 
 // ===== Public API =====

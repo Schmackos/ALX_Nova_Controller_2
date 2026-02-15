@@ -10,7 +10,7 @@ esp_err_t dsps_fir_init_f32(fir_f32_t *fir, float *coeffs, float *delay, int num
 
     fir->coeffs = coeffs;
     fir->delay = delay;
-    fir->numTaps = numTaps;
+    fir->N = numTaps;
     fir->pos = 0;
 
     // Zero the delay line

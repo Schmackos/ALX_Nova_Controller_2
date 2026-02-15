@@ -16,7 +16,7 @@
 static ConvState _convSlots[CONV_MAX_IR_SLOTS];
 
 // Allocate memory (PSRAM preferred on ESP32, heap on native)
-static float* conv_alloc(int count) {
+static float* dsp_conv_alloc(int count) {
 #ifndef NATIVE_TEST
     float *p = (float *)heap_caps_calloc(count, sizeof(float), MALLOC_CAP_SPIRAM);
     if (!p) p = (float *)calloc(count, sizeof(float));
@@ -26,12 +26,12 @@ static float* conv_alloc(int count) {
 #endif
 }
 
-int conv_init_slot(int slot, const float *ir, int irLength) {
+int dsp_conv_init_slot(int slot, const float *ir, int irLength) {
     if (slot < 0 || slot >= CONV_MAX_IR_SLOTS || !ir || irLength <= 0)
         return -1;
 
     // Free existing slot if active
-    conv_free_slot(slot);
+    dsp_conv_free_slot(slot);
 
     ConvState &s = _convSlots[slot];
     s.numPartitions = (irLength + CONV_PARTITION_SIZE - 1) / CONV_PARTITION_SIZE;
@@ -51,10 +51,10 @@ int conv_init_slot(int slot, const float *ir, int irLength) {
 
     // Allocate and copy each partition
     for (int p = 0; p < s.numPartitions; p++) {
-        s.irPartitions[p] = conv_alloc(CONV_PARTITION_SIZE);
+        s.irPartitions[p] = dsp_conv_alloc(CONV_PARTITION_SIZE);
         if (!s.irPartitions[p]) {
             LOG_E("[Conv] Failed to allocate partition %d", p);
-            conv_free_slot(slot);
+            dsp_conv_free_slot(slot);
             return -1;
         }
         int offset = p * CONV_PARTITION_SIZE;
@@ -66,10 +66,10 @@ int conv_init_slot(int slot, const float *ir, int irLength) {
     }
 
     // Allocate overlap buffer
-    s.overlapBuf = conv_alloc(CONV_PARTITION_SIZE);
+    s.overlapBuf = dsp_conv_alloc(CONV_PARTITION_SIZE);
     if (!s.overlapBuf) {
         LOG_E("[Conv] Failed to allocate overlap buffer");
-        conv_free_slot(slot);
+        dsp_conv_free_slot(slot);
         return -1;
     }
 
@@ -78,7 +78,7 @@ int conv_init_slot(int slot, const float *ir, int irLength) {
     return 0;
 }
 
-void conv_free_slot(int slot) {
+void dsp_conv_free_slot(int slot) {
     if (slot < 0 || slot >= CONV_MAX_IR_SLOTS) return;
     ConvState &s = _convSlots[slot];
 
@@ -96,7 +96,7 @@ void conv_free_slot(int slot) {
     s.active = false;
 }
 
-void conv_process(int slot, float *buf, int len) {
+void dsp_conv_process(int slot, float *buf, int len) {
     if (slot < 0 || slot >= CONV_MAX_IR_SLOTS || !buf || len <= 0) return;
     ConvState &s = _convSlots[slot];
     if (!s.active || !s.irPartitions || !s.overlapBuf) return;
@@ -149,12 +149,12 @@ void conv_process(int slot, float *buf, int len) {
     memcpy(buf, output, len * sizeof(float));
 }
 
-bool conv_is_active(int slot) {
+bool dsp_conv_is_active(int slot) {
     if (slot < 0 || slot >= CONV_MAX_IR_SLOTS) return false;
     return _convSlots[slot].active;
 }
 
-int conv_get_ir_length(int slot) {
+int dsp_conv_get_ir_length(int slot) {
     if (slot < 0 || slot >= CONV_MAX_IR_SLOTS) return 0;
     return _convSlots[slot].irLength;
 }

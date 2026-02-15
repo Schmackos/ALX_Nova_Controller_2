@@ -156,7 +156,7 @@ int dsp_gen_bpf0db_f32(float *coeffs, float freq, float qFactor)
     return dsp_gen_bpf_f32(coeffs, freq, qFactor);
 }
 
-int dsp_gen_peakingEQ_f32(float *coeffs, float freq, float gain, float qFactor)
+int dsp_gen_peaking_eq_f32(float *coeffs, float freq, float gain, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
         return -1;
@@ -178,7 +178,7 @@ int dsp_gen_peakingEQ_f32(float *coeffs, float freq, float gain, float qFactor)
     return 0;
 }
 
-int dsp_gen_lowShelf_f32(float *coeffs, float freq, float gain, float qFactor)
+int dsp_gen_low_shelf_f32(float *coeffs, float freq, float gain, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
         return -1;
@@ -201,7 +201,7 @@ int dsp_gen_lowShelf_f32(float *coeffs, float freq, float gain, float qFactor)
     return 0;
 }
 
-int dsp_gen_highShelf_f32(float *coeffs, float freq, float gain, float qFactor)
+int dsp_gen_high_shelf_f32(float *coeffs, float freq, float gain, float qFactor)
 {
     if (!coeffs || freq <= 0.0f || freq >= 0.5f || qFactor <= 0.0f) {
         return -1;
