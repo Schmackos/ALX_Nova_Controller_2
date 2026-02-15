@@ -2,6 +2,19 @@
 
 ## Version 1.8.2
 
+## New Features
+- [2026-02-15] feat: Release version 1.8.2 with new DSP features and improvements
+
+- Extended DSP stage types: Noise Gate, Tone Controls, Loudness Compensation, Bass Enhancement, Stereo Width, Speaker Protection, Multiband Compressor
+- Added Bessel crossover filters with multiple order options
+- Implemented baffle step correction for high-shelf compensation
+- Introduced real-time THD+N measurement with harmonic level display
+- Improved client-side frequency response graph for PEQ curve accuracy
+- Reduced Core 1 idle CPU usage significantly
+- Fixed various bugs including frequency response graph issues and undefined function calls
+- Updated technical details and ensured 754 native tests are passing
+- Version bumped to 1.8.2 (`90ce72c`)
+
 ### New Features
 - **Extended DSP stage types**: Noise Gate, Tone Controls, Loudness Compensation, Bass Enhancement, Stereo Width, Speaker Protection, Multiband Compressor — full Web UI, WebSocket, MQTT, and REST support
 - **Bessel crossover filters**: 2nd/4th/6th/8th order Bessel options in crossover preset UI
