@@ -3,6 +3,18 @@
 ## Version 1.8.3
 
 ## New Features
+- [2026-02-15] feat: Auth security hardening and USB audio init fix
+
+SHA256 password hashing with NVS migration from plaintext, timing-safe
+comparison, progressive login rate limiting, session ID log truncation,
+SameSite=Strict cookies. USB audio TinyUSB init guarded to prevent
+double-init crashes on enable/disable toggle. (`1014338`)
+- [2026-02-15] feat: Auth security hardening and USB audio init fix
+
+SHA256 password hashing with NVS migration from plaintext, timing-safe
+comparison, progressive login rate limiting, session ID log truncation,
+SameSite=Strict cookies. USB audio TinyUSB init guarded to prevent
+double-init crashes on enable/disable toggle. (`fa721ee`)
 - Automated release via GitHub Actions
 
 ## Improvements
@@ -16,23 +28,7 @@ Previously, WS connections persisted after HTTP logout because
 wsAuthStatus was only set once during auth handshake.
 
 Also fix isDefaultPassword() to compare against runtime AP password
-instead of hardcoded DEFAULT_AP_PASSWORD constant. (`61b0a70`)
-- [2026-02-15] fix: WebSocket session re-validation and default password consistency
-
-Re-validate session on every WS command to catch logout/expiry.
-Previously, WS connections persisted after HTTP logout because
-wsAuthStatus was only set once during auth handshake.
-
-Also fix isDefaultPassword() to compare against runtime AP password
-instead of hardcoded DEFAULT_AP_PASSWORD constant. (`1d367f7`)
-- [2026-02-15] fix: WebSocket session re-validation and default password consistency
-
-Re-validate session on every WS command to catch logout/expiry.
-Previously, WS connections persisted after HTTP logout because
-wsAuthStatus was only set once during auth handshake.
-
-Also fix isDefaultPassword() to compare against runtime AP password
-instead of hardcoded DEFAULT_AP_PASSWORD constant. (`27dc0eb`)
+instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details

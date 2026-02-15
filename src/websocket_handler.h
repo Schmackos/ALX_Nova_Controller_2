@@ -13,7 +13,6 @@
 // ===== WebSocket Authentication =====
 extern bool wsAuthStatus[MAX_WS_CLIENTS];
 extern unsigned long wsAuthTimeout[MAX_WS_CLIENTS];
-extern String wsSessionId[MAX_WS_CLIENTS];
 
 // ===== WebSocket Event Handler =====
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length);

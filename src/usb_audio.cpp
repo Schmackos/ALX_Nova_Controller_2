@@ -161,6 +161,7 @@ static uint8_t _itfNum = 0;          // Assigned by framework
 static int16_t _hostVolume = 0;      // 1/256 dB
 static bool _hostMute = false;
 static uint8_t _altSetting = 0;      // Current AS alt setting (0=idle, 1=streaming)
+static bool _tinyusbHwReady = false; // True after tinyusb_init() succeeds (one-shot)
 
 // Control request response buffer
 static uint8_t _ctrlBuf[64];
@@ -360,8 +361,6 @@ static void _audio_driver_reset(uint8_t rhport) {
 }
 
 static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *desc_intf, uint16_t max_len) {
-    (void)rhport;
-
     // Only handle Audio Control or Audio Streaming interfaces
     if (desc_intf->bInterfaceClass != TUSB_CLASS_AUDIO) return 0;
 
@@ -375,7 +374,7 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
 
         // Walk CS descriptors until next standard interface or end
         while (drv_len < max_len) {
-            if (p[0] == 0) break; // Guard against zero-length descriptor (infinite loop)
+            if (p[0] == 0) break;
             uint8_t nextType = p[1];
             if (nextType == TUSB_DESC_INTERFACE || nextType == TUSB_DESC_INTERFACE_ASSOCIATION) break;
             drv_len += p[0];
@@ -388,21 +387,48 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
         LOG_I("[USB Audio] AC interface opened, connected");
 
     } else if (desc_intf->bInterfaceSubClass == AUDIO_SUBCLASS_STREAMING) {
-        // Audio Streaming interface
         if (desc_intf->bAlternateSetting == 0) {
-            // Alt 0 (zero bandwidth) — just the interface descriptor
+            // Alt 0 (zero bandwidth): claim ALL remaining AS descriptors (alt 0 +
+            // alt 1 + CS + endpoints) so TinyUSB knows the full extent during
+            // initial config. Also called by process_set_interface to stop streaming.
             drv_len = desc_intf->bLength;
+            p += drv_len;
+
+            // Walk through all descriptors belonging to this interface number
+            while (drv_len < max_len) {
+                if (p[0] == 0) break;
+                uint8_t nextType = p[1];
+                if (nextType == TUSB_DESC_INTERFACE_ASSOCIATION) break;
+                // Stop at a different interface number
+                if (nextType == TUSB_DESC_INTERFACE) {
+                    tusb_desc_interface_t const *next_itf = (tusb_desc_interface_t const *)p;
+                    if (next_itf->bInterfaceNumber != desc_intf->bInterfaceNumber) break;
+                }
+                drv_len += p[0];
+                p += p[0];
+            }
+
+            // Stop streaming (SET_INTERFACE alt 0 from host)
+            if (_usbState == USB_AUDIO_STREAMING) {
+                _usbState = USB_AUDIO_CONNECTED;
+                _altSetting = 0;
+                AppState::getInstance().usbAudioStreaming = false;
+                AppState::getInstance().markUsbAudioDirty();
+                LOG_I("[USB Audio] Streaming stopped (alt 0)");
+            }
+
         } else {
-            // Alt 1+ (active streaming) — interface + CS + endpoint descriptors
+            // Alt 1+ (active streaming) — called by TinyUSB's process_set_interface
+            // when host sends SET_INTERFACE to start streaming.
             drv_len = desc_intf->bLength;
             p += drv_len;
 
             while (drv_len < max_len) {
-                if (p[0] == 0) break; // Guard against zero-length descriptor (infinite loop)
+                if (p[0] == 0) break;
                 uint8_t nextType = p[1];
                 if (nextType == TUSB_DESC_INTERFACE || nextType == TUSB_DESC_INTERFACE_ASSOCIATION) break;
 
-                // Open isochronous endpoint if we find one
+                // Open isochronous endpoint
                 if (nextType == TUSB_DESC_ENDPOINT) {
                     tusb_desc_endpoint_t const *ep = (tusb_desc_endpoint_t const *)p;
                     usbd_edpt_iso_alloc(rhport, ep->bEndpointAddress, ep->wMaxPacketSize);
@@ -411,6 +437,19 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
 
                 drv_len += p[0];
                 p += p[0];
+            }
+
+            // Start streaming
+            _altSetting = desc_intf->bAlternateSetting;
+            _usbState = USB_AUDIO_STREAMING;
+            usb_rb_reset(&_ringBuffer);
+            AppState::getInstance().usbAudioStreaming = true;
+            AppState::getInstance().markUsbAudioDirty();
+            LOG_I("[USB Audio] Streaming started (alt %d)", desc_intf->bAlternateSetting);
+
+            // Prime the OUT endpoint for first isochronous transfer
+            if (_epOut) {
+                usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE);
             }
         }
     }
@@ -615,75 +654,90 @@ extern "C" usbd_class_driver_t const *usbd_app_driver_get_cb(uint8_t *driver_cou
 // ===== Public API Implementation =====
 
 void usb_audio_init(void) {
-    // Allocate ring buffer in PSRAM
-    _ringBufStorage = (int32_t *)heap_caps_calloc(
-        RING_BUF_CAPACITY * 2, sizeof(int32_t), MALLOC_CAP_SPIRAM);
+    // Allocate ring buffer in PSRAM (once — persists across enable/disable toggles)
     if (!_ringBufStorage) {
-        _ringBufStorage = (int32_t *)calloc(RING_BUF_CAPACITY * 2, sizeof(int32_t));
-    }
-    if (!_ringBufStorage) {
-        LOG_E("[USB Audio] Ring buffer allocation failed!");
-        return;
-    }
-    usb_rb_init(&_ringBuffer, _ringBufStorage, RING_BUF_CAPACITY);
-
-    // Register audio interface descriptor with the Arduino TinyUSB framework
-    esp_err_t err = tinyusb_enable_interface(
-        USB_INTERFACE_CUSTOM,
-        UAC2_DESC_TOTAL_LEN,
-        usb_audio_descriptor_cb
-    );
-    if (err != ESP_OK) {
-        LOG_E("[USB Audio] Failed to register USB interface: %d", err);
-        return;
+        _ringBufStorage = (int32_t *)heap_caps_calloc(
+            RING_BUF_CAPACITY * 2, sizeof(int32_t), MALLOC_CAP_SPIRAM);
+        if (!_ringBufStorage) {
+            _ringBufStorage = (int32_t *)calloc(RING_BUF_CAPACITY * 2, sizeof(int32_t));
+        }
+        if (!_ringBufStorage) {
+            LOG_E("[USB Audio] Ring buffer allocation failed!");
+            return;
+        }
+        usb_rb_init(&_ringBuffer, _ringBufStorage, RING_BUF_CAPACITY);
     }
 
-    // Initialize TinyUSB with our device config (don't use TINYUSB_CONFIG_DEFAULT
-    // — it references Kconfig macros not available in Arduino framework builds)
-    tinyusb_device_config_t cfg = {};
-    cfg.vid = USB_ESPRESSIF_VID;
-    cfg.pid = 0x4001;
-    cfg.product_name = "ALX Nova Audio";
-    cfg.manufacturer_name = "ALX Audio";
-    cfg.serial_number = "ALX-USB-AUDIO";
-    cfg.fw_version = 0x0100;
-    cfg.usb_version = 0x0200;
-    cfg.usb_class = TUSB_CLASS_MISC;
-    cfg.usb_subclass = MISC_SUBCLASS_COMMON;
-    cfg.usb_protocol = MISC_PROTOCOL_IAD;
-    cfg.usb_attributes = TUSB_DESC_CONFIG_ATT_SELF_POWERED;
-    cfg.usb_power_ma = 100;
-    cfg.webusb_enabled = false;
-    cfg.webusb_url = "";
-    err = tinyusb_init(&cfg);
-    if (err != ESP_OK) {
-        LOG_E("[USB Audio] TinyUSB init failed: %d", err);
-        return;
+    // Initialize TinyUSB hardware (one-shot — can't re-init after first call).
+    // tinyusb_enable_interface() must be called before tinyusb_init(), and both
+    // fail if called a second time. The enable/disable toggle only controls the
+    // software data path; the USB device stays enumerated once started.
+    if (!_tinyusbHwReady) {
+        // Register audio interface descriptor with the Arduino TinyUSB framework
+        esp_err_t err = tinyusb_enable_interface(
+            USB_INTERFACE_CUSTOM,
+            UAC2_DESC_TOTAL_LEN,
+            usb_audio_descriptor_cb
+        );
+        if (err != ESP_OK) {
+            LOG_E("[USB Audio] Failed to register USB interface: %d", err);
+            return;
+        }
+
+        // Initialize TinyUSB with our device config (don't use TINYUSB_CONFIG_DEFAULT
+        // — it references Kconfig macros not available in Arduino framework builds)
+        tinyusb_device_config_t cfg = {};
+        cfg.vid = USB_ESPRESSIF_VID;
+        cfg.pid = 0x4001;
+        cfg.product_name = "ALX Nova Audio";
+        cfg.manufacturer_name = "ALX Audio";
+        cfg.serial_number = "ALX-USB-AUDIO";
+        cfg.fw_version = 0x0100;
+        cfg.usb_version = 0x0200;
+        cfg.usb_class = TUSB_CLASS_MISC;
+        cfg.usb_subclass = MISC_SUBCLASS_COMMON;
+        cfg.usb_protocol = MISC_PROTOCOL_IAD;
+        cfg.usb_attributes = TUSB_DESC_CONFIG_ATT_SELF_POWERED;
+        cfg.usb_power_ma = 100;
+        cfg.webusb_enabled = false;
+        cfg.webusb_url = "";
+        err = tinyusb_init(&cfg);
+        if (err != ESP_OK) {
+            LOG_E("[USB Audio] TinyUSB init failed: %d", err);
+            return;
+        }
+        // tinyusb_init() creates its own "usbd" task (max priority, no core affinity)
+        // that calls tud_task() in a loop. No additional task needed.
+        _tinyusbHwReady = true;
+
+        LOG_I("[USB Audio] TinyUSB started: %dHz/%dbit/%dch, ring=%d frames (%s)",
+              USB_AUDIO_SAMPLE_RATE, USB_AUDIO_BIT_DEPTH, USB_AUDIO_CHANNELS,
+              RING_BUF_CAPACITY,
+              _ringBufStorage ? "PSRAM" : "internal");
+    } else {
+        LOG_I("[USB Audio] Re-enabled (TinyUSB already running)");
     }
-    // tinyusb_init() creates its own "usbd" task (max priority, no core affinity)
-    // that calls tud_task() in a loop. No additional task needed.
+
+    // Reset ring buffer for clean start on each enable
+    usb_rb_reset(&_ringBuffer);
 
     // Set initial AppState
     AppState &as = AppState::getInstance();
     as.usbAudioSampleRate = USB_AUDIO_SAMPLE_RATE;
     as.usbAudioBitDepth = USB_AUDIO_BIT_DEPTH;
     as.usbAudioChannels = USB_AUDIO_CHANNELS;
-
-    LOG_I("[USB Audio] Initialized: %dHz/%dbit/%dch, ring=%d frames (%s)",
-          USB_AUDIO_SAMPLE_RATE, USB_AUDIO_BIT_DEPTH, USB_AUDIO_CHANNELS,
-          RING_BUF_CAPACITY,
-          _ringBufStorage ? "PSRAM" : "internal");
 }
 
 void usb_audio_deinit(void) {
-    // NOTE: The "usbd" task created by tinyusb_init() cannot be stopped here
-    // (we don't own its handle). Full USB teardown would require tinyusb_deinit().
+    // Soft disable only — TinyUSB keeps running (can't be torn down at runtime).
+    // The USB device remains enumerated on the host; we just stop processing data.
+    // _tinyusbHwReady is NOT cleared so re-enable skips hardware init.
     _usbState = USB_AUDIO_DISCONNECTED;
     AppState &as = AppState::getInstance();
     as.usbAudioConnected = false;
     as.usbAudioStreaming = false;
     as.markUsbAudioDirty();
-    LOG_I("[USB Audio] Deinitialized");
+    LOG_I("[USB Audio] Disabled (USB device still enumerated)");
 }
 
 UsbAudioState usb_audio_get_state(void) {

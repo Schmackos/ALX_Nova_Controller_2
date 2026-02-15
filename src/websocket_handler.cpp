@@ -36,7 +36,7 @@
 // ===== WebSocket Authentication Tracking =====
 bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
 unsigned long wsAuthTimeout[MAX_WS_CLIENTS] = {0};
-String wsSessionId[MAX_WS_CLIENTS];
+static String wsSessionId[MAX_WS_CLIENTS];
 
 // ===== Per-client Audio Streaming Subscription =====
 static bool _audioSubscribed[MAX_WS_CLIENTS] = {};

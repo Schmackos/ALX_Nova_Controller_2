@@ -35,6 +35,11 @@ String getWebPassword();
 void setWebPassword(String newPassword);
 bool isDefaultPassword();
 
+// Security utilities
+bool timingSafeCompare(const String &a, const String &b);
+String hashPassword(const String &password);
+void resetLoginRateLimit();
+
 // Handlers
 void handleLogin();
 void handleLogout();

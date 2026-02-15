@@ -6,9 +6,81 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <esp_random.h>
+#include <mbedtls/md.h>
 
 Session activeSessions[MAX_SESSIONS];
 Preferences authPrefs;
+
+// Rate limiting state
+static int _loginFailCount = 0;
+static unsigned long _lastFailTime = 0;
+static const unsigned long LOGIN_COOLDOWN_MS = 300000; // 5 minutes
+
+// Timing-safe string comparison — constant time regardless of where strings differ
+bool timingSafeCompare(const String &a, const String &b) {
+  size_t lenA = a.length();
+  size_t lenB = b.length();
+  size_t maxLen = (lenA > lenB) ? lenA : lenB;
+
+  if (maxLen == 0) {
+    return (lenA == 0 && lenB == 0);
+  }
+
+  volatile uint8_t result = (lenA != lenB) ? 1 : 0;
+  const char *pA = a.c_str();
+  const char *pB = b.c_str();
+
+  for (size_t i = 0; i < maxLen; i++) {
+    uint8_t byteA = (i < lenA) ? (uint8_t)pA[i] : 0;
+    uint8_t byteB = (i < lenB) ? (uint8_t)pB[i] : 0;
+    result |= byteA ^ byteB;
+  }
+
+  return result == 0;
+}
+
+// Hash password using SHA256, returns 64-char hex string
+String hashPassword(const String &password) {
+  uint8_t shaResult[32];
+
+  mbedtls_md_context_t ctx;
+  mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+
+  mbedtls_md_init(&ctx);
+  mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 0);
+  mbedtls_md_starts(&ctx);
+  mbedtls_md_update(&ctx, (const unsigned char *)password.c_str(),
+                    password.length());
+  mbedtls_md_finish(&ctx, shaResult);
+  mbedtls_md_free(&ctx);
+
+  // Convert to hex string
+  char hexStr[65];
+  for (int i = 0; i < 32; i++) {
+    snprintf(hexStr + (i * 2), 3, "%02x", shaResult[i]);
+  }
+  hexStr[64] = '\0';
+
+  return String(hexStr);
+}
+
+// Get progressive login delay based on fail count
+static unsigned long getLoginDelay() {
+  // Progressive: 1s, 2s, 5s, 10s, 30s (capped)
+  static const unsigned long delays[] = {1000, 2000, 5000, 10000, 30000};
+  int idx = _loginFailCount - 1;
+  if (idx < 0)
+    return 0;
+  if (idx > 4)
+    idx = 4;
+  return delays[idx];
+}
+
+// Reset rate limiting (for factory reset)
+void resetLoginRateLimit() {
+  _loginFailCount = 0;
+  _lastFailTime = 0;
+}
 
 // Initialize authentication system
 void initAuth() {
@@ -19,22 +91,33 @@ void initAuth() {
     activeSessions[i].lastSeen = 0;
   }
 
-  // Load password from NVS
+  // Load password hash from NVS (with migration from plaintext)
   authPrefs.begin("auth", false);
-  String savedPassword = "";
-  if (authPrefs.isKey("web_pwd")) {
-    savedPassword = authPrefs.getString("web_pwd", "");
-  }
-  authPrefs.end();
 
-  if (savedPassword.length() == 0) {
-    // No password saved, use default (AP password)
-    appState.webPassword = appState.apPassword;
-    LOG_I("[Auth] Using default password (AP password)");
+  if (authPrefs.isKey("pwd_hash")) {
+    // New format: already hashed
+    appState.webPassword = authPrefs.getString("pwd_hash", "");
+    LOG_I("[Auth] Loaded password hash from NVS");
+  } else if (authPrefs.isKey("web_pwd")) {
+    // Legacy plaintext — migrate to hashed
+    String plaintext = authPrefs.getString("web_pwd", "");
+    if (plaintext.length() > 0) {
+      String hashed = hashPassword(plaintext);
+      authPrefs.putString("pwd_hash", hashed);
+      authPrefs.remove("web_pwd");
+      appState.webPassword = hashed;
+      LOG_I("[Auth] Migrated plaintext password to hash");
+    } else {
+      appState.webPassword = hashPassword(appState.apPassword);
+      LOG_I("[Auth] Using default password (AP password)");
+    }
   } else {
-    appState.webPassword = savedPassword;
-    LOG_I("[Auth] Loaded password from NVS");
+    // No password saved, use hashed default (AP password)
+    appState.webPassword = hashPassword(appState.apPassword);
+    LOG_I("[Auth] Using default password (AP password)");
   }
+
+  authPrefs.end();
 
   LOG_I("[Auth] Authentication system initialized");
 }
@@ -68,7 +151,8 @@ bool createSession(String &sessionId) {
       activeSessions[i].sessionId = sessionId;
       activeSessions[i].createdAt = now;
       activeSessions[i].lastSeen = now;
-      LOG_D("[Auth] Session %s created in slot %d", sessionId.c_str(), i);
+      LOG_D("[Auth] Session %s... created in slot %d",
+            sessionId.substring(0, 8).c_str(), i);
       return true;
     }
   }
@@ -84,16 +168,17 @@ bool createSession(String &sessionId) {
     }
   }
 
-  LOG_D("[Auth] Evicting oldest session %s from slot %d",
-        activeSessions[oldestIndex].sessionId.c_str(), oldestIndex);
+  LOG_D("[Auth] Evicting oldest session %s... from slot %d",
+        activeSessions[oldestIndex].sessionId.substring(0, 8).c_str(),
+        oldestIndex);
 
   sessionId = generateSessionId();
   activeSessions[oldestIndex].sessionId = sessionId;
   activeSessions[oldestIndex].createdAt = now;
   activeSessions[oldestIndex].lastSeen = now;
 
-  LOG_D("[Auth] Session %s created in slot %d (evicted)",
-        sessionId.c_str(), oldestIndex);
+  LOG_D("[Auth] Session %s... created in slot %d (evicted)",
+        sessionId.substring(0, 8).c_str(), oldestIndex);
   return true;
 }
 
@@ -110,7 +195,8 @@ bool validateSession(String sessionId) {
     if (activeSessions[i].sessionId == sessionId) {
       // Check if expired
       if (now - activeSessions[i].lastSeen > SESSION_TIMEOUT) {
-        LOG_D("[Auth] Session %s expired", sessionId.c_str());
+        LOG_D("[Auth] Session %s... expired",
+              sessionId.substring(0, 8).c_str());
         activeSessions[i].sessionId = "";
         return false;
       }
@@ -121,7 +207,7 @@ bool validateSession(String sessionId) {
     }
   }
 
-  LOG_D("[Auth] Session %s not found", sessionId.c_str());
+  LOG_D("[Auth] Session %s... not found", sessionId.substring(0, 8).c_str());
   return false;
 }
 
@@ -129,7 +215,8 @@ bool validateSession(String sessionId) {
 void removeSession(String sessionId) {
   for (int i = 0; i < MAX_SESSIONS; i++) {
     if (activeSessions[i].sessionId == sessionId) {
-      LOG_D("[Auth] Session %s removed from slot %d", sessionId.c_str(), i);
+      LOG_D("[Auth] Session %s... removed from slot %d",
+            sessionId.substring(0, 8).c_str(), i);
       activeSessions[i].sessionId = "";
       activeSessions[i].createdAt = 0;
       activeSessions[i].lastSeen = 0;
@@ -158,7 +245,7 @@ String getSessionFromCookie() {
     return "";
   }
 
-  LOG_D("[Auth] Raw Cookie header: %s", cookie.c_str());
+  LOG_D("[Auth] Cookie header received [len=%d]", cookie.length());
 
   // Parse cookie header for sessionId
   int start = cookie.indexOf("sessionId=");
@@ -226,19 +313,25 @@ bool requireAuth() {
 // Get web password
 String getWebPassword() { return appState.webPassword; }
 
-// Set web password and save to NVS
+// Set web password and save to NVS (stores hash, deletes legacy key)
 void setWebPassword(String newPassword) {
-  appState.webPassword = newPassword;
+  String hashed = hashPassword(newPassword);
+  appState.webPassword = hashed;
 
   authPrefs.begin("auth", false);
-  authPrefs.putString("web_pwd", newPassword);
+  authPrefs.putString("pwd_hash", hashed);
+  if (authPrefs.isKey("web_pwd")) {
+    authPrefs.remove("web_pwd");
+  }
   authPrefs.end();
 
   LOG_I("[Auth] Password changed and saved to NVS");
 }
 
-// Check if using default password (matches initAuth() which defaults to AP password)
-bool isDefaultPassword() { return appState.webPassword == appState.apPassword; }
+// Check if using default password (hash of AP password)
+bool isDefaultPassword() {
+  return timingSafeCompare(appState.webPassword, hashPassword(appState.apPassword));
+}
 
 // Handler: Login
 void handleLogin() {
@@ -263,12 +356,22 @@ void handleLogin() {
 
   String password = doc["password"].as<String>();
 
-  // Validate password
-  if (password != appState.webPassword) {
-    // Rate limiting: delay on failed attempt
-    delay(1000);
+  // Auto-reset fail counter after cooldown period of no attempts
+  unsigned long now = millis();
+  if (_loginFailCount > 0 && (now - _lastFailTime) > LOGIN_COOLDOWN_MS) {
+    _loginFailCount = 0;
+  }
 
-    LOG_W("[Auth] Login failed - incorrect password");
+  // Validate password — compare hash of input against stored hash
+  if (!timingSafeCompare(hashPassword(password), appState.webPassword)) {
+    // Progressive rate limiting
+    _loginFailCount++;
+    _lastFailTime = millis();
+    unsigned long delayMs = getLoginDelay();
+    delay(delayMs);
+
+    LOG_W("[Auth] Login failed - incorrect password (attempt %d, delay %lums)",
+          _loginFailCount, delayMs);
 
     JsonDocument response;
     response["success"] = false;
@@ -293,6 +396,10 @@ void handleLogin() {
     return;
   }
 
+  // Reset rate limiter on success
+  _loginFailCount = 0;
+  _lastFailTime = 0;
+
   LOG_I("[Auth] Login successful");
 
   // Send response with cookie
@@ -304,11 +411,13 @@ void handleLogin() {
   String responseStr;
   serializeJson(response, responseStr);
 
-  // Set cookie (Path=/, Max-Age=3600)
+  // Set cookie (Path=/, Max-Age=3600, SameSite=Strict)
   // Removing HttpOnly to allow JS to read it for WebSocket auth
-  String cookie = "sessionId=" + sessionId + "; Path=/; Max-Age=3600";
+  String cookie =
+      "sessionId=" + sessionId + "; Path=/; Max-Age=3600; SameSite=Strict";
   server.sendHeader("Set-Cookie", cookie);
-  LOG_D("[Auth] Set-Cookie: %s", cookie.c_str());
+  LOG_D("[Auth] Set-Cookie for session %s...",
+        sessionId.substring(0, 8).c_str());
   server.send(200, "application/json", responseStr);
 }
 
