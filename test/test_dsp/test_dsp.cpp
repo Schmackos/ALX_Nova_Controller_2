@@ -2650,6 +2650,191 @@ void test_thd_invalid_freq_safe(void) {
     TEST_ASSERT_FALSE(r.valid);
 }
 
+// ===== Utility & Helper Tests =====
+
+void test_stage_type_name_all_types(void) {
+    TEST_ASSERT_EQUAL_STRING("LPF", stage_type_name(DSP_BIQUAD_LPF));
+    TEST_ASSERT_EQUAL_STRING("HPF", stage_type_name(DSP_BIQUAD_HPF));
+    TEST_ASSERT_EQUAL_STRING("BPF", stage_type_name(DSP_BIQUAD_BPF));
+    TEST_ASSERT_EQUAL_STRING("NOTCH", stage_type_name(DSP_BIQUAD_NOTCH));
+    TEST_ASSERT_EQUAL_STRING("PEQ", stage_type_name(DSP_BIQUAD_PEQ));
+    TEST_ASSERT_EQUAL_STRING("LOW_SHELF", stage_type_name(DSP_BIQUAD_LOW_SHELF));
+    TEST_ASSERT_EQUAL_STRING("HIGH_SHELF", stage_type_name(DSP_BIQUAD_HIGH_SHELF));
+    TEST_ASSERT_EQUAL_STRING("ALLPASS", stage_type_name(DSP_BIQUAD_ALLPASS));
+    TEST_ASSERT_EQUAL_STRING("ALLPASS_360", stage_type_name(DSP_BIQUAD_ALLPASS_360));
+    TEST_ASSERT_EQUAL_STRING("ALLPASS_180", stage_type_name(DSP_BIQUAD_ALLPASS_180));
+    TEST_ASSERT_EQUAL_STRING("BPF_0DB", stage_type_name(DSP_BIQUAD_BPF_0DB));
+    TEST_ASSERT_EQUAL_STRING("CUSTOM", stage_type_name(DSP_BIQUAD_CUSTOM));
+    TEST_ASSERT_EQUAL_STRING("LIMITER", stage_type_name(DSP_LIMITER));
+    TEST_ASSERT_EQUAL_STRING("FIR", stage_type_name(DSP_FIR));
+    TEST_ASSERT_EQUAL_STRING("GAIN", stage_type_name(DSP_GAIN));
+    TEST_ASSERT_EQUAL_STRING("DELAY", stage_type_name(DSP_DELAY));
+    TEST_ASSERT_EQUAL_STRING("POLARITY", stage_type_name(DSP_POLARITY));
+    TEST_ASSERT_EQUAL_STRING("MUTE", stage_type_name(DSP_MUTE));
+    TEST_ASSERT_EQUAL_STRING("COMPRESSOR", stage_type_name(DSP_COMPRESSOR));
+    TEST_ASSERT_EQUAL_STRING("LPF_1ST", stage_type_name(DSP_BIQUAD_LPF_1ST));
+    TEST_ASSERT_EQUAL_STRING("HPF_1ST", stage_type_name(DSP_BIQUAD_HPF_1ST));
+    TEST_ASSERT_EQUAL_STRING("LINKWITZ", stage_type_name(DSP_BIQUAD_LINKWITZ));
+    TEST_ASSERT_EQUAL_STRING("DECIMATOR", stage_type_name(DSP_DECIMATOR));
+    TEST_ASSERT_EQUAL_STRING("CONVOLUTION", stage_type_name(DSP_CONVOLUTION));
+    TEST_ASSERT_EQUAL_STRING("NOISE_GATE", stage_type_name(DSP_NOISE_GATE));
+    TEST_ASSERT_EQUAL_STRING("TONE_CTRL", stage_type_name(DSP_TONE_CTRL));
+    TEST_ASSERT_EQUAL_STRING("SPEAKER_PROT", stage_type_name(DSP_SPEAKER_PROT));
+    TEST_ASSERT_EQUAL_STRING("STEREO_WIDTH", stage_type_name(DSP_STEREO_WIDTH));
+    TEST_ASSERT_EQUAL_STRING("LOUDNESS", stage_type_name(DSP_LOUDNESS));
+    TEST_ASSERT_EQUAL_STRING("BASS_ENHANCE", stage_type_name(DSP_BASS_ENHANCE));
+    TEST_ASSERT_EQUAL_STRING("MULTIBAND_COMP", stage_type_name(DSP_MULTIBAND_COMP));
+    TEST_ASSERT_EQUAL_STRING("UNKNOWN", stage_type_name((DspStageType)255));
+}
+
+void test_ensure_peq_bands(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    // Clear PEQ labels to make dsp_has_peq_bands() return false
+    cfg->channels[0].stages[0].label[0] = 'X';
+    TEST_ASSERT_FALSE(dsp_has_peq_bands(cfg->channels[0]));
+
+    dsp_ensure_peq_bands(cfg);
+    // Should have re-initialized PEQ bands
+    TEST_ASSERT_TRUE(dsp_has_peq_bands(cfg->channels[0]));
+    TEST_ASSERT_EQUAL_STRING("PEQ 1", cfg->channels[0].stages[0].label);
+}
+
+void test_copy_peq_bands(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    // Modify channel 0 PEQ band 0 frequency
+    cfg->channels[0].stages[0].biquad.frequency = 5000.0f;
+    cfg->channels[0].stages[0].biquad.gain = 6.0f;
+
+    dsp_copy_peq_bands(0, 1);
+
+    cfg = dsp_get_inactive_config();
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 5000.0f, cfg->channels[1].stages[0].biquad.frequency);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 6.0f, cfg->channels[1].stages[0].biquad.gain);
+}
+
+void test_reset_max_metrics(void) {
+    // Process a buffer to generate metrics
+    int32_t buf[64] = {0};
+    for (int i = 0; i < 64; i++) buf[i] = 100000;
+    dsp_process_buffer(buf, 32, 0);
+
+    DspMetrics m = dsp_get_metrics();
+    // maxProcessTimeUs should be set (>= processTimeUs)
+    TEST_ASSERT_TRUE(m.maxProcessTimeUs >= m.processTimeUs);
+
+    dsp_reset_max_metrics();
+    m = dsp_get_metrics();
+    TEST_ASSERT_EQUAL_UINT32(0, m.maxProcessTimeUs);
+}
+
+void test_clear_cpu_load(void) {
+    int32_t buf[64] = {0};
+    for (int i = 0; i < 64; i++) buf[i] = 100000;
+    dsp_process_buffer(buf, 32, 0);
+
+    dsp_clear_cpu_load();
+    DspMetrics m = dsp_get_metrics();
+    TEST_ASSERT_EQUAL_UINT32(0, m.processTimeUs);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, m.cpuLoadPercent);
+}
+
+void test_is_peq_index_boundaries(void) {
+    TEST_ASSERT_FALSE(dsp_is_peq_index(-1));
+    TEST_ASSERT_TRUE(dsp_is_peq_index(0));
+    TEST_ASSERT_TRUE(dsp_is_peq_index(DSP_PEQ_BANDS - 1));
+    TEST_ASSERT_FALSE(dsp_is_peq_index(DSP_PEQ_BANDS));
+    TEST_ASSERT_FALSE(dsp_is_peq_index(100));
+}
+
+void test_chain_stage_count(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    DspChannelConfig &ch = cfg->channels[0];
+    // After init, stageCount == DSP_PEQ_BANDS, so chain count == 0
+    TEST_ASSERT_EQUAL_INT(0, dsp_chain_stage_count(ch));
+
+    // Add a chain stage
+    dsp_add_stage(0, DSP_GAIN);
+    cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(1, dsp_chain_stage_count(cfg->channels[0]));
+}
+
+void test_has_peq_bands(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    TEST_ASSERT_TRUE(dsp_has_peq_bands(cfg->channels[0]));
+
+    // Corrupt label to break detection
+    cfg->channels[0].stages[0].label[0] = 'Z';
+    TEST_ASSERT_FALSE(dsp_has_peq_bands(cfg->channels[0]));
+
+    // Channel with too few stages
+    DspChannelConfig empty;
+    memset(&empty, 0, sizeof(empty));
+    empty.stageCount = DSP_PEQ_BANDS - 1;
+    TEST_ASSERT_FALSE(dsp_has_peq_bands(empty));
+}
+
+void test_fir_pool_exhaustion_rollback(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int initialCount = cfg->channels[0].stageCount;
+
+    // Allocate all FIR slots
+    int slots[DSP_MAX_FIR_SLOTS];
+    for (int i = 0; i < DSP_MAX_FIR_SLOTS; i++) {
+        slots[i] = dsp_add_stage(0, DSP_FIR);
+        TEST_ASSERT_TRUE(slots[i] >= 0);
+    }
+
+    // Next FIR should fail and rollback
+    int overflow = dsp_add_stage(0, DSP_FIR);
+    TEST_ASSERT_EQUAL_INT(-1, overflow);
+
+    cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(initialCount + DSP_MAX_FIR_SLOTS, cfg->channels[0].stageCount);
+}
+
+void test_delay_pool_exhaustion_rollback(void) {
+    DspState *cfg = dsp_get_inactive_config();
+    int initialCount = cfg->channels[0].stageCount;
+
+    // Allocate all delay slots
+    for (int i = 0; i < DSP_MAX_DELAY_SLOTS; i++) {
+        int idx = dsp_add_stage(0, DSP_DELAY);
+        TEST_ASSERT_TRUE(idx >= 0);
+    }
+
+    // Next delay should fail and rollback
+    int overflow = dsp_add_stage(0, DSP_DELAY);
+    TEST_ASSERT_EQUAL_INT(-1, overflow);
+
+    cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(initialCount + DSP_MAX_DELAY_SLOTS, cfg->channels[0].stageCount);
+}
+
+void test_db_to_linear_helper(void) {
+    // 0 dB = 1.0
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, dsp_db_to_linear(0.0f));
+    // +6 dB ≈ 2.0
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.9953f, dsp_db_to_linear(6.0f));
+    // -6 dB ≈ 0.5
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.5012f, dsp_db_to_linear(-6.0f));
+    // -20 dB = 0.1
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.1f, dsp_db_to_linear(-20.0f));
+    // +20 dB = 10.0
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 10.0f, dsp_db_to_linear(20.0f));
+}
+
+void test_time_coeff_helper(void) {
+    // At 48kHz, 1ms should give coeff close to exp(-1/(0.001*48000)) = exp(-1/48) ≈ 0.9794
+    float c = dsp_time_coeff(1.0f, 48000.0f);
+    float expected = expf(-1.0f / 48.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, expected, c);
+
+    // 10ms at 48000: exp(-1/(0.01*48000)) = exp(-1/480) ≈ 0.99792
+    c = dsp_time_coeff(10.0f, 48000.0f);
+    expected = expf(-1.0f / 480.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.00001f, expected, c);
+}
+
 // ===== Runner =====
 
 int main(int argc, char **argv) {
@@ -2874,6 +3059,20 @@ int main(int argc, char **argv) {
     RUN_TEST(test_thd_averaging_accumulates);
     RUN_TEST(test_thd_cancel_stops);
     RUN_TEST(test_thd_invalid_freq_safe);
+
+    // Utility & Helper functions
+    RUN_TEST(test_stage_type_name_all_types);
+    RUN_TEST(test_ensure_peq_bands);
+    RUN_TEST(test_copy_peq_bands);
+    RUN_TEST(test_reset_max_metrics);
+    RUN_TEST(test_clear_cpu_load);
+    RUN_TEST(test_is_peq_index_boundaries);
+    RUN_TEST(test_chain_stage_count);
+    RUN_TEST(test_has_peq_bands);
+    RUN_TEST(test_fir_pool_exhaustion_rollback);
+    RUN_TEST(test_delay_pool_exhaustion_rollback);
+    RUN_TEST(test_db_to_linear_helper);
+    RUN_TEST(test_time_coeff_helper);
 
     return UNITY_END();
 }
