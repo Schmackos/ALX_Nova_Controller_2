@@ -2,6 +2,9 @@
 
 ## Version 1.8.2
 
+## Documentation
+- [2026-02-15] docs: Update release notes for v1.8.2 (`03a9078`)
+
 ## New Features
 - [2026-02-15] feat: Release version 1.8.2 with new DSP features and improvements
 
