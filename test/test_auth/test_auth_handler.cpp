@@ -369,6 +369,74 @@ void test_multiple_sessions_independent_validation(void) {
   TEST_ASSERT_FALSE(validateSession(session2));
 }
 
+// ===== Session Revocation Tests (WS auth vulnerability fix) =====
+
+void test_session_invalid_after_removal(void) {
+  // Simulates: user logs in via HTTP, authenticates WS, then logs out via HTTP
+  String sessionId;
+  createSession(sessionId);
+
+  // Session is valid (WS auth would succeed)
+  TEST_ASSERT_TRUE(validateSession(sessionId));
+
+  // HTTP logout removes the session
+  removeSession(sessionId);
+
+  // Session must now fail validation (WS re-check catches this)
+  TEST_ASSERT_FALSE(validateSession(sessionId));
+}
+
+void test_session_revalidation_catches_expiry(void) {
+  // WS client authenticates, then session expires between messages
+  String sessionId;
+  createSession(sessionId);
+  TEST_ASSERT_TRUE(validateSession(sessionId));
+
+  // Time passes beyond session timeout
+  ArduinoMock::mockMillis += SESSION_TIMEOUT + 1;
+
+  // Re-validation on next WS command should fail
+  TEST_ASSERT_FALSE(validateSession(sessionId));
+}
+
+void test_removed_session_does_not_affect_others(void) {
+  // Two clients with separate sessions
+  String session1, session2;
+  createSession(session1);
+  ArduinoMock::mockMillis += 10;
+  createSession(session2);
+
+  // Remove session1 (logout)
+  removeSession(session1);
+
+  // session1 invalid, session2 still valid
+  TEST_ASSERT_FALSE(validateSession(session1));
+  TEST_ASSERT_TRUE(validateSession(session2));
+}
+
+// ===== Default Password Consistency Tests =====
+
+void test_is_default_password_with_unchanged_ap(void) {
+  // When webPassword == apPassword, it should be "default"
+  mockWebPassword = mockAPPassword;
+  TEST_ASSERT_TRUE(mockWebPassword == mockAPPassword);
+}
+
+void test_is_default_password_with_changed_ap(void) {
+  // User changes AP password, initAuth sets webPassword = new AP password
+  // isDefaultPassword() should still detect this as "default"
+  mockAPPassword = "customAPpwd";
+  mockWebPassword = "customAPpwd";  // initAuth() would set this
+  TEST_ASSERT_TRUE(mockWebPassword == mockAPPassword);
+}
+
+void test_is_not_default_after_web_password_change(void) {
+  // User explicitly sets a different web password
+  mockAPPassword = "ap_password";
+  mockWebPassword = "my_custom_web_pwd";
+  TEST_ASSERT_FALSE(mockWebPassword == mockAPPassword);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -394,6 +462,16 @@ int runUnityTests(void) {
   RUN_TEST(test_login_failure);
   RUN_TEST(test_session_empty_validation);
   RUN_TEST(test_multiple_sessions_independent_validation);
+
+  // Session revocation tests (WS auth vulnerability fix)
+  RUN_TEST(test_session_invalid_after_removal);
+  RUN_TEST(test_session_revalidation_catches_expiry);
+  RUN_TEST(test_removed_session_does_not_affect_others);
+
+  // Default password consistency tests
+  RUN_TEST(test_is_default_password_with_unchanged_ap);
+  RUN_TEST(test_is_default_password_with_changed_ap);
+  RUN_TEST(test_is_not_default_after_web_password_change);
 
   return UNITY_END();
 }

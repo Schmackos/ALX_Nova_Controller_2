@@ -237,8 +237,8 @@ void setWebPassword(String newPassword) {
   LOG_I("[Auth] Password changed and saved to NVS");
 }
 
-// Check if using default password
-bool isDefaultPassword() { return appState.webPassword == DEFAULT_AP_PASSWORD; }
+// Check if using default password (matches initAuth() which defaults to AP password)
+bool isDefaultPassword() { return appState.webPassword == appState.apPassword; }
 
 // Handler: Login
 void handleLogin() {

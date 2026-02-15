@@ -9,7 +9,31 @@
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-15] fix: WebSocket session re-validation and default password consistency
+
+Re-validate session on every WS command to catch logout/expiry.
+Previously, WS connections persisted after HTTP logout because
+wsAuthStatus was only set once during auth handshake.
+
+Also fix isDefaultPassword() to compare against runtime AP password
+instead of hardcoded DEFAULT_AP_PASSWORD constant. (`61b0a70`)
+- [2026-02-15] fix: WebSocket session re-validation and default password consistency
+
+Re-validate session on every WS command to catch logout/expiry.
+Previously, WS connections persisted after HTTP logout because
+wsAuthStatus was only set once during auth handshake.
+
+Also fix isDefaultPassword() to compare against runtime AP password
+instead of hardcoded DEFAULT_AP_PASSWORD constant. (`1d367f7`)
+- [2026-02-15] fix: WebSocket session re-validation and default password consistency
+
+Re-validate session on every WS command to catch logout/expiry.
+Previously, WS connections persisted after HTTP logout because
+wsAuthStatus was only set once during auth handshake.
+
+Also fix isDefaultPassword() to compare against runtime AP password
+instead of hardcoded DEFAULT_AP_PASSWORD constant. (`27dc0eb`)
+
 
 ## Technical Details
 - Version bump to 1.8.3

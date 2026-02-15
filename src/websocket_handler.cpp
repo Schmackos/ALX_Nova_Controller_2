@@ -36,6 +36,7 @@
 // ===== WebSocket Authentication Tracking =====
 bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
 unsigned long wsAuthTimeout[MAX_WS_CLIENTS] = {0};
+String wsSessionId[MAX_WS_CLIENTS];
 
 // ===== Per-client Audio Streaming Subscription =====
 static bool _audioSubscribed[MAX_WS_CLIENTS] = {};
@@ -90,6 +91,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
       LOG_I("[WebSocket] Client [%u] disconnected", num);
       wsAuthStatus[num] = false;
       wsAuthTimeout[num] = 0;
+      wsSessionId[num] = "";
       _audioSubscribed[num] = false;
       break;
 
@@ -128,6 +130,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (validateSession(sessionId)) {
             wsAuthStatus[num] = true;
             wsAuthTimeout[num] = 0;
+            wsSessionId[num] = sessionId;
             webSocket.sendTXT(num, "{\"type\":\"authSuccess\"}");
             LOG_D("[WebSocket] Client [%u] authenticated", num);
 
@@ -172,9 +175,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           return;
         }
 
-        // Check if client is authenticated for all other commands
-        if (!wsAuthStatus[num]) {
-          webSocket.sendTXT(num, "{\"type\":\"error\",\"message\":\"Not authenticated\"}");
+        // Re-validate session for every non-auth command (catches logout/expiry)
+        if (!wsAuthStatus[num] || !validateSession(wsSessionId[num])) {
+          wsAuthStatus[num] = false;
+          wsSessionId[num] = "";
+          webSocket.sendTXT(num, "{\"type\":\"authFailed\",\"error\":\"Session expired or revoked\"}");
           webSocket.disconnect(num);
           return;
         }
