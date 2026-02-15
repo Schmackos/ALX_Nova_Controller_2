@@ -8,7 +8,7 @@ esp_err_t dsps_fird_init_f32(fir_f32_t *fir, float *coeffs, float *delay, int nu
         return ESP_ERR_DSP_INVALID_PARAM;
     fir->coeffs = coeffs;
     fir->delay = delay;
-    fir->numTaps = numTaps;
+    fir->N = numTaps;
     fir->pos = 0;
     fir->decim = decim;
     memset(delay, 0, sizeof(float) * numTaps);
@@ -21,7 +21,7 @@ int dsps_fird_f32_ansi(fir_f32_t *fir, const float *input, float *output, int le
 
     int outIdx = 0;
     int decim = fir->decim;
-    int numTaps = fir->numTaps;
+    int numTaps = fir->N;
     int pos = fir->pos;
 
     for (int i = 0; i < len; i++) {

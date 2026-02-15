@@ -1678,32 +1678,32 @@ void test_gain_init_sets_current_linear(void) {
 void test_conv_impulse_passthrough(void) {
     // Convolving with a unit impulse should produce the original signal
     float ir[1] = {1.0f};
-    int ret = conv_init_slot(0, ir, 1);
+    int ret = dsp_conv_init_slot(0, ir, 1);
     TEST_ASSERT_EQUAL_INT(0, ret);
-    TEST_ASSERT_TRUE(conv_is_active(0));
-    TEST_ASSERT_EQUAL_INT(1, conv_get_ir_length(0));
+    TEST_ASSERT_TRUE(dsp_conv_is_active(0));
+    TEST_ASSERT_EQUAL_INT(1, dsp_conv_get_ir_length(0));
 
     float buf[8] = {1.0f, 0.5f, -0.3f, 0.7f, 0.0f, -1.0f, 0.2f, 0.1f};
     float expected[8];
     memcpy(expected, buf, sizeof(expected));
 
-    conv_process(0, buf, 8);
+    dsp_conv_process(0, buf, 8);
 
     for (int i = 0; i < 8; i++) {
         TEST_ASSERT_FLOAT_WITHIN(0.01f, expected[i], buf[i]);
     }
-    conv_free_slot(0);
+    dsp_conv_free_slot(0);
 }
 
 void test_conv_free_releases_slot(void) {
     float ir[4] = {0.25f, 0.25f, 0.25f, 0.25f};
-    int ret = conv_init_slot(0, ir, 4);
+    int ret = dsp_conv_init_slot(0, ir, 4);
     TEST_ASSERT_EQUAL_INT(0, ret);
-    TEST_ASSERT_TRUE(conv_is_active(0));
+    TEST_ASSERT_TRUE(dsp_conv_is_active(0));
 
-    conv_free_slot(0);
-    TEST_ASSERT_FALSE(conv_is_active(0));
-    TEST_ASSERT_EQUAL_INT(0, conv_get_ir_length(0));
+    dsp_conv_free_slot(0);
+    TEST_ASSERT_FALSE(dsp_conv_is_active(0));
+    TEST_ASSERT_EQUAL_INT(0, dsp_conv_get_ir_length(0));
 }
 
 void test_conv_short_ir_matches_direct(void) {
@@ -1716,19 +1716,19 @@ void test_conv_short_ir_matches_direct(void) {
     dsps_conv_f32(input, 8, ir, 4, directOut);
 
     // Partitioned convolution
-    int ret = conv_init_slot(1, ir, 4);
+    int ret = dsp_conv_init_slot(1, ir, 4);
     TEST_ASSERT_EQUAL_INT(0, ret);
 
     float partBuf[8];
     memcpy(partBuf, input, sizeof(float) * 8);
-    conv_process(1, partBuf, 8);
+    dsp_conv_process(1, partBuf, 8);
 
     // First 4 output samples of partitioned should match direct convolution
     // (the rest is overlap that comes out in next block)
     for (int i = 0; i < 4; i++) {
         TEST_ASSERT_FLOAT_WITHIN(0.05f, directOut[i], partBuf[i]);
     }
-    conv_free_slot(1);
+    dsp_conv_free_slot(1);
 }
 
 void test_conv_stage_type_integration(void) {

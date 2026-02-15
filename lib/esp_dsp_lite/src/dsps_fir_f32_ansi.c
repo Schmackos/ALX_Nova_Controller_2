@@ -7,13 +7,13 @@ esp_err_t dsps_fir_f32_ansi(fir_f32_t *fir, const float *input, float *output, i
     if (!fir || !input || !output || len <= 0) {
         return ESP_ERR_DSP_INVALID_PARAM;
     }
-    if (!fir->coeffs || !fir->delay || fir->numTaps <= 0) {
+    if (!fir->coeffs || !fir->delay || fir->N <= 0) {
         return ESP_ERR_DSP_INVALID_PARAM;
     }
 
     float *coeffs = fir->coeffs;
     float *delay = fir->delay;
-    int numTaps = fir->numTaps;
+    int numTaps = fir->N;
     int pos = fir->pos;
 
     for (int i = 0; i < len; i++) {

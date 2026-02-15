@@ -6,6 +6,7 @@
 #include "dsps_fir.h"
 #include "dsps_mulc.h"
 #include "dsps_mul.h"
+#include "dsps_add.h"
 #include "dsp_convolution.h"
 #include <math.h>
 #include <string.h>
@@ -670,7 +671,7 @@ static int dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int st
             }
             case DSP_CONVOLUTION:
                 if (s.convolution.convSlot >= 0) {
-                    conv_process(s.convolution.convSlot, buf, curLen);
+                    dsp_conv_process(s.convolution.convSlot, buf, curLen);
                 }
                 break;
             case DSP_NOISE_GATE:
@@ -757,11 +758,7 @@ static void dsp_fir_process(DspFirParams &fir, float *buf, int len, int stateIdx
     memset(&firState, 0, sizeof(firState)); // Zero extra fields (decim, use_delay on ESP32)
     firState.coeffs = taps;
     firState.delay = delay;
-#ifdef NATIVE_TEST
-    firState.numTaps = fir.numTaps;
-#else
     firState.N = fir.numTaps;
-#endif
     firState.pos = fir.delayPos;
 
     dsps_fir_f32(&firState, buf, buf, len);
@@ -895,11 +892,7 @@ static int dsp_decimator_process(DspDecimatorParams &dec, float *buf, int len, i
     memset(&fird, 0, sizeof(fird));
     fird.coeffs = taps;
     fird.delay = delay;
-#ifdef NATIVE_TEST
-    fird.numTaps = dec.numTaps;
-#else
     fird.N = dec.numTaps;
-#endif
     fird.pos = dec.delayPos;
     fird.decim = dec.factor;
 
@@ -1240,7 +1233,7 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
             dsp_compute_decimation_filter(taps, numTaps, 2, (float)cfg->sampleRate);
         }
     } else if (type == DSP_CONVOLUTION) {
-        // Convolution slots are initialized separately via conv_init_slot()
+        // Convolution slots are initialized separately via dsp_conv_init_slot()
         // Just mark as unassigned; user loads IR via API
         ch.stages[pos].convolution.convSlot = -1;
         ch.stages[pos].convolution.irLength = 0;
@@ -1292,7 +1285,7 @@ bool dsp_remove_stage(int channel, int stageIndex) {
         dsp_fir_free_slot(ch.stages[stageIndex].decimator.firSlot);
     } else if (ch.stages[stageIndex].type == DSP_CONVOLUTION) {
         if (ch.stages[stageIndex].convolution.convSlot >= 0) {
-            conv_free_slot(ch.stages[stageIndex].convolution.convSlot);
+            dsp_conv_free_slot(ch.stages[stageIndex].convolution.convSlot);
         }
     } else if (ch.stages[stageIndex].type == DSP_MULTIBAND_COMP) {
         dsp_mb_free_slot(ch.stages[stageIndex].multibandComp.mbSlot);
@@ -1410,7 +1403,7 @@ void dsp_mirror_channel_config(int srcCh, int dstCh) {
         else if (dst.stages[i].type == DSP_DELAY) dsp_delay_free_slot(dst.stages[i].delay.delaySlot);
         else if (dst.stages[i].type == DSP_DECIMATOR) dsp_fir_free_slot(dst.stages[i].decimator.firSlot);
         else if (dst.stages[i].type == DSP_CONVOLUTION && dst.stages[i].convolution.convSlot >= 0)
-            conv_free_slot(dst.stages[i].convolution.convSlot);
+            dsp_conv_free_slot(dst.stages[i].convolution.convSlot);
         else if (dst.stages[i].type == DSP_MULTIBAND_COMP)
             dsp_mb_free_slot(dst.stages[i].multibandComp.mbSlot);
     }
@@ -1704,7 +1697,7 @@ void dsp_load_config_from_json(const char *json, int channel) {
         } else if (ch.stages[i].type == DSP_DECIMATOR) {
             dsp_fir_free_slot(ch.stages[i].decimator.firSlot);
         } else if (ch.stages[i].type == DSP_CONVOLUTION && ch.stages[i].convolution.convSlot >= 0) {
-            conv_free_slot(ch.stages[i].convolution.convSlot);
+            dsp_conv_free_slot(ch.stages[i].convolution.convSlot);
         }
     }
 
@@ -1982,7 +1975,7 @@ void dsp_import_full_config_json(const char *json) {
             } else if (cfg->channels[c].stages[i].type == DSP_DECIMATOR) {
                 dsp_fir_free_slot(cfg->channels[c].stages[i].decimator.firSlot);
             } else if (cfg->channels[c].stages[i].type == DSP_CONVOLUTION && cfg->channels[c].stages[i].convolution.convSlot >= 0) {
-                conv_free_slot(cfg->channels[c].stages[i].convolution.convSlot);
+                dsp_conv_free_slot(cfg->channels[c].stages[i].convolution.convSlot);
             } else if (cfg->channels[c].stages[i].type == DSP_MULTIBAND_COMP) {
                 dsp_mb_free_slot(cfg->channels[c].stages[i].multibandComp.mbSlot);
             }
