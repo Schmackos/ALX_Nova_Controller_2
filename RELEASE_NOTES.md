@@ -27,9 +27,75 @@ double-init crashes on enable/disable toggle. (`fa721ee`)
 - Automated release via GitHub Actions
 
 ## Improvements
-- None
+- [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
+
+Merge 6+ separate buffer loops into 2 passes in process_adc_buffer():
+- Pass 1: diagnostics + DC offset + DC-blocking IIR in one loop
+- Pass 2: RMS + waveform + FFT ring fill in one loop
+
+Replace double-precision math with float (ESP32-S3 has no double FPU):
+- audio_compute_rms(): double sum_sq → float, sqrt → sqrtf
+- DC offset tracking: double sum → float
+
+Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
+and inline VU/peak updates in both silence and active paths.
+
+Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
+300ms. Updated test_vu_decay_ramp assertions accordingly. (`afb2240`)
+- [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
+
+Merge 6+ separate buffer loops into 2 passes in process_adc_buffer():
+- Pass 1: diagnostics + DC offset + DC-blocking IIR in one loop
+- Pass 2: RMS + waveform + FFT ring fill in one loop
+
+Replace double-precision math with float (ESP32-S3 has no double FPU):
+- audio_compute_rms(): double sum_sq → float, sqrt → sqrtf
+- DC offset tracking: double sum → float
+
+Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
+and inline VU/peak updates in both silence and active paths.
+
+Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
+300ms. Updated test_vu_decay_ramp assertions accordingly. (`d9c6514`)
+- [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
+
+Merge 6+ separate buffer loops into 2 passes in process_adc_buffer():
+- Pass 1: diagnostics + DC offset + DC-blocking IIR in one loop
+- Pass 2: RMS + waveform + FFT ring fill in one loop
+
+Replace double-precision math with float (ESP32-S3 has no double FPU):
+- audio_compute_rms(): double sum_sq → float, sqrt → sqrtf
+- DC offset tracking: double sum → float
+
+Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
+and inline VU/peak updates in both silence and active paths.
+
+Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
+300ms. Updated test_vu_decay_ramp assertions accordingly. (`8a75385`)
+
 
 ## Bug Fixes
+- [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
+
+Address CONCERNS.md audit findings across security, robustness, and test gaps:
+
+Security:
+- Use timingSafeCompare() for session ID lookup in validateSession/removeSession
+- Atomic crash log ring buffer validation (reset all on any inconsistency)
+- Cap OTA consecutive failure counter at 20 to prevent unbounded growth
+
+Robustness:
+- Add recursive mutex to all I2C EEPROM operations (dac_eeprom.cpp)
+- Move 3 large DSP API buffers (4-8KB) from stack to PSRAM heap
+- Gate WS binary sends (waveform/spectrum) on !heapCritical
+- Block dsp_add_stage() when heap is critical
+
+Auth migration:
+- Session timestamps: millis() (32-bit ms) → esp_timer_get_time() (64-bit μs)
+- SESSION_TIMEOUT → SESSION_TIMEOUT_US (3600000000 μs)
+- Rate-limit state updated to 64-bit microseconds
+
+Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruption) (`f0d0aa2`)
 - [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
 
 Address CONCERNS.md audit findings across security, robustness, and test gaps:

@@ -20,18 +20,18 @@ int32_t audio_parse_24bit_sample(int32_t raw_i2s_word) {
 
 float audio_compute_rms(const int32_t *samples, int count, int channel, int channels) {
     if (count <= 0) return 0.0f;
-    double sum_sq = 0.0;
+    float sum_sq = 0.0f;
     int sample_count = 0;
     const float MAX_24BIT = 8388607.0f;
     for (int i = channel; i < count * channels; i += channels) {
         int32_t raw = samples[i];
         int32_t parsed = audio_parse_24bit_sample(raw);
         float normalized = (float)parsed / MAX_24BIT;
-        sum_sq += (double)normalized * (double)normalized;
+        sum_sq += normalized * normalized;
         sample_count++;
     }
     if (sample_count == 0) return 0.0f;
-    return (float)sqrt(sum_sq / sample_count);
+    return sqrtf(sum_sq / sample_count);
 }
 
 float audio_rms_to_dbfs(float rms) {
@@ -90,7 +90,7 @@ void audio_downsample_waveform(const int32_t *stereo_frames, int frame_count,
 
 // VU metering constants (mirrors i2s_audio.h)
 static const float VU_ATTACK_MS = 300.0f;
-static const float VU_DECAY_MS = 650.0f;
+static const float VU_DECAY_MS = 300.0f;
 static const float PEAK_HOLD_MS = 2000.0f;
 static const float PEAK_DECAY_AFTER_HOLD_MS = 300.0f;
 
@@ -328,31 +328,24 @@ void test_vu_attack_ramp(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.02f, target, vu);
 }
 
-// Test 16: VU decay ramp — signal drop causes VU to decay slower than attack
+// Test 16: VU decay ramp — signal drop causes VU to decay exponentially
 void test_vu_decay_ramp(void) {
     float vu = 0.8f;
     float target = 0.0f;
 
-    // After 300ms (56 steps) of decay, VU should still be well above 63.2% drop
-    // because decay time constant is 650ms (slower than attack)
+    // After 300ms (56 steps of 5.33ms) of decay with 300ms time constant
     float vu_after_300ms = vu;
     for (int i = 0; i < 56; i++) {
         vu_after_300ms = audio_vu_update(vu_after_300ms, target, 5.33f);
     }
 
-    // At 300ms with 650ms decay TC: should have decayed by ~37% of (0.8-0.0)
-    // exp(-300/650) ≈ 0.633, so vu ≈ 0.8 * 0.633 ≈ 0.506
-    TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.8f * expf(-300.0f / 650.0f), vu_after_300ms);
+    // At ~300ms with 300ms decay TC: exp(-300/300) ≈ 0.368
+    // vu ≈ 0.8 * 0.368 ≈ 0.294
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.8f * expf(-300.0f / 300.0f), vu_after_300ms);
 
-    // Confirm decay is slower than attack: after same 300ms, decay retains more
-    float vu_attack = 0.0f;
-    for (int i = 0; i < 56; i++) {
-        vu_attack = audio_vu_update(vu_attack, 0.8f, 5.33f);
-    }
-    // vu_attack moved further from 0 than vu_after_300ms moved from 0.8
-    float attack_travel = vu_attack;
-    float decay_travel = 0.8f - vu_after_300ms;
-    TEST_ASSERT_TRUE(attack_travel > decay_travel);
+    // VU should have decayed significantly but not reached zero
+    TEST_ASSERT_TRUE(vu_after_300ms > 0.0f);
+    TEST_ASSERT_TRUE(vu_after_300ms < 0.8f);
 }
 
 // Test 17: Peak hold instant attack — new value immediately becomes peak

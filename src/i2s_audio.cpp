@@ -62,21 +62,20 @@ static volatile bool _dumpReady = false;
 float audio_compute_rms(const int32_t *samples, int count, int channel, int channels) {
     if (count <= 0) return 0.0f;
 
-    double sum_sq = 0.0;
+    float sum_sq = 0.0f;
     int sample_count = 0;
     const float MAX_24BIT = 8388607.0f; // 2^23 - 1
 
     for (int i = channel; i < count * channels; i += channels) {
-        // Parse 24-bit left-justified sample
         int32_t raw = samples[i];
         int32_t parsed = audio_parse_24bit_sample(raw);
         float normalized = (float)parsed / MAX_24BIT;
-        sum_sq += (double)normalized * (double)normalized;
+        sum_sq += normalized * normalized;
         sample_count++;
     }
 
     if (sample_count == 0) return 0.0f;
-    return (float)sqrt(sum_sq / sample_count);
+    return sqrtf(sum_sq / sample_count);
 }
 
 float audio_rms_to_dbfs(float rms) {
@@ -437,18 +436,47 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
     int total_samples = stereo_frames * 2;
     AdcDiagnostics &diag = _diagnostics.adc[a];
 
-    // --- Diagnostics: scan raw buffer BEFORE siggen overwrites it ---
+    // Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
+    float coeffAttack = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / VU_ATTACK_MS) : 0.0f;
+    float coeffDecay  = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / VU_DECAY_MS) : 0.0f;
+    float coeffPeakDecay = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / PEAK_DECAY_AFTER_HOLD_MS) : 0.0f;
+
+    // --- Pass 1: Diagnostics + DC offset + DC-blocking IIR (merged) ---
     diag.totalBuffersRead++;
     diag.lastReadMs = now;
     {
         bool allZero = true;
         uint32_t clipCount = 0;
         const int32_t CLIP_THRESHOLD = 8300000;
-        for (int i = 0; i < total_samples; i++) {
-            int32_t parsed = audio_parse_24bit_sample(buffer[i]);
-            if (parsed != 0) allZero = false;
-            if (parsed > CLIP_THRESHOLD || parsed < -CLIP_THRESHOLD) clipCount++;
+        float dcSum = 0.0f;
+        static const float DC_BLOCK_ALPHA = 0.9987f;
+
+        for (int f = 0; f < stereo_frames; f++) {
+            int32_t rawL = buffer[f * 2];
+            int32_t rawR = buffer[f * 2 + 1];
+            int32_t parsedL = audio_parse_24bit_sample(rawL);
+            int32_t parsedR = audio_parse_24bit_sample(rawR);
+
+            // Diagnostics: zero/clip detection
+            if (parsedL != 0 || parsedR != 0) allZero = false;
+            if (parsedL > CLIP_THRESHOLD || parsedL < -CLIP_THRESHOLD) clipCount++;
+            if (parsedR > CLIP_THRESHOLD || parsedR < -CLIP_THRESHOLD) clipCount++;
+
+            // DC offset accumulation (float — matches 24-bit precision)
+            dcSum += (float)parsedL + (float)parsedR;
+
+            // DC-blocking IIR (modifies buffer in-place)
+            float outL = (float)(rawL - _dcPrevInL[a]) + DC_BLOCK_ALPHA * _dcPrevOutL[a];
+            _dcPrevInL[a] = rawL;
+            _dcPrevOutL[a] = outL;
+            buffer[f * 2] = (int32_t)outL;
+
+            float outR = (float)(rawR - _dcPrevInR[a]) + DC_BLOCK_ALPHA * _dcPrevOutR[a];
+            _dcPrevInR[a] = rawR;
+            _dcPrevOutR[a] = outR;
+            buffer[f * 2 + 1] = (int32_t)outR;
         }
+
         if (allZero) {
             diag.allZeroBuffers++;
             diag.consecutiveZeros++;
@@ -457,32 +485,32 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
             diag.lastNonZeroMs = now;
         }
         diag.clippedSamples += clipCount;
-        // EMA clip rate: naturally decays when clipping stops
         float bufferClipRate = (total_samples > 0) ? (float)clipCount / (float)total_samples : 0.0f;
         diag.clipRate = diag.clipRate * (1.0f - CLIP_RATE_ALPHA) + bufferClipRate * CLIP_RATE_ALPHA;
-    }
 
-    // DC offset tracking
-    {
-        double sum = 0.0;
-        for (int i = 0; i < total_samples; i++) {
-            sum += (double)audio_parse_24bit_sample(buffer[i]);
-        }
-        float mean = (float)(sum / total_samples) / 8388607.0f;
+        float mean = (dcSum / (float)total_samples) / 8388607.0f;
         diag.dcOffset += (mean - diag.dcOffset) * 0.01f;
     }
 
     // === SILENCE FAST-PATH ===
     // When buffer is confirmed zeros and siggen is off, skip heavy processing
-    // (DC filter, DSP, RMS, waveform, FFT). Still decay VU/peak meters.
+    // (DSP, RMS, waveform, FFT). Still decay VU/peak meters using pre-computed coefficients.
     if (diag.consecutiveZeros > 0 && !sigGenSw) {
         if (AppState::getInstance().vuMeterEnabled) {
-            _vuL[a] = audio_vu_update(_vuL[a], 0.0f, dt_ms);
-            _vuR[a] = audio_vu_update(_vuR[a], 0.0f, dt_ms);
-            _vuC[a] = audio_vu_update(_vuC[a], 0.0f, dt_ms);
-            _peakL[a] = audio_peak_hold_update(_peakL[a], 0.0f, &_holdStartL[a], now, dt_ms);
-            _peakR[a] = audio_peak_hold_update(_peakR[a], 0.0f, &_holdStartR[a], now, dt_ms);
-            _peakC[a] = audio_peak_hold_update(_peakC[a], 0.0f, &_holdStartC[a], now, dt_ms);
+            // VU decay toward 0 using pre-computed coefficient
+            _vuL[a] += coeffDecay * (0.0f - _vuL[a]);
+            _vuR[a] += coeffDecay * (0.0f - _vuR[a]);
+            _vuC[a] += coeffDecay * (0.0f - _vuC[a]);
+            // Peak hold: 0.0f input → instant capture, hold, or decay
+            if (0.0f >= _peakL[a]) { _holdStartL[a] = now; _peakL[a] = 0.0f; }
+            else if (now - _holdStartL[a] >= (unsigned long)PEAK_HOLD_MS)
+                _peakL[a] *= (1.0f - coeffPeakDecay);
+            if (0.0f >= _peakR[a]) { _holdStartR[a] = now; _peakR[a] = 0.0f; }
+            else if (now - _holdStartR[a] >= (unsigned long)PEAK_HOLD_MS)
+                _peakR[a] *= (1.0f - coeffPeakDecay);
+            if (0.0f >= _peakC[a]) { _holdStartC[a] = now; _peakC[a] = 0.0f; }
+            else if (now - _holdStartC[a] >= (unsigned long)PEAK_HOLD_MS)
+                _peakC[a] *= (1.0f - coeffPeakDecay);
         } else {
             _vuL[a] = _vuR[a] = _vuC[a] = 0.0f;
             _peakL[a] = _peakR[a] = _peakC[a] = 0.0f;
@@ -504,22 +532,6 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
         _analysis.adc[a].peakCombined = _peakC[a];
         _analysis.adc[a].dBFS = DBFS_FLOOR;
         return;
-    }
-
-    // DC-blocking IIR filter
-    static const float DC_BLOCK_ALPHA = 0.9987f;
-    for (int f = 0; f < stereo_frames; f++) {
-        int32_t inL = buffer[f * 2];
-        float outL = (float)(inL - _dcPrevInL[a]) + DC_BLOCK_ALPHA * _dcPrevOutL[a];
-        _dcPrevInL[a] = inL;
-        _dcPrevOutL[a] = outL;
-        buffer[f * 2] = (int32_t)outL;
-
-        int32_t inR = buffer[f * 2 + 1];
-        float outR = (float)(inR - _dcPrevInR[a]) + DC_BLOCK_ALPHA * _dcPrevOutR[a];
-        _dcPrevInR[a] = inR;
-        _dcPrevOutR[a] = outR;
-        buffer[f * 2 + 1] = (int32_t)outR;
     }
 
     // DSP pipeline processing (after DC filter, before analysis)
@@ -549,57 +561,86 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
     }
 #endif
 
-    // Compute RMS
-    float rmsL = audio_compute_rms(buffer, stereo_frames, 0, 2);
-    float rmsR = audio_compute_rms(buffer, stereo_frames, 1, 2);
-    float rmsC = sqrtf((rmsL * rmsL + rmsR * rmsR) / 2.0f);
-    float dBFS = audio_rms_to_dbfs(rmsC);
+    // --- Pass 2: RMS + waveform + FFT ring (merged single loop) ---
+    {
+        float sumSqL = 0.0f, sumSqR = 0.0f;
+        bool wfEnabled = AppState::getInstance().waveformEnabled;
+        bool spEnabled = AppState::getInstance().spectrumEnabled;
 
-    // VU metering
-    if (AppState::getInstance().vuMeterEnabled) {
-        _vuL[a] = audio_vu_update(_vuL[a], rmsL, dt_ms);
-        _vuR[a] = audio_vu_update(_vuR[a], rmsR, dt_ms);
-        _vuC[a] = audio_vu_update(_vuC[a], rmsC, dt_ms);
-        _peakL[a] = audio_peak_hold_update(_peakL[a], rmsL, &_holdStartL[a], now, dt_ms);
-        _peakR[a] = audio_peak_hold_update(_peakR[a], rmsR, &_holdStartR[a], now, dt_ms);
-        _peakC[a] = audio_peak_hold_update(_peakC[a], rmsC, &_holdStartC[a], now, dt_ms);
-    } else {
-        _vuL[a] = _vuR[a] = _vuC[a] = 0.0f;
-        _peakL[a] = _peakR[a] = _peakC[a] = 0.0f;
-    }
-
-    // Waveform accumulation
-    if (AppState::getInstance().waveformEnabled) {
         for (int f = 0; f < stereo_frames; f++) {
-            int bin = (int)((long)(_wfFramesSeen[a] + f) * WAVEFORM_BUFFER_SIZE / _wfTargetFrames);
-            if (bin >= WAVEFORM_BUFFER_SIZE) break;
-            float sL = (float)audio_parse_24bit_sample(buffer[f * 2]) / MAX_24BIT_F;
-            float sR = (float)audio_parse_24bit_sample(buffer[f * 2 + 1]) / MAX_24BIT_F;
-            float combined = (sL + sR) / 2.0f;
-            if (fabsf(combined) > fabsf(_wfAccum[a][bin])) {
-                _wfAccum[a][bin] = combined;
+            float nL = (float)audio_parse_24bit_sample(buffer[f * 2]) / MAX_24BIT_F;
+            float nR = (float)audio_parse_24bit_sample(buffer[f * 2 + 1]) / MAX_24BIT_F;
+
+            // RMS accumulation
+            sumSqL += nL * nL;
+            sumSqR += nR * nR;
+
+            float combined = (nL + nR) * 0.5f;
+
+            // Waveform accumulation
+            if (wfEnabled) {
+                int bin = (int)((long)(_wfFramesSeen[a] + f) * WAVEFORM_BUFFER_SIZE / _wfTargetFrames);
+                if (bin < WAVEFORM_BUFFER_SIZE) {
+                    if (fabsf(combined) > fabsf(_wfAccum[a][bin])) {
+                        _wfAccum[a][bin] = combined;
+                    }
+                }
+            }
+
+            // FFT ring buffer fill
+            if (spEnabled) {
+                _fftRing[a][_fftRingPos[a]] = combined;
+                _fftRingPos[a] = (_fftRingPos[a] + 1) % FFT_SIZE;
             }
         }
-        _wfFramesSeen[a] += stereo_frames;
-        if (_wfFramesSeen[a] >= _wfTargetFrames) {
-            for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
-                _wfOutput[a][i] = audio_quantize_sample(_wfAccum[a][i]);
-                _wfAccum[a][i] = 0.0f;
-            }
-            _wfFramesSeen[a] = 0;
-            _wfReady[a] = true;
-        }
-    }
 
-    // FFT ring buffer + compute
-    if (AppState::getInstance().spectrumEnabled) {
-        for (int f = 0; f < stereo_frames; f++) {
-            float sL = (float)audio_parse_24bit_sample(buffer[f * 2]) / MAX_24BIT_F;
-            float sR = (float)audio_parse_24bit_sample(buffer[f * 2 + 1]) / MAX_24BIT_F;
-            _fftRing[a][_fftRingPos[a]] = (sL + sR) / 2.0f;
-            _fftRingPos[a] = (_fftRingPos[a] + 1) % FFT_SIZE;
+        float rmsL = (stereo_frames > 0) ? sqrtf(sumSqL / stereo_frames) : 0.0f;
+        float rmsR = (stereo_frames > 0) ? sqrtf(sumSqR / stereo_frames) : 0.0f;
+        float rmsC = sqrtf((rmsL * rmsL + rmsR * rmsR) * 0.5f);
+        float dBFS = audio_rms_to_dbfs(rmsC);
+
+        // Waveform buffer flush
+        if (wfEnabled) {
+            _wfFramesSeen[a] += stereo_frames;
+            if (_wfFramesSeen[a] >= _wfTargetFrames) {
+                for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
+                    _wfOutput[a][i] = audio_quantize_sample(_wfAccum[a][i]);
+                    _wfAccum[a][i] = 0.0f;
+                }
+                _wfFramesSeen[a] = 0;
+                _wfReady[a] = true;
+            }
         }
-        if (now - _lastFftTime[a] >= AppState::getInstance().audioUpdateRate) {
+
+        // VU metering with pre-computed coefficients (inline — avoids 12 expf calls)
+        if (AppState::getInstance().vuMeterEnabled) {
+            _vuL[a] += ((rmsL > _vuL[a]) ? coeffAttack : coeffDecay) * (rmsL - _vuL[a]);
+            _vuR[a] += ((rmsR > _vuR[a]) ? coeffAttack : coeffDecay) * (rmsR - _vuR[a]);
+            _vuC[a] += ((rmsC > _vuC[a]) ? coeffAttack : coeffDecay) * (rmsC - _vuC[a]);
+
+            // Peak hold with pre-computed decay coefficient
+            if (rmsL >= _peakL[a]) { _holdStartL[a] = now; _peakL[a] = rmsL; }
+            else if (now - _holdStartL[a] >= (unsigned long)PEAK_HOLD_MS) {
+                float d = _peakL[a] * (1.0f - coeffPeakDecay);
+                _peakL[a] = (d > rmsL) ? d : rmsL;
+            }
+            if (rmsR >= _peakR[a]) { _holdStartR[a] = now; _peakR[a] = rmsR; }
+            else if (now - _holdStartR[a] >= (unsigned long)PEAK_HOLD_MS) {
+                float d = _peakR[a] * (1.0f - coeffPeakDecay);
+                _peakR[a] = (d > rmsR) ? d : rmsR;
+            }
+            if (rmsC >= _peakC[a]) { _holdStartC[a] = now; _peakC[a] = rmsC; }
+            else if (now - _holdStartC[a] >= (unsigned long)PEAK_HOLD_MS) {
+                float d = _peakC[a] * (1.0f - coeffPeakDecay);
+                _peakC[a] = (d > rmsC) ? d : rmsC;
+            }
+        } else {
+            _vuL[a] = _vuR[a] = _vuC[a] = 0.0f;
+            _peakL[a] = _peakR[a] = _peakC[a] = 0.0f;
+        }
+
+        // FFT compute (runs at audioUpdateRate, not every buffer)
+        if (spEnabled && now - _lastFftTime[a] >= AppState::getInstance().audioUpdateRate) {
             _lastFftTime[a] = now;
 
             // Check if window type changed at runtime
@@ -643,33 +684,33 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
                                       _spectrumOutput[a], SPECTRUM_BANDS);
             _spectrumReady[a] = true;
         }
-    }
 
-    // Noise floor and peak tracking (only when siggen is off)
-    if (!sigGenSw) {
-        if (dBFS > diag.noiseFloorDbfs) {
-            diag.noiseFloorDbfs += (dBFS - diag.noiseFloorDbfs) * 0.01f;
-        } else {
-            diag.noiseFloorDbfs += (dBFS - diag.noiseFloorDbfs) * 0.001f;
+        // Noise floor and peak tracking (only when siggen is off)
+        if (!sigGenSw) {
+            if (dBFS > diag.noiseFloorDbfs) {
+                diag.noiseFloorDbfs += (dBFS - diag.noiseFloorDbfs) * 0.01f;
+            } else {
+                diag.noiseFloorDbfs += (dBFS - diag.noiseFloorDbfs) * 0.001f;
+            }
+            if (dBFS > diag.peakDbfs) diag.peakDbfs = dBFS;
         }
-        if (dBFS > diag.peakDbfs) diag.peakDbfs = dBFS;
-    }
-    // Clipping check for health: only flag when siggen is off
-    AdcDiagnostics diagCopy = diag;
-    if (sigGenSw) diagCopy.clipRate = 0.0f; // Mask siggen-induced clipping
-    diag.status = audio_derive_health_status(diagCopy);
+        // Clipping check for health: only flag when siggen is off
+        AdcDiagnostics diagCopy = diag;
+        if (sigGenSw) diagCopy.clipRate = 0.0f; // Mask siggen-induced clipping
+        diag.status = audio_derive_health_status(diagCopy);
 
-    // Write per-ADC analysis into shared struct
-    _analysis.adc[a].rms1 = rmsL;
-    _analysis.adc[a].rms2 = rmsR;
-    _analysis.adc[a].rmsCombined = rmsC;
-    _analysis.adc[a].vu1 = _vuL[a];
-    _analysis.adc[a].vu2 = _vuR[a];
-    _analysis.adc[a].vuCombined = _vuC[a];
-    _analysis.adc[a].peak1 = _peakL[a];
-    _analysis.adc[a].peak2 = _peakR[a];
-    _analysis.adc[a].peakCombined = _peakC[a];
-    _analysis.adc[a].dBFS = dBFS;
+        // Write per-ADC analysis into shared struct
+        _analysis.adc[a].rms1 = rmsL;
+        _analysis.adc[a].rms2 = rmsR;
+        _analysis.adc[a].rmsCombined = rmsC;
+        _analysis.adc[a].vu1 = _vuL[a];
+        _analysis.adc[a].vu2 = _vuR[a];
+        _analysis.adc[a].vuCombined = _vuC[a];
+        _analysis.adc[a].peak1 = _peakL[a];
+        _analysis.adc[a].peak2 = _peakR[a];
+        _analysis.adc[a].peakCombined = _peakC[a];
+        _analysis.adc[a].dBFS = dBFS;
+    } // end Pass 2 scope
 }
 
 static void audio_capture_task(void *param) {
