@@ -17,6 +17,17 @@ int dsp_insert_crossover_butterworth(int channel, float freq, int order, int rol
 // LR(2M) = BW(M) squared — each BW(M) section appears twice.
 int dsp_insert_crossover_lr(int channel, float freq, int order, int role);
 
+// Insert Bessel filter of given order (2,4,6,8).
+// Maximally-flat group delay crossover using pre-computed Q values.
+int dsp_insert_crossover_bessel(int channel, float freq, int order, int role);
+
+// Baffle step correction: returns frequency and gain for a high-shelf filter.
+struct BaffleStepResult {
+    float frequency;
+    float gainDb;
+};
+BaffleStepResult dsp_baffle_step_correction(float baffleWidthMm);
+
 // Remove existing LPF/HPF chain stages (>= DSP_PEQ_BANDS) on a channel
 // Call before inserting new crossover to avoid duplication.
 void dsp_clear_crossover_stages(int channel);

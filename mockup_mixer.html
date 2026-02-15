@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALX Nova — Mixer Dashboard Mockup</title>
+<style>
+/* ─── Theme Variables (matches existing web UI) ─── */
+:root {
+  --bg-primary: #F5F5F5;
+  --bg-surface: #FFFFFF;
+  --bg-card: #EEEEEE;
+  --bg-input: #E0E0E0;
+  --accent: #FF9800;
+  --accent-light: #FFB74D;
+  --accent-dark: #E68900;
+  --text-primary: #212121;
+  --text-secondary: #757575;
+  --text-disabled: #9E9E9E;
+  --success: #4CAF50;
+  --error: #F44336;
+  --warning: #FFC107;
+  --info: #2196F3;
+  --border: #E0E0E0;
+  --shadow: rgba(0, 0, 0, 0.1);
+}
+
+body.night-mode {
+  --bg-primary: #121212;
+  --bg-surface: #1E1E1E;
+  --bg-card: #252525;
+  --bg-input: #2C2C2C;
+  --text-primary: #FFFFFF;
+  --text-secondary: #B0B0B0;
+  --text-disabled: #666666;
+  --border: #333333;
+  --shadow: rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Reset & Base ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* ─── Mockup Controls (top bar) ─── */
+.mockup-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: #1a1a2e; color: #fff; padding: 8px 16px;
+  display: flex; align-items: center; gap: 12px; font-size: 13px;
+}
+.mockup-bar button {
+  background: var(--accent); color: #000; border: none; border-radius: 6px;
+  padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.mockup-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.mockup-bar select { background: #2a2a4a; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 3px 8px; }
+
+/* ─── Layout ─── */
+.page-wrapper {
+  max-width: 960px;
+  margin: 52px auto 80px;
+  padding: 16px;
+}
+
+/* ─── Card (matches existing) ─── */
+.card {
+  background: var(--bg-surface);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+/* ─── Status Bar ─── */
+.mixer-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mixer-status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.mixer-status-item strong {
+  color: var(--text-primary);
+}
+.cpu-bar-track {
+  width: 80px;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.cpu-bar-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.cpu-bar-fill.warn { background: var(--warning); }
+.cpu-bar-fill.crit { background: var(--error); }
+
+/* ─── Toggle Switch (matches existing) ─── */
+.switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; inset: 0;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 26px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 20px; height: 20px;
+  left: 1px; bottom: 1px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: 0.2s;
+}
+input:checked + .slider {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input:checked + .slider::before {
+  background: #fff;
+  transform: translateX(18px);
+}
+
+/* ─── Channel Strip Grid ─── */
+.mixer-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .mixer-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 540px) {
+  .mixer-grid { grid-template-columns: 1fr; }
+}
+
+/* ─── Channel Strip ─── */
+.mixer-strip {
+  background: var(--bg-surface);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 1px 3px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mixer-strip.muted {
+  opacity: 0.55;
+}
+
+.strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.strip-ch-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+.strip-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  border-bottom: 1px dashed var(--border);
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+.strip-name:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* ─── Stacked Meters ─── */
+.meter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.meter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.meter-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-disabled);
+  text-transform: uppercase;
+  width: 24px;
+  flex-shrink: 0;
+}
+.meter-track {
+  flex: 1;
+  height: 14px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.08s linear;
+}
+.meter-fill.input-meter {
+  background: linear-gradient(to right,
+    #4CAF50 0%, #4CAF50 60%,
+    #FFC107 75%, #FF9800 88%,
+    #F44336 100%
+  );
+}
+.meter-fill.output-meter {
+  background: linear-gradient(to right,
+    #2196F3 0%, #2196F3 55%,
+    #42A5F5 65%,
+    #FF9800 85%,
+    #F44336 100%
+  );
+}
+.meter-peak {
+  position: absolute;
+  width: 2px;
+  height: 100%;
+  background: rgba(255,255,255,0.9);
+  top: 0;
+  left: 0;
+  transition: left 0.08s linear;
+}
+.meter-db {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  width: 52px;
+  text-align: right;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.meter-clip {
+  display: none;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--error);
+  background: rgba(244,67,54,0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.meter-clip.active { display: inline; }
+
+/* ─── Gain Slider ─── */
+.gain-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gain-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  outline: none;
+}
+.gain-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.gain-slider::-moz-range-thumb {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+}
+.gain-value {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  width: 48px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ─── Mute Button ─── */
+.mute-btn {
+  width: 100%;
+  min-height: 32px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mute-btn:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+.mute-btn.active {
+  background: var(--error);
+  border-color: var(--error);
+  color: #fff;
+}
+
+/* ─── Processing Badges ─── */
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  user-select: none;
+}
+.badge-peq {
+  background: rgba(255,152,0,0.15);
+  color: var(--accent);
+  border: 1px solid rgba(255,152,0,0.3);
+}
+.badge-peq:hover { background: rgba(255,152,0,0.25); }
+.badge-comp {
+  background: rgba(33,150,243,0.12);
+  color: var(--info);
+  border: 1px solid rgba(33,150,243,0.25);
+}
+.badge-comp:hover { background: rgba(33,150,243,0.22); }
+.badge-lim {
+  background: rgba(244,67,54,0.12);
+  color: var(--error);
+  border: 1px solid rgba(244,67,54,0.2);
+}
+.badge-lim:hover { background: rgba(244,67,54,0.2); }
+.badge-delay {
+  background: rgba(156,39,176,0.12);
+  color: #AB47BC;
+  border: 1px solid rgba(156,39,176,0.2);
+}
+.badge-delay:hover { background: rgba(156,39,176,0.2); }
+.badge-fir {
+  background: rgba(0,150,136,0.12);
+  color: #26A69A;
+  border: 1px solid rgba(0,150,136,0.2);
+}
+.badge-fir:hover { background: rgba(0,150,136,0.2); }
+.badge-pol {
+  background: rgba(121,85,72,0.12);
+  color: #8D6E63;
+  border: 1px solid rgba(121,85,72,0.2);
+}
+.badge-pol:hover { background: rgba(121,85,72,0.2); }
+.badge-gain {
+  background: rgba(76,175,80,0.12);
+  color: var(--success);
+  border: 1px solid rgba(76,175,80,0.2);
+}
+.badge-gain:hover { background: rgba(76,175,80,0.2); }
+.badge-disabled {
+  opacity: 0.4;
+}
+
+/* ─── Summary Cards Row ─── */
+.summary-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 540px) {
+  .summary-row { grid-template-columns: 1fr; }
+}
+.summary-card {
+  background: var(--bg-surface);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.summary-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.summary-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.summary-edit {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.summary-edit:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ─── Collapsible Sections ─── */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  cursor: pointer;
+  padding: 8px 0;
+  user-select: none;
+}
+.collapsible-header .card-title { margin-bottom: 0; }
+.collapsible-chevron {
+  width: 20px; height: 20px;
+  fill: var(--text-secondary);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.collapsible-header.open .collapsible-chevron {
+  transform: rotate(180deg);
+}
+.collapsible-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.collapsible-content.open {
+  max-height: 2000px;
+}
+
+/* ─── Visualizations Placeholder ─── */
+.vis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+@media (max-width: 540px) {
+  .vis-grid { grid-template-columns: 1fr; }
+}
+.vis-canvas-placeholder {
+  background: var(--bg-card);
+  border-radius: 8px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-disabled);
+  font-size: 12px;
+  border: 1px dashed var(--border);
+}
+
+/* ─── Utilities Section ─── */
+.util-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+@media (max-width: 540px) {
+  .util-grid { grid-template-columns: 1fr; }
+}
+.util-card {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 12px;
+}
+.util-card-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+.form-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  display: block;
+}
+.form-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  margin-bottom: 6px;
+}
+.form-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  margin-bottom: 6px;
+}
+
+/* ─── Buttons (matches existing) ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+}
+.btn-primary:hover { background: var(--accent-light); }
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-small {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ─── Drawer System ─── */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 480px;
+  max-width: 100vw;
+  background: var(--bg-primary);
+  z-index: 501;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.2);
+}
+.drawer.open {
+  transform: translateX(0);
+}
+
+@media (max-width: 540px) {
+  .drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 90vh;
+    border-radius: 16px 16px 0 0;
+    transform: translateY(100%);
+  }
+  .drawer.open {
+    transform: translateY(0);
+  }
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+.drawer-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.drawer-close {
+  width: 36px; height: 36px;
+  border: none;
+  background: var(--bg-card);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 18px;
+  transition: all 0.15s;
+}
+.drawer-close:hover {
+  background: var(--error);
+  color: #fff;
+}
+
+.drawer-ch-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-ch-tab {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.drawer-ch-tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(255,152,0,0.3);
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ─── PEQ Drawer Content ─── */
+.freq-response-canvas {
+  width: 100%;
+  height: 160px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-disabled);
+  font-size: 12px;
+}
+
+.peq-band-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.peq-band-pill {
+  width: 32px; height: 28px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.peq-band-pill.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.peq-band-pill.enabled {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.peq-detail {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 12px;
+}
+.peq-param-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.peq-param-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.peq-param-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Stage List in Drawer ─── */
+.stage-card {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stage-type-badge {
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.stage-info {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.stage-toggle { flex-shrink: 0; }
+
+/* ─── Routing Matrix (placeholder) ─── */
+.routing-grid-placeholder {
+  display: grid;
+  grid-template-columns: auto repeat(4, 1fr);
+  gap: 2px;
+  margin-top: 8px;
+}
+.routing-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-disabled);
+  cursor: pointer;
+}
+.routing-cell.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.routing-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Mobile Tab Bar (simplified for mockup) ─── */
+.tab-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  padding: 4px 0 env(safe-area-inset-bottom, 0);
+  z-index: 100;
+}
+.tab-bar button {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 6px 0;
+  font-size: 10px;
+  color: var(--text-disabled);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.tab-bar button.active {
+  color: var(--accent);
+}
+.tab-bar button svg {
+  width: 20px; height: 20px;
+  fill: currentColor;
+}
+
+@media (min-width: 768px) {
+  .tab-bar { display: none; }
+}
+
+/* ─── Signal Gen Presets ─── */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+.preset-btn {
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.preset-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ─── Anim helper ─── */
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Drag handle for mobile drawer */
+.drawer-drag-handle {
+  display: none;
+  width: 36px;
+  height: 4px;
+  background: var(--text-disabled);
+  border-radius: 2px;
+  margin: 8px auto 0;
+}
+@media (max-width: 540px) {
+  .drawer-drag-handle { display: block; }
+}
+</style>
+</head>
+
+<body class="night-mode">
+
+<!-- ─── Mockup Controls ─── -->
+<div class="mockup-bar">
+  <strong>Mixer Mockup</strong>
+  <button onclick="document.body.classList.toggle('night-mode')">Toggle Dark/Light</button>
+  <label>
+    Viewport:
+    <select onchange="setViewport(this.value)">
+      <option value="">Auto</option>
+      <option value="1200">Desktop (1200px)</option>
+      <option value="800">Tablet (800px)</option>
+      <option value="375">Mobile (375px)</option>
+    </select>
+  </label>
+  <button onclick="toggleAnimation()">Animate Meters</button>
+  <button onclick="openDrawer('peq','L1')">Open PEQ Drawer</button>
+  <button onclick="openDrawer('stages','L1')">Open Stages Drawer</button>
+  <button onclick="openDrawer('crossover')">Open Crossover</button>
+  <button onclick="openDrawer('routing')">Open Routing</button>
+</div>
+
+<!-- ─── Page Content ─── -->
+<div class="page-wrapper" id="pageWrapper">
+
+  <!-- ══════ Status Bar ══════ -->
+  <div class="card fade-in">
+    <div class="mixer-status">
+      <div class="mixer-status-item">
+        DSP
+        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+      </div>
+      <div class="mixer-status-item">
+        Bypass
+        <label class="switch"><input type="checkbox"><span class="slider"></span></label>
+      </div>
+      <div class="mixer-status-item">
+        CPU: <strong>12.3%</strong>
+        <div class="cpu-bar-track"><div class="cpu-bar-fill" style="width:12.3%"></div></div>
+      </div>
+      <div class="mixer-status-item">
+        <strong>48 kHz</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ Channel Strip Grid ══════ -->
+  <div class="mixer-grid fade-in" id="mixerGrid">
+    <!-- strips rendered by JS -->
+  </div>
+
+  <!-- ══════ Crossover / Routing Summary ══════ -->
+  <div class="summary-row fade-in" style="margin-top: 2px;">
+    <div class="summary-card">
+      <div>
+        <div class="summary-label">Crossover</div>
+        <div class="summary-value">LR4 @ 2000 Hz</div>
+      </div>
+      <button class="summary-edit" onclick="openDrawer('crossover')">Edit</button>
+    </div>
+    <div class="summary-card">
+      <div>
+        <div class="summary-label">Routing</div>
+        <div class="summary-value">1:1 Direct</div>
+      </div>
+      <button class="summary-edit" onclick="openDrawer('routing')">Edit</button>
+    </div>
+  </div>
+
+  <!-- ══════ Visualizations (Collapsible) ══════ -->
+  <div class="card fade-in" style="margin-top: 12px;">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <span class="card-title" style="margin:0">Visualizations</span>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+    </div>
+    <div class="collapsible-content" id="visContent">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;margin-top:4px;">
+        <div class="mixer-status-item">
+          Waveform
+          <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+        </div>
+        <div class="mixer-status-item">
+          Spectrum
+          <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+        </div>
+        <div class="mixer-status-item">
+          LED Mode
+          <label class="switch"><input type="checkbox"><span class="slider"></span></label>
+        </div>
+        <div class="mixer-status-item">
+          FFT Window
+          <select class="form-select" style="width:auto;margin:0;padding:4px 8px;font-size:12px">
+            <option>Hann</option><option>Blackman</option><option>Blackman-Harris</option>
+            <option>Flat-Top</option>
+          </select>
+        </div>
+      </div>
+      <div class="vis-grid">
+        <div class="vis-canvas-placeholder">Waveform — ADC 1</div>
+        <div class="vis-canvas-placeholder">Waveform — ADC 2</div>
+        <div class="vis-canvas-placeholder">Spectrum — ADC 1</div>
+        <div class="vis-canvas-placeholder">Spectrum — ADC 2</div>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text-secondary)">
+        <span>SNR: <strong style="color:var(--text-primary)">72.3 dB</strong></span>
+        <span>SFDR: <strong style="color:var(--text-primary)">68.1 dB</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ Utilities (Collapsible) ══════ -->
+  <div class="card fade-in">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <span class="card-title" style="margin:0">Utilities</span>
+      <svg class="collapsible-chevron" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+    </div>
+    <div class="collapsible-content" id="utilContent">
+      <div class="util-grid">
+        <!-- Input Names -->
+        <div class="util-card">
+          <div class="util-card-title">Input Names</div>
+          <label class="form-label">L1</label>
+          <input class="form-input" value="Woofer L">
+          <label class="form-label">R1</label>
+          <input class="form-input" value="Woofer R">
+          <label class="form-label">L2</label>
+          <input class="form-input" value="Sub">
+          <label class="form-label">R2</label>
+          <input class="form-input" value="Sub 2">
+          <button class="btn btn-secondary btn-small" style="margin-top:4px;width:100%">Save Names</button>
+        </div>
+
+        <!-- Audio Settings -->
+        <div class="util-card">
+          <div class="util-card-title">Audio Settings</div>
+          <label class="form-label">Update Rate</label>
+          <select class="form-select">
+            <option>50 ms</option><option selected>100 ms</option><option>200 ms</option><option>500 ms</option>
+          </select>
+          <label class="form-label">Sample Rate</label>
+          <select class="form-select">
+            <option>44100 Hz</option><option selected>48000 Hz</option>
+          </select>
+          <button class="btn btn-primary btn-small" style="margin-top:4px;width:100%">Apply</button>
+        </div>
+
+        <!-- Signal Generator -->
+        <div class="util-card">
+          <div class="util-card-title">Signal Generator</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span class="form-label" style="margin:0">Enable</span>
+            <label class="switch"><input type="checkbox"><span class="slider"></span></label>
+          </div>
+          <div class="preset-grid">
+            <button class="preset-btn">440 Hz</button>
+            <button class="preset-btn">1 kHz</button>
+            <button class="preset-btn">Pink</button>
+            <button class="preset-btn">White</button>
+            <button class="preset-btn">Sweep</button>
+            <button class="preset-btn">-20 dB</button>
+          </div>
+        </div>
+
+        <!-- Import / Export -->
+        <div class="util-card">
+          <div class="util-card-title">Import / Export</div>
+          <div class="btn-row">
+            <button class="btn btn-secondary btn-small" style="flex:1">Import REW</button>
+            <button class="btn btn-secondary btn-small" style="flex:1">Export REW</button>
+          </div>
+          <div class="btn-row" style="margin-top:4px">
+            <button class="btn btn-secondary btn-small" style="flex:1">Import JSON</button>
+            <button class="btn btn-secondary btn-small" style="flex:1">Export JSON</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page-wrapper -->
+
+<!-- ══════ Drawer Overlay ══════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+
+<!-- ══════ Drawer Panel ══════ -->
+<div class="drawer" id="drawerPanel">
+  <div class="drawer-drag-handle"></div>
+  <div class="drawer-header">
+    <span class="drawer-title" id="drawerTitle">PEQ — L1</span>
+    <button class="drawer-close" onclick="closeDrawer()">&times;</button>
+  </div>
+  <div class="drawer-ch-tabs" id="drawerChTabs">
+    <button class="drawer-ch-tab active" onclick="switchDrawerCh(this,'L1')">L1</button>
+    <button class="drawer-ch-tab" onclick="switchDrawerCh(this,'R1')">R1</button>
+    <button class="drawer-ch-tab" onclick="switchDrawerCh(this,'L2')">L2</button>
+    <button class="drawer-ch-tab" onclick="switchDrawerCh(this,'R2')">R2</button>
+  </div>
+  <div class="drawer-body" id="drawerBody">
+    <!-- dynamically filled -->
+  </div>
+</div>
+
+<!-- ══════ Mobile Tab Bar ══════ -->
+<nav class="tab-bar">
+  <button><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg><span>Ctrl</span></button>
+  <button class="active"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 8.14v7.72c.91-.43 1.5-1.54 1.5-2.86zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77 0-4.28-2.99-7.86-7-8.77z"/></svg><span>Mixer</span></button>
+  <button><svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3a4.24 4.24 0 00-6 0zm-4-4l2 2a7.07 7.07 0 0110 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg><span>WiFi</span></button>
+  <button><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.6 3.6 0 0112 15.6z"/></svg><span>Settings</span></button>
+</nav>
+
+<script>
+// ─── Mock Data ───
+const channels = [
+  { id: 'L1', name: 'Woofer L', inputVu: 0.72, outputVu: 0.55, inputPeak: 0.78, outputPeak: 0.61, inputDb: -12.3, outputDb: -18.1, gain: 0.0, muted: false,
+    badges: [
+      { type: 'peq', label: 'PEQ:5' },
+      { type: 'comp', label: 'Comp' },
+      { type: 'delay', label: '2.0ms' },
+    ]},
+  { id: 'R1', name: 'Woofer R', inputVu: 0.48, outputVu: 0.35, inputPeak: 0.54, outputPeak: 0.40, inputDb: -18.4, outputDb: -24.2, gain: -3.0, muted: false,
+    badges: [
+      { type: 'peq', label: 'PEQ:3' },
+      { type: 'lim', label: 'Lim' },
+    ]},
+  { id: 'L2', name: 'Sub', inputVu: 0.30, outputVu: 0.42, inputPeak: 0.36, outputPeak: 0.48, inputDb: -24.1, outputDb: -20.5, gain: +2.0, muted: false,
+    badges: [
+      { type: 'peq', label: 'PEQ:2' },
+      { type: 'gain', label: '+2dB' },
+    ]},
+  { id: 'R2', name: 'Sub 2', inputVu: 0.0, outputVu: 0.0, inputPeak: 0.0, outputPeak: 0.0, inputDb: -Infinity, outputDb: -Infinity, gain: 0.0, muted: true,
+    badges: [
+      { type: 'peq', label: 'PEQ:0', disabled: true },
+    ]},
+];
+
+// ─── Render Channel Strips ───
+function renderStrips() {
+  const grid = document.getElementById('mixerGrid');
+  grid.innerHTML = '';
+  channels.forEach((ch, i) => {
+    const inDbStr = ch.inputDb === -Infinity ? '-inf' : ch.inputDb.toFixed(1);
+    const outDbStr = ch.outputDb === -Infinity ? '-inf' : ch.outputDb.toFixed(1);
+    const inPct = Math.max(0, Math.min(100, (ch.inputVu * 100)));
+    const outPct = Math.max(0, Math.min(100, (ch.outputVu * 100)));
+    const inPkPct = Math.max(0, Math.min(100, (ch.inputPeak * 100)));
+    const outPkPct = Math.max(0, Math.min(100, (ch.outputPeak * 100)));
+
+    const strip = document.createElement('div');
+    strip.className = 'mixer-strip' + (ch.muted ? ' muted' : '');
+    strip.id = 'strip-' + ch.id;
+    strip.innerHTML = `
+      <div class="strip-header">
+        <span class="strip-ch-label">${ch.id}</span>
+      </div>
+      <input class="strip-name" value="${ch.name}" title="Click to rename">
+
+      <div class="meter-section">
+        <div class="meter-row">
+          <span class="meter-label">In</span>
+          <div class="meter-track">
+            <div class="meter-fill input-meter" id="inFill${i}" style="width:${inPct}%"></div>
+            <div class="meter-peak" id="inPeak${i}" style="left:${inPkPct}%"></div>
+          </div>
+        </div>
+        <div class="meter-row">
+          <span class="meter-label">Out</span>
+          <div class="meter-track">
+            <div class="meter-fill output-meter" id="outFill${i}" style="width:${outPct}%"></div>
+            <div class="meter-peak" id="outPeak${i}" style="left:${outPkPct}%"></div>
+          </div>
+          <span class="meter-db" id="meterDb${i}">${outDbStr}</span>
+        </div>
+      </div>
+
+      <div class="gain-section">
+        <input type="range" class="gain-slider" min="-24" max="12" step="0.5" value="${ch.gain}"
+               oninput="updateGain(${i}, this.value)" id="gainSlider${i}">
+        <span class="gain-value" id="gainVal${i}">${ch.gain >= 0 ? '+' : ''}${ch.gain.toFixed(1)} dB</span>
+      </div>
+
+      <button class="mute-btn ${ch.muted ? 'active' : ''}" onclick="toggleMute(${i})" id="muteBtn${i}">
+        ${ch.muted ? 'Muted' : 'Mute'}
+      </button>
+
+      <div class="badge-row" id="badges${i}">
+        ${ch.badges.map(b =>
+          `<span class="badge badge-${b.type}${b.disabled ? ' badge-disabled' : ''}"
+                 onclick="openDrawer('${b.type === 'peq' ? 'peq' : 'stages'}','${ch.id}')">${b.label}</span>`
+        ).join('')}
+      </div>
+    `;
+    grid.appendChild(strip);
+  });
+}
+
+// ─── Gain & Mute ───
+function updateGain(i, val) {
+  const v = parseFloat(val);
+  channels[i].gain = v;
+  document.getElementById('gainVal' + i).textContent = (v >= 0 ? '+' : '') + v.toFixed(1) + ' dB';
+}
+
+function toggleMute(i) {
+  channels[i].muted = !channels[i].muted;
+  const btn = document.getElementById('muteBtn' + i);
+  const strip = document.getElementById('strip-' + channels[i].id);
+  btn.classList.toggle('active', channels[i].muted);
+  btn.textContent = channels[i].muted ? 'Muted' : 'Mute';
+  strip.classList.toggle('muted', channels[i].muted);
+}
+
+// ─── Collapsible ───
+function toggleCollapsible(header) {
+  header.classList.toggle('open');
+  header.nextElementSibling.classList.toggle('open');
+}
+
+// ─── Drawer ───
+let currentDrawerType = '';
+let currentDrawerCh = '';
+
+function openDrawer(type, ch) {
+  currentDrawerType = type;
+  currentDrawerCh = ch || '';
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('drawerPanel').classList.add('open');
+
+  // Channel tabs visibility
+  const chTabs = document.getElementById('drawerChTabs');
+  chTabs.style.display = (type === 'crossover' || type === 'routing') ? 'none' : 'flex';
+
+  // Update active ch tab
+  if (ch) {
+    chTabs.querySelectorAll('.drawer-ch-tab').forEach(t => {
+      t.classList.toggle('active', t.textContent === ch);
+    });
+  }
+
+  // Title
+  const titles = {
+    peq: `PEQ — ${ch}`,
+    stages: `Processing — ${ch}`,
+    crossover: 'Crossover',
+    routing: 'Routing Matrix',
+  };
+  document.getElementById('drawerTitle').textContent = titles[type] || type;
+
+  // Body content
+  const body = document.getElementById('drawerBody');
+  body.innerHTML = drawerContent[type] ? drawerContent[type](ch) : '<p>Coming soon</p>';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('drawerPanel').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function switchDrawerCh(btn, ch) {
+  document.querySelectorAll('.drawer-ch-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  currentDrawerCh = ch;
+  const titles = { peq: 'PEQ', stages: 'Processing' };
+  document.getElementById('drawerTitle').textContent = `${titles[currentDrawerType] || currentDrawerType} — ${ch}`;
+  const body = document.getElementById('drawerBody');
+  body.innerHTML = drawerContent[currentDrawerType] ? drawerContent[currentDrawerType](ch) : '';
+}
+
+// Escape to close
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+// ─── Drawer Content Generators ───
+const drawerContent = {
+  peq: (ch) => `
+    <div class="freq-response-canvas">Frequency Response Graph (canvas)</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <div class="mixer-status-item" style="font-size:12px">
+        Individual <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+      </div>
+      <div class="mixer-status-item" style="font-size:12px">
+        RTA <label class="switch"><input type="checkbox"><span class="slider"></span></label>
+      </div>
+      <div class="mixer-status-item" style="font-size:12px">
+        Chain <label class="switch"><input type="checkbox"><span class="slider"></span></label>
+      </div>
+      <div class="mixer-status-item" style="font-size:12px">
+        Link L/R <label class="switch"><input type="checkbox"><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="peq-band-strip">
+      <div class="peq-band-pill active">1</div>
+      <div class="peq-band-pill enabled">2</div>
+      <div class="peq-band-pill enabled">3</div>
+      <div class="peq-band-pill enabled">4</div>
+      <div class="peq-band-pill enabled">5</div>
+      <div class="peq-band-pill">6</div>
+      <div class="peq-band-pill">7</div>
+      <div class="peq-band-pill">8</div>
+      <div class="peq-band-pill">9</div>
+      <div class="peq-band-pill">10</div>
+    </div>
+
+    <div class="peq-detail">
+      <div class="card-title" style="font-size:12px">Band 1 — Peaking EQ</div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Filter Type</span>
+        <select class="form-select" style="width:auto;margin:0;padding:4px 8px;font-size:12px">
+          <option selected>Peaking EQ</option><option>Low Shelf</option><option>High Shelf</option>
+          <option>Low Pass</option><option>High Pass</option><option>Notch</option><option>All Pass</option>
+        </select>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Frequency</span>
+        <span class="peq-param-value">1000 Hz</span>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Gain</span>
+        <span class="peq-param-value">+3.0 dB</span>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Q</span>
+        <span class="peq-param-value">1.41</span>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Enabled</span>
+        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-secondary btn-small" style="flex:1">Enable All</button>
+      <button class="btn btn-secondary btn-small" style="flex:1">Disable All</button>
+      <button class="btn btn-secondary btn-small" style="flex:1">Copy To...</button>
+    </div>
+    <div class="btn-row" style="margin-top:6px">
+      <select class="form-select" style="flex:1;margin:0">
+        <option>Presets...</option>
+        <option>Flat</option>
+        <option>Bass Boost</option>
+        <option>Vocal Presence</option>
+        <option>Sub Align</option>
+      </select>
+    </div>
+  `,
+
+  stages: (ch) => `
+    <div class="card-title" style="margin-bottom:8px">Processing Chain — ${ch}</div>
+
+    <div class="stage-card">
+      <span class="stage-type-badge">GAIN</span>
+      <span class="stage-info">+0.0 dB</span>
+      <div class="stage-toggle">
+        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <span class="stage-type-badge" style="background:var(--info)">COMP</span>
+      <span class="stage-info">Thresh: -18 dB, Ratio: 4:1, Attack: 10ms</span>
+      <div class="stage-toggle">
+        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <span class="stage-type-badge" style="background:var(--error)">LIM</span>
+      <span class="stage-info">Ceiling: -1.0 dB, Release: 50ms</span>
+      <div class="stage-toggle">
+        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <span class="stage-type-badge" style="background:#AB47BC">DELAY</span>
+      <span class="stage-info">2.0 ms (0.69 m)</span>
+      <div class="stage-toggle">
+        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <span class="stage-type-badge" style="background:#8D6E63">POL</span>
+      <span class="stage-info">Inverted</span>
+      <div class="stage-toggle">
+        <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-small" style="width:100%;margin-top:8px">+ Add Stage</button>
+
+    <div class="card-title" style="margin-top:16px;margin-bottom:8px">Compressor Detail</div>
+    <div class="peq-detail">
+      <div class="vis-canvas-placeholder" style="height:80px;margin-bottom:8px">Transfer Curve (canvas)</div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Threshold</span>
+        <span class="peq-param-value">-18.0 dB</span>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Ratio</span>
+        <span class="peq-param-value">4.0 : 1</span>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Attack</span>
+        <span class="peq-param-value">10 ms</span>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Release</span>
+        <span class="peq-param-value">100 ms</span>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Makeup Gain</span>
+        <span class="peq-param-value">+4.0 dB</span>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">GR</span>
+        <span class="peq-param-value" style="color:var(--warning)">-6.2 dB</span>
+      </div>
+    </div>
+  `,
+
+  crossover: () => `
+    <div class="card-title">Crossover Settings</div>
+    <div class="peq-detail" style="margin-bottom:12px">
+      <div class="peq-param-row">
+        <span class="peq-param-label">Frequency</span>
+        <input class="form-input" type="number" value="2000" style="width:100px;margin:0;text-align:right">
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Slope</span>
+        <select class="form-select" style="width:auto;margin:0">
+          <option>BW1 (6 dB/oct)</option>
+          <option>BW2 (12 dB/oct)</option>
+          <option selected>LR4 (24 dB/oct)</option>
+          <option>LR8 (48 dB/oct)</option>
+        </select>
+      </div>
+      <div class="peq-param-row">
+        <span class="peq-param-label">Role</span>
+        <select class="form-select" style="width:auto;margin:0">
+          <option>Low Pass (Sub)</option>
+          <option selected>High Pass (Main)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card-title">Apply To Channels</div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox" checked> L1
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox" checked> R1
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox"> L2
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+        <input type="checkbox"> R2
+      </label>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%">Apply Crossover</button>
+
+    <div class="card-title" style="margin-top:16px">Presets</div>
+    <div class="btn-row">
+      <button class="btn btn-secondary btn-small" style="flex:1">2-Way</button>
+      <button class="btn btn-secondary btn-small" style="flex:1">3-Way</button>
+      <button class="btn btn-secondary btn-small" style="flex:1">Sub + Main</button>
+    </div>
+  `,
+
+  routing: () => `
+    <div class="card-title">Routing Presets</div>
+    <div class="btn-row" style="margin-bottom:12px">
+      <button class="btn btn-primary btn-small" style="flex:1">1:1 Direct</button>
+      <button class="btn btn-secondary btn-small" style="flex:1">Mono Sum</button>
+      <button class="btn btn-secondary btn-small" style="flex:1">Swap L/R</button>
+      <button class="btn btn-secondary btn-small" style="flex:1">Sub Sum</button>
+    </div>
+
+    <div class="card-title">Routing Matrix</div>
+    <p style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">
+      Rows = inputs, Columns = outputs. Click to toggle routing.
+    </p>
+    <div class="routing-grid-placeholder">
+      <div class="routing-label"></div>
+      <div class="routing-label">L1</div>
+      <div class="routing-label">R1</div>
+      <div class="routing-label">L2</div>
+      <div class="routing-label">R2</div>
+
+      <div class="routing-label">In L1</div>
+      <div class="routing-cell active">1.0</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell">0</div>
+
+      <div class="routing-label">In R1</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell active">1.0</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell">0</div>
+
+      <div class="routing-label">In L2</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell active">1.0</div>
+      <div class="routing-cell">0</div>
+
+      <div class="routing-label">In R2</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell">0</div>
+      <div class="routing-cell active">1.0</div>
+    </div>
+  `,
+};
+
+// ─── Animated Meters ───
+let animating = false;
+let animFrame = null;
+
+function toggleAnimation() {
+  animating = !animating;
+  if (animating) animateMeters();
+  else cancelAnimationFrame(animFrame);
+}
+
+function animateMeters() {
+  if (!animating) return;
+  const t = Date.now() / 1000;
+  channels.forEach((ch, i) => {
+    if (ch.muted) {
+      ch.inputVu = 0; ch.outputVu = 0;
+      ch.inputPeak = 0; ch.outputPeak = 0;
+      ch.inputDb = -Infinity; ch.outputDb = -Infinity;
+    } else {
+      // Simulate fluctuating levels
+      const base = [0.65, 0.45, 0.30, 0.0][i];
+      const wobble = Math.sin(t * (2 + i * 0.7)) * 0.12 + Math.sin(t * (5 + i)) * 0.06;
+      ch.inputVu = Math.max(0, Math.min(1, base + wobble));
+      ch.outputVu = Math.max(0, Math.min(1, ch.inputVu * (0.7 + Math.sin(t * 0.5) * 0.1)));
+      ch.inputPeak = Math.max(ch.inputVu, ch.inputPeak * 0.995);
+      ch.outputPeak = Math.max(ch.outputVu, ch.outputPeak * 0.995);
+      ch.inputDb = ch.inputVu > 0.001 ? 20 * Math.log10(ch.inputVu) : -Infinity;
+      ch.outputDb = ch.outputVu > 0.001 ? 20 * Math.log10(ch.outputVu) : -Infinity;
+    }
+
+    const inFill = document.getElementById('inFill' + i);
+    const outFill = document.getElementById('outFill' + i);
+    const inPeak = document.getElementById('inPeak' + i);
+    const outPeak = document.getElementById('outPeak' + i);
+    const dbLabel = document.getElementById('meterDb' + i);
+
+    if (inFill) inFill.style.width = (ch.inputVu * 100) + '%';
+    if (outFill) outFill.style.width = (ch.outputVu * 100) + '%';
+    if (inPeak) inPeak.style.left = (ch.inputPeak * 100) + '%';
+    if (outPeak) outPeak.style.left = (ch.outputPeak * 100) + '%';
+    if (dbLabel) dbLabel.textContent = ch.outputDb === -Infinity ? '-inf' : ch.outputDb.toFixed(1);
+  });
+  animFrame = requestAnimationFrame(animateMeters);
+}
+
+// ─── Viewport Simulation ───
+function setViewport(w) {
+  const wrapper = document.getElementById('pageWrapper');
+  if (!w) {
+    wrapper.style.maxWidth = '960px';
+  } else {
+    wrapper.style.maxWidth = w + 'px';
+  }
+}
+
+// ─── Init ───
+renderStrips();
+</script>
+</body>
+</html>

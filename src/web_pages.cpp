@@ -3267,6 +3267,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="menu-cat">Dynamics</div>
                         <div class="menu-item" onclick="dspAddStage(12)">Limiter</div>
                         <div class="menu-item" onclick="dspAddStage(18)">Compressor</div>
+                        <div class="menu-item" onclick="dspAddStage(24)">Noise Gate</div>
+                        <div class="menu-item" onclick="dspAddStage(30)">Multiband Comp</div>
+                        <div class="menu-cat">Tone Shaping</div>
+                        <div class="menu-item" onclick="dspAddStage(25)">Tone Controls</div>
+                        <div class="menu-item" onclick="dspAddStage(28)">Loudness Comp</div>
+                        <div class="menu-item" onclick="dspAddStage(29)">Bass Enhance</div>
+                        <div class="menu-cat">Stereo / Protection</div>
+                        <div class="menu-item" onclick="dspAddStage(27)">Stereo Width</div>
+                        <div class="menu-item" onclick="dspAddStage(26)">Speaker Protection</div>
                         <div class="menu-cat">Utility</div>
                         <div class="menu-item" onclick="dspAddStage(14)">Gain</div>
                         <div class="menu-item" onclick="dspAddStage(15)">Delay</div>
@@ -3326,6 +3335,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                 <option value="lr16">LR16 — 16th order (96 dB/oct)</option>
                                 <option value="lr24">LR24 — 24th order (144 dB/oct)</option>
                             </optgroup>
+                            <optgroup label="Bessel (flat group delay)">
+                                <option value="bessel2">Bessel 2nd order (12 dB/oct)</option>
+                                <option value="bessel4">Bessel 4th order (24 dB/oct)</option>
+                                <option value="bessel6">Bessel 6th order (36 dB/oct)</option>
+                                <option value="bessel8">Bessel 8th order (48 dB/oct)</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div class="form-group">
@@ -3336,6 +3351,64 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         </select>
                     </div>
                     <button class="btn btn-primary" onclick="dspApplyCrossover()">Apply to Channel</button>
+                </div>
+            </div>
+
+            <!-- Baffle Step Correction -->
+            <div class="card">
+                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                    <span class="card-title" style="margin-bottom:0;">Baffle Step Correction</span>
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" style="margin-top:8px;">
+                    <div class="form-group">
+                        <label class="form-label">Baffle Width (mm)</label>
+                        <input type="number" class="form-input" id="baffleWidth" value="250" min="50" max="600" step="1">
+                    </div>
+                    <div id="bafflePreview" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+                        Estimated: ~437 Hz, +6.0 dB high shelf
+                    </div>
+                    <button class="btn btn-primary" onclick="applyBaffleStep()">Apply to Channel</button>
+                </div>
+            </div>
+
+            <!-- THD+N Measurement -->
+            <div class="card">
+                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                    <span class="card-title" style="margin-bottom:0;">THD+N Measurement</span>
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" style="margin-top:8px;">
+                    <div class="form-group">
+                        <label class="form-label">Test Frequency</label>
+                        <select class="form-input" id="thdFreq">
+                            <option value="100">100 Hz</option>
+                            <option value="1000" selected>1 kHz</option>
+                            <option value="10000">10 kHz</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Averages</label>
+                        <select class="form-input" id="thdAverages">
+                            <option value="4">4 frames</option>
+                            <option value="8" selected>8 frames</option>
+                            <option value="16">16 frames</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-bottom:8px;">
+                        <button class="btn btn-primary" id="thdStartBtn" onclick="thdStart()">Start</button>
+                        <button class="btn btn-outline" id="thdStopBtn" onclick="thdStop()" style="display:none">Stop</button>
+                    </div>
+                    <div id="thdResult" style="display:none;font-size:13px;">
+                        <div class="info-row"><span class="info-label">THD+N</span><span class="info-value" id="thdPercent">—</span></div>
+                        <div class="info-row"><span class="info-label">THD+N (dB)</span><span class="info-value" id="thdDb">—</span></div>
+                        <div class="info-row"><span class="info-label">Fundamental</span><span class="info-value" id="thdFund">—</span></div>
+                        <div class="info-row"><span class="info-label">Progress</span><span class="info-value" id="thdProgress">—</span></div>
+                        <div id="thdHarmonics" style="margin-top:8px;">
+                            <div style="font-weight:600;margin-bottom:4px;font-size:12px;">Harmonics (dB rel. fundamental)</div>
+                            <div id="thdHarmBars" style="display:flex;gap:2px;height:60px;align-items:flex-end;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -5119,6 +5192,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     dspHandleMetrics(data);
                 } else if (data.type === 'peqPresets') {
                     peqHandlePresetsList(data.presets);
+                } else if (data.type === 'thdResult') {
+                    thdUpdateResult(data);
                 }
             };
 
@@ -6106,12 +6181,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== Per-ADC Input Enable/Disable =====
         function setAdcEnabled(adc, en) {
-            wsSend(JSON.stringify({type:'setAdcEnabled',adc:adc,enabled:en}));
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:'setAdcEnabled',adc:adc,enabled:en}));
         }
 
         // ===== USB Audio Input =====
         function setUsbAudioEnabled(en) {
-            wsSend(JSON.stringify({type:'setUsbAudioEnabled',enabled:en}));
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:'setUsbAudioEnabled',enabled:en}));
         }
 
         function handleUsbAudioState(d) {
@@ -9439,7 +9516,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== DSP Tab =====
-        const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor','LPF 1st','HPF 1st','Linkwitz'];
+        const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor','LPF 1st','HPF 1st','Linkwitz','Decimator','Convolution','Noise Gate','Tone Controls','Speaker Prot','Stereo Width','Loudness','Bass Enhance','Multiband Comp'];
         const DSP_MAX_CH = 4;
         const DSP_CH_NAMES = ['L1','R1','L2','R2'];
         function dspChLabel(c) { return inputNames[c] || DSP_CH_NAMES[c]; }
@@ -9880,6 +9957,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (t === 16) return s.inverted ? 'Inverted' : 'Normal';
             if (t === 17) return s.muted ? 'Muted' : 'Active';
             if (t === 18) return s.thresholdDb.toFixed(1) + ' dBFS ' + s.ratio.toFixed(1) + ':1';
+            if (t === 24) return (s.thresholdDb || -40).toFixed(0) + ' dB ' + (s.ratio || 1).toFixed(0) + ':1';
+            if (t === 25) return 'B' + (s.bassGain || 0).toFixed(0) + ' M' + (s.midGain || 0).toFixed(0) + ' T' + (s.trebleGain || 0).toFixed(0);
+            if (t === 26) return (s.currentTempC || 25).toFixed(0) + '\u00B0C GR=' + (s.gr || 0).toFixed(1);
+            if (t === 27) return 'W=' + (s.width || 100).toFixed(0) + '%';
+            if (t === 28) return 'Ref=' + (s.referenceLevelDb || 85).toFixed(0) + ' Cur=' + (s.currentLevelDb || 75).toFixed(0);
+            if (t === 29) return (s.frequency || 80).toFixed(0) + ' Hz mix=' + (s.mix || 50).toFixed(0) + '%';
+            if (t === 30) return (s.numBands || 3) + ' bands';
             return '';
         }
 
@@ -9924,6 +10008,49 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 h += '<div class="dsp-param"><label>Mute</label><label class="switch" style="transform:scale(0.75);"><input type="checkbox" ' + (s.muted ? 'checked' : '') + ' onchange="dspUpdateParam(' + idx + ',\'muted\',this.checked)"><span class="slider round"></span></label></div>';
             } else if (t === 13) {
                 h += '<div class="dsp-param"><label>Taps</label><span class="dsp-val">' + (s.numTaps || 0) + '</span></div>';
+            } else if (t === 24) {
+                h += dspSlider(idx, 'thresholdDb', 'Threshold', s.thresholdDb, -80, 0, 0.5, 'dB');
+                h += dspSlider(idx, 'attackMs', 'Attack', s.attackMs, 0.1, 100, 0.1, 'ms');
+                h += dspSlider(idx, 'holdMs', 'Hold', s.holdMs, 0, 500, 1, 'ms');
+                h += dspSlider(idx, 'releaseMs', 'Release', s.releaseMs, 1, 2000, 1, 'ms');
+                h += dspSlider(idx, 'ratio', 'Ratio (1=gate)', s.ratio, 1, 20, 0.5, ':1');
+                h += dspSlider(idx, 'rangeDb', 'Range', s.rangeDb, -80, 0, 0.5, 'dB');
+                if (s.gr !== undefined) h += '<div class="dsp-param"><label>GR</label><span class="dsp-val" style="color:var(--error)">' + s.gr.toFixed(1) + ' dB</span></div>';
+            } else if (t === 25) {
+                h += dspSlider(idx, 'bassGain', 'Bass (100 Hz)', s.bassGain, -12, 12, 0.5, 'dB');
+                h += dspSlider(idx, 'midGain', 'Mid (1 kHz)', s.midGain, -12, 12, 0.5, 'dB');
+                h += dspSlider(idx, 'trebleGain', 'Treble (10 kHz)', s.trebleGain, -12, 12, 0.5, 'dB');
+            } else if (t === 26) {
+                h += dspSlider(idx, 'powerRatingW', 'Power Rating', s.powerRatingW, 1, 1000, 1, 'W');
+                h += dspSlider(idx, 'impedanceOhms', 'Impedance', s.impedanceOhms, 2, 32, 0.5, '\u03A9');
+                h += dspSlider(idx, 'thermalTauMs', 'Thermal \u03C4', s.thermalTauMs, 100, 10000, 100, 'ms');
+                h += dspSlider(idx, 'excursionLimitMm', 'Xmax', s.excursionLimitMm, 0.5, 30, 0.5, 'mm');
+                h += dspSlider(idx, 'driverDiameterMm', 'Driver \u00D8', s.driverDiameterMm, 25, 460, 1, 'mm');
+                h += dspSlider(idx, 'maxTempC', 'Max Temp', s.maxTempC, 50, 300, 5, '\u00B0C');
+                h += '<div class="dsp-param"><label>Temp</label><span class="dsp-val">' + (s.currentTempC || 25).toFixed(1) + ' \u00B0C</span></div>';
+                if (s.gr !== undefined) h += '<div class="dsp-param"><label>GR</label><span class="dsp-val" style="color:var(--error)">' + s.gr.toFixed(1) + ' dB</span></div>';
+            } else if (t === 27) {
+                h += dspSlider(idx, 'width', 'Width', s.width, 0, 200, 1, '%');
+                h += dspSlider(idx, 'centerGainDb', 'Center Gain', s.centerGainDb, -12, 12, 0.5, 'dB');
+            } else if (t === 28) {
+                h += dspSlider(idx, 'referenceLevelDb', 'Reference Level', s.referenceLevelDb, 60, 100, 1, 'dB SPL');
+                h += dspSlider(idx, 'currentLevelDb', 'Current Level', s.currentLevelDb, 20, 100, 1, 'dB SPL');
+                h += dspSlider(idx, 'amount', 'Amount', s.amount, 0, 100, 1, '%');
+            } else if (t === 29) {
+                h += dspSlider(idx, 'frequency', 'Crossover Freq', s.frequency, 20, 200, 1, 'Hz');
+                h += dspSlider(idx, 'harmonicGainDb', 'Harmonic Gain', s.harmonicGainDb, -12, 12, 0.5, 'dB');
+                h += dspSlider(idx, 'mix', 'Mix', s.mix, 0, 100, 1, '%');
+                h += '<div class="dsp-param"><label>Harmonics</label><select class="form-input" style="width:auto;padding:2px 6px;" onchange="dspUpdateParam(' + idx + ',\'order\',parseInt(this.value))">';
+                h += '<option value="0"' + (s.order===0?' selected':'') + '>2nd</option>';
+                h += '<option value="1"' + (s.order===1?' selected':'') + '>3rd</option>';
+                h += '<option value="2"' + (s.order===2?' selected':'') + '>Both</option>';
+                h += '</select></div>';
+            } else if (t === 30) {
+                h += '<div class="dsp-param"><label>Bands</label><select class="form-input" style="width:auto;padding:2px 6px;" onchange="dspUpdateParam(' + idx + ',\'numBands\',parseInt(this.value))">';
+                h += '<option value="2"' + (s.numBands===2?' selected':'') + '>2</option>';
+                h += '<option value="3"' + ((s.numBands||3)===3?' selected':'') + '>3</option>';
+                h += '<option value="4"' + (s.numBands===4?' selected':'') + '>4</option>';
+                h += '</select></div>';
             }
             return h;
         }
@@ -10225,6 +10352,96 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             return 10 * Math.log10(Math.max((numR*numR + numI*numI) / (denR*denR + denI*denI), 1e-20));
         }
 
+        // Client-side biquad coefficient computation (RBJ Audio EQ Cookbook).
+        // Returns [b0, b1, b2, a1, a2] normalized so a0=1.
+        // Uses ESP-DSP sign convention: denominator is 1 + a1*z^-1 + a2*z^-2,
+        // processing uses y = b0*x + d0; d0 = b1*x - a1*y + d1; d1 = b2*x - a2*y.
+        function dspComputeCoeffs(type, freq, gain, Q, fs) {
+            var fn = freq / fs;
+            if (fn < 0.0001) fn = 0.0001;
+            if (fn > 0.4999) fn = 0.4999;
+            var w0 = 2 * Math.PI * fn;
+            var cosW = Math.cos(w0), sinW = Math.sin(w0);
+            if (Q <= 0) Q = 0.707;
+            var alpha = sinW / (2 * Q);
+            var A, b0, b1, b2, a0, a1, a2;
+
+            switch (type) {
+                case 0: // LPF
+                    b1 = 1 - cosW; b0 = b1 / 2; b2 = b0;
+                    a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
+                    break;
+                case 1: // HPF
+                    b1 = -(1 + cosW); b0 = -b1 / 2; b2 = b0;
+                    a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
+                    break;
+                case 2: // BPF
+                    b0 = sinW / 2; b1 = 0; b2 = -b0;
+                    a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
+                    break;
+                case 3: // Notch
+                    b0 = 1; b1 = -2 * cosW; b2 = 1;
+                    a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
+                    break;
+                case 4: // PEQ
+                    A = Math.pow(10, gain / 40);
+                    b0 = 1 + alpha * A; b1 = -2 * cosW; b2 = 1 - alpha * A;
+                    a0 = 1 + alpha / A; a1 = -2 * cosW; a2 = 1 - alpha / A;
+                    break;
+                case 5: // Low Shelf
+                    A = Math.pow(10, gain / 40);
+                    var sq = 2 * Math.sqrt(A) * alpha;
+                    b0 = A * ((A + 1) - (A - 1) * cosW + sq);
+                    b1 = 2 * A * ((A - 1) - (A + 1) * cosW);
+                    b2 = A * ((A + 1) - (A - 1) * cosW - sq);
+                    a0 = (A + 1) + (A - 1) * cosW + sq;
+                    a1 = -2 * ((A - 1) + (A + 1) * cosW);
+                    a2 = (A + 1) + (A - 1) * cosW - sq;
+                    break;
+                case 6: // High Shelf
+                    A = Math.pow(10, gain / 40);
+                    var sq = 2 * Math.sqrt(A) * alpha;
+                    b0 = A * ((A + 1) + (A - 1) * cosW + sq);
+                    b1 = -2 * A * ((A - 1) + (A + 1) * cosW);
+                    b2 = A * ((A + 1) + (A - 1) * cosW - sq);
+                    a0 = (A + 1) - (A - 1) * cosW + sq;
+                    a1 = 2 * ((A - 1) - (A + 1) * cosW);
+                    a2 = (A + 1) - (A - 1) * cosW - sq;
+                    break;
+                case 7: case 8: // Allpass / AP360
+                    b0 = 1 - alpha; b1 = -2 * cosW; b2 = 1 + alpha;
+                    a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
+                    break;
+                case 9: // AP180
+                    b0 = -(1 - alpha); b1 = 2 * cosW; b2 = -(1 + alpha);
+                    a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
+                    break;
+                case 10: // BPF 0dB
+                    b0 = alpha; b1 = 0; b2 = -alpha;
+                    a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
+                    break;
+                case 19: // LPF 1st order
+                    var wt = Math.tan(Math.PI * fn);
+                    var n = 1 / (1 + wt);
+                    return [wt * n, wt * n, 0, (wt - 1) * n, 0];
+                case 20: // HPF 1st order
+                    var wt = Math.tan(Math.PI * fn);
+                    var n = 1 / (1 + wt);
+                    return [n, -n, 0, (wt - 1) * n, 0];
+                default: // passthrough
+                    return [1, 0, 0, 0, 0];
+            }
+            // Normalize by a0
+            var inv = 1 / a0;
+            return [b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv];
+        }
+
+        // Compute magnitude in dB from stage parameters (no server coefficients needed)
+        function dspStageMagDb(s, f, fs) {
+            var coeffs = dspComputeCoeffs(s.type, s.freq || 1000, s.gain || 0, s.Q || 0.707, fs);
+            return dspBiquadMagDb(coeffs, f, fs);
+        }
+
         function dspDrawFreqResponse() {
             var canvas = document.getElementById('dspFreqCanvas');
             if (!canvas || !dspState || currentActiveTab !== 'dsp') return;
@@ -10316,10 +10533,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var chainCombined = new Float32Array(nPts);
             var hasPeq = false, hasChain = false;
 
-            // Layer 2: Individual PEQ band curves
+            // Layer 2: Individual PEQ band curves (client-side coefficient computation)
             for (var si = 0; si < peqBands.length; si++) {
                 var s = peqBands[si];
-                if (s.type > 11 || !s.coeffs || !s.enabled) continue;
+                if (!dspIsBiquad(s.type) || !s.enabled) continue;
+                var peqCoeffs = dspComputeCoeffs(s.type, s.freq || 1000, s.gain || 0, s.Q || 0.707, fs);
                 hasPeq = true;
                 if (peqGraphLayers.individual) {
                     ctx.beginPath();
@@ -10328,7 +10546,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
                 for (var p = 0; p < nPts; p++) {
                     var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
-                    var magDb = dspBiquadMagDb(s.coeffs, f, fs);
+                    var magDb = dspBiquadMagDb(peqCoeffs, f, fs);
                     peqCombined[p] += magDb;
                     if (peqGraphLayers.individual) {
                         var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
@@ -10339,10 +10557,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (peqGraphLayers.individual) ctx.stroke();
             }
 
-            // Layer 3: Chain biquad curves
+            // Layer 3: Chain biquad curves (use server coefficients, fallback to client-side)
             for (var si = 0; si < chainStages.length; si++) {
                 var s = chainStages[si];
-                if (s.type > 11 || !s.coeffs || !s.enabled) continue;
+                if (!dspIsBiquad(s.type) || !s.enabled) continue;
+                var chainCoeffs = s.coeffs || dspComputeCoeffs(s.type, s.freq || 1000, s.gain || 0, s.Q || 0.707, fs);
                 hasChain = true;
                 if (peqGraphLayers.chain) {
                     ctx.beginPath();
@@ -10351,7 +10570,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
                 for (var p = 0; p < nPts; p++) {
                     var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
-                    var magDb = dspBiquadMagDb(s.coeffs, f, fs);
+                    var magDb = dspBiquadMagDb(chainCoeffs, f, fs);
                     chainCombined[p] += magDb;
                     if (peqGraphLayers.chain) {
                         var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
@@ -10394,14 +10613,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             // Highlight selected chain stage (if expanded)
             if (dspOpenStage >= DSP_PEQ_BANDS && dspOpenStage < stages.length) {
                 var ss = stages[dspOpenStage];
-                if (ss.type <= 11 && ss.coeffs) {
+                if (dspIsBiquad(ss.type)) {
+                    var hlCoeffs = ss.coeffs || dspComputeCoeffs(ss.type, ss.freq || 1000, ss.gain || 0, ss.Q || 0.707, fs);
                     ctx.beginPath();
                     ctx.strokeStyle = '#FFFFFF';
                     ctx.lineWidth = 2 * dpr;
                     ctx.setLineDash([4*dpr, 4*dpr]);
                     for (var p = 0; p < nPts; p++) {
                         var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
-                        var magDb = dspBiquadMagDb(ss.coeffs, f, fs);
+                        var magDb = dspBiquadMagDb(hlCoeffs, f, fs);
                         var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
                         var xp = padL + gw * p / (nPts - 1);
                         if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
@@ -10493,6 +10713,70 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .then(r => r.json())
             .then(d => { if (d.success) showToast('Crossover applied'); else showToast('Failed: ' + (d.message || ''), true); })
             .catch(err => showToast('Error: ' + err, true));
+        }
+
+        // ===== Baffle Step =====
+        function applyBaffleStep() {
+            var w = parseInt(document.getElementById('baffleWidth').value) || 250;
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:'applyBaffleStep', ch:dspCh, baffleWidthMm:w}));
+            showToast('Baffle step applied');
+        }
+        (function() {
+            var bw = document.getElementById('baffleWidth');
+            if (bw) bw.addEventListener('input', function() {
+                var w = parseInt(this.value) || 250;
+                var f = 343000 / (3.14159 * w);
+                var el = document.getElementById('bafflePreview');
+                if (el) el.textContent = 'Estimated: ~' + f.toFixed(0) + ' Hz, +6.0 dB high shelf';
+            });
+        })();
+
+        // ===== THD Measurement =====
+        function thdStart() {
+            var freq = parseInt(document.getElementById('thdFreq').value) || 1000;
+            var avg = parseInt(document.getElementById('thdAverages').value) || 8;
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:'startThdMeasurement', freq:freq, averages:avg}));
+            document.getElementById('thdStartBtn').style.display = 'none';
+            document.getElementById('thdStopBtn').style.display = '';
+            document.getElementById('thdResult').style.display = '';
+        }
+        function thdStop() {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:'stopThdMeasurement'}));
+            document.getElementById('thdStartBtn').style.display = '';
+            document.getElementById('thdStopBtn').style.display = 'none';
+        }
+        function thdUpdateResult(d) {
+            if (!d) return;
+            var el;
+            el = document.getElementById('thdPercent');
+            if (el) el.textContent = d.valid ? d.thdPlusNPercent.toFixed(3) + '%' : '\u2014';
+            el = document.getElementById('thdDb');
+            if (el) el.textContent = d.valid ? d.thdPlusNDb.toFixed(1) + ' dB' : '\u2014';
+            el = document.getElementById('thdFund');
+            if (el) el.textContent = d.valid ? d.fundamentalDbfs.toFixed(1) + ' dBFS' : '\u2014';
+            el = document.getElementById('thdProgress');
+            if (el) el.textContent = d.framesProcessed + '/' + d.framesTarget;
+            if (d.valid && d.harmonicLevels) {
+                var bars = document.getElementById('thdHarmBars');
+                if (bars) {
+                    var html = '';
+                    for (var h = 0; h < d.harmonicLevels.length; h++) {
+                        var lev = d.harmonicLevels[h];
+                        var pct = Math.max(2, Math.min(100, (120 + lev) / 120 * 100));
+                        html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;">';
+                        html += '<div style="width:100%;background:var(--primary);border-radius:2px;height:' + pct + '%" title="' + lev.toFixed(1) + ' dB"></div>';
+                        html += '<span style="font-size:10px;margin-top:2px;">' + (h+2) + '</span></div>';
+                    }
+                    bars.innerHTML = html;
+                }
+            }
+            if (d.valid && !d.measuring) {
+                document.getElementById('thdStartBtn').style.display = '';
+                document.getElementById('thdStopBtn').style.display = 'none';
+            }
         }
 
         // ===== DSP Routing Matrix =====

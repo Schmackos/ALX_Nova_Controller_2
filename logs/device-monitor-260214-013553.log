@@ -1,0 +1,132 @@
+R�gB[I] [Main] ESP32-S3 ALX Nova Controller starting
+[I] [Main] Firmware version: 1.7.1
+[I] [Main] Serial number loaded: ALX-D0CF1333F058
+[I] [Main] AP SSID set to: ALX-D0CF1333F058
+[I] [Buzzer] Initialized on GPIO 8
+[I] [Main] Factory reset button configured: GPIO15
+[D] [Main] Button: short=status, double=AP, triple=blink, long=restart, vlong=reboot
+[I] [Main] Amplifier relay configured: GPIO4
+[I] [Main] LittleFS initialized
+[I] [CrashLog] Recorded: power_on (heap=221256, minHeap=211092)
+[I] [Main] Reset reason: power_on
+[I] [GUI] Initializing...
+[I] [GUI] TFT initialized (ST7735S 160x128 landscape)
+[I] [GUI] LVGL initialized
+[I] [GUI Input] Encoder + button initialized
+[I] [GUI] Initialization complete
+[I] [GUI] Task started on core 1
+[I] [GUI] Playing boot animation 1
+[D] [Buzzer] Play request: 10
+[D] [Buzzer] Start pattern: freq=523, dur=120
+[I] [Sensing] Settings loaded
+[D] [Sensing]   Mode: 2, Timer: 15 min, Threshold: -50 dBFS, Sample Rate: 48000 Hz
+[I] [Audio] FFT/waveform buffers allocated (PSRAM)
+[I] [Audio] I2S0 regs: rx_conf=0x00081624 rx_conf1=0x3F7FE19F rx_clkm_conf=0x3400000D rx_clkm_div=0x00BC0201
+[I] [Audio] I2S1 regs: rx_conf=0x00081624 rx_conf1=0x3F7FE19F rx_clkm_conf=0x3400000D rx_clkm_div=0x00BC0201
+[I] [DSP] Pipeline initialized (double-buffered, 4 channels, max 20 stages/ch)
+[I] [DAC] Settings loaded: enabled=0 vol=100 mute=0 device=0x0001 (PCM5102A)
+[I] [DAC] Volume gain: 100% -> 1.0000 linear
+[I] [DAC] I2C bus scan starting (SDA=41 SCL=42, 0x08-0x77)
+[I] [DAC] I2C device found at 0x50
+[D] [DAC] No ACK at 0x51 (err=2)
+[D] [DAC] No ACK at 0x52 (err=2)
+[D] [DAC] No ACK at 0x53 (err=2)
+[D] [DAC] No ACK at 0x54 (err=2)
+[D] [DAC] No ACK at 0x55 (err=2)
+[D] [DAC] No ACK at 0x56 (err=2)
+[D] [DAC] No ACK at 0x57 (err=2)
+[I] [DAC] I2C scan: 1 devices found (EEPROM mask=0x01)
+[D] [DAC] EEPROM 0x50: no ALXD magic (FF FF FF FF)
+[D] [Buzzer] Pattern complete
+[0;31m[  4276][E][Wire.cpp:499] requestFrom(): i2cWriteReadNonStop returned Error -1[0m
+[0;31m[  4437][E][Wire.cpp:499] requestFrom(): i2cWriteReadNonStop returned Error -1[0m
+[0;31m[  4533][E][Wire.cpp:499] requestFrom(): i2cWriteReadNonStop returned Error -1[0m
+[0;31m[  4629][E][Wire.cpp:499] requestFrom(): i2cWriteReadNonStop returned Error -1[0m
+[0;31m[  4726][E][Wire.cpp:499] requestFrom(): i2cWriteReadNonStop returned Error -1[0m
+[0;31m[  4823][E][Wire.cpp:499] requestFrom(): i2cWriteReadNonStop returned Error -1[0m
+[0;31m[  4920][E][Wire.cpp:499] requestFrom(): i2cWriteReadNonStop returned Error -1[0m
+[I] [DAC] No EEPROM found on I2C bus
+[I] [DAC] DAC disabled in settings, skipping init
+[I] [Audio] I2S initialized: 48000 Hz, BCK=16, DOUT1=17, DOUT2=9, LRC=18, MCLK=3, ADC2=OK[I] 
+[Audio] ADC2 first read OK: 2048 bytes, samples[0..3]=28000006 A0000002 E8000001 E0000005
+[I] [MQTT] Settings loaded - Enabled: true, Broker: 192.168.178.6:1883
+[I] [MQTT] Base Topic: , HA Discovery: false[I] [Audio] ADC1=-24.3dB flr=-95.3 st=2 errs=0 zb=0 az=0 cz=0 tot=1 adcs=1
+
+[I] [Audio] ADC2=-0.3dB flr=-95.0 st=3 errs=0 zb=0 az=0 cz=0 tot=1
+[I] [Settings] Signal generator settings loaded
+[I] [Audio] ADCs detected: 1 -> 2[I] [Settings] Input names loaded
+
+[I] [SigGen] Initialized PWM on GPIO 38
+[I] [Auth] Using default password (AP password)
+[I] [Auth] Authentication system initialized
+[I] [GUI] Boot animation complete
+[I] [DSP] REST API endpoints registered
+[D] [GUI] Desktop focus -> card 0
+[D] [GUI] Desktop carousel created
+[D] [GUI Nav] Push screen 0 (depth 1)
+[I] [DSP] Routing matrix loaded from LittleFS
+[I] [DSP] Config swapped (active=1)
+[I] [DSP] Settings loaded from LittleFS
+[I] [DAC] REST API endpoints registered
+[I] [WiFi] Event handler initialized
+[I] [WiFi] Trying 2 saved network(s)
+[I] [WiFi] Attempting connection 1/2: Schmackos WiFi
+[D] [WiFi] Using DHCP
+[I] [WiFi] Connected to access point
+[I] [WiFi] IP address: 192.168.178.199
+[I] [WiFi] Connected to: Schmackos WiFi
+[I] [WiFi] IP address: 192.168.178.199
+[I] [NTP] === Synchronizing Time with NTP ===
+[I] [NTP] Timezone offset: 3600 seconds (1.0 hours)
+[I] [NTP] DST offset: 0 seconds (0.0 hours)
+[I] [NTP] Waiting for NTP time sync...
+[I] [NTP] Time synchronized successfully
+[I] [NTP] Current local time: 2026-02-14 01:36:01
+[I] [CrashLog] Timestamp updated: 2026-02-14T01:36:01
+[I] [WiFi] Web server started on port 80
+[I] [WiFi] WebSocket server started on port 81
+[I] [WiFi] Navigate to http://192.168.178.199
+[I] [MQTT] Setting up...
+[I] [MQTT] Broker: 192.168.178.6:1883
+[I] [MQTT] Base Topic: 
+[I] [MQTT] HA Discovery: disabled
+[I] [MQTT] Connecting to broker (backoff: 5000ms)...
+[I] [MQTT] Connected to 192.168.178.6:1883
+[D] [MQTT] Subscribed to command topics
+[I] [Main] Web server and WebSocket started
+[I] [Main] Free heap: 117204 bytes, largest block: 106484 bytes
+[I] [Main] Main loop subscribed to task watchdog
+[I] [Sensing] ADC1 health: UNKNOWN -> OK
+[I] [OTA] Checking for firmware update[I] [Sensing] ADC2 health: UNKNOWN -> CLIPPING
+
+[I] [OTA] Current firmware version: 1.7.1
+[I] [OTA] Certificate validation enabled
+[I] [OTA] Fetching release info from: https://api.github.com/repos/Schmackos/ALX_Nova_Controller_2/releases/latest
+[I] [OTA] Performing HTTPS request
+[I] [Sensing] Amplifier ON
+[D] [Sensing] Signal detected, amp ON, timer reset
+[D] [MQTT] Received: homeassistant/status = offline
+[I] [Audio] ADC1=-11.7dB flr=-16.2 st=0 errs=0 zb=0 az=0 cz=0 tot=820 adcs=2
+[I] [Audio] ADC2=-0.4dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=820
+[I] [Audio] ADC1=-23.9dB flr=-13.4 st=0 errs=0 zb=0 az=0 cz=0 tot=1687 adcs=2
+[I] [Audio] ADC2=-0.2dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=1687
+[D] [GUI] Screen dimmed
+[I] [OTA] HTTPS request successful
+[E] [OTA] firmware.bin not found in release assets
+[E] [OTA] Failed to retrieve release information
+[I] [Audio] ADC1=-18.6dB flr=-16.3 st=0 errs=0 zb=0 az=0 cz=0 tot=2549 adcs=2
+[I] [Audio] ADC2=-0.2dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=2549
+[I] [Audio] ADC1=-9.5dB flr=-9.3 st=0 errs=0 zb=0 az=0 cz=0 tot=3413 adcs=2
+[I] [Audio] ADC2=0.0dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=3413
+[I] [Audio] ADC1=-6.6dB flr=-9.5 st=0 errs=0 zb=0 az=0 cz=0 tot=4275 adcs=2
+[I] [Audio] ADC2=0.0dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=4275
+[I] [Audio] ADC1=-16.8dB flr=-8.5 st=0 errs=0 zb=0 az=0 cz=0 tot=5135 adcs=2
+[I] [Audio] ADC2=0.0dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=5135
+[I] [Audio] ADC1=-11.8dB flr=-8.3 st=0 errs=0 zb=0 az=0 cz=0 tot=5995 adcs=2
+[I] [Audio] ADC2=-0.1dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=5995
+[I] [Audio] ADC1=-11.6dB flr=-11.3 st=0 errs=0 zb=0 az=0 cz=0 tot=6853 adcs=2
+[I] [Audio] ADC2=0.0dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=6853
+[I] [Audio] ADC1=-8.3dB flr=-11.3 st=0 errs=0 zb=0 az=0 cz=0 tot=7715 adcs=2
+[I] [Audio] ADC2=0.0dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=7715
+[I] [Audio] ADC1=-9.5dB flr=-8.7 st=0 errs=0 zb=0 az=0 cz=0 tot=8577 adcs=2
+[I] [Audio] ADC2=-0.6dB flr=-0.0 st=3 errs=0 zb=0 az=0 cz=0 tot=8577

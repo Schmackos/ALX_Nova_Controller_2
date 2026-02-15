@@ -25,5 +25,20 @@ void dsp_compute_compressor_makeup(DspCompressorParams &params);
 // Writes numTaps floats to taps[]. Cutoff = sampleRate / (2 * decimFactor).
 void dsp_compute_decimation_filter(float *taps, int numTaps, int decimFactor, float sampleRate);
 
+// Tone control coefficient computation (3 cascaded biquads: low shelf, peaking, high shelf)
+void dsp_compute_tone_ctrl_coeffs(DspToneCtrlParams &params, uint32_t sampleRate);
+
+// Loudness compensation coefficient computation (ISO 226 simplified)
+void dsp_compute_loudness_coeffs(DspLoudnessParams &params, uint32_t sampleRate);
+
+// Bass enhancement filter computation (HPF + BPF for harmonic generation)
+void dsp_compute_bass_enhance_coeffs(DspBassEnhanceParams &params, uint32_t sampleRate);
+
+// Speaker protection precomputation
+void dsp_compute_speaker_prot(DspSpeakerProtParams &params);
+
+// Stereo width precomputation
+void dsp_compute_stereo_width(DspStereoWidthParams &params);
+
 #endif // DSP_ENABLED
 #endif // DSP_COEFFICIENTS_H

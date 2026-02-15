@@ -1071,11 +1071,12 @@ static void otaCheckTaskFunc(void* param) {
   // unsubscribe from watchdog to prevent IDLE0 starvation panic on Core 0
   esp_task_wdt_delete(NULL);
 
-  // Heap pre-flight: TLS handshake allocates ~55KB temporarily from internal SRAM.
-  // If largest free block is below 60KB, skip to avoid pushing heap into critical zone.
+  // Heap pre-flight: must match the inner TLS threshold (30KB) used by
+  // getLatestReleaseInfo(). When heap is 30-50KB, TLS runs in insecure mode
+  // (no cert validation) which needs only ~15-20KB for the session.
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 60000) {
-    LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<60KB), skipping", (unsigned long)maxBlock);
+  if (maxBlock < 30000) {
+    LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<30KB), skipping", (unsigned long)maxBlock);
     _otaConsecutiveFailures++;
     appState.markOTADirty();
     otaCheckTaskHandle = NULL;
