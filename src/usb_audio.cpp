@@ -458,7 +458,10 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
 }
 
 static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_control_request_t const *request) {
-    // Handle UAC2 control requests for clock and feature unit
+    // Handle UAC2 class-specific control requests for clock and feature unit.
+    // NOTE: Standard SET_INTERFACE is handled by TinyUSB's USBD internally —
+    // it calls _audio_driver_open() for the new alt setting (not this callback).
+
     if (stage == CONTROL_STAGE_SETUP) {
         uint8_t entity = TU_U16_HIGH(request->wIndex);
 
@@ -471,6 +474,9 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                         // GET: return current sample rate
                         uint32_t rate = USB_AUDIO_SAMPLE_RATE;
                         memcpy(_ctrlBuf, &rate, 4);
+                        return tud_control_xfer(rhport, request, _ctrlBuf, 4);
+                    } else {
+                        // SET: accept the rate (receive in DATA stage, validate there)
                         return tud_control_xfer(rhport, request, _ctrlBuf, 4);
                     }
                 } else if (TU_U16_HIGH(request->wValue) == 0x02) {
@@ -543,43 +549,31 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
             }
         }
 
-        // Standard SET_INTERFACE for alt setting changes
-        if (request->bmRequestType_bit.type == TUSB_REQ_TYPE_STANDARD &&
-            request->bRequest == TUSB_REQ_SET_INTERFACE) {
-            uint8_t itf = (uint8_t)request->wIndex;
-            uint8_t alt = (uint8_t)request->wValue;
-
-            if (itf == _itfNum + 1) { // AS interface
-                _altSetting = alt;
-                if (alt == 0) {
-                    _usbState = USB_AUDIO_CONNECTED;
-                    AppState::getInstance().usbAudioStreaming = false;
-                    LOG_I("[USB Audio] Streaming stopped (alt 0)");
-                } else {
-                    _usbState = USB_AUDIO_STREAMING;
-                    usb_rb_reset(&_ringBuffer);
-                    AppState::getInstance().usbAudioStreaming = true;
-                    LOG_I("[USB Audio] Streaming started (alt %d)", alt);
-
-                    // Prime the OUT endpoint for first transfer
-                    if (_epOut) {
-                        usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE);
-                    }
-                }
-                AppState::getInstance().markUsbAudioDirty();
-                return tud_control_xfer(rhport, request, NULL, 0);
-            }
-        }
-
         // Unhandled — stall
-        LOG_W("[USB Audio] Unhandled control: stage=%d, bReq=0x%02X, wVal=0x%04X, wIdx=0x%04X",
-              stage, request->bRequest, request->wValue, request->wIndex);
+        LOG_W("[USB Audio] Unhandled control: bReq=0x%02X, wVal=0x%04X, wIdx=0x%04X",
+              request->bRequest, request->wValue, request->wIndex);
         return false;
     }
 
     // DATA stage: process received control data
     if (stage == CONTROL_STAGE_DATA) {
         uint8_t entity = TU_U16_HIGH(request->wIndex);
+
+        // Clock SET_CUR: accept if it matches our fixed rate, otherwise stall
+        if (entity == UAC2_ENTITY_CLOCK) {
+            uint8_t control_sel = TU_U16_HIGH(request->wValue);
+            if (control_sel == 0x01) { // SAM_FREQ_CONTROL
+                uint32_t requested_rate;
+                memcpy(&requested_rate, _ctrlBuf, 4);
+                if (requested_rate != USB_AUDIO_SAMPLE_RATE) {
+                    LOG_W("[USB Audio] Host requested unsupported rate: %u", requested_rate);
+                    // We only support one rate — host should use the rate from RANGE
+                }
+                LOG_I("[USB Audio] Host set clock rate: %u Hz", requested_rate);
+            }
+            return true;
+        }
+
         if (entity == UAC2_ENTITY_FEATURE) {
             uint8_t control_sel = TU_U16_HIGH(request->wValue);
             if (control_sel == AUDIO_FU_CTRL_MUTE) {

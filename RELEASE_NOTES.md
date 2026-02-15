@@ -8,6 +8,12 @@
 SHA256 password hashing with NVS migration from plaintext, timing-safe
 comparison, progressive login rate limiting, session ID log truncation,
 SameSite=Strict cookies. USB audio TinyUSB init guarded to prevent
+double-init crashes on enable/disable toggle. (`2832507`)
+- [2026-02-15] feat: Auth security hardening and USB audio init fix
+
+SHA256 password hashing with NVS migration from plaintext, timing-safe
+comparison, progressive login rate limiting, session ID log truncation,
+SameSite=Strict cookies. USB audio TinyUSB init guarded to prevent
 double-init crashes on enable/disable toggle. (`1014338`)
 - [2026-02-15] feat: Auth security hardening and USB audio init fix
 
@@ -21,6 +27,11 @@ double-init crashes on enable/disable toggle. (`fa721ee`)
 - None
 
 ## Bug Fixes
+- [2026-02-15] fix: USB audio control transfer handling and clock rate validation
+
+Remove redundant SET_INTERFACE handler (TinyUSB handles it internally
+via driver open callback). Add SET_CUR clock rate validation in DATA
+stage. Improve control request logging. (`0d5de4c`)
 - [2026-02-15] fix: WebSocket session re-validation and default password consistency
 
 Re-validate session on every WS command to catch logout/expiry.
