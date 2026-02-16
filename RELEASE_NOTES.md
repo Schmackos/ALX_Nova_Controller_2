@@ -41,6 +41,21 @@ Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
 and inline VU/peak updates in both silence and active paths.
 
 Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
+300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
+- [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
+
+Merge 6+ separate buffer loops into 2 passes in process_adc_buffer():
+- Pass 1: diagnostics + DC offset + DC-blocking IIR in one loop
+- Pass 2: RMS + waveform + FFT ring fill in one loop
+
+Replace double-precision math with float (ESP32-S3 has no double FPU):
+- audio_compute_rms(): double sum_sq → float, sqrt → sqrtf
+- DC offset tracking: double sum → float
+
+Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
+and inline VU/peak updates in both silence and active paths.
+
+Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`afb2240`)
 - [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
 
@@ -75,6 +90,19 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 
 
 ## Bug Fixes
+- [2026-02-16] fix: Graceful OTA shutdown using audioPaused flag
+
+Reuse the existing audioPaused pattern from DAC reinit to prevent I2S
+driver conflicts during OTA updates. The audio capture task already
+checks this flag and yields while paused (i2s_audio.cpp:703-706).
+
+Changes:
+- Set audioPaused=true in startOTADownloadTask() before spawning task
+- Add 50ms delay to ensure audio task exits i2s_read()
+- Clear audioPaused=false on download failure and task creation failure
+
+Prevents potential crashes when OTA download occurs concurrently with
+audio capture operations. (`645a487`)
 - [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
 
 Address CONCERNS.md audit findings across security, robustness, and test gaps:

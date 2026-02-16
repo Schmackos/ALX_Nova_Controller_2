@@ -1030,6 +1030,7 @@ static void otaDownloadTask(void* param) {
     ESP.restart();
   } else {
     LOG_W("[OTA] Update failed");
+    appState.audioPaused = false;  // Resume audio capture
     appState.otaInProgress = false;
     appState.updateDiscoveredTime = 0;
     appState.setFSMState(STATE_IDLE);
@@ -1053,6 +1054,10 @@ void startOTADownloadTask() {
   appState.setFSMState(STATE_OTA_UPDATE);
   appState.markOTADirty();
 
+  // Pause audio capture to prevent I2S driver conflicts during OTA
+  appState.audioPaused = true;
+  vTaskDelay(pdMS_TO_TICKS(50));  // Ensure audio task exits i2s_read()
+
   BaseType_t result = xTaskCreatePinnedToCore(
     otaDownloadTask, "OTA_DL", TASK_STACK_SIZE_OTA,
     NULL, TASK_PRIORITY_WEB, &otaDownloadTaskHandle, 0  // Core 0 (network stack affinity)
@@ -1060,6 +1065,7 @@ void startOTADownloadTask() {
 
   if (result != pdPASS) {
     LOG_E("[OTA] Failed to create download task");
+    appState.audioPaused = false;  // Resume audio if task creation failed
     appState.otaInProgress = false;
     setOTAProgress("error", "Failed to start update task", 0);
     appState.setFSMState(STATE_IDLE);
