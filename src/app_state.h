@@ -309,6 +309,15 @@ public:
   bool isEmergencyLimiterDirty() const { return _emergencyLimiterDirty; }
   void clearEmergencyLimiterDirty() { _emergencyLimiterDirty = false; }
 
+  // ===== Audio Quality Diagnostics (Phase 3) =====
+  bool audioQualityEnabled = false;          // Default OFF (opt-in)
+  float audioQualityGlitchThreshold = 0.5f;  // Discontinuity threshold (0.1-1.0)
+
+  void setAudioQualityEnabled(bool enabled);
+  void setAudioQualityThreshold(float threshold);
+  bool isAudioQualityDirty() const { return _audioQualityDirty; }
+  void clearAudioQualityDirty() { _audioQualityDirty = false; }
+
   // ===== ADC Enabled Dirty Flag (for WS/MQTT sync) =====
   void markAdcEnabledDirty() { _adcEnabledDirty = true; }
   bool isAdcEnabledDirty() const { return _adcEnabledDirty; }
@@ -525,6 +534,7 @@ private:
   bool _dcBlockDirty = false;
   bool _delayAlignDirty = false;
   bool _emergencyLimiterDirty = false;
+  bool _audioQualityDirty = false;
 #endif
 #ifdef USB_AUDIO_ENABLED
   bool _usbAudioDirty = false;

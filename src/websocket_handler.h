@@ -34,6 +34,8 @@ void sendDebugState();
 void sendDspState();
 void sendDspMetrics();
 void sendEmergencyLimiterState();
+void sendAudioQualityState();
+void sendAudioQualityDiagnostics();
 #endif
 #ifdef DAC_ENABLED
 void sendDacState();

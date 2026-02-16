@@ -3,6 +3,7 @@
 ## Version 1.8.3
 
 ## Documentation
+- [2026-02-16] docs: Update release notes with DC block preset and stability improvements (`4814730`)
 - [2026-02-16] docs: Update release notes with DC block preset and stability improvements (`c3f23ef`)
 - [2026-02-16] docs: Update release notes with DC block preset and stability improvements (`23fc90e`)
 - [2026-02-16] docs: Update release notes with project structure reorganization
@@ -70,6 +71,80 @@ workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
+- [2026-02-16] feat: Implement Phase 3 Audio Quality Diagnostics
+
+Add comprehensive audio quality monitoring system with glitch detection,
+timing analysis, and event correlation.
+
+Core Module:
+- src/audio_quality.h/.cpp: Glitch detection (4 types: discontinuity, DC
+  offset, dropout, overload), timing histogram (20 buckets, 0-20ms),
+  event correlation (DSP swap, WiFi, MQTT), memory snapshots (60-entry
+  ring buffer)
+
+Integration:
+- i2s_audio: Scan buffers after ADC processing (both ADCs)
+- dsp_pipeline: Mark DSP swap events for correlation tracking
+- wifi_manager: Mark WiFi connect/disconnect events
+- main.cpp: Init, 1s memory updates, 5s diagnostics broadcast, dirty
+  flag handling
+- app_state: audioQualityEnabled, audioQualityGlitchThreshold fields
+- websocket_handler: sendAudioQualityState(), sendAudioQualityDiagnostics()
+- mqtt_handler: publishMqttAudioQualityState()
+
+Web UI:
+- Audio Quality Diagnostics card on Debug tab (toggle, threshold,
+  counters, correlation badges)
+- Binary phase of testing, TFT GUI shows minimal display on Debug screen
+- JS handlers: updateAudioQuality(), applyAudioQualityState(), applyAudioQualityDiag()
+
+Features:
+- 32-event glitch ring buffer with throttled logging
+- Configurable discontinuity threshold (0.1-1.0, default 0.5)
+- Rolling minute glitch counter with auto-decay
+- 100ms correlation window for causal event detection
+- Default OFF (opt-in to avoid performance impact)
+- Real-time diagnostics via WebSocket (5s interval)
+
+Phase 1+2 emergency limiter and DSP swap mutex fixes already committed.
+Phase 3 completes the audio quality protection and monitoring suite. (`623af67`)
+- [2026-02-16] feat: Implement Phase 3 Audio Quality Diagnostics
+
+Add comprehensive audio quality monitoring system with glitch detection,
+timing analysis, and event correlation.
+
+Core Module:
+- src/audio_quality.h/.cpp: Glitch detection (4 types: discontinuity, DC
+  offset, dropout, overload), timing histogram (20 buckets, 0-20ms),
+  event correlation (DSP swap, WiFi, MQTT), memory snapshots (60-entry
+  ring buffer)
+
+Integration:
+- i2s_audio: Scan buffers after ADC processing (both ADCs)
+- dsp_pipeline: Mark DSP swap events for correlation tracking
+- wifi_manager: Mark WiFi connect/disconnect events
+- main.cpp: Init, 1s memory updates, 5s diagnostics broadcast, dirty
+  flag handling
+- app_state: audioQualityEnabled, audioQualityGlitchThreshold fields
+- websocket_handler: sendAudioQualityState(), sendAudioQualityDiagnostics()
+- mqtt_handler: publishMqttAudioQualityState()
+
+Web UI:
+- Audio Quality Diagnostics card on Debug tab (toggle, threshold,
+  counters, correlation badges)
+- Binary phase of testing, TFT GUI shows minimal display on Debug screen
+- JS handlers: updateAudioQuality(), applyAudioQualityState(), applyAudioQualityDiag()
+
+Features:
+- 32-event glitch ring buffer with throttled logging
+- Configurable discontinuity threshold (0.1-1.0, default 0.5)
+- Rolling minute glitch counter with auto-decay
+- 100ms correlation window for causal event detection
+- Default OFF (opt-in to avoid performance impact)
+- Real-time diagnostics via WebSocket (5s interval)
+
+Phase 1+2 emergency limiter and DSP swap mutex fixes already committed.
+Phase 3 completes the audio quality protection and monitoring suite. (`3fdf2b0`)
 - [2026-02-16] feat: Add emergency limiter and DSP swap synchronization fixes
 
 Implement comprehensive audio protection system with two phases:

@@ -42,6 +42,7 @@ void publishMqttInputNames();
 void publishMqttDspState();
 void publishMqttDcBlockState();
 void publishMqttEmergencyLimiterState();
+void publishMqttAudioQualityState();
 #endif
 #ifdef GUI_ENABLED
 void publishMqttBootAnimState();

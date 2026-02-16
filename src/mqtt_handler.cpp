@@ -1603,6 +1603,32 @@ void publishMqttEmergencyLimiterState() {
   mqttClient.publish((base + "/emergency_limiter/gain_reduction").c_str(),
                      String(metrics.emergencyLimiterGrDb, 2).c_str(), true);
 }
+
+void publishMqttAudioQualityState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  // Settings
+  mqttClient.publish((base + "/audio_quality/enabled").c_str(),
+                     appState.audioQualityEnabled ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/audio_quality/glitch_threshold").c_str(),
+                     String(appState.audioQualityGlitchThreshold, 2).c_str(), true);
+
+  // Diagnostics
+  AudioQualityDiag diag = audio_quality_get_diagnostics();
+  mqttClient.publish((base + "/audio_quality/glitches_total").c_str(),
+                     String(diag.glitchHistory.totalGlitches).c_str(), true);
+  mqttClient.publish((base + "/audio_quality/glitches_last_minute").c_str(),
+                     String(diag.glitchHistory.glitchesLastMinute).c_str(), true);
+  mqttClient.publish((base + "/audio_quality/buffer_latency_avg").c_str(),
+                     String(diag.timingHist.avgLatencyMs, 2).c_str(), true);
+  mqttClient.publish((base + "/audio_quality/correlation_dsp_swap").c_str(),
+                     diag.correlation.dspSwapRelated ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/audio_quality/correlation_wifi").c_str(),
+                     diag.correlation.wifiRelated ? "ON" : "OFF", true);
+}
 #endif
 
 void publishMqttAudioDiagnostics() {

@@ -1258,6 +1258,36 @@ void sendEmergencyLimiterState() {
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
+
+void sendAudioQualityState() {
+  JsonDocument doc;
+  doc["type"] = "audioQualityState";
+  doc["enabled"] = appState.audioQualityEnabled;
+  doc["threshold"] = serialized(String(appState.audioQualityGlitchThreshold, 2));
+
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+void sendAudioQualityDiagnostics() {
+  AudioQualityDiag diag = audio_quality_get_diagnostics();
+  JsonDocument doc;
+  doc["type"] = "audioQualityDiag";
+  doc["glitchesTotal"] = diag.glitchHistory.totalGlitches;
+  doc["glitchesLastMinute"] = diag.glitchHistory.glitchesLastMinute;
+  doc["lastGlitchType"] = (int)diag.lastGlitchType;
+  doc["lastGlitchMs"] = diag.lastGlitchMs;
+  doc["avgLatencyMs"] = serialized(String(diag.timingHist.avgLatencyMs, 2));
+  doc["maxLatencyMs"] = serialized(String(diag.timingHist.maxLatencyMs, 2));
+  doc["correlationDsp"] = diag.correlation.dspSwapRelated;
+  doc["correlationWifi"] = diag.correlation.wifiRelated;
+  doc["correlationMqtt"] = diag.correlation.mqttRelated;
+
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
 #endif
 
 void sendAudioGraphState() {

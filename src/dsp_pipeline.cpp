@@ -9,6 +9,7 @@
 #include "dsps_mul.h"
 #include "dsps_add.h"
 #include "dsp_convolution.h"
+#include "audio_quality.h"
 #include <math.h>
 #include <string.h>
 
@@ -543,6 +544,9 @@ bool dsp_swap_config() {
 
     // Update success counter
     AppState::getInstance().dspSwapSuccesses++;
+
+    // Mark DSP swap event for audio quality correlation (Phase 3)
+    audio_quality_mark_event("dsp_swap");
 
     LOG_I("[DSP] Config swapped (active=%d)", newActive);
     return true;

@@ -4545,6 +4545,52 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </table>
             </div>
 
+            <!-- Audio Quality Diagnostics -->
+            <div class="card">
+                <div class="card-title">Audio Quality Diagnostics</div>
+                <div class="info-box">
+                    <div class="toggle-row">
+                        <span>Enable Diagnostics</span>
+                        <label class="switch"><input type="checkbox" id="audioQualityEnabled" onchange="updateAudioQuality('enabled')"><span class="slider round"></span></label>
+                    </div>
+                    <div class="form-row">
+                        <label for="audioQualityThreshold">Glitch Threshold (0.1-1.0):</label>
+                        <input type="number" id="audioQualityThreshold" min="0.1" max="1.0" step="0.1" value="0.5" onchange="updateAudioQuality('threshold')">
+                    </div>
+                </div>
+                <div class="stats-grid" id="audioQualityStats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="aqGlitchesTotal">0</div>
+                        <div class="stat-label">Total Glitches</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="aqGlitchesMinute">0</div>
+                        <div class="stat-label">Last Minute</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="aqLatencyAvg">--</div>
+                        <div class="stat-label">Avg Latency</div>
+                    </div>
+                </div>
+                <div class="info-box-compact mt-12">
+                    <div class="info-row">
+                        <span class="info-label">Last Glitch Type</span>
+                        <span class="info-value" id="aqLastGlitchType">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">DSP Swap Correlation</span>
+                        <span class="info-value badge" id="aqCorrelationDsp">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">WiFi Correlation</span>
+                        <span class="info-value badge" id="aqCorrelationWifi">--</span>
+                    </div>
+                </div>
+                <div class="btn-row mt-12">
+                    <button class="btn btn-secondary" onclick="resetAudioQualityStats()">Reset Statistics</button>
+                </div>
+            </div>
+
             <!-- Debug Console -->
             <div class="card">
                 <div class="card-title">Debug Console</div>
@@ -5223,6 +5269,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     applySigGenState(data);
                 } else if (data.type === 'emergencyLimiterState') {
                     applyEmergencyLimiterState(data);
+                } else if (data.type === 'audioQualityState') {
+                    applyAudioQualityState(data);
+                } else if (data.type === 'audioQualityDiag') {
+                    applyAudioQualityDiag(data);
                 } else if (data.type === 'adcState') {
                     if (Array.isArray(data.enabled)) {
                         for (var ai = 0; ai < data.enabled.length; ai++) {
@@ -6612,6 +6662,58 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             // Update metrics
             document.getElementById('emergencyLimiterGR').textContent = parseFloat(d.gainReductionDb).toFixed(1) + ' dB';
             document.getElementById('emergencyLimiterTriggers').textContent = d.triggerCount || 0;
+        }
+
+        function updateAudioQuality(field) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            if (field === 'enabled') {
+                ws.send(JSON.stringify({
+                    type: 'setAudioQualityEnabled',
+                    enabled: document.getElementById('audioQualityEnabled').checked
+                }));
+            } else if (field === 'threshold') {
+                ws.send(JSON.stringify({
+                    type: 'setAudioQualityThreshold',
+                    threshold: parseFloat(document.getElementById('audioQualityThreshold').value)
+                }));
+            }
+        }
+
+        function applyAudioQualityState(d) {
+            document.getElementById('audioQualityEnabled').checked = d.enabled;
+            document.getElementById('audioQualityThreshold').value = d.threshold;
+        }
+
+        function applyAudioQualityDiag(d) {
+            document.getElementById('aqGlitchesTotal').textContent = d.glitchesTotal || 0;
+            document.getElementById('aqGlitchesMinute').textContent = d.glitchesLastMinute || 0;
+            document.getElementById('aqLatencyAvg').textContent = d.timingAvgMs ? parseFloat(d.timingAvgMs).toFixed(2) + ' ms' : '--';
+            document.getElementById('aqLastGlitchType').textContent = d.lastGlitchTypeStr || '--';
+
+            // Correlation badges
+            var dspBadge = document.getElementById('aqCorrelationDsp');
+            var wifiBadge = document.getElementById('aqCorrelationWifi');
+
+            if (d.correlationDspSwap) {
+                dspBadge.textContent = 'YES';
+                dspBadge.style.background = '#F44336';
+            } else {
+                dspBadge.textContent = 'No';
+                dspBadge.style.background = '#4CAF50';
+            }
+
+            if (d.correlationWifi) {
+                wifiBadge.textContent = 'YES';
+                wifiBadge.style.background = '#F44336';
+            } else {
+                wifiBadge.textContent = 'No';
+                wifiBadge.style.background = '#4CAF50';
+            }
+        }
+
+        function resetAudioQualityStats() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            ws.send(JSON.stringify({ type: 'resetAudioQualityStats' }));
         }
 
         function updateSigGen() {

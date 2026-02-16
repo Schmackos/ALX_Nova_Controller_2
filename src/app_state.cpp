@@ -134,6 +134,25 @@ void AppState::setEmergencyLimiterThreshold(float dbfs) {
     _emergencyLimiterDirty = true;
   }
 }
+
+// ===== Audio Quality Diagnostics State Management (Phase 3) =====
+void AppState::setAudioQualityEnabled(bool enabled) {
+  if (audioQualityEnabled != enabled) {
+    audioQualityEnabled = enabled;
+    _audioQualityDirty = true;
+  }
+}
+
+void AppState::setAudioQualityThreshold(float threshold) {
+  // Validate range: 0.1 to 1.0
+  if (threshold < 0.1f) threshold = 0.1f;
+  if (threshold > 1.0f) threshold = 1.0f;
+  // Use small threshold to avoid float comparison issues
+  if (abs(audioQualityGlitchThreshold - threshold) > 0.01f) {
+    audioQualityGlitchThreshold = threshold;
+    _audioQualityDirty = true;
+  }
+}
 #endif
 
 // ===== Signal Generator State Management =====

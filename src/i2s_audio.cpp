@@ -1,5 +1,6 @@
 #include "i2s_audio.h"
 #include "app_state.h"
+#include "audio_quality.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "signal_generator.h"
@@ -853,10 +854,14 @@ static void audio_capture_task(void *param) {
 
         // Process ADC1
         process_adc_buffer(0, buf1, stereo_frames1, now, dt_ms, sigGenSw);
+        // Audio quality scan (Phase 3)
+        audio_quality_scan_buffer(0, buf1, stereo_frames1, (t1 - t0));
 
         // Process ADC2 (if available)
         if (adc2Ok) {
             process_adc_buffer(1, buf2, stereo_frames2, now, dt_ms, sigGenSw);
+            // Audio quality scan (Phase 3)
+            audio_quality_scan_buffer(1, buf2, stereo_frames2, (t3 - t2));
         } else if (_adc2InitOk) {
             // Slave read failed — still update diagnostics so health status reflects reality
             AdcDiagnostics &diag = _diagnostics.adc[1];
