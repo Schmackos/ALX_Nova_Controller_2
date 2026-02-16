@@ -385,14 +385,7 @@ public:
   uint32_t dspSwapSuccesses = 0;
   unsigned long lastDspSwapFailure = 0;
 
-  // Delay alignment result
-  int   delayAlignSamples = 0;
-  float delayAlignMs = 0.0f;
-  float delayAlignConfidence = 0.0f;
-  bool  delayAlignValid = false;
-  void markDelayAlignDirty() { _delayAlignDirty = true; }
-  bool isDelayAlignDirty() const { return _delayAlignDirty; }
-  void clearDelayAlignDirty() { _delayAlignDirty = false; }
+  // NOTE: Delay alignment removed in v1.8.3 - incomplete feature, never functional
 
   // MQTT state tracking for DSP
   bool prevMqttDspEnabled = false;
@@ -527,7 +520,6 @@ private:
   bool _dspConfigDirty = false;
   bool _dspMetricsDirty = false;
   bool _dspPresetDirty = false;
-  bool _delayAlignDirty = false;
   bool _emergencyLimiterDirty = false;
   bool _audioQualityDirty = false;
 #endif

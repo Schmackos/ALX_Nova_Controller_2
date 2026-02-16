@@ -18,7 +18,6 @@
 #include "dsp_coefficients.h"
 #include "dsp_crossover.h"
 #include "thd_measurement.h"
-#include "delay_alignment.h"
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
@@ -869,24 +868,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_I("[WebSocket] DSP preset deleted: slot=%d", slot);
           }
         }
-        else if (msgType == "measureDelayAlignment") {
-          // Trigger measurement — handled in main loop via dirty flag
-          appState.markDelayAlignDirty();
-        }
-        else if (msgType == "applyDelayAlignment") {
-          if (appState.delayAlignValid) {
-            extern void delay_align_auto_apply(const struct DelayAlignResult &, int);
-            DelayAlignResult r;
-            r.delaySamples = appState.delayAlignSamples;
-            r.confidence = appState.delayAlignConfidence;
-            r.delayMs = appState.delayAlignMs;
-            r.valid = appState.delayAlignValid;
-            delay_align_auto_apply(r, 1);
-            extern void saveDspSettingsDebounced();
-            saveDspSettingsDebounced();
-            appState.markDspConfigDirty();
-          }
-        }
+        // measureDelayAlignment and applyDelayAlignment removed in v1.8.3 - incomplete feature
         else if (msgType == "startThdMeasurement") {
           float freq = doc["freq"] | 1000.0f;
           int avg = doc["averages"] | 8;

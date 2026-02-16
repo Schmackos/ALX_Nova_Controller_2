@@ -538,6 +538,30 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: Remove incomplete delay alignment feature
+
+Removed ~200 lines of non-functional delay alignment code:
+- src/delay_alignment.h/.cpp (153 lines) - cross-correlation algorithm never called
+- AppState fields: delayAlignSamples/Ms/Confidence/Valid + dirty flag
+- 3 API endpoints: GET /api/dsp/align, POST align/measure, POST align/apply
+- WebSocket message handlers: measureDelayAlignment, applyDelayAlignment
+- Test include in test_dsp.cpp
+
+Analysis revealed the feature was incomplete - measurement function was never
+invoked from main loop or any handler, dirty flag had no consumer, and the
+cross-correlation algorithm remained dormant. No functional impact on users. (`351fcf6`)
+- [2026-02-16] refactor: Remove incomplete delay alignment feature
+
+Removed ~200 lines of non-functional delay alignment code:
+- src/delay_alignment.h/.cpp (153 lines) - cross-correlation algorithm never called
+- AppState fields: delayAlignSamples/Ms/Confidence/Valid + dirty flag
+- 3 API endpoints: GET /api/dsp/align, POST align/measure, POST align/apply
+- WebSocket message handlers: measureDelayAlignment, applyDelayAlignment
+- Test include in test_dsp.cpp
+
+Analysis revealed the feature was incomplete - measurement function was never
+invoked from main loop or any handler, dirty flag had no consumer, and the
+cross-correlation algorithm remained dormant. No functional impact on users. (`ad0ee41`)
 - [2026-02-16] refactor: Remove legacy DC Block feature (dead code)
 
 Remove DC Block feature entirely as it's been superseded by DSP highpass
