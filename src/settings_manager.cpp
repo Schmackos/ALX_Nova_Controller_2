@@ -247,10 +247,7 @@ bool loadSettings() {
       appState.emergencyLimiterThresholdDb = threshold;
     }
   }
-  // Load DC block enabled (line 30, default false)
-  if (lines[dataStart + 30].length() > 0) {
-    appState.dcBlockEnabled = (lines[dataStart + 30].toInt() != 0);
-  }
+  // Line 30 was dcBlockEnabled (removed — now a DSP preset)
 #endif
 
   return true;
@@ -313,11 +310,11 @@ void saveSettings() {
 #ifdef DSP_ENABLED
   file.println(appState.emergencyLimiterEnabled ? "1" : "0");
   file.println(appState.emergencyLimiterThresholdDb, 2); // 2 decimal places
-  file.println(appState.dcBlockEnabled ? "1" : "0");
+  file.println("0"); // line 30: reserved (was dcBlockEnabled)
 #else
   file.println("1"); // placeholder for emergencyLimiterEnabled (default ON)
   file.println("-0.5"); // placeholder for emergencyLimiterThresholdDb
-  file.println("0"); // placeholder for dcBlockEnabled
+  file.println("0"); // line 30: reserved (was dcBlockEnabled)
 #endif
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
@@ -1549,7 +1546,7 @@ void handleDiagnostics() {
     for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef DSP_ENABLED
-  settings["dcBlockEnabled"] = appState.dcBlockEnabled;
+  // dcBlockEnabled removed (now a DSP preset)
 #endif
 #ifdef USB_AUDIO_ENABLED
   settings["usbAudioEnabled"] = appState.usbAudioEnabled;

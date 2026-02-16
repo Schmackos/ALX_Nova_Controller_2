@@ -380,12 +380,6 @@ public:
   bool isDspPresetDirty() const { return _dspPresetDirty; }
   void clearDspPresetDirty() { _dspPresetDirty = false; }
 
-  // DC block (legacy - use DSP stage instead)
-  bool dcBlockEnabled = false;
-  void markDcBlockDirty() { _dcBlockDirty = true; }
-  bool isDcBlockDirty() const { return _dcBlockDirty; }
-  void clearDcBlockDirty() { _dcBlockDirty = false; }
-
   // DSP config swap diagnostics
   uint32_t dspSwapFailures = 0;
   uint32_t dspSwapSuccesses = 0;
@@ -405,6 +399,8 @@ public:
   bool prevMqttDspBypass = false;
   bool prevMqttDspChBypass[DSP_MAX_CHANNELS] = {};
   int8_t prevMqttDspPresetIndex = -1;
+
+  // NOTE: DC Block removed in v1.8.3 - use DSP highpass stage instead
 #endif
 
   // ===== USB Audio State =====
@@ -531,7 +527,6 @@ private:
   bool _dspConfigDirty = false;
   bool _dspMetricsDirty = false;
   bool _dspPresetDirty = false;
-  bool _dcBlockDirty = false;
   bool _delayAlignDirty = false;
   bool _emergencyLimiterDirty = false;
   bool _audioQualityDirty = false;

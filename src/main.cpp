@@ -861,13 +861,6 @@ void loop() {
     appState.clearDspConfigDirty();
   }
 
-  // Broadcast DC block state changes
-  if (appState.isDcBlockDirty()) {
-    sendDcBlockState();
-    publishMqttDcBlockState();
-    appState.clearDcBlockDirty();
-  }
-
   // DSP metrics broadcast (1s interval when DSP is active, one final 0% when disabled/bypassed)
   static unsigned long lastDspMetricsBroadcast = 0;
   static bool lastDspMetricsActive = false;
