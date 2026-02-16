@@ -10,11 +10,11 @@
 #include "dsps_add.h"
 #include "dsp_convolution.h"
 #include "audio_quality.h"
+#include "app_state.h"
 #include <math.h>
 #include <string.h>
 
 #ifndef NATIVE_TEST
-#include "app_state.h"
 #include "debug_serial.h"
 #include <esp_heap_caps.h>
 #else
@@ -546,7 +546,9 @@ bool dsp_swap_config() {
     AppState::getInstance().dspSwapSuccesses++;
 
     // Mark DSP swap event for audio quality correlation (Phase 3)
+#ifndef NATIVE_TEST
     audio_quality_mark_event("dsp_swap");
+#endif
 
     LOG_I("[DSP] Config swapped (active=%d)", newActive);
     return true;

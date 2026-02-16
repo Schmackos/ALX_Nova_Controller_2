@@ -1,7 +1,13 @@
 #ifndef AUDIO_QUALITY_H
 #define AUDIO_QUALITY_H
 
+#ifdef NATIVE_TEST
+#include "../test/test_mocks/Arduino.h"
+#else
 #include <Arduino.h>
+#endif
+
+#include <stdint.h>
 
 // Glitch detection types
 enum GlitchType {

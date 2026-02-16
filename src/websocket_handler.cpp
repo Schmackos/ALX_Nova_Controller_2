@@ -865,7 +865,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "saveDspPreset") {
           int slot = doc["slot"] | -1;
           const char *name = doc["name"] | "";
-          if (slot >= 0 && slot < DSP_PRESET_MAX_SLOTS) {
+          if ((slot >= -1) && slot < DSP_PRESET_MAX_SLOTS) {
             extern bool dsp_preset_save(int, const char*);
             if (dsp_preset_save(slot, name)) {
               sendDspState();

@@ -1,14 +1,27 @@
 #include <unity.h>
-#include "dsp_pipeline.h"
-#include "app_state.h"
 #include <cmath>
 #include <cstring>
 
+// Include DSP sources directly (test_build_src = no)
+#include "../../lib/esp_dsp_lite/src/dsps_biquad_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_fir_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_fir_init_f32.c"
+#include "../../lib/esp_dsp_lite/src/dsps_fird_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_corr_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_conv_f32_ansi.c"
+#include "../../src/dsp_biquad_gen.c"
+
+// Include DSP headers
+#include "../../src/dsp_pipeline.h"
+#include "../../src/app_state.h"
+
+// Include DSP implementation
+#include "../../src/dsp_coefficients.cpp"
+#include "../../src/dsp_convolution.cpp"
+#include "../../src/dsp_pipeline.cpp"
+
 #define SAMPLE_RATE 48000
 #define TEST_FRAMES 256
-
-// Mock AppState for testing
-AppState& appState = AppState::getInstance();
 
 void setUp(void) {
     // Reset DSP state before each test
@@ -261,7 +274,7 @@ void test_multichannel_independence() {
     }
 }
 
-void setup() {
+int main(int argc, char **argv) {
     UNITY_BEGIN();
 
     RUN_TEST(test_limiter_disabled_passthrough);
@@ -275,9 +288,5 @@ void setup() {
     RUN_TEST(test_threshold_edge_cases);
     RUN_TEST(test_multichannel_independence);
 
-    UNITY_END();
-}
-
-void loop() {
-    // Unity tests run once in setup()
+    return UNITY_END();
 }

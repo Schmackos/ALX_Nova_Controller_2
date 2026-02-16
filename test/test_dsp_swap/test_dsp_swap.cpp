@@ -1,10 +1,23 @@
 #include <unity.h>
-#include "dsp_pipeline.h"
-#include "app_state.h"
 #include <cstring>
 
-// Mock AppState for testing
-AppState& appState = AppState::getInstance();
+// Include DSP sources directly (test_build_src = no)
+#include "../../lib/esp_dsp_lite/src/dsps_biquad_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_fir_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_fir_init_f32.c"
+#include "../../lib/esp_dsp_lite/src/dsps_fird_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_corr_f32_ansi.c"
+#include "../../lib/esp_dsp_lite/src/dsps_conv_f32_ansi.c"
+#include "../../src/dsp_biquad_gen.c"
+
+// Include DSP headers
+#include "../../src/dsp_pipeline.h"
+#include "../../src/app_state.h"
+
+// Include DSP implementation
+#include "../../src/dsp_coefficients.cpp"
+#include "../../src/dsp_convolution.cpp"
+#include "../../src/dsp_pipeline.cpp"
 
 void setUp(void) {
     // Reset DSP before each test
@@ -171,7 +184,7 @@ void test_compressor_state_preserved() {
     TEST_ASSERT_EQUAL_FLOAT(-6.2f, active->channels[0].stages[0].compressor.gainReduction);
 }
 
-void setup() {
+int main(int argc, char **argv) {
     UNITY_BEGIN();
 
     RUN_TEST(test_swap_returns_true_on_success);
@@ -184,9 +197,5 @@ void setup() {
     RUN_TEST(test_gain_ramping_preserved);
     RUN_TEST(test_compressor_state_preserved);
 
-    UNITY_END();
-}
-
-void loop() {
-    // Unity tests run once in setup()
+    return UNITY_END();
 }

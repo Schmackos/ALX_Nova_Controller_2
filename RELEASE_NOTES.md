@@ -88,6 +88,30 @@ workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
+- [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
+
+Preset items now use styled cards with filled orange active state matching
+channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
+Green "Saved" / red "Modified" badge in card title. Save button appears when
+config is modified to overwrite last active preset. (`3a59978`)
+- [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
+
+Preset items now use styled cards with filled orange active state matching
+channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
+Green "Saved" / red "Modified" badge in card title. Save button appears when
+config is modified to overwrite last active preset. (`472a09a`)
+- [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
+
+Preset items now use styled cards with filled orange active state matching
+channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
+Green "Saved" / red "Modified" badge in card title. Save button appears when
+config is modified to overwrite last active preset. (`08c191d`)
+- [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
+
+Preset items now use styled cards with filled orange active state matching
+channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
+Green "Saved" / red "Modified" badge in card title. Save button appears when
+config is modified to overwrite last active preset. (`7e8ac7d`)
 - [2026-02-17] feat: Color-coded DSP stage labels and "Copy to" for Additional Processing
 
 Add category-colored type badges on stage cards, colored category labels
@@ -440,6 +464,19 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-17] fix: Native test compilation and WebSocket JSON key naming
+
+Add NATIVE_TEST guards to app_state.h, audio_quality.h, config.h so
+tests can include them without ESP32 dependencies. Fix dsp_pipeline.cpp
+app_state include order and guard audio_quality call. Fix smart_sensing
+JSON keys that had erroneous "appState." prefix. Add new DSP preset
+tests and expand DSP swap/emergency limiter test coverage. (`f27ec56`)
+- [2026-02-17] fix: Undefined escapeHtml breaking DSP UI and preset save rejecting auto-assign
+
+escapeHtml() was called in dspRenderPresetList but never defined, causing
+a ReferenceError that killed the entire dspHandleDspState handler and
+prevented stages, PEQ bands, and presets from rendering. Also fixed
+saveDspPreset WS handler rejecting slot=-1 (auto-assign). (`9e959b0`)
 - [2026-02-16] fix: Use custom input names in EQ Bands "Copy to..." dropdown
 
 Updated PEQ copy channel dropdown to display user-configured input names
@@ -668,6 +705,21 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-17] test: Add regression tests for WebSocket message key format
+
+Adds 4 comprehensive tests to prevent recurrence of the timer display
+bug where backend sent "appState.timerDuration" but frontend expected
+"timerDuration", causing the web UI to show "-- min" instead of the
+actual timer value.
+
+Test coverage:
+- test_smart_sensing_websocket_message_keys: Verifies correct JSON keys
+  without "appState." prefix and explicit regression checks
+- test_websocket_message_consistency: Validates consistent key naming
+- test_timer_display_values: Tests timer value formatting scenarios
+- test_timer_active_flag: Tests timerActive boolean logic
+
+All 4 tests passing in native environment. (`785954a`)
 - [2026-02-16] refactor: Move Crossover Presets from card to Add Stage dropdown modal
 
 Follows same pattern as Baffle Step and THD+N - replaces the standalone

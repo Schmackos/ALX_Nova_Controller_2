@@ -2259,6 +2259,62 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             background: var(--error);
             color: #fff;
         }
+        .dsp-preset-item {
+            background: var(--bg-card);
+            border-radius: 10px;
+            margin-bottom: 6px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .dsp-preset-item:hover { border-color: var(--text-secondary); }
+        .dsp-preset-item.active {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark, #E68900));
+            border-color: var(--accent);
+            box-shadow: 0 2px 8px rgba(255,152,0,0.3);
+        }
+        .dsp-preset-item.active .preset-name { color: #fff; }
+        .dsp-preset-item.active .dsp-stage-actions button {
+            background: rgba(0,0,0,0.2);
+            color: rgba(255,255,255,0.85);
+        }
+        .dsp-preset-item.active .dsp-stage-actions button:hover {
+            background: rgba(0,0,0,0.35);
+        }
+        .dsp-preset-item .preset-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .dsp-preset-item .dsp-stage-actions button {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 6px;
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+        .dsp-preset-item .dsp-stage-actions button:hover {
+            background: var(--border);
+        }
+        .dsp-preset-item .dsp-stage-actions button.del:hover {
+            background: var(--error);
+            color: #fff;
+        }
         .dsp-stage-body {
             display: none;
             padding: 0 12px 12px;
@@ -3218,10 +3274,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             <!-- DSP Presets -->
             <div class="card">
-                <div class="card-title">Presets (<span id="dspPresetCount">0</span>)</div>
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>Presets (<span id="dspPresetCount">0</span>)</span>
+                    <span id="dspPresetStatus" class="badge" style="font-size:10px;padding:2px 8px;border-radius:4px;display:none;">Saved</span>
+                </div>
                 <div id="dspPresetList" style="margin-top:8px;"></div>
-                <button class="dsp-add-btn" id="dspAddPresetBtn" onclick="dspShowAddPresetDialog()">+ Add Preset</button>
-                <span id="dspPresetModified" style="font-size:10px;color:var(--accent);display:none;margin-top:4px;">Modified</span>
+                <div id="dspPresetActions" style="display:flex;gap:8px;margin-top:8px;">
+                    <button class="dsp-add-btn" style="flex:1" onclick="dspShowAddPresetDialog()">+ Add Preset</button>
+                    <button class="btn btn-primary" id="dspSavePresetBtn" style="display:none;padding:8px 16px;font-size:12px;border-radius:10px;white-space:nowrap;" onclick="dspSaveCurrentPreset()">&#128190; Save</button>
+                </div>
             </div>
 
             <!-- Channel Selector -->
@@ -10366,11 +10427,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== DSP Config Presets =====
+        var _dspLastActivePreset = -1;
         function dspRenderPresetList(presets, activeIndex) {
             var list = document.getElementById('dspPresetList');
             var count = document.getElementById('dspPresetCount');
-            var mod = document.getElementById('dspPresetModified');
+            var status = document.getElementById('dspPresetStatus');
+            var saveBtn = document.getElementById('dspSavePresetBtn');
             if (!list) return;
+
+            if (activeIndex >= 0) _dspLastActivePreset = activeIndex;
 
             var html = '';
             var anyExists = false;
@@ -10379,22 +10444,52 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (!p.exists) continue;
                 anyExists = true;
                 var isActive = (activeIndex === p.index);
-                html += '<div class="dsp-stage-item' + (isActive ? ' active' : '') + '">';
-                html += '<div class="stage-header">';
-                html += '<span class="stage-name">' + escapeHtml(p.name || ('Slot ' + (p.index + 1))) + '</span>';
-                html += '<div class="stage-controls">';
-                html += '<button class="btn btn-small" onclick="dspLoadPreset(' + p.index + ')">Load</button>';
-                html += '<button class="btn btn-small" onclick="dspRenamePresetDialog(' + p.index + ')">Rename</button>';
-                html += '<button class="btn btn-small btn-danger" onclick="dspDeletePresetConfirm(' + p.index + ')">Delete</button>';
-                html += '</div></div></div>';
+                var eName = (p.name || ('Slot ' + (p.index + 1))).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                html += '<div class="dsp-preset-item' + (isActive ? ' active' : '') + '" onclick="dspLoadPreset(' + p.index + ')">';
+                html += '<span class="preset-name">' + eName + '</span>';
+                html += '<div class="dsp-stage-actions">';
+                html += '<button onclick="event.stopPropagation();dspRenamePresetDialog(' + p.index + ')" title="Rename">&#9998;</button>';
+                html += '<button class="del" onclick="event.stopPropagation();dspDeletePresetConfirm(' + p.index + ')" title="Delete">&times;</button>';
+                html += '</div></div>';
             }
             list.innerHTML = html;
             if (count) count.textContent = presets.filter(function(p){ return p.exists; }).length;
-            if (mod) mod.style.display = (activeIndex === -1 && anyExists) ? 'inline' : 'none';
+
+            // Status badge
+            if (status) {
+                if (activeIndex >= 0) {
+                    status.textContent = 'Saved';
+                    status.style.background = 'var(--success)';
+                    status.style.color = '#fff';
+                    status.style.display = 'inline';
+                } else if (anyExists) {
+                    status.textContent = 'Modified';
+                    status.style.background = 'var(--error)';
+                    status.style.color = '#fff';
+                    status.style.display = 'inline';
+                } else {
+                    status.style.display = 'none';
+                }
+            }
+            // Save button visible when modified and presets exist
+            if (saveBtn) saveBtn.style.display = (activeIndex === -1 && anyExists) ? '' : 'none';
         }
         function dspLoadPreset(slot) {
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({ type: 'loadDspPreset', slot: slot }));
+        }
+        function dspSaveCurrentPreset() {
+            if (_dspLastActivePreset >= 0) {
+                // Overwrite the last active preset
+                var presets = dspState && dspState.presets ? dspState.presets : [];
+                var preset = presets.find(function(p) { return p.index === _dspLastActivePreset; });
+                var name = preset ? preset.name : ('Preset ' + (_dspLastActivePreset + 1));
+                if (ws && ws.readyState === WebSocket.OPEN)
+                    ws.send(JSON.stringify({ type: 'saveDspPreset', slot: _dspLastActivePreset, name: name }));
+            } else {
+                // No previous preset — act like Add Preset
+                dspShowAddPresetDialog();
+            }
         }
         function dspShowAddPresetDialog() {
             var name = prompt('Preset name (max 20 chars):', '');

@@ -926,6 +926,8 @@ void test_corr_zero_delay_returns_zero_index(void) {
     TEST_ASSERT_TRUE(corr[0] > 0.0f);
 }
 
+// Delay alignment tests removed in v1.8.3 - incomplete feature, never functional
+/*
 void test_delay_align_measure_known_offset(void) {
     // Feed same signal to both ADCs with 5-sample offset
     int frames = 128;
@@ -967,6 +969,7 @@ void test_delay_align_low_confidence_with_noise(void) {
     // Verify it returns a result without crashing
     TEST_ASSERT_TRUE(r.delayMs >= 0.0f);
 }
+*/
 
 // ===== New Biquad Type Tests =====
 
@@ -2711,6 +2714,98 @@ void test_copy_peq_bands(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 6.0f, cfg->channels[1].stages[0].biquad.gain);
 }
 
+void test_copy_chain_stages_basic(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+
+    // Add some chain stages to channel 0
+    int gain1 = dsp_add_stage(0, DSP_GAIN);
+    int limiter1 = dsp_add_stage(0, DSP_LIMITER);
+
+    cfg = dsp_get_inactive_config();
+    cfg->channels[0].stages[gain1].gain.gainLinear = 2.0f;
+    cfg->channels[0].stages[limiter1].limiter.thresholdDb = -6.0f;
+
+    // Copy chain stages from channel 0 to channel 1
+    dsp_copy_chain_stages(0, 1);
+
+    cfg = dsp_get_inactive_config();
+    // Channel 1 should now have the same chain stages
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS + 2, cfg->channels[1].stageCount);
+    TEST_ASSERT_EQUAL_INT(DSP_GAIN, cfg->channels[1].stages[DSP_PEQ_BANDS].type);
+    TEST_ASSERT_EQUAL_INT(DSP_LIMITER, cfg->channels[1].stages[DSP_PEQ_BANDS + 1].type);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 2.0f, cfg->channels[1].stages[DSP_PEQ_BANDS].gain.gainLinear);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, -6.0f, cfg->channels[1].stages[DSP_PEQ_BANDS + 1].limiter.thresholdDb);
+}
+
+void test_copy_chain_stages_preserves_peq(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+
+    // Modify PEQ on destination channel
+    cfg->channels[1].stages[0].biquad.frequency = 8000.0f;
+    cfg->channels[1].stages[0].biquad.gain = 3.0f;
+
+    // Add chain stage to source channel
+    dsp_add_stage(0, DSP_GAIN);
+
+    // Copy chain stages
+    dsp_copy_chain_stages(0, 1);
+
+    cfg = dsp_get_inactive_config();
+    // PEQ should be unchanged
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 8000.0f, cfg->channels[1].stages[0].biquad.frequency);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 3.0f, cfg->channels[1].stages[0].biquad.gain);
+    // Chain stage should be copied
+    TEST_ASSERT_EQUAL_INT(DSP_GAIN, cfg->channels[1].stages[DSP_PEQ_BANDS].type);
+}
+
+void test_copy_chain_stages_empty_chain(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+
+    // Add chain stage to destination first
+    dsp_add_stage(1, DSP_GAIN);
+    int oldCount = cfg->channels[1].stageCount;
+
+    // Copy from channel 0 (which has no chain stages)
+    dsp_copy_chain_stages(0, 1);
+
+    cfg = dsp_get_inactive_config();
+    // Destination should have only PEQ bands now
+    TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS, cfg->channels[1].stageCount);
+}
+
+void test_copy_chain_stages_same_channel_noop(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+
+    dsp_add_stage(0, DSP_GAIN);
+    int beforeCount = cfg->channels[0].stageCount;
+
+    // Copy to same channel should do nothing
+    dsp_copy_chain_stages(0, 0);
+
+    cfg = dsp_get_inactive_config();
+    TEST_ASSERT_EQUAL_INT(beforeCount, cfg->channels[0].stageCount);
+}
+
+void test_copy_chain_stages_with_labels(void) {
+    dsp_init();
+    DspState *cfg = dsp_get_inactive_config();
+
+    // Add crossover with labels to channel 0
+    dsp_insert_crossover_lr(0, 2000.0f, 8, 0); // LR8 LPF
+
+    // Copy to channel 1
+    dsp_copy_chain_stages(0, 1);
+
+    cfg = dsp_get_inactive_config();
+    // Labels should be copied
+    TEST_ASSERT_EQUAL_STRING("LR8 LPF", cfg->channels[1].stages[DSP_PEQ_BANDS].label);
+    TEST_ASSERT_EQUAL_STRING("LR8 LPF", cfg->channels[1].stages[DSP_PEQ_BANDS + 1].label);
+}
+
 void test_reset_max_metrics(void) {
     // Process a buffer to generate metrics
     int32_t buf[64] = {0};
@@ -2920,8 +3015,9 @@ int main(int argc, char **argv) {
     // Cross-correlation / delay alignment
     RUN_TEST(test_corr_known_delay_detected);
     RUN_TEST(test_corr_zero_delay_returns_zero_index);
-    RUN_TEST(test_delay_align_measure_known_offset);
-    RUN_TEST(test_delay_align_low_confidence_with_noise);
+    // Delay alignment tests removed in v1.8.3 - incomplete feature
+    // RUN_TEST(test_delay_align_measure_known_offset);
+    // RUN_TEST(test_delay_align_low_confidence_with_noise);
 
     // New biquad types
     RUN_TEST(test_bpf0db_unity_peak_gain);
@@ -3063,6 +3159,11 @@ int main(int argc, char **argv) {
     RUN_TEST(test_stage_type_name_all_types);
     RUN_TEST(test_ensure_peq_bands);
     RUN_TEST(test_copy_peq_bands);
+    RUN_TEST(test_copy_chain_stages_basic);
+    RUN_TEST(test_copy_chain_stages_preserves_peq);
+    RUN_TEST(test_copy_chain_stages_empty_chain);
+    RUN_TEST(test_copy_chain_stages_same_channel_noop);
+    RUN_TEST(test_copy_chain_stages_with_labels);
     RUN_TEST(test_reset_max_metrics);
     RUN_TEST(test_clear_cpu_load);
     RUN_TEST(test_is_peq_index_boundaries);
