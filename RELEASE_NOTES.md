@@ -88,6 +88,24 @@ workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
+- [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
+
+Preset items now use styled cards with filled orange active state matching
+channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
+Green "Saved" / red "Modified" badge in card title. Save button appears when
+config is modified to overwrite last active preset. (`472a09a`)
+- [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
+
+Preset items now use styled cards with filled orange active state matching
+channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
+Green "Saved" / red "Modified" badge in card title. Save button appears when
+config is modified to overwrite last active preset. (`08c191d`)
+- [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
+
+Preset items now use styled cards with filled orange active state matching
+channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
+Green "Saved" / red "Modified" badge in card title. Save button appears when
+config is modified to overwrite last active preset. (`7e8ac7d`)
 - [2026-02-17] feat: Color-coded DSP stage labels and "Copy to" for Additional Processing
 
 Add category-colored type badges on stage cards, colored category labels
