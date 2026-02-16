@@ -35,6 +35,7 @@ static DspState _states[2];
 static DspState *_states = nullptr;
 #endif
 static volatile int _activeIndex = 0;
+static volatile bool _processingActive = false;
 static DspMetrics _metrics;
 
 // ===== FIR Data Pool (PSRAM on ESP32, static on native) =====
@@ -395,6 +396,13 @@ void dsp_swap_config() {
     int oldActive = _activeIndex;
     int newActive = 1 - oldActive;
 
+    // Wait for processing to finish to ensure frame-aligned swap (prevents mid-frame config changes)
+    int waitCount = 0;
+    while (_processingActive && waitCount < 50) {
+        vTaskDelay(1);  // yield ~1ms
+        waitCount++;
+    }
+
     // Copy delay lines from old active → new active to avoid audio discontinuity
     for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
         DspChannelConfig &oldCh = _states[oldActive].channels[ch];
@@ -508,18 +516,23 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
     unsigned long startUs = esp_timer_get_time();
 #endif
 
+    _processingActive = true;
     int stateIdx = _activeIndex;
     DspState *cfg = &_states[stateIdx];
     if (cfg->globalBypass) {
         _metrics.processTimeUs = 0;
         _metrics.cpuLoadPercent = 0.0f;
+        _processingActive = false;
         return;
     }
 
     // Map ADC index to channel pair: ADC0 → ch0(L), ch1(R); ADC1 → ch2(L), ch3(R)
     int chL = adcIndex * 2;
     int chR = adcIndex * 2 + 1;
-    if (chL >= DSP_MAX_CHANNELS || chR >= DSP_MAX_CHANNELS) return;
+    if (chL >= DSP_MAX_CHANNELS || chR >= DSP_MAX_CHANNELS) {
+        _processingActive = false;
+        return;
+    }
 
     // Deinterleave int32 stereo → float mono buffers
     for (int f = 0; f < stereoFrames; f++) {
@@ -589,6 +602,8 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
             }
         }
     }
+
+    _processingActive = false;
 }
 
 // ===== Per-Channel Processing =====

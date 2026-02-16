@@ -63,6 +63,90 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-16] fix: DSP frame-aligned config swap with busy-wait
+
+Prevent mid-frame config swaps that could cause transient glitches.
+Add _processingActive flag to track when dsp_process_buffer() is
+executing. dsp_swap_config() now busy-waits (max 50ms) until
+processing completes before copying delay lines.
+
+Changes:
+- Add volatile _processingActive flag
+- Set true at start of dsp_process_buffer(), clear at end
+- Clear in all early-return paths (globalBypass, channel bounds)
+- dsp_swap_config() waits up to 50ms for !_processingActive
+
+On native tests: vTaskDelay is no-op, _processingActive always false
+(single-threaded), so no wait occurs.
+
+Typical wait: 0-1 iterations (~5ms processing << 50ms timeout). (`09615b1`)
+- [2026-02-16] fix: DSP frame-aligned config swap with busy-wait
+
+Prevent mid-frame config swaps that could cause transient glitches.
+Add _processingActive flag to track when dsp_process_buffer() is
+executing. dsp_swap_config() now busy-waits (max 50ms) until
+processing completes before copying delay lines.
+
+Changes:
+- Add volatile _processingActive flag
+- Set true at start of dsp_process_buffer(), clear at end
+- Clear in all early-return paths (globalBypass, channel bounds)
+- dsp_swap_config() waits up to 50ms for !_processingActive
+
+On native tests: vTaskDelay is no-op, _processingActive always false
+(single-threaded), so no wait occurs.
+
+Typical wait: 0-1 iterations (~5ms processing << 50ms timeout). (`a9fcb31`)
+- [2026-02-16] fix: DSP frame-aligned config swap with busy-wait
+
+Prevent mid-frame config swaps that could cause transient glitches.
+Add _processingActive flag to track when dsp_process_buffer() is
+executing. dsp_swap_config() now busy-waits (max 50ms) until
+processing completes before copying delay lines.
+
+Changes:
+- Add volatile _processingActive flag
+- Set true at start of dsp_process_buffer(), clear at end
+- Clear in all early-return paths (globalBypass, channel bounds)
+- dsp_swap_config() waits up to 50ms for !_processingActive
+
+On native tests: vTaskDelay is no-op, _processingActive always false
+(single-threaded), so no wait occurs.
+
+Typical wait: 0-1 iterations (~5ms processing << 50ms timeout). (`f88d6e1`)
+- [2026-02-16] fix: DSP frame-aligned config swap with busy-wait
+
+Prevent mid-frame config swaps that could cause transient glitches.
+Add _processingActive flag to track when dsp_process_buffer() is
+executing. dsp_swap_config() now busy-waits (max 50ms) until
+processing completes before copying delay lines.
+
+Changes:
+- Add volatile _processingActive flag
+- Set true at start of dsp_process_buffer(), clear at end
+- Clear in all early-return paths (globalBypass, channel bounds)
+- dsp_swap_config() waits up to 50ms for !_processingActive
+
+On native tests: vTaskDelay is no-op, _processingActive always false
+(single-threaded), so no wait occurs.
+
+Typical wait: 0-1 iterations (~5ms processing << 50ms timeout). (`9d17f93`)
+- [2026-02-16] fix: USB audio Windows driver compatibility via minimal BOS descriptor
+
+Override framework's BOS descriptor that includes Microsoft OS 2.0 with
+Compatible ID "WINUSB", which causes Windows to load WinUSB driver instead
+of usbaudio2.sys. Our minimal BOS includes only USB 2.0 Extension capability
+(required for bcdUSB=0x0210) with no MSOS2/WINUSB descriptors.
+
+Changes:
+- Add linker wrapper flag -Wl,--wrap=tud_descriptor_bos_cb to override strong symbol
+- Implement __wrap_tud_descriptor_bos_cb() with 12-byte minimal BOS descriptor
+- Change clock control to read-only (bmControls: 0x07 → 0x05)
+- STALL SET_CUR requests for clock frequency (fixed 48kHz, not configurable)
+- Change USB PID 0x4001 → 0x4002 to force Windows to re-enumerate
+
+Fixes Windows incorrectly loading WinUSB driver and failing to recognize UAC2
+audio device. Device now correctly appears as "ALX Nova Audio" speaker. (`cb11992`)
 - [2026-02-16] fix: USB audio Windows driver compatibility via minimal BOS descriptor
 
 Override framework's BOS descriptor that includes Microsoft OS 2.0 with
