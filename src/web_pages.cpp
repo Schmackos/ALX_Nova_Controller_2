@@ -3308,6 +3308,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
                 </div>
                 <div class="collapsible-content" style="margin-top:8px;">
+                    <button class="btn btn-secondary" style="width:100%;margin-bottom:8px;" onclick="dspAddDCBlock()">+ DC Block (10 Hz HPF)</button>
                     <div id="dspStageList"></div>
                     <button class="dsp-add-btn" id="dspAddBtn" onclick="dspToggleAddMenu()">+ Add Stage</button>
                     <div class="dsp-add-menu" id="dspAddMenu">
@@ -9987,6 +9988,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             document.getElementById('dspAddMenu').classList.remove('open');
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({ type: 'addDspStage', ch: dspCh, stageType: typeInt }));
+        }
+        function dspAddDCBlock() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'addDspStage', ch: dspCh, stageType: 20, frequency: 10.0, Q: 0.707, label: 'DC Block' }));
+                showToast('DC Block added (10 Hz HPF)', 'success');
+            }
         }
         function dspRemoveStage(idx) {
             if (ws && ws.readyState === WebSocket.OPEN)

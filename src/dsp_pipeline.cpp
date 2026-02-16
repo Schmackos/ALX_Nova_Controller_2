@@ -2,6 +2,7 @@
 
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
+#include "dsp_biquad_gen.h"
 #include "dsps_biquad.h"
 #include "dsps_fir.h"
 #include "dsps_mulc.h"
@@ -1693,9 +1694,10 @@ void dsp_enable_dc_block(int channel, float sampleRate) {
     s.biquad.Q = 0.707f;        // Butterworth response
     s.enabled = true;
 
-    // Compute coefficients
+    // Compute coefficients (normalized frequency = f_Hz / f_sample)
     #ifndef NATIVE_TEST
-    dsp_gen_biquad_hpf_1st(s.biquad.coeffs, s.biquad.frequency, sampleRate);
+    float normFreq = s.biquad.frequency / sampleRate;
+    dsp_gen_hpf1_f32(s.biquad.coeffs, normFreq);
     #endif
 }
 

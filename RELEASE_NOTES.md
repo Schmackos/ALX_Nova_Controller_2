@@ -436,6 +436,60 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: Reorganize project structure into professional layout
+
+- Move 41 documentation files into categorized docs/ subdirectories
+- Create docs/{user,development,hardware,planning,archive} structure
+- Move build script to tools/ directory
+- Delete 8 temporary build/log files
+- Update .gitignore for logs and build artifacts
+- Standardize naming: UPPERCASE for root, lowercase-with-dashes for docs
+- Add MIGRATION.md tracking all file movements
+
+User Documentation (docs/user/):
+- Quick start, user manual, feature guides
+
+Development Documentation (docs/development/):
+- CI/CD integration, testing, release processes
+
+Hardware Documentation (docs/hardware/):
+- PCM1808 integration, hardware diagnostics
+
+Planning Documentation (docs/planning/):
+- Feature roadmaps, DSP plans, future work
+
+Archive (docs/archive/):
+- Historical summaries and completed features
+
+Root directory now contains only essential files:
+README.md, CLAUDE.md, RELEASE_NOTES.md, MIGRATION.md (`28b9391`)
+- [2026-02-16] refactor: Reorganize project structure into professional layout
+
+- Move 41 documentation files into categorized docs/ subdirectories
+- Create docs/{user,development,hardware,planning,archive} structure
+- Move build script to tools/ directory
+- Delete 8 temporary build/log files
+- Update .gitignore for logs and build artifacts
+- Standardize naming: UPPERCASE for root, lowercase-with-dashes for docs
+- Add MIGRATION.md tracking all file movements
+
+User Documentation (docs/user/):
+- Quick start, user manual, feature guides
+
+Development Documentation (docs/development/):
+- CI/CD integration, testing, release processes
+
+Hardware Documentation (docs/hardware/):
+- PCM1808 integration, hardware diagnostics
+
+Planning Documentation (docs/planning/):
+- Feature roadmaps, DSP plans, future work
+
+Archive (docs/archive/):
+- Historical summaries and completed features
+
+Root directory now contains only essential files:
+README.md, CLAUDE.md, RELEASE_NOTES.md, MIGRATION.md (`a687a00`)
 - [2026-02-16] refactor: Remove legacy macro aliases for AppState members
 
 Remove 122 legacy macro definitions and replace all usages with direct

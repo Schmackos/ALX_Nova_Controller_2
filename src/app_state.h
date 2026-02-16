@@ -371,7 +371,7 @@ public:
   bool isDspPresetDirty() const { return _dspPresetDirty; }
   void clearDspPresetDirty() { _dspPresetDirty = false; }
 
-  // DC blocking filter (high-pass at 10 Hz to remove DC offset and subsonic noise)
+  // DC block (legacy - use DSP stage instead)
   bool dcBlockEnabled = false;
   void markDcBlockDirty() { _dcBlockDirty = true; }
   bool isDcBlockDirty() const { return _dcBlockDirty; }

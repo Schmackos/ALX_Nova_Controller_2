@@ -25,6 +25,9 @@ static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
 static lv_obj_t *lbl_audio_adc[NUM_AUDIO_ADCS] = {nullptr, nullptr};
 static lv_obj_t *lbl_i2s = nullptr;
+#ifdef DSP_ENABLED
+// static lv_obj_t *lbl_audio_quality = nullptr;
+#endif
 #ifdef DAC_ENABLED
 static lv_obj_t *lbl_dac = nullptr;
 static lv_obj_t *lbl_eeprom = nullptr;
@@ -252,6 +255,20 @@ void scr_debug_refresh(void) {
         }
     }
 
+    /* Audio Quality Diagnostics */
+#ifdef DSP_ENABLED
+    // if (lbl_audio_quality) {
+    //     AudioQualityDiag diag = audio_quality_get_diagnostics();
+    //     const char* typeStr = audio_quality_glitch_type_to_string(diag.lastGlitchType);
+    //     snprintf(buf, sizeof(buf), "Enabled: %s\nGlitches: %lu (min:%lu)\nLast: %s",
+    //              appState.audioQualityEnabled ? "Yes" : "No",
+    //              (unsigned long)diag.glitchHistory.totalGlitches,
+    //              (unsigned long)diag.glitchHistory.glitchesLastMinute,
+    //              typeStr);
+    //     lv_label_set_text(lbl_audio_quality, buf);
+    // }
+#endif
+
     /* Audio DAC */
 #ifdef DAC_ENABLED
     if (lbl_dac) {
@@ -449,6 +466,11 @@ lv_obj_t *scr_debug_create(void) {
             lv_label_set_long_mode(lbl_audio_adc[a], LV_LABEL_LONG_WRAP);
         }
     }
+
+    /* Audio Quality Diagnostics */
+// #ifdef DSP_ENABLED
+//     lbl_audio_quality = add_section(cont, "Audio Quality");
+// #endif
 
     /* Audio DAC */
 #ifdef DAC_ENABLED

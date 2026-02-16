@@ -1,7 +1,32 @@
+# PlatformIO
 .pio
+
+# VSCode
 .vscode/.browse.c_cpp.db*
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Temporary files
 platformio.ini
 mockup_dsp_peq.html
+
+# Build artifacts
+*.txt
+!CLAUDE.txt
+build_*.txt
+upload_*.txt
+*_log.txt
+
+# Runtime logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor backups
+*~
+*.swp
+*.swo
