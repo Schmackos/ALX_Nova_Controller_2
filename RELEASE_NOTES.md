@@ -3,6 +3,23 @@
 ## Version 1.8.3
 
 ## Documentation
+- [2026-02-16] docs: Add comprehensive testing guide for audio protection system
+
+Create detailed testing guide covering all three phases of the audio
+protection implementation (Emergency Limiter, DSP Swap Fixes, Audio
+Quality Diagnostics).
+
+Guide includes:
+- Prerequisites and hardware setup
+- 12 Phase 1 tests (emergency limiter functionality, attack/release)
+- 3 Phase 2 tests (DSP swap synchronization, multi-ADC race conditions)
+- 12 Phase 3 tests (glitch detection, event correlation, timing analysis)
+- Integration test combining all three phases
+- Troubleshooting section with common issues and fixes
+- Performance baselines and validation checklist
+- Unit test instructions and expected results
+
+Located at: docs/development/audio-protection-testing-guide.md (`60cff1b`)
 - [2026-02-16] docs: Update release notes with DC block preset and stability improvements (`4814730`)
 - [2026-02-16] docs: Update release notes with DC block preset and stability improvements (`c3f23ef`)
 - [2026-02-16] docs: Update release notes with DC block preset and stability improvements (`23fc90e`)
