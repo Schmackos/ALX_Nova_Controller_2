@@ -6,7 +6,6 @@
 #include "dsp_rew_parser.h"
 #include "dsp_crossover.h"
 #include "thd_measurement.h"
-#include "delay_alignment.h"
 #include "app_state.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
@@ -1473,41 +1472,7 @@ void registerDspApiEndpoints() {
         }
     });
 
-    // GET /api/dsp/align — get last delay alignment result
-    server.on("/api/dsp/align", HTTP_GET, []() {
-        if (!requireAuth()) return;
-        char buf[128];
-        snprintf(buf, sizeof(buf),
-            "{\"delaySamples\":%d,\"delayMs\":%.3f,\"confidence\":%.2f,\"valid\":%s}",
-            appState.delayAlignSamples, appState.delayAlignMs,
-            appState.delayAlignConfidence, appState.delayAlignValid ? "true" : "false");
-        server.send(200, "application/json", buf);
-    });
-
-    // POST /api/dsp/align/measure — trigger delay alignment measurement
-    server.on("/api/dsp/align/measure", HTTP_POST, []() {
-        if (!requireAuth()) return;
-        appState.markDelayAlignDirty();
-        server.send(200, "application/json", "{\"success\":true,\"status\":\"measuring\"}");
-    });
-
-    // POST /api/dsp/align/apply — apply measured delay to DSP pipeline
-    server.on("/api/dsp/align/apply", HTTP_POST, []() {
-        if (!requireAuth()) return;
-        if (!appState.delayAlignValid) {
-            sendJsonError(400, "No valid measurement");
-            return;
-        }
-        DelayAlignResult r;
-        r.delaySamples = appState.delayAlignSamples;
-        r.confidence = appState.delayAlignConfidence;
-        r.delayMs = appState.delayAlignMs;
-        r.valid = appState.delayAlignValid;
-        delay_align_auto_apply(r, 1);
-        saveDspSettingsDebounced();
-        appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
-    });
+    // Delay alignment API endpoints removed in v1.8.3 - incomplete feature, never functional
 
     // POST /api/dsp/channel/stereolink — toggle stereo link for a channel pair
     server.on("/api/dsp/channel/stereolink", HTTP_POST, []() {

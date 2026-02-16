@@ -20,7 +20,6 @@
 #include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_crossover.cpp"
 #include "../../src/dsp_convolution.cpp"
-#include "../../src/delay_alignment.cpp"
 #include "../../src/thd_measurement.cpp"
 
 // Tolerance for float comparisons
