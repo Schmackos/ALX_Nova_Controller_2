@@ -10381,7 +10381,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 var isActive = (activeIndex === p.index);
                 html += '<div class="dsp-stage-item' + (isActive ? ' active' : '') + '">';
                 html += '<div class="stage-header">';
-                html += '<span class="stage-name">' + escapeHtml(p.name || ('Slot ' + (p.index + 1))) + '</span>';
+                html += '<span class="stage-name">' + (p.name || ('Slot ' + (p.index + 1))).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
                 html += '<div class="stage-controls">';
                 html += '<button class="btn btn-small" onclick="dspLoadPreset(' + p.index + ')">Load</button>';
                 html += '<button class="btn btn-small" onclick="dspRenamePresetDialog(' + p.index + ')">Rename</button>';
