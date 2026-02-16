@@ -235,6 +235,24 @@ bool loadSettings() {
   }
 #endif
 
+#ifdef DSP_ENABLED
+  // Load emergency limiter settings (lines 28-29)
+  if (lines[dataStart + 28].length() > 0) {
+    appState.emergencyLimiterEnabled = (lines[dataStart + 28].toInt() != 0);
+  }
+  if (lines[dataStart + 29].length() > 0) {
+    float threshold = lines[dataStart + 29].toFloat();
+    // Validate range
+    if (threshold >= -6.0f && threshold <= 0.0f) {
+      appState.emergencyLimiterThresholdDb = threshold;
+    }
+  }
+  // Load DC block enabled (line 30, default false)
+  if (lines[dataStart + 30].length() > 0) {
+    appState.dcBlockEnabled = (lines[dataStart + 30].toInt() != 0);
+  }
+#endif
+
   return true;
 }
 
@@ -291,6 +309,15 @@ void saveSettings() {
   file.println(appState.usbAudioEnabled ? "1" : "0");
 #else
   file.println("0"); // placeholder for usbAudioEnabled
+#endif
+#ifdef DSP_ENABLED
+  file.println(appState.emergencyLimiterEnabled ? "1" : "0");
+  file.println(appState.emergencyLimiterThresholdDb, 2); // 2 decimal places
+  file.println(appState.dcBlockEnabled ? "1" : "0");
+#else
+  file.println("1"); // placeholder for emergencyLimiterEnabled (default ON)
+  file.println("-0.5"); // placeholder for emergencyLimiterThresholdDb
+  file.println("0"); // placeholder for dcBlockEnabled
 #endif
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
@@ -1521,6 +1548,9 @@ void handleDiagnostics() {
     JsonArray adcArr = settings["adcEnabled"].to<JsonArray>();
     for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
   }
+#ifdef DSP_ENABLED
+  settings["dcBlockEnabled"] = appState.dcBlockEnabled;
+#endif
 #ifdef USB_AUDIO_ENABLED
   settings["usbAudioEnabled"] = appState.usbAudioEnabled;
 #endif

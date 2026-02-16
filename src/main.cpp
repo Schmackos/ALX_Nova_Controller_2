@@ -834,11 +834,25 @@ void loop() {
   }
 
 #ifdef DSP_ENABLED
+  // Broadcast emergency limiter state changes (GUI/API -> WS clients + MQTT)
+  if (appState.isEmergencyLimiterDirty()) {
+    sendEmergencyLimiterState();
+    publishMqttEmergencyLimiterState();
+    appState.clearEmergencyLimiterDirty();
+  }
+
   // Broadcast DSP config changes (API/MQTT -> WS clients + MQTT)
   if (appState.isDspConfigDirty()) {
     sendDspState();
     publishMqttDspState();
     appState.clearDspConfigDirty();
+  }
+
+  // Broadcast DC block state changes
+  if (appState.isDcBlockDirty()) {
+    sendDcBlockState();
+    publishMqttDcBlockState();
+    appState.clearDcBlockDirty();
   }
 
   // DSP metrics broadcast (1s interval when DSP is active, one final 0% when disabled/bypassed)
@@ -851,6 +865,20 @@ void loop() {
       sendDspMetrics();
     }
     lastDspMetricsActive = dspActive;
+  }
+
+  // Emergency limiter state broadcast (1s interval when active, one final update when idle)
+  static unsigned long lastEmergencyLimiterBroadcast = 0;
+  static bool lastEmergencyLimiterActive = false;
+  DspMetrics dspMetrics = dsp_get_metrics();
+  bool limiterActive = dspMetrics.emergencyLimiterActive;
+  if (millis() - lastEmergencyLimiterBroadcast >= 1000) {
+    if (limiterActive || lastEmergencyLimiterActive) {
+      lastEmergencyLimiterBroadcast = millis();
+      sendEmergencyLimiterState();
+      publishMqttEmergencyLimiterState();
+    }
+    lastEmergencyLimiterActive = limiterActive;
   }
 
   // Check for debounced DSP settings save

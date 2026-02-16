@@ -38,6 +38,15 @@ static volatile int _activeIndex = 0;
 static volatile bool _processingActive = false;
 static DspMetrics _metrics;
 
+// ===== Emergency Safety Limiter State =====
+static EmergencyLimiterState _emergencyLimiter = {};
+
+// ===== DSP Swap Synchronization =====
+#ifndef NATIVE_TEST
+static SemaphoreHandle_t _swapMutex = NULL;
+#endif
+static volatile bool _swapRequested = false;
+
 // ===== FIR Data Pool (PSRAM on ESP32, static on native) =====
 // Each slot: taps[256] + delay[256+8] ~= 2.1KB. 2 states × 2 slots × 2.1KB ~= 8.3KB total
 // Delay array is DSP_MAX_FIR_TAPS + 8 because ESP-DSP S3 SIMD reads ahead of the delay line.
@@ -348,6 +357,14 @@ void dsp_init() {
 #endif
     memset(_mbSlotUsed, 0, sizeof(_mbSlotUsed));
 
+    // Initialize swap synchronization mutex
+#ifndef NATIVE_TEST
+    if (!_swapMutex) {
+        _swapMutex = xSemaphoreCreateMutex();
+    }
+#endif
+    _swapRequested = false;
+
     LOG_I("[DSP] Pipeline initialized (double-buffered, %d channels, max %d stages/ch)",
           DSP_MAX_CHANNELS, DSP_MAX_STAGES);
 }
@@ -392,17 +409,42 @@ void dsp_copy_active_to_inactive() {
     }
 }
 
-void dsp_swap_config() {
+bool dsp_swap_config() {
+    // Try to acquire mutex (5ms timeout) to prevent concurrent swaps
+#ifndef NATIVE_TEST
+    if (_swapMutex && xSemaphoreTake(_swapMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+        LOG_W("[DSP] Swap failed: mutex busy");
+        AppState::getInstance().dspSwapFailures++;
+        AppState::getInstance().lastDspSwapFailure = millis();
+        return false;
+    }
+#endif
+
     int oldActive = _activeIndex;
     int newActive = 1 - oldActive;
 
-    // Wait for processing to finish to ensure frame-aligned swap (prevents mid-frame config changes)
+    // Set swap request flag for multi-ADC synchronization
+    _swapRequested = true;
+
+    // Wait for processing to finish (increased timeout: 100ms)
     int waitCount = 0;
-    while (_processingActive && waitCount < 50) {
+    while (_processingActive && waitCount < 100) {
 #ifndef NATIVE_TEST
         vTaskDelay(1);  // yield ~1ms
 #endif
         waitCount++;
+    }
+
+    // Check for timeout
+    if (_processingActive) {
+        LOG_E("[DSP] Swap timeout after 100ms (audio task busy)");
+        _swapRequested = false;
+#ifndef NATIVE_TEST
+        if (_swapMutex) xSemaphoreGive(_swapMutex);
+#endif
+        AppState::getInstance().dspSwapFailures++;
+        AppState::getInstance().lastDspSwapFailure = millis();
+        return false;
     }
 
     // Copy delay lines from old active → new active to avoid audio discontinuity
@@ -489,7 +531,20 @@ void dsp_swap_config() {
 
     // Atomic swap
     _activeIndex = newActive;
+
+    // Clear swap request flag
+    _swapRequested = false;
+
+    // Release mutex
+#ifndef NATIVE_TEST
+    if (_swapMutex) xSemaphoreGive(_swapMutex);
+#endif
+
+    // Update success counter
+    AppState::getInstance().dspSwapSuccesses++;
+
     LOG_I("[DSP] Config swapped (active=%d)", newActive);
+    return true;
 }
 
 // ===== Metrics =====
@@ -507,6 +562,77 @@ void dsp_clear_cpu_load() {
     _metrics.cpuLoadPercent = 0.0f;
 }
 
+// ===== Emergency Safety Limiter =====
+// Brick-wall limiter at DSP output stage for speaker protection.
+// Uses 8-sample lookahead to prevent overshoot, fast attack (0.1ms), moderate release (100ms).
+static void dsp_emergency_limiter_process(float *bufL, float *bufR, int frames, float thresholdDb, uint32_t sampleRate) {
+    const float thresholdLinear = powf(10.0f, thresholdDb / 20.0f);
+    const float attackCoeff = expf(-1.0f / (0.1f * 0.001f * (float)sampleRate));   // 0.1ms attack
+    const float releaseCoeff = expf(-1.0f / (100.0f * 0.001f * (float)sampleRate)); // 100ms release
+    const int lookaheadSamples = 8;
+
+    bool wasActive = false;
+    float maxPeak = 0.0f;
+
+    for (int f = 0; f < frames; f++) {
+        // Write current samples to lookahead buffer
+        int writePos = _emergencyLimiter.lookaheadPos;
+        _emergencyLimiter.lookahead[0][writePos] = bufL[f];
+        _emergencyLimiter.lookahead[1][writePos] = bufR[f];
+        _emergencyLimiter.lookaheadPos = (writePos + 1) % lookaheadSamples;
+
+        // Find peak in lookahead window (all 8 samples)
+        float peakL = 0.0f, peakR = 0.0f;
+        for (int i = 0; i < lookaheadSamples; i++) {
+            float absL = fabsf(_emergencyLimiter.lookahead[0][i]);
+            float absR = fabsf(_emergencyLimiter.lookahead[1][i]);
+            if (absL > peakL) peakL = absL;
+            if (absR > peakR) peakR = absR;
+        }
+        float peak = (peakL > peakR) ? peakL : peakR;
+        if (peak > maxPeak) maxPeak = peak;
+
+        // Envelope follower: instant attack, slow release
+        if (peak > _emergencyLimiter.envelope) {
+            _emergencyLimiter.envelope = peak; // Instant attack
+        } else {
+            _emergencyLimiter.envelope = releaseCoeff * _emergencyLimiter.envelope + (1.0f - releaseCoeff) * peak;
+        }
+
+        // Compute gain reduction (infinite ratio = hard ceiling)
+        float gain = 1.0f;
+        if (_emergencyLimiter.envelope > thresholdLinear) {
+            gain = thresholdLinear / _emergencyLimiter.envelope;
+            wasActive = true;
+            _emergencyLimiter.samplesSinceTrigger = 0;
+        } else {
+            _emergencyLimiter.samplesSinceTrigger++;
+        }
+
+        // Read delayed samples from lookahead (lookahead delay)
+        int readPos = (_emergencyLimiter.lookaheadPos + lookaheadSamples - lookaheadSamples) % lookaheadSamples;
+        bufL[f] = _emergencyLimiter.lookahead[0][readPos] * gain;
+        bufR[f] = _emergencyLimiter.lookahead[1][readPos] * gain;
+
+        // Update gain reduction (convert to dB)
+        if (gain < 1.0f) {
+            _emergencyLimiter.gainReduction = 20.0f * log10f(gain);
+        } else {
+            _emergencyLimiter.gainReduction = 0.0f;
+        }
+    }
+
+    // Update metrics
+    _metrics.emergencyLimiterGrDb = _emergencyLimiter.gainReduction;
+    _metrics.emergencyLimiterActive = (wasActive || _emergencyLimiter.samplesSinceTrigger < sampleRate / 10); // Active if triggered in last 100ms
+
+    // Increment trigger counter if this buffer crossed threshold
+    if (wasActive && _emergencyLimiter.samplesSinceTrigger == 0) {
+        _emergencyLimiter.triggerCount++;
+        _metrics.emergencyLimiterTriggers = _emergencyLimiter.triggerCount;
+    }
+}
+
 // ===== Main Processing Entry Point =====
 
 void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
@@ -517,6 +643,12 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
 #else
     unsigned long startUs = esp_timer_get_time();
 #endif
+
+    // Check for pending swap request BEFORE processing (allows swap between ADC buffers)
+    if (_swapRequested && adcIndex == 0) {
+        // Skip this ADC0 buffer to allow swap to complete between ADC0 and ADC1
+        return;
+    }
 
     _processingActive = true;
     int stateIdx = _activeIndex;
@@ -562,6 +694,14 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
             break; // Only one stereo width stage per pair
         }
     }
+
+    // Apply emergency safety limiter (non-bypassable brick-wall protection)
+#ifndef NATIVE_TEST
+    if (AppState::getInstance().emergencyLimiterEnabled) {
+        float threshold = AppState::getInstance().emergencyLimiterThresholdDb;
+        dsp_emergency_limiter_process(_dspBufL, _dspBufR, stereoFrames, threshold, cfg->sampleRate);
+    }
+#endif
 
     // Re-interleave float → int32 with clamp
     for (int f = 0; f < stereoFrames; f++) {
@@ -1516,6 +1656,56 @@ void dsp_mirror_channel_config(int srcCh, int dstCh) {
 #ifndef NATIVE_TEST
 #include <ArduinoJson.h>
 #endif
+
+// ===== DC Block Helper Functions =====
+// DC block is a 1st-order HPF at 10 Hz with label "DC Block"
+
+bool dsp_is_dc_block_enabled(int channel) {
+    if (channel < 0 || channel >= DSP_MAX_CHANNELS) return false;
+    DspState *cfg = dsp_get_inactive_config();
+    DspChannelConfig &ch = cfg->channels[channel];
+
+    // Check if first stage is a DC block (HPF_1ST at 10 Hz with "DC Block" label)
+    if (ch.stageCount > 0) {
+        DspStage &s = ch.stages[0];
+        if (s.type == DSP_BIQUAD_HPF_1ST && strcmp(s.label, "DC Block") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void dsp_enable_dc_block(int channel, float sampleRate) {
+    if (channel < 0 || channel >= DSP_MAX_CHANNELS) return;
+    if (dsp_is_dc_block_enabled(channel)) return; // Already enabled
+
+    // Add 1st-order HPF at 10 Hz at position 0
+    int idx = dsp_add_stage(channel, DSP_BIQUAD_HPF_1ST, 0);
+    if (idx < 0) return; // Failed to add stage
+
+    DspState *cfg = dsp_get_inactive_config();
+    DspChannelConfig &ch = cfg->channels[channel];
+    DspStage &s = ch.stages[idx];
+
+    // Configure DC blocking filter
+    strcpy(s.label, "DC Block");
+    s.biquad.frequency = 10.0f; // 10 Hz cutoff
+    s.biquad.Q = 0.707f;        // Butterworth response
+    s.enabled = true;
+
+    // Compute coefficients
+    #ifndef NATIVE_TEST
+    dsp_gen_biquad_hpf_1st(s.biquad.coeffs, s.biquad.frequency, sampleRate);
+    #endif
+}
+
+void dsp_disable_dc_block(int channel) {
+    if (channel < 0 || channel >= DSP_MAX_CHANNELS) return;
+    if (!dsp_is_dc_block_enabled(channel)) return; // Not enabled
+
+    // Remove the DC block stage (always at position 0 if present)
+    dsp_remove_stage(channel, 0);
+}
 
 const char *stage_type_name(DspStageType t) {
     switch (t) {

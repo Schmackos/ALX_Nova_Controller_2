@@ -239,12 +239,26 @@ struct DspChannelConfig {
     DspStage stages[DSP_MAX_STAGES];
 };
 
+// ===== Emergency Safety Limiter State =====
+struct EmergencyLimiterState {
+    float envelope;                           // Current envelope level (runtime)
+    float gainReduction;                      // Current GR in dB (runtime)
+    uint32_t triggerCount;                    // Lifetime trigger counter
+    uint32_t samplesSinceTrigger;             // Samples since last trigger
+    float lookahead[DSP_MAX_CHANNELS][8];     // Lookahead buffer (8 samples per channel)
+    uint8_t lookaheadPos;                     // Current write position in lookahead
+};
+
 // ===== DSP Metrics =====
 struct DspMetrics {
     uint32_t processTimeUs;     // Last buffer processing time (us)
     uint32_t maxProcessTimeUs;  // Peak processing time (us)
     float cpuLoadPercent;       // DSP CPU usage estimate (%)
     float limiterGrDb[DSP_MAX_CHANNELS]; // Per-channel limiter GR (dB)
+    // Emergency limiter metrics
+    float emergencyLimiterGrDb;              // Emergency limiter GR (dB)
+    uint32_t emergencyLimiterTriggers;       // Lifetime trigger count
+    bool emergencyLimiterActive;             // Currently limiting flag
 };
 
 // ===== Global DSP State =====
@@ -517,6 +531,9 @@ inline void dsp_init_metrics(DspMetrics &m) {
     for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
         m.limiterGrDb[i] = 0.0f;
     }
+    m.emergencyLimiterGrDb = 0.0f;
+    m.emergencyLimiterTriggers = 0;
+    m.emergencyLimiterActive = false;
 }
 
 // ===== Conversion Helpers =====
@@ -538,7 +555,7 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex);
 // Config access (double-buffered: active = read by audio task, inactive = modified by API)
 DspState *dsp_get_active_config();
 DspState *dsp_get_inactive_config();
-void dsp_swap_config();
+bool dsp_swap_config();  // Returns: true if swap successful, false if busy/timeout
 
 // Deep copy active config to inactive (includes FIR pool data)
 void dsp_copy_active_to_inactive();
@@ -566,6 +583,11 @@ int  dsp_get_linked_partner(int channel);               // Returns partner chann
 void dsp_ensure_peq_bands(DspState *cfg);  // Ensure all channels have PEQ bands
 void dsp_copy_peq_bands(int srcChannel, int dstChannel);  // Copy PEQ bands between channels
 const char *stage_type_name(DspStageType t);               // Stage type to string name
+
+// DC block helpers (1st-order HPF at 10 Hz)
+bool dsp_is_dc_block_enabled(int channel);                 // Check if DC block is enabled
+void dsp_enable_dc_block(int channel, float sampleRate);   // Enable DC block filter
+void dsp_disable_dc_block(int channel);                    // Disable DC block filter
 
 // Multi-band compressor pool
 int dsp_mb_alloc_slot();

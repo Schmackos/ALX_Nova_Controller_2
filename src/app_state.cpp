@@ -115,6 +115,27 @@ void AppState::setBuzzerVolume(int volume) {
   }
 }
 
+// ===== Emergency Safety Limiter State Management =====
+#ifdef DSP_ENABLED
+void AppState::setEmergencyLimiterEnabled(bool enabled) {
+  if (emergencyLimiterEnabled != enabled) {
+    emergencyLimiterEnabled = enabled;
+    _emergencyLimiterDirty = true;
+  }
+}
+
+void AppState::setEmergencyLimiterThreshold(float dbfs) {
+  // Validate range: -6.0 to 0.0 dBFS
+  if (dbfs < -6.0f) dbfs = -6.0f;
+  if (dbfs > 0.0f) dbfs = 0.0f;
+  // Use small threshold to avoid float comparison issues
+  if (abs(emergencyLimiterThresholdDb - dbfs) > 0.01f) {
+    emergencyLimiterThresholdDb = dbfs;
+    _emergencyLimiterDirty = true;
+  }
+}
+#endif
+
 // ===== Signal Generator State Management =====
 void AppState::setSignalGenEnabled(bool enabled) {
   if (sigGenEnabled != enabled) {
@@ -162,11 +183,18 @@ void AppState::clearAllDirtyFlags() {
   _adcEnabledDirty = false;
   _sigGenDirty = false;
   _otaDirty = false;
+#ifdef DSP_ENABLED
+  _emergencyLimiterDirty = false;
+#endif
 }
 
 bool AppState::hasAnyDirtyFlag() const {
-  return _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
+  bool hasDirty = _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
          _amplifierDirty || _sensingModeDirty || _timerDirty ||
          _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty ||
          _adcEnabledDirty || _sigGenDirty || _otaDirty;
+#ifdef DSP_ENABLED
+  hasDirty = hasDirty || _emergencyLimiterDirty;
+#endif
+  return hasDirty;
 }

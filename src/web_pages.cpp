@@ -2955,6 +2955,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <button class="btn btn-primary" onclick="updateAudioSettings()">Update Sample Rate</button>
             </div>
 
+            <!-- Audio Processing -->
+            <div class="card">
+                <div class="card-title">Audio Processing</div>
+                <div class="form-group">
+                    <label class="form-label">DC Blocking Filter</label>
+                    <label class="switch" style="float:right">
+                        <input type="checkbox" id="dcBlockToggle" onchange="setDcBlockEnabled(this.checked)">
+                        <span class="slider round"></span>
+                    </label>
+                    <div style="clear:both"></div>
+                    <p style="font-size:11px;color:var(--text-secondary);margin-top:4px;line-height:1.4">
+                        Removes DC offset and subsonic noise using a 10 Hz high-pass filter. Helps reduce ground loop hum and low-frequency rumble.
+                    </p>
+                </div>
+            </div>
+
             <!-- USB Audio Input -->
             <div class="card" id="usbAudioCard">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3081,6 +3097,37 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="btn-row" style="margin-top:8px">
                     <button class="btn btn-primary" onclick="eepromProgram()">Program</button>
                     <button class="btn btn-danger" onclick="eepromErase()">Erase</button>
+                </div>
+            </div>
+
+            <!-- Emergency Protection -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>Emergency Protection</span>
+                    <span id="emergencyLimiterStatusBadge" class="badge" style="background:#4CAF50">Idle</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Enable Limiter</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="emergencyLimiterEnable" checked onchange="updateEmergencyLimiter('enabled')"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                    <small style="color:#888">Brick-wall limiter prevents speaker damage from audio peaks</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Threshold: <span id="emergencyLimiterThresholdVal">-0.5</span> dBFS</label>
+                    <input type="range" class="form-input" id="emergencyLimiterThreshold" min="-6" max="0" value="-0.5" step="0.1" oninput="document.getElementById('emergencyLimiterThresholdVal').textContent=parseFloat(this.value).toFixed(1)" onchange="updateEmergencyLimiter('threshold')">
+                    <small style="color:#888">Recommended: -0.5 to -1.0 dBFS for safety headroom</small>
+                </div>
+                <div class="info-row" style="margin-top:8px">
+                    <span>Status:</span>
+                    <span id="emergencyLimiterStatus">Idle</span>
+                </div>
+                <div class="info-row">
+                    <span>Gain Reduction:</span>
+                    <span id="emergencyLimiterGR">0.0 dB</span>
+                </div>
+                <div class="info-row">
+                    <span>Lifetime Triggers:</span>
+                    <span id="emergencyLimiterTriggers">0</span>
                 </div>
             </div>
 
@@ -5166,10 +5213,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     toggleGraphDisabled('vuMeterContent', !data.vuMeterEnabled);
                     toggleGraphDisabled('waveformContent', !data.waveformEnabled);
                     toggleGraphDisabled('spectrumContent', !data.spectrumEnabled);
+                } else if (data.type === 'dcBlockState') {
+                    var dcT = document.getElementById('dcBlockToggle');
+                    if (dcT && typeof data.enabled !== 'undefined') dcT.checked = data.enabled;
                 } else if (data.type === 'debugState') {
                     applyDebugState(data);
                 } else if (data.type === 'signalGenerator') {
                     applySigGenState(data);
+                } else if (data.type === 'emergencyLimiterState') {
+                    applyEmergencyLimiterState(data);
                 } else if (data.type === 'adcState') {
                     if (Array.isArray(data.enabled)) {
                         for (var ai = 0; ai < data.enabled.length; ai++) {
@@ -6521,6 +6573,46 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Signal Generator =====
+        // ===== Emergency Limiter =====
+        function updateEmergencyLimiter(field) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            if (field === 'enabled') {
+                ws.send(JSON.stringify({
+                    type: 'setEmergencyLimiterEnabled',
+                    enabled: document.getElementById('emergencyLimiterEnable').checked
+                }));
+            } else if (field === 'threshold') {
+                ws.send(JSON.stringify({
+                    type: 'setEmergencyLimiterThreshold',
+                    threshold: parseFloat(document.getElementById('emergencyLimiterThreshold').value)
+                }));
+            }
+        }
+        function applyEmergencyLimiterState(d) {
+            document.getElementById('emergencyLimiterEnable').checked = d.enabled;
+            document.getElementById('emergencyLimiterThreshold').value = d.threshold;
+            document.getElementById('emergencyLimiterThresholdVal').textContent = parseFloat(d.threshold).toFixed(1);
+
+            // Update status badge
+            var statusBadge = document.getElementById('emergencyLimiterStatusBadge');
+            var statusText = document.getElementById('emergencyLimiterStatus');
+            if (d.active) {
+                statusBadge.textContent = 'ACTIVE';
+                statusBadge.style.background = '#F44336';
+                statusText.textContent = 'Limiting';
+                statusText.style.color = '#F44336';
+            } else {
+                statusBadge.textContent = 'Idle';
+                statusBadge.style.background = '#4CAF50';
+                statusText.textContent = 'Idle';
+                statusText.style.color = '';
+            }
+
+            // Update metrics
+            document.getElementById('emergencyLimiterGR').textContent = parseFloat(d.gainReductionDb).toFixed(1) + ' dB';
+            document.getElementById('emergencyLimiterTriggers').textContent = d.triggerCount || 0;
+        }
+
         function updateSigGen() {
             document.getElementById('siggenFields').style.display = document.getElementById('siggenEnable').checked ? '' : 'none';
             var wf = parseInt(document.getElementById('siggenWaveform').value);
@@ -7937,6 +8029,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function setFftWindow(val) {
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({type:'setFftWindowType', value:parseInt(val)}));
+        }
+        function setDcBlockEnabled(enabled) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type:'setDcBlockEnabled', enabled:enabled}));
+                showToast('DC block ' + (enabled ? 'enabled' : 'disabled'), 'success');
+            }
         }
         function toggleGraphDisabled(id, disabled) {
             var el = document.getElementById(id);

@@ -106,7 +106,7 @@ void delay_align_auto_apply(const DelayAlignResult &result, int adcIndex) {
         if (cfg->channels[targetCh].stages[i].type == DSP_DELAY) {
             cfg->channels[targetCh].stages[i].delay.delaySamples = (uint16_t)absSamples;
             cfg->channels[targetCh].stages[i].enabled = true;
-            dsp_swap_config();
+            if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
             LOG_I("[Align] Updated delay on ch%d: %d samples (%.2f ms)",
                   targetCh, absSamples, result.delayMs);
             return;
@@ -117,7 +117,7 @@ void delay_align_auto_apply(const DelayAlignResult &result, int adcIndex) {
     int pos = dsp_add_stage(targetCh, DSP_DELAY);
     if (pos >= 0) {
         cfg->channels[targetCh].stages[pos].delay.delaySamples = (uint16_t)absSamples;
-        dsp_swap_config();
+        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
         LOG_I("[Align] Added delay stage on ch%d: %d samples (%.2f ms)",
               targetCh, absSamples, result.delayMs);
     }

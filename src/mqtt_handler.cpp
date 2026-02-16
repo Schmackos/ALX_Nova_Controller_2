@@ -200,6 +200,10 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/signalgenerator/channel/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/output_mode/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/target_adc/set").c_str());
+#ifdef DSP_ENABLED
+  mqttClient.subscribe((base + "/emergency_limiter/enabled/set").c_str());
+  mqttClient.subscribe((base + "/emergency_limiter/threshold/set").c_str());
+#endif
   mqttClient.subscribe((base + "/settings/adc_vref/set").c_str());
   mqttClient.subscribe((base + "/audio/input1/enabled/set").c_str());
   mqttClient.subscribe((base + "/audio/input2/enabled/set").c_str());
@@ -207,6 +211,9 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/audio/waveform/set").c_str());
   mqttClient.subscribe((base + "/audio/spectrum/set").c_str());
   mqttClient.subscribe((base + "/audio/fft_window/set").c_str());
+#ifdef DSP_ENABLED
+  mqttClient.subscribe((base + "/audio/dc_block/set").c_str());
+#endif
   mqttClient.subscribe((base + "/debug/mode/set").c_str());
   mqttClient.subscribe((base + "/debug/serial_level/set").c_str());
   mqttClient.subscribe((base + "/debug/hw_stats/set").c_str());
@@ -598,6 +605,28 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       sendSignalGenState();
     }
   }
+#ifdef DSP_ENABLED
+  // Handle emergency limiter enabled
+  else if (topicStr == base + "/emergency_limiter/enabled/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.setEmergencyLimiterEnabled(newState);
+    saveSettings();
+    LOG_I("[MQTT] Emergency limiter set to %s", newState ? "ON" : "OFF");
+    publishMqttEmergencyLimiterState();
+    sendEmergencyLimiterState();
+  }
+  // Handle emergency limiter threshold
+  else if (topicStr == base + "/emergency_limiter/threshold/set") {
+    float threshold = message.toFloat();
+    if (threshold >= -6.0f && threshold <= 0.0f) {
+      appState.setEmergencyLimiterThreshold(threshold);
+      saveSettings();
+      LOG_I("[MQTT] Emergency limiter threshold set to %.2f dBFS", threshold);
+      publishMqttEmergencyLimiterState();
+      sendEmergencyLimiterState();
+    }
+  }
+#endif
   // Handle ADC reference voltage
   else if (topicStr == base + "/settings/adc_vref/set") {
     float vref = message.toFloat();
@@ -665,6 +694,28 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     publishMqttAudioGraphState();
     LOG_I("[MQTT] FFT window set to %d", (int)wt);
   }
+#ifdef DSP_ENABLED
+  // Handle DC block filter toggle
+  else if (topicStr == base + "/audio/dc_block/set") {
+    bool enabled = (message == "ON" || message == "1" || message == "true");
+    appState.dcBlockEnabled = enabled;
+
+    // Apply to all channels
+    DspState *dspCfg = dsp_get_active_config();
+    for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
+      if (enabled) {
+        dsp_enable_dc_block(ch, dspCfg->sampleRate);
+      } else {
+        dsp_disable_dc_block(ch);
+      }
+    }
+    dsp_swap_config();
+
+    saveSettings();
+    appState.markDcBlockDirty();
+    LOG_I("[MQTT] DC block %s", enabled ? "enabled" : "disabled");
+  }
+#endif
   // Handle debug mode toggle
   else if (topicStr == base + "/debug/mode/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
@@ -778,7 +829,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     dsp_copy_active_to_inactive();
     DspState *cfg = dsp_get_inactive_config();
     cfg->globalBypass = newState;
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[MQTT] Swap failed, staged for retry"); }
     saveDspSettingsDebounced();
     appState.markDspConfigDirty();
     LOG_I("[MQTT] DSP bypass set to %s", newState ? "ON" : "OFF");
@@ -795,7 +846,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         dsp_copy_active_to_inactive();
         DspState *cfg = dsp_get_inactive_config();
         cfg->channels[ch].bypass = newState;
-        dsp_swap_config();
+        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[MQTT] Swap failed, staged for retry"); }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         LOG_I("[MQTT] DSP channel %d bypass set to %s", ch, newState ? "ON" : "OFF");
@@ -816,7 +867,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         dsp_copy_active_to_inactive();
         DspState *cfg = dsp_get_inactive_config();
         cfg->channels[ch].stages[band].enabled = newState;
-        dsp_swap_config();
+        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[MQTT] Swap failed, staged for retry"); }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         LOG_I("[MQTT] PEQ ch%d band%d set to %s", ch, band + 1, newState ? "ON" : "OFF");
@@ -833,7 +884,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         cfg->channels[ch].stages[b].enabled = !bypass;
       }
     }
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[MQTT] Swap failed, staged for retry"); }
     saveDspSettingsDebounced();
     appState.markDspConfigDirty();
     LOG_I("[MQTT] PEQ bypass set to %s", bypass ? "ON" : "OFF");
@@ -1530,6 +1581,30 @@ void publishMqttSignalGenState() {
                      targetNames[appState.sigGenTargetAdc % 3], true);
 }
 
+#ifdef DSP_ENABLED
+void publishMqttEmergencyLimiterState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  // Settings
+  mqttClient.publish((base + "/emergency_limiter/enabled").c_str(),
+                     appState.emergencyLimiterEnabled ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/emergency_limiter/threshold").c_str(),
+                     String(appState.emergencyLimiterThresholdDb, 2).c_str(), true);
+
+  // Status (from DSP metrics)
+  DspMetrics metrics = dsp_get_metrics();
+  mqttClient.publish((base + "/emergency_limiter/status").c_str(),
+                     metrics.emergencyLimiterActive ? "active" : "idle", true);
+  mqttClient.publish((base + "/emergency_limiter/trigger_count").c_str(),
+                     String(metrics.emergencyLimiterTriggers).c_str(), true);
+  mqttClient.publish((base + "/emergency_limiter/gain_reduction").c_str(),
+                     String(metrics.emergencyLimiterGrDb, 2).c_str(), true);
+}
+#endif
+
 void publishMqttAudioDiagnostics() {
   if (!mqttClient.connected())
     return;
@@ -1681,6 +1756,16 @@ void publishMqttDspState() {
                        String(m.limiterGrDb[ch], 1).c_str(), true);
   }
 }
+
+// Publish DC block filter state
+void publishMqttDcBlockState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+  mqttClient.publish((base + "/audio/dc_block").c_str(),
+                     appState.dcBlockEnabled ? "ON" : "OFF", true);
+}
 #endif
 
 // Publish static crash info (called once on MQTT connect — never changes per boot)
@@ -1770,6 +1855,8 @@ void publishMqttState() {
   publishMqttInputNames();
 #ifdef DSP_ENABLED
   publishMqttDspState();
+  publishMqttDcBlockState();
+  publishMqttEmergencyLimiterState();
 #endif
 #ifdef GUI_ENABLED
   publishMqttBootAnimState();
@@ -2896,6 +2983,27 @@ void publishHADiscovery() {
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
+#ifdef DSP_ENABLED
+  // ===== DC Block Filter Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "DC Block Filter";
+    doc["unique_id"] = deviceId + "_dc_block";
+    doc["state_topic"] = base + "/audio/dc_block";
+    doc["command_topic"] = base + "/audio/dc_block/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/switch/" + deviceId + "/dc_block/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+#endif
+
   // ===== FFT Window Type Select =====
   {
     JsonDocument doc;
@@ -3368,6 +3476,88 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     mqttClient.publish(("homeassistant/select/" + deviceId + "/boot_animation_style/config").c_str(), payload.c_str(), true);
+  }
+#endif
+
+#ifdef DSP_ENABLED
+  // ===== Emergency Limiter Enabled Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Emergency Limiter";
+    doc["unique_id"] = deviceId + "_emergency_limiter_enabled";
+    doc["state_topic"] = base + "/emergency_limiter/enabled";
+    doc["command_topic"] = base + "/emergency_limiter/enabled/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["icon"] = "mdi:shield-alert";
+    doc["entity_category"] = "config";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/switch/" + deviceId + "/emergency_limiter_enabled/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Emergency Limiter Threshold Number =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Emergency Limiter Threshold";
+    doc["unique_id"] = deviceId + "_emergency_limiter_threshold";
+    doc["state_topic"] = base + "/emergency_limiter/threshold";
+    doc["command_topic"] = base + "/emergency_limiter/threshold/set";
+    doc["min"] = -6.0;
+    doc["max"] = 0.0;
+    doc["step"] = 0.1;
+    doc["unit_of_measurement"] = "dBFS";
+    doc["icon"] = "mdi:volume-high";
+    doc["entity_category"] = "config";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/number/" + deviceId + "/emergency_limiter_threshold/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Emergency Limiter Status Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Emergency Limiter Status";
+    doc["unique_id"] = deviceId + "_emergency_limiter_status";
+    doc["state_topic"] = base + "/emergency_limiter/status";
+    doc["icon"] = "mdi:shield-check";
+    doc["entity_category"] = "diagnostic";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/emergency_limiter_status/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Emergency Limiter Trigger Count Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Emergency Limiter Triggers";
+    doc["unique_id"] = deviceId + "_emergency_limiter_triggers";
+    doc["state_topic"] = base + "/emergency_limiter/trigger_count";
+    doc["icon"] = "mdi:counter";
+    doc["entity_category"] = "diagnostic";
+    doc["state_class"] = "total_increasing";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/emergency_limiter_triggers/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Emergency Limiter Gain Reduction Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Emergency Limiter Gain Reduction";
+    doc["unique_id"] = deviceId + "_emergency_limiter_gr";
+    doc["state_topic"] = base + "/emergency_limiter/gain_reduction";
+    doc["unit_of_measurement"] = "dB";
+    doc["icon"] = "mdi:volume-minus";
+    doc["entity_category"] = "diagnostic";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/emergency_limiter_gr/config").c_str(), payload.c_str(), true);
   }
 #endif
 

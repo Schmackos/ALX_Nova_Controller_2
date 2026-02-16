@@ -300,6 +300,15 @@ public:
   bool isBuzzerDirty() const { return _buzzerDirty; }
   void clearBuzzerDirty() { _buzzerDirty = false; }
 
+  // ===== Emergency Safety Limiter (Speaker Protection) =====
+  bool emergencyLimiterEnabled = true;       // Default ON for safety
+  float emergencyLimiterThresholdDb = -0.5f; // Threshold in dBFS (-6.0 to 0.0)
+
+  void setEmergencyLimiterEnabled(bool enabled);
+  void setEmergencyLimiterThreshold(float dbfs);
+  bool isEmergencyLimiterDirty() const { return _emergencyLimiterDirty; }
+  void clearEmergencyLimiterDirty() { _emergencyLimiterDirty = false; }
+
   // ===== ADC Enabled Dirty Flag (for WS/MQTT sync) =====
   void markAdcEnabledDirty() { _adcEnabledDirty = true; }
   bool isAdcEnabledDirty() const { return _adcEnabledDirty; }
@@ -361,6 +370,17 @@ public:
   void markDspPresetDirty() { _dspPresetDirty = true; }
   bool isDspPresetDirty() const { return _dspPresetDirty; }
   void clearDspPresetDirty() { _dspPresetDirty = false; }
+
+  // DC blocking filter (high-pass at 10 Hz to remove DC offset and subsonic noise)
+  bool dcBlockEnabled = false;
+  void markDcBlockDirty() { _dcBlockDirty = true; }
+  bool isDcBlockDirty() const { return _dcBlockDirty; }
+  void clearDcBlockDirty() { _dcBlockDirty = false; }
+
+  // DSP config swap diagnostics
+  uint32_t dspSwapFailures = 0;
+  uint32_t dspSwapSuccesses = 0;
+  unsigned long lastDspSwapFailure = 0;
 
   // Delay alignment result
   int   delayAlignSamples = 0;
@@ -502,7 +522,9 @@ private:
   bool _dspConfigDirty = false;
   bool _dspMetricsDirty = false;
   bool _dspPresetDirty = false;
+  bool _dcBlockDirty = false;
   bool _delayAlignDirty = false;
+  bool _emergencyLimiterDirty = false;
 #endif
 #ifdef USB_AUDIO_ENABLED
   bool _usbAudioDirty = false;

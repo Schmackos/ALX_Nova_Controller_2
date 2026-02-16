@@ -108,7 +108,7 @@ static void on_bypass_confirm(int val, float, int) {
     dsp_copy_active_to_inactive();
     DspState *cfg = dsp_get_inactive_config();
     cfg->globalBypass = st.dspBypass;
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
     saveDspSettingsDebounced();
     st.markDspConfigDirty();
 }
@@ -141,7 +141,7 @@ static void toggle_ch_bypass(int ch) {
     dsp_copy_active_to_inactive();
     DspState *cfg = dsp_get_inactive_config();
     cfg->channels[ch].bypass = !cfg->channels[ch].bypass;
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
     saveDspSettingsDebounced();
     AppState::getInstance().markDspConfigDirty();
 }
@@ -369,7 +369,7 @@ static void on_peq_enable_confirm(int val, float, int) {
     dsp_copy_active_to_inactive();
     DspState *cfg = dsp_get_inactive_config();
     cfg->channels[peq_channel].stages[peq_edit_band_idx].enabled = (val == 1);
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
     saveDspSettingsDebounced();
     AppState::getInstance().markDspConfigDirty();
 }
@@ -390,7 +390,7 @@ static void on_peq_freq_confirm(int val, float, int) {
     cfg->channels[peq_channel].stages[peq_edit_band_idx].biquad.frequency = (float)val;
     dsp_compute_biquad_coeffs(cfg->channels[peq_channel].stages[peq_edit_band_idx].biquad,
                               cfg->channels[peq_channel].stages[peq_edit_band_idx].type, cfg->sampleRate);
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
     saveDspSettingsDebounced();
     AppState::getInstance().markDspConfigDirty();
 }
@@ -415,7 +415,7 @@ static void on_peq_gain_confirm(int, float val, int) {
     cfg->channels[peq_channel].stages[peq_edit_band_idx].biquad.gain = val;
     dsp_compute_biquad_coeffs(cfg->channels[peq_channel].stages[peq_edit_band_idx].biquad,
                               cfg->channels[peq_channel].stages[peq_edit_band_idx].type, cfg->sampleRate);
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
     saveDspSettingsDebounced();
     AppState::getInstance().markDspConfigDirty();
 }
@@ -441,7 +441,7 @@ static void on_peq_q_confirm(int, float val, int) {
     cfg->channels[peq_channel].stages[peq_edit_band_idx].biquad.Q = val;
     dsp_compute_biquad_coeffs(cfg->channels[peq_channel].stages[peq_edit_band_idx].biquad,
                               cfg->channels[peq_channel].stages[peq_edit_band_idx].type, cfg->sampleRate);
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
     saveDspSettingsDebounced();
     AppState::getInstance().markDspConfigDirty();
 }
@@ -478,7 +478,7 @@ static void on_peq_type_confirm(int, float, int option_idx) {
     cfg->channels[peq_channel].stages[peq_edit_band_idx].type = (DspStageType)peq_type_options[option_idx].value;
     dsp_compute_biquad_coeffs(cfg->channels[peq_channel].stages[peq_edit_band_idx].biquad,
                               cfg->channels[peq_channel].stages[peq_edit_band_idx].type, cfg->sampleRate);
-    dsp_swap_config();
+    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); }
     saveDspSettingsDebounced();
     AppState::getInstance().markDspConfigDirty();
 }

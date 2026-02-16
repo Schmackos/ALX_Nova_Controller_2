@@ -40,6 +40,8 @@ void publishMqttCrashDiagnostics();
 void publishMqttInputNames();
 #ifdef DSP_ENABLED
 void publishMqttDspState();
+void publishMqttDcBlockState();
+void publishMqttEmergencyLimiterState();
 #endif
 #ifdef GUI_ENABLED
 void publishMqttBootAnimState();

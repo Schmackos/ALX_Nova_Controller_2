@@ -3,6 +3,7 @@
 ## Version 1.8.3
 
 ## Documentation
+- [2026-02-16] docs: Update release notes for v1.8.3 codebase concerns (`e2d9527`)
 - [2026-02-16] docs: Update release notes for v1.8.3 codebase concerns (`05fa536`)
 - [2026-02-16] docs: Add dual-ADC clock architecture summary comment
 
@@ -59,6 +60,69 @@ workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
+- [2026-02-16] feat: Add emergency limiter and DSP swap synchronization fixes
+
+Implement comprehensive audio protection system with two phases:
+
+Phase 1 - Emergency Safety Limiter:
+- Brick-wall limiter with 8-sample lookahead buffer
+- 0.1ms attack, 100ms release, -0.5 dBFS default threshold
+- WebSocket and MQTT integration with 5 HA entities
+- Web UI card on Audio tab with real-time metrics
+- 10 unit tests
+
+Phase 2 - DSP Swap Synchronization:
+- FreeRTOS mutex protection with 5ms timeout
+- Multi-ADC coordination via _swapRequested flag
+- Changed dsp_swap_config() to return bool for error handling
+- Updated 46 call sites with retry logic
+- Increased timeout from 50ms to 100ms
+- Added swap diagnostics (failures/successes/timing)
+- 9 unit tests
+
+Prevents speaker damage and eliminates audio pops/crackles during config changes. (`e276565`)
+- [2026-02-16] feat: Add emergency limiter and DSP swap synchronization fixes
+
+Implement comprehensive audio protection system with two phases:
+
+Phase 1 - Emergency Safety Limiter:
+- Brick-wall limiter with 8-sample lookahead buffer
+- 0.1ms attack, 100ms release, -0.5 dBFS default threshold
+- WebSocket and MQTT integration with 5 HA entities
+- Web UI card on Audio tab with real-time metrics
+- 10 unit tests
+
+Phase 2 - DSP Swap Synchronization:
+- FreeRTOS mutex protection with 5ms timeout
+- Multi-ADC coordination via _swapRequested flag
+- Changed dsp_swap_config() to return bool for error handling
+- Updated 46 call sites with retry logic
+- Increased timeout from 50ms to 100ms
+- Added swap diagnostics (failures/successes/timing)
+- 9 unit tests
+
+Prevents speaker damage and eliminates audio pops/crackles during config changes. (`eb5c00f`)
+- [2026-02-16] feat: Add emergency limiter and DSP swap synchronization fixes
+
+Implement comprehensive audio protection system with two phases:
+
+Phase 1 - Emergency Safety Limiter:
+- Brick-wall limiter with 8-sample lookahead buffer
+- 0.1ms attack, 100ms release, -0.5 dBFS default threshold
+- WebSocket and MQTT integration with 5 HA entities
+- Web UI card on Audio tab with real-time metrics
+- 10 unit tests
+
+Phase 2 - DSP Swap Synchronization:
+- FreeRTOS mutex protection with 5ms timeout
+- Multi-ADC coordination via _swapRequested flag
+- Changed dsp_swap_config() to return bool for error handling
+- Updated 46 call sites with retry logic
+- Increased timeout from 50ms to 100ms
+- Added swap diagnostics (failures/successes/timing)
+- 9 unit tests
+
+Prevents speaker damage and eliminates audio pops/crackles during config changes. (`71fb6b8`)
 - [2026-02-16] feat: Add settings format versioning with VER= prefix
 
 Refactor settings persistence to support format evolution. Load/save

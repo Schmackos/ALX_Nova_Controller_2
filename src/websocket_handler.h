@@ -28,10 +28,12 @@ void sendMqttSettingsState();
 void sendBuzzerState();
 void sendSignalGenState();
 void sendAudioGraphState();
+void sendDcBlockState();
 void sendDebugState();
 #ifdef DSP_ENABLED
 void sendDspState();
 void sendDspMetrics();
+void sendEmergencyLimiterState();
 #endif
 #ifdef DAC_ENABLED
 void sendDacState();
