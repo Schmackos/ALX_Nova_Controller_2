@@ -3,6 +3,12 @@
 ## Version 1.8.3
 
 ## Documentation
+- [2026-02-16] docs: Update release notes with DC block preset and stability improvements (`c3f23ef`)
+- [2026-02-16] docs: Update release notes with DC block preset and stability improvements (`23fc90e`)
+- [2026-02-16] docs: Update release notes with project structure reorganization
+
+Document the refactoring of project structure into professional layout
+with categorized docs/ subdirectories. (`c08ea6e`)
 - [2026-02-16] docs: Update release notes with project structure reorganization
 
 Document the refactoring of project structure into professional layout
