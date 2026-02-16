@@ -2,11 +2,42 @@
 #define APP_STATE_H
 
 #include "config.h"
+
+#ifdef NATIVE_TEST
+#include "../test/test_mocks/Arduino.h"
+// Native test stubs for Arduino libraries
+class WiFiClient {
+public:
+    bool connected() { return false; }
+    void stop() {}
+};
+class PubSubClient {
+public:
+    bool connected() { return false; }
+    bool connect(const char*) { return false; }
+    bool publish(const char*, const char*) { return false; }
+    void loop() {}
+};
+class WebServer {
+public:
+    void handleClient() {}
+};
+class WebSocketsServer {
+public:
+    void loop() {}
+    void broadcastTXT(const String&) {}
+};
+class WiFiClass {
+public:
+    bool isConnected() { return false; }
+};
+#else
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <WiFi.h>
+#endif
 
 // ===== FFT Window Types =====
 enum FftWindowType : uint8_t {

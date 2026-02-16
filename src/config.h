@@ -1,7 +1,11 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#ifdef NATIVE_TEST
+#include "../test/test_mocks/Arduino.h"
+#else
 #include <Arduino.h>
+#endif
 
 // ===== Device Information =====
 #define MANUFACTURER_NAME "ALX Audio"

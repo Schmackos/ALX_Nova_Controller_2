@@ -93,6 +93,12 @@ workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 Preset items now use styled cards with filled orange active state matching
 channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
 Green "Saved" / red "Modified" badge in card title. Save button appears when
+config is modified to overwrite last active preset. (`3a59978`)
+- [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
+
+Preset items now use styled cards with filled orange active state matching
+channel tabs. Click row to load preset, pencil/x icon buttons for rename/delete.
+Green "Saved" / red "Modified" badge in card title. Save button appears when
 config is modified to overwrite last active preset. (`472a09a`)
 - [2026-02-17] feat: Restyle DSP presets with card design, status badge, and save button
 
@@ -458,6 +464,13 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-17] fix: Native test compilation and WebSocket JSON key naming
+
+Add NATIVE_TEST guards to app_state.h, audio_quality.h, config.h so
+tests can include them without ESP32 dependencies. Fix dsp_pipeline.cpp
+app_state include order and guard audio_quality call. Fix smart_sensing
+JSON keys that had erroneous "appState." prefix. Add new DSP preset
+tests and expand DSP swap/emergency limiter test coverage. (`f27ec56`)
 - [2026-02-17] fix: Undefined escapeHtml breaking DSP UI and preset save rejecting auto-assign
 
 escapeHtml() was called in dspRenderPresetList but never defined, causing

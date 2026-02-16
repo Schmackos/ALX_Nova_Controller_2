@@ -43,10 +43,10 @@ void handleSmartSensingGet() {
   }
   doc["mode"] = modeStr;
 
-  doc["appState.timerDuration"] = appState.timerDuration;
-  doc["appState.timerRemaining"] = appState.timerRemaining;
+  doc["timerDuration"] = appState.timerDuration;
+  doc["timerRemaining"] = appState.timerRemaining;
   doc["timerActive"] = (appState.timerRemaining > 0);
-  doc["appState.amplifierState"] = appState.amplifierState;
+  doc["amplifierState"] = appState.amplifierState;
   doc["audioThreshold"] = appState.audioThreshold_dBFS;
   doc["audioLevel"] = appState.audioLevel_dBFS;
   doc["signalDetected"] = (_smoothedAudioLevel >= appState.audioThreshold_dBFS);
@@ -431,10 +431,10 @@ void sendSmartSensingStateInternal() {
   }
   doc["mode"] = modeStr;
 
-  doc["appState.timerDuration"] = appState.timerDuration;
-  doc["appState.timerRemaining"] = appState.timerRemaining;
+  doc["timerDuration"] = appState.timerDuration;
+  doc["timerRemaining"] = appState.timerRemaining;
   doc["timerActive"] = (appState.timerRemaining > 0);
-  doc["appState.amplifierState"] = appState.amplifierState;
+  doc["amplifierState"] = appState.amplifierState;
   doc["audioThreshold"] = appState.audioThreshold_dBFS;
   doc["audioLevel"] = appState.audioLevel_dBFS;
   doc["signalDetected"] = (_smoothedAudioLevel >= appState.audioThreshold_dBFS);
