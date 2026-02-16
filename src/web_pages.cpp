@@ -3314,6 +3314,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="menu-item" onclick="dspAddStage(17)">Mute</div>
                         <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
                         <div class="menu-item" onclick="dspShowBaffleModal()">Baffle Step...</div>
+                        <div class="menu-cat">Crossover</div>
+                        <div class="menu-item" onclick="dspShowCrossoverModal()">Crossover Preset...</div>
                         <div class="menu-cat">Analysis</div>
                         <div class="menu-item" onclick="dspShowThdModal()">THD+N Measurement...</div>
                     </div>
@@ -3330,62 +3332,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <button class="btn btn-secondary" onclick="dspExportJson()">Export JSON</button>
                 </div>
                 <input type="file" id="dspFileInput" accept=".txt,.json" style="display:none" onchange="dspHandleFileImport(event)">
-            </div>
-
-            <!-- Quick Setup: Crossover Presets -->
-            <div class="card">
-                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-                    <span class="card-title" style="margin-bottom:0;">Crossover Presets</span>
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-                </div>
-                <div class="collapsible-content" style="margin-top:8px;">
-                    <div class="form-group">
-                        <label class="form-label">Crossover Frequency (Hz)</label>
-                        <input type="number" class="form-input" id="dspXoverFreq" value="2000" min="20" max="20000">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Slope</label>
-                        <select class="form-input" id="dspXoverType">
-                            <optgroup label="Butterworth">
-                                <option value="bw1">BW1 — 1st order (6 dB/oct)</option>
-                                <option value="bw2">BW2 — 2nd order (12 dB/oct)</option>
-                                <option value="bw3">BW3 — 3rd order (18 dB/oct)</option>
-                                <option value="bw4">BW4 — 4th order (24 dB/oct)</option>
-                                <option value="bw5">BW5 — 5th order (30 dB/oct)</option>
-                                <option value="bw6">BW6 — 6th order (36 dB/oct)</option>
-                                <option value="bw7">BW7 — 7th order (42 dB/oct)</option>
-                                <option value="bw8">BW8 — 8th order (48 dB/oct)</option>
-                                <option value="bw9">BW9 — 9th order (54 dB/oct)</option>
-                                <option value="bw10">BW10 — 10th order (60 dB/oct)</option>
-                                <option value="bw11">BW11 — 11th order (66 dB/oct)</option>
-                                <option value="bw12">BW12 — 12th order (72 dB/oct)</option>
-                            </optgroup>
-                            <optgroup label="Linkwitz-Riley">
-                                <option value="lr2">LR2 — 2nd order (12 dB/oct)</option>
-                                <option value="lr4" selected>LR4 — 4th order (24 dB/oct)</option>
-                                <option value="lr6">LR6 — 6th order (36 dB/oct)</option>
-                                <option value="lr8">LR8 — 8th order (48 dB/oct)</option>
-                                <option value="lr12">LR12 — 12th order (72 dB/oct)</option>
-                                <option value="lr16">LR16 — 16th order (96 dB/oct)</option>
-                                <option value="lr24">LR24 — 24th order (144 dB/oct)</option>
-                            </optgroup>
-                            <optgroup label="Bessel (flat group delay)">
-                                <option value="bessel2">Bessel 2nd order (12 dB/oct)</option>
-                                <option value="bessel4">Bessel 4th order (24 dB/oct)</option>
-                                <option value="bessel6">Bessel 6th order (36 dB/oct)</option>
-                                <option value="bessel8">Bessel 8th order (48 dB/oct)</option>
-                            </optgroup>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Role</label>
-                        <select class="form-input" id="dspXoverRole">
-                            <option value="0">Low Pass (LPF)</option>
-                            <option value="1">High Pass (HPF)</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-primary" onclick="dspApplyCrossover()">Apply to Channel</button>
-                </div>
             </div>
 
             <!-- Quick Setup: Routing Matrix -->
@@ -10822,10 +10768,67 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== DSP Crossover Presets =====
+        function dspShowCrossoverModal() {
+            dspToggleAddMenu();
+            var existing = document.getElementById('crossoverModal');
+            if (existing) existing.remove();
+            var modal = document.createElement('div');
+            modal.id = 'crossoverModal';
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = '<div class="modal">' +
+                '<div class="modal-title">Crossover Preset</div>' +
+                '<div class="form-group"><label class="form-label">Crossover Frequency (Hz)</label>' +
+                '<input type="number" class="form-input" id="modalXoverFreq" value="2000" min="20" max="20000"></div>' +
+                '<div class="form-group"><label class="form-label">Slope</label>' +
+                '<select class="form-input" id="modalXoverType">' +
+                '<optgroup label="Butterworth">' +
+                '<option value="bw1">BW1 — 1st order (6 dB/oct)</option>' +
+                '<option value="bw2">BW2 — 2nd order (12 dB/oct)</option>' +
+                '<option value="bw3">BW3 — 3rd order (18 dB/oct)</option>' +
+                '<option value="bw4">BW4 — 4th order (24 dB/oct)</option>' +
+                '<option value="bw5">BW5 — 5th order (30 dB/oct)</option>' +
+                '<option value="bw6">BW6 — 6th order (36 dB/oct)</option>' +
+                '<option value="bw7">BW7 — 7th order (42 dB/oct)</option>' +
+                '<option value="bw8">BW8 — 8th order (48 dB/oct)</option>' +
+                '<option value="bw9">BW9 — 9th order (54 dB/oct)</option>' +
+                '<option value="bw10">BW10 — 10th order (60 dB/oct)</option>' +
+                '<option value="bw11">BW11 — 11th order (66 dB/oct)</option>' +
+                '<option value="bw12">BW12 — 12th order (72 dB/oct)</option>' +
+                '</optgroup>' +
+                '<optgroup label="Linkwitz-Riley">' +
+                '<option value="lr2">LR2 — 2nd order (12 dB/oct)</option>' +
+                '<option value="lr4" selected>LR4 — 4th order (24 dB/oct)</option>' +
+                '<option value="lr6">LR6 — 6th order (36 dB/oct)</option>' +
+                '<option value="lr8">LR8 — 8th order (48 dB/oct)</option>' +
+                '<option value="lr12">LR12 — 12th order (72 dB/oct)</option>' +
+                '<option value="lr16">LR16 — 16th order (96 dB/oct)</option>' +
+                '<option value="lr24">LR24 — 24th order (144 dB/oct)</option>' +
+                '</optgroup>' +
+                '<optgroup label="Bessel (flat group delay)">' +
+                '<option value="bessel2">Bessel 2nd order (12 dB/oct)</option>' +
+                '<option value="bessel4">Bessel 4th order (24 dB/oct)</option>' +
+                '<option value="bessel6">Bessel 6th order (36 dB/oct)</option>' +
+                '<option value="bessel8">Bessel 8th order (48 dB/oct)</option>' +
+                '</optgroup>' +
+                '</select></div>' +
+                '<div class="form-group"><label class="form-label">Role</label>' +
+                '<select class="form-input" id="modalXoverRole">' +
+                '<option value="0">Low Pass (LPF)</option>' +
+                '<option value="1">High Pass (HPF)</option>' +
+                '</select></div>' +
+                '<div class="modal-actions"><button class="btn btn-secondary" onclick="closeCrossoverModal()">Cancel</button>' +
+                '<button class="btn btn-primary" onclick="dspApplyCrossover()">Apply to Channel</button></div></div>';
+            modal.addEventListener('click', function(e) { if (e.target === modal) closeCrossoverModal(); });
+            document.body.appendChild(modal);
+        }
+        function closeCrossoverModal() {
+            var m = document.getElementById('crossoverModal');
+            if (m) m.remove();
+        }
         function dspApplyCrossover() {
-            var freq = parseInt(document.getElementById('dspXoverFreq').value) || 2000;
-            var type = document.getElementById('dspXoverType').value;
-            var role = parseInt(document.getElementById('dspXoverRole').value);
+            var freq = parseInt(document.getElementById('modalXoverFreq').value) || 2000;
+            var type = document.getElementById('modalXoverType').value;
+            var role = parseInt(document.getElementById('modalXoverRole').value);
             fetch('/api/dsp/crossover?ch=' + dspCh, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -10834,6 +10837,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .then(r => r.json())
             .then(d => { if (d.success) showToast('Crossover applied'); else showToast('Failed: ' + (d.message || ''), true); })
             .catch(err => showToast('Error: ' + err, true));
+            closeCrossoverModal();
         }
 
         // ===== Baffle Step =====
