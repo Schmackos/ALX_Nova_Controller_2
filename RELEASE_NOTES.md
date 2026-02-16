@@ -3,6 +3,20 @@
 ## Version 1.8.3
 
 ## Documentation
+- [2026-02-16] docs: Update release notes for v1.8.3 codebase concerns (`05fa536`)
+- [2026-02-16] docs: Add dual-ADC clock architecture summary comment
+
+Add brief summary comment before i2s_audio_init() documenting the
+dual I2S master architecture. Complements the detailed inline
+documentation already present at lines 379-418.
+
+Documents:
+- Both ADCs use master mode (not slave due to ESP32-S3 DMA issues)
+- I2S0 outputs clocks (BCK/WS/MCLK), I2S1 data-only (GPIO9)
+- Init order: ADC2 first, then ADC1 (clock source)
+
+Improves code readability for developers unfamiliar with the dual-master
+workaround used to avoid ESP32-S3 slave-mode DMA issues. (`d69cf21`)
 - [2026-02-16] docs: Add dual-ADC clock architecture summary comment
 
 Add brief summary comment before i2s_audio_init() documenting the
