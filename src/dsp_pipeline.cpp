@@ -399,7 +399,9 @@ void dsp_swap_config() {
     // Wait for processing to finish to ensure frame-aligned swap (prevents mid-frame config changes)
     int waitCount = 0;
     while (_processingActive && waitCount < 50) {
+#ifndef NATIVE_TEST
         vTaskDelay(1);  // yield ~1ms
+#endif
         waitCount++;
     }
 

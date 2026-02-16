@@ -46,6 +46,42 @@ SameSite=Strict cookies. USB audio TinyUSB init guarded to prevent
 double-init crashes on enable/disable toggle. (`2832507`)
 
 ## Improvements
+- [2026-02-16] perf: Pool JSON allocations in DSP API handlers
+
+Replace per-handler JsonDocument with static _dspApiDoc to reduce heap
+fragmentation. All DSP API handlers now reuse a single document pool.
+
+Safe because:
+- All handlers run single-threaded on Core 0 HTTP server
+- No handler stores JSON references beyond its return
+- serializeJson() completes before handler exits
+
+Changed 26 instances of:
+  JsonDocument doc;
+To:
+  _dspApiDoc.clear();
+  JsonDocument &doc = _dspApiDoc;
+
+Reduces ~2KB heap allocation per API call and prevents long-term
+fragmentation from repeated JSON alloc/free cycles. (`a7a3372`)
+- [2026-02-16] perf: Pool JSON allocations in DSP API handlers
+
+Replace per-handler JsonDocument with static _dspApiDoc to reduce heap
+fragmentation. All DSP API handlers now reuse a single document pool.
+
+Safe because:
+- All handlers run single-threaded on Core 0 HTTP server
+- No handler stores JSON references beyond its return
+- serializeJson() completes before handler exits
+
+Changed 26 instances of:
+  JsonDocument doc;
+To:
+  _dspApiDoc.clear();
+  JsonDocument &doc = _dspApiDoc;
+
+Reduces ~2KB heap allocation per API call and prevents long-term
+fragmentation from repeated JSON alloc/free cycles. (`d0bd171`)
 - [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
 
 Merge 6+ separate buffer loops into 2 passes in process_adc_buffer():
@@ -63,6 +99,23 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-16] fix: DSP frame-aligned config swap with busy-wait
+
+Prevent mid-frame config swaps that could cause transient glitches.
+Add _processingActive flag to track when dsp_process_buffer() is
+executing. dsp_swap_config() now busy-waits (max 50ms) until
+processing completes before copying delay lines.
+
+Changes:
+- Add volatile _processingActive flag
+- Set true at start of dsp_process_buffer(), clear at end
+- Clear in all early-return paths (globalBypass, channel bounds)
+- dsp_swap_config() waits up to 50ms for !_processingActive
+
+On native tests: vTaskDelay is no-op, _processingActive always false
+(single-threaded), so no wait occurs.
+
+Typical wait: 0-1 iterations (~5ms processing << 50ms timeout). (`a6cd50f`)
 - [2026-02-16] fix: DSP frame-aligned config swap with busy-wait
 
 Prevent mid-frame config swaps that could cause transient glitches.
