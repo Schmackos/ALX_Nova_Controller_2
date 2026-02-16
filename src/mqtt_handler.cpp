@@ -1598,8 +1598,6 @@ void publishMqttAudioQualityState() {
                      String(diag.glitchHistory.totalGlitches).c_str(), true);
   mqttClient.publish((base + "/audio_quality/glitches_last_minute").c_str(),
                      String(diag.glitchHistory.glitchesLastMinute).c_str(), true);
-  mqttClient.publish((base + "/audio_quality/buffer_latency_avg").c_str(),
-                     String(diag.timingHist.avgLatencyMs, 2).c_str(), true);
   mqttClient.publish((base + "/audio_quality/correlation_dsp_swap").c_str(),
                      diag.correlation.dspSwapRelated ? "ON" : "OFF", true);
   mqttClient.publish((base + "/audio_quality/correlation_wifi").c_str(),

@@ -265,21 +265,4 @@ void siggen_init() {}
 bool siggen_is_active() { return _siggenActive; }
 bool siggen_is_software_mode() { return _params.outputMode == SIGOUT_SOFTWARE; }
 void siggen_apply_params() {}
-
-// Test helper: allow tests to set active/params directly
-void siggen_test_set_active(bool active) { _siggenActive = active; }
-void siggen_test_set_params(int waveform, float freq, float amp_dbfs,
-                            int channel, int outputMode, float sweepSpeed) {
-    _params.waveform = waveform;
-    _params.frequency = freq;
-    _params.amplitude_linear = siggen_dbfs_to_linear(amp_dbfs);
-    _params.channel = channel;
-    _params.outputMode = outputMode;
-    _params.sweepSpeed = sweepSpeed;
-    _params.sweepMin = 20.0f;
-    _params.sweepMax = freq;
-    _phase = 0.0f;
-    _sweepFreq = 20.0f;
-    _noiseSeed = 42; // Deterministic for tests
-}
 #endif // NATIVE_TEST

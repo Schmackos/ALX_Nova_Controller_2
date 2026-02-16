@@ -21,7 +21,6 @@ static AudioQualityDiag _diag = {
     .enabled = false,
     .glitchThreshold = DISCONTINUITY_THRESHOLD_DEFAULT,
     .glitchHistory = {.writePos = 0, .totalGlitches = 0, .glitchesLastMinute = 0, .lastMinuteResetMs = 0},
-    .timingHist = {.avgLatencyMs = 0.0f, .maxLatencyMs = 0.0f, .sampleCount = 0},
     .correlation = {.dspSwapRelated = false, .wifiRelated = false, .mqttRelated = false,
                     .lastDspSwapMs = 0, .lastWifiEventMs = 0, .lastMqttBurstMs = 0},
     .memoryHist = {.writePos = 0},
@@ -69,29 +68,8 @@ float audio_quality_get_threshold() {
     return _diag.glitchThreshold;
 }
 
-void audio_quality_scan_buffer(int adcIndex, const int32_t *buf, int stereoFrames, unsigned long latencyUs) {
+void audio_quality_scan_buffer(int adcIndex, const int32_t *buf, int stereoFrames) {
     if (!_diag.enabled || !buf || stereoFrames <= 0) return;
-
-    // Update timing histogram
-    float latencyMs = (float)latencyUs / 1000.0f;
-    int bucket = (int)latencyMs;
-
-    if (bucket >= TIMING_HISTOGRAM_BUCKETS) {
-        _diag.timingHist.overflows++;
-    } else {
-        _diag.timingHist.buckets[bucket]++;
-    }
-
-    // Update rolling average
-    _diag.timingHist.sampleCount++;
-    float alpha = 1.0f / (float)_diag.timingHist.sampleCount;
-    if (alpha > 0.1f) alpha = 0.1f; // Clamp for stability
-
-    _diag.timingHist.avgLatencyMs = _diag.timingHist.avgLatencyMs * (1.0f - alpha) + latencyMs * alpha;
-
-    if (latencyMs > _diag.timingHist.maxLatencyMs) {
-        _diag.timingHist.maxLatencyMs = latencyMs;
-    }
 
     // Glitch detection on left and right channels
     for (int ch = 0; ch < 2; ch++) {

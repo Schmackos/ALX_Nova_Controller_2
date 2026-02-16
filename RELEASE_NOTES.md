@@ -538,6 +538,42 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: Remove dead code - test helpers and timing histogram
+
+Removed two categories of unused/incomplete code:
+
+1. Signal generator test helpers (~18 lines)
+   - siggen_test_set_active() and siggen_test_set_params()
+   - Marked as test helpers but never used by any unit tests
+   - Not exported in header file
+
+2. Audio quality timing histogram feature (~60 lines)
+   - TimingHistogram struct and implementation removed
+   - Function always received 0 for latencyUs (incomplete feature)
+   - Removed from WebSocket messages (avgLatencyMs, maxLatencyMs)
+   - Removed from MQTT publish (buffer_latency_avg)
+   - Removed TODO comments from i2s_audio.cpp
+
+Total dead code removed: ~78 lines across 6 files
+No functional impact - features were either unused or non-functional (`af9d3b8`)
+- [2026-02-16] refactor: Remove dead code - test helpers and timing histogram
+
+Removed two categories of unused/incomplete code:
+
+1. Signal generator test helpers (~18 lines)
+   - siggen_test_set_active() and siggen_test_set_params()
+   - Marked as test helpers but never used by any unit tests
+   - Not exported in header file
+
+2. Audio quality timing histogram feature (~60 lines)
+   - TimingHistogram struct and implementation removed
+   - Function always received 0 for latencyUs (incomplete feature)
+   - Removed from WebSocket messages (avgLatencyMs, maxLatencyMs)
+   - Removed from MQTT publish (buffer_latency_avg)
+   - Removed TODO comments from i2s_audio.cpp
+
+Total dead code removed: ~78 lines across 6 files
+No functional impact - features were either unused or non-functional (`bdd09fb`)
 - [2026-02-16] refactor: Remove incomplete delay alignment feature
 
 Removed ~200 lines of non-functional delay alignment code:
