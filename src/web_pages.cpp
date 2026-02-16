@@ -3313,6 +3313,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="menu-item" onclick="dspAddStage(16)">Polarity Invert</div>
                         <div class="menu-item" onclick="dspAddStage(17)">Mute</div>
                         <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
+                        <div class="menu-item" onclick="dspShowBaffleModal()">Baffle Step...</div>
+                        <div class="menu-cat">Analysis</div>
+                        <div class="menu-item" onclick="dspShowThdModal()">THD+N Measurement...</div>
                     </div>
                 </div>
             </div>
@@ -3382,64 +3385,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         </select>
                     </div>
                     <button class="btn btn-primary" onclick="dspApplyCrossover()">Apply to Channel</button>
-                </div>
-            </div>
-
-            <!-- Baffle Step Correction -->
-            <div class="card">
-                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-                    <span class="card-title" style="margin-bottom:0;">Baffle Step Correction</span>
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-                </div>
-                <div class="collapsible-content" style="margin-top:8px;">
-                    <div class="form-group">
-                        <label class="form-label">Baffle Width (mm)</label>
-                        <input type="number" class="form-input" id="baffleWidth" value="250" min="50" max="600" step="1">
-                    </div>
-                    <div id="bafflePreview" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
-                        Estimated: ~437 Hz, +6.0 dB high shelf
-                    </div>
-                    <button class="btn btn-primary" onclick="applyBaffleStep()">Apply to Channel</button>
-                </div>
-            </div>
-
-            <!-- THD+N Measurement -->
-            <div class="card">
-                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-                    <span class="card-title" style="margin-bottom:0;">THD+N Measurement</span>
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-                </div>
-                <div class="collapsible-content" style="margin-top:8px;">
-                    <div class="form-group">
-                        <label class="form-label">Test Frequency</label>
-                        <select class="form-input" id="thdFreq">
-                            <option value="100">100 Hz</option>
-                            <option value="1000" selected>1 kHz</option>
-                            <option value="10000">10 kHz</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Averages</label>
-                        <select class="form-input" id="thdAverages">
-                            <option value="4">4 frames</option>
-                            <option value="8" selected>8 frames</option>
-                            <option value="16">16 frames</option>
-                        </select>
-                    </div>
-                    <div style="display:flex;gap:8px;margin-bottom:8px;">
-                        <button class="btn btn-primary" id="thdStartBtn" onclick="thdStart()">Start</button>
-                        <button class="btn btn-outline" id="thdStopBtn" onclick="thdStop()" style="display:none">Stop</button>
-                    </div>
-                    <div id="thdResult" style="display:none;font-size:13px;">
-                        <div class="info-row"><span class="info-label">THD+N</span><span class="info-value" id="thdPercent">—</span></div>
-                        <div class="info-row"><span class="info-label">THD+N (dB)</span><span class="info-value" id="thdDb">—</span></div>
-                        <div class="info-row"><span class="info-label">Fundamental</span><span class="info-value" id="thdFund">—</span></div>
-                        <div class="info-row"><span class="info-label">Progress</span><span class="info-value" id="thdProgress">—</span></div>
-                        <div id="thdHarmonics" style="margin-top:8px;">
-                            <div style="font-weight:600;margin-bottom:4px;font-size:12px;">Harmonics (dB rel. fundamental)</div>
-                            <div id="thdHarmBars" style="display:flex;gap:2px;height:60px;align-items:flex-end;"></div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -10892,37 +10837,95 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Baffle Step =====
+        function dspShowBaffleModal() {
+            dspToggleAddMenu();
+            var existing = document.getElementById('baffleModal');
+            if (existing) existing.remove();
+            var modal = document.createElement('div');
+            modal.id = 'baffleModal';
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = '<div class="modal">' +
+                '<div class="modal-title">Baffle Step Correction</div>' +
+                '<div class="form-group"><label class="form-label">Baffle Width (mm)</label>' +
+                '<input type="number" class="form-input" id="modalBaffleWidth" value="250" min="50" max="600" step="1"></div>' +
+                '<div id="modalBafflePreview" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Estimated: ~437 Hz, +6.0 dB high shelf</div>' +
+                '<div class="modal-actions"><button class="btn btn-secondary" onclick="closeBaffleModal()">Cancel</button>' +
+                '<button class="btn btn-primary" onclick="applyBaffleStep()">Apply to Channel</button></div></div>';
+            modal.addEventListener('click', function(e) { if (e.target === modal) closeBaffleModal(); });
+            document.body.appendChild(modal);
+            document.getElementById('modalBaffleWidth').addEventListener('input', function() {
+                var w = parseInt(this.value) || 250;
+                var f = 343000 / (3.14159 * w);
+                document.getElementById('modalBafflePreview').textContent = 'Estimated: ~' + f.toFixed(0) + ' Hz, +6.0 dB high shelf';
+            });
+        }
+        function closeBaffleModal() {
+            var m = document.getElementById('baffleModal');
+            if (m) m.remove();
+        }
         function applyBaffleStep() {
-            var w = parseInt(document.getElementById('baffleWidth').value) || 250;
+            var w = parseInt(document.getElementById('modalBaffleWidth').value) || 250;
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({type:'applyBaffleStep', ch:dspCh, baffleWidthMm:w}));
             showToast('Baffle step applied');
+            closeBaffleModal();
         }
-        (function() {
-            var bw = document.getElementById('baffleWidth');
-            if (bw) bw.addEventListener('input', function() {
-                var w = parseInt(this.value) || 250;
-                var f = 343000 / (3.14159 * w);
-                var el = document.getElementById('bafflePreview');
-                if (el) el.textContent = 'Estimated: ~' + f.toFixed(0) + ' Hz, +6.0 dB high shelf';
-            });
-        })();
 
         // ===== THD Measurement =====
+        function dspShowThdModal() {
+            dspToggleAddMenu();
+            var existing = document.getElementById('thdModal');
+            if (existing) existing.remove();
+            var modal = document.createElement('div');
+            modal.id = 'thdModal';
+            modal.className = 'modal-overlay active';
+            modal.innerHTML = '<div class="modal">' +
+                '<div class="modal-title">THD+N Measurement</div>' +
+                '<div class="form-group"><label class="form-label">Test Frequency</label>' +
+                '<select class="form-input" id="thdFreq"><option value="100">100 Hz</option>' +
+                '<option value="1000" selected>1 kHz</option><option value="10000">10 kHz</option></select></div>' +
+                '<div class="form-group"><label class="form-label">Averages</label>' +
+                '<select class="form-input" id="thdAverages"><option value="4">4 frames</option>' +
+                '<option value="8" selected>8 frames</option><option value="16">16 frames</option></select></div>' +
+                '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+                '<button class="btn btn-primary" id="thdStartBtn" onclick="thdStart()">Start</button>' +
+                '<button class="btn btn-outline" id="thdStopBtn" onclick="thdStop()" style="display:none">Stop</button></div>' +
+                '<div id="thdResult" style="display:none;font-size:13px;">' +
+                '<div class="info-row"><span class="info-label">THD+N</span><span class="info-value" id="thdPercent">\u2014</span></div>' +
+                '<div class="info-row"><span class="info-label">THD+N (dB)</span><span class="info-value" id="thdDb">\u2014</span></div>' +
+                '<div class="info-row"><span class="info-label">Fundamental</span><span class="info-value" id="thdFund">\u2014</span></div>' +
+                '<div class="info-row"><span class="info-label">Progress</span><span class="info-value" id="thdProgress">\u2014</span></div>' +
+                '<div id="thdHarmonics" style="margin-top:8px;">' +
+                '<div style="font-weight:600;margin-bottom:4px;font-size:12px;">Harmonics (dB rel. fundamental)</div>' +
+                '<div id="thdHarmBars" style="display:flex;gap:2px;height:60px;align-items:flex-end;"></div></div></div>' +
+                '<div class="modal-actions" style="margin-top:12px;"><button class="btn btn-secondary" onclick="closeThdModal()">Close</button></div></div>';
+            modal.addEventListener('click', function(e) { if (e.target === modal) closeThdModal(); });
+            document.body.appendChild(modal);
+        }
+        function closeThdModal() {
+            thdStop();
+            var m = document.getElementById('thdModal');
+            if (m) m.remove();
+        }
         function thdStart() {
             var freq = parseInt(document.getElementById('thdFreq').value) || 1000;
             var avg = parseInt(document.getElementById('thdAverages').value) || 8;
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({type:'startThdMeasurement', freq:freq, averages:avg}));
-            document.getElementById('thdStartBtn').style.display = 'none';
-            document.getElementById('thdStopBtn').style.display = '';
-            document.getElementById('thdResult').style.display = '';
+            var sb = document.getElementById('thdStartBtn');
+            var stb = document.getElementById('thdStopBtn');
+            var tr = document.getElementById('thdResult');
+            if (sb) sb.style.display = 'none';
+            if (stb) stb.style.display = '';
+            if (tr) tr.style.display = '';
         }
         function thdStop() {
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({type:'stopThdMeasurement'}));
-            document.getElementById('thdStartBtn').style.display = '';
-            document.getElementById('thdStopBtn').style.display = 'none';
+            var sb = document.getElementById('thdStartBtn');
+            var stb = document.getElementById('thdStopBtn');
+            if (sb) sb.style.display = '';
+            if (stb) stb.style.display = 'none';
         }
         function thdUpdateResult(d) {
             if (!d) return;
@@ -10950,8 +10953,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             }
             if (d.valid && !d.measuring) {
-                document.getElementById('thdStartBtn').style.display = '';
-                document.getElementById('thdStopBtn').style.display = 'none';
+                var sb = document.getElementById('thdStartBtn');
+                var stb = document.getElementById('thdStopBtn');
+                if (sb) sb.style.display = '';
+                if (stb) stb.style.display = 'none';
             }
         }
 
