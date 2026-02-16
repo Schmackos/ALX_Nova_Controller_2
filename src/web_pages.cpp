@@ -1649,7 +1649,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
 
             .dsp-freq-canvas {
-                height: 220px;
+                height: 280px;
             }
         }
 
@@ -2433,12 +2433,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .dsp-freq-canvas {
             display: block;
             width: 100%;
-            height: 160px;
+            height: 220px;
             border-radius: 8px;
             background: var(--bg-card);
         }
         @media (max-width: 767px) {
-            .dsp-freq-canvas { height: 150px; }
+            .dsp-freq-canvas { height: 180px; }
         }
         /* ===== PEQ Band Styles ===== */
         .peq-band-strip {
@@ -9720,7 +9720,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function peqSetBandType(band, typeInt) {
             peqUpdateBandParam(band, 'filterType', typeInt);
         }
-        const PEQ_DEFAULT_FREQS = [31,63,125,250,500,1000,2000,4000,8000,16000];
+        // Equal logarithmic spacing from 20 Hz to 20 kHz (10 bands)
+        const PEQ_DEFAULT_FREQS = [20,43,93,200,430,930,2000,4300,9300,20000];
         function peqResetBand(band) {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
             var msg = { type: 'updatePeqBand', ch: dspCh, band: band,
