@@ -30,7 +30,7 @@ void handleSmartSensingGet() {
 
   // Convert mode enum to string
   String modeStr;
-  switch (currentMode) {
+  switch (appState.currentMode) {
   case ALWAYS_ON:
     modeStr = "always_on";
     break;
@@ -43,13 +43,13 @@ void handleSmartSensingGet() {
   }
   doc["mode"] = modeStr;
 
-  doc["timerDuration"] = timerDuration;
-  doc["timerRemaining"] = timerRemaining;
-  doc["timerActive"] = (timerRemaining > 0);
-  doc["amplifierState"] = amplifierState;
-  doc["audioThreshold"] = audioThreshold_dBFS;
-  doc["audioLevel"] = audioLevel_dBFS;
-  doc["signalDetected"] = (_smoothedAudioLevel >= audioThreshold_dBFS);
+  doc["appState.timerDuration"] = appState.timerDuration;
+  doc["appState.timerRemaining"] = appState.timerRemaining;
+  doc["timerActive"] = (appState.timerRemaining > 0);
+  doc["appState.amplifierState"] = appState.amplifierState;
+  doc["audioThreshold"] = appState.audioThreshold_dBFS;
+  doc["audioLevel"] = appState.audioLevel_dBFS;
+  doc["signalDetected"] = (_smoothedAudioLevel >= appState.audioThreshold_dBFS);
   doc["audioSampleRate"] = appState.audioSampleRate;
   doc["adcVref"] = appState.adcVref;
   doc["numAdcsDetected"] = appState.numAdcsDetected;
@@ -121,29 +121,29 @@ void handleSmartSensingUpdate() {
       return;
     }
 
-    if (currentMode != newMode) {
-      currentMode = newMode;
+    if (appState.currentMode != newMode) {
+      appState.currentMode = newMode;
       settingsChanged = true;
       LOG_I("[Sensing] Mode changed to: %s", modeStr.c_str());
 
       // When switching to SMART_AUTO mode, immediately evaluate signal state
-      if (currentMode == SMART_AUTO) {
+      if (appState.currentMode == SMART_AUTO) {
         bool signalDetected = detectSignal();
-        _smoothedAudioLevel = audioLevel_dBFS; // Initialize to current level
+        _smoothedAudioLevel = appState.audioLevel_dBFS; // Initialize to current level
 
         if (signalDetected) {
           // Signal is above threshold - turn ON and set timer to full value
-          timerRemaining = timerDuration * 60;
-          lastTimerUpdate = millis();
-          lastSignalDetection = millis();
+          appState.timerRemaining = appState.timerDuration * 60;
+          appState.lastTimerUpdate = millis();
+          appState.lastSignalDetection = millis();
           setAmplifierState(true);
-          previousSignalState = true;
+          appState.previousSignalState = true;
           LOG_I("[Sensing] Smart Auto activated: signal detected, amp ON");
         } else {
           // Signal is below threshold - turn OFF
-          timerRemaining = 0;
+          appState.timerRemaining = 0;
           setAmplifierState(false);
-          previousSignalState = false;
+          appState.previousSignalState = false;
           LOG_I("[Sensing] Smart Auto activated: no signal, amp OFF");
         }
       }
@@ -151,21 +151,21 @@ void handleSmartSensingUpdate() {
   }
 
   // Update timer duration
-  if (doc["timerDuration"].is<int>()) {
-    int duration = doc["timerDuration"].as<int>();
+  if (doc["appState.timerDuration"].is<int>()) {
+    int duration = doc["appState.timerDuration"].as<int>();
 
     if (duration >= 1 && duration <= 60) {
-      timerDuration = duration;
+      appState.timerDuration = duration;
       settingsChanged = true;
 
       // Update timer remaining in SMART_AUTO mode
-      if (currentMode == SMART_AUTO) {
-        // Always update timerRemaining to show the new duration
-        timerRemaining = timerDuration * 60;
+      if (appState.currentMode == SMART_AUTO) {
+        // Always update appState.timerRemaining to show the new duration
+        appState.timerRemaining = appState.timerDuration * 60;
 
-        if (amplifierState) {
+        if (appState.amplifierState) {
           // Amplifier is ON - update timer to new duration
-          lastTimerUpdate = millis();
+          appState.lastTimerUpdate = millis();
           LOG_I("[Sensing] Timer duration changed to %d min (timer updated)", duration);
         } else {
           // Amplifier is OFF - just display new duration, countdown won't start
@@ -187,7 +187,7 @@ void handleSmartSensingUpdate() {
   if (doc["audioThreshold"].is<float>() || doc["audioThreshold"].is<int>()) {
     float threshold = doc["audioThreshold"].as<float>();
     if (threshold >= -96.0f && threshold <= 0.0f) {
-      audioThreshold_dBFS = threshold;
+      appState.audioThreshold_dBFS = threshold;
       settingsChanged = true;
       LOG_I("[Sensing] Audio threshold set to %+.0f dBFS", threshold);
     } else {
@@ -225,15 +225,15 @@ void handleSmartSensingUpdate() {
     setAmplifierState(state);
     LOG_I("[Sensing] Manual override: amplifier %s", state ? "ON" : "OFF");
 
-    if (currentMode == SMART_AUTO) {
+    if (appState.currentMode == SMART_AUTO) {
       if (state) {
         // If turning on manually in SMART_AUTO mode, set timer to full value
-        timerRemaining = timerDuration * 60;
-        lastTimerUpdate = millis();
+        appState.timerRemaining = appState.timerDuration * 60;
+        appState.lastTimerUpdate = millis();
         LOG_D("[Sensing] Manual ON: timer set to full value");
       } else {
         // If turning off manually in SMART_AUTO mode, reset timer to 0
-        timerRemaining = 0;
+        appState.timerRemaining = 0;
         LOG_D("[Sensing] Manual OFF: timer reset to 0");
       }
     }
@@ -315,7 +315,7 @@ bool detectSignal() {
   }
 
   // Overall level = max dBFS across all ADCs
-  audioLevel_dBFS = analysis.dBFS;
+  appState.audioLevel_dBFS = analysis.dBFS;
   appState.numAdcsDetected = diag.numAdcsDetected;
 
   return analysis.signalDetected;
@@ -323,8 +323,8 @@ bool detectSignal() {
 
 // Set amplifier state and update pin
 void setAmplifierState(bool state) {
-  if (amplifierState != state) {
-    amplifierState = state;
+  if (appState.amplifierState != state) {
+    appState.amplifierState = state;
     digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
     LOG_I("[Sensing] Amplifier %s", state ? "ON" : "OFF");
   }
@@ -353,48 +353,48 @@ void updateSmartSensingLogic() {
       case 100: alpha = 0.278f; break;
       default:  alpha = 1.0f - expf(-(float)detectInterval / 308.0f); break;
     }
-    _smoothedAudioLevel += (audioLevel_dBFS - _smoothedAudioLevel) * alpha;
+    _smoothedAudioLevel += (appState.audioLevel_dBFS - _smoothedAudioLevel) * alpha;
   }
 
   // Use smoothed level for signal presence decision
-  bool signalPresent = (_smoothedAudioLevel >= audioThreshold_dBFS);
+  bool signalPresent = (_smoothedAudioLevel >= appState.audioThreshold_dBFS);
 
-  switch (currentMode) {
+  switch (appState.currentMode) {
   case ALWAYS_ON:
     // Always keep amplifier ON, timer disabled
     setAmplifierState(true);
-    timerRemaining = 0;
-    previousSignalState = signalPresent; // Update state tracking
+    appState.timerRemaining = 0;
+    appState.previousSignalState = signalPresent; // Update state tracking
     break;
 
   case ALWAYS_OFF:
     // Always keep amplifier OFF, timer disabled
     setAmplifierState(false);
-    timerRemaining = 0;
-    previousSignalState = signalPresent; // Update state tracking
+    appState.timerRemaining = 0;
+    appState.previousSignalState = signalPresent; // Update state tracking
     break;
 
   case SMART_AUTO: {
     if (signalPresent) {
       // Signal is currently detected - keep timer at full value and amplifier
       // ON
-      timerRemaining = timerDuration * 60; // Keep timer at full value
-      lastSignalDetection = currentMillis;
-      lastTimerUpdate = currentMillis;
+      appState.timerRemaining = appState.timerDuration * 60; // Keep timer at full value
+      appState.lastSignalDetection = currentMillis;
+      appState.lastTimerUpdate = currentMillis;
 
       // Ensure amplifier is ON
-      if (!amplifierState) {
+      if (!appState.amplifierState) {
         setAmplifierState(true);
         LOG_D("[Sensing] Signal detected, amp ON, timer reset");
       }
     } else {
       // No signal detected - countdown timer if amplifier is ON
-      if (amplifierState && timerRemaining > 0) {
-        if (currentMillis - lastTimerUpdate >= 1000) {
-          lastTimerUpdate = currentMillis;
-          timerRemaining--;
+      if (appState.amplifierState && appState.timerRemaining > 0) {
+        if (currentMillis - appState.lastTimerUpdate >= 1000) {
+          appState.lastTimerUpdate = currentMillis;
+          appState.timerRemaining--;
 
-          if (timerRemaining == 0) {
+          if (appState.timerRemaining == 0) {
             setAmplifierState(false);
             LOG_I("[Sensing] Timer expired, amplifier OFF");
           }
@@ -403,7 +403,7 @@ void updateSmartSensingLogic() {
     }
 
     // Update previous signal state for next iteration
-    previousSignalState = signalPresent;
+    appState.previousSignalState = signalPresent;
     break;
   }
   }
@@ -418,7 +418,7 @@ void sendSmartSensingStateInternal() {
 
   // Convert mode enum to string
   String modeStr;
-  switch (currentMode) {
+  switch (appState.currentMode) {
   case ALWAYS_ON:
     modeStr = "always_on";
     break;
@@ -431,13 +431,13 @@ void sendSmartSensingStateInternal() {
   }
   doc["mode"] = modeStr;
 
-  doc["timerDuration"] = timerDuration;
-  doc["timerRemaining"] = timerRemaining;
-  doc["timerActive"] = (timerRemaining > 0);
-  doc["amplifierState"] = amplifierState;
-  doc["audioThreshold"] = audioThreshold_dBFS;
-  doc["audioLevel"] = audioLevel_dBFS;
-  doc["signalDetected"] = (_smoothedAudioLevel >= audioThreshold_dBFS);
+  doc["appState.timerDuration"] = appState.timerDuration;
+  doc["appState.timerRemaining"] = appState.timerRemaining;
+  doc["timerActive"] = (appState.timerRemaining > 0);
+  doc["appState.amplifierState"] = appState.amplifierState;
+  doc["audioThreshold"] = appState.audioThreshold_dBFS;
+  doc["audioLevel"] = appState.audioLevel_dBFS;
+  doc["signalDetected"] = (_smoothedAudioLevel >= appState.audioThreshold_dBFS);
   doc["audioSampleRate"] = appState.audioSampleRate;
   doc["audioVrms"] = appState.audioVrmsCombined;
 
@@ -446,10 +446,10 @@ void sendSmartSensingStateInternal() {
   webSocket.broadcastTXT((uint8_t *)json.c_str(), json.length());
 
   // Update tracked state after broadcast
-  prevBroadcastMode = currentMode;
-  prevBroadcastAmplifierState = amplifierState;
-  prevBroadcastTimerRemaining = timerRemaining;
-  lastSmartSensingHeartbeat = millis();
+  appState.prevBroadcastMode = appState.currentMode;
+  appState.prevBroadcastAmplifierState = appState.amplifierState;
+  appState.prevBroadcastTimerRemaining = appState.timerRemaining;
+  appState.lastSmartSensingHeartbeat = millis();
 }
 
 // Send Smart Sensing state - only broadcasts if state changed or heartbeat
@@ -458,12 +458,12 @@ void sendSmartSensingState() {
   unsigned long currentMillis = millis();
 
   // Check if any state has changed
-  bool stateChanged = (currentMode != prevBroadcastMode) ||
-                      (amplifierState != prevBroadcastAmplifierState) ||
-                      (timerRemaining != prevBroadcastTimerRemaining);
+  bool stateChanged = (appState.currentMode != appState.prevBroadcastMode) ||
+                      (appState.amplifierState != appState.prevBroadcastAmplifierState) ||
+                      (appState.timerRemaining != appState.prevBroadcastTimerRemaining);
 
   // Check if heartbeat interval has elapsed (1s, matches main loop call rate)
-  bool heartbeatDue = (currentMillis - lastSmartSensingHeartbeat >= 1000);
+  bool heartbeatDue = (currentMillis - appState.lastSmartSensingHeartbeat >= 1000);
 
   // Only broadcast if state changed or heartbeat is due
   if (stateChanged || heartbeatDue) {
@@ -500,21 +500,21 @@ bool loadSmartSensingSettings() {
   if (line1.length() > 0) {
     int mode = line1.toInt();
     if (mode >= 0 && mode <= 2) {
-      currentMode = static_cast<SensingMode>(mode);
+      appState.currentMode = static_cast<SensingMode>(mode);
     }
   }
 
   if (line2.length() > 0) {
     int duration = line2.toInt();
     if (duration >= 1 && duration <= 60) {
-      timerDuration = duration;
+      appState.timerDuration = duration;
     }
   }
 
   if (line3.length() > 0) {
     float threshold = line3.toFloat();
     // Auto-migrate: if value > 0, it's old voltage format
-    audioThreshold_dBFS = audio_migrate_voltage_threshold(threshold);
+    appState.audioThreshold_dBFS = audio_migrate_voltage_threshold(threshold);
   }
 
   if (line4.length() > 0) {
@@ -532,8 +532,8 @@ bool loadSmartSensingSettings() {
   }
 
   LOG_I("[Sensing] Settings loaded");
-  LOG_D("[Sensing]   Mode: %d, Timer: %lu min, Threshold: %+.0f dBFS, Sample Rate: %lu Hz", currentMode,
-        timerDuration, audioThreshold_dBFS, appState.audioSampleRate);
+  LOG_D("[Sensing]   Mode: %d, Timer: %lu min, Threshold: %+.0f dBFS, Sample Rate: %lu Hz", appState.currentMode,
+        appState.timerDuration, appState.audioThreshold_dBFS, appState.audioSampleRate);
 
   return true;
 }
@@ -546,9 +546,9 @@ void saveSmartSensingSettings() {
     return;
   }
 
-  file.println(String(currentMode));
-  file.println(String(timerDuration));
-  file.println(String(audioThreshold_dBFS, 1));
+  file.println(String(appState.currentMode));
+  file.println(String(appState.timerDuration));
+  file.println(String(appState.audioThreshold_dBFS, 1));
   file.println(String(appState.audioSampleRate));
   file.println(String(appState.adcVref, 2));
   file.close();

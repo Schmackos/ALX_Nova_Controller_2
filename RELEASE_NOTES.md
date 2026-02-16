@@ -319,6 +319,43 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: Remove legacy macro aliases for AppState members
+
+Remove 122 legacy macro definitions and replace all usages with direct
+appState.memberName syntax. This eliminates a layer of indirection and
+makes code more explicit and maintainable.
+
+Changes:
+- Deleted 50 macros from src/main.cpp (lines 79-131)
+- Deleted 72 macros from src/app_state.h (lines 519-623)
+- Kept only #define appState AppState::getInstance()
+- Replaced all bare macro usages across 13+ source files
+
+Affected files:
+- src/main.cpp, settings_manager.cpp, mqtt_handler.cpp
+- src/smart_sensing.cpp, wifi_manager.cpp, ota_updater.cpp
+- src/websocket_handler.cpp, web_pages.cpp
+- src/gui/screens/scr_desktop.cpp, scr_mqtt.cpp, scr_home.cpp, scr_control.cpp
+
+Verification: ESP32-S3 firmware builds successfully, all 790 native
+tests pass. Zero behavioral change - macros were identity mappings. (`fae861c`)
+- [2026-02-16] refactor: JSON allocation pooling for DSP API handlers
+
+Replace per-handler JsonDocument stack allocations with a single static
+document pool (_dspApiDoc). All DSP API handlers run single-threaded on
+Core 0 HTTP server and no handler stores JSON references beyond its
+return, making shared document safe.
+
+This eliminates heap fragmentation from repeated 4-8KB allocations during
+DSP config operations and prevents stack overflow risk when handlers are
+called from nested MQTT/WebSocket contexts.
+
+Changes:
+- Add static JsonDocument _dspApiDoc at file scope
+- Replace all 'JsonDocument doc;' with '_dspApiDoc.clear(); JsonDocument &doc = _dspApiDoc;'
+- Updated in loadRoutingMatrix, saveRoutingMatrix, loadDspSettings, dsp_preset_save, dsp_preset_load, and all API endpoint handlers
+
+Tests: 156 DSP tests pass, no behavioral changes (`9b95943`)
 - [2026-02-16] refactor: JSON allocation pooling for DSP API handlers
 
 Replace per-handler JsonDocument stack allocations with a single static

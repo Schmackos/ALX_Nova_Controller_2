@@ -76,60 +76,6 @@ const char *githubRepoName = GITHUB_REPO_NAME;
 // ===== Button Handler =====
 ButtonHandler resetButton(RESET_BUTTON_PIN);
 
-// ===== Legacy extern variable aliases (for backward compatibility) =====
-// These reference the AppState singleton internally
-// TODO: Remove these once all handlers are updated to use appState directly
-#define wifiSSID appState.wifiSSID
-#define wifiPassword appState.wifiPassword
-#define deviceSerialNumber appState.deviceSerialNumber
-#define blinkingEnabled appState.blinkingEnabled
-#define ledState appState.ledState
-#define previousMillis appState.previousMillis
-#define isAPMode appState.isAPMode
-#define apEnabled appState.apEnabled
-#define apSSID appState.apSSID
-#define apPassword appState.apPassword
-#define factoryResetInProgress appState.factoryResetInProgress
-#define lastOTACheck appState.lastOTACheck
-#define otaInProgress appState.otaInProgress
-#define otaProgress appState.otaProgress
-#define otaStatus appState.otaStatus
-#define otaStatusMessage appState.otaStatusMessage
-#define otaProgressBytes appState.otaProgressBytes
-#define otaTotalBytes appState.otaTotalBytes
-#define autoUpdateEnabled appState.autoUpdateEnabled
-#define cachedFirmwareUrl appState.cachedFirmwareUrl
-#define cachedChecksum appState.cachedChecksum
-#define timezoneOffset appState.timezoneOffset
-#define darkMode appState.darkMode
-#define updateAvailable appState.updateAvailable
-#define cachedLatestVersion appState.cachedLatestVersion
-#define updateDiscoveredTime appState.updateDiscoveredTime
-#define justUpdated appState.justUpdated
-#define previousFirmwareVersion appState.previousFirmwareVersion
-#define currentMode appState.currentMode
-#define timerDuration appState.timerDuration
-#define timerRemaining appState.timerRemaining
-#define lastSignalDetection appState.lastSignalDetection
-#define lastTimerUpdate appState.lastTimerUpdate
-#define audioThreshold_dBFS appState.audioThreshold_dBFS
-#define amplifierState appState.amplifierState
-#define audioLevel_dBFS appState.audioLevel_dBFS
-#define previousSignalState appState.previousSignalState
-#define lastSmartSensingHeartbeat appState.lastSmartSensingHeartbeat
-#define enableCertValidation appState.enableCertValidation
-#define hardwareStatsInterval appState.hardwareStatsInterval
-#define mqttEnabled appState.mqttEnabled
-#define mqttBroker appState.mqttBroker
-#define mqttPort appState.mqttPort
-#define mqttUsername appState.mqttUsername
-#define mqttPassword appState.mqttPassword
-#define mqttBaseTopic appState.mqttBaseTopic
-#define mqttHADiscovery appState.mqttHADiscovery
-#define lastMqttReconnect appState.lastMqttReconnect
-#define mqttConnected appState.mqttConnected
-#define lastMqttPublish appState.lastMqttPublish
-
 // Note: GitHub Root CA Certificate removed - now using Mozilla certificate
 // bundle via ESP32CertBundle library for automatic SSL validation of all public
 // servers
@@ -828,7 +774,7 @@ void loop() {
       appState.updateDiscoveredTime > 0) {
     if (appState.amplifierState) {
       // Amplifier is ON - skip this check, will retry on next periodic check
-      // Reset updateDiscoveredTime so countdown restarts when amp turns off
+      // Reset appState.updateDiscoveredTime so countdown restarts when amp turns off
       LOG_W("[OTA] Auto-update skipped: amplifier is in use, will retry on next check");
       appState.updateDiscoveredTime = 0;
       appState.markOTADirty();
@@ -1002,7 +948,7 @@ void loop() {
   // (Moved out of audio_capture_task to avoid Serial blocking I2S DMA.)
   audio_periodic_dump();
 
-  // IMPORTANT: blinking must NOT depend on isAPMode
+  // IMPORTANT: blinking must NOT depend on appState.isAPMode
   if (appState.blinkingEnabled) {
     unsigned long currentMillis = millis();
     if (currentMillis - appState.previousMillis >= LED_BLINK_INTERVAL) {
@@ -1011,7 +957,7 @@ void loop() {
       appState.setLedState(!appState.ledState);
       digitalWrite(LED_PIN, appState.ledState);
 
-      // Don't broadcast every toggle — client animates locally from blinkingEnabled state.
+      // Don't broadcast every toggle — client animates locally from appState.blinkingEnabled state.
       // Only sendLEDState() on explicit user actions (toggle blink on/off).
     }
   } else {

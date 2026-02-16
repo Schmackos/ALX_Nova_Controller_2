@@ -165,7 +165,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 #endif
 
             // If device just updated, notify the client
-            if (justUpdated) {
+            if (appState.justUpdated) {
               broadcastJustUpdated();
             }
           } else {
@@ -185,34 +185,34 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         }
 
         if (msgType == "toggle") {
-          blinkingEnabled = doc["enabled"];
-          LOG_I("[WebSocket] Blinking %s by client [%u]", blinkingEnabled ? "enabled" : "disabled", num);
+          appState.blinkingEnabled = doc["enabled"];
+          LOG_I("[WebSocket] Blinking %s by client [%u]", appState.blinkingEnabled ? "enabled" : "disabled", num);
           
           sendBlinkingState();
           
-          if (!blinkingEnabled) {
-            ledState = false;
+          if (!appState.blinkingEnabled) {
+            appState.ledState = false;
             digitalWrite(LED_PIN, LOW);
             sendLEDState();
             LOG_I("[WebSocket] LED turned OFF");
           }
         } else if (doc["type"] == "toggleAP") {
           bool enabled = doc["enabled"].as<bool>();
-          apEnabled = enabled;
+          appState.apEnabled = enabled;
           
           if (enabled) {
-            if (!isAPMode) {
+            if (!appState.isAPMode) {
               WiFi.mode(WIFI_AP_STA);
-              WiFi.softAP(apSSID.c_str(), apPassword);
-              isAPMode = true;
+              WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+              appState.isAPMode = true;
               LOG_I("[WebSocket] Access Point enabled");
               LOG_I("[WebSocket] AP IP: %s", WiFi.softAPIP().toString().c_str());
             }
           } else {
-            if (isAPMode && WiFi.status() == WL_CONNECTED) {
+            if (appState.isAPMode && WiFi.status() == WL_CONNECTED) {
               WiFi.softAPdisconnect(true);
               WiFi.mode(WIFI_STA);
-              isAPMode = false;
+              appState.isAPMode = false;
               LOG_I("[WebSocket] Access Point disabled");
             }
           }
@@ -1121,8 +1121,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
 void sendLEDState() {
   JsonDocument doc;
-  doc["type"] = "ledState";
-  doc["state"] = ledState;
+  doc["type"] = "appState.ledState";
+  doc["state"] = appState.ledState;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1130,8 +1130,8 @@ void sendLEDState() {
 
 void sendBlinkingState() {
   JsonDocument doc;
-  doc["type"] = "blinkingEnabled";
-  doc["enabled"] = blinkingEnabled;
+  doc["type"] = "appState.blinkingEnabled";
+  doc["enabled"] = appState.blinkingEnabled;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1784,8 +1784,8 @@ void sendAudioData() {
   {
     JsonDocument doc;
     doc["type"] = "audioLevels";
-    doc["audioLevel"] = audioLevel_dBFS;
-    doc["signalDetected"] = (audioLevel_dBFS >= audioThreshold_dBFS);
+    doc["audioLevel"] = appState.audioLevel_dBFS;
+    doc["signalDetected"] = (appState.audioLevel_dBFS >= appState.audioThreshold_dBFS);
     doc["numAdcsDetected"] = appState.numAdcsDetected;
     // Per-ADC data array
     JsonArray adcArr = doc["adc"].to<JsonArray>();

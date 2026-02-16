@@ -2488,7 +2488,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     </style>
 </head>
 <body class="has-status-bar">
-    <script>if(localStorage.getItem('darkMode')==='true'){document.body.classList.add('night-mode');document.querySelector('meta[name="theme-color"]').setAttribute('content','#121212');}</script>
+    <script>if(localStorage.getItem('appState.darkMode')==='true'){document.body.classList.add('night-mode');document.querySelector('meta[name="theme-color"]').setAttribute('content','#121212');}</script>
     <!-- Sidebar Navigation (Desktop) -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -2673,7 +2673,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="collapsible-content" id="smartAutoContent">
                     <div class="form-group" style="margin-top: 12px;">
                         <label class="form-label">Auto-Off Timer (minutes)</label>
-                        <input type="number" class="form-input" id="timerDuration" inputmode="numeric" min="1" max="60" value="15" onchange="updateTimerDuration()">
+                        <input type="number" class="form-input" id="appState.timerDuration" inputmode="numeric" min="1" max="60" value="15" onchange="updateTimerDuration()">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Audio Threshold (dBFS)</label>
@@ -3460,13 +3460,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                     <div class="form-group">
                         <label class="form-label">Network Name (SSID)</label>
-                        <input type="text" class="form-input" id="wifiSSID" inputmode="text" placeholder="Enter WiFi SSID or select from above">
+                        <input type="text" class="form-input" id="appState.wifiSSID" inputmode="text" placeholder="Enter WiFi SSID or select from above">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Password</label>
                         <div class="password-wrapper">
-                            <input type="password" class="form-input" id="wifiPassword" placeholder="Enter password">
-                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('wifiPassword', this)">👁</button>
+                            <input type="password" class="form-input" id="appState.wifiPassword" placeholder="Enter password">
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('appState.wifiPassword', this)">👁</button>
                         </div>
                     </div>
                     <div class="toggle-row" style="margin: 16px 0;">
@@ -3613,7 +3613,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="toggle-sublabel">Toggle to connect/disconnect</div>
                     </div>
                     <label class="switch">
-                        <input type="checkbox" id="mqttEnabled" onchange="toggleMqttEnabled()">
+                        <input type="checkbox" id="appState.mqttEnabled" onchange="toggleMqttEnabled()">
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -3624,33 +3624,33 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="toggle-sublabel">Auto-configure in Home Assistant</div>
                     </div>
                     <label class="switch">
-                        <input type="checkbox" id="mqttHADiscovery">
+                        <input type="checkbox" id="appState.mqttHADiscovery">
                         <span class="slider"></span>
                     </label>
                 </div>
                 <div class="divider"></div>
                 <div class="form-group">
                     <label class="form-label">Broker Address</label>
-                    <input type="text" class="form-input" id="mqttBroker" inputmode="url" placeholder="mqtt.example.com">
+                    <input type="text" class="form-input" id="appState.mqttBroker" inputmode="url" placeholder="mqtt.example.com">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Port</label>
-                    <input type="number" class="form-input" id="mqttPort" inputmode="numeric" placeholder="1883" value="1883">
+                    <input type="number" class="form-input" id="appState.mqttPort" inputmode="numeric" placeholder="1883" value="1883">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Username (optional)</label>
-                    <input type="text" class="form-input" id="mqttUsername" placeholder="Username">
+                    <input type="text" class="form-input" id="appState.mqttUsername" placeholder="Username">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Password (optional)</label>
                     <div class="password-wrapper">
-                        <input type="password" class="form-input" id="mqttPassword" placeholder="Password">
-                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('mqttPassword', this)">👁</button>
+                        <input type="password" class="form-input" id="appState.mqttPassword" placeholder="Password">
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('appState.mqttPassword', this)">👁</button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Base Topic</label>
-                    <input type="text" class="form-input" id="mqttBaseTopic" placeholder="ALX/device-serial">
+                    <input type="text" class="form-input" id="appState.mqttBaseTopic" placeholder="ALX/device-serial">
                     <div class="text-secondary" style="font-size: 11px; margin-top: 4px;">Leave empty to use: <span id="mqttDefaultTopic">ALX/{serial}</span></div>
                 </div>
                 <button class="btn btn-primary" onclick="saveMqttSettings()">Save MQTT Settings</button>
@@ -4544,13 +4544,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <form onsubmit="submitAPConfig(event)">
                 <div class="form-group">
                     <label class="form-label">AP Network Name (SSID)</label>
-                    <input type="text" class="form-input" id="apSSID" placeholder="ALX-XXXXXXXXXXXX">
+                    <input type="text" class="form-input" id="appState.apSSID" placeholder="ALX-XXXXXXXXXXXX">
                 </div>
                 <div class="form-group">
                     <label class="form-label">AP Password</label>
                     <div class="password-wrapper">
-                        <input type="password" class="form-input" id="apPassword" placeholder="Min 8 characters (leave empty to keep current)">
-                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('apPassword', this)">👁</button>
+                        <input type="password" class="form-input" id="appState.apPassword" placeholder="Min 8 characters (leave empty to keep current)">
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('appState.apPassword', this)">👁</button>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary mb-8">Save AP Settings</button>
@@ -4565,10 +4565,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     <script>
         // ===== State Variables =====
         let ws = null;
-        let ledState = false;
-        let blinkingEnabled = false;
-        let autoUpdateEnabled = false;
-        let darkMode = true;
+        let appState.ledState = false;
+        let appState.blinkingEnabled = false;
+        let appState.autoUpdateEnabled = false;
+        let appState.darkMode = true;
         let waveformAutoScaleEnabled = false;
         let backlightOn = true;
         let backlightBrightness = 255;
@@ -4576,7 +4576,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let dimEnabled = false;
         let dimTimeoutSec = 10;
         let dimBrightnessPwm = 26;
-        let enableCertValidation = true;
+        let appState.enableCertValidation = true;
         let currentFirmwareVersion = '';
         let currentLatestVersion = '';
         let currentTimezoneOffset = 3600;
@@ -4704,7 +4704,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // Input focus state to prevent overwrites during user input
         let inputFocusState = {
-            timerDuration: false,
+            appState.timerDuration: false,
             audioThreshold: false
         };
 
@@ -4832,7 +4832,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Status Bar Updates =====
-        function updateStatusBar(wifiConnected, mqttConnected, ampState, wsConnected) {
+        function updateStatusBar(wifiConnected, appState.mqttConnected, ampState, wsConnected) {
             // WiFi status
             const wifiIndicator = document.getElementById('statusWifi');
             const wifiText = document.getElementById('statusWifiText');
@@ -4847,10 +4847,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             // MQTT status
             const mqttIndicator = document.getElementById('statusMqtt');
             const mqttText = document.getElementById('statusMqttText');
-            if (mqttConnected) {
+            if (appState.mqttConnected) {
                 mqttIndicator.className = 'status-indicator online';
                 mqttText.textContent = 'MQTT';
-            } else if (mqttConnected === false) {
+            } else if (appState.mqttConnected === false) {
                 mqttIndicator.className = 'status-indicator offline';
                 mqttText.textContent = 'MQTT';
             } else {
@@ -5022,11 +5022,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         window.location.href = '/login';
                     }, 2000);
                 }
-                else if (data.type === 'ledState') {
-                    ledState = data.state;
+                else if (data.type === 'appState.ledState') {
+                    appState.ledState = data.state;
                     updateLED();
-                } else if (data.type === 'blinkingEnabled') {
-                    blinkingEnabled = data.enabled;
+                } else if (data.type === 'appState.blinkingEnabled') {
+                    appState.blinkingEnabled = data.enabled;
                     updateBlinkButton();
                 } else if (data.type === 'wifiStatus') {
                     updateWiFiStatus(data);
@@ -5049,7 +5049,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     appendDebugLog(data.timestamp, data.message, data.level);
                 } else if (data.type === 'hardware_stats') {
                     updateHardwareStats(data);
-                } else if (data.type === 'justUpdated') {
+                } else if (data.type === 'appState.justUpdated') {
                     showUpdateSuccessNotification(data);
                 } else if (data.type === 'displayState') {
                     if (typeof data.backlightOn !== 'undefined') {
@@ -5089,13 +5089,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         document.getElementById('buzzerVolumeSelect').value = data.volume.toString();
                     }
                 } else if (data.type === 'mqttSettings') {
-                    document.getElementById('mqttEnabled').checked = data.enabled || false;
+                    document.getElementById('appState.mqttEnabled').checked = data.enabled || false;
                     document.getElementById('mqttFields').style.display = (data.enabled || false) ? '' : 'none';
-                    document.getElementById('mqttBroker').value = data.broker || '';
-                    document.getElementById('mqttPort').value = data.port || 1883;
-                    document.getElementById('mqttUsername').value = data.username || '';
-                    document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
-                    document.getElementById('mqttHADiscovery').checked = data.haDiscovery || false;
+                    document.getElementById('appState.mqttBroker').value = data.broker || '';
+                    document.getElementById('appState.mqttPort').value = data.port || 1883;
+                    document.getElementById('appState.mqttUsername').value = data.username || '';
+                    document.getElementById('appState.mqttBaseTopic').value = data.baseTopic || '';
+                    document.getElementById('appState.mqttHADiscovery').checked = data.haDiscovery || false;
                     updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
                 } else if (data.type === 'audioLevels') {
                     if (currentActiveTab === 'audio') {
@@ -5235,7 +5235,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function updateLED() {
             const led = document.getElementById('led');
             const status = document.getElementById('ledStatus');
-            if (ledState) {
+            if (appState.ledState) {
                 led.classList.remove('off');
                 led.classList.add('on');
                 status.textContent = 'LED is ON';
@@ -5249,7 +5249,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function updateBlinkButton() {
             const btn = document.getElementById('toggleBtn');
             const state = document.getElementById('blinkingState');
-            if (blinkingEnabled) {
+            if (appState.blinkingEnabled) {
                 btn.textContent = 'Stop Blinking';
                 btn.classList.remove('btn-primary');
                 btn.classList.add('btn-danger');
@@ -5263,9 +5263,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function toggleBlinking() {
-            blinkingEnabled = !blinkingEnabled;
+            appState.blinkingEnabled = !appState.blinkingEnabled;
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'toggle', enabled: blinkingEnabled }));
+                ws.send(JSON.stringify({ type: 'toggle', enabled: appState.blinkingEnabled }));
             }
             updateBlinkButton();
         }
@@ -5277,10 +5277,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');
 
             // Store AP SSID for pre-filling the config modal
-            if (data.apSSID) {
-                currentAPSSID = data.apSSID;
+            if (data.appState.apSSID) {
+                currentAPSSID = data.appState.apSSID;
             } else if (data.serialNumber) {
-                // Fallback to serial number if apSSID not provided
+                // Fallback to serial number if appState.apSSID not provided
                 currentAPSSID = data.serialNumber;
             }
 
@@ -5309,12 +5309,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             // AP Details separator if both are relevant
             let apContentAdded = false;
-            if (data.mode === 'ap' || data.apEnabled) {
+            if (data.mode === 'ap' || data.appState.apEnabled) {
                 if (html !== '') html += '<div class="divider"></div>';
 
                 html += `
                     <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
-                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
+                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data.appState.apSSID || 'ALX-Device'}</span></div>
                     <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
                 `;
 
@@ -5330,34 +5330,34 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
 
-            apToggle.checked = data.apEnabled || (data.mode === 'ap');
+            apToggle.checked = data.appState.apEnabled || (data.mode === 'ap');
             document.getElementById('apFields').style.display = apToggle.checked ? '' : 'none';
             statusBox.innerHTML = html;
 
-            if (typeof data.autoUpdateEnabled !== 'undefined') {
-                autoUpdateEnabled = !!data.autoUpdateEnabled;
-                autoUpdateToggle.checked = autoUpdateEnabled;
+            if (typeof data.appState.autoUpdateEnabled !== 'undefined') {
+                appState.autoUpdateEnabled = !!data.appState.autoUpdateEnabled;
+                autoUpdateToggle.checked = appState.autoUpdateEnabled;
             }
 
-            if (typeof data.autoAPEnabled !== 'undefined') {
-                document.getElementById('autoAPToggle').checked = !!data.autoAPEnabled;
+            if (typeof data.appState.autoAPEnabled !== 'undefined') {
+                document.getElementById('autoAPToggle').checked = !!data.appState.autoAPEnabled;
             }
             
-            if (typeof data.timezoneOffset !== 'undefined') {
-                currentTimezoneOffset = data.timezoneOffset;
+            if (typeof data.appState.timezoneOffset !== 'undefined') {
+                currentTimezoneOffset = data.appState.timezoneOffset;
                 document.getElementById('timezoneSelect').value = data.timezoneOffset.toString();
-                updateTimezoneDisplay(data.timezoneOffset, data.dstOffset || 0);
+                updateTimezoneDisplay(data.appState.timezoneOffset, data.appState.dstOffset || 0);
             }
 
-            if (typeof data.dstOffset !== 'undefined') {
-                currentDstOffset = data.dstOffset;
-                document.getElementById('dstToggle').checked = (data.dstOffset === 3600);
+            if (typeof data.appState.dstOffset !== 'undefined') {
+                currentDstOffset = data.appState.dstOffset;
+                document.getElementById('dstToggle').checked = (data.appState.dstOffset === 3600);
             }
             
-            if (typeof data.darkMode !== 'undefined') {
-                darkMode = !!data.darkMode;
-                document.getElementById('darkModeToggle').checked = darkMode;
-                applyTheme(darkMode);
+            if (typeof data.appState.darkMode !== 'undefined') {
+                appState.darkMode = !!data.appState.darkMode;
+                document.getElementById('darkModeToggle').checked = appState.darkMode;
+                applyTheme(appState.darkMode);
             }
 
             if (typeof data.backlightOn !== 'undefined') {
@@ -5410,12 +5410,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('buzzerVolumeSelect').value = data.buzzerVolume.toString();
             }
 
-            if (typeof data.enableCertValidation !== 'undefined') {
-                enableCertValidation = !!data.enableCertValidation;
-                document.getElementById('certValidationToggle').checked = enableCertValidation;
+            if (typeof data.appState.enableCertValidation !== 'undefined') {
+                appState.enableCertValidation = !!data.appState.enableCertValidation;
+                document.getElementById('certValidationToggle').checked = appState.enableCertValidation;
             }
             
-            if (typeof data.hardwareStatsInterval !== 'undefined') {
+            if (typeof data.appState.hardwareStatsInterval !== 'undefined') {
                 document.getElementById('statsIntervalSelect').value = data.hardwareStatsInterval.toString();
             }
 
@@ -5439,7 +5439,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 latestVersionRow.style.display = 'flex';
 
                 // If up-to-date, show green "Up-To-Date" text and hide release notes link
-                if (!data.updateAvailable && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
+                if (!data.appState.updateAvailable && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
                     latestVersionEl.textContent = 'Up-To-Date, no newer version available';
                     latestVersionEl.style.opacity = '1';
                     latestVersionEl.style.fontStyle = 'normal';
@@ -5465,7 +5465,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     }
                 }
 
-                if (data.updateAvailable) {
+                if (data.appState.updateAvailable) {
                     document.getElementById('updateBtn').classList.remove('hidden');
                 } else {
                     document.getElementById('updateBtn').classList.add('hidden');
@@ -5489,7 +5489,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             
             // Pre-fill WiFi SSID with currently connected network
             if (data.ssid && data.connected) {
-                document.getElementById('wifiSSID').value = data.ssid;
+                document.getElementById('appState.wifiSSID').value = data.ssid;
             }
 
             // Update global WiFi status for status bar
@@ -5547,13 +5547,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function updateTimerDuration() {
-            const value = parseInt(document.getElementById('timerDuration').value);
+            const value = parseInt(document.getElementById('appState.timerDuration').value);
             if (isNaN(value) || value < 1 || value > 60) return;
             
             apiFetch('/api/smartsensing', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timerDuration: value })
+                body: JSON.stringify({ appState.timerDuration: value })
             })
             .then(res => res.json())
             .then(data => {
@@ -5610,11 +5610,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             
             // Update timer duration (only if not focused)
-            if (data.timerDuration !== undefined && !inputFocusState.timerDuration) {
-                document.getElementById('timerDuration').value = data.timerDuration;
+            if (data.appState.timerDuration !== undefined && !inputFocusState.appState.timerDuration) {
+                document.getElementById('appState.timerDuration').value = data.appState.timerDuration;
             }
-            if (data.timerDuration !== undefined) {
-                document.getElementById('infoTimerDuration').textContent = data.timerDuration + ' min';
+            if (data.appState.timerDuration !== undefined) {
+                document.getElementById('infoTimerDuration').textContent = data.appState.timerDuration + ' min';
             }
             
             // Update audio threshold (only if not focused)
@@ -5626,10 +5626,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             
             // Update amplifier status
-            if (data.amplifierState !== undefined) {
+            if (data.appState.amplifierState !== undefined) {
                 const display = document.getElementById('amplifierDisplay');
                 const status = document.getElementById('amplifierStatus');
-                if (data.amplifierState) {
+                if (data.appState.amplifierState) {
                     display.classList.add('on');
                     status.textContent = 'ON';
                 } else {
@@ -5637,7 +5637,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     status.textContent = 'OFF';
                 }
                 // Update status bar
-                currentAmpState = data.amplifierState;
+                currentAmpState = data.appState.amplifierState;
                 updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, ws && ws.readyState === WebSocket.OPEN);
             }
             
@@ -5655,10 +5655,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             // Update timer display
             const timerDisplay = document.getElementById('timerDisplay');
             const timerValue = document.getElementById('timerValue');
-            if (data.timerActive && data.timerRemaining !== undefined) {
+            if (data.timerActive && data.appState.timerRemaining !== undefined) {
                 timerDisplay.classList.remove('hidden');
-                const mins = Math.floor(data.timerRemaining / 60);
-                const secs = data.timerRemaining % 60;
+                const mins = Math.floor(data.appState.timerRemaining / 60);
+                const secs = data.appState.timerRemaining % 60;
                 timerValue.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
             } else {
                 timerDisplay.classList.add('hidden');
@@ -6574,8 +6574,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function submitWiFiConfig(event) {
             event.preventDefault();
-            const ssid = document.getElementById('wifiSSID').value;
-            const password = document.getElementById('wifiPassword').value;
+            const ssid = document.getElementById('appState.wifiSSID').value;
+            const password = document.getElementById('appState.wifiPassword').value;
             const useStaticIP = document.getElementById('useStaticIP').checked;
 
             // Build request body
@@ -6634,8 +6634,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function saveNetworkSettings(event) {
             event.preventDefault();
-            const ssid = document.getElementById('wifiSSID').value;
-            const password = document.getElementById('wifiPassword').value;
+            const ssid = document.getElementById('appState.wifiSSID').value;
+            const password = document.getElementById('appState.wifiPassword').value;
             const useStaticIP = document.getElementById('useStaticIP').checked;
 
             if (!ssid) {
@@ -6694,8 +6694,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     showToast('Network saved successfully', 'success');
 
                     // Clear the form
-                    document.getElementById('wifiSSID').value = '';
-                    document.getElementById('wifiPassword').value = '';
+                    document.getElementById('appState.wifiSSID').value = '';
+                    document.getElementById('appState.wifiPassword').value = '';
                     document.getElementById('useStaticIP').checked = false;
                     toggleStaticIPFields(); // Hide static IP fields
 
@@ -6795,7 +6795,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     // Reset attempts on successful response
                     connectionPollAttempts = 0;
 
-                    if (data.wifiConnecting) {
+                    if (data.appState.wifiConnecting) {
                         // Still connecting, keep polling
                         return;
                     }
@@ -6806,11 +6806,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         wifiConnectionPollTimer = null;
                     }
 
-                    if (data.wifiConnectSuccess) {
-                        lastKnownNewIP = data.wifiNewIP || data.staIP || '';
+                    if (data.appState.wifiConnectSuccess) {
+                        lastKnownNewIP = data.appState.wifiNewIP || data.staIP || '';
                         updateWiFiConnectionStatus('success', 'Connected successfully!', lastKnownNewIP);
                     } else {
-                        const errorMsg = data.wifiConnectError || 'Failed to connect. Check credentials.';
+                        const errorMsg = data.appState.wifiConnectError || 'Failed to connect. Check credentials.';
                         updateWiFiConnectionStatus('error', errorMsg);
                     }
                 })
@@ -6979,8 +6979,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         
         function onNetworkSelect() {
             const select = document.getElementById('wifiNetworkSelect');
-            const ssidInput = document.getElementById('wifiSSID');
-            const passwordInput = document.getElementById('wifiPassword');
+            const ssidInput = document.getElementById('appState.wifiSSID');
+            const passwordInput = document.getElementById('appState.wifiPassword');
             const useStaticIPCheckbox = document.getElementById('useStaticIP');
             const staticIPFields = document.getElementById('staticIPFields');
 
@@ -7480,7 +7480,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function showAPConfig() {
             // Pre-fill with current AP SSID from stored data
             if (currentAPSSID) {
-                document.getElementById('apSSID').value = currentAPSSID;
+                document.getElementById('appState.apSSID').value = currentAPSSID;
             }
             document.getElementById('apConfigModal').classList.add('active');
         }
@@ -7491,8 +7491,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function submitAPConfig(event) {
             event.preventDefault();
-            const ssid = document.getElementById('apSSID').value;
-            const password = document.getElementById('apPassword').value;
+            const ssid = document.getElementById('appState.apSSID').value;
+            const password = document.getElementById('appState.apPassword').value;
             
             if (password.length > 0 && password.length < 8) {
                 showToast('Password must be at least 8 characters', 'error');
@@ -7521,19 +7521,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             apiFetch('/api/mqtt')
             .then(res => res.json())
             .then(data => {
-                document.getElementById('mqttEnabled').checked = data.enabled || false;
+                document.getElementById('appState.mqttEnabled').checked = data.enabled || false;
                 document.getElementById('mqttFields').style.display = (data.enabled || false) ? '' : 'none';
-                document.getElementById('mqttBroker').value = data.broker || '';
-                document.getElementById('mqttPort').value = data.port || 1883;
-                document.getElementById('mqttUsername').value = data.username || '';
-                document.getElementById('mqttPassword').value = '';
-                document.getElementById('mqttPassword').placeholder = data.hasPassword
+                document.getElementById('appState.mqttBroker').value = data.broker || '';
+                document.getElementById('appState.mqttPort').value = data.port || 1883;
+                document.getElementById('appState.mqttUsername').value = data.username || '';
+                document.getElementById('appState.mqttPassword').value = '';
+                document.getElementById('appState.mqttPassword').placeholder = data.hasPassword
                     ? 'Enter password (leave empty to keep current)'
                     : 'Password';
-                document.getElementById('mqttBaseTopic').value = data.baseTopic || '';
-                document.getElementById('mqttBaseTopic').placeholder = data.defaultBaseTopic || 'ALX/device-serial';
+                document.getElementById('appState.mqttBaseTopic').value = data.baseTopic || '';
+                document.getElementById('appState.mqttBaseTopic').placeholder = data.defaultBaseTopic || 'ALX/device-serial';
                 document.getElementById('mqttDefaultTopic').textContent = data.defaultBaseTopic || 'ALX/{serial}';
-                document.getElementById('mqttHADiscovery').checked = data.haDiscovery || false;
+                document.getElementById('appState.mqttHADiscovery').checked = data.haDiscovery || false;
                 updateMqttConnectionStatus(data.connected, data.broker, data.port, data.effectiveBaseTopic);
             })
             .catch(err => console.error('Failed to load MQTT settings:', err));
@@ -7541,7 +7541,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function updateMqttConnectionStatus(connected, broker, port, baseTopic) {
             const statusBox = document.getElementById('mqttStatusBox');
-            const enabled = document.getElementById('mqttEnabled').checked;
+            const enabled = document.getElementById('appState.mqttEnabled').checked;
             
             let html = '';
             if (connected) {
@@ -7571,7 +7571,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function toggleMqttEnabled() {
-            const enabled = document.getElementById('mqttEnabled').checked;
+            const enabled = document.getElementById('appState.mqttEnabled').checked;
             document.getElementById('mqttFields').style.display = enabled ? '' : 'none';
             apiFetch('/api/mqtt', {
                 method: 'POST',
@@ -7586,23 +7586,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 } else {
                     showToast(data.message || 'Failed to toggle MQTT', 'error');
                     // Revert toggle on failure
-                    document.getElementById('mqttEnabled').checked = !enabled;
+                    document.getElementById('appState.mqttEnabled').checked = !enabled;
                 }
             })
             .catch(err => {
                 showToast('Failed to toggle MQTT', 'error');
-                document.getElementById('mqttEnabled').checked = !enabled;
+                document.getElementById('appState.mqttEnabled').checked = !enabled;
             });
         }
 
         function saveMqttSettings() {
             const settings = {
-                broker: document.getElementById('mqttBroker').value,
-                port: parseInt(document.getElementById('mqttPort').value) || 1883,
-                username: document.getElementById('mqttUsername').value,
-                password: document.getElementById('mqttPassword').value,
-                baseTopic: document.getElementById('mqttBaseTopic').value,
-                haDiscovery: document.getElementById('mqttHADiscovery').checked
+                broker: document.getElementById('appState.mqttBroker').value,
+                port: parseInt(document.getElementById('appState.mqttPort').value) || 1883,
+                username: document.getElementById('appState.mqttUsername').value,
+                password: document.getElementById('appState.mqttPassword').value,
+                baseTopic: document.getElementById('appState.mqttBaseTopic').value,
+                haDiscovery: document.getElementById('appState.mqttHADiscovery').checked
             };
             
             apiFetch('/api/mqtt', {
@@ -7628,7 +7628,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ autoAPEnabled: enabled })
+                body: JSON.stringify({ appState.autoAPEnabled: enabled })
             })
             .then(res => res.json())
             .then(data => {
@@ -7643,19 +7643,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function updateTimezone() {
             const offset = parseInt(document.getElementById('timezoneSelect').value);
-            const dstOffset = document.getElementById('dstToggle').checked ? 3600 : 0;
+            const appState.dstOffset = document.getElementById('dstToggle').checked ? 3600 : 0;
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
+                body: JSON.stringify({ appState.timezoneOffset: offset, appState.dstOffset: appState.dstOffset })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     showToast('Timezone updated', 'success');
                     currentTimezoneOffset = offset;
-                    currentDstOffset = dstOffset;
-                    updateTimezoneDisplay(offset, dstOffset);
+                    currentDstOffset = appState.dstOffset;
+                    updateTimezoneDisplay(offset, appState.dstOffset);
                     // Wait a moment for NTP sync then refresh time
                     setTimeout(updateCurrentTime, 2000);
                 }
@@ -7665,19 +7665,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function updateDST() {
             const offset = parseInt(document.getElementById('timezoneSelect').value);
-            const dstOffset = document.getElementById('dstToggle').checked ? 3600 : 0;
+            const appState.dstOffset = document.getElementById('dstToggle').checked ? 3600 : 0;
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
+                body: JSON.stringify({ appState.timezoneOffset: offset, appState.dstOffset: appState.dstOffset })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     showToast('DST setting updated', 'success');
                     currentTimezoneOffset = offset;
-                    currentDstOffset = dstOffset;
-                    updateTimezoneDisplay(offset, dstOffset);
+                    currentDstOffset = appState.dstOffset;
+                    updateTimezoneDisplay(offset, appState.dstOffset);
                     // Wait a moment for NTP sync then refresh time
                     setTimeout(updateCurrentTime, 2000);
                 }
@@ -7685,15 +7685,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .catch(err => showToast('Failed to update DST setting', 'error'));
         }
 
-        function updateTimezoneDisplay(offset, dstOffset = 0) {
-            const totalOffset = offset + dstOffset;
+        function updateTimezoneDisplay(offset, appState.dstOffset = 0) {
+            const totalOffset = offset + appState.dstOffset;
             const hours = totalOffset / 3600;
             const sign = hours >= 0 ? '+' : '';
             const baseHours = offset / 3600;
             const baseSign = baseHours >= 0 ? '+' : '';
 
             let displayText = `UTC${sign}${hours} hours (GMT${baseSign}${baseHours}`;
-            if (dstOffset !== 0) {
+            if (appState.dstOffset !== 0) {
                 displayText += ' + DST)';
             } else {
                 displayText += ')';
@@ -7711,7 +7711,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     // Create date object with current UTC time
                     const now = new Date();
                     // Apply timezone and DST offsets
-                    const offset = (data.timezoneOffset || 0) + (data.dstOffset || 0);
+                    const offset = (data.appState.timezoneOffset || 0) + (data.appState.dstOffset || 0);
                     const localTime = new Date(now.getTime() + offset * 1000);
 
                     // Format time
@@ -7747,12 +7747,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function toggleTheme() {
-            darkMode = document.getElementById('darkModeToggle').checked;
-            applyTheme(darkMode);
+            appState.darkMode = document.getElementById('darkModeToggle').checked;
+            applyTheme(appState.darkMode);
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ darkMode })
+                body: JSON.stringify({ appState.darkMode })
             });
         }
 
@@ -7764,7 +7764,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.body.classList.remove('night-mode');
                 document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F5F5F5');
             }
-            localStorage.setItem('darkMode', isDarkMode ? 'true' : 'false');
+            localStorage.setItem('appState.darkMode', isDarkMode ? 'true' : 'false');
             invalidateBgCache();
         }
 
@@ -7886,29 +7886,29 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function toggleAutoUpdate() {
-            autoUpdateEnabled = document.getElementById('autoUpdateToggle').checked;
+            appState.autoUpdateEnabled = document.getElementById('autoUpdateToggle').checked;
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ autoUpdateEnabled: autoUpdateEnabled })
+                body: JSON.stringify({ appState.autoUpdateEnabled: appState.autoUpdateEnabled })
             })
             .then(res => res.json())
             .then(data => {
-                if (data.success) showToast(autoUpdateEnabled ? 'Auto-update enabled' : 'Auto-update disabled', 'success');
+                if (data.success) showToast(appState.autoUpdateEnabled ? 'Auto-update enabled' : 'Auto-update disabled', 'success');
             })
             .catch(err => showToast('Failed to update setting', 'error'));
         }
 
         function toggleCertValidation() {
-            enableCertValidation = document.getElementById('certValidationToggle').checked;
+            appState.enableCertValidation = document.getElementById('certValidationToggle').checked;
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enableCertValidation: enableCertValidation })
+                body: JSON.stringify({ appState.enableCertValidation: appState.enableCertValidation })
             })
             .then(res => res.json())
             .then(data => {
-                if (data.success) showToast(enableCertValidation ? 'SSL validation enabled' : 'SSL validation disabled', 'success');
+                if (data.success) showToast(appState.enableCertValidation ? 'SSL validation enabled' : 'SSL validation disabled', 'success');
             })
             .catch(err => showToast('Failed to update setting', 'error'));
         }
@@ -7918,7 +7918,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ hardwareStatsInterval: interval })
+                body: JSON.stringify({ appState.hardwareStatsInterval: interval })
             })
             .then(res => res.json())
             .then(data => {
@@ -8033,7 +8033,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     document.getElementById('latestVersionRow').style.display = 'flex';
 
                     // If up-to-date, show green "Up-To-Date" text and hide release notes link
-                    if (!data.updateAvailable && data.latestVersion !== 'Unknown') {
+                    if (!data.appState.updateAvailable && data.latestVersion !== 'Unknown') {
                         latestVersionEl.textContent = 'Up-To-Date, no newer version available';
                         latestVersionEl.style.opacity = '1';
                         latestVersionEl.style.fontStyle = 'normal';
@@ -8057,7 +8057,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
 
                 // Show/hide update button based on update availability
-                if (data.updateAvailable) {
+                if (data.appState.updateAvailable) {
                     document.getElementById('updateBtn').classList.remove('hidden');
                     showToast(`Update available: ${data.latestVersion}`, 'success');
                 } else {
@@ -8160,7 +8160,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 status.classList.add('hidden');
                 showToast(data.message || 'Update failed', 'error');
                 // Re-show update button if update is still available
-                if (data.updateAvailable) {
+                if (data.appState.updateAvailable) {
                     updateBtn.classList.remove('hidden');
                 }
             } else {
@@ -8169,7 +8169,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 status.classList.add('hidden');
                 
                 // Show/hide update button based on update availability
-                if (data.updateAvailable) {
+                if (data.appState.updateAvailable) {
                     updateBtn.classList.remove('hidden');
                 } else {
                     updateBtn.classList.add('hidden');
@@ -9296,8 +9296,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             loadSavedNetworks();
 
             // Add input focus listeners
-            document.getElementById('timerDuration').addEventListener('focus', () => inputFocusState.timerDuration = true);
-            document.getElementById('timerDuration').addEventListener('blur', () => inputFocusState.timerDuration = false);
+            document.getElementById('appState.timerDuration').addEventListener('focus', () => inputFocusState.appState.timerDuration = true);
+            document.getElementById('appState.timerDuration').addEventListener('blur', () => inputFocusState.appState.timerDuration = false);
             document.getElementById('audioThreshold').addEventListener('focus', () => inputFocusState.audioThreshold = true);
             document.getElementById('audioThreshold').addEventListener('blur', () => inputFocusState.audioThreshold = false);
 
@@ -9395,8 +9395,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function submitAPConfig(event) {
             event.preventDefault();
-            const ssid = document.getElementById('apSSID').value;
-            const password = document.getElementById('apPassword').value;
+            const ssid = document.getElementById('appState.apSSID').value;
+            const password = document.getElementById('appState.apPassword').value;
             
             if (password && password.length < 8) {
                 showToast('Password must be at least 8 characters', 'error');
@@ -11165,8 +11165,8 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             .then(res => res.json())
             .then(data => {
                 const apInfo = document.getElementById('currentAPInfo');
-                if (data.apSSID) {
-                    apInfo.textContent = 'Access Point: ' + data.apSSID;
+                if (data.appState.apSSID) {
+                    apInfo.textContent = 'Access Point: ' + data.appState.apSSID;
                 } else {
                     apInfo.textContent = 'Access Point: ALX-Device';
                 }
@@ -11249,13 +11249,13 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
             apiFetch('/api/wifistatus')
                 .then(res => res.json())
                 .then(data => {
-                    if (data.wifiConnecting) return;
+                    if (data.appState.wifiConnecting) return;
 
                     clearInterval(apPagePollTimer);
                     apPagePollTimer = null;
 
-                    if (data.wifiConnectSuccess) {
-                        updateAPPageStatus('success', 'Connected successfully!', data.wifiNewIP);
+                    if (data.appState.wifiConnectSuccess) {
+                        updateAPPageStatus('success', 'Connected successfully!', data.appState.wifiNewIP);
                     } else {
                         updateAPPageStatus('error', data.message || 'Failed to connect. Check credentials.');
                     }

@@ -14,7 +14,7 @@
 /* ===== Value editor confirmations ===== */
 
 static void on_mqtt_enable_confirm(int int_val, float, int) {
-    AppState::getInstance().mqttEnabled = (int_val != 0);
+    AppState::getInstance().appState.mqttEnabled = (int_val != 0);
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     if (int_val) {
@@ -24,17 +24,17 @@ static void on_mqtt_enable_confirm(int int_val, float, int) {
 }
 
 static void on_mqtt_port_confirm(int int_val, float, int) {
-    AppState::getInstance().mqttPort = int_val;
+    AppState::getInstance().appState.mqttPort = int_val;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT port set to %d", int_val);
 }
 
 static void on_mqtt_ha_confirm(int int_val, float, int) {
-    AppState::getInstance().mqttHADiscovery = (int_val != 0);
+    AppState::getInstance().appState.mqttHADiscovery = (int_val != 0);
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
-    if (int_val && AppState::getInstance().mqttConnected) {
+    if (int_val && AppState::getInstance().appState.mqttConnected) {
         publishHADiscovery();
     }
     LOG_I("[GUI] HA Discovery %s", int_val ? "enabled" : "disabled");
@@ -43,28 +43,28 @@ static void on_mqtt_ha_confirm(int int_val, float, int) {
 /* ===== Keyboard callbacks ===== */
 
 static void on_broker_done(const char *text) {
-    AppState::getInstance().mqttBroker = text;
+    AppState::getInstance().appState.mqttBroker = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT broker set to %s", text);
 }
 
 static void on_username_done(const char *text) {
-    AppState::getInstance().mqttUsername = text;
+    AppState::getInstance().appState.mqttUsername = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT username set");
 }
 
 static void on_password_done(const char *text) {
-    AppState::getInstance().mqttPassword = text;
+    AppState::getInstance().appState.mqttPassword = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT password set");
 }
 
 static void on_topic_done(const char *text) {
-    AppState::getInstance().mqttBaseTopic = text;
+    AppState::getInstance().appState.mqttBaseTopic = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT base topic set to %s", text);
@@ -76,7 +76,7 @@ static void edit_mqtt_enable(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Enable MQTT";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().mqttEnabled;
+    cfg.toggle_val = AppState::getInstance().appState.mqttEnabled;
     cfg.on_confirm = on_mqtt_enable_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -94,7 +94,7 @@ static void edit_mqtt_port(void) {
     ValueEditConfig cfg = {};
     cfg.title = "MQTT Port";
     cfg.type = VE_NUMERIC;
-    cfg.int_val = AppState::getInstance().mqttPort;
+    cfg.int_val = AppState::getInstance().appState.mqttPort;
     cfg.int_min = 1;
     cfg.int_max = 65535;
     cfg.int_step = 1;
@@ -133,7 +133,7 @@ static void edit_mqtt_ha(void) {
     ValueEditConfig cfg = {};
     cfg.title = "HA Discovery";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().mqttHADiscovery;
+    cfg.toggle_val = AppState::getInstance().appState.mqttHADiscovery;
     cfg.on_confirm = on_mqtt_ha_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -145,12 +145,12 @@ static void build_mqtt_menu(void) {
     AppState &st = AppState::getInstance();
 
     static char enable_str[8];
-    snprintf(enable_str, sizeof(enable_str), "%s", st.mqttEnabled ? "ON" : "OFF");
+    snprintf(enable_str, sizeof(enable_str), "%s", st.appState.mqttEnabled ? "ON" : "OFF");
 
     static char status_str[24];
-    if (!st.mqttEnabled) {
+    if (!st.appState.mqttEnabled) {
         snprintf(status_str, sizeof(status_str), "Disabled");
-    } else if (st.mqttConnected) {
+    } else if (st.appState.mqttConnected) {
         snprintf(status_str, sizeof(status_str), "Connected");
     } else {
         snprintf(status_str, sizeof(status_str), "Disconnected");
@@ -164,7 +164,7 @@ static void build_mqtt_menu(void) {
     }
 
     static char port_str[8];
-    snprintf(port_str, sizeof(port_str), "%d", st.mqttPort);
+    snprintf(port_str, sizeof(port_str), "%d", st.appState.mqttPort);
 
     static char user_str[16];
     if (st.mqttUsername.length() > 0) {
@@ -174,7 +174,7 @@ static void build_mqtt_menu(void) {
     }
 
     static char ha_str[8];
-    snprintf(ha_str, sizeof(ha_str), "%s", st.mqttHADiscovery ? "ON" : "OFF");
+    snprintf(ha_str, sizeof(ha_str), "%s", st.appState.mqttHADiscovery ? "ON" : "OFF");
 
     mqtt_menu.title = "MQTT";
     mqtt_menu.item_count = 9;
@@ -198,16 +198,16 @@ void scr_mqtt_refresh(void) {
     AppState &st = AppState::getInstance();
 
     static char status_buf[24];
-    if (!st.mqttEnabled) {
+    if (!st.appState.mqttEnabled) {
         snprintf(status_buf, sizeof(status_buf), "Disabled");
-    } else if (st.mqttConnected) {
+    } else if (st.appState.mqttConnected) {
         snprintf(status_buf, sizeof(status_buf), "Connected");
     } else {
         snprintf(status_buf, sizeof(status_buf), "Disconnected");
     }
     scr_menu_set_item_value(1, status_buf);
 
-    scr_menu_set_item_value(2, st.mqttEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(2, st.appState.mqttEnabled ? "ON" : "OFF");
 
     static char broker_buf[24];
     if (st.mqttBroker.length() > 0) {
@@ -218,7 +218,7 @@ void scr_mqtt_refresh(void) {
     scr_menu_set_item_value(3, broker_buf);
 
     static char port_buf[8];
-    snprintf(port_buf, sizeof(port_buf), "%d", st.mqttPort);
+    snprintf(port_buf, sizeof(port_buf), "%d", st.appState.mqttPort);
     scr_menu_set_item_value(4, port_buf);
 
     static char user_buf[16];
@@ -229,7 +229,7 @@ void scr_mqtt_refresh(void) {
     }
     scr_menu_set_item_value(5, user_buf);
 
-    scr_menu_set_item_value(8, st.mqttHADiscovery ? "ON" : "OFF");
+    scr_menu_set_item_value(8, st.appState.mqttHADiscovery ? "ON" : "OFF");
 }
 
 #endif /* GUI_ENABLED */

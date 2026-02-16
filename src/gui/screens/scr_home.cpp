@@ -227,19 +227,19 @@ void scr_home_refresh(void) {
     /* Update icon: orange when update available, dim when up to date */
     if (lbl_update_icon) {
         lv_obj_set_style_text_color(lbl_update_icon,
-            st.updateAvailable ? COLOR_PRIMARY : COLOR_TEXT_DIM, LV_PART_MAIN);
+            st.appState.updateAvailable ? COLOR_PRIMARY : COLOR_TEXT_DIM, LV_PART_MAIN);
     }
 
     /* Amp: ON/OFF + dot green/red */
     if (lbl_amp_value) {
-        lv_label_set_text(lbl_amp_value, st.amplifierState ? "ON" : "OFF");
+        lv_label_set_text(lbl_amp_value, st.appState.amplifierState ? "ON" : "OFF");
     }
-    set_dot_color(dot_amp, st.amplifierState ? COLOR_SUCCESS : COLOR_ERROR);
+    set_dot_color(dot_amp, st.appState.amplifierState ? COLOR_SUCCESS : COLOR_ERROR);
 
     /* Signal: dBFS value + dot green/gray */
     if (lbl_sig_value) {
-        bool detected = st.audioLevel_dBFS >= st.audioThreshold_dBFS;
-        snprintf(buf, sizeof(buf), "%+.0f dBFS", st.audioLevel_dBFS);
+        bool detected = st.appState.audioLevel_dBFS >= st.appState.audioThreshold_dBFS;
+        snprintf(buf, sizeof(buf), "%+.0f dBFS", st.appState.audioLevel_dBFS);
         lv_label_set_text(lbl_sig_value, buf);
         set_dot_color(dot_sig, detected ? COLOR_SUCCESS : COLOR_TEXT_DIM);
     }
@@ -249,7 +249,7 @@ void scr_home_refresh(void) {
         if (WiFi.status() == WL_CONNECTED) {
             lv_label_set_text(lbl_wifi_value, "Connected");
             set_dot_color(dot_wifi, COLOR_SUCCESS);
-        } else if (st.isAPMode) {
+        } else if (st.appState.isAPMode) {
             lv_label_set_text(lbl_wifi_value, "AP Mode");
             set_dot_color(dot_wifi, COLOR_PRIMARY);
         } else {
@@ -260,10 +260,10 @@ void scr_home_refresh(void) {
 
     /* MQTT: status text + dot green/red/gray */
     if (lbl_mqtt_value) {
-        if (!st.mqttEnabled) {
+        if (!st.appState.mqttEnabled) {
             lv_label_set_text(lbl_mqtt_value, "Disabled");
             set_dot_color(dot_mqtt, COLOR_TEXT_DIM);
-        } else if (st.mqttConnected) {
+        } else if (st.appState.mqttConnected) {
             lv_label_set_text(lbl_mqtt_value, "Connected");
             set_dot_color(dot_mqtt, COLOR_SUCCESS);
         } else {
@@ -274,15 +274,15 @@ void scr_home_refresh(void) {
 
     /* Mode: alternates with timer countdown when Smart Auto + timer active */
     if (lbl_mode_value) {
-        if (st.currentMode == SMART_AUTO && st.timerRemaining > 0 &&
+        if (st.appState.currentMode == SMART_AUTO && st.appState.timerRemaining > 0 &&
             (millis() / 3000) % 2 == 1) {
-            unsigned long mins = st.timerRemaining / 60;
-            unsigned long secs = st.timerRemaining % 60;
+            unsigned long mins = st.appState.timerRemaining / 60;
+            unsigned long secs = st.appState.timerRemaining % 60;
             snprintf(buf, sizeof(buf), "%02lu:%02lu", mins, secs);
             lv_label_set_text(lbl_mode_value, buf);
         } else {
-            const char *mode = (st.currentMode == ALWAYS_ON)  ? "Always On" :
-                               (st.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
+            const char *mode = (st.appState.currentMode == ALWAYS_ON)  ? "Always On" :
+                               (st.appState.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
             lv_label_set_text(lbl_mode_value, mode);
         }
     }
@@ -294,7 +294,7 @@ void scr_home_refresh(void) {
         if (vu > 0) vu = 0;
         lv_bar_set_value(bar_level, vu, LV_ANIM_ON);
 
-        bool detected = st.audioLevel_dBFS >= st.audioThreshold_dBFS;
+        bool detected = st.appState.audioLevel_dBFS >= st.appState.audioThreshold_dBFS;
         lv_obj_set_style_bg_color(bar_level,
             detected ? COLOR_SUCCESS : COLOR_TEXT_DIM, LV_PART_INDICATOR);
     }

@@ -30,13 +30,13 @@ static void on_amplifier_confirm(int int_val, float, int) {
 }
 
 static void on_timer_confirm(int int_val, float, int) {
-    AppState::getInstance().timerDuration = (unsigned long)int_val;
+    AppState::getInstance().appState.timerDuration = (unsigned long)int_val;
     saveSmartSensingSettings();
     LOG_I("[GUI] Timer duration set to %d min", int_val);
 }
 
 static void on_voltage_confirm(int, float float_val, int) {
-    AppState::getInstance().audioThreshold_dBFS = float_val;
+    AppState::getInstance().appState.audioThreshold_dBFS = float_val;
     saveSmartSensingSettings();
     LOG_I("[GUI] Audio threshold set to %+.0f dBFS", float_val);
 }
@@ -56,7 +56,7 @@ static void edit_sensing_mode(void) {
     AppState &st = AppState::getInstance();
     int cur = 0;
     for (int i = 0; i < 3; i++) {
-        if (sensing_modes[i].value == st.currentMode) { cur = i; break; }
+        if (sensing_modes[i].value == st.appState.currentMode) { cur = i; break; }
     }
     ValueEditConfig cfg = {};
     cfg.title = "Sensing Mode";
@@ -72,7 +72,7 @@ static void edit_amplifier(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Amplifier";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().amplifierState;
+    cfg.toggle_val = AppState::getInstance().appState.amplifierState;
     cfg.on_confirm = on_amplifier_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -81,7 +81,7 @@ static void edit_timer_duration(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Timer Duration";
     cfg.type = VE_NUMERIC;
-    cfg.int_val = (int)AppState::getInstance().timerDuration;
+    cfg.int_val = (int)AppState::getInstance().appState.timerDuration;
     cfg.int_min = 1;
     cfg.int_max = 60;
     cfg.int_step = 1;
@@ -94,7 +94,7 @@ static void edit_voltage_threshold(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Audio Thresh";
     cfg.type = VE_FLOAT;
-    cfg.float_val = AppState::getInstance().audioThreshold_dBFS;
+    cfg.float_val = AppState::getInstance().appState.audioThreshold_dBFS;
     cfg.float_min = -96.0f;
     cfg.float_max = 0.0f;
     cfg.float_step = 1.0f;
@@ -108,7 +108,7 @@ static void edit_led_blinking(void) {
     ValueEditConfig cfg = {};
     cfg.title = "LED Blinking";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().blinkingEnabled;
+    cfg.toggle_val = AppState::getInstance().appState.blinkingEnabled;
     cfg.on_confirm = on_blinking_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -119,20 +119,20 @@ static MenuConfig control_menu;
 static void build_control_menu(void) {
     AppState &st = AppState::getInstance();
 
-    const char *mode_str = (st.currentMode == ALWAYS_ON) ? "Always On" :
-                           (st.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
+    const char *mode_str = (st.appState.currentMode == ALWAYS_ON) ? "Always On" :
+                           (st.appState.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
 
     static char amp_str[8];
-    snprintf(amp_str, sizeof(amp_str), "%s", st.amplifierState ? "ON" : "OFF");
+    snprintf(amp_str, sizeof(amp_str), "%s", st.appState.amplifierState ? "ON" : "OFF");
 
     static char timer_str[12];
-    snprintf(timer_str, sizeof(timer_str), "%lu min", st.timerDuration);
+    snprintf(timer_str, sizeof(timer_str), "%lu min", st.appState.timerDuration);
 
     static char volt_str[12];
-    snprintf(volt_str, sizeof(volt_str), "%+.0f dBFS", st.audioThreshold_dBFS);
+    snprintf(volt_str, sizeof(volt_str), "%+.0f dBFS", st.appState.audioThreshold_dBFS);
 
     static char blink_str[8];
-    snprintf(blink_str, sizeof(blink_str), "%s", st.blinkingEnabled ? "ON" : "OFF");
+    snprintf(blink_str, sizeof(blink_str), "%s", st.appState.blinkingEnabled ? "ON" : "OFF");
 
     control_menu.title = "Control";
     control_menu.item_count = 7;
@@ -153,21 +153,21 @@ lv_obj_t *scr_control_create(void) {
 void scr_control_refresh(void) {
     AppState &st = AppState::getInstance();
 
-    const char *mode_str = (st.currentMode == ALWAYS_ON) ? "Always On" :
-                           (st.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
+    const char *mode_str = (st.appState.currentMode == ALWAYS_ON) ? "Always On" :
+                           (st.appState.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
     scr_menu_set_item_value(1, mode_str);
 
-    scr_menu_set_item_value(2, st.amplifierState ? "ON" : "OFF");
+    scr_menu_set_item_value(2, st.appState.amplifierState ? "ON" : "OFF");
 
     static char timer_buf[12];
-    snprintf(timer_buf, sizeof(timer_buf), "%lu min", st.timerDuration);
+    snprintf(timer_buf, sizeof(timer_buf), "%lu min", st.appState.timerDuration);
     scr_menu_set_item_value(3, timer_buf);
 
     static char volt_buf[12];
-    snprintf(volt_buf, sizeof(volt_buf), "%+.0f dBFS", st.audioThreshold_dBFS);
+    snprintf(volt_buf, sizeof(volt_buf), "%+.0f dBFS", st.appState.audioThreshold_dBFS);
     scr_menu_set_item_value(4, volt_buf);
 
-    scr_menu_set_item_value(5, st.blinkingEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(5, st.appState.blinkingEnabled ? "ON" : "OFF");
 }
 
 #endif /* GUI_ENABLED */

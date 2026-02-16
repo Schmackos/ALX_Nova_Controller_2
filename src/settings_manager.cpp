@@ -57,27 +57,27 @@ bool loadSettings() {
     return false;
   }
 
-  autoUpdateEnabled = (lines[dataStart + 0].toInt() != 0);
+  appState.autoUpdateEnabled = (lines[dataStart + 0].toInt() != 0);
 
   // Load timezone offset (if available, otherwise default to 0)
   if (lines[dataStart + 1].length() > 0) {
-    timezoneOffset = lines[dataStart + 1].toInt();
+    appState.timezoneOffset = lines[dataStart + 1].toInt();
   }
 
   // Load DST offset (if available, otherwise default to 0)
   if (lines[dataStart + 2].length() > 0) {
-    dstOffset = lines[dataStart + 2].toInt();
+    appState.dstOffset = lines[dataStart + 2].toInt();
   }
 
   // Load night mode (if available, otherwise default to false)
   if (lines[dataStart + 3].length() > 0) {
-    darkMode = (lines[dataStart + 3].toInt() != 0);
+    appState.darkMode = (lines[dataStart + 3].toInt() != 0);
   }
 
   // Load cert validation setting (if available, otherwise default to true from
   // AppState)
   if (lines[dataStart + 4].length() > 0) {
-    enableCertValidation = (lines[dataStart + 4].toInt() != 0);
+    appState.enableCertValidation = (lines[dataStart + 4].toInt() != 0);
   }
 
   // Load hardware stats interval (if available, otherwise default to 2000ms)
@@ -86,15 +86,15 @@ bool loadSettings() {
     // Validate: only allow 1000, 2000, 3000, 5000, or 10000 ms
     if (interval == 1000 || interval == 2000 || interval == 3000 ||
         interval == 5000 || interval == 10000) {
-      hardwareStatsInterval = interval;
+      appState.hardwareStatsInterval = interval;
     }
   }
 
   if (lines[dataStart + 6].length() > 0) {
-    autoAPEnabled = (lines[dataStart + 6].toInt() != 0);
+    appState.autoAPEnabled = (lines[dataStart + 6].toInt() != 0);
   } else {
     // Default to true if not present (backward compatibility)
-    autoAPEnabled = true;
+    appState.autoAPEnabled = true;
   }
 
 #ifdef GUI_ENABLED
@@ -248,13 +248,13 @@ void saveSettings() {
   // Write format version header
   file.println("VER=2");
 
-  file.println(autoUpdateEnabled ? "1" : "0");
-  file.println(timezoneOffset);
-  file.println(dstOffset);
-  file.println(darkMode ? "1" : "0");
-  file.println(enableCertValidation ? "1" : "0");
-  file.println(hardwareStatsInterval);
-  file.println(autoAPEnabled ? "1" : "0");
+  file.println(appState.autoUpdateEnabled ? "1" : "0");
+  file.println(appState.timezoneOffset);
+  file.println(appState.dstOffset);
+  file.println(appState.darkMode ? "1" : "0");
+  file.println(appState.enableCertValidation ? "1" : "0");
+  file.println(appState.hardwareStatsInterval);
+  file.println(appState.autoAPEnabled ? "1" : "0");
 #ifdef GUI_ENABLED
   file.println(appState.bootAnimEnabled ? "1" : "0");
   file.println(appState.bootAnimStyle);
@@ -423,7 +423,7 @@ void saveInputNames() {
 
 void performFactoryReset() {
   LOG_W("[Settings] Factory reset initiated");
-  factoryResetInProgress = true;
+  appState.factoryResetInProgress = true;
 
   // Visual feedback: solid LED
   digitalWrite(LED_PIN, HIGH);
@@ -455,8 +455,8 @@ void performFactoryReset() {
   LittleFS.end();
 
   // 4. Force AP Mode defaults for next boot
-  apEnabled = true;
-  isAPMode = true;
+  appState.apEnabled = true;
+  appState.isAPMode = true;
 
   LOG_W("[Settings] Factory reset complete");
 
@@ -494,14 +494,14 @@ void performFactoryReset() {
 void handleSettingsGet() {
   JsonDocument doc;
   doc["success"] = true;
-  doc["autoUpdateEnabled"] = autoUpdateEnabled;
-  doc["timezoneOffset"] = timezoneOffset;
-  doc["dstOffset"] = dstOffset;
-  doc["darkMode"] = darkMode;
-  doc["enableCertValidation"] = enableCertValidation;
-  doc["autoAPEnabled"] = autoAPEnabled;
-  doc["hardwareStatsInterval"] =
-      hardwareStatsInterval / 1000; // Send as seconds
+  doc["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
+  doc["appState.timezoneOffset"] = appState.timezoneOffset;
+  doc["appState.dstOffset"] = appState.dstOffset;
+  doc["appState.darkMode"] = appState.darkMode;
+  doc["appState.enableCertValidation"] = appState.enableCertValidation;
+  doc["appState.autoAPEnabled"] = appState.autoAPEnabled;
+  doc["appState.hardwareStatsInterval"] =
+      appState.hardwareStatsInterval / 1000; // Send as seconds
   doc["audioUpdateRate"] = appState.audioUpdateRate;
   doc["screenTimeout"] = appState.screenTimeout / 1000; // Send as seconds
   doc["backlightOn"] = appState.backlightOn;
@@ -552,26 +552,26 @@ void handleSettingsUpdate() {
 
   bool settingsChanged = false;
 
-  if (doc["autoUpdateEnabled"].is<bool>()) {
-    autoUpdateEnabled = doc["autoUpdateEnabled"].as<bool>();
+  if (doc["appState.autoUpdateEnabled"].is<bool>()) {
+    appState.autoUpdateEnabled = doc["appState.autoUpdateEnabled"].as<bool>();
     settingsChanged = true;
   }
 
   bool timezoneChanged = false;
 
-  if (doc["timezoneOffset"].is<int>()) {
-    int newOffset = doc["timezoneOffset"].as<int>();
-    if (newOffset != timezoneOffset) {
-      timezoneOffset = newOffset;
+  if (doc["appState.timezoneOffset"].is<int>()) {
+    int newOffset = doc["appState.timezoneOffset"].as<int>();
+    if (newOffset != appState.timezoneOffset) {
+      appState.timezoneOffset = newOffset;
       settingsChanged = true;
       timezoneChanged = true;
     }
   }
 
-  if (doc["dstOffset"].is<int>()) {
-    int newDstOffset = doc["dstOffset"].as<int>();
-    if (newDstOffset != dstOffset) {
-      dstOffset = newDstOffset;
+  if (doc["appState.dstOffset"].is<int>()) {
+    int newDstOffset = doc["appState.dstOffset"].as<int>();
+    if (newDstOffset != appState.dstOffset) {
+      appState.dstOffset = newDstOffset;
       settingsChanged = true;
       timezoneChanged = true;
     }
@@ -582,32 +582,32 @@ void handleSettingsUpdate() {
     syncTimeWithNTP();
   }
 
-  if (doc["darkMode"].is<bool>()) {
-    bool newDarkMode = doc["darkMode"].as<bool>();
-    if (newDarkMode != darkMode) {
-      darkMode = newDarkMode;
+  if (doc["appState.darkMode"].is<bool>()) {
+    bool newDarkMode = doc["appState.darkMode"].as<bool>();
+    if (newDarkMode != appState.darkMode) {
+      appState.darkMode = newDarkMode;
       settingsChanged = true;
     }
   }
 
-  if (doc["enableCertValidation"].is<bool>()) {
-    bool newCertValidation = doc["enableCertValidation"].as<bool>();
-    if (newCertValidation != enableCertValidation) {
-      enableCertValidation = newCertValidation;
+  if (doc["appState.enableCertValidation"].is<bool>()) {
+    bool newCertValidation = doc["appState.enableCertValidation"].as<bool>();
+    if (newCertValidation != appState.enableCertValidation) {
+      appState.enableCertValidation = newCertValidation;
       settingsChanged = true;
       LOG_I("[Settings] Certificate validation %s",
-            enableCertValidation ? "ENABLED" : "DISABLED");
+            appState.enableCertValidation ? "ENABLED" : "DISABLED");
     }
   }
 
-  if (doc["hardwareStatsInterval"].is<int>()) {
-    int newInterval = doc["hardwareStatsInterval"].as<int>();
+  if (doc["appState.hardwareStatsInterval"].is<int>()) {
+    int newInterval = doc["appState.hardwareStatsInterval"].as<int>();
     // Validate: only allow 1, 2, 3, 5, or 10 seconds
     if (newInterval == 1 || newInterval == 2 || newInterval == 3 ||
         newInterval == 5 || newInterval == 10) {
       unsigned long newIntervalMs = newInterval * 1000UL;
-      if (newIntervalMs != hardwareStatsInterval) {
-        hardwareStatsInterval = newIntervalMs;
+      if (newIntervalMs != appState.hardwareStatsInterval) {
+        appState.hardwareStatsInterval = newIntervalMs;
         settingsChanged = true;
         LOG_I("[Settings] Hardware stats interval set to %d seconds",
               newInterval);
@@ -626,12 +626,12 @@ void handleSettingsUpdate() {
     }
   }
 
-  if (doc["autoAPEnabled"].is<bool>()) {
-    bool newAutoAP = doc["autoAPEnabled"].as<bool>();
-    if (newAutoAP != autoAPEnabled) {
-      autoAPEnabled = newAutoAP;
+  if (doc["appState.autoAPEnabled"].is<bool>()) {
+    bool newAutoAP = doc["appState.autoAPEnabled"].as<bool>();
+    if (newAutoAP != appState.autoAPEnabled) {
+      appState.autoAPEnabled = newAutoAP;
       settingsChanged = true;
-      LOG_I("[Settings] Auto AP %s", autoAPEnabled ? "enabled" : "disabled");
+      LOG_I("[Settings] Auto AP %s", appState.autoAPEnabled ? "enabled" : "disabled");
     }
   }
 
@@ -824,13 +824,13 @@ void handleSettingsUpdate() {
 
   JsonDocument resp;
   resp["success"] = true;
-  resp["autoUpdateEnabled"] = autoUpdateEnabled;
-  resp["timezoneOffset"] = timezoneOffset;
-  resp["dstOffset"] = dstOffset;
-  resp["darkMode"] = darkMode;
-  resp["enableCertValidation"] = enableCertValidation;
-  resp["autoAPEnabled"] = autoAPEnabled;
-  resp["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
+  resp["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
+  resp["appState.timezoneOffset"] = appState.timezoneOffset;
+  resp["appState.dstOffset"] = appState.dstOffset;
+  resp["appState.darkMode"] = appState.darkMode;
+  resp["appState.enableCertValidation"] = appState.enableCertValidation;
+  resp["appState.autoAPEnabled"] = appState.autoAPEnabled;
+  resp["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval / 1000;
   resp["audioUpdateRate"] = appState.audioUpdateRate;
   resp["screenTimeout"] = appState.screenTimeout / 1000;
   resp["backlightOn"] = appState.backlightOn;
@@ -870,30 +870,30 @@ void handleSettingsExport() {
   // Device info
   doc["deviceInfo"]["manufacturer"] = MANUFACTURER_NAME;
   doc["deviceInfo"]["model"] = MANUFACTURER_MODEL;
-  doc["deviceInfo"]["serialNumber"] = deviceSerialNumber;
+  doc["deviceInfo"]["serialNumber"] = appState.deviceSerialNumber;
   doc["deviceInfo"]["firmwareVersion"] = firmwareVer;
   doc["deviceInfo"]["mac"] = WiFi.macAddress();
   doc["deviceInfo"]["chipId"] =
       String((uint32_t)(ESP.getEfuseMac() & 0xFFFFFFFF), HEX);
 
   // WiFi settings
-  doc["wifi"]["ssid"] = wifiSSID;
-  doc["wifi"]["password"] = wifiPassword;
+  doc["wifi"]["ssid"] = appState.wifiSSID;
+  doc["wifi"]["password"] = appState.wifiPassword;
 
   // AP settings
-  doc["accessPoint"]["enabled"] = apEnabled;
-  doc["accessPoint"]["ssid"] = apSSID;
-  doc["accessPoint"]["password"] = apPassword;
-  doc["accessPoint"]["autoAPEnabled"] = autoAPEnabled;
+  doc["accessPoint"]["enabled"] = appState.apEnabled;
+  doc["accessPoint"]["ssid"] = appState.apSSID;
+  doc["accessPoint"]["password"] = appState.apPassword;
+  doc["accessPoint"]["appState.autoAPEnabled"] = appState.autoAPEnabled;
 
   // General settings
-  doc["settings"]["autoUpdateEnabled"] = autoUpdateEnabled;
-  doc["settings"]["timezoneOffset"] = timezoneOffset;
-  doc["settings"]["dstOffset"] = dstOffset;
-  doc["settings"]["darkMode"] = darkMode;
-  doc["settings"]["enableCertValidation"] = enableCertValidation;
-  doc["settings"]["blinkingEnabled"] = blinkingEnabled;
-  doc["settings"]["hardwareStatsInterval"] = hardwareStatsInterval / 1000;
+  doc["settings"]["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
+  doc["settings"]["appState.timezoneOffset"] = appState.timezoneOffset;
+  doc["settings"]["appState.dstOffset"] = appState.dstOffset;
+  doc["settings"]["appState.darkMode"] = appState.darkMode;
+  doc["settings"]["appState.enableCertValidation"] = appState.enableCertValidation;
+  doc["settings"]["appState.blinkingEnabled"] = appState.blinkingEnabled;
+  doc["settings"]["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval / 1000;
   doc["settings"]["audioUpdateRate"] = appState.audioUpdateRate;
   doc["settings"]["screenTimeout"] = appState.screenTimeout / 1000;
   doc["settings"]["buzzerEnabled"] = appState.buzzerEnabled;
@@ -925,7 +925,7 @@ void handleSettingsExport() {
 
   // Smart Sensing settings
   String modeStr;
-  switch (currentMode) {
+  switch (appState.currentMode) {
   case ALWAYS_ON:
     modeStr = "always_on";
     break;
@@ -937,8 +937,8 @@ void handleSettingsExport() {
     break;
   }
   doc["smartSensing"]["mode"] = modeStr;
-  doc["smartSensing"]["timerDuration"] = timerDuration;
-  doc["smartSensing"]["audioThreshold"] = audioThreshold_dBFS;
+  doc["smartSensing"]["appState.timerDuration"] = appState.timerDuration;
+  doc["smartSensing"]["audioThreshold"] = appState.audioThreshold_dBFS;
   doc["smartSensing"]["adcVref"] = appState.adcVref;
 
   // Signal Generator settings
@@ -967,12 +967,12 @@ void handleSettingsExport() {
   }
 
   // MQTT settings (password excluded for security)
-  doc["mqtt"]["enabled"] = mqttEnabled;
-  doc["mqtt"]["broker"] = mqttBroker;
-  doc["mqtt"]["port"] = mqttPort;
-  doc["mqtt"]["username"] = mqttUsername;
-  doc["mqtt"]["baseTopic"] = mqttBaseTopic;
-  doc["mqtt"]["haDiscovery"] = mqttHADiscovery;
+  doc["mqtt"]["enabled"] = appState.mqttEnabled;
+  doc["mqtt"]["broker"] = appState.mqttBroker;
+  doc["mqtt"]["port"] = appState.mqttPort;
+  doc["mqtt"]["username"] = appState.mqttUsername;
+  doc["mqtt"]["baseTopic"] = appState.mqttBaseTopic;
+  doc["mqtt"]["haDiscovery"] = appState.mqttHADiscovery;
   // Note: Password is intentionally excluded from export for security
 
   // Note: Certificate management removed - now using Mozilla certificate bundle
@@ -1034,73 +1034,73 @@ void handleSettingsImport() {
   // Import WiFi settings
   if (!doc["wifi"].isNull()) {
     if (doc["wifi"]["ssid"].is<String>()) {
-      wifiSSID = doc["wifi"]["ssid"].as<String>();
-      LOG_D("[Settings] WiFi SSID: %s", wifiSSID.c_str());
+      appState.wifiSSID = doc["wifi"]["ssid"].as<String>();
+      LOG_D("[Settings] WiFi SSID: %s", appState.wifiSSID.c_str());
     }
     if (doc["wifi"]["password"].is<String>()) {
-      wifiPassword = doc["wifi"]["password"].as<String>();
+      appState.wifiPassword = doc["wifi"]["password"].as<String>();
       LOG_D("[Settings] WiFi password imported");
     }
     // Save WiFi credentials to multi-WiFi list
-    if (wifiSSID.length() > 0) {
-      saveWiFiNetwork(wifiSSID.c_str(), wifiPassword.c_str());
+    if (appState.wifiSSID.length() > 0) {
+      saveWiFiNetwork(appState.wifiSSID.c_str(), appState.wifiPassword.c_str());
     }
   }
 
   // Import AP settings
   if (!doc["accessPoint"].isNull()) {
     if (doc["accessPoint"]["enabled"].is<bool>()) {
-      apEnabled = doc["accessPoint"]["enabled"].as<bool>();
-      LOG_D("[Settings] AP Enabled: %s", apEnabled ? "true" : "false");
+      appState.apEnabled = doc["accessPoint"]["enabled"].as<bool>();
+      LOG_D("[Settings] AP Enabled: %s", appState.apEnabled ? "true" : "false");
     }
     if (doc["accessPoint"]["ssid"].is<String>()) {
-      apSSID = doc["accessPoint"]["ssid"].as<String>();
-      LOG_D("[Settings] AP SSID: %s", apSSID.c_str());
+      appState.apSSID = doc["accessPoint"]["ssid"].as<String>();
+      LOG_D("[Settings] AP SSID: %s", appState.apSSID.c_str());
     }
     if (doc["accessPoint"]["password"].is<String>()) {
-      apPassword = doc["accessPoint"]["password"].as<String>();
+      appState.apPassword = doc["accessPoint"]["password"].as<String>();
       LOG_D("[Settings] AP password imported");
     }
-    if (doc["accessPoint"]["autoAPEnabled"].is<bool>()) {
-      autoAPEnabled = doc["accessPoint"]["autoAPEnabled"].as<bool>();
-      LOG_D("[Settings] Auto AP: %s", autoAPEnabled ? "enabled" : "disabled");
+    if (doc["accessPoint"]["appState.autoAPEnabled"].is<bool>()) {
+      appState.autoAPEnabled = doc["accessPoint"]["appState.autoAPEnabled"].as<bool>();
+      LOG_D("[Settings] Auto AP: %s", appState.autoAPEnabled ? "enabled" : "disabled");
     }
   }
 
   // Import general settings
   if (!doc["settings"].isNull()) {
-    if (doc["settings"]["autoUpdateEnabled"].is<bool>()) {
-      autoUpdateEnabled = doc["settings"]["autoUpdateEnabled"].as<bool>();
+    if (doc["settings"]["appState.autoUpdateEnabled"].is<bool>()) {
+      appState.autoUpdateEnabled = doc["settings"]["appState.autoUpdateEnabled"].as<bool>();
       LOG_D("[Settings] Auto Update: %s",
-            autoUpdateEnabled ? "enabled" : "disabled");
+            appState.autoUpdateEnabled ? "enabled" : "disabled");
     }
-    if (doc["settings"]["timezoneOffset"].is<int>()) {
-      timezoneOffset = doc["settings"]["timezoneOffset"].as<int>();
-      LOG_D("[Settings] Timezone Offset: %d", timezoneOffset);
+    if (doc["settings"]["appState.timezoneOffset"].is<int>()) {
+      appState.timezoneOffset = doc["settings"]["appState.timezoneOffset"].as<int>();
+      LOG_D("[Settings] Timezone Offset: %d", appState.timezoneOffset);
     }
-    if (doc["settings"]["dstOffset"].is<int>()) {
-      dstOffset = doc["settings"]["dstOffset"].as<int>();
-      LOG_D("[Settings] DST Offset: %d", dstOffset);
+    if (doc["settings"]["appState.dstOffset"].is<int>()) {
+      appState.dstOffset = doc["settings"]["appState.dstOffset"].as<int>();
+      LOG_D("[Settings] DST Offset: %d", appState.dstOffset);
     }
-    if (doc["settings"]["darkMode"].is<bool>()) {
-      darkMode = doc["settings"]["darkMode"].as<bool>();
-      LOG_D("[Settings] Dark Mode: %s", darkMode ? "enabled" : "disabled");
+    if (doc["settings"]["appState.darkMode"].is<bool>()) {
+      appState.darkMode = doc["settings"]["appState.darkMode"].as<bool>();
+      LOG_D("[Settings] Dark Mode: %s", appState.darkMode ? "enabled" : "disabled");
     }
-    if (doc["settings"]["enableCertValidation"].is<bool>()) {
-      enableCertValidation = doc["settings"]["enableCertValidation"].as<bool>();
+    if (doc["settings"]["appState.enableCertValidation"].is<bool>()) {
+      appState.enableCertValidation = doc["settings"]["appState.enableCertValidation"].as<bool>();
       LOG_D("[Settings] Cert Validation: %s",
-            enableCertValidation ? "enabled" : "disabled");
+            appState.enableCertValidation ? "enabled" : "disabled");
     }
-    if (doc["settings"]["blinkingEnabled"].is<bool>()) {
-      blinkingEnabled = doc["settings"]["blinkingEnabled"].as<bool>();
+    if (doc["settings"]["appState.blinkingEnabled"].is<bool>()) {
+      appState.blinkingEnabled = doc["settings"]["appState.blinkingEnabled"].as<bool>();
       LOG_D("[Settings] Blinking: %s",
-            blinkingEnabled ? "enabled" : "disabled");
+            appState.blinkingEnabled ? "enabled" : "disabled");
     }
-    if (doc["settings"]["hardwareStatsInterval"].is<int>()) {
-      int interval = doc["settings"]["hardwareStatsInterval"].as<int>();
+    if (doc["settings"]["appState.hardwareStatsInterval"].is<int>()) {
+      int interval = doc["settings"]["appState.hardwareStatsInterval"].as<int>();
       if (interval == 1 || interval == 2 || interval == 3 || interval == 5 ||
           interval == 10) {
-        hardwareStatsInterval = interval * 1000UL;
+        appState.hardwareStatsInterval = interval * 1000UL;
         LOG_D("[Settings] Hardware Stats Interval: %d seconds", interval);
       }
     }
@@ -1232,22 +1232,22 @@ void handleSettingsImport() {
     if (doc["smartSensing"]["mode"].is<String>()) {
       String modeStr = doc["smartSensing"]["mode"].as<String>();
       if (modeStr == "always_on") {
-        currentMode = ALWAYS_ON;
+        appState.currentMode = ALWAYS_ON;
       } else if (modeStr == "always_off") {
-        currentMode = ALWAYS_OFF;
+        appState.currentMode = ALWAYS_OFF;
       } else if (modeStr == "smart_auto") {
-        currentMode = SMART_AUTO;
+        appState.currentMode = SMART_AUTO;
       }
       LOG_D("[Settings] Smart Sensing Mode: %s", modeStr.c_str());
     }
-    if (doc["smartSensing"]["timerDuration"].is<int>() ||
-        doc["smartSensing"]["timerDuration"].is<unsigned long>()) {
-      timerDuration = doc["smartSensing"]["timerDuration"].as<unsigned long>();
-      LOG_D("[Settings] Timer Duration: %lu minutes", timerDuration);
+    if (doc["smartSensing"]["appState.timerDuration"].is<int>() ||
+        doc["smartSensing"]["appState.timerDuration"].is<unsigned long>()) {
+      appState.timerDuration = doc["smartSensing"]["appState.timerDuration"].as<unsigned long>();
+      LOG_D("[Settings] Timer Duration: %lu minutes", appState.timerDuration);
     }
     if (doc["smartSensing"]["audioThreshold"].is<float>()) {
-      audioThreshold_dBFS = doc["smartSensing"]["audioThreshold"].as<float>();
-      LOG_D("[Settings] Audio Threshold: %+.0f dBFS", audioThreshold_dBFS);
+      appState.audioThreshold_dBFS = doc["smartSensing"]["audioThreshold"].as<float>();
+      LOG_D("[Settings] Audio Threshold: %+.0f dBFS", appState.audioThreshold_dBFS);
     }
     if (doc["smartSensing"]["adcVref"].is<float>()) {
       float vref = doc["smartSensing"]["adcVref"].as<float>();
@@ -1263,29 +1263,29 @@ void handleSettingsImport() {
   // Import MQTT settings
   if (!doc["mqtt"].isNull()) {
     if (doc["mqtt"]["enabled"].is<bool>()) {
-      mqttEnabled = doc["mqtt"]["enabled"].as<bool>();
-      LOG_D("[Settings] MQTT Enabled: %s", mqttEnabled ? "true" : "false");
+      appState.mqttEnabled = doc["mqtt"]["enabled"].as<bool>();
+      LOG_D("[Settings] MQTT Enabled: %s", appState.mqttEnabled ? "true" : "false");
     }
     if (doc["mqtt"]["broker"].is<String>()) {
-      mqttBroker = doc["mqtt"]["broker"].as<String>();
-      LOG_D("[Settings] MQTT Broker: %s", mqttBroker.c_str());
+      appState.mqttBroker = doc["mqtt"]["broker"].as<String>();
+      LOG_D("[Settings] MQTT Broker: %s", appState.mqttBroker.c_str());
     }
     if (doc["mqtt"]["port"].is<int>()) {
-      mqttPort = doc["mqtt"]["port"].as<int>();
-      LOG_D("[Settings] MQTT Port: %d", mqttPort);
+      appState.mqttPort = doc["mqtt"]["port"].as<int>();
+      LOG_D("[Settings] MQTT Port: %d", appState.mqttPort);
     }
     if (doc["mqtt"]["username"].is<String>()) {
-      mqttUsername = doc["mqtt"]["username"].as<String>();
+      appState.mqttUsername = doc["mqtt"]["username"].as<String>();
       LOG_D("[Settings] MQTT username imported");
     }
     if (doc["mqtt"]["baseTopic"].is<String>()) {
-      mqttBaseTopic = doc["mqtt"]["baseTopic"].as<String>();
-      LOG_D("[Settings] MQTT Base Topic: %s", mqttBaseTopic.c_str());
+      appState.mqttBaseTopic = doc["mqtt"]["baseTopic"].as<String>();
+      LOG_D("[Settings] MQTT Base Topic: %s", appState.mqttBaseTopic.c_str());
     }
     if (doc["mqtt"]["haDiscovery"].is<bool>()) {
-      mqttHADiscovery = doc["mqtt"]["haDiscovery"].as<bool>();
+      appState.mqttHADiscovery = doc["mqtt"]["haDiscovery"].as<bool>();
       LOG_D("[Settings] MQTT HA Discovery: %s",
-            mqttHADiscovery ? "enabled" : "disabled");
+            appState.mqttHADiscovery ? "enabled" : "disabled");
     }
     // Note: Password is not imported for security - user needs to re-enter it
     // Save MQTT settings
@@ -1430,7 +1430,7 @@ void handleDiagnostics() {
   JsonObject device = doc["device"].to<JsonObject>();
   device["manufacturer"] = MANUFACTURER_NAME;
   device["model"] = MANUFACTURER_MODEL;
-  device["serialNumber"] = deviceSerialNumber;
+  device["serialNumber"] = appState.deviceSerialNumber;
   device["firmwareVersion"] = firmwareVer;
   device["mac"] = WiFi.macAddress();
   device["chipId"] = String((uint32_t)(ESP.getEfuseMac() & 0xFFFFFFFF), HEX);
@@ -1474,7 +1474,7 @@ void handleDiagnostics() {
   // ===== WiFi Status =====
   JsonObject wifi = doc["wifi"].to<JsonObject>();
   wifi["connected"] = (WiFi.status() == WL_CONNECTED);
-  wifi["mode"] = isAPMode ? "ap" : "sta";
+  wifi["mode"] = appState.isAPMode ? "ap" : "sta";
   wifi["ssid"] = WiFi.SSID();
   wifi["rssi"] = WiFi.RSSI();
   wifi["localIP"] = WiFi.localIP().toString();
@@ -1482,8 +1482,8 @@ void handleDiagnostics() {
   wifi["subnetMask"] = WiFi.subnetMask().toString();
   wifi["dnsIP"] = WiFi.dnsIP().toString();
   wifi["hostname"] = WiFi.getHostname();
-  wifi["apEnabled"] = apEnabled;
-  wifi["apSSID"] = apSSID;
+  wifi["appState.apEnabled"] = appState.apEnabled;
+  wifi["appState.apSSID"] = appState.apSSID;
   wifi["apIP"] = WiFi.softAPIP().toString();
   wifi["apClients"] = WiFi.softAPgetStationNum();
 
@@ -1492,13 +1492,13 @@ void handleDiagnostics() {
 
   // ===== Settings =====
   JsonObject settings = doc["settings"].to<JsonObject>();
-  settings["autoUpdateEnabled"] = autoUpdateEnabled;
-  settings["timezoneOffset"] = timezoneOffset;
-  settings["dstOffset"] = dstOffset;
-  settings["darkMode"] = darkMode;
-  settings["enableCertValidation"] = enableCertValidation;
-  settings["blinkingEnabled"] = blinkingEnabled;
-  settings["hardwareStatsInterval"] = hardwareStatsInterval;
+  settings["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
+  settings["appState.timezoneOffset"] = appState.timezoneOffset;
+  settings["appState.dstOffset"] = appState.dstOffset;
+  settings["appState.darkMode"] = appState.darkMode;
+  settings["appState.enableCertValidation"] = appState.enableCertValidation;
+  settings["appState.blinkingEnabled"] = appState.blinkingEnabled;
+  settings["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval;
   settings["audioUpdateRate"] = appState.audioUpdateRate;
   settings["screenTimeout"] = appState.screenTimeout;
   settings["backlightOn"] = appState.backlightOn;
@@ -1528,7 +1528,7 @@ void handleDiagnostics() {
   // ===== Smart Sensing =====
   JsonObject sensing = doc["smartSensing"].to<JsonObject>();
   String modeStr;
-  switch (currentMode) {
+  switch (appState.currentMode) {
   case ALWAYS_ON:
     modeStr = "always_on";
     break;
@@ -1540,12 +1540,12 @@ void handleDiagnostics() {
     break;
   }
   sensing["mode"] = modeStr;
-  sensing["amplifierState"] = amplifierState;
-  sensing["timerDuration"] = timerDuration;
-  sensing["timerRemaining"] = timerRemaining;
-  sensing["audioThreshold"] = audioThreshold_dBFS;
-  sensing["audioLevel"] = audioLevel_dBFS;
-  sensing["lastSignalDetection"] = lastSignalDetection;
+  sensing["appState.amplifierState"] = appState.amplifierState;
+  sensing["appState.timerDuration"] = appState.timerDuration;
+  sensing["appState.timerRemaining"] = appState.timerRemaining;
+  sensing["audioThreshold"] = appState.audioThreshold_dBFS;
+  sensing["audioLevel"] = appState.audioLevel_dBFS;
+  sensing["appState.lastSignalDetection"] = appState.lastSignalDetection;
 
   // ===== Audio ADC Diagnostics =====
   {
@@ -1614,20 +1614,20 @@ void handleDiagnostics() {
 
   // ===== MQTT Settings (password excluded) =====
   JsonObject mqtt = doc["mqtt"].to<JsonObject>();
-  mqtt["enabled"] = mqttEnabled;
-  mqtt["broker"] = mqttBroker;
-  mqtt["port"] = mqttPort;
-  mqtt["username"] = mqttUsername;
-  mqtt["baseTopic"] = mqttBaseTopic;
-  mqtt["haDiscovery"] = mqttHADiscovery;
-  mqtt["connected"] = mqttConnected;
+  mqtt["enabled"] = appState.mqttEnabled;
+  mqtt["broker"] = appState.mqttBroker;
+  mqtt["port"] = appState.mqttPort;
+  mqtt["username"] = appState.mqttUsername;
+  mqtt["baseTopic"] = appState.mqttBaseTopic;
+  mqtt["haDiscovery"] = appState.mqttHADiscovery;
+  mqtt["connected"] = appState.mqttConnected;
 
   // ===== OTA Status =====
   JsonObject ota = doc["ota"].to<JsonObject>();
-  ota["updateAvailable"] = updateAvailable;
-  ota["latestVersion"] = cachedLatestVersion;
-  ota["inProgress"] = otaInProgress;
-  ota["status"] = otaStatus;
+  ota["appState.updateAvailable"] = appState.updateAvailable;
+  ota["latestVersion"] = appState.cachedLatestVersion;
+  ota["inProgress"] = appState.otaInProgress;
+  ota["status"] = appState.otaStatus;
 
   // ===== FSM State =====
   String fsmStateStr;
@@ -1654,7 +1654,7 @@ void handleDiagnostics() {
     fsmStateStr = "unknown";
   }
   doc["fsmState"] = fsmStateStr;
-  doc["ledState"] = ledState;
+  doc["appState.ledState"] = appState.ledState;
 
   // ===== Error State =====
   if (appState.hasError()) {
@@ -1678,6 +1678,6 @@ void handleDiagnostics() {
 }
 
 // Note: Certificate HTTP API handlers removed - now using Mozilla certificate
-// bundle The enableCertValidation setting still works to toggle between:
+// bundle The appState.enableCertValidation setting still works to toggle between:
 // - ENABLED: Uses Mozilla certificate bundle for validation
 // - DISABLED: Insecure mode (no certificate validation)

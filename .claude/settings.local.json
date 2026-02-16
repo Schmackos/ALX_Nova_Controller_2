@@ -117,7 +117,14 @@
       "Bash(powershell.exe:*)",
       "WebFetch(domain:components.espressif.com)",
       "WebFetch(domain:www.atomic14.com)",
-      "Bash(sort:*)"
+      "Bash(sort:*)",
+      "Bash(git branch:*)",
+      "Bash(bash -c 'input=$\\(cat\\); cwd=$\\(echo \"\"$input\"\" | jq -r \"\".workspace.current_dir\"\"\\); cd \"\"$cwd\"\" 2>/dev/null; user=$\\(whoami\\); host=$\\(hostname -s\\); msystem=${MSYSTEM:-MINGW64}; gitbranch=$\\(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null\\); printf \"\"\\\\033[32m%s@%s \\\\033[35m%s \\\\033[33m%s\\\\033[36m%s\\\\033[0m\"\" \"\"$user\"\" \"\"$host\"\" \"\"$msystem\"\" \"\"$cwd\"\" \"\"${gitbranch:+ \\($gitbranch\\)}\"\"')",
+      "Bash(bash -c 'input=$\\(cat\\); cwd=$\\(echo \"\"$input\"\" | python -c \"\"import sys,json;print\\(json.load\\(sys.stdin\\).get\\(\\\\\"\"workspace\\\\\"\",{}\\).get\\(\\\\\"\"current_dir\\\\\"\",\\\\\"\"\\\\\"\"\\)\\)\"\" 2>/dev/null\\); cd \"\"$cwd\"\" 2>/dev/null; user=$\\(whoami\\); host=$\\(hostname | cut -d. -f1\\); msystem=${MSYSTEM:-MINGW64}; gitbranch=$\\(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null\\); printf \"\"\\\\033[32m%s@%s \\\\033[35m%s \\\\033[33m%s\\\\033[36m%s\\\\033[0m\"\" \"\"$user\"\" \"\"$host\"\" \"\"$msystem\"\" \"\"$cwd\"\" \"\"${gitbranch:+ \\($gitbranch\\)}\"\"')",
+      "Bash(pacman -S:*)",
+      "Bash(choco install:*)",
+      "Bash(bash -c 'input=$\\(cat\\); cwd=$\\(echo \"\"$input\"\" | jq -r \"\".workspace.current_dir\"\"\\); cd \"\"$cwd\"\" 2>/dev/null; user=$\\(whoami\\); host=$\\(hostname | cut -d. -f1\\); msystem=${MSYSTEM:-MINGW64}; gitbranch=$\\(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null\\); printf \"\"\\\\033[32m%s@%s \\\\033[35m%s \\\\033[33m%s\\\\033[36m%s\\\\033[0m\"\" \"\"$user\"\" \"\"$host\"\" \"\"$msystem\"\" \"\"$cwd\"\" \"\"${gitbranch:+ \\($gitbranch\\)}\"\"')",
+      "Bash(node:*)"
     ]
   }
 }
