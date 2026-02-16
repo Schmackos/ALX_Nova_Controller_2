@@ -1543,6 +1543,29 @@ void dsp_copy_peq_bands(int srcChannel, int dstChannel) {
     }
 }
 
+void dsp_copy_chain_stages(int srcChannel, int dstChannel) {
+    if (srcChannel < 0 || srcChannel >= DSP_MAX_CHANNELS) return;
+    if (dstChannel < 0 || dstChannel >= DSP_MAX_CHANNELS) return;
+    if (srcChannel == dstChannel) return;
+
+    DspState *cfg = dsp_get_inactive_config();
+    DspChannelConfig &src = cfg->channels[srcChannel];
+    DspChannelConfig &dst = cfg->channels[dstChannel];
+
+    // Copy chain stages (DSP_PEQ_BANDS and above)
+    int srcChainCount = src.stageCount > DSP_PEQ_BANDS ? src.stageCount - DSP_PEQ_BANDS : 0;
+    int maxChain = DSP_MAX_STAGES - DSP_PEQ_BANDS;
+    if (srcChainCount > maxChain) srcChainCount = maxChain;
+
+    for (int i = 0; i < srcChainCount; i++) {
+        dst.stages[DSP_PEQ_BANDS + i] = src.stages[DSP_PEQ_BANDS + i];
+    }
+
+    // Update dst stageCount: keep PEQ bands, replace chain count
+    int dstPeq = dst.stageCount < DSP_PEQ_BANDS ? dst.stageCount : DSP_PEQ_BANDS;
+    dst.stageCount = dstPeq + srcChainCount;
+}
+
 // ===== Stereo Link =====
 
 int dsp_get_linked_partner(int channel) {

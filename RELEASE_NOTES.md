@@ -88,6 +88,11 @@ workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
+- [2026-02-17] feat: Color-coded DSP stage labels and "Copy to" for Additional Processing
+
+Add category-colored type badges on stage cards, colored category labels
+in the Add Stage menu, and a "Copy to..." dropdown for copying chain
+stages between channels.
 - [2026-02-17] feat: Dynamic DSP preset management with unlimited slots
 
 Replace fixed 4-slot preset system with dynamic list supporting up to 32 presets.
