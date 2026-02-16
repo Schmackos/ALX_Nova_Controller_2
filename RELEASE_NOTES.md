@@ -21,6 +21,22 @@ Backward compatibility: old firmware reads "VER=2" as autoUpdateEnabled
 (toInt() returns 0), disabling auto-update on downgrade.
 
 Array-based approach eliminates 28 individual String variables and makes
+adding new settings fields trivial. (`a30ea6d`)
+- [2026-02-16] feat: Add settings format versioning with VER= prefix
+
+Refactor settings persistence to support format evolution. Load/save
+functions now detect and handle versioned settings files.
+
+Changes:
+- loadSettings() reads lines into array, detects "VER=2" prefix
+- dataStart offset skips version line when present
+- Legacy files (no version) still load correctly with dataStart=0
+- saveSettings() writes "VER=2" as first line
+
+Backward compatibility: old firmware reads "VER=2" as autoUpdateEnabled
+(toInt() returns 0), disabling auto-update on downgrade.
+
+Array-based approach eliminates 28 individual String variables and makes
 adding new settings fields trivial. (`e7bd55e`)
 - [2026-02-15] feat: Auth security hardening and USB audio init fix
 
@@ -47,6 +63,54 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-16] fix: USB audio Windows driver compatibility via minimal BOS descriptor
+
+Override framework's BOS descriptor that includes Microsoft OS 2.0 with
+Compatible ID "WINUSB", which causes Windows to load WinUSB driver instead
+of usbaudio2.sys. Our minimal BOS includes only USB 2.0 Extension capability
+(required for bcdUSB=0x0210) with no MSOS2/WINUSB descriptors.
+
+Changes:
+- Add linker wrapper flag -Wl,--wrap=tud_descriptor_bos_cb to override strong symbol
+- Implement __wrap_tud_descriptor_bos_cb() with 12-byte minimal BOS descriptor
+- Change clock control to read-only (bmControls: 0x07 → 0x05)
+- STALL SET_CUR requests for clock frequency (fixed 48kHz, not configurable)
+- Change USB PID 0x4001 → 0x4002 to force Windows to re-enumerate
+
+Fixes Windows incorrectly loading WinUSB driver and failing to recognize UAC2
+audio device. Device now correctly appears as "ALX Nova Audio" speaker. (`ccea3c8`)
+- [2026-02-16] fix: USB audio Windows driver compatibility via minimal BOS descriptor
+
+Override framework's BOS descriptor that includes Microsoft OS 2.0 with
+Compatible ID "WINUSB", which causes Windows to load WinUSB driver instead
+of usbaudio2.sys. Our minimal BOS includes only USB 2.0 Extension capability
+(required for bcdUSB=0x0210) with no MSOS2/WINUSB descriptors.
+
+Changes:
+- Add linker wrapper flag -Wl,--wrap=tud_descriptor_bos_cb to override strong symbol
+- Implement __wrap_tud_descriptor_bos_cb() with 12-byte minimal BOS descriptor
+- Change clock control to read-only (bmControls: 0x07 → 0x05)
+- STALL SET_CUR requests for clock frequency (fixed 48kHz, not configurable)
+- Change USB PID 0x4001 → 0x4002 to force Windows to re-enumerate
+
+Fixes Windows incorrectly loading WinUSB driver and failing to recognize UAC2
+audio device. Device now correctly appears as "ALX Nova Audio" speaker. (`d0ecfb7`)
+- [2026-02-16] fix: USB audio Windows driver compatibility via minimal BOS descriptor
+
+Override framework's BOS descriptor that includes Microsoft OS 2.0 with
+Compatible ID "WINUSB", which causes Windows to load WinUSB driver instead
+of usbaudio2.sys. Our minimal BOS includes only USB 2.0 Extension capability
+(required for bcdUSB=0x0210) with no MSOS2/WINUSB descriptors.
+
+Changes:
+- Add linker wrapper flag -Wl,--wrap=tud_descriptor_bos_cb to override strong symbol
+- Implement __wrap_tud_descriptor_bos_cb() with 12-byte minimal BOS descriptor
+- Change clock control to read-only (bmControls: 0x07 → 0x05)
+- STALL SET_CUR requests for clock frequency (fixed 48kHz, not configurable)
+- Change USB PID 0x4001 → 0x4002 to force Windows to re-enumerate
+
+Fixes Windows incorrectly loading WinUSB driver and failing to recognize UAC2
+audio device. Device now correctly appears as "ALX Nova Audio" speaker. (`77a7e2a`)
 - [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
 
 Address CONCERNS.md audit findings across security, robustness, and test gaps:
@@ -73,10 +137,22 @@ Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruptio
 Remove redundant SET_INTERFACE handler (TinyUSB handles it internally
 via driver open callback). Add SET_CUR clock rate validation in DATA
 stage. Improve control request logging. (`6d0e343`)
+- [2026-02-16] fix: USB audio Windows driver compatibility via minimal BOS descriptor
 
-Remove redundant SET_INTERFACE handler (TinyUSB handles it internally
-via driver open callback). Add SET_CUR clock rate validation in DATA
-stage. Improve control request logging. (`0d5de4c`)
+Override framework's BOS descriptor that includes Microsoft OS 2.0 with
+Compatible ID "WINUSB", which causes Windows to load WinUSB driver instead
+of usbaudio2.sys. Our minimal BOS includes only USB 2.0 Extension capability
+(required for bcdUSB=0x0210) with no MSOS2/WINUSB descriptors.
+
+Changes:
+- Add linker wrapper flag `-Wl,--wrap=tud_descriptor_bos_cb` to override strong symbol
+- Implement __wrap_tud_descriptor_bos_cb() with 12-byte minimal BOS descriptor
+- Change clock control to read-only (bmControls: 0x07 → 0x05)
+- STALL SET_CUR requests for clock frequency (fixed 48kHz, not configurable)
+- Change USB PID 0x4001 → 0x4002 to force Windows to re-enumerate
+
+Fixes Windows incorrectly loading WinUSB driver and failing to recognize UAC2
+audio device. Device now correctly appears as "ALX Nova Audio" speaker.
 - [2026-02-15] fix: WebSocket session re-validation and default password consistency
 
 Re-validate session on every WS command to catch logout/expiry.

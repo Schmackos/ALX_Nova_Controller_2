@@ -228,7 +228,7 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     *p++ = AUDIO_CS_AC_INTERFACE_CLOCK_SOURCE;         // bDescriptorSubtype
     *p++ = UAC2_ENTITY_CLOCK;                          // bClockID
     *p++ = 0x01;                                       // bmAttributes: internal fixed clock
-    *p++ = 0x07;                                       // bmControls: freq r/w, validity readable
+    *p++ = 0x05;                                       // bmControls: freq read-only, validity read-only
     *p++ = 0;                                          // bAssocTerminal
     *p++ = 0;                                          // iClockSource
 
@@ -476,8 +476,9 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                         memcpy(_ctrlBuf, &rate, 4);
                         return tud_control_xfer(rhport, request, _ctrlBuf, 4);
                     } else {
-                        // SET: accept the rate (receive in DATA stage, validate there)
-                        return tud_control_xfer(rhport, request, _ctrlBuf, 4);
+                        // SET: clock is fixed/read-only — STALL unsupported SET requests
+                        LOG_W("[USB Audio] Rejecting SET_CUR for clock frequency (read-only)");
+                        return false;
                     }
                 } else if (TU_U16_HIGH(request->wValue) == 0x02) {
                     // CLOCK_VALID_CONTROL — always valid
@@ -640,6 +641,34 @@ extern "C" usbd_class_driver_t const *usbd_app_driver_get_cb(uint8_t *driver_cou
     return &_audio_class_driver;
 }
 
+// Override the framework's BOS descriptor callback via --wrap linker flag.
+// The Arduino ESP32 TinyUSB HAL defines tud_descriptor_bos_cb() as a STRONG
+// symbol (not __attribute__((weak))), so a normal override in user code is
+// silently discarded by the linker. Using -Wl,--wrap=tud_descriptor_bos_cb
+// in platformio.ini guarantees our version is called.
+//
+// The framework's BOS includes Microsoft OS 2.0 with Compatible ID "WINUSB",
+// causing Windows to load WinUSB instead of usbaudio2.sys. Our minimal BOS
+// has only the USB 2.0 Extension capability (required since bcdUSB=0x0210).
+static uint8_t const _minimal_bos_descriptor[] = {
+    // BOS Descriptor Header (5 bytes)
+    5,                          // bLength
+    0x0F,                       // bDescriptorType = BOS
+    12, 0,                      // wTotalLength = 12
+    1,                          // bNumDeviceCaps = 1
+
+    // USB 2.0 Extension Capability (7 bytes)
+    7,                          // bLength
+    0x10,                       // bDescriptorType = DEVICE_CAPABILITY
+    0x02,                       // bDevCapabilityType = USB_2_0_EXTENSION
+    0x00, 0x00, 0x00, 0x00     // bmAttributes: no LPM (ESP32-S3 FS doesn't support it reliably)
+};
+
+extern "C" uint8_t const *__wrap_tud_descriptor_bos_cb(void) {
+    LOG_I("[USB Audio] BOS descriptor served (minimal, no MSOS2)");
+    return _minimal_bos_descriptor;
+}
+
 // NOTE: No separate FreeRTOS task needed — tinyusb_init() creates its own
 // "usbd" task at configMAX_PRIORITIES-1 that calls tud_task() in a loop.
 // Creating a second task calling tud_task_ext() causes concurrent access
@@ -682,7 +711,7 @@ void usb_audio_init(void) {
         // — it references Kconfig macros not available in Arduino framework builds)
         tinyusb_device_config_t cfg = {};
         cfg.vid = USB_ESPRESSIF_VID;
-        cfg.pid = 0x4001;
+        cfg.pid = 0x4002;
         cfg.product_name = "ALX Nova Audio";
         cfg.manufacturer_name = "ALX Audio";
         cfg.serial_number = "ALX-USB-AUDIO";
