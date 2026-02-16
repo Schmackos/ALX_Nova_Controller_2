@@ -1,5 +1,24 @@
 # Release Notes
 
+## Version 1.8.4
+
+## Technical Details
+- [2026-02-17] chore: Bump version to 1.8.4 (`00beba4`)
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.8.3
 
 ## Documentation
