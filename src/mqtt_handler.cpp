@@ -870,7 +870,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     int slot = message.toInt();
     if (message == "Custom" || message == "-1") {
       // No action — "Custom" means user manually modified config
-    } else if (slot >= 0 && slot < 4) {
+    } else if (slot >= 0 && slot < DSP_PRESET_MAX_SLOTS) {
       extern bool dsp_preset_load(int);
       if (dsp_preset_load(slot)) {
         appState.markDspConfigDirty();
@@ -1720,7 +1720,7 @@ void publishMqttDspState() {
                      appState.dspBypass ? "ON" : "OFF", true);
 
   // Preset state
-  if (appState.dspPresetIndex >= 0 && appState.dspPresetIndex < 4) {
+  if (appState.dspPresetIndex >= 0 && appState.dspPresetIndex < DSP_PRESET_MAX_SLOTS) {
     mqttClient.publish((base + "/dsp/preset").c_str(),
                        appState.dspPresetNames[appState.dspPresetIndex], true);
   } else {
@@ -3320,8 +3320,11 @@ void publishHADiscovery() {
     doc["icon"] = "mdi:playlist-music";
     JsonArray opts = doc["options"].to<JsonArray>();
     opts.add("Custom");
-    for (int i = 0; i < 4; i++) {
-      if (appState.dspPresetNames[i][0]) opts.add(appState.dspPresetNames[i]);
+    extern bool dsp_preset_exists(int);
+    for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
+      if (appState.dspPresetNames[i][0] && dsp_preset_exists(i)) {
+        opts.add(appState.dspPresetNames[i]);
+      }
     }
     addHADeviceInfo(doc);
     String payload;

@@ -89,6 +89,7 @@ const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
 #define DSP_MAX_DELAY_SAMPLES 4800 // Max delay = 100ms @ 48kHz
 #define DSP_DEFAULT_Q        0.707f
 #define DSP_CPU_WARN_PERCENT 80.0f
+#define DSP_PRESET_MAX_SLOTS 32    // Max number of config preset slots
 #endif
 
 // ===== USB Audio Configuration =====

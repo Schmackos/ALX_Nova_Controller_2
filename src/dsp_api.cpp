@@ -196,7 +196,7 @@ void saveDspSettings() {
     globalDoc["dspEnabled"] = appState.dspEnabled;
     globalDoc["presetIndex"] = appState.dspPresetIndex;
     JsonArray names = globalDoc["presetNames"].to<JsonArray>();
-    for (int i = 0; i < 4; i++) names.add(appState.dspPresetNames[i]);
+    for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) names.add(appState.dspPresetNames[i]);
 
     String globalJson;
     serializeJson(globalDoc, globalJson);
@@ -256,14 +256,30 @@ static void checkDspSave() {
 // ===== DSP Preset Management =====
 
 bool dsp_preset_exists(int slot) {
-    if (slot < 0 || slot >= 4) return false;
+    if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) return false;
     char path[24];
     snprintf(path, sizeof(path), "/dsp_preset_%d.json", slot);
     return dspFileExists(path);
 }
 
 bool dsp_preset_save(int slot, const char *name) {
-    if (slot < 0 || slot >= 4) return false;
+    // Auto-assign slot if -1
+    if (slot == -1) {
+        bool found = false;
+        for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
+            if (!dsp_preset_exists(i) || appState.dspPresetNames[i][0] == '\0') {
+                slot = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            LOG_E("[DSP] Preset save: all %d slots full", DSP_PRESET_MAX_SLOTS);
+            return false;
+        }
+    }
+
+    if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) return false;
 
     // Export full config from active state (heap-allocated to avoid stack overflow)
     char *configBuf = (char *)heap_caps_malloc(8192, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -319,7 +335,7 @@ bool dsp_preset_save(int slot, const char *name) {
 }
 
 bool dsp_preset_load(int slot) {
-    if (slot < 0 || slot >= 4) return false;
+    if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) return false;
 
     char path[24];
     snprintf(path, sizeof(path), "/dsp_preset_%d.json", slot);
@@ -381,7 +397,7 @@ bool dsp_preset_load(int slot) {
 }
 
 bool dsp_preset_delete(int slot) {
-    if (slot < 0 || slot >= 4) return false;
+    if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) return false;
 
     char path[24];
     snprintf(path, sizeof(path), "/dsp_preset_%d.json", slot);
@@ -396,6 +412,47 @@ bool dsp_preset_delete(int slot) {
     appState.markDspPresetDirty();
 
     LOG_I("[DSP] Preset %d deleted", slot);
+    return true;
+}
+
+bool dsp_preset_rename(int slot, const char *newName) {
+    if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) return false;
+    if (!newName || strlen(newName) == 0) return false;
+
+    char path[24];
+    snprintf(path, sizeof(path), "/dsp_preset_%d.json", slot);
+    if (!dspFileExists(path)) return false;
+
+    // Read existing preset file
+    File f = LittleFS.open(path, "r");
+    if (!f || f.size() == 0) { if (f) f.close(); return false; }
+    String json = f.readString();
+    f.close();
+
+    // Parse and update name field
+    _dspApiDoc.clear();
+    JsonDocument &doc = _dspApiDoc;
+    if (deserializeJson(doc, json)) return false;
+
+    doc["name"] = newName;
+
+    // Write back to file
+    json.clear();
+    serializeJson(doc, json);
+    f = LittleFS.open(path, "w");
+    if (!f) return false;
+    f.print(json);
+    f.close();
+
+    // Update AppState
+    strncpy(appState.dspPresetNames[slot], newName, 20);
+    appState.dspPresetNames[slot][20] = '\0';
+    appState.markDspPresetDirty();
+
+    // Persist to global settings
+    saveDspSettingsDebounced();
+
+    LOG_I("[DSP] Preset %d renamed: %s", slot, newName);
     return true;
 }
 
@@ -1402,16 +1459,16 @@ void registerDspApiEndpoints() {
         LOG_I("[DSP] PEQ preset deleted: %s", server.arg("name").c_str());
     });
 
-    // ===== DSP Config Preset Endpoints (4 slots) =====
+    // ===== DSP Config Preset Endpoints (up to 32 slots) =====
 
-    // GET /api/dsp/presets — list all 4 slots
+    // GET /api/dsp/presets — list all preset slots
     server.on("/api/dsp/presets", HTTP_GET, []() {
         if (!requireAuth()) return;
         _dspApiDoc.clear();
     JsonDocument &doc = _dspApiDoc;
         doc["activeIndex"] = appState.dspPresetIndex;
         JsonArray slots = doc["slots"].to<JsonArray>();
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
             JsonObject slot = slots.add<JsonObject>();
             slot["index"] = i;
             slot["name"] = appState.dspPresetNames[i];
@@ -1427,7 +1484,7 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
         int slot = server.arg("slot").toInt();
-        if (slot < 0 || slot >= 4) { sendJsonError(400, "Invalid slot (0-3)"); return; }
+        if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) { sendJsonError(400, "Invalid slot (0-31)"); return; }
 
         const char *name = "";
         _dspApiDoc.clear();
@@ -1448,7 +1505,7 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
         int slot = server.arg("slot").toInt();
-        if (slot < 0 || slot >= 4) { sendJsonError(400, "Invalid slot (0-3)"); return; }
+        if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) { sendJsonError(400, "Invalid slot (0-31)"); return; }
 
         if (dsp_preset_load(slot)) {
             server.send(200, "application/json", "{\"success\":true}");
@@ -1462,13 +1519,37 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
         int slot = server.arg("slot").toInt();
-        if (slot < 0 || slot >= 4) { sendJsonError(400, "Invalid slot (0-3)"); return; }
+        if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) { sendJsonError(400, "Invalid slot (0-31)"); return; }
 
         if (dsp_preset_delete(slot)) {
             saveDspSettings();
             server.send(200, "application/json", "{\"success\":true}");
         } else {
             sendJsonError(500, "Failed to delete preset");
+        }
+    });
+
+    // POST /api/dsp/presets/rename — rename preset
+    server.on("/api/dsp/presets/rename", HTTP_POST, []() {
+        if (!requireAuth()) return;
+        if (!server.hasArg("slot")) { sendJsonError(400, "Slot required"); return; }
+        int slot = server.arg("slot").toInt();
+        if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) { sendJsonError(400, "Invalid slot (0-31)"); return; }
+
+        String name = "";
+        _dspApiDoc.clear();
+    JsonDocument &doc = _dspApiDoc;
+        if (server.hasArg("plain") && !deserializeJson(doc, server.arg("plain"))) {
+            name = doc["name"] | "";
+        }
+
+        if (name.length() == 0) { sendJsonError(400, "Name required"); return; }
+
+        extern bool dsp_preset_rename(int, const char*);
+        if (dsp_preset_rename(slot, name.c_str())) {
+            server.send(200, "application/json", "{\"success\":true}");
+        } else {
+            sendJsonError(500, "Failed to rename preset");
         }
     });
 

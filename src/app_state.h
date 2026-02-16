@@ -361,9 +361,9 @@ public:
   bool dspEnabled = false;     // Master DSP enable
   bool dspBypass = false;      // Master bypass (pass-through)
 
-  // DSP Presets (4 named slots)
-  int8_t dspPresetIndex = -1;         // -1 = custom/no preset, 0-3 = active preset
-  char dspPresetNames[4][21] = {};    // 20 char max + null
+  // DSP Presets (up to 32 named slots)
+  int8_t dspPresetIndex = -1;         // -1 = custom/no preset, 0-31 = active preset
+  char dspPresetNames[DSP_PRESET_MAX_SLOTS][21] = {};    // 20 char max + null
 
   void markDspConfigDirty() {
     _dspConfigDirty = true;

@@ -737,6 +737,19 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_I("[WebSocket] PEQ bands copied ch%d -> ch%d", from, to);
           }
         }
+        else if (msgType == "copyChainStages") {
+          int from = doc["from"] | -1;
+          int to = doc["to"] | -1;
+          if (from >= 0 && from < DSP_MAX_CHANNELS && to >= 0 && to < DSP_MAX_CHANNELS && from != to) {
+            dsp_copy_active_to_inactive();
+            dsp_copy_chain_stages(from, to);
+            if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+            extern void saveDspSettingsDebounced();
+            saveDspSettingsDebounced();
+            appState.markDspConfigDirty();
+            LOG_I("[WebSocket] Chain stages copied ch%d -> ch%d", from, to);
+          }
+        }
         else if (msgType == "savePeqPreset") {
           const char *name = doc["name"] | (const char *)nullptr;
           int ch = doc["ch"] | 0;
@@ -852,7 +865,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "saveDspPreset") {
           int slot = doc["slot"] | -1;
           const char *name = doc["name"] | "";
-          if (slot >= 0 && slot < 4) {
+          if (slot >= 0 && slot < DSP_PRESET_MAX_SLOTS) {
             extern bool dsp_preset_save(int, const char*);
             if (dsp_preset_save(slot, name)) {
               sendDspState();
@@ -862,7 +875,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         }
         else if (msgType == "loadDspPreset") {
           int slot = doc["slot"] | -1;
-          if (slot >= 0 && slot < 4) {
+          if (slot >= 0 && slot < DSP_PRESET_MAX_SLOTS) {
             extern bool dsp_preset_load(int);
             if (dsp_preset_load(slot)) {
               sendDspState();
@@ -872,13 +885,24 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         }
         else if (msgType == "deleteDspPreset") {
           int slot = doc["slot"] | -1;
-          if (slot >= 0 && slot < 4) {
+          if (slot >= 0 && slot < DSP_PRESET_MAX_SLOTS) {
             extern bool dsp_preset_delete(int);
             dsp_preset_delete(slot);
             extern void saveDspSettings();
             saveDspSettings();
             sendDspState();
             LOG_I("[WebSocket] DSP preset deleted: slot=%d", slot);
+          }
+        }
+        else if (msgType == "renameDspPreset") {
+          int slot = doc["slot"] | -1;
+          const char *name = doc["name"] | "";
+          if (slot >= 0 && slot < DSP_PRESET_MAX_SLOTS && strlen(name) > 0) {
+            extern bool dsp_preset_rename(int, const char*);
+            if (dsp_preset_rename(slot, name)) {
+              sendDspState();
+              LOG_I("[WebSocket] DSP preset renamed: slot=%d name=%s", slot, name);
+            }
           }
         }
         // measureDelayAlignment and applyDelayAlignment removed in v1.8.3 - incomplete feature
@@ -1296,8 +1320,17 @@ void sendDspState() {
   doc["dspEnabled"] = appState.dspEnabled;
   doc["dspBypass"] = appState.dspBypass;
   doc["presetIndex"] = appState.dspPresetIndex;
-  JsonArray presetNames = doc["presetNames"].to<JsonArray>();
-  for (int i = 0; i < 4; i++) presetNames.add(appState.dspPresetNames[i]);
+
+  // Send preset list (index, name, exists)
+  JsonArray presets = doc["presets"].to<JsonArray>();
+  extern bool dsp_preset_exists(int);
+  for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
+    JsonObject preset = presets.add<JsonObject>();
+    preset["index"] = i;
+    preset["name"] = appState.dspPresetNames[i];
+    preset["exists"] = dsp_preset_exists(i);
+  }
+
   DspState *cfg = dsp_get_active_config();
   doc["globalBypass"] = cfg->globalBypass;
   doc["sampleRate"] = cfg->sampleRate;
