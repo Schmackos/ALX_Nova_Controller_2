@@ -3287,11 +3287,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             <!-- Additional Processing (chain stages) -->
             <div class="card">
-                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-                    <span class="card-title" style="margin-bottom:0;" id="dspStageTitle">Additional Processing (0)</span>
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-                </div>
-                <div class="collapsible-content" style="margin-top:8px;">
+                <div class="card-title" id="dspStageTitle">Additional Processing (0)</div>
+                <div style="margin-top:8px;">
                     <div id="dspStageList"></div>
                     <button class="dsp-add-btn" id="dspAddBtn" onclick="dspToggleAddMenu()">+ Add Stage</button>
                     <div class="dsp-add-menu" id="dspAddMenu">
@@ -4726,6 +4723,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 canvasDims = {};
                 setTimeout(dspDrawFreqResponse, 50);
                 dspLoadRouting();
+                if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
                 if (peqGraphLayers.rta && ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
                     ws.send(JSON.stringify({ type: 'setSpectrumEnabled', enabled: true }));
@@ -5699,6 +5697,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             if (typeof dspRenderChannelTabs === 'function') dspRenderChannelTabs();
             if (typeof dspRenderRouting === 'function') dspRenderRouting();
+            if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
+        }
+
+        function updatePeqCopyToDropdown() {
+            var sel = document.getElementById('peqCopyTo');
+            if (!sel) return;
+            // Preserve first option and rebuild channel options
+            var html = '<option value="">Copy to...</option>';
+            for (var i = 0; i < DSP_MAX_CH; i++) {
+                var name = inputNames[i] || DSP_CH_NAMES[i];
+                html += '<option value="' + i + '">' + name + '</option>';
+            }
+            html += '<option value="all">All Channels</option>';
+            sel.innerHTML = html;
         }
 
         function loadInputNameFields() {
@@ -10255,22 +10267,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ctx.restore();
         }
 
-        function dspIsCrossoverLabel(label) {
-            return label && (label.indexOf('LR') === 0 || label.indexOf('BW') === 0);
-        }
-        function dspToggleGroupEnabled(firstIdx, count, en) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            for (var k = 0; k < count; k++) {
-                ws.send(JSON.stringify({ type: 'updateDspStage', ch: dspCh, stage: firstIdx + k, enabled: en }));
-            }
-        }
-        function dspRemoveGroup(firstIdx, count) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            // Remove from last to first so indices stay valid
-            for (var k = count - 1; k >= 0; k--) {
-                ws.send(JSON.stringify({ type: 'removeDspStage', ch: dspCh, stage: firstIdx + k }));
-            }
-        }
         function dspRenderStages() {
             if (!dspState || !dspState.channels[dspCh]) return;
             var ch = dspState.channels[dspCh];
@@ -10281,64 +10277,24 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (!list) return;
             var html = '';
             var stages = ch.stages || [];
-            var i = DSP_PEQ_BANDS;
-            while (i < stages.length) {
+            for (var i = DSP_PEQ_BANDS; i < stages.length; i++) {
                 var s = stages[i];
                 var typeName = DSP_TYPES[s.type] || 'Unknown';
                 var label = s.label || typeName;
-                // Group consecutive crossover stages with same label
-                if (dspIsCrossoverLabel(label)) {
-                    var groupStart = i;
-                    var groupLabel = label;
-                    var groupCount = 0;
-                    var allEnabled = true;
-                    while (i < stages.length && stages[i].label === groupLabel) {
-                        if (!stages[i].enabled) allEnabled = false;
-                        groupCount++;
-                        i++;
-                    }
-                    var freq = stages[groupStart].freq || stages[groupStart].frequency || 0;
-                    var open = (dspOpenStage >= groupStart && dspOpenStage < groupStart + groupCount);
-                    html += '<div class="dsp-stage-card' + (!allEnabled ? ' disabled' : '') + '">';
-                    html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : groupStart) + ';dspRenderStages();dspDrawFreqResponse();">';
-                    html += '<span class="dsp-stage-type" style="background:var(--accent);color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;">' + groupLabel + '</span>';
-                    html += '<span class="dsp-stage-name">' + groupLabel + '</span>';
-                    html += '<span class="dsp-stage-info">' + Math.round(freq) + ' Hz (' + groupCount + (groupCount === 1 ? ' section)' : ' sections)') + '</span>';
-                    html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
-                    html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (allEnabled ? 'checked' : '') + ' onchange="dspToggleGroupEnabled(' + groupStart + ',' + groupCount + ',this.checked)"><span class="slider round"></span></label>';
-                    html += '<button class="del" onclick="dspRemoveGroup(' + groupStart + ',' + groupCount + ')" title="Delete">&times;</button>';
-                    html += '</div></div>';
-                    // Expandable detail showing individual sections
-                    if (open) {
-                        html += '<div class="dsp-stage-body open" style="padding:4px 8px;">';
-                        for (var g = 0; g < groupCount; g++) {
-                            var gs = stages[groupStart + g];
-                            var gt = DSP_TYPES[gs.type] || '?';
-                            html += '<div style="font-size:11px;color:var(--text-secondary);padding:2px 0;">' + gt + ' ' + Math.round(gs.freq || gs.frequency || 0) + ' Hz Q=' + (gs.Q || gs.qFactor || 0).toFixed(2) + '</div>';
-                        }
-                        html += '</div>';
-                    } else {
-                        html += '<div class="dsp-stage-body"></div>';
-                    }
-                    html += '</div>';
-                } else {
-                    // Regular (non-crossover) stage — render as before
-                    var open = (i === dspOpenStage);
-                    html += '<div class="dsp-stage-card' + (!s.enabled ? ' disabled' : '') + '">';
-                    html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : i) + ';dspRenderStages();dspDrawFreqResponse();">';
-                    html += '<span class="dsp-stage-type">' + typeName + '</span>';
-                    html += '<span class="dsp-stage-name">' + label + '</span>';
-                    html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
-                    html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
-                    html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
-                    if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
-                    if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down">&#9660;</button>';
-                    html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete">&times;</button>';
-                    html += '</div></div>';
-                    html += '<div class="dsp-stage-body' + (open ? ' open' : '') + '">' + (open ? dspParamSliders(i, s) : '') + '</div>';
-                    html += '</div>';
-                    i++;
-                }
+                var open = (i === dspOpenStage);
+                html += '<div class="dsp-stage-card' + (!s.enabled ? ' disabled' : '') + '">';
+                html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : i) + ';dspRenderStages();dspDrawFreqResponse();">';
+                html += '<span class="dsp-stage-type">' + typeName + '</span>';
+                html += '<span class="dsp-stage-name">' + label + '</span>';
+                html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
+                html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
+                html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
+                if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
+                if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down">&#9660;</button>';
+                html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete">&times;</button>';
+                html += '</div></div>';
+                html += '<div class="dsp-stage-body' + (open ? ' open' : '') + '">' + (open ? dspParamSliders(i, s) : '') + '</div>';
+                html += '</div>';
             }
             list.innerHTML = html;
             if (dspOpenStage >= DSP_PEQ_BANDS && stages[dspOpenStage] && stages[dspOpenStage].type === 18) {

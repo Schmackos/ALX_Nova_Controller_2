@@ -336,6 +336,19 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-16] fix: Use custom input names in EQ Bands "Copy to..." dropdown
+
+Updated PEQ copy channel dropdown to display user-configured input names
+instead of hardcoded L1/R1/L2/R2 labels:
+- Added updatePeqCopyToDropdown() function to rebuild dropdown with current names
+- Integrated with applyInputNames() for automatic updates when names change
+- Dropdown now populated on DSP tab open for immediate correct labeling
+- Fallback to default names (L1/R1/L2/R2) when custom names not set
+
+Example: If user renamed inputs to "Sub L", "Sub R", "Top L", "Top R",
+the dropdown now shows those names instead of generic L1/R1/L2/R2.
+
+Regenerated web_pages_gz.cpp (82.4 KB gzipped) (`0a05161`)
 - [2026-02-16] fix: Apply design system standards to frequency response toggles
 
 Updated frequency response graph toggle buttons to follow design system:
