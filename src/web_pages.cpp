@@ -3251,10 +3251,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <div class="card">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
                     Frequency Response
-                    <div style="display:flex;gap:4px;" id="peqGraphToggles">
-                        <button class="btn btn-secondary peq-graph-tog active" id="togIndividual" onclick="peqToggleGraphLayer('individual')" style="padding:2px 6px;font-size:10px;">Individual</button>
-                        <button class="btn btn-secondary peq-graph-tog" id="togRta" onclick="peqToggleGraphLayer('rta')" style="padding:2px 6px;font-size:10px;">RTA</button>
-                        <button class="btn btn-secondary peq-graph-tog active" id="togChain" onclick="peqToggleGraphLayer('chain')" style="padding:2px 6px;font-size:10px;">Chain</button>
+                    <div style="display:flex;gap:8px;" id="peqGraphToggles">
+                        <button class="btn btn-secondary btn-small peq-graph-tog active" id="togIndividual" onclick="peqToggleGraphLayer('individual')">Individual</button>
+                        <button class="btn btn-secondary btn-small peq-graph-tog" id="togRta" onclick="peqToggleGraphLayer('rta')">RTA</button>
+                        <button class="btn btn-secondary btn-small peq-graph-tog active" id="togChain" onclick="peqToggleGraphLayer('chain')">Chain</button>
                     </div>
                 </div>
                 <canvas class="dsp-freq-canvas" id="dspFreqCanvas" style="cursor:crosshair;"></canvas>
@@ -3313,6 +3313,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="menu-item" onclick="dspAddStage(16)">Polarity Invert</div>
                         <div class="menu-item" onclick="dspAddStage(17)">Mute</div>
                         <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
+                        <div class="menu-item" onclick="dspAddDCBlock()">DC Block</div>
                         <div class="menu-item" onclick="dspShowBaffleModal()">Baffle Step...</div>
                         <div class="menu-cat">Crossover</div>
                         <div class="menu-item" onclick="dspShowCrossoverModal()">Crossover Preset...</div>
@@ -9956,7 +9957,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({ type: 'addDspStage', ch: dspCh, stageType: typeInt }));
         }
-        // dspAddDCBlock() removed in v1.8.3 - users should add a highpass filter stage instead
+        function dspAddDCBlock() {
+            dspToggleAddMenu();
+            fetch('/api/dsp/crossover?ch=' + dspCh, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ freq: 10, type: 'bw2', role: 1 })
+            })
+            .then(r => r.json())
+            .then(d => { if (d.success) showToast('DC Block added (10 Hz HPF)'); else showToast('Failed: ' + (d.message || ''), true); })
+            .catch(err => showToast('Error: ' + err, true));
+        }
         function dspRemoveStage(idx) {
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({ type: 'removeDspStage', ch: dspCh, stage: idx }));

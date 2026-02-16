@@ -336,6 +336,19 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-16] fix: Apply design system standards to frequency response toggles
+
+Updated frequency response graph toggle buttons to follow design system:
+- Replaced inline styles (padding:2px 6px; font-size:10px) with .btn-small class
+- Increased button gap from 4px to 8px (matches design system spacing)
+- Buttons now use standard sizing: padding 6px 12px, font-size 13px
+
+Benefits:
+- Consistent button sizing across UI
+- Better touch targets (larger clickable area)
+- Follows established design system standards
+
+Regenerated web_pages_gz.cpp (82.9 KB gzipped) (`9590998`)
 - [2026-02-16] fix: DSP frame-aligned config swap with busy-wait
 
 Prevent mid-frame config swaps that could cause transient glitches.
