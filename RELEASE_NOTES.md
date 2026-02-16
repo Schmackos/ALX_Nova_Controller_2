@@ -88,6 +88,30 @@ workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
+- [2026-02-16] feat: Improve EQ graph usability - equal spacing and increased height
+
+Updated frequency response graph for better usability:
+
+1. Redistributed PEQ default frequencies with perfect logarithmic spacing:
+   - Old: [31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+   - New: [20, 43, 93, 200, 430, 930, 2000, 4300, 9300, 20000]
+   - Equal spacing across full audio spectrum (20 Hz to 20 kHz)
+   - Each band is 2.154x the previous (perfect geometric progression)
+
+2. Increased graph canvas height for easier positioning:
+   - Mobile (< 768px): 150px → 180px (+30px)
+   - Base: 160px → 220px (+60px)
+   - Tablet (768px+): 220px → 280px (+60px)
+   - Larger clickable area for dragging EQ handles
+   - Better vertical resolution for precise gain adjustments
+
+Benefits:
+- EQ balls now evenly distributed across frequency spectrum
+- No clustering of handles in mid-range
+- Easier to position and drag handles with taller graph
+- Full coverage from 20 Hz to 20 kHz
+
+Regenerated web_pages_gz.cpp (82.5 KB gzipped) (`eed96eb`)
 - [2026-02-16] feat: Implement Phase 3 Audio Quality Diagnostics
 
 Add comprehensive audio quality monitoring system with glitch detection,
