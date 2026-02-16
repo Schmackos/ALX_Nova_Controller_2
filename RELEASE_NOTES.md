@@ -538,6 +538,34 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: Reorganize DSP UI - move Baffle Step and THD+N to menu
+
+Moved Baffle Step Correction and THD+N Measurement from standalone
+collapsible cards into the DSP menu as modal options:
+- Added "Baffle Step..." menu item under Utility category
+- Added new "Analysis" category with "THD+N Measurement..." menu item
+- Removed 2 standalone collapsible card sections (~60 lines)
+
+Benefits:
+- Cleaner DSP tab layout with less scrolling
+- Consistent modal-based UI for all DSP utilities
+- Better categorization (Analysis vs Processing)
+
+Regenerated web_pages_gz.cpp (82.8 KB gzipped) (`85228f3`)
+- [2026-02-16] refactor: Reorganize DSP UI - move Baffle Step and THD+N to menu
+
+Moved Baffle Step Correction and THD+N Measurement from standalone
+collapsible cards into the DSP menu as modal options:
+- Added "Baffle Step..." menu item under Utility category
+- Added new "Analysis" category with "THD+N Measurement..." menu item
+- Removed 2 standalone collapsible card sections (~60 lines)
+
+Benefits:
+- Cleaner DSP tab layout with less scrolling
+- Consistent modal-based UI for all DSP utilities
+- Better categorization (Analysis vs Processing)
+
+Regenerated web_pages_gz.cpp (82.8 KB gzipped) (`c5363c0`)
 - [2026-02-16] refactor: Remove dead code - test helpers and timing histogram
 
 Removed two categories of unused/incomplete code:
