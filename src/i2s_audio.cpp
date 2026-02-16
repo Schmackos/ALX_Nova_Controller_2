@@ -937,6 +937,10 @@ static void audio_capture_task(void *param) {
     }
 }
 
+// Dual I2S Master Architecture:
+// Both PCM1808 ADCs use master-mode I2S (not slave — ESP32-S3 slave DMA issues).
+// I2S0 outputs BCK/WS/MCLK; I2S1 has data_in only (GPIO9).
+// Init order: ADC2 first, then ADC1 (clock source). See i2s_configure_adc2().
 void i2s_audio_init() {
     _currentSampleRate = AppState::getInstance().audioSampleRate;
     if (!audio_validate_sample_rate(_currentSampleRate)) {

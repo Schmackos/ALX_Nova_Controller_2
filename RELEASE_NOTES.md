@@ -3,6 +3,45 @@
 ## Version 1.8.3
 
 ## Documentation
+- [2026-02-16] docs: Add dual-ADC clock architecture summary comment
+
+Add brief summary comment before i2s_audio_init() documenting the
+dual I2S master architecture. Complements the detailed inline
+documentation already present at lines 379-418.
+
+Documents:
+- Both ADCs use master mode (not slave due to ESP32-S3 DMA issues)
+- I2S0 outputs clocks (BCK/WS/MCLK), I2S1 data-only (GPIO9)
+- Init order: ADC2 first, then ADC1 (clock source)
+
+Improves code readability for developers unfamiliar with the dual-master
+workaround used to avoid ESP32-S3 slave-mode DMA issues. (`6c1dbc0`)
+- [2026-02-16] docs: Add dual-ADC clock architecture summary comment
+
+Add brief summary comment before i2s_audio_init() documenting the
+dual I2S master architecture. Complements the detailed inline
+documentation already present at lines 379-418.
+
+Documents:
+- Both ADCs use master mode (not slave due to ESP32-S3 DMA issues)
+- I2S0 outputs clocks (BCK/WS/MCLK), I2S1 data-only (GPIO9)
+- Init order: ADC2 first, then ADC1 (clock source)
+
+Improves code readability for developers unfamiliar with the dual-master
+workaround used to avoid ESP32-S3 slave-mode DMA issues. (`984ae22`)
+- [2026-02-16] docs: Add dual-ADC clock architecture summary comment
+
+Add brief summary comment before i2s_audio_init() documenting the
+dual I2S master architecture. Complements the detailed inline
+documentation already present at lines 379-418.
+
+Documents:
+- Both ADCs use master mode (not slave due to ESP32-S3 DMA issues)
+- I2S0 outputs clocks (BCK/WS/MCLK), I2S1 data-only (GPIO9)
+- Init order: ADC2 first, then ADC1 (clock source)
+
+Improves code readability for developers unfamiliar with the dual-master
+workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
@@ -319,6 +358,26 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: Remove legacy macro aliases for AppState members
+
+Remove 122 legacy macro definitions and replace all usages with direct
+appState.memberName syntax. This eliminates a layer of indirection and
+makes code more explicit and maintainable.
+
+Changes:
+- Deleted 50 macros from src/main.cpp (lines 79-131)
+- Deleted 72 macros from src/app_state.h (lines 519-623)
+- Kept only #define appState AppState::getInstance()
+- Replaced all bare macro usages across 13+ source files
+
+Affected files:
+- src/main.cpp, settings_manager.cpp, mqtt_handler.cpp
+- src/smart_sensing.cpp, wifi_manager.cpp, ota_updater.cpp
+- src/websocket_handler.cpp, web_pages.cpp
+- src/gui/screens/scr_desktop.cpp, scr_mqtt.cpp, scr_home.cpp, scr_control.cpp
+
+Verification: ESP32-S3 firmware builds successfully, all 790 native
+tests pass. Zero behavioral change - macros were identity mappings. (`41d83bb`)
 - [2026-02-16] refactor: Remove legacy macro aliases for AppState members
 
 Remove 122 legacy macro definitions and replace all usages with direct
