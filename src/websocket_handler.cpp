@@ -10,6 +10,7 @@
 #include "debug_serial.h"
 #include "utils.h"
 #include "i2s_audio.h"
+#include "audio_quality.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
 #ifdef DSP_ENABLED
@@ -143,7 +144,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendBuzzerState();
             sendSignalGenState();
             sendAudioGraphState();
-            sendDcBlockState();
+            sendAudioQualityState();
             sendDebugState();
             // Send per-ADC enabled state
             {
@@ -317,26 +318,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendAudioGraphState();
             LOG_I("[WebSocket] FFT window type: %d", wt);
           }
-        } else if (msgType == "setDcBlockEnabled") {
-#ifdef DSP_ENABLED
-          bool enabled = doc["enabled"].as<bool>();
-          appState.dcBlockEnabled = enabled;
-
-          // Apply to all channels
-          DspState *dspCfg = dsp_get_active_config();
-          for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
-            if (enabled) {
-              dsp_enable_dc_block(ch, dspCfg->sampleRate);
-            } else {
-              dsp_disable_dc_block(ch);
-            }
-          }
-          if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
-
-          saveSettings();
-          appState.markDcBlockDirty();
-          LOG_I("[WebSocket] DC block %s", enabled ? "enabled" : "disabled");
-#endif
         } else if (msgType == "setSignalGen") {
           bool changed = false;
           if (doc["enabled"].is<bool>()) {
@@ -1300,17 +1281,6 @@ void sendAudioGraphState() {
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
-}
-
-void sendDcBlockState() {
-#ifdef DSP_ENABLED
-  JsonDocument doc;
-  doc["type"] = "dcBlockState";
-  doc["enabled"] = appState.dcBlockEnabled;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
-#endif
 }
 
 void sendDebugState() {

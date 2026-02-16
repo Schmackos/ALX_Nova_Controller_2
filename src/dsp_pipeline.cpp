@@ -1662,56 +1662,7 @@ void dsp_mirror_channel_config(int srcCh, int dstCh) {
 #include <ArduinoJson.h>
 #endif
 
-// ===== DC Block Helper Functions =====
-// DC block is a 1st-order HPF at 10 Hz with label "DC Block"
-
-bool dsp_is_dc_block_enabled(int channel) {
-    if (channel < 0 || channel >= DSP_MAX_CHANNELS) return false;
-    DspState *cfg = dsp_get_inactive_config();
-    DspChannelConfig &ch = cfg->channels[channel];
-
-    // Check if first stage is a DC block (HPF_1ST at 10 Hz with "DC Block" label)
-    if (ch.stageCount > 0) {
-        DspStage &s = ch.stages[0];
-        if (s.type == DSP_BIQUAD_HPF_1ST && strcmp(s.label, "DC Block") == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void dsp_enable_dc_block(int channel, float sampleRate) {
-    if (channel < 0 || channel >= DSP_MAX_CHANNELS) return;
-    if (dsp_is_dc_block_enabled(channel)) return; // Already enabled
-
-    // Add 1st-order HPF at 10 Hz at position 0
-    int idx = dsp_add_stage(channel, DSP_BIQUAD_HPF_1ST, 0);
-    if (idx < 0) return; // Failed to add stage
-
-    DspState *cfg = dsp_get_inactive_config();
-    DspChannelConfig &ch = cfg->channels[channel];
-    DspStage &s = ch.stages[idx];
-
-    // Configure DC blocking filter
-    strcpy(s.label, "DC Block");
-    s.biquad.frequency = 10.0f; // 10 Hz cutoff
-    s.biquad.Q = 0.707f;        // Butterworth response
-    s.enabled = true;
-
-    // Compute coefficients (normalized frequency = f_Hz / f_sample)
-    #ifndef NATIVE_TEST
-    float normFreq = s.biquad.frequency / sampleRate;
-    dsp_gen_hpf1_f32(s.biquad.coeffs, normFreq);
-    #endif
-}
-
-void dsp_disable_dc_block(int channel) {
-    if (channel < 0 || channel >= DSP_MAX_CHANNELS) return;
-    if (!dsp_is_dc_block_enabled(channel)) return; // Not enabled
-
-    // Remove the DC block stage (always at position 0 if present)
-    dsp_remove_stage(channel, 0);
-}
+// DC block functions removed in v1.8.3 - users should add a highpass filter stage instead
 
 const char *stage_type_name(DspStageType t) {
     switch (t) {

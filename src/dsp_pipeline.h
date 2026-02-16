@@ -584,10 +584,7 @@ void dsp_ensure_peq_bands(DspState *cfg);  // Ensure all channels have PEQ bands
 void dsp_copy_peq_bands(int srcChannel, int dstChannel);  // Copy PEQ bands between channels
 const char *stage_type_name(DspStageType t);               // Stage type to string name
 
-// DC block helpers (1st-order HPF at 10 Hz)
-bool dsp_is_dc_block_enabled(int channel);                 // Check if DC block is enabled
-void dsp_enable_dc_block(int channel, float sampleRate);   // Enable DC block filter
-void dsp_disable_dc_block(int channel);                    // Disable DC block filter
+// DC block removed in v1.8.3 - use highpass filter stage instead (dsp_add_stage with DSP_HIGHPASS)
 
 // Multi-band compressor pool
 int dsp_mb_alloc_slot();

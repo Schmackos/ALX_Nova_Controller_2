@@ -538,6 +538,36 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: Remove legacy DC Block feature (dead code)
+
+Remove DC Block feature entirely as it's been superseded by DSP highpass
+filter stages and was partially broken (no WebSocket handler).
+
+Deleted Code (~200 lines):
+- app_state.h: dcBlockEnabled field + dirty flag
+- dsp_pipeline.h/cpp: dsp_is_dc_block_enabled(), dsp_enable_dc_block(),
+  dsp_disable_dc_block() implementations
+- mqtt_handler.h: publishMqttDcBlockState() declaration (already removed)
+- settings_manager.cpp: Load/save code replaced with comments
+- web_pages.cpp: "+ DC Block" button, dspAddDCBlock() function
+
+Why removed:
+- Marked as "legacy - use DSP stage instead" since v1.7.x
+- Web UI sent 'setDcBlockEnabled' message with NO WebSocket handler
+- Feature was silently broken - toggle did nothing
+- Users should use DSP highpass filter stage (10 Hz, Q=0.707) instead
+
+Backward Compatibility:
+- Settings file line 30 reserved but writes "0"
+- Old configs with dcBlockEnabled are ignored on load
+- No migration needed - feature was already broken
+
+Files modified:
+- src/app_state.h
+- src/dsp_pipeline.h/cpp
+- src/settings_manager.cpp
+- src/web_pages.cpp
+- src/web_pages_gz.cpp (rebuilt) (`a9c0ada`)
 - [2026-02-16] refactor: Reorganize project structure into professional layout
 
 - Move 41 documentation files into categorized docs/ subdirectories

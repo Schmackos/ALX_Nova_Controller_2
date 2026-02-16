@@ -6,6 +6,7 @@
 #include "debug_serial.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
+#include "audio_quality.h"
 #include "settings_manager.h"
 #include "utils.h"
 #include "websocket_handler.h"
@@ -211,9 +212,6 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/audio/waveform/set").c_str());
   mqttClient.subscribe((base + "/audio/spectrum/set").c_str());
   mqttClient.subscribe((base + "/audio/fft_window/set").c_str());
-#ifdef DSP_ENABLED
-  mqttClient.subscribe((base + "/audio/dc_block/set").c_str());
-#endif
   mqttClient.subscribe((base + "/debug/mode/set").c_str());
   mqttClient.subscribe((base + "/debug/serial_level/set").c_str());
   mqttClient.subscribe((base + "/debug/hw_stats/set").c_str());
@@ -694,28 +692,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     publishMqttAudioGraphState();
     LOG_I("[MQTT] FFT window set to %d", (int)wt);
   }
-#ifdef DSP_ENABLED
-  // Handle DC block filter toggle
-  else if (topicStr == base + "/audio/dc_block/set") {
-    bool enabled = (message == "ON" || message == "1" || message == "true");
-    appState.dcBlockEnabled = enabled;
-
-    // Apply to all channels
-    DspState *dspCfg = dsp_get_active_config();
-    for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
-      if (enabled) {
-        dsp_enable_dc_block(ch, dspCfg->sampleRate);
-      } else {
-        dsp_disable_dc_block(ch);
-      }
-    }
-    dsp_swap_config();
-
-    saveSettings();
-    appState.markDcBlockDirty();
-    LOG_I("[MQTT] DC block %s", enabled ? "enabled" : "disabled");
-  }
-#endif
   // Handle debug mode toggle
   else if (topicStr == base + "/debug/mode/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
@@ -1783,15 +1759,6 @@ void publishMqttDspState() {
   }
 }
 
-// Publish DC block filter state
-void publishMqttDcBlockState() {
-  if (!mqttClient.connected())
-    return;
-
-  String base = getEffectiveMqttBaseTopic();
-  mqttClient.publish((base + "/audio/dc_block").c_str(),
-                     appState.dcBlockEnabled ? "ON" : "OFF", true);
-}
 #endif
 
 // Publish static crash info (called once on MQTT connect — never changes per boot)
@@ -1881,7 +1848,6 @@ void publishMqttState() {
   publishMqttInputNames();
 #ifdef DSP_ENABLED
   publishMqttDspState();
-  publishMqttDcBlockState();
   publishMqttEmergencyLimiterState();
 #endif
 #ifdef GUI_ENABLED
@@ -3008,27 +2974,6 @@ void publishHADiscovery() {
     String topic = "homeassistant/switch/" + deviceId + "/spectrum/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
-
-#ifdef DSP_ENABLED
-  // ===== DC Block Filter Switch =====
-  {
-    JsonDocument doc;
-    doc["name"] = "DC Block Filter";
-    doc["unique_id"] = deviceId + "_dc_block";
-    doc["state_topic"] = base + "/audio/dc_block";
-    doc["command_topic"] = base + "/audio/dc_block/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:sine-wave";
-    addHADeviceInfo(doc);
-
-    String payload;
-    serializeJson(doc, payload);
-    String topic = "homeassistant/switch/" + deviceId + "/dc_block/config";
-    mqttClient.publish(topic.c_str(), payload.c_str(), true);
-  }
-#endif
 
   // ===== FFT Window Type Select =====
   {
