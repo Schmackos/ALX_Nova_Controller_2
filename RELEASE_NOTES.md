@@ -63,6 +63,24 @@ To:
   JsonDocument &doc = _dspApiDoc;
 
 Reduces ~2KB heap allocation per API call and prevents long-term
+fragmentation from repeated JSON alloc/free cycles. (`b0312bf`)
+- [2026-02-16] perf: Pool JSON allocations in DSP API handlers
+
+Replace per-handler JsonDocument with static _dspApiDoc to reduce heap
+fragmentation. All DSP API handlers now reuse a single document pool.
+
+Safe because:
+- All handlers run single-threaded on Core 0 HTTP server
+- No handler stores JSON references beyond its return
+- serializeJson() completes before handler exits
+
+Changed 26 instances of:
+  JsonDocument doc;
+To:
+  _dspApiDoc.clear();
+  JsonDocument &doc = _dspApiDoc;
+
+Reduces ~2KB heap allocation per API call and prevents long-term
 fragmentation from repeated JSON alloc/free cycles. (`a7a3372`)
 - [2026-02-16] perf: Pool JSON allocations in DSP API handlers
 
@@ -301,6 +319,40 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: JSON allocation pooling for DSP API handlers
+
+Replace per-handler JsonDocument stack allocations with a single static
+document pool (_dspApiDoc). All DSP API handlers run single-threaded on
+Core 0 HTTP server and no handler stores JSON references beyond its
+return, making shared document safe.
+
+This eliminates heap fragmentation from repeated 4-8KB allocations during
+DSP config operations and prevents stack overflow risk when handlers are
+called from nested MQTT/WebSocket contexts.
+
+Changes:
+- Add static JsonDocument _dspApiDoc at file scope
+- Replace all 'JsonDocument doc;' with '_dspApiDoc.clear(); JsonDocument &doc = _dspApiDoc;'
+- Updated in loadRoutingMatrix, saveRoutingMatrix, loadDspSettings, dsp_preset_save, dsp_preset_load, and all API endpoint handlers
+
+Tests: 156 DSP tests pass, no behavioral changes (`ff1bfc6`)
+- [2026-02-16] refactor: JSON allocation pooling for DSP API handlers
+
+Replace per-handler JsonDocument stack allocations with a single static
+document pool (_dspApiDoc). All DSP API handlers run single-threaded on
+Core 0 HTTP server and no handler stores JSON references beyond its
+return, making shared document safe.
+
+This eliminates heap fragmentation from repeated 4-8KB allocations during
+DSP config operations and prevents stack overflow risk when handlers are
+called from nested MQTT/WebSocket contexts.
+
+Changes:
+- Add static JsonDocument _dspApiDoc at file scope
+- Replace all 'JsonDocument doc;' with '_dspApiDoc.clear(); JsonDocument &doc = _dspApiDoc;'
+- Updated in loadRoutingMatrix, saveRoutingMatrix, loadDspSettings, dsp_preset_save, dsp_preset_load, and all API endpoint handlers
+
+Tests: 156 DSP tests pass, no behavioral changes (`b42d50a`)
 - Version bump to 1.8.3
 
 ## Breaking Changes
