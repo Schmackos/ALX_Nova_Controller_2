@@ -34,73 +34,55 @@ bool loadSettings() {
     return false;
   }
 
-  // Read ALL lines before closing the file
-  String line1 = file.readStringUntil('\n');
-  String line2 = file.readStringUntil('\n');
-  String line3 = file.readStringUntil('\n');
-  String line4 = file.readStringUntil('\n');
-  String line5 = file.readStringUntil('\n');
-  String line6 = file.readStringUntil('\n');
-  String line7 = file.readStringUntil('\n');
-  String line8 = file.readStringUntil('\n');
-  String line9 = file.readStringUntil('\n');
-  String line10 = file.readStringUntil('\n');
-  String line11 = file.readStringUntil('\n');
-  String line12 = file.readStringUntil('\n');
-  String line13 = file.readStringUntil('\n');
-  String line14 = file.readStringUntil('\n');
-  String line15 = file.readStringUntil('\n');
-  String line16 = file.readStringUntil('\n');
-  String line17 = file.readStringUntil('\n');
-  String line18 = file.readStringUntil('\n');
-  String line19 = file.readStringUntil('\n');
-  String line20 = file.readStringUntil('\n');
-  String line21 = file.readStringUntil('\n');
-  String line22 = file.readStringUntil('\n');
-  String line23 = file.readStringUntil('\n');
-  String line24 = file.readStringUntil('\n');
-  String line25 = file.readStringUntil('\n');
-  String line26 = file.readStringUntil('\n');
-  String line27 = file.readStringUntil('\n');
-  String line28 = file.readStringUntil('\n');
+  // Read ALL lines into array (30 slots for future growth)
+  String lines[30];
+  for (int i = 0; i < 30; i++) {
+    if (file.available()) {
+      lines[i] = file.readStringUntil('\n');
+      lines[i].trim();
+    }
+  }
   file.close();
 
-  line1.trim();
-  if (line1.length() == 0) {
+  // Detect format version
+  int dataStart = 0;
+  if (lines[0].startsWith("VER=")) {
+    int version = lines[0].substring(4).toInt();
+    dataStart = 1;  // Skip version line
+    (void)version;  // Unused for now, but parsed for future use
+  }
+
+  // Validate first data line
+  if (lines[dataStart].length() == 0) {
     return false;
   }
 
-  autoUpdateEnabled = (line1.toInt() != 0);
+  autoUpdateEnabled = (lines[dataStart + 0].toInt() != 0);
 
   // Load timezone offset (if available, otherwise default to 0)
-  if (line2.length() > 0) {
-    line2.trim();
-    timezoneOffset = line2.toInt();
+  if (lines[dataStart + 1].length() > 0) {
+    timezoneOffset = lines[dataStart + 1].toInt();
   }
 
   // Load DST offset (if available, otherwise default to 0)
-  if (line3.length() > 0) {
-    line3.trim();
-    dstOffset = line3.toInt();
+  if (lines[dataStart + 2].length() > 0) {
+    dstOffset = lines[dataStart + 2].toInt();
   }
 
   // Load night mode (if available, otherwise default to false)
-  if (line4.length() > 0) {
-    line4.trim();
-    darkMode = (line4.toInt() != 0);
+  if (lines[dataStart + 3].length() > 0) {
+    darkMode = (lines[dataStart + 3].toInt() != 0);
   }
 
   // Load cert validation setting (if available, otherwise default to true from
   // AppState)
-  if (line5.length() > 0) {
-    line5.trim();
-    enableCertValidation = (line5.toInt() != 0);
+  if (lines[dataStart + 4].length() > 0) {
+    enableCertValidation = (lines[dataStart + 4].toInt() != 0);
   }
 
   // Load hardware stats interval (if available, otherwise default to 2000ms)
-  if (line6.length() > 0) {
-    line6.trim();
-    unsigned long interval = line6.toInt();
+  if (lines[dataStart + 5].length() > 0) {
+    unsigned long interval = lines[dataStart + 5].toInt();
     // Validate: only allow 1000, 2000, 3000, 5000, or 10000 ms
     if (interval == 1000 || interval == 2000 || interval == 3000 ||
         interval == 5000 || interval == 10000) {
@@ -108,9 +90,8 @@ bool loadSettings() {
     }
   }
 
-  if (line7.length() > 0) {
-    line7.trim();
-    autoAPEnabled = (line7.toInt() != 0);
+  if (lines[dataStart + 6].length() > 0) {
+    autoAPEnabled = (lines[dataStart + 6].toInt() != 0);
   } else {
     // Default to true if not present (backward compatibility)
     autoAPEnabled = true;
@@ -118,15 +99,13 @@ bool loadSettings() {
 
 #ifdef GUI_ENABLED
   // Load boot animation enabled (if available, otherwise default to true)
-  if (line8.length() > 0) {
-    line8.trim();
-    appState.bootAnimEnabled = (line8.toInt() != 0);
+  if (lines[dataStart + 7].length() > 0) {
+    appState.bootAnimEnabled = (lines[dataStart + 7].toInt() != 0);
   }
 
   // Load boot animation style (if available, otherwise default to 0)
-  if (line9.length() > 0) {
-    line9.trim();
-    int style = line9.toInt();
+  if (lines[dataStart + 8].length() > 0) {
+    int style = lines[dataStart + 8].toInt();
     if (style >= 0 && style <= 5) {
       appState.bootAnimStyle = style;
     }
@@ -134,9 +113,8 @@ bool loadSettings() {
 #endif
 
   // Load screen timeout (if available, otherwise keep default)
-  if (line10.length() > 0) {
-    line10.trim();
-    unsigned long timeout = line10.toInt();
+  if (lines[dataStart + 9].length() > 0) {
+    unsigned long timeout = lines[dataStart + 9].toInt();
     // Validate: only allow 0 (never), 30000, 60000, 300000, 600000 ms
     if (timeout == 0 || timeout == 30000 || timeout == 60000 ||
         timeout == 300000 || timeout == 600000) {
@@ -145,24 +123,21 @@ bool loadSettings() {
   }
 
   // Load buzzer enabled (if available, otherwise default to true)
-  if (line11.length() > 0) {
-    line11.trim();
-    appState.buzzerEnabled = (line11.toInt() != 0);
+  if (lines[dataStart + 10].length() > 0) {
+    appState.buzzerEnabled = (lines[dataStart + 10].toInt() != 0);
   }
 
   // Load buzzer volume (if available, otherwise default to 1=Medium)
-  if (line12.length() > 0) {
-    line12.trim();
-    int vol = line12.toInt();
+  if (lines[dataStart + 11].length() > 0) {
+    int vol = lines[dataStart + 11].toInt();
     if (vol >= 0 && vol <= 2) {
       appState.buzzerVolume = vol;
     }
   }
 
   // Load backlight brightness (if available, otherwise default to 255)
-  if (line13.length() > 0) {
-    line13.trim();
-    int bright = line13.toInt();
+  if (lines[dataStart + 12].length() > 0) {
+    int bright = lines[dataStart + 12].toInt();
     if (bright >= 1 && bright <= 255) {
       appState.backlightBrightness = (uint8_t)bright;
     }
@@ -170,9 +145,8 @@ bool loadSettings() {
 
   // Load dim timeout (if available)
   // Legacy: dimVal==0 meant disabled; now handled by dimEnabled toggle
-  if (line14.length() > 0) {
-    line14.trim();
-    unsigned long dimVal = line14.toInt();
+  if (lines[dataStart + 13].length() > 0) {
+    unsigned long dimVal = lines[dataStart + 13].toInt();
     if (dimVal == 0) {
       // Legacy "disabled" value — keep default timeout, dimEnabled stays false
     } else if (dimVal == 5000 || dimVal == 10000 || dimVal == 15000 ||
@@ -182,9 +156,8 @@ bool loadSettings() {
   }
 
   // Load dim brightness (if available, otherwise default to 26 = 10%)
-  if (line15.length() > 0) {
-    line15.trim();
-    int dimBright = line15.toInt();
+  if (lines[dataStart + 14].length() > 0) {
+    int dimBright = lines[dataStart + 14].toInt();
     if (dimBright == 26 || dimBright == 64 || dimBright == 128 ||
         dimBright == 191) {
       appState.dimBrightness = (uint8_t)dimBright;
@@ -192,76 +165,64 @@ bool loadSettings() {
   }
 
   // Load dim enabled (if available, otherwise default to false)
-  if (line16.length() > 0) {
-    line16.trim();
-    appState.dimEnabled = (line16 == "1");
+  if (lines[dataStart + 15].length() > 0) {
+    appState.dimEnabled = (lines[dataStart + 15] == "1");
   }
 
   // Load audio update rate (if available, otherwise default to 50ms)
-  if (line17.length() > 0) {
-    line17.trim();
-    int rate = line17.toInt();
+  if (lines[dataStart + 16].length() > 0) {
+    int rate = lines[dataStart + 16].toInt();
     if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
       appState.audioUpdateRate = (uint16_t)rate;
     }
   }
 
   // Load audio graph toggles (if available, default to true)
-  if (line18.length() > 0) {
-    line18.trim();
-    appState.vuMeterEnabled = (line18.toInt() != 0);
+  if (lines[dataStart + 17].length() > 0) {
+    appState.vuMeterEnabled = (lines[dataStart + 17].toInt() != 0);
   }
-  if (line19.length() > 0) {
-    line19.trim();
-    appState.waveformEnabled = (line19.toInt() != 0);
+  if (lines[dataStart + 18].length() > 0) {
+    appState.waveformEnabled = (lines[dataStart + 18].toInt() != 0);
   }
-  if (line20.length() > 0) {
-    line20.trim();
-    appState.spectrumEnabled = (line20.toInt() != 0);
+  if (lines[dataStart + 19].length() > 0) {
+    appState.spectrumEnabled = (lines[dataStart + 19].toInt() != 0);
   }
 
   // Load debug mode toggles (lines 21-25)
-  if (line21.length() > 0) {
-    line21.trim();
-    appState.debugMode = (line21.toInt() != 0);
+  if (lines[dataStart + 20].length() > 0) {
+    appState.debugMode = (lines[dataStart + 20].toInt() != 0);
   }
-  if (line22.length() > 0) {
-    line22.trim();
-    int level = line22.toInt();
+  if (lines[dataStart + 21].length() > 0) {
+    int level = lines[dataStart + 21].toInt();
     if (level >= 0 && level <= 3) {
       appState.debugSerialLevel = level;
     }
   }
-  if (line23.length() > 0) {
-    line23.trim();
-    appState.debugHwStats = (line23.toInt() != 0);
+  if (lines[dataStart + 22].length() > 0) {
+    appState.debugHwStats = (lines[dataStart + 22].toInt() != 0);
   }
-  if (line24.length() > 0) {
-    line24.trim();
-    appState.debugI2sMetrics = (line24.toInt() != 0);
+  if (lines[dataStart + 23].length() > 0) {
+    appState.debugI2sMetrics = (lines[dataStart + 23].toInt() != 0);
   }
-  if (line25.length() > 0) {
-    line25.trim();
-    appState.debugTaskMonitor = (line25.toInt() != 0);
+  if (lines[dataStart + 24].length() > 0) {
+    appState.debugTaskMonitor = (lines[dataStart + 24].toInt() != 0);
   }
-  if (line26.length() > 0) {
-    line26.trim();
-    int wt = line26.toInt();
+  if (lines[dataStart + 25].length() > 0) {
+    int wt = lines[dataStart + 25].toInt();
     if (wt >= 0 && wt < FFT_WINDOW_COUNT)
       appState.fftWindowType = (FftWindowType)wt;
   }
 
   // Load per-ADC enabled (if available, default true)
-  if (line27.length() > 0) {
-    line27.trim();
-    int commaIdx = line27.indexOf(',');
+  if (lines[dataStart + 26].length() > 0) {
+    int commaIdx = lines[dataStart + 26].indexOf(',');
     if (commaIdx > 0) {
       // New format: "1,1" (per-ADC)
-      appState.adcEnabled[0] = (line27.substring(0, commaIdx).toInt() != 0);
-      appState.adcEnabled[1] = (line27.substring(commaIdx + 1).toInt() != 0);
+      appState.adcEnabled[0] = (lines[dataStart + 26].substring(0, commaIdx).toInt() != 0);
+      appState.adcEnabled[1] = (lines[dataStart + 26].substring(commaIdx + 1).toInt() != 0);
     } else {
       // Old format: single "1" or "0" — apply to both
-      bool val = (line27.toInt() != 0);
+      bool val = (lines[dataStart + 26].toInt() != 0);
       appState.adcEnabled[0] = val;
       appState.adcEnabled[1] = val;
     }
@@ -269,9 +230,8 @@ bool loadSettings() {
 
 #ifdef USB_AUDIO_ENABLED
   // Load USB audio enabled (if available, default false)
-  if (line28.length() > 0) {
-    line28.trim();
-    appState.usbAudioEnabled = (line28.toInt() != 0);
+  if (lines[dataStart + 27].length() > 0) {
+    appState.usbAudioEnabled = (lines[dataStart + 27].toInt() != 0);
   }
 #endif
 
@@ -284,6 +244,9 @@ void saveSettings() {
     LOG_E("[Settings] Failed to open settings file for writing");
     return;
   }
+
+  // Write format version header
+  file.println("VER=2");
 
   file.println(autoUpdateEnabled ? "1" : "0");
   file.println(timezoneOffset);

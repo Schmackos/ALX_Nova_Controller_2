@@ -6,25 +6,28 @@
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
+- [2026-02-16] feat: Add settings format versioning with VER= prefix
+
+Refactor settings persistence to support format evolution. Load/save
+functions now detect and handle versioned settings files.
+
+Changes:
+- loadSettings() reads lines into array, detects "VER=2" prefix
+- dataStart offset skips version line when present
+- Legacy files (no version) still load correctly with dataStart=0
+- saveSettings() writes "VER=2" as first line
+
+Backward compatibility: old firmware reads "VER=2" as autoUpdateEnabled
+(toInt() returns 0), disabling auto-update on downgrade.
+
+Array-based approach eliminates 28 individual String variables and makes
+adding new settings fields trivial. (`e7bd55e`)
 - [2026-02-15] feat: Auth security hardening and USB audio init fix
 
 SHA256 password hashing with NVS migration from plaintext, timing-safe
 comparison, progressive login rate limiting, session ID log truncation,
 SameSite=Strict cookies. USB audio TinyUSB init guarded to prevent
 double-init crashes on enable/disable toggle. (`2832507`)
-- [2026-02-15] feat: Auth security hardening and USB audio init fix
-
-SHA256 password hashing with NVS migration from plaintext, timing-safe
-comparison, progressive login rate limiting, session ID log truncation,
-SameSite=Strict cookies. USB audio TinyUSB init guarded to prevent
-double-init crashes on enable/disable toggle. (`1014338`)
-- [2026-02-15] feat: Auth security hardening and USB audio init fix
-
-SHA256 password hashing with NVS migration from plaintext, timing-safe
-comparison, progressive login rate limiting, session ID log truncation,
-SameSite=Strict cookies. USB audio TinyUSB init guarded to prevent
-double-init crashes on enable/disable toggle. (`fa721ee`)
-- Automated release via GitHub Actions
 
 ## Improvements
 - [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
@@ -42,67 +45,8 @@ and inline VU/peak updates in both silence and active paths.
 
 Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
-- [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
-
-Merge 6+ separate buffer loops into 2 passes in process_adc_buffer():
-- Pass 1: diagnostics + DC offset + DC-blocking IIR in one loop
-- Pass 2: RMS + waveform + FFT ring fill in one loop
-
-Replace double-precision math with float (ESP32-S3 has no double FPU):
-- audio_compute_rms(): double sum_sq → float, sqrt → sqrtf
-- DC offset tracking: double sum → float
-
-Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
-and inline VU/peak updates in both silence and active paths.
-
-Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
-300ms. Updated test_vu_decay_ramp assertions accordingly. (`afb2240`)
-- [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
-
-Merge 6+ separate buffer loops into 2 passes in process_adc_buffer():
-- Pass 1: diagnostics + DC offset + DC-blocking IIR in one loop
-- Pass 2: RMS + waveform + FFT ring fill in one loop
-
-Replace double-precision math with float (ESP32-S3 has no double FPU):
-- audio_compute_rms(): double sum_sq → float, sqrt → sqrtf
-- DC offset tracking: double sum → float
-
-Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
-and inline VU/peak updates in both silence and active paths.
-
-Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
-300ms. Updated test_vu_decay_ramp assertions accordingly. (`d9c6514`)
-- [2026-02-15] perf: Optimize audio capture task CPU usage on Core 1
-
-Merge 6+ separate buffer loops into 2 passes in process_adc_buffer():
-- Pass 1: diagnostics + DC offset + DC-blocking IIR in one loop
-- Pass 2: RMS + waveform + FFT ring fill in one loop
-
-Replace double-precision math with float (ESP32-S3 has no double FPU):
-- audio_compute_rms(): double sum_sq → float, sqrt → sqrtf
-- DC offset tracking: double sum → float
-
-Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
-and inline VU/peak updates in both silence and active paths.
-
-Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
-300ms. Updated test_vu_decay_ramp assertions accordingly. (`8a75385`)
-
 
 ## Bug Fixes
-- [2026-02-16] fix: Graceful OTA shutdown using audioPaused flag
-
-Reuse the existing audioPaused pattern from DAC reinit to prevent I2S
-driver conflicts during OTA updates. The audio capture task already
-checks this flag and yields while paused (i2s_audio.cpp:703-706).
-
-Changes:
-- Set audioPaused=true in startOTADownloadTask() before spawning task
-- Add 50ms delay to ensure audio task exits i2s_read()
-- Clear audioPaused=false on download failure and task creation failure
-
-Prevents potential crashes when OTA download occurs concurrently with
-audio capture operations. (`645a487`)
 - [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
 
 Address CONCERNS.md audit findings across security, robustness, and test gaps:
@@ -124,75 +68,11 @@ Auth migration:
 - Rate-limit state updated to 64-bit microseconds
 
 Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruption) (`f0d0aa2`)
-- [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
-
-Address CONCERNS.md audit findings across security, robustness, and test gaps:
-
-Security:
-- Use timingSafeCompare() for session ID lookup in validateSession/removeSession
-- Atomic crash log ring buffer validation (reset all on any inconsistency)
-- Cap OTA consecutive failure counter at 20 to prevent unbounded growth
-
-Robustness:
-- Add recursive mutex to all I2C EEPROM operations (dac_eeprom.cpp)
-- Move 3 large DSP API buffers (4-8KB) from stack to PSRAM heap
-- Gate WS binary sends (waveform/spectrum) on !heapCritical
-- Block dsp_add_stage() when heap is critical
-
-Auth migration:
-- Session timestamps: millis() (32-bit ms) → esp_timer_get_time() (64-bit μs)
-- SESSION_TIMEOUT → SESSION_TIMEOUT_US (3600000000 μs)
-- Rate-limit state updated to 64-bit microseconds
-
-Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruption) (`efd8e0f`)
-- [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
-
-Address CONCERNS.md audit findings across security, robustness, and test gaps:
-
-Security:
-- Use timingSafeCompare() for session ID lookup in validateSession/removeSession
-- Atomic crash log ring buffer validation (reset all on any inconsistency)
-- Cap OTA consecutive failure counter at 20 to prevent unbounded growth
-
-Robustness:
-- Add recursive mutex to all I2C EEPROM operations (dac_eeprom.cpp)
-- Move 3 large DSP API buffers (4-8KB) from stack to PSRAM heap
-- Gate WS binary sends (waveform/spectrum) on !heapCritical
-- Block dsp_add_stage() when heap is critical
-
-Auth migration:
-- Session timestamps: millis() (32-bit ms) → esp_timer_get_time() (64-bit μs)
-- SESSION_TIMEOUT → SESSION_TIMEOUT_US (3600000000 μs)
-- Rate-limit state updated to 64-bit microseconds
-
-Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruption) (`d29a0dd`)
-- [2026-02-15] fix: Security hardening, robustness fixes, and 64-bit auth timestamps
-
-Address CONCERNS.md audit findings across security, robustness, and test gaps:
-
-Security:
-- Use timingSafeCompare() for session ID lookup in validateSession/removeSession
-- Atomic crash log ring buffer validation (reset all on any inconsistency)
-- Cap OTA consecutive failure counter at 20 to prevent unbounded growth
-
-Robustness:
-- Add recursive mutex to all I2C EEPROM operations (dac_eeprom.cpp)
-- Move 3 large DSP API buffers (4-8KB) from stack to PSRAM heap
-- Gate WS binary sends (waveform/spectrum) on !heapCritical
-- Block dsp_add_stage() when heap is critical
-
-Auth migration:
-- Session timestamps: millis() (32-bit ms) → esp_timer_get_time() (64-bit μs)
-- SESSION_TIMEOUT → SESSION_TIMEOUT_US (3600000000 μs)
-- Rate-limit state updated to 64-bit microseconds
-
-Tests: 790 pass (+36 new: auth timing-safe, OTA backoff cap, crash log corruption) (`c779119`)
 - [2026-02-15] fix: USB audio control transfer handling and clock rate validation
 
 Remove redundant SET_INTERFACE handler (TinyUSB handles it internally
 via driver open callback). Add SET_CUR clock rate validation in DATA
 stage. Improve control request logging. (`6d0e343`)
-- [2026-02-15] fix: USB audio control transfer handling and clock rate validation
 
 Remove redundant SET_INTERFACE handler (TinyUSB handles it internally
 via driver open callback). Add SET_CUR clock rate validation in DATA
