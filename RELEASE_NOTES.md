@@ -440,6 +440,12 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-17] fix: Undefined escapeHtml breaking DSP UI and preset save rejecting auto-assign
+
+escapeHtml() was called in dspRenderPresetList but never defined, causing
+a ReferenceError that killed the entire dspHandleDspState handler and
+prevented stages, PEQ bands, and presets from rendering. Also fixed
+saveDspPreset WS handler rejecting slot=-1 (auto-assign). (`9e959b0`)
 - [2026-02-16] fix: Use custom input names in EQ Bands "Copy to..." dropdown
 
 Updated PEQ copy channel dropdown to display user-configured input names
@@ -668,6 +674,21 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-17] test: Add regression tests for WebSocket message key format
+
+Adds 4 comprehensive tests to prevent recurrence of the timer display
+bug where backend sent "appState.timerDuration" but frontend expected
+"timerDuration", causing the web UI to show "-- min" instead of the
+actual timer value.
+
+Test coverage:
+- test_smart_sensing_websocket_message_keys: Verifies correct JSON keys
+  without "appState." prefix and explicit regression checks
+- test_websocket_message_consistency: Validates consistent key naming
+- test_timer_display_values: Tests timer value formatting scenarios
+- test_timer_active_flag: Tests timerActive boolean logic
+
+All 4 tests passing in native environment. (`785954a`)
 - [2026-02-16] refactor: Move Crossover Presets from card to Add Stage dropdown modal
 
 Follows same pattern as Baffle Step and THD+N - replaces the standalone
