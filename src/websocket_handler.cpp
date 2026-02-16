@@ -448,6 +448,19 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             dsp_copy_active_to_inactive();
             int idx = dsp_add_stage(ch, (DspStageType)typeInt);
             if (idx >= 0) {
+              // Apply optional overrides (e.g., DC Block: freq=10, label="DC Block")
+              DspState *inCfg = dsp_get_inactive_config();
+              DspStage &added = inCfg->channels[ch].stages[idx];
+              if (dsp_is_biquad_type((DspStageType)typeInt)) {
+                if (doc["frequency"].is<float>()) added.biquad.frequency = doc["frequency"].as<float>();
+                if (doc["Q"].is<float>()) added.biquad.Q = doc["Q"].as<float>();
+                if (doc["gain"].is<float>()) added.biquad.gain = doc["gain"].as<float>();
+                dsp_compute_biquad_coeffs(added.biquad, added.type, inCfg->sampleRate);
+              }
+              if (doc["label"].is<const char*>()) {
+                strncpy(added.label, doc["label"].as<const char*>(), sizeof(added.label) - 1);
+                added.label[sizeof(added.label) - 1] = '\0';
+              }
               if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
@@ -1241,8 +1254,6 @@ void sendAudioQualityDiagnostics() {
   doc["glitchesLastMinute"] = diag.glitchHistory.glitchesLastMinute;
   doc["lastGlitchType"] = (int)diag.lastGlitchType;
   doc["lastGlitchMs"] = diag.lastGlitchMs;
-  doc["avgLatencyMs"] = serialized(String(diag.timingHist.avgLatencyMs, 2));
-  doc["maxLatencyMs"] = serialized(String(diag.timingHist.maxLatencyMs, 2));
   doc["correlationDsp"] = diag.correlation.dspSwapRelated;
   doc["correlationWifi"] = diag.correlation.wifiRelated;
   doc["correlationMqtt"] = diag.correlation.mqttRelated;

@@ -32,16 +32,6 @@ struct GlitchHistory {
     unsigned long lastMinuteResetMs;
 };
 
-// Timing histogram for buffer latency
-#define TIMING_HISTOGRAM_BUCKETS 20
-struct TimingHistogram {
-    uint32_t buckets[TIMING_HISTOGRAM_BUCKETS]; // 0-20ms in 1ms steps
-    uint32_t overflows;                         // >20ms
-    float avgLatencyMs;
-    float maxLatencyMs;
-    uint32_t sampleCount;
-};
-
 // Event correlation flags
 struct EventCorrelation {
     bool dspSwapRelated;
@@ -71,7 +61,6 @@ struct AudioQualityDiag {
     bool enabled;
     float glitchThreshold;
     GlitchHistory glitchHistory;
-    TimingHistogram timingHist;
     EventCorrelation correlation;
     MemoryHistory memoryHist;
     GlitchType lastGlitchType;
@@ -86,7 +75,7 @@ void audio_quality_set_threshold(float threshold);
 float audio_quality_get_threshold();
 
 // Called from audio task after processing each ADC buffer
-void audio_quality_scan_buffer(int adcIndex, const int32_t *buf, int stereoFrames, unsigned long latencyUs);
+void audio_quality_scan_buffer(int adcIndex, const int32_t *buf, int stereoFrames);
 
 // Called when events occur (for correlation tracking)
 void audio_quality_mark_event(const char *eventName);
