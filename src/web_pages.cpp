@@ -2215,7 +2215,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             font-weight: 700;
             padding: 2px 8px;
             border-radius: 4px;
-            background: var(--accent);
             color: #fff;
             letter-spacing: 0.3px;
             flex-shrink: 0;
@@ -3219,11 +3218,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             <!-- DSP Presets -->
             <div class="card">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    Presets
-                    <button class="btn btn-secondary" onclick="dspSavePresetDialog()" style="padding:2px 8px;font-size:11px;">Save</button>
-                </div>
-                <div style="display:flex;gap:4px;flex-wrap:wrap;" id="dspPresetBar"></div>
+                <div class="card-title">Presets (<span id="dspPresetCount">0</span>)</div>
+                <div id="dspPresetList" style="margin-top:8px;"></div>
+                <button class="dsp-add-btn" id="dspAddPresetBtn" onclick="dspShowAddPresetDialog()">+ Add Preset</button>
                 <span id="dspPresetModified" style="font-size:10px;color:var(--accent);display:none;margin-top:4px;">Modified</span>
             </div>
 
@@ -3287,24 +3284,34 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             <!-- Additional Processing (chain stages) -->
             <div class="card">
-                <div class="card-title" id="dspStageTitle">Additional Processing (0)</div>
+                <div class="card-title" id="dspStageTitle" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span id="dspStageTitleText">Additional Processing (0)</span>
+                    <select id="chainCopyTo" class="select-sm" style="font-size:11px;" onchange="dspCopyChainChannel(this.value);this.value=''">
+                        <option value="">Copy to...</option>
+                        <option value="0">L1</option>
+                        <option value="1">R1</option>
+                        <option value="2">L2</option>
+                        <option value="3">R2</option>
+                        <option value="all">All Channels</option>
+                    </select>
+                </div>
                 <div style="margin-top:8px;">
                     <div id="dspStageList"></div>
                     <button class="dsp-add-btn" id="dspAddBtn" onclick="dspToggleAddMenu()">+ Add Stage</button>
                     <div class="dsp-add-menu" id="dspAddMenu">
-                        <div class="menu-cat">Dynamics</div>
+                        <div class="menu-cat" style="color:#e6a817">Dynamics</div>
                         <div class="menu-item" onclick="dspAddStage(12)">Limiter</div>
                         <div class="menu-item" onclick="dspAddStage(18)">Compressor</div>
                         <div class="menu-item" onclick="dspAddStage(24)">Noise Gate</div>
                         <div class="menu-item" onclick="dspAddStage(30)">Multiband Comp</div>
-                        <div class="menu-cat">Tone Shaping</div>
+                        <div class="menu-cat" style="color:#43a047">Tone Shaping</div>
                         <div class="menu-item" onclick="dspAddStage(25)">Tone Controls</div>
                         <div class="menu-item" onclick="dspAddStage(28)">Loudness Comp</div>
                         <div class="menu-item" onclick="dspAddStage(29)">Bass Enhance</div>
-                        <div class="menu-cat">Stereo / Protection</div>
+                        <div class="menu-cat" style="color:#8e24aa">Stereo / Protection</div>
                         <div class="menu-item" onclick="dspAddStage(27)">Stereo Width</div>
                         <div class="menu-item" onclick="dspAddStage(26)">Speaker Protection</div>
-                        <div class="menu-cat">Utility</div>
+                        <div class="menu-cat" style="color:#757575">Utility</div>
                         <div class="menu-item" onclick="dspAddStage(14)">Gain</div>
                         <div class="menu-item" onclick="dspAddStage(15)">Delay</div>
                         <div class="menu-item" onclick="dspAddStage(16)">Polarity Invert</div>
@@ -3312,9 +3319,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
                         <div class="menu-item" onclick="dspAddDCBlock()">DC Block</div>
                         <div class="menu-item" onclick="dspShowBaffleModal()">Baffle Step...</div>
-                        <div class="menu-cat">Crossover</div>
+                        <div class="menu-cat" style="color:#1e88e5">Crossover</div>
                         <div class="menu-item" onclick="dspShowCrossoverModal()">Crossover Preset...</div>
-                        <div class="menu-cat">Analysis</div>
+                        <div class="menu-cat" style="color:#ef6c00">Analysis</div>
                         <div class="menu-item" onclick="dspShowThdModal()">THD+N Measurement...</div>
                     </div>
                 </div>
@@ -4724,6 +4731,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 setTimeout(dspDrawFreqResponse, 50);
                 dspLoadRouting();
                 if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
+                if (typeof updateChainCopyToDropdown === 'function') updateChainCopyToDropdown();
                 if (peqGraphLayers.rta && ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
                     ws.send(JSON.stringify({ type: 'setSpectrumEnabled', enabled: true }));
@@ -5698,6 +5706,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (typeof dspRenderChannelTabs === 'function') dspRenderChannelTabs();
             if (typeof dspRenderRouting === 'function') dspRenderRouting();
             if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
+            if (typeof updateChainCopyToDropdown === 'function') updateChainCopyToDropdown();
         }
 
         function updatePeqCopyToDropdown() {
@@ -9763,6 +9772,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 ws.send(JSON.stringify({ type: 'copyPeqChannel', from: dspCh, to: parseInt(target) }));
             }
         }
+        function dspCopyChainChannel(target) {
+            if (!target || !ws || ws.readyState !== WebSocket.OPEN) return;
+            if (target === 'all') {
+                for (var c = 0; c < DSP_MAX_CH; c++) {
+                    if (c !== dspCh) ws.send(JSON.stringify({ type: 'copyChainStages', from: dspCh, to: c }));
+                }
+            } else {
+                ws.send(JSON.stringify({ type: 'copyChainStages', from: dspCh, to: parseInt(target) }));
+            }
+        }
+        function updateChainCopyToDropdown() {
+            var sel = document.getElementById('chainCopyTo');
+            if (!sel) return;
+            var html = '<option value="">Copy to...</option>';
+            for (var i = 0; i < DSP_MAX_CH; i++) {
+                var name = inputNames[i] || DSP_CH_NAMES[i];
+                html += '<option value="' + i + '">' + name + '</option>';
+            }
+            html += '<option value="all">All Channels</option>';
+            sel.innerHTML = html;
+        }
         function peqPresetAction(val) {
             if (!val) return;
             if (val === '_save') {
@@ -10268,11 +10298,26 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ctx.restore();
         }
 
+        function dspStageColor(t) {
+            // Dynamics: Limiter(12), Compressor(18), Noise Gate(24), Multiband Comp(30)
+            if (t===12||t===18||t===24||t===30) return '#e6a817';
+            // Tone Shaping: Tone Controls(25), Loudness Comp(28), Bass Enhance(29)
+            if (t===25||t===28||t===29) return '#43a047';
+            // Stereo / Protection: Stereo Width(27), Speaker Protection(26)
+            if (t===26||t===27) return '#8e24aa';
+            // Utility: FIR(13), Gain(14), Delay(15), Polarity(16), Mute(17)
+            if (t>=13&&t<=17) return '#757575';
+            // Analysis / Other: Decimator(22), Convolution(23)
+            if (t===22||t===23) return '#ef6c00';
+            // Crossover / Filters: all EQ/filter types (0-11, 19-21)
+            return '#1e88e5';
+        }
+
         function dspRenderStages() {
             if (!dspState || !dspState.channels[dspCh]) return;
             var ch = dspState.channels[dspCh];
             var list = document.getElementById('dspStageList');
-            var title = document.getElementById('dspStageTitle');
+            var title = document.getElementById('dspStageTitleText');
             var chainCount = Math.max(0, (ch.stageCount || 0) - DSP_PEQ_BANDS);
             if (title) title.textContent = 'Additional Processing (' + chainCount + ')';
             if (!list) return;
@@ -10285,7 +10330,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 var open = (i === dspOpenStage);
                 html += '<div class="dsp-stage-card' + (!s.enabled ? ' disabled' : '') + '">';
                 html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : i) + ';dspRenderStages();dspDrawFreqResponse();">';
-                html += '<span class="dsp-stage-type">' + typeName + '</span>';
+                html += '<span class="dsp-stage-type" style="background:' + dspStageColor(s.type) + '">' + typeName + '</span>';
                 html += '<span class="dsp-stage-name">' + label + '</span>';
                 html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
                 html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
@@ -10311,7 +10356,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (bpTgl) bpTgl.checked = d.globalBypass;
             var sr = document.getElementById('dspSampleRate');
             if (sr) sr.textContent = (d.sampleRate || 48000) + ' Hz';
-            dspRenderPresetBar(d);
+            dspRenderPresetList(d.presets || [], d.presetIndex != null ? d.presetIndex : -1);
             dspRenderChannelTabs();
             peqRenderBandStrip();
             peqRenderBandDetail();
@@ -10321,52 +10366,61 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== DSP Config Presets =====
-        function dspRenderPresetBar(d) {
-            var bar = document.getElementById('dspPresetBar');
+        function dspRenderPresetList(presets, activeIndex) {
+            var list = document.getElementById('dspPresetList');
+            var count = document.getElementById('dspPresetCount');
             var mod = document.getElementById('dspPresetModified');
-            if (!bar) return;
-            var names = d.presetNames || ['','','',''];
-            var idx = d.presetIndex != null ? d.presetIndex : -1;
+            if (!list) return;
+
             var html = '';
             var anyExists = false;
-            for (var i = 0; i < 4; i++) {
-                var label = names[i] || ('Slot ' + (i+1));
-                var exists = names[i] && names[i].length > 0;
-                if (exists) anyExists = true;
-                var active = (i === idx) ? ' btn-primary' : ' btn-secondary';
-                var opacity = exists ? '' : ' style="opacity:0.5"';
-                html += '<button class="btn' + active + '" onclick="dspLoadPreset(' + i + ')"' + opacity + ' style="padding:3px 10px;font-size:11px;flex:1;min-width:0;' + (i === idx ? '' : 'opacity:' + (exists ? '1' : '0.5')) + '">';
-                html += label;
-                html += '</button>';
+            for (var i = 0; i < presets.length; i++) {
+                var p = presets[i];
+                if (!p.exists) continue;
+                anyExists = true;
+                var isActive = (activeIndex === p.index);
+                html += '<div class="dsp-stage-item' + (isActive ? ' active' : '') + '">';
+                html += '<div class="stage-header">';
+                html += '<span class="stage-name">' + escapeHtml(p.name || ('Slot ' + (p.index + 1))) + '</span>';
+                html += '<div class="stage-controls">';
+                html += '<button class="btn btn-small" onclick="dspLoadPreset(' + p.index + ')">Load</button>';
+                html += '<button class="btn btn-small" onclick="dspRenamePresetDialog(' + p.index + ')">Rename</button>';
+                html += '<button class="btn btn-small btn-danger" onclick="dspDeletePresetConfirm(' + p.index + ')">Delete</button>';
+                html += '</div></div></div>';
             }
-            bar.innerHTML = html;
-            if (mod) mod.style.display = (idx === -1 && anyExists) ? 'inline' : 'none';
+            list.innerHTML = html;
+            if (count) count.textContent = presets.filter(function(p){ return p.exists; }).length;
+            if (mod) mod.style.display = (activeIndex === -1 && anyExists) ? 'inline' : 'none';
         }
         function dspLoadPreset(slot) {
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({ type: 'loadDspPreset', slot: slot }));
         }
-        function dspSavePresetDialog() {
+        function dspShowAddPresetDialog() {
             var name = prompt('Preset name (max 20 chars):', '');
-            if (name === null) return;
+            if (!name) return;
             name = name.substring(0, 20);
-            // Find first empty slot, or use current + 1
-            var slot = -1;
-            if (dspState && dspState.presetIndex >= 0) {
-                slot = dspState.presetIndex;
-            } else {
-                var names = dspState ? dspState.presetNames || [] : [];
-                for (var i = 0; i < 4; i++) {
-                    if (!names[i] || names[i].length === 0) { slot = i; break; }
-                }
-                if (slot < 0) slot = 0;
-            }
-            var slotStr = prompt('Save to slot (0-3):', String(slot));
-            if (slotStr === null) return;
-            slot = parseInt(slotStr);
-            if (isNaN(slot) || slot < 0 || slot > 3) { alert('Invalid slot'); return; }
+            // Backend will auto-assign next available slot
             if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({ type: 'saveDspPreset', slot: slot, name: name }));
+                ws.send(JSON.stringify({ type: 'saveDspPreset', slot: -1, name: name }));
+        }
+        function dspRenamePresetDialog(slot) {
+            var presets = dspState && dspState.presets ? dspState.presets : [];
+            var current = presets.find(function(p) { return p.index === slot; });
+            var oldName = current ? current.name : '';
+            var name = prompt('Rename preset:', oldName);
+            if (!name || name === oldName) return;
+            name = name.substring(0, 20);
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'renameDspPreset', slot: slot, name: name }));
+        }
+        function dspDeletePresetConfirm(slot) {
+            var presets = dspState && dspState.presets ? dspState.presets : [];
+            var preset = presets.find(function(p) { return p.index === slot; });
+            if (!preset) return;
+            if (!confirm('Delete preset "' + preset.name + '"?')) return;
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({ type: 'deleteDspPreset', slot: slot }));
         }
 
         function dspHandleMetrics(d) {

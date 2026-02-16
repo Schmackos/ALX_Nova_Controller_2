@@ -582,6 +582,7 @@ int  dsp_get_linked_partner(int channel);               // Returns partner chann
 // PEQ band helpers
 void dsp_ensure_peq_bands(DspState *cfg);  // Ensure all channels have PEQ bands
 void dsp_copy_peq_bands(int srcChannel, int dstChannel);  // Copy PEQ bands between channels
+void dsp_copy_chain_stages(int srcChannel, int dstChannel);  // Copy chain stages (Additional Processing) between channels
 const char *stage_type_name(DspStageType t);               // Stage type to string name
 
 // DC block removed in v1.8.3 - use highpass filter stage instead (dsp_add_stage with DSP_HIGHPASS)

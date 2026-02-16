@@ -88,6 +88,86 @@ workaround used to avoid ESP32-S3 slave-mode DMA issues. (`7fa5595`)
 - [2026-02-15] docs: map existing codebase (`824ba3e`)
 
 ## New Features
+- [2026-02-17] feat: Color-coded DSP stage labels and "Copy to" for Additional Processing
+
+Add category-colored type badges on stage cards, colored category labels
+in the Add Stage menu, and a "Copy to..." dropdown for copying chain
+stages between channels.
+- [2026-02-17] feat: Dynamic DSP preset management with unlimited slots
+
+Replace fixed 4-slot preset system with dynamic list supporting up to 32 presets.
+Users can now add, rename, and delete presets via intuitive list UI.
+
+Backend changes:
+- Increase DSP_PRESET_MAX_SLOTS from 4 to 32
+- Add dsp_preset_rename() function for in-place name updates
+- Modify dsp_preset_save() to auto-assign slots when slot=-1
+- New REST endpoint: POST /api/dsp/presets/rename
+- New WebSocket handler: renameDspPreset
+
+Frontend changes:
+- Replace horizontal preset bar with vertical list (like Additional Processing)
+- Add "+ Add Preset" button with auto-slot-assignment
+- Each preset shows Load/Rename/Delete buttons
+- Active preset highlighted with .active class
+- Dynamic preset count display
+
+Integration updates:
+- WebSocket: Send full preset array (index, name, exists) instead of names only
+- MQTT: Update discovery to include all existing presets dynamically
+- GUI: Update preset cycling to support 0-31 range
+
+All preset operations (create/load/rename/delete) work across web UI, MQTT, and TFT GUI. (`ebef130`)
+- [2026-02-17] feat: Dynamic DSP preset management with unlimited slots
+
+Replace fixed 4-slot preset system with dynamic list supporting up to 32 presets.
+Users can now add, rename, and delete presets via intuitive list UI.
+
+Backend changes:
+- Increase DSP_PRESET_MAX_SLOTS from 4 to 32
+- Add dsp_preset_rename() function for in-place name updates
+- Modify dsp_preset_save() to auto-assign slots when slot=-1
+- New REST endpoint: POST /api/dsp/presets/rename
+- New WebSocket handler: renameDspPreset
+
+Frontend changes:
+- Replace horizontal preset bar with vertical list (like Additional Processing)
+- Add "+ Add Preset" button with auto-slot-assignment
+- Each preset shows Load/Rename/Delete buttons
+- Active preset highlighted with .active class
+- Dynamic preset count display
+
+Integration updates:
+- WebSocket: Send full preset array (index, name, exists) instead of names only
+- MQTT: Update discovery to include all existing presets dynamically
+- GUI: Update preset cycling to support 0-31 range
+
+All preset operations (create/load/rename/delete) work across web UI, MQTT, and TFT GUI. (`d6fb9d8`)
+- [2026-02-17] feat: Dynamic DSP preset management with unlimited slots
+
+Replace fixed 4-slot preset system with dynamic list supporting up to 32 presets.
+Users can now add, rename, and delete presets via intuitive list UI.
+
+Backend changes:
+- Increase DSP_PRESET_MAX_SLOTS from 4 to 32
+- Add dsp_preset_rename() function for in-place name updates
+- Modify dsp_preset_save() to auto-assign slots when slot=-1
+- New REST endpoint: POST /api/dsp/presets/rename
+- New WebSocket handler: renameDspPreset
+
+Frontend changes:
+- Replace horizontal preset bar with vertical list (like Additional Processing)
+- Add "+ Add Preset" button with auto-slot-assignment
+- Each preset shows Load/Rename/Delete buttons
+- Active preset highlighted with .active class
+- Dynamic preset count display
+
+Integration updates:
+- WebSocket: Send full preset array (index, name, exists) instead of names only
+- MQTT: Update discovery to include all existing presets dynamically
+- GUI: Update preset cycling to support 0-31 range
+
+All preset operations (create/load/rename/delete) work across web UI, MQTT, and TFT GUI. (`8348cb9`)
 - [2026-02-16] feat: Improve EQ graph usability - equal spacing and increased height
 
 Updated frequency response graph for better usability:

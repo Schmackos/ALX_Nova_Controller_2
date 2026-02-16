@@ -57,7 +57,7 @@ static void build_dsp_menu(void) {
     }
 
     // Preset string
-    if (st.dspPresetIndex >= 0 && st.dspPresetIndex < 4 && st.dspPresetNames[st.dspPresetIndex][0]) {
+    if (st.dspPresetIndex >= 0 && st.dspPresetIndex < DSP_PRESET_MAX_SLOTS && st.dspPresetNames[st.dspPresetIndex][0]) {
         snprintf(preset_str, sizeof(preset_str), "%s", st.dspPresetNames[st.dspPresetIndex]);
     } else {
         snprintf(preset_str, sizeof(preset_str), "Custom");
@@ -127,8 +127,8 @@ static void edit_bypass(void) {
 static void cycle_preset(void) {
     AppState &st = AppState::getInstance();
     int current = st.dspPresetIndex;
-    for (int i = 1; i <= 4; i++) {
-        int slot = (current + i) % 4;
+    for (int i = 1; i <= DSP_PRESET_MAX_SLOTS; i++) {
+        int slot = (current + i) % DSP_PRESET_MAX_SLOTS;
         if (dsp_preset_exists(slot)) {
             dsp_preset_load(slot);
             return;
@@ -167,7 +167,7 @@ void scr_dsp_refresh(void) {
     snprintf(bypass_str, sizeof(bypass_str), "%s", st.dspBypass ? "ON" : "OFF");
     scr_menu_set_item_value(2, bypass_str);
 
-    if (st.dspPresetIndex >= 0 && st.dspPresetIndex < 4 && st.dspPresetNames[st.dspPresetIndex][0]) {
+    if (st.dspPresetIndex >= 0 && st.dspPresetIndex < DSP_PRESET_MAX_SLOTS && st.dspPresetNames[st.dspPresetIndex][0]) {
         snprintf(preset_str, sizeof(preset_str), "%s", st.dspPresetNames[st.dspPresetIndex]);
     } else {
         snprintf(preset_str, sizeof(preset_str), "Custom");
