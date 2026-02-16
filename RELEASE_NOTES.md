@@ -538,6 +538,26 @@ instead of hardcoded DEFAULT_AP_PASSWORD constant. (`df56634`)
 
 
 ## Technical Details
+- [2026-02-16] refactor: Move Crossover Presets from card to Add Stage dropdown modal
+
+Follows same pattern as Baffle Step and THD+N - replaces the standalone
+collapsible card with a modal launched from the + Add Stage menu. (`b489d82`)
+- [2026-02-16] refactor: Move Crossover Presets from card to Add Stage dropdown modal
+
+Follows same pattern as Baffle Step and THD+N - replaces the standalone
+collapsible card with a modal launched from the + Add Stage menu. (`6699633`)
+- [2026-02-16] refactor: Move Crossover Presets from card to Add Stage dropdown modal
+
+Follows same pattern as Baffle Step and THD+N - replaces the standalone
+collapsible card with a modal launched from the + Add Stage menu. (`03fe031`)
+- [2026-02-16] refactor: Move Crossover Presets from card to Add Stage dropdown modal
+
+Follows same pattern as Baffle Step and THD+N - replaces the standalone
+collapsible card with a modal launched from the + Add Stage menu. (`0c87620`)
+- [2026-02-16] refactor: Move Crossover Presets from card to Add Stage dropdown modal
+
+Follows same pattern as Baffle Step and THD+N - replaces the standalone
+collapsible card with a modal launched from the + Add Stage menu. (`fff0208`)
 - [2026-02-16] refactor: Reorganize DSP UI - move Baffle Step and THD+N to menu
 
 Moved Baffle Step Correction and THD+N Measurement from standalone
