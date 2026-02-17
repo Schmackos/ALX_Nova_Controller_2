@@ -29,9 +29,17 @@ skip cert validation when NTP hasn't synced, and suspend loopTask WDT
 during TLS handshakes to prevent watchdog crashes on boot. (`979ce9c`)
 
 ## Documentation
+- [2026-02-17] docs: complete project research for Spotify Connect integration
+
+Research files covering stack (cspot + dual-framework build), features
+(P1/P2/P3 prioritization, anti-features), architecture (SPSC ring buffer
+pattern, source priority enum, AppState extensions), and pitfalls (heap
+exhaustion, flash overflow, mDNS double-init, I2S race, session death).
+Summary synthesizes findings into 7-phase roadmap with gating criteria. (`625eeb2`)
 - [2026-02-17] docs: initialize project (`7fa6371`)
 
 ## Technical Details
+- [2026-02-17] chore: add project config (`91b13cd`)
 - [2026-02-17] chore: Bump version to 1.8.5 (`d73ba60`)
 
 ## Improvements
@@ -62,6 +70,14 @@ bug on ESP32-S3 (invalid register write in dma_end_callback). (`448fe70`)
 
 
 ## Bug Fixes
+- [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
+
+OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
+I/O buffers (~32KB) competed with I2S DMA for scarce internal SRAM. Instead
+of tearing down audio during checks, use GCC --wrap to redirect all MbedTLS
+allocations to PSRAM via heap_caps_calloc(MALLOC_CAP_SPIRAM). Audio runs
+uninterrupted during OTA checks. Also includes OTA stream-parse optimization,
+HTTP fallback for downloads, and I2S driver teardown safety for OTA downloads. (`11751d6`)
 - [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
 
 OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
