@@ -2,6 +2,8 @@
 #define OTA_UPDATER_H
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // ===== OTA Core Functions =====
 void checkForFirmwareUpdate();
@@ -31,6 +33,11 @@ void startOTADownloadTask();
 void startOTACheckTask();
 bool isOTATaskRunning();
 unsigned long getOTAEffectiveInterval();  // Backoff-aware check interval
+
+// loopTaskHandle is defined in Arduino framework's main.cpp — OTA tasks
+// temporarily unsubscribe it from WDT during TLS handshakes that can
+// block the WiFi/lwIP stack for >15s
+extern TaskHandle_t loopTaskHandle;
 
 // ===== Manual Firmware Upload Handlers =====
 void handleFirmwareUploadComplete();

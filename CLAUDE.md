@@ -68,7 +68,7 @@ Each subsystem is a separate module in `src/`:
 - **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`). **IMPORTANT: After ANY edit to `web_pages.cpp`, you MUST run `node build_web_assets.js` to regenerate `web_pages_gz.cpp` before building firmware.** The ESP32 serves the gzipped version — without this step, frontend changes will not take effect.
 
 ### GUI (LVGL on TFT Display)
-LVGL v9.4 + TFT_eSPI on ST7735S 128x160 (landscape 160x128). Runs on Core 1 via FreeRTOS `gui_task`. All GUI code is guarded by `-D GUI_ENABLED`.
+LVGL v9.4 + LovyanGFX on ST7735S 128x160 (landscape 160x128). DMA double-buffered flush. Runs on Core 1 via FreeRTOS `gui_task`. All GUI code is guarded by `-D GUI_ENABLED`.
 
 Key GUI modules in `src/gui/`:
 - **gui_manager** — Init, FreeRTOS task, screen sleep/wake, dashboard refresh
@@ -149,7 +149,7 @@ All modules use `debug_serial.h` macros (`LOG_D`, `LOG_I`, `LOG_W`, `LOG_E`) wit
 | Module | Prefix | Notes |
 |---|---|---|
 | `smart_sensing` | `[Sensing]` | Mode changes, threshold, timer, amplifier state, ADC health transitions |
-| `i2s_audio` | `[Audio]` | Init, sample rate changes, ADC detection changes. Periodic dump via `audio_periodic_dump()` from main loop |
+| `i2s_audio` | `[Audio]` | Init, sam       ple rate changes, ADC detection changes. Periodic dump via `audio_periodic_dump()` from main loop |
 | `signal_generator` | `[SigGen]` | Init, start/stop, PWM duty, param changes while active |
 | `buzzer_handler` | `[Buzzer]` | Init, pattern start/complete, play requests (excludes tick/click to avoid noise) |
 | `wifi_manager` | `[WiFi]` | Connection attempts, AP mode, scan results |
@@ -172,6 +172,6 @@ When adding logging to new modules, follow these conventions:
 - `WebSockets@^2.7.2` — WebSocket server for real-time UI updates
 - `PubSubClient@^2.8` — MQTT client for Home Assistant integration
 - `lvgl@^9.4` — GUI framework (guarded by `GUI_ENABLED`)
-- `TFT_eSPI@^2.5.43` — TFT display driver for ST7735S
+- `LovyanGFX@^1.2.0` — TFT display driver with DMA support for ST7735S (replaced TFT_eSPI)
 - `arduinoFFT@^2.0` — FFT spectrum analysis (**native tests only**; ESP32 uses pre-built ESP-DSP FFT)
 - **ESP-DSP pre-built library** (`libespressif__esp-dsp.a`) — S3 assembly-optimized biquad IIR, FIR, Radix-4 FFT, window functions, vector math (mulc/mul/add), dot product, SNR/SFDR analysis. Include paths added via `-I` flags in `platformio.ini`. `lib/esp_dsp_lite/` provides ANSI C fallbacks for native tests only (`lib_ignore = esp_dsp_lite` in ESP32 envs)

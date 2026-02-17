@@ -16,13 +16,15 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-// Root CA certificates for GitHub (api.github.com, github.com, and objects.githubusercontent.com)
-// GitHub migrated to Sectigo/USERTrust in March 2024
-// Includes both USERTrust (ECC and RSA) for github.com/api.github.com 
-// and DigiCert Global Root G2 for objects.githubusercontent.com CDN
-// Valid until 2030-2038
+// Root and intermediate CA certificates for GitHub
+// (api.github.com, github.com, and objects.githubusercontent.com)
+// Updated Feb 2026: GitHub's chain now uses Sectigo Public Server Auth Root E46
+// as an intermediate between the leaf and USERTrust ECC root.
+// Chain: leaf → Sectigo DV E36 → Sectigo Root E46 → USERTrust ECC
+// CDN:   leaf → Sectigo RSA DV → USERTrust RSA
+// All certs valid until 2028-2038
 static const char* GITHUB_ROOT_CA = \
-// USERTrust ECC Certification Authority (for api.github.com and github.com) - valid until 2038
+// USERTrust ECC Certification Authority (root for api.github.com ECC chain) - valid until 2038
 "-----BEGIN CERTIFICATE-----\n" \
 "MIICjzCCAhWgAwIBAgIQXIuZxVqUxdJxVt7NiYDMJjAKBggqhkjOPQQDAzCBiDEL\n" \
 "MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl\n" \
@@ -39,7 +41,29 @@ static const char* GITHUB_ROOT_CA = \
 "zzuqQhFkoJ2UOQIReVx7Hfpkue4WQrO/isIJxOzksU0CMQDpKmFHjFJKS04YcPbW\n" \
 "RNZu9YO6bVi9JNlWSOrvxKJGgYhqOkbRqZtNyWHa0V1Xahg=\n" \
 "-----END CERTIFICATE-----\n" \
-// USERTrust RSA Certification Authority (for github.com RSA certificates) - valid until 2038
+// Sectigo Public Server Authentication Root E46 (intermediate for api.github.com) - valid until 2038
+// Signed by USERTrust ECC. Added Feb 2026 when GitHub's chain gained this intermediate.
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDRjCCAsugAwIBAgIQGp6v7G3o4ZtcGTFBto2Q3TAKBggqhkjOPQQDAzCBiDEL\n" \
+"MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl\n" \
+"eSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMT\n" \
+"JVVTRVJUcnVzdCBFQ0MgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMjEwMzIy\n" \
+"MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjBfMQswCQYDVQQGEwJHQjEYMBYGA1UEChMP\n" \
+"U2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1TZWN0aWdvIFB1YmxpYyBTZXJ2ZXIg\n" \
+"QXV0aGVudGljYXRpb24gUm9vdCBFNDYwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAR2\n" \
+"+pmpbiDt+dd34wc7qNs9Xzjoq1WmVk/WSOrsfy2qw7LFeeyZYX8QeccCWvkEN/U0\n" \
+"NSt3zn8gj1KjAIns1aeibVvjS5KToID1AZTc8GgHHs3u/iVStSBDHBv+6xnOQ6Oj\n" \
+"ggEgMIIBHDAfBgNVHSMEGDAWgBQ64QmG1M8ZwpZ2dEl23OA1xmNjmjAdBgNVHQ4E\n" \
+"FgQU0SLaTFnxS18mOKqd1u7rDcP7qWEwDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB\n" \
+"/wQFMAMBAf8wHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMBEGA1UdIAQK\n" \
+"MAgwBgYEVR0gADBQBgNVHR8ESTBHMEWgQ6BBhj9odHRwOi8vY3JsLnVzZXJ0cnVz\n" \
+"dC5jb20vVVNFUlRydXN0RUNDQ2VydGlmaWNhdGlvbkF1dGhvcml0eS5jcmwwNQYI\n" \
+"KwYBBQUHAQEEKTAnMCUGCCsGAQUFBzABhhlodHRwOi8vb2NzcC51c2VydHJ1c3Qu\n" \
+"Y29tMAoGCCqGSM49BAMDA2kAMGYCMQCMCyBit99vX2ba6xEkDe+YO7vC0twjbkv9\n" \
+"PKpqGGuZ61JZryjFsp+DFpEclCVy4noCMQCwvZDXD/m2Ko1HA5Bkmz7YQOFAiNDD\n" \
+"49IWa2wdT7R3DtODaSXH/BiXv8fwB9su4tU=\n" \
+"-----END CERTIFICATE-----\n" \
+// USERTrust RSA Certification Authority (root for CDN objects.githubusercontent.com) - valid until 2028
 "-----BEGIN CERTIFICATE-----\n" \
 "MIIFgTCCBGmgAwIBAgIQOXJEOvkit1HX02wQ3TE1lTANBgkqhkiG9w0BAQwFADB7\n" \
 "MQswCQYDVQQGEwJHQjEbMBkGA1UECAwSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYD\n" \
@@ -71,34 +95,31 @@ static const char* GITHUB_ROOT_CA = \
 "CiIDEOUMsfnNkjcZ7Tvx5Dq2+UUTJnWvu6rvP3t3O9LEApE9GQDTF1w52z97GA1F\n" \
 "zZOFli9d31kWTz9RvdVFGD/tSo7oBmF0Ixa1DVBzJ0RHfxBdiSprhTEUxOipakyA\n" \
 "vGp4z7h/jnZymQyd/teRCBaho1+V\n" \
-"-----END CERTIFICATE-----\n" \
-// DigiCert Global Root G2 (for objects.githubusercontent.com - GitHub releases CDN) - valid until 2038
-"-----BEGIN CERTIFICATE-----\n" \
-"MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh\n" \
-"MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n" \
-"d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\n" \
-"MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT\n" \
-"MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n" \
-"b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG\n" \
-"9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI\n" \
-"2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx\n" \
-"1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ\n" \
-"q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz\n" \
-"tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ\n" \
-"vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP\n" \
-"BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV\n" \
-"5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY\n" \
-"1Yl9PMCcit0BnuQ/8Kt+cTxZp2nh5w1TBVB0El8eTKt/IfVt8+yS2TY+Hp1VxS1x\n" \
-"mfo/7SfE85AmUptT/PCTTp/ShpMrnJN/QvmKp5h/Db0OuCFq5g0rLM3MnvsU2rFy\n" \
-"dHWqZdMI7TaWvRw0ng8NDYMBUu0F0R6xz1BqeOlF+v6PvMRyhPEZ7D6V3AVMuX4a\n" \
-"IjEcnAcLJlCH4nRmFBsKgyJhSz1cMq6cIsPE3ha6uPCTsjHRM63UPk5ZLkIQ5SeE\n" \
-"MppdNrYpMYL7I5lGCNvAk/b7QBQg9T3VwW8E4L8PqlKjFz5E8k4sFTbLCS7Q/l6a\n" \
-"o5c=\n" \
 "-----END CERTIFICATE-----\n";
 
 // External functions from main.cpp that OTA needs to call
 extern int compareVersions(const String& v1, const String& v2);
 extern void sendWiFiStatus();
+
+// Check if NTP has synced (time > year 2000)
+static bool isNtpSynced() {
+  return time(nullptr) > 1000000000;
+}
+
+// Temporarily unsubscribe loopTask from WDT during TLS operations.
+// TLS handshakes monopolize the WiFi/lwIP stack, blocking loopTask
+// on Core 1 from feeding the WDT for >15s.
+static void wdtSuspendLoopTask() {
+  if (loopTaskHandle) {
+    esp_task_wdt_delete(loopTaskHandle);
+  }
+}
+
+static void wdtResumeLoopTask() {
+  if (loopTaskHandle) {
+    esp_task_wdt_add(loopTaskHandle);
+  }
+}
 
 // ===== FreeRTOS Task Handles =====
 static TaskHandle_t otaDownloadTaskHandle = NULL;
@@ -281,9 +302,12 @@ void handleGetReleaseNotes() {
   if (maxBlock < 50000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
-  } else if (appState.enableCertValidation) {
+  } else if (appState.enableCertValidation && isNtpSynced()) {
     client.setCACert(GITHUB_ROOT_CA);
   } else {
+    if (appState.enableCertValidation && !isNtpSynced()) {
+      LOG_W("[OTA] NTP not synced, skipping cert validation (clock not set)");
+    }
     client.setInsecure();
   }
 
@@ -415,11 +439,15 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   if (maxBlock < 50000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
-  } else if (appState.enableCertValidation) {
+  } else if (appState.enableCertValidation && isNtpSynced()) {
     LOG_I("[OTA] Certificate validation enabled");
     client.setCACert(GITHUB_ROOT_CA);
   } else {
-    LOG_W("[OTA] Certificate validation disabled (insecure mode)");
+    if (appState.enableCertValidation && !isNtpSynced()) {
+      LOG_W("[OTA] NTP not synced, skipping cert validation (clock not set)");
+    } else {
+      LOG_W("[OTA] Certificate validation disabled (insecure mode)");
+    }
     client.setInsecure();
   }
 
@@ -582,11 +610,15 @@ bool performOTAUpdate(String firmwareUrl) {
   if (maxBlock < 50000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
-  } else if (appState.enableCertValidation) {
+  } else if (appState.enableCertValidation && isNtpSynced()) {
     LOG_I("[OTA] Certificate validation enabled");
     client.setCACert(GITHUB_ROOT_CA);
   } else {
-    LOG_W("[OTA] Certificate validation disabled (insecure mode)");
+    if (appState.enableCertValidation && !isNtpSynced()) {
+      LOG_W("[OTA] NTP not synced, skipping cert validation (clock not set)");
+    } else {
+      LOG_W("[OTA] Certificate validation disabled (insecure mode)");
+    }
     client.setInsecure();
   }
 
@@ -1019,6 +1051,8 @@ void handleFirmwareUploadComplete() {
 static void otaDownloadTask(void* param) {
   // OTA download can take minutes — unsubscribe from watchdog
   esp_task_wdt_delete(NULL);
+  // Also suspend loopTask WDT — TLS monopolizes the WiFi/lwIP stack
+  wdtSuspendLoopTask();
 
   String firmwareUrl = appState.cachedFirmwareUrl;
   bool success = performOTAUpdate(firmwareUrl);
@@ -1035,6 +1069,8 @@ static void otaDownloadTask(void* param) {
     appState.updateDiscoveredTime = 0;
     appState.setFSMState(STATE_IDLE);
     appState.markOTADirty();
+    // Re-subscribe loopTask to WDT now that TLS is done
+    wdtResumeLoopTask();
   }
 
   otaDownloadTaskHandle = NULL;
@@ -1077,6 +1113,9 @@ static void otaCheckTaskFunc(void* param) {
   // TLS handshake (ECDSA verification) can take 5-10s without yielding —
   // unsubscribe from watchdog to prevent IDLE0 starvation panic on Core 0
   esp_task_wdt_delete(NULL);
+  // Also suspend loopTask WDT — TLS monopolizes the WiFi/lwIP stack,
+  // blocking loopTask from feeding its watchdog for >15s
+  wdtSuspendLoopTask();
 
   // Heap pre-flight: must match the inner TLS threshold (30KB) used by
   // getLatestReleaseInfo(). When heap is 30-50KB, TLS runs in insecure mode
@@ -1096,6 +1135,9 @@ static void otaCheckTaskFunc(void* param) {
 
   // Also refresh WiFi status after check (needs dirty flag, not direct WS call)
   appState.markOTADirty();
+
+  // Re-subscribe loopTask to WDT now that TLS is done
+  wdtResumeLoopTask();
 
   otaCheckTaskHandle = NULL;
   vTaskDelete(NULL);

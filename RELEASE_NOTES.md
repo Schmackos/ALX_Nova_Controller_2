@@ -2,6 +2,29 @@
 
 ## Version 1.8.5
 
+## New Features
+- [2026-02-17] feat: Migrate TFT driver to LovyanGFX and fix OTA TLS/WDT issues
+
+Replace TFT_eSPI with LovyanGFX for DMA double-buffered display flush
+on ST7735S. Add Sectigo intermediate cert for GitHub's updated chain,
+skip cert validation when NTP hasn't synced, and suspend loopTask WDT
+during TLS handshakes to prevent watchdog crashes on boot. (`2240223`)
+- [2026-02-17] feat: Migrate TFT driver to LovyanGFX and fix OTA TLS/WDT issues
+
+Replace TFT_eSPI with LovyanGFX for DMA double-buffered display flush
+on ST7735S. Add Sectigo intermediate cert for GitHub's updated chain,
+skip cert validation when NTP hasn't synced, and suspend loopTask WDT
+during TLS handshakes to prevent watchdog crashes on boot. (`2728e5d`)
+- [2026-02-17] feat: Migrate TFT driver to LovyanGFX and fix OTA TLS/WDT issues
+
+Replace TFT_eSPI with LovyanGFX for DMA double-buffered display flush
+on ST7735S. Add Sectigo intermediate cert for GitHub's updated chain,
+skip cert validation when NTP hasn't synced, and suspend loopTask WDT
+during TLS handshakes to prevent watchdog crashes on boot. (`979ce9c`)
+
+## Documentation
+- [2026-02-17] docs: initialize project (`7fa6371`)
+
 ## Technical Details
 - [2026-02-17] chore: Bump version to 1.8.5 (`d73ba60`)
 

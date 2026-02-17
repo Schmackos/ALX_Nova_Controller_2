@@ -621,6 +621,10 @@ void setup() {
   // have their own WDT entries and feed them explicitly.
   esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(0));
 
+  // Defer first OTA check — immediate check on boot (lastOTACheck==0) caused WDT
+  // crashes: TLS handshake holds WiFi/lwIP mutex for 5-15s, blocking web page serve.
+  appState.lastOTACheck = millis();
+
   LOG_I("[Main] Main loop subscribed to task watchdog");
 }
 
@@ -633,10 +637,12 @@ void loop() {
   delay(5);
 
   server.handleClient();
+  esp_task_wdt_reset();  // Feed WDT after serving pages (85KB dashboard can block)
   if (appState.isAPMode) {
     dnsServer.processNextRequest();
   }
   webSocket.loop();
+  esp_task_wdt_reset();  // Feed WDT after WS burst (auth sends 15+ messages)
   mqttLoop();
   updateWiFiConnection();
 
