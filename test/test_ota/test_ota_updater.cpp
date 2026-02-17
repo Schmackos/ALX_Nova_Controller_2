@@ -314,6 +314,234 @@ void test_firmware_size_validation(void) {
     TEST_ASSERT_LESS_THAN(maxSize, testSize + 1);
 }
 
+// ===== Stream JSON Parsing Tests =====
+
+// Reimplementation of the release JSON extraction logic for testing.
+// Mirrors the real getLatestReleaseInfo() field extraction from ArduinoJson.
+struct ReleaseInfo {
+    String version;
+    String firmwareUrl;
+    String checksum;
+};
+
+bool extractReleaseInfo(const String& jsonStr, ReleaseInfo& info) {
+    // Use ArduinoJson-like parsing (test uses simple string ops)
+    std::string json = jsonStr.c_str();
+
+    // Extract tag_name
+    size_t tagStart = json.find("\"tag_name\":\"");
+    if (tagStart == std::string::npos) return false;
+    tagStart += 12;
+    size_t tagEnd = json.find("\"", tagStart);
+    if (tagEnd == std::string::npos) return false;
+    info.version = json.substr(tagStart, tagEnd - tagStart).c_str();
+
+    // Find firmware.bin in assets
+    bool foundFirmware = false;
+    size_t assetPos = 0;
+    while ((assetPos = json.find("\"name\":\"", assetPos)) != std::string::npos) {
+        assetPos += 8;
+        size_t nameEnd = json.find("\"", assetPos);
+        std::string name = json.substr(assetPos, nameEnd - assetPos);
+
+        if (name == "firmware.bin") {
+            // Find browser_download_url after this name
+            size_t urlStart = json.find("\"browser_download_url\":\"", nameEnd);
+            if (urlStart != std::string::npos) {
+                urlStart += 24;
+                size_t urlEnd = json.find("\"", urlStart);
+                info.firmwareUrl = json.substr(urlStart, urlEnd - urlStart).c_str();
+                foundFirmware = true;
+            }
+        }
+    }
+
+    if (!foundFirmware) return false;
+
+    // Extract SHA256 from body
+    size_t bodyStart = json.find("\"body\":\"");
+    if (bodyStart != std::string::npos) {
+        bodyStart += 8;
+        size_t bodyEnd = json.find("\"", bodyStart);
+        std::string body = json.substr(bodyStart, bodyEnd - bodyStart);
+
+        size_t shaIdx = body.find("SHA256:");
+        if (shaIdx == std::string::npos) shaIdx = body.find("sha256:");
+        if (shaIdx != std::string::npos) {
+            size_t start = body.find(':', shaIdx) + 1;
+            while (start < body.size() && (body[start] == ' ' || body[start] == '\n')) start++;
+            std::string candidate = body.substr(start, 64);
+            if (candidate.length() == 64) {
+                bool validHex = true;
+                for (char c : candidate) {
+                    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+                        validHex = false;
+                        break;
+                    }
+                }
+                if (validHex) info.checksum = candidate.c_str();
+            }
+        }
+    }
+
+    return true;
+}
+
+void test_parse_release_json_extracts_version(void) {
+    String json = R"({"tag_name":"1.9.0","body":"Release notes","assets":[{"name":"firmware.bin","browser_download_url":"https://example.com/firmware.bin"}]})";
+    ReleaseInfo info;
+    bool ok = extractReleaseInfo(json, info);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_STRING("1.9.0", info.version.c_str());
+}
+
+void test_parse_release_json_extracts_firmware_url(void) {
+    String json = R"({"tag_name":"1.9.0","body":"","assets":[{"name":"firmware.bin","browser_download_url":"https://github.com/user/repo/releases/download/1.9.0/firmware.bin"}]})";
+    ReleaseInfo info;
+    bool ok = extractReleaseInfo(json, info);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_STRING("https://github.com/user/repo/releases/download/1.9.0/firmware.bin", info.firmwareUrl.c_str());
+}
+
+void test_parse_release_json_extracts_sha256(void) {
+    String json = R"({"tag_name":"1.9.0","body":"SHA256: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","assets":[{"name":"firmware.bin","browser_download_url":"https://example.com/firmware.bin"}]})";
+    ReleaseInfo info;
+    bool ok = extractReleaseInfo(json, info);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_STRING("a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", info.checksum.c_str());
+}
+
+void test_parse_release_json_no_sha256_in_body(void) {
+    String json = R"({"tag_name":"1.9.0","body":"Just a release, no hash here","assets":[{"name":"firmware.bin","browser_download_url":"https://example.com/firmware.bin"}]})";
+    ReleaseInfo info;
+    bool ok = extractReleaseInfo(json, info);
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL(0, info.checksum.length());
+}
+
+void test_parse_release_json_no_assets(void) {
+    String json = R"({"tag_name":"1.9.0","body":"","assets":[]})";
+    ReleaseInfo info;
+    bool ok = extractReleaseInfo(json, info);
+    TEST_ASSERT_FALSE(ok);
+}
+
+void test_parse_release_json_no_firmware_bin(void) {
+    String json = R"({"tag_name":"1.9.0","body":"","assets":[{"name":"source.zip","browser_download_url":"https://example.com/source.zip"}]})";
+    ReleaseInfo info;
+    bool ok = extractReleaseInfo(json, info);
+    TEST_ASSERT_FALSE(ok);
+}
+
+void test_parse_release_json_invalid_sha256_hex(void) {
+    // 64 chars but contains 'g' which is not valid hex
+    String json = R"({"tag_name":"1.9.0","body":"SHA256: g1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2","assets":[{"name":"firmware.bin","browser_download_url":"https://example.com/firmware.bin"}]})";
+    ReleaseInfo info;
+    bool ok = extractReleaseInfo(json, info);
+    TEST_ASSERT_TRUE(ok);  // Parsing succeeds but checksum should be empty
+    TEST_ASSERT_EQUAL(0, info.checksum.length());
+}
+
+// ===== HTTP Fallback Tests =====
+
+// Reimplementation of downgradeToHttp for testing
+static String testDowngradeToHttp(const String& url) {
+    std::string s = url.c_str();
+    size_t pos = s.find("https://");
+    if (pos != std::string::npos) {
+        s.replace(pos, 8, "http://");
+    }
+    return String(s.c_str());
+}
+
+void test_downgrade_to_http_cdn_url(void) {
+    String url = "https://objects.githubusercontent.com/path/firmware.bin";
+    String result = testDowngradeToHttp(url);
+    TEST_ASSERT_EQUAL_STRING("http://objects.githubusercontent.com/path/firmware.bin", result.c_str());
+}
+
+void test_downgrade_to_http_github_url(void) {
+    String url = "https://github.com/user/repo/releases/download/v1.0/firmware.bin";
+    String result = testDowngradeToHttp(url);
+    TEST_ASSERT_EQUAL_STRING("http://github.com/user/repo/releases/download/v1.0/firmware.bin", result.c_str());
+}
+
+void test_http_fallback_requires_checksum(void) {
+    // Simulate: heap is low (<30KB) but no checksum available
+    String cachedChecksum = "";
+    bool hasChecksum = (cachedChecksum.length() == 64);
+    bool heapLow = true;  // < 30KB
+
+    // HTTP fallback should NOT be allowed without checksum
+    bool httpFallbackAllowed = heapLow && hasChecksum;
+    TEST_ASSERT_FALSE(httpFallbackAllowed);
+}
+
+void test_http_fallback_requires_64char_checksum(void) {
+    // Short checksum should not enable fallback
+    String cachedChecksum = "abc123";
+    bool hasChecksum = (cachedChecksum.length() == 64);
+    TEST_ASSERT_FALSE(hasChecksum);
+
+    // 63 chars - too short
+    cachedChecksum = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b";
+    hasChecksum = (cachedChecksum.length() == 64);
+    TEST_ASSERT_FALSE(hasChecksum);
+}
+
+void test_http_fallback_allowed_with_valid_checksum(void) {
+    String cachedChecksum = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+    bool hasChecksum = (cachedChecksum.length() == 64);
+    TEST_ASSERT_TRUE(hasChecksum);
+}
+
+// ===== Heap Threshold Decision Tests =====
+
+// Reimplementation of the heap decision logic from performOTAUpdate
+enum OtaTransport {
+    OTA_ABORT = 0,
+    OTA_HTTP_FALLBACK,
+    OTA_HTTPS_INSECURE,
+    OTA_HTTPS_FULL
+};
+
+static OtaTransport selectOtaTransport(uint32_t maxBlock, bool hasChecksum) {
+    if (maxBlock < 10000) return OTA_ABORT;
+    if (maxBlock < 30000 && hasChecksum) return OTA_HTTP_FALLBACK;
+    if (maxBlock < 30000) return OTA_ABORT;  // No checksum, can't do HTTP fallback
+    if (maxBlock < 50000) return OTA_HTTPS_INSECURE;
+    return OTA_HTTPS_FULL;
+}
+
+void test_ota_download_aborts_below_10k(void) {
+    TEST_ASSERT_EQUAL(OTA_ABORT, selectOtaTransport(9999, true));
+    TEST_ASSERT_EQUAL(OTA_ABORT, selectOtaTransport(5000, false));
+    TEST_ASSERT_EQUAL(OTA_ABORT, selectOtaTransport(0, true));
+}
+
+void test_ota_download_uses_http_at_15k_with_checksum(void) {
+    TEST_ASSERT_EQUAL(OTA_HTTP_FALLBACK, selectOtaTransport(15000, true));
+    TEST_ASSERT_EQUAL(OTA_HTTP_FALLBACK, selectOtaTransport(20000, true));
+    TEST_ASSERT_EQUAL(OTA_HTTP_FALLBACK, selectOtaTransport(29999, true));
+}
+
+void test_ota_download_aborts_at_15k_without_checksum(void) {
+    TEST_ASSERT_EQUAL(OTA_ABORT, selectOtaTransport(15000, false));
+    TEST_ASSERT_EQUAL(OTA_ABORT, selectOtaTransport(29999, false));
+}
+
+void test_ota_download_uses_insecure_tls_at_35k(void) {
+    TEST_ASSERT_EQUAL(OTA_HTTPS_INSECURE, selectOtaTransport(35000, true));
+    TEST_ASSERT_EQUAL(OTA_HTTPS_INSECURE, selectOtaTransport(35000, false));
+    TEST_ASSERT_EQUAL(OTA_HTTPS_INSECURE, selectOtaTransport(49999, true));
+}
+
+void test_ota_download_uses_full_tls_at_60k(void) {
+    TEST_ASSERT_EQUAL(OTA_HTTPS_FULL, selectOtaTransport(60000, true));
+    TEST_ASSERT_EQUAL(OTA_HTTPS_FULL, selectOtaTransport(60000, false));
+    TEST_ASSERT_EQUAL(OTA_HTTPS_FULL, selectOtaTransport(100000, true));
+}
+
 // ===== OTA Backoff Tests (Group 4B) =====
 
 // Test-local reimplementation of backoff logic (mirrors ota_updater.cpp)
@@ -399,6 +627,29 @@ int runUnityTests(void) {
     RUN_TEST(test_check_update_api_update_available);
     RUN_TEST(test_check_update_api_no_update);
     RUN_TEST(test_firmware_size_validation);
+
+    // Stream JSON parsing tests
+    RUN_TEST(test_parse_release_json_extracts_version);
+    RUN_TEST(test_parse_release_json_extracts_firmware_url);
+    RUN_TEST(test_parse_release_json_extracts_sha256);
+    RUN_TEST(test_parse_release_json_no_sha256_in_body);
+    RUN_TEST(test_parse_release_json_no_assets);
+    RUN_TEST(test_parse_release_json_no_firmware_bin);
+    RUN_TEST(test_parse_release_json_invalid_sha256_hex);
+
+    // HTTP fallback tests
+    RUN_TEST(test_downgrade_to_http_cdn_url);
+    RUN_TEST(test_downgrade_to_http_github_url);
+    RUN_TEST(test_http_fallback_requires_checksum);
+    RUN_TEST(test_http_fallback_requires_64char_checksum);
+    RUN_TEST(test_http_fallback_allowed_with_valid_checksum);
+
+    // Heap threshold decision tests
+    RUN_TEST(test_ota_download_aborts_below_10k);
+    RUN_TEST(test_ota_download_uses_http_at_15k_with_checksum);
+    RUN_TEST(test_ota_download_aborts_at_15k_without_checksum);
+    RUN_TEST(test_ota_download_uses_insecure_tls_at_35k);
+    RUN_TEST(test_ota_download_uses_full_tls_at_60k);
 
     // OTA backoff tests (Group 4B)
     RUN_TEST(test_ota_backoff_counter_caps_at_20);

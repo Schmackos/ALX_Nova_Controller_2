@@ -20,7 +20,7 @@ public:
             auto cfg = _bus.config();
             cfg.spi_host    = SPI2_HOST;
             cfg.spi_mode    = 0;
-            cfg.freq_write  = 40000000;   /* 40 MHz — ST7735S supports up to ~62 MHz */
+            cfg.freq_write  = 27000000;   /* 27 MHz — safe max for ST7735S on breadboard */
             cfg.freq_read   = 16000000;
             cfg.pin_sclk    = 12;
             cfg.pin_mosi    = 11;
@@ -32,7 +32,10 @@ public:
 
         _panel.setBus(&_bus);
 
-        /* Panel configuration (ST7735S BLACKTAB) */
+        /* Panel configuration (ST7735S BLACKTAB)
+           memory_width/height = 128x160 (GM=001 mode, confirmed working in
+           LovyanGFX issue #206). If image is shifted but not diagonal,
+           switch to 132x162 with offset_x=2, offset_y=1. */
         {
             auto cfg = _panel.config();
             cfg.pin_cs        = 10;
@@ -40,11 +43,13 @@ public:
             cfg.pin_busy      = -1;
             cfg.panel_width   = 128;
             cfg.panel_height  = 160;
-            cfg.memory_width  = 132;   /* ST7735 internal VRAM width */
-            cfg.memory_height = 162;   /* ST7735 internal VRAM height */
-            cfg.offset_x      = 2;    /* BLACKTAB horizontal offset */
-            cfg.offset_y      = 1;    /* BLACKTAB vertical offset */
-            cfg.offset_rotation = 2;  /* BLACKTAB offset rotation correction */
+            cfg.memory_width  = 128;   /* GM=001: GRAM matches panel */
+            cfg.memory_height = 160;
+            cfg.offset_x      = 0;    /* No offset when memory = panel */
+            cfg.offset_y      = 0;
+            cfg.offset_rotation = 0;  /* Match TFT_eSPI BLACKTAB MADCTL */
+            cfg.dlen_16bit    = false; /* 8-bit SPI commands */
+            cfg.bus_shared    = false; /* SPI bus not shared */
             cfg.rgb_order     = true;  /* true = RGB data from LVGL (BLACKTAB panel handles BGR via MADCTL) */
             cfg.invert        = false;
             _panel.config(cfg);

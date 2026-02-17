@@ -99,6 +99,10 @@ AudioAnalysis i2s_audio_get_analysis();
 AudioDiagnostics i2s_audio_get_diagnostics();
 bool i2s_audio_set_sample_rate(uint32_t rate);
 
+// Tear down / restore I2S drivers to free ~16KB DMA buffers during OTA
+void i2s_audio_uninstall_drivers();
+void i2s_audio_reinstall_drivers();
+
 // Waveform: returns true if a new 256-point snapshot is available
 // out must point to WAVEFORM_BUFFER_SIZE bytes
 // adcIndex: 0 = ADC1 (default), 1 = ADC2

@@ -135,6 +135,8 @@ public:
   String cachedLatestVersion;
   unsigned long updateDiscoveredTime = 0;
 
+  bool otaHttpFallback = false;  // True when HTTP fallback was used (SHA256-verified)
+
   // ===== OTA Just Updated State =====
   bool justUpdated = false;
   String previousFirmwareVersion;

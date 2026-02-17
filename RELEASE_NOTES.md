@@ -62,6 +62,36 @@ bug on ESP32-S3 (invalid register write in dma_end_callback). (`448fe70`)
 
 
 ## Bug Fixes
+- [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
+
+OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
+I/O buffers (~32KB) competed with I2S DMA for scarce internal SRAM. Instead
+of tearing down audio during checks, use GCC --wrap to redirect all MbedTLS
+allocations to PSRAM via heap_caps_calloc(MALLOC_CAP_SPIRAM). Audio runs
+uninterrupted during OTA checks. Also includes OTA stream-parse optimization,
+HTTP fallback for downloads, and I2S driver teardown safety for OTA downloads. (`0b26275`)
+- [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
+
+OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
+I/O buffers (~32KB) competed with I2S DMA for scarce internal SRAM. Instead
+of tearing down audio during checks, use GCC --wrap to redirect all MbedTLS
+allocations to PSRAM via heap_caps_calloc(MALLOC_CAP_SPIRAM). Audio runs
+uninterrupted during OTA checks. Also includes OTA stream-parse optimization,
+HTTP fallback for downloads, and I2S driver teardown safety for OTA downloads. (`01dd3a1`)
+- [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
+
+OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
+I/O buffers (~32KB) competed with I2S DMA for scarce internal SRAM. Instead
+of tearing down audio during checks, use GCC --wrap to redirect all MbedTLS
+allocations to PSRAM via heap_caps_calloc(MALLOC_CAP_SPIRAM). Audio runs
+uninterrupted during OTA checks. Also includes OTA stream-parse optimization,
+HTTP fallback for downloads, and I2S driver teardown safety for OTA downloads. (`91ceec1`)
+- [2026-02-17] fix: Clean up LovyanGFX flush path with DMA and RGB565_SWAPPED format
+
+Remove diagnostic stripe rendering and flush logging from gui_manager.
+Switch to pushImageDMA/waitDMA for proper DMA-accelerated display flush
+and use RGB565_SWAPPED color format to eliminate manual byte swapping.
+Simplify buffer allocation to partial-render mode only. (`166e806`)
 - [2026-02-17] fix: Clean up LovyanGFX flush path with DMA and RGB565_SWAPPED format
 
 Remove diagnostic stripe rendering and flush logging from gui_manager.

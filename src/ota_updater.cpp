@@ -4,6 +4,7 @@
 #include "debug_serial.h"
 #include "utils.h"
 #include "buzzer_handler.h"
+#include "i2s_audio.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -13,8 +14,33 @@
 #include <time.h>
 #include <Preferences.h>
 #include <esp_task_wdt.h>
+#include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+// ===== MbedTLS PSRAM Allocation Override =====
+// Redirect MbedTLS memory allocations to PSRAM via GCC linker --wrap.
+// The precompiled libmbedcrypto.a calls esp_mbedtls_mem_calloc() for all
+// internal allocations (SSL contexts, X.509 cert chains, I/O buffers ~32KB).
+// By default these go to internal SRAM, competing with I2S DMA and WiFi.
+// This wrapper sends them to PSRAM instead, keeping internal SRAM free
+// for audio and network buffers that require DMA-capable memory.
+extern "C" {
+
+void *__wrap_esp_mbedtls_mem_calloc(size_t n, size_t size) {
+  // Try PSRAM first, fall back to internal SRAM if PSRAM unavailable
+  void *ptr = heap_caps_calloc(n, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  if (!ptr) {
+    ptr = heap_caps_calloc(n, size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+  }
+  return ptr;
+}
+
+void __wrap_esp_mbedtls_mem_free(void *ptr) {
+  heap_caps_free(ptr);
+}
+
+}  // extern "C"
 
 // Root and intermediate CA certificates for GitHub
 // (api.github.com, github.com, and objects.githubusercontent.com)
@@ -160,7 +186,8 @@ void broadcastUpdateStatus() {
   doc["latestVersion"] = appState.cachedLatestVersion;
   doc["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
   doc["amplifierInUse"] = appState.amplifierState;
-  
+  doc["httpFallback"] = appState.otaHttpFallback;
+
   if (appState.otaTotalBytes > 0) {
     doc["bytesDownloaded"] = appState.otaProgressBytes;
     doc["totalBytes"] = appState.otaTotalBytes;
@@ -327,12 +354,16 @@ void handleGetReleaseNotes() {
   
   JsonDocument doc;
   if (httpCode == HTTP_CODE_OK) {
-    String response = https.getString();
-    
-    // Parse GitHub API response
+    // Stream-parse with filter — only extract "body" field to save heap
+    JsonDocument bodyFilter;
+    bodyFilter["body"] = true;
+
     JsonDocument apiDoc;
-    DeserializationError error = deserializeJson(apiDoc, response);
-    
+    WiFiClient* streamPtr = https.getStreamPtr();
+    DeserializationError error = deserializeJson(apiDoc, *streamPtr,
+        DeserializationOption::Filter(bodyFilter));
+    https.end();  // Close AFTER deserialization
+
     if (!error && apiDoc["body"].is<String>()) {
       String releaseNotes = apiDoc["body"].as<String>();
       doc["success"] = true;
@@ -345,14 +376,14 @@ void handleGetReleaseNotes() {
       doc["notes"] = "Could not parse release notes for version " + version;
     }
   } else {
+    https.end();
     doc["success"] = false;
     doc["message"] = "Release notes not found";
     doc["notes"] = "No release notes available for version " + version + "\n\nYou can view releases at:\nhttps://github.com/" + String(githubRepoOwner) + "/" + String(githubRepoName) + "/releases";
   }
-  
+
   String json;
   serializeJson(doc, json);
-  https.end();
   server.send(200, "application/json", json);
 }
 
@@ -480,14 +511,22 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   }
 
   LOG_I("[OTA] HTTPS request successful");
-  
-  String payload = https.getString();
-  https.end();
-  
-  // Parse JSON response
+
+  // Stream-parse JSON directly from network — avoids 5-20KB heap String copy.
+  // Filter to only store the fields we need (tag_name, body, assets[].name/url).
+  JsonDocument filter;
+  filter["tag_name"] = true;
+  filter["body"] = true;
+  JsonObject assetFilter = filter["assets"][0].to<JsonObject>();
+  assetFilter["name"] = true;
+  assetFilter["browser_download_url"] = true;
+
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-  
+  WiFiClient* streamPtr = https.getStreamPtr();
+  DeserializationError error = deserializeJson(doc, *streamPtr,
+      DeserializationOption::Filter(filter));
+  https.end();  // Close AFTER deserialization completes
+
   if (error) {
     LOG_E("[OTA] JSON parsing failed: %s", error.c_str());
     return false;
@@ -589,71 +628,16 @@ String calculateSHA256(uint8_t* data, size_t len) {
   return hashString;
 }
 
-bool performOTAUpdate(String firmwareUrl) {
-  appState.otaInProgress = true;
-  setOTAProgress("preparing", "Preparing for update...", 0);
-
-  LOG_I("[OTA] Starting OTA update");
-  LOG_I("[OTA] Downloading from: %s", firmwareUrl.c_str());
-
-  // TLS handshake needs ~40-50KB contiguous heap for MbedTLS buffers
-  uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 30000) {
-    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<30KB)", (unsigned long)maxBlock);
-    setOTAProgress("error", "Insufficient memory for secure download", 0);
-    appState.otaInProgress = false;
-    return false;
-  }
-
-  WiFiClientSecure client;
-
-  if (maxBlock < 50000) {
-    LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
-    client.setInsecure();
-  } else if (appState.enableCertValidation && isNtpSynced()) {
-    LOG_I("[OTA] Certificate validation enabled");
-    client.setCACert(GITHUB_ROOT_CA);
-  } else {
-    if (appState.enableCertValidation && !isNtpSynced()) {
-      LOG_W("[OTA] NTP not synced, skipping cert validation (clock not set)");
-    } else {
-      LOG_W("[OTA] Certificate validation disabled (insecure mode)");
-    }
-    client.setInsecure();
-  }
-
-  client.setTimeout(30000);
-
-  HTTPClient https;
-  if (!https.begin(client, firmwareUrl)) {
-    LOG_E("[OTA] Failed to initialize HTTPS connection");
-    setOTAProgress("error", "Failed to initialize secure connection", 0);
-    appState.otaInProgress = false;
-    return false;
-  }
-
-  https.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  https.setTimeout(30000);
-
-  setOTAProgress("preparing", "Connecting to server...", 0);
-
-  int httpCode = https.GET();
-
-  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY && httpCode != HTTP_CODE_FOUND) {
-    LOG_E("[OTA] Failed to download firmware, HTTP code: %d", httpCode);
-    https.end();
-    setOTAProgress("error", "Failed to connect to server", 0);
-    appState.otaInProgress = false;
-    return false;
-  }
-
-  int contentLength = https.getSize();
+// Shared download+flash logic used by both HTTPS and HTTP paths.
+// Streams firmware from an already-connected HTTPClient, writes to flash,
+// computes SHA256 on the fly, and verifies against cachedChecksum.
+static bool performDownloadAndFlash(HTTPClient& http, int contentLength) {
   appState.otaTotalBytes = contentLength;
   LOG_I("[OTA] Firmware size: %d bytes (%.2f KB)", contentLength, contentLength / 1024.0);
 
   if (contentLength <= 0) {
     LOG_E("[OTA] Invalid firmware size");
-    https.end();
+    http.end();
     setOTAProgress("error", "Invalid firmware file", 0);
     appState.otaInProgress = false;
     return false;
@@ -663,7 +647,7 @@ bool performOTAUpdate(String firmwareUrl) {
   int freeSpace = ESP.getFreeSketchSpace() - 0x1000;
   if (contentLength > freeSpace) {
     LOG_E("[OTA] Not enough space, need: %d, available: %d", contentLength, freeSpace);
-    https.end();
+    http.end();
     setOTAProgress("error", "Not enough storage space", 0);
     appState.otaInProgress = false;
     return false;
@@ -675,7 +659,7 @@ bool performOTAUpdate(String firmwareUrl) {
   // Begin OTA update
   if (!Update.begin(contentLength)) {
     LOG_E("[OTA] Failed to begin OTA, free space: %d", ESP.getFreeSketchSpace());
-    https.end();
+    http.end();
     setOTAProgress("error", "Failed to initialize update", 0);
     appState.otaInProgress = false;
     return false;
@@ -686,7 +670,7 @@ bool performOTAUpdate(String firmwareUrl) {
 
   LOG_I("[OTA] Download started, writing to flash");
 
-  WiFiClient* stream = https.getStreamPtr();
+  WiFiClient* stream = http.getStreamPtr();
 
   size_t written = 0;
   uint8_t buffer[1024];
@@ -704,7 +688,7 @@ bool performOTAUpdate(String firmwareUrl) {
     LOG_I("[OTA] Checksum verification enabled");
   }
 
-  while (https.connected() && (written < contentLength)) {
+  while (http.connected() && (written < (size_t)contentLength)) {
     size_t available = stream->available();
     if (available) {
       int bytesRead = stream->readBytes(buffer, min(available, sizeof(buffer)));
@@ -714,13 +698,13 @@ bool performOTAUpdate(String firmwareUrl) {
         mbedtls_md_update(&ctx, buffer, bytesRead);
       }
 
-      if (Update.write(buffer, bytesRead) != bytesRead) {
+      if (Update.write(buffer, bytesRead) != (size_t)bytesRead) {
         LOG_E("[OTA] Error writing firmware data");
         Update.abort();
         if (calculatingChecksum) {
           mbedtls_md_free(&ctx);
         }
-        https.end();
+        http.end();
         setOTAProgress("error", "Write error during download", 0);
         appState.otaInProgress = false;
         return false;
@@ -743,7 +727,7 @@ bool performOTAUpdate(String firmwareUrl) {
     delay(1);  // Yield to FreeRTOS scheduler
   }
 
-  https.end();
+  http.end();
 
   // Verify checksum if available
   if (calculatingChecksum) {
@@ -801,6 +785,134 @@ bool performOTAUpdate(String firmwareUrl) {
     appState.otaInProgress = false;
     return false;
   }
+}
+
+// Downgrade HTTPS URL to HTTP for heap-constrained downloads.
+// Safety: only the binary payload is fetched over HTTP — integrity is verified
+// by SHA256 checksum obtained from the authenticated HTTPS version check.
+static String downgradeToHttp(const String& url) {
+    String httpUrl = url;
+    httpUrl.replace("https://", "http://");
+    return httpUrl;
+}
+
+bool performOTAUpdate(String firmwareUrl) {
+  appState.otaInProgress = true;
+  appState.otaHttpFallback = false;
+  setOTAProgress("preparing", "Preparing for update...", 0);
+
+  LOG_I("[OTA] Starting OTA update");
+  LOG_I("[OTA] Downloading from: %s", firmwareUrl.c_str());
+
+  // Heap-based transport selection:
+  //   >= 50KB: HTTPS with full cert validation (~43KB TLS cost)
+  //   30-50KB: HTTPS insecure (no cert check, ~35KB TLS cost)
+  //   10-30KB + SHA256: HTTP fallback (~4KB cost, integrity via SHA256)
+  //   < 10KB: Abort — not enough even for plain HTTP
+  uint32_t maxBlock = ESP.getMaxAllocHeap();
+  bool hasChecksum = (appState.cachedChecksum.length() == 64);
+
+  LOG_I("[OTA] Heap largest block: %lu bytes, checksum available: %s",
+        (unsigned long)maxBlock, hasChecksum ? "yes" : "no");
+
+  if (maxBlock < 10000) {
+    LOG_E("[OTA] Heap critically low: %lu bytes (<10KB), aborting", (unsigned long)maxBlock);
+    setOTAProgress("error", "Insufficient memory for download", 0);
+    appState.otaInProgress = false;
+    return false;
+  }
+
+  // HTTP fallback path: plain WiFiClient, no TLS overhead
+  if (maxBlock < 30000 && hasChecksum) {
+    LOG_W("[OTA] Heap too low for TLS (%lu bytes), using HTTP fallback with SHA256 verification",
+          (unsigned long)maxBlock);
+    appState.otaHttpFallback = true;
+    appState.markOTADirty();
+
+    String httpUrl = downgradeToHttp(firmwareUrl);
+    LOG_I("[OTA] HTTP fallback URL: %s", httpUrl.c_str());
+
+    WiFiClient plainClient;
+    plainClient.setTimeout(30);  // 30 seconds
+
+    HTTPClient http;
+    if (!http.begin(plainClient, httpUrl)) {
+      LOG_E("[OTA] Failed to initialize HTTP connection");
+      setOTAProgress("error", "Failed to initialize connection", 0);
+      appState.otaInProgress = false;
+      return false;
+    }
+
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.setTimeout(30000);
+
+    setOTAProgress("preparing", "Connecting (HTTP fallback)...", 0);
+
+    int httpCode = http.GET();
+    if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY && httpCode != HTTP_CODE_FOUND) {
+      LOG_E("[OTA] HTTP fallback failed, code: %d", httpCode);
+      http.end();
+      setOTAProgress("error", "HTTP fallback failed to connect", 0);
+      appState.otaInProgress = false;
+      return false;
+    }
+
+    return performDownloadAndFlash(http, http.getSize());
+  }
+
+  // HTTPS fallback without checksum — refuse HTTP when integrity can't be verified
+  if (maxBlock < 30000) {
+    LOG_E("[OTA] Heap too low for TLS (%lu bytes) and no checksum for HTTP fallback",
+          (unsigned long)maxBlock);
+    setOTAProgress("error", "Insufficient memory and no checksum for fallback", 0);
+    appState.otaInProgress = false;
+    return false;
+  }
+
+  // HTTPS path (>= 30KB heap available)
+  WiFiClientSecure client;
+
+  if (maxBlock < 50000) {
+    LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
+    client.setInsecure();
+  } else if (appState.enableCertValidation && isNtpSynced()) {
+    LOG_I("[OTA] Certificate validation enabled");
+    client.setCACert(GITHUB_ROOT_CA);
+  } else {
+    if (appState.enableCertValidation && !isNtpSynced()) {
+      LOG_W("[OTA] NTP not synced, skipping cert validation (clock not set)");
+    } else {
+      LOG_W("[OTA] Certificate validation disabled (insecure mode)");
+    }
+    client.setInsecure();
+  }
+
+  client.setTimeout(30000);
+
+  HTTPClient https;
+  if (!https.begin(client, firmwareUrl)) {
+    LOG_E("[OTA] Failed to initialize HTTPS connection");
+    setOTAProgress("error", "Failed to initialize secure connection", 0);
+    appState.otaInProgress = false;
+    return false;
+  }
+
+  https.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  https.setTimeout(30000);
+
+  setOTAProgress("preparing", "Connecting to server...", 0);
+
+  int httpCode = https.GET();
+
+  if (httpCode != HTTP_CODE_OK && httpCode != HTTP_CODE_MOVED_PERMANENTLY && httpCode != HTTP_CODE_FOUND) {
+    LOG_E("[OTA] Failed to download firmware, HTTP code: %d", httpCode);
+    https.end();
+    setOTAProgress("error", "Failed to connect to server", 0);
+    appState.otaInProgress = false;
+    return false;
+  }
+
+  return performDownloadAndFlash(https, https.getSize());
 }
 
 // ===== OTA Success Flag Functions =====
@@ -1064,7 +1176,8 @@ static void otaDownloadTask(void* param) {
     ESP.restart();
   } else {
     LOG_W("[OTA] Update failed");
-    appState.audioPaused = false;  // Resume audio capture
+    i2s_audio_reinstall_drivers();  // Restore I2S DMA buffers
+    appState.audioPaused = false;   // Resume audio capture
     appState.otaInProgress = false;
     appState.updateDiscoveredTime = 0;
     appState.setFSMState(STATE_IDLE);
@@ -1090,9 +1203,10 @@ void startOTADownloadTask() {
   appState.setFSMState(STATE_OTA_UPDATE);
   appState.markOTADirty();
 
-  // Pause audio capture to prevent I2S driver conflicts during OTA
+  // Pause audio capture and free I2S DMA buffers (~16KB internal SRAM)
   appState.audioPaused = true;
   vTaskDelay(pdMS_TO_TICKS(50));  // Ensure audio task exits i2s_read()
+  i2s_audio_uninstall_drivers();  // Free ~16KB DMA buffers for TLS
 
   BaseType_t result = xTaskCreatePinnedToCore(
     otaDownloadTask, "OTA_DL", TASK_STACK_SIZE_OTA,
@@ -1101,7 +1215,8 @@ void startOTADownloadTask() {
 
   if (result != pdPASS) {
     LOG_E("[OTA] Failed to create download task");
-    appState.audioPaused = false;  // Resume audio if task creation failed
+    i2s_audio_reinstall_drivers();  // Restore I2S if task creation failed
+    appState.audioPaused = false;
     appState.otaInProgress = false;
     setOTAProgress("error", "Failed to start update task", 0);
     appState.setFSMState(STATE_IDLE);
@@ -1117,15 +1232,16 @@ static void otaCheckTaskFunc(void* param) {
   // blocking loopTask from feeding its watchdog for >15s
   wdtSuspendLoopTask();
 
-  // Heap pre-flight: must match the inner TLS threshold (30KB) used by
-  // getLatestReleaseInfo(). When heap is 30-50KB, TLS runs in insecure mode
-  // (no cert validation) which needs only ~15-20KB for the session.
+  // Heap pre-flight: MbedTLS I/O buffers (~32KB) are allocated from PSRAM
+  // via the __wrap_esp_mbedtls_mem_calloc linker override, so internal SRAM
+  // only needs enough for WiFi/lwIP packet buffers (~10-15KB).
   uint32_t maxBlock = ESP.getMaxAllocHeap();
   if (maxBlock < 30000) {
     LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<30KB), skipping", (unsigned long)maxBlock);
     _otaConsecutiveFailures++;
     if (_otaConsecutiveFailures > 20) _otaConsecutiveFailures = 20;
     appState.markOTADirty();
+    wdtResumeLoopTask();
     otaCheckTaskHandle = NULL;
     vTaskDelete(NULL);
     return;

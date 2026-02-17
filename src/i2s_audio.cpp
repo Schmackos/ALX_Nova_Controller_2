@@ -1137,6 +1137,21 @@ I2sStaticConfig i2s_audio_get_static_config() {
     return cfg;
 }
 
+void i2s_audio_uninstall_drivers() {
+    LOG_I("[Audio] Uninstalling I2S drivers to free DMA buffers");
+    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
+    if (_adc2InitOk) i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC2);
+}
+
+void i2s_audio_reinstall_drivers() {
+    LOG_I("[Audio] Reinstalling I2S drivers");
+    if (_adc2InitOk) _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
+    i2s_configure_adc1(_currentSampleRate);
+    // Re-apply pulldown on DOUT2 after driver reconfigure
+    gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
+    LOG_I("[Audio] I2S drivers reinstalled at %lu Hz", _currentSampleRate);
+}
+
 bool i2s_audio_set_sample_rate(uint32_t rate) {
     if (!audio_validate_sample_rate(rate)) return false;
     if (rate == _currentSampleRate) return true;
@@ -1173,6 +1188,8 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 }
 int i2s_audio_get_num_adcs() { return _nativeNumAdcs; }
 void audio_periodic_dump() {}
+void i2s_audio_uninstall_drivers() {}
+void i2s_audio_reinstall_drivers() {}
 I2sStaticConfig i2s_audio_get_static_config() {
     I2sStaticConfig cfg = {};
     cfg.adc[0].isMaster = true;

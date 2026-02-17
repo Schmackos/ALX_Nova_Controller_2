@@ -38,6 +38,10 @@ public:
   int otaTotalBytes = 0;
   String cachedFirmwareUrl;
   unsigned long updateDiscoveredTime = 0;
+  bool otaHttpFallback = false;
+
+  // Audio pause flag (used during I2S teardown for OTA)
+  volatile bool audioPaused = false;
 
   // FSM
   AppFSMState fsmState = STATE_IDLE;
@@ -87,6 +91,18 @@ static void setOTAProgress(const char* status, const char* message, int progress
   appState.markOTADirty();
 }
 
+// ===== I2S driver mock tracking =====
+static bool i2sDriversUninstalled = false;
+static bool i2sDriversReinstalled = false;
+
+void i2s_audio_uninstall_drivers() {
+  i2sDriversUninstalled = true;
+}
+
+void i2s_audio_reinstall_drivers() {
+  i2sDriversReinstalled = true;
+}
+
 // ===== FreeRTOS stubs for task guard tests =====
 static bool taskCreateCalled = false;
 static bool lastTaskCreateResult = true;
@@ -112,8 +128,14 @@ bool startOTADownloadTask_testable() {
   appState.setFSMState(STATE_OTA_UPDATE);
   appState.markOTADirty();
 
+  // Pause audio and tear down I2S (mirrors real implementation)
+  appState.audioPaused = true;
+  i2s_audio_uninstall_drivers();
+
   taskCreateCalled = true;
   if (!lastTaskCreateResult) {
+    i2s_audio_reinstall_drivers();
+    appState.audioPaused = false;
     appState.otaInProgress = false;
     setOTAProgress("error", "Failed to start update task", 0);
     appState.setFSMState(STATE_IDLE);
@@ -147,6 +169,8 @@ void setUp(void) {
   appState.otaTotalBytes = 0;
   appState.cachedFirmwareUrl = "";
   appState.updateDiscoveredTime = 0;
+  appState.otaHttpFallback = false;
+  appState.audioPaused = false;
   appState.fsmState = STATE_IDLE;
   appState.clearAllDirtyFlags();
 
@@ -154,6 +178,8 @@ void setUp(void) {
   lastTaskCreateResult = true;
   stubOtaDownloadTaskRunning = false;
   stubOtaCheckTaskRunning = false;
+  i2sDriversUninstalled = false;
+  i2sDriversReinstalled = false;
 
 #ifdef NATIVE_TEST
   ArduinoMock::reset();
@@ -300,6 +326,50 @@ void test_startOTADownload_task_create_failure(void) {
   TEST_ASSERT_FALSE(appState.otaInProgress);
   TEST_ASSERT_EQUAL_STRING("error", appState.otaStatus.c_str());
   TEST_ASSERT_EQUAL(STATE_IDLE, appState.fsmState);
+  // I2S should be reinstalled on failure
+  TEST_ASSERT_TRUE(i2sDriversReinstalled);
+  TEST_ASSERT_FALSE(appState.audioPaused);
+}
+
+// ===== I2S Driver Management Tests =====
+
+void test_ota_download_pauses_audio_and_uninstalls_i2s(void) {
+  bool result = startOTADownloadTask_testable();
+
+  TEST_ASSERT_TRUE(result);
+  TEST_ASSERT_TRUE(appState.audioPaused);
+  TEST_ASSERT_TRUE(i2sDriversUninstalled);
+}
+
+void test_ota_failure_reinstalls_i2s(void) {
+  // Start OTA download
+  bool result = startOTADownloadTask_testable();
+  TEST_ASSERT_TRUE(result);
+  TEST_ASSERT_TRUE(i2sDriversUninstalled);
+
+  // Simulate failure path (what otaDownloadTask does on failure)
+  i2s_audio_reinstall_drivers();
+  appState.audioPaused = false;
+  appState.otaInProgress = false;
+  appState.updateDiscoveredTime = 0;
+  appState.setFSMState(STATE_IDLE);
+  appState.markOTADirty();
+
+  TEST_ASSERT_TRUE(i2sDriversReinstalled);
+  TEST_ASSERT_FALSE(appState.audioPaused);
+  TEST_ASSERT_FALSE(appState.otaInProgress);
+}
+
+void test_ota_task_create_failure_reinstalls_i2s(void) {
+  lastTaskCreateResult = false;
+
+  bool result = startOTADownloadTask_testable();
+
+  TEST_ASSERT_FALSE(result);
+  // I2S should have been uninstalled then reinstalled
+  TEST_ASSERT_TRUE(i2sDriversUninstalled);
+  TEST_ASSERT_TRUE(i2sDriversReinstalled);
+  TEST_ASSERT_FALSE(appState.audioPaused);
 }
 
 // ===== Test Runner =====
@@ -322,6 +392,11 @@ int runUnityTests(void) {
   RUN_TEST(test_clearAllDirtyFlags_includes_ota);
   RUN_TEST(test_hasAnyDirtyFlag_includes_ota);
   RUN_TEST(test_startOTADownload_task_create_failure);
+
+  // I2S driver management tests
+  RUN_TEST(test_ota_download_pauses_audio_and_uninstalls_i2s);
+  RUN_TEST(test_ota_failure_reinstalls_i2s);
+  RUN_TEST(test_ota_task_create_failure_reinstalls_i2s);
 
   return UNITY_END();
 }

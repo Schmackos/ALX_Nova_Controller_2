@@ -58,12 +58,14 @@ static unsigned long last_dashboard_refresh = 0;
 
 /* LVGL display flush callback — matches official LVGL+LovyanGFX driver.
    Uses RGB565_SWAPPED format: LVGL renders directly in SPI byte order,
-   so no manual byte swap is needed in the flush path. */
+   so no manual byte swap is needed in the flush path.
+   Cast to swap565_t tells LovyanGFX the data is already in SPI wire format,
+   which triggers the direct write_bytes DMA path (no pixel conversion). */
 static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     uint32_t w = lv_area_get_width(area);
     uint32_t h = lv_area_get_height(area);
 
-    tft.pushImageDMA(area->x1, area->y1, w, h, (uint16_t *)px_map);
+    tft.pushImageDMA(area->x1, area->y1, w, h, (lgfx::swap565_t *)px_map);
     tft.waitDMA();
 
     lv_display_flush_ready(disp);
