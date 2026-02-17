@@ -9,7 +9,12 @@
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-17] fix: Combined dBFS readout now uses smoothed VU values matching per-channel
+
+Combined dBFS was computed from raw unsmoothed RMS (backend) while
+per-channel dBFS used smoothed VU values (client-side), causing the
+total to appear lower than either channel during signal decay. (`c989eef`)
+
 
 ## Technical Details
 
@@ -483,6 +488,13 @@ Fix test VU_DECAY_MS mismatch: test had 650ms but production header has
 300ms. Updated test_vu_decay_ramp assertions accordingly. (`de7cf89`)
 
 ## Bug Fixes
+- [2026-02-17] fix: Native test compilation and WebSocket JSON key naming
+
+Add NATIVE_TEST guards to app_state.h, audio_quality.h, config.h so
+tests can include them without ESP32 dependencies. Fix dsp_pipeline.cpp
+app_state include order and guard audio_quality call. Fix smart_sensing
+JSON keys that had erroneous "appState." prefix. Add new DSP preset
+tests and expand DSP swap/emergency limiter test coverage. (`545f8e5`)
 - [2026-02-17] fix: Native test compilation and WebSocket JSON key naming
 
 Add NATIVE_TEST guards to app_state.h, audio_quality.h, config.h so

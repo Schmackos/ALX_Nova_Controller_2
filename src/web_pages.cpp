@@ -6207,6 +6207,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (dbSegL) dbSegL.textContent = formatDbFS(vu1);
                 if (dbSegR) dbSegR.textContent = formatDbFS(vu2);
             }
+            // Update combined dBFS readout from smoothed VU (matches per-channel source)
+            var vuC = Math.sqrt((vu1 * vu1 + vu2 * vu2) * 0.5);
+            var el = document.getElementById('adcReadout' + adcIdx);
+            if (el) {
+                var dbStr = vuC > 0 ? (20 * Math.log10(vuC)).toFixed(1) + ' dBFS' : '-inf dBFS';
+                var old = el.textContent;
+                var vrmsPart = old.indexOf('|') >= 0 ? old.substring(old.indexOf('|')) : '| -- Vrms';
+                el.textContent = dbStr + ' ' + vrmsPart;
+            }
         }
 
         function toggleVuMode(seg) {
