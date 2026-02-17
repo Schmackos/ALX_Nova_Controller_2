@@ -54,7 +54,7 @@
 #define DISPLAY_WIDTH 128
 #define DISPLAY_HEIGHT 160
 
-/* Display buffer: 1/10th of screen (single buffer) */
+/* Display buffer: 1/10th of screen, internal SRAM for fast access */
 #define DISP_BUF_SIZE (DISPLAY_WIDTH * DISPLAY_HEIGHT / 10)
 
 /* Backlight PWM settings */

@@ -27,7 +27,7 @@
 /* Backlight control is handled via PWM in gui_manager.cpp */
 
 /* ===== SPI frequency ===== */
-#define SPI_FREQUENCY       27000000  /* 27 MHz — safe for ST7735S */
+#define SPI_FREQUENCY       40000000  /* 40 MHz — ST7735S supports up to ~62 MHz */
 #define SPI_READ_FREQUENCY  16000000
 #define SPI_TOUCH_FREQUENCY  2500000  /* Not used (no touch) */
 

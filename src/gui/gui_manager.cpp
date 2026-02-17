@@ -34,7 +34,7 @@ static uint32_t lv_millis_cb(void) { return (uint32_t)millis(); }
 /* TFT driver instance */
 static TFT_eSPI tft = TFT_eSPI();
 
-/* LVGL display buffer — allocated in PSRAM to save ~4KB internal SRAM */
+/* LVGL display buffer — allocated in internal SRAM for fast CPU access */
 static lv_color_t *draw_buf = nullptr;
 
 /* Screen sleep state */
@@ -303,10 +303,10 @@ void gui_init(void) {
     lv_tick_set_cb(lv_millis_cb);
     LOG_I("[GUI] LVGL initialized");
 
-    /* Allocate LVGL draw buffer in PSRAM (aligned per LV_DRAW_BUF_ALIGN) */
+    /* Allocate LVGL draw buffer in internal SRAM (~12x faster access than PSRAM) */
     if (!draw_buf) {
         draw_buf = (lv_color_t *)heap_caps_aligned_alloc(
-            LV_DRAW_BUF_ALIGN, DISP_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+            LV_DRAW_BUF_ALIGN, DISP_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
         if (!draw_buf) {
             draw_buf = (lv_color_t *)heap_caps_aligned_alloc(
                 LV_DRAW_BUF_ALIGN, DISP_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DEFAULT);
