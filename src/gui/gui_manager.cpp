@@ -30,7 +30,6 @@
 #include "lgfx_config.h"
 #endif
 #include <lvgl.h>
-#include <src/draw/sw/lv_draw_sw_utils.h>
 
 /* LVGL tick callback (millis returns unsigned long, LVGL expects uint32_t) */
 static uint32_t lv_millis_cb(void) { return (uint32_t)millis(); }
@@ -38,9 +37,8 @@ static uint32_t lv_millis_cb(void) { return (uint32_t)millis(); }
 /* LovyanGFX driver instance */
 static LGFX tft;
 
-/* LVGL display buffers — two for DMA double-buffering */
+/* LVGL display buffer */
 static lv_color_t *draw_buf1 = nullptr;
-static lv_color_t *draw_buf2 = nullptr;
 
 /* Screen sleep state */
 static bool screen_awake = true;
@@ -58,42 +56,15 @@ static TaskHandle_t gui_task_handle = nullptr;
 #define DASHBOARD_REFRESH_MS 1000
 static unsigned long last_dashboard_refresh = 0;
 
-/* LVGL display flush callback */
+/* LVGL display flush callback — matches official LVGL+LovyanGFX driver.
+   Uses RGB565_SWAPPED format: LVGL renders directly in SPI byte order,
+   so no manual byte swap is needed in the flush path. */
 static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     uint32_t w = lv_area_get_width(area);
     uint32_t h = lv_area_get_height(area);
 
-    /* Log info to diagnose diagonal shift */
-    static int flush_log_count = 0;
-    if (flush_log_count < 3) {
-        uint32_t cf = lv_display_get_color_format(disp);
-        LOG_I("[GUI] Flush #%d: x1=%d y1=%d w=%lu h=%lu cf=%lu sizeof(lv_color_t)=%u px_map=%p",
-              flush_log_count, area->x1, area->y1, w, h, cf, (unsigned)sizeof(lv_color_t), px_map);
-        flush_log_count++;
-    }
-
-    /* DIAGNOSTIC: Use fillRect to draw stripes — bypasses ALL pixel buffer logic.
-       If stripes are straight → LovyanGFX coordinates correct, issue is bulk pixel write.
-       If stripes have gaps/overlap → LovyanGFX coordinate/offset config is wrong.
-       Remove this block after testing! */
-    {
-        tft.startWrite();
-        for (uint32_t row = 0; row < h; row += 8) {
-            uint32_t stripe_h = (row + 8 <= h) ? 8 : (h - row);
-            uint16_t color = ((row / 8) % 2 == 0) ? 0xF800 : 0x07E0;
-            tft.fillRect(area->x1, area->y1 + row, w, stripe_h, color);
-        }
-        tft.endWrite();
-        lv_display_flush_ready(disp);
-        return;
-    }
-
-    lv_draw_sw_rgb565_swap(px_map, w * h);
-
-    tft.startWrite();
-    tft.setAddrWindow(area->x1, area->y1, w, h);
-    tft.writePixels((lgfx::swap565_t *)px_map, w * h);
-    tft.endWrite();
+    tft.pushImageDMA(area->x1, area->y1, w, h, (uint16_t *)px_map);
+    tft.waitDMA();
 
     lv_display_flush_ready(disp);
 }
@@ -312,8 +283,9 @@ void gui_init(void) {
 
     /* Initialize TFT via LovyanGFX */
     tft.init();
+    tft.initDMA();
     tft.setRotation(1); /* Landscape: 160x128 */
-    /* No setSwapBytes — we pre-swap via lv_draw_sw_rgb565_swap for direct DMA (no_convert path) */
+    tft.startWrite();
     tft.fillScreen(0x0000); /* Black */
     LOG_I("[GUI] TFT initialized (LovyanGFX %dx%d)", tft.width(), tft.height());
 
@@ -322,38 +294,28 @@ void gui_init(void) {
     lv_tick_set_cb(lv_millis_cb);
     LOG_I("[GUI] LVGL initialized");
 
-    /* Create LVGL display and force RGB565 color format.
-       IMPORTANT: In LVGL v9, sizeof(lv_color_t) = 3 (RGB888 internal),
-       but the display buffer uses the DISPLAY color format. We must
-       explicitly set RGB565 and size the buffer at 2 bytes/pixel. */
+    /* Create LVGL display with RGB565_SWAPPED format.
+       This matches the official LVGL+LovyanGFX driver: LVGL renders directly
+       in big-endian (SPI wire) byte order, eliminating the need for a manual
+       byte swap in the flush callback.  RGB565_SWAPPED is still 2 bytes/pixel. */
     lv_display_t *disp = lv_display_create(DISPLAY_HEIGHT, DISPLAY_WIDTH); /* landscape: 160x128 */
-    lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565);
+    lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565_SWAPPED);
     lv_display_set_flush_cb(disp, disp_flush_cb);
 
     /* Allocate LVGL draw buffer — RGB565 = 2 bytes per pixel.
-       Try DMA-capable internal SRAM for full-screen; fall back to partial. */
-    size_t bpp = 2; /* RGB565: 2 bytes per pixel */
-    size_t full_buf_bytes = DISPLAY_HEIGHT * DISPLAY_WIDTH * bpp; /* 160*128*2 = 40960 */
+       Use partial-render mode: smaller DMA buffer, multiple flushes per frame. */
+    size_t bpp = 2;
+    size_t buf_bytes = DISP_BUF_SIZE * bpp;
     if (!draw_buf1) {
         draw_buf1 = (lv_color_t *)heap_caps_aligned_alloc(
-            LV_DRAW_BUF_ALIGN, full_buf_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    }
-
-    if (draw_buf1) {
-        lv_display_set_buffers(disp, draw_buf1, NULL, full_buf_bytes, LV_DISPLAY_RENDER_MODE_FULL);
-        LOG_I("[GUI] Draw buffer: FULL mode, %u bytes (internal DMA), format=RGB565", full_buf_bytes);
-    } else {
-        /* Fall back to smaller partial buffer */
-        size_t buf_bytes = DISP_BUF_SIZE * bpp;
-        draw_buf1 = (lv_color_t *)heap_caps_aligned_alloc(
             LV_DRAW_BUF_ALIGN, buf_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-        if (!draw_buf1) {
-            draw_buf1 = (lv_color_t *)heap_caps_aligned_alloc(
-                LV_DRAW_BUF_ALIGN, buf_bytes, MALLOC_CAP_DEFAULT);
-        }
-        lv_display_set_buffers(disp, draw_buf1, NULL, buf_bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
-        LOG_W("[GUI] Draw buffer: PARTIAL mode fallback, %u bytes", buf_bytes);
     }
+    if (!draw_buf1) {
+        draw_buf1 = (lv_color_t *)heap_caps_aligned_alloc(
+            LV_DRAW_BUF_ALIGN, buf_bytes, MALLOC_CAP_DEFAULT);
+    }
+    lv_display_set_buffers(disp, draw_buf1, NULL, buf_bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    LOG_I("[GUI] Draw buffer: PARTIAL mode, %u bytes, format=RGB565_SWAPPED", buf_bytes);
 
     /* Initialize theme (dark mode by default) */
     gui_theme_init(true);

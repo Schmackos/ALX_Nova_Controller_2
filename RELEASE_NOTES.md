@@ -8,6 +8,12 @@
 Replace TFT_eSPI with LovyanGFX for DMA double-buffered display flush
 on ST7735S. Add Sectigo intermediate cert for GitHub's updated chain,
 skip cert validation when NTP hasn't synced, and suspend loopTask WDT
+during TLS handshakes to prevent watchdog crashes on boot. (`87ce8e3`)
+- [2026-02-17] feat: Migrate TFT driver to LovyanGFX and fix OTA TLS/WDT issues
+
+Replace TFT_eSPI with LovyanGFX for DMA double-buffered display flush
+on ST7735S. Add Sectigo intermediate cert for GitHub's updated chain,
+skip cert validation when NTP hasn't synced, and suspend loopTask WDT
 during TLS handshakes to prevent watchdog crashes on boot. (`2240223`)
 - [2026-02-17] feat: Migrate TFT driver to LovyanGFX and fix OTA TLS/WDT issues
 
@@ -56,7 +62,19 @@ bug on ESP32-S3 (invalid register write in dma_end_callback). (`448fe70`)
 
 
 ## Bug Fixes
-- None
+- [2026-02-17] fix: Clean up LovyanGFX flush path with DMA and RGB565_SWAPPED format
+
+Remove diagnostic stripe rendering and flush logging from gui_manager.
+Switch to pushImageDMA/waitDMA for proper DMA-accelerated display flush
+and use RGB565_SWAPPED color format to eliminate manual byte swapping.
+Simplify buffer allocation to partial-render mode only. (`43fc7ed`)
+- [2026-02-17] fix: Clean up LovyanGFX flush path with DMA and RGB565_SWAPPED format
+
+Remove diagnostic stripe rendering and flush logging from gui_manager.
+Switch to pushImageDMA/waitDMA for proper DMA-accelerated display flush
+and use RGB565_SWAPPED color format to eliminate manual byte swapping.
+Simplify buffer allocation to partial-render mode only. (`51c3ae3`)
+
 
 ## Technical Details
 
