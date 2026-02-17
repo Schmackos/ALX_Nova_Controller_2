@@ -1,5 +1,24 @@
 # Release Notes
 
+## Version 1.8.5
+
+## Technical Details
+- [2026-02-17] chore: Bump version to 1.8.5 (`d73ba60`)
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.8.4
 
 ## Technical Details
@@ -9,6 +28,11 @@
 - None
 
 ## Bug Fixes
+- [2026-02-17] fix: Combined dBFS readout now uses smoothed VU values matching per-channel
+
+Combined dBFS was computed from raw unsmoothed RMS (backend) while
+per-channel dBFS used smoothed VU values (client-side), causing the
+total to appear lower than either channel during signal decay. (`3d72f9a`)
 - [2026-02-17] fix: Combined dBFS readout now uses smoothed VU values matching per-channel
 
 Combined dBFS was computed from raw unsmoothed RMS (backend) while
