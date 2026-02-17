@@ -29,6 +29,11 @@ skip cert validation when NTP hasn't synced, and suspend loopTask WDT
 during TLS handshakes to prevent watchdog crashes on boot. (`979ce9c`)
 
 ## Documentation
+- [2026-02-17] docs: create roadmap (8 phases, 25 plans, 49 requirements) (`a1eb065`)
+- [2026-02-17] docs: create roadmap (8 phases, 25 plans, 49 requirements) (`7bdd662`)
+- [2026-02-17] docs: create roadmap (8 phases, 25 plans, 49 requirements) (`969f1c8`)
+- [2026-02-17] docs: create roadmap (8 phases, 25 plans, 49 requirements) (`5bd2c3c`)
+- [2026-02-17] docs: define v1 requirements (`4201203`)
 - [2026-02-17] docs: complete project research for Spotify Connect integration
 
 Research files covering stack (cspot + dual-framework build), features
