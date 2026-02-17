@@ -11,6 +11,12 @@
 Increase SPI clock from 27MHz to 40MHz for ~48% faster pixel transfers.
 Move LVGL draw buffer from PSRAM to internal SRAM for ~12x faster CPU
 rendering access. DMA was tested but reverted due to a TFT_eSPI v2.5.43
+bug on ESP32-S3 (invalid register write in dma_end_callback). (`745f6a0`)
+- [2026-02-17] perf: Optimize TFT display with 40MHz SPI and internal SRAM draw buffer
+
+Increase SPI clock from 27MHz to 40MHz for ~48% faster pixel transfers.
+Move LVGL draw buffer from PSRAM to internal SRAM for ~12x faster CPU
+rendering access. DMA was tested but reverted due to a TFT_eSPI v2.5.43
 bug on ESP32-S3 (invalid register write in dma_end_callback). (`c74cdb8`)
 - [2026-02-17] perf: Optimize TFT display with 40MHz SPI and internal SRAM draw buffer
 
