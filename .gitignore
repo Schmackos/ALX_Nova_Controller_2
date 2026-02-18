@@ -30,3 +30,6 @@ Thumbs.db
 *~
 *.swp
 *.swo
+
+# Leftover submodule stub (locked by OS, cleaned to empty)
+lib/cspot/

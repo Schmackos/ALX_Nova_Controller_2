@@ -29,9 +29,30 @@ skip cert validation when NTP hasn't synced, and suspend loopTask WDT
 during TLS handshakes to prevent watchdog crashes on boot. (`979ce9c`)
 
 ## Documentation
+- [2026-02-17] docs: create roadmap (8 phases, 25 plans, 49 requirements) (`a1eb065`)
+- [2026-02-17] docs: create roadmap (8 phases, 25 plans, 49 requirements) (`7bdd662`)
+- [2026-02-17] docs: create roadmap (8 phases, 25 plans, 49 requirements) (`969f1c8`)
+- [2026-02-17] docs: create roadmap (8 phases, 25 plans, 49 requirements) (`5bd2c3c`)
+- [2026-02-17] docs: define v1 requirements (`4201203`)
+- [2026-02-17] docs: complete project research for Spotify Connect integration
+
+Research files covering stack (cspot + dual-framework build), features
+(P1/P2/P3 prioritization, anti-features), architecture (SPSC ring buffer
+pattern, source priority enum, AppState extensions), and pitfalls (heap
+exhaustion, flash overflow, mDNS double-init, I2S race, session death).
+Summary synthesizes findings into 7-phase roadmap with gating criteria. (`625eeb2`)
 - [2026-02-17] docs: initialize project (`7fa6371`)
 
 ## Technical Details
+- [2026-02-18] chore: pin platform version, fix display rotation, update build config
+
+- Pin espressif32@6.9.0 and toolchain-xtensa-esp32s3@12.2.0+20230208 for reproducible builds
+- Fix lgfx_config.h offset_rotation to 2 (panel mounted inverted, 180° correction)
+- Reformat platformio.ini build_flags to tab-indented style
+- Update .vscode settings to use built-in PIO core/Python
+- Add pioarduino VSCode extension recommendation (`a870a64`)
+- [2026-02-18] chore: ignore lib/cspot stub left by OS file lock (`9e1132c`)
+- [2026-02-17] chore: add project config (`91b13cd`)
 - [2026-02-17] chore: Bump version to 1.8.5 (`d73ba60`)
 
 ## Improvements
@@ -62,6 +83,14 @@ bug on ESP32-S3 (invalid register write in dma_end_callback). (`448fe70`)
 
 
 ## Bug Fixes
+- [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
+
+OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
+I/O buffers (~32KB) competed with I2S DMA for scarce internal SRAM. Instead
+of tearing down audio during checks, use GCC --wrap to redirect all MbedTLS
+allocations to PSRAM via heap_caps_calloc(MALLOC_CAP_SPIRAM). Audio runs
+uninterrupted during OTA checks. Also includes OTA stream-parse optimization,
+HTTP fallback for downloads, and I2S driver teardown safety for OTA downloads. (`11751d6`)
 - [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
 
 OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
