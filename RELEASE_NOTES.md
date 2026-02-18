@@ -44,6 +44,7 @@ Summary synthesizes findings into 7-phase roadmap with gating criteria. (`625eeb
 - [2026-02-17] docs: initialize project (`7fa6371`)
 
 ## Technical Details
+- [2026-02-18] chore: ignore lib/cspot stub left by OS file lock (`9e1132c`)
 - [2026-02-17] chore: add project config (`91b13cd`)
 - [2026-02-17] chore: Bump version to 1.8.5 (`d73ba60`)
 

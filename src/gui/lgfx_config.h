@@ -47,7 +47,7 @@ public:
             cfg.memory_height = 160;
             cfg.offset_x      = 0;    /* No offset when memory = panel */
             cfg.offset_y      = 0;
-            cfg.offset_rotation = 0;  /* Match TFT_eSPI BLACKTAB MADCTL */
+            cfg.offset_rotation = 2;  /* 180° rotation — panel mounted inverted */
             cfg.dlen_16bit    = false; /* 8-bit SPI commands */
             cfg.bus_shared    = false; /* SPI bus not shared */
             cfg.rgb_order     = true;  /* true = RGB data from LVGL (BLACKTAB panel handles BGR via MADCTL) */
