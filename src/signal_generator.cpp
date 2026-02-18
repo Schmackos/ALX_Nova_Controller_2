@@ -192,10 +192,9 @@ void siggen_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_rate) {
 #ifndef NATIVE_TEST
 
 void siggen_init() {
-    // Setup LEDC PWM for signal generator output
-    ledcSetup(SIGGEN_PWM_CHANNEL, 1000, SIGGEN_PWM_RESOLUTION);
-    ledcAttachPin(SIGGEN_PWM_PIN, SIGGEN_PWM_CHANNEL);
-    ledcWrite(SIGGEN_PWM_CHANNEL, 0);
+    // Arduino-ESP32 3.x: ledcAttach replaces ledcSetup + ledcAttachPin
+    ledcAttach(SIGGEN_PWM_PIN, 1000, SIGGEN_PWM_RESOLUTION);
+    ledcWrite(SIGGEN_PWM_PIN, 0);
     LOG_I("[SigGen] Initialized PWM on GPIO %d", SIGGEN_PWM_PIN);
 }
 
@@ -231,15 +230,15 @@ void siggen_apply_params() {
 
     // Handle PWM mode
     if (shouldBeActive && p.outputMode == SIGOUT_PWM) {
-        // Set PWM frequency to the signal frequency
-        ledcSetup(SIGGEN_PWM_CHANNEL, (uint32_t)p.frequency, SIGGEN_PWM_RESOLUTION);
+        // Re-attach with new frequency (Arduino 3.x: ledcAttach handles freq change)
+        ledcAttach(SIGGEN_PWM_PIN, (uint32_t)p.frequency, SIGGEN_PWM_RESOLUTION);
         // Duty cycle represents amplitude (512 = 50% = full amplitude for square)
         uint32_t duty = (uint32_t)(512.0f * p.amplitude_linear);
-        ledcWrite(SIGGEN_PWM_CHANNEL, duty);
+        ledcWrite(SIGGEN_PWM_PIN, duty);
         LOG_I("[SigGen] PWM: %.0f Hz, duty=%lu", p.frequency, duty);
     } else if (!shouldBeActive && wasActive) {
         // Stop PWM output
-        ledcWrite(SIGGEN_PWM_CHANNEL, 0);
+        ledcWrite(SIGGEN_PWM_PIN, 0);
         LOG_I("[SigGen] Stopped");
     }
 

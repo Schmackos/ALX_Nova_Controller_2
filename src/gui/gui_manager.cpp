@@ -73,7 +73,7 @@ static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
 
 /* Set backlight brightness (0-255) */
 static void set_backlight(uint8_t brightness) {
-    ledcWrite(BL_PWM_CHANNEL, brightness);
+    ledcWrite(TFT_BL_PIN, brightness);
 }
 
 /* Put display to sleep */
@@ -278,9 +278,8 @@ static void register_screens(void) {
 void gui_init(void) {
     LOG_I("[GUI] Initializing...");
 
-    /* Initialize backlight PWM */
-    ledcSetup(BL_PWM_CHANNEL, BL_PWM_FREQ, BL_PWM_RESOLUTION);
-    ledcAttachPin(TFT_BL_PIN, BL_PWM_CHANNEL);
+    /* Initialize backlight PWM (Arduino 3.x: ledcAttach replaces ledcSetup+ledcAttachPin) */
+    ledcAttach(TFT_BL_PIN, BL_PWM_FREQ, BL_PWM_RESOLUTION);
     set_backlight(0);  /* Keep backlight OFF until content is ready */
 
     /* Initialize TFT via LovyanGFX */

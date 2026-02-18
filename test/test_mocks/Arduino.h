@@ -233,6 +233,7 @@ inline void resetLedc() {
 }
 } // namespace ArduinoMock
 
+// Arduino-ESP32 2.x channel-based API (kept for backward compat)
 inline void ledcSetup(uint8_t channel, double freq, uint8_t resolution) {
   ArduinoMock::ledcLastChannel = channel;
   ArduinoMock::ledcSetupCount++;
@@ -240,16 +241,20 @@ inline void ledcSetup(uint8_t channel, double freq, uint8_t resolution) {
 inline void ledcAttachPin(uint8_t pin, uint8_t channel) {
   ArduinoMock::ledcAttachCount++;
 }
-inline double ledcWriteTone(uint8_t channel, double freq) {
-  ArduinoMock::ledcLastChannel = channel;
+inline double ledcWriteTone(uint8_t pin_or_ch, double freq) {
   ArduinoMock::ledcLastFreq = freq;
   ArduinoMock::ledcWriteToneCount++;
   return freq;
 }
-inline void ledcWrite(uint8_t channel, uint32_t duty) {
-  ArduinoMock::ledcLastChannel = channel;
+inline void ledcWrite(uint8_t pin_or_ch, uint32_t duty) {
   ArduinoMock::ledcLastDuty = duty;
   ArduinoMock::ledcWriteCount++;
 }
+// Arduino-ESP32 3.x pin-based API
+inline bool ledcAttach(uint8_t pin, uint32_t freq, uint8_t resolution) {
+  ArduinoMock::ledcAttachCount++;
+  return true;
+}
+inline void ledcDetach(uint8_t pin) { /* no-op */ }
 
 #endif // ARDUINO_MOCK_H

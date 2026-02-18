@@ -30,11 +30,10 @@
 #include <cstring>
 
 #ifndef NATIVE_TEST
-#include <driver/i2s.h>
+#include "driver/i2s_std.h"
 #include <driver/gpio.h>
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
-#include <soc/i2s_struct.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #endif
@@ -252,8 +251,10 @@ AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag) {
 // ===== Hardware-dependent code (ESP32 only) =====
 #ifndef NATIVE_TEST
 
-static const int I2S_PORT_ADC1 = 0; // I2S_NUM_0 — master RX (ADC1)
-static const int I2S_PORT_ADC2 = 1; // I2S_NUM_1 — master RX (ADC2, no clock output)
+// IDF5 channel handles (replaces legacy port-number addressing)
+static i2s_chan_handle_t _i2s0_rx = NULL;  // ADC1 receive (I2S_NUM_0)
+static i2s_chan_handle_t _i2s0_tx = NULL;  // DAC transmit (I2S_NUM_0, full-duplex pair)
+static i2s_chan_handle_t _i2s1_rx = NULL;  // ADC2 receive (I2S_NUM_1)
 
 static uint32_t _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
@@ -339,96 +340,135 @@ static void i2s_audio_apply_window(FftWindowType type) {
 }
 
 static void i2s_configure_adc1(uint32_t sample_rate) {
+    // Clean up existing channels before (re)installing
+    if (_i2s0_rx) {
+        i2s_channel_disable(_i2s0_rx);
+        i2s_del_channel(_i2s0_rx);
+        _i2s0_rx = NULL;
+    }
+    if (_i2s0_tx) {
+        i2s_channel_disable(_i2s0_tx);
+        i2s_del_channel(_i2s0_tx);
+        _i2s0_tx = NULL;
+    }
+
     // Check if DAC TX is active — preserve full-duplex mode during recovery
     bool dacTxActive = false;
 #ifdef DAC_ENABLED
     dacTxActive = AppState::getInstance().dacEnabled && AppState::getInstance().dacReady;
 #endif
 
-    i2s_config_t cfg = {};
-    cfg.mode = dacTxActive
-        ? (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_TX)
-        : (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
-    cfg.sample_rate = sample_rate;
-    cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
-    cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-    cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-    cfg.dma_buf_count = DMA_BUF_COUNT;
-    cfg.dma_buf_len = DMA_BUF_LEN;
-    cfg.use_apll = true;
-    cfg.tx_desc_auto_clear = dacTxActive;
-    cfg.fixed_mclk = sample_rate * 256;
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = DMA_BUF_COUNT;
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;
+    chan_cfg.auto_clear = dacTxActive;  // Zero TX DMA when starved (avoids noise)
 
-    i2s_driver_install((i2s_port_t)I2S_PORT_ADC1, &cfg, 0, NULL);
-
-    i2s_pin_config_t pins = {};
-    pins.bck_io_num = I2S_BCK_PIN;
-    pins.ws_io_num = I2S_LRC_PIN;
-    pins.data_in_num = I2S_DOUT_PIN;
-    pins.data_out_num = dacTxActive ? I2S_TX_DATA_PIN : I2S_PIN_NO_CHANGE;
-    pins.mck_io_num = I2S_MCLK_PIN;
-
-    i2s_set_pin((i2s_port_t)I2S_PORT_ADC1, &pins);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
-
+    esp_err_t err;
     if (dacTxActive) {
+        err = i2s_new_channel(&chan_cfg, &_i2s0_tx, &_i2s0_rx);
+    } else {
+        err = i2s_new_channel(&chan_cfg, NULL, &_i2s0_rx);
+    }
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC1 channel create failed: 0x%x", err);
+        return;
+    }
+
+    i2s_std_config_t std_cfg = {};
+    std_cfg.clk_cfg.sample_rate_hz = sample_rate;
+    std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_DEFAULT;  // PLL_D2_CLK (160MHz), deterministic
+    std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_256;
+    std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
+        I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    std_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;
+    std_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
+    std_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
+    std_cfg.gpio_cfg.dout = dacTxActive ? (gpio_num_t)I2S_TX_DATA_PIN : I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT_PIN;
+    std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
+
+    if (_i2s0_rx) {
+        i2s_channel_init_std_mode(_i2s0_rx, &std_cfg);
+        i2s_channel_enable(_i2s0_rx);
+    }
+    if (dacTxActive && _i2s0_tx) {
+        i2s_channel_init_std_mode(_i2s0_tx, &std_cfg);
+        i2s_channel_enable(_i2s0_tx);
         LOG_I("[Audio] I2S0 recovery preserved TX full-duplex (data_out=GPIO%d)", I2S_TX_DATA_PIN);
     }
 }
 
 // ADC2 uses I2S_NUM_1 configured as MASTER (not slave) to bypass ESP32-S3
 // slave mode constraints (bclk_div >= 8, DMA timeout). Both I2S peripherals
-// derive from the same 160MHz D2CLK with identical divider chains, giving
+// derive from the same 160MHz PLL_D2_CLK with identical divider chains, giving
 // frequency-locked BCK. I2S1 does NOT output any clocks — only data_in is
 // connected (GPIO9). The internal RX state machine samples at the same
 // frequency as I2S0's BCK, with a fixed phase offset that is well within
 // the PCM1808's data valid window (~305ns of 325ns period).
 static bool i2s_configure_adc2(uint32_t sample_rate) {
-    i2s_config_t cfg = {};
-    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
-    cfg.sample_rate = sample_rate;
-    cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
-    cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-    cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-    cfg.dma_buf_count = DMA_BUF_COUNT;
-    cfg.dma_buf_len = DMA_BUF_LEN;
-    cfg.use_apll = true;
-    cfg.tx_desc_auto_clear = false;
-    cfg.fixed_mclk = sample_rate * 256;
+    // Clean up existing channel before reinstalling
+    if (_i2s1_rx) {
+        i2s_channel_disable(_i2s1_rx);
+        i2s_del_channel(_i2s1_rx);
+        _i2s1_rx = NULL;
+    }
 
-    esp_err_t err = i2s_driver_install((i2s_port_t)I2S_PORT_ADC2, &cfg, 0, NULL);
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = DMA_BUF_COUNT;
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;
+    chan_cfg.auto_clear = false;
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &_i2s1_rx);
     if (err != ESP_OK) {
-        LOG_E("[Audio] ADC2 driver install failed: %d", err);
+        LOG_E("[Audio] ADC2 channel create failed: 0x%x", err);
         return false;
     }
 
-    // Only set data input pin — I2S1 does NOT output BCK/WS/MCK.
+    // Only route data_in pin — I2S1 does NOT output BCK/WS/MCK.
     // I2S0 (ADC1) provides all clock outputs to both PCM1808 boards.
-    i2s_pin_config_t pins = {};
-    pins.bck_io_num = I2S_PIN_NO_CHANGE;
-    pins.ws_io_num = I2S_PIN_NO_CHANGE;
-    pins.data_in_num = I2S_DOUT2_PIN;
-    pins.data_out_num = I2S_PIN_NO_CHANGE;
-    pins.mck_io_num = I2S_PIN_NO_CHANGE;
+    i2s_std_config_t std_cfg = {};
+    std_cfg.clk_cfg.sample_rate_hz = sample_rate;
+    std_cfg.clk_cfg.clk_src        = I2S_CLK_SRC_DEFAULT;
+    std_cfg.clk_cfg.mclk_multiple  = I2S_MCLK_MULTIPLE_256;
+    std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
+        I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.ws   = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT2_PIN;
+    std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
 
-    i2s_set_pin((i2s_port_t)I2S_PORT_ADC2, &pins);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC2);
+    err = i2s_channel_init_std_mode(_i2s1_rx, &std_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC2 channel init failed: 0x%x", err);
+        i2s_del_channel(_i2s1_rx);
+        _i2s1_rx = NULL;
+        return false;
+    }
+    err = i2s_channel_enable(_i2s1_rx);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC2 channel enable failed: 0x%x", err);
+        i2s_del_channel(_i2s1_rx);
+        _i2s1_rx = NULL;
+        return false;
+    }
+
+    // Apply pulldown AFTER channel enable — the I2S driver reconfigures the GPIO
+    // matrix on enable, stripping any prior pulldown state. Without this, an
+    // unconnected DOUT2 pin floats high → reads all-1s → false CLIPPING status.
+    gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
     return true;
 }
 
-// Dump key I2S registers for both peripherals (debug aid)
+// Dump key I2S channel info (IDF5: direct register access removed, use driver API)
 static void i2s_dump_registers() {
-    for (int p = 0; p < 2; p++) {
-        i2s_dev_t *dev = (p == 0) ? &I2S0 : &I2S1;
-        LOG_I("[Audio] I2S%d regs: rx_conf=0x%08lX rx_conf1=0x%08lX "
-              "rx_clkm_conf=0x%08lX rx_clkm_div=0x%08lX",
-              p, (unsigned long)dev->rx_conf.val,
-              (unsigned long)dev->rx_conf1.val,
-              (unsigned long)dev->rx_clkm_conf.val,
-              (unsigned long)dev->rx_clkm_div_conf.val);
-    }
+    LOG_I("[Audio] I2S0_RX=%p I2S0_TX=%p I2S1_RX=%p",
+          (void*)_i2s0_rx, (void*)_i2s0_tx, (void*)_i2s1_rx);
 }
 
 // Process a single ADC's buffer: diagnostics, DC filter, RMS, VU, peak, waveform, FFT
@@ -763,8 +803,8 @@ static void audio_capture_task(void *param) {
         // Read ADC1 (master) — 500ms timeout instead of portMAX_DELAY
         if (AppState::getInstance().adcEnabled[0]) {
             unsigned long t0 = micros();
-            esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_ADC1, buf1,
-                                       sizeof(buf1), &bytes_read1, pdMS_TO_TICKS(500));
+            esp_err_t err1 = i2s_channel_read(_i2s0_rx, buf1,
+                                               sizeof(buf1), &bytes_read1, pdMS_TO_TICKS(500));
             unsigned long t1 = micros();
 
             if (err1 != ESP_OK || bytes_read1 == 0) {
@@ -776,8 +816,7 @@ static void audio_capture_task(void *param) {
                 if (consecutiveTimeouts >= TIMEOUT_RECOVERY_THRESHOLD) {
                     LOG_W("[Audio] ADC1 %lu consecutive timeouts — attempting I2S recovery",
                           (unsigned long)consecutiveTimeouts);
-                    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
-                    vTaskDelay(pdMS_TO_TICKS(50));
+                    // i2s_configure_adc1 disables+deletes existing channels internally
                     i2s_configure_adc1(_currentSampleRate);
                     _diagnostics.adc[0].i2sRecoveries++;
                     consecutiveTimeouts = 0;
@@ -800,8 +839,8 @@ static void audio_capture_task(void *param) {
         // Read ADC2 — near-instant if synced DMA is ready
         if (_adc2InitOk && AppState::getInstance().adcEnabled[1]) {
             unsigned long t2 = micros();
-            esp_err_t err2 = i2s_read((i2s_port_t)I2S_PORT_ADC2, buf2,
-                                       sizeof(buf2), &bytes_read2, pdMS_TO_TICKS(5));
+            esp_err_t err2 = i2s_channel_read(_i2s1_rx, buf2,
+                                               sizeof(buf2), &bytes_read2, pdMS_TO_TICKS(5));
             unsigned long t3 = micros();
             if (err2 == ESP_OK && bytes_read2 > 0) {
                 adc2Ok = true;
@@ -1009,12 +1048,7 @@ void i2s_audio_init() {
     _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
     i2s_configure_adc1(_currentSampleRate);
 
-    // Pull-down on DOUT2 AFTER i2s_set_pin() — the I2S driver reconfigures
-    // the GPIO via gpio_matrix, stripping any prior pulldown. Without this,
-    // an unconnected pin floats high → reads all-1s → false CLIPPING status.
-    gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
-
-    // Dump registers for debugging
+    // Dump channel handles for debugging (pulldown now applied inside i2s_configure_adc2)
     if (_adc2InitOk) {
         i2s_dump_registers();
     }
@@ -1139,16 +1173,20 @@ I2sStaticConfig i2s_audio_get_static_config() {
 
 void i2s_audio_uninstall_drivers() {
     LOG_I("[Audio] Uninstalling I2S drivers to free DMA buffers");
-    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
-    if (_adc2InitOk) i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC2);
+    if (_i2s0_rx) { i2s_channel_disable(_i2s0_rx); i2s_del_channel(_i2s0_rx); _i2s0_rx = NULL; }
+    if (_i2s0_tx) { i2s_channel_disable(_i2s0_tx); i2s_del_channel(_i2s0_tx); _i2s0_tx = NULL; }
+    if (_adc2InitOk && _i2s1_rx) {
+        i2s_channel_disable(_i2s1_rx);
+        i2s_del_channel(_i2s1_rx);
+        _i2s1_rx = NULL;
+    }
 }
 
 void i2s_audio_reinstall_drivers() {
     LOG_I("[Audio] Reinstalling I2S drivers");
+    // i2s_configure_adc* internally clean up any lingering handles
     if (_adc2InitOk) _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
     i2s_configure_adc1(_currentSampleRate);
-    // Re-apply pulldown on DOUT2 after driver reconfigure
-    gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
     LOG_I("[Audio] I2S drivers reinstalled at %lu Hz", _currentSampleRate);
 }
 
@@ -1158,9 +1196,6 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
     LOG_I("[Audio] Changing sample rate: %lu -> %lu Hz", _currentSampleRate, rate);
 
-    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
-    if (_adc2InitOk) i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC2);
-
     _currentSampleRate = rate;
     _wfTargetFrames = rate * AppState::getInstance().audioUpdateRate / 1000;
     for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
@@ -1168,11 +1203,59 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
     }
 
+    // i2s_configure_adc* disable and delete existing channels before recreating
     if (_adc2InitOk) _adc2InitOk = i2s_configure_adc2(rate);
     i2s_configure_adc1(rate);
 
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
     return true;
+}
+
+// ===== I2S TX channel management (called by dac_hal.cpp) =====
+
+bool i2s_audio_enable_tx(uint32_t sampleRate) {
+    if (_i2s0_tx != NULL) return true;  // Already in full-duplex mode
+
+    LOG_I("[Audio] Enabling I2S TX full-duplex on I2S0, data_out=GPIO%d", I2S_TX_DATA_PIN);
+
+    // Pause audio task during driver reinit
+    AppState::getInstance().audioPaused = true;
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // i2s_configure_adc1 detects dacEnabled && dacReady from AppState.
+    // Caller (dac_hal) must ensure both are true before calling this function.
+    i2s_configure_adc1(sampleRate);
+
+    AppState::getInstance().audioPaused = false;
+
+    if (_i2s0_tx != NULL) {
+        LOG_I("[Audio] I2S TX enabled: rate=%luHz data_out=GPIO%d MCLK=%luHz DMA=%dx%d",
+              (unsigned long)sampleRate, I2S_TX_DATA_PIN,
+              (unsigned long)(sampleRate * 256), DMA_BUF_COUNT, DMA_BUF_LEN);
+        return true;
+    }
+    LOG_E("[Audio] I2S TX enable failed (dacEnabled/dacReady not set?)");
+    return false;
+}
+
+void i2s_audio_disable_tx() {
+    if (_i2s0_tx == NULL) return;
+
+    LOG_I("[Audio] Disabling I2S TX, reverting to RX-only");
+
+    AppState::getInstance().audioPaused = true;
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // With dacReady=false (set by caller), i2s_configure_adc1 creates RX-only channel
+    i2s_configure_adc1(_currentSampleRate);
+
+    AppState::getInstance().audioPaused = false;
+    LOG_I("[Audio] Reverted to RX-only mode");
+}
+
+void i2s_audio_write_tx(const void* buf, size_t bytes, size_t* bytes_written, uint32_t timeout_ms) {
+    if (!_i2s0_tx) { if (bytes_written) *bytes_written = 0; return; }
+    i2s_channel_write(_i2s0_tx, buf, bytes, bytes_written, pdMS_TO_TICKS(timeout_ms));
 }
 
 #else
@@ -1190,6 +1273,9 @@ int i2s_audio_get_num_adcs() { return _nativeNumAdcs; }
 void audio_periodic_dump() {}
 void i2s_audio_uninstall_drivers() {}
 void i2s_audio_reinstall_drivers() {}
+bool i2s_audio_enable_tx(uint32_t) { return true; }
+void i2s_audio_disable_tx() {}
+void i2s_audio_write_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
 I2sStaticConfig i2s_audio_get_static_config() {
     I2sStaticConfig cfg = {};
     cfg.adc[0].isMaster = true;

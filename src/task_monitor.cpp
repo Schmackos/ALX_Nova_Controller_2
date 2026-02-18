@@ -6,6 +6,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/task_snapshot.h>
+#include <esp_idf_version.h>
 #else
 // Stubs for native test — config constants provided by the test file
 #ifndef TASK_STACK_SIZE_AUDIO
@@ -117,6 +118,22 @@ void task_monitor_loop_end() {
 // ===== FreeRTOS snapshot =====
 
 #ifndef NATIVE_TEST
+// IDF5 SMP affinity helper: vTaskCoreAffinityGet returns a bitmask.
+// IDF4 xTaskGetAffinity returns a core index (0/1) or -1 (run on any).
+static int8_t get_core_id(TaskHandle_t h) {
+#if defined(CONFIG_FREERTOS_UNICORE)
+    (void)h;
+    return 0;
+#elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+    UBaseType_t mask = vTaskCoreAffinityGet(h);
+    if (mask == (1U << 0)) return 0;
+    if (mask == (1U << 1)) return 1;
+    return -1;  // Pinned to any / both cores
+#else
+    return (int8_t)xTaskGetAffinity(h);
+#endif
+}
+
 void task_monitor_update() {
     // Iterate all tasks using ESP-IDF pxTaskGetNext (uxTaskGetSystemState
     // is not exported from the pre-compiled FreeRTOS library in Arduino ESP32)
@@ -137,7 +154,7 @@ void task_monitor_update() {
         }
         info.priority = (uint8_t)uxTaskPriorityGet(handle);
         info.state = (uint8_t)eTaskGetState(handle);
-        info.coreId = (int8_t)xTaskGetAffinity(handle);
+        info.coreId = get_core_id(handle);
         i++;
         handle = pxTaskGetNext(handle);
     }
