@@ -2,6 +2,7 @@
 #define I2S_AUDIO_H
 
 #include <stdint.h>
+#include <stddef.h>  // size_t
 
 #ifndef NUM_AUDIO_ADCS
 #define NUM_AUDIO_ADCS 2

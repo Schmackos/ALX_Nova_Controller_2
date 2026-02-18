@@ -59,6 +59,7 @@ Summary synthesizes findings into 7-phase roadmap with gating criteria. (`625eeb
 - [2026-02-17] docs: initialize project (`7fa6371`)
 
 ## Technical Details
+- [2026-02-19] chore: update release notes (`74b80fe`)
 - [2026-02-18] chore: update release notes for build config changes (`f13c978`)
 - [2026-02-18] chore: pin platform version, fix display rotation, update build config
 
