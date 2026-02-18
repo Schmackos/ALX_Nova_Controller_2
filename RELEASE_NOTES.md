@@ -44,6 +44,13 @@ Summary synthesizes findings into 7-phase roadmap with gating criteria. (`625eeb
 - [2026-02-17] docs: initialize project (`7fa6371`)
 
 ## Technical Details
+- [2026-02-18] chore: pin platform version, fix display rotation, update build config
+
+- Pin espressif32@6.9.0 and toolchain-xtensa-esp32s3@12.2.0+20230208 for reproducible builds
+- Fix lgfx_config.h offset_rotation to 2 (panel mounted inverted, 180° correction)
+- Reformat platformio.ini build_flags to tab-indented style
+- Update .vscode settings to use built-in PIO core/Python
+- Add pioarduino VSCode extension recommendation (`a870a64`)
 - [2026-02-18] chore: ignore lib/cspot stub left by OS file lock (`9e1132c`)
 - [2026-02-17] chore: add project config (`91b13cd`)
 - [2026-02-17] chore: Bump version to 1.8.5 (`d73ba60`)
