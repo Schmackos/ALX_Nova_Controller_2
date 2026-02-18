@@ -3,6 +3,21 @@
 ## Version 1.8.5
 
 ## New Features
+- [2026-02-19] feat: migrate to pioarduino IDF5 platform and Arduino-ESP32 3.x API
+
+- Switch to pioarduino platform (IDF5 / Arduino-ESP32 3.x) for improved
+  ESP32-S3 support and newer ESP-IDF features
+- Migrate I2S driver: legacy driver/i2s.h → IDF5 driver/i2s_std.h with
+  channel handles (_i2s0_rx, _i2s0_tx, _i2s1_rx) replacing port numbers
+- Extract I2S TX management into i2s_audio.cpp: new i2s_audio_enable_tx(),
+  i2s_audio_disable_tx(), i2s_audio_write_tx() API; dac_hal.cpp delegates
+- Migrate LEDC API: ledcSetup+ledcAttachPin → ledcAttach (pin-based),
+  ledcDetachPin → ledcDetach across buzzer, GUI backlight, and signal gen
+- Fix task_monitor: use vTaskCoreAffinityGet (IDF5 bitmask) with version
+  guard, falling back to xTaskGetAffinity on IDF4
+- Refactor platformio.ini: shared [idf5_includes] section eliminates
+  duplicate ESP-DSP include paths across environments
+- Update Arduino.h mock to cover both 2.x and 3.x LEDC API signatures (`6266003`)
 - [2026-02-17] feat: Migrate TFT driver to LovyanGFX and fix OTA TLS/WDT issues
 
 Replace TFT_eSPI with LovyanGFX for DMA double-buffered display flush
