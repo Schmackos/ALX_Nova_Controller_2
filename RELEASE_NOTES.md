@@ -64,6 +64,7 @@ existing native tests are unaffected. Added test/test_debug_serial/ with 6
 tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
 
 ## Technical Details
+- [2026-02-19] chore: update release notes (`6c19dd4`)
 - [2026-02-19] chore: update release notes (`5127a87`)
 - [2026-02-19] refactor: add named heap threshold constants to config.h (Item A)
 
