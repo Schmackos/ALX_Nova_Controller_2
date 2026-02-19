@@ -11409,6 +11409,10 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
         .password-wrapper .form-input {
             padding-right: 48px;
         }
+
+        .fallback-notice{text-align:center;font-size:13px;color:var(--text-secondary);margin-top:16px;padding:12px;background:var(--bg-card);border-radius:8px;border:1px dashed var(--border);}
+        .fallback-url{font-family:monospace;font-size:15px;color:var(--accent);margin-top:6px;}
+        .fallback-url a{color:var(--accent);text-decoration:none;}
     </style>
 </head>
 <body>
@@ -11439,6 +11443,11 @@ const char apHtmlPage[] PROGMEM = R"rawliteral(
         </div>
 
         <p class="info-text">Enter your WiFi credentials to connect the device to your network.</p>
+
+        <div class="fallback-notice">
+          <p>If this page didn't open automatically, navigate to:</p>
+          <p class="fallback-url"><a href="http://192.168.4.1/">http://192.168.4.1/</a></p>
+        </div>
     </div>
 
     <div id="wifiConnectionModal" class="modal-overlay">

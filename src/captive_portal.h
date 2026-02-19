@@ -8,12 +8,17 @@
 // These probes are sent by OS captive portal detection mechanisms.
 inline bool captive_portal_is_probe_url(const char* uri) {
     if (!uri) return false;
-    return (strcmp(uri, "/generate_204")       == 0 ||  // Android
-            strcmp(uri, "/hotspot-detect.html") == 0 ||  // Apple iOS/macOS
-            strcmp(uri, "/connecttest.txt")     == 0 ||  // Windows 10/11
-            strcmp(uri, "/redirect")            == 0 ||  // Windows 10/11
-            strcmp(uri, "/ncsi.txt")            == 0 ||  // Windows legacy
-            strcmp(uri, "/success.txt")         == 0);   // Firefox
+    return (strcmp(uri, "/generate_204")               == 0 ||  // Android/Chrome
+            strcmp(uri, "/gen_204")                    == 0 ||  // Android (alt)
+            strcmp(uri, "/hotspot-detect.html")        == 0 ||  // Apple iOS/macOS
+            strcmp(uri, "/library/test/success.html")  == 0 ||  // Apple (alt)
+            strcmp(uri, "/connecttest.txt")            == 0 ||  // Windows 10/11
+            strcmp(uri, "/redirect")                   == 0 ||  // Windows stage 2
+            strcmp(uri, "/ncsi.txt")                   == 0 ||  // Windows legacy
+            strcmp(uri, "/success.txt")                == 0 ||  // Firefox
+            strcmp(uri, "/canonical.html")             == 0 ||  // Firefox (alt)
+            strcmp(uri, "/connectivity-check")         == 0 ||  // Ubuntu/NetworkManager
+            strcmp(uri, "/check_network_status.txt")   == 0);   // Samsung
 }
 
 // Returns true if the Host header refers to this device's own IP.

@@ -11,6 +11,11 @@ constexpr unsigned long WARNING_THROTTLE_MS = 30000;
 constexpr unsigned long WIFI_SCAN_TIMEOUT_MS = 30000;
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000;
 
+constexpr uint8_t ROAM_MAX_CHECKS = 3;
+constexpr unsigned long ROAM_CHECK_INTERVAL_MS = 300000UL;  // 5 minutes
+constexpr int8_t ROAM_RSSI_EXCELLENT = -49;                 // Skip scan above this dBm
+constexpr int8_t ROAM_RSSI_IMPROVEMENT_DB = 10;             // Min improvement to roam
+
 // ===== WiFi Network Configuration Struct =====
 struct WiFiNetworkConfig {
   String ssid;
@@ -60,6 +65,7 @@ bool configureStaticIP(const char *staticIP, const char *subnet,
 // ===== WiFi Event Handler & Reconnection =====
 void initWiFiEventHandler();
 void checkWiFiConnection();
+void checkWiFiRoaming();
 
 // ===== WiFi Credentials Persistence (Legacy - for migration only) =====
 bool loadWiFiCredentials(String &ssid, String &password);

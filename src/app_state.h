@@ -525,6 +525,11 @@ public:
   void clearError();
   bool hasError() const { return errorCode != 0; }
 
+  // ===== WiFi Roaming State =====
+  uint8_t roamCheckCount = 0;           // 0-3, reset on non-roam disconnect
+  unsigned long lastRoamCheckTime = 0;  // millis() of last roam check
+  bool roamingInProgress = false;       // True during self-triggered roam
+
   // ===== Reconnection Backoff =====
   unsigned long wifiBackoffDelay = 1000;
   unsigned long mqttBackoffDelay = 5000;
