@@ -3,8 +3,36 @@
 ## Version 1.8.7
 
 ## New Features
+- [2026-02-19] feat: post-connect roaming and captive portal auto-open
+
+Post-connect roaming: after connecting to a non-hidden network, scan
+for a better BSSID up to 3 times (every 5 min). Skips scan when RSSI
+> -49 dBm (excellent) but still counts toward the limit. Roams via
+WiFi.begin(ssid, pass, channel, bssid) when the same SSID is found
+with +10 dB improvement. Non-roaming disconnects reset the counter.
+
+Captive portal: replace single handleCaptivePortal() with per-platform
+handlers (Android 302, Apple inline portal page, Windows/Firefox/Ubuntu
+body-mismatch redirect, Samsung redirect). Expanded probe URL list from
+6 to 11. Root route serves AP page without auth in AP-only mode. Added
+fallback URL notice (http://192.168.4.1/) to AP setup page.
+
+929/929 native tests pass including 15 new test_wifi_roaming tests. (`71a660f`)
+- [2026-02-19] feat: WebSocket session IP binding — reject messages from mismatched IPs
+
+- Add wsClientIP[MAX_WS_CLIENTS] array to track per-client remote IP
+- On WStype_CONNECTED: store webSocket.remoteIP(num) in wsClientIP[num]
+- On WStype_DISCONNECTED: clear wsClientIP[num] to IPAddress() default
+- On auth success: confirm/update stored IP to webSocket.remoteIP(num)
+- On every authenticated message: compare current remoteIP with stored IP;
+  call webSocket.disconnect(num) and return on mismatch
+- Export wsClientIP via websocket_handler.h for testing
+- Add 5 unit tests covering match, mismatch, clear, auth update, and
+  multi-client independence (`69e8222`)
 - [2026-02-19] feat: captive portal for AP mode — all-OS probe URL handlers with host-header guard (`84defa9`)
 - [2026-02-19] feat: passive ADC clock sync monitoring via cross-correlation
+- [2026-02-19] feat: post-connect roaming — device scans for better AP up to 3 times after connecting (+10 dB threshold, 5 min interval, convergence limit, RSSI excellence gate at -49 dBm)
+- [2026-02-19] feat: captive portal auto-open — platform-specific probe handlers for Android/Chrome, Apple iOS/macOS, Windows NCSI, Firefox, Ubuntu NetworkManager, Samsung; fallback URL notice in AP page
 
 Add cross-correlation-based phase detection between the two PCM1808 I2S
 ADCs. Every 5 seconds, when both ADCs report AUDIO_OK, the audio task
@@ -36,6 +64,20 @@ existing native tests are unaffected. Added test/test_debug_serial/ with 6
 tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
 
 ## Technical Details
+- [2026-02-19] chore: update release notes (`6c19dd4`)
+- [2026-02-19] chore: update release notes (`5127a87`)
+- [2026-02-19] refactor: add named heap threshold constants to config.h (Item A)
+
+Replace all hardcoded heap size literals with named constants:
+- HEAP_CRITICAL_THRESHOLD_BYTES (40000) — WiFi RX drops below this
+- HEAP_WARNING_THRESHOLD_BYTES (60000) — early notice threshold
+- HEAP_TLS_MIN_THRESHOLD_BYTES (30000) — minimum for TLS handshake
+- HEAP_TLS_SECURE_THRESHOLD_BYTES (50000) — threshold for cert validation
+- HEAP_OTA_ABORT_THRESHOLD_BYTES (10000) — abort OTA if below this
+- HEAP_WIFI_RESERVE_BYTES (40000) — DSP alloc reserve for WiFi/MQTT/HTTP
+
+Updated: src/main.cpp (heap monitor block), src/ota_updater.cpp (5 sites),
+src/dsp_pipeline.cpp (delay alloc pre-flight check) (`df7e9e7`)
 - [2026-02-19] chore: bump version to 1.8.7 (`660fcf0`)
 - [2026-02-19] chore: update release notes (`977cb57`)
 - [2026-02-19] test: unit tests for captive portal URL matching and host-header logic (`0d84dfa`)

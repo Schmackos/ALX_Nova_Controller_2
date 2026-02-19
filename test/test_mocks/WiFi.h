@@ -10,13 +10,27 @@
 // Forward declare IPAddress
 class IPAddress;
 
+// Scan status constants
+#define WIFI_SCAN_RUNNING (-1)
+#define WIFI_SCAN_FAILED  (-2)
+
 // Mock WiFi network scan result
 struct WiFiNetwork {
   std::string ssid;
   int rssi;
   uint8_t channel;
   bool encrypted;
+  uint8_t bssid[6];
 };
+
+// WiFi mode constants
+#define WIFI_MODE_NULL  0
+#define WIFI_MODE_STA   1
+#define WIFI_MODE_AP    2
+#define WIFI_MODE_APSTA 3
+#define WIFI_AP         WIFI_MODE_AP
+#define WIFI_STA        WIFI_MODE_STA
+#define WIFI_AP_STA     WIFI_MODE_APSTA
 
 // Mock WiFi class
 class WiFiClass {
@@ -42,6 +56,9 @@ public:
   static IPAddress mockSubnet;
   static IPAddress mockAPIP;
   static int mockRSSI;
+  static int mockScanComplete;
+  static bool mockWifiBeginCalled;
+  static uint8_t mockCurrentMode;
 
   // Core functions
   int status() { return lastStatusCode; }
@@ -51,6 +68,17 @@ public:
       return false;
     connectedSSID = ssid;
     lastStatusCode = WL_CONNECTED;
+    mockWifiBeginCalled = true;
+    return true;
+  }
+
+  bool begin(const char *ssid, const char *password, int32_t channel,
+             const uint8_t *bssid) {
+    if (!ssid)
+      return false;
+    connectedSSID = ssid;
+    lastStatusCode = WL_CONNECTED;
+    mockWifiBeginCalled = true;
     return true;
   }
 
@@ -61,10 +89,12 @@ public:
   }
 
   bool mode(uint8_t m) {
-    // m = 1 for STA, 2 for AP, 3 for STA+AP
+    mockCurrentMode = m;
     apModeActive = (m & 2) != 0;
     return true;
   }
+
+  uint8_t getMode() { return mockCurrentMode; }
 
   // AP mode functions
   bool softAP(const char *ssid, const char *password = nullptr) {
@@ -100,7 +130,18 @@ public:
   int RSSI() { return mockRSSI; }
 
   // Scanning
-  int scanNetworks() { return mockScanResults.size(); }
+  int scanNetworks() { return (int)mockScanResults.size(); }
+
+  int scanNetworks(bool async, bool show_hidden) {
+    if (mockScanComplete == WIFI_SCAN_FAILED) {
+      return WIFI_SCAN_FAILED;
+    }
+    return WIFI_SCAN_RUNNING;
+  }
+
+  int scanComplete() { return mockScanComplete; }
+
+  void scanDelete() { /* no-op */ }
 
   String SSID(uint8_t networkItem) {
     if (networkItem < mockScanResults.size()) {
@@ -116,11 +157,19 @@ public:
     return 0;
   }
 
-  uint8_t channel(uint8_t networkItem) {
+  int32_t channel(uint8_t networkItem) {
     if (networkItem < mockScanResults.size()) {
       return mockScanResults[networkItem].channel;
     }
-    return 0;
+    return 1;
+  }
+
+  uint8_t *BSSID(uint8_t networkItem) {
+    static uint8_t mockBssid[6] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
+    if (networkItem < mockScanResults.size()) {
+      return mockScanResults[networkItem].bssid;
+    }
+    return mockBssid;
   }
 
   bool encryptionType(uint8_t networkItem) {
@@ -134,6 +183,8 @@ public:
 
   String hostname() { return "esp32-nova"; }
 
+  int softAPgetStationNum() { return 0; }
+
   // Static methods to reset for tests
   static void reset() {
     mockScanResults.clear();
@@ -145,11 +196,26 @@ public:
     mockSubnet = IPAddress(255, 255, 255, 0);
     mockAPIP = IPAddress(192, 168, 4, 1);
     mockRSSI = -50;
+    mockScanComplete = WIFI_SCAN_FAILED;
+    mockWifiBeginCalled = false;
+    mockCurrentMode = WIFI_STA;
   }
 
   static void addMockNetwork(const char *ssid, int rssi, uint8_t channel = 1,
                              bool encrypted = true) {
-    mockScanResults.push_back({std::string(ssid), rssi, channel, encrypted});
+    WiFiNetwork net;
+    net.ssid = std::string(ssid);
+    net.rssi = rssi;
+    net.channel = channel;
+    net.encrypted = encrypted;
+    std::memset(net.bssid, 0, 6);
+    net.bssid[0] = 0xAA;
+    net.bssid[1] = 0xBB;
+    net.bssid[2] = 0xCC;
+    net.bssid[3] = 0xDD;
+    net.bssid[4] = 0xEE;
+    net.bssid[5] = 0xFF;
+    mockScanResults.push_back(net);
   }
 
   static void clearMockNetworks() { mockScanResults.clear(); }
@@ -165,8 +231,21 @@ IPAddress WiFiClass::mockGateway(192, 168, 1, 1);
 IPAddress WiFiClass::mockSubnet(255, 255, 255, 0);
 IPAddress WiFiClass::mockAPIP(192, 168, 4, 1);
 int WiFiClass::mockRSSI = -50;
+int WiFiClass::mockScanComplete = WIFI_SCAN_FAILED;
+bool WiFiClass::mockWifiBeginCalled = false;
+uint8_t WiFiClass::mockCurrentMode = WIFI_STA;
 
 // Global WiFi object
 static WiFiClass WiFi;
+
+// Global-scope WiFi status aliases (matching real Arduino WiFi library)
+static const int WL_IDLE_STATUS    = WiFiClass::WL_IDLE_STATUS;
+static const int WL_NO_SSID_AVAIL  = WiFiClass::WL_NO_SSID_AVAIL;
+static const int WL_SCAN_COMPLETED = WiFiClass::WL_SCAN_COMPLETED;
+static const int WL_CONNECTED      = WiFiClass::WL_CONNECTED;
+static const int WL_CONNECT_FAILED = WiFiClass::WL_CONNECT_FAILED;
+static const int WL_CONNECTION_LOST = WiFiClass::WL_CONNECTION_LOST;
+static const int WL_DISCONNECTED   = WiFiClass::WL_DISCONNECTED;
+static const int WL_AP_LISTENING   = WiFiClass::WL_AP_LISTENING;
 
 #endif // WIFI_MOCK_H

@@ -318,7 +318,7 @@ void handleGetReleaseNotes() {
   LOG_I("[OTA] Fetching release notes from: %s", releaseNotesUrl.c_str());
 
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 30000) {
+  if (maxBlock < HEAP_TLS_MIN_THRESHOLD_BYTES) {
     LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<30KB)", (unsigned long)maxBlock);
     server.send(200, "application/json", "{\"success\": false, \"message\": \"Insufficient memory for secure connection\"}");
     return;
@@ -326,7 +326,7 @@ void handleGetReleaseNotes() {
 
   WiFiClientSecure client;
 
-  if (maxBlock < 50000) {
+  if (maxBlock < HEAP_TLS_SECURE_THRESHOLD_BYTES) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
   } else if (appState.enableCertValidation && isNtpSynced()) {
@@ -460,14 +460,14 @@ void checkForFirmwareUpdate() {
 bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum) {
   // TLS handshake needs ~40-50KB contiguous heap for MbedTLS buffers
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 30000) {
+  if (maxBlock < HEAP_TLS_MIN_THRESHOLD_BYTES) {
     LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<30KB), skipping", (unsigned long)maxBlock);
     return false;
   }
 
   WiFiClientSecure client;
 
-  if (maxBlock < 50000) {
+  if (maxBlock < HEAP_TLS_SECURE_THRESHOLD_BYTES) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
   } else if (appState.enableCertValidation && isNtpSynced()) {
@@ -815,7 +815,7 @@ bool performOTAUpdate(String firmwareUrl) {
   LOG_I("[OTA] Heap largest block: %lu bytes, checksum available: %s",
         (unsigned long)maxBlock, hasChecksum ? "yes" : "no");
 
-  if (maxBlock < 10000) {
+  if (maxBlock < HEAP_OTA_ABORT_THRESHOLD_BYTES) {
     LOG_E("[OTA] Heap critically low: %lu bytes (<10KB), aborting", (unsigned long)maxBlock);
     setOTAProgress("error", "Insufficient memory for download", 0);
     appState.otaInProgress = false;
@@ -823,7 +823,7 @@ bool performOTAUpdate(String firmwareUrl) {
   }
 
   // HTTP fallback path: plain WiFiClient, no TLS overhead
-  if (maxBlock < 30000 && hasChecksum) {
+  if (maxBlock < HEAP_TLS_MIN_THRESHOLD_BYTES && hasChecksum) {
     LOG_W("[OTA] Heap too low for TLS (%lu bytes), using HTTP fallback with SHA256 verification",
           (unsigned long)maxBlock);
     appState.otaHttpFallback = true;
@@ -861,7 +861,7 @@ bool performOTAUpdate(String firmwareUrl) {
   }
 
   // HTTPS fallback without checksum — refuse HTTP when integrity can't be verified
-  if (maxBlock < 30000) {
+  if (maxBlock < HEAP_TLS_MIN_THRESHOLD_BYTES) {
     LOG_E("[OTA] Heap too low for TLS (%lu bytes) and no checksum for HTTP fallback",
           (unsigned long)maxBlock);
     setOTAProgress("error", "Insufficient memory and no checksum for fallback", 0);
@@ -872,7 +872,7 @@ bool performOTAUpdate(String firmwareUrl) {
   // HTTPS path (>= 30KB heap available)
   WiFiClientSecure client;
 
-  if (maxBlock < 50000) {
+  if (maxBlock < HEAP_TLS_SECURE_THRESHOLD_BYTES) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
   } else if (appState.enableCertValidation && isNtpSynced()) {
@@ -1236,7 +1236,7 @@ static void otaCheckTaskFunc(void* param) {
   // via the __wrap_esp_mbedtls_mem_calloc linker override, so internal SRAM
   // only needs enough for WiFi/lwIP packet buffers (~10-15KB).
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 30000) {
+  if (maxBlock < HEAP_TLS_MIN_THRESHOLD_BYTES) {
     LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<30KB), skipping", (unsigned long)maxBlock);
     _otaConsecutiveFailures++;
     if (_otaConsecutiveFailures > 20) _otaConsecutiveFailures = 20;

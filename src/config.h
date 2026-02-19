@@ -82,6 +82,17 @@ const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
 #endif
 #endif // DAC_ENABLED
 
+// ===== Heap Safety Thresholds =====
+// Named constants for heap size checks scattered across main/OTA/DSP modules.
+// WiFi RX buffers are dynamically allocated from internal SRAM; if free heap
+// drops below ~40 KB, incoming packets are silently dropped.
+#define HEAP_CRITICAL_THRESHOLD_BYTES   40000  // < 40 KB: WiFi RX likely dropping
+#define HEAP_WARNING_THRESHOLD_BYTES    60000  // < 60 KB: early notice, reduce allocations
+#define HEAP_TLS_MIN_THRESHOLD_BYTES    30000  // < 30 KB: heap too low for TLS handshake
+#define HEAP_TLS_SECURE_THRESHOLD_BYTES 50000  // < 50 KB: skip cert validation (insecure TLS)
+#define HEAP_OTA_ABORT_THRESHOLD_BYTES  10000  // < 10 KB: heap critically low, abort OTA
+#define HEAP_WIFI_RESERVE_BYTES         40000  // DSP alloc: keep 40 KB reserve for WiFi/MQTT/HTTP
+
 // ===== DSP Pipeline Configuration =====
 #ifdef DSP_ENABLED
 #define DSP_MAX_STAGES       24    // Max filter stages per channel (10 PEQ + 14 chain)

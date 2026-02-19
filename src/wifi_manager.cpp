@@ -41,6 +41,10 @@ static unsigned long lastDisconnectWarning = 0;
 static bool wifiScanInProgress = false;
 static unsigned long wifiScanStartTime = 0;
 
+// WiFi roaming scan state
+static bool roamScanInProgress = false;
+static unsigned long roamScanStartTime = 0;
+
 // WiFi retry state - for intelligent network retry logic
 static bool wifiRetryInProgress = false;
 static unsigned long lastFullRetryAttempt = 0;
@@ -234,6 +238,15 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     uint8_t reason = info.wifi_sta_disconnected.reason;
     String reasonStr = getWiFiDisconnectReason(reason);
 
+    // If WE triggered this disconnect for roaming, skip normal reconnect logic
+    if (appState.roamingInProgress) {
+      LOG_D("[WiFi] Roaming disconnect (expected), reason %d", reason);
+      break;
+    }
+    // Non-roaming disconnect: reset roam counter for fresh start
+    appState.roamCheckCount = 0;
+    appState.lastRoamCheckTime = 0;
+
     // Always print when actively connecting, otherwise throttle
     if (appState.wifiConnecting) {
       LOG_W("[WiFi] Connection failed: %s (reason %d)", reasonStr.c_str(), reason);
@@ -268,6 +281,11 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     wifiStatusUpdateRequested = true; // Defer update to main loop
     // Mark WiFi event for audio quality correlation (Phase 3)
     audio_quality_mark_event("wifi_connected");
+    // Clear roaming flag after a successful connection
+    if (appState.roamingInProgress) {
+      LOG_I("[WiFi] Roam successful");
+      appState.roamingInProgress = false;
+    }
     break;
 
   case ARDUINO_EVENT_WIFI_STA_GOT_IP:
@@ -299,6 +317,16 @@ void checkWiFiConnection() {
       // Scan timed out, clear the flag
       wifiScanInProgress = false;
       LOG_W("[WiFi] Scan timeout - clearing scan flag");
+    } else {
+      return;
+    }
+  }
+
+  // Don't run reconnection logic while a roaming scan is in progress
+  if (roamScanInProgress) {
+    if (millis() - roamScanStartTime > WIFI_SCAN_TIMEOUT_MS) {
+      roamScanInProgress = false;
+      LOG_W("[WiFi] Roam scan timeout in checkWiFiConnection - clearing flag");
     } else {
       return;
     }
@@ -372,9 +400,141 @@ void checkWiFiConnection() {
       }
     }
   }
+
+  // Post-connect roaming check (only when stably connected)
+  if (WiFi.status() == WL_CONNECTED && !wifiDisconnected) {
+    checkWiFiRoaming();
+  }
 }
 
 // ===== WiFi Core Functions =====
+
+void checkWiFiRoaming() {
+  // Prerequisites: must be stably connected, no competing operations
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (appState.wifiConnecting) return;
+  if (appState.roamingInProgress) return;
+  if (wifiScanInProgress) return;  // User-initiated scan in progress
+
+  // Convergence limit: after 3 checks we are done
+  if (appState.roamCheckCount >= ROAM_MAX_CHECKS) return;
+
+  // Skip roaming on hidden networks (SSID is empty string)
+  String currentSSID = WiFi.SSID();
+  if (currentSSID.length() == 0) return;
+
+  // Time gate: only check every 5 minutes
+  if (appState.lastRoamCheckTime != 0 &&
+      millis() - appState.lastRoamCheckTime < ROAM_CHECK_INTERVAL_MS) {
+    return;
+  }
+
+  // ---- Phase 1: Start async scan ----
+  if (!roamScanInProgress) {
+    int currentRSSI = WiFi.RSSI();
+    if (currentRSSI > ROAM_RSSI_EXCELLENT) {
+      // Signal is already excellent — skip scan but count toward limit
+      appState.roamCheckCount++;
+      appState.lastRoamCheckTime = millis();
+      LOG_D("[WiFi] Roam check %d/%d: RSSI %d dBm (excellent, skipped)",
+            appState.roamCheckCount, ROAM_MAX_CHECKS, currentRSSI);
+      return;
+    }
+
+    // Start async scan (non-blocking, skip hidden networks)
+    WiFi.scanDelete();
+    int result = WiFi.scanNetworks(/*async=*/true, /*show_hidden=*/false);
+    if (result == WIFI_SCAN_FAILED) {
+      LOG_W("[WiFi] Roam scan failed to start");
+      appState.roamCheckCount++;
+      appState.lastRoamCheckTime = millis();
+      return;
+    }
+    roamScanInProgress = true;
+    roamScanStartTime = millis();
+    LOG_D("[WiFi] Roam scan started (check %d/%d, RSSI %d dBm)",
+          appState.roamCheckCount + 1, ROAM_MAX_CHECKS, currentRSSI);
+    return;
+  }
+
+  // ---- Phase 2: Check if scan has completed (called on subsequent polls) ----
+
+  // Timeout protection
+  if (millis() - roamScanStartTime > WIFI_SCAN_TIMEOUT_MS) {
+    roamScanInProgress = false;
+    WiFi.scanDelete();
+    appState.roamCheckCount++;
+    appState.lastRoamCheckTime = millis();
+    LOG_W("[WiFi] Roam scan timed out");
+    return;
+  }
+
+  int n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_RUNNING) return;  // Still scanning, check again next poll
+
+  roamScanInProgress = false;
+
+  if (n == WIFI_SCAN_FAILED || n < 0) {
+    appState.roamCheckCount++;
+    appState.lastRoamCheckTime = millis();
+    WiFi.scanDelete();
+    return;
+  }
+
+  // ---- Phase 3: Evaluate results ----
+  int currentRSSI = WiFi.RSSI();
+  int bestRSSI = currentRSSI;
+  int bestIndex = -1;
+
+  for (int i = 0; i < n; i++) {
+    if (WiFi.SSID(i) == currentSSID) {
+      int candidateRSSI = WiFi.RSSI(i);
+      if ((candidateRSSI - currentRSSI) >= ROAM_RSSI_IMPROVEMENT_DB &&
+          candidateRSSI > bestRSSI) {
+        bestRSSI = candidateRSSI;
+        bestIndex = i;
+      }
+    }
+  }
+
+  appState.roamCheckCount++;
+  appState.lastRoamCheckTime = millis();
+
+  if (bestIndex >= 0) {
+    // Found a significantly better AP — look up password and roam
+    uint8_t bssid[6];
+    memcpy(bssid, WiFi.BSSID(bestIndex), 6);
+    int32_t channel = WiFi.channel(bestIndex);
+
+    // Find stored password for this SSID
+    String password = "";
+    Preferences prefs;
+    prefs.begin("wifi-list", true);
+    int count = prefs.getUChar("count", 0);
+    for (int i = 0; i < count; i++) {
+      String storedSSID = prefs.getString(getNetworkKey("s", i).c_str(), "");
+      if (storedSSID == currentSSID) {
+        password = prefs.getString(getNetworkKey("p", i).c_str(), "");
+        break;
+      }
+    }
+    prefs.end();
+
+    LOG_I("[WiFi] Roaming: current %d dBm -> target %d dBm (ch %d)",
+          currentRSSI, bestRSSI, channel);
+
+    // Set flag BEFORE WiFi.begin so the disconnect event handler knows this is intentional
+    appState.roamingInProgress = true;
+    WiFi.scanDelete();
+
+    // Begin connection to specific BSSID + channel for fast roam
+    WiFi.begin(currentSSID.c_str(), password.c_str(), channel, bssid);
+  } else {
+    LOG_D("[WiFi] Roam check %d/%d: no better AP found (current %d dBm)",
+          appState.roamCheckCount, ROAM_MAX_CHECKS, currentRSSI);
+    WiFi.scanDelete();
+  }
+}
 
 void startAccessPoint() {
   appState.isAPMode = true;

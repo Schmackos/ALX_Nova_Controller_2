@@ -38,6 +38,11 @@ bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
 unsigned long wsAuthTimeout[MAX_WS_CLIENTS] = {0};
 static String wsSessionId[MAX_WS_CLIENTS];
 
+// ===== Per-client IP Binding =====
+// Stores the remote IP captured at connect time. Messages from a different IP
+// are rejected and the connection is dropped (Session-IP hijack protection).
+IPAddress wsClientIP[MAX_WS_CLIENTS];
+
 // ===== Per-client Audio Streaming Subscription =====
 static bool _audioSubscribed[MAX_WS_CLIENTS] = {};
 
@@ -93,12 +98,16 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
       wsAuthTimeout[num] = 0;
       wsSessionId[num] = "";
       _audioSubscribed[num] = false;
+      wsClientIP[num] = IPAddress();
       break;
 
     case WStype_CONNECTED:
       {
         IPAddress ip = webSocket.remoteIP(num);
         LOG_I("[WebSocket] Client [%u] connected from %d.%d.%d.%d", num, ip[0], ip[1], ip[2], ip[3]);
+
+        // Bind this slot to the connecting client's IP
+        wsClientIP[num] = ip;
 
         // Set auth timeout (5 seconds to authenticate)
         wsAuthStatus[num] = false;
@@ -131,6 +140,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             wsAuthStatus[num] = true;
             wsAuthTimeout[num] = 0;
             wsSessionId[num] = sessionId;
+            // Confirm/update the stored IP binding at auth success
+            wsClientIP[num] = webSocket.remoteIP(num);
             webSocket.sendTXT(num, "{\"type\":\"authSuccess\"}");
             LOG_D("[WebSocket] Client [%u] authenticated", num);
 
@@ -181,6 +192,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           wsAuthStatus[num] = false;
           wsSessionId[num] = "";
           webSocket.sendTXT(num, "{\"type\":\"authFailed\",\"error\":\"Session expired or revoked\"}");
+          webSocket.disconnect(num);
+          return;
+        }
+
+        // IP binding check: reject messages arriving from a different IP than
+        // the one that was present at connect/auth time (session-IP hijack guard)
+        if (webSocket.remoteIP(num) != wsClientIP[num]) {
+          LOG_W("[WebSocket] Client [%u] IP mismatch — dropping connection", num);
           webSocket.disconnect(num);
           return;
         }
