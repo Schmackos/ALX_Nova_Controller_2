@@ -71,6 +71,7 @@ Five root causes fixed across four test files and one source file:
 - [2026-02-19] docs: update codebase concerns map (`5188c0c`)
 
 ## Bug Fixes
+- [2026-02-19] fix: add heapWarning threshold and 10s heap monitoring for earlier fragmentation detection (`c1982d4`)
 - [2026-02-19] fix: WinMain linker error in test_emergency_limiter; extract dsp_swap_check_state() for testability
 
 Add #pragma comment(linker, "/SUBSYSTEM:CONSOLE") guard in test_emergency_limiter.cpp to

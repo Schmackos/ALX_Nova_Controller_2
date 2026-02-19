@@ -3,10 +3,6 @@
 #include <math.h>
 #include <string.h>
 
-#ifndef NATIVE_TEST
-#include <ESP.h>
-#endif
-
 // Correlation window (100ms)
 #define CORRELATION_WINDOW_MS 100
 
