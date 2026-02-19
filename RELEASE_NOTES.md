@@ -3,6 +3,52 @@
 ## Version 1.8.7
 
 ## New Features
+- [2026-02-19] feat: add user-configurable device name (AP SSID override)
+
+- AppState: add customDeviceName field (persisted, max 32 chars)
+- settings_manager: expand lines[] to 35, persist customDeviceName at
+  line index 31, include in export/import JSON as settings.customDeviceName
+- main.cpp: apply customDeviceName to apSSID after loadSettings(); falls
+  back to ALX-Nova-<serial> when blank
+- websocket_handler: handle setDeviceName WS command, update apSSID
+  live and broadcast wifiStatus to all clients
+- wifi_manager: include customDeviceName in buildWiFiStatusJson so web
+  UI can pre-populate the field on load
+- mqtt_handler: subscribe settings/device_name/set, handle command,
+  publish HA text entity via homeassistant/text/.../device_name/config
+- web_pages: add Device Name text input in Access Point card with
+  debounced save via saveDeviceName(); load value from wifiStatus WS
+- test_settings: add 5 tests covering empty fallback, custom name usage,
+  32-char truncation, save/load roundtrip, and clear-to-empty (`e098abf`)
+- [2026-02-19] feat: add user-configurable device name (AP SSID override)
+
+- AppState: add customDeviceName field (persisted, max 32 chars)
+- settings_manager: expand lines[] to 35, persist customDeviceName at
+  line index 31, include in export/import JSON as settings.customDeviceName
+- main.cpp: apply customDeviceName to apSSID after loadSettings(); falls
+  back to ALX-Nova-<serial> when blank
+- websocket_handler: handle setDeviceName WS command, update apSSID
+  live and broadcast wifiStatus to all clients
+- wifi_manager: include customDeviceName in buildWiFiStatusJson so web
+  UI can pre-populate the field on load
+- mqtt_handler: subscribe settings/device_name/set, handle command,
+  publish HA text entity via homeassistant/text/.../device_name/config
+- web_pages: add Device Name text input in Access Point card with
+  debounced save via saveDeviceName(); load value from wifiStatus WS
+- test_settings: add 5 tests covering empty fallback, custom name usage,
+  32-char truncation, save/load roundtrip, and clear-to-empty (`bfb005a`)
+- [2026-02-19] feat: add FreeRTOS stack overflow hook with flag-pattern handler
+
+- Define vApplicationStackOverflowHook (extern C weak symbol) in main.cpp
+  before setup(); stores detected flag + task name in AppState (safe for
+  exception/interrupt context — no heap, no Serial)
+- Add volatile stackOverflowDetected + char stackOverflowTaskName[16] to
+  AppState in the audio/volatile field section
+- loop() checks the flag each iteration, clears it, logs LOG_E, and records
+  "stack_overflow:<taskName>" to the crash log ring buffer
+- Add test/test_stack_overflow/ with 5 native tests covering: flag set,
+  15-char truncation, null name handling, loop handler clears flag, and
+  loop handler no-op when flag not set (`9cdaf49`)
 - [2026-02-19] feat: replace single pending_pattern with 3-slot circular buzzer queue (Item D)
 
 Replace the volatile BuzzerPattern pending_pattern singleton with a

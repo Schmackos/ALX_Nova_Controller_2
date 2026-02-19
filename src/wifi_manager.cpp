@@ -1008,6 +1008,7 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   doc["manufacturer"] = MANUFACTURER_NAME;
   doc["model"] = MANUFACTURER_MODEL;
   doc["serialNumber"] = appState.deviceSerialNumber;
+  doc["customDeviceName"] = appState.customDeviceName;
 
   // Include latest version info if available
   if (appState.cachedLatestVersion.length() > 0) {

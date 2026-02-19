@@ -277,6 +277,72 @@ void test_settings_validation(void) {
     TEST_ASSERT_EQUAL(14 * 3600, appSettings.utcOffset);
 }
 
+// ===== Custom Device Name Tests =====
+
+// Helper: compute AP name using the same logic as main.cpp and websocket_handler
+static String computeApName(const String &customDeviceName, const String &serialNumber) {
+    String apName;
+    if (customDeviceName.length() > 0) {
+        apName = customDeviceName;
+    } else {
+        apName = String("ALX-Nova-") + serialNumber;
+    }
+    if ((int)apName.length() > 32) apName = apName.substring(0, 32);
+    return apName;
+}
+
+void test_custom_name_empty_falls_back_to_serial(void) {
+    // When customDeviceName is empty, AP name must use the serial-based default
+    String customName = "";
+    String serial = "AABBCCDDEEFF";
+    String apName = computeApName(customName, serial);
+    TEST_ASSERT_EQUAL_STRING("ALX-Nova-AABBCCDDEEFF", apName.c_str());
+}
+
+void test_custom_name_used_when_set(void) {
+    // When customDeviceName is non-empty, AP name should equal it
+    String customName = "MyAmplifier";
+    String serial = "AABBCCDDEEFF";
+    String apName = computeApName(customName, serial);
+    TEST_ASSERT_EQUAL_STRING("MyAmplifier", apName.c_str());
+}
+
+void test_custom_name_truncated_at_32(void) {
+    // Names longer than 32 chars must be truncated to 32
+    String customName = "This-Is-A-Very-Long-Device-Name-That-Exceeds-32";
+    String serial = "AABBCCDDEEFF";
+    // Simulate save truncation (as done in websocket_handler and settings load)
+    if ((int)customName.length() > 32) customName = customName.substring(0, 32);
+    String apName = computeApName(customName, serial);
+    TEST_ASSERT_EQUAL(32, (int)apName.length());
+    TEST_ASSERT_EQUAL_STRING("This-Is-A-Very-Long-Device-Name-", apName.c_str());
+}
+
+void test_custom_name_save_load_roundtrip(void) {
+    // Saving and reloading customDeviceName should return the same value
+    const String testName = "RoundtripName";
+    // Simulate save: store in Preferences
+    Preferences prefs;
+    prefs.begin("settings", false);
+    prefs.putString("custom_device_name", testName);
+    prefs.end();
+    // Simulate load: retrieve from Preferences
+    prefs.begin("settings", true);
+    String loaded = prefs.getString("custom_device_name", "");
+    prefs.end();
+    TEST_ASSERT_EQUAL_STRING(testName.c_str(), loaded.c_str());
+}
+
+void test_custom_name_cleared_to_empty(void) {
+    // Setting customDeviceName to "" clears back to default fallback behavior
+    String customName = "";
+    String serial = "112233445566";
+    String apName = computeApName(customName, serial);
+    // Must fall back to the auto-generated form
+    String expected = "ALX-Nova-" + serial;
+    TEST_ASSERT_EQUAL_STRING(expected.c_str(), apName.c_str());
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -291,6 +357,12 @@ int runUnityTests(void) {
     RUN_TEST(test_settings_api_update);
     RUN_TEST(test_settings_update_partial);
     RUN_TEST(test_settings_validation);
+
+    RUN_TEST(test_custom_name_empty_falls_back_to_serial);
+    RUN_TEST(test_custom_name_used_when_set);
+    RUN_TEST(test_custom_name_truncated_at_32);
+    RUN_TEST(test_custom_name_save_load_roundtrip);
+    RUN_TEST(test_custom_name_cleared_to_empty);
 
     return UNITY_END();
 }

@@ -34,9 +34,9 @@ bool loadSettings() {
     return false;
   }
 
-  // Read ALL lines into array (30 slots for future growth)
-  String lines[30];
-  for (int i = 0; i < 30; i++) {
+  // Read ALL lines into array (35 slots for future growth)
+  String lines[35];
+  for (int i = 0; i < 35; i++) {
     if (file.available()) {
       lines[i] = file.readStringUntil('\n');
       lines[i].trim();
@@ -250,6 +250,15 @@ bool loadSettings() {
   // Line 30 was dcBlockEnabled (removed — now a DSP preset)
 #endif
 
+  // Load custom device name (line 31, if present)
+  if (lines[dataStart + 31].length() > 0) {
+    String name = lines[dataStart + 31];
+    name = name.substring(0, 32); // Enforce 32-char max
+    appState.customDeviceName = name;
+  } else {
+    appState.customDeviceName = "";
+  }
+
   return true;
 }
 
@@ -316,6 +325,7 @@ void saveSettings() {
   file.println("-0.5"); // placeholder for emergencyLimiterThresholdDb
   file.println("0"); // line 30: reserved (was dcBlockEnabled)
 #endif
+  file.println(appState.customDeviceName); // line 31: custom device name (AP SSID override)
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -984,6 +994,9 @@ void handleSettingsExport() {
   doc["dacOutput"]["filterMode"] = appState.dacFilterMode;
 #endif
 
+  // Custom device name
+  doc["settings"]["customDeviceName"] = appState.customDeviceName;
+
   // Input channel names
   JsonArray names = doc["inputNames"].to<JsonArray>();
   for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
@@ -1247,6 +1260,12 @@ void handleSettingsImport() {
       }
     }
 #endif
+    if (doc["settings"]["customDeviceName"].is<String>()) {
+      String name = doc["settings"]["customDeviceName"].as<String>();
+      name = name.substring(0, 32); // Enforce 32-char max
+      appState.customDeviceName = name;
+      LOG_D("[Settings] Custom Device Name: %s", name.c_str());
+    }
     // Save general settings
     saveSettings();
   }

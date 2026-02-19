@@ -182,6 +182,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/settings/dark_mode/set").c_str());
   mqttClient.subscribe((base + "/settings/cert_validation/set").c_str());
   mqttClient.subscribe((base + "/settings/screen_timeout/set").c_str());
+  mqttClient.subscribe((base + "/settings/device_name/set").c_str());
   mqttClient.subscribe((base + "/display/dim_enabled/set").c_str());
   mqttClient.subscribe((base + "/settings/dim_timeout/set").c_str());
   mqttClient.subscribe((base + "/display/backlight/set").c_str());
@@ -908,6 +909,22 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         LOG_W("[MQTT] No update available or firmware URL missing");
       }
     }
+  }
+  // Handle custom device name
+  else if (topicStr == base + "/settings/device_name/set") {
+    String name = message;
+    if ((int)name.length() > 32) name = name.substring(0, 32);
+    appState.customDeviceName = name;
+    // Update AP SSID to reflect new custom name
+    String apName = appState.customDeviceName.length() > 0
+                      ? appState.customDeviceName
+                      : ("ALX-Nova-" + appState.deviceSerialNumber);
+    if ((int)apName.length() > 32) apName = apName.substring(0, 32);
+    appState.apSSID = apName;
+    saveSettings();
+    sendWiFiStatus(); // Broadcast to web clients
+    LOG_I("[MQTT] Custom device name set to: '%s'", name.c_str());
+    mqttClient.publish((base + "/settings/device_name").c_str(), name.c_str(), true);
   }
 }
 
@@ -3596,6 +3613,26 @@ void publishHADiscovery() {
   }
 #endif
 
+  // ===== Custom Device Name (Text Entity) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Device Name";
+    doc["unique_id"] = deviceId + "_device_name";
+    doc["state_topic"] = base + "/settings/device_name";
+    doc["command_topic"] = base + "/settings/device_name/set";
+    doc["icon"] = "mdi:rename";
+    doc["entity_category"] = "config";
+    doc["max"] = 32;
+    doc["min"] = 0;
+    doc["mode"] = "text";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/text/" + deviceId + "/device_name/config").c_str(), payload.c_str(), true);
+    // Publish current value
+    mqttClient.publish((base + "/settings/device_name").c_str(), appState.customDeviceName.c_str(), true);
+  }
+
   LOG_I("[MQTT] Home Assistant discovery configs published");
 }
 
@@ -3722,7 +3759,9 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/dsp_ch2_limiter_gr/config",
       "homeassistant/sensor/%s/dsp_ch3_limiter_gr/config",
       // PEQ bypass
-      "homeassistant/switch/%s/peq_bypass/config"};
+      "homeassistant/switch/%s/peq_bypass/config",
+      // Custom device name
+      "homeassistant/text/%s/device_name/config"};
 
   char topicBuf[160];
   for (const char *topicTemplate : topics) {

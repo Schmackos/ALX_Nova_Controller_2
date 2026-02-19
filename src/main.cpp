@@ -211,7 +211,8 @@ void setup() {
   // firmware update)
   initSerialNumber();
 
-  // Set AP SSID to the device serial number (e.g., ALX-AABBCCDDEEFF)
+  // Set AP SSID: use customDeviceName if set, otherwise fall back to serial number
+  // Note: loadSettings() is called later; the apSSID will be updated after settings load
   appState.apSSID = appState.deviceSerialNumber;
   LOG_I("[Main] AP SSID set to: %s", appState.apSSID.c_str());
 
@@ -257,6 +258,16 @@ void setup() {
   // Load persisted settings (e.g., auto-update preference)
   if (!loadSettings()) {
     LOG_I("[Main] No settings file found, using defaults");
+  }
+
+  // Update AP SSID now that customDeviceName has been loaded from settings
+  {
+    String apName = appState.customDeviceName.length() > 0
+                      ? appState.customDeviceName
+                      : ("ALX-Nova-" + appState.deviceSerialNumber);
+    if ((int)apName.length() > 32) apName = apName.substring(0, 32);
+    appState.apSSID = apName;
+    LOG_I("[Main] AP SSID updated to: %s", appState.apSSID.c_str());
   }
 
   // Apply debug serial log level from loaded settings

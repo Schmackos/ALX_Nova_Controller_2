@@ -85,6 +85,7 @@ public:
 
   // ===== Device Information =====
   String deviceSerialNumber;
+  String customDeviceName = "";  // User-configurable name used as AP SSID (overrides auto-generated)
 
   // ===== LED State =====
   bool blinkingEnabled = true;
