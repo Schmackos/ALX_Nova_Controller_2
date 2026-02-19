@@ -2,6 +2,38 @@
 
 ## Version 1.8.6
 
+## New Features
+- [2026-02-19] feat: passive ADC clock sync monitoring via cross-correlation
+
+Add cross-correlation-based phase detection between the two PCM1808 I2S
+ADCs. Every 5 seconds, when both ADCs report AUDIO_OK, the audio task
+extracts 64+8 L-channel samples from each ADC buffer, searches for the
+peak cross-correlation across a ±8 sample lag window, and stores the
+result in a spinlock-protected AdcSyncDiag struct.
+
+Key implementation details:
+- compute_adc_sync_diag() is a pure function (no hardware deps, fully
+  testable on native platform) that normalizes correlation peak by the
+  RMS product of both signals, handling the silence case gracefully
+- Sync check runs inside audio_capture_task on Core 1 with no Serial/LOG
+  calls (dirty-flag pattern preserved)
+- AdcSyncDiag state copied to AppState in detectSignal() for WS/MQTT
+- WebSocket: syncOk/syncOffsetSamples/syncCorrelation added to audio
+  object in sendHardwareStats()
+- MQTT: audio/adc_sync_ok (binary ON/OFF) and audio/adc_sync_offset
+  (float, samples) published when numAdcsDetected >= 2
+- HA discovery: binary_sensor for sync status, sensor for phase offset
+- 8 native unit tests all pass (test_adc_sync) (`d360d81`)
+- [2026-02-19] feat: async ring buffer in DebugSerial to prevent I2S DMA blocking
+
+LOG_* calls from FreeRTOS tasks now enqueue messages into a 16-slot ring
+buffer (portMUX spinlock) instead of calling Serial.print() directly.
+The main loop drains up to 4 entries per call to processQueue(), which is
+invoked right after audio_periodic_dump(). On NATIVE_TEST the ring buffer
+is compiled out and processQueue()/isQueueEmpty() remain no-ops so all
+existing native tests are unaffected. Added test/test_debug_serial/ with 6
+tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
+
 ## Technical Details
 - [2026-02-19] test: fix all pre-existing test failures in test_dsp_swap and test_emergency_limiter
 
