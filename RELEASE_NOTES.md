@@ -185,6 +185,16 @@ existing native tests are unaffected. Added test/test_debug_serial/ with 6
 tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
 
 ## Technical Details
+- [2026-02-19] test: add smoothing alpha and heap constant validation tests
+
+- Add 9 tests to test_smart_sensing validating the EMA smoothing alpha
+  formula (1 - exp(-interval/308)) at 20/33/50/100ms intervals and
+  arbitrary fallback values, plus monotonicity and formula-vs-hardcoded
+  consistency checks
+- Add new test_config module with 8 tests verifying heap threshold
+  constants (HEAP_CRITICAL, HEAP_WARNING, HEAP_OTA_ABORT, HEAP_TLS_*)
+  are positive, in correct hierarchical order, and plausible for ESP32-S3
+- Total test count: 954 -> 971 (17 new tests, 0 failures) (`46a2eed`)
 - [2026-02-19] chore: update release notes for custom device name (`865ebe2`)
 - [2026-02-19] chore: update release notes (`6c19dd4`)
 - [2026-02-19] chore: update release notes (`5127a87`)

@@ -4,8 +4,9 @@
  *
  * Processes web_pages.cpp to:
  * 1. Extract raw HTML pages
- * 2. Minify CSS and JavaScript (optional)
- * 3. Generate gzipped byte arrays for efficient serving
+ * 2. Validate JavaScript syntax (before gzip)
+ * 3. Minify CSS and JavaScript (optional)
+ * 4. Generate gzipped byte arrays for efficient serving
  *
  * Usage: node build_web_assets.js [--minify]
  */
@@ -13,6 +14,8 @@
 const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { execSync } = require('child_process');
 
 const MINIFY = process.argv.includes('--minify');
 
@@ -37,6 +40,89 @@ function extractAsset(content, varName) {
     const regex = new RegExp(`const char ${varName}\\[\\] PROGMEM = R"rawliteral\\(([\\s\\S]*?)\\)rawliteral";`);
     const match = content.match(regex);
     return match ? match[1] : null;
+}
+
+/**
+ * Validate JavaScript syntax in all <script> blocks of an HTML asset.
+ *
+ * For each <script>...</script> block found, writes the content to a
+ * temporary file and runs `node --check` against it. If any block fails
+ * the check, prints a descriptive error (asset name, block number, V8
+ * error message with adjusted line number) and exits with code 1.
+ *
+ * Temp files are always cleaned up, even on error.
+ *
+ * @param {string} assetName  Human-readable name used in error messages.
+ * @param {string} html       Raw HTML string extracted from the C++ source.
+ */
+function validateJsSyntax(assetName, html) {
+    if (!html) return;
+
+    // Match every <script>…</script> block (non-type or type="text/javascript").
+    // Blocks with a type attribute other than text/javascript (e.g. type="module"
+    // handled by a bundler, or type="text/template") are skipped because Node's
+    // --check flag uses CommonJS semantics and would reject module syntax.
+    const scriptRegex = /<script(?:\s+type=["']text\/javascript["'])?\s*>([\s\S]*?)<\/script>/gi;
+
+    const tempFiles = [];
+    let blockIndex = 0;
+    let hasErrors = false;
+    let match;
+
+    while ((match = scriptRegex.exec(html)) !== null) {
+        blockIndex++;
+        const scriptBody = match[1];
+        const scriptStart = match.index;
+
+        // Compute line offset: how many newlines appear in html before this block.
+        const linesBefore = html.slice(0, scriptStart).split('\n').length;
+
+        const tempFile = path.join(os.tmpdir(), `alx_nova_js_check_${Date.now()}_${blockIndex}.js`);
+        tempFiles.push(tempFile);
+
+        try {
+            fs.writeFileSync(tempFile, scriptBody, 'utf8');
+            execSync(`node --check "${tempFile}"`, { stdio: 'pipe' });
+            // Syntax OK — nothing to report for this block.
+        } catch (err) {
+            hasErrors = true;
+
+            // V8 error format: "<path>:<line>:<col>\n<SyntaxError: ...>"
+            // Re-map the line number to the original HTML line.
+            let errMsg = (err.stderr || err.stdout || '').toString().trim();
+
+            // Replace the temp file path with a friendlier reference.
+            errMsg = errMsg.replace(tempFile, `<script block ${blockIndex}>`);
+
+            // Adjust reported line numbers by the HTML line offset.
+            // V8 reports lines relative to the temp file (1-based), so we add
+            // (linesBefore - 1) to each line number found in the error output.
+            errMsg = errMsg.replace(/:(\d+):/g, (m, lineStr) => {
+                const adjustedLine = parseInt(lineStr, 10) + linesBefore - 1;
+                return `:${adjustedLine}:`;
+            });
+
+            console.error(`\n[JS Syntax Error] ${assetName} — script block ${blockIndex} (starts at HTML line ${linesBefore}):`);
+            console.error(errMsg);
+        }
+    }
+
+    // Always clean up temp files.
+    for (const f of tempFiles) {
+        try { fs.unlinkSync(f); } catch (_) { /* best effort */ }
+    }
+
+    if (blockIndex === 0) {
+        // No <script> blocks found — nothing to check.
+        return;
+    }
+
+    if (hasErrors) {
+        console.error(`\n[ABORT] JavaScript syntax errors found in ${assetName}. Fix errors before building.`);
+        process.exit(1);
+    }
+
+    console.log(`  [JS OK] ${assetName}: ${blockIndex} script block(s) passed syntax check`);
 }
 
 /**
@@ -130,6 +216,12 @@ console.log('\nExtracting assets...');
 const htmlPage = extractAsset(webPagesContent, 'htmlPage');
 const apHtmlPage = extractAsset(webPagesContent, 'apHtmlPage');
 const loginPage = loginPageContent ? extractAsset(loginPageContent, 'loginPage') : null;
+
+// Validate JavaScript syntax before gzip (catches errors early)
+console.log('\nValidating JavaScript syntax...');
+validateJsSyntax('htmlPage', htmlPage);
+validateJsSyntax('apHtmlPage', apHtmlPage);
+validateJsSyntax('loginPage', loginPage);
 
 // Process assets
 console.log('\nProcessing assets...');

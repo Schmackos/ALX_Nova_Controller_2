@@ -1,0 +1,5 @@
+{
+  "env": { "browser": true, "es2020": true },
+  "rules": { "no-undef": "warn" },
+  "parserOptions": { "ecmaVersion": 2020 }
+}
