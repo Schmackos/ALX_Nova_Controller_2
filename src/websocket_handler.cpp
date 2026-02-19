@@ -1724,6 +1724,10 @@ void sendHardwareStats() {
       adcObj["sfdrDb"] = appState.audioSfdrDb[a];
     }
     doc["audio"]["fftWindowType"] = (int)appState.fftWindowType;
+    // ADC clock sync diagnostics
+    doc["audio"]["syncOk"]            = appState.adcSyncOk;
+    doc["audio"]["syncOffsetSamples"] = appState.adcSyncOffsetSamples;
+    doc["audio"]["syncCorrelation"]   = appState.adcSyncCorrelation;
     // Legacy flat fields for backward compat
     doc["audio"]["adcStatus"] = adcArr[0]["status"];
     doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;

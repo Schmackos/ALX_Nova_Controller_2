@@ -175,6 +175,11 @@ public:
   AdcState audioAdc[NUM_AUDIO_ADCS];
   int numAdcsDetected = 1; // How many ADCs are currently producing data
 
+  // ===== ADC Clock Sync Diagnostics =====
+  float adcSyncOffsetSamples = 0.0f;  // Phase offset ADC1->ADC2 in samples
+  float adcSyncCorrelation   = 0.0f;  // Cross-correlation peak (0.0-1.0)
+  bool  adcSyncOk            = true;  // true when |offset| <= threshold
+
   // ===== I2S Runtime Metrics (written by audio task, read by diagnostics) =====
   struct I2sRuntimeMetrics {
     uint32_t audioTaskStackFree = 0;           // bytes remaining (high watermark × 4)

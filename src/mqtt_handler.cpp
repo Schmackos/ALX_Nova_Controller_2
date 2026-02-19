@@ -1640,6 +1640,14 @@ void publishMqttAudioDiagnostics() {
     }
   }
 
+  // ADC clock sync topics (only when both ADCs are detected)
+  if (appState.numAdcsDetected >= 2) {
+    mqttClient.publish((base + "/audio/adc_sync_ok").c_str(),
+                       appState.adcSyncOk ? "ON" : "OFF", true);
+    mqttClient.publish((base + "/audio/adc_sync_offset").c_str(),
+                       String(appState.adcSyncOffsetSamples, 2).c_str(), true);
+  }
+
   // Legacy combined topics (ADC 0)
   const char *statusStr = "OK";
   switch (appState.audioHealthStatus) {
@@ -2816,6 +2824,43 @@ void publishHADiscovery() {
       // SNR/SFDR discovery removed — debug-only data, accessible via REST/WS/GUI.
       // Cleanup of orphaned entities is handled in removeHADiscovery().
     }
+  }
+
+  // ===== ADC Clock Sync Binary Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "ADC Clock Sync";
+    doc["unique_id"] = deviceId + "_adc_sync_ok";
+    doc["state_topic"] = base + "/audio/adc_sync_ok";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["device_class"] = "connectivity";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:sync";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/binary_sensor/" + deviceId + "/adc_sync_ok/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== ADC Sync Phase Offset Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "ADC Sync Phase Offset";
+    doc["unique_id"] = deviceId + "_adc_sync_offset";
+    doc["state_topic"] = base + "/audio/adc_sync_offset";
+    doc["unit_of_measurement"] = "samples";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/adc_sync_offset/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Legacy Combined Audio ADC Status Sensor =====

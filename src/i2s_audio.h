@@ -14,6 +14,23 @@ static const float VU_DECAY_MS = 300.0f;    // Fast digital VU release
 static const float PEAK_HOLD_MS = 2000.0f;  // Peak hold duration
 static const float PEAK_DECAY_AFTER_HOLD_MS = 300.0f; // Decay after hold expires
 
+// ===== ADC Clock Sync Constants =====
+static const int    ADC_SYNC_CHECK_FRAMES     = 64;     // Window for cross-correlation
+static const int    ADC_SYNC_SEARCH_RANGE     = 8;      // Search ±8 samples lag
+static const float  ADC_SYNC_OFFSET_THRESHOLD = 2.0f;   // inSync if |offset| <= 2 samples
+static const uint32_t ADC_SYNC_CHECK_INTERVAL_MS = 5000;
+
+// ===== ADC Clock Sync Diagnostics =====
+struct AdcSyncDiag {
+    float phaseOffsetSamples = 0.0f;  // Measured delay ADC1->ADC2 (samples)
+    float phaseOffsetUs = 0.0f;       // Same in microseconds
+    float correlationPeak = 0.0f;     // Peak cross-corr value (0.0-1.0 normalized)
+    bool  inSync = true;              // true if |offset| <= ADC_SYNC_OFFSET_THRESHOLD
+    unsigned long lastCheckMs = 0;
+    uint32_t checkCount = 0;
+    uint32_t outOfSyncCount = 0;
+};
+
 // ===== Per-ADC Analysis Sub-struct =====
 struct AdcAnalysis {
     float rms1;         // 0.0-1.0 (linear)
@@ -126,6 +143,15 @@ bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex = 0
 
 // Returns number of ADCs currently detected and producing data
 int i2s_audio_get_num_adcs();
+
+// Returns current ADC clock sync diagnostics (thread-safe copy)
+AdcSyncDiag i2s_audio_get_sync_diag();
+
+// Pure function — testable without hardware
+// adc1_samples and adc2_samples: left-channel only, normalized float [-1,1], length=frames
+// Returns filled AdcSyncDiag (does not touch global state)
+AdcSyncDiag compute_adc_sync_diag(const float* adc1_samples, const float* adc2_samples,
+                                   int frames, float sampleRateHz);
 
 // Call from main loop to flush periodic audio/DAC diagnostic logs.
 // The audio task sets a flag every 5s; this function does the actual
