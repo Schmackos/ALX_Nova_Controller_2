@@ -71,6 +71,11 @@ Five root causes fixed across four test files and one source file:
 - [2026-02-19] docs: update codebase concerns map (`5188c0c`)
 
 ## Bug Fixes
+- [2026-02-19] fix: remove case-sensitive ESP.h include that broke Linux CI builds
+
+`#include <ESP.h>` fails on Linux (case-sensitive filesystem) because
+the actual header is `Esp.h`. The include was redundant anyway since
+audio_quality.h includes Arduino.h which brings in Esp.h transitively. (`64b9f8b`)
 - [2026-02-19] fix: add heapWarning threshold and 10s heap monitoring for earlier fragmentation detection (`c1982d4`)
 - [2026-02-19] fix: WinMain linker error in test_emergency_limiter; extract dsp_swap_check_state() for testability
 
