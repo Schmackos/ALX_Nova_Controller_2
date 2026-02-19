@@ -1007,6 +1007,9 @@ void loop() {
   // Flush periodic audio/DAC diagnostic logs from main loop context.
   // (Moved out of audio_capture_task to avoid Serial blocking I2S DMA.)
   audio_periodic_dump();
+  // Drain async log ring buffer — writes from any FreeRTOS task are
+  // safely serialised here on Core 0 so UART TX never stalls the caller.
+  DebugOut.processQueue();
 
   // IMPORTANT: blinking must NOT depend on appState.isAPMode
   if (appState.blinkingEnabled) {

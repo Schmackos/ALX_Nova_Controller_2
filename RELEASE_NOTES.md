@@ -38,6 +38,16 @@ Five root causes fixed across four test files and one source file:
 - [2026-02-19] docs: update codebase concerns map (`5188c0c`)
 
 ## Bug Fixes
+- [2026-02-19] fix: WinMain linker error in test_emergency_limiter; extract dsp_swap_check_state() for testability
+
+Add #pragma comment(linker, "/SUBSYSTEM:CONSOLE") guard in test_emergency_limiter.cpp to
+fix the MinGW undefined reference to WinMain on Windows builds. The pragma is ignored on
+Linux/CI (ubuntu-latest) so it does not break the GitHub Actions workflow.
+
+Extract dsp_swap_check_state() as a pure testable function from dsp_swap_config() logic.
+The function encodes the mutex/processing/timeout decision without FreeRTOS dependencies,
+making the swap timeout path unit-testable natively. Four new tests added to test_dsp_swap
+covering the mutex-busy, timeout, still-waiting, and success return codes. (`7de04ee`)
 - Use esp_task_wdt_reconfigure() for IDF5 TWDT timeout (30s) instead of defunct build flag
 - Fix IDF5/Arduino-ESP32 3.x API compatibility (I2S, FreeRTOS task monitor, TinyUSB UAC2)
 
