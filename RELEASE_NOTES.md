@@ -99,6 +99,13 @@ bug on ESP32-S3 (invalid register write in dma_end_callback). (`448fe70`)
 
 
 ## Bug Fixes
+- [2026-02-19] fix: use esp_task_wdt_reconfigure for IDF5 TWDT timeout
+
+Use esp_task_wdt_reconfigure() at runtime instead of the
+CONFIG_ESP_TASK_WDT_TIMEOUT_S build flag, which has no effect on the
+pre-built Arduino IDF5 .a files. Set idle_core_mask=0 to atomically
+remove IDLE0 monitoring without corrupting the WDT subscriber linked
+list in IDF5.5. Also update PlatformIO IDE settings and release notes. (`5dfbc9d`)
 - [2026-02-19] fix: Update APIs for IDF5/Arduino-ESP32 3.x compatibility
 
 - i2s_audio.h: add #include <stddef.h> for size_t declaration
