@@ -35,6 +35,7 @@ existing native tests are unaffected. Added test/test_debug_serial/ with 6
 tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
 
 ## Technical Details
+- [2026-02-19] chore: update release notes (`1f83f34`)
 - [2026-02-19] chore: update release notes (`53b21a5`)
 - [2026-02-19] chore: update release notes (`1d21650`)
 - [2026-02-19] test: fix all pre-existing test failures in test_dsp_swap and test_emergency_limiter
