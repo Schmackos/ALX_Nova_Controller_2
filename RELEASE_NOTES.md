@@ -59,7 +59,6 @@ Summary synthesizes findings into 7-phase roadmap with gating criteria. (`625eeb
 - [2026-02-17] docs: initialize project (`7fa6371`)
 
 ## Technical Details
-- [2026-02-19] chore: update release notes (`74b80fe`)
 - [2026-02-18] chore: update release notes for build config changes (`f13c978`)
 - [2026-02-18] chore: pin platform version, fix display rotation, update build config
 
@@ -100,6 +99,18 @@ bug on ESP32-S3 (invalid register write in dma_end_callback). (`448fe70`)
 
 
 ## Bug Fixes
+- [2026-02-19] fix: Update APIs for IDF5/Arduino-ESP32 3.x compatibility
+
+- i2s_audio.h: add #include <stddef.h> for size_t declaration
+- task_monitor.cpp: replace pxTaskGetNext+xTaskGetAffinity with
+  xTaskGetNext(TaskIterator_t*)+xTaskGetCoreID for IDF5 FreeRTOS API
+- usb_audio.cpp: rename AUDIO_* UAC2 constants to AUDIO20_* prefix
+  and add is_isr=false parameter to usbd_edpt_xfer (TinyUSB API change) (`e29e7ae`)
+- [2026-02-19] fix: Use esp_task_wdt_reconfigure for IDF5 TWDT timeout
+
+Use esp_task_wdt_reconfigure() at runtime instead of CONFIG_ESP_TASK_WDT_TIMEOUT_S build
+flag (which has no effect on the pre-built Arduino IDF5 .a files). Set idle_core_mask=0
+to atomically remove IDLE0 monitoring, avoiding WDT subscriber list corruption in IDF5.5.
 - [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
 
 OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
