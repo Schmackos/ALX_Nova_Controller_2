@@ -3,6 +3,21 @@
 ## Version 1.8.7
 
 ## New Features
+- [2026-02-19] feat: post-connect roaming and captive portal auto-open
+
+Post-connect roaming: after connecting to a non-hidden network, scan
+for a better BSSID up to 3 times (every 5 min). Skips scan when RSSI
+> -49 dBm (excellent) but still counts toward the limit. Roams via
+WiFi.begin(ssid, pass, channel, bssid) when the same SSID is found
+with +10 dB improvement. Non-roaming disconnects reset the counter.
+
+Captive portal: replace single handleCaptivePortal() with per-platform
+handlers (Android 302, Apple inline portal page, Windows/Firefox/Ubuntu
+body-mismatch redirect, Samsung redirect). Expanded probe URL list from
+6 to 11. Root route serves AP page without auth in AP-only mode. Added
+fallback URL notice (http://192.168.4.1/) to AP setup page.
+
+929/929 native tests pass including 15 new test_wifi_roaming tests. (`71a660f`)
 - [2026-02-19] feat: WebSocket session IP binding — reject messages from mismatched IPs
 
 - Add wsClientIP[MAX_WS_CLIENTS] array to track per-client remote IP
