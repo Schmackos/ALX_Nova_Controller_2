@@ -476,9 +476,9 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                         memcpy(_ctrlBuf, &rate, 4);
                         return tud_control_xfer(rhport, request, _ctrlBuf, 4);
                     } else {
-                        // SET: clock is fixed/read-only — STALL unsupported SET requests
-                        LOG_W("[USB Audio] Rejecting SET_CUR for clock frequency (read-only)");
-                        return false;
+                        // Accept SET_CUR — Windows always sends this during startup even for
+                        // read-only clocks; stalling causes Code 10. Rate validated in DATA stage.
+                        return tud_control_xfer(rhport, request, _ctrlBuf, 4);
                     }
                 } else if (TU_U16_HIGH(request->wValue) == 0x02) {
                     // CLOCK_VALID_CONTROL — always valid
@@ -538,7 +538,7 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                 } else if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
                     // Volume range: -128 dB to 0 dB in 1/256 dB steps
                     uint16_t numRanges = 1;
-                    int16_t volMin = -32768; // -128 dB
+                    int16_t volMin = -32512; // -124 dB (0x8100 — 0x8000 is UAC2 reserved sentinel)
                     int16_t volMax = 0;      // 0 dB
                     int16_t volRes = 256;    // 1 dB steps
                     memcpy(_ctrlBuf, &numRanges, 2);

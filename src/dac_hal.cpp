@@ -463,7 +463,10 @@ void dac_output_init() {
         return;
     }
 
-    // Enable I2S TX full-duplex
+    // Enable I2S TX full-duplex.
+    // dacReady must be true before calling so i2s_configure_adc1() creates the
+    // full-duplex channel. Reset to false on failure.
+    as.dacReady = true;
     if (!dac_enable_i2s_tx(as.audioSampleRate)) {
         LOG_E("[DAC] I2S TX enable failed — DAC unavailable");
         _driver->deinit();

@@ -9,7 +9,17 @@
 - None
 
 ## Bug Fixes
-- None
+- [2026-02-20] fix: move TWDT reconfigure to top of setup() before WiFi init
+
+esp_task_wdt_reconfigure() was called after connectToStoredNetworks(),
+which meant the WiFi/lwIP task (tiT) could auto-subscribe to the old
+5-second WDT during the connection attempt and then log spurious
+'task not found' errors once the reconfigure cleared the subscriber list.
+
+Moving reconfigure() to the very top of setup() (before any WiFi, GUI,
+or audio task creation) ensures all tasks start against the correct
+30-second timeout with idle_core_mask=0 from the beginning. (`7e2b30e`)
+
 
 ## Technical Details
 
