@@ -146,8 +146,19 @@ static int current_step = 0;
 static unsigned long step_start_ms = 0;
 static bool playing = false;
 
-// Pending pattern request (from non-ISR context)
-static volatile BuzzerPattern pending_pattern = BUZZ_NONE;
+// ===== 3-slot circular queue for buzzer_play() requests =====
+// Head = next slot to write; Tail = next slot to read.
+// portMUX guards head/tail/count updates in buzzer_play() (may be called
+// from any task); buzzer_update() runs from the main loop only.
+static BuzzerPattern _buzzQueue[BUZZ_QUEUE_SIZE];
+static int _buzzQueueHead  = 0;
+static int _buzzQueueTail  = 0;
+static int _buzzQueueCount = 0;
+uint32_t   _buzzQueueDropped = 0;
+
+#ifndef UNIT_TEST
+static portMUX_TYPE _buzzQueueMux = portMUX_INITIALIZER_UNLOCKED;
+#endif
 
 static SemaphoreHandle_t buzzer_mutex = nullptr;
 
@@ -159,14 +170,39 @@ void buzzer_init() {
   if (buzzer_mutex == nullptr) {
     buzzer_mutex = xSemaphoreCreateMutex();
   }
+  // Reset circular queue
+  _buzzQueueHead    = 0;
+  _buzzQueueTail    = 0;
+  _buzzQueueCount   = 0;
+  _buzzQueueDropped = 0;
   LOG_I("[Buzzer] Initialized on GPIO %d", BUZZER_PIN);
 }
 
 void buzzer_play(BuzzerPattern pattern) {
-  if (pattern != BUZZ_TICK && pattern != BUZZ_CLICK && pattern != BUZZ_NONE) {
+  if (pattern == BUZZ_NONE) return;
+  if (pattern != BUZZ_TICK && pattern != BUZZ_CLICK) {
     LOG_D("[Buzzer] Play request: %d", (int)pattern);
   }
-  pending_pattern = pattern;
+
+#ifndef UNIT_TEST
+  portENTER_CRITICAL(&_buzzQueueMux);
+#endif
+  if (_buzzQueueCount < BUZZ_QUEUE_SIZE) {
+    // Normal enqueue at head position
+    _buzzQueue[_buzzQueueHead] = pattern;
+    _buzzQueueHead = (_buzzQueueHead + 1) % BUZZ_QUEUE_SIZE;
+    _buzzQueueCount++;
+  } else {
+    // Queue full — drop oldest (tail) and enqueue new at head
+    _buzzQueueDropped++;
+    _buzzQueueTail = (_buzzQueueTail + 1) % BUZZ_QUEUE_SIZE;  // discard oldest
+    _buzzQueue[_buzzQueueHead] = pattern;
+    _buzzQueueHead = (_buzzQueueHead + 1) % BUZZ_QUEUE_SIZE;
+    // count stays at BUZZ_QUEUE_SIZE
+  }
+#ifndef UNIT_TEST
+  portEXIT_CRITICAL(&_buzzQueueMux);
+#endif
 }
 
 static void start_pattern(const ToneStep *pat) {
@@ -252,11 +288,21 @@ void buzzer_update() {
     }
   }
 
-  // Check pending pattern request from buzzer_play()
-  BuzzerPattern req = pending_pattern;
-  if (req != BUZZ_NONE) {
-    pending_pattern = BUZZ_NONE;
-    if (AppState::getInstance().buzzerEnabled) {
+  // Dequeue next pattern from circular queue (only when not currently playing)
+  if (!playing) {
+#ifndef UNIT_TEST
+    portENTER_CRITICAL(&_buzzQueueMux);
+#endif
+    BuzzerPattern req = BUZZ_NONE;
+    if (_buzzQueueCount > 0) {
+      req = _buzzQueue[_buzzQueueTail];
+      _buzzQueueTail = (_buzzQueueTail + 1) % BUZZ_QUEUE_SIZE;
+      _buzzQueueCount--;
+    }
+#ifndef UNIT_TEST
+    portEXIT_CRITICAL(&_buzzQueueMux);
+#endif
+    if (req != BUZZ_NONE && AppState::getInstance().buzzerEnabled) {
       const ToneStep *pat = get_pattern(req);
       if (pat) {
         start_pattern(pat);

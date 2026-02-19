@@ -3,6 +3,137 @@
 ## Version 1.8.7
 
 ## New Features
+- [2026-02-19] feat: add JS syntax validation to web asset build script (Item F)
+
+Add validateJsSyntax() to tools/build_web_assets.js that extracts every
+<script>...</script> block from the HTML assets, writes each to a temp
+file, and runs `node --check` (V8 syntax check, zero deps) before the
+gzip step. Build exits with code 1 and a descriptive error (asset name,
+block number, V8 message with HTML-offset line number) on failure.
+
+Add tools/.eslintrc.json with minimal browser/ES2020 config for optional
+manual ESLint runs. (`8a0cf20`)
+- [2026-02-19] feat: WiFi RX watchdog — force reconnect when heap critical >2min
+
+When ESP32 internal SRAM heap stays below ~40KB for more than 2 minutes,
+the WiFi stack's RX buffer allocations silently fail, dropping all incoming
+packets (HTTP, WebSocket, ping) while outgoing MQTT publishes continue to
+work. The watchdog detects this condition and forces a WiFi disconnect;
+wifi_manager then reconnects with a fresh allocation pool.
+
+- src/wifi_watchdog.h: pure inline helper wifi_watchdog_should_reconnect()
+  (heapCritical + connected + !otaInProgress + criticalDuration >= 120s)
+- src/app_state.h: add wifiRxWatchdogRecoveries (uint32_t) and
+  heapCriticalSinceMs (unsigned long) to Heap Health section
+- src/main.cpp: include wifi_watchdog.h; extend heap monitor block with
+  heapCriticalSinceMs tracking and watchdog trigger (WiFi.disconnect())
+- src/websocket_handler.cpp: emit wifiRxWatchdogRecoveries in sendHardwareStats()
+- src/mqtt_handler.cpp: publish system/wifi_rx_watchdog_recoveries on heartbeat;
+  add HA discovery sensor (state_class: total_increasing, mdi:wifi-refresh)
+- test/test_wifi_watchdog/test_wifi_watchdog.cpp: 5 unit tests for the pure
+  helper function (not critical, under 2min, at 2min, OTA guard, not connected) (`ac8c0ad`)
+- [2026-02-19] feat: WiFi RX watchdog — force reconnect when heap critical >2min
+
+When ESP32 internal SRAM heap stays below ~40KB for more than 2 minutes,
+the WiFi stack's RX buffer allocations silently fail, dropping all incoming
+packets (HTTP, WebSocket, ping) while outgoing MQTT publishes continue to
+work. The watchdog detects this condition and forces a WiFi disconnect;
+wifi_manager then reconnects with a fresh allocation pool.
+
+- src/wifi_watchdog.h: pure inline helper wifi_watchdog_should_reconnect()
+  (heapCritical + connected + !otaInProgress + criticalDuration >= 120s)
+- src/app_state.h: add wifiRxWatchdogRecoveries (uint32_t) and
+  heapCriticalSinceMs (unsigned long) to Heap Health section
+- src/main.cpp: include wifi_watchdog.h; extend heap monitor block with
+  heapCriticalSinceMs tracking and watchdog trigger (WiFi.disconnect())
+- src/websocket_handler.cpp: emit wifiRxWatchdogRecoveries in sendHardwareStats()
+- src/mqtt_handler.cpp: publish system/wifi_rx_watchdog_recoveries on heartbeat;
+  add HA discovery sensor (state_class: total_increasing, mdi:wifi-refresh)
+- test/test_wifi_watchdog/test_wifi_watchdog.cpp: 5 unit tests for the pure
+  helper function (not critical, under 2min, at 2min, OTA guard, not connected) (`f3b3fb7`)
+- [2026-02-19] feat: add user-configurable device name (AP SSID override)
+
+- AppState: add customDeviceName field (persisted, max 32 chars)
+- settings_manager: expand lines[] to 35, persist customDeviceName at
+  line index 31, include in export/import JSON as settings.customDeviceName
+- main.cpp: apply customDeviceName to apSSID after loadSettings(); falls
+  back to ALX-Nova-<serial> when blank
+- websocket_handler: handle setDeviceName WS command, update apSSID
+  live and broadcast wifiStatus to all clients
+- wifi_manager: include customDeviceName in buildWiFiStatusJson so web
+  UI can pre-populate the field on load
+- mqtt_handler: subscribe settings/device_name/set, handle command,
+  publish HA text entity via homeassistant/text/.../device_name/config
+- web_pages: add Device Name text input in Access Point card with
+  debounced save via saveDeviceName(); load value from wifiStatus WS
+- test_settings: add 5 tests covering empty fallback, custom name usage,
+  32-char truncation, save/load roundtrip, and clear-to-empty (`2601f2e`)
+- [2026-02-19] feat: add user-configurable device name (AP SSID override)
+
+- AppState: add customDeviceName field (persisted, max 32 chars)
+- settings_manager: expand lines[] to 35, persist customDeviceName at
+  line index 31, include in export/import JSON as settings.customDeviceName
+- main.cpp: apply customDeviceName to apSSID after loadSettings(); falls
+  back to ALX-Nova-<serial> when blank
+- websocket_handler: handle setDeviceName WS command, update apSSID
+  live and broadcast wifiStatus to all clients
+- wifi_manager: include customDeviceName in buildWiFiStatusJson so web
+  UI can pre-populate the field on load
+- mqtt_handler: subscribe settings/device_name/set, handle command,
+  publish HA text entity via homeassistant/text/.../device_name/config
+- web_pages: add Device Name text input in Access Point card with
+  debounced save via saveDeviceName(); load value from wifiStatus WS
+- test_settings: add 5 tests covering empty fallback, custom name usage,
+  32-char truncation, save/load roundtrip, and clear-to-empty (`e098abf`)
+- [2026-02-19] feat: add user-configurable device name (AP SSID override)
+
+- AppState: add customDeviceName field (persisted, max 32 chars)
+- settings_manager: expand lines[] to 35, persist customDeviceName at
+  line index 31, include in export/import JSON as settings.customDeviceName
+- main.cpp: apply customDeviceName to apSSID after loadSettings(); falls
+  back to ALX-Nova-<serial> when blank
+- websocket_handler: handle setDeviceName WS command, update apSSID
+  live and broadcast wifiStatus to all clients
+- wifi_manager: include customDeviceName in buildWiFiStatusJson so web
+  UI can pre-populate the field on load
+- mqtt_handler: subscribe settings/device_name/set, handle command,
+  publish HA text entity via homeassistant/text/.../device_name/config
+- web_pages: add Device Name text input in Access Point card with
+  debounced save via saveDeviceName(); load value from wifiStatus WS
+- test_settings: add 5 tests covering empty fallback, custom name usage,
+  32-char truncation, save/load roundtrip, and clear-to-empty (`bfb005a`)
+- [2026-02-19] feat: add FreeRTOS stack overflow hook with flag-pattern handler
+
+- Define vApplicationStackOverflowHook (extern C weak symbol) in main.cpp
+  before setup(); stores detected flag + task name in AppState (safe for
+  exception/interrupt context — no heap, no Serial)
+- Add volatile stackOverflowDetected + char stackOverflowTaskName[16] to
+  AppState in the audio/volatile field section
+- loop() checks the flag each iteration, clears it, logs LOG_E, and records
+  "stack_overflow:<taskName>" to the crash log ring buffer
+- Add test/test_stack_overflow/ with 5 native tests covering: flag set,
+  15-char truncation, null name handling, loop handler clears flag, and
+  loop handler no-op when flag not set (`9cdaf49`)
+- [2026-02-19] feat: replace single pending_pattern with 3-slot circular buzzer queue (Item D)
+
+Replace the volatile BuzzerPattern pending_pattern singleton with a
+circular queue of BUZZ_QUEUE_SIZE (3) slots:
+- buzzer_play() enqueues patterns; when full, drops oldest and
+  increments _buzzQueueDropped
+- buzzer_update() dequeues only when not currently playing (FIFO order)
+- portMUX_TYPE _buzzQueueMux guards queue head/tail/count in
+  buzzer_play() (guarded by #ifndef UNIT_TEST for native builds)
+- buzzer_init() resets queue state on startup
+
+Adds 5 new tests to test_buzzer_handler.cpp:
+- test_buzz_queue_3_in_order: FIFO order across 3 dequeue cycles
+- test_buzz_queue_4th_drops_oldest: overflow evicts head, count stays 3
+- test_buzz_queue_empty_returns_none: empty queue causes no playback
+- test_buzz_queue_drop_counter: each overflow increments _buzzQueueDropped
+- test_buzz_queue_sequential_playback: full play->complete->dequeue cycle
+
+Updates test 6 (formerly test_new_pattern_overrides) to reflect new
+queue semantics: second enqueued pattern waits for current to finish. (`e9cf3f4`)
 - [2026-02-19] feat: post-connect roaming and captive portal auto-open
 
 Post-connect roaming: after connecting to a non-hidden network, scan
@@ -64,6 +195,18 @@ existing native tests are unaffected. Added test/test_debug_serial/ with 6
 tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
 
 ## Technical Details
+- [2026-02-19] chore: update release notes (`de0c8ce`)
+- [2026-02-19] test: add smoothing alpha and heap constant validation tests
+
+- Add 9 tests to test_smart_sensing validating the EMA smoothing alpha
+  formula (1 - exp(-interval/308)) at 20/33/50/100ms intervals and
+  arbitrary fallback values, plus monotonicity and formula-vs-hardcoded
+  consistency checks
+- Add new test_config module with 8 tests verifying heap threshold
+  constants (HEAP_CRITICAL, HEAP_WARNING, HEAP_OTA_ABORT, HEAP_TLS_*)
+  are positive, in correct hierarchical order, and plausible for ESP32-S3
+- Total test count: 954 -> 971 (17 new tests, 0 failures) (`46a2eed`)
+- [2026-02-19] chore: update release notes for custom device name (`865ebe2`)
 - [2026-02-19] chore: update release notes (`6c19dd4`)
 - [2026-02-19] chore: update release notes (`5127a87`)
 - [2026-02-19] refactor: add named heap threshold constants to config.h (Item A)

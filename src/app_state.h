@@ -85,6 +85,7 @@ public:
 
   // ===== Device Information =====
   String deviceSerialNumber;
+  String customDeviceName = "";  // User-configurable name used as AP SSID (overrides auto-generated)
 
   // ===== LED State =====
   bool blinkingEnabled = true;
@@ -219,6 +220,10 @@ public:
   bool adcEnabled[NUM_AUDIO_ADCS] = {true, true}; // Per-ADC input enable (persisted)
   volatile bool audioPaused = false; // Set true to pause audio_capture_task I2S reads (for I2S reinit)
 
+  // ===== Stack Overflow Detection (set by vApplicationStackOverflowHook, handled in loop()) =====
+  volatile bool stackOverflowDetected = false;
+  char stackOverflowTaskName[16] = {0};
+
   // Input channel names (user-configurable, 4 channels = 2 ADCs x 2 channels)
   String inputNames[NUM_AUDIO_ADCS * 2];
 
@@ -260,6 +265,8 @@ public:
   bool heapCritical = false;       // True when largest free block < 40KB — WiFi RX drops silently
   bool heapWarning  = false;       // True when largest free block < 60KB — approaching critical
   uint32_t heapMaxBlockBytes = 0;  // Current largest contiguous free block in internal SRAM
+  uint32_t wifiRxWatchdogRecoveries = 0;  // Number of WiFi reconnects triggered by RX watchdog
+  unsigned long heapCriticalSinceMs = 0;  // millis() when heap first went critical; 0 if not critical
 
   // ===== Debug Mode Toggles =====
   bool debugMode = true;           // Master debug gate

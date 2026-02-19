@@ -20,11 +20,17 @@ enum BuzzerPattern {
   BUZZ_SHUTDOWN,       // Reversed startup melody (before reboot)
 };
 
+// ===== Queue configuration =====
+#define BUZZ_QUEUE_SIZE 3  // Circular queue depth for buzzer_play() requests
+
 // ===== Public API =====
 void buzzer_init();
 void buzzer_play(BuzzerPattern pattern);
 void buzzer_update();  // Call from main loop — non-blocking sequencer
 void buzzer_play_blocking(BuzzerPattern pattern, uint16_t timeout_ms);
+
+// Dropped-pattern counter (incremented when queue overflows; oldest entry evicted)
+extern uint32_t _buzzQueueDropped;
 
 // ===== ISR-safe request functions (inlined volatile writes) =====
 // These are safe to call from any context including IRAM_ATTR ISRs.

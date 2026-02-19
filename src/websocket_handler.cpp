@@ -395,6 +395,20 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             }
           }
 #endif
+        } else if (msgType == "setDeviceName") {
+          String name = doc["name"] | "";
+          if ((int)name.length() > 32) name = name.substring(0, 32);
+          appState.customDeviceName = name;
+          // Update AP SSID to reflect new custom name
+          String apName = appState.customDeviceName.length() > 0
+                            ? appState.customDeviceName
+                            : ("ALX-Nova-" + appState.deviceSerialNumber);
+          if ((int)apName.length() > 32) apName = apName.substring(0, 32);
+          appState.apSSID = apName;
+          saveSettings();
+          // Broadcast updated WiFi status so clients see the new name
+          sendWiFiStatus();
+          LOG_I("[WebSocket] Custom device name set to: '%s'", name.c_str());
         } else if (msgType == "setInputNames") {
           if (doc["names"].is<JsonArray>()) {
             JsonArray names = doc["names"].as<JsonArray>();
@@ -1762,6 +1776,7 @@ void sendHardwareStats() {
     doc["heapCritical"]     = appState.heapCritical;
     doc["heapWarning"]      = appState.heapWarning;
     doc["heapMaxBlockBytes"] = appState.heapMaxBlockBytes;
+    doc["wifiRxWatchdogRecoveries"] = appState.wifiRxWatchdogRecoveries;
 
     // Crash history (ring buffer, most recent first)
     const CrashLogData &clog = crashlog_get();

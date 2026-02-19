@@ -3556,6 +3556,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- Access Point -->
             <div class="card">
                 <div class="card-title">Access Point</div>
+                <div class="form-group" style="margin-bottom:12px">
+                    <label class="form-label">Device Name</label>
+                    <input type="text" class="form-input" id="customDeviceName" maxlength="32" placeholder="ALX-Nova-XXXXXX (auto)" oninput="saveDeviceName()">
+                    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">Used as AP hotspot name. Leave blank to use default.</div>
+                </div>
                 <div class="toggle-row">
                     <div>
                         <div class="toggle-label">Enable AP Mode</div>
@@ -5384,7 +5389,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (typeof data.autoAPEnabled !== 'undefined') {
                 document.getElementById('autoAPToggle').checked = !!data.autoAPEnabled;
             }
-            
+
+            if (typeof data.customDeviceName !== 'undefined') {
+                const el = document.getElementById('customDeviceName');
+                if (el && document.activeElement !== el) {
+                    el.value = data.customDeviceName || '';
+                }
+            }
+
             if (typeof data.timezoneOffset !== 'undefined') {
                 currentTimezoneOffset = data.timezoneOffset;
                 document.getElementById('timezoneSelect').value = data.timezoneOffset.toString();
@@ -7781,6 +7793,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== WiFi Management Functions =====
+        let _deviceNameTimer = null;
+        function saveDeviceName() {
+            clearTimeout(_deviceNameTimer);
+            _deviceNameTimer = setTimeout(() => {
+                const name = document.getElementById('customDeviceName').value.trim().substring(0, 32);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'setDeviceName', name: name }));
+                }
+            }, 800);
+        }
+
         function toggleAutoAP() {
             const enabled = document.getElementById('autoAPToggle').checked;
             apiFetch('/api/settings', {

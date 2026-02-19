@@ -30,6 +30,7 @@
 #include "web_pages.h"
 #include "websocket_handler.h"
 #include "wifi_manager.h"
+#include "wifi_watchdog.h"
 #include "captive_portal.h"
 #ifdef GUI_ENABLED
 #include "gui/gui_manager.h"
@@ -81,6 +82,21 @@ ButtonHandler resetButton(RESET_BUTTON_PIN);
 // Note: GitHub Root CA Certificate removed - now using Mozilla certificate
 // bundle via ESP32CertBundle library for automatic SSL validation of all public
 // servers
+
+// ===== Stack Overflow Hook =====
+// Called by FreeRTOS when CONFIG_FREERTOS_CHECK_STACKOVERFLOW_PTRVAL detects
+// a stack overflow. Runs in exception/interrupt context — no heap, no Serial.
+// Sets a flag and copies the task name; loop() handles logging + crashlog.
+extern "C" void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+  appState.stackOverflowDetected = true;
+  if (pcTaskName != nullptr) {
+    strncpy(appState.stackOverflowTaskName, pcTaskName, 15);
+    appState.stackOverflowTaskName[15] = '\0';
+  } else {
+    strncpy(appState.stackOverflowTaskName, "unknown", 15);
+    appState.stackOverflowTaskName[15] = '\0';
+  }
+}
 
 // ===== Serial Number Generation =====
 // Generates a unique serial number from eFuse MAC and stores it in NVS
@@ -196,7 +212,8 @@ void setup() {
   // firmware update)
   initSerialNumber();
 
-  // Set AP SSID to the device serial number (e.g., ALX-AABBCCDDEEFF)
+  // Set AP SSID: use customDeviceName if set, otherwise fall back to serial number
+  // Note: loadSettings() is called later; the apSSID will be updated after settings load
   appState.apSSID = appState.deviceSerialNumber;
   LOG_I("[Main] AP SSID set to: %s", appState.apSSID.c_str());
 
@@ -242,6 +259,16 @@ void setup() {
   // Load persisted settings (e.g., auto-update preference)
   if (!loadSettings()) {
     LOG_I("[Main] No settings file found, using defaults");
+  }
+
+  // Update AP SSID now that customDeviceName has been loaded from settings
+  {
+    String apName = appState.customDeviceName.length() > 0
+                      ? appState.customDeviceName
+                      : ("ALX-Nova-" + appState.deviceSerialNumber);
+    if ((int)apName.length() > 32) apName = apName.substring(0, 32);
+    appState.apSSID = apName;
+    LOG_I("[Main] AP SSID updated to: %s", appState.apSSID.c_str());
   }
 
   // Apply debug serial log level from loaded settings
@@ -720,6 +747,13 @@ void loop() {
   // Without this, the loop runs as fast as possible (~49% CPU)
   delay(5);
 
+  // Handle stack overflow detection (flag set by vApplicationStackOverflowHook)
+  if (appState.stackOverflowDetected) {
+    appState.stackOverflowDetected = false;
+    LOG_E("[Main] Stack overflow detected in task: %s", appState.stackOverflowTaskName);
+    crashlog_record(String("stack_overflow:") + appState.stackOverflowTaskName);
+  }
+
   server.handleClient();
   esp_task_wdt_reset();  // Feed WDT after serving pages (85KB dashboard can block)
   if (appState.isAPMode) {
@@ -1068,6 +1102,34 @@ void loop() {
         LOG_I("[Main] Heap warning cleared: largest free block=%lu bytes", (unsigned long)maxBlock);
       }
     }
+
+    // Track how long heap has been continuously critical
+    if (appState.heapCritical) {
+      if (appState.heapCriticalSinceMs == 0) {
+        appState.heapCriticalSinceMs = millis();
+      }
+    } else {
+      appState.heapCriticalSinceMs = 0;  // reset when heap is no longer critical
+    }
+
+    // WiFi RX watchdog: force reconnect when heap critical >2min to flush stale RX buffers.
+    // WiFi RX buffer allocations silently fail below ~40KB; disconnect lets wifi_manager
+    // reconnect with a fresh allocation pool.
+    unsigned long criticalDuration = (appState.heapCriticalSinceMs > 0)
+        ? (millis() - appState.heapCriticalSinceMs)
+        : 0;
+    if (wifi_watchdog_should_reconnect(appState.heapCritical,
+                                       WiFi.status() == WL_CONNECTED,
+                                       appState.otaInProgress,
+                                       criticalDuration)) {
+      LOG_W("[Main] WiFi RX watchdog: heap critical for %lus, forcing reconnect to flush stale RX buffers",
+            criticalDuration / 1000);
+      appState.wifiRxWatchdogRecoveries++;
+      appState.heapCriticalSinceMs = 0;  // reset timer so we don't immediately trigger again
+      WiFi.disconnect();
+      // wifi_manager's updateWiFiConnection() / checkWiFiConnection() will handle reconnection
+    }
+
     // heapCritical/heapWarning included in next sendHardwareStats() cycle
   }
 
