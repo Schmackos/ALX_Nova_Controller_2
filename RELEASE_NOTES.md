@@ -3,6 +3,16 @@
 ## Version 1.8.7
 
 ## New Features
+- [2026-02-19] feat: add JS syntax validation to web asset build script (Item F)
+
+Add validateJsSyntax() to tools/build_web_assets.js that extracts every
+<script>...</script> block from the HTML assets, writes each to a temp
+file, and runs `node --check` (V8 syntax check, zero deps) before the
+gzip step. Build exits with code 1 and a descriptive error (asset name,
+block number, V8 message with HTML-offset line number) on failure.
+
+Add tools/.eslintrc.json with minimal browser/ES2020 config for optional
+manual ESLint runs. (`8a0cf20`)
 - [2026-02-19] feat: WiFi RX watchdog — force reconnect when heap critical >2min
 
 When ESP32 internal SRAM heap stays below ~40KB for more than 2 minutes,
