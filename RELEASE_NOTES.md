@@ -3,6 +3,7 @@
 ## Version 1.8.6
 
 ## New Features
+- [2026-02-19] feat: captive portal for AP mode — all-OS probe URL handlers with host-header guard (`84defa9`)
 - [2026-02-19] feat: passive ADC clock sync monitoring via cross-correlation
 
 Add cross-correlation-based phase detection between the two PCM1808 I2S
@@ -35,6 +36,7 @@ existing native tests are unaffected. Added test/test_debug_serial/ with 6
 tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
 
 ## Technical Details
+- [2026-02-19] chore: update release notes (`4ee1dc2`)
 - [2026-02-19] chore: update release notes (`1f83f34`)
 - [2026-02-19] chore: update release notes (`53b21a5`)
 - [2026-02-19] chore: update release notes (`1d21650`)
