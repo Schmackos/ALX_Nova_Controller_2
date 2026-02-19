@@ -236,7 +236,7 @@ int dsp_delay_alloc_slot() {
     if (ESP.getPsramSize() == 0) {
         uint32_t needed = DSP_MAX_DELAY_SAMPLES * sizeof(float) * 2; // Both state pools
         uint32_t available = ESP.getMaxAllocHeap();
-        if (available < needed + 40000) { // Keep 40KB reserve for WiFi/MQTT/HTTP
+        if (available < needed + HEAP_WIFI_RESERVE_BYTES) { // Keep 40KB reserve for WiFi/MQTT/HTTP
             LOG_E("[DSP] Delay alloc blocked: need %lu + 40KB reserve, only %lu available",
                   (unsigned long)needed, (unsigned long)available);
             return -1;

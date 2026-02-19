@@ -122,23 +122,67 @@ void initSerialNumber() {
   prefs.end();
 }
 
-// Captive portal redirect handler — sends AP clients to the portal root page.
-// Only redirects when in AP mode; returns 404 otherwise.
-void handleCaptivePortal() {
+void handleCaptivePortalAndroid() {
+  // Android/Chrome: expects HTTP 204 = "internet OK"; anything else = captive portal
+  if (!appState.isAPMode) { server.send(204); return; }
+  String portalUrl = "http://" + WiFi.softAPIP().toString() + "/";
+  server.sendHeader("Location", portalUrl, true);
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.send(302, "text/html", "");
+}
+
+void handleCaptivePortalApple() {
+  // Apple iOS/macOS: if NOT in AP mode, return the expected Success page
+  // If in AP mode, serve the portal page directly (shown in mini browser)
   if (!appState.isAPMode) {
-    server.send(404, "text/plain", "Not Found");
+    server.send(200, "text/html",
+      "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
+    return;
+  }
+  handleAPRoot();
+}
+
+void handleCaptivePortalWindows() {
+  // Windows 10/11: expects "Microsoft Connect Test" body; redirect triggers portal
+  if (!appState.isAPMode) {
+    server.send(200, "text/plain", "Microsoft Connect Test");
     return;
   }
   String portalUrl = "http://" + WiFi.softAPIP().toString() + "/";
   server.sendHeader("Location", portalUrl, true);
   server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  server.sendHeader("Pragma", "no-cache");
-  server.sendHeader("Expires", "-1");
-  server.send(302, "text/html",
-    "<!DOCTYPE html><html><head><title>Redirecting</title>"
-    "<meta http-equiv='refresh' content='0;url=" + portalUrl + "'>"
-    "<script>window.location='" + portalUrl + "';</script>"
-    "</head><body><p>Redirecting to <a href='" + portalUrl + "'>" + portalUrl + "</a></p></body></html>");
+  server.send(302, "text/html", "");
+}
+
+void handleCaptivePortalNCSI() {
+  // Windows NCSI legacy: expects "Microsoft NCSI" body
+  if (!appState.isAPMode) {
+    server.send(200, "text/plain", "Microsoft NCSI");
+    return;
+  }
+  String portalUrl = "http://" + WiFi.softAPIP().toString() + "/";
+  server.sendHeader("Location", portalUrl, true);
+  server.send(302, "text/html", "");
+}
+
+void handleCaptivePortalFirefox() {
+  // Firefox: expects "success\n" body
+  if (!appState.isAPMode) {
+    server.send(200, "text/plain", "success\n");
+    return;
+  }
+  String portalUrl = "http://" + WiFi.softAPIP().toString() + "/";
+  server.sendHeader("Location", portalUrl, true);
+  server.send(302, "text/html", "");
+}
+
+void handleCaptivePortalRedirect() {
+  // Generic redirect for Windows second stage and other platforms
+  if (!appState.isAPMode) { server.send(404, "text/plain", "Not Found"); return; }
+  String portalUrl = "http://" + WiFi.softAPIP().toString() + "/";
+  server.sendHeader("Location", portalUrl, true);
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.send(302, "text/html", "");
 }
 
 void setup() {
@@ -281,13 +325,18 @@ void setup() {
   server.on("/apple-touch-icon-precomposed.png", HTTP_GET,
             []() { server.send(404, "text/plain", "Not Found"); });
 
-  // Captive portal probes — redirect all OS connectivity-check requests to the portal
-  server.on("/generate_204",        HTTP_GET, handleCaptivePortal); // Android
-  server.on("/hotspot-detect.html", HTTP_GET, handleCaptivePortal); // Apple iOS/macOS
-  server.on("/connecttest.txt",     HTTP_GET, handleCaptivePortal); // Windows 10/11
-  server.on("/redirect",            HTTP_GET, handleCaptivePortal); // Windows 10/11
-  server.on("/ncsi.txt",            HTTP_GET, handleCaptivePortal); // Windows legacy
-  server.on("/success.txt",         HTTP_GET, handleCaptivePortal); // Firefox
+  // Captive portal probes — platform-specific responses to trigger auto-open
+  server.on("/generate_204",              HTTP_GET, handleCaptivePortalAndroid);   // Android/Chrome
+  server.on("/gen_204",                   HTTP_GET, handleCaptivePortalAndroid);   // Android (alt)
+  server.on("/hotspot-detect.html",       HTTP_GET, handleCaptivePortalApple);     // Apple iOS/macOS
+  server.on("/library/test/success.html", HTTP_GET, handleCaptivePortalApple);     // Apple (alt)
+  server.on("/connecttest.txt",           HTTP_GET, handleCaptivePortalWindows);   // Windows 10/11
+  server.on("/redirect",                  HTTP_GET, handleCaptivePortalRedirect);  // Windows stage 2
+  server.on("/ncsi.txt",                  HTTP_GET, handleCaptivePortalNCSI);      // Windows legacy
+  server.on("/success.txt",               HTTP_GET, handleCaptivePortalFirefox);   // Firefox
+  server.on("/canonical.html",            HTTP_GET, handleCaptivePortalRedirect);  // Firefox (alt)
+  server.on("/connectivity-check",        HTTP_GET, handleCaptivePortalAndroid);   // Ubuntu/NetworkManager
+  server.on("/check_network_status.txt",  HTTP_GET, handleCaptivePortalRedirect);  // Samsung
 
   // Redirect all unknown routes to root in AP mode (Captive Portal)
   server.onNotFound([]() {
@@ -328,6 +377,11 @@ void setup() {
 
   // Protected routes
   server.on("/", HTTP_GET, []() {
+    // In AP-only mode, serve the setup page without authentication requirement
+    if (appState.isAPMode && WiFi.status() != WL_CONNECTED) {
+      handleAPRoot();
+      return;
+    }
     if (!requireAuth())
       return;
 
@@ -998,8 +1052,8 @@ void loop() {
 
     bool wasCritical = appState.heapCritical;
     bool wasWarning  = appState.heapWarning;
-    appState.heapCritical = (maxBlock < 40000);
-    appState.heapWarning  = (!appState.heapCritical && maxBlock < 60000);
+    appState.heapCritical = (maxBlock < HEAP_CRITICAL_THRESHOLD_BYTES);
+    appState.heapWarning  = (!appState.heapCritical && maxBlock < HEAP_WARNING_THRESHOLD_BYTES);
 
     if (appState.heapCritical != wasCritical) {
       if (appState.heapCritical) {
