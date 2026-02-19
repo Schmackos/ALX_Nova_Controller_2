@@ -9,6 +9,21 @@
 - None
 
 ## Bug Fixes
+- [2026-02-20] fix: resolve USB audio Code 10 and DAC I2S TX init deadlock
+
+USB audio (usb_audio.cpp):
+- Accept SAM_FREQ_CONTROL SET_CUR for clock source instead of stalling;
+  Windows usbaudio2.sys sends this unconditionally during driver startup
+  even for read-only clocks, stalling caused Code 10
+- Change volume RANGE wMIN from -32768 (0x8000, UAC2 reserved sentinel)
+  to -32512 (0x8100); 0x8000 caused usbaudio2.sys to treat the volume
+  control as absent, contradicting the Feature Unit descriptor
+
+DAC (dac_hal.cpp):
+- Set dacReady=true before calling dac_enable_i2s_tx() in dac_output_init();
+  i2s_configure_adc1() gates TX channel creation on dacEnabled && dacReady,
+  so dacReady must be true before the call — it is reset to false on any
+  subsequent failure (`d4ec45b`)
 - [2026-02-20] fix: move TWDT reconfigure to top of setup() before WiFi init
 
 esp_task_wdt_reconfigure() was called after connectToStoredNetworks(),
