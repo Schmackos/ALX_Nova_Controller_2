@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <cmath>
 
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
@@ -428,6 +429,120 @@ void test_signal_disappears_smoothing_delay(void) {
     TEST_ASSERT_TRUE(TestState::timerRemaining < 300);
 }
 
+// ===== Tier 1.3: Smoothing Alpha Tests =====
+//
+// The smart sensing module uses an EMA (exponential moving average) to smooth
+// audio levels. The smoothing alpha is derived from the audioUpdateRate
+// (interval in ms) to maintain approximately a 308ms time constant:
+//   alpha = 1 - exp(-interval_ms / 308)
+//
+// Common intervals have hardcoded alpha values; all others use the formula.
+// This helper mirrors the switch statement in updateSmartSensingLogic().
+
+static float computeSmoothingAlpha(uint16_t intervalMs) {
+    switch (intervalMs) {
+        case 20:  return 0.063f;
+        case 33:  return 0.102f;
+        case 50:  return 0.15f;
+        case 100: return 0.278f;
+        default:  return 1.0f - expf(-(float)intervalMs / 308.0f);
+    }
+}
+
+// Test 14: Alpha at 50ms interval (rate=20Hz) is in range [0.13, 0.17]
+// Formula: 1 - exp(-50/308) = 0.1489... hardcoded as 0.15
+void test_alpha_50ms_interval_rate_20hz(void) {
+    float alpha = computeSmoothingAlpha(50);
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 0.15f, alpha); // centred on 0.15, ±0.02
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.12f, alpha);
+    TEST_ASSERT_LESS_THAN_FLOAT(0.18f, alpha);
+}
+
+// Test 15: Alpha at 33ms interval (rate≈30Hz) is in range [0.08, 0.12]
+// Formula: 1 - exp(-33/308) = 0.1002... hardcoded as 0.102
+void test_alpha_33ms_interval_rate_30hz(void) {
+    float alpha = computeSmoothingAlpha(33);
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.08f, alpha);
+    TEST_ASSERT_LESS_THAN_FLOAT(0.12f, alpha);
+}
+
+// Test 16: Alpha at 20ms interval (rate=50Hz) is in range [0.050, 0.080]
+// Formula: 1 - exp(-20/308) = 0.0629... hardcoded as 0.063
+void test_alpha_20ms_interval_rate_50hz(void) {
+    float alpha = computeSmoothingAlpha(20);
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.050f, alpha);
+    TEST_ASSERT_LESS_THAN_FLOAT(0.080f, alpha);
+}
+
+// Test 17: Alpha at 100ms interval (rate=10Hz) is in range [0.24, 0.32]
+// Formula: 1 - exp(-100/308) = 0.2784... hardcoded as 0.278
+void test_alpha_100ms_interval_rate_10hz(void) {
+    float alpha = computeSmoothingAlpha(100);
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.24f, alpha);
+    TEST_ASSERT_LESS_THAN_FLOAT(0.32f, alpha);
+}
+
+// Test 18: Default formula for a non-standard interval (10ms, rate=100Hz)
+// Formula: 1 - exp(-10/308) = 0.03175...  expected range [0.025, 0.04]
+void test_alpha_default_formula_10ms_interval(void) {
+    float alpha = computeSmoothingAlpha(10);
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.025f, alpha);
+    TEST_ASSERT_LESS_THAN_FLOAT(0.04f, alpha);
+}
+
+// Test 19: Default formula for 200ms interval — alpha still in (0, 1)
+// Formula: 1 - exp(-200/308) = 0.4789...
+void test_alpha_200ms_interval_valid_range(void) {
+    float alpha = computeSmoothingAlpha(200);
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.0f, alpha);
+    TEST_ASSERT_LESS_THAN_FLOAT(1.0f, alpha);
+}
+
+// Test 20: Time constant property — longer interval gives larger alpha
+void test_alpha_increases_with_interval(void) {
+    float alpha10  = computeSmoothingAlpha(10);
+    float alpha20  = computeSmoothingAlpha(20);
+    float alpha50  = computeSmoothingAlpha(50);
+    float alpha100 = computeSmoothingAlpha(100);
+
+    // TEST_ASSERT_LESS_THAN_FLOAT(threshold, actual): passes if actual < threshold
+    // So "alpha10 < alpha20" is: TEST_ASSERT_LESS_THAN_FLOAT(alpha20, alpha10)
+    TEST_ASSERT_LESS_THAN_FLOAT(alpha20, alpha10);   // alpha10 < alpha20
+    TEST_ASSERT_LESS_THAN_FLOAT(alpha50, alpha20);   // alpha20 < alpha50
+    TEST_ASSERT_LESS_THAN_FLOAT(alpha100, alpha50);  // alpha50 < alpha100
+}
+
+// Test 21: Fallback for unexpected interval (1ms) — does not crash, returns valid alpha
+void test_alpha_fallback_1ms_no_crash(void) {
+    float alpha = computeSmoothingAlpha(1);
+    // 1 - exp(-1/308) ≈ 0.00324
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.0f, alpha);
+    TEST_ASSERT_LESS_THAN_FLOAT(0.01f, alpha);
+}
+
+// Test 22: All hardcoded values match the formula within ±20% relative error
+// Validates that the hardcoded lookup approximations are accurate.
+void test_hardcoded_alpha_matches_formula(void) {
+    const float tau = 308.0f;
+    const float tolerance_rel = 0.20f; // allow up to 20% relative deviation
+
+    struct { uint16_t interval; float hardcoded; } cases[] = {
+        { 20,  0.063f },
+        { 33,  0.102f },
+        { 50,  0.15f  },
+        { 100, 0.278f },
+    };
+
+    for (int i = 0; i < 4; i++) {
+        float formula = 1.0f - expf(-(float)cases[i].interval / tau);
+        float diff = fabsf(cases[i].hardcoded - formula);
+        float rel  = diff / formula;
+        // rel should be < 20% — if this fails, the hardcoded value drifted
+        // from the theoretical formula significantly
+        TEST_ASSERT_LESS_THAN_FLOAT(tolerance_rel, rel);
+    }
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -446,6 +561,16 @@ int runUnityTests(void) {
     RUN_TEST(test_noise_near_threshold_timer_counts_down);
     RUN_TEST(test_real_signal_resets_timer_after_smoothing);
     RUN_TEST(test_signal_disappears_smoothing_delay);
+    // Item H: smoothing alpha formula validation
+    RUN_TEST(test_alpha_50ms_interval_rate_20hz);
+    RUN_TEST(test_alpha_33ms_interval_rate_30hz);
+    RUN_TEST(test_alpha_20ms_interval_rate_50hz);
+    RUN_TEST(test_alpha_100ms_interval_rate_10hz);
+    RUN_TEST(test_alpha_default_formula_10ms_interval);
+    RUN_TEST(test_alpha_200ms_interval_valid_range);
+    RUN_TEST(test_alpha_increases_with_interval);
+    RUN_TEST(test_alpha_fallback_1ms_no_crash);
+    RUN_TEST(test_hardcoded_alpha_matches_formula);
 
     return UNITY_END();
 }

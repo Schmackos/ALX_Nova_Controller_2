@@ -21,6 +21,25 @@ wifi_manager then reconnects with a fresh allocation pool.
 - src/mqtt_handler.cpp: publish system/wifi_rx_watchdog_recoveries on heartbeat;
   add HA discovery sensor (state_class: total_increasing, mdi:wifi-refresh)
 - test/test_wifi_watchdog/test_wifi_watchdog.cpp: 5 unit tests for the pure
+  helper function (not critical, under 2min, at 2min, OTA guard, not connected) (`ac8c0ad`)
+- [2026-02-19] feat: WiFi RX watchdog — force reconnect when heap critical >2min
+
+When ESP32 internal SRAM heap stays below ~40KB for more than 2 minutes,
+the WiFi stack's RX buffer allocations silently fail, dropping all incoming
+packets (HTTP, WebSocket, ping) while outgoing MQTT publishes continue to
+work. The watchdog detects this condition and forces a WiFi disconnect;
+wifi_manager then reconnects with a fresh allocation pool.
+
+- src/wifi_watchdog.h: pure inline helper wifi_watchdog_should_reconnect()
+  (heapCritical + connected + !otaInProgress + criticalDuration >= 120s)
+- src/app_state.h: add wifiRxWatchdogRecoveries (uint32_t) and
+  heapCriticalSinceMs (unsigned long) to Heap Health section
+- src/main.cpp: include wifi_watchdog.h; extend heap monitor block with
+  heapCriticalSinceMs tracking and watchdog trigger (WiFi.disconnect())
+- src/websocket_handler.cpp: emit wifiRxWatchdogRecoveries in sendHardwareStats()
+- src/mqtt_handler.cpp: publish system/wifi_rx_watchdog_recoveries on heartbeat;
+  add HA discovery sensor (state_class: total_increasing, mdi:wifi-refresh)
+- test/test_wifi_watchdog/test_wifi_watchdog.cpp: 5 unit tests for the pure
   helper function (not critical, under 2min, at 2min, OTA guard, not connected) (`f3b3fb7`)
 - [2026-02-19] feat: add user-configurable device name (AP SSID override)
 
