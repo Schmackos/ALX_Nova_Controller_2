@@ -3,6 +3,26 @@
 ## Version 1.8.7
 
 ## New Features
+- [2026-02-19] feat: replace single pending_pattern with 3-slot circular buzzer queue (Item D)
+
+Replace the volatile BuzzerPattern pending_pattern singleton with a
+circular queue of BUZZ_QUEUE_SIZE (3) slots:
+- buzzer_play() enqueues patterns; when full, drops oldest and
+  increments _buzzQueueDropped
+- buzzer_update() dequeues only when not currently playing (FIFO order)
+- portMUX_TYPE _buzzQueueMux guards queue head/tail/count in
+  buzzer_play() (guarded by #ifndef UNIT_TEST for native builds)
+- buzzer_init() resets queue state on startup
+
+Adds 5 new tests to test_buzzer_handler.cpp:
+- test_buzz_queue_3_in_order: FIFO order across 3 dequeue cycles
+- test_buzz_queue_4th_drops_oldest: overflow evicts head, count stays 3
+- test_buzz_queue_empty_returns_none: empty queue causes no playback
+- test_buzz_queue_drop_counter: each overflow increments _buzzQueueDropped
+- test_buzz_queue_sequential_playback: full play->complete->dequeue cycle
+
+Updates test 6 (formerly test_new_pattern_overrides) to reflect new
+queue semantics: second enqueued pattern waits for current to finish. (`e9cf3f4`)
 - [2026-02-19] feat: post-connect roaming and captive portal auto-open
 
 Post-connect roaming: after connecting to a non-hidden network, scan

@@ -219,6 +219,10 @@ public:
   bool adcEnabled[NUM_AUDIO_ADCS] = {true, true}; // Per-ADC input enable (persisted)
   volatile bool audioPaused = false; // Set true to pause audio_capture_task I2S reads (for I2S reinit)
 
+  // ===== Stack Overflow Detection (set by vApplicationStackOverflowHook, handled in loop()) =====
+  volatile bool stackOverflowDetected = false;
+  char stackOverflowTaskName[16] = {0};
+
   // Input channel names (user-configurable, 4 channels = 2 ADCs x 2 channels)
   String inputNames[NUM_AUDIO_ADCS * 2];
 

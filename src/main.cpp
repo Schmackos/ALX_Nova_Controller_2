@@ -82,6 +82,21 @@ ButtonHandler resetButton(RESET_BUTTON_PIN);
 // bundle via ESP32CertBundle library for automatic SSL validation of all public
 // servers
 
+// ===== Stack Overflow Hook =====
+// Called by FreeRTOS when CONFIG_FREERTOS_CHECK_STACKOVERFLOW_PTRVAL detects
+// a stack overflow. Runs in exception/interrupt context — no heap, no Serial.
+// Sets a flag and copies the task name; loop() handles logging + crashlog.
+extern "C" void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+  appState.stackOverflowDetected = true;
+  if (pcTaskName != nullptr) {
+    strncpy(appState.stackOverflowTaskName, pcTaskName, 15);
+    appState.stackOverflowTaskName[15] = '\0';
+  } else {
+    strncpy(appState.stackOverflowTaskName, "unknown", 15);
+    appState.stackOverflowTaskName[15] = '\0';
+  }
+}
+
 // ===== Serial Number Generation =====
 // Generates a unique serial number from eFuse MAC and stores it in NVS
 // Regenerates when firmware version changes
@@ -719,6 +734,13 @@ void loop() {
   // Small delay to reduce CPU usage - allows other tasks to run
   // Without this, the loop runs as fast as possible (~49% CPU)
   delay(5);
+
+  // Handle stack overflow detection (flag set by vApplicationStackOverflowHook)
+  if (appState.stackOverflowDetected) {
+    appState.stackOverflowDetected = false;
+    LOG_E("[Main] Stack overflow detected in task: %s", appState.stackOverflowTaskName);
+    crashlog_record(String("stack_overflow:") + appState.stackOverflowTaskName);
+  }
 
   server.handleClient();
   esp_task_wdt_reset();  // Feed WDT after serving pages (85KB dashboard can block)
