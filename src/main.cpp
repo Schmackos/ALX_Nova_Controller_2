@@ -30,6 +30,7 @@
 #include "web_pages.h"
 #include "websocket_handler.h"
 #include "wifi_manager.h"
+#include "captive_portal.h"
 #ifdef GUI_ENABLED
 #include "gui/gui_manager.h"
 #endif
@@ -119,6 +120,25 @@ void initSerialNumber() {
   }
 
   prefs.end();
+}
+
+// Captive portal redirect handler — sends AP clients to the portal root page.
+// Only redirects when in AP mode; returns 404 otherwise.
+void handleCaptivePortal() {
+  if (!appState.isAPMode) {
+    server.send(404, "text/plain", "Not Found");
+    return;
+  }
+  String portalUrl = "http://" + WiFi.softAPIP().toString() + "/";
+  server.sendHeader("Location", portalUrl, true);
+  server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  server.sendHeader("Pragma", "no-cache");
+  server.sendHeader("Expires", "-1");
+  server.send(302, "text/html",
+    "<!DOCTYPE html><html><head><title>Redirecting</title>"
+    "<meta http-equiv='refresh' content='0;url=" + portalUrl + "'>"
+    "<script>window.location='" + portalUrl + "';</script>"
+    "</head><body><p>Redirecting to <a href='" + portalUrl + "'>" + portalUrl + "</a></p></body></html>");
 }
 
 void setup() {
@@ -261,17 +281,13 @@ void setup() {
   server.on("/apple-touch-icon-precomposed.png", HTTP_GET,
             []() { server.send(404, "text/plain", "Not Found"); });
 
-  // Android/Chrome captive portal check
-  server.on("/generate_204", HTTP_GET, []() {
-    server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "Redirecting...");
-  });
-
-  // Apple captive portal check
-  server.on("/hotspot-detect.html", HTTP_GET, []() {
-    server.sendHeader("Location", "/", true);
-    server.send(302, "text/plain", "Redirecting...");
-  });
+  // Captive portal probes — redirect all OS connectivity-check requests to the portal
+  server.on("/generate_204",        HTTP_GET, handleCaptivePortal); // Android
+  server.on("/hotspot-detect.html", HTTP_GET, handleCaptivePortal); // Apple iOS/macOS
+  server.on("/connecttest.txt",     HTTP_GET, handleCaptivePortal); // Windows 10/11
+  server.on("/redirect",            HTTP_GET, handleCaptivePortal); // Windows 10/11
+  server.on("/ncsi.txt",            HTTP_GET, handleCaptivePortal); // Windows legacy
+  server.on("/success.txt",         HTTP_GET, handleCaptivePortal); // Firefox
 
   // Redirect all unknown routes to root in AP mode (Captive Portal)
   server.onNotFound([]() {
@@ -282,13 +298,21 @@ void setup() {
           server.uri().c_str());
 
     if (appState.isAPMode) {
-      server.sendHeader("Location",
-                        String("http://") + WiFi.softAPIP().toString() + "/",
-                        true);
-      server.send(302, "text/plain", "Redirecting to Captive Portal");
-    } else {
-      server.send(404, "text/plain", "Not Found");
+      String host = server.hostHeader();
+      String apIP = WiFi.softAPIP().toString();
+      String staIP = WiFi.localIP().toString();
+      if (!captive_portal_is_device_host(host.c_str(), apIP.c_str(), staIP.c_str())) {
+        // DNS-hijacked request from AP client — redirect to portal
+        String portalUrl = "http://" + apIP + "/";
+        server.sendHeader("Location", portalUrl, true);
+        server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        server.sendHeader("Pragma", "no-cache");
+        server.sendHeader("Expires", "-1");
+        server.send(302, "text/plain", "Redirecting to portal");
+        return;
+      }
     }
+    server.send(404, "text/plain", "Not Found");
   });
 
   // Authentication routes (unprotected)
