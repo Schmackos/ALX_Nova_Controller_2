@@ -208,6 +208,23 @@ void setup() {
   LOG_I("[Main] ESP32-S3 ALX Nova Controller starting");
   LOG_I("[Main] Firmware version: %s", firmwareVer);
 
+  // Reconfigure TWDT immediately — before WiFi, GUI, or audio tasks start.
+  // The pre-built IDF5 Arduino-ESP32 library has CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
+  // baked in; -D build flags have no effect on the compiled .a. Calling
+  // esp_task_wdt_reconfigure() here (before connectToStoredNetworks()) prevents
+  // the WiFi/lwIP task (tiT) from auto-subscribing to the old 5s WDT and then
+  // triggering "task not found" warnings when it calls esp_task_wdt_reset() after
+  // the reconfigure clears the subscriber list. idle_core_mask=0 removes IDLE tasks
+  // from WDT monitoring without corrupting the subscriber linked list.
+  {
+    esp_task_wdt_config_t twdt_cfg = {
+      .timeout_ms    = 30000,  // 30 seconds
+      .idle_core_mask = 0,     // don't monitor any IDLE task
+      .trigger_panic  = true,
+    };
+    esp_task_wdt_reconfigure(&twdt_cfg);
+  }
+
   // Initialize device serial number from NVS (generates on first boot or
   // firmware update)
   initSerialNumber();
@@ -716,20 +733,6 @@ void setup() {
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
 
-  // Reconfigure TWDT before subscribing tasks.
-  // The pre-built IDF5 Arduino-ESP32 library has CONFIG_ESP_TASK_WDT_TIMEOUT_S=5 baked
-  // in — the -D build flag has no effect on the compiled .a. Use esp_task_wdt_reconfigure()
-  // to extend to 30s at runtime. Setting idle_core_mask=0 also atomically removes the
-  // auto-subscribed IDLE0 entry without corrupting the subscriber linked list (calling
-  // esp_task_wdt_delete() after tasks are subscribed breaks list lookup in IDF5.5).
-  {
-    esp_task_wdt_config_t twdt_cfg = {
-      .timeout_ms    = 30000,  // 30 seconds
-      .idle_core_mask = 0,     // don't monitor any IDLE task
-      .trigger_panic  = true,
-    };
-    esp_task_wdt_reconfigure(&twdt_cfg);
-  }
   esp_task_wdt_add(NULL);  // Register main loop (loopTask)
 
   // Defer first OTA check — immediate check on boot (lastOTACheck==0) caused WDT
