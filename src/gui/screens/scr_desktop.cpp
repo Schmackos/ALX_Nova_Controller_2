@@ -398,7 +398,7 @@ lv_obj_t *scr_desktop_create(void) {
         lv_obj_set_size(card, 148, 114);
         lv_obj_align(card, LV_ALIGN_CENTER, 0, 0);
         lv_obj_add_style(card, gui_style_card(), LV_PART_MAIN);
-        lv_obj_add_style(card, gui_style_card_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
+        lv_obj_add_style(card, gui_style_card_focused(), ((lv_style_selector_t)LV_PART_MAIN | (lv_style_selector_t)LV_STATE_FOCUSED));
         lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
 
         /* Make card clickable for encoder */

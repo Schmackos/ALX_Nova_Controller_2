@@ -201,7 +201,7 @@ lv_obj_t *scr_home_create(void) {
     lv_obj_set_size(back_btn, 60, BACK_BTN_H);
     lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_add_style(back_btn, gui_style_list_item(), LV_PART_MAIN);
-    lv_obj_add_style(back_btn, gui_style_list_item_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(back_btn, gui_style_list_item_focused(), ((lv_style_selector_t)LV_PART_MAIN | (lv_style_selector_t)LV_STATE_FOCUSED));
     lv_obj_add_flag(back_btn, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(back_btn, LV_OBJ_FLAG_SCROLLABLE);
     lv_group_add_obj(gui_nav_get_group(), back_btn);
