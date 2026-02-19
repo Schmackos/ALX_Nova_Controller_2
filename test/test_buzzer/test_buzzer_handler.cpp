@@ -91,12 +91,20 @@ static const ToneStep *get_pattern(BuzzerPattern p) {
 
 static const uint8_t volume_duty[] = {25, 76, 153};
 
+// ===== 3-slot circular queue =====
+#define BUZZ_QUEUE_SIZE 3
+
+static BuzzerPattern _buzzQueue[BUZZ_QUEUE_SIZE];
+static int _buzzQueueHead  = 0;
+static int _buzzQueueTail  = 0;
+static int _buzzQueueCount = 0;
+static uint32_t _buzzQueueDropped = 0;
+
 // Sequencer state
 static const ToneStep *current_pattern = nullptr;
 static int current_step = 0;
 static unsigned long step_start_ms = 0;
 static bool playing = false;
-static volatile BuzzerPattern pending_pattern = BUZZ_NONE;
 static volatile bool _buzzer_tick_pending = false;
 static volatile bool _buzzer_click_pending = false;
 
@@ -128,7 +136,25 @@ static void stop_buzzer() {
   current_pattern = nullptr;
 }
 
+// Enqueue a pattern; if full, drop oldest and enqueue new one
+static void buzzer_play(BuzzerPattern pattern) {
+  if (pattern == BUZZ_NONE) return;
+  if (_buzzQueueCount < BUZZ_QUEUE_SIZE) {
+    _buzzQueue[_buzzQueueHead] = pattern;
+    _buzzQueueHead = (_buzzQueueHead + 1) % BUZZ_QUEUE_SIZE;
+    _buzzQueueCount++;
+  } else {
+    // Queue full — drop oldest
+    _buzzQueueDropped++;
+    _buzzQueueTail = (_buzzQueueTail + 1) % BUZZ_QUEUE_SIZE;
+    _buzzQueue[_buzzQueueHead] = pattern;
+    _buzzQueueHead = (_buzzQueueHead + 1) % BUZZ_QUEUE_SIZE;
+    // count stays at BUZZ_QUEUE_SIZE
+  }
+}
+
 static void buzzer_update() {
+  // Handle ISR-safe tick/click flags (bypass queue — direct play when idle)
   if (_buzzer_tick_pending) {
     _buzzer_tick_pending = false;
     if (test_buzzerEnabled && !playing) {
@@ -142,10 +168,15 @@ static void buzzer_update() {
     }
   }
 
-  BuzzerPattern req = pending_pattern;
-  if (req != BUZZ_NONE) {
-    pending_pattern = BUZZ_NONE;
-    if (test_buzzerEnabled) {
+  // Dequeue next pattern only when not currently playing
+  if (!playing) {
+    BuzzerPattern req = BUZZ_NONE;
+    if (_buzzQueueCount > 0) {
+      req = _buzzQueue[_buzzQueueTail];
+      _buzzQueueTail = (_buzzQueueTail + 1) % BUZZ_QUEUE_SIZE;
+      _buzzQueueCount--;
+    }
+    if (req != BUZZ_NONE && test_buzzerEnabled) {
       const ToneStep *pat = get_pattern(req);
       if (pat) {
         start_pattern(pat);
@@ -178,8 +209,6 @@ static void buzzer_update() {
   }
 }
 
-static void buzzer_play(BuzzerPattern pattern) { pending_pattern = pattern; }
-
 static void buzzer_play_blocking(BuzzerPattern pattern, uint16_t timeout_ms) {
   buzzer_play(pattern);
   unsigned long start = millis();
@@ -201,9 +230,16 @@ void setUp(void) {
   current_step = 0;
   step_start_ms = 0;
   playing = false;
-  pending_pattern = BUZZ_NONE;
   _buzzer_tick_pending = false;
   _buzzer_click_pending = false;
+  // Reset circular queue
+  _buzzQueueHead    = 0;
+  _buzzQueueTail    = 0;
+  _buzzQueueCount   = 0;
+  _buzzQueueDropped = 0;
+  for (int i = 0; i < BUZZ_QUEUE_SIZE; i++) {
+    _buzzQueue[i] = BUZZ_NONE;
+  }
 }
 
 void tearDown(void) {}
@@ -300,18 +336,29 @@ void test_pattern_sequencing_confirm(void) {
   TEST_ASSERT_FALSE(playing);
 }
 
-// Test 6: New pattern overrides current
-void test_new_pattern_overrides(void) {
-  buzzer_play(BUZZ_BTN_LONG); // 3-step pattern
-  buzzer_update();
-  TEST_ASSERT_TRUE(playing);
-  TEST_ASSERT_EQUAL(2000, (int)ArduinoMock::ledcLastFreq);
-
-  // Override with tick
-  buzzer_play(BUZZ_TICK);
+// Test 6: Second pattern enqueued while playing starts after current finishes
+// (Queue semantics: no override — patterns are FIFO)
+void test_enqueued_pattern_plays_after_current(void) {
+  buzzer_play(BUZZ_BTN_SHORT); // 1-step pattern: 1500 Hz, 100ms
   buzzer_update();
   TEST_ASSERT_TRUE(playing);
   TEST_ASSERT_EQUAL(1500, (int)ArduinoMock::ledcLastFreq);
+
+  // Enqueue a second pattern while first is playing
+  buzzer_play(BUZZ_CLICK); // 1-step: 2000 Hz, 30ms
+  // update while still playing (time not advanced) — dequeue should NOT happen
+  buzzer_update();
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(1500, (int)ArduinoMock::ledcLastFreq); // still first pattern
+
+  // Advance past first pattern (100ms)
+  ArduinoMock::mockMillis = 100;
+  buzzer_update(); // stops first pattern
+
+  // Now idle — next update dequeues BUZZ_CLICK
+  buzzer_update();
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(2000, (int)ArduinoMock::ledcLastFreq);
 }
 
 // Test 7: Silence gaps produce zero duty
@@ -427,6 +474,150 @@ void test_blocking_playback_disabled_no_sound(void) {
   TEST_ASSERT_EQUAL(0, ArduinoMock::ledcWriteToneCount);
 }
 
+// ===== Queue Tests =====
+
+// Test 13: Enqueue 3 patterns; verify they dequeue in FIFO order
+void test_buzz_queue_3_in_order(void) {
+  // Enqueue 3 patterns while not playing
+  buzzer_play(BUZZ_BTN_SHORT);   // freq 1500
+  buzzer_play(BUZZ_CLICK);       // freq 2000
+  buzzer_play(BUZZ_NAV);         // freq 3000
+
+  TEST_ASSERT_EQUAL(3, _buzzQueueCount);
+  TEST_ASSERT_EQUAL(0u, _buzzQueueDropped);
+
+  // First update: dequeues BUZZ_BTN_SHORT (1500 Hz)
+  buzzer_update();
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(1500, (int)ArduinoMock::ledcLastFreq);
+
+  // Advance past BTN_SHORT (100ms), stop it
+  ArduinoMock::mockMillis = 100;
+  buzzer_update(); // stop_buzzer called
+
+  // Next update: dequeues BUZZ_CLICK (2000 Hz)
+  buzzer_update();
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(2000, (int)ArduinoMock::ledcLastFreq);
+
+  // Advance past CLICK (30ms)
+  ArduinoMock::mockMillis = 130;
+  buzzer_update(); // stop_buzzer
+
+  // Next update: dequeues BUZZ_NAV (3000 Hz)
+  buzzer_update();
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(3000, (int)ArduinoMock::ledcLastFreq);
+
+  TEST_ASSERT_EQUAL(0, _buzzQueueCount);
+}
+
+// Test 14: 4th enqueue when full drops oldest; queue still has 3 with correct order
+void test_buzz_queue_4th_drops_oldest(void) {
+  // Fill queue: BTN_SHORT, CLICK, NAV
+  buzzer_play(BUZZ_BTN_SHORT);   // slot 0 — will be dropped
+  buzzer_play(BUZZ_CLICK);       // slot 1
+  buzzer_play(BUZZ_NAV);         // slot 2
+
+  TEST_ASSERT_EQUAL(3, _buzzQueueCount);
+  TEST_ASSERT_EQUAL(0u, _buzzQueueDropped);
+
+  // 4th enqueue — queue is full, oldest (BTN_SHORT) dropped
+  buzzer_play(BUZZ_CONFIRM);
+  TEST_ASSERT_EQUAL(3, _buzzQueueCount);
+  TEST_ASSERT_EQUAL(1u, _buzzQueueDropped);
+
+  // Dequeue order should be: CLICK, NAV, CONFIRM
+
+  // First dequeue: CLICK (2000 Hz)
+  buzzer_update();
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(2000, (int)ArduinoMock::ledcLastFreq);
+
+  ArduinoMock::mockMillis = 30;
+  buzzer_update(); // stop CLICK
+
+  buzzer_update(); // dequeue NAV
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(3000, (int)ArduinoMock::ledcLastFreq);
+
+  ArduinoMock::mockMillis = 40;
+  buzzer_update(); // stop NAV
+
+  buzzer_update(); // dequeue CONFIRM (2000 Hz first step)
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(2000, (int)ArduinoMock::ledcLastFreq);
+}
+
+// Test 15: Dequeue from empty queue returns BUZZ_NONE (no crash, no playback)
+void test_buzz_queue_empty_returns_none(void) {
+  TEST_ASSERT_EQUAL(0, _buzzQueueCount);
+
+  // Update on empty queue should not start playback
+  buzzer_update();
+
+  TEST_ASSERT_FALSE(playing);
+  TEST_ASSERT_EQUAL(0, ArduinoMock::ledcWriteToneCount);
+  TEST_ASSERT_EQUAL(0, _buzzQueueCount);
+}
+
+// Test 16: Overflow increments _buzzQueueDropped
+void test_buzz_queue_drop_counter(void) {
+  TEST_ASSERT_EQUAL(0u, _buzzQueueDropped);
+
+  // Fill queue
+  buzzer_play(BUZZ_TICK);
+  buzzer_play(BUZZ_TICK);
+  buzzer_play(BUZZ_TICK);
+  TEST_ASSERT_EQUAL(0u, _buzzQueueDropped);
+
+  // Each additional call should drop one
+  buzzer_play(BUZZ_CLICK);
+  TEST_ASSERT_EQUAL(1u, _buzzQueueDropped);
+
+  buzzer_play(BUZZ_CLICK);
+  TEST_ASSERT_EQUAL(2u, _buzzQueueDropped);
+
+  buzzer_play(BUZZ_NAV);
+  TEST_ASSERT_EQUAL(3u, _buzzQueueDropped);
+
+  // Queue count never exceeds BUZZ_QUEUE_SIZE
+  TEST_ASSERT_EQUAL(BUZZ_QUEUE_SIZE, _buzzQueueCount);
+}
+
+// Test 17: Sequential play — simulate play->update->complete->update cycle
+void test_buzz_queue_sequential_playback(void) {
+  // Enqueue two short patterns
+  buzzer_play(BUZZ_BTN_SHORT);  // 1500 Hz, 100ms
+  buzzer_play(BUZZ_NAV);        // 3000 Hz, 10ms
+
+  // --- Cycle 1: start BTN_SHORT ---
+  buzzer_update();
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(1500, (int)ArduinoMock::ledcLastFreq);
+  TEST_ASSERT_EQUAL(1, _buzzQueueCount); // NAV still queued
+
+  // Advance 100ms — pattern finishes on next update
+  ArduinoMock::mockMillis = 100;
+  buzzer_update();
+  TEST_ASSERT_FALSE(playing); // BTN_SHORT done
+
+  // --- Cycle 2: dequeue and start NAV ---
+  buzzer_update();
+  TEST_ASSERT_TRUE(playing);
+  TEST_ASSERT_EQUAL(3000, (int)ArduinoMock::ledcLastFreq);
+  TEST_ASSERT_EQUAL(0, _buzzQueueCount); // queue empty
+
+  // Advance 10ms — NAV finishes
+  ArduinoMock::mockMillis = 110;
+  buzzer_update();
+  TEST_ASSERT_FALSE(playing);
+
+  // Queue fully drained
+  TEST_ASSERT_EQUAL(0, _buzzQueueCount);
+  TEST_ASSERT_EQUAL(0u, _buzzQueueDropped);
+}
+
 // ===== Main =====
 
 int main(int argc, char **argv) {
@@ -439,12 +630,17 @@ int main(int argc, char **argv) {
   RUN_TEST(test_isr_tick_flag);
   RUN_TEST(test_isr_click_flag);
   RUN_TEST(test_pattern_sequencing_confirm);
-  RUN_TEST(test_new_pattern_overrides);
+  RUN_TEST(test_enqueued_pattern_plays_after_current);
   RUN_TEST(test_silence_gap_zero_duty);
   RUN_TEST(test_ota_update_pattern_plays);
   RUN_TEST(test_ota_update_pattern_sequencing);
   RUN_TEST(test_ota_update_disabled_skips);
   RUN_TEST(test_blocking_playback_completes);
   RUN_TEST(test_blocking_playback_disabled_no_sound);
+  RUN_TEST(test_buzz_queue_3_in_order);
+  RUN_TEST(test_buzz_queue_4th_drops_oldest);
+  RUN_TEST(test_buzz_queue_empty_returns_none);
+  RUN_TEST(test_buzz_queue_drop_counter);
+  RUN_TEST(test_buzz_queue_sequential_playback);
   return UNITY_END();
 }
