@@ -1740,7 +1740,9 @@ void sendHardwareStats() {
     doc["resetReason"] = getResetReasonString();
 
     // Heap health
-    doc["heapCritical"] = appState.heapCritical;
+    doc["heapCritical"]     = appState.heapCritical;
+    doc["heapWarning"]      = appState.heapWarning;
+    doc["heapMaxBlockBytes"] = appState.heapMaxBlockBytes;
 
     // Crash history (ring buffer, most recent first)
     const CrashLogData &clog = crashlog_get();

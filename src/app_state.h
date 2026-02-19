@@ -257,7 +257,9 @@ public:
   float audioSfdrDb[NUM_AUDIO_ADCS] = {};        // Spurious-Free Dynamic Range (dB)
 
   // ===== Heap Health =====
-  bool heapCritical = false;       // True when largest free block < 20KB
+  bool heapCritical = false;       // True when largest free block < 40KB — WiFi RX drops silently
+  bool heapWarning  = false;       // True when largest free block < 60KB — approaching critical
+  uint32_t heapMaxBlockBytes = 0;  // Current largest contiguous free block in internal SRAM
 
   // ===== Debug Mode Toggles =====
   bool debugMode = true;           // Master debug gate

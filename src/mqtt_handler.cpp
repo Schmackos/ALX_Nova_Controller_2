@@ -1793,6 +1793,8 @@ void publishMqttCrashDiagnostics() {
                      String(ESP.getMaxAllocHeap()).c_str(), true);
   mqttClient.publish((base + "/diagnostics/heap_critical").c_str(),
                      appState.heapCritical ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/diagnostics/heap_warning").c_str(),
+                     (appState.heapWarning || appState.heapCritical) ? "ON" : "OFF", true);
 
   // Per-ADC I2S recovery counts
   mqttClient.publish((base + "/diagnostics/i2s_recoveries_adc1").c_str(),
@@ -3215,6 +3217,22 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/was_crash/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Heap Health — Heap Warning (binary sensor) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Heap Warning";
+    doc["unique_id"] = deviceId + "_heap_warning";
+    doc["state_topic"] = base + "/diagnostics/heap_warning";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["device_class"] = "problem";
+    doc["entity_category"] = "diagnostic";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/heap_warning/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Heap Health — Heap Critical (binary sensor) =====

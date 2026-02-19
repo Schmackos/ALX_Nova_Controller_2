@@ -1468,7 +1468,9 @@ void handleDiagnostics() {
   system["uptimeSeconds"] = millis() / 1000;
   system["resetReason"] = getResetReasonString();
   system["wasCrash"] = crashlog_last_was_crash();
-  system["heapCritical"] = appState.heapCritical;
+  system["heapCritical"]     = appState.heapCritical;
+  system["heapWarning"]      = appState.heapWarning;
+  system["heapMaxBlockBytes"] = appState.heapMaxBlockBytes;
   system["sdkVersion"] = ESP.getSdkVersion();
   system["freeHeap"] = ESP.getFreeHeap();
   system["heapSize"] = ESP.getHeapSize();
