@@ -6,6 +6,7 @@
 
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
+#include "../test_mocks/IPAddress.h"
 #else
 #include <Arduino.h>
 #endif
@@ -304,6 +305,155 @@ void test_websocket_message_size(void) {
   TEST_ASSERT_LESS_THAN(1000, json.length());
 }
 
+// ===== IP Binding Mock Infrastructure =====
+// A minimal stand-alone implementation of the per-client IP binding logic
+// that mirrors the production code in websocket_handler.cpp, allowing it to
+// be exercised without pulling in the full ESP32 build chain.
+
+#define IP_BIND_MAX_CLIENTS 10
+
+struct MockWSServer {
+  IPAddress clientIPs[IP_BIND_MAX_CLIENTS];
+  bool disconnectCalled[IP_BIND_MAX_CLIENTS];
+  int disconnectCalledCount = 0;
+
+  void reset() {
+    for (int i = 0; i < IP_BIND_MAX_CLIENTS; i++) {
+      clientIPs[i] = IPAddress();
+      disconnectCalled[i] = false;
+    }
+    disconnectCalledCount = 0;
+  }
+
+  IPAddress remoteIP(uint8_t num) {
+    if (num < IP_BIND_MAX_CLIENTS) return clientIPs[num];
+    return IPAddress();
+  }
+
+  void disconnect(uint8_t num) {
+    if (num < IP_BIND_MAX_CLIENTS) disconnectCalled[num] = true;
+    disconnectCalledCount++;
+  }
+} mockWS;
+
+// Mirrors the production wsClientIP[] array
+IPAddress testWsClientIP[IP_BIND_MAX_CLIENTS];
+
+// Mirrors production: store IP on connect
+void ipbind_on_connect(uint8_t num) {
+  testWsClientIP[num] = mockWS.remoteIP(num);
+}
+
+// Mirrors production: clear IP on disconnect
+void ipbind_on_disconnect(uint8_t num) {
+  testWsClientIP[num] = IPAddress();
+}
+
+// Mirrors production: check IP on each message (returns false = mismatch → drop)
+bool ipbind_check_message(uint8_t num) {
+  if (mockWS.remoteIP(num) != testWsClientIP[num]) {
+    mockWS.disconnect(num);
+    return false;
+  }
+  return true;
+}
+
+// Mirrors production: confirm/update IP on auth success
+void ipbind_on_auth(uint8_t num) {
+  testWsClientIP[num] = mockWS.remoteIP(num);
+}
+
+static void ipbind_reset() {
+  mockWS.reset();
+  for (int i = 0; i < IP_BIND_MAX_CLIENTS; i++) {
+    testWsClientIP[i] = IPAddress();
+  }
+}
+
+// ===== IP Binding Tests =====
+
+void test_ws_ip_match_passes(void) {
+  ipbind_reset();
+  // Client 0 connects from 192.168.1.50
+  mockWS.clientIPs[0] = IPAddress(192, 168, 1, 50);
+  ipbind_on_connect(0);
+
+  // Message arrives from the same IP — should pass
+  bool allowed = ipbind_check_message(0);
+
+  TEST_ASSERT_TRUE(allowed);
+  TEST_ASSERT_FALSE(mockWS.disconnectCalled[0]);
+}
+
+void test_ws_ip_mismatch_rejected(void) {
+  ipbind_reset();
+  // Client 0 connects from 192.168.1.50
+  mockWS.clientIPs[0] = IPAddress(192, 168, 1, 50);
+  ipbind_on_connect(0);
+
+  // A different IP now claims to be client 0
+  mockWS.clientIPs[0] = IPAddress(10, 0, 0, 99);
+  bool allowed = ipbind_check_message(0);
+
+  TEST_ASSERT_FALSE(allowed);
+  TEST_ASSERT_TRUE(mockWS.disconnectCalled[0]);
+  TEST_ASSERT_EQUAL(1, mockWS.disconnectCalledCount);
+}
+
+void test_ws_ip_cleared_on_disconnect(void) {
+  ipbind_reset();
+  // Client 2 connects from 172.16.0.5
+  mockWS.clientIPs[2] = IPAddress(172, 16, 0, 5);
+  ipbind_on_connect(2);
+
+  // Stored IP should be set
+  TEST_ASSERT_TRUE(testWsClientIP[2] == IPAddress(172, 16, 0, 5));
+
+  // Client 2 disconnects
+  ipbind_on_disconnect(2);
+
+  // Stored IP should be cleared to default (0.0.0.0)
+  TEST_ASSERT_TRUE(testWsClientIP[2] == IPAddress());
+}
+
+void test_ws_ip_updated_on_auth(void) {
+  ipbind_reset();
+  // Slot 1 has a stale IP (e.g., from a previous connection cycle)
+  testWsClientIP[1] = IPAddress(192, 168, 1, 10);
+
+  // Auth arrives with a new IP for slot 1
+  mockWS.clientIPs[1] = IPAddress(192, 168, 1, 20);
+  ipbind_on_auth(1);
+
+  // Stored IP must be updated to the auth-time IP
+  TEST_ASSERT_TRUE(testWsClientIP[1] == IPAddress(192, 168, 1, 20));
+  // A message from the new IP should be accepted
+  bool allowed = ipbind_check_message(1);
+  TEST_ASSERT_TRUE(allowed);
+}
+
+void test_ws_ip_multiple_clients_independent(void) {
+  ipbind_reset();
+  // Client 0: 10.0.0.1, client 3: 10.0.0.2
+  mockWS.clientIPs[0] = IPAddress(10, 0, 0, 1);
+  mockWS.clientIPs[3] = IPAddress(10, 0, 0, 2);
+  ipbind_on_connect(0);
+  ipbind_on_connect(3);
+
+  // Correct IPs — both should pass
+  TEST_ASSERT_TRUE(ipbind_check_message(0));
+  TEST_ASSERT_TRUE(ipbind_check_message(3));
+
+  // Client 0 now reports a mismatched IP; client 3 is still correct
+  mockWS.clientIPs[0] = IPAddress(10, 0, 0, 99);
+  TEST_ASSERT_FALSE(ipbind_check_message(0));
+  TEST_ASSERT_TRUE(ipbind_check_message(3));
+
+  // Client 0 was disconnected; client 3 was not
+  TEST_ASSERT_TRUE(mockWS.disconnectCalled[0]);
+  TEST_ASSERT_FALSE(mockWS.disconnectCalled[3]);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -331,6 +481,13 @@ int runUnityTests(void) {
   RUN_TEST(test_websocket_message_json_valid);
   RUN_TEST(test_websocket_message_escaping);
   RUN_TEST(test_websocket_message_size);
+
+  // IP binding tests
+  RUN_TEST(test_ws_ip_match_passes);
+  RUN_TEST(test_ws_ip_mismatch_rejected);
+  RUN_TEST(test_ws_ip_cleared_on_disconnect);
+  RUN_TEST(test_ws_ip_updated_on_auth);
+  RUN_TEST(test_ws_ip_multiple_clients_independent);
 
   return UNITY_END();
 }

@@ -14,6 +14,10 @@
 extern bool wsAuthStatus[MAX_WS_CLIENTS];
 extern unsigned long wsAuthTimeout[MAX_WS_CLIENTS];
 
+// ===== Per-client IP Binding =====
+// IPAddress is provided by Arduino.h (already included above via WebSocketsServer.h)
+extern IPAddress wsClientIP[MAX_WS_CLIENTS];
+
 // ===== WebSocket Event Handler =====
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length);
 
