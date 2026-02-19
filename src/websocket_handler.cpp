@@ -1776,6 +1776,7 @@ void sendHardwareStats() {
     doc["heapCritical"]     = appState.heapCritical;
     doc["heapWarning"]      = appState.heapWarning;
     doc["heapMaxBlockBytes"] = appState.heapMaxBlockBytes;
+    doc["wifiRxWatchdogRecoveries"] = appState.wifiRxWatchdogRecoveries;
 
     // Crash history (ring buffer, most recent first)
     const CrashLogData &clog = crashlog_get();

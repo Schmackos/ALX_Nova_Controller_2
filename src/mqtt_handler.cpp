@@ -1820,6 +1820,10 @@ void publishMqttCrashDiagnostics() {
     mqttClient.publish((base + "/diagnostics/i2s_recoveries_adc2").c_str(),
                        String(appState.audioAdc[1].i2sRecoveries).c_str(), true);
   }
+
+  // WiFi RX watchdog recovery count
+  mqttClient.publish((base + "/system/wifi_rx_watchdog_recoveries").c_str(),
+                     String(appState.wifiRxWatchdogRecoveries).c_str(), true);
 }
 
 // Publish input names as read-only sensors
@@ -3282,6 +3286,21 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/heap_max_block/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== WiFi RX Watchdog Recovery Count (diagnostic sensor) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "WiFi RX Watchdog Recoveries";
+    doc["unique_id"] = deviceId + "_wifi_rx_watchdog_recoveries";
+    doc["state_topic"] = base + "/system/wifi_rx_watchdog_recoveries";
+    doc["state_class"] = "total_increasing";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:wifi-refresh";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/wifi_rx_watchdog_recoveries/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Timezone Offset Number =====

@@ -30,6 +30,7 @@
 #include "web_pages.h"
 #include "websocket_handler.h"
 #include "wifi_manager.h"
+#include "wifi_watchdog.h"
 #include "captive_portal.h"
 #ifdef GUI_ENABLED
 #include "gui/gui_manager.h"
@@ -1101,6 +1102,34 @@ void loop() {
         LOG_I("[Main] Heap warning cleared: largest free block=%lu bytes", (unsigned long)maxBlock);
       }
     }
+
+    // Track how long heap has been continuously critical
+    if (appState.heapCritical) {
+      if (appState.heapCriticalSinceMs == 0) {
+        appState.heapCriticalSinceMs = millis();
+      }
+    } else {
+      appState.heapCriticalSinceMs = 0;  // reset when heap is no longer critical
+    }
+
+    // WiFi RX watchdog: force reconnect when heap critical >2min to flush stale RX buffers.
+    // WiFi RX buffer allocations silently fail below ~40KB; disconnect lets wifi_manager
+    // reconnect with a fresh allocation pool.
+    unsigned long criticalDuration = (appState.heapCriticalSinceMs > 0)
+        ? (millis() - appState.heapCriticalSinceMs)
+        : 0;
+    if (wifi_watchdog_should_reconnect(appState.heapCritical,
+                                       WiFi.status() == WL_CONNECTED,
+                                       appState.otaInProgress,
+                                       criticalDuration)) {
+      LOG_W("[Main] WiFi RX watchdog: heap critical for %lus, forcing reconnect to flush stale RX buffers",
+            criticalDuration / 1000);
+      appState.wifiRxWatchdogRecoveries++;
+      appState.heapCriticalSinceMs = 0;  // reset timer so we don't immediately trigger again
+      WiFi.disconnect();
+      // wifi_manager's updateWiFiConnection() / checkWiFiConnection() will handle reconnection
+    }
+
     // heapCritical/heapWarning included in next sendHardwareStats() cycle
   }
 

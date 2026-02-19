@@ -265,6 +265,8 @@ public:
   bool heapCritical = false;       // True when largest free block < 40KB — WiFi RX drops silently
   bool heapWarning  = false;       // True when largest free block < 60KB — approaching critical
   uint32_t heapMaxBlockBytes = 0;  // Current largest contiguous free block in internal SRAM
+  uint32_t wifiRxWatchdogRecoveries = 0;  // Number of WiFi reconnects triggered by RX watchdog
+  unsigned long heapCriticalSinceMs = 0;  // millis() when heap first went critical; 0 if not critical
 
   // ===== Debug Mode Toggles =====
   bool debugMode = true;           // Master debug gate
