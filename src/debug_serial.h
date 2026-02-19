@@ -39,6 +39,15 @@ public:
   void error(const char *format, ...);
   void log(LogLevel level, const char *format, ...);
 
+  // Async ring buffer for non-blocking LOG calls (ESP32 only)
+#ifndef NATIVE_TEST
+  void processQueue();
+  bool isQueueEmpty() const { return _queueHead == _queueTail; }
+#else
+  void processQueue() {}  // no-op for native tests
+  bool isQueueEmpty() const { return true; }
+#endif
+
 private:
   WebSocketsServer *_webSocket = nullptr;
   String _lineBuffer;
@@ -51,6 +60,22 @@ private:
   void logWithLevel(LogLevel level, const char *format, va_list args);
   const char *levelToString(LogLevel level);
   const char *levelToPrefix(LogLevel level);
+
+#ifndef NATIVE_TEST
+  static const uint8_t LOG_QUEUE_SIZE = 16;
+  static const int LOG_FLUSH_PER_CALL = 4;
+
+  struct LogEntry {
+    char msg[256];
+    LogLevel level;
+  };
+
+  LogEntry _queue[LOG_QUEUE_SIZE];
+  volatile uint8_t _queueHead = 0;  // write index (producer)
+  volatile uint8_t _queueTail = 0;  // read index (consumer, main loop only)
+
+  portMUX_TYPE _queueMux = portMUX_INITIALIZER_UNLOCKED;
+#endif
 };
 
 extern DebugSerial DebugOut;

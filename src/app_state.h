@@ -175,6 +175,11 @@ public:
   AdcState audioAdc[NUM_AUDIO_ADCS];
   int numAdcsDetected = 1; // How many ADCs are currently producing data
 
+  // ===== ADC Clock Sync Diagnostics =====
+  float adcSyncOffsetSamples = 0.0f;  // Phase offset ADC1->ADC2 in samples
+  float adcSyncCorrelation   = 0.0f;  // Cross-correlation peak (0.0-1.0)
+  bool  adcSyncOk            = true;  // true when |offset| <= threshold
+
   // ===== I2S Runtime Metrics (written by audio task, read by diagnostics) =====
   struct I2sRuntimeMetrics {
     uint32_t audioTaskStackFree = 0;           // bytes remaining (high watermark × 4)
@@ -252,7 +257,9 @@ public:
   float audioSfdrDb[NUM_AUDIO_ADCS] = {};        // Spurious-Free Dynamic Range (dB)
 
   // ===== Heap Health =====
-  bool heapCritical = false;       // True when largest free block < 20KB
+  bool heapCritical = false;       // True when largest free block < 40KB — WiFi RX drops silently
+  bool heapWarning  = false;       // True when largest free block < 60KB — approaching critical
+  uint32_t heapMaxBlockBytes = 0;  // Current largest contiguous free block in internal SRAM
 
   // ===== Debug Mode Toggles =====
   bool debugMode = true;           // Master debug gate

@@ -413,6 +413,16 @@ void dsp_copy_active_to_inactive() {
     }
 }
 
+// Pure testable swap decision function — no FreeRTOS dependencies.
+// Returns: 0=success (safe to swap), 1=mutex busy, 2=processing timeout, -1=still waiting.
+// This mirrors the decision logic inside dsp_swap_config() so it can be unit-tested natively.
+int dsp_swap_check_state(bool mutex_acquired, bool processing_active, int wait_iterations_remaining) {
+    if (!mutex_acquired) return 1;                                 // mutex busy
+    if (processing_active && wait_iterations_remaining <= 0) return 2; // processing timeout
+    if (processing_active) return -1;                             // still waiting (loop again)
+    return 0;                                                      // success — safe to swap
+}
+
 bool dsp_swap_config() {
     // Try to acquire mutex (5ms timeout) to prevent concurrent swaps
 #ifndef NATIVE_TEST

@@ -557,6 +557,11 @@ DspState *dsp_get_active_config();
 DspState *dsp_get_inactive_config();
 bool dsp_swap_config();  // Returns: true if swap successful, false if busy/timeout
 
+// Pure testable swap decision function — no FreeRTOS dependencies.
+// Returns: 0=success (safe to swap), 1=mutex busy, 2=processing timeout, -1=still waiting
+// Parameters mirror the swap loop state so this function can be tested natively.
+int dsp_swap_check_state(bool mutex_acquired, bool processing_active, int wait_iterations_remaining);
+
 // Deep copy active config to inactive (includes FIR pool data)
 void dsp_copy_active_to_inactive();
 

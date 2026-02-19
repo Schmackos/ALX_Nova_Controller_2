@@ -1724,6 +1724,10 @@ void sendHardwareStats() {
       adcObj["sfdrDb"] = appState.audioSfdrDb[a];
     }
     doc["audio"]["fftWindowType"] = (int)appState.fftWindowType;
+    // ADC clock sync diagnostics
+    doc["audio"]["syncOk"]            = appState.adcSyncOk;
+    doc["audio"]["syncOffsetSamples"] = appState.adcSyncOffsetSamples;
+    doc["audio"]["syncCorrelation"]   = appState.adcSyncCorrelation;
     // Legacy flat fields for backward compat
     doc["audio"]["adcStatus"] = adcArr[0]["status"];
     doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
@@ -1736,7 +1740,9 @@ void sendHardwareStats() {
     doc["resetReason"] = getResetReasonString();
 
     // Heap health
-    doc["heapCritical"] = appState.heapCritical;
+    doc["heapCritical"]     = appState.heapCritical;
+    doc["heapWarning"]      = appState.heapWarning;
+    doc["heapMaxBlockBytes"] = appState.heapMaxBlockBytes;
 
     // Crash history (ring buffer, most recent first)
     const CrashLogData &clog = crashlog_get();

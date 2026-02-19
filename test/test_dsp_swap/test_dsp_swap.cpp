@@ -189,6 +189,28 @@ void test_compressor_state_preserved() {
     TEST_ASSERT_EQUAL_FLOAT(-6.2f, new_active->channels[0].stages[DSP_PEQ_BANDS].compressor.gainReduction);
 }
 
+// ===== dsp_swap_check_state() pure function tests =====
+
+// Test: mutex not acquired → returns 1 (mutex busy)
+void test_swap_check_mutex_busy() {
+    TEST_ASSERT_EQUAL(1, dsp_swap_check_state(false, false, 10));
+}
+
+// Test: mutex acquired, processing active, no wait iterations remaining → returns 2 (timeout)
+void test_swap_check_processing_timeout() {
+    TEST_ASSERT_EQUAL(2, dsp_swap_check_state(true, true, 0));
+}
+
+// Test: mutex acquired, processing active, wait remaining → returns -1 (still waiting)
+void test_swap_check_still_waiting() {
+    TEST_ASSERT_EQUAL(-1, dsp_swap_check_state(true, true, 5));
+}
+
+// Test: mutex acquired, not processing → returns 0 (success, safe to swap)
+void test_swap_check_success() {
+    TEST_ASSERT_EQUAL(0, dsp_swap_check_state(true, false, 10));
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
 
@@ -201,6 +223,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_limiter_envelope_preserved);
     RUN_TEST(test_gain_ramping_preserved);
     RUN_TEST(test_compressor_state_preserved);
+    RUN_TEST(test_swap_check_mutex_busy);
+    RUN_TEST(test_swap_check_processing_timeout);
+    RUN_TEST(test_swap_check_still_waiting);
+    RUN_TEST(test_swap_check_success);
 
     return UNITY_END();
 }

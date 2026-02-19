@@ -1640,6 +1640,14 @@ void publishMqttAudioDiagnostics() {
     }
   }
 
+  // ADC clock sync topics (only when both ADCs are detected)
+  if (appState.numAdcsDetected >= 2) {
+    mqttClient.publish((base + "/audio/adc_sync_ok").c_str(),
+                       appState.adcSyncOk ? "ON" : "OFF", true);
+    mqttClient.publish((base + "/audio/adc_sync_offset").c_str(),
+                       String(appState.adcSyncOffsetSamples, 2).c_str(), true);
+  }
+
   // Legacy combined topics (ADC 0)
   const char *statusStr = "OK";
   switch (appState.audioHealthStatus) {
@@ -1785,6 +1793,8 @@ void publishMqttCrashDiagnostics() {
                      String(ESP.getMaxAllocHeap()).c_str(), true);
   mqttClient.publish((base + "/diagnostics/heap_critical").c_str(),
                      appState.heapCritical ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/diagnostics/heap_warning").c_str(),
+                     (appState.heapWarning || appState.heapCritical) ? "ON" : "OFF", true);
 
   // Per-ADC I2S recovery counts
   mqttClient.publish((base + "/diagnostics/i2s_recoveries_adc1").c_str(),
@@ -2818,6 +2828,43 @@ void publishHADiscovery() {
     }
   }
 
+  // ===== ADC Clock Sync Binary Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "ADC Clock Sync";
+    doc["unique_id"] = deviceId + "_adc_sync_ok";
+    doc["state_topic"] = base + "/audio/adc_sync_ok";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["device_class"] = "connectivity";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:sync";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/binary_sensor/" + deviceId + "/adc_sync_ok/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== ADC Sync Phase Offset Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "ADC Sync Phase Offset";
+    doc["unique_id"] = deviceId + "_adc_sync_offset";
+    doc["state_topic"] = base + "/audio/adc_sync_offset";
+    doc["unit_of_measurement"] = "samples";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/sensor/" + deviceId + "/adc_sync_offset/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
   // ===== Legacy Combined Audio ADC Status Sensor =====
   {
     JsonDocument doc;
@@ -3170,6 +3217,22 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/was_crash/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== Heap Health — Heap Warning (binary sensor) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Heap Warning";
+    doc["unique_id"] = deviceId + "_heap_warning";
+    doc["state_topic"] = base + "/diagnostics/heap_warning";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["device_class"] = "problem";
+    doc["entity_category"] = "diagnostic";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/heap_warning/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Heap Health — Heap Critical (binary sensor) =====

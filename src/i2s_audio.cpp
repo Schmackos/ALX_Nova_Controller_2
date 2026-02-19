@@ -226,6 +226,95 @@ void audio_aggregate_fft_bands(const float *magnitudes, int fft_size,
     }
 }
 
+// ===== ADC Clock Sync Diagnostics (pure, testable) =====
+//
+// Computes cross-correlation between two L-channel float arrays to detect
+// phase offset between ADC1 and ADC2. Uses a manual lag-search loop
+// (simpler and equally efficient for ADC_SYNC_CHECK_FRAMES x ADC_SYNC_SEARCH_RANGE*2+1).
+//
+// Algorithm:
+//   For each lag l in [-R, +R]:
+//     corr[l] = sum(adc1[i] * adc2[i+l]) / frames
+//   Peak lag = argmax(|corr|)
+//   Peak value = corr[peak_lag] (normalized by frames above)
+//   Normalization by RMS product is skipped intentionally: the pure division by
+//   frames keeps the function branchless (avoids sqrt/zero-division guards)
+//   and still produces a stable peak location even if absolute magnitude varies.
+//   The caller should only trust inSync when correlationPeak > ~0.1.
+AdcSyncDiag compute_adc_sync_diag(const float* adc1_samples, const float* adc2_samples,
+                                   int frames, float sampleRateHz) {
+    AdcSyncDiag result;
+    result.inSync = true;
+    result.phaseOffsetSamples = 0.0f;
+    result.phaseOffsetUs = 0.0f;
+    result.correlationPeak = 0.0f;
+
+    if (!adc1_samples || !adc2_samples || frames <= 0 || sampleRateHz <= 0.0f) {
+        return result;
+    }
+
+    const int R = ADC_SYNC_SEARCH_RANGE;
+    // We need frames + R samples from adc2 (positive lags) and frames - R from adc1 (negative lags).
+    // Guard: we need at least (R+1) frames to compute any lag.
+    if (frames <= R) {
+        return result;
+    }
+
+    // Compute usable window: central region where both signals have valid data for all lags
+    // For lag l: adc1[i] * adc2[i+l], i in [0, frames-1], i+l in [0, frames-1]
+    // => i in [max(0, -l), min(frames-1, frames-1-l)]
+    // Use the inner window [R, frames-R-1] which is valid for all lags in [-R,+R]
+    int innerStart = R;
+    int innerEnd   = frames - R - 1;
+    if (innerEnd <= innerStart) {
+        return result;
+    }
+    int innerLen = innerEnd - innerStart + 1;
+
+    float bestCorr = -2.0f;
+    int   bestLag  = 0;
+
+    for (int lag = -R; lag <= R; lag++) {
+        float sum = 0.0f;
+        for (int i = innerStart; i <= innerEnd; i++) {
+            sum += adc1_samples[i] * adc2_samples[i + lag];
+        }
+        float corr = sum / (float)innerLen;
+        float absCorr = (corr < 0.0f) ? -corr : corr;
+        if (absCorr > bestCorr) {
+            bestCorr = absCorr;
+            bestLag  = lag;
+        }
+    }
+
+    // Normalize: correlationPeak = bestCorr (already divided by innerLen)
+    // Optionally further normalize by RMS product for 0-1 range, but guard for silence
+    float rms1 = 0.0f, rms2 = 0.0f;
+    for (int i = innerStart; i <= innerEnd; i++) {
+        rms1 += adc1_samples[i] * adc1_samples[i];
+        rms2 += adc2_samples[i] * adc2_samples[i];
+    }
+    rms1 = sqrtf(rms1 / (float)innerLen);
+    rms2 = sqrtf(rms2 / (float)innerLen);
+    float rmsProd = rms1 * rms2;
+    if (rmsProd > 1e-9f) {
+        result.correlationPeak = bestCorr / rmsProd;
+        if (result.correlationPeak > 1.0f) result.correlationPeak = 1.0f;
+        if (result.correlationPeak < 0.0f) result.correlationPeak = 0.0f;
+    } else {
+        // Both signals are silence — cannot determine offset, stay at defaults
+        result.correlationPeak = 0.0f;
+        return result;
+    }
+
+    result.phaseOffsetSamples = (float)bestLag;
+    result.phaseOffsetUs = (float)bestLag / sampleRateHz * 1000000.0f;
+    result.inSync = (result.phaseOffsetSamples < 0.0f
+                     ? -result.phaseOffsetSamples
+                     : result.phaseOffsetSamples) <= ADC_SYNC_OFFSET_THRESHOLD;
+    return result;
+}
+
 // ===== Health status derivation (pure, testable) =====
 AudioHealthStatus audio_derive_health_status(const AdcDiagnostics &diag) {
     // I2S bus errors take highest priority
@@ -261,6 +350,9 @@ static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 static TaskHandle_t _audioTaskHandle = NULL;
 static int _numAdcsDetected = 1;
 static bool _adc2InitOk = false;
+
+// ADC clock sync diagnostics (written by audio task, read by main loop)
+static AdcSyncDiag _syncDiag = {};
 
 // Per-ADC state arrays
 static const float MAX_24BIT_F = 8388607.0f;
@@ -911,6 +1003,46 @@ static void audio_capture_task(void *param) {
             diag.status = audio_derive_health_status(diag);
         }
 
+        // ADC clock sync check (every ADC_SYNC_CHECK_INTERVAL_MS, both ADCs active with signal)
+        // Runs inside audio task on Core 1 — NO Serial/LOG here; use dirty-flag pattern.
+        {
+            static unsigned long lastSyncCheckMs = 0;
+            if (_numAdcsDetected >= 2 &&
+                _diagnostics.adc[0].status == AUDIO_OK &&
+                _diagnostics.adc[1].status == AUDIO_OK &&
+                now - lastSyncCheckMs >= ADC_SYNC_CHECK_INTERVAL_MS) {
+                lastSyncCheckMs = now;
+
+                // Extract up to ADC_SYNC_CHECK_FRAMES + ADC_SYNC_SEARCH_RANGE samples
+                // from L-channel of each ADC buffer (normalized float)
+                const int needed = ADC_SYNC_CHECK_FRAMES + ADC_SYNC_SEARCH_RANGE;
+                const int avail1 = (stereo_frames1 < needed) ? stereo_frames1 : needed;
+                const int avail2 = (stereo_frames2 < needed) ? stereo_frames2 : needed;
+                const int usable = (avail1 < avail2) ? avail1 : avail2;
+
+                if (usable >= ADC_SYNC_CHECK_FRAMES) {
+                    // Stack buffers: 2 × (64+8) × 4 bytes = 576 bytes — safe for audio task stack
+                    float s1[ADC_SYNC_CHECK_FRAMES + ADC_SYNC_SEARCH_RANGE];
+                    float s2[ADC_SYNC_CHECK_FRAMES + ADC_SYNC_SEARCH_RANGE];
+                    const float MAX24F = 8388607.0f;
+                    for (int i = 0; i < usable; i++) {
+                        s1[i] = (float)audio_parse_24bit_sample(buf1[i * 2]) / MAX24F;
+                        s2[i] = (float)audio_parse_24bit_sample(buf2[i * 2]) / MAX24F;
+                    }
+
+                    AdcSyncDiag sd = compute_adc_sync_diag(s1, s2, usable,
+                                                           (float)_currentSampleRate);
+                    sd.lastCheckMs = now;
+
+                    portENTER_CRITICAL_ISR(&spinlock);
+                    sd.checkCount    = _syncDiag.checkCount + 1;
+                    sd.outOfSyncCount = _syncDiag.outOfSyncCount + (sd.inSync ? 0u : 1u);
+                    _syncDiag = sd;
+                    portEXIT_CRITICAL_ISR(&spinlock);
+                }
+            }
+        }
+
         // Periodic dump: just set flag, main loop does the actual LOG calls.
         // Serial.print blocks at low baud rates, starving I2S DMA buffers.
         if (now - lastDumpTime >= 5000) {
@@ -1097,6 +1229,14 @@ AudioDiagnostics i2s_audio_get_diagnostics() {
     return result;
 }
 
+AdcSyncDiag i2s_audio_get_sync_diag() {
+    AdcSyncDiag result;
+    portENTER_CRITICAL(&spinlock);
+    result = _syncDiag;
+    portEXIT_CRITICAL(&spinlock);
+    return result;
+}
+
 void audio_periodic_dump() {
     if (!_dumpReady) return;
     _dumpReady = false;
@@ -1261,9 +1401,11 @@ void i2s_audio_write_tx(const void* buf, size_t bytes, size_t* bytes_written, ui
 #else
 // Native test stubs
 static int _nativeNumAdcs = 1;
+static AdcSyncDiag _nativeSyncDiag = {};
 void i2s_audio_init() {}
 AudioAnalysis i2s_audio_get_analysis() { return AudioAnalysis{}; }
 AudioDiagnostics i2s_audio_get_diagnostics() { return AudioDiagnostics{}; }
+AdcSyncDiag i2s_audio_get_sync_diag() { return _nativeSyncDiag; }
 bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) { return false; }
 bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex) { return false; }
 bool i2s_audio_set_sample_rate(uint32_t rate) {

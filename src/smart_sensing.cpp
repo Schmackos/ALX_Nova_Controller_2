@@ -318,6 +318,12 @@ bool detectSignal() {
   appState.audioLevel_dBFS = analysis.dBFS;
   appState.numAdcsDetected = diag.numAdcsDetected;
 
+  // Copy ADC clock sync diagnostics into AppState for WS/MQTT broadcast
+  AdcSyncDiag sync = i2s_audio_get_sync_diag();
+  appState.adcSyncOffsetSamples = sync.phaseOffsetSamples;
+  appState.adcSyncCorrelation   = sync.correlationPeak;
+  appState.adcSyncOk            = sync.inSync;
+
   return analysis.signalDetected;
 }
 

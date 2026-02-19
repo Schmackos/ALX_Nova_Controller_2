@@ -2,7 +2,42 @@
 
 ## Version 1.8.6
 
+## New Features
+- [2026-02-19] feat: passive ADC clock sync monitoring via cross-correlation
+
+Add cross-correlation-based phase detection between the two PCM1808 I2S
+ADCs. Every 5 seconds, when both ADCs report AUDIO_OK, the audio task
+extracts 64+8 L-channel samples from each ADC buffer, searches for the
+peak cross-correlation across a ±8 sample lag window, and stores the
+result in a spinlock-protected AdcSyncDiag struct.
+
+Key implementation details:
+- compute_adc_sync_diag() is a pure function (no hardware deps, fully
+  testable on native platform) that normalizes correlation peak by the
+  RMS product of both signals, handling the silence case gracefully
+- Sync check runs inside audio_capture_task on Core 1 with no Serial/LOG
+  calls (dirty-flag pattern preserved)
+- AdcSyncDiag state copied to AppState in detectSignal() for WS/MQTT
+- WebSocket: syncOk/syncOffsetSamples/syncCorrelation added to audio
+  object in sendHardwareStats()
+- MQTT: audio/adc_sync_ok (binary ON/OFF) and audio/adc_sync_offset
+  (float, samples) published when numAdcsDetected >= 2
+- HA discovery: binary_sensor for sync status, sensor for phase offset
+- 8 native unit tests all pass (test_adc_sync) (`d360d81`)
+- [2026-02-19] feat: async ring buffer in DebugSerial to prevent I2S DMA blocking
+
+LOG_* calls from FreeRTOS tasks now enqueue messages into a 16-slot ring
+buffer (portMUX spinlock) instead of calling Serial.print() directly.
+The main loop drains up to 4 entries per call to processQueue(), which is
+invoked right after audio_periodic_dump(). On NATIVE_TEST the ring buffer
+is compiled out and processQueue()/isQueueEmpty() remain no-ops so all
+existing native tests are unaffected. Added test/test_debug_serial/ with 6
+tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
+
 ## Technical Details
+- [2026-02-19] chore: update release notes (`1f83f34`)
+- [2026-02-19] chore: update release notes (`53b21a5`)
+- [2026-02-19] chore: update release notes (`1d21650`)
 - [2026-02-19] test: fix all pre-existing test failures in test_dsp_swap and test_emergency_limiter
 
 Five root causes fixed across four test files and one source file:
@@ -38,6 +73,22 @@ Five root causes fixed across four test files and one source file:
 - [2026-02-19] docs: update codebase concerns map (`5188c0c`)
 
 ## Bug Fixes
+- [2026-02-19] fix: remove case-sensitive ESP.h include that broke Linux CI builds
+
+`#include <ESP.h>` fails on Linux (case-sensitive filesystem) because
+the actual header is `Esp.h`. The include was redundant anyway since
+audio_quality.h includes Arduino.h which brings in Esp.h transitively. (`64b9f8b`)
+- [2026-02-19] fix: add heapWarning threshold and 10s heap monitoring for earlier fragmentation detection (`c1982d4`)
+- [2026-02-19] fix: WinMain linker error in test_emergency_limiter; extract dsp_swap_check_state() for testability
+
+Add #pragma comment(linker, "/SUBSYSTEM:CONSOLE") guard in test_emergency_limiter.cpp to
+fix the MinGW undefined reference to WinMain on Windows builds. The pragma is ignored on
+Linux/CI (ubuntu-latest) so it does not break the GitHub Actions workflow.
+
+Extract dsp_swap_check_state() as a pure testable function from dsp_swap_config() logic.
+The function encodes the mutex/processing/timeout decision without FreeRTOS dependencies,
+making the swap timeout path unit-testable natively. Four new tests added to test_dsp_swap
+covering the mutex-busy, timeout, still-waiting, and success return codes. (`7de04ee`)
 - Use esp_task_wdt_reconfigure() for IDF5 TWDT timeout (30s) instead of defunct build flag
 - Fix IDF5/Arduino-ESP32 3.x API compatibility (I2S, FreeRTOS task monitor, TinyUSB UAC2)
 

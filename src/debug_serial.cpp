@@ -87,6 +87,26 @@ void DebugSerial::logWithLevel(LogLevel level, const char *format,
     return;
   }
 
+#ifndef NATIVE_TEST
+  // Async path: enqueue message for main-loop drain (never blocks)
+  char buffer[MAX_BUFFER];
+  vsnprintf(buffer, MAX_BUFFER, format, args);
+
+  uint8_t nextHead;
+  portENTER_CRITICAL_ISR(&_queueMux);
+  nextHead = (_queueHead + 1) % LOG_QUEUE_SIZE;
+  if (nextHead == _queueTail) {
+    // Queue full — overwrite oldest entry by advancing tail
+    _queueTail = (_queueTail + 1) % LOG_QUEUE_SIZE;
+  }
+  // Build prefixed message directly into the queue slot
+  snprintf(_queue[_queueHead].msg, sizeof(_queue[_queueHead].msg),
+           "%s%s", levelToPrefix(level), buffer);
+  _queue[_queueHead].level = level;
+  _queueHead = nextHead;
+  portEXIT_CRITICAL_ISR(&_queueMux);
+#else
+  // Synchronous path for native tests: keep existing behavior unchanged
   _currentMsgLevel = level;
 
   // Format the message
@@ -100,7 +120,35 @@ void DebugSerial::logWithLevel(LogLevel level, const char *format,
   // Broadcast via WebSocket
   String prefixedMsg = String(levelToPrefix(level)) + buffer;
   broadcastLine(prefixedMsg, level);
+#endif
 }
+
+#ifndef NATIVE_TEST
+// Drain up to LOG_FLUSH_PER_CALL entries from the ring buffer.
+// Called from the main loop (Core 0 only) — no consumer-side mutex needed.
+void DebugSerial::processQueue() {
+  int flushed = 0;
+  while (flushed < LOG_FLUSH_PER_CALL) {
+    uint8_t tail;
+    portENTER_CRITICAL_ISR(&_queueMux);
+    if (_queueHead == _queueTail) {
+      portEXIT_CRITICAL_ISR(&_queueMux);
+      break;  // Queue empty
+    }
+    tail = _queueTail;
+    _queueTail = (_queueTail + 1) % LOG_QUEUE_SIZE;
+    portEXIT_CRITICAL_ISR(&_queueMux);
+
+    // Serial output (non-blocking: UART TX buffer is large enough for one line)
+    Serial.print(_queue[tail].msg);
+    Serial.println();
+
+    // WebSocket broadcast
+    broadcastLine(String(_queue[tail].msg), _queue[tail].level);
+    flushed++;
+  }
+}
+#endif
 
 void DebugSerial::debug(const char *format, ...) {
   va_list args;

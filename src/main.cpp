@@ -960,21 +960,37 @@ void loop() {
     audio_quality_update_memory();
   }
 
-  // Heap health monitor — detect fragmentation before OOM crash (every 30s)
+  // Heap health monitor — detect fragmentation before OOM crash (every 10s)
+  // WiFi RX buffers are dynamically allocated from internal SRAM; if the largest
+  // contiguous free block drops below ~40KB, incoming packets are silently dropped
+  // while outgoing (MQTT publish) still works. Two thresholds:
+  //   heapWarning  < 60KB — early notice, reduce allocations
+  //   heapCritical < 40KB — WiFi RX likely dropping; may lose WebSocket/HTTP/MQTT RX
   static unsigned long lastHeapCheck = 0;
-  if (millis() - lastHeapCheck >= 30000) {
+  if (millis() - lastHeapCheck >= 10000) {
     lastHeapCheck = millis();
     uint32_t maxBlock = ESP.getMaxAllocHeap();
+    appState.heapMaxBlockBytes = maxBlock;
+
     bool wasCritical = appState.heapCritical;
+    bool wasWarning  = appState.heapWarning;
     appState.heapCritical = (maxBlock < 40000);
+    appState.heapWarning  = (!appState.heapCritical && maxBlock < 60000);
+
     if (appState.heapCritical != wasCritical) {
       if (appState.heapCritical) {
-        LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB)", (unsigned long)maxBlock);
+        LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB) — WiFi RX may drop", (unsigned long)maxBlock);
       } else {
-        LOG_I("[Main] Heap recovered: largest free block=%lu bytes", (unsigned long)maxBlock);
+        LOG_I("[Main] Heap recovered from critical: largest free block=%lu bytes", (unsigned long)maxBlock);
       }
-      // heapCritical is included in next sendHardwareStats() cycle
+    } else if (appState.heapWarning != wasWarning) {
+      if (appState.heapWarning) {
+        LOG_W("[Main] HEAP WARNING: largest free block=%lu bytes (<60KB) — approaching critical", (unsigned long)maxBlock);
+      } else {
+        LOG_I("[Main] Heap warning cleared: largest free block=%lu bytes", (unsigned long)maxBlock);
+      }
     }
+    // heapCritical/heapWarning included in next sendHardwareStats() cycle
   }
 
   // Broadcast Hardware Stats periodically (user-configurable interval)
@@ -1007,6 +1023,9 @@ void loop() {
   // Flush periodic audio/DAC diagnostic logs from main loop context.
   // (Moved out of audio_capture_task to avoid Serial blocking I2S DMA.)
   audio_periodic_dump();
+  // Drain async log ring buffer — writes from any FreeRTOS task are
+  // safely serialised here on Core 0 so UART TX never stalls the caller.
+  DebugOut.processQueue();
 
   // IMPORTANT: blinking must NOT depend on appState.isAPMode
   if (appState.blinkingEnabled) {
