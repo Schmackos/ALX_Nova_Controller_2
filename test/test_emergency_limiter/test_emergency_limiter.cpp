@@ -296,3 +296,10 @@ int main(int argc, char **argv) {
 
     return UNITY_END();
 }
+
+// MinGW defaults to the Windows GUI subsystem which requires WinMain instead of main.
+// Force console subsystem so the linker accepts main() as the entry point.
+// This pragma is a MinGW/MSVC extension; it is ignored on GCC/Linux (CI).
+#ifdef _WIN32
+#pragma comment(linker, "/SUBSYSTEM:CONSOLE")
+#endif
