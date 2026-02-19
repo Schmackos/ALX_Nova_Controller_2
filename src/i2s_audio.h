@@ -2,6 +2,7 @@
 #define I2S_AUDIO_H
 
 #include <stdint.h>
+#include <stddef.h>  // size_t
 
 #ifndef NUM_AUDIO_ADCS
 #define NUM_AUDIO_ADCS 2
@@ -102,6 +103,15 @@ bool i2s_audio_set_sample_rate(uint32_t rate);
 // Tear down / restore I2S drivers to free ~16KB DMA buffers during OTA
 void i2s_audio_uninstall_drivers();
 void i2s_audio_reinstall_drivers();
+
+// I2S TX (DAC full-duplex) management — called by dac_hal.cpp.
+// i2s_audio_enable_tx() reinstalls I2S0 in TX+RX mode (pauses audio task).
+// i2s_audio_disable_tx() reverts I2S0 to RX-only mode.
+// i2s_audio_write_tx() writes audio samples to the TX channel.
+// All three are no-ops on NATIVE_TEST.
+bool i2s_audio_enable_tx(uint32_t sampleRate);
+void i2s_audio_disable_tx();
+void i2s_audio_write_tx(const void* buf, size_t bytes, size_t* bytes_written, uint32_t timeout_ms);
 
 // Waveform: returns true if a new 256-point snapshot is available
 // out must point to WAVEFORM_BUFFER_SIZE bytes

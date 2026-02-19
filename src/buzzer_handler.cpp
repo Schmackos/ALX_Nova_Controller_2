@@ -152,8 +152,8 @@ static volatile BuzzerPattern pending_pattern = BUZZ_NONE;
 static SemaphoreHandle_t buzzer_mutex = nullptr;
 
 void buzzer_init() {
-  ledcSetup(BUZZER_PWM_CHANNEL, 2000, BUZZER_PWM_RESOLUTION);
-  // Start with pin detached and LOW — only attach during active playback
+  // Arduino-ESP32 3.x: pin is attached at playback start via ledcAttach().
+  // Keep pin LOW until the first pattern plays.
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
   if (buzzer_mutex == nullptr) {
@@ -176,8 +176,9 @@ static void start_pattern(const ToneStep *pat) {
   step_start_ms = millis();
   playing = true;
 
-  // Re-attach pin to LEDC for playback
-  ledcAttachPin(BUZZER_PIN, BUZZER_PWM_CHANNEL);
+  // Attach pin to LEDC for playback (Arduino 3.x: ledcAttach replaces ledcSetup+ledcAttachPin)
+  uint32_t initFreq = (pat[0].freq_hz > 0) ? (uint32_t)pat[0].freq_hz : 2000;
+  ledcAttach(BUZZER_PIN, initFreq, BUZZER_PWM_RESOLUTION);
 
   // Start first step
   if (pat[0].duration_ms > 0) {
@@ -185,21 +186,21 @@ static void start_pattern(const ToneStep *pat) {
     if (vol < 0) vol = 0;
     if (vol > 2) vol = 2;
     if (pat[0].freq_hz > 0) {
-      ledcWriteTone(BUZZER_PWM_CHANNEL, pat[0].freq_hz);
-      ledcWrite(BUZZER_PWM_CHANNEL, volume_duty[vol]);
+      ledcWriteTone(BUZZER_PIN, pat[0].freq_hz);
+      ledcWrite(BUZZER_PIN, volume_duty[vol]);
     } else {
       // Silence gap
-      ledcWrite(BUZZER_PWM_CHANNEL, 0);
+      ledcWrite(BUZZER_PIN, 0);
     }
   }
 }
 
 static void stop_buzzer() {
   LOG_D("[Buzzer] Pattern complete");
-  ledcWrite(BUZZER_PWM_CHANNEL, 0);
-  ledcWriteTone(BUZZER_PWM_CHANNEL, 0);
+  ledcWrite(BUZZER_PIN, 0);
+  ledcWriteTone(BUZZER_PIN, 0);
   // Detach pin from LEDC and drive LOW to eliminate residual PWM noise
-  ledcDetachPin(BUZZER_PIN);
+  ledcDetach(BUZZER_PIN);
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
   playing = false;
@@ -227,11 +228,11 @@ void buzzer_update() {
         if (vol < 0) vol = 0;
         if (vol > 2) vol = 2;
         if (current_pattern[current_step].freq_hz > 0) {
-          ledcWriteTone(BUZZER_PWM_CHANNEL, current_pattern[current_step].freq_hz);
-          ledcWrite(BUZZER_PWM_CHANNEL, volume_duty[vol]);
+          ledcWriteTone(BUZZER_PIN, current_pattern[current_step].freq_hz);
+          ledcWrite(BUZZER_PIN, volume_duty[vol]);
         } else {
           // Silence gap
-          ledcWrite(BUZZER_PWM_CHANNEL, 0);
+          ledcWrite(BUZZER_PIN, 0);
         }
       }
     }

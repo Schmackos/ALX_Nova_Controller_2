@@ -6,6 +6,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/task_snapshot.h>
+#include <esp_idf_version.h>
+#include <esp_private/freertos_debug.h>  // xTaskGetNext / TaskIterator_t (IDF5)
 #else
 // Stubs for native test — config constants provided by the test file
 #ifndef TASK_STACK_SIZE_AUDIO
@@ -117,13 +119,30 @@ void task_monitor_loop_end() {
 // ===== FreeRTOS snapshot =====
 
 #ifndef NATIVE_TEST
+// IDF5 SMP affinity helper: vTaskCoreAffinityGet returns a bitmask.
+// IDF4 xTaskGetAffinity returns a core index (0/1) or -1 (run on any).
+static int8_t get_core_id(TaskHandle_t h) {
+#if defined(CONFIG_FREERTOS_UNICORE)
+    (void)h;
+    return 0;
+#else
+    // xTaskGetCoreID() returns the core ID (0 or 1) or tskNO_AFFINITY (-1).
+    // Available in IDF4 and IDF5 without deprecation warnings.
+    BaseType_t core = xTaskGetCoreID(h);
+    if (core == tskNO_AFFINITY) return -1;
+    return (int8_t)core;
+#endif
+}
+
 void task_monitor_update() {
-    // Iterate all tasks using ESP-IDF pxTaskGetNext (uxTaskGetSystemState
-    // is not exported from the pre-compiled FreeRTOS library in Arduino ESP32)
+    // Iterate all tasks using ESP-IDF xTaskGetNext iterator (IDF5).
+    // pxTaskGetNext was renamed; xTaskGetNext uses TaskIterator_t for safe traversal.
     int i = 0;
-    TaskHandle_t handle = NULL;
-    handle = pxTaskGetNext(handle);
-    while (handle && i < MAX_MONITORED_TASKS) {
+    TaskIterator_t iter;
+    memset(&iter, 0, sizeof(iter));  // Must be zero-initialised on first call
+    while (xTaskGetNext(&iter) >= 0 && i < MAX_MONITORED_TASKS) {
+        TaskHandle_t handle = iter.pxTaskHandle;
+        if (!handle) continue;
         TaskInfo& info = _tmData.tasks[i];
         const char *name = pcTaskGetName(handle);
         strncpy(info.name, name ? name : "?", sizeof(info.name) - 1);
@@ -137,9 +156,8 @@ void task_monitor_update() {
         }
         info.priority = (uint8_t)uxTaskPriorityGet(handle);
         info.state = (uint8_t)eTaskGetState(handle);
-        info.coreId = (int8_t)xTaskGetAffinity(handle);
+        info.coreId = get_core_id(handle);
         i++;
-        handle = pxTaskGetNext(handle);
     }
     _tmData.taskCount = (uint8_t)i;
 

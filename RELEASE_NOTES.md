@@ -1,8 +1,31 @@
 # Release Notes
 
+## Version 1.8.6
+
+## Bug Fixes
+- Use esp_task_wdt_reconfigure() for IDF5 TWDT timeout (30s) instead of defunct build flag
+- Fix IDF5/Arduino-ESP32 3.x API compatibility (I2S, FreeRTOS task monitor, TinyUSB UAC2)
+
+---
+
 ## Version 1.8.5
 
 ## New Features
+- [2026-02-19] feat: migrate to pioarduino IDF5 platform and Arduino-ESP32 3.x API
+
+- Switch to pioarduino platform (IDF5 / Arduino-ESP32 3.x) for improved
+  ESP32-S3 support and newer ESP-IDF features
+- Migrate I2S driver: legacy driver/i2s.h → IDF5 driver/i2s_std.h with
+  channel handles (_i2s0_rx, _i2s0_tx, _i2s1_rx) replacing port numbers
+- Extract I2S TX management into i2s_audio.cpp: new i2s_audio_enable_tx(),
+  i2s_audio_disable_tx(), i2s_audio_write_tx() API; dac_hal.cpp delegates
+- Migrate LEDC API: ledcSetup+ledcAttachPin → ledcAttach (pin-based),
+  ledcDetachPin → ledcDetach across buzzer, GUI backlight, and signal gen
+- Fix task_monitor: use vTaskCoreAffinityGet (IDF5 bitmask) with version
+  guard, falling back to xTaskGetAffinity on IDF4
+- Refactor platformio.ini: shared [idf5_includes] section eliminates
+  duplicate ESP-DSP include paths across environments
+- Update Arduino.h mock to cover both 2.x and 3.x LEDC API signatures (`6266003`)
 - [2026-02-17] feat: Migrate TFT driver to LovyanGFX and fix OTA TLS/WDT issues
 
 Replace TFT_eSPI with LovyanGFX for DMA double-buffered display flush
@@ -44,6 +67,7 @@ Summary synthesizes findings into 7-phase roadmap with gating criteria. (`625eeb
 - [2026-02-17] docs: initialize project (`7fa6371`)
 
 ## Technical Details
+- [2026-02-18] chore: update release notes for build config changes (`f13c978`)
 - [2026-02-18] chore: pin platform version, fix display rotation, update build config
 
 - Pin espressif32@6.9.0 and toolchain-xtensa-esp32s3@12.2.0+20230208 for reproducible builds
@@ -83,6 +107,25 @@ bug on ESP32-S3 (invalid register write in dma_end_callback). (`448fe70`)
 
 
 ## Bug Fixes
+- [2026-02-19] fix: use esp_task_wdt_reconfigure for IDF5 TWDT timeout
+
+Use esp_task_wdt_reconfigure() at runtime instead of the
+CONFIG_ESP_TASK_WDT_TIMEOUT_S build flag, which has no effect on the
+pre-built Arduino IDF5 .a files. Set idle_core_mask=0 to atomically
+remove IDLE0 monitoring without corrupting the WDT subscriber linked
+list in IDF5.5. Also update PlatformIO IDE settings and release notes. (`5dfbc9d`)
+- [2026-02-19] fix: Update APIs for IDF5/Arduino-ESP32 3.x compatibility
+
+- i2s_audio.h: add #include <stddef.h> for size_t declaration
+- task_monitor.cpp: replace pxTaskGetNext+xTaskGetAffinity with
+  xTaskGetNext(TaskIterator_t*)+xTaskGetCoreID for IDF5 FreeRTOS API
+- usb_audio.cpp: rename AUDIO_* UAC2 constants to AUDIO20_* prefix
+  and add is_isr=false parameter to usbd_edpt_xfer (TinyUSB API change) (`e29e7ae`)
+- [2026-02-19] fix: Use esp_task_wdt_reconfigure for IDF5 TWDT timeout
+
+Use esp_task_wdt_reconfigure() at runtime instead of CONFIG_ESP_TASK_WDT_TIMEOUT_S build
+flag (which has no effect on the pre-built Arduino IDF5 .a files). Set idle_core_mask=0
+to atomically remove IDLE0 monitoring, avoiding WDT subscriber list corruption in IDF5.5.
 - [2026-02-17] fix: Redirect MbedTLS allocations to PSRAM to fix OTA version check TLS failure
 
 OTA version checks failed with HTTP -1 at ~35KB free heap because MbedTLS
