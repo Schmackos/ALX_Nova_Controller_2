@@ -77,74 +77,76 @@ void test_multiple_swaps_succeed() {
 
 // Test 5: Delay line state preserved across swap
 void test_delay_state_preserved() {
-    // Add a delay stage to channel 0
-    DspState *inactive = dsp_get_inactive_config();
-    dsp_add_stage(0, DSP_DELAY, -1);
+    // Step 1: add delay to inactive (state 1), swap to make it active
+    dsp_add_stage(0, DSP_DELAY, -1);   // appends at stage DSP_PEQ_BANDS in state 1
+    dsp_swap_config();                 // state 1 is now active; _activeIndex = 1
 
-    // Allocate delay slot
-    inactive->channels[0].stages[0].delay.delaySamples = 100;
-    inactive->channels[0].stages[0].delay.delaySlot = dsp_delay_alloc_slot();
-
-    // Fill delay line with test pattern
-    float *delayLine = dsp_delay_get_line(1, inactive->channels[0].stages[0].delay.delaySlot);
+    // Step 2: set state on OLD ACTIVE (state 1) — fill delay line with test pattern
+    DspState *active = dsp_get_active_config();   // &_states[1]
+    active->channels[0].stages[DSP_PEQ_BANDS].delay.delaySamples = 100;
+    active->channels[0].stages[DSP_PEQ_BANDS].delay.writePos = 50;
+    int delaySlot = active->channels[0].stages[DSP_PEQ_BANDS].delay.delaySlot;
+    float *delayLine = dsp_delay_get_line(1, delaySlot);   // state index 1
     if (delayLine) {
         for (int i = 0; i < 100; i++) {
             delayLine[i] = (float)i / 100.0f;
         }
-        inactive->channels[0].stages[0].delay.writePos = 50;
     }
 
-    // Swap config
-    TEST_ASSERT_TRUE(dsp_swap_config());
+    // Step 3: add matching delay to (now) inactive (state 0)
+    dsp_add_stage(0, DSP_DELAY, -1);   // appends at stage DSP_PEQ_BANDS in state 0
 
-    // Verify delay line copied to new active
-    DspState *active = dsp_get_active_config();
-    float *newDelayLine = dsp_delay_get_line(0, active->channels[0].stages[0].delay.delaySlot);
+    // Step 4: swap — copies delay line from old active (state 1) to new active (state 0)
+    TEST_ASSERT_TRUE(dsp_swap_config());   // state 0 is now active; _activeIndex = 0
+
+    // Step 5: verify
+    DspState *new_active = dsp_get_active_config();   // &_states[0]
+    int newDelaySlot = new_active->channels[0].stages[DSP_PEQ_BANDS].delay.delaySlot;
+    float *newDelayLine = dsp_delay_get_line(0, newDelaySlot);   // state index 0
 
     if (newDelayLine && delayLine) {
         for (int i = 0; i < 100; i++) {
             TEST_ASSERT_EQUAL_FLOAT((float)i / 100.0f, newDelayLine[i]);
         }
-        TEST_ASSERT_EQUAL_UINT16(50, active->channels[0].stages[0].delay.writePos);
+        TEST_ASSERT_EQUAL_UINT16(50, new_active->channels[0].stages[DSP_PEQ_BANDS].delay.writePos);
     }
 }
 
 // Test 6: Biquad delay state preserved
 void test_biquad_delay_preserved() {
-    // Add a biquad stage
-    DspState *inactive = dsp_get_inactive_config();
-    dsp_add_stage(0, DSP_BIQUAD_PEQ, -1);
+    // Both configs already have matching PEQ stages (DSP_BIQUAD_PEQ) at stages[0-9]
+    // from dsp_init_state. Set delay state on ACTIVE config — swap must copy it to new active.
+    DspState *active = dsp_get_active_config();
+    active->channels[0].stages[0].biquad.delay[0] = 0.123f;
+    active->channels[0].stages[0].biquad.delay[1] = 0.456f;
 
-    // Set delay state
-    inactive->channels[0].stages[0].biquad.delay[0] = 0.123f;
-    inactive->channels[0].stages[0].biquad.delay[1] = 0.456f;
-
-    // Swap
     TEST_ASSERT_TRUE(dsp_swap_config());
 
-    // Verify preserved
-    DspState *active = dsp_get_active_config();
-    TEST_ASSERT_EQUAL_FLOAT(0.123f, active->channels[0].stages[0].biquad.delay[0]);
-    TEST_ASSERT_EQUAL_FLOAT(0.456f, active->channels[0].stages[0].biquad.delay[1]);
+    DspState *new_active = dsp_get_active_config();
+    TEST_ASSERT_EQUAL_FLOAT(0.123f, new_active->channels[0].stages[0].biquad.delay[0]);
+    TEST_ASSERT_EQUAL_FLOAT(0.456f, new_active->channels[0].stages[0].biquad.delay[1]);
 }
 
 // Test 7: Limiter envelope state preserved
 void test_limiter_envelope_preserved() {
-    // Add limiter stage
-    DspState *inactive = dsp_get_inactive_config();
+    // Step 1: add limiter to inactive (state 1), swap to make it active at stage DSP_PEQ_BANDS
+    dsp_add_stage(0, DSP_LIMITER, -1);
+    dsp_swap_config();   // state 1 active
+
+    // Step 2: add matching limiter to (now) inactive (state 0)
     dsp_add_stage(0, DSP_LIMITER, -1);
 
-    // Set runtime state
-    inactive->channels[0].stages[0].limiter.envelope = 0.789f;
-    inactive->channels[0].stages[0].limiter.gainReduction = -3.5f;
-
-    // Swap
-    TEST_ASSERT_TRUE(dsp_swap_config());
-
-    // Verify preserved
+    // Step 3: set runtime state on OLD ACTIVE (state 1) at the limiter stage
     DspState *active = dsp_get_active_config();
-    TEST_ASSERT_EQUAL_FLOAT(0.789f, active->channels[0].stages[0].limiter.envelope);
-    TEST_ASSERT_EQUAL_FLOAT(-3.5f, active->channels[0].stages[0].limiter.gainReduction);
+    active->channels[0].stages[DSP_PEQ_BANDS].limiter.envelope = 0.789f;
+    active->channels[0].stages[DSP_PEQ_BANDS].limiter.gainReduction = -3.5f;
+
+    // Step 4: swap — copies limiter state from old active to new active
+    TEST_ASSERT_TRUE(dsp_swap_config());   // state 0 active
+
+    DspState *new_active = dsp_get_active_config();
+    TEST_ASSERT_EQUAL_FLOAT(0.789f, new_active->channels[0].stages[DSP_PEQ_BANDS].limiter.envelope);
+    TEST_ASSERT_EQUAL_FLOAT(-3.5f, new_active->channels[0].stages[DSP_PEQ_BANDS].limiter.gainReduction);
 }
 
 // Test 8: Gain ramping state preserved
@@ -167,21 +169,24 @@ void test_gain_ramping_preserved() {
 
 // Test 9: Compressor state preserved
 void test_compressor_state_preserved() {
-    // Add compressor stage
-    DspState *inactive = dsp_get_inactive_config();
+    // Step 1: add compressor to inactive (state 1), swap to make it active at stage DSP_PEQ_BANDS
+    dsp_add_stage(0, DSP_COMPRESSOR, -1);
+    dsp_swap_config();   // state 1 active
+
+    // Step 2: add matching compressor to (now) inactive (state 0)
     dsp_add_stage(0, DSP_COMPRESSOR, -1);
 
-    // Set runtime state
-    inactive->channels[0].stages[0].compressor.envelope = 0.333f;
-    inactive->channels[0].stages[0].compressor.gainReduction = -6.2f;
-
-    // Swap
-    TEST_ASSERT_TRUE(dsp_swap_config());
-
-    // Verify preserved
+    // Step 3: set runtime state on OLD ACTIVE (state 1) at the compressor stage
     DspState *active = dsp_get_active_config();
-    TEST_ASSERT_EQUAL_FLOAT(0.333f, active->channels[0].stages[0].compressor.envelope);
-    TEST_ASSERT_EQUAL_FLOAT(-6.2f, active->channels[0].stages[0].compressor.gainReduction);
+    active->channels[0].stages[DSP_PEQ_BANDS].compressor.envelope = 0.333f;
+    active->channels[0].stages[DSP_PEQ_BANDS].compressor.gainReduction = -6.2f;
+
+    // Step 4: swap — copies compressor state from old active to new active
+    TEST_ASSERT_TRUE(dsp_swap_config());   // state 0 active
+
+    DspState *new_active = dsp_get_active_config();
+    TEST_ASSERT_EQUAL_FLOAT(0.333f, new_active->channels[0].stages[DSP_PEQ_BANDS].compressor.envelope);
+    TEST_ASSERT_EQUAL_FLOAT(-6.2f, new_active->channels[0].stages[DSP_PEQ_BANDS].compressor.gainReduction);
 }
 
 int main(int argc, char **argv) {

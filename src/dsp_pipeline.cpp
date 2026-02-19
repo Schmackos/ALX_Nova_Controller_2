@@ -329,6 +329,8 @@ void dsp_init() {
     dsp_init_state(_states[1]);
     dsp_init_metrics(_metrics);
     _activeIndex = 0;
+    memset(&_emergencyLimiter, 0, sizeof(_emergencyLimiter));
+    _emergencyLimiter.samplesSinceTrigger = UINT32_MAX / 2; // Not recently triggered
 
     // Clear FIR pool
 #ifdef NATIVE_TEST
@@ -703,12 +705,10 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
     }
 
     // Apply emergency safety limiter (non-bypassable brick-wall protection)
-#ifndef NATIVE_TEST
     if (AppState::getInstance().emergencyLimiterEnabled) {
         float threshold = AppState::getInstance().emergencyLimiterThresholdDb;
         dsp_emergency_limiter_process(_dspBufL, _dspBufR, stereoFrames, threshold, cfg->sampleRate);
     }
-#endif
 
     // Re-interleave float → int32 with clamp
     for (int f = 0; f < stereoFrames; f++) {
