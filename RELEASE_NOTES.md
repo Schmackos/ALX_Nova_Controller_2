@@ -1,5 +1,24 @@
 # Release Notes
 
+## Version 1.8.8
+
+## Technical Details
+- [2026-02-19] chore: bump version to 1.8.8 (`b63d01b`)
+
+## Improvements
+- None
+
+## Bug Fixes
+- None
+
+## Technical Details
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.8.7
 
 ## New Features
