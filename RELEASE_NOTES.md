@@ -1,5 +1,13 @@
 # Release Notes
 
+## Version 1.8.6
+
+## Bug Fixes
+- Use esp_task_wdt_reconfigure() for IDF5 TWDT timeout (30s) instead of defunct build flag
+- Fix IDF5/Arduino-ESP32 3.x API compatibility (I2S, FreeRTOS task monitor, TinyUSB UAC2)
+
+---
+
 ## Version 1.8.5
 
 ## New Features
