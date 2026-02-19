@@ -195,6 +195,7 @@ existing native tests are unaffected. Added test/test_debug_serial/ with 6
 tests covering the no-op API contract and log-level filtering behaviour. (`ba7aae5`)
 
 ## Technical Details
+- [2026-02-19] chore: update release notes (`de0c8ce`)
 - [2026-02-19] test: add smoothing alpha and heap constant validation tests
 
 - Add 9 tests to test_smart_sensing validating the EMA smoothing alpha
