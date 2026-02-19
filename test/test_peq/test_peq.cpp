@@ -23,6 +23,7 @@
 
 void setUp(void) {
     dsp_init();
+    appState.emergencyLimiterEnabled = false; // Don't let lookahead delay affect PEQ stage tests
 }
 
 void tearDown(void) {}

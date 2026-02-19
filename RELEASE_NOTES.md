@@ -2,6 +2,41 @@
 
 ## Version 1.8.6
 
+## Technical Details
+- [2026-02-19] test: fix all pre-existing test failures in test_dsp_swap and test_emergency_limiter
+
+Five root causes fixed across four test files and one source file:
+
+1. dsp_pipeline.cpp: Remove #ifndef NATIVE_TEST guard around emergency limiter
+   call so the limiter actually runs in native test builds. Reset
+   _emergencyLimiter state in dsp_init() with samplesSinceTrigger=UINT32_MAX/2
+   so it doesn't appear falsely "active" before any signal has been processed.
+
+2. test_dsp_swap: Fix four state-preservation tests that incorrectly set
+   runtime state on the inactive config (which gets overwritten during swap).
+   Redesigned to use a 2-swap setup: add stage → swap → set state on active →
+   add matching stage to (now) inactive → swap → verify. Also fixed
+   test_biquad_delay_preserved to set state on active config (both configs
+   have matching PEQ stages from dsp_init_state).
+
+3. test_emergency_limiter: Fix test_fast_attack_time to refill the input
+   buffer before the second dsp_process_buffer call — the function modifies
+   the buffer in-place (re-interleaves output), so the second call was
+   processing the limited output (~0.501 of full scale) instead of new
+   full-scale input. Fix test_release_time threshold from -3 dBFS to -6 dBFS:
+   at -3 dBFS the envelope (tau=100ms) decays below threshold before the
+   mid-check at 53ms; at -6 dBFS it stays above threshold until ~69ms then
+   releases fully before 213ms.
+
+4. test_dsp, test_peq: Disable emergency limiter in setUp() — the limiter's
+   8-sample lookahead delay zeros the first 8 output samples, which breaks
+   tests that process small buffers (2-4 frames) or check early samples. (`3d4c16c`)
+- [2026-02-19] chore: update release notes (`eb10d60`)
+- [2026-02-19] build: auto-rebuild web_pages_gz.cpp via PlatformIO pre-build hook (`f299ed8`)
+
+## Documentation
+- [2026-02-19] docs: update codebase concerns map (`5188c0c`)
+
 ## Bug Fixes
 - Use esp_task_wdt_reconfigure() for IDF5 TWDT timeout (30s) instead of defunct build flag
 - Fix IDF5/Arduino-ESP32 3.x API compatibility (I2S, FreeRTOS task monitor, TinyUSB UAC2)

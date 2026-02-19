@@ -141,6 +141,12 @@ void test_fast_attack_time() {
     DspMetrics metrics1 = dsp_get_metrics();
     TEST_ASSERT_TRUE(metrics1.emergencyLimiterGrDb < -0.5f);
 
+    // Refill: dsp_process_buffer modifies the buffer in-place (re-interleaves output)
+    for (int i = 0; i < TEST_FRAMES; i++) {
+        buffer[i * 2] = 8388607;
+        buffer[i * 2 + 1] = 8388607;
+    }
+
     // Second buffer should show similar or more GR
     dsp_process_buffer(buffer, TEST_FRAMES, 0);
     DspMetrics metrics2 = dsp_get_metrics();
@@ -150,7 +156,7 @@ void test_fast_attack_time() {
 // Test 6: Release time ~100ms
 void test_release_time() {
     appState.emergencyLimiterEnabled = true;
-    appState.emergencyLimiterThresholdDb = -3.0f;
+    appState.emergencyLimiterThresholdDb = -6.0f;
 
     // Process buffer with peak
     int32_t buffer[TEST_FRAMES * 2];
