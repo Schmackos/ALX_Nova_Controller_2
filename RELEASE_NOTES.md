@@ -2,6 +2,9 @@
 
 ## Version 1.8.6
 
+## Technical Details
+- [2026-02-19] build: auto-rebuild web_pages_gz.cpp via PlatformIO pre-build hook (`f299ed8`)
+
 ## Documentation
 - [2026-02-19] docs: update codebase concerns map (`5188c0c`)
 
