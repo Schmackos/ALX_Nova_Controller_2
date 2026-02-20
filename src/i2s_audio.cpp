@@ -860,7 +860,11 @@ static void audio_capture_task(void *param) {
     static int32_t buf1[BUFFER_SAMPLES];
     static int32_t buf2[BUFFER_SAMPLES];
 #ifdef USB_AUDIO_ENABLED
-    static int32_t bufUsb[BUFFER_SAMPLES];
+    static int32_t *s_bufUsb = nullptr;
+    if (!s_bufUsb) {
+        s_bufUsb = (int32_t *)heap_caps_calloc(BUFFER_SAMPLES, sizeof(int32_t), MALLOC_CAP_SPIRAM);
+        if (!s_bufUsb) s_bufUsb = (int32_t *)calloc(BUFFER_SAMPLES, sizeof(int32_t));
+    }
 #endif
 
     unsigned long prevTime = millis();
@@ -879,6 +883,12 @@ static void audio_capture_task(void *param) {
 
     // Register this task with the Task Watchdog Timer
     esp_task_wdt_add(NULL);
+
+    static int32_t *s_dacBuf = nullptr;
+    if (!s_dacBuf) {
+        s_dacBuf = (int32_t *)heap_caps_calloc(DMA_BUF_LEN * 2, sizeof(int32_t), MALLOC_CAP_SPIRAM);
+        if (!s_dacBuf) s_dacBuf = (int32_t *)calloc(DMA_BUF_LEN * 2, sizeof(int32_t));
+    }
 
     while (true) {
         // Feed watchdog at the top of every iteration (even on timeout path)
@@ -1023,29 +1033,29 @@ static void audio_capture_task(void *param) {
                 (targetAdc == SIGTARGET_USB || targetAdc == SIGTARGET_ALL);
 
             if (usbEnabled && (usbStreaming || sigGenTargetsUsb)) {
-                uint32_t framesRead = usb_audio_read(bufUsb, DMA_BUF_LEN);
+                uint32_t framesRead = usb_audio_read(s_bufUsb, DMA_BUF_LEN);
 
                 // Zero-fill remainder on underrun
                 if (framesRead < (uint32_t)DMA_BUF_LEN) {
-                    memset(bufUsb + framesRead * 2, 0,
+                    memset(s_bufUsb + framesRead * 2, 0,
                            ((uint32_t)DMA_BUF_LEN - framesRead) * 2 * sizeof(int32_t));
                 }
 
                 // Apply host volume/mute BEFORE DSP
                 if (usb_audio_get_mute()) {
-                    memset(bufUsb, 0, DMA_BUF_LEN * 2 * sizeof(int32_t));
+                    memset(s_bufUsb, 0, DMA_BUF_LEN * 2 * sizeof(int32_t));
                 } else {
-                    applyHostVolume(bufUsb, DMA_BUF_LEN, usb_audio_get_volume_linear());
+                    applyHostVolume(s_bufUsb, DMA_BUF_LEN, usb_audio_get_volume_linear());
                 }
 
                 // Signal generator injection for USB target
                 if (sigGenTargetsUsb) {
-                    siggen_fill_buffer(bufUsb, DMA_BUF_LEN, _currentSampleRate);
+                    siggen_fill_buffer(s_bufUsb, DMA_BUF_LEN, _currentSampleRate);
                 }
 
-                process_adc_buffer(2, bufUsb, DMA_BUF_LEN, now, dt_ms, sigGenSw);
+                process_adc_buffer(2, s_bufUsb, DMA_BUF_LEN, now, dt_ms, sigGenSw);
                 if (appState.audioQualityEnabled) {
-                    audio_quality_scan_buffer(2, bufUsb, DMA_BUF_LEN);
+                    audio_quality_scan_buffer(2, s_bufUsb, DMA_BUF_LEN);
                 }
             } else if (usbEnabled && !usbStreaming) {
                 // USB enabled but not streaming — update diagnostics
@@ -1161,9 +1171,8 @@ static void audio_capture_task(void *param) {
 #ifdef DSP_ENABLED
             if (AppState::getInstance().dspEnabled && !AppState::getInstance().dspBypass) {
                 // DSP active: route through 6x6 matrix
-                static int32_t dacBuf[DMA_BUF_LEN * 2];
-                dsp_routing_execute(dacBuf, stereo_frames1);
-                dac_output_write(dacBuf, stereo_frames1);
+                dsp_routing_execute(s_dacBuf, stereo_frames1);
+                dac_output_write(s_dacBuf, stereo_frames1);
             } else
 #endif
             {
@@ -1176,7 +1185,7 @@ static void audio_capture_task(void *param) {
                 }
 #ifdef USB_AUDIO_ENABLED
                 else if (src == 2 && AppState::getInstance().adcEnabled[2] && usb_audio_is_streaming()) {
-                    dac_output_write(bufUsb, DMA_BUF_LEN);
+                    dac_output_write(s_bufUsb, DMA_BUF_LEN);
                 }
 #endif
             }

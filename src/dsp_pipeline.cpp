@@ -157,7 +157,11 @@ static float *_gainBuf = nullptr;
 #endif
 
 // Post-DSP float channel storage for routing matrix
-static float _postDspChannels[DSP_MAX_CHANNELS][256];
+#ifdef NATIVE_TEST
+static float _postDspChannels[DSP_MAX_CHANNELS][256];  // static on native (no PSRAM)
+#else
+static float *_postDspChannels[DSP_MAX_CHANNELS] = {};  // PSRAM pointers on ESP32
+#endif
 static int _postDspFrames = 0;  // Number of valid frames in _postDspChannels
 
 // ===== Forward Declarations =====
@@ -328,6 +332,12 @@ void dsp_init() {
         if (!_dspBufL) _dspBufL = (float *)calloc(256, sizeof(float));
         if (!_dspBufR) _dspBufR = (float *)calloc(256, sizeof(float));
         if (!_gainBuf) _gainBuf = (float *)calloc(256, sizeof(float));
+    }
+    if (!_postDspChannels[0]) {
+        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
+            _postDspChannels[i] = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
+            if (!_postDspChannels[i]) _postDspChannels[i] = (float *)calloc(256, sizeof(float));
+        }
     }
 #endif
 

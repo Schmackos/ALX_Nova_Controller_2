@@ -86,7 +86,7 @@ const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
 // Named constants for heap size checks scattered across main/OTA/DSP modules.
 // WiFi RX buffers are dynamically allocated from internal SRAM; if free heap
 // drops below ~40 KB, incoming packets are silently dropped.
-#define HEAP_CRITICAL_THRESHOLD_BYTES   40000  // < 40 KB: WiFi RX likely dropping
+#define HEAP_CRITICAL_THRESHOLD_BYTES   15000  // < 15 KB: WebSocket/HTTP allocations failing
 #define HEAP_WARNING_THRESHOLD_BYTES    60000  // < 60 KB: early notice, reduce allocations
 #define HEAP_TLS_MIN_THRESHOLD_BYTES    30000  // < 30 KB: heap too low for TLS handshake
 #define HEAP_TLS_SECURE_THRESHOLD_BYTES 50000  // < 50 KB: skip cert validation (insecure TLS)

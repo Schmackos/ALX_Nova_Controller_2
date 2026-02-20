@@ -35,10 +35,10 @@ void test_heap_ota_abort_less_than_critical(void) {
     TEST_ASSERT_LESS_THAN(HEAP_CRITICAL_THRESHOLD_BYTES, HEAP_OTA_ABORT_THRESHOLD_BYTES + 1);
 }
 
-// Test 5: TLS_MIN threshold is below CRITICAL (30KB < 40KB)
-// i.e. TLS handshakes can fail even before WiFi RX starts dropping
+// Test 5: TLS_MIN threshold is above CRITICAL (30KB > 15KB)
+// i.e. TLS handshakes fail before the critical threshold is reached
 void test_heap_tls_min_below_critical(void) {
-    TEST_ASSERT_LESS_THAN(HEAP_CRITICAL_THRESHOLD_BYTES, HEAP_TLS_MIN_THRESHOLD_BYTES);
+    TEST_ASSERT_GREATER_THAN(HEAP_CRITICAL_THRESHOLD_BYTES, HEAP_TLS_MIN_THRESHOLD_BYTES);
 }
 
 // Test 6: TLS_SECURE threshold is between CRITICAL and WARNING (50KB)
@@ -47,9 +47,9 @@ void test_heap_tls_secure_between_critical_and_warning(void) {
     TEST_ASSERT_LESS_THAN(HEAP_WARNING_THRESHOLD_BYTES, HEAP_TLS_SECURE_THRESHOLD_BYTES);
 }
 
-// Test 7: WIFI_RESERVE equals CRITICAL (both represent the 40KB WiFi floor)
+// Test 7: WIFI_RESERVE is above CRITICAL (DSP pre-flight keeps 40KB for WiFi, critical triggers at 15KB)
 void test_heap_wifi_reserve_equals_critical(void) {
-    TEST_ASSERT_EQUAL(HEAP_CRITICAL_THRESHOLD_BYTES, HEAP_WIFI_RESERVE_BYTES);
+    TEST_ASSERT_GREATER_THAN(HEAP_CRITICAL_THRESHOLD_BYTES, HEAP_WIFI_RESERVE_BYTES);
 }
 
 // Test 8: Thresholds are plausible for an ESP32-S3 with 512KB SRAM
