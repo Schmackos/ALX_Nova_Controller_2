@@ -995,12 +995,18 @@ static void audio_capture_task(void *param) {
             if (appState.audioQualityEnabled) {
                 audio_quality_scan_buffer(1, buf2, stereo_frames2);
             }
-        } else if (_adc2InitOk) {
-            // Slave read failed — still update diagnostics so health status reflects reality
-            AdcDiagnostics &diag = _diagnostics.adc[1];
-            diag.consecutiveZeros++;
-            diag.allZeroBuffers++;
-            diag.status = audio_derive_health_status(diag);
+        } else {
+            // ADC2 not processed — zero its post-DSP channels to prevent stale data in routing
+#ifdef DSP_ENABLED
+            dsp_zero_channels(1);
+#endif
+            if (_adc2InitOk) {
+                // Slave read failed — still update diagnostics so health status reflects reality
+                AdcDiagnostics &diag = _diagnostics.adc[1];
+                diag.consecutiveZeros++;
+                diag.allZeroBuffers++;
+                diag.status = audio_derive_health_status(diag);
+            }
         }
 
         // ===== USB Audio Input Processing =====
@@ -1036,11 +1042,17 @@ static void audio_capture_task(void *param) {
                 if (appState.audioQualityEnabled) {
                     audio_quality_scan_buffer(2, s_bufUsb, DMA_BUF_LEN);
                 }
-            } else if (usbEnabled && !usbStreaming) {
-                // USB enabled but not streaming — update diagnostics
-                AdcDiagnostics &diag = _diagnostics.adc[2];
-                diag.consecutiveZeros++;
-                diag.status = AUDIO_NO_DATA;
+            } else {
+                // USB not processed — zero its post-DSP channels to prevent stale data in routing
+#ifdef DSP_ENABLED
+                dsp_zero_channels(2);
+#endif
+                if (usbEnabled && !usbStreaming) {
+                    // USB enabled but not streaming — update diagnostics
+                    AdcDiagnostics &diag = _diagnostics.adc[2];
+                    diag.consecutiveZeros++;
+                    diag.status = AUDIO_NO_DATA;
+                }
             }
         }
 #endif

@@ -56,28 +56,44 @@ the two I2S ADCs with full metering, DSP processing, and routing.
   test_emergency_limiter, test_peq) (`51903f5`)
 
 ## Technical Details
-- [2026-02-20] chore: update release notes (`05e21ba`)
+- [2026-02-20] Merge branch 'Dev'
+
+# Conflicts:
+#	RELEASE_NOTES.md
+#	src/web_pages_gz.cpp (`b582b8b`)
+- [2026-02-20] chore: update release notes (`510b5fb`)
 - [2026-02-20] chore: update release notes (`0fb6a9a`)
 - [2026-02-19] chore: bump version to 1.8.8 (`b63d01b`)
 
 ## Improvements
-- [2026-02-20] perf: heap memory optimization — reduce internal SRAM usage by ~28 KB
-
-- GUI task stack → PSRAM via xTaskCreateStaticPinnedToCore (-16 KB)
-- Debug log ring → PSRAM via heap_caps_calloc(SPIRAM) (-4 KB)
-- I2S DMA buffers: I2S_DMA_BUF_COUNT 8→6 (-4 KB)
-- MQTT: all String fields → static char[] buffers; mqttTopic()/mqttPubInt/Float/Str/Bool() helpers
-- HA Discovery: table-driven with reusable _jsonBuf (was ~80 separate String allocs)
-- AppState: 16 String fields → char[] arrays with setCharField() for assignment
-- WebSocket: _wsBuf PSRAM pool + wsBroadcastJson()/wsSendJson() helpers
-- Settings: line-by-line readBytesUntil() (was String lines[35])
-- DSP API: PsramAllocator for ArduinoJson documents
-- Signal generator: lazy init (only when first enabled)
-- OTA SHA256: char hashStr[65] + snprintf (was String+= loop)
-- Heap budget regression tests added (test_heap_budget) (`87bce1e`)
-
+- None
 
 ## Bug Fixes
+- [2026-02-20] fix: routing matrix — USB channel bleeding, stale data, and UI mismatch
+
+Mono Sum preset rewired to per-pair mono (no cross-input bleed), inactive
+channels zeroed before routing to prevent stale data in DAC output, and
+web UI routing grid expanded from 4 to 6 channels to show USB L/USB R. (`d9fb47c`)
+- [2026-02-20] fix: routing matrix — USB channel bleeding, stale data, and UI mismatch
+
+Mono Sum preset rewired to per-pair mono (no cross-input bleed), inactive
+channels zeroed before routing to prevent stale data in DAC output, and
+web UI routing grid expanded from 4 to 6 channels to show USB L/USB R. (`1834056`)
+- [2026-02-20] fix: USB audio input not processed — persist adcEnabled[2] and clear dacMute on reinit failure
+
+adcEnabled[2] (USB input) defaulted to false and was never persisted in
+settings. The save format was "1,1" (ADC1/ADC2 only), so even with USB
+audio streaming, the audio capture task skipped USB reads — ring buffer
+overflowed (overruns) while metering showed -inf dBFS.
+
+Settings manager:
+- Extend save format from "1,1" to "1,1,0" (ADC1,ADC2,USB)
+- Load parser handles 3-value CSV with backward-compat for old format
+- Auto-enable adcEnabled[2] when usbAudioEnabled is loaded as true
+
+DAC HAL:
+- Clear dacMute on early returns from dac_output_reinit() to prevent
+  permanent mute when DAC is disabled or I2S TX re-enable fails (`b8c01db`)
 - [2026-02-20] fix: remove residual DC blocking filter and fix emergency limiter defaults
 
 DC blocking filter:

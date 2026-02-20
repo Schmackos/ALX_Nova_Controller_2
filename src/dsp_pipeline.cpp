@@ -2379,6 +2379,25 @@ void dsp_export_full_config_json(char *, int) {}
 void dsp_import_full_config_json(const char *) {}
 #endif // NATIVE_TEST
 
+// ===== Zero Inactive Channels =====
+// Clears post-DSP float buffers for an inactive input so the routing matrix
+// doesn't multiply stale sample data into the DAC output.
+void dsp_zero_channels(int adcIndex) {
+    int chL = adcIndex * 2;
+    int chR = adcIndex * 2 + 1;
+#ifdef NATIVE_TEST
+    if (chL < DSP_MAX_CHANNELS)
+        memset(_postDspChannels[chL], 0, 256 * sizeof(float));
+    if (chR < DSP_MAX_CHANNELS)
+        memset(_postDspChannels[chR], 0, 256 * sizeof(float));
+#else
+    if (chL < DSP_MAX_CHANNELS && _postDspChannels[chL])
+        memset(_postDspChannels[chL], 0, 256 * sizeof(float));
+    if (chR < DSP_MAX_CHANNELS && _postDspChannels[chR])
+        memset(_postDspChannels[chR], 0, 256 * sizeof(float));
+#endif
+}
+
 // ===== Routing Matrix Execution =====
 // Called from audio_capture_task after all inputs are processed through DSP.
 // Applies the 6x6 routing matrix to post-DSP float channels,

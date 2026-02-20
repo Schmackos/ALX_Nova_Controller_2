@@ -1273,15 +1273,21 @@ void test_routing_mono_sum(void) {
     dsp_routing_preset_mono_sum(rm);
 
     float ch0[] = {1.0f};
-    float ch1[] = {1.0f};
+    float ch1[] = {0.5f};
     float *channels[] = {ch0, ch1};
 
     dsp_routing_apply(rm, channels, 2, 1);
 
-    // Mono sum: each output = average of all inputs = (1+1)/N
-    float expected = 2.0f / DSP_MAX_CHANNELS;
+    // Per-pair mono sum: Out_L = Out_R = 0.5*In_L + 0.5*In_R
+    float expected = 0.5f * 1.0f + 0.5f * 0.5f;  // 0.75
     TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, ch0[0]);
     TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, ch1[0]);
+
+    // Verify no cross-input bleed: off-diagonal pairs are zero
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][2]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][4]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[2][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[4][0]);
 }
 
 // ===== Expanded Crossover Tests =====
@@ -1675,13 +1681,15 @@ void test_routing_matrix_presets(void) {
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[1][0]);
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[1][1]);
 
-    // Mono sum: gain = 1/DSP_MAX_CHANNELS (~0.167 for 6 channels)
-    float g = 1.0f / DSP_MAX_CHANNELS;
+    // Mono sum: per-pair 0.5 gain within each stereo pair, no cross-input bleed
     dsp_routing_preset_mono_sum(rm);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[0][0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[0][1]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[1][0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[1][1]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.5f, rm.matrix[0][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.5f, rm.matrix[0][1]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.5f, rm.matrix[1][0]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.5f, rm.matrix[1][1]);
+    // No cross-input bleed
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][2]);
+    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][4]);
 }
 
 void test_gain_init_sets_current_linear(void) {
