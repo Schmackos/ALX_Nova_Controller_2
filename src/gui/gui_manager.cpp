@@ -333,18 +333,22 @@ void gui_init(void) {
     /* Boot animation + desktop push happen inside gui_task so all
        lv_timer_handler() calls stay in one FreeRTOS context. */
 
-    /* Start FreeRTOS GUI task on Core 1
-     * NOTE: Task stacks MUST be in internal SRAM on ESP32 — PSRAM fails
-     * xPortcheckValidStackMem() assertion in FreeRTOS port. */
-    xTaskCreatePinnedToCore(
-        gui_task,
-        "gui_task",
-        GUI_TASK_STACK_SIZE,
-        NULL,
-        GUI_TASK_PRIORITY,
-        &gui_task_handle,
-        GUI_TASK_CORE
-    );
+    /* Start FreeRTOS GUI task on Core 1.
+     * Allocate stack from PSRAM to save 16 KB of internal SRAM for WiFi/DMA.
+     * Falls back to internal SRAM if PSRAM allocation fails. */
+    static StackType_t *gui_stack = (StackType_t *)heap_caps_malloc(
+        GUI_TASK_STACK_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    static StaticTask_t gui_tcb;
+    if (gui_stack) {
+        gui_task_handle = xTaskCreateStaticPinnedToCore(
+            gui_task, "gui_task", GUI_TASK_STACK_SIZE,
+            NULL, GUI_TASK_PRIORITY, gui_stack, &gui_tcb, GUI_TASK_CORE);
+        LOG_I("[GUI] Task stack allocated in PSRAM (%d bytes)", GUI_TASK_STACK_SIZE);
+    } else {
+        xTaskCreatePinnedToCore(gui_task, "gui_task", GUI_TASK_STACK_SIZE,
+            NULL, GUI_TASK_PRIORITY, &gui_task_handle, GUI_TASK_CORE);
+        LOG_W("[GUI] PSRAM stack alloc failed, using internal SRAM");
+    }
 
     LOG_I("[GUI] Initialization complete");
 }

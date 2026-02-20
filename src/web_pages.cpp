@@ -2780,6 +2780,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                 <canvas class="waveform-canvas" id="audioWaveformCanvas1"></canvas>
                             </div>
                         </div>
+                        <div class="canvas-panel" id="waveformPanel2" style="display:none">
+                            <div class="canvas-panel-title">USB</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="waveform-canvas" id="audioWaveformCanvas2"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2809,6 +2815,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                 <canvas class="spectrum-canvas" id="audioSpectrumCanvas0"></canvas>
                             </div>
                             <div class="dominant-freq-readout">Dominant: <span id="dominantFreq0">-- Hz</span></div>
+                            <div style="font-size:11px;color:var(--text-secondary);text-align:center;margin-top:2px">SNR: <span id="audioSnr0">--</span> dB &nbsp; SFDR: <span id="audioSfdr0">--</span> dB</div>
                         </div>
                         <div class="canvas-panel" id="spectrumPanel1">
                             <div class="canvas-panel-title">ADC 2</div>
@@ -2816,6 +2823,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                 <canvas class="spectrum-canvas" id="audioSpectrumCanvas1"></canvas>
                             </div>
                             <div class="dominant-freq-readout">Dominant: <span id="dominantFreq1">-- Hz</span></div>
+                            <div style="font-size:11px;color:var(--text-secondary);text-align:center;margin-top:2px">SNR: <span id="audioSnr1">--</span> dB &nbsp; SFDR: <span id="audioSfdr1">--</span> dB</div>
+                        </div>
+                        <div class="canvas-panel" id="spectrumPanel2" style="display:none">
+                            <div class="canvas-panel-title">USB</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="spectrum-canvas" id="audioSpectrumCanvas2"></canvas>
+                            </div>
+                            <div class="dominant-freq-readout">Dominant: <span id="dominantFreq2">-- Hz</span></div>
+                            <div style="font-size:11px;color:var(--text-secondary);text-align:center;margin-top:2px">SNR: <span id="audioSnr2">--</span> dB &nbsp; SFDR: <span id="audioSfdr2">--</span> dB</div>
                         </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
@@ -2828,8 +2844,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <option value="4">Nuttall</option>
                             <option value="5">Flat-Top</option>
                         </select>
-                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">SNR: <span id="audioSnr0">--</span> dB</span>
-                        <span style="font-size:11px;color:var(--text-secondary);">SFDR: <span id="audioSfdr0">--</span> dB</span>
                     </div>
                 </div>
             </div>
@@ -2934,6 +2948,48 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 </div>
 
+                <!-- USB Audio (Input 3) -->
+                <div id="adcSection2" style="display:none">
+                <div class="adc-section-header">
+                    <span class="adc-section-title">USB</span>
+                    <span class="adc-status-badge no-data" id="adcStatusBadge2">NO_DATA</span>
+                    <span class="clip-indicator" id="clipIndicator2">CLIP</span>
+                    <span class="adc-readout" id="adcReadout2">-- dBFS | -- Vrms</span>
+                </div>
+                <!-- Continuous bars USB -->
+                <div id="vuContinuous2">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name" id="vuChName4">Ch 5</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFill2L"></div>
+                            <div class="vu-meter-peak" id="vuPeak2L"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDb2L">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name" id="vuChName5">Ch 6</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFill2R"></div>
+                            <div class="vu-meter-peak" id="vuPeak2R"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDb2R">-inf dBFS</span>
+                    </div>
+                </div>
+                <!-- Segmented PPM USB -->
+                <div id="vuSegmented2" style="display:none">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg4">Ch 5</span>
+                        <canvas id="ppmCanvas2L" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg2L">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg5">Ch 6</span>
+                        <canvas id="ppmCanvas2R" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg2R">-inf dBFS</span>
+                    </div>
+                </div>
+                </div>
+
                 <!-- Shared scale row -->
                 <div class="vu-meter-row" style="margin-bottom:8px;margin-top:10px">
                     <span class="vu-meter-label"></span>
@@ -2976,6 +3032,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <input type="text" class="form-input" id="inputName3" placeholder="Subwoofer 4" maxlength="20">
                 </div>
                 </div>
+                <div id="inputNamesUsb" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">USB - Input 5</label>
+                    <input type="text" class="form-input" id="inputName4" placeholder="USB Left" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">USB - Input 6</label>
+                    <input type="text" class="form-input" id="inputName5" placeholder="USB Right" maxlength="20">
+                </div>
+                </div>
                 <button class="btn btn-primary" onclick="saveInputNames()">Save Names</button>
             </div>
 
@@ -2989,6 +3055,29 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
                     <label class="form-label" style="margin:0">ADC Input 2</label>
                     <label class="switch"><input type="checkbox" id="adcEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
+                    <label class="form-label" style="margin:0">USB Input</label>
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <span id="usbAudioBadge" class="badge" style="font-size:10px;padding:2px 6px;background:#9E9E9E;color:#fff">Disabled</span>
+                        <label class="switch"><input type="checkbox" id="usbAudioEnable" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
+                    </div>
+                </div>
+                <div id="usbAudioFields" style="display:none;padding-left:8px;border-left:2px solid var(--border-color);margin-bottom:8px">
+                    <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="usbAudioStatus">Disconnected</span></div>
+                    <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="usbAudioFormat">&mdash;</span></div>
+                    <div class="info-row"><span class="info-label">Host Volume</span><span class="info-value" id="usbAudioVolume">&mdash;</span></div>
+                    <div style='font-size:10px;color:#999;margin:-4px 0 4px 0'>May not reflect system volume on all hosts</div>
+                    <div id="usbAudioDetails" style="display:none">
+                        <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
+                        <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
+                        <div class='info-row'><span>Buffer Fill</span><span id='usbAudioBufferFill'>&mdash;</span></div>
+                        <div class='info-row'><span>Latency</span><span id='usbAudioLatency'>&mdash;</span></div>
+                    </div>
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
+                    <label class="form-label" style="margin:0">Auto-Priority (USB&rarr;DAC)</label>
+                    <label class="switch"><input type="checkbox" id="usbAutoPriority" onchange="setUsbAutoPriority(this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Update Rate</label>
@@ -3008,46 +3097,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </select>
                 </div>
                 <button class="btn btn-primary" onclick="updateAudioSettings()">Update Sample Rate</button>
-            </div>
-
-            <!-- USB Audio Input -->
-            <div class="card" id="usbAudioCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    USB Audio Input
-                    <span id="usbAudioBadge" class="badge" style="font-size:10px;padding:2px 6px;background:#9E9E9E;color:#fff">Disabled</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="usbAudioEnable" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div id="usbAudioFields" style="display:none">
-                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="usbAudioStatus">Disconnected</span></div>
-                <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="usbAudioFormat">—</span></div>
-                <div class="info-row"><span class="info-label">Host Volume</span><span class="info-value" id="usbAudioVolume">—</span></div>
-                <div style='font-size:10px;color:#999;margin:-4px 0 4px 0'>May not reflect system volume on all hosts</div>
-                <div class="info-row"><span class="info-label">Audio Level</span><span class="info-value" id="usbAudioLevel">—</span></div>
-                <div class="info-row"><span class="info-label">ADC Status</span><span class="info-value" id="usbAdcStatus">—</span></div>
-                <div class="form-group">
-                    <label class="form-label">Auto-Priority (route USB to DAC)</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="usbAutoPriority" onchange="setUsbAutoPriority(this.checked)"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">DAC Source</label>
-                    <select class="form-input" id="dacSourceInput" onchange="setDacSourceInput(this.value)">
-                        <option value="0">ADC 1</option>
-                        <option value="1">ADC 2</option>
-                        <option value="2">USB</option>
-                    </select>
-                </div>
-                <div id="usbAudioDetails" style="display:none">
-                    <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
-                    <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
-                    <div class='info-row'><span>Buffer Fill</span><span id='usbAudioBufferFill'>&mdash;</span></div>
-                    <div class='info-row'><span>Latency</span><span id='usbAudioLatency'>&mdash;</span></div>
-                </div>
-                </div>
             </div>
 
             <!-- DAC Output -->
@@ -4648,26 +4697,28 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let audioSubscribed = false;
         let currentActiveTab = 'control';
 
-        // Dual ADC count
+        // Dual ADC count + USB
         const NUM_ADCS = 2;
+        const NUM_INPUTS = 3;
         let numAdcsDetected = 1;
-        let inputNames = ['Subwoofer 1','Subwoofer 2','Subwoofer 3','Subwoofer 4'];
+        let usbInputEnabled = false;
+        let inputNames = ['Subwoofer 1','Subwoofer 2','Subwoofer 3','Subwoofer 4','USB Left','USB Right'];
 
-        // Audio animation state (rAF interpolation) — per-ADC
-        let waveformCurrent = [null, null], waveformTarget = [null, null];
-        let spectrumCurrent = [new Float32Array(16), new Float32Array(16)];
-        let spectrumTarget = [new Float32Array(16), new Float32Array(16)];
-        let currentDominantFreq = [0, 0], targetDominantFreq = [0, 0];
+        // Audio animation state (rAF interpolation) — per-input
+        let waveformCurrent = [null, null, null], waveformTarget = [null, null, null];
+        let spectrumCurrent = [new Float32Array(16), new Float32Array(16), new Float32Array(16)];
+        let spectrumTarget = [new Float32Array(16), new Float32Array(16), new Float32Array(16)];
+        let currentDominantFreq = [0, 0, 0], targetDominantFreq = [0, 0, 0];
         let audioAnimFrameId = null;
         let LERP_SPEED = 0.25;
 
-        // Spectrum peak hold state — per-ADC
-        let spectrumPeaks = [new Float32Array(16), new Float32Array(16)];
-        let spectrumPeakTimes = [new Float64Array(16), new Float64Array(16)];
+        // Spectrum peak hold state — per-input
+        let spectrumPeaks = [new Float32Array(16), new Float32Array(16), new Float32Array(16)];
+        let spectrumPeakTimes = [new Float64Array(16), new Float64Array(16), new Float64Array(16)];
 
-        // VU meter animation state (rAF LERP interpolation) — per-ADC [adc][L=0,R=1]
-        let vuCurrent = [[0,0],[0,0]], vuTargetArr = [[0,0],[0,0]];
-        let peakCurrent = [[0,0],[0,0]], peakTargetArr = [[0,0],[0,0]];
+        // VU meter animation state (rAF LERP interpolation) — per-input [input][L=0,R=1]
+        let vuCurrent = [[0,0],[0,0],[0,0]], vuTargetArr = [[0,0],[0,0],[0,0]];
+        let peakCurrent = [[0,0],[0,0],[0,0]], peakTargetArr = [[0,0],[0,0],[0,0]];
         let vuDetected = false;
         let vuAnimFrameId = null;
         let VU_LERP = 0.3;
@@ -4707,7 +4758,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let vuDomRefs = null;
         function cacheVuDomRefs() {
             vuDomRefs = {};
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < NUM_INPUTS; a++) {
                 vuDomRefs['fillL' + a] = document.getElementById('vuFill' + a + 'L');
                 vuDomRefs['fillR' + a] = document.getElementById('vuFill' + a + 'R');
                 vuDomRefs['pkL' + a] = document.getElementById('vuPeak' + a + 'L');
@@ -4734,7 +4785,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const adc = dv.getUint8(1);
             if (type === 0x01 && currentActiveTab === 'audio') {
                 // Waveform: [type:1][adc:1][samples:256]
-                if (adc < NUM_ADCS && buf.byteLength >= 258) {
+                if (adc < NUM_INPUTS && buf.byteLength >= 258) {
                     const samples = new Uint8Array(buf, 2, 256);
                     waveformTarget[adc] = samples;
                     if (!waveformCurrent[adc]) waveformCurrent[adc] = new Uint8Array(samples);
@@ -4742,7 +4793,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             } else if (type === 0x02) {
                 // Spectrum: [type:1][adc:1][freq:f32LE][bands:16xf32LE]
-                if (adc < NUM_ADCS && buf.byteLength >= 70) {
+                if (adc < NUM_INPUTS && buf.byteLength >= 70) {
                     const freq = dv.getFloat32(2, true);
                     for (let i = 0; i < 16; i++) spectrumTarget[adc][i] = dv.getFloat32(6 + i * 4, true);
                     targetDominantFreq[adc] = freq;
@@ -4841,13 +4892,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 cacheVuDomRefs();
                 canvasDims = {};
                 invalidateBgCache();
-                // Draw initial empty canvases for each ADC
-                for (let a = 0; a < NUM_ADCS; a++) {
+                // Draw initial empty canvases for each input
+                for (let a = 0; a < NUM_INPUTS; a++) {
                     drawAudioWaveform(null, a);
                     drawSpectrumBars(null, 0, a);
                 }
-                // Update ADC2 panel visibility
+                // Update panel visibility
                 updateAdc2Visibility();
+                updateUsbVisibility();
                 // Load input names into fields
                 loadInputNameFields();
             } else if (tabId !== 'audio' && audioSubscribed) {
@@ -4859,7 +4911,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 // Stop animation and reset state
                 if (audioAnimFrameId) { cancelAnimationFrame(audioAnimFrameId); audioAnimFrameId = null; }
                 if (vuAnimFrameId) { cancelAnimationFrame(vuAnimFrameId); vuAnimFrameId = null; }
-                for (let a = 0; a < NUM_ADCS; a++) {
+                for (let a = 0; a < NUM_INPUTS; a++) {
                     waveformCurrent[a] = null; waveformTarget[a] = null;
                     if (!dspRtaTakeover) { spectrumTarget[a].fill(0); }
                     spectrumCurrent[a].fill(0);
@@ -5164,9 +5216,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             numAdcsDetected = data.numAdcsDetected;
                             updateAdc2Visibility();
                         }
-                        // Per-ADC VU/peak data
+                        // Per-input VU/peak data (ADC1, ADC2, USB)
                         if (data.adc && Array.isArray(data.adc)) {
-                            for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
+                            for (let a = 0; a < data.adc.length && a < NUM_INPUTS; a++) {
                                 const ad = data.adc[a];
                                 vuTargetArr[a][0] = ad.vu1 !== undefined ? ad.vu1 : 0;
                                 vuTargetArr[a][1] = ad.vu2 !== undefined ? ad.vu2 : 0;
@@ -5174,34 +5226,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                 peakTargetArr[a][1] = ad.peak2 !== undefined ? ad.peak2 : 0;
                             }
                         }
-                        // Per-ADC status badges and readouts
+                        // Per-input status badges and readouts
                         if (data.adcStatus && Array.isArray(data.adcStatus)) {
-                            for (let a = 0; a < data.adcStatus.length && a < NUM_ADCS; a++) {
+                            for (let a = 0; a < data.adcStatus.length && a < NUM_INPUTS; a++) {
                                 updateAdcStatusBadge(a, data.adcStatus[a]);
                             }
                         }
                         if (data.adc && Array.isArray(data.adc)) {
-                            for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
+                            for (let a = 0; a < data.adc.length && a < NUM_INPUTS; a++) {
                                 const ad = data.adc[a];
                                 updateAdcReadout(a, ad.dBFS, ad.vrms1, ad.vrms2);
                             }
                         }
                         vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                         startVuAnimation();
-                        // USB audio level/status (input index 2)
-                        if (data.adc && data.adc.length > 2) {
-                            var uLvl = document.getElementById('usbAudioLevel');
-                            if (uLvl) uLvl.textContent = data.adc[2].dBFS !== undefined ? data.adc[2].dBFS.toFixed(1) + ' dBFS' : '\u2014';
-                        }
-                        if (data.adcStatus && data.adcStatus.length > 2) {
-                            var uSt = document.getElementById('usbAdcStatus');
-                            if (uSt) uSt.textContent = data.adcStatus[2] || '\u2014';
-                        }
                     }
                 } else if (data.type === 'audioWaveform') {
                     if (currentActiveTab === 'audio' && data.w) {
                         const a = data.adc || 0;
-                        if (a < NUM_ADCS) {
+                        if (a < NUM_INPUTS) {
                             waveformTarget[a] = data.w;
                             if (!waveformCurrent[a]) waveformCurrent[a] = data.w.slice();
                             startAudioAnimation();
@@ -5210,7 +5253,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 } else if (data.type === 'audioSpectrum') {
                     if (currentActiveTab === 'audio' && data.bands) {
                         const a = data.adc || 0;
-                        if (a < NUM_ADCS) {
+                        if (a < NUM_INPUTS) {
                             for (let i = 0; i < data.bands.length && i < 16; i++) spectrumTarget[a][i] = data.bands[i];
                             targetDominantFreq[a] = data.freq || 0;
                             startAudioAnimation();
@@ -5218,7 +5261,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     }
                 } else if (data.type === 'inputNames') {
                     if (data.names && Array.isArray(data.names)) {
-                        for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
+                        for (let i = 0; i < data.names.length && i < NUM_INPUTS * 2; i++) {
                             inputNames[i] = data.names[i];
                         }
                         applyInputNames();
@@ -5757,6 +5800,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Audio Tab Functions =====
+        function updateCanvasGridColumns() {
+            var cols = 1;
+            if (numAdcsDetected > 1) cols = 2;
+            if (usbInputEnabled) cols++;
+            var grids = document.querySelectorAll('#audio .dual-canvas-grid');
+            for (var i = 0; i < grids.length; i++)
+                grids[i].style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+        }
         function updateAdc2Visibility() {
             var show = numAdcsDetected > 1;
             var ids = ['adcSection1', 'waveformPanel1', 'spectrumPanel1', 'inputNamesAdc1', 'siggenTargetAdcGroup'];
@@ -5764,10 +5815,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 var el = document.getElementById(ids[i]);
                 if (el) el.style.display = show ? '' : 'none';
             }
-            var grids = document.querySelectorAll('#audio .dual-canvas-grid');
-            for (var i = 0; i < grids.length; i++) {
-                grids[i].style.gridTemplateColumns = show ? '1fr 1fr' : '1fr';
+            updateCanvasGridColumns();
+        }
+        function updateUsbVisibility() {
+            var show = usbInputEnabled;
+            var ids = ['adcSection2', 'waveformPanel2', 'spectrumPanel2', 'inputNamesUsb'];
+            for (var i = 0; i < ids.length; i++) {
+                var el = document.getElementById(ids[i]);
+                if (el) el.style.display = show ? '' : 'none';
             }
+            updateCanvasGridColumns();
         }
 
         function updateAdcStatusBadge(adcIdx, status) {
@@ -5801,7 +5858,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function applyInputNames() {
-            for (var i = 0; i < NUM_ADCS * 2; i++) {
+            for (var i = 0; i < NUM_INPUTS * 2; i++) {
                 var el = document.getElementById('vuChName' + i);
                 if (el) el.textContent = inputNames[i] || ('Ch ' + (i + 1));
                 var segEl = document.getElementById('vuChNameSeg' + i);
@@ -5827,7 +5884,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         function loadInputNameFields() {
-            for (var i = 0; i < NUM_ADCS * 2; i++) {
+            for (var i = 0; i < NUM_INPUTS * 2; i++) {
                 var el = document.getElementById('inputName' + i);
                 if (el) el.value = inputNames[i] || '';
             }
@@ -5835,7 +5892,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function saveInputNames() {
             var names = [];
-            for (var i = 0; i < NUM_ADCS * 2; i++) {
+            for (var i = 0; i < NUM_INPUTS * 2; i++) {
                 var el = document.getElementById('inputName' + i);
                 names.push(el ? el.value : '');
             }
@@ -5875,7 +5932,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             audioAnimFrameId = null;
             let needsMore = false;
 
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < NUM_INPUTS; a++) {
                 // Lerp waveform
                 if (waveformCurrent[a] && waveformTarget[a]) {
                     for (let i = 0; i < waveformCurrent[a].length && i < waveformTarget[a].length; i++) {
@@ -6153,7 +6210,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function vuAnimLoop() {
             vuAnimFrameId = null;
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < NUM_INPUTS; a++) {
                 for (let ch = 0; ch < 2; ch++) {
                     vuCurrent[a][ch] += (vuTargetArr[a][ch] - vuCurrent[a][ch]) * VU_LERP;
                     peakCurrent[a][ch] += (peakTargetArr[a][ch] - peakCurrent[a][ch]) * VU_LERP;
@@ -6264,7 +6321,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function toggleVuMode(seg) {
             vuSegmentedMode = seg;
             localStorage.setItem('vuSegmented', seg);
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < NUM_INPUTS; a++) {
                 var cont = document.getElementById('vuContinuous' + a);
                 var segDiv = document.getElementById('vuSegmented' + a);
                 if (cont) cont.style.display = seg ? 'none' : '';
@@ -6305,6 +6362,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var fields = document.getElementById('usbAudioFields');
             if (enableCb) enableCb.checked = !!d.enabled;
             if (fields) fields.style.display = d.enabled ? '' : 'none';
+
+            // Track USB enabled state for visibility
+            var wasEnabled = usbInputEnabled;
+            usbInputEnabled = !!d.enabled;
+            if (usbInputEnabled !== wasEnabled) updateUsbVisibility();
 
             var badge = document.getElementById('usbAudioBadge');
             var statusEl = document.getElementById('usbAudioStatus');
@@ -6353,9 +6415,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var bufFill = document.getElementById('usbAudioBufferFill');
             if (bufFill) {
                 if (d.streaming) {
-                    var pct = Math.round((d.bufferLevel || 0) * 100);
+                    var pctVal = Math.round((d.bufferLevel || 0) * 100);
                     var frames = d.framesAvailable || 0;
-                    bufFill.textContent = pct + '% (' + frames + '/' + (d.bufferCapacity || 1024) + ' frames)';
+                    bufFill.textContent = pctVal + '% (' + frames + '/' + (d.bufferCapacity || 1024) + ' frames)';
                 } else {
                     bufFill.textContent = '\u2014';
                 }
@@ -6369,14 +6431,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     latEl.textContent = '\u2014';
                 }
             }
-            // Sync auto-priority and DAC source if present in state
+            // Sync auto-priority if present in state
             if (d.usbAutoPriority !== undefined) {
                 var cb = document.getElementById('usbAutoPriority');
                 if (cb) cb.checked = !!d.usbAutoPriority;
-            }
-            if (d.dacSourceInput !== undefined) {
-                var sel = document.getElementById('dacSourceInput');
-                if (sel) sel.value = d.dacSourceInput;
             }
         }
 
@@ -6385,15 +6443,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (ws && ws.readyState === WebSocket.OPEN)
                 ws.send(JSON.stringify({type:'setUsbAutoPriority',value:en}));
         }
-        function setDacSourceInput(val) {
-            if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({type:'setDacSourceInput',value:parseInt(val)}));
-        }
         function handleUsbAutoPriorityState(d) {
             var cb = document.getElementById('usbAutoPriority');
             if (cb) cb.checked = !!d.usbAutoPriority;
-            var sel = document.getElementById('dacSourceInput');
-            if (sel && d.dacSourceInput !== undefined) sel.value = d.dacSourceInput;
         }
 
         // ===== DAC Output =====
@@ -8686,10 +8738,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         document.getElementById('adcI2sErrors').textContent = adcs[0].i2sErrors !== undefined ? adcs[0].i2sErrors : '--';
                         document.getElementById('adcConsecutiveZeros').textContent = adcs[0].consecutiveZeros !== undefined ? adcs[0].consecutiveZeros : '--';
                         document.getElementById('adcTotalBuffers').textContent = adcs[0].totalBuffers !== undefined ? adcs[0].totalBuffers : '--';
-                        var snr0 = document.getElementById('audioSnr0');
-                        if (snr0 && adcs[0].snrDb !== undefined) snr0.textContent = adcs[0].snrDb.toFixed(1);
-                        var sfdr0 = document.getElementById('audioSfdr0');
-                        if (sfdr0 && adcs[0].sfdrDb !== undefined) sfdr0.textContent = adcs[0].sfdrDb.toFixed(1);
+                    }
+                    // Per-input SNR/SFDR
+                    for (var si = 0; si < adcs.length && si < NUM_INPUTS; si++) {
+                        var snrEl = document.getElementById('audioSnr' + si);
+                        if (snrEl && adcs[si].snrDb !== undefined) snrEl.textContent = adcs[si].snrDb.toFixed(1);
+                        var sfdrEl = document.getElementById('audioSfdr' + si);
+                        if (sfdrEl && adcs[si].sfdrDb !== undefined) sfdrEl.textContent = adcs[si].sfdrDb.toFixed(1);
                     }
                     // Show ADC 1 fields if present
                     var el2 = document.getElementById('adcStatus1');
@@ -9568,7 +9623,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (d.names && Array.isArray(d.names)) {
-                        for (var i = 0; i < d.names.length && i < NUM_ADCS * 2; i++) inputNames[i] = d.names[i];
+                        for (var i = 0; i < d.names.length && i < NUM_INPUTS * 2; i++) inputNames[i] = d.names[i];
                         applyInputNames();
                     }
                 })

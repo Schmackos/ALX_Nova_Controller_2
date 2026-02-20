@@ -158,7 +158,7 @@ static void edit_auto_ap(void) {
 }
 
 static void on_ap_ssid_done(const char *text) {
-    AppState::getInstance().apSSID = String(text);
+    setCharField(appState.apSSID, sizeof(appState.apSSID), text);
     saveSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] AP SSID set to: %s", text);
@@ -167,14 +167,14 @@ static void on_ap_ssid_done(const char *text) {
 static void edit_ap_ssid(void) {
     KeyboardConfig kb = {};
     kb.title = "AP SSID";
-    kb.initial_text = AppState::getInstance().apSSID.c_str();
+    kb.initial_text = AppState::getInstance().apSSID;
     kb.password_mode = false;
     kb.on_done = on_ap_ssid_done;
     scr_keyboard_open(&kb);
 }
 
 static void on_ap_password_done(const char *text) {
-    AppState::getInstance().apPassword = String(text);
+    setCharField(appState.apPassword, sizeof(appState.apPassword), text);
     saveSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] AP password changed");
@@ -202,7 +202,7 @@ lv_obj_t *scr_wifi_ap_create(void) {
     cfg.items[0] = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     cfg.items[1] = {"Enable AP", ap_str, nullptr, MENU_ACTION, edit_ap_toggle};
     cfg.items[2] = {"Auto AP", auto_ap_str, nullptr, MENU_ACTION, edit_auto_ap};
-    cfg.items[3] = {"AP SSID", st.apSSID.c_str(), ICON_EDIT, MENU_ACTION, edit_ap_ssid};
+    cfg.items[3] = {"AP SSID", st.apSSID, ICON_EDIT, MENU_ACTION, edit_ap_ssid};
     cfg.items[4] = {"AP Password", "****", ICON_EDIT, MENU_ACTION, edit_ap_password};
 
     return scr_menu_create(&cfg);
@@ -269,7 +269,7 @@ void scr_wifi_ap_refresh(void) {
     AppState &st = AppState::getInstance();
     scr_menu_set_item_value(1, st.apEnabled ? "ON" : "OFF");
     scr_menu_set_item_value(2, st.autoAPEnabled ? "ON" : "OFF");
-    scr_menu_set_item_value(3, st.apSSID.c_str());
+    scr_menu_set_item_value(3, st.apSSID);
 }
 
 #endif /* GUI_ENABLED */

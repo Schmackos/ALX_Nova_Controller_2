@@ -34,13 +34,19 @@ bool loadSettings() {
     return false;
   }
 
-  // Read ALL lines into array (35 slots for future growth)
-  String lines[35];
-  for (int i = 0; i < 35; i++) {
-    if (file.available()) {
-      lines[i] = file.readStringUntil('\n');
-      lines[i].trim();
-    }
+  // Read lines one at a time using a single char buffer (saves ~2KB vs String[35])
+  const int MAX_LINES = 35;
+  char lineBuf[128];
+  String lines[MAX_LINES];
+  int lineCount = 0;
+  for (int i = 0; i < MAX_LINES && file.available(); i++) {
+    int len = file.readBytesUntil('\n', lineBuf, sizeof(lineBuf) - 1);
+    lineBuf[len] = '\0';
+    // Trim trailing \r if present
+    if (len > 0 && lineBuf[len - 1] == '\r') lineBuf[len - 1] = '\0';
+    lines[i] = lineBuf;
+    lines[i].trim();
+    lineCount++;
   }
   file.close();
 
@@ -254,9 +260,9 @@ bool loadSettings() {
   if (lines[dataStart + 31].length() > 0) {
     String name = lines[dataStart + 31];
     name = name.substring(0, 32); // Enforce 32-char max
-    appState.customDeviceName = name;
+    setCharField(appState.customDeviceName, sizeof(appState.customDeviceName), name.c_str());
   } else {
-    appState.customDeviceName = "";
+    appState.customDeviceName[0] = '\0';
   }
 
   // Load USB auto-priority (line 32, if present)
@@ -819,7 +825,7 @@ void handleSettingsUpdate() {
       if (newVal != appState.adcEnabled[i]) {
         appState.adcEnabled[i] = newVal;
         settingsChanged = true;
-        LOG_I("[Settings] ADC%d %s", i + 1, newVal ? "enabled" : "disabled");
+        LOG_I("[Settings] %s %s", audioInputLabel(i), newVal ? "enabled" : "disabled");
       }
     }
   } else if (doc["adcEnabled"].is<bool>()) {
@@ -1090,17 +1096,17 @@ void handleSettingsImport() {
 
   // Import WiFi settings
   if (!doc["wifi"].isNull()) {
-    if (doc["wifi"]["ssid"].is<String>()) {
-      appState.wifiSSID = doc["wifi"]["ssid"].as<String>();
-      LOG_D("[Settings] WiFi SSID: %s", appState.wifiSSID.c_str());
+    if (doc["wifi"]["ssid"].is<const char*>()) {
+      setCharField(appState.wifiSSID, sizeof(appState.wifiSSID), doc["wifi"]["ssid"].as<const char*>());
+      LOG_D("[Settings] WiFi SSID: %s", appState.wifiSSID);
     }
-    if (doc["wifi"]["password"].is<String>()) {
-      appState.wifiPassword = doc["wifi"]["password"].as<String>();
+    if (doc["wifi"]["password"].is<const char*>()) {
+      setCharField(appState.wifiPassword, sizeof(appState.wifiPassword), doc["wifi"]["password"].as<const char*>());
       LOG_D("[Settings] WiFi password imported");
     }
     // Save WiFi credentials to multi-WiFi list
-    if (appState.wifiSSID.length() > 0) {
-      saveWiFiNetwork(appState.wifiSSID.c_str(), appState.wifiPassword.c_str());
+    if (strlen(appState.wifiSSID) > 0) {
+      saveWiFiNetwork(appState.wifiSSID, appState.wifiPassword);
     }
   }
 
@@ -1110,12 +1116,12 @@ void handleSettingsImport() {
       appState.apEnabled = doc["accessPoint"]["enabled"].as<bool>();
       LOG_D("[Settings] AP Enabled: %s", appState.apEnabled ? "true" : "false");
     }
-    if (doc["accessPoint"]["ssid"].is<String>()) {
-      appState.apSSID = doc["accessPoint"]["ssid"].as<String>();
-      LOG_D("[Settings] AP SSID: %s", appState.apSSID.c_str());
+    if (doc["accessPoint"]["ssid"].is<const char*>()) {
+      setCharField(appState.apSSID, sizeof(appState.apSSID), doc["accessPoint"]["ssid"].as<const char*>());
+      LOG_D("[Settings] AP SSID: %s", appState.apSSID);
     }
-    if (doc["accessPoint"]["password"].is<String>()) {
-      appState.apPassword = doc["accessPoint"]["password"].as<String>();
+    if (doc["accessPoint"]["password"].is<const char*>()) {
+      setCharField(appState.apPassword, sizeof(appState.apPassword), doc["accessPoint"]["password"].as<const char*>());
       LOG_D("[Settings] AP password imported");
     }
     if (doc["accessPoint"]["appState.autoAPEnabled"].is<bool>()) {
@@ -1253,7 +1259,7 @@ void handleSettingsImport() {
       JsonArray arr = doc["settings"]["adcEnabled"].as<JsonArray>();
       for (int i = 0; i < NUM_AUDIO_INPUTS && i < (int)arr.size(); i++) {
         appState.adcEnabled[i] = arr[i].as<bool>();
-        LOG_D("[Settings] ADC%d: %s", i + 1, appState.adcEnabled[i] ? "enabled" : "disabled");
+        LOG_D("[Settings] %s: %s", audioInputLabel(i), appState.adcEnabled[i] ? "enabled" : "disabled");
       }
     } else if (doc["settings"]["adcEnabled"].is<bool>()) {
       bool val = doc["settings"]["adcEnabled"].as<bool>();
@@ -1280,11 +1286,10 @@ void handleSettingsImport() {
       }
     }
 #endif
-    if (doc["settings"]["customDeviceName"].is<String>()) {
-      String name = doc["settings"]["customDeviceName"].as<String>();
-      name = name.substring(0, 32); // Enforce 32-char max
-      appState.customDeviceName = name;
-      LOG_D("[Settings] Custom Device Name: %s", name.c_str());
+    if (doc["settings"]["customDeviceName"].is<const char*>()) {
+      const char* name = doc["settings"]["customDeviceName"].as<const char*>();
+      setCharField(appState.customDeviceName, sizeof(appState.customDeviceName), name);
+      LOG_D("[Settings] Custom Device Name: %s", appState.customDeviceName);
     }
 #ifdef DSP_ENABLED
     if (doc["settings"]["usbAutoPriority"].is<bool>()) {
@@ -1342,21 +1347,21 @@ void handleSettingsImport() {
       appState.mqttEnabled = doc["mqtt"]["enabled"].as<bool>();
       LOG_D("[Settings] MQTT Enabled: %s", appState.mqttEnabled ? "true" : "false");
     }
-    if (doc["mqtt"]["broker"].is<String>()) {
-      appState.mqttBroker = doc["mqtt"]["broker"].as<String>();
-      LOG_D("[Settings] MQTT Broker: %s", appState.mqttBroker.c_str());
+    if (doc["mqtt"]["broker"].is<const char*>()) {
+      setCharField(appState.mqttBroker, sizeof(appState.mqttBroker), doc["mqtt"]["broker"].as<const char*>());
+      LOG_D("[Settings] MQTT Broker: %s", appState.mqttBroker);
     }
     if (doc["mqtt"]["port"].is<int>()) {
       appState.mqttPort = doc["mqtt"]["port"].as<int>();
       LOG_D("[Settings] MQTT Port: %d", appState.mqttPort);
     }
-    if (doc["mqtt"]["username"].is<String>()) {
-      appState.mqttUsername = doc["mqtt"]["username"].as<String>();
+    if (doc["mqtt"]["username"].is<const char*>()) {
+      setCharField(appState.mqttUsername, sizeof(appState.mqttUsername), doc["mqtt"]["username"].as<const char*>());
       LOG_D("[Settings] MQTT username imported");
     }
-    if (doc["mqtt"]["baseTopic"].is<String>()) {
-      appState.mqttBaseTopic = doc["mqtt"]["baseTopic"].as<String>();
-      LOG_D("[Settings] MQTT Base Topic: %s", appState.mqttBaseTopic.c_str());
+    if (doc["mqtt"]["baseTopic"].is<const char*>()) {
+      setCharField(appState.mqttBaseTopic, sizeof(appState.mqttBaseTopic), doc["mqtt"]["baseTopic"].as<const char*>());
+      LOG_D("[Settings] MQTT Base Topic: %s", appState.mqttBaseTopic);
     }
     if (doc["mqtt"]["haDiscovery"].is<bool>()) {
       appState.mqttHADiscovery = doc["mqtt"]["haDiscovery"].as<bool>();

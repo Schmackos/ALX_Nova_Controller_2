@@ -167,6 +167,17 @@ const float DEFAULT_ADC_VREF = 3.3f; // PCM1808 full-scale reference voltage (V)
 // Input 0 = ADC1 (I2S_NUM_0), Input 1 = ADC2 (I2S_NUM_1), Input 2 = USB Audio
 #define NUM_AUDIO_INPUTS 3
 
+// Returns a human-readable label for an audio input index.
+// Indices [0, NUM_AUDIO_ADCS) → "ADC1", "ADC2", ...
+// Indices [NUM_AUDIO_ADCS, NUM_AUDIO_INPUTS) → "USB"
+// Always derived from NUM_AUDIO_ADCS so it stays in sync with hardware config.
+static inline const char* audioInputLabel(int idx) {
+    static const char* const s_adcNames[] = {"ADC1", "ADC2", "ADC3", "ADC4"};
+    if (idx < 0 || idx >= NUM_AUDIO_INPUTS) return "?";
+    if (idx < NUM_AUDIO_ADCS) return s_adcNames[idx < 4 ? idx : 0];
+    return "USB";
+}
+
 // Smart Sensing modes
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };
 
@@ -205,7 +216,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_CORE_AUDIO     1   // Core 1 — isolates audio from WiFi system tasks on Core 0
 
 // ===== I2S DMA Configuration =====
-#define I2S_DMA_BUF_COUNT 8     // 8 buffers x 256 samples = ~42ms runway at 48kHz
+#define I2S_DMA_BUF_COUNT 6     // 6 buffers x 256 samples = ~32ms runway at 48kHz
 #define I2S_DMA_BUF_LEN   256
 
 // ===== GUI Configuration (TFT + Rotary Encoder) =====

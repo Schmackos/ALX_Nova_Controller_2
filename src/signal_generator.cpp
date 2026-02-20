@@ -191,10 +191,13 @@ void siggen_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_rate) {
 // ===== Hardware-dependent code (ESP32 only) =====
 #ifndef NATIVE_TEST
 
+static bool _siggenInitialized = false;
+
 void siggen_init() {
     // Arduino-ESP32 3.x: ledcAttach replaces ledcSetup + ledcAttachPin
     ledcAttach(SIGGEN_PWM_PIN, 1000, SIGGEN_PWM_RESOLUTION);
     ledcWrite(SIGGEN_PWM_PIN, 0);
+    _siggenInitialized = true;
     LOG_I("[SigGen] Initialized PWM on GPIO %d", SIGGEN_PWM_PIN);
 }
 
@@ -221,6 +224,11 @@ void siggen_apply_params() {
 
     bool wasActive = _siggenActive;
     bool shouldBeActive = st.sigGenEnabled;
+
+    // Lazy init: only initialize PWM hardware when first enabled
+    if (shouldBeActive && !_siggenInitialized) {
+        siggen_init();
+    }
 
     portENTER_CRITICAL(&_siggenSpinlock);
     _params = p;

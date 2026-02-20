@@ -39,6 +39,18 @@ public:
 #include <WiFi.h>
 #endif
 
+#include <cstring>
+
+// ===== Helper: safe char[] field assignment =====
+inline void setCharField(char *dst, size_t dstSize, const char *src) {
+  if (src) {
+    strncpy(dst, src, dstSize - 1);
+    dst[dstSize - 1] = '\0';
+  } else {
+    dst[0] = '\0';
+  }
+}
+
 // ===== FFT Window Types =====
 enum FftWindowType : uint8_t {
   FFT_WINDOW_HANN = 0,
@@ -80,12 +92,12 @@ public:
   void clearFSMStateDirty() { _fsmStateDirty = false; }
 
   // ===== WiFi State =====
-  String wifiSSID;
-  String wifiPassword;
+  char wifiSSID[33] = {};
+  char wifiPassword[65] = {};
 
   // ===== Device Information =====
-  String deviceSerialNumber;
-  String customDeviceName = "";  // User-configurable name used as AP SSID (overrides auto-generated)
+  char deviceSerialNumber[17] = {};
+  char customDeviceName[33] = {};  // User-configurable name used as AP SSID (overrides auto-generated)
 
   // ===== LED State =====
   bool blinkingEnabled = true;
@@ -103,17 +115,17 @@ public:
   bool isAPMode = false;
   bool apEnabled = false;
   bool autoAPEnabled = true; // Default to true per requirements
-  String apSSID;
-  String apPassword = DEFAULT_AP_PASSWORD;
+  char apSSID[33] = {};
+  char apPassword[33] = {};
 
   // ===== Web Authentication =====
-  String webPassword = DEFAULT_AP_PASSWORD;
+  char webPassword[65] = {};  // SHA256 hex hash = 64 chars + null
 
   // ===== WiFi Connection State (Async) =====
   bool wifiConnecting = false;
   bool wifiConnectSuccess = false;
-  String wifiNewIP;
-  String wifiConnectError;
+  char wifiNewIP[16] = {};
+  char wifiConnectError[64] = {};
 
   // ===== Factory Reset State =====
   bool factoryResetInProgress = false;
@@ -122,8 +134,8 @@ public:
   unsigned long lastOTACheck = 0;
   bool otaInProgress = false;
   int otaProgress = 0;
-  String otaStatus = "idle";
-  String otaStatusMessage = "idle";
+  char otaStatus[16] = "idle";
+  char otaStatusMessage[64] = "idle";
   int otaProgressBytes = 0;
   int otaTotalBytes = 0;
   bool autoUpdateEnabled = false;
@@ -281,11 +293,11 @@ public:
 
   // ===== MQTT State =====
   bool mqttEnabled = false;
-  String mqttBroker;
+  char mqttBroker[65] = {};
   int mqttPort = DEFAULT_MQTT_PORT;
-  String mqttUsername;
-  String mqttPassword;
-  String mqttBaseTopic;
+  char mqttUsername[33] = {};
+  char mqttPassword[65] = {};
+  char mqttBaseTopic[65] = {};
   bool mqttHADiscovery = false;
   unsigned long lastMqttReconnect = 0;
   bool mqttConnected = false;
@@ -350,7 +362,7 @@ public:
 
   // ===== Emergency Safety Limiter (Speaker Protection) =====
   bool emergencyLimiterEnabled = true;       // Default ON for safety
-  float emergencyLimiterThresholdDb = -0.5f; // Threshold in dBFS (-6.0 to 0.0)
+  float emergencyLimiterThresholdDb = -0.1f; // Threshold in dBFS (-6.0 to 0.0)
 
   void setEmergencyLimiterEnabled(bool enabled);
   void setEmergencyLimiterThreshold(float dbfs);
@@ -531,9 +543,9 @@ public:
 
   // ===== Error State =====
   int errorCode = 0;
-  String errorMessage;
+  char errorMessage[64] = {};
 
-  void setError(int code, const String &message);
+  void setError(int code, const char *message);
   void clearError();
   bool hasError() const { return errorCode != 0; }
 
@@ -557,7 +569,10 @@ public:
   bool hasAnyDirtyFlag() const;
 
 private:
-  AppState() {} // Private constructor
+  AppState() {
+    setCharField(apPassword, sizeof(apPassword), DEFAULT_AP_PASSWORD);
+    setCharField(webPassword, sizeof(webPassword), DEFAULT_AP_PASSWORD);
+  }
 
   // Dirty flags for change detection
   bool _fsmStateDirty = false;

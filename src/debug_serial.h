@@ -70,7 +70,7 @@ private:
     LogLevel level;
   };
 
-  LogEntry _queue[LOG_QUEUE_SIZE];
+  LogEntry *_queue = nullptr;
   volatile uint8_t _queueHead = 0;  // write index (producer)
   volatile uint8_t _queueTail = 0;  // read index (consumer, main loop only)
 

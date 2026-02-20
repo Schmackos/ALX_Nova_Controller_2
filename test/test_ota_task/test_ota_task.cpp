@@ -2,6 +2,16 @@
 #include <string>
 #include <cstring>
 
+// Safe char[] field assignment helper (mirrors app_state.h)
+static inline void setCharField(char *dst, size_t dstSize, const char *src) {
+  if (src) {
+    strncpy(dst, src, dstSize - 1);
+    dst[dstSize - 1] = '\0';
+  } else {
+    dst[0] = '\0';
+  }
+}
+
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
 #else
@@ -32,8 +42,8 @@ public:
   // OTA fields
   bool otaInProgress = false;
   int otaProgress = 0;
-  String otaStatus = "idle";
-  String otaStatusMessage = "idle";
+  char otaStatus[16] = "idle";
+  char otaStatusMessage[64] = "idle";
   int otaProgressBytes = 0;
   int otaTotalBytes = 0;
   String cachedFirmwareUrl;
@@ -85,8 +95,8 @@ private:
 
 // ===== setOTAProgress (mirrors real implementation) =====
 static void setOTAProgress(const char* status, const char* message, int progress) {
-  appState.otaStatus = status;
-  appState.otaStatusMessage = message;
+  setCharField(appState.otaStatus, sizeof(appState.otaStatus), status);
+  setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), message);
   appState.otaProgress = progress;
   appState.markOTADirty();
 }
@@ -122,8 +132,8 @@ bool startOTADownloadTask_testable() {
   }
 
   appState.otaInProgress = true;
-  appState.otaStatus = "preparing";
-  appState.otaStatusMessage = "Preparing for update...";
+  setCharField(appState.otaStatus, sizeof(appState.otaStatus), "preparing");
+  setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Preparing for update...");
   appState.otaProgress = 0;
   appState.setFSMState(STATE_OTA_UPDATE);
   appState.markOTADirty();
@@ -163,8 +173,8 @@ void setUp(void) {
   // Reset all state
   appState.otaInProgress = false;
   appState.otaProgress = 0;
-  appState.otaStatus = "idle";
-  appState.otaStatusMessage = "idle";
+  setCharField(appState.otaStatus, sizeof(appState.otaStatus), "idle");
+  setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "idle");
   appState.otaProgressBytes = 0;
   appState.otaTotalBytes = 0;
   appState.cachedFirmwareUrl = "";
@@ -193,8 +203,8 @@ void tearDown(void) {}
 void test_setOTAProgress_sets_fields(void) {
   setOTAProgress("downloading", "Downloading firmware...", 50);
 
-  TEST_ASSERT_EQUAL_STRING("downloading", appState.otaStatus.c_str());
-  TEST_ASSERT_EQUAL_STRING("Downloading firmware...", appState.otaStatusMessage.c_str());
+  TEST_ASSERT_EQUAL_STRING("downloading", appState.otaStatus);
+  TEST_ASSERT_EQUAL_STRING("Downloading firmware...", appState.otaStatusMessage);
   TEST_ASSERT_EQUAL_INT(50, appState.otaProgress);
 }
 
@@ -245,7 +255,7 @@ void test_startOTADownload_sets_initial_state(void) {
 
   TEST_ASSERT_TRUE(result);
   TEST_ASSERT_TRUE(appState.otaInProgress);
-  TEST_ASSERT_EQUAL_STRING("preparing", appState.otaStatus.c_str());
+  TEST_ASSERT_EQUAL_STRING("preparing", appState.otaStatus);
   TEST_ASSERT_EQUAL(STATE_OTA_UPDATE, appState.fsmState);
   TEST_ASSERT_TRUE(appState.isOTADirty());
   TEST_ASSERT_TRUE(taskCreateCalled);
@@ -324,7 +334,7 @@ void test_startOTADownload_task_create_failure(void) {
 
   TEST_ASSERT_FALSE(result);
   TEST_ASSERT_FALSE(appState.otaInProgress);
-  TEST_ASSERT_EQUAL_STRING("error", appState.otaStatus.c_str());
+  TEST_ASSERT_EQUAL_STRING("error", appState.otaStatus);
   TEST_ASSERT_EQUAL(STATE_IDLE, appState.fsmState);
   // I2S should be reinstalled on failure
   TEST_ASSERT_TRUE(i2sDriversReinstalled);

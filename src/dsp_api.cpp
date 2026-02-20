@@ -17,8 +17,26 @@
 
 extern WebServer server;
 
+// PSRAM allocator for ArduinoJson — moves large JSON allocations to PSRAM,
+// keeping internal SRAM free for WiFi RX buffers and DMA
+struct PsramAllocator : ArduinoJson::Allocator {
+  void* allocate(size_t size) override {
+    void* p = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return p ? p : malloc(size);  // fallback to internal
+  }
+  void deallocate(void* ptr) override {
+    heap_caps_free(ptr);
+  }
+  void* reallocate(void* ptr, size_t new_size) override {
+    void* p = heap_caps_realloc(ptr, new_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return p ? p : realloc(ptr, new_size);  // fallback
+  }
+};
+static PsramAllocator psramAlloc;
+
 // Static JSON document pool for all DSP API handlers (safe: single-threaded Core 0 HTTP server)
-static JsonDocument _dspApiDoc;
+// Uses PSRAM allocator to avoid consuming internal SRAM heap
+static JsonDocument _dspApiDoc(&psramAlloc);
 
 // Check if a LittleFS file exists without triggering VFS "no permits" error log.
 // Arduino's dspFileExists() internally calls open("r") which logs the error.
@@ -188,8 +206,8 @@ void loadDspSettings() {
 }
 
 void saveDspSettings() {
-    // Save global settings
-    JsonDocument globalDoc;
+    // Save global settings (PSRAM-backed to avoid internal heap pressure)
+    JsonDocument globalDoc(&psramAlloc);
     DspState *cfg = dsp_get_active_config();
     globalDoc["globalBypass"] = cfg->globalBypass;
     globalDoc["sampleRate"] = cfg->sampleRate;
@@ -1399,7 +1417,7 @@ void registerDspApiEndpoints() {
         }
 
         // Build preset from current PEQ bands if no bands provided
-        JsonDocument preset;
+        JsonDocument preset(&psramAlloc);
         preset["name"] = safeName;
         if (doc["bands"].is<JsonArray>()) {
             preset["bands"] = doc["bands"];

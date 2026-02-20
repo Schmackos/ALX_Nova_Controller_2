@@ -1,4 +1,5 @@
 #include "audio_quality.h"
+#include "config.h"
 #include "debug_serial.h"
 #include <math.h>
 #include <string.h>
@@ -197,8 +198,8 @@ static void _record_glitch(GlitchType type, int adcIndex, int channel, float mag
     if (now - lastLogMs[type] < 1000) {
         // Still increment counters, just don't log
     } else {
-        LOG_W("[AudioQuality] Glitch detected: %s on ADC%d CH%d (mag: %.3f, sample: %u)",
-              audio_quality_glitch_type_to_string(type), adcIndex + 1, channel, magnitude, sampleIndex);
+        LOG_W("[AudioQuality] Glitch detected: %s on %s CH%d (mag: %.3f, sample: %u)",
+              audio_quality_glitch_type_to_string(type), audioInputLabel(adcIndex), channel, magnitude, sampleIndex);
         lastLogMs[type] = now;
     }
 

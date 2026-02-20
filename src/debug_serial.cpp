@@ -1,4 +1,7 @@
 #include "debug_serial.h"
+#ifndef NATIVE_TEST
+#include <esp_heap_caps.h>
+#endif
 
 // Global instance
 DebugSerial DebugOut;
@@ -7,6 +10,15 @@ LogLevel currentLogLevel = LOG_DEBUG;
 void DebugSerial::begin(unsigned long baud) {
   Serial.begin(baud);
   _lineBuffer.reserve(MAX_BUFFER);
+#ifndef NATIVE_TEST
+  if (!_queue) {
+    _queue = (LogEntry *)heap_caps_calloc(LOG_QUEUE_SIZE, sizeof(LogEntry),
+                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!_queue) {
+      _queue = (LogEntry *)calloc(LOG_QUEUE_SIZE, sizeof(LogEntry));
+    }
+  }
+#endif
 }
 
 void DebugSerial::setWebSocket(WebSocketsServer *ws) { _webSocket = ws; }
@@ -89,6 +101,7 @@ void DebugSerial::logWithLevel(LogLevel level, const char *format,
 
 #ifndef NATIVE_TEST
   // Async path: enqueue message for main-loop drain (never blocks)
+  if (!_queue) return;  // Not yet initialized
   char buffer[MAX_BUFFER];
   vsnprintf(buffer, MAX_BUFFER, format, args);
 
@@ -127,6 +140,7 @@ void DebugSerial::logWithLevel(LogLevel level, const char *format,
 // Drain up to LOG_FLUSH_PER_CALL entries from the ring buffer.
 // Called from the main loop (Core 0 only) — no consumer-side mutex needed.
 void DebugSerial::processQueue() {
+  if (!_queue) return;
   int flushed = 0;
   while (flushed < LOG_FLUSH_PER_CALL) {
     uint8_t tail;

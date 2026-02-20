@@ -172,6 +172,10 @@ static bool _tinyusbHwReady = false; // True after tinyusb_init() succeeds (one-
 static volatile unsigned long _lastDataMs = 0;     // millis() of last xfer_cb with data
 #define USB_STREAM_TIMEOUT_MS 500                   // No data for 500ms -> idle
 
+// Saved endpoint descriptor from initial enumeration (needed for iso_alloc/activate in SET_INTERFACE)
+static tusb_desc_endpoint_t _savedEpDesc;
+static bool _epDescSaved = false;
+
 // Control request response buffer
 static uint8_t _ctrlBuf[64];
 
@@ -361,6 +365,7 @@ static void _audio_driver_reset(uint8_t rhport) {
     (void)rhport;
     _usbState = USB_AUDIO_DISCONNECTED;
     _altSetting = 0;
+    _epDescSaved = false;
     usb_rb_reset(&_ringBuffer);
 
     AppState &as = AppState::getInstance();
@@ -413,6 +418,11 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
                     tusb_desc_interface_t const *next_itf = (tusb_desc_interface_t const *)p;
                     if (next_itf->bInterfaceNumber != desc_intf->bInterfaceNumber) break;
                 }
+                // Save endpoint descriptor for later iso_alloc/activate in SET_INTERFACE
+                if (nextType == TUSB_DESC_ENDPOINT && !_epDescSaved) {
+                    memcpy(&_savedEpDesc, p, sizeof(tusb_desc_endpoint_t));
+                    _epDescSaved = true;
+                }
                 drv_len += p[0];
                 p += p[0];
             }
@@ -427,39 +437,10 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
             }
 
         } else {
-            // Alt 1+ (active streaming) — called by TinyUSB's process_set_interface
-            // when host sends SET_INTERFACE to start streaming.
+            // TinyUSB does not call .open() for SET_INTERFACE on custom drivers.
+            // Streaming is handled in control_xfer_cb. If we reach here, log it.
+            LOG_W("[USB Audio] Unexpected .open() with alt %d", desc_intf->bAlternateSetting);
             drv_len = desc_intf->bLength;
-            p += drv_len;
-
-            while (drv_len < max_len) {
-                if (p[0] == 0) break;
-                uint8_t nextType = p[1];
-                if (nextType == TUSB_DESC_INTERFACE || nextType == TUSB_DESC_INTERFACE_ASSOCIATION) break;
-
-                // Open isochronous endpoint
-                if (nextType == TUSB_DESC_ENDPOINT) {
-                    tusb_desc_endpoint_t const *ep = (tusb_desc_endpoint_t const *)p;
-                    usbd_edpt_iso_alloc(rhport, ep->bEndpointAddress, ep->wMaxPacketSize);
-                    usbd_edpt_iso_activate(rhport, ep);
-                }
-
-                drv_len += p[0];
-                p += p[0];
-            }
-
-            // Start streaming
-            _altSetting = desc_intf->bAlternateSetting;
-            _usbState = USB_AUDIO_STREAMING;
-            usb_rb_reset(&_ringBuffer);
-            AppState::getInstance().usbAudioStreaming = true;
-            AppState::getInstance().markUsbAudioDirty();
-            LOG_I("[USB Audio] Streaming started (alt %d)", desc_intf->bAlternateSetting);
-
-            // Prime the OUT endpoint for first isochronous transfer
-            if (_epOut) {
-                usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE, false);
-            }
         }
     }
 
@@ -490,6 +471,12 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                 }
             } else {
                 // Host starting streaming (alt 1+)
+                // Allocate and activate ISO endpoint (must happen before xfer)
+                if (_epOut && _epDescSaved) {
+                    usbd_edpt_iso_alloc(rhport, _epOut, USB_AUDIO_EP_SIZE);
+                    usbd_edpt_iso_activate(rhport, &_savedEpDesc);
+                }
+
                 _altSetting = altSetting;
                 _usbState = USB_AUDIO_STREAMING;
                 _lastDataMs = millis();
@@ -498,7 +485,7 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                 AppState::getInstance().markUsbAudioDirty();
                 LOG_I("[USB Audio] Streaming started (SET_INTERFACE alt %d)", altSetting);
 
-                // Re-prime ISO endpoint for first transfer
+                // Prime ISO endpoint for first transfer
                 if (_epOut) {
                     usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE, false);
                 }

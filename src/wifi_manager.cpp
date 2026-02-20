@@ -221,7 +221,7 @@ void initializeNetworkServices() {
 void ensureAPModeWithSTA() {
   if (appState.apEnabled && !appState.isAPMode) {
     WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+    WiFi.softAP(appState.apSSID, appState.apPassword);
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
     appState.isAPMode = true;
     LOG_I("[WiFi] Access Point also running at: %s", WiFi.softAPIP().toString().c_str());
@@ -250,7 +250,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     // Always print when actively connecting, otherwise throttle
     if (appState.wifiConnecting) {
       LOG_W("[WiFi] Connection failed: %s (reason %d)", reasonStr.c_str(), reason);
-      appState.wifiConnectError = reasonStr;
+      setCharField(appState.wifiConnectError, sizeof(appState.wifiConnectError), reasonStr.c_str());
     } else if (millis() - lastDisconnectWarning > WARNING_THROTTLE_MS) {
       LOG_W("[WiFi] Disconnected: %s (reason %d)", reasonStr.c_str(), reason);
       lastDisconnectWarning = millis();
@@ -274,7 +274,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
   case ARDUINO_EVENT_WIFI_STA_CONNECTED:
     LOG_I("[WiFi] Connected to access point");
     wifiDisconnected = false;
-    appState.wifiConnectError = "";            // Clear any previous error
+    appState.wifiConnectError[0] = '\0';       // Clear any previous error
     wifiRetryInProgress = false;      // Clear retry flag on success
     currentRetryCount = 0;            // Reset retry counter
     lastFailedSSID = "";              // Clear failed SSID
@@ -291,7 +291,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
   case ARDUINO_EVENT_WIFI_STA_GOT_IP:
     LOG_I("[WiFi] IP address: %s", WiFi.localIP().toString().c_str());
     wifiDisconnected = false;
-    appState.wifiConnectError = "";            // Clear any previous error
+    appState.wifiConnectError[0] = '\0';       // Clear any previous error
     wifiRetryInProgress = false;      // Clear retry flag on success
     currentRetryCount = 0;            // Reset retry counter
     lastFailedSSID = "";              // Clear failed SSID
@@ -541,11 +541,11 @@ void startAccessPoint() {
   appState.apEnabled = true;
 
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+  WiFi.softAP(appState.apSSID, appState.apPassword);
 
   IPAddress apIP = WiFi.softAPIP();
   LOG_I("[WiFi] Access Point started");
-  LOG_I("[WiFi] SSID: %s", appState.apSSID.c_str());
+  LOG_I("[WiFi] SSID: %s", appState.apSSID);
   LOG_D("[WiFi] Password: %s", appState.apPassword);
   LOG_I("[WiFi] AP IP address: %s", apIP.toString().c_str());
 
@@ -1086,7 +1086,7 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   doc["appState.wifiNewIP"] = appState.wifiNewIP;
 
   // Add error message if connection failed
-  if (!appState.wifiConnecting && !appState.wifiConnectSuccess && appState.wifiConnectError.length() > 0) {
+  if (!appState.wifiConnecting && !appState.wifiConnectSuccess && strlen(appState.wifiConnectError) > 0) {
     doc["message"] = appState.wifiConnectError;
   }
 }
@@ -1132,12 +1132,12 @@ void handleAPConfig() {
   saveWiFiNetwork(config);
 
   // Start asynchronous connection
-  appState.wifiSSID = ssid;
-  appState.wifiPassword = password;
+  setCharField(appState.wifiSSID, sizeof(appState.wifiSSID), ssid.c_str());
+  setCharField(appState.wifiPassword, sizeof(appState.wifiPassword), password.c_str());
   appState.wifiConnecting = true;
   appState.wifiConnectSuccess = false;
-  appState.wifiNewIP = "";
-  appState.wifiConnectError = "";
+  appState.wifiNewIP[0] = '\0';
+  appState.wifiConnectError[0] = '\0';
 
   WiFi.mode(WIFI_AP_STA);
   WiFi.begin(ssid.c_str(), password.c_str());
@@ -1163,13 +1163,13 @@ void handleAPConfigUpdate() {
   }
 
   // Update AP SSID
-  appState.apSSID = newSSID;
+  setCharField(appState.apSSID, sizeof(appState.apSSID), newSSID.c_str());
 
   // Only update password if provided (otherwise keep existing)
   if (doc["password"].is<String>()) {
     String newPassword = doc["password"].as<String>();
     if (newPassword.length() >= 8) {
-      appState.apPassword = newPassword;
+      setCharField(appState.apPassword, sizeof(appState.apPassword), newPassword.c_str());
       LOG_D("[WiFi] AP password updated");
     } else if (newPassword.length() > 0) {
       server.send(400, "application/json",
@@ -1180,7 +1180,7 @@ void handleAPConfigUpdate() {
     // If password is empty string, keep existing password
   }
 
-  LOG_I("[WiFi] AP configuration updated: SSID=%s", appState.apSSID.c_str());
+  LOG_I("[WiFi] AP configuration updated: SSID=%s", appState.apSSID);
 
   // If AP is currently running, restart it with new credentials
   if (appState.isAPMode) {
@@ -1196,8 +1196,8 @@ void handleAPConfigUpdate() {
       WiFi.mode(WIFI_AP);
     }
 
-    WiFi.softAP(appState.apSSID.c_str(), appState.apPassword.c_str());
-    LOG_I("[WiFi] AP restarted with new SSID: %s", appState.apSSID.c_str());
+    WiFi.softAP(appState.apSSID, appState.apPassword);
+    LOG_I("[WiFi] AP restarted with new SSID: %s", appState.apSSID);
     LOG_I("[WiFi] AP IP: %s", WiFi.softAPIP().toString().c_str());
   }
 
@@ -1300,8 +1300,8 @@ void handleWiFiConfig() {
   // Reset status flags for UI polling
   appState.wifiConnecting = true;
   appState.wifiConnectSuccess = false;
-  appState.wifiNewIP = "";
-  appState.wifiConnectError = "";
+  appState.wifiNewIP[0] = '\0';
+  appState.wifiConnectError[0] = '\0';
 
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Connection initiated\"}");
@@ -1549,8 +1549,8 @@ void updateWiFiConnection() {
     pendingConnection.requested = false;
 
     // Set global connection variables for status reporting
-    appState.wifiSSID = pendingConnection.config.ssid;
-    appState.wifiPassword = pendingConnection.config.password;
+    setCharField(appState.wifiSSID, sizeof(appState.wifiSSID), pendingConnection.config.ssid.c_str());
+    setCharField(appState.wifiPassword, sizeof(appState.wifiPassword), pendingConnection.config.password.c_str());
 
     // IMPORTANT: Maintain AP mode if enabled so frontend doesn't lose
     // connection. This allows the UI to poll for status (success/failure)
@@ -1559,7 +1559,7 @@ void updateWiFiConnection() {
       WiFi.mode(WIFI_AP_STA);
       // Ensure AP is up if it wasn't
       if (!appState.isAPMode) {
-        WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+        WiFi.softAP(appState.apSSID, appState.apPassword);
         dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
         appState.isAPMode = true;
       }
@@ -1581,7 +1581,7 @@ void updateWiFiConnection() {
                              cfg.dns2.c_str())) {
         LOG_E("[WiFi] Failed to configure static IP");
         appState.wifiConnectSuccess = false;
-        appState.wifiConnectError = "Invalid Static IP Configuration";
+        setCharField(appState.wifiConnectError, sizeof(appState.wifiConnectError), "Invalid Static IP Configuration");
         appState.wifiConnecting = false;
         pendingConnection.config.clear();
         return;
@@ -1605,13 +1605,13 @@ void updateWiFiConnection() {
   if (WiFi.status() == WL_CONNECTED) {
     appState.wifiConnectSuccess = true;
     appState.wifiConnecting = false;
-    appState.wifiNewIP = WiFi.localIP().toString();
-    appState.wifiConnectError = "";
+    { String _tmp = WiFi.localIP().toString(); setCharField(appState.wifiNewIP, sizeof(appState.wifiNewIP), _tmp.c_str()); }
+    appState.wifiConnectError[0] = '\0';
     connectionStarted = 0;
     pendingConnection.config.clear();
 
     LOG_I("[WiFi] Connected in background");
-    LOG_I("[WiFi] IP address: %s", appState.wifiNewIP.c_str());
+    LOG_I("[WiFi] IP address: %s", appState.wifiNewIP);
 
     // Sync time and setup services
     syncTimeWithNTP();
@@ -1626,16 +1626,16 @@ void updateWiFiConnection() {
     pendingConnection.config.clear();
 
     // Set timeout error if no specific disconnect reason was captured
-    if (appState.wifiConnectError.length() == 0) {
-      appState.wifiConnectError = "Connection timed out - check password and signal";
+    if (strlen(appState.wifiConnectError) == 0) {
+      setCharField(appState.wifiConnectError, sizeof(appState.wifiConnectError), "Connection timed out - check password and signal");
     }
-    LOG_W("[WiFi] Connection failed: %s", appState.wifiConnectError.c_str());
+    LOG_W("[WiFi] Connection failed: %s", appState.wifiConnectError);
 
     // Restore AP mode if it was enabled
     if (appState.apEnabled && !appState.isAPMode) {
       LOG_I("[WiFi] Restoring AP mode after failed connection");
       WiFi.mode(WIFI_AP_STA);
-      WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+      WiFi.softAP(appState.apSSID, appState.apPassword);
       dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
       appState.isAPMode = true;
       LOG_I("[WiFi] AP restored at: %s", WiFi.softAPIP().toString().c_str());

@@ -97,7 +97,7 @@ void initAuth() {
 
   if (authPrefs.isKey("pwd_hash")) {
     // New format: already hashed
-    appState.webPassword = authPrefs.getString("pwd_hash", "");
+    { String h = authPrefs.getString("pwd_hash", ""); setCharField(appState.webPassword, sizeof(appState.webPassword), h.c_str()); }
     LOG_I("[Auth] Loaded password hash from NVS");
   } else if (authPrefs.isKey("web_pwd")) {
     // Legacy plaintext — migrate to hashed
@@ -106,15 +106,15 @@ void initAuth() {
       String hashed = hashPassword(plaintext);
       authPrefs.putString("pwd_hash", hashed);
       authPrefs.remove("web_pwd");
-      appState.webPassword = hashed;
+      setCharField(appState.webPassword, sizeof(appState.webPassword), hashed.c_str());
       LOG_I("[Auth] Migrated plaintext password to hash");
     } else {
-      appState.webPassword = hashPassword(appState.apPassword);
+      { String h = hashPassword(appState.apPassword); setCharField(appState.webPassword, sizeof(appState.webPassword), h.c_str()); }
       LOG_I("[Auth] Using default password (AP password)");
     }
   } else {
     // No password saved, use hashed default (AP password)
-    appState.webPassword = hashPassword(appState.apPassword);
+    { String h = hashPassword(appState.apPassword); setCharField(appState.webPassword, sizeof(appState.webPassword), h.c_str()); }
     LOG_I("[Auth] Using default password (AP password)");
   }
 
@@ -317,7 +317,7 @@ String getWebPassword() { return appState.webPassword; }
 // Set web password and save to NVS (stores hash, deletes legacy key)
 void setWebPassword(String newPassword) {
   String hashed = hashPassword(newPassword);
-  appState.webPassword = hashed;
+  setCharField(appState.webPassword, sizeof(appState.webPassword), hashed.c_str());
 
   authPrefs.begin("auth", false);
   authPrefs.putString("pwd_hash", hashed);

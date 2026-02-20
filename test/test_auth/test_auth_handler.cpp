@@ -564,6 +564,25 @@ void test_hash_password_different_inputs_diverge(void) {
   TEST_ASSERT_FALSE(hash1 == hash2);
 }
 
+void test_hash_fits_in_webPassword_field(void) {
+  // Regression test: webPassword must be char[65] not char[33].
+  // A 64-char SHA256 hex hash must survive a setCharField-style copy without
+  // truncation, otherwise every login attempt fails (stored hash != entered hash).
+  String hash = hashPassword("testpassword");
+  TEST_ASSERT_EQUAL_MESSAGE(64, (int)hash.length(),
+      "SHA256 hex hash must be 64 chars");
+
+  // Simulate writing into a correctly-sized field (65 bytes: 64 chars + null)
+  char buf[65] = {};
+  strncpy(buf, hash.c_str(), sizeof(buf) - 1);
+  buf[sizeof(buf) - 1] = '\0';
+
+  TEST_ASSERT_EQUAL_MESSAGE(64, (int)strlen(buf),
+      "64-char SHA256 hash must survive copy into char[65] without truncation");
+  TEST_ASSERT_EQUAL_STRING_MESSAGE(hash.c_str(), buf,
+      "Hash value must be identical after copy — truncation breaks login");
+}
+
 void test_nvs_migration_from_plaintext(void) {
   // Simulate legacy NVS state: plaintext password under "web_pwd"
   Preferences prefs;
@@ -680,6 +699,7 @@ int runUnityTests(void) {
   // Password hashing tests
   RUN_TEST(test_hash_password_deterministic);
   RUN_TEST(test_hash_password_different_inputs_diverge);
+  RUN_TEST(test_hash_fits_in_webPassword_field);
   RUN_TEST(test_nvs_migration_from_plaintext);
 
   // Rate limiting tests

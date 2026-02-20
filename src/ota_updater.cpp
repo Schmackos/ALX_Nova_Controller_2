@@ -168,8 +168,8 @@ unsigned long getOTAEffectiveInterval() {
 
 // ===== OTA Progress Helper (thread-safe via dirty flag) =====
 static void setOTAProgress(const char* status, const char* message, int progress) {
-  appState.otaStatus = status;
-  appState.otaStatusMessage = message;
+  setCharField(appState.otaStatus, sizeof(appState.otaStatus), status);
+  setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), message);
   appState.otaProgress = progress;
   appState.markOTADirty();
 }
@@ -606,26 +606,25 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
 // Calculate SHA256 hash of data
 String calculateSHA256(uint8_t* data, size_t len) {
   byte shaResult[32];
-  
+
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
-  
+
   mbedtls_md_init(&ctx);
   mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(md_type), 0);
   mbedtls_md_starts(&ctx);
   mbedtls_md_update(&ctx, data, len);
   mbedtls_md_finish(&ctx, shaResult);
   mbedtls_md_free(&ctx);
-  
-  // Convert to hex string
-  String hashString = "";
+
+  // Convert to hex string using fixed-size char array (avoids 32 String concatenations)
+  char hashStr[65];
   for (int i = 0; i < 32; i++) {
-    char str[3];
-    sprintf(str, "%02x", shaResult[i]);
-    hashString += str;
+    snprintf(hashStr + i * 2, 3, "%02x", shaResult[i]);
   }
-  
-  return hashString;
+  hashStr[64] = '\0';
+
+  return String(hashStr);
 }
 
 // Shared download+flash logic used by both HTTPS and HTTP paths.
@@ -718,7 +717,7 @@ static bool performDownloadAndFlash(HTTPClient& http, int contentLength) {
       unsigned long now = millis();
       if (newProgress != appState.otaProgress || (now - lastProgressUpdate) >= 2000) {
         appState.otaProgress = newProgress;
-        appState.otaStatusMessage = String("Downloading: ") + String(written / 1024) + " / " + String(contentLength / 1024) + " KB";
+        snprintf(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Downloading: %d / %d KB", (int)(written / 1024), contentLength / 1024);
         appState.markOTADirty();
         lastProgressUpdate = now;
         LOG_D("[OTA] Progress: %d%% (%d KB / %d KB)", newProgress, written / 1024, contentLength / 1024);
@@ -735,13 +734,13 @@ static bool performDownloadAndFlash(HTTPClient& http, int contentLength) {
     mbedtls_md_finish(&ctx, shaResult);
     mbedtls_md_free(&ctx);
 
-    // Convert to hex string
-    String calculatedChecksum = "";
+    // Convert to hex string using fixed-size char array (avoids 32 String concatenations)
+    char hashStr[65];
     for (int i = 0; i < 32; i++) {
-      char str[3];
-      sprintf(str, "%02x", shaResult[i]);
-      calculatedChecksum += str;
+      snprintf(hashStr + i * 2, 3, "%02x", shaResult[i]);
     }
+    hashStr[64] = '\0';
+    String calculatedChecksum(hashStr);
 
     LOG_I("[OTA] Expected checksum:   %s", appState.cachedChecksum.c_str());
     LOG_I("[OTA] Calculated checksum: %s", calculatedChecksum.c_str());
@@ -778,8 +777,8 @@ static bool performDownloadAndFlash(HTTPClient& http, int contentLength) {
   } else {
     LOG_E("[OTA] Update error: %s", Update.errorString());
     Update.abort();
-    appState.otaStatus = "error";
-    appState.otaStatusMessage = String("Update error: ") + Update.errorString();
+    setCharField(appState.otaStatus, sizeof(appState.otaStatus), "error");
+    snprintf(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Update error: %s", Update.errorString());
     appState.otaProgress = 0;
     appState.markOTADirty();
     appState.otaInProgress = false;
@@ -1001,11 +1000,11 @@ void handleFirmwareUploadChunk() {
     }
     
     appState.otaInProgress = true;
-    appState.otaStatus = "uploading";
+    setCharField(appState.otaStatus, sizeof(appState.otaStatus), "uploading");
     appState.otaProgress = 0;
     appState.otaProgressBytes = 0;
     appState.otaTotalBytes = 0;  // Unknown until upload completes
-    appState.otaStatusMessage = "Receiving firmware file...";
+    setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Receiving firmware file...");
     appState.markOTADirty();
     
     // Play OTA update melody before flashing begins
@@ -1016,8 +1015,8 @@ void handleFirmwareUploadChunk() {
       LOG_E("[OTA] Failed to begin update: %s", Update.errorString());
       uploadError = true;
       uploadErrorMessage = String("Failed to begin update: ") + Update.errorString();
-      appState.otaStatus = "error";
-      appState.otaStatusMessage = uploadErrorMessage;
+      setCharField(appState.otaStatus, sizeof(appState.otaStatus), "error");
+      setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), uploadErrorMessage.c_str());
       appState.otaInProgress = false;
       appState.markOTADirty();
       return;
@@ -1037,8 +1036,8 @@ void handleFirmwareUploadChunk() {
       uploadError = true;
       uploadErrorMessage = String("Write error: ") + Update.errorString();
       Update.abort();
-      appState.otaStatus = "error";
-      appState.otaStatusMessage = uploadErrorMessage;
+      setCharField(appState.otaStatus, sizeof(appState.otaStatus), "error");
+      setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), uploadErrorMessage.c_str());
       appState.otaInProgress = false;
       appState.markOTADirty();
       return;
@@ -1052,7 +1051,7 @@ void handleFirmwareUploadChunk() {
     unsigned long now = millis();
 
     if ((appState.otaProgressBytes - lastBroadcastBytes) >= 10240 || (now - lastBroadcast) >= 2000) {
-      appState.otaStatusMessage = String("Uploading: ") + String(appState.otaProgressBytes / 1024) + " KB received...";
+      snprintf(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Uploading: %d KB received...", (int)(appState.otaProgressBytes / 1024));
       appState.markOTADirty();
       lastBroadcast = now;
       lastBroadcastBytes = appState.otaProgressBytes;
@@ -1068,7 +1067,7 @@ void handleFirmwareUploadChunk() {
     appState.otaTotalBytes = upload.totalSize;
     LOG_I("[OTA] Upload complete: %d bytes (%.2f KB)", upload.totalSize, upload.totalSize / 1024.0);
 
-    appState.otaStatusMessage = "Verifying firmware...";
+    setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Verifying firmware...");
     appState.otaProgress = 100;
     appState.markOTADirty();
 
@@ -1076,16 +1075,16 @@ void handleFirmwareUploadChunk() {
     if (Update.end(true)) {
       if (Update.isFinished()) {
         LOG_I("[OTA] Firmware upload and verification successful");
-        appState.otaStatus = "complete";
-        appState.otaStatusMessage = "Upload complete! Rebooting...";
+        setCharField(appState.otaStatus, sizeof(appState.otaStatus), "complete");
+        setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Upload complete! Rebooting...");
         appState.markOTADirty();
         // Note: Response and reboot handled in handleFirmwareUploadComplete
       } else {
         LOG_E("[OTA] Update did not finish correctly");
         uploadError = true;
         uploadErrorMessage = "Update verification failed";
-        appState.otaStatus = "error";
-        appState.otaStatusMessage = uploadErrorMessage;
+        setCharField(appState.otaStatus, sizeof(appState.otaStatus), "error");
+        setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), uploadErrorMessage.c_str());
         appState.otaInProgress = false;
         appState.markOTADirty();
       }
@@ -1093,8 +1092,8 @@ void handleFirmwareUploadChunk() {
       LOG_E("[OTA] Update finalization error: %s", Update.errorString());
       uploadError = true;
       uploadErrorMessage = String("Update error: ") + Update.errorString();
-      appState.otaStatus = "error";
-      appState.otaStatusMessage = uploadErrorMessage;
+      setCharField(appState.otaStatus, sizeof(appState.otaStatus), "error");
+      setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), uploadErrorMessage.c_str());
       appState.otaInProgress = false;
       appState.markOTADirty();
     }
@@ -1104,8 +1103,8 @@ void handleFirmwareUploadChunk() {
     Update.abort();
     uploadError = true;
     uploadErrorMessage = "Upload aborted";
-    appState.otaStatus = "error";
-    appState.otaStatusMessage = "Upload aborted";
+    setCharField(appState.otaStatus, sizeof(appState.otaStatus), "error");
+    setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Upload aborted");
     appState.otaInProgress = false;
     appState.markOTADirty();
   }
@@ -1130,7 +1129,7 @@ void handleFirmwareUploadComplete() {
   }
   
   // Check if update was successful
-  if (appState.otaStatus == "complete") {
+  if (strcmp(appState.otaStatus, "complete") == 0) {
     doc["success"] = true;
     doc["message"] = "Firmware uploaded successfully! Rebooting...";
     doc["bytesReceived"] = appState.otaTotalBytes;
@@ -1146,7 +1145,7 @@ void handleFirmwareUploadComplete() {
     ESP.restart();
   } else {
     doc["success"] = false;
-    doc["message"] = appState.otaStatusMessage.length() > 0 ? appState.otaStatusMessage : "Upload failed";
+    doc["message"] = strlen(appState.otaStatusMessage) > 0 ? appState.otaStatusMessage : "Upload failed";
     
     String json;
     serializeJson(doc, json);
@@ -1197,8 +1196,8 @@ void startOTADownloadTask() {
   }
 
   appState.otaInProgress = true;
-  appState.otaStatus = "preparing";
-  appState.otaStatusMessage = "Preparing for update...";
+  setCharField(appState.otaStatus, sizeof(appState.otaStatus), "preparing");
+  setCharField(appState.otaStatusMessage, sizeof(appState.otaStatusMessage), "Preparing for update...");
   appState.otaProgress = 0;
   appState.setFSMState(STATE_OTA_UPDATE);
   appState.markOTADirty();

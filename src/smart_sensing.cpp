@@ -295,7 +295,7 @@ bool detectSignal() {
             pendingSince[a] = millis();
         } else if (millis() - pendingSince[a] >= 3000) {
             // Candidate held stable for 3s — commit the transition
-            LOG_I("[Sensing] ADC%d health: %s -> %s", a + 1,
+            LOG_I("[Sensing] %s health: %s -> %s", audioInputLabel(a),
                   audioHealthName(prevHealth[a]), audioHealthName(dst.healthStatus));
             prevHealth[a] = dst.healthStatus;
         }

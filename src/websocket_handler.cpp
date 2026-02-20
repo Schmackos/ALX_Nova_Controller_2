@@ -30,8 +30,50 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#ifndef NATIVE_TEST
+#include <esp_heap_caps.h>
+#endif
 #include "esp_freertos_hooks.h"
 #include "esp_timer.h"
+
+// PSRAM-backed WebSocket serialization buffer (eliminates ~23 String heap allocs per broadcast cycle)
+static char *_wsBuf = nullptr;
+static const size_t WS_BUF_SIZE = 4096;
+
+void ws_init_buffers() {
+#ifndef NATIVE_TEST
+    if (!_wsBuf) {
+        _wsBuf = (char *)heap_caps_malloc(WS_BUF_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    }
+#endif
+    if (!_wsBuf) {
+        _wsBuf = (char *)malloc(WS_BUF_SIZE);
+    }
+}
+
+// Helper: broadcast a JsonDocument to all WebSocket clients using the PSRAM buffer
+static void wsBroadcastJson(JsonDocument &doc) {
+    if (_wsBuf) {
+        size_t len = serializeJson(doc, _wsBuf, WS_BUF_SIZE);
+        webSocket.broadcastTXT(_wsBuf, len);
+    } else {
+        String json;
+        serializeJson(doc, json);
+        webSocket.broadcastTXT(json);
+    }
+}
+
+// Helper: send a JsonDocument to a single WebSocket client using the PSRAM buffer
+static void wsSendJson(uint8_t num, JsonDocument &doc) {
+    if (_wsBuf) {
+        size_t len = serializeJson(doc, _wsBuf, WS_BUF_SIZE);
+        webSocket.sendTXT(num, _wsBuf, len);
+    } else {
+        String json;
+        serializeJson(doc, json);
+        webSocket.sendTXT(num, json.c_str());
+    }
+}
 
 // ===== WebSocket Authentication Tracking =====
 bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
@@ -233,7 +275,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (enabled) {
             if (!appState.isAPMode) {
               WiFi.mode(WIFI_AP_STA);
-              WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+              WiFi.softAP(appState.apSSID, appState.apPassword);
               appState.isAPMode = true;
               LOG_I("[WebSocket] Access Point enabled");
               LOG_I("[WebSocket] AP IP: %s", WiFi.softAPIP().toString().c_str());
@@ -406,19 +448,25 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
 #endif
         } else if (msgType == "setDeviceName") {
-          String name = doc["name"] | "";
-          if ((int)name.length() > 32) name = name.substring(0, 32);
-          appState.customDeviceName = name;
+          const char* nameRaw = doc["name"].as<const char*>();
+          if (!nameRaw) nameRaw = "";
+          char nameBuf[33];
+          setCharField(nameBuf, sizeof(nameBuf), nameRaw);
+          setCharField(appState.customDeviceName, sizeof(appState.customDeviceName), nameBuf);
           // Update AP SSID to reflect new custom name
-          String apName = appState.customDeviceName.length() > 0
-                            ? appState.customDeviceName
-                            : ("ALX-Nova-" + appState.deviceSerialNumber);
-          if ((int)apName.length() > 32) apName = apName.substring(0, 32);
-          appState.apSSID = apName;
+          char apName[33];
+          if (strlen(appState.customDeviceName) > 0) {
+            setCharField(apName, sizeof(apName), appState.customDeviceName);
+          } else {
+            char apNameTmp[33];
+            snprintf(apNameTmp, sizeof(apNameTmp), "ALX-Nova-%s", appState.deviceSerialNumber);
+            setCharField(apName, sizeof(apName), apNameTmp);
+          }
+          setCharField(appState.apSSID, sizeof(appState.apSSID), apName);
           saveSettings();
           // Broadcast updated WiFi status so clients see the new name
           sendWiFiStatus();
-          LOG_I("[WebSocket] Custom device name set to: '%s'", name.c_str());
+          LOG_I("[WebSocket] Custom device name set to: '%s'", appState.customDeviceName);
         } else if (msgType == "setInputNames") {
           if (doc["names"].is<JsonArray>()) {
             JsonArray names = doc["names"].as<JsonArray>();
@@ -434,9 +482,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
               outNames.add(appState.inputNames[i]);
             }
-            String json;
-            serializeJson(resp, json);
-            webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+            wsBroadcastJson(resp);
             LOG_I("[WebSocket] Input names updated by client [%u]", num);
           }
         } else if (msgType == "setDebugMode") {
@@ -821,10 +867,16 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 band["Q"] = s.biquad.Q;
                 band["enabled"] = s.enabled;
               }
-              String json;
-              serializeJson(preset, json);
               File f = LittleFS.open(path, "w");
-              if (f) { f.print(json); f.close(); }
+              if (f) {
+                if (_wsBuf) {
+                  size_t len = serializeJson(preset, _wsBuf, WS_BUF_SIZE);
+                  f.write((const uint8_t*)_wsBuf, len);
+                } else {
+                  serializeJson(preset, f);
+                }
+                f.close();
+              }
 
               // Respond with success
               JsonDocument resp;
@@ -845,10 +897,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             snprintf(path, sizeof(path), "/peq_%s.json", name);
             File f = LittleFS.open(path, "r");
             if (f && f.size() > 0) {
-              String json = f.readString();
-              f.close();
               JsonDocument preset;
-              if (!deserializeJson(preset, json) && preset["bands"].is<JsonArray>()) {
+              DeserializationError err = deserializeJson(preset, f);
+              f.close();
+              if (!err && preset["bands"].is<JsonArray>()) {
                 dsp_copy_active_to_inactive();
                 DspState *cfg = dsp_get_inactive_config();
                 JsonArray bands = preset["bands"].as<JsonArray>();
@@ -900,9 +952,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               f = root.openNextFile();
             }
           }
-          String json;
-          serializeJson(resp, json);
-          webSocket.sendTXT(num, json.c_str());
+          wsSendJson(num, resp);
         }
         // ===== DSP Config Preset Commands =====
         else if (msgType == "saveDspPreset") {
@@ -1172,7 +1222,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             String rJson;
             serializeJson(resp, rJson);
             webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
-            LOG_I("[WebSocket] ADC%d %s", adc + 1, newVal ? "enabled" : "disabled");
+            LOG_I("[WebSocket] %s %s", audioInputLabel(adc), newVal ? "enabled" : "disabled");
           }
         }
 #ifdef USB_AUDIO_ENABLED
@@ -1239,18 +1289,14 @@ void sendLEDState() {
   JsonDocument doc;
   doc["type"] = "appState.ledState";
   doc["state"] = appState.ledState;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendBlinkingState() {
   JsonDocument doc;
   doc["type"] = "appState.blinkingEnabled";
   doc["enabled"] = appState.blinkingEnabled;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendDisplayState() {
@@ -1262,9 +1308,7 @@ void sendDisplayState() {
   doc["dimEnabled"] = AppState::getInstance().dimEnabled;
   doc["dimTimeout"] = AppState::getInstance().dimTimeout / 1000;
   doc["dimBrightness"] = AppState::getInstance().dimBrightness;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendFactoryResetProgress(unsigned long secondsHeld, bool resetTriggered) {
@@ -1274,9 +1318,7 @@ void sendFactoryResetProgress(unsigned long secondsHeld, bool resetTriggered) {
   doc["secondsRequired"] = BTN_VERY_LONG_PRESS_MIN / 1000;
   doc["resetTriggered"] = resetTriggered;
   doc["progress"] = (secondsHeld * 100) / (BTN_VERY_LONG_PRESS_MIN / 1000);
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered) {
@@ -1286,9 +1328,7 @@ void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered) {
   doc["secondsRequired"] = BTN_VERY_LONG_PRESS_MIN / 1000;
   doc["rebootTriggered"] = rebootTriggered;
   doc["progress"] = (secondsHeld * 100) / (BTN_VERY_LONG_PRESS_MIN / 1000);
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendBuzzerState() {
@@ -1296,9 +1336,7 @@ void sendBuzzerState() {
   doc["type"] = "buzzerState";
   doc["enabled"] = AppState::getInstance().buzzerEnabled;
   doc["volume"] = AppState::getInstance().buzzerVolume;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendSignalGenState() {
@@ -1312,9 +1350,7 @@ void sendSignalGenState() {
   doc["outputMode"] = appState.sigGenOutputMode;
   doc["sweepSpeed"] = appState.sigGenSweepSpeed;
   doc["targetAdc"] = appState.sigGenTargetAdc;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 #ifdef DSP_ENABLED
@@ -1330,9 +1366,7 @@ void sendEmergencyLimiterState() {
   doc["gainReductionDb"] = serialized(String(metrics.emergencyLimiterGrDb, 2));
   doc["triggerCount"] = metrics.emergencyLimiterTriggers;
 
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendAudioQualityState() {
@@ -1341,9 +1375,7 @@ void sendAudioQualityState() {
   doc["enabled"] = appState.audioQualityEnabled;
   doc["threshold"] = serialized(String(appState.audioQualityGlitchThreshold, 2));
 
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendAudioQualityDiagnostics() {
@@ -1358,9 +1390,7 @@ void sendAudioQualityDiagnostics() {
   doc["correlationWifi"] = diag.correlation.wifiRelated;
   doc["correlationMqtt"] = diag.correlation.mqttRelated;
 
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 #endif
 
@@ -1371,9 +1401,7 @@ void sendAudioGraphState() {
   doc["waveformEnabled"] = appState.waveformEnabled;
   doc["spectrumEnabled"] = appState.spectrumEnabled;
   doc["fftWindowType"] = (int)appState.fftWindowType;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendDebugState() {
@@ -1384,9 +1412,7 @@ void sendDebugState() {
   doc["debugHwStats"] = appState.debugHwStats;
   doc["debugI2sMetrics"] = appState.debugI2sMetrics;
   doc["debugTaskMonitor"] = appState.debugTaskMonitor;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 #ifdef DSP_ENABLED
@@ -1495,9 +1521,7 @@ void sendDspState() {
       }
     }
   }
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 void sendDspMetrics() {
@@ -1508,9 +1532,7 @@ void sendDspMetrics() {
   doc["cpuLoad"] = m.cpuLoadPercent;
   JsonArray gr = doc["limiterGr"].to<JsonArray>();
   for (int i = 0; i < DSP_MAX_CHANNELS; i++) gr.add(m.limiterGrDb[i]);
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 #endif
 
@@ -1583,9 +1605,7 @@ void sendDacState() {
       }
     }
   }
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 #endif
 
@@ -1609,9 +1629,7 @@ void sendUsbAudioState() {
   doc["bufferCapacity"] = 1024;
   doc["usbAutoPriority"] = appState.usbAutoPriority;
   doc["dacSourceInput"] = appState.dacSourceInput;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 #endif
 
@@ -1622,13 +1640,11 @@ void sendMqttSettingsState() {
   doc["broker"] = appState.mqttBroker;
   doc["port"] = appState.mqttPort;
   doc["username"] = appState.mqttUsername;
-  doc["hasPassword"] = (appState.mqttPassword.length() > 0);
+  doc["hasPassword"] = (strlen(appState.mqttPassword) > 0);
   doc["baseTopic"] = appState.mqttBaseTopic;
   doc["haDiscovery"] = appState.mqttHADiscovery;
   doc["connected"] = appState.mqttConnected;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t *)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 // ===== CPU Utilization Functions =====
@@ -1957,9 +1973,7 @@ void sendHardwareStats() {
   }
 
   // Broadcast to all WebSocket clients
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+  wsBroadcastJson(doc);
 }
 
 // ===== Audio Streaming to Subscribed Clients =====
@@ -2020,11 +2034,20 @@ void sendAudioData() {
     doc["audioVrms1"] = appState.audioVrms1;
     doc["audioVrms2"] = appState.audioVrms2;
     doc["audioVrms"] = appState.audioVrmsCombined;
-    String json;
-    serializeJson(doc, json);
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-      if (_audioSubscribed[i]) {
-        webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+    if (_wsBuf) {
+      size_t len = serializeJson(doc, _wsBuf, WS_BUF_SIZE);
+      for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        if (_audioSubscribed[i]) {
+          webSocket.sendTXT(i, _wsBuf, len);
+        }
+      }
+    } else {
+      String json;
+      serializeJson(doc, json);
+      for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        if (_audioSubscribed[i]) {
+          webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
+        }
       }
     }
   }

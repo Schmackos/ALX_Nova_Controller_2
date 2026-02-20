@@ -50,6 +50,9 @@ void sendUsbAudioState();
 // ===== Audio Streaming =====
 void sendAudioData();
 
+// ===== WebSocket Buffer Pool =====
+void ws_init_buffers();
+
 // ===== CPU Utilization Tracking =====
 void initCpuUsageMonitoring();
 void deinitCpuUsageMonitoring();

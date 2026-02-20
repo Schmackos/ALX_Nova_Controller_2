@@ -87,7 +87,7 @@ static void get_card_summary(int idx, char *buf, size_t len) {
                          WiFi.localIP().toString().c_str(),
                          WiFi.RSSI());
             } else if (st.appState.isAPMode) {
-                snprintf(buf, len, "AP Mode\n%s", st.apSSID.c_str());
+                snprintf(buf, len, "AP Mode\n%s", st.apSSID);
             } else {
                 snprintf(buf, len, "Disconnected");
             }
@@ -97,9 +97,9 @@ static void get_card_summary(int idx, char *buf, size_t len) {
             if (!st.appState.mqttEnabled) {
                 snprintf(buf, len, "Disabled");
             } else if (st.appState.mqttConnected) {
-                snprintf(buf, len, "Connected\n%s:%d", st.mqttBroker.c_str(), st.appState.mqttPort);
+                snprintf(buf, len, "Connected\n%s:%d", st.mqttBroker, st.appState.mqttPort);
             } else {
-                snprintf(buf, len, "Disconnected\n%s", st.mqttBroker.c_str());
+                snprintf(buf, len, "Disconnected\n%s", st.mqttBroker);
             }
             break;
         }
