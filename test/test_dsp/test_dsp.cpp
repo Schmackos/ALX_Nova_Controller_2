@@ -17,8 +17,23 @@
 
 // Include DSP implementation source (no ArduinoJson in native tests)
 #include "../../src/dsp_coefficients.cpp"
-#include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_crossover.cpp"
+
+// Stub for dsp_api functions (not linked in native tests).
+// Must appear after dsp_crossover.cpp (defines DspRoutingMatrix) and
+// before dsp_pipeline.cpp (calls dsp_get_routing_matrix).
+static DspRoutingMatrix _testRoutingMatrix;
+static bool _testRoutingMatrixInit = false;
+DspRoutingMatrix* dsp_get_routing_matrix() {
+    if (!_testRoutingMatrixInit) {
+        dsp_routing_init(_testRoutingMatrix);
+        dsp_routing_preset_identity(_testRoutingMatrix);
+        _testRoutingMatrixInit = true;
+    }
+    return &_testRoutingMatrix;
+}
+
+#include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_convolution.cpp"
 #include "../../src/thd_measurement.cpp"
 

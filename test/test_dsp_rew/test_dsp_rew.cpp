@@ -16,6 +16,20 @@
 
 // Include sources
 #include "../../src/dsp_coefficients.cpp"
+#include "../../src/dsp_crossover.cpp"
+
+// Stub for dsp_api (dsp_pipeline.cpp calls dsp_get_routing_matrix via routing execute)
+static DspRoutingMatrix _testRoutingMatrix;
+static bool _testRoutingMatrixInit = false;
+DspRoutingMatrix* dsp_get_routing_matrix() {
+    if (!_testRoutingMatrixInit) {
+        dsp_routing_init(_testRoutingMatrix);
+        dsp_routing_preset_identity(_testRoutingMatrix);
+        _testRoutingMatrixInit = true;
+    }
+    return &_testRoutingMatrix;
+}
+
 #include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_rew_parser.cpp"
 

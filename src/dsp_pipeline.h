@@ -613,5 +613,8 @@ void dsp_export_config_to_json(int channel, char *buf, int bufSize);
 void dsp_export_full_config_json(char *buf, int bufSize);
 void dsp_import_full_config_json(const char *json);
 
+// Routing matrix execution: apply 6x6 routing to post-DSP channels, output to DAC buffer
+void dsp_routing_execute(int32_t *dacBuf, int frames);
+
 #endif // DSP_ENABLED
 #endif // DSP_PIPELINE_H
