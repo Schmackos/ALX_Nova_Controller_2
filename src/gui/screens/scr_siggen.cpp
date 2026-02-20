@@ -37,6 +37,8 @@ static const CycleOption target_adc_opts[] = {
     {"ADC 1", SIGTARGET_ADC1},
     {"ADC 2", SIGTARGET_ADC2},
     {"Both",  SIGTARGET_BOTH},
+    {"USB",   SIGTARGET_USB},
+    {"All",   SIGTARGET_ALL},
 };
 
 /* Confirmation callbacks */
@@ -183,14 +185,14 @@ static void edit_output(void) {
 static void edit_target_adc(void) {
     AppState &st = AppState::getInstance();
     int cur = 0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) {
         if (target_adc_opts[i].value == st.sigGenTargetAdc) { cur = i; break; }
     }
     ValueEditConfig cfg = {};
     cfg.title = "Target";
     cfg.type = VE_CYCLE;
     cfg.options = target_adc_opts;
-    cfg.option_count = 3;
+    cfg.option_count = 5;
     cfg.current_option = cur;
     cfg.on_confirm = on_target_adc_confirm;
     scr_value_edit_open(&cfg);
@@ -219,8 +221,8 @@ static void build_siggen_menu(void) {
 
     const char *out_str = st.sigGenOutputMode == 0 ? "Software" : "PWM";
 
-    const char *target_names[] = {"ADC 1", "ADC 2", "Both"};
-    const char *target_str = target_names[st.sigGenTargetAdc % 3];
+    const char *target_names[] = {"ADC 1", "ADC 2", "Both", "USB", "All"};
+    const char *target_str = target_names[st.sigGenTargetAdc % 5];
 
     siggen_menu.title = "Signal Gen";
     int idx = 0;
@@ -264,8 +266,8 @@ void scr_siggen_refresh(void) {
     scr_menu_set_item_value(6, st.sigGenOutputMode == 0 ? "Software" : "PWM");
 
     if (st.numAdcsDetected > 1) {
-        const char *target_names[] = {"ADC 1", "ADC 2", "Both"};
-        scr_menu_set_item_value(7, target_names[st.sigGenTargetAdc % 3]);
+        const char *target_names[] = {"ADC 1", "ADC 2", "Both", "USB", "All"};
+        scr_menu_set_item_value(7, target_names[st.sigGenTargetAdc % 5]);
     }
 }
 

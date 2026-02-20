@@ -10,6 +10,9 @@
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
 #endif
+#ifdef USB_AUDIO_ENABLED
+#include "usb_audio.h"
+#endif
 #ifndef NATIVE_TEST
 #include "dsps_fft4r.h"
 #include "dsps_wind.h"
@@ -357,54 +360,54 @@ static AdcSyncDiag _syncDiag = {};
 // Per-ADC state arrays
 static const float MAX_24BIT_F = 8388607.0f;
 
-// VU meter state per ADC
-static float _vuL[NUM_AUDIO_ADCS] = {};
-static float _vuR[NUM_AUDIO_ADCS] = {};
-static float _vuC[NUM_AUDIO_ADCS] = {};
+// VU meter state per input
+static float _vuL[NUM_AUDIO_INPUTS] = {};
+static float _vuR[NUM_AUDIO_INPUTS] = {};
+static float _vuC[NUM_AUDIO_INPUTS] = {};
 
-// Peak hold state per ADC
-static float _peakL[NUM_AUDIO_ADCS] = {};
-static float _peakR[NUM_AUDIO_ADCS] = {};
-static float _peakC[NUM_AUDIO_ADCS] = {};
-static unsigned long _holdStartL[NUM_AUDIO_ADCS] = {};
-static unsigned long _holdStartR[NUM_AUDIO_ADCS] = {};
-static unsigned long _holdStartC[NUM_AUDIO_ADCS] = {};
+// Peak hold state per input
+static float _peakL[NUM_AUDIO_INPUTS] = {};
+static float _peakR[NUM_AUDIO_INPUTS] = {};
+static float _peakC[NUM_AUDIO_INPUTS] = {};
+static unsigned long _holdStartL[NUM_AUDIO_INPUTS] = {};
+static unsigned long _holdStartR[NUM_AUDIO_INPUTS] = {};
+static unsigned long _holdStartC[NUM_AUDIO_INPUTS] = {};
 
-// DC-blocking IIR filter state per ADC
-static int32_t _dcPrevInL[NUM_AUDIO_ADCS] = {};
-static int32_t _dcPrevInR[NUM_AUDIO_ADCS] = {};
-static float _dcPrevOutL[NUM_AUDIO_ADCS] = {};
-static float _dcPrevOutR[NUM_AUDIO_ADCS] = {};
+// DC-blocking IIR filter state per input
+static int32_t _dcPrevInL[NUM_AUDIO_INPUTS] = {};
+static int32_t _dcPrevInR[NUM_AUDIO_INPUTS] = {};
+static float _dcPrevOutL[NUM_AUDIO_INPUTS] = {};
+static float _dcPrevOutR[NUM_AUDIO_INPUTS] = {};
 
-// Waveform accumulation state per ADC — PSRAM-allocated on ESP32, static on native
+// Waveform accumulation state per input — PSRAM-allocated on ESP32, static on native
 #ifdef NATIVE_TEST
-static float _wfAccum[NUM_AUDIO_ADCS][WAVEFORM_BUFFER_SIZE];
-static uint8_t _wfOutput[NUM_AUDIO_ADCS][WAVEFORM_BUFFER_SIZE];
+static float _wfAccum[NUM_AUDIO_INPUTS][WAVEFORM_BUFFER_SIZE];
+static uint8_t _wfOutput[NUM_AUDIO_INPUTS][WAVEFORM_BUFFER_SIZE];
 #else
-static float *_wfAccum[NUM_AUDIO_ADCS] = {};
-static uint8_t *_wfOutput[NUM_AUDIO_ADCS] = {};
+static float *_wfAccum[NUM_AUDIO_INPUTS] = {};
+static uint8_t *_wfOutput[NUM_AUDIO_INPUTS] = {};
 #endif
-static volatile bool _wfReady[NUM_AUDIO_ADCS] = {};
-static int _wfFramesSeen[NUM_AUDIO_ADCS] = {};
+static volatile bool _wfReady[NUM_AUDIO_INPUTS] = {};
+static int _wfFramesSeen[NUM_AUDIO_INPUTS] = {};
 static int _wfTargetFrames = 2400; // shared, recalculated from audioUpdateRate
 
-// FFT state per ADC — PSRAM-allocated on ESP32, static on native
+// FFT state per input — PSRAM-allocated on ESP32, static on native
 #ifdef NATIVE_TEST
-static float _fftRing[NUM_AUDIO_ADCS][FFT_SIZE];
+static float _fftRing[NUM_AUDIO_INPUTS][FFT_SIZE];
 static float _fftData[FFT_SIZE * 2];
 static float _fftWindow[FFT_SIZE];
 #else
-static float *_fftRing[NUM_AUDIO_ADCS] = {};
+static float *_fftRing[NUM_AUDIO_INPUTS] = {};
 static float *_fftData = nullptr;
 static float *_fftWindow = nullptr;
 #endif
-static int _fftRingPos[NUM_AUDIO_ADCS] = {};
+static int _fftRingPos[NUM_AUDIO_INPUTS] = {};
 static FftWindowType _currentWindowType = FFT_WINDOW_HANN;
 static bool _fftInitialized = false;
-static float _spectrumOutput[NUM_AUDIO_ADCS][SPECTRUM_BANDS];
-static float _dominantFreqOutput[NUM_AUDIO_ADCS] = {};
-static volatile bool _spectrumReady[NUM_AUDIO_ADCS] = {};
-static unsigned long _lastFftTime[NUM_AUDIO_ADCS] = {};
+static float _spectrumOutput[NUM_AUDIO_INPUTS][SPECTRUM_BANDS];
+static float _dominantFreqOutput[NUM_AUDIO_INPUTS] = {};
+static volatile bool _spectrumReady[NUM_AUDIO_INPUTS] = {};
+static unsigned long _lastFftTime[NUM_AUDIO_INPUTS] = {};
 
 // Apply the selected FFT window function to the window buffer
 static void i2s_audio_apply_window(FftWindowType type) {
@@ -687,12 +690,7 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
     }
 #endif
 
-    // DAC output: route ADC1 post-DSP audio to I2S TX (non-blocking)
-#ifdef DAC_ENABLED
-    if (a == 0 && AppState::getInstance().dacEnabled && AppState::getInstance().dacReady) {
-        dac_output_write(buffer, stereo_frames);
-    }
-#endif
+    // DAC output moved to audio_capture_task after routing matrix application
 
     // --- Pass 2: RMS + waveform + FFT ring (merged single loop) ---
     {
@@ -846,11 +844,24 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
     } // end Pass 2 scope
 }
 
+#ifdef USB_AUDIO_ENABLED
+// Apply USB host volume control to buffer (in-place, linear gain 0.0-1.0)
+static void applyHostVolume(int32_t *buf, int frames, float volLinear) {
+    if (volLinear >= 0.999f) return;  // Unity gain, skip
+    for (int i = 0; i < frames * 2; i++) {
+        buf[i] = (int32_t)((float)buf[i] * volLinear);
+    }
+}
+#endif
+
 static void audio_capture_task(void *param) {
     const int BUFFER_SAMPLES = DMA_BUF_LEN * 2; // stereo
     // Static to keep off task stack (4KB) — safe since only one audio task instance
     static int32_t buf1[BUFFER_SAMPLES];
     static int32_t buf2[BUFFER_SAMPLES];
+#ifdef USB_AUDIO_ENABLED
+    static int32_t bufUsb[BUFFER_SAMPLES];
+#endif
 
     unsigned long prevTime = millis();
     unsigned long lastDumpTime = 0;
@@ -977,9 +988,9 @@ static void audio_capture_task(void *param) {
         // Signal generator injection (before per-ADC processing)
         int targetAdc = AppState::getInstance().sigGenTargetAdc;
         if (sigGenSw) {
-            if (targetAdc == 0 || targetAdc == 2)
+            if (targetAdc == SIGTARGET_ADC1 || targetAdc == SIGTARGET_BOTH || targetAdc == SIGTARGET_ALL)
                 siggen_fill_buffer(buf1, stereo_frames1, _currentSampleRate);
-            if ((targetAdc == 1 || targetAdc == 2) && adc2Ok)
+            if ((targetAdc == SIGTARGET_ADC2 || targetAdc == SIGTARGET_BOTH || targetAdc == SIGTARGET_ALL) && adc2Ok)
                 siggen_fill_buffer(buf2, stereo_frames2, _currentSampleRate);
         }
 
@@ -1002,6 +1013,48 @@ static void audio_capture_task(void *param) {
             diag.allZeroBuffers++;
             diag.status = audio_derive_health_status(diag);
         }
+
+        // ===== USB Audio Input Processing =====
+#ifdef USB_AUDIO_ENABLED
+        {
+            bool usbEnabled = AppState::getInstance().adcEnabled[2];
+            bool usbStreaming = usb_audio_is_streaming();
+            bool sigGenTargetsUsb = sigGenSw &&
+                (targetAdc == SIGTARGET_USB || targetAdc == SIGTARGET_ALL);
+
+            if (usbEnabled && (usbStreaming || sigGenTargetsUsb)) {
+                uint32_t framesRead = usb_audio_read(bufUsb, DMA_BUF_LEN);
+
+                // Zero-fill remainder on underrun
+                if (framesRead < (uint32_t)DMA_BUF_LEN) {
+                    memset(bufUsb + framesRead * 2, 0,
+                           ((uint32_t)DMA_BUF_LEN - framesRead) * 2 * sizeof(int32_t));
+                }
+
+                // Apply host volume/mute BEFORE DSP
+                if (usb_audio_get_mute()) {
+                    memset(bufUsb, 0, DMA_BUF_LEN * 2 * sizeof(int32_t));
+                } else {
+                    applyHostVolume(bufUsb, DMA_BUF_LEN, usb_audio_get_volume_linear());
+                }
+
+                // Signal generator injection for USB target
+                if (sigGenTargetsUsb) {
+                    siggen_fill_buffer(bufUsb, DMA_BUF_LEN, _currentSampleRate);
+                }
+
+                process_adc_buffer(2, bufUsb, DMA_BUF_LEN, now, dt_ms, sigGenSw);
+                if (appState.audioQualityEnabled) {
+                    audio_quality_scan_buffer(2, bufUsb, DMA_BUF_LEN);
+                }
+            } else if (usbEnabled && !usbStreaming) {
+                // USB enabled but not streaming — update diagnostics
+                AdcDiagnostics &diag = _diagnostics.adc[2];
+                diag.consecutiveZeros++;
+                diag.status = AUDIO_NO_DATA;
+            }
+        }
+#endif
 
         // ADC clock sync check (every ADC_SYNC_CHECK_INTERVAL_MS, both ADCs active with signal)
         // Runs inside audio task on Core 1 — NO Serial/LOG here; use dirty-flag pattern.
@@ -1063,6 +1116,13 @@ static void audio_capture_task(void *param) {
         }
         _diagnostics.numAdcsDetected = _numAdcsDetected;
 
+        // Track total inputs detected (ADCs + USB)
+        int totalInputs = _numAdcsDetected;
+#ifdef USB_AUDIO_ENABLED
+        if (usb_audio_is_streaming()) totalInputs++;
+#endif
+        _diagnostics.numInputsDetected = totalInputs;
+
         // Update runtime metrics every 1 second (gated by debug toggle)
         bool metricsEnabled = AppState::getInstance().debugMode &&
                               AppState::getInstance().debugI2sMetrics;
@@ -1095,11 +1155,45 @@ static void audio_capture_task(void *param) {
         // Recalculate waveform target on both ADCs
         _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
 
-        // Combined analysis: overall dBFS = max across ADCs, signal detected = any
+        // ===== DAC Output via Routing Matrix =====
+#ifdef DAC_ENABLED
+        if (AppState::getInstance().dacEnabled && AppState::getInstance().dacReady) {
+#ifdef DSP_ENABLED
+            if (AppState::getInstance().dspEnabled && !AppState::getInstance().dspBypass) {
+                // DSP active: route through 6x6 matrix
+                static int32_t dacBuf[DMA_BUF_LEN * 2];
+                dsp_routing_execute(dacBuf, stereo_frames1);
+                dac_output_write(dacBuf, stereo_frames1);
+            } else
+#endif
+            {
+                // DSP bypassed: direct source selection
+                uint8_t src = AppState::getInstance().dacSourceInput;
+                if (src == 0) {
+                    dac_output_write(buf1, stereo_frames1);
+                } else if (src == 1 && adc2Ok) {
+                    dac_output_write(buf2, stereo_frames2);
+                }
+#ifdef USB_AUDIO_ENABLED
+                else if (src == 2 && AppState::getInstance().adcEnabled[2] && usb_audio_is_streaming()) {
+                    dac_output_write(bufUsb, DMA_BUF_LEN);
+                }
+#endif
+            }
+        }
+#endif
+
+        // Combined analysis: overall dBFS = max across all inputs, signal detected = any
         float overallDbfs = _analysis.adc[0].dBFS;
         if (_numAdcsDetected >= 2 && _analysis.adc[1].dBFS > overallDbfs) {
             overallDbfs = _analysis.adc[1].dBFS;
         }
+#ifdef USB_AUDIO_ENABLED
+        if (AppState::getInstance().adcEnabled[2] && usb_audio_is_streaming() &&
+            _analysis.adc[2].dBFS > overallDbfs) {
+            overallDbfs = _analysis.adc[2].dBFS;
+        }
+#endif
         float threshold = AppState::getInstance().audioThreshold_dBFS;
 
         portENTER_CRITICAL_ISR(&spinlock);
@@ -1134,7 +1228,7 @@ void i2s_audio_init() {
     if (!_fftData) {
         _fftData    = (float *)heap_caps_calloc(FFT_SIZE * 2, sizeof(float), MALLOC_CAP_SPIRAM);
         _fftWindow  = (float *)heap_caps_calloc(FFT_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
-        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
             _fftRing[a]  = (float *)heap_caps_calloc(FFT_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
             _wfAccum[a]  = (float *)heap_caps_calloc(WAVEFORM_BUFFER_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
             _wfOutput[a] = (uint8_t *)heap_caps_calloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t), MALLOC_CAP_SPIRAM);
@@ -1142,7 +1236,7 @@ void i2s_audio_init() {
         // Fallback to internal SRAM if PSRAM unavailable
         if (!_fftData)   _fftData   = (float *)calloc(FFT_SIZE * 2, sizeof(float));
         if (!_fftWindow) _fftWindow = (float *)calloc(FFT_SIZE, sizeof(float));
-        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
             if (!_fftRing[a])  _fftRing[a]  = (float *)calloc(FFT_SIZE, sizeof(float));
             if (!_wfAccum[a])  _wfAccum[a]  = (float *)calloc(WAVEFORM_BUFFER_SIZE, sizeof(float));
             if (!_wfOutput[a]) _wfOutput[a] = (uint8_t *)calloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t));
@@ -1156,7 +1250,7 @@ void i2s_audio_init() {
     }
 
     _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
         _wfFramesSeen[a] = 0;
         _wfReady[a] = false;
@@ -1270,7 +1364,7 @@ void audio_periodic_dump() {
 }
 
 bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) {
-    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_ADCS) return false;
+    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_INPUTS) return false;
     if (!_wfReady[adcIndex]) return false;
     memcpy(out, (const void *)_wfOutput[adcIndex], WAVEFORM_BUFFER_SIZE);
     _wfReady[adcIndex] = false;
@@ -1278,7 +1372,7 @@ bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) {
 }
 
 bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex) {
-    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_ADCS) return false;
+    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_INPUTS) return false;
     if (!_spectrumReady[adcIndex]) return false;
     memcpy(bands, (const void *)_spectrumOutput[adcIndex], SPECTRUM_BANDS * sizeof(float));
     *dominant_freq = _dominantFreqOutput[adcIndex];
@@ -1338,7 +1432,7 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
     _currentSampleRate = rate;
     _wfTargetFrames = rate * AppState::getInstance().audioUpdateRate / 1000;
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
         _wfFramesSeen[a] = 0;
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
     }

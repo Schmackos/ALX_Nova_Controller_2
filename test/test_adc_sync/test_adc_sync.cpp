@@ -17,9 +17,15 @@
 // ===== Inline definitions for native testing =====
 // Mirrors the constants and struct from i2s_audio.h
 
+#ifndef NUM_AUDIO_INPUTS
+#define NUM_AUDIO_INPUTS 3
+#endif
+
 #ifndef NUM_AUDIO_ADCS
 #define NUM_AUDIO_ADCS 2
 #endif
+
+static_assert(NUM_AUDIO_INPUTS >= NUM_AUDIO_ADCS, "NUM_AUDIO_INPUTS must be >= NUM_AUDIO_ADCS");
 
 static const int    ADC_SYNC_CHECK_FRAMES     = 64;
 static const int    ADC_SYNC_SEARCH_RANGE     = 8;

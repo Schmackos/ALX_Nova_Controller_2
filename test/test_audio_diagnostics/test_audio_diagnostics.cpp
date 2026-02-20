@@ -42,14 +42,21 @@ struct AdcDiagnostics {
     uint32_t totalBuffersRead = 0;
 };
 
+#ifndef NUM_AUDIO_INPUTS
+#define NUM_AUDIO_INPUTS 3
+#endif
+
 #ifndef NUM_AUDIO_ADCS
 #define NUM_AUDIO_ADCS 2
 #endif
 
+static_assert(NUM_AUDIO_INPUTS >= NUM_AUDIO_ADCS, "NUM_AUDIO_INPUTS must be >= NUM_AUDIO_ADCS");
+
 struct AudioDiagnostics {
-    AdcDiagnostics adc[NUM_AUDIO_ADCS];
+    AdcDiagnostics adc[NUM_AUDIO_INPUTS];
     bool sigGenActive = false;
     int numAdcsDetected = 1;
+    int numInputsDetected = 1;
 };
 
 // Per-ADC health status derivation (matches production i2s_audio.cpp)
@@ -218,6 +225,7 @@ void test_adc_diagnostics_siggen_masking(void) {
 // Test 14: NUM_AUDIO_ADCS array size
 void test_num_audio_adcs_array_size(void) {
     TEST_ASSERT_EQUAL(2, NUM_AUDIO_ADCS);
+    TEST_ASSERT_EQUAL(3, NUM_AUDIO_INPUTS);
     AudioDiagnostics diag;
     // Both ADCs should be independently addressable
     diag.adc[0].i2sReadErrors = 5;

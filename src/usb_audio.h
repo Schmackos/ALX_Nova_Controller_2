@@ -102,4 +102,13 @@ float usb_audio_get_volume_linear(void); // 0.0-1.0
 uint32_t usb_audio_get_overruns(void);
 uint32_t usb_audio_get_underruns(void);
 
+// Check for streaming timeout (call from main loop). Returns true if state changed.
+bool usb_audio_check_timeout(void);
+
+// Pure function for testing timeout logic.
+bool usb_audio_is_stream_timed_out(unsigned long current_ms, unsigned long last_data_ms, unsigned long timeout_ms);
+
+// Get ring buffer fill level (0.0-1.0)
+float usb_audio_get_buffer_fill(void);
+
 #endif // USB_AUDIO_H

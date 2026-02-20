@@ -23,7 +23,7 @@ static lv_obj_t *lbl_cpu = nullptr;
 static lv_obj_t *lbl_storage = nullptr;
 static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
-static lv_obj_t *lbl_audio_adc[NUM_AUDIO_ADCS] = {nullptr, nullptr};
+static lv_obj_t *lbl_audio_adc[NUM_AUDIO_INPUTS] = {nullptr, nullptr, nullptr};
 static lv_obj_t *lbl_i2s = nullptr;
 #ifdef DSP_ENABLED
 // static lv_obj_t *lbl_audio_quality = nullptr;
@@ -238,14 +238,16 @@ void scr_debug_refresh(void) {
     /* Audio ADC — per-ADC diagnostics (always show both) */
     {
         static const char *status_names[] = {"OK", "NO DATA", "NOISE", "CLIP", "I2S ERR", "HW FAULT"};
-        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
             if (!lbl_audio_adc[a]) continue;
             const AppState::AdcState &adc = appState.audioAdc[a];
             const char *st2 = status_names[adc.healthStatus < 6 ? adc.healthStatus : 0];
             unsigned long age = 0;
             if (adc.lastNonZeroMs > 0) age = (millis() - adc.lastNonZeroMs) / 1000;
-            snprintf(buf, sizeof(buf), "ADC %d\n%s %.0fdB\n%.3fV\nFl:%.0f\nSNR:%.0f SFDR:%.0f\nCl:%lu E:%lu\n%lus",
-                     a + 1, st2, adc.dBFS,
+            const char *inputLabel = (a < NUM_AUDIO_ADCS) ? "ADC" : "USB";
+            int inputNum = (a < NUM_AUDIO_ADCS) ? (a + 1) : (a - NUM_AUDIO_ADCS + 1);
+            snprintf(buf, sizeof(buf), "%s %d\n%s %.0fdB\n%.3fV\nFl:%.0f\nSNR:%.0f SFDR:%.0f\nCl:%lu E:%lu\n%lus",
+                     inputLabel, inputNum, st2, adc.dBFS,
                      (adc.vrms1 > adc.vrms2) ? adc.vrms1 : adc.vrms2,
                      adc.noiseFloorDbfs,
                      appState.audioSnrDb[a], appState.audioSfdrDb[a],
@@ -400,8 +402,7 @@ lv_obj_t *scr_debug_create(void) {
     lbl_storage = nullptr;
     lbl_network = nullptr;
     lbl_system = nullptr;
-    lbl_audio_adc[0] = nullptr;
-    lbl_audio_adc[1] = nullptr;
+    for (int i = 0; i < NUM_AUDIO_INPUTS; i++) lbl_audio_adc[i] = nullptr;
     lbl_i2s = nullptr;
 #ifdef DAC_ENABLED
     lbl_dac = nullptr;
@@ -458,7 +459,7 @@ lv_obj_t *scr_debug_create(void) {
         lv_obj_set_style_border_width(adc_row, 0, LV_PART_MAIN);
         lv_obj_clear_flag(adc_row, LV_OBJ_FLAG_SCROLLABLE);
 
-        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
             lbl_audio_adc[a] = lv_label_create(adc_row);
             lv_label_set_text(lbl_audio_adc[a], "...");
             lv_obj_add_style(lbl_audio_adc[a], gui_style_dim(), LV_PART_MAIN);

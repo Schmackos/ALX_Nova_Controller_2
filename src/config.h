@@ -99,7 +99,7 @@ const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
 #define DSP_PEQ_BANDS        10    // PEQ bands occupy stages 0-9; chain stages use 10-19
 #define DSP_MAX_FIR_TAPS     256   // Max FIR taps (direct convolution)
 #define DSP_MAX_FIR_SLOTS    2     // Max concurrent FIR stages (pool-allocated, not inline)
-#define DSP_MAX_CHANNELS     4     // L1, R1, L2, R2
+#define DSP_MAX_CHANNELS     6     // L1, R1, L2, R2, USB_L, USB_R
 #define DSP_MAX_DELAY_SLOTS  2     // Max concurrent delay stages (pool-allocated)
 #define DSP_MAX_DELAY_SAMPLES 4800 // Max delay = 100ms @ 48kHz
 #define DSP_DEFAULT_Q        0.707f
@@ -161,6 +161,11 @@ const float DEFAULT_ADC_VREF = 3.3f; // PCM1808 full-scale reference voltage (V)
 
 // ===== Dual ADC Configuration =====
 #define NUM_AUDIO_ADCS 2  // Number of PCM1808 ADC modules (1 or 2)
+
+// ===== Audio Input Configuration =====
+// NUM_AUDIO_INPUTS includes all audio sources: I2S ADCs + USB Audio
+// Input 0 = ADC1 (I2S_NUM_0), Input 1 = ADC2 (I2S_NUM_1), Input 2 = USB Audio
+#define NUM_AUDIO_INPUTS 3
 
 // Smart Sensing modes
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };

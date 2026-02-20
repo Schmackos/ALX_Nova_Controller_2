@@ -31,9 +31,11 @@ static void edit_ch_bypass_0(void);
 static void edit_ch_bypass_1(void);
 static void edit_ch_bypass_2(void);
 static void edit_ch_bypass_3(void);
+static void edit_ch_bypass_4(void);
+static void edit_ch_bypass_5(void);
 static void open_peq(void);
 
-static const char *ch_names[DSP_MAX_CHANNELS] = {"L1", "R1", "L2", "R2"};
+static const char *ch_names[DSP_MAX_CHANNELS] = {"L1", "R1", "L2", "R2", "USB_L", "USB_R"};
 
 static void build_dsp_menu(void) {
     AppState &st = AppState::getInstance();
@@ -74,7 +76,8 @@ static void build_dsp_menu(void) {
 
     /* Per-channel info + bypass toggle */
     static menu_action_fn ch_bypass_fns[DSP_MAX_CHANNELS] = {
-        edit_ch_bypass_0, edit_ch_bypass_1, edit_ch_bypass_2, edit_ch_bypass_3
+        edit_ch_bypass_0, edit_ch_bypass_1, edit_ch_bypass_2, edit_ch_bypass_3,
+        edit_ch_bypass_4, edit_ch_bypass_5
     };
     for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
         dsp_menu.items[idx++] = {ch_names[ch], ch_str[ch], nullptr, MENU_ACTION, ch_bypass_fns[ch]};
@@ -150,6 +153,8 @@ static void edit_ch_bypass_0(void) { toggle_ch_bypass(0); }
 static void edit_ch_bypass_1(void) { toggle_ch_bypass(1); }
 static void edit_ch_bypass_2(void) { toggle_ch_bypass(2); }
 static void edit_ch_bypass_3(void) { toggle_ch_bypass(3); }
+static void edit_ch_bypass_4(void) { toggle_ch_bypass(4); }
+static void edit_ch_bypass_5(void) { toggle_ch_bypass(5); }
 
 lv_obj_t *scr_dsp_create(void) {
     build_dsp_menu();
@@ -246,7 +251,7 @@ static void build_peq_menu(void) {
 
     /* Channel selector */
     static char peq_ch_str[8];
-    const char *ch_names_peq[] = {"L1", "R1", "L2", "R2"};
+    const char *ch_names_peq[] = {"L1", "R1", "L2", "R2", "USB_L", "USB_R"};
     snprintf(peq_ch_str, sizeof(peq_ch_str), "%s", ch_names_peq[peq_channel]);
     peq_menu.items[idx++] = {"Channel", peq_ch_str, nullptr, MENU_ACTION, peq_next_ch};
 
@@ -271,7 +276,7 @@ lv_obj_t *scr_peq_create(void) {
 
 void scr_peq_refresh(void) {
     DspState *cfg = dsp_get_active_config();
-    const char *ch_names_peq[] = {"L1", "R1", "L2", "R2"};
+    const char *ch_names_peq[] = {"L1", "R1", "L2", "R2", "USB_L", "USB_R"};
     static char peq_ch_str[8];
     snprintf(peq_ch_str, sizeof(peq_ch_str), "%s", ch_names_peq[peq_channel]);
     scr_menu_set_item_value(1, peq_ch_str);

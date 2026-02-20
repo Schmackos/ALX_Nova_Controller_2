@@ -16,6 +16,7 @@
 #ifdef DSP_ENABLED
 #include "dsp_api.h"
 #include "dsp_pipeline.h"
+#include "usb_auto_priority.h"
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
@@ -577,8 +578,8 @@ void setup() {
     doc["channel"] = chanNames[appState.sigGenChannel % 3];
     doc["outputMode"] = appState.sigGenOutputMode == 0 ? "software" : "pwm";
     doc["sweepSpeed"] = appState.sigGenSweepSpeed;
-    const char *targetNames[] = {"input1", "input2", "both"};
-    doc["targetAdc"] = targetNames[appState.sigGenTargetAdc % 3];
+    const char *targetNames[] = {"input1", "input2", "both", "usb", "all"};
+    doc["targetAdc"] = targetNames[appState.sigGenTargetAdc % 5];
     String json;
     serializeJson(doc, json);
     server.send(200, "application/json", json);
@@ -640,6 +641,8 @@ void setup() {
       if (t == "input1") appState.sigGenTargetAdc = 0;
       else if (t == "input2") appState.sigGenTargetAdc = 1;
       else if (t == "both") appState.sigGenTargetAdc = 2;
+      else if (t == "usb") appState.sigGenTargetAdc = 3;
+      else if (t == "all") appState.sigGenTargetAdc = 4;
       changed = true;
     }
     if (changed) {
@@ -656,10 +659,11 @@ void setup() {
     JsonDocument doc;
     doc["success"] = true;
     JsonArray names = doc["names"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
       names.add(appState.inputNames[i]);
     }
     doc["numAdcsDetected"] = appState.numAdcsDetected;
+    doc["numInputsDetected"] = appState.numInputsDetected;
     String json;
     serializeJson(doc, json);
     server.send(200, "application/json", json);
@@ -680,7 +684,7 @@ void setup() {
     }
     if (doc["names"].is<JsonArray>()) {
       JsonArray names = doc["names"].as<JsonArray>();
-      for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+      for (int i = 0; i < NUM_AUDIO_INPUTS * 2 && i < (int)names.size(); i++) {
         String name = names[i].as<String>();
         if (name.length() > 0) appState.inputNames[i] = name;
       }
@@ -695,6 +699,7 @@ void setup() {
   // Register DSP API endpoints and load persisted config
   registerDspApiEndpoints();
   loadDspSettings();
+  usb_auto_priority_init();
 #endif
 
 #ifdef DAC_ENABLED
@@ -967,6 +972,10 @@ void loop() {
   }
 
 #ifdef DSP_ENABLED
+  usb_auto_priority_update(millis());
+#endif
+
+#ifdef DSP_ENABLED
   // Broadcast emergency limiter state changes (GUI/API -> WS clients + MQTT)
   if (appState.isEmergencyLimiterDirty()) {
     sendEmergencyLimiterState();
@@ -1033,8 +1042,25 @@ void loop() {
 
 #ifdef USB_AUDIO_ENABLED
   if (appState.isUsbAudioDirty()) {
+    appState.usbAudioBufferOverruns = usb_audio_get_overruns();
+    appState.usbAudioBufferUnderruns = usb_audio_get_underruns();
     sendUsbAudioState();
     appState.clearUsbAudioDirty();
+  }
+  usb_audio_check_timeout();
+  // Periodic stats sync (1s) during streaming
+  {
+    static unsigned long lastUsbStatSync = 0;
+    if (appState.usbAudioStreaming && millis() - lastUsbStatSync >= 1000) {
+      lastUsbStatSync = millis();
+      uint32_t ov = usb_audio_get_overruns();
+      uint32_t ud = usb_audio_get_underruns();
+      if (ov != appState.usbAudioBufferOverruns || ud != appState.usbAudioBufferUnderruns) {
+        appState.usbAudioBufferOverruns = ov;
+        appState.usbAudioBufferUnderruns = ud;
+        appState.markUsbAudioDirty();
+      }
+    }
   }
 #endif
 

@@ -9,6 +9,8 @@
 #include "dsps_mul.h"
 #include "dsps_add.h"
 #include "dsp_convolution.h"
+#include "dsp_crossover.h"
+#include "dsp_api.h"
 #include "audio_quality.h"
 #include "app_state.h"
 #include <math.h>
@@ -153,6 +155,10 @@ static float *_dspBufL = nullptr;
 static float *_dspBufR = nullptr;
 static float *_gainBuf = nullptr;
 #endif
+
+// Post-DSP float channel storage for routing matrix
+static float _postDspChannels[DSP_MAX_CHANNELS][256];
+static int _postDspFrames = 0;  // Number of valid frames in _postDspChannels
 
 // ===== Forward Declarations =====
 static int  dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int stateIdx);
@@ -719,6 +725,11 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
         float threshold = AppState::getInstance().emergencyLimiterThresholdDb;
         dsp_emergency_limiter_process(_dspBufL, _dspBufR, stereoFrames, threshold, cfg->sampleRate);
     }
+
+    // Store post-DSP float channels for routing matrix
+    memcpy(_postDspChannels[chL], _dspBufL, stereoFrames * sizeof(float));
+    memcpy(_postDspChannels[chR], _dspBufR, stereoFrames * sizeof(float));
+    _postDspFrames = stereoFrames;
 
     // Re-interleave float → int32 with clamp
     for (int f = 0; f < stereoFrames; f++) {
@@ -2341,5 +2352,37 @@ void dsp_load_config_from_json(const char *, int) {}
 void dsp_export_full_config_json(char *, int) {}
 void dsp_import_full_config_json(const char *) {}
 #endif // NATIVE_TEST
+
+// ===== Routing Matrix Execution =====
+// Called from audio_capture_task after all inputs are processed through DSP.
+// Applies the 6x6 routing matrix to post-DSP float channels,
+// then re-interleaves output ch0/ch1 into dacBuf for DAC write.
+void dsp_routing_execute(int32_t *dacBuf, int frames) {
+    if (!dacBuf || frames <= 0 || _postDspFrames <= 0) return;
+    int n = (frames < _postDspFrames) ? frames : _postDspFrames;
+
+    DspRoutingMatrix *rm = dsp_get_routing_matrix();
+    if (!rm) return;
+
+    // Build channel pointer array
+    float *channelPtrs[DSP_MAX_CHANNELS];
+    for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
+        channelPtrs[i] = _postDspChannels[i];
+    }
+
+    // Apply routing: 6x6 multiply-accumulate (modifies _postDspChannels in-place)
+    dsp_routing_apply(*rm, channelPtrs, DSP_MAX_CHANNELS, n);
+
+    // Re-interleave routed output ch0/ch1 → DAC buffer (left-justified int32)
+    const float MAX_24BIT = 8388607.0f;
+    for (int f = 0; f < n; f++) {
+        float sL = _postDspChannels[0][f];
+        float sR = _postDspChannels[1][f];
+        if (sL > 1.0f) sL = 1.0f; else if (sL < -1.0f) sL = -1.0f;
+        if (sR > 1.0f) sR = 1.0f; else if (sR < -1.0f) sR = -1.0f;
+        dacBuf[f * 2] = (int32_t)(sL * MAX_24BIT) << 8;
+        dacBuf[f * 2 + 1] = (int32_t)(sR * MAX_24BIT) << 8;
+    }
+}
 
 #endif // DSP_ENABLED

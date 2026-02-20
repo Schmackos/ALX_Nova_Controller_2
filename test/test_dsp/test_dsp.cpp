@@ -17,8 +17,23 @@
 
 // Include DSP implementation source (no ArduinoJson in native tests)
 #include "../../src/dsp_coefficients.cpp"
-#include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_crossover.cpp"
+
+// Stub for dsp_api functions (not linked in native tests).
+// Must appear after dsp_crossover.cpp (defines DspRoutingMatrix) and
+// before dsp_pipeline.cpp (calls dsp_get_routing_matrix).
+static DspRoutingMatrix _testRoutingMatrix;
+static bool _testRoutingMatrixInit = false;
+DspRoutingMatrix* dsp_get_routing_matrix() {
+    if (!_testRoutingMatrixInit) {
+        dsp_routing_init(_testRoutingMatrix);
+        dsp_routing_preset_identity(_testRoutingMatrix);
+        _testRoutingMatrixInit = true;
+    }
+    return &_testRoutingMatrix;
+}
+
+#include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_convolution.cpp"
 #include "../../src/thd_measurement.cpp"
 
@@ -1659,7 +1674,7 @@ void test_routing_matrix_presets(void) {
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[1][0]);
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[1][1]);
 
-    // Mono sum: gain = 1/DSP_MAX_CHANNELS = 0.25 for 4 channels
+    // Mono sum: gain = 1/DSP_MAX_CHANNELS (~0.167 for 6 channels)
     float g = 1.0f / DSP_MAX_CHANNELS;
     dsp_routing_preset_mono_sum(rm);
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[0][0]);

@@ -38,6 +38,7 @@ void publishMqttAdcEnabledState();
 void publishMqttDebugState();
 void publishMqttCrashDiagnostics();
 void publishMqttInputNames();
+void publishMqttUsbAutoPriorityState();
 #ifdef DSP_ENABLED
 void publishMqttDspState();
 void publishMqttEmergencyLimiterState();

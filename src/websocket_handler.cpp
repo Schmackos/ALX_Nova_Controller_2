@@ -161,7 +161,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               JsonDocument adcDoc;
               adcDoc["type"] = "adcState";
               JsonArray arr = adcDoc["enabled"].to<JsonArray>();
-              for (int i = 0; i < NUM_AUDIO_ADCS; i++) arr.add(appState.adcEnabled[i]);
+              for (int i = 0; i < NUM_AUDIO_INPUTS; i++) arr.add(appState.adcEnabled[i]);
               String adcJson;
               serializeJson(adcDoc, adcJson);
               webSocket.sendTXT(num, adcJson.c_str());
@@ -175,6 +175,16 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 #ifdef USB_AUDIO_ENABLED
             sendUsbAudioState();
 #endif
+            // Send USB routing state (unconditional — routing fields exist regardless of USB_AUDIO_ENABLED)
+            {
+              JsonDocument routDoc;
+              routDoc["type"] = "usbAutoPriorityState";
+              routDoc["usbAutoPriority"] = appState.usbAutoPriority;
+              routDoc["dacSourceInput"] = appState.dacSourceInput;
+              String routJson;
+              serializeJson(routDoc, routJson);
+              webSocket.sendTXT(num, routJson.c_str());
+            }
 
             // If device just updated, notify the client
             if (appState.justUpdated) {
@@ -368,7 +378,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
           if (doc["targetAdc"].is<int>()) {
             int t = doc["targetAdc"].as<int>();
-            if (t >= 0 && t <= 2) { appState.sigGenTargetAdc = t; changed = true; }
+            if (t >= 0 && t <= 4) { appState.sigGenTargetAdc = t; changed = true; }
           }
           if (changed) {
             siggen_apply_params();
@@ -412,7 +422,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (msgType == "setInputNames") {
           if (doc["names"].is<JsonArray>()) {
             JsonArray names = doc["names"].as<JsonArray>();
-            for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+            for (int i = 0; i < NUM_AUDIO_INPUTS * 2 && i < (int)names.size(); i++) {
               String name = names[i].as<String>();
               if (name.length() > 0) appState.inputNames[i] = name;
             }
@@ -421,7 +431,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             JsonDocument resp;
             resp["type"] = "inputNames";
             JsonArray outNames = resp["names"].to<JsonArray>();
-            for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+            for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
               outNames.add(appState.inputNames[i]);
             }
             String json;
@@ -1150,7 +1160,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "setAdcEnabled") {
           int adc = doc["adc"] | -1;
           bool newVal = doc["enabled"].as<bool>();
-          if (adc >= 0 && adc < NUM_AUDIO_ADCS && newVal != appState.adcEnabled[adc]) {
+          if (adc >= 0 && adc < NUM_AUDIO_INPUTS && newVal != appState.adcEnabled[adc]) {
             appState.adcEnabled[adc] = newVal;
             appState.markAdcEnabledDirty();
             saveSettings();
@@ -1158,7 +1168,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             JsonDocument resp;
             resp["type"] = "adcState";
             JsonArray arr = resp["enabled"].to<JsonArray>();
-            for (int i = 0; i < NUM_AUDIO_ADCS; i++) arr.add(appState.adcEnabled[i]);
+            for (int i = 0; i < NUM_AUDIO_INPUTS; i++) arr.add(appState.adcEnabled[i]);
             String rJson;
             serializeJson(resp, rJson);
             webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
@@ -1182,6 +1192,39 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
         }
 #endif
+        // ===== USB Auto-Priority =====
+        else if (msgType == "setUsbAutoPriority") {
+          appState.usbAutoPriority = doc["value"] | false;
+          saveSettings();
+          {
+            JsonDocument resp;
+            resp["type"] = "usbAutoPriorityState";
+            resp["usbAutoPriority"] = appState.usbAutoPriority;
+            resp["dacSourceInput"] = appState.dacSourceInput;
+            String rJson;
+            serializeJson(resp, rJson);
+            webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
+          }
+          LOG_I("[WebSocket] USB auto-priority: %s", appState.usbAutoPriority ? "enabled" : "disabled");
+        }
+        // ===== DAC Source Input =====
+        else if (msgType == "setDacSourceInput") {
+          int val = doc["value"] | 0;
+          if (val >= 0 && val <= 2) {
+            appState.dacSourceInput = (uint8_t)val;
+            saveSettings();
+            {
+              JsonDocument resp;
+              resp["type"] = "usbAutoPriorityState";
+              resp["usbAutoPriority"] = appState.usbAutoPriority;
+              resp["dacSourceInput"] = appState.dacSourceInput;
+              String rJson;
+              serializeJson(resp, rJson);
+              webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
+            }
+            LOG_I("[WebSocket] DAC source input: %d", val);
+          }
+        }
       }
       break;
 
@@ -1561,6 +1604,11 @@ void sendUsbAudioState() {
   doc["mute"] = appState.usbAudioMute;
   doc["overruns"] = appState.usbAudioBufferOverruns;
   doc["underruns"] = appState.usbAudioBufferUnderruns;
+  doc["bufferLevel"] = usb_audio_get_buffer_fill();
+  doc["framesAvailable"] = usb_audio_available_frames();
+  doc["bufferCapacity"] = 1024;
+  doc["usbAutoPriority"] = appState.usbAutoPriority;
+  doc["dacSourceInput"] = appState.dacSourceInput;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1736,7 +1784,7 @@ void sendHardwareStats() {
     doc["audio"]["adcVref"] = appState.adcVref;
     doc["audio"]["numAdcsDetected"] = appState.numAdcsDetected;
     JsonArray adcArr = doc["audio"]["adcs"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
       JsonObject adcObj = adcArr.add<JsonObject>();
       const AppState::AdcState &adc = appState.audioAdc[a];
       const char *statusStr = "OK";
@@ -1938,7 +1986,7 @@ void sendAudioData() {
     JsonArray adcArr = doc["adc"].to<JsonArray>();
     JsonArray adcStatusArr = doc["adcStatus"].to<JsonArray>();
     JsonArray adcNoiseArr = doc["adcNoiseFloor"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
       const AppState::AdcState &adc = appState.audioAdc[a];
       JsonObject adcObj = adcArr.add<JsonObject>();
       adcObj["vu1"] = adc.vu1;
@@ -1985,7 +2033,7 @@ void sendAudioData() {
   if (appState.waveformEnabled && !appState.heapCritical) {
     uint8_t wfBin[2 + WAVEFORM_BUFFER_SIZE]; // 258 bytes
     wfBin[0] = WS_BIN_WAVEFORM;
-    for (int a = 0; a < appState.numAdcsDetected; a++) {
+    for (int a = 0; a < appState.numInputsDetected; a++) {
       if (i2s_audio_get_waveform(wfBin + 2, a)) {
         wfBin[1] = (uint8_t)a;
         for (int i = 0; i < MAX_WS_CLIENTS; i++) {
@@ -2003,7 +2051,7 @@ void sendAudioData() {
     spBin[0] = WS_BIN_SPECTRUM;
     float bands[SPECTRUM_BANDS];
     float freq = 0.0f;
-    for (int a = 0; a < appState.numAdcsDetected; a++) {
+    for (int a = 0; a < appState.numInputsDetected; a++) {
       if (i2s_audio_get_spectrum(bands, &freq, a)) {
         spBin[1] = (uint8_t)a;
         memcpy(spBin + 2, &freq, sizeof(float));

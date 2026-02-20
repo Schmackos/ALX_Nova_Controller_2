@@ -259,6 +259,18 @@ bool loadSettings() {
     appState.customDeviceName = "";
   }
 
+  // Load USB auto-priority (line 32, if present)
+  if (lines[dataStart + 32].length() > 0) {
+    appState.usbAutoPriority = (lines[dataStart + 32].toInt() != 0);
+  }
+  // Load DAC source input (line 33, if present)
+  if (lines[dataStart + 33].length() > 0) {
+    int val = lines[dataStart + 33].toInt();
+    if (val >= 0 && val <= 2) {
+      appState.dacSourceInput = (uint8_t)val;
+    }
+  }
+
   return true;
 }
 
@@ -326,6 +338,8 @@ void saveSettings() {
   file.println("0"); // line 30: reserved (was dcBlockEnabled)
 #endif
   file.println(appState.customDeviceName); // line 31: custom device name (AP SSID override)
+  file.println(appState.usbAutoPriority ? "1" : "0"); // line 32: USB auto-priority
+  file.println(appState.dacSourceInput); // line 33: DAC source input (0=ADC1, 1=ADC2, 2=USB)
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -383,7 +397,7 @@ bool loadSignalGenSettings() {
   }
   if (line7.length() > 0) {
     int target = line7.toInt();
-    if (target >= 0 && target <= 2) appState.sigGenTargetAdc = target;
+    if (target >= 0 && target <= 4) appState.sigGenTargetAdc = target;
   }
 
   // Always boot disabled regardless of saved state
@@ -414,7 +428,8 @@ void saveSignalGenSettings() {
 // ===== Input Names Settings =====
 
 static const char *INPUT_NAME_DEFAULTS[] = {"Subwoofer 1", "Subwoofer 2",
-                                             "Subwoofer 3", "Subwoofer 4"};
+                                             "Subwoofer 3", "Subwoofer 4",
+                                             "USB Left", "USB Right"};
 
 bool loadInputNames() {
   File file = LittleFS.open("/inputnames.txt", "r", true);
@@ -422,13 +437,13 @@ bool loadInputNames() {
     if (file)
       file.close();
     // Set defaults
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
       appState.inputNames[i] = INPUT_NAME_DEFAULTS[i];
     }
     return false;
   }
 
-  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+  for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
     String line = file.readStringUntil('\n');
     line.trim();
     appState.inputNames[i] =
@@ -446,7 +461,7 @@ void saveInputNames() {
     return;
   }
 
-  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+  for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
     file.println(appState.inputNames[i]);
   }
   file.close();
@@ -553,7 +568,7 @@ void handleSettingsGet() {
   doc["fftWindowType"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = doc["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < NUM_AUDIO_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
   doc["usbAudioEnabled"] = appState.usbAudioEnabled;
@@ -799,7 +814,7 @@ void handleSettingsUpdate() {
 
   if (doc["adcEnabled"].is<JsonArray>()) {
     JsonArray arr = doc["adcEnabled"].as<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS && i < (int)arr.size(); i++) {
+    for (int i = 0; i < NUM_AUDIO_INPUTS && i < (int)arr.size(); i++) {
       bool newVal = arr[i].as<bool>();
       if (newVal != appState.adcEnabled[i]) {
         appState.adcEnabled[i] = newVal;
@@ -810,7 +825,7 @@ void handleSettingsUpdate() {
   } else if (doc["adcEnabled"].is<bool>()) {
     // Legacy single bool — apply to both
     bool newVal = doc["adcEnabled"].as<bool>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) {
+    for (int i = 0; i < NUM_AUDIO_INPUTS; i++) {
       if (newVal != appState.adcEnabled[i]) {
         appState.adcEnabled[i] = newVal;
         settingsChanged = true;
@@ -882,7 +897,7 @@ void handleSettingsUpdate() {
   resp["fftWindowType"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = resp["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < NUM_AUDIO_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
   resp["usbAudioEnabled"] = appState.usbAudioEnabled;
@@ -947,7 +962,7 @@ void handleSettingsExport() {
   doc["settings"]["fftWindowType"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = doc["settings"]["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < NUM_AUDIO_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
   doc["settings"]["usbAudioEnabled"] = appState.usbAudioEnabled;
@@ -997,9 +1012,14 @@ void handleSettingsExport() {
   // Custom device name
   doc["settings"]["customDeviceName"] = appState.customDeviceName;
 
+#ifdef DSP_ENABLED
+  doc["settings"]["usbAutoPriority"] = appState.usbAutoPriority;
+  doc["settings"]["dacSourceInput"] = appState.dacSourceInput;
+#endif
+
   // Input channel names
   JsonArray names = doc["inputNames"].to<JsonArray>();
-  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+  for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
     names.add(appState.inputNames[i]);
   }
 
@@ -1231,13 +1251,13 @@ void handleSettingsImport() {
     }
     if (doc["settings"]["adcEnabled"].is<JsonArray>()) {
       JsonArray arr = doc["settings"]["adcEnabled"].as<JsonArray>();
-      for (int i = 0; i < NUM_AUDIO_ADCS && i < (int)arr.size(); i++) {
+      for (int i = 0; i < NUM_AUDIO_INPUTS && i < (int)arr.size(); i++) {
         appState.adcEnabled[i] = arr[i].as<bool>();
         LOG_D("[Settings] ADC%d: %s", i + 1, appState.adcEnabled[i] ? "enabled" : "disabled");
       }
     } else if (doc["settings"]["adcEnabled"].is<bool>()) {
       bool val = doc["settings"]["adcEnabled"].as<bool>();
-      for (int i = 0; i < NUM_AUDIO_ADCS; i++) appState.adcEnabled[i] = val;
+      for (int i = 0; i < NUM_AUDIO_INPUTS; i++) appState.adcEnabled[i] = val;
       LOG_D("[Settings] ADC: %s", val ? "enabled" : "disabled");
     }
 #ifdef USB_AUDIO_ENABLED
@@ -1266,6 +1286,19 @@ void handleSettingsImport() {
       appState.customDeviceName = name;
       LOG_D("[Settings] Custom Device Name: %s", name.c_str());
     }
+#ifdef DSP_ENABLED
+    if (doc["settings"]["usbAutoPriority"].is<bool>()) {
+      appState.usbAutoPriority = doc["settings"]["usbAutoPriority"].as<bool>();
+      LOG_D("[Settings] USB Auto-Priority: %s", appState.usbAutoPriority ? "enabled" : "disabled");
+    }
+    if (doc["settings"]["dacSourceInput"].is<int>()) {
+      int val = doc["settings"]["dacSourceInput"].as<int>();
+      if (val >= 0 && val <= 2) {
+        appState.dacSourceInput = (uint8_t)val;
+        LOG_D("[Settings] DAC Source Input: %d", val);
+      }
+    }
+#endif
     // Save general settings
     saveSettings();
   }
@@ -1363,7 +1396,7 @@ void handleSettingsImport() {
     }
     if (doc["signalGenerator"]["targetAdc"].is<int>()) {
       int target = doc["signalGenerator"]["targetAdc"].as<int>();
-      if (target >= 0 && target <= 2) appState.sigGenTargetAdc = target;
+      if (target >= 0 && target <= 4) appState.sigGenTargetAdc = target;
     }
     appState.sigGenEnabled = false; // Always boot disabled
     saveSignalGenSettings();
@@ -1401,7 +1434,7 @@ void handleSettingsImport() {
   // Import input channel names
   if (!doc["inputNames"].isNull() && doc["inputNames"].is<JsonArray>()) {
     JsonArray names = doc["inputNames"].as<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+    for (int i = 0; i < NUM_AUDIO_INPUTS * 2 && i < (int)names.size(); i++) {
       String name = names[i].as<String>();
       if (name.length() > 0) appState.inputNames[i] = name;
     }
@@ -1564,7 +1597,7 @@ void handleDiagnostics() {
   settings["fftWindowType"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = settings["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < NUM_AUDIO_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef DSP_ENABLED
   // dcBlockEnabled removed (now a DSP preset)
@@ -1602,7 +1635,7 @@ void handleDiagnostics() {
     audioAdcObj["sampleRate"] = appState.audioSampleRate;
     audioAdcObj["adcVref"] = appState.adcVref;
     JsonArray adcArr = audioAdcObj["adcs"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < NUM_AUDIO_INPUTS; a++) {
       JsonObject adcObj = adcArr.add<JsonObject>();
       const AppState::AdcState &adc = appState.audioAdc[a];
       const char *statusStr = "OK";
@@ -1630,7 +1663,7 @@ void handleDiagnostics() {
     }
     // Input names
     JsonArray names = audioAdcObj["inputNames"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
       names.add(appState.inputNames[i]);
     }
 
