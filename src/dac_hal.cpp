@@ -508,6 +508,7 @@ void dac_output_reinit() {
     AppState& as = AppState::getInstance();
     if (!as.dacEnabled || !_driver) {
         LOG_D("[DAC] Reinit skipped: DAC not enabled");
+        as.dacMute = false;
         return;
     }
     LOG_I("[DAC] Reinit: cycling I2S TX for USB reconnect");
@@ -520,6 +521,7 @@ void dac_output_reinit() {
     if (!dac_enable_i2s_tx(as.audioSampleRate)) {
         LOG_E("[DAC] Reinit: I2S TX re-enable failed");
         as.dacReady = false;
+        as.dacMute = false;
         return;
     }
 

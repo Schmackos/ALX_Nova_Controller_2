@@ -219,15 +219,24 @@ bool loadSettings() {
       appState.fftWindowType = (FftWindowType)wt;
   }
 
-  // Load per-ADC enabled (if available, default true)
+  // Load per-input enabled (if available, default true/true/false)
   if (lines[dataStart + 26].length() > 0) {
     int commaIdx = lines[dataStart + 26].indexOf(',');
     if (commaIdx > 0) {
-      // New format: "1,1" (per-ADC)
-      appState.adcEnabled[0] = (lines[dataStart + 26].substring(0, commaIdx).toInt() != 0);
-      appState.adcEnabled[1] = (lines[dataStart + 26].substring(commaIdx + 1).toInt() != 0);
+      // CSV format: "1,1" or "1,1,0" (ADC1,ADC2[,USB])
+      String remaining = lines[dataStart + 26];
+      for (int i = 0; i < NUM_AUDIO_INPUTS && remaining.length() > 0; i++) {
+        int sep = remaining.indexOf(',');
+        if (sep > 0) {
+          appState.adcEnabled[i] = (remaining.substring(0, sep).toInt() != 0);
+          remaining = remaining.substring(sep + 1);
+        } else {
+          appState.adcEnabled[i] = (remaining.toInt() != 0);
+          remaining = "";
+        }
+      }
     } else {
-      // Old format: single "1" or "0" — apply to both
+      // Old format: single "1" or "0" — apply to I2S ADCs only
       bool val = (lines[dataStart + 26].toInt() != 0);
       appState.adcEnabled[0] = val;
       appState.adcEnabled[1] = val;
@@ -238,6 +247,10 @@ bool loadSettings() {
   // Load USB audio enabled (if available, default false)
   if (lines[dataStart + 27].length() > 0) {
     appState.usbAudioEnabled = (lines[dataStart + 27].toInt() != 0);
+  }
+  // If USB audio HW is enabled, auto-enable USB input processing
+  if (appState.usbAudioEnabled) {
+    appState.adcEnabled[2] = true;
   }
 #endif
 
@@ -321,12 +334,13 @@ void saveSettings() {
   file.println(appState.debugI2sMetrics ? "1" : "0");
   file.println(appState.debugTaskMonitor ? "1" : "0");
   file.println((int)appState.fftWindowType);
-  // Per-ADC enabled: "1,1" format
+  // Per-input enabled: "1,1,0" format (ADC1,ADC2,USB)
   {
     String adcLine;
-    adcLine += (appState.adcEnabled[0] ? "1" : "0");
-    adcLine += ",";
-    adcLine += (appState.adcEnabled[1] ? "1" : "0");
+    for (int i = 0; i < NUM_AUDIO_INPUTS; i++) {
+      if (i > 0) adcLine += ",";
+      adcLine += (appState.adcEnabled[i] ? "1" : "0");
+    }
     file.println(adcLine);
   }
 #ifdef USB_AUDIO_ENABLED
