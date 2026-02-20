@@ -3,6 +3,10 @@
 ## Version 1.8.8
 
 ## Documentation
+- [2026-02-20] docs: fix signal generator placement in audio pipeline diagram
+
+Show signal generator as conditional dashed side-injection into
+per-input processing instead of a serial stage in the main data path. (`6e3073c`)
 - [2026-02-20] docs: move audio_pipeline diagram to docs/flowcharts/ (`81decb7`)
 - [2026-02-20] docs: add Mermaid audio pipeline diagram (`775a859`)
 

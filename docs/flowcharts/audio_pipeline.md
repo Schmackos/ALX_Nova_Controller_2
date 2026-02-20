@@ -9,7 +9,7 @@ graph LR
             UA["USB Audio\nTinyUSB UAC2  ·  GPIO 19/20\nSPSC ring 1024 frames → int32"]
         end
 
-        SG["Signal Generator\n(optional injection)\nSine / Square / Noise / Sweep"]
+        SG["Signal Generator\n(conditional · targeted)\nsiggen_is_active() && software_mode\nSine / Square / Noise / Sweep"]
 
         subgraph PERINPUT["Per-Input Processing  ×3  —  process_adc_buffer()"]
             PB["Diagnostics + DC-block IIR\nSilence fast-path gate\nRMS · VU ballistics · Waveform · FFT\nHealth status derivation"]
@@ -28,10 +28,10 @@ graph LR
         WB["WebSocket Broadcast  :81\naudioLevels JSON\n+ waveform 258 B binary  (type 0x01)\n+ spectrum  70 B binary  (type 0x02)"]
     end
 
-    A1 -->|"int32 stereo · 256 frames · 2 KB\nleft-justified 24-bit  (>> 8 to parse)"| SG
-    A2 -->|"int32 stereo · 256 frames · 2 KB"| SG
-    UA -->|"PCM16/24 → int32 · 256 frames · 2 KB\nhost volume applied"| SG
-    SG -->|"int32 stereo · 256 frames"| PB
+    A1 -->|"int32 stereo · 256 frames · 2 KB\nleft-justified 24-bit  (>> 8)"| PB
+    A2 -->|"int32 stereo · 256 frames · 2 KB"| PB
+    UA -->|"PCM16/24 → int32 · 256 frames · 2 KB\nhost volume applied"| PB
+    SG -.->|"optional buffer override\nsiggen_fill_buffer()"| PB
     PB --> DP
     DP -->|"float[6][256]  PSRAM\nch0-1 = ADC1  ·  ch2-3 = ADC2  ·  ch4-5 = USB"| RT
     RT -->|"float[2][256] → int32 stereo · 2 KB\nre-interleaved  (<< 8)"| DW
