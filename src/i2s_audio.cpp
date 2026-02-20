@@ -373,12 +373,6 @@ static unsigned long _holdStartL[NUM_AUDIO_INPUTS] = {};
 static unsigned long _holdStartR[NUM_AUDIO_INPUTS] = {};
 static unsigned long _holdStartC[NUM_AUDIO_INPUTS] = {};
 
-// DC-blocking IIR filter state per input
-static int32_t _dcPrevInL[NUM_AUDIO_INPUTS] = {};
-static int32_t _dcPrevInR[NUM_AUDIO_INPUTS] = {};
-static float _dcPrevOutL[NUM_AUDIO_INPUTS] = {};
-static float _dcPrevOutR[NUM_AUDIO_INPUTS] = {};
-
 // Waveform accumulation state per input — PSRAM-allocated on ESP32, static on native
 #ifdef NATIVE_TEST
 static float _wfAccum[NUM_AUDIO_INPUTS][WAVEFORM_BUFFER_SIZE];
@@ -577,7 +571,7 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
     float coeffDecay  = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / VU_DECAY_MS) : 0.0f;
     float coeffPeakDecay = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / PEAK_DECAY_AFTER_HOLD_MS) : 0.0f;
 
-    // --- Pass 1: Diagnostics + DC offset + DC-blocking IIR (merged) ---
+    // --- Pass 1: Diagnostics + DC offset detection ---
     diag.totalBuffersRead++;
     diag.lastReadMs = now;
     {
@@ -585,7 +579,6 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
         uint32_t clipCount = 0;
         const int32_t CLIP_THRESHOLD = 8300000;
         float dcSum = 0.0f;
-        static const float DC_BLOCK_ALPHA = 0.9987f;
 
         for (int f = 0; f < stereo_frames; f++) {
             int32_t rawL = buffer[f * 2];
@@ -600,17 +593,6 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
 
             // DC offset accumulation (float — matches 24-bit precision)
             dcSum += (float)parsedL + (float)parsedR;
-
-            // DC-blocking IIR (modifies buffer in-place)
-            float outL = (float)(rawL - _dcPrevInL[a]) + DC_BLOCK_ALPHA * _dcPrevOutL[a];
-            _dcPrevInL[a] = rawL;
-            _dcPrevOutL[a] = outL;
-            buffer[f * 2] = (int32_t)outL;
-
-            float outR = (float)(rawR - _dcPrevInR[a]) + DC_BLOCK_ALPHA * _dcPrevOutR[a];
-            _dcPrevInR[a] = rawR;
-            _dcPrevOutR[a] = outR;
-            buffer[f * 2 + 1] = (int32_t)outR;
         }
 
         if (allZero) {
@@ -670,23 +652,20 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
         return;
     }
 
-    // DSP pipeline processing (after DC filter, before analysis)
+    // DSP pipeline processing (before analysis)
     // Buffer contains raw left-justified I2S data (24-bit in bits [31:8]).
     // DSP normalizes by MAX_24BIT (8388607) so we must parse to right-justified
     // 24-bit first, then left-justify back after DSP for DAC output and analysis.
+    // Always routes through DSP+matrix so routing matrix works even when DSP stages are bypassed.
 #ifdef DSP_ENABLED
-    if (AppState::getInstance().dspEnabled && !AppState::getInstance().dspBypass) {
-        // Parse: left-justified → right-justified 24-bit (>> 8)
-        for (int i = 0; i < stereo_frames * 2; i++) {
-            buffer[i] = audio_parse_24bit_sample(buffer[i]);
-        }
-        dsp_process_buffer(buffer, stereo_frames, a);
-        // Restore: right-justified → left-justified (<< 8) for DAC + analysis
-        for (int i = 0; i < stereo_frames * 2; i++) {
-            buffer[i] = buffer[i] << 8;
-        }
-    } else {
-        dsp_clear_cpu_load();
+    // Parse: left-justified → right-justified 24-bit (>> 8)
+    for (int i = 0; i < stereo_frames * 2; i++) {
+        buffer[i] = audio_parse_24bit_sample(buffer[i]);
+    }
+    dsp_process_buffer(buffer, stereo_frames, a);
+    // Restore: right-justified → left-justified (<< 8) for DAC + analysis
+    for (int i = 0; i < stereo_frames * 2; i++) {
+        buffer[i] = buffer[i] << 8;
     }
 #endif
 
@@ -1168,27 +1147,8 @@ static void audio_capture_task(void *param) {
         // ===== DAC Output via Routing Matrix =====
 #ifdef DAC_ENABLED
         if (AppState::getInstance().dacEnabled && AppState::getInstance().dacReady) {
-#ifdef DSP_ENABLED
-            if (AppState::getInstance().dspEnabled && !AppState::getInstance().dspBypass) {
-                // DSP active: route through 6x6 matrix
-                dsp_routing_execute(s_dacBuf, stereo_frames1);
-                dac_output_write(s_dacBuf, stereo_frames1);
-            } else
-#endif
-            {
-                // DSP bypassed: direct source selection
-                uint8_t src = AppState::getInstance().dacSourceInput;
-                if (src == 0) {
-                    dac_output_write(buf1, stereo_frames1);
-                } else if (src == 1 && adc2Ok) {
-                    dac_output_write(buf2, stereo_frames2);
-                }
-#ifdef USB_AUDIO_ENABLED
-                else if (src == 2 && AppState::getInstance().adcEnabled[2] && usb_audio_is_streaming()) {
-                    dac_output_write(s_bufUsb, DMA_BUF_LEN);
-                }
-#endif
-            }
+            dsp_routing_execute(s_dacBuf, stereo_frames1);
+            dac_output_write(s_dacBuf, stereo_frames1);
         }
 #endif
 
@@ -1310,6 +1270,10 @@ void i2s_audio_init() {
     LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",
           _currentSampleRate, I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
           I2S_LRC_PIN, I2S_MCLK_PIN, _adc2InitOk ? "OK" : "FAIL");
+    LOG_I("[Audio] DMA buffers: %d x %d samples/ch, ~%d KB total for %d I2S peripherals",
+          DMA_BUF_COUNT, DMA_BUF_LEN,
+          (DMA_BUF_COUNT * DMA_BUF_LEN * sizeof(int32_t) * 2 * NUM_AUDIO_ADCS) / 1024,
+          NUM_AUDIO_ADCS);
 }
 
 int i2s_audio_get_num_adcs() {

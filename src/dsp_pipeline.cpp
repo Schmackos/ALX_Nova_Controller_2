@@ -688,12 +688,7 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
     _processingActive = true;
     int stateIdx = _activeIndex;
     DspState *cfg = &_states[stateIdx];
-    if (cfg->globalBypass) {
-        _metrics.processTimeUs = 0;
-        _metrics.cpuLoadPercent = 0.0f;
-        _processingActive = false;
-        return;
-    }
+    bool bypass = cfg->globalBypass || !AppState::getInstance().dspEnabled;
 
     // Map ADC index to channel pair: ADC0 → ch0(L), ch1(R); ADC1 → ch2(L), ch3(R)
     int chL = adcIndex * 2;
@@ -703,40 +698,56 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
         return;
     }
 
-    // Deinterleave int32 stereo → float mono buffers
+    // Always deinterleave int32 stereo → float mono buffers
     for (int f = 0; f < stereoFrames; f++) {
         _dspBufL[f] = (float)buffer[f * 2] / MAX_24BIT_F;
         _dspBufR[f] = (float)buffer[f * 2 + 1] / MAX_24BIT_F;
     }
 
-    // Process each channel
-    dsp_process_channel(_dspBufL, stereoFrames, cfg->channels[chL], stateIdx);
-    dsp_process_channel(_dspBufR, stereoFrames, cfg->channels[chR], stateIdx);
+    if (!bypass) {
+        // Process each channel
+        dsp_process_channel(_dspBufL, stereoFrames, cfg->channels[chL], stateIdx);
+        dsp_process_channel(_dspBufR, stereoFrames, cfg->channels[chR], stateIdx);
 
-    // Apply stereo width (mid-side processing) — operates on L+R pair, placed on L channel
-    DspChannelConfig &chLeft = cfg->channels[chL];
-    for (int i = 0; i < chLeft.stageCount; i++) {
-        DspStage &s = chLeft.stages[i];
-        if (s.enabled && s.type == DSP_STEREO_WIDTH) {
-            float widthScale = s.stereoWidth.width / 100.0f;
-            float centerGain = s.stereoWidth.centerGainLin;
-            for (int f = 0; f < stereoFrames; f++) {
-                float mid  = (_dspBufL[f] + _dspBufR[f]) * 0.5f * centerGain;
-                float side = (_dspBufL[f] - _dspBufR[f]) * 0.5f * widthScale;
-                _dspBufL[f] = mid + side;
-                _dspBufR[f] = mid - side;
+        // Apply stereo width (mid-side processing) — operates on L+R pair, placed on L channel
+        DspChannelConfig &chLeft = cfg->channels[chL];
+        for (int i = 0; i < chLeft.stageCount; i++) {
+            DspStage &s = chLeft.stages[i];
+            if (s.enabled && s.type == DSP_STEREO_WIDTH) {
+                float widthScale = s.stereoWidth.width / 100.0f;
+                float centerGain = s.stereoWidth.centerGainLin;
+                for (int f = 0; f < stereoFrames; f++) {
+                    float mid  = (_dspBufL[f] + _dspBufR[f]) * 0.5f * centerGain;
+                    float side = (_dspBufL[f] - _dspBufR[f]) * 0.5f * widthScale;
+                    _dspBufL[f] = mid + side;
+                    _dspBufR[f] = mid - side;
+                }
+                break; // Only one stereo width stage per pair
             }
-            break; // Only one stereo width stage per pair
+        }
+
+        // Apply emergency safety limiter (brick-wall speaker protection, optional)
+        {
+            static bool _prevLimiterEnabled = false;
+            bool limiterEnabled = AppState::getInstance().emergencyLimiterEnabled;
+            if (limiterEnabled && !_prevLimiterEnabled) {
+                // Reset stale envelope/lookahead state so re-enabling doesn't
+                // cause spurious gain reduction from the previous active period.
+                uint32_t savedTriggerCount = _emergencyLimiter.triggerCount;
+                memset(&_emergencyLimiter, 0, sizeof(_emergencyLimiter));
+                _emergencyLimiter.triggerCount = savedTriggerCount;
+                _emergencyLimiter.samplesSinceTrigger = UINT32_MAX / 2; // "not recently triggered"
+            }
+            _prevLimiterEnabled = limiterEnabled;
+
+            if (limiterEnabled) {
+                float threshold = AppState::getInstance().emergencyLimiterThresholdDb;
+                dsp_emergency_limiter_process(_dspBufL, _dspBufR, stereoFrames, threshold, cfg->sampleRate);
+            }
         }
     }
 
-    // Apply emergency safety limiter (non-bypassable brick-wall protection)
-    if (AppState::getInstance().emergencyLimiterEnabled) {
-        float threshold = AppState::getInstance().emergencyLimiterThresholdDb;
-        dsp_emergency_limiter_process(_dspBufL, _dspBufR, stereoFrames, threshold, cfg->sampleRate);
-    }
-
-    // Store post-DSP float channels for routing matrix
+    // Always store post-DSP float channels for routing matrix
     memcpy(_postDspChannels[chL], _dspBufL, stereoFrames * sizeof(float));
     memcpy(_postDspChannels[chR], _dspBufR, stereoFrames * sizeof(float));
     _postDspFrames = stereoFrames;
@@ -752,33 +763,38 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
     }
 
     // Update timing metrics
+    if (bypass) {
+        _metrics.processTimeUs = 0;
+        _metrics.cpuLoadPercent = 0.0f;
+    } else {
 #ifndef NATIVE_TEST
-    unsigned long endUs = (unsigned long)esp_timer_get_time();
+        unsigned long endUs = (unsigned long)esp_timer_get_time();
 #else
-    unsigned long endUs = esp_timer_get_time();
+        unsigned long endUs = esp_timer_get_time();
 #endif
-    uint32_t elapsed = (uint32_t)(endUs - startUs);
-    _metrics.processTimeUs = elapsed;
-    if (elapsed > _metrics.maxProcessTimeUs) _metrics.maxProcessTimeUs = elapsed;
+        uint32_t elapsed = (uint32_t)(endUs - startUs);
+        _metrics.processTimeUs = elapsed;
+        if (elapsed > _metrics.maxProcessTimeUs) _metrics.maxProcessTimeUs = elapsed;
 
-    // CPU load = processTime / bufferPeriod * 100
-    float bufferPeriodUs = (float)stereoFrames / (float)cfg->sampleRate * 1000000.0f;
-    if (bufferPeriodUs > 0.0f) {
-        _metrics.cpuLoadPercent = (float)elapsed / bufferPeriodUs * 100.0f;
-    }
+        // CPU load = processTime / bufferPeriod * 100
+        float bufferPeriodUs = (float)stereoFrames / (float)cfg->sampleRate * 1000000.0f;
+        if (bufferPeriodUs > 0.0f) {
+            _metrics.cpuLoadPercent = (float)elapsed / bufferPeriodUs * 100.0f;
+        }
 
-    // Collect limiter/compressor/gate GR from active channels (worst = most reduction)
-    for (int c = chL; c <= chR; c++) {
-        _metrics.limiterGrDb[c] = 0.0f;
-        DspChannelConfig &ch = cfg->channels[c];
-        for (int s = 0; s < ch.stageCount; s++) {
-            if (ch.stages[s].enabled) {
-                float gr = 0.0f;
-                if (ch.stages[s].type == DSP_LIMITER) gr = ch.stages[s].limiter.gainReduction;
-                else if (ch.stages[s].type == DSP_COMPRESSOR) gr = ch.stages[s].compressor.gainReduction;
-                else if (ch.stages[s].type == DSP_NOISE_GATE) gr = ch.stages[s].noiseGate.gainReduction;
-                else if (ch.stages[s].type == DSP_SPEAKER_PROT) gr = ch.stages[s].speakerProt.gainReduction;
-                if (gr < _metrics.limiterGrDb[c]) _metrics.limiterGrDb[c] = gr;
+        // Collect limiter/compressor/gate GR from active channels (worst = most reduction)
+        for (int c = chL; c <= chR; c++) {
+            _metrics.limiterGrDb[c] = 0.0f;
+            DspChannelConfig &ch = cfg->channels[c];
+            for (int s = 0; s < ch.stageCount; s++) {
+                if (ch.stages[s].enabled) {
+                    float gr = 0.0f;
+                    if (ch.stages[s].type == DSP_LIMITER) gr = ch.stages[s].limiter.gainReduction;
+                    else if (ch.stages[s].type == DSP_COMPRESSOR) gr = ch.stages[s].compressor.gainReduction;
+                    else if (ch.stages[s].type == DSP_NOISE_GATE) gr = ch.stages[s].noiseGate.gainReduction;
+                    else if (ch.stages[s].type == DSP_SPEAKER_PROT) gr = ch.stages[s].speakerProt.gainReduction;
+                    if (gr < _metrics.limiterGrDb[c]) _metrics.limiterGrDb[c] = gr;
+                }
             }
         }
     }

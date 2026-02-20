@@ -77,6 +77,14 @@ the two I2S ADCs with full metering, DSP processing, and routing.
 
 
 ## Bug Fixes
+- [2026-02-20] fix: DAC soft-mute and I2S reinit on USB audio connect
+
+- Add dac_output_reinit() — cycles I2S TX and relocks DAC PLL after
+  USB VBUS returns; waits 50ms for PLL lock then unmutes
+- Detect usbAudioConnected rising edge in main loop: mute DAC for
+  200ms then trigger dac_output_reinit() to mask power-on pop
+- Wrap usb_auto_priority routing switch with 10ms dacMute to eliminate
+  source-switch pop when USB auto-priority activates (Fix 2c) (`a250b4d`)
 - [2026-02-20] fix: move large static buffers to PSRAM to resolve HEAP CRITICAL
 
 _postDspChannels[6][256] (~6KB), dacBuf (~2KB), and bufUsb (~2KB) were

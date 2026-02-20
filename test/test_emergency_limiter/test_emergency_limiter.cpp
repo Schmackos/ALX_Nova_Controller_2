@@ -42,6 +42,7 @@ void setUp(void) {
     dsp_init();
 
     // Reset emergency limiter settings to defaults
+    appState.dspEnabled = true;
     appState.emergencyLimiterEnabled = true;
     appState.emergencyLimiterThresholdDb = -0.5f;
 }
