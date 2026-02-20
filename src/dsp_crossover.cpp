@@ -275,11 +275,13 @@ void dsp_routing_preset_identity(DspRoutingMatrix &rm) {
 }
 
 void dsp_routing_preset_mono_sum(DspRoutingMatrix &rm) {
-    float g = 1.0f / DSP_MAX_CHANNELS;
-    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
-        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
-            rm.matrix[o][i] = g;
-        }
+    memset(&rm, 0, sizeof(rm));
+    // Mono sum within each stereo pair: L+R → both outputs at 0.5 gain
+    for (int p = 0; p < DSP_MAX_CHANNELS; p += 2) {
+        rm.matrix[p][p]         = 0.5f;  // Out_L = 0.5*In_L + 0.5*In_R
+        rm.matrix[p][p + 1]     = 0.5f;
+        rm.matrix[p + 1][p]     = 0.5f;  // Out_R = 0.5*In_L + 0.5*In_R
+        rm.matrix[p + 1][p + 1] = 0.5f;
     }
 }
 

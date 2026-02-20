@@ -64,6 +64,59 @@ the two I2S ADCs with full metering, DSP processing, and routing.
 - None
 
 ## Bug Fixes
+- [2026-02-20] fix: routing matrix — USB channel bleeding, stale data, and UI mismatch
+
+Mono Sum preset rewired to per-pair mono (no cross-input bleed), inactive
+channels zeroed before routing to prevent stale data in DAC output, and
+web UI routing grid expanded from 4 to 6 channels to show USB L/USB R. (`d9fb47c`)
+- [2026-02-20] fix: routing matrix — USB channel bleeding, stale data, and UI mismatch
+
+Mono Sum preset rewired to per-pair mono (no cross-input bleed), inactive
+channels zeroed before routing to prevent stale data in DAC output, and
+web UI routing grid expanded from 4 to 6 channels to show USB L/USB R. (`1834056`)
+- [2026-02-20] fix: USB audio input not processed — persist adcEnabled[2] and clear dacMute on reinit failure
+
+adcEnabled[2] (USB input) defaulted to false and was never persisted in
+settings. The save format was "1,1" (ADC1/ADC2 only), so even with USB
+audio streaming, the audio capture task skipped USB reads — ring buffer
+overflowed (overruns) while metering showed -inf dBFS.
+
+Settings manager:
+- Extend save format from "1,1" to "1,1,0" (ADC1,ADC2,USB)
+- Load parser handles 3-value CSV with backward-compat for old format
+- Auto-enable adcEnabled[2] when usbAudioEnabled is loaded as true
+
+DAC HAL:
+- Clear dacMute on early returns from dac_output_reinit() to prevent
+  permanent mute when DAC is disabled or I2S TX re-enable fails (`b8c01db`)
+- [2026-02-20] fix: remove residual DC blocking filter and fix emergency limiter defaults
+
+DC blocking filter:
+- Remove IIR DC block from process_adc_buffer() — the v1.8.3 removal
+  commit (b0e4c4d) stripped the GUI toggle and DSP helpers but left
+  the actual filter code running unconditionally
+- Removing it eliminates the click/transient when ADC inputs are toggled
+  (large step response in filter state → audible pop on enable/disable)
+- DSP high-pass filter stages are the correct user-facing replacement
+
+Emergency safety limiter:
+- Raise default threshold from -0.5 dBFS to -0.1 dBFS — the old
+  default triggered on virtually all commercial music (mastered near
+  0 dBFS), causing audible gain pumping with instant attack + 100ms
+  release; at -0.1 dBFS only genuine DSP overloads are caught
+- Reset limiter state (envelope, lookahead, samplesSinceTrigger) when
+  re-enabled after being disabled — prevents spurious gain reduction
+  for the first 100ms after toggling the feature back on
+- Fix misleading "non-bypassable" comment — limiter is gated by the
+  emergencyLimiterEnabled flag and by global DSP bypass (`0959c02`)
+- [2026-02-20] fix: DAC soft-mute and I2S reinit on USB audio connect
+
+- Add dac_output_reinit() — cycles I2S TX and relocks DAC PLL after
+  USB VBUS returns; waits 50ms for PLL lock then unmutes
+- Detect usbAudioConnected rising edge in main loop: mute DAC for
+  200ms then trigger dac_output_reinit() to mask power-on pop
+- Wrap usb_auto_priority routing switch with 10ms dacMute to eliminate
+  source-switch pop when USB auto-priority activates (Fix 2c) (`a250b4d`)
 - [2026-02-20] fix: move large static buffers to PSRAM to resolve HEAP CRITICAL
 
 _postDspChannels[6][256] (~6KB), dacBuf (~2KB), and bufUsb (~2KB) were

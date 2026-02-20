@@ -9773,8 +9773,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== DSP Tab =====
         const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor','LPF 1st','HPF 1st','Linkwitz','Decimator','Convolution','Noise Gate','Tone Controls','Speaker Prot','Stereo Width','Loudness','Bass Enhance','Multiband Comp'];
-        const DSP_MAX_CH = 4;
-        const DSP_CH_NAMES = ['L1','R1','L2','R2'];
+        const DSP_MAX_CH = 6;
+        const DSP_CH_NAMES = ['L1','R1','L2','R2','USB L','USB R'];
         function dspChLabel(c) { return inputNames[c] || DSP_CH_NAMES[c]; }
         let dspState = null;
         let dspCh = 0; // selected channel
