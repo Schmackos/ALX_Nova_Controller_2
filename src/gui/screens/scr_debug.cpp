@@ -25,9 +25,6 @@ static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
 static lv_obj_t *lbl_audio_adc[NUM_AUDIO_INPUTS] = {nullptr, nullptr, nullptr};
 static lv_obj_t *lbl_i2s = nullptr;
-#ifdef DSP_ENABLED
-// static lv_obj_t *lbl_audio_quality = nullptr;
-#endif
 #ifdef DAC_ENABLED
 static lv_obj_t *lbl_dac = nullptr;
 static lv_obj_t *lbl_eeprom = nullptr;
@@ -68,7 +65,6 @@ static const PinEntry all_pins[] = {
     {"EC11 Encoder", "B",    ENCODER_B_PIN},
     {"EC11 Encoder", "SW",   ENCODER_SW_PIN},
     {"HW-508 Buzz",  "IO",   BUZZER_PIN},
-    {"Core",         "LED",  LED_PIN},
     {"Core",         "Amp",  AMPLIFIER_PIN},
     {"Core",         "Btn",  RESET_BUTTON_PIN},
 };
@@ -128,12 +124,12 @@ static void update_pins_label(void) {
                  "HW-508 Buzzer\n"
                  "  IO=%d\n"
                  "Core\n"
-                 "  LED=%d Amp=%d Btn=%d",
+                 "  Amp=%d Btn=%d",
                  TFT_CS_PIN, TFT_MOSI_PIN, TFT_SCLK_PIN,
                  TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN,
                  ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
                  BUZZER_PIN,
-                 LED_PIN, AMPLIFIER_PIN, RESET_BUTTON_PIN);
+                 AMPLIFIER_PIN, RESET_BUTTON_PIN);
     } else {
         sort_pins(indices, PIN_COUNT, pin_sort_mode);
         pos = 0;
@@ -258,19 +254,6 @@ void scr_debug_refresh(void) {
     }
 
     /* Audio Quality Diagnostics */
-#ifdef DSP_ENABLED
-    // if (lbl_audio_quality) {
-    //     AudioQualityDiag diag = audio_quality_get_diagnostics();
-    //     const char* typeStr = audio_quality_glitch_type_to_string(diag.lastGlitchType);
-    //     snprintf(buf, sizeof(buf), "Enabled: %s\nGlitches: %lu (min:%lu)\nLast: %s",
-    //              appState.audioQualityEnabled ? "Yes" : "No",
-    //              (unsigned long)diag.glitchHistory.totalGlitches,
-    //              (unsigned long)diag.glitchHistory.glitchesLastMinute,
-    //              typeStr);
-    //     lv_label_set_text(lbl_audio_quality, buf);
-    // }
-#endif
-
     /* Audio DAC */
 #ifdef DAC_ENABLED
     if (lbl_dac) {
@@ -467,11 +450,6 @@ lv_obj_t *scr_debug_create(void) {
             lv_label_set_long_mode(lbl_audio_adc[a], LV_LABEL_LONG_WRAP);
         }
     }
-
-    /* Audio Quality Diagnostics */
-// #ifdef DSP_ENABLED
-//     lbl_audio_quality = add_section(cont, "Audio Quality");
-// #endif
 
     /* Audio DAC */
 #ifdef DAC_ENABLED

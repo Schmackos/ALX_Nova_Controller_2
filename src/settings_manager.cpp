@@ -254,20 +254,7 @@ bool loadSettings() {
   }
 #endif
 
-#ifdef DSP_ENABLED
-  // Load emergency limiter settings (lines 28-29)
-  if (lines[dataStart + 28].length() > 0) {
-    appState.emergencyLimiterEnabled = (lines[dataStart + 28].toInt() != 0);
-  }
-  if (lines[dataStart + 29].length() > 0) {
-    float threshold = lines[dataStart + 29].toFloat();
-    // Validate range
-    if (threshold >= -6.0f && threshold <= 0.0f) {
-      appState.emergencyLimiterThresholdDb = threshold;
-    }
-  }
-  // Line 30 was dcBlockEnabled (removed — now a DSP preset)
-#endif
+  // Lines 28-29 were emergency limiter (removed), line 30 was dcBlockEnabled (removed)
 
   // Load custom device name (line 31, if present)
   if (lines[dataStart + 31].length() > 0) {
@@ -278,17 +265,7 @@ bool loadSettings() {
     appState.customDeviceName[0] = '\0';
   }
 
-  // Load USB auto-priority (line 32, if present)
-  if (lines[dataStart + 32].length() > 0) {
-    appState.usbAutoPriority = (lines[dataStart + 32].toInt() != 0);
-  }
-  // Load DAC source input (line 33, if present)
-  if (lines[dataStart + 33].length() > 0) {
-    int val = lines[dataStart + 33].toInt();
-    if (val >= 0 && val <= 2) {
-      appState.dacSourceInput = (uint8_t)val;
-    }
-  }
+  // Lines 32-33: reserved (was usbAutoPriority, dacSourceInput)
 
   return true;
 }
@@ -348,18 +325,12 @@ void saveSettings() {
 #else
   file.println("0"); // placeholder for usbAudioEnabled
 #endif
-#ifdef DSP_ENABLED
-  file.println(appState.emergencyLimiterEnabled ? "1" : "0");
-  file.println(appState.emergencyLimiterThresholdDb, 2); // 2 decimal places
+  file.println("0"); // line 28: reserved (was emergencyLimiterEnabled)
+  file.println("0"); // line 29: reserved (was emergencyLimiterThresholdDb)
   file.println("0"); // line 30: reserved (was dcBlockEnabled)
-#else
-  file.println("1"); // placeholder for emergencyLimiterEnabled (default ON)
-  file.println("-0.5"); // placeholder for emergencyLimiterThresholdDb
-  file.println("0"); // line 30: reserved (was dcBlockEnabled)
-#endif
   file.println(appState.customDeviceName); // line 31: custom device name (AP SSID override)
-  file.println(appState.usbAutoPriority ? "1" : "0"); // line 32: USB auto-priority
-  file.println(appState.dacSourceInput); // line 33: DAC source input (0=ADC1, 1=ADC2, 2=USB)
+  file.println("0"); // line 32: reserved (was usbAutoPriority)
+  file.println("0"); // line 33: reserved (was dacSourceInput)
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 }
@@ -493,9 +464,6 @@ void saveInputNames() {
 void performFactoryReset() {
   LOG_W("[Settings] Factory reset initiated");
   appState.factoryResetInProgress = true;
-
-  // Visual feedback: solid LED
-  digitalWrite(LED_PIN, HIGH);
 
   // 1. Clear WiFi settings from NVS
   LOG_I("[Settings] Clearing WiFi credentials (NVS: wifi-list)");
@@ -961,7 +929,6 @@ void handleSettingsExport() {
   doc["settings"]["appState.dstOffset"] = appState.dstOffset;
   doc["settings"]["appState.darkMode"] = appState.darkMode;
   doc["settings"]["appState.enableCertValidation"] = appState.enableCertValidation;
-  doc["settings"]["appState.blinkingEnabled"] = appState.blinkingEnabled;
   doc["settings"]["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval / 1000;
   doc["settings"]["audioUpdateRate"] = appState.audioUpdateRate;
   doc["settings"]["screenTimeout"] = appState.screenTimeout / 1000;
@@ -1032,10 +999,6 @@ void handleSettingsExport() {
   // Custom device name
   doc["settings"]["customDeviceName"] = appState.customDeviceName;
 
-#ifdef DSP_ENABLED
-  doc["settings"]["usbAutoPriority"] = appState.usbAutoPriority;
-  doc["settings"]["dacSourceInput"] = appState.dacSourceInput;
-#endif
 
   // Input channel names
   JsonArray names = doc["inputNames"].to<JsonArray>();
@@ -1167,11 +1130,6 @@ void handleSettingsImport() {
       appState.enableCertValidation = doc["settings"]["appState.enableCertValidation"].as<bool>();
       LOG_D("[Settings] Cert Validation: %s",
             appState.enableCertValidation ? "enabled" : "disabled");
-    }
-    if (doc["settings"]["appState.blinkingEnabled"].is<bool>()) {
-      appState.blinkingEnabled = doc["settings"]["appState.blinkingEnabled"].as<bool>();
-      LOG_D("[Settings] Blinking: %s",
-            appState.blinkingEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["appState.hardwareStatsInterval"].is<int>()) {
       int interval = doc["settings"]["appState.hardwareStatsInterval"].as<int>();
@@ -1305,19 +1263,6 @@ void handleSettingsImport() {
       setCharField(appState.customDeviceName, sizeof(appState.customDeviceName), name);
       LOG_D("[Settings] Custom Device Name: %s", appState.customDeviceName);
     }
-#ifdef DSP_ENABLED
-    if (doc["settings"]["usbAutoPriority"].is<bool>()) {
-      appState.usbAutoPriority = doc["settings"]["usbAutoPriority"].as<bool>();
-      LOG_D("[Settings] USB Auto-Priority: %s", appState.usbAutoPriority ? "enabled" : "disabled");
-    }
-    if (doc["settings"]["dacSourceInput"].is<int>()) {
-      int val = doc["settings"]["dacSourceInput"].as<int>();
-      if (val >= 0 && val <= 2) {
-        appState.dacSourceInput = (uint8_t)val;
-        LOG_D("[Settings] DAC Source Input: %d", val);
-      }
-    }
-#endif
     // Save general settings
     saveSettings();
   }
@@ -1594,7 +1539,6 @@ void handleDiagnostics() {
   settings["appState.dstOffset"] = appState.dstOffset;
   settings["appState.darkMode"] = appState.darkMode;
   settings["appState.enableCertValidation"] = appState.enableCertValidation;
-  settings["appState.blinkingEnabled"] = appState.blinkingEnabled;
   settings["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval;
   settings["audioUpdateRate"] = appState.audioUpdateRate;
   settings["screenTimeout"] = appState.screenTimeout;
@@ -1754,7 +1698,6 @@ void handleDiagnostics() {
     fsmStateStr = "unknown";
   }
   doc["fsmState"] = fsmStateStr;
-  doc["appState.ledState"] = appState.ledState;
 
   // ===== Error State =====
   if (appState.hasError()) {

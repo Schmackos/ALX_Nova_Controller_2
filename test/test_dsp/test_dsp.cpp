@@ -35,7 +35,6 @@ DspRoutingMatrix* dsp_get_routing_matrix() {
 
 #include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_convolution.cpp"
-#include "../../src/thd_measurement.cpp"
 
 // Tolerance for float comparisons
 #define FLOAT_TOL 0.001f
@@ -48,7 +47,6 @@ DspRoutingMatrix* dsp_get_routing_matrix() {
 void setUp(void) {
     dsp_init();
     appState.dspEnabled = true;
-    appState.emergencyLimiterEnabled = false; // Don't let lookahead delay affect DSP stage tests
 }
 
 void tearDown(void) {}
@@ -1707,7 +1705,6 @@ void test_conv_impulse_passthrough(void) {
     float ir[1] = {1.0f};
     int ret = dsp_conv_init_slot(0, ir, 1);
     TEST_ASSERT_EQUAL_INT(0, ret);
-    TEST_ASSERT_TRUE(dsp_conv_is_active(0));
     TEST_ASSERT_EQUAL_INT(1, dsp_conv_get_ir_length(0));
 
     float buf[8] = {1.0f, 0.5f, -0.3f, 0.7f, 0.0f, -1.0f, 0.2f, 0.1f};
@@ -1726,10 +1723,9 @@ void test_conv_free_releases_slot(void) {
     float ir[4] = {0.25f, 0.25f, 0.25f, 0.25f};
     int ret = dsp_conv_init_slot(0, ir, 4);
     TEST_ASSERT_EQUAL_INT(0, ret);
-    TEST_ASSERT_TRUE(dsp_conv_is_active(0));
+    TEST_ASSERT_TRUE(dsp_conv_get_ir_length(0) > 0);
 
     dsp_conv_free_slot(0);
-    TEST_ASSERT_FALSE(dsp_conv_is_active(0));
     TEST_ASSERT_EQUAL_INT(0, dsp_conv_get_ir_length(0));
 }
 
@@ -2597,86 +2593,6 @@ void test_baffle_step_gain_6db(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.5f, 6.0f, r.gainDb);
 }
 
-// ===== THD Measurement Tests =====
-
-void test_thd_pure_sine_near_zero(void) {
-    thd_start_measurement(1000.0f, 4);
-    TEST_ASSERT_TRUE(thd_is_measuring());
-
-    // Generate clean FFT magnitude for pure 1kHz sine
-    float binFreqHz = 48000.0f / 1024.0f; // ~46.875 Hz/bin
-    int fundamentalBin = (int)(1000.0f / binFreqHz + 0.5f); // bin 21
-    int numBins = 512;
-
-    for (int frame = 0; frame < 4; frame++) {
-        float fftMag[512];
-        memset(fftMag, 0, sizeof(fftMag));
-        fftMag[fundamentalBin] = 1.0f; // Pure fundamental, no harmonics
-        thd_process_fft_buffer(fftMag, numBins, binFreqHz, 48000.0f);
-    }
-
-    ThdResult r = thd_get_result();
-    TEST_ASSERT_TRUE(r.valid);
-    TEST_ASSERT_TRUE(r.thdPlusNPercent < 1.0f); // Near zero THD for pure sine
-}
-
-void test_thd_known_3rd_harmonic(void) {
-    thd_start_measurement(1000.0f, 4);
-
-    float binFreqHz = 48000.0f / 1024.0f;
-    int fundamentalBin = (int)(1000.0f / binFreqHz + 0.5f);
-    int thirdHarmBin = (int)(3000.0f / binFreqHz + 0.5f);
-    int numBins = 512;
-
-    for (int frame = 0; frame < 4; frame++) {
-        float fftMag[512];
-        memset(fftMag, 0, sizeof(fftMag));
-        fftMag[fundamentalBin] = 1.0f;
-        fftMag[thirdHarmBin] = 0.1f; // 3rd harmonic at -20dB = 10%
-        thd_process_fft_buffer(fftMag, numBins, binFreqHz, 48000.0f);
-    }
-
-    ThdResult r = thd_get_result();
-    TEST_ASSERT_TRUE(r.valid);
-    TEST_ASSERT_TRUE(r.thdPlusNPercent > 5.0f); // Should detect significant THD
-}
-
-void test_thd_averaging_accumulates(void) {
-    thd_start_measurement(1000.0f, 8);
-    TEST_ASSERT_TRUE(thd_is_measuring());
-
-    float binFreqHz = 48000.0f / 1024.0f;
-    int fundamentalBin = (int)(1000.0f / binFreqHz + 0.5f);
-    int numBins = 512;
-
-    for (int frame = 0; frame < 4; frame++) {
-        float fftMag[512];
-        memset(fftMag, 0, sizeof(fftMag));
-        fftMag[fundamentalBin] = 1.0f;
-        thd_process_fft_buffer(fftMag, numBins, binFreqHz, 48000.0f);
-    }
-
-    // After 4 frames of 8 needed, should still be measuring
-    TEST_ASSERT_TRUE(thd_is_measuring());
-    ThdResult r = thd_get_result();
-    TEST_ASSERT_EQUAL(4, r.framesProcessed);
-    TEST_ASSERT_FALSE(r.valid);
-}
-
-void test_thd_cancel_stops(void) {
-    thd_start_measurement(1000.0f, 4);
-    TEST_ASSERT_TRUE(thd_is_measuring());
-    thd_stop_measurement();
-    TEST_ASSERT_FALSE(thd_is_measuring());
-}
-
-void test_thd_invalid_freq_safe(void) {
-    thd_start_measurement(0.0f, 4);
-    TEST_ASSERT_FALSE(thd_is_measuring());
-    ThdResult r = thd_get_result();
-    TEST_ASSERT_FALSE(r.valid);
-}
-
 // ===== Utility & Helper Tests =====
 
 void test_stage_type_name_all_types(void) {
@@ -3172,13 +3088,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_baffle_step_frequency_250mm);
     RUN_TEST(test_baffle_step_zero_width_safe);
     RUN_TEST(test_baffle_step_gain_6db);
-
-    // THD Measurement
-    RUN_TEST(test_thd_pure_sine_near_zero);
-    RUN_TEST(test_thd_known_3rd_harmonic);
-    RUN_TEST(test_thd_averaging_accumulates);
-    RUN_TEST(test_thd_cancel_stops);
-    RUN_TEST(test_thd_invalid_freq_safe);
 
     // Utility & Helper functions
     RUN_TEST(test_stage_type_name_all_types);

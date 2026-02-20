@@ -99,18 +99,6 @@ public:
   char deviceSerialNumber[17] = {};
   char customDeviceName[33] = {};  // User-configurable name used as AP SSID (overrides auto-generated)
 
-  // ===== LED State =====
-  bool blinkingEnabled = true;
-  bool ledState = false;
-  unsigned long previousMillis = 0;
-
-  void setLedState(bool state);
-  void setBlinkingEnabled(bool enabled);
-  bool isLedStateDirty() const { return _ledStateDirty; }
-  bool isBlinkingDirty() const { return _blinkingDirty; }
-  void clearLedStateDirty() { _ledStateDirty = false; }
-  void clearBlinkingDirty() { _blinkingDirty = false; }
-
   // ===== AP Mode State =====
   bool isAPMode = false;
   bool apEnabled = false;
@@ -304,8 +292,6 @@ public:
   unsigned long lastMqttPublish = 0;
 
   // ===== MQTT State Tracking (for change detection) =====
-  bool prevMqttLedState = false;
-  bool prevMqttBlinkingEnabled = true;
   bool prevMqttAmplifierState = false;
   SensingMode prevMqttSensingMode = ALWAYS_ON;
   unsigned long prevMqttTimerRemaining = 0;
@@ -359,24 +345,6 @@ public:
   void setBuzzerVolume(int volume);
   bool isBuzzerDirty() const { return _buzzerDirty; }
   void clearBuzzerDirty() { _buzzerDirty = false; }
-
-  // ===== Emergency Safety Limiter (Speaker Protection) =====
-  bool emergencyLimiterEnabled = true;       // Default ON for safety
-  float emergencyLimiterThresholdDb = -0.1f; // Threshold in dBFS (-6.0 to 0.0)
-
-  void setEmergencyLimiterEnabled(bool enabled);
-  void setEmergencyLimiterThreshold(float dbfs);
-  bool isEmergencyLimiterDirty() const { return _emergencyLimiterDirty; }
-  void clearEmergencyLimiterDirty() { _emergencyLimiterDirty = false; }
-
-  // ===== Audio Quality Diagnostics (Phase 3) =====
-  bool audioQualityEnabled = false;          // Default OFF (opt-in)
-  float audioQualityGlitchThreshold = 0.5f;  // Discontinuity threshold (0.1-1.0)
-
-  void setAudioQualityEnabled(bool enabled);
-  void setAudioQualityThreshold(float threshold);
-  bool isAudioQualityDirty() const { return _audioQualityDirty; }
-  void clearAudioQualityDirty() { _audioQualityDirty = false; }
 
   // ===== ADC Enabled Dirty Flag (for WS/MQTT sync) =====
   void markAdcEnabledDirty() { _adcEnabledDirty = true; }
@@ -456,10 +424,6 @@ public:
   // NOTE: DC Block removed in v1.8.3 - use DSP highpass stage instead
 #endif
 
-  // ===== USB Audio Routing =====
-  bool usbAutoPriority = false;   // Auto-route USB to DAC when streaming starts
-  uint8_t dacSourceInput = 0;     // Which input routes to DAC (0=ADC1, 1=ADC2, 2=USB)
-
   // ===== USB Audio State =====
 #ifdef USB_AUDIO_ENABLED
   bool usbAudioEnabled = false;      // USB audio enable (persisted, default off — avoids EMI when unused)
@@ -477,6 +441,14 @@ public:
   bool isUsbAudioDirty() const { return _usbAudioDirty; }
   void clearUsbAudioDirty() { _usbAudioDirty = false; }
 #endif
+
+  // ===== DAC Output Metering (computed in audio task, read by WS/GUI) =====
+  float dacOutputVuL = 0.0f;
+  float dacOutputVuR = 0.0f;
+  float dacOutputDbfsL = -96.0f;
+  float dacOutputDbfsR = -96.0f;
+  float dacOutputPeakL = 0.0f;
+  float dacOutputPeakR = 0.0f;
 
   // ===== DAC Output State =====
 #ifdef DAC_ENABLED
@@ -576,8 +548,6 @@ private:
 
   // Dirty flags for change detection
   bool _fsmStateDirty = false;
-  bool _ledStateDirty = false;
-  bool _blinkingDirty = false;
   bool _amplifierDirty = false;
   bool _sensingModeDirty = false;
   bool _timerDirty = false;
@@ -592,8 +562,6 @@ private:
   bool _dspConfigDirty = false;
   bool _dspMetricsDirty = false;
   bool _dspPresetDirty = false;
-  bool _emergencyLimiterDirty = false;
-  bool _audioQualityDirty = false;
 #endif
 #ifdef USB_AUDIO_ENABLED
   bool _usbAudioDirty = false;

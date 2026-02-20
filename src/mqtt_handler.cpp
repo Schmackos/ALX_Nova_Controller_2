@@ -6,7 +6,6 @@
 #include "debug_serial.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
-#include "audio_quality.h"
 #include "settings_manager.h"
 #include "utils.h"
 #include "websocket_handler.h"
@@ -99,13 +98,7 @@ static bool prevMqttDarkMode = false;
 static bool prevMqttAutoUpdate = false;
 static bool prevMqttCertValidation = true;
 
-// State tracking for USB auto-priority change detection
-static bool prevMqttUsbAutoPriority = false;
-static uint8_t prevMqttDacSourceInput = 0;
-
 // External functions from other modules
-extern void sendBlinkingState();
-extern void sendLEDState();
 extern void saveSmartSensingSettings();
 extern void sendSmartSensingStateInternal();
 extern void sendWiFiStatus();
@@ -225,7 +218,6 @@ void subscribeToMqttTopics() {
     return;
 
   // Subscribe to command topics
-  mqttClient.subscribe(mqttTopic("/led/blinking/set"));
   mqttClient.subscribe(mqttTopic("/smartsensing/mode/set"));
   mqttClient.subscribe(mqttTopic("/smartsensing/amplifier/set"));
   mqttClient.subscribe(mqttTopic("/smartsensing/timer_duration/set"));
@@ -255,10 +247,6 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe(mqttTopic("/signalgenerator/channel/set"));
   mqttClient.subscribe(mqttTopic("/signalgenerator/output_mode/set"));
   mqttClient.subscribe(mqttTopic("/signalgenerator/target_adc/set"));
-#ifdef DSP_ENABLED
-  mqttClient.subscribe(mqttTopic("/emergency_limiter/enabled/set"));
-  mqttClient.subscribe(mqttTopic("/emergency_limiter/threshold/set"));
-#endif
   mqttClient.subscribe(mqttTopic("/settings/adc_vref/set"));
   mqttClient.subscribe(mqttTopic("/audio/input1/enabled/set"));
   mqttClient.subscribe(mqttTopic("/audio/input2/enabled/set"));
@@ -288,9 +276,6 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe(mqttTopic("/dsp/peq/bypass/set"));
   mqttClient.subscribe(mqttTopic("/dsp/preset/set"));
 #endif
-  mqttClient.subscribe(mqttTopic("/settings/usb_auto_priority/set"));
-  mqttClient.subscribe(mqttTopic("/settings/dac_source/set"));
-
   // Subscribe to HA birth message for re-discovery after HA restart
   mqttClient.subscribe("homeassistant/status");
 
@@ -335,24 +320,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     return;
   }
 
-  // Handle LED blinking control
-  if (suffix && strcmp(suffix, "/led/blinking/set") == 0) {
-    bool newState = parseBool(_payloadBuf);
-    if (appState.blinkingEnabled != newState) {
-      appState.blinkingEnabled = newState;
-      LOG_I("[MQTT] Blinking set to %s", appState.blinkingEnabled ? "ON" : "OFF");
-      sendBlinkingState();
-
-      if (!appState.blinkingEnabled) {
-        appState.ledState = false;
-        digitalWrite(LED_PIN, LOW);
-        sendLEDState();
-      }
-    }
-    publishMqttBlinkingState();
-  }
   // Handle Smart Sensing mode
-  else if (suffix && strcmp(suffix, "/smartsensing/mode/set") == 0) {
+  if (suffix && strcmp(suffix, "/smartsensing/mode/set") == 0) {
     SensingMode newMode;
     bool validMode = true;
 
@@ -672,50 +641,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       LOG_I("[MQTT] Signal generator target ADC set to %s", _payloadBuf);
       publishMqttSignalGenState();
       sendSignalGenState();
-    }
-  }
-#ifdef DSP_ENABLED
-  // Handle emergency limiter enabled
-  else if (suffix && strcmp(suffix, "/emergency_limiter/enabled/set") == 0) {
-    bool newState = parseBool(_payloadBuf);
-    appState.setEmergencyLimiterEnabled(newState);
-    saveSettings();
-    LOG_I("[MQTT] Emergency limiter set to %s", newState ? "ON" : "OFF");
-    publishMqttEmergencyLimiterState();
-    sendEmergencyLimiterState();
-  }
-  // Handle emergency limiter threshold
-  else if (suffix && strcmp(suffix, "/emergency_limiter/threshold/set") == 0) {
-    float threshold = atof(_payloadBuf);
-    if (threshold >= -6.0f && threshold <= 0.0f) {
-      appState.setEmergencyLimiterThreshold(threshold);
-      saveSettings();
-      LOG_I("[MQTT] Emergency limiter threshold set to %.2f dBFS", threshold);
-      publishMqttEmergencyLimiterState();
-      sendEmergencyLimiterState();
-    }
-  }
-#endif
-  // Handle USB auto-priority
-  else if (suffix && strcmp(suffix, "/settings/usb_auto_priority/set") == 0) {
-    bool newState = parseBool(_payloadBuf);
-    appState.usbAutoPriority = newState;
-    saveSettings();
-    LOG_I("[MQTT] USB auto-priority: %s", newState ? "ON" : "OFF");
-    publishMqttUsbAutoPriorityState();
-  }
-  // Handle DAC source input
-  else if (suffix && strcmp(suffix, "/settings/dac_source/set") == 0) {
-    uint8_t val = 0;
-    if (strcmp(_payloadBuf, "ADC1") == 0 || strcmp(_payloadBuf, "0") == 0) val = 0;
-    else if (strcmp(_payloadBuf, "ADC2") == 0 || strcmp(_payloadBuf, "1") == 0) val = 1;
-    else if (strcmp(_payloadBuf, "USB") == 0 || strcmp(_payloadBuf, "2") == 0) val = 2;
-    else { val = 255; } // invalid
-    if (val <= 2) {
-      appState.dacSourceInput = val;
-      saveSettings();
-      LOG_I("[MQTT] DAC source input: %d", val);
-      publishMqttUsbAutoPriorityState();
     }
   }
   // Handle ADC reference voltage
@@ -1139,8 +1064,6 @@ void mqttLoop() {
     // Per-category change detection
     bool audioLevelChanged =
         (fabs(appState.audioLevel_dBFS - appState.prevMqttAudioLevel) > 0.5f);
-    bool ledChanged = (appState.ledState != appState.prevMqttLedState);
-    bool blinkingChanged = (appState.blinkingEnabled != appState.prevMqttBlinkingEnabled);
     bool sensingChanged =
         (appState.amplifierState != appState.prevMqttAmplifierState) ||
         (appState.currentMode != appState.prevMqttSensingMode) ||
@@ -1177,19 +1100,7 @@ void mqttLoop() {
         (appState.debugHwStats != appState.prevMqttDebugHwStats) ||
         (appState.debugI2sMetrics != appState.prevMqttDebugI2sMetrics) ||
         (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor);
-    bool usbAutoPriorityChanged =
-        (appState.usbAutoPriority != prevMqttUsbAutoPriority) ||
-        (appState.dacSourceInput != prevMqttDacSourceInput);
-
     // Selective dispatch — only publish categories that actually changed
-    if (ledChanged) {
-      publishMqttLedState();
-      appState.prevMqttLedState = appState.ledState;
-    }
-    if (blinkingChanged) {
-      publishMqttBlinkingState();
-      appState.prevMqttBlinkingEnabled = appState.blinkingEnabled;
-    }
     // Smart sensing + audio level (combined to avoid double-publishing)
     if (sensingChanged || audioLevelChanged) {
       publishMqttSmartSensingState();
@@ -1251,11 +1162,6 @@ void mqttLoop() {
       appState.prevMqttDebugI2sMetrics = appState.debugI2sMetrics;
       appState.prevMqttDebugTaskMonitor = appState.debugTaskMonitor;
     }
-    if (usbAutoPriorityChanged) {
-      publishMqttUsbAutoPriorityState();
-      prevMqttUsbAutoPriority = appState.usbAutoPriority;
-      prevMqttDacSourceInput = appState.dacSourceInput;
-    }
 #ifdef GUI_ENABLED
     if ((appState.bootAnimEnabled != appState.prevMqttBootAnimEnabled) ||
         (appState.bootAnimStyle != appState.prevMqttBootAnimStyle)) {
@@ -1290,22 +1196,6 @@ void mqttLoop() {
 }
 
 // ===== MQTT State Publishing Functions =====
-
-// Publish LED state
-void publishMqttLedState() {
-  if (!mqttClient.connected())
-    return;
-
-  mqttPubBool("/led/state", appState.ledState);
-}
-
-// Publish blinking state
-void publishMqttBlinkingState() {
-  if (!mqttClient.connected())
-    return;
-
-  mqttPubBool("/led/blinking", appState.blinkingEnabled);
-}
 
 // Publish Smart Sensing state
 void publishMqttSmartSensingState() {
@@ -1579,40 +1469,6 @@ void publishMqttSignalGenState() {
   mqttPubStr("/signalgenerator/target_adc", targetNames[appState.sigGenTargetAdc % 5]);
 }
 
-#ifdef DSP_ENABLED
-void publishMqttEmergencyLimiterState() {
-  if (!mqttClient.connected())
-    return;
-
-  // Settings
-  mqttPubBool("/emergency_limiter/enabled", appState.emergencyLimiterEnabled);
-  mqttPubFloat("/emergency_limiter/threshold", appState.emergencyLimiterThresholdDb, 2);
-
-  // Status (from DSP metrics)
-  DspMetrics metrics = dsp_get_metrics();
-  mqttPubStr("/emergency_limiter/status",
-             metrics.emergencyLimiterActive ? "active" : "idle");
-  mqttPubInt("/emergency_limiter/trigger_count", (int)metrics.emergencyLimiterTriggers);
-  mqttPubFloat("/emergency_limiter/gain_reduction", metrics.emergencyLimiterGrDb, 2);
-}
-
-void publishMqttAudioQualityState() {
-  if (!mqttClient.connected())
-    return;
-
-  // Settings
-  mqttPubBool("/audio_quality/enabled", appState.audioQualityEnabled);
-  mqttPubFloat("/audio_quality/glitch_threshold", appState.audioQualityGlitchThreshold, 2);
-
-  // Diagnostics
-  AudioQualityDiag diag = audio_quality_get_diagnostics();
-  mqttPubInt("/audio_quality/glitches_total", (int)diag.glitchHistory.totalGlitches);
-  mqttPubInt("/audio_quality/glitches_last_minute", (int)diag.glitchHistory.glitchesLastMinute);
-  mqttPubBool("/audio_quality/correlation_dsp_swap", diag.correlation.dspSwapRelated);
-  mqttPubBool("/audio_quality/correlation_wifi", diag.correlation.wifiRelated);
-}
-#endif
-
 void publishMqttAudioDiagnostics() {
   if (!mqttClient.connected())
     return;
@@ -1820,22 +1676,8 @@ void publishMqttBootAnimState() {
 }
 #endif
 
-// Publish USB auto-priority and DAC source input state
-void publishMqttUsbAutoPriorityState() {
-  if (!mqttClient.connected())
-    return;
-
-  mqttPubBool("/settings/usb_auto_priority", appState.usbAutoPriority);
-
-  const char *sourceNames[] = {"ADC1", "ADC2", "USB"};
-  uint8_t src = appState.dacSourceInput < 3 ? appState.dacSourceInput : 0;
-  mqttPubStr("/settings/dac_source", sourceNames[src]);
-}
-
 // Publish all states
 void publishMqttState() {
-  publishMqttLedState();
-  publishMqttBlinkingState();
   publishMqttSmartSensingState();
   publishMqttWifiStatus();
   publishMqttSystemStatus();
@@ -1850,10 +1692,8 @@ void publishMqttState() {
   publishMqttDebugState();
   publishMqttCrashDiagnostics();
   publishMqttInputNames();
-  publishMqttUsbAutoPriorityState();
 #ifdef DSP_ENABLED
   publishMqttDspState();
-  publishMqttEmergencyLimiterState();
 #endif
 #ifdef GUI_ENABLED
   publishMqttBootAnimState();
@@ -1909,26 +1749,6 @@ void publishHADiscovery() {
   const char* devId = mqttDeviceId();
   // _mqttTopicBase already contains the cached base topic
   char uidBuf[64];  // Reused across all entity blocks
-
-  // ===== LED Blinking Switch =====
-  {
-    JsonDocument doc;
-    doc["name"] = "LED Blinking";
-    snprintf(uidBuf, sizeof(uidBuf), "%s_blinking", devId);
-    doc["unique_id"] = uidBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/led/blinking", _mqttTopicBase);
-    doc["state_topic"] = _topicBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/led/blinking/set", _mqttTopicBase);
-    doc["command_topic"] = _topicBuf;
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:led-on";
-    addHADeviceInfo(doc);
-
-    serializeJson(doc, _jsonBuf, sizeof(_jsonBuf));
-    snprintf(_topicBuf, sizeof(_topicBuf), "homeassistant/switch/%s/blinking/config", devId);
-    mqttClient.publish(_topicBuf, _jsonBuf, true);
-  }
 
   // ===== Amplifier Switch =====
   {
@@ -3700,144 +3520,6 @@ void publishHADiscovery() {
   }
 #endif
 
-#ifdef DSP_ENABLED
-  // ===== Emergency Limiter Enabled Switch =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter";
-    snprintf(uidBuf, sizeof(uidBuf), "%s_emergency_limiter_enabled", devId);
-    doc["unique_id"] = uidBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/emergency_limiter/enabled", _mqttTopicBase);
-    doc["state_topic"] = _topicBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/emergency_limiter/enabled/set", _mqttTopicBase);
-    doc["command_topic"] = _topicBuf;
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:shield-alert";
-    doc["entity_category"] = "config";
-    addHADeviceInfo(doc);
-    serializeJson(doc, _jsonBuf, sizeof(_jsonBuf));
-    snprintf(_topicBuf, sizeof(_topicBuf), "homeassistant/switch/%s/emergency_limiter_enabled/config", devId);
-    mqttClient.publish(_topicBuf, _jsonBuf, true);
-  }
-
-  // ===== Emergency Limiter Threshold Number =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter Threshold";
-    snprintf(uidBuf, sizeof(uidBuf), "%s_emergency_limiter_threshold", devId);
-    doc["unique_id"] = uidBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/emergency_limiter/threshold", _mqttTopicBase);
-    doc["state_topic"] = _topicBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/emergency_limiter/threshold/set", _mqttTopicBase);
-    doc["command_topic"] = _topicBuf;
-    doc["min"] = -6.0;
-    doc["max"] = 0.0;
-    doc["step"] = 0.1;
-    doc["unit_of_measurement"] = "dBFS";
-    doc["icon"] = "mdi:volume-high";
-    doc["entity_category"] = "config";
-    addHADeviceInfo(doc);
-    serializeJson(doc, _jsonBuf, sizeof(_jsonBuf));
-    snprintf(_topicBuf, sizeof(_topicBuf), "homeassistant/number/%s/emergency_limiter_threshold/config", devId);
-    mqttClient.publish(_topicBuf, _jsonBuf, true);
-  }
-
-  // ===== Emergency Limiter Status Sensor =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter Status";
-    snprintf(uidBuf, sizeof(uidBuf), "%s_emergency_limiter_status", devId);
-    doc["unique_id"] = uidBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/emergency_limiter/status", _mqttTopicBase);
-    doc["state_topic"] = _topicBuf;
-    doc["icon"] = "mdi:shield-check";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
-    serializeJson(doc, _jsonBuf, sizeof(_jsonBuf));
-    snprintf(_topicBuf, sizeof(_topicBuf), "homeassistant/sensor/%s/emergency_limiter_status/config", devId);
-    mqttClient.publish(_topicBuf, _jsonBuf, true);
-  }
-
-  // ===== Emergency Limiter Trigger Count Sensor =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter Triggers";
-    snprintf(uidBuf, sizeof(uidBuf), "%s_emergency_limiter_triggers", devId);
-    doc["unique_id"] = uidBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/emergency_limiter/trigger_count", _mqttTopicBase);
-    doc["state_topic"] = _topicBuf;
-    doc["icon"] = "mdi:counter";
-    doc["entity_category"] = "diagnostic";
-    doc["state_class"] = "total_increasing";
-    addHADeviceInfo(doc);
-    serializeJson(doc, _jsonBuf, sizeof(_jsonBuf));
-    snprintf(_topicBuf, sizeof(_topicBuf), "homeassistant/sensor/%s/emergency_limiter_triggers/config", devId);
-    mqttClient.publish(_topicBuf, _jsonBuf, true);
-  }
-
-  // ===== Emergency Limiter Gain Reduction Sensor =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter Gain Reduction";
-    snprintf(uidBuf, sizeof(uidBuf), "%s_emergency_limiter_gr", devId);
-    doc["unique_id"] = uidBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/emergency_limiter/gain_reduction", _mqttTopicBase);
-    doc["state_topic"] = _topicBuf;
-    doc["unit_of_measurement"] = "dB";
-    doc["icon"] = "mdi:volume-minus";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
-    serializeJson(doc, _jsonBuf, sizeof(_jsonBuf));
-    snprintf(_topicBuf, sizeof(_topicBuf), "homeassistant/sensor/%s/emergency_limiter_gr/config", devId);
-    mqttClient.publish(_topicBuf, _jsonBuf, true);
-  }
-#endif
-
-  // ===== USB Auto-Priority Switch =====
-  {
-    JsonDocument doc;
-    doc["name"] = "USB Auto-Priority";
-    snprintf(uidBuf, sizeof(uidBuf), "%s_usb_auto_priority", devId);
-    doc["unique_id"] = uidBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/settings/usb_auto_priority", _mqttTopicBase);
-    doc["state_topic"] = _topicBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/settings/usb_auto_priority/set", _mqttTopicBase);
-    doc["command_topic"] = _topicBuf;
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:usb-flash-drive";
-    doc["entity_category"] = "config";
-    addHADeviceInfo(doc);
-    serializeJson(doc, _jsonBuf, sizeof(_jsonBuf));
-    snprintf(_topicBuf, sizeof(_topicBuf), "homeassistant/switch/%s/usb_auto_priority/config", devId);
-    mqttClient.publish(_topicBuf, _jsonBuf, true);
-    // Publish current value
-    publishMqttUsbAutoPriorityState();
-  }
-
-  // ===== DAC Source Select =====
-  {
-    JsonDocument doc;
-    doc["name"] = "DAC Source";
-    snprintf(uidBuf, sizeof(uidBuf), "%s_dac_source", devId);
-    doc["unique_id"] = uidBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/settings/dac_source", _mqttTopicBase);
-    doc["state_topic"] = _topicBuf;
-    snprintf(_topicBuf, sizeof(_topicBuf), "%s/settings/dac_source/set", _mqttTopicBase);
-    doc["command_topic"] = _topicBuf;
-    JsonArray options = doc["options"].to<JsonArray>();
-    options.add("ADC1");
-    options.add("ADC2");
-    options.add("USB");
-    doc["icon"] = "mdi:swap-horizontal";
-    doc["entity_category"] = "config";
-    addHADeviceInfo(doc);
-    serializeJson(doc, _jsonBuf, sizeof(_jsonBuf));
-    snprintf(_topicBuf, sizeof(_topicBuf), "homeassistant/select/%s/dac_source/config", devId);
-    mqttClient.publish(_topicBuf, _jsonBuf, true);
-  }
-
   // ===== Custom Device Name (Text Entity) =====
   {
     JsonDocument doc;
@@ -3876,7 +3558,6 @@ void removeHADiscovery() {
 
   // List of all discovery topics to remove
   const char *topics[] = {
-      "homeassistant/switch/%s/blinking/config",
       "homeassistant/switch/%s/amplifier/config",
       "homeassistant/switch/%s/ap/config",
       "homeassistant/switch/%s/auto_update/config",
@@ -3990,10 +3671,7 @@ void removeHADiscovery() {
       // PEQ bypass
       "homeassistant/switch/%s/peq_bypass/config",
       // Custom device name
-      "homeassistant/text/%s/device_name/config",
-      // USB auto-priority and DAC source
-      "homeassistant/switch/%s/usb_auto_priority/config",
-      "homeassistant/select/%s/dac_source/config"};
+      "homeassistant/text/%s/device_name/config"};
 
   char topicBuf[160];
   for (const char *topicTemplate : topics) {

@@ -1,6 +1,5 @@
 #include "i2s_audio.h"
 #include "app_state.h"
-#include "audio_quality.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "signal_generator.h"
@@ -373,6 +372,57 @@ static unsigned long _holdStartL[NUM_AUDIO_INPUTS] = {};
 static unsigned long _holdStartR[NUM_AUDIO_INPUTS] = {};
 static unsigned long _holdStartC[NUM_AUDIO_INPUTS] = {};
 
+// DAC output metering state
+static float _dacVuL = 0.0f, _dacVuR = 0.0f;
+static float _dacPeakL = 0.0f, _dacPeakR = 0.0f;
+static unsigned long _dacHoldL = 0, _dacHoldR = 0;
+
+// Compute RMS/dBFS/VU on the DAC output buffer (stereo interleaved left-justified int32)
+static void dac_compute_output_levels(const int32_t *buf, int stereo_frames,
+                                       float dt_ms, unsigned long now) {
+    const float NORM = 1.0f / 2147483647.0f;  // Left-justified int32 → normalize by 2^31
+    float sumSqL = 0.0f, sumSqR = 0.0f;
+
+    for (int f = 0; f < stereo_frames; f++) {
+        float nL = (float)buf[f * 2] * NORM;
+        float nR = (float)buf[f * 2 + 1] * NORM;
+        sumSqL += nL * nL;
+        sumSqR += nR * nR;
+    }
+
+    float rmsL = (stereo_frames > 0) ? sqrtf(sumSqL / stereo_frames) : 0.0f;
+    float rmsR = (stereo_frames > 0) ? sqrtf(sumSqR / stereo_frames) : 0.0f;
+
+    // VU smoothing (same constants as input metering)
+    float coeffAttack = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / VU_ATTACK_MS) : 0.0f;
+    float coeffDecay  = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / VU_DECAY_MS) : 0.0f;
+    float coeffPeakDecay = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / PEAK_DECAY_AFTER_HOLD_MS) : 0.0f;
+
+    _dacVuL += ((rmsL > _dacVuL) ? coeffAttack : coeffDecay) * (rmsL - _dacVuL);
+    _dacVuR += ((rmsR > _dacVuR) ? coeffAttack : coeffDecay) * (rmsR - _dacVuR);
+
+    // Peak hold
+    if (rmsL >= _dacPeakL) { _dacHoldL = now; _dacPeakL = rmsL; }
+    else if (now - _dacHoldL >= (unsigned long)PEAK_HOLD_MS) {
+        float d = _dacPeakL * (1.0f - coeffPeakDecay);
+        _dacPeakL = (d > rmsL) ? d : rmsL;
+    }
+    if (rmsR >= _dacPeakR) { _dacHoldR = now; _dacPeakR = rmsR; }
+    else if (now - _dacHoldR >= (unsigned long)PEAK_HOLD_MS) {
+        float d = _dacPeakR * (1.0f - coeffPeakDecay);
+        _dacPeakR = (d > rmsR) ? d : rmsR;
+    }
+
+    // Write to AppState
+    AppState &as = AppState::getInstance();
+    as.dacOutputVuL = _dacVuL;
+    as.dacOutputVuR = _dacVuR;
+    as.dacOutputDbfsL = audio_rms_to_dbfs(rmsL);
+    as.dacOutputDbfsR = audio_rms_to_dbfs(rmsR);
+    as.dacOutputPeakL = _dacPeakL;
+    as.dacOutputPeakR = _dacPeakR;
+}
+
 // Waveform accumulation state per input — PSRAM-allocated on ESP32, static on native
 #ifdef NATIVE_TEST
 static float _wfAccum[NUM_AUDIO_INPUTS][WAVEFORM_BUFFER_SIZE];
@@ -634,6 +684,7 @@ static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
             _peakL[a] = _peakR[a] = _peakC[a] = 0.0f;
         }
 #ifdef DSP_ENABLED
+        dsp_zero_channels(a);  // Clear post-DSP float buffers so routing matrix outputs silence
         dsp_clear_cpu_load();
 #endif
         diag.noiseFloorDbfs += (DBFS_FLOOR - diag.noiseFloorDbfs) * 0.001f;
@@ -869,6 +920,12 @@ static void audio_capture_task(void *param) {
         if (!s_dacBuf) s_dacBuf = (int32_t *)calloc(DMA_BUF_LEN * 2, sizeof(int32_t));
     }
 
+    // Track previous ADC enabled state to detect transitions
+    bool prevAdcEn[NUM_AUDIO_ADCS] = {
+        AppState::getInstance().adcEnabled[0],
+        AppState::getInstance().adcEnabled[1]
+    };
+
     while (true) {
         // Feed watchdog at the top of every iteration (even on timeout path)
         esp_task_wdt_reset();
@@ -877,6 +934,25 @@ static void audio_capture_task(void *param) {
         if (AppState::getInstance().audioPaused) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
+        }
+
+        // Detect ADC enable/disable transitions — disable I2S channel + pulldown pin
+        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+            bool en = AppState::getInstance().adcEnabled[a];
+            if (en != prevAdcEn[a]) {
+                gpio_num_t pin = (a == 0) ? (gpio_num_t)I2S_DOUT_PIN : (gpio_num_t)I2S_DOUT2_PIN;
+                i2s_chan_handle_t ch = (a == 0) ? _i2s0_rx : _i2s1_rx;
+                if (!en && ch) {
+                    i2s_channel_disable(ch);
+                    gpio_pulldown_en(pin);
+                    LOG_I("[Audio] ADC%d disabled — GPIO%d pulled down, I2S RX stopped", a + 1, (int)pin);
+                } else if (en && ch) {
+                    gpio_pulldown_dis(pin);
+                    i2s_channel_enable(ch);
+                    LOG_I("[Audio] ADC%d enabled — GPIO%d active, I2S RX started", a + 1, (int)pin);
+                }
+                prevAdcEn[a] = en;
+            }
         }
 
         size_t bytes_read1 = 0;
@@ -926,6 +1002,9 @@ static void audio_capture_task(void *param) {
             // ADC1 disabled — zero-fill buffer, still need ADC2 timing from I2S0 clocks
             memset(buf1, 0, sizeof(buf1));
             bytes_read1 = sizeof(buf1);
+#ifdef DSP_ENABLED
+            dsp_zero_channels(0);  // Explicit clear (belt-and-suspenders with silence fast-path)
+#endif
         }
 
         // Read ADC2 — near-instant if synced DMA is ready
@@ -985,16 +1064,10 @@ static void audio_capture_task(void *param) {
 
         // Process ADC1
         process_adc_buffer(0, buf1, stereo_frames1, now, dt_ms, sigGenSw);
-        if (appState.audioQualityEnabled) {
-            audio_quality_scan_buffer(0, buf1, stereo_frames1);
-        }
 
         // Process ADC2 (if available)
         if (adc2Ok) {
             process_adc_buffer(1, buf2, stereo_frames2, now, dt_ms, sigGenSw);
-            if (appState.audioQualityEnabled) {
-                audio_quality_scan_buffer(1, buf2, stereo_frames2);
-            }
         } else {
             // ADC2 not processed — zero its post-DSP channels to prevent stale data in routing
 #ifdef DSP_ENABLED
@@ -1039,9 +1112,6 @@ static void audio_capture_task(void *param) {
                 }
 
                 process_adc_buffer(2, s_bufUsb, DMA_BUF_LEN, now, dt_ms, sigGenSw);
-                if (appState.audioQualityEnabled) {
-                    audio_quality_scan_buffer(2, s_bufUsb, DMA_BUF_LEN);
-                }
             } else {
                 // USB not processed — zero its post-DSP channels to prevent stale data in routing
 #ifdef DSP_ENABLED
@@ -1156,11 +1226,22 @@ static void audio_capture_task(void *param) {
         // Recalculate waveform target on both ADCs
         _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
 
-        // ===== DAC Output via Routing Matrix =====
+        // ===== DAC Output =====
 #ifdef DAC_ENABLED
         if (AppState::getInstance().dacEnabled && AppState::getInstance().dacReady) {
-            dsp_routing_execute(s_dacBuf, stereo_frames1);
-            dac_output_write(s_dacBuf, stereo_frames1);
+            {
+                dsp_routing_execute(s_dacBuf, stereo_frames1);
+                dac_output_write(s_dacBuf, stereo_frames1);
+                dac_compute_output_levels(s_dacBuf, stereo_frames1, dt_ms, now);
+            }
+        } else {
+            // DAC disabled — reset output meters to silence
+            _dacVuL = _dacVuR = 0.0f;
+            _dacPeakL = _dacPeakR = 0.0f;
+            AppState &as = AppState::getInstance();
+            as.dacOutputVuL = as.dacOutputVuR = 0.0f;
+            as.dacOutputDbfsL = as.dacOutputDbfsR = DBFS_FLOOR;
+            as.dacOutputPeakL = as.dacOutputPeakR = 0.0f;
         }
 #endif
 
@@ -1254,6 +1335,9 @@ void i2s_audio_init() {
     // data from GPIO9. This bypasses ESP32-S3 slave mode DMA issues entirely.
     _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
     i2s_configure_adc1(_currentSampleRate);
+
+    // Prevent floating noise when ADC1 unconnected (matches DOUT2 pulldown in i2s_configure_adc2)
+    gpio_pulldown_en((gpio_num_t)I2S_DOUT_PIN);
 
     // Dump channel handles for debugging (pulldown now applied inside i2s_configure_adc2)
     if (_adc2InitOk) {

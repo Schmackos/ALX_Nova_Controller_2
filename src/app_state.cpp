@@ -8,21 +8,6 @@ void AppState::setFSMState(AppFSMState newState) {
   }
 }
 
-// ===== LED State Management =====
-void AppState::setLedState(bool state) {
-  if (ledState != state) {
-    ledState = state;
-    _ledStateDirty = true;
-  }
-}
-
-void AppState::setBlinkingEnabled(bool enabled) {
-  if (blinkingEnabled != enabled) {
-    blinkingEnabled = enabled;
-    _blinkingDirty = true;
-  }
-}
-
 // ===== Smart Sensing State Management =====
 void AppState::setAmplifierState(bool state) {
   if (amplifierState != state) {
@@ -115,46 +100,6 @@ void AppState::setBuzzerVolume(int volume) {
   }
 }
 
-// ===== Emergency Safety Limiter State Management =====
-#ifdef DSP_ENABLED
-void AppState::setEmergencyLimiterEnabled(bool enabled) {
-  if (emergencyLimiterEnabled != enabled) {
-    emergencyLimiterEnabled = enabled;
-    _emergencyLimiterDirty = true;
-  }
-}
-
-void AppState::setEmergencyLimiterThreshold(float dbfs) {
-  // Validate range: -6.0 to 0.0 dBFS
-  if (dbfs < -6.0f) dbfs = -6.0f;
-  if (dbfs > 0.0f) dbfs = 0.0f;
-  // Use small threshold to avoid float comparison issues
-  if (abs(emergencyLimiterThresholdDb - dbfs) > 0.01f) {
-    emergencyLimiterThresholdDb = dbfs;
-    _emergencyLimiterDirty = true;
-  }
-}
-
-// ===== Audio Quality Diagnostics State Management (Phase 3) =====
-void AppState::setAudioQualityEnabled(bool enabled) {
-  if (audioQualityEnabled != enabled) {
-    audioQualityEnabled = enabled;
-    _audioQualityDirty = true;
-  }
-}
-
-void AppState::setAudioQualityThreshold(float threshold) {
-  // Validate range: 0.1 to 1.0
-  if (threshold < 0.1f) threshold = 0.1f;
-  if (threshold > 1.0f) threshold = 1.0f;
-  // Use small threshold to avoid float comparison issues
-  if (abs(audioQualityGlitchThreshold - threshold) > 0.01f) {
-    audioQualityGlitchThreshold = threshold;
-    _audioQualityDirty = true;
-  }
-}
-#endif
-
 // ===== Signal Generator State Management =====
 void AppState::setSignalGenEnabled(bool enabled) {
   if (sigGenEnabled != enabled) {
@@ -190,8 +135,6 @@ void AppState::increaseMqttBackoff() {
 // ===== Dirty Flag Utilities =====
 void AppState::clearAllDirtyFlags() {
   _fsmStateDirty = false;
-  _ledStateDirty = false;
-  _blinkingDirty = false;
   _amplifierDirty = false;
   _sensingModeDirty = false;
   _timerDirty = false;
@@ -202,18 +145,12 @@ void AppState::clearAllDirtyFlags() {
   _adcEnabledDirty = false;
   _sigGenDirty = false;
   _otaDirty = false;
-#ifdef DSP_ENABLED
-  _emergencyLimiterDirty = false;
-#endif
 }
 
 bool AppState::hasAnyDirtyFlag() const {
-  bool hasDirty = _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
+  bool hasDirty = _fsmStateDirty ||
          _amplifierDirty || _sensingModeDirty || _timerDirty ||
          _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty ||
          _adcEnabledDirty || _sigGenDirty || _otaDirty;
-#ifdef DSP_ENABLED
-  hasDirty = hasDirty || _emergencyLimiterDirty;
-#endif
   return hasDirty;
 }

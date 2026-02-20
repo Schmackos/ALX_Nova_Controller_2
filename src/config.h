@@ -22,10 +22,6 @@
 
 // ===== Pin Definitions (can be overridden by build flags in platformio.ini)
 // =====
-#ifndef LED_PIN
-const int LED_PIN = 2; // Internal board LED pin
-#endif
-
 #ifndef RESET_BUTTON_PIN
 const int RESET_BUTTON_PIN = 15; // Factory reset button
 #endif
@@ -66,7 +62,6 @@ const int BUZZER_PIN = 8; // GPIO 8 - passive buzzer (PWM)
 const int SIGGEN_PWM_PIN = 38;   // GPIO 38 — no strapping constraints
 #endif
 #define SIGGEN_PWM_CHANNEL 4     // LEDC channel 4 (Timer 2)
-#define SIGGEN_PWM_TIMER 2       // Separate from buzzer Timer 1 & backlight Timer 0
 #define SIGGEN_PWM_RESOLUTION 10 // 10-bit (0-1023), max ~78kHz carrier
 
 // ===== DAC Output Pin Definitions =====
@@ -110,20 +105,11 @@ const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
 // ===== USB Audio Configuration =====
 #ifdef USB_AUDIO_ENABLED
 #define USB_AUDIO_DEFAULT_SAMPLE_RATE 48000
-#define USB_AUDIO_DEFAULT_BIT_DEPTH   16
-#define USB_AUDIO_RING_BUFFER_MS      20    // Ring buffer capacity in ms
-#define USB_AUDIO_RING_BUFFER_FRAMES  ((USB_AUDIO_DEFAULT_SAMPLE_RATE * USB_AUDIO_RING_BUFFER_MS) / 1000)
-#define USB_AUDIO_TASK_STACK_SIZE     4096
-#define USB_AUDIO_TASK_PRIORITY       1     // Same as main loop — must not preempt audio
-#define USB_AUDIO_TASK_CORE           0     // TinyUSB task on Core 0 (separate from audio on Core 1)
 #endif
 
 // ===== Server Ports =====
 const int WEB_SERVER_PORT = 80;
 const int WEBSOCKET_PORT = 81;
-
-// ===== LED Timing =====
-const unsigned long LED_BLINK_INTERVAL = 500; // LED blink interval in ms
 
 // ===== Button Configuration =====
 const unsigned long BTN_DEBOUNCE_TIME = 50;          // 50ms debounce

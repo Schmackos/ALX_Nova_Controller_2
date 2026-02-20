@@ -19,8 +19,6 @@ void saveMqttSettings();
 
 // ===== MQTT State Publishing =====
 void publishMqttState();
-void publishMqttLedState();
-void publishMqttBlinkingState();
 void publishMqttSmartSensingState();
 void publishMqttWifiStatus();
 void publishMqttSystemStatusStatic();
@@ -38,11 +36,8 @@ void publishMqttAdcEnabledState();
 void publishMqttDebugState();
 void publishMqttCrashDiagnostics();
 void publishMqttInputNames();
-void publishMqttUsbAutoPriorityState();
 #ifdef DSP_ENABLED
 void publishMqttDspState();
-void publishMqttEmergencyLimiterState();
-void publishMqttAudioQualityState();
 #endif
 #ifdef GUI_ENABLED
 void publishMqttBootAnimState();

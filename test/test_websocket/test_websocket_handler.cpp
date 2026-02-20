@@ -25,8 +25,6 @@ int broadcastCount = 0;
 
 // Mock app state
 struct MockAppState {
-  bool ledState = false;
-  bool blinkingState = false;
   unsigned long uptime = 0;
   int cpuUsage = 0;
   int memoryUsage = 0;
@@ -37,8 +35,6 @@ void reset() {
   wsClients.clear();
   lastBroadcastMessage.clear();
   broadcastCount = 0;
-  appState.ledState = false;
-  appState.blinkingState = false;
   appState.uptime = 0;
   appState.cpuUsage = 0;
   appState.memoryUsage = 0;

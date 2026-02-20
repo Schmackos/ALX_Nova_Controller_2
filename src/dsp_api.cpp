@@ -5,7 +5,6 @@
 #include "dsp_coefficients.h"
 #include "dsp_rew_parser.h"
 #include "dsp_crossover.h"
-#include "thd_measurement.h"
 #include "app_state.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
@@ -1227,48 +1226,6 @@ void registerDspApiEndpoints() {
         snprintf(resp, sizeof(resp), "{\"success\":true,\"frequency\":%.1f,\"gainDb\":%.1f,\"index\":%d}", bsr.frequency, bsr.gainDb, idx);
         server.send(200, "application/json", resp);
         LOG_I("[DSP] Baffle step: ch=%d width=%.0fmm freq=%.0fHz", ch, widthMm, bsr.frequency);
-    });
-
-    // GET /api/thd — get THD measurement result
-    server.on("/api/thd", HTTP_GET, []() {
-        if (!requireAuth()) return;
-        ThdResult r = thd_get_result();
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
-        doc["measuring"] = thd_is_measuring();
-        doc["testFreq"] = thd_get_test_freq();
-        doc["valid"] = r.valid;
-        doc["thdPlusNPercent"] = r.thdPlusNPercent;
-        doc["thdPlusNDb"] = r.thdPlusNDb;
-        doc["fundamentalDbfs"] = r.fundamentalDbfs;
-        doc["framesProcessed"] = r.framesProcessed;
-        doc["framesTarget"] = r.framesTarget;
-        JsonArray harmonics = doc["harmonicLevels"].to<JsonArray>();
-        for (int h = 0; h < THD_MAX_HARMONICS; h++) harmonics.add(r.harmonicLevels[h]);
-        String json;
-        serializeJson(doc, json);
-        server.send(200, "application/json", json);
-    });
-
-    // POST /api/thd — start THD measurement
-    server.on("/api/thd", HTTP_POST, []() {
-        if (!requireAuth()) return;
-        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
-        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
-        float freq = doc["freq"] | 1000.0f;
-        int avg = doc["averages"] | 8;
-        thd_start_measurement(freq, (uint16_t)avg);
-        server.send(200, "application/json", "{\"success\":true}");
-        LOG_I("[DSP] THD measurement started: %.0f Hz, %d avg", freq, avg);
-    });
-
-    // DELETE /api/thd — stop THD measurement
-    server.on("/api/thd", HTTP_DELETE, []() {
-        if (!requireAuth()) return;
-        thd_stop_measurement();
-        server.send(200, "application/json", "{\"success\":true}");
     });
 
     // ===== Routing Matrix Endpoints =====

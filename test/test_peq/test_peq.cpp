@@ -37,7 +37,6 @@ DspRoutingMatrix* dsp_get_routing_matrix() {
 void setUp(void) {
     dsp_init();
     appState.dspEnabled = true;
-    appState.emergencyLimiterEnabled = false; // Don't let lookahead delay affect PEQ stage tests
 }
 
 void tearDown(void) {}

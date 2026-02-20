@@ -28,9 +28,6 @@ void dsp_conv_free_slot(int slot);
 // buf must have exactly CONV_PARTITION_SIZE samples.
 void dsp_conv_process(int slot, float *buf, int len);
 
-// Check if a slot is active.
-bool dsp_conv_is_active(int slot);
-
 // Get the IR length (in samples) for a slot.
 int dsp_conv_get_ir_length(int slot);
 

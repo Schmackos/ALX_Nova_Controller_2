@@ -10,14 +10,12 @@
 #include "debug_serial.h"
 #include "utils.h"
 #include "i2s_audio.h"
-#include "audio_quality.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
 #include "dsp_crossover.h"
-#include "thd_measurement.h"
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
@@ -201,15 +199,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_D("[WebSocket] Client [%u] authenticated", num);
 
             // Send initial state after authentication
-            sendLEDState();
-            sendBlinkingState();
             sendWiFiStatus();
             sendSmartSensingStateInternal();
             sendDisplayState();
             sendBuzzerState();
             sendSignalGenState();
             sendAudioGraphState();
-            sendAudioQualityState();
             sendDebugState();
             // Send per-ADC enabled state
             {
@@ -258,19 +253,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           return;
         }
 
-        if (msgType == "toggle") {
-          appState.blinkingEnabled = doc["enabled"];
-          LOG_I("[WebSocket] Blinking %s by client [%u]", appState.blinkingEnabled ? "enabled" : "disabled", num);
-          
-          sendBlinkingState();
-          
-          if (!appState.blinkingEnabled) {
-            appState.ledState = false;
-            digitalWrite(LED_PIN, LOW);
-            sendLEDState();
-            LOG_I("[WebSocket] LED turned OFF");
-          }
-        } else if (doc["type"] == "toggleAP") {
+        if (doc["type"] == "toggleAP") {
           bool enabled = doc["enabled"].as<bool>();
           appState.apEnabled = enabled;
           
@@ -982,18 +965,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
         }
         // measureDelayAlignment and applyDelayAlignment removed in v1.8.3 - incomplete feature
-        else if (msgType == "startThdMeasurement") {
-          float freq = doc["freq"] | 1000.0f;
-          int avg = doc["averages"] | 8;
-          extern void thd_start_measurement(float, uint16_t);
-          thd_start_measurement(freq, (uint16_t)avg);
-          LOG_I("[WebSocket] THD measurement started: %.0f Hz, %d avg", freq, avg);
-        }
-        else if (msgType == "stopThdMeasurement") {
-          extern void thd_stop_measurement();
-          thd_stop_measurement();
-          LOG_I("[WebSocket] THD measurement stopped");
-        }
         else if (msgType == "applyBaffleStep") {
           int ch = doc["ch"] | 0;
           float widthMm = doc["baffleWidthMm"] | 250.0f;
@@ -1235,20 +1206,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
 // ===== State Broadcasting Functions =====
 
-void sendLEDState() {
-  JsonDocument doc;
-  doc["type"] = "appState.ledState";
-  doc["state"] = appState.ledState;
-  wsBroadcastJson(doc);
-}
-
-void sendBlinkingState() {
-  JsonDocument doc;
-  doc["type"] = "appState.blinkingEnabled";
-  doc["enabled"] = appState.blinkingEnabled;
-  wsBroadcastJson(doc);
-}
-
 void sendDisplayState() {
   JsonDocument doc;
   doc["type"] = "displayState";
@@ -1302,32 +1259,6 @@ void sendSignalGenState() {
   doc["targetAdc"] = appState.sigGenTargetAdc;
   wsBroadcastJson(doc);
 }
-
-#ifdef DSP_ENABLED
-void sendAudioQualityState() {
-  JsonDocument doc;
-  doc["type"] = "audioQualityState";
-  doc["enabled"] = appState.audioQualityEnabled;
-  doc["threshold"] = serialized(String(appState.audioQualityGlitchThreshold, 2));
-
-  wsBroadcastJson(doc);
-}
-
-void sendAudioQualityDiagnostics() {
-  AudioQualityDiag diag = audio_quality_get_diagnostics();
-  JsonDocument doc;
-  doc["type"] = "audioQualityDiag";
-  doc["glitchesTotal"] = diag.glitchHistory.totalGlitches;
-  doc["glitchesLastMinute"] = diag.glitchHistory.glitchesLastMinute;
-  doc["lastGlitchType"] = (int)diag.lastGlitchType;
-  doc["lastGlitchMs"] = diag.lastGlitchMs;
-  doc["correlationDsp"] = diag.correlation.dspSwapRelated;
-  doc["correlationWifi"] = diag.correlation.wifiRelated;
-  doc["correlationMqtt"] = diag.correlation.mqttRelated;
-
-  wsBroadcastJson(doc);
-}
-#endif
 
 void sendAudioGraphState() {
   JsonDocument doc;

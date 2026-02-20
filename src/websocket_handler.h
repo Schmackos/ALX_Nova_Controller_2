@@ -22,8 +22,6 @@ extern IPAddress wsClientIP[MAX_WS_CLIENTS];
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length);
 
 // ===== State Broadcasting Functions =====
-void sendLEDState();
-void sendBlinkingState();
 void sendDisplayState();
 void sendFactoryResetProgress(unsigned long secondsHeld, bool resetTriggered);
 void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered);
@@ -36,9 +34,6 @@ void sendDebugState();
 #ifdef DSP_ENABLED
 void sendDspState();
 void sendDspMetrics();
-void sendEmergencyLimiterState();
-void sendAudioQualityState();
-void sendAudioQualityDiagnostics();
 #endif
 #ifdef DAC_ENABLED
 void sendDacState();

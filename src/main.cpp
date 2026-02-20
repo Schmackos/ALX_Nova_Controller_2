@@ -1,5 +1,4 @@
 #include "app_state.h"
-#include "audio_quality.h"
 #include "auth_handler.h"
 #include "button_handler.h"
 #include "buzzer_handler.h"
@@ -16,7 +15,6 @@
 #ifdef DSP_ENABLED
 #include "dsp_api.h"
 #include "dsp_pipeline.h"
-#include "usb_auto_priority.h"
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
@@ -235,14 +233,11 @@ void setup() {
   setCharField(appState.apSSID, sizeof(appState.apSSID), appState.deviceSerialNumber);
   LOG_I("[Main] AP SSID set to: %s", appState.apSSID);
 
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
-
   // Configure factory reset button with enhanced detection
   resetButton.begin();
   buzzer_init();
   LOG_I("[Main] Factory reset button configured: GPIO%d", RESET_BUTTON_PIN);
-  LOG_D("[Main] Button: short=status, double=AP, triple=blink, long=restart, vlong=reboot");
+  LOG_D("[Main] Button: short=status, double=AP, long=restart, vlong=reboot");
 
   // Configure Smart Sensing pins
   pinMode(AMPLIFIER_PIN, OUTPUT);
@@ -315,11 +310,6 @@ void setup() {
 
   // Initialize I2S audio ADC (PCM1808) — uses sample rate from loaded settings
   i2s_audio_init();
-
-  // Initialize Audio Quality Diagnostics (Phase 3)
-  audio_quality_init();
-  audio_quality_enable(appState.audioQualityEnabled);
-  audio_quality_set_threshold(appState.audioQualityGlitchThreshold);
 
   // Load MQTT settings
   if (!loadMqttSettings()) {
@@ -699,7 +689,6 @@ void setup() {
   // Register DSP API endpoints and load persisted config
   registerDspApiEndpoints();
   loadDspSettings();
-  usb_auto_priority_init();
 #endif
 
 #ifdef DAC_ENABLED
@@ -808,8 +797,6 @@ void loop() {
                                     : "Disconnected");
       LOG_D("[Button] AP Mode: %s",
             appState.isAPMode ? "Active" : "Inactive");
-      LOG_D("[Button] LED Blinking: %s",
-            appState.blinkingEnabled ? "Enabled" : "Disabled");
       LOG_D("[Button] Firmware: %s", firmwareVer);
       break;
 
@@ -825,11 +812,7 @@ void loop() {
 
     case BTN_TRIPLE_CLICK:
       buzzer_play(BUZZ_BTN_TRIPLE);
-      LOG_I("[Button] Triple click - toggle LED blinking");
-      appState.setBlinkingEnabled(!appState.blinkingEnabled);
-      LOG_D("[Button] LED Blinking is now: %s",
-            appState.blinkingEnabled ? "ON" : "OFF");
-      sendBlinkingState();
+      LOG_I("[Button] Triple click");
       break;
 
     case BTN_LONG_PRESS:
@@ -857,13 +840,6 @@ void loop() {
     if (resetButton.isPressed()) {
       unsigned long holdDuration = resetButton.getHoldDuration();
 
-      // Fast blink LED to indicate progress during hold (every 200ms)
-      static unsigned long lastBlinkTime = 0;
-      if (millis() - lastBlinkTime >= 200) {
-        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-        lastBlinkTime = millis();
-      }
-
       // Print progress and send WebSocket update every second for long holds
       if (holdDuration >= BTN_LONG_PRESS_MIN) {
         static unsigned long lastProgressPrint = 0;
@@ -877,17 +853,6 @@ void loop() {
           }
           lastProgressPrint = millis();
         }
-      }
-    } else {
-      // Button not pressed - restore LED to normal state if it was blinking for
-      // feedback
-      static bool wasPressed = false;
-      if (wasPressed) {
-        digitalWrite(LED_PIN, appState.ledState);
-        wasPressed = false;
-      }
-      if (resetButton.isPressed()) {
-        wasPressed = true;
       }
     }
   }
@@ -972,10 +937,6 @@ void loop() {
     appState.clearSignalGenDirty();
   }
 
-#ifdef DSP_ENABLED
-  usb_auto_priority_update(millis());
-#endif
-
 #if defined(USB_AUDIO_ENABLED) && defined(DAC_ENABLED)
   // Fix 2a/2b: Detect usbAudioConnected rising edge → mute DAC for 200 ms then reinit.
   // Masks the power-on pop and relocks the DAC chip PLL after USB VBUS returns.
@@ -1000,20 +961,6 @@ void loop() {
 #endif
 
 #ifdef DSP_ENABLED
-  // Broadcast emergency limiter state changes (GUI/API -> WS clients + MQTT)
-  if (appState.isEmergencyLimiterDirty()) {
-    sendEmergencyLimiterState();
-    publishMqttEmergencyLimiterState();
-    appState.clearEmergencyLimiterDirty();
-  }
-
-  // Broadcast audio quality state changes (Phase 3 - GUI/API -> WS clients + MQTT)
-  if (appState.isAudioQualityDirty()) {
-    sendAudioQualityState();
-    publishMqttAudioQualityState();
-    appState.clearAudioQualityDirty();
-  }
-
   // Broadcast DSP config changes (API/MQTT -> WS clients + MQTT)
   if (appState.isDspConfigDirty()) {
     sendDspState();
@@ -1033,19 +980,6 @@ void loop() {
     lastDspMetricsActive = dspActive;
   }
 
-  // Emergency limiter state broadcast (1s interval when active, one final update when idle)
-  static unsigned long lastEmergencyLimiterBroadcast = 0;
-  static bool lastEmergencyLimiterActive = false;
-  DspMetrics dspMetrics = dsp_get_metrics();
-  bool limiterActive = dspMetrics.emergencyLimiterActive;
-  if (millis() - lastEmergencyLimiterBroadcast >= 1000) {
-    if (limiterActive || lastEmergencyLimiterActive) {
-      lastEmergencyLimiterBroadcast = millis();
-      sendEmergencyLimiterState();
-      publishMqttEmergencyLimiterState();
-    }
-    lastEmergencyLimiterActive = limiterActive;
-  }
 
   // Check for debounced DSP settings save
   dsp_check_debounced_save();
@@ -1088,12 +1022,6 @@ void loop() {
   }
 #endif
 
-  // Broadcast blinking state changes (GUI -> WS clients)
-  if (appState.isBlinkingDirty()) {
-    sendBlinkingState();
-    appState.clearBlinkingDirty();
-  }
-
   // Broadcast settings changes (GUI -> WS clients + MQTT)
   if (appState.isSettingsDirty()) {
     sendWiFiStatus();
@@ -1116,13 +1044,6 @@ void loop() {
       lastTaskMonUpdate = millis();
       task_monitor_update();
     }
-  }
-
-  // Audio quality memory snapshot (Phase 3 - every 1s)
-  static unsigned long lastAudioQualityMemUpdate = 0;
-  if (millis() - lastAudioQualityMemUpdate >= 1000) {
-    lastAudioQualityMemUpdate = millis();
-    audio_quality_update_memory();
   }
 
   // Heap health monitor — detect fragmentation before OOM crash (every 10s)
@@ -1198,13 +1119,6 @@ void loop() {
     }
   }
 
-  // Broadcast Audio Quality Diagnostics (Phase 3 - every 5s when enabled)
-  static unsigned long lastAudioQualityDiagBroadcast = 0;
-  if (appState.audioQualityEnabled && millis() - lastAudioQualityDiagBroadcast >= 5000) {
-    lastAudioQualityDiagBroadcast = millis();
-    sendAudioQualityDiagnostics();
-  }
-
   // Send audio waveform/spectrum data to subscribed WebSocket clients
   // Skip this iteration if hwStats just sent — prevents WiFi TX burst that starves I2S DMA
   static unsigned long lastAudioSend = 0;
@@ -1219,27 +1133,6 @@ void loop() {
   // Drain async log ring buffer — writes from any FreeRTOS task are
   // safely serialised here on Core 0 so UART TX never stalls the caller.
   DebugOut.processQueue();
-
-  // IMPORTANT: blinking must NOT depend on appState.isAPMode
-  if (appState.blinkingEnabled) {
-    unsigned long currentMillis = millis();
-    if (currentMillis - appState.previousMillis >= LED_BLINK_INTERVAL) {
-      appState.previousMillis = currentMillis;
-
-      appState.setLedState(!appState.ledState);
-      digitalWrite(LED_PIN, appState.ledState);
-
-      // Don't broadcast every toggle — client animates locally from appState.blinkingEnabled state.
-      // Only sendLEDState() on explicit user actions (toggle blink on/off).
-    }
-  } else {
-    if (appState.ledState) {
-      appState.setLedState(false);
-      digitalWrite(LED_PIN, LOW);
-      sendLEDState();
-      LOG_I("[Main] Blinking stopped - LED turned OFF");
-    }
-  }
 
   // Fallback buzzer processing (primary path is gui_task on Core 1)
   // Non-blocking mutex: skips if gui_task is already processing

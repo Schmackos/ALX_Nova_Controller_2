@@ -17,9 +17,6 @@
  */
 
 /* Pin constants matching config.h defaults */
-#ifndef LED_PIN
-static const int LED_PIN = 2;
-#endif
 #ifndef AMPLIFIER_PIN
 static const int AMPLIFIER_PIN = 4;
 #endif
@@ -100,7 +97,6 @@ static const PinEntry all_pins[] = {
     {"EC11 Encoder", "B",    ENCODER_B_PIN},
     {"EC11 Encoder", "SW",   ENCODER_SW_PIN},
     {"HW-508 Buzz",  "IO",   BUZZER_PIN},
-    {"Core",         "LED",  LED_PIN},
     {"Core",         "Amp",  AMPLIFIER_PIN},
     {"Core",         "Btn",  RESET_BUTTON_PIN},
 };
@@ -138,18 +134,18 @@ static void format_pin_info(char *buf, int len) {
              "HW-508 Buzzer\n"
              "  IO=%d\n"
              "Core\n"
-             "  LED=%d Amp=%d Btn=%d",
+             "  Amp=%d Btn=%d",
              I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
              I2S_LRC_PIN, I2S_MCLK_PIN,
              TFT_CS_PIN, TFT_MOSI_PIN, TFT_SCLK_PIN,
              TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN,
              ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
              BUZZER_PIN,
-             LED_PIN, AMPLIFIER_PIN, RESET_BUTTON_PIN);
+             AMPLIFIER_PIN, RESET_BUTTON_PIN);
 }
 
 static void format_pin_sorted(char *buf, int len, PinSortMode mode) {
-    int indices[18];
+    int indices[17];
     for (int i = 0; i < PIN_COUNT; i++) indices[i] = i;
 
     if (mode == SORT_BY_DEVICE) {
@@ -192,7 +188,6 @@ void test_pin_info_format_output(void) {
 void test_pin_info_core_pins(void) {
     char buf[256];
     format_pin_info(buf, sizeof(buf));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "LED=2"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "Amp=4"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "Btn=15"));
 }
@@ -265,15 +260,15 @@ void test_pin_info_first_line(void) {
     TEST_ASSERT_EQUAL_STRING("PCM1808 ADC 1&2", first_line);
 }
 
-/* Test: all 17 pin numbers are unique in output */
-void test_pin_info_all_17_pins_present(void) {
+/* Test: all 16 pin numbers are unique in output */
+void test_pin_info_all_16_pins_present(void) {
     char buf[256];
     format_pin_info(buf, sizeof(buf));
     int eq_count = 0;
     for (size_t i = 0; i < strlen(buf); i++) {
         if (buf[i] == '=') eq_count++;
     }
-    TEST_ASSERT_EQUAL(18, eq_count);
+    TEST_ASSERT_EQUAL(17, eq_count);
 }
 
 /* Test: multiline output has expected line count */
@@ -293,18 +288,18 @@ void test_pin_info_line_count(void) {
 void test_sort_by_gpio_ascending(void) {
     char buf[384];
     format_pin_sorted(buf, sizeof(buf), SORT_BY_GPIO);
-    /* First line should be GPIO 2 (LED), last should be GPIO 21 (BL) */
-    TEST_ASSERT_NOT_NULL(strstr(buf, " 2 LED"));
+    /* First line should be GPIO 3 (MCLK), last should be GPIO 21 (BL) */
+    TEST_ASSERT_NOT_NULL(strstr(buf, " 3 MCLK"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "21 BL"));
     /* Verify ascending: find positions of first few entries */
-    char *pos2 = strstr(buf, " 2 LED");
     char *pos3 = strstr(buf, " 3 MCLK");
     char *pos4 = strstr(buf, " 4 Amp");
-    TEST_ASSERT_TRUE(pos2 < pos3);
+    char *pos5 = strstr(buf, " 5 A");
     TEST_ASSERT_TRUE(pos3 < pos4);
+    TEST_ASSERT_TRUE(pos4 < pos5);
 }
 
-/* Test: sort by GPIO has all 17 pins */
+/* Test: sort by GPIO has all 16 pins */
 void test_sort_by_gpio_all_pins(void) {
     char buf[384];
     format_pin_sorted(buf, sizeof(buf), SORT_BY_GPIO);
@@ -312,8 +307,8 @@ void test_sort_by_gpio_all_pins(void) {
     for (size_t i = 0; i < strlen(buf); i++) {
         if (buf[i] == '\n') line_count++;
     }
-    /* 18 pins = 17 newlines (last line has no trailing newline) */
-    TEST_ASSERT_EQUAL(17, line_count);
+    /* 17 pins = 16 newlines (last line has no trailing newline) */
+    TEST_ASSERT_EQUAL(16, line_count);
 }
 
 /* Test: sort by function produces alphabetical order */
@@ -366,7 +361,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_pin_info_buffer_size);
     RUN_TEST(test_pin_info_small_buffer);
     RUN_TEST(test_pin_info_first_line);
-    RUN_TEST(test_pin_info_all_17_pins_present);
+    RUN_TEST(test_pin_info_all_16_pins_present);
     RUN_TEST(test_pin_info_line_count);
     RUN_TEST(test_sort_by_gpio_ascending);
     RUN_TEST(test_sort_by_gpio_all_pins);

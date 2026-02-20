@@ -41,11 +41,6 @@ static void on_voltage_confirm(int, float float_val, int) {
     LOG_I("[GUI] Audio threshold set to %+.0f dBFS", float_val);
 }
 
-static void on_blinking_confirm(int int_val, float, int) {
-    AppState::getInstance().setBlinkingEnabled(int_val != 0);
-    LOG_I("[GUI] LED blinking set to %s", int_val ? "ON" : "OFF");
-}
-
 /* Navigate to signal generator sub-menu */
 static void show_siggen(void) {
     gui_nav_push_deferred(SCR_SIGGEN_MENU);
@@ -104,15 +99,6 @@ static void edit_voltage_threshold(void) {
     scr_value_edit_open(&cfg);
 }
 
-static void edit_led_blinking(void) {
-    ValueEditConfig cfg = {};
-    cfg.title = "LED Blinking";
-    cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().appState.blinkingEnabled;
-    cfg.on_confirm = on_blinking_confirm;
-    scr_value_edit_open(&cfg);
-}
-
 /* Build the control menu */
 static MenuConfig control_menu;
 
@@ -131,18 +117,14 @@ static void build_control_menu(void) {
     static char volt_str[12];
     snprintf(volt_str, sizeof(volt_str), "%+.0f dBFS", st.appState.audioThreshold_dBFS);
 
-    static char blink_str[8];
-    snprintf(blink_str, sizeof(blink_str), "%s", st.appState.blinkingEnabled ? "ON" : "OFF");
-
     control_menu.title = "Control";
-    control_menu.item_count = 7;
+    control_menu.item_count = 6;
     control_menu.items[0] = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     control_menu.items[1] = {"Sensing Mode", mode_str, ICON_SETTINGS, MENU_ACTION, edit_sensing_mode};
     control_menu.items[2] = {"Amplifier", amp_str, ICON_CONTROL, MENU_ACTION, edit_amplifier};
     control_menu.items[3] = {"Timer Duration", timer_str, nullptr, MENU_ACTION, edit_timer_duration};
     control_menu.items[4] = {"Audio Thresh", volt_str, nullptr, MENU_ACTION, edit_voltage_threshold};
-    control_menu.items[5] = {"LED Blinking", blink_str, nullptr, MENU_ACTION, edit_led_blinking};
-    control_menu.items[6] = {"Signal Gen", nullptr, nullptr, MENU_SUBMENU, show_siggen};
+    control_menu.items[5] = {"Signal Gen", nullptr, nullptr, MENU_SUBMENU, show_siggen};
 }
 
 lv_obj_t *scr_control_create(void) {
@@ -166,8 +148,6 @@ void scr_control_refresh(void) {
     static char volt_buf[12];
     snprintf(volt_buf, sizeof(volt_buf), "%+.0f dBFS", st.appState.audioThreshold_dBFS);
     scr_menu_set_item_value(4, volt_buf);
-
-    scr_menu_set_item_value(5, st.appState.blinkingEnabled ? "ON" : "OFF");
 }
 
 #endif /* GUI_ENABLED */

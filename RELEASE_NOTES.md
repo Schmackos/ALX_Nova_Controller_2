@@ -57,6 +57,20 @@ the two I2S ADCs with full metering, DSP processing, and routing.
   test_emergency_limiter, test_peq) (`51903f5`)
 
 ## Technical Details
+- [2026-02-20] test: add WS buffer overflow regression tests for DSP page
+
+Add 6 regression tests to test_websocket_messages to guard against the
+WS_BUF_SIZE truncation bug (87bce1e) where 4096-byte limit silently
+truncated DSP state JSON (~5200 bytes), producing invalid JSON and
+breaking the entire DSP page.
+
+Tests verify:
+- Default DSP state exceeds old 4096-byte limit (proves the bug)
+- Default DSP state fits in new 16384-byte limit
+- Worst-case state (6ch × 24 stages with coefficients) still fits
+- WS_BUF_SIZE constant is exactly 16384 (alerts on regression)
+- Enabled stages serialize larger than disabled (coeff path)
+- DSP JSON structure integrity (channels/stages/coeffs arrays) (`41e2548`)
 - [2026-02-20] Merge branch 'Dev'
 
 # Conflicts:

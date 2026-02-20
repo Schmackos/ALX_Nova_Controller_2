@@ -729,39 +729,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             margin-top: 4px;
         }
 
-        /* ===== LED Indicator ===== */
-        .led-display {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 24px;
-        }
-
-        .led {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            border: 4px solid var(--border);
-            transition: all 0.3s ease;
-        }
-
-        .led.on {
-            background: #ffeb3b;
-            box-shadow: 0 0 40px #ffeb3b, 0 0 80px rgba(255, 235, 59, 0.5);
-            border-color: #ffeb3b;
-        }
-
-        .led.off {
-            background: var(--bg-card);
-            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
-        }
-
-        .led-status {
-            margin-top: 12px;
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
         /* ===== Debug Console ===== */
         .debug-console {
             background: #0d0d0d;
@@ -2585,10 +2552,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <svg viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
                 <span>Debug</span>
             </button>
-            <button class="sidebar-item" data-tab="test" onclick="switchTab('test')">
-                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l4.59-4.58L18 11l-6 6z"/></svg>
-                <span>Test</span>
-            </button>
         </nav>
         <div class="sidebar-footer">
             <span id="sidebarVersion">v--</span>
@@ -2643,9 +2606,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         </button>
         <button class="tab" data-tab="debug" onclick="switchTab('debug')">
             <svg viewBox="0 0 24 24"><path d="M20 19V7H4v12h16m0-16c1.11 0 2 .89 2 2v14c0 1.11-.89 2-2 2H4c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h16zM7 9h10v2H7V9zm0 4h7v2H7v-2z"/></svg>
-        </button>
-        <button class="tab" data-tab="test" onclick="switchTab('test')">
-            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>
         </button>
     </nav>
 
@@ -2990,6 +2950,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 </div>
 
+                <!-- DAC Output Meters -->
+                <div id="dacOutputSection" style="display:none">
+                <div class="adc-section-header">
+                    <span class="adc-section-title">DAC Output</span>
+                    <span class="adc-readout" id="dacOutReadout">-- dBFS</span>
+                </div>
+                <div id="dacOutMeters">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name">L</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="dacOutFillL"></div>
+                            <div class="vu-meter-peak" id="dacOutPeakL"></div>
+                        </div>
+                        <span class="vu-meter-db" id="dacOutDbL">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name">R</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="dacOutFillR"></div>
+                            <div class="vu-meter-peak" id="dacOutPeakR"></div>
+                        </div>
+                        <span class="vu-meter-db" id="dacOutDbR">-inf dBFS</span>
+                    </div>
+                </div>
+                </div>
+
                 <!-- Shared scale row -->
                 <div class="vu-meter-row" style="margin-bottom:8px;margin-top:10px">
                     <span class="vu-meter-label"></span>
@@ -3074,10 +3060,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class='info-row'><span>Buffer Fill</span><span id='usbAudioBufferFill'>&mdash;</span></div>
                         <div class='info-row'><span>Latency</span><span id='usbAudioLatency'>&mdash;</span></div>
                     </div>
-                </div>
-                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
-                    <label class="form-label" style="margin:0">Auto-Priority (USB&rarr;DAC)</label>
-                    <label class="switch"><input type="checkbox" id="usbAutoPriority" onchange="setUsbAutoPriority(this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Update Rate</label>
@@ -3203,37 +3185,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="btn-row" style="margin-top:8px">
                     <button class="btn btn-primary" onclick="eepromProgram()">Program</button>
                     <button class="btn btn-danger" onclick="eepromErase()">Erase</button>
-                </div>
-            </div>
-
-            <!-- Emergency Protection -->
-            <div class="card">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    <span>Emergency Protection</span>
-                    <span id="emergencyLimiterStatusBadge" class="badge" style="background:#4CAF50">Idle</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable Limiter</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="emergencyLimiterEnable" checked onchange="updateEmergencyLimiter('enabled')"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                    <small style="color:#888">Brick-wall limiter prevents speaker damage from audio peaks</small>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Threshold: <span id="emergencyLimiterThresholdVal">-0.5</span> dBFS</label>
-                    <input type="range" class="form-input" id="emergencyLimiterThreshold" min="-6" max="0" value="-0.5" step="0.1" oninput="document.getElementById('emergencyLimiterThresholdVal').textContent=parseFloat(this.value).toFixed(1)" onchange="updateEmergencyLimiter('threshold')">
-                    <small style="color:#888">Recommended: -0.5 to -1.0 dBFS for safety headroom</small>
-                </div>
-                <div class="info-row" style="margin-top:8px">
-                    <span>Status:</span>
-                    <span id="emergencyLimiterStatus">Idle</span>
-                </div>
-                <div class="info-row">
-                    <span>Gain Reduction:</span>
-                    <span id="emergencyLimiterGR">0.0 dB</span>
-                </div>
-                <div class="info-row">
-                    <span>Lifetime Triggers:</span>
-                    <span id="emergencyLimiterTriggers">0</span>
                 </div>
             </div>
 
@@ -3451,8 +3402,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <div class="menu-item" onclick="dspShowBaffleModal()">Baffle Step...</div>
                         <div class="menu-cat" style="color:#1e88e5">Crossover</div>
                         <div class="menu-item" onclick="dspShowCrossoverModal()">Crossover Preset...</div>
-                        <div class="menu-cat" style="color:#ef6c00">Analysis</div>
-                        <div class="menu-item" onclick="dspShowThdModal()">THD+N Measurement...</div>
                     </div>
                 </div>
             </div>
@@ -4559,52 +4508,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </table>
             </div>
 
-            <!-- Audio Quality Diagnostics -->
-            <div class="card">
-                <div class="card-title">Audio Quality Diagnostics</div>
-                <div class="info-box">
-                    <div class="toggle-row">
-                        <span>Enable Diagnostics</span>
-                        <label class="switch"><input type="checkbox" id="audioQualityEnabled" onchange="updateAudioQuality('enabled')"><span class="slider round"></span></label>
-                    </div>
-                    <div class="form-row">
-                        <label for="audioQualityThreshold">Glitch Threshold (0.1-1.0):</label>
-                        <input type="number" id="audioQualityThreshold" min="0.1" max="1.0" step="0.1" value="0.5" onchange="updateAudioQuality('threshold')">
-                    </div>
-                </div>
-                <div class="stats-grid" id="audioQualityStats">
-                    <div class="stat-card">
-                        <div class="stat-value" id="aqGlitchesTotal">0</div>
-                        <div class="stat-label">Total Glitches</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="aqGlitchesMinute">0</div>
-                        <div class="stat-label">Last Minute</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="aqLatencyAvg">--</div>
-                        <div class="stat-label">Avg Latency</div>
-                    </div>
-                </div>
-                <div class="info-box-compact mt-12">
-                    <div class="info-row">
-                        <span class="info-label">Last Glitch Type</span>
-                        <span class="info-value" id="aqLastGlitchType">--</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">DSP Swap Correlation</span>
-                        <span class="info-value badge" id="aqCorrelationDsp">--</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">WiFi Correlation</span>
-                        <span class="info-value badge" id="aqCorrelationWifi">--</span>
-                    </div>
-                </div>
-                <div class="btn-row mt-12">
-                    <button class="btn btn-secondary" onclick="resetAudioQualityStats()">Reset Statistics</button>
-                </div>
-            </div>
-
             <!-- Debug Console -->
             <div class="card">
                 <div class="card-title">Debug Console</div>
@@ -4629,20 +4532,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             </div>
         </section>
 
-        <!-- ===== TEST TAB ===== -->
-        <section id="test" class="panel">
-            <div class="card">
-                <div class="card-title">LED Blink Test</div>
-                <div class="led-display">
-                    <div id="led" class="led off"></div>
-                    <div class="led-status" id="ledStatus">LED is OFF</div>
-                </div>
-                <button class="btn btn-primary" id="toggleBtn" onclick="toggleBlinking()">Start Blinking</button>
-                <div class="info-box mt-12" id="blinkStatus">
-                    <div class="text-center">Blinking: <strong id="blinkingState">OFF</strong></div>
-                </div>
-            </div>
-        </section>
     </main>
 
     <!-- AP Config Modal -->
@@ -4673,8 +4562,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     <script>
         // ===== State Variables =====
         let ws = null;
-        let ledState = false;
-        let blinkingEnabled = false;
         let autoUpdateEnabled = false;
         let darkMode = true;
         let waveformAutoScaleEnabled = false;
@@ -5135,13 +5022,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         window.location.href = '/login';
                     }, 2000);
                 }
-                else if (data.type === 'ledState') {
-                    ledState = data.state;
-                    updateLED();
-                } else if (data.type === 'blinkingEnabled') {
-                    blinkingEnabled = data.enabled;
-                    updateBlinkButton();
-                } else if (data.type === 'wifiStatus') {
+                else if (data.type === 'wifiStatus') {
                     updateWiFiStatus(data);
                 } else if (data.type === 'updateStatus') {
                     handleUpdateStatus(data);
@@ -5238,6 +5119,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                                 updateAdcReadout(a, ad.dBFS, ad.vrms1, ad.vrms2);
                             }
                         }
+                        // DAC output metering
+                        if (data.dacOutput) {
+                            updateDacOutputMeters(data.dacOutput);
+                        }
                         vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                         startVuAnimation();
                     }
@@ -5283,12 +5168,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     applyDebugState(data);
                 } else if (data.type === 'signalGenerator') {
                     applySigGenState(data);
-                } else if (data.type === 'emergencyLimiterState') {
-                    applyEmergencyLimiterState(data);
-                } else if (data.type === 'audioQualityState') {
-                    applyAudioQualityState(data);
-                } else if (data.type === 'audioQualityDiag') {
-                    applyAudioQualityDiag(data);
                 } else if (data.type === 'adcState') {
                     if (Array.isArray(data.enabled)) {
                         for (var ai = 0; ai < data.enabled.length; ai++) {
@@ -5298,8 +5177,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     }
                 } else if (data.type === 'usbAudioState') {
                     handleUsbAudioState(data);
-                } else if (data.type === 'usbAutoPriorityState') {
-                    handleUsbAutoPriorityState(data);
                 } else if (data.type === 'dacState') {
                     handleDacState(data);
                     if (data.eeprom) handleEepromDiag(data.eeprom);
@@ -5313,8 +5190,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     dspHandleMetrics(data);
                 } else if (data.type === 'peqPresets') {
                     peqHandlePresetsList(data.presets);
-                } else if (data.type === 'thdResult') {
-                    thdUpdateResult(data);
                 }
             };
 
@@ -5350,45 +5225,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             // Update status bar
             updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, connected);
-        }
-
-        // ===== LED Control =====
-        function updateLED() {
-            const led = document.getElementById('led');
-            const status = document.getElementById('ledStatus');
-            if (ledState) {
-                led.classList.remove('off');
-                led.classList.add('on');
-                status.textContent = 'LED is ON';
-            } else {
-                led.classList.remove('on');
-                led.classList.add('off');
-                status.textContent = 'LED is OFF';
-            }
-        }
-
-        function updateBlinkButton() {
-            const btn = document.getElementById('toggleBtn');
-            const state = document.getElementById('blinkingState');
-            if (blinkingEnabled) {
-                btn.textContent = 'Stop Blinking';
-                btn.classList.remove('btn-primary');
-                btn.classList.add('btn-danger');
-                state.textContent = 'ON';
-            } else {
-                btn.textContent = 'Start Blinking';
-                btn.classList.remove('btn-danger');
-                btn.classList.add('btn-primary');
-                state.textContent = 'OFF';
-            }
-        }
-
-        function toggleBlinking() {
-            blinkingEnabled = !blinkingEnabled;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'toggle', enabled: blinkingEnabled }));
-            }
-            updateBlinkButton();
         }
 
         // ===== WiFi Status =====
@@ -5855,6 +5691,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             else if (vrms1 !== undefined) vrms = vrms1;
             var vStr = vrms > 0.001 ? vrms.toFixed(3) + ' Vrms' : '-- Vrms';
             el.textContent = dbStr + ' | ' + vStr;
+        }
+
+        function updateDacOutputMeters(d) {
+            var sec = document.getElementById('dacOutputSection');
+            if (!sec) return;
+            var hasData = (d.vuL > 0.0001 || d.vuR > 0.0001);
+            sec.style.display = hasData ? '' : 'none';
+            if (!hasData) return;
+            var vuToPercent = function(v) { var db = v > 0 ? 20*Math.log10(v) : -96; return Math.max(0, Math.min(100, (db + 60) / 60 * 100)); };
+            var fillL = document.getElementById('dacOutFillL');
+            var fillR = document.getElementById('dacOutFillR');
+            var peakL = document.getElementById('dacOutPeakL');
+            var peakR = document.getElementById('dacOutPeakR');
+            var dbL = document.getElementById('dacOutDbL');
+            var dbR = document.getElementById('dacOutDbR');
+            var rdout = document.getElementById('dacOutReadout');
+            if (fillL) fillL.style.width = vuToPercent(d.vuL) + '%';
+            if (fillR) fillR.style.width = vuToPercent(d.vuR) + '%';
+            if (peakL) peakL.style.left = vuToPercent(d.peakL) + '%';
+            if (peakR) peakR.style.left = vuToPercent(d.peakR) + '%';
+            var dbfsL = d.dbfsL !== undefined ? d.dbfsL : -96;
+            var dbfsR = d.dbfsR !== undefined ? d.dbfsR : -96;
+            if (dbL) dbL.textContent = dbfsL > -95 ? dbfsL.toFixed(1) + ' dBFS' : '-inf dBFS';
+            if (dbR) dbR.textContent = dbfsR > -95 ? dbfsR.toFixed(1) + ' dBFS' : '-inf dBFS';
+            var maxDb = Math.max(dbfsL, dbfsR);
+            if (rdout) rdout.textContent = maxDb > -95 ? maxDb.toFixed(1) + ' dBFS' : '-inf dBFS';
         }
 
         function applyInputNames() {
@@ -6431,21 +6293,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     latEl.textContent = '\u2014';
                 }
             }
-            // Sync auto-priority if present in state
-            if (d.usbAutoPriority !== undefined) {
-                var cb = document.getElementById('usbAutoPriority');
-                if (cb) cb.checked = !!d.usbAutoPriority;
-            }
-        }
-
-        // ===== USB Auto-Priority + DAC Source =====
-        function setUsbAutoPriority(en) {
-            if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({type:'setUsbAutoPriority',value:en}));
-        }
-        function handleUsbAutoPriorityState(d) {
-            var cb = document.getElementById('usbAutoPriority');
-            if (cb) cb.checked = !!d.usbAutoPriority;
         }
 
         // ===== DAC Output =====
@@ -6726,98 +6573,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         // ===== Signal Generator =====
-        // ===== Emergency Limiter =====
-        function updateEmergencyLimiter(field) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            if (field === 'enabled') {
-                ws.send(JSON.stringify({
-                    type: 'setEmergencyLimiterEnabled',
-                    enabled: document.getElementById('emergencyLimiterEnable').checked
-                }));
-            } else if (field === 'threshold') {
-                ws.send(JSON.stringify({
-                    type: 'setEmergencyLimiterThreshold',
-                    threshold: parseFloat(document.getElementById('emergencyLimiterThreshold').value)
-                }));
-            }
-        }
-        function applyEmergencyLimiterState(d) {
-            document.getElementById('emergencyLimiterEnable').checked = d.enabled;
-            document.getElementById('emergencyLimiterThreshold').value = d.threshold;
-            document.getElementById('emergencyLimiterThresholdVal').textContent = parseFloat(d.threshold).toFixed(1);
-
-            // Update status badge
-            var statusBadge = document.getElementById('emergencyLimiterStatusBadge');
-            var statusText = document.getElementById('emergencyLimiterStatus');
-            if (d.active) {
-                statusBadge.textContent = 'ACTIVE';
-                statusBadge.style.background = '#F44336';
-                statusText.textContent = 'Limiting';
-                statusText.style.color = '#F44336';
-            } else {
-                statusBadge.textContent = 'Idle';
-                statusBadge.style.background = '#4CAF50';
-                statusText.textContent = 'Idle';
-                statusText.style.color = '';
-            }
-
-            // Update metrics
-            document.getElementById('emergencyLimiterGR').textContent = parseFloat(d.gainReductionDb).toFixed(1) + ' dB';
-            document.getElementById('emergencyLimiterTriggers').textContent = d.triggerCount || 0;
-        }
-
-        function updateAudioQuality(field) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            if (field === 'enabled') {
-                ws.send(JSON.stringify({
-                    type: 'setAudioQualityEnabled',
-                    enabled: document.getElementById('audioQualityEnabled').checked
-                }));
-            } else if (field === 'threshold') {
-                ws.send(JSON.stringify({
-                    type: 'setAudioQualityThreshold',
-                    threshold: parseFloat(document.getElementById('audioQualityThreshold').value)
-                }));
-            }
-        }
-
-        function applyAudioQualityState(d) {
-            document.getElementById('audioQualityEnabled').checked = d.enabled;
-            document.getElementById('audioQualityThreshold').value = d.threshold;
-        }
-
-        function applyAudioQualityDiag(d) {
-            document.getElementById('aqGlitchesTotal').textContent = d.glitchesTotal || 0;
-            document.getElementById('aqGlitchesMinute').textContent = d.glitchesLastMinute || 0;
-            document.getElementById('aqLatencyAvg').textContent = d.timingAvgMs ? parseFloat(d.timingAvgMs).toFixed(2) + ' ms' : '--';
-            document.getElementById('aqLastGlitchType').textContent = d.lastGlitchTypeStr || '--';
-
-            // Correlation badges
-            var dspBadge = document.getElementById('aqCorrelationDsp');
-            var wifiBadge = document.getElementById('aqCorrelationWifi');
-
-            if (d.correlationDspSwap) {
-                dspBadge.textContent = 'YES';
-                dspBadge.style.background = '#F44336';
-            } else {
-                dspBadge.textContent = 'No';
-                dspBadge.style.background = '#4CAF50';
-            }
-
-            if (d.correlationWifi) {
-                wifiBadge.textContent = 'YES';
-                wifiBadge.style.background = '#F44336';
-            } else {
-                wifiBadge.textContent = 'No';
-                wifiBadge.style.background = '#4CAF50';
-            }
-        }
-
-        function resetAudioQualityStats() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-            ws.send(JSON.stringify({ type: 'resetAudioQualityStats' }));
-        }
-
         function updateSigGen() {
             document.getElementById('siggenFields').style.display = document.getElementById('siggenEnable').checked ? '' : 'none';
             var wf = parseInt(document.getElementById('siggenWaveform').value);
@@ -11154,95 +10909,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             closeBaffleModal();
         }
 
-        // ===== THD Measurement =====
-        function dspShowThdModal() {
-            dspToggleAddMenu();
-            var existing = document.getElementById('thdModal');
-            if (existing) existing.remove();
-            var modal = document.createElement('div');
-            modal.id = 'thdModal';
-            modal.className = 'modal-overlay active';
-            modal.innerHTML = '<div class="modal">' +
-                '<div class="modal-title">THD+N Measurement</div>' +
-                '<div class="form-group"><label class="form-label">Test Frequency</label>' +
-                '<select class="form-input" id="thdFreq"><option value="100">100 Hz</option>' +
-                '<option value="1000" selected>1 kHz</option><option value="10000">10 kHz</option></select></div>' +
-                '<div class="form-group"><label class="form-label">Averages</label>' +
-                '<select class="form-input" id="thdAverages"><option value="4">4 frames</option>' +
-                '<option value="8" selected>8 frames</option><option value="16">16 frames</option></select></div>' +
-                '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-                '<button class="btn btn-primary" id="thdStartBtn" onclick="thdStart()">Start</button>' +
-                '<button class="btn btn-outline" id="thdStopBtn" onclick="thdStop()" style="display:none">Stop</button></div>' +
-                '<div id="thdResult" style="display:none;font-size:13px;">' +
-                '<div class="info-row"><span class="info-label">THD+N</span><span class="info-value" id="thdPercent">\u2014</span></div>' +
-                '<div class="info-row"><span class="info-label">THD+N (dB)</span><span class="info-value" id="thdDb">\u2014</span></div>' +
-                '<div class="info-row"><span class="info-label">Fundamental</span><span class="info-value" id="thdFund">\u2014</span></div>' +
-                '<div class="info-row"><span class="info-label">Progress</span><span class="info-value" id="thdProgress">\u2014</span></div>' +
-                '<div id="thdHarmonics" style="margin-top:8px;">' +
-                '<div style="font-weight:600;margin-bottom:4px;font-size:12px;">Harmonics (dB rel. fundamental)</div>' +
-                '<div id="thdHarmBars" style="display:flex;gap:2px;height:60px;align-items:flex-end;"></div></div></div>' +
-                '<div class="modal-actions" style="margin-top:12px;"><button class="btn btn-secondary" onclick="closeThdModal()">Close</button></div></div>';
-            modal.addEventListener('click', function(e) { if (e.target === modal) closeThdModal(); });
-            document.body.appendChild(modal);
-        }
-        function closeThdModal() {
-            thdStop();
-            var m = document.getElementById('thdModal');
-            if (m) m.remove();
-        }
-        function thdStart() {
-            var freq = parseInt(document.getElementById('thdFreq').value) || 1000;
-            var avg = parseInt(document.getElementById('thdAverages').value) || 8;
-            if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({type:'startThdMeasurement', freq:freq, averages:avg}));
-            var sb = document.getElementById('thdStartBtn');
-            var stb = document.getElementById('thdStopBtn');
-            var tr = document.getElementById('thdResult');
-            if (sb) sb.style.display = 'none';
-            if (stb) stb.style.display = '';
-            if (tr) tr.style.display = '';
-        }
-        function thdStop() {
-            if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({type:'stopThdMeasurement'}));
-            var sb = document.getElementById('thdStartBtn');
-            var stb = document.getElementById('thdStopBtn');
-            if (sb) sb.style.display = '';
-            if (stb) stb.style.display = 'none';
-        }
-        function thdUpdateResult(d) {
-            if (!d) return;
-            var el;
-            el = document.getElementById('thdPercent');
-            if (el) el.textContent = d.valid ? d.thdPlusNPercent.toFixed(3) + '%' : '\u2014';
-            el = document.getElementById('thdDb');
-            if (el) el.textContent = d.valid ? d.thdPlusNDb.toFixed(1) + ' dB' : '\u2014';
-            el = document.getElementById('thdFund');
-            if (el) el.textContent = d.valid ? d.fundamentalDbfs.toFixed(1) + ' dBFS' : '\u2014';
-            el = document.getElementById('thdProgress');
-            if (el) el.textContent = d.framesProcessed + '/' + d.framesTarget;
-            if (d.valid && d.harmonicLevels) {
-                var bars = document.getElementById('thdHarmBars');
-                if (bars) {
-                    var html = '';
-                    for (var h = 0; h < d.harmonicLevels.length; h++) {
-                        var lev = d.harmonicLevels[h];
-                        var pct = Math.max(2, Math.min(100, (120 + lev) / 120 * 100));
-                        html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;">';
-                        html += '<div style="width:100%;background:var(--primary);border-radius:2px;height:' + pct + '%" title="' + lev.toFixed(1) + ' dB"></div>';
-                        html += '<span style="font-size:10px;margin-top:2px;">' + (h+2) + '</span></div>';
-                    }
-                    bars.innerHTML = html;
-                }
-            }
-            if (d.valid && !d.measuring) {
-                var sb = document.getElementById('thdStartBtn');
-                var stb = document.getElementById('thdStopBtn');
-                if (sb) sb.style.display = '';
-                if (stb) stb.style.display = 'none';
-            }
-        }
-
         // ===== DSP Routing Matrix =====
         let dspRouting = null;
         function dspRoutingPreset(name) {
@@ -11264,12 +10930,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function dspRenderRouting() {
             var el = document.getElementById('dspRoutingGrid');
             if (!el || !dspRouting) return;
+            var outLabel = function(o) {
+                var name = dspChLabel(o);
+                if (o < 2) return name + ' <span style="font-size:10px;color:var(--accent);font-weight:400;">\u2192 DAC</span>';
+                return name;
+            };
             var h = '<table style="border-collapse:collapse;font-size:12px;width:100%;">';
-            h += '<tr><td></td>';
+            h += '<tr><td style="padding:4px;font-weight:600;color:var(--text-secondary);font-size:10px;">OUT \u2193 / IN \u2192</td>';
             for (var i = 0; i < DSP_MAX_CH; i++) h += '<td style="padding:4px;text-align:center;font-weight:600;color:var(--text-secondary);">' + dspChLabel(i) + '</td>';
             h += '</tr>';
             for (var o = 0; o < DSP_MAX_CH; o++) {
-                h += '<tr><td style="padding:4px;font-weight:600;color:var(--text-secondary);">' + dspChLabel(o) + '</td>';
+                h += '<tr><td style="padding:4px;font-weight:600;color:var(--text-secondary);white-space:nowrap;">' + outLabel(o) + '</td>';
                 for (var i = 0; i < DSP_MAX_CH; i++) {
                     var v = dspRouting[o] ? dspRouting[o][i] : 0;
                     var db = v <= 0.0001 ? 'Off' : (20 * Math.log10(v)).toFixed(1);

@@ -1,6 +1,5 @@
 #include "wifi_manager.h"
 #include "app_state.h"
-#include "audio_quality.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "mqtt_handler.h"
@@ -266,8 +265,6 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     wifiDisconnected = true;
     lastDisconnectTime = millis();
     wifiStatusUpdateRequested = true; // Defer update to main loop
-    // Mark WiFi event for audio quality correlation (Phase 3)
-    audio_quality_mark_event("wifi_disconnected");
     break;
   }
 
@@ -279,8 +276,6 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     currentRetryCount = 0;            // Reset retry counter
     lastFailedSSID = "";              // Clear failed SSID
     wifiStatusUpdateRequested = true; // Defer update to main loop
-    // Mark WiFi event for audio quality correlation (Phase 3)
-    audio_quality_mark_event("wifi_connected");
     // Clear roaming flag after a successful connection
     if (appState.roamingInProgress) {
       LOG_I("[WiFi] Roam successful");

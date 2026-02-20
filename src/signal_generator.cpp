@@ -69,6 +69,7 @@ static SigGenParams _params = {};
 static float _phase = 0.0f;           // Phase accumulator [0, 1)
 static float _sweepFreq = 0.0f;       // Current sweep frequency
 static uint32_t _noiseSeed = 12345;   // PRNG seed
+static volatile bool _phaseResetPending = false;  // Deferred reset — set by Core 0, applied by audio task
 
 #ifndef NATIVE_TEST
 static portMUX_TYPE _siggenSpinlock = portMUX_INITIALIZER_UNLOCKED;
@@ -122,6 +123,14 @@ void siggen_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_rate) {
 #ifndef NATIVE_TEST
     portEXIT_CRITICAL(&_siggenSpinlock);
 #endif
+
+    // Apply deferred phase reset (set by siggen_apply_params on Core 0)
+    if (_phaseResetPending) {
+        _phase = 0.0f;
+        _sweepFreq = p.sweepMin;
+        _noiseSeed = 12345;
+        _phaseResetPending = false;
+    }
 
     float phase_inc = p.frequency / (float)sample_rate;
     float amp = p.amplitude_linear;
@@ -250,11 +259,9 @@ void siggen_apply_params() {
         LOG_I("[SigGen] Stopped");
     }
 
-    // Reset phase and sweep on enable
+    // Reset phase and sweep on enable — deferred to audio task to avoid cross-core jitter
     if (shouldBeActive && !wasActive) {
-        _phase = 0.0f;
-        _sweepFreq = p.sweepMin;
-        _noiseSeed = (uint32_t)millis();
+        _phaseResetPending = true;
         LOG_I("[SigGen] Started: waveform=%d, freq=%.0f Hz, amp=%.1f dBFS, mode=%s",
               p.waveform, p.frequency, st.sigGenAmplitude,
               p.outputMode == SIGOUT_SOFTWARE ? "software" : "PWM");

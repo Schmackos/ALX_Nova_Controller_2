@@ -32,7 +32,7 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (935 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_presets`, `test_dsp_rew`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_usb_auto_priority`, `test_usb_input`, `test_adc_sync`, `test_audio_quality`, `test_captive_portal`, `test_config`, `test_dac_eeprom`, `test_dac_hal`, `test_debug_serial`, `test_emergency_limiter`, `test_peq`, `test_stack_overflow`, `test_websocket_messages`, `test_wifi_roaming`, `test_wifi_watchdog`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (960 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_presets`, `test_dsp_rew`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_usb_input`, `test_adc_sync`, `test_captive_portal`, `test_config`, `test_dac_eeprom`, `test_dac_hal`, `test_debug_serial`, `test_peq`, `test_stack_overflow`, `test_websocket_messages`, `test_wifi_roaming`, `test_wifi_watchdog`.
 
 ## Architecture
 
@@ -93,7 +93,7 @@ The board has 8MB OPI PSRAM (Freenove ESP32-S3 WROOM N16R8). DSP delay lines are
 ## Pin Configuration
 
 Defined as build flags in `platformio.ini` and with fallback defaults in `src/config.h`:
-- Core: LED=2, Amplifier=4, VoltSense(ADC)=1, Reset button=15, Buzzer=8
+- Core: Amplifier=4, VoltSense(ADC)=1, Reset button=15, Buzzer=8
 - TFT: MOSI=11, SCLK=12, CS=10, DC=13, RST=14, BL=21
 - Encoder: A=5, B=6, SW=7
 - I2S Audio ADC1: BCK=16, DOUT=17, LRC=18, MCLK=3

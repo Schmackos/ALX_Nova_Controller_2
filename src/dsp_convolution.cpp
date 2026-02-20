@@ -149,11 +149,6 @@ void dsp_conv_process(int slot, float *buf, int len) {
     memcpy(buf, output, len * sizeof(float));
 }
 
-bool dsp_conv_is_active(int slot) {
-    if (slot < 0 || slot >= CONV_MAX_IR_SLOTS) return false;
-    return _convSlots[slot].active;
-}
-
 int dsp_conv_get_ir_length(int slot) {
     if (slot < 0 || slot >= CONV_MAX_IR_SLOTS) return 0;
     return _convSlots[slot].irLength;
