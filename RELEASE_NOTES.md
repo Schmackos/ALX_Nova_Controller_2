@@ -3,6 +3,7 @@
 ## Version 1.8.8
 
 ## Documentation
+- [2026-02-20] docs: move audio_pipeline diagram to docs/flowcharts/ (`81decb7`)
 - [2026-02-20] docs: add Mermaid audio pipeline diagram (`775a859`)
 
 ## New Features
