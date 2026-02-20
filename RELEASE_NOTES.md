@@ -48,6 +48,7 @@ the two I2S ADCs with full metering, DSP processing, and routing.
   test_emergency_limiter, test_peq) (`51903f5`)
 
 ## Technical Details
+- [2026-02-20] chore: update release notes (`0fb6a9a`)
 - [2026-02-19] chore: bump version to 1.8.8 (`b63d01b`)
 
 ## Improvements
