@@ -2,6 +2,9 @@
 
 ## Version 1.8.8
 
+## Documentation
+- [2026-02-20] docs: add Mermaid audio pipeline diagram (`775a859`)
+
 ## New Features
 - [2026-02-20] feat: USB Audio as full input source with 6x6 routing matrix
 
