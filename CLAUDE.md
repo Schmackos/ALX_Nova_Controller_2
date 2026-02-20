@@ -98,7 +98,8 @@ Defined as build flags in `platformio.ini` and with fallback defaults in `src/co
 - Encoder: A=5, B=6, SW=7
 - I2S Audio ADC1: BCK=16, DOUT=17, LRC=18, MCLK=3
 - I2S Audio ADC2: DOUT2=9 (shares BCK/LRC/MCLK with ADC1)
-- I2S DAC TX: DOUT=40 (full-duplex on I2S0), DAC I2C: SDA=41, SCL=42
+- I2S DAC TX: DOUT=40, BCK=16, LRC=18 (full-duplex on I2S0; BCK/LRC shared with ADC1)
+- EEPROM I2C: SDA=41, SCL=42 (EEPROM only — not connected to any DAC)
 - Signal Generator PWM: GPIO 38
 - USB Audio: GPIO 19/20 (native USB D-/D+, used by TinyUSB UAC2 speaker device)
 
