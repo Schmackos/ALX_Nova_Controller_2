@@ -140,8 +140,21 @@ void usb_auto_priority_update(unsigned long nowMs) {
     if (result.applyUsbRouting) {
         DspRoutingMatrix *rm = dsp_get_routing_matrix();
         if (rm) {
+#ifdef DAC_ENABLED
+            // Fix 2c: brief mute around source switch to eliminate routing-change pop
+            app.dacMute = true;
+#ifndef NATIVE_TEST
+            vTaskDelay(pdMS_TO_TICKS(10));   // ~2 buffer periods at 48 kHz/256
+#endif
+#endif
             usb_auto_priority_build_routing(*rm);
             app.markDspConfigDirty();
+#ifdef DAC_ENABLED
+#ifndef NATIVE_TEST
+            vTaskDelay(pdMS_TO_TICKS(10));
+#endif
+            app.dacMute = false;
+#endif
             LOG_I("[USB Prio] Applied USB-to-DAC routing");
         }
     }

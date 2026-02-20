@@ -503,6 +503,40 @@ void dac_output_init() {
           caps.needsIndependentClock ? "yes" : "no");
 }
 
+void dac_output_reinit() {
+#ifndef NATIVE_TEST
+    AppState& as = AppState::getInstance();
+    if (!as.dacEnabled || !_driver) {
+        LOG_D("[DAC] Reinit skipped: DAC not enabled");
+        return;
+    }
+    LOG_I("[DAC] Reinit: cycling I2S TX for USB reconnect");
+
+    // Tear down TX (sets dacReady=false and _i2sTxEnabled=false internally)
+    dac_disable_i2s_tx();
+
+    // dacReady must be true so i2s_configure_adc1() creates the TX+RX channel
+    as.dacReady = true;
+    if (!dac_enable_i2s_tx(as.audioSampleRate)) {
+        LOG_E("[DAC] Reinit: I2S TX re-enable failed");
+        as.dacReady = false;
+        return;
+    }
+
+    // Reconfigure driver (DAC chip PLL relock after power-on)
+    if (!_driver->configure(as.audioSampleRate, 32)) {
+        LOG_W("[DAC] Reinit: driver reconfigure failed");
+    }
+
+    as.dacReady = true;
+
+    // Allow DAC chip PLL to stabilize before unmuting
+    delay(50);
+    as.dacMute = false;
+    LOG_I("[DAC] Reinit complete, DAC unmuted");
+#endif
+}
+
 void dac_output_deinit() {
     if (_driver) {
         _driver->deinit();

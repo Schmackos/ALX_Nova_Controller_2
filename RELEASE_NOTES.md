@@ -60,7 +60,21 @@ the two I2S ADCs with full metering, DSP processing, and routing.
 - [2026-02-19] chore: bump version to 1.8.8 (`b63d01b`)
 
 ## Improvements
-- None
+- [2026-02-20] perf: heap memory optimization — reduce internal SRAM usage by ~28 KB
+
+- GUI task stack → PSRAM via xTaskCreateStaticPinnedToCore (-16 KB)
+- Debug log ring → PSRAM via heap_caps_calloc(SPIRAM) (-4 KB)
+- I2S DMA buffers: I2S_DMA_BUF_COUNT 8→6 (-4 KB)
+- MQTT: all String fields → static char[] buffers; mqttTopic()/mqttPubInt/Float/Str/Bool() helpers
+- HA Discovery: table-driven with reusable _jsonBuf (was ~80 separate String allocs)
+- AppState: 16 String fields → char[] arrays with setCharField() for assignment
+- WebSocket: _wsBuf PSRAM pool + wsBroadcastJson()/wsSendJson() helpers
+- Settings: line-by-line readBytesUntil() (was String lines[35])
+- DSP API: PsramAllocator for ArduinoJson documents
+- Signal generator: lazy init (only when first enabled)
+- OTA SHA256: char hashStr[65] + snprintf (was String+= loop)
+- Heap budget regression tests added (test_heap_budget) (`87bce1e`)
+
 
 ## Bug Fixes
 - [2026-02-20] fix: move large static buffers to PSRAM to resolve HEAP CRITICAL

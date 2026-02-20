@@ -121,19 +121,19 @@ void initSerialNumber() {
              (uint8_t)(mac), (uint8_t)(mac >> 8), (uint8_t)(mac >> 16),
              (uint8_t)(mac >> 24), (uint8_t)(mac >> 32), (uint8_t)(mac >> 40));
 
-    appState.deviceSerialNumber = String(serial);
+    setCharField(appState.deviceSerialNumber, sizeof(appState.deviceSerialNumber), serial);
 
     // Store serial number and firmware version in NVS
     prefs.putString("serial", appState.deviceSerialNumber);
     prefs.putString("fw_ver", currentFwVer);
 
     LOG_I("[Main] Serial number generated: %s (firmware: %s)",
-          appState.deviceSerialNumber.c_str(), currentFwVer.c_str());
+          appState.deviceSerialNumber, currentFwVer.c_str());
   } else {
     // Load existing serial number
-    appState.deviceSerialNumber = prefs.getString("serial", "");
+    { String s = prefs.getString("serial", ""); setCharField(appState.deviceSerialNumber, sizeof(appState.deviceSerialNumber), s.c_str()); }
     LOG_I("[Main] Serial number loaded: %s",
-          appState.deviceSerialNumber.c_str());
+          appState.deviceSerialNumber);
   }
 
   prefs.end();
@@ -232,8 +232,8 @@ void setup() {
 
   // Set AP SSID: use customDeviceName if set, otherwise fall back to serial number
   // Note: loadSettings() is called later; the apSSID will be updated after settings load
-  appState.apSSID = appState.deviceSerialNumber;
-  LOG_I("[Main] AP SSID set to: %s", appState.apSSID.c_str());
+  setCharField(appState.apSSID, sizeof(appState.apSSID), appState.deviceSerialNumber);
+  LOG_I("[Main] AP SSID set to: %s", appState.apSSID);
 
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
@@ -281,12 +281,12 @@ void setup() {
 
   // Update AP SSID now that customDeviceName has been loaded from settings
   {
-    String apName = appState.customDeviceName.length() > 0
-                      ? appState.customDeviceName
-                      : ("ALX-Nova-" + appState.deviceSerialNumber);
+    String apName = strlen(appState.customDeviceName) > 0
+                      ? String(appState.customDeviceName)
+                      : ("ALX-Nova-" + String(appState.deviceSerialNumber));
     if ((int)apName.length() > 32) apName = apName.substring(0, 32);
-    appState.apSSID = apName;
-    LOG_I("[Main] AP SSID updated to: %s", appState.apSSID.c_str());
+    setCharField(appState.apSSID, sizeof(appState.apSSID), apName.c_str());
+    LOG_I("[Main] AP SSID updated to: %s", appState.apSSID);
   }
 
   // Apply debug serial log level from loaded settings
@@ -336,8 +336,8 @@ void setup() {
     LOG_I("[Main] No input names found, using defaults");
   }
 
-  // Initialize Signal Generator PWM
-  siggen_init();
+  // Signal Generator: lazy init — PWM hardware initialized on first enable
+  // via siggen_apply_params() to avoid allocating LEDC channel when unused
 
   // Initialize authentication system
   initAuth();
@@ -725,6 +725,7 @@ void setup() {
   // Always start server and WebSocket regardless of mode
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
+  ws_init_buffers();
   DebugOut.setWebSocket(&webSocket);
   server.begin();
   LOG_I("[Main] Web server and WebSocket started");
@@ -973,6 +974,29 @@ void loop() {
 
 #ifdef DSP_ENABLED
   usb_auto_priority_update(millis());
+#endif
+
+#if defined(USB_AUDIO_ENABLED) && defined(DAC_ENABLED)
+  // Fix 2a/2b: Detect usbAudioConnected rising edge → mute DAC for 200 ms then reinit.
+  // Masks the power-on pop and relocks the DAC chip PLL after USB VBUS returns.
+  {
+    static bool prevUsbAudioConnected = false;
+    static unsigned long usbConnectMuteUntilMs = 0;
+    static bool usbDacReinitPending = false;
+
+    bool currUsbConnected = appState.usbAudioConnected;
+    if (currUsbConnected && !prevUsbAudioConnected) {
+      appState.dacMute = true;
+      usbConnectMuteUntilMs = millis() + 200;
+      usbDacReinitPending = true;
+      LOG_I("[Main] USB connected: DAC muted, reinit pending");
+    }
+    if (usbDacReinitPending && millis() >= usbConnectMuteUntilMs) {
+      usbDacReinitPending = false;
+      dac_output_reinit();  // cycles I2S TX, relocks PLL, unmutes after 50 ms
+    }
+    prevUsbAudioConnected = currUsbConnected;
+  }
 #endif
 
 #ifdef DSP_ENABLED

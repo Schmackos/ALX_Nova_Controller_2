@@ -73,6 +73,7 @@ void dac_apply_software_volume(float* buffer, int samples, float gain);
 // ===== DAC Output Manager Public API =====
 void dac_output_init();           // Load settings, create driver, enable I2S TX
 void dac_output_deinit();         // Tear down driver
+void dac_output_reinit();         // Cycle I2S TX + relock DAC PLL after USB reconnect (unmutes when done)
 bool dac_output_is_ready();       // Is DAC ready for samples?
 
 // Write processed audio to I2S TX (called from audio task, non-blocking)
