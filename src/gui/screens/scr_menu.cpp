@@ -75,7 +75,7 @@ lv_obj_t *scr_menu_create(const MenuConfig *config) {
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_add_style(row, gui_style_list_item(), LV_PART_MAIN);
-        lv_obj_add_style(row, gui_style_list_item_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
+        lv_obj_add_style(row, gui_style_list_item_focused(), ((lv_style_selector_t)LV_PART_MAIN | (lv_style_selector_t)LV_STATE_FOCUSED));
         lv_obj_set_style_pad_hor(row, 4, LV_PART_MAIN);
         lv_obj_set_style_pad_ver(row, 3, LV_PART_MAIN);
         lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);

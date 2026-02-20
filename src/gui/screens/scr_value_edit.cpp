@@ -143,7 +143,7 @@ static lv_obj_t *create_value_edit_screen(void) {
     lv_obj_set_size(val_container, 140, 40);
     lv_obj_align(val_container, LV_ALIGN_CENTER, 0, -4);
     lv_obj_add_style(val_container, gui_style_card(), LV_PART_MAIN);
-    lv_obj_add_style(val_container, gui_style_card_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(val_container, gui_style_card_focused(), ((lv_style_selector_t)LV_PART_MAIN | (lv_style_selector_t)LV_STATE_FOCUSED));
     lv_obj_clear_flag(val_container, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(val_container, LV_OBJ_FLAG_CLICKABLE);
 

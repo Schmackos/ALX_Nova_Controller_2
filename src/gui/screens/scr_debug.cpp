@@ -505,7 +505,7 @@ lv_obj_t *scr_debug_create(void) {
         lv_obj_set_size(sort_btn, LV_SIZE_CONTENT, 14);
         lv_obj_align(sort_btn, LV_ALIGN_RIGHT_MID, 0, 0);
         lv_obj_add_style(sort_btn, gui_style_list_item(), LV_PART_MAIN);
-        lv_obj_add_style(sort_btn, gui_style_list_item_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
+        lv_obj_add_style(sort_btn, gui_style_list_item_focused(), ((lv_style_selector_t)LV_PART_MAIN | (lv_style_selector_t)LV_STATE_FOCUSED));
         lv_obj_add_flag(sort_btn, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_clear_flag(sort_btn, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_style_pad_hor(sort_btn, 4, LV_PART_MAIN);
@@ -534,7 +534,7 @@ lv_obj_t *scr_debug_create(void) {
     lv_obj_set_size(back_btn, 60, 16);
     lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_add_style(back_btn, gui_style_list_item(), LV_PART_MAIN);
-    lv_obj_add_style(back_btn, gui_style_list_item_focused(), LV_PART_MAIN | LV_STATE_FOCUSED);
+    lv_obj_add_style(back_btn, gui_style_list_item_focused(), ((lv_style_selector_t)LV_PART_MAIN | (lv_style_selector_t)LV_STATE_FOCUSED));
     lv_obj_add_flag(back_btn, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(back_btn, LV_OBJ_FLAG_SCROLLABLE);
     lv_group_add_obj(gui_nav_get_group(), back_btn);
