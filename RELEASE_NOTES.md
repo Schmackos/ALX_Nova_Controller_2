@@ -69,6 +69,10 @@ the two I2S ADCs with full metering, DSP processing, and routing.
 - None
 
 ## Bug Fixes
+- [2026-02-20] fix: remove deprecated task_snapshot.h include
+
+The header is unused (xTaskGetNext comes from esp_private/freertos_debug.h)
+and generates a deprecation warning on IDF 5.5. (`0a5efa6`)
 - [2026-02-20] fix: routing matrix — USB channel bleeding, stale data, and UI mismatch
 
 Mono Sum preset rewired to per-pair mono (no cross-input bleed), inactive
