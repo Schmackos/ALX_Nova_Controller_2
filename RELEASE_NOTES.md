@@ -3,6 +3,7 @@
 ## Version 1.8.8
 
 ## Documentation
+- [2026-02-20] docs: resolve debug dsp-page-broken (`5438028`)
 - [2026-02-20] docs: fix signal generator placement in audio pipeline diagram
 
 Show signal generator as conditional dashed side-injection into
