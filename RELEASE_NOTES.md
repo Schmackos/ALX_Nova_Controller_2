@@ -77,6 +77,26 @@ the two I2S ADCs with full metering, DSP processing, and routing.
 
 
 ## Bug Fixes
+- [2026-02-20] fix: remove residual DC blocking filter and fix emergency limiter defaults
+
+DC blocking filter:
+- Remove IIR DC block from process_adc_buffer() — the v1.8.3 removal
+  commit (b0e4c4d) stripped the GUI toggle and DSP helpers but left
+  the actual filter code running unconditionally
+- Removing it eliminates the click/transient when ADC inputs are toggled
+  (large step response in filter state → audible pop on enable/disable)
+- DSP high-pass filter stages are the correct user-facing replacement
+
+Emergency safety limiter:
+- Raise default threshold from -0.5 dBFS to -0.1 dBFS — the old
+  default triggered on virtually all commercial music (mastered near
+  0 dBFS), causing audible gain pumping with instant attack + 100ms
+  release; at -0.1 dBFS only genuine DSP overloads are caught
+- Reset limiter state (envelope, lookahead, samplesSinceTrigger) when
+  re-enabled after being disabled — prevents spurious gain reduction
+  for the first 100ms after toggling the feature back on
+- Fix misleading "non-bypassable" comment — limiter is gated by the
+  emergencyLimiterEnabled flag and by global DSP bypass (`0959c02`)
 - [2026-02-20] fix: DAC soft-mute and I2S reinit on USB audio connect
 
 - Add dac_output_reinit() — cycles I2S TX and relocks DAC PLL after
