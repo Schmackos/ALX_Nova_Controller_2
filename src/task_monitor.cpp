@@ -5,7 +5,6 @@
 #include "debug_serial.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/task_snapshot.h>
 #include <esp_idf_version.h>
 #include <esp_private/freertos_debug.h>  // xTaskGetNext / TaskIterator_t (IDF5)
 #else
