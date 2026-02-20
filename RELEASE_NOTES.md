@@ -18,6 +18,22 @@ the two I2S ADCs with full metering, DSP processing, and routing.
 - Full per-input metering: VU, waveform, spectrum, diagnostics for USB
 - WebSocket, MQTT, REST, GUI all support 3 inputs and 6 DSP channels
 - Web UI: USB level/status in Audio tab, auto-priority toggle
+- 1009 native tests pass, ESP32 build succeeds (53.4% RAM, 88.9% Flash) (`171605d`)
+- [2026-02-20] feat: USB Audio as full input source with 6x6 routing matrix
+
+Integrate USB Audio (TinyUSB UAC2) as a first-class input alongside
+the two I2S ADCs with full metering, DSP processing, and routing.
+
+- Dual-constant architecture: NUM_AUDIO_ADCS=2 (I2S hardware),
+  NUM_AUDIO_INPUTS=3 (all inputs including USB)
+- DSP_MAX_CHANNELS expanded 4→6 (L1, R1, L2, R2, USB_L, USB_R)
+- 6x6 routing matrix activated via dsp_routing_execute() in audio task
+- USB ring buffer read in audio_capture_task with host volume/mute
+- Auto-priority USB→DAC routing state machine (usb_auto_priority)
+- Signal generator targets expanded: ADC1, ADC2, Both, USB, All
+- Full per-input metering: VU, waveform, spectrum, diagnostics for USB
+- WebSocket, MQTT, REST, GUI all support 3 inputs and 6 DSP channels
+- Web UI: USB level/status in Audio tab, auto-priority toggle
 - 1009 native tests pass, ESP32 build succeeds (53.4% RAM, 88.9% Flash) (`18c0b67`)
 - [2026-02-20] feat: wire routing matrix into DSP pipeline with dsp_routing_execute()
 
@@ -32,6 +48,7 @@ the two I2S ADCs with full metering, DSP processing, and routing.
   test_emergency_limiter, test_peq) (`51903f5`)
 
 ## Technical Details
+- [2026-02-20] chore: update release notes (`0fb6a9a`)
 - [2026-02-19] chore: bump version to 1.8.8 (`b63d01b`)
 
 ## Improvements
