@@ -69,6 +69,20 @@ the two I2S ADCs with full metering, DSP processing, and routing.
 - None
 
 ## Bug Fixes
+- [2026-02-20] fix: increase WS_BUF_SIZE to 16384 to fix broken DSP page
+
+WS_BUF_SIZE of 4096 bytes (introduced in 87bce1e) was too small for the
+DSP state JSON. The default state with 6 channels × 10 PEQ bands + 32
+preset slots serializes to ~5202 bytes, overflowing the buffer by 1106
+bytes. The truncated JSON caused JSON.parse() to throw SyntaxError in
+ws.onmessage, leaving dspState permanently null — blank freq response
+graph, silent no-ops on add preset/stage/remove.
+
+With all stages enabled and biquad coefficients included, DSP state can
+reach ~16 KB. Increase WS_BUF_SIZE to 16384 bytes (PSRAM, negligible
+cost). Add truncation guard with LOG_W + String fallback in both
+wsBroadcastJson() and wsSendJson() to prevent silent truncation for any
+future oversized message. (`b106552`)
 - [2026-02-20] fix: remove deprecated task_snapshot.h include
 
 The header is unused (xTaskGetNext comes from esp_private/freertos_debug.h)

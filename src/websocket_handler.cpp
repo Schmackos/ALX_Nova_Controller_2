@@ -37,8 +37,10 @@
 #include "esp_timer.h"
 
 // PSRAM-backed WebSocket serialization buffer (eliminates ~23 String heap allocs per broadcast cycle)
+// Must be large enough for the largest WS message. DSP state with 6ch × 24 stages (all enabled with
+// biquad coefficients) reaches ~16 KB. Default state (all disabled, no coeffs) is ~5.2 KB.
 static char *_wsBuf = nullptr;
-static const size_t WS_BUF_SIZE = 4096;
+static const size_t WS_BUF_SIZE = 16384;
 
 void ws_init_buffers() {
 #ifndef NATIVE_TEST
@@ -51,28 +53,39 @@ void ws_init_buffers() {
     }
 }
 
-// Helper: broadcast a JsonDocument to all WebSocket clients using the PSRAM buffer
+// Helper: broadcast a JsonDocument to all WebSocket clients using the PSRAM buffer.
+// Falls back to dynamic String allocation if the serialized JSON exceeds WS_BUF_SIZE
+// (prevents sending truncated JSON which causes client-side parse failures).
 static void wsBroadcastJson(JsonDocument &doc) {
     if (_wsBuf) {
-        size_t len = serializeJson(doc, _wsBuf, WS_BUF_SIZE);
-        webSocket.broadcastTXT(_wsBuf, len);
-    } else {
-        String json;
-        serializeJson(doc, json);
-        webSocket.broadcastTXT(json);
+        size_t needed = measureJson(doc) + 1;
+        if (needed <= WS_BUF_SIZE) {
+            size_t len = serializeJson(doc, _wsBuf, WS_BUF_SIZE);
+            webSocket.broadcastTXT(_wsBuf, len);
+            return;
+        }
+        LOG_W("[WebSocket] wsBroadcastJson: JSON %u bytes exceeds buffer (%u), using dynamic alloc", (unsigned)needed, (unsigned)WS_BUF_SIZE);
     }
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json);
 }
 
-// Helper: send a JsonDocument to a single WebSocket client using the PSRAM buffer
+// Helper: send a JsonDocument to a single WebSocket client using the PSRAM buffer.
+// Falls back to dynamic String allocation if the serialized JSON exceeds WS_BUF_SIZE.
 static void wsSendJson(uint8_t num, JsonDocument &doc) {
     if (_wsBuf) {
-        size_t len = serializeJson(doc, _wsBuf, WS_BUF_SIZE);
-        webSocket.sendTXT(num, _wsBuf, len);
-    } else {
-        String json;
-        serializeJson(doc, json);
-        webSocket.sendTXT(num, json.c_str());
+        size_t needed = measureJson(doc) + 1;
+        if (needed <= WS_BUF_SIZE) {
+            size_t len = serializeJson(doc, _wsBuf, WS_BUF_SIZE);
+            webSocket.sendTXT(num, _wsBuf, len);
+            return;
+        }
+        LOG_W("[WebSocket] wsSendJson: JSON %u bytes exceeds buffer (%u), using dynamic alloc", (unsigned)needed, (unsigned)WS_BUF_SIZE);
     }
+    String json;
+    serializeJson(doc, json);
+    webSocket.sendTXT(num, json.c_str());
 }
 
 // ===== WebSocket Authentication Tracking =====
@@ -217,17 +230,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 #ifdef USB_AUDIO_ENABLED
             sendUsbAudioState();
 #endif
-            // Send USB routing state (unconditional — routing fields exist regardless of USB_AUDIO_ENABLED)
-            {
-              JsonDocument routDoc;
-              routDoc["type"] = "usbAutoPriorityState";
-              routDoc["usbAutoPriority"] = appState.usbAutoPriority;
-              routDoc["dacSourceInput"] = appState.dacSourceInput;
-              String routJson;
-              serializeJson(routDoc, routJson);
-              webSocket.sendTXT(num, routJson.c_str());
-            }
-
             // If device just updated, notify the client
             if (appState.justUpdated) {
               broadcastJustUpdated();
@@ -428,25 +430,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendSignalGenState();
             LOG_I("[WebSocket] Signal generator updated by client [%u]", num);
           }
-#ifdef DSP_ENABLED
-        } else if (msgType == "setEmergencyLimiterEnabled") {
-          if (doc["enabled"].is<bool>()) {
-            appState.setEmergencyLimiterEnabled(doc["enabled"].as<bool>());
-            saveSettings();
-            sendEmergencyLimiterState();
-            LOG_I("[WebSocket] Emergency limiter enabled: %d", appState.emergencyLimiterEnabled);
-          }
-        } else if (msgType == "setEmergencyLimiterThreshold") {
-          if (doc["threshold"].is<float>()) {
-            float threshold = doc["threshold"].as<float>();
-            if (threshold >= -6.0f && threshold <= 0.0f) {
-              appState.setEmergencyLimiterThreshold(threshold);
-              saveSettings();
-              sendEmergencyLimiterState();
-              LOG_I("[WebSocket] Emergency limiter threshold: %.2f dBFS", threshold);
-            }
-          }
-#endif
         } else if (msgType == "setDeviceName") {
           const char* nameRaw = doc["name"].as<const char*>();
           if (!nameRaw) nameRaw = "";
@@ -1242,39 +1225,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
         }
 #endif
-        // ===== USB Auto-Priority =====
-        else if (msgType == "setUsbAutoPriority") {
-          appState.usbAutoPriority = doc["value"] | false;
-          saveSettings();
-          {
-            JsonDocument resp;
-            resp["type"] = "usbAutoPriorityState";
-            resp["usbAutoPriority"] = appState.usbAutoPriority;
-            resp["dacSourceInput"] = appState.dacSourceInput;
-            String rJson;
-            serializeJson(resp, rJson);
-            webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
-          }
-          LOG_I("[WebSocket] USB auto-priority: %s", appState.usbAutoPriority ? "enabled" : "disabled");
-        }
-        // ===== DAC Source Input =====
-        else if (msgType == "setDacSourceInput") {
-          int val = doc["value"] | 0;
-          if (val >= 0 && val <= 2) {
-            appState.dacSourceInput = (uint8_t)val;
-            saveSettings();
-            {
-              JsonDocument resp;
-              resp["type"] = "usbAutoPriorityState";
-              resp["usbAutoPriority"] = appState.usbAutoPriority;
-              resp["dacSourceInput"] = appState.dacSourceInput;
-              String rJson;
-              serializeJson(resp, rJson);
-              webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
-            }
-            LOG_I("[WebSocket] DAC source input: %d", val);
-          }
-        }
       }
       break;
 
@@ -1354,21 +1304,6 @@ void sendSignalGenState() {
 }
 
 #ifdef DSP_ENABLED
-void sendEmergencyLimiterState() {
-  JsonDocument doc;
-  doc["type"] = "emergencyLimiterState";
-  doc["enabled"] = appState.emergencyLimiterEnabled;
-  doc["threshold"] = serialized(String(appState.emergencyLimiterThresholdDb, 2));
-
-  // Include metrics from DSP pipeline
-  DspMetrics metrics = dsp_get_metrics();
-  doc["active"] = metrics.emergencyLimiterActive;
-  doc["gainReductionDb"] = serialized(String(metrics.emergencyLimiterGrDb, 2));
-  doc["triggerCount"] = metrics.emergencyLimiterTriggers;
-
-  wsBroadcastJson(doc);
-}
-
 void sendAudioQualityState() {
   JsonDocument doc;
   doc["type"] = "audioQualityState";
@@ -1627,8 +1562,6 @@ void sendUsbAudioState() {
   doc["bufferLevel"] = usb_audio_get_buffer_fill();
   doc["framesAvailable"] = usb_audio_available_frames();
   doc["bufferCapacity"] = 1024;
-  doc["usbAutoPriority"] = appState.usbAutoPriority;
-  doc["dacSourceInput"] = appState.dacSourceInput;
   wsBroadcastJson(doc);
 }
 #endif
@@ -2022,6 +1955,16 @@ void sendAudioData() {
       }
       adcStatusArr.add(statusStr);
       adcNoiseArr.add(adc.noiseFloorDbfs);
+    }
+    // DAC output metering
+    {
+      JsonObject dacOut = doc["dacOutput"].to<JsonObject>();
+      dacOut["vuL"] = appState.dacOutputVuL;
+      dacOut["vuR"] = appState.dacOutputVuR;
+      dacOut["dbfsL"] = appState.dacOutputDbfsL;
+      dacOut["dbfsR"] = appState.dacOutputDbfsR;
+      dacOut["peakL"] = appState.dacOutputPeakL;
+      dacOut["peakR"] = appState.dacOutputPeakR;
     }
     // Legacy flat fields for backward compat (ADC 0)
     doc["audioRms1"] = appState.audioRmsLeft;
