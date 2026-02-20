@@ -7,7 +7,7 @@
 enum SignalWaveform  { WAVE_SINE = 0, WAVE_SQUARE, WAVE_NOISE, WAVE_SWEEP, WAVE_COUNT };
 enum SignalOutputMode { SIGOUT_SOFTWARE = 0, SIGOUT_PWM };
 enum SignalChannel   { SIGCHAN_CH1 = 0, SIGCHAN_CH2, SIGCHAN_BOTH };
-enum SignalTargetAdc { SIGTARGET_ADC1 = 0, SIGTARGET_ADC2, SIGTARGET_BOTH };
+enum SignalTargetAdc { SIGTARGET_ADC1 = 0, SIGTARGET_ADC2, SIGTARGET_BOTH, SIGTARGET_USB, SIGTARGET_ALL };
 
 // ===== Public API =====
 void siggen_init();

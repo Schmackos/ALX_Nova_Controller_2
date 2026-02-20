@@ -120,6 +120,13 @@ float usb_volume_to_linear(int16_t volume_256db) {
     return powf(10.0f, db / 20.0f);
 }
 
+// ===== Pure Timeout Logic (available in all build modes) =====
+
+bool usb_audio_is_stream_timed_out(unsigned long current_ms, unsigned long last_data_ms, unsigned long timeout_ms) {
+    if (last_data_ms == 0) return false;
+    return (current_ms - last_data_ms) > timeout_ms;
+}
+
 // ===== ESP32 Hardware Implementation =====
 #if !defined(NATIVE_TEST) && defined(USB_AUDIO_ENABLED)
 
@@ -162,6 +169,8 @@ static int16_t _hostVolume = 0;      // 1/256 dB
 static bool _hostMute = false;
 static uint8_t _altSetting = 0;      // Current AS alt setting (0=idle, 1=streaming)
 static bool _tinyusbHwReady = false; // True after tinyusb_init() succeeds (one-shot)
+static volatile unsigned long _lastDataMs = 0;     // millis() of last xfer_cb with data
+#define USB_STREAM_TIMEOUT_MS 500                   // No data for 500ms -> idle
 
 // Control request response buffer
 static uint8_t _ctrlBuf[64];
@@ -458,11 +467,47 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
 }
 
 static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_control_request_t const *request) {
-    // Handle UAC2 class-specific control requests for clock and feature unit.
-    // NOTE: Standard SET_INTERFACE is handled by TinyUSB's USBD internally —
-    // it calls _audio_driver_open() for the new alt setting (not this callback).
+    // Handle UAC2 control requests. TinyUSB routes BOTH standard SET_INTERFACE
+    // and class-specific entity requests to this callback for custom drivers.
+    // We handle SET_INTERFACE here for streaming state, and class-specific
+    // requests for clock source and feature unit (volume/mute) below.
 
     if (stage == CONTROL_STAGE_SETUP) {
+        // Handle standard SET_INTERFACE (alternate setting change for streaming)
+        if (request->bmRequestType_bit.type == TUSB_REQ_TYPE_STANDARD &&
+            request->bRequest == TUSB_REQ_SET_INTERFACE) {
+            uint16_t altSetting = request->wValue;
+
+            if (altSetting == 0) {
+                // Host stopping streaming (alt 0 = zero bandwidth)
+                if (_usbState == USB_AUDIO_STREAMING) {
+                    _usbState = USB_AUDIO_CONNECTED;
+                    _altSetting = 0;
+                    usb_rb_reset(&_ringBuffer);
+                    AppState::getInstance().usbAudioStreaming = false;
+                    AppState::getInstance().markUsbAudioDirty();
+                    LOG_I("[USB Audio] Streaming stopped (SET_INTERFACE alt 0)");
+                }
+            } else {
+                // Host starting streaming (alt 1+)
+                _altSetting = altSetting;
+                _usbState = USB_AUDIO_STREAMING;
+                _lastDataMs = millis();
+                usb_rb_reset(&_ringBuffer);
+                AppState::getInstance().usbAudioStreaming = true;
+                AppState::getInstance().markUsbAudioDirty();
+                LOG_I("[USB Audio] Streaming started (SET_INTERFACE alt %d)", altSetting);
+
+                // Re-prime ISO endpoint for first transfer
+                if (_epOut) {
+                    usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE, false);
+                }
+            }
+
+            tud_control_status(rhport, request);
+            return true;
+        }
+
         uint8_t entity = TU_U16_HIGH(request->wIndex);
 
         // Clock Source entity requests
@@ -600,6 +645,7 @@ static bool _audio_driver_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t
     (void)result;
 
     if (ep_addr == _epOut && xferred_bytes > 0) {
+        _lastDataMs = millis();
         // Convert received USB audio to I2S format and write to ring buffer
         uint32_t frames = xferred_bytes / (USB_AUDIO_CHANNELS * USB_AUDIO_SUBSLOT_SIZE);
 
@@ -749,18 +795,26 @@ void usb_audio_init(void) {
     as.usbAudioSampleRate = USB_AUDIO_SAMPLE_RATE;
     as.usbAudioBitDepth = USB_AUDIO_BIT_DEPTH;
     as.usbAudioChannels = USB_AUDIO_CHANNELS;
+
+    // Connect to USB bus. On first enable, tinyusb_init() already called this,
+    // but it's idempotent. On re-enable after deinit(), this triggers re-enumeration.
+    tud_connect();
+    LOG_I("[USB Audio] Connected to USB bus");
 }
 
 void usb_audio_deinit(void) {
-    // Soft disable only — TinyUSB keeps running (can't be torn down at runtime).
-    // The USB device remains enumerated on the host; we just stop processing data.
-    // _tinyusbHwReady is NOT cleared so re-enable skips hardware init.
+    // Disconnect from USB bus to trigger host-side device removal.
+    // TinyUSB continues running but device is removed from enumeration.
+    // Re-enable will call tud_connect() to re-enumerate as new device.
     _usbState = USB_AUDIO_DISCONNECTED;
     AppState &as = AppState::getInstance();
     as.usbAudioConnected = false;
     as.usbAudioStreaming = false;
     as.markUsbAudioDirty();
-    LOG_I("[USB Audio] Disabled (USB device still enumerated)");
+
+    // Tell host device is unplugged (triggers re-enumeration on next enable)
+    tud_disconnect();
+    LOG_I("[USB Audio] Disconnected from USB bus");
 }
 
 UsbAudioState usb_audio_get_state(void) {
@@ -816,6 +870,24 @@ uint32_t usb_audio_get_underruns(void) {
     return _ringBuffer.underruns;
 }
 
+float usb_audio_get_buffer_fill(void) {
+    return usb_rb_fill_level(&_ringBuffer);
+}
+
+bool usb_audio_check_timeout(void) {
+    if (_usbState == USB_AUDIO_STREAMING && _lastDataMs > 0) {
+        if (millis() - _lastDataMs > USB_STREAM_TIMEOUT_MS) {
+            _usbState = USB_AUDIO_CONNECTED;
+            _altSetting = 0;
+            AppState::getInstance().usbAudioStreaming = false;
+            AppState::getInstance().markUsbAudioDirty();
+            LOG_I("[USB Audio] Streaming timed out (no data for %dms)", USB_STREAM_TIMEOUT_MS);
+            return true;
+        }
+    }
+    return false;
+}
+
 #elif defined(NATIVE_TEST)
 
 // ===== Native Test Stubs =====
@@ -842,6 +914,8 @@ bool usb_audio_get_mute(void) { return false; }
 float usb_audio_get_volume_linear(void) { return 1.0f; }
 uint32_t usb_audio_get_overruns(void) { return 0; }
 uint32_t usb_audio_get_underruns(void) { return 0; }
+float usb_audio_get_buffer_fill(void) { return 0.0f; }
+bool usb_audio_check_timeout(void) { return false; }
 
 #else
 // USB_AUDIO_ENABLED not defined and not NATIVE_TEST — empty stubs
@@ -860,4 +934,6 @@ bool usb_audio_get_mute(void) { return false; }
 float usb_audio_get_volume_linear(void) { return 1.0f; }
 uint32_t usb_audio_get_overruns(void) { return 0; }
 uint32_t usb_audio_get_underruns(void) { return 0; }
+float usb_audio_get_buffer_fill(void) { return 0.0f; }
+bool usb_audio_check_timeout(void) { return false; }
 #endif

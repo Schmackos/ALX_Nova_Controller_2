@@ -2,6 +2,35 @@
 
 ## Version 1.8.8
 
+## New Features
+- [2026-02-20] feat: USB Audio as full input source with 6x6 routing matrix
+
+Integrate USB Audio (TinyUSB UAC2) as a first-class input alongside
+the two I2S ADCs with full metering, DSP processing, and routing.
+
+- Dual-constant architecture: NUM_AUDIO_ADCS=2 (I2S hardware),
+  NUM_AUDIO_INPUTS=3 (all inputs including USB)
+- DSP_MAX_CHANNELS expanded 4→6 (L1, R1, L2, R2, USB_L, USB_R)
+- 6x6 routing matrix activated via dsp_routing_execute() in audio task
+- USB ring buffer read in audio_capture_task with host volume/mute
+- Auto-priority USB→DAC routing state machine (usb_auto_priority)
+- Signal generator targets expanded: ADC1, ADC2, Both, USB, All
+- Full per-input metering: VU, waveform, spectrum, diagnostics for USB
+- WebSocket, MQTT, REST, GUI all support 3 inputs and 6 DSP channels
+- Web UI: USB level/status in Audio tab, auto-priority toggle
+- 1009 native tests pass, ESP32 build succeeds (53.4% RAM, 88.9% Flash) (`18c0b67`)
+- [2026-02-20] feat: wire routing matrix into DSP pipeline with dsp_routing_execute()
+
+- Add dsp_crossover.h and dsp_api.h includes to dsp_pipeline.cpp
+- Add static _postDspChannels[6][256] storage for post-DSP float data
+- Store post-DSP L/R channels after emergency limiter for routing matrix
+- Add dsp_routing_execute() function: applies 6x6 routing matrix to
+  post-DSP channels, re-interleaves ch0/ch1 to DAC buffer (left-justified int32)
+- Declare dsp_routing_execute() in dsp_pipeline.h
+- Add dsp_get_routing_matrix() stub and dsp_crossover.cpp include to all
+  5 affected test files (test_dsp, test_dsp_rew, test_dsp_swap,
+  test_emergency_limiter, test_peq) (`51903f5`)
+
 ## Technical Details
 - [2026-02-19] chore: bump version to 1.8.8 (`b63d01b`)
 

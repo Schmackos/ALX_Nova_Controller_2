@@ -1674,7 +1674,7 @@ void test_routing_matrix_presets(void) {
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[1][0]);
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[1][1]);
 
-    // Mono sum: gain = 1/DSP_MAX_CHANNELS = 0.25 for 4 channels
+    // Mono sum: gain = 1/DSP_MAX_CHANNELS (~0.167 for 6 channels)
     float g = 1.0f / DSP_MAX_CHANNELS;
     dsp_routing_preset_mono_sum(rm);
     TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[0][0]);

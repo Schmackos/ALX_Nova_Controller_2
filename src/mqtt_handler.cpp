@@ -40,6 +40,10 @@ static bool prevMqttDarkMode = false;
 static bool prevMqttAutoUpdate = false;
 static bool prevMqttCertValidation = true;
 
+// State tracking for USB auto-priority change detection
+static bool prevMqttUsbAutoPriority = false;
+static uint8_t prevMqttDacSourceInput = 0;
+
 // External functions from other modules
 extern void sendBlinkingState();
 extern void sendLEDState();
@@ -233,6 +237,8 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/dsp/peq/bypass/set").c_str());
   mqttClient.subscribe((base + "/dsp/preset/set").c_str());
 #endif
+  mqttClient.subscribe((base + "/settings/usb_auto_priority/set").c_str());
+  mqttClient.subscribe((base + "/settings/dac_source/set").c_str());
 
   // Subscribe to HA birth message for re-discovery after HA restart
   mqttClient.subscribe("homeassistant/status");
@@ -595,6 +601,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (message == "adc1") target = 0;
     else if (message == "adc2") target = 1;
     else if (message == "both") target = 2;
+    else if (message == "usb") target = 3;
+    else if (message == "all") target = 4;
     if (target >= 0) {
       appState.sigGenTargetAdc = target;
       siggen_apply_params();
@@ -626,6 +634,28 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     }
   }
 #endif
+  // Handle USB auto-priority
+  else if (topicStr == base + "/settings/usb_auto_priority/set") {
+    bool newState = (message == "ON" || message == "1" || message == "true");
+    appState.usbAutoPriority = newState;
+    saveSettings();
+    LOG_I("[MQTT] USB auto-priority: %s", newState ? "ON" : "OFF");
+    publishMqttUsbAutoPriorityState();
+  }
+  // Handle DAC source input
+  else if (topicStr == base + "/settings/dac_source/set") {
+    uint8_t val = 0;
+    if (message == "ADC1" || message == "0") val = 0;
+    else if (message == "ADC2" || message == "1") val = 1;
+    else if (message == "USB" || message == "2") val = 2;
+    else { val = 255; } // invalid
+    if (val <= 2) {
+      appState.dacSourceInput = val;
+      saveSettings();
+      LOG_I("[MQTT] DAC source input: %d", val);
+      publishMqttUsbAutoPriorityState();
+    }
+  }
   // Handle ADC reference voltage
   else if (topicStr == base + "/settings/adc_vref/set") {
     float vref = message.toFloat();
@@ -1090,6 +1120,9 @@ void mqttLoop() {
         (appState.debugHwStats != appState.prevMqttDebugHwStats) ||
         (appState.debugI2sMetrics != appState.prevMqttDebugI2sMetrics) ||
         (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor);
+    bool usbAutoPriorityChanged =
+        (appState.usbAutoPriority != prevMqttUsbAutoPriority) ||
+        (appState.dacSourceInput != prevMqttDacSourceInput);
 
     // Selective dispatch — only publish categories that actually changed
     if (ledChanged) {
@@ -1160,6 +1193,11 @@ void mqttLoop() {
       appState.prevMqttDebugHwStats = appState.debugHwStats;
       appState.prevMqttDebugI2sMetrics = appState.debugI2sMetrics;
       appState.prevMqttDebugTaskMonitor = appState.debugTaskMonitor;
+    }
+    if (usbAutoPriorityChanged) {
+      publishMqttUsbAutoPriorityState();
+      prevMqttUsbAutoPriority = appState.usbAutoPriority;
+      prevMqttDacSourceInput = appState.dacSourceInput;
     }
 #ifdef GUI_ENABLED
     if ((appState.bootAnimEnabled != appState.prevMqttBootAnimEnabled) ||
@@ -1569,9 +1607,9 @@ void publishMqttSignalGenState() {
   mqttClient.publish((base + "/signalgenerator/sweep_speed").c_str(),
                      String(appState.sigGenSweepSpeed, 0).c_str(), true);
 
-  const char *targetNames[] = {"adc1", "adc2", "both"};
+  const char *targetNames[] = {"adc1", "adc2", "both", "usb", "all"};
   mqttClient.publish((base + "/signalgenerator/target_adc").c_str(),
-                     targetNames[appState.sigGenTargetAdc % 3], true);
+                     targetNames[appState.sigGenTargetAdc % 5], true);
 }
 
 #ifdef DSP_ENABLED
@@ -1628,9 +1666,9 @@ void publishMqttAudioDiagnostics() {
 
   String base = getEffectiveMqttBaseTopic();
 
-  // Per-ADC diagnostics (only publish detected ADCs)
-  const char *inputLabels[] = {"adc1", "adc2"};
-  int adcCount = appState.numAdcsDetected < NUM_AUDIO_ADCS ? appState.numAdcsDetected : NUM_AUDIO_ADCS;
+  // Per-input diagnostics (only publish detected inputs)
+  const char *inputLabels[] = {"adc1", "adc2", "usb"};
+  int adcCount = appState.numInputsDetected < NUM_AUDIO_INPUTS ? appState.numInputsDetected : NUM_AUDIO_INPUTS;
   for (int a = 0; a < adcCount; a++) {
     const AppState::AdcState &adc = appState.audioAdc[a];
     const char *statusStr = "OK";
@@ -1833,8 +1871,8 @@ void publishMqttInputNames() {
 
   String base = getEffectiveMqttBaseTopic();
 
-  const char *labels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
-  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+  const char *labels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r", "input3_name_l", "input3_name_r"};
+  for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
     mqttClient.publish((base + "/audio/" + labels[i]).c_str(),
                        appState.inputNames[i].c_str(), true);
   }
@@ -1857,6 +1895,22 @@ void publishMqttBootAnimState() {
 }
 #endif
 
+// Publish USB auto-priority and DAC source input state
+void publishMqttUsbAutoPriorityState() {
+  if (!mqttClient.connected())
+    return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  mqttClient.publish((base + "/settings/usb_auto_priority").c_str(),
+                     appState.usbAutoPriority ? "ON" : "OFF", true);
+
+  const char *sourceNames[] = {"ADC1", "ADC2", "USB"};
+  uint8_t src = appState.dacSourceInput < 3 ? appState.dacSourceInput : 0;
+  mqttClient.publish((base + "/settings/dac_source").c_str(),
+                     sourceNames[src], true);
+}
+
 // Publish all states
 void publishMqttState() {
   publishMqttLedState();
@@ -1875,6 +1929,7 @@ void publishMqttState() {
   publishMqttDebugState();
   publishMqttCrashDiagnostics();
   publishMqttInputNames();
+  publishMqttUsbAutoPriorityState();
 #ifdef DSP_ENABLED
   publishMqttDspState();
   publishMqttEmergencyLimiterState();
@@ -2762,6 +2817,8 @@ void publishHADiscovery() {
     options.add("adc1");
     options.add("adc2");
     options.add("both");
+    options.add("usb");
+    options.add("all");
     doc["icon"] = "mdi:audio-input-stereo-minijack";
     addHADeviceInfo(doc);
 
@@ -2774,9 +2831,9 @@ void publishHADiscovery() {
 
   // ===== Per-ADC Audio Diagnostic Entities (only detected ADCs) =====
   {
-    const char *inputLabels[] = {"adc1", "adc2"};
-    const char *inputNames[] = {"ADC 1", "ADC 2"};
-    int adcCount = appState.numAdcsDetected < NUM_AUDIO_ADCS ? appState.numAdcsDetected : NUM_AUDIO_ADCS;
+    const char *inputLabels[] = {"adc1", "adc2", "usb"};
+    const char *inputNames[] = {"ADC 1", "ADC 2", "USB Audio"};
+    int adcCount = appState.numInputsDetected < NUM_AUDIO_INPUTS ? appState.numInputsDetected : NUM_AUDIO_INPUTS;
     for (int a = 0; a < adcCount; a++) {
       String prefix = base + "/audio/" + inputLabels[a];
       String idSuffix = String("_") + inputLabels[a];
@@ -3340,11 +3397,11 @@ void publishHADiscovery() {
     mqttClient.publish(("homeassistant/number/" + deviceId + "/siggen_sweep_speed/config").c_str(), payload.c_str(), true);
   }
 
-  // ===== Input Names (4 read-only sensors) =====
+  // ===== Input Names (6 read-only sensors) =====
   {
-    const char *inputLabels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
-    const char *inputDisplayNames[] = {"Input 1 Left Name", "Input 1 Right Name", "Input 2 Left Name", "Input 2 Right Name"};
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    const char *inputLabels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r", "input3_name_l", "input3_name_r"};
+    const char *inputDisplayNames[] = {"Input 1 Left Name", "Input 1 Right Name", "Input 2 Left Name", "Input 2 Right Name", "Input 3 Left Name", "Input 3 Right Name"};
+    for (int i = 0; i < NUM_AUDIO_INPUTS * 2; i++) {
       JsonDocument doc;
       doc["name"] = inputDisplayNames[i];
       doc["unique_id"] = deviceId + "_" + inputLabels[i];
@@ -3632,6 +3689,44 @@ void publishHADiscovery() {
   }
 #endif
 
+  // ===== USB Auto-Priority Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Auto-Priority";
+    doc["unique_id"] = deviceId + "_usb_auto_priority";
+    doc["state_topic"] = base + "/settings/usb_auto_priority";
+    doc["command_topic"] = base + "/settings/usb_auto_priority/set";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["icon"] = "mdi:usb-flash-drive";
+    doc["entity_category"] = "config";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/switch/" + deviceId + "/usb_auto_priority/config").c_str(), payload.c_str(), true);
+    // Publish current value
+    publishMqttUsbAutoPriorityState();
+  }
+
+  // ===== DAC Source Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "DAC Source";
+    doc["unique_id"] = deviceId + "_dac_source";
+    doc["state_topic"] = base + "/settings/dac_source";
+    doc["command_topic"] = base + "/settings/dac_source/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("ADC1");
+    options.add("ADC2");
+    options.add("USB");
+    doc["icon"] = "mdi:swap-horizontal";
+    doc["entity_category"] = "config";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/select/" + deviceId + "/dac_source/config").c_str(), payload.c_str(), true);
+  }
+
   // ===== Custom Device Name (Text Entity) =====
   {
     JsonDocument doc;
@@ -3780,7 +3875,10 @@ void removeHADiscovery() {
       // PEQ bypass
       "homeassistant/switch/%s/peq_bypass/config",
       // Custom device name
-      "homeassistant/text/%s/device_name/config"};
+      "homeassistant/text/%s/device_name/config",
+      // USB auto-priority and DAC source
+      "homeassistant/switch/%s/usb_auto_priority/config",
+      "homeassistant/select/%s/dac_source/config"};
 
   char topicBuf[160];
   for (const char *topicTemplate : topics) {

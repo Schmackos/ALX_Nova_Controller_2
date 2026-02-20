@@ -303,6 +303,24 @@ void test_volume_to_linear_minus_40db(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.01f, result);
 }
 
+// ===== Streaming Timeout (pure function) =====
+
+void test_stream_timeout_no_data_ever(void) {
+    TEST_ASSERT_FALSE(usb_audio_is_stream_timed_out(1000, 0, 500));
+}
+
+void test_stream_timeout_recent_data(void) {
+    TEST_ASSERT_FALSE(usb_audio_is_stream_timed_out(1100, 1000, 500));
+}
+
+void test_stream_timeout_expired(void) {
+    TEST_ASSERT_TRUE(usb_audio_is_stream_timed_out(1600, 1000, 500));
+}
+
+void test_stream_timeout_exact_boundary(void) {
+    TEST_ASSERT_FALSE(usb_audio_is_stream_timed_out(1500, 1000, 500));
+}
+
 // ===== State Machine =====
 
 void test_state_initial_disconnected(void) {
@@ -356,6 +374,12 @@ int main(int argc, char **argv) {
     RUN_TEST(test_volume_to_linear_silence);
     RUN_TEST(test_volume_to_linear_positive_clamped);
     RUN_TEST(test_volume_to_linear_minus_40db);
+
+    // Streaming timeout
+    RUN_TEST(test_stream_timeout_no_data_ever);
+    RUN_TEST(test_stream_timeout_recent_data);
+    RUN_TEST(test_stream_timeout_expired);
+    RUN_TEST(test_stream_timeout_exact_boundary);
 
     // State Machine
     RUN_TEST(test_state_initial_disconnected);

@@ -292,6 +292,10 @@ void dsp_routing_preset_swap_lr(DspRoutingMatrix &rm) {
         rm.matrix[2][3] = 1.0f; // output 2 (L2) = input 3 (R2)
         rm.matrix[3][2] = 1.0f; // output 3 (R2) = input 2 (L2)
     }
+    if (DSP_MAX_CHANNELS >= 6) {
+        rm.matrix[4][5] = 1.0f; // output 4 (L_USB) = input 5 (R_USB)
+        rm.matrix[5][4] = 1.0f; // output 5 (R_USB) = input 4 (L_USB)
+    }
 }
 
 void dsp_routing_preset_sub_sum(DspRoutingMatrix &rm) {
@@ -304,6 +308,10 @@ void dsp_routing_preset_sub_sum(DspRoutingMatrix &rm) {
     if (DSP_MAX_CHANNELS >= 4) {
         rm.matrix[2][2] = 1.0f;
         rm.matrix[3][3] = 1.0f;
+    }
+    if (DSP_MAX_CHANNELS >= 6) {
+        rm.matrix[4][4] = 1.0f;
+        rm.matrix[5][5] = 1.0f;
     }
 }
 

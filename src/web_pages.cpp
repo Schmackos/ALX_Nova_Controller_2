@@ -3025,9 +3025,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="usbAudioStatus">Disconnected</span></div>
                 <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="usbAudioFormat">—</span></div>
                 <div class="info-row"><span class="info-label">Host Volume</span><span class="info-value" id="usbAudioVolume">—</span></div>
+                <div style='font-size:10px;color:#999;margin:-4px 0 4px 0'>May not reflect system volume on all hosts</div>
+                <div class="info-row"><span class="info-label">Audio Level</span><span class="info-value" id="usbAudioLevel">—</span></div>
+                <div class="info-row"><span class="info-label">ADC Status</span><span class="info-value" id="usbAdcStatus">—</span></div>
+                <div class="form-group">
+                    <label class="form-label">Auto-Priority (route USB to DAC)</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="usbAutoPriority" onchange="setUsbAutoPriority(this.checked)"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">DAC Source</label>
+                    <select class="form-input" id="dacSourceInput" onchange="setDacSourceInput(this.value)">
+                        <option value="0">ADC 1</option>
+                        <option value="1">ADC 2</option>
+                        <option value="2">USB</option>
+                    </select>
+                </div>
                 <div id="usbAudioDetails" style="display:none">
                     <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
                     <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
+                    <div class='info-row'><span>Buffer Fill</span><span id='usbAudioBufferFill'>&mdash;</span></div>
+                    <div class='info-row'><span>Latency</span><span id='usbAudioLatency'>&mdash;</span></div>
                 </div>
                 </div>
             </div>
@@ -3193,6 +3211,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="0">ADC 1</option>
                         <option value="1">ADC 2</option>
                         <option value="2" selected>Both</option>
+                        <option value="3">USB</option>
+                        <option value="4">All</option>
                     </select>
                 </div>
                 </div>
@@ -5168,6 +5188,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         }
                         vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                         startVuAnimation();
+                        // USB audio level/status (input index 2)
+                        if (data.adc && data.adc.length > 2) {
+                            var uLvl = document.getElementById('usbAudioLevel');
+                            if (uLvl) uLvl.textContent = data.adc[2].dBFS !== undefined ? data.adc[2].dBFS.toFixed(1) + ' dBFS' : '\u2014';
+                        }
+                        if (data.adcStatus && data.adcStatus.length > 2) {
+                            var uSt = document.getElementById('usbAdcStatus');
+                            if (uSt) uSt.textContent = data.adcStatus[2] || '\u2014';
+                        }
                     }
                 } else if (data.type === 'audioWaveform') {
                     if (currentActiveTab === 'audio' && data.w) {
@@ -5226,6 +5255,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     }
                 } else if (data.type === 'usbAudioState') {
                     handleUsbAudioState(data);
+                } else if (data.type === 'usbAutoPriorityState') {
+                    handleUsbAutoPriorityState(data);
                 } else if (data.type === 'dacState') {
                     handleDacState(data);
                     if (data.eeprom) handleEepromDiag(data.eeprom);
@@ -6319,6 +6350,50 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (ovr) ovr.textContent = d.overruns || 0;
             var udr = document.getElementById('usbAudioUnderruns');
             if (udr) udr.textContent = d.underruns || 0;
+            var bufFill = document.getElementById('usbAudioBufferFill');
+            if (bufFill) {
+                if (d.streaming) {
+                    var pct = Math.round((d.bufferLevel || 0) * 100);
+                    var frames = d.framesAvailable || 0;
+                    bufFill.textContent = pct + '% (' + frames + '/' + (d.bufferCapacity || 1024) + ' frames)';
+                } else {
+                    bufFill.textContent = '\u2014';
+                }
+            }
+            var latEl = document.getElementById('usbAudioLatency');
+            if (latEl) {
+                if (d.streaming && d.framesAvailable > 0) {
+                    var ms = ((d.framesAvailable / d.sampleRate) * 1000).toFixed(1);
+                    latEl.textContent = ms + ' ms';
+                } else {
+                    latEl.textContent = '\u2014';
+                }
+            }
+            // Sync auto-priority and DAC source if present in state
+            if (d.usbAutoPriority !== undefined) {
+                var cb = document.getElementById('usbAutoPriority');
+                if (cb) cb.checked = !!d.usbAutoPriority;
+            }
+            if (d.dacSourceInput !== undefined) {
+                var sel = document.getElementById('dacSourceInput');
+                if (sel) sel.value = d.dacSourceInput;
+            }
+        }
+
+        // ===== USB Auto-Priority + DAC Source =====
+        function setUsbAutoPriority(en) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:'setUsbAutoPriority',value:en}));
+        }
+        function setDacSourceInput(val) {
+            if (ws && ws.readyState === WebSocket.OPEN)
+                ws.send(JSON.stringify({type:'setDacSourceInput',value:parseInt(val)}));
+        }
+        function handleUsbAutoPriorityState(d) {
+            var cb = document.getElementById('usbAutoPriority');
+            if (cb) cb.checked = !!d.usbAutoPriority;
+            var sel = document.getElementById('dacSourceInput');
+            if (sel && d.dacSourceInput !== undefined) sel.value = d.dacSourceInput;
         }
 
         // ===== DAC Output =====

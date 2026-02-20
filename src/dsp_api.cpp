@@ -118,7 +118,7 @@ void loadDspSettings() {
                 if (doc["presetIndex"].is<int>()) appState.dspPresetIndex = doc["presetIndex"].as<int8_t>();
                 if (doc["presetNames"].is<JsonArray>()) {
                     JsonArray names = doc["presetNames"].as<JsonArray>();
-                    for (int i = 0; i < 4 && i < (int)names.size(); i++) {
+                    for (int i = 0; i < DSP_PRESET_MAX_SLOTS && i < (int)names.size(); i++) {
                         const char *n = names[i] | "";
                         strncpy(appState.dspPresetNames[i], n, 20);
                         appState.dspPresetNames[i][20] = '\0';

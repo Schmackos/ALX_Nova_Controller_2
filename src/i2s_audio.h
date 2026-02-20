@@ -8,6 +8,10 @@
 #define NUM_AUDIO_ADCS 2
 #endif
 
+#ifndef NUM_AUDIO_INPUTS
+#define NUM_AUDIO_INPUTS 3  // ADC1 + ADC2 + USB Audio
+#endif
+
 // ===== VU Meter Constants =====
 static const float VU_ATTACK_MS = 300.0f;   // Industry-standard VU attack
 static const float VU_DECAY_MS = 300.0f;    // Fast digital VU release
@@ -47,9 +51,9 @@ struct AdcAnalysis {
 
 // ===== Audio Analysis Result (shared between I2S task and consumers) =====
 struct AudioAnalysis {
-    AdcAnalysis adc[NUM_AUDIO_ADCS]; // Per-ADC data
-    float dBFS;            // -96 to 0 (overall max across all ADCs)
-    bool  signalDetected;  // any ADC above threshold
+    AdcAnalysis adc[NUM_AUDIO_INPUTS]; // Per-input data (ADC1, ADC2, USB)
+    float dBFS;            // -96 to 0 (overall max across all inputs)
+    bool  signalDetected;  // any input above threshold
     unsigned long timestamp;
 
 };
@@ -83,9 +87,10 @@ struct AdcDiagnostics {
 };
 
 struct AudioDiagnostics {
-    AdcDiagnostics adc[NUM_AUDIO_ADCS];
+    AdcDiagnostics adc[NUM_AUDIO_INPUTS]; // Per-input diagnostics (ADC1, ADC2, USB)
     bool sigGenActive = false;
-    int numAdcsDetected = 1;  // How many ADCs are actually producing data
+    int numAdcsDetected = 1;   // How many I2S ADCs are producing data
+    int numInputsDetected = 1; // How many audio inputs total (ADCs + USB)
 
 };
 
@@ -132,14 +137,14 @@ void i2s_audio_write_tx(const void* buf, size_t bytes, size_t* bytes_written, ui
 
 // Waveform: returns true if a new 256-point snapshot is available
 // out must point to WAVEFORM_BUFFER_SIZE bytes
-// adcIndex: 0 = ADC1 (default), 1 = ADC2
-bool i2s_audio_get_waveform(uint8_t *out, int adcIndex = 0);
+// inputIndex: 0 = ADC1 (default), 1 = ADC2, 2 = USB
+bool i2s_audio_get_waveform(uint8_t *out, int inputIndex = 0);
 
 // Spectrum: returns true if new FFT data is available
 // bands must point to SPECTRUM_BANDS floats (0.0-1.0 normalized)
 // dominant_freq receives the dominant frequency in Hz
-// adcIndex: 0 = ADC1 (default), 1 = ADC2
-bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex = 0);
+// inputIndex: 0 = ADC1 (default), 1 = ADC2, 2 = USB
+bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int inputIndex = 0);
 
 // Returns number of ADCs currently detected and producing data
 int i2s_audio_get_num_adcs();
