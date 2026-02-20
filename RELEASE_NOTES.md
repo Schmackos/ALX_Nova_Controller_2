@@ -2,6 +2,10 @@
 
 ## Version 1.8.8
 
+## Documentation
+- [2026-02-20] docs: move audio_pipeline diagram to docs/flowcharts/ (`81decb7`)
+- [2026-02-20] docs: add Mermaid audio pipeline diagram (`775a859`)
+
 ## New Features
 - [2026-02-20] feat: USB Audio as full input source with 6x6 routing matrix
 
@@ -55,6 +59,22 @@ the two I2S ADCs with full metering, DSP processing, and routing.
 - None
 
 ## Bug Fixes
+- [2026-02-20] fix: move large static buffers to PSRAM to resolve HEAP CRITICAL
+
+_postDspChannels[6][256] (~6KB), dacBuf (~2KB), and bufUsb (~2KB) were
+allocated as static BSS, pushing internal SRAM usage high enough that
+getMaxAllocHeap() dropped to ~12KB and heapCritical fired. Migrate all
+three to PSRAM via heap_caps_calloc (with calloc fallback); lower
+HEAP_CRITICAL_THRESHOLD_BYTES from 40KB to 15KB to match actual WebSocket/
+HTTP allocation requirements. Restores audio graphs and web app responsiveness. (`5845e66`)
+- [2026-02-20] fix: move large static buffers to PSRAM to resolve HEAP CRITICAL
+
+_postDspChannels[6][256] (~6KB), dacBuf (~2KB), and bufUsb (~2KB) were
+allocated as static BSS, pushing internal SRAM usage high enough that
+getMaxAllocHeap() dropped to ~12KB and heapCritical fired. Migrate all
+three to PSRAM via heap_caps_calloc (with calloc fallback); lower
+HEAP_CRITICAL_THRESHOLD_BYTES from 40KB to 15KB to match actual WebSocket/
+HTTP allocation requirements. Restores audio graphs and web app responsiveness. (`66729a8`)
 - [2026-02-20] fix: resolve USB audio Code 10 and DAC I2S TX init deadlock
 
 USB audio (usb_audio.cpp):

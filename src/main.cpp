@@ -1120,7 +1120,7 @@ void loop() {
 
     if (appState.heapCritical != wasCritical) {
       if (appState.heapCritical) {
-        LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB) — WiFi RX may drop", (unsigned long)maxBlock);
+        LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<15KB) — WebSocket/HTTP allocations failing", (unsigned long)maxBlock);
       } else {
         LOG_I("[Main] Heap recovered from critical: largest free block=%lu bytes", (unsigned long)maxBlock);
       }
