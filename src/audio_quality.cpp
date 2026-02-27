@@ -4,7 +4,7 @@
 #include <string.h>
 
 #ifndef NATIVE_TEST
-#include <ESP.h>
+#include <esp_heap_caps.h>
 #endif
 
 // Correlation window (100ms)
@@ -171,8 +171,8 @@ void audio_quality_update_memory() {
     unsigned long now = millis();
     MemorySnapshot snapshot = {
         .timestampMs = now,
-        .freeHeap = ESP.getFreeHeap(),
-        .maxAllocHeap = ESP.getMaxAllocHeap()
+        .freeHeap = esp_get_free_heap_size(),
+        .maxAllocHeap = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT)
     };
 
     _diag.memoryHist.snapshots[_diag.memoryHist.writePos] = snapshot;
