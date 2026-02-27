@@ -24,18 +24,21 @@
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
-#include <SPI.h>
-#include <TFT_eSPI.h>
+#ifdef WOKWI_BUILD
+#include "lgfx_config_wokwi.h"
+#else
+#include "lgfx_config.h"
+#endif
 #include <lvgl.h>
 
 /* LVGL tick callback (millis returns unsigned long, LVGL expects uint32_t) */
 static uint32_t lv_millis_cb(void) { return (uint32_t)millis(); }
 
-/* TFT driver instance */
-static TFT_eSPI tft = TFT_eSPI();
+/* LovyanGFX driver instance */
+static LGFX tft;
 
-/* LVGL display buffer — allocated in PSRAM to save ~4KB internal SRAM */
-static lv_color_t *draw_buf = nullptr;
+/* LVGL display buffer */
+static lv_color_t *draw_buf1 = nullptr;
 
 /* Screen sleep state */
 static bool screen_awake = true;
@@ -53,36 +56,21 @@ static TaskHandle_t gui_task_handle = nullptr;
 #define DASHBOARD_REFRESH_MS 1000
 static unsigned long last_dashboard_refresh = 0;
 
-/* Swap R and B channels in RGB565 pixel (bits 15:11 <-> bits 4:0) */
-static inline uint16_t swap_rb565(uint16_t c) {
-    uint16_t r = (c >> 11) & 0x1F;
-    uint16_t b = c & 0x1F;
-    return (b << 11) | (c & 0x07E0) | r;
-}
-
-/* LVGL display flush callback */
+/* LVGL display flush callback — uses LovyanGFX DMA push.
+   RGB565_SWAPPED format: LVGL renders in SPI byte order, no manual swap needed. */
 static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
-    uint32_t w = (area->x2 - area->x1 + 1);
-    uint32_t h = (area->y2 - area->y1 + 1);
-    uint32_t count = w * h;
-    uint16_t *px = (uint16_t *)px_map;
+    uint32_t w = lv_area_get_width(area);
+    uint32_t h = lv_area_get_height(area);
 
-    /* Swap R/B channels — LVGL outputs RGB565 but ST7735S panel expects BGR565 */
-    for (uint32_t i = 0; i < count; i++) {
-        px[i] = swap_rb565(px[i]);
-    }
-
-    tft.startWrite();
-    tft.setAddrWindow(area->x1, area->y1, w, h);
-    tft.pushColors(px, count, true);
-    tft.endWrite();
+    tft.pushImageDMA(area->x1, area->y1, w, h, (lgfx::swap565_t *)px_map);
+    tft.waitDMA();
 
     lv_display_flush_ready(disp);
 }
 
 /* Set backlight brightness (0-255) */
 static void set_backlight(uint8_t brightness) {
-    ledcWrite(BL_PWM_CHANNEL, brightness);
+    ledcWrite(TFT_BL_PIN, brightness);
 }
 
 /* Put display to sleep */
@@ -288,35 +276,40 @@ void gui_init(void) {
     LOG_I("[GUI] Initializing...");
 
     /* Initialize backlight PWM */
-    ledcSetup(BL_PWM_CHANNEL, BL_PWM_FREQ, BL_PWM_RESOLUTION);
-    ledcAttachPin(TFT_BL_PIN, BL_PWM_CHANNEL);
+    ledcAttach(TFT_BL_PIN, BL_PWM_FREQ, BL_PWM_RESOLUTION);
     set_backlight(0);  /* Keep backlight OFF until content is ready */
 
-    /* Initialize TFT */
+    /* Initialize TFT via LovyanGFX */
     tft.init();
+    tft.initDMA();
     tft.setRotation(1); /* Landscape: 160x128 */
-    tft.fillScreen(TFT_BLACK);
-    LOG_I("[GUI] TFT initialized (ST7735S 160x128 landscape)");
+    tft.startWrite();
+    tft.fillScreen(0x0000); /* Black */
+    LOG_I("[GUI] TFT initialized (LovyanGFX %dx%d)", tft.width(), tft.height());
 
     /* Initialize LVGL */
     lv_init();
     lv_tick_set_cb(lv_millis_cb);
     LOG_I("[GUI] LVGL initialized");
 
-    /* Allocate LVGL draw buffer in PSRAM (aligned per LV_DRAW_BUF_ALIGN) */
-    if (!draw_buf) {
-        draw_buf = (lv_color_t *)heap_caps_aligned_alloc(
-            LV_DRAW_BUF_ALIGN, DISP_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
-        if (!draw_buf) {
-            draw_buf = (lv_color_t *)heap_caps_aligned_alloc(
-                LV_DRAW_BUF_ALIGN, DISP_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DEFAULT);
-        }
-    }
-
-    /* Create LVGL display with buffer */
+    /* Create LVGL display with RGB565_SWAPPED format */
     lv_display_t *disp = lv_display_create(DISPLAY_HEIGHT, DISPLAY_WIDTH); /* landscape: 160x128 */
+    lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565_SWAPPED);
     lv_display_set_flush_cb(disp, disp_flush_cb);
-    lv_display_set_buffers(disp, draw_buf, NULL, DISP_BUF_SIZE * sizeof(lv_color_t), LV_DISPLAY_RENDER_MODE_PARTIAL);
+
+    /* Allocate LVGL draw buffer — RGB565 = 2 bytes per pixel */
+    size_t bpp = 2;
+    size_t buf_bytes = DISP_BUF_SIZE * bpp;
+    if (!draw_buf1) {
+        draw_buf1 = (lv_color_t *)heap_caps_aligned_alloc(
+            LV_DRAW_BUF_ALIGN, buf_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    }
+    if (!draw_buf1) {
+        draw_buf1 = (lv_color_t *)heap_caps_aligned_alloc(
+            LV_DRAW_BUF_ALIGN, buf_bytes, MALLOC_CAP_DEFAULT);
+    }
+    lv_display_set_buffers(disp, draw_buf1, NULL, buf_bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    LOG_I("[GUI] Draw buffer: PARTIAL mode, %u bytes, format=RGB565_SWAPPED", buf_bytes);
 
     /* Initialize theme (dark mode by default) */
     gui_theme_init(true);

@@ -125,6 +125,21 @@ void setup() {
   DebugOut.begin(115200);
   delay(1000);
 
+  // Reconfigure TWDT immediately — before WiFi, GUI, or audio tasks start.
+  // The pre-built IDF5 Arduino-ESP32 library has CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
+  // baked in; the -D build flag has no effect on the compiled .a.
+  // esp_task_wdt_reconfigure() before any tasks subscribe avoids "task not found"
+  // errors. idle_core_mask=0 removes IDLE tasks from WDT monitoring without
+  // corrupting the subscriber linked list (esp_task_wdt_delete causes list issues in IDF5.5).
+  {
+    esp_task_wdt_config_t twdt_cfg = {
+      .timeout_ms    = 30000,
+      .idle_core_mask = 0,
+      .trigger_panic  = true,
+    };
+    esp_task_wdt_reconfigure(&twdt_cfg);
+  }
+
   LOG_I("[Main] ESP32-S3 ALX Nova Controller starting");
   LOG_I("[Main] Firmware version: %s", firmwareVer);
 
@@ -611,15 +626,7 @@ void setup() {
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
 
-  // Subscribe main loop to the Arduino-managed Task Watchdog Timer
-  // Timeout is set to 15s via CONFIG_ESP_TASK_WDT_TIMEOUT_S build flag in platformio.ini
-  // Do NOT call esp_task_wdt_init() — Arduino framework already initializes the WDT
-  esp_task_wdt_add(NULL);          // Register main loop (loopTask)
-
-  // Unsubscribe IDLE0 from WDT — audio_cap (priority 3) + OTA TLS crypto on Core 0
-  // can starve IDLE0 for >15s. All important tasks (loopTask, audio_cap, gui_task)
-  // have their own WDT entries and feed them explicitly.
-  esp_task_wdt_delete(xTaskGetIdleTaskHandleForCPU(0));
+  esp_task_wdt_add(NULL);  // Register main loop (loopTask)
 
   LOG_I("[Main] Main loop subscribed to task watchdog");
 }

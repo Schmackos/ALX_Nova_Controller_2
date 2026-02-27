@@ -215,9 +215,9 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     // --- CS AC Interface Header (UAC2) ---
     *p++ = 9;                                          // bLength
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO_CS_AC_INTERFACE_HEADER;               // bDescriptorSubtype
+    *p++ = AUDIO20_CS_AC_INTERFACE_HEADER;               // bDescriptorSubtype
     *p++ = 0x00; *p++ = 0x02;                          // bcdADC = 2.00 (UAC2)
-    *p++ = AUDIO_FUNC_DESKTOP_SPEAKER;                 // bCategory
+    *p++ = AUDIO20_FUNC_DESKTOP_SPEAKER;                 // bCategory
     *p++ = (uint8_t)(UAC2_AC_CS_LEN);                  // wTotalLength (low)
     *p++ = (uint8_t)(UAC2_AC_CS_LEN >> 8);             // wTotalLength (high)
     *p++ = 0;                                          // bmControls
@@ -225,7 +225,7 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     // --- Clock Source (Entity 1) ---
     *p++ = 8;                                          // bLength
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO_CS_AC_INTERFACE_CLOCK_SOURCE;         // bDescriptorSubtype
+    *p++ = AUDIO20_CS_AC_INTERFACE_CLOCK_SOURCE;         // bDescriptorSubtype
     *p++ = UAC2_ENTITY_CLOCK;                          // bClockID
     *p++ = 0x01;                                       // bmAttributes: internal fixed clock
     *p++ = 0x05;                                       // bmControls: freq read-only, validity read-only
@@ -235,7 +235,7 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     // --- Input Terminal (Entity 2, USB Streaming) ---
     *p++ = 17;                                         // bLength
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO_CS_AC_INTERFACE_INPUT_TERMINAL;       // bDescriptorSubtype
+    *p++ = AUDIO20_CS_AC_INTERFACE_INPUT_TERMINAL;       // bDescriptorSubtype
     *p++ = UAC2_ENTITY_INPUT_TERM;                     // bTerminalID
     *p++ = 0x01; *p++ = 0x01;                          // wTerminalType = USB Streaming (0x0101)
     *p++ = 0;                                          // bAssocTerminal
@@ -250,7 +250,7 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     // bLength = 6 + 4*(numChannels+1) = 6 + 4*3 = 18
     *p++ = 18;                                         // bLength
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO_CS_AC_INTERFACE_FEATURE_UNIT;         // bDescriptorSubtype
+    *p++ = AUDIO20_CS_AC_INTERFACE_FEATURE_UNIT;         // bDescriptorSubtype
     *p++ = UAC2_ENTITY_FEATURE;                        // bUnitID
     *p++ = UAC2_ENTITY_INPUT_TERM;                     // bSourceID
     // bmControls per channel (4 bytes each): master, ch1, ch2
@@ -263,7 +263,7 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     // --- Output Terminal (Entity 4, Speaker) ---
     *p++ = 12;                                         // bLength
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO_CS_AC_INTERFACE_OUTPUT_TERMINAL;      // bDescriptorSubtype
+    *p++ = AUDIO20_CS_AC_INTERFACE_OUTPUT_TERMINAL;      // bDescriptorSubtype
     *p++ = UAC2_ENTITY_OUTPUT_TERM;                    // bTerminalID
     *p++ = 0x01; *p++ = 0x03;                          // wTerminalType = Speaker (0x0301)
     *p++ = 0;                                          // bAssocTerminal
@@ -297,10 +297,10 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     // --- CS AS General (UAC2) ---
     *p++ = 16;                                         // bLength
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO_CS_AS_INTERFACE_AS_GENERAL;           // bDescriptorSubtype
+    *p++ = AUDIO20_CS_AS_INTERFACE_AS_GENERAL;           // bDescriptorSubtype
     *p++ = UAC2_ENTITY_INPUT_TERM;                     // bTerminalLink
     *p++ = 0x00;                                       // bmControls
-    *p++ = AUDIO_FORMAT_TYPE_I;                        // bFormatType
+    *p++ = AUDIO20_FORMAT_TYPE_I;                        // bFormatType
     *p++ = 0x01; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; // bmFormats = PCM (bit 0)
     *p++ = USB_AUDIO_CHANNELS;                         // bNrChannels
     *p++ = 0x03; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; // bmChannelConfig = FL+FR
@@ -309,8 +309,8 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     // --- Type I Format Descriptor (UAC2) ---
     *p++ = 6;                                          // bLength
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO_CS_AS_INTERFACE_FORMAT_TYPE;          // bDescriptorSubtype
-    *p++ = AUDIO_FORMAT_TYPE_I;                        // bFormatType
+    *p++ = AUDIO20_CS_AS_INTERFACE_FORMAT_TYPE;          // bDescriptorSubtype
+    *p++ = AUDIO20_FORMAT_TYPE_I;                        // bFormatType
     *p++ = USB_AUDIO_SUBSLOT_SIZE;                     // bSubslotSize (2 for 16-bit)
     *p++ = USB_AUDIO_BIT_DEPTH;                        // bBitResolution
 
@@ -326,7 +326,7 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     // --- CS Endpoint (Audio Class) ---
     *p++ = 8;                                          // bLength
     *p++ = TUSB_DESC_CS_ENDPOINT;                      // bDescriptorType
-    *p++ = AUDIO_CS_EP_SUBTYPE_GENERAL;                // bDescriptorSubtype
+    *p++ = AUDIO20_CS_EP_SUBTYPE_GENERAL;                // bDescriptorSubtype
     *p++ = 0x00;                                       // bmAttributes
     *p++ = 0x00;                                       // bmControls
     *p++ = 0x00;                                       // bLockDelayUnits
@@ -449,7 +449,7 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
 
             // Prime the OUT endpoint for first isochronous transfer
             if (_epOut) {
-                usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE);
+                usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE, false);
             }
         }
     }
@@ -467,7 +467,7 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
 
         // Clock Source entity requests
         if (entity == UAC2_ENTITY_CLOCK) {
-            if (request->bRequest == AUDIO_CS_REQ_CUR) {
+            if (request->bRequest == AUDIO20_CS_REQ_CUR) {
                 if (TU_U16_HIGH(request->wValue) == 0x01) {
                     // SAM_FREQ_CONTROL — CUR
                     if (request->bmRequestType_bit.direction == TUSB_DIR_IN) {
@@ -487,7 +487,7 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                         return tud_control_xfer(rhport, request, _ctrlBuf, 1);
                     }
                 }
-            } else if (request->bRequest == AUDIO_CS_REQ_RANGE) {
+            } else if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
                 if (TU_U16_HIGH(request->wValue) == 0x01) {
                     // SAM_FREQ_CONTROL — RANGE: report single supported rate
                     // Layout: wNumSubRanges(2), dMIN(4), dMAX(4), dRES(4)
@@ -509,8 +509,8 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
             uint8_t channel = TU_U16_LOW(request->wValue);
             (void)channel;
 
-            if (control_sel == AUDIO_FU_CTRL_MUTE) {
-                if (request->bRequest == AUDIO_CS_REQ_CUR) {
+            if (control_sel == AUDIO20_FU_CTRL_MUTE) {
+                if (request->bRequest == AUDIO20_CS_REQ_CUR) {
                     if (request->bmRequestType_bit.direction == TUSB_DIR_IN) {
                         // GET mute
                         _ctrlBuf[0] = _hostMute ? 1 : 0;
@@ -519,14 +519,14 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                         // SET mute — receive data in DATA stage
                         return tud_control_xfer(rhport, request, _ctrlBuf, 1);
                     }
-                } else if (request->bRequest == AUDIO_CS_REQ_RANGE) {
+                } else if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
                     // Mute is boolean — no range, return 0 sub-ranges
                     uint16_t numRanges = 0;
                     memcpy(_ctrlBuf, &numRanges, 2);
                     return tud_control_xfer(rhport, request, _ctrlBuf, 2);
                 }
-            } else if (control_sel == AUDIO_FU_CTRL_VOLUME) {
-                if (request->bRequest == AUDIO_CS_REQ_CUR) {
+            } else if (control_sel == AUDIO20_FU_CTRL_VOLUME) {
+                if (request->bRequest == AUDIO20_CS_REQ_CUR) {
                     if (request->bmRequestType_bit.direction == TUSB_DIR_IN) {
                         // GET volume
                         memcpy(_ctrlBuf, &_hostVolume, 2);
@@ -535,7 +535,7 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                         // SET volume — receive data in DATA stage
                         return tud_control_xfer(rhport, request, _ctrlBuf, 2);
                     }
-                } else if (request->bRequest == AUDIO_CS_REQ_RANGE) {
+                } else if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
                     // Volume range: -128 dB to 0 dB in 1/256 dB steps
                     uint16_t numRanges = 1;
                     int16_t volMin = -32768; // -128 dB
@@ -577,12 +577,12 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
 
         if (entity == UAC2_ENTITY_FEATURE) {
             uint8_t control_sel = TU_U16_HIGH(request->wValue);
-            if (control_sel == AUDIO_FU_CTRL_MUTE) {
+            if (control_sel == AUDIO20_FU_CTRL_MUTE) {
                 _hostMute = (_ctrlBuf[0] != 0);
                 AppState::getInstance().usbAudioMute = _hostMute;
                 AppState::getInstance().markUsbAudioDirty();
                 LOG_I("[USB Audio] Host mute: %s", _hostMute ? "ON" : "OFF");
-            } else if (control_sel == AUDIO_FU_CTRL_VOLUME) {
+            } else if (control_sel == AUDIO20_FU_CTRL_VOLUME) {
                 memcpy(&_hostVolume, _ctrlBuf, 2);
                 AppState::getInstance().usbAudioVolume = _hostVolume;
                 AppState::getInstance().markUsbAudioDirty();
@@ -615,7 +615,7 @@ static bool _audio_driver_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t
         usb_rb_write(&_ringBuffer, converted, frames);
 
         // Re-arm the endpoint for next transfer
-        usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE);
+        usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE, false);
     }
 
     return true;

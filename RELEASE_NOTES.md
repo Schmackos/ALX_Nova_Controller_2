@@ -1,5 +1,24 @@
 # Release Notes
 
+## Version 1.8.6
+
+## Improvements
+- Migrated TFT display driver from TFT_eSPI to LovyanGFX — resolves GUI hang on Arduino ESP32 3.x / IDF5 (TFT_eSPI `init()` blocks indefinitely on FSPI/SPI2 with the new framework)
+- LovyanGFX DMA flush with `RGB565_SWAPPED` format eliminates manual byte-swap overhead
+- Confirmed ST7735S stable at 40 MHz SPI (up from 27 MHz)
+
+## Bug Fixes
+- Fixed LEDC API incompatibility with Arduino ESP32 3.x: migrated from deprecated channel-based `ledcSetup`/`ledcAttachPin`/`ledcDetachPin` to pin-based `ledcAttach`/`ledcDetach`/`ledcChangeFrequency` in buzzer_handler, signal_generator, and gui_manager
+- Fixed FreeRTOS task iteration in task_monitor: replaced removed `pxTaskGetNext` (from deprecated `task_snapshot.h`) with `xTaskGetNext` using the `TaskIterator_t` API from `esp_private/freertos_debug.h`
+- Fixed TinyUSB UAC2 constant rename: `AUDIO_CS_*` / `AUDIO_FU_CTRL_*` → `AUDIO20_CS_*` / `AUDIO20_FU_CTRL_*`; added required 5th `bool` argument to `usbd_edpt_xfer`
+- Fixed Task Watchdog Timer reboot loop on IDF5.5: replaced `esp_task_wdt_delete()` (which corrupts the IDF5 subscriber list) with `esp_task_wdt_reconfigure()` at startup, extending timeout to 30 s
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.8.5
 
 ## Technical Details
