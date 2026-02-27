@@ -141,6 +141,12 @@ void test_fast_attack_time() {
     DspMetrics metrics1 = dsp_get_metrics();
     TEST_ASSERT_TRUE(metrics1.emergencyLimiterGrDb < -0.5f);
 
+    // Re-fill buffer: dsp_process_buffer modifies it in-place (limited output replaces input)
+    for (int i = 0; i < TEST_FRAMES; i++) {
+        buffer[i * 2] = 8388607;
+        buffer[i * 2 + 1] = 8388607;
+    }
+
     // Second buffer should show similar or more GR
     dsp_process_buffer(buffer, TEST_FRAMES, 0);
     DspMetrics metrics2 = dsp_get_metrics();
@@ -164,7 +170,7 @@ void test_release_time() {
 
     // Process buffers with silence (release should occur)
     memset(buffer, 0, sizeof(buffer));
-    for (int i = 0; i < 10; i++) { // ~53ms worth of buffers
+    for (int i = 0; i < 5; i++) { // ~26ms: envelope still above threshold, GR recovering
         dsp_process_buffer(buffer, TEST_FRAMES, 0);
     }
     DspMetrics metrics_mid = dsp_get_metrics();

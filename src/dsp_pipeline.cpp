@@ -366,6 +366,7 @@ void dsp_init() {
     }
 #endif
     _swapRequested = false;
+    _emergencyLimiter = {};
 
     LOG_I("[DSP] Pipeline initialized (double-buffered, %d channels, max %d stages/ch)",
           DSP_MAX_CHANNELS, DSP_MAX_STAGES);
@@ -616,10 +617,14 @@ static void dsp_emergency_limiter_process(float *bufL, float *bufR, int frames, 
             _emergencyLimiter.samplesSinceTrigger++;
         }
 
-        // Read delayed samples from lookahead (lookahead delay)
-        int readPos = (_emergencyLimiter.lookaheadPos + lookaheadSamples - lookaheadSamples) % lookaheadSamples;
-        bufL[f] = _emergencyLimiter.lookahead[0][readPos] * gain;
-        bufR[f] = _emergencyLimiter.lookahead[1][readPos] * gain;
+        // Apply lookahead delay and gain only when limiting is active.
+        // When gain = 1.0 (below threshold), pass through transparently to avoid
+        // introducing latency into the signal path.
+        if (gain < 1.0f) {
+            int readPos = _emergencyLimiter.lookaheadPos;
+            bufL[f] = _emergencyLimiter.lookahead[0][readPos] * gain;
+            bufR[f] = _emergencyLimiter.lookahead[1][readPos] * gain;
+        }
 
         // Update gain reduction (convert to dB)
         if (gain < 1.0f) {
@@ -631,7 +636,7 @@ static void dsp_emergency_limiter_process(float *bufL, float *bufR, int frames, 
 
     // Update metrics
     _metrics.emergencyLimiterGrDb = _emergencyLimiter.gainReduction;
-    _metrics.emergencyLimiterActive = (wasActive || _emergencyLimiter.samplesSinceTrigger < sampleRate / 10); // Active if triggered in last 100ms
+    _metrics.emergencyLimiterActive = wasActive || (_emergencyLimiter.envelope > thresholdLinear); // Active if currently limiting or in release phase
 
     // Increment trigger counter if this buffer crossed threshold
     if (wasActive && _emergencyLimiter.samplesSinceTrigger == 0) {
@@ -703,12 +708,10 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
     }
 
     // Apply emergency safety limiter (non-bypassable brick-wall protection)
-#ifndef NATIVE_TEST
-    if (AppState::getInstance().emergencyLimiterEnabled) {
-        float threshold = AppState::getInstance().emergencyLimiterThresholdDb;
+    if (appState.emergencyLimiterEnabled) {
+        float threshold = appState.emergencyLimiterThresholdDb;
         dsp_emergency_limiter_process(_dspBufL, _dspBufR, stereoFrames, threshold, cfg->sampleRate);
     }
-#endif
 
     // Re-interleave float → int32 with clamp
     for (int f = 0; f < stereoFrames; f++) {
