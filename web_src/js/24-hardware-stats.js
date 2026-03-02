@@ -1,5 +1,24 @@
 // ===== Performance History =====
 
+        var _eepromPresetsLoaded = false;
+        function eepromLoadPresets() {
+            if (_eepromPresetsLoaded) return;
+            apiFetch('/api/dac/eeprom/presets')
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) return;
+                var sel = document.getElementById('eepromPreset');
+                if (!sel) return;
+                d.presets.forEach(function(p) {
+                    var opt = document.createElement('option');
+                    opt.value = JSON.stringify(p);
+                    opt.textContent = p.deviceName + ' (' + p.manufacturer + ')';
+                    sel.appendChild(opt);
+                });
+                _eepromPresetsLoaded = true;
+            }).catch(function(){});
+        }
+
         function handleEepromDiag(eep) {
             if (!eep) return;
             var chipDetected = eep.scanned && eep.i2cMask > 0;
