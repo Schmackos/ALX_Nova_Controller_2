@@ -627,12 +627,14 @@ static usbd_class_driver_t const _audio_class_driver = {
 #if CFG_TUSB_DEBUG >= 2
     .name = "AUDIO",
 #endif
-    .init = _audio_driver_init,
-    .reset = _audio_driver_reset,
-    .open = _audio_driver_open,
+    .init            = _audio_driver_init,
+    .deinit          = NULL,               // TinyUSB 0.20.1: new field — no teardown needed
+    .reset           = _audio_driver_reset,
+    .open            = _audio_driver_open,
     .control_xfer_cb = _audio_driver_control_xfer,
-    .xfer_cb = _audio_driver_xfer_cb,
-    .sof = NULL,
+    .xfer_cb         = _audio_driver_xfer_cb,
+    .xfer_isr        = NULL,               // TinyUSB 0.20.1: new field — defer ISR transfers to xfer_cb
+    .sof             = NULL,               // sof signature now (rhport, frame_count) — NULL safe
 };
 
 // Register our audio driver with TinyUSB's USBD stack
