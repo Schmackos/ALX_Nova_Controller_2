@@ -4,28 +4,26 @@ var inputLaneEnabled = [true, true, false, false];
 var inputLaneLevels  = [null, null, null, null];
 
 function updateInputOverview() {
-    // Update from current VU data (called by audioAnimLoop / WS handler)
-    var dots  = ['laneDot0','laneDot1','laneDot2','laneDot3'];
+    var dots   = ['laneDot0','laneDot1','laneDot2','laneDot3'];
     var levels = ['laneLevel0','laneLevel1','laneLevel2','laneLevel3'];
 
     for (var i = 0; i < 4; i++) {
         var dot = document.getElementById(dots[i]);
         var lvl = document.getElementById(levels[i]);
-        var btn = dot && dot.parentElement.querySelector('button');
         if (!dot) continue;
 
         var dbVal = inputLaneLevels[i];
         var enabled = inputLaneEnabled[i];
 
-        // Button label
-        if (btn) btn.textContent = enabled ? 'Enabled' : 'Enable';
+        var cb = document.getElementById('laneEnable' + i);
+        if (cb) cb.checked = enabled;
 
         if (!enabled || dbVal === null) {
             dot.className = 'lane-status-dot';
-            if (lvl) lvl.textContent = '—';
+            if (lvl) lvl.textContent = '\u2014';
         } else {
             var dbNum = typeof dbVal === 'number' ? dbVal : -99;
-            if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '—';
+            if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '\u2014';
             dot.className = 'lane-status-dot' + (dbNum > -65 ? ' active' : dbNum > -80 ? ' low' : '');
         }
     }
@@ -61,7 +59,7 @@ function overviewApplyUsbState(d) {
     updateInputOverview();
 }
 
-function toggleSigGenLane() {
-    var newState = !inputLaneEnabled[2];
-    wsSend('setSigGenEnabled', { enabled: newState });
+function toggleSigGenLane(enabled) {
+    if (enabled === undefined) enabled = !inputLaneEnabled[2];
+    wsSend('setSignalGen', { enabled: !!enabled });
 }

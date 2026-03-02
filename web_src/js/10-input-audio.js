@@ -119,6 +119,8 @@
             var enableCb = document.getElementById('usbAudioEnable');
             var fields = document.getElementById('usbAudioFields');
             if (enableCb) enableCb.checked = !!d.enabled;
+            var laneEn3 = document.getElementById('laneEnable3');
+            if (laneEn3) laneEn3.checked = !!d.enabled;
             if (fields) fields.style.display = d.enabled ? '' : 'none';
 
             var badge = document.getElementById('usbAudioBadge');

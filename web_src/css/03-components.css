@@ -1710,6 +1710,9 @@
             color: var(--text-primary, #eee);
             min-height: 1em;
         }
+        .input-lane .switch {
+            margin: 2px 0 -4px;
+        }
         @media (max-width: 480px) {
             .input-lane-grid { grid-template-columns: repeat(2, 1fr); }
         }

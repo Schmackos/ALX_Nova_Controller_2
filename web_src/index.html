@@ -217,25 +217,25 @@
                   <div class="lane-name">ADC 1</div>
                   <div class="lane-status-dot" id="laneDot0"></div>
                   <div class="lane-level" id="laneLevel0">—</div>
-                  <button class="btn btn-small" onclick="setAdcEnabled(0, !inputLaneEnabled[0])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane1">
                   <div class="lane-name">ADC 2</div>
                   <div class="lane-status-dot" id="laneDot1"></div>
                   <div class="lane-level" id="laneLevel1">—</div>
-                  <button class="btn btn-small" onclick="setAdcEnabled(1, !inputLaneEnabled[1])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane2">
                   <div class="lane-name">SigGen</div>
                   <div class="lane-status-dot" id="laneDot2"></div>
                   <div class="lane-level" id="laneLevel2">—</div>
-                  <button class="btn btn-small" onclick="toggleSigGenLane()">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable2" onchange="toggleSigGenLane(this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane3">
                   <div class="lane-name">USB</div>
                   <div class="lane-status-dot" id="laneDot3"></div>
                   <div class="lane-level" id="laneLevel3">—</div>
-                  <button class="btn btn-small" onclick="setUsbAudioEnabled(!inputLaneEnabled[3])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable3" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
                 </div>
               </div>
             </div>
@@ -472,14 +472,6 @@
             <!-- Audio Settings -->
             <div class="card">
                 <div class="card-title">Audio Settings</div>
-                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
-                    <label class="form-label" style="margin:0">ADC Input 1</label>
-                    <label class="switch"><input type="checkbox" id="adcEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
-                </div>
-                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
-                    <label class="form-label" style="margin:0">ADC Input 2</label>
-                    <label class="switch"><input type="checkbox" id="adcEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
-                </div>
                 <div class="form-group">
                     <label class="form-label">Update Rate</label>
                     <select class="form-input" id="audioUpdateRateSelect" onchange="setAudioUpdateRate()">

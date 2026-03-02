@@ -213,8 +213,9 @@
             } else if (data.type === 'adcState') {
                 if (Array.isArray(data.enabled)) {
                     for (var ai = 0; ai < data.enabled.length; ai++) {
-                        var cb = document.getElementById('adcEnable' + ai);
-                        if (cb) cb.checked = !!data.enabled[ai];
+                        var laneCb = document.getElementById('laneEnable' + ai);
+                        if (laneCb) laneCb.checked = !!data.enabled[ai];
+                        overviewApplyAdcEnabled(ai, !!data.enabled[ai]);
                     }
                 }
             } else if (data.type === 'usbAudioState') {

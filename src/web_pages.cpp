@@ -2137,6 +2137,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             color: var(--text-primary, #eee);
             min-height: 1em;
         }
+        .input-lane .switch {
+            margin: 2px 0 -4px;
+        }
         @media (max-width: 480px) {
             .input-lane-grid { grid-template-columns: repeat(2, 1fr); }
         }
@@ -2853,25 +2856,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                   <div class="lane-name">ADC 1</div>
                   <div class="lane-status-dot" id="laneDot0"></div>
                   <div class="lane-level" id="laneLevel0">—</div>
-                  <button class="btn btn-small" onclick="setAdcEnabled(0, !inputLaneEnabled[0])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane1">
                   <div class="lane-name">ADC 2</div>
                   <div class="lane-status-dot" id="laneDot1"></div>
                   <div class="lane-level" id="laneLevel1">—</div>
-                  <button class="btn btn-small" onclick="setAdcEnabled(1, !inputLaneEnabled[1])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane2">
                   <div class="lane-name">SigGen</div>
                   <div class="lane-status-dot" id="laneDot2"></div>
                   <div class="lane-level" id="laneLevel2">—</div>
-                  <button class="btn btn-small" onclick="toggleSigGenLane()">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable2" onchange="toggleSigGenLane(this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane3">
                   <div class="lane-name">USB</div>
                   <div class="lane-status-dot" id="laneDot3"></div>
                   <div class="lane-level" id="laneLevel3">—</div>
-                  <button class="btn btn-small" onclick="setUsbAudioEnabled(!inputLaneEnabled[3])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable3" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
                 </div>
               </div>
             </div>
@@ -3108,14 +3111,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- Audio Settings -->
             <div class="card">
                 <div class="card-title">Audio Settings</div>
-                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
-                    <label class="form-label" style="margin:0">ADC Input 1</label>
-                    <label class="switch"><input type="checkbox" id="adcEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
-                </div>
-                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
-                    <label class="form-label" style="margin:0">ADC Input 2</label>
-                    <label class="switch"><input type="checkbox" id="adcEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
-                </div>
                 <div class="form-group">
                     <label class="form-label">Update Rate</label>
                     <select class="form-input" id="audioUpdateRateSelect" onchange="setAudioUpdateRate()">
@@ -5089,8 +5084,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             } else if (data.type === 'adcState') {
                 if (Array.isArray(data.enabled)) {
                     for (var ai = 0; ai < data.enabled.length; ai++) {
-                        var cb = document.getElementById('adcEnable' + ai);
-                        if (cb) cb.checked = !!data.enabled[ai];
+                        var laneCb = document.getElementById('laneEnable' + ai);
+                        if (laneCb) laneCb.checked = !!data.enabled[ai];
+                        overviewApplyAdcEnabled(ai, !!data.enabled[ai]);
                     }
                 }
             } else if (data.type === 'usbAudioState') {
@@ -6343,6 +6339,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var enableCb = document.getElementById('usbAudioEnable');
             var fields = document.getElementById('usbAudioFields');
             if (enableCb) enableCb.checked = !!d.enabled;
+            var laneEn3 = document.getElementById('laneEnable3');
+            if (laneEn3) laneEn3.checked = !!d.enabled;
             if (fields) fields.style.display = d.enabled ? '' : 'none';
 
             var badge = document.getElementById('usbAudioBadge');
@@ -6419,28 +6417,26 @@ var inputLaneEnabled = [true, true, false, false];
 var inputLaneLevels  = [null, null, null, null];
 
 function updateInputOverview() {
-    // Update from current VU data (called by audioAnimLoop / WS handler)
-    var dots  = ['laneDot0','laneDot1','laneDot2','laneDot3'];
+    var dots   = ['laneDot0','laneDot1','laneDot2','laneDot3'];
     var levels = ['laneLevel0','laneLevel1','laneLevel2','laneLevel3'];
 
     for (var i = 0; i < 4; i++) {
         var dot = document.getElementById(dots[i]);
         var lvl = document.getElementById(levels[i]);
-        var btn = dot && dot.parentElement.querySelector('button');
         if (!dot) continue;
 
         var dbVal = inputLaneLevels[i];
         var enabled = inputLaneEnabled[i];
 
-        // Button label
-        if (btn) btn.textContent = enabled ? 'Enabled' : 'Enable';
+        var cb = document.getElementById('laneEnable' + i);
+        if (cb) cb.checked = enabled;
 
         if (!enabled || dbVal === null) {
             dot.className = 'lane-status-dot';
-            if (lvl) lvl.textContent = '—';
+            if (lvl) lvl.textContent = '\u2014';
         } else {
             var dbNum = typeof dbVal === 'number' ? dbVal : -99;
-            if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '—';
+            if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '\u2014';
             dot.className = 'lane-status-dot' + (dbNum > -65 ? ' active' : dbNum > -80 ? ' low' : '');
         }
     }
@@ -6476,9 +6472,9 @@ function overviewApplyUsbState(d) {
     updateInputOverview();
 }
 
-function toggleSigGenLane() {
-    var newState = !inputLaneEnabled[2];
-    wsSend('setSigGenEnabled', { enabled: newState });
+function toggleSigGenLane(enabled) {
+    if (enabled === undefined) enabled = !inputLaneEnabled[2];
+    wsSend('setSignalGen', { enabled: !!enabled });
 }
 
 //# sourceURL=11-input-overview.js
@@ -6620,6 +6616,8 @@ function toggleSigGenLane() {
             document.getElementById('siggenSweepGroup').style.display = d.waveform === 3 ? '' : 'none';
             document.getElementById('siggenPwmNote').style.display = d.outputMode === 1 ? '' : 'none';
             if (typeof overviewApplySigGenState === 'function') overviewApplySigGenState(d);
+            var laneEn2 = document.getElementById('laneEnable2');
+            if (laneEn2) laneEn2.checked = !!d.enabled;
         }
 
 //# sourceURL=13-signal-gen.js
