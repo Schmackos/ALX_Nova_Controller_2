@@ -102,7 +102,7 @@ static void update_pins_label(void) {
     int indices[PIN_COUNT];
     for (int i = 0; i < PIN_COUNT; i++) indices[i] = i;
 
-    char buf[512];
+    static char buf[512];
     int pos = 0;
 
     if (pin_sort_mode == SORT_BY_DEVICE) {

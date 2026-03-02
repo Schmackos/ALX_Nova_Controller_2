@@ -4273,6 +4273,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-label">Largest Block</span>
                         <span class="info-value" id="heapMaxBlock">--</span>
                     </div>
+                    <div class="info-row" id="heapCriticalRow" style="display:none">
+                        <span class="info-label" style="color:var(--danger)">Heap Critical</span>
+                        <span class="info-value" id="heapCriticalValue" style="color:var(--danger)">YES</span>
+                    </div>
                     <div class="info-row">
                         <span class="info-label">PSRAM Free</span>
                         <span class="info-value" id="psramFree">--</span>
@@ -10291,6 +10295,10 @@ function initFirmwareDragDrop() {
                 document.getElementById('heapTotal').textContent = formatBytes(heapTotal);
                 document.getElementById('heapMinFree').textContent = formatBytes(data.memory.heapMinFree || 0);
                 document.getElementById('heapMaxBlock').textContent = formatBytes(data.memory.heapMaxBlock || 0);
+
+                // Heap critical indicator
+                const critRow = document.getElementById('heapCriticalRow');
+                if (critRow) critRow.style.display = data.heapCritical ? '' : 'none';
 
                 // PSRAM
                 const psramTotal = data.memory.psramTotal || 0;

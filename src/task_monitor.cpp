@@ -13,11 +13,11 @@
 #define TASK_STACK_SIZE_AUDIO 10240
 #endif
 #ifndef TASK_STACK_SIZE_OTA
-#define TASK_STACK_SIZE_OTA 16384
+#define TASK_STACK_SIZE_OTA 8192
 #endif
 #ifdef GUI_ENABLED
 #ifndef TASK_STACK_SIZE_GUI
-#define TASK_STACK_SIZE_GUI 16384
+#define TASK_STACK_SIZE_GUI 10240
 #endif
 #endif
 #ifndef LOG_I

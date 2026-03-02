@@ -503,10 +503,10 @@ static void audio_pipeline_task_fn(void * /*param*/) {
             i2s_audio_request_dump();
         }
 
-        // Yield 1 tick to let IDLE task run on Core 1.
-        // IDLE WDT is disabled (idle_core_mask=0 at startup), so 1 tick is sufficient.
-        // DMA has 16 buffers = ~85ms runway; 1ms yield is safe.
-        vTaskDelay(1);
+        // Yield 2 ticks so loopTask (also on Core 1) gets scheduling time.
+        // loopTask runs the main loop (HTTP, WebSocket, MQTT) at priority 1.
+        // DMA has 16 buffers = ~85ms runway; 2ms yield is safe.
+        vTaskDelay(2);
     }
 }
 #endif

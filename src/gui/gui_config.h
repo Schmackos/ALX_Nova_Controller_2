@@ -81,12 +81,4 @@
 /* Input polling period for LVGL indev driver */
 #define INDEV_READ_PERIOD_MS 10
 
-/*====================
-   FreeRTOS GUI TASK
- *====================*/
-
-#define GUI_TASK_STACK_SIZE 16384
-#define GUI_TASK_PRIORITY 1
-#define GUI_TASK_CORE 0  // Was 1 — moved off Core 1 to eliminate audio pipeline contention
-
 #endif /* GUI_CONFIG_H */

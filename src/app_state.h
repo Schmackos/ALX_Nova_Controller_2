@@ -241,7 +241,7 @@ public:
   float audioSfdrDb[NUM_AUDIO_ADCS] = {};        // Spurious-Free Dynamic Range (dB)
 
   // ===== Heap Health =====
-  bool heapCritical = false;       // True when largest free block < 20KB
+  bool heapCritical = false;       // True when largest free block < 40KB
 
   // ===== Debug Mode Toggles =====
   bool debugMode = true;           // Master debug gate

@@ -663,11 +663,6 @@ void setup() {
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
 
-  // Disable WiFi modem power save — radio sleep/wake cycles cause latency
-  // spikes (5-20ms) that generate memory bus contention with I2S DMA,
-  // causing audio pops during WiFi TX bursts.
-  esp_wifi_set_ps(WIFI_PS_NONE);
-
   // Initialize WiFi event handler for automatic reconnection
   initWiFiEventHandler();
 
@@ -679,6 +674,11 @@ void setup() {
   if (!connectToStoredNetworks()) {
     LOG_W("[Main] No WiFi connection established, running in AP mode");
   }
+
+  // Disable WiFi modem power save AFTER WiFi is initialized.
+  // Radio sleep/wake cycles cause 5-20ms latency spikes that generate
+  // memory bus contention with I2S DMA, causing audio pops.
+  esp_wifi_set_ps(WIFI_PS_NONE);
 
   // Always start server and WebSocket regardless of mode
   webSocket.begin();

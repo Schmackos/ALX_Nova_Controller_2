@@ -174,7 +174,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_STACK_SIZE_SENSING 4096
 #define TASK_STACK_SIZE_WEB 8192
 #define TASK_STACK_SIZE_MQTT 4096
-#define TASK_STACK_SIZE_OTA 12288
+#define TASK_STACK_SIZE_OTA 8192
 #define TASK_STACK_SIZE_AUDIO 8192
 
 #define TASK_PRIORITY_SENSING 2 // High priority
@@ -185,7 +185,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_CORE_AUDIO     1   // Core 1 — isolates audio from WiFi system tasks on Core 0
 
 // ===== I2S DMA Configuration =====
-#define I2S_DMA_BUF_COUNT 16    // 16 buffers x 256 samples = ~85ms runway at 48kHz
+#define I2S_DMA_BUF_COUNT 6     // 6 buffers x 256 samples = ~32ms runway at 48kHz
 #define I2S_DMA_BUF_LEN   256
 
 // ===== Audio Pipeline Configuration =====
@@ -228,8 +228,9 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #endif
 
 // GUI FreeRTOS task
-#define TASK_STACK_SIZE_GUI 16384
+#define TASK_STACK_SIZE_GUI 10240
 #define TASK_PRIORITY_GUI 1
+#define TASK_CORE_GUI     0     // Core 0 — moved off Core 1 to avoid audio pipeline contention
 
 #endif // GUI_ENABLED
 

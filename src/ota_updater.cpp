@@ -270,8 +270,9 @@ void handleGetReleaseNotes() {
   LOG_I("[OTA] Fetching release notes from: %s", releaseNotesUrl.c_str());
 
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 30000) {
-    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<30KB)", (unsigned long)maxBlock);
+  LOG_I("[OTA] Heap before TLS: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
+  if (maxBlock < 35000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<35KB)", (unsigned long)maxBlock);
     server.send(200, "application/json", "{\"success\": false, \"message\": \"Insufficient memory for secure connection\"}");
     return;
   }
@@ -403,10 +404,11 @@ void checkForFirmwareUpdate() {
 
 // Get latest release information from GitHub API
 bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum) {
-  // TLS handshake needs ~40-50KB contiguous heap for MbedTLS buffers
+  // TLS needs ~33KB contiguous: mbedtls_ssl_setup() allocates two 16KB buffers sequentially
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 30000) {
-    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<30KB), skipping", (unsigned long)maxBlock);
+  LOG_I("[OTA] Heap before TLS: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
+  if (maxBlock < 35000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<35KB), skipping", (unsigned long)maxBlock);
     return false;
   }
 
@@ -568,10 +570,11 @@ bool performOTAUpdate(String firmwareUrl) {
   LOG_I("[OTA] Starting OTA update");
   LOG_I("[OTA] Downloading from: %s", firmwareUrl.c_str());
 
-  // TLS handshake needs ~40-50KB contiguous heap for MbedTLS buffers
+  // TLS needs ~33KB contiguous: mbedtls_ssl_setup() allocates two 16KB buffers sequentially
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 30000) {
-    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<30KB)", (unsigned long)maxBlock);
+  LOG_I("[OTA] Heap before TLS: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
+  if (maxBlock < 35000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<35KB)", (unsigned long)maxBlock);
     setOTAProgress("error", "Insufficient memory for secure download", 0);
     appState.otaInProgress = false;
     return false;
@@ -1071,12 +1074,11 @@ void startOTADownloadTask() {
 
 // OTA check task — runs checkForFirmwareUpdate() on a separate core
 static void otaCheckTaskFunc(void* param) {
-  // Heap pre-flight: must match the inner TLS threshold (30KB) used by
-  // getLatestReleaseInfo(). When heap is 30-50KB, TLS runs in insecure mode
-  // (no cert validation) which needs only ~15-20KB for the session.
+  // Heap pre-flight: must match the inner TLS threshold (35KB) used by
+  // getLatestReleaseInfo(). MbedTLS allocates two 16KB buffers (~33KB total).
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 30000) {
-    LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<30KB), skipping", (unsigned long)maxBlock);
+  if (maxBlock < 35000) {
+    LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<35KB), skipping", (unsigned long)maxBlock);
     _otaConsecutiveFailures++;
     if (_otaConsecutiveFailures > 20) _otaConsecutiveFailures = 20;
     appState.markOTADirty();
