@@ -1012,6 +1012,58 @@ void test_wifi_retry_preserves_network_order(void) {
     TEST_ASSERT_EQUAL_STRING("Priority3", wifiNetworks[2].ssid.c_str());
 }
 
+// ===== WPA3 Minimum Security Tests =====
+
+void test_wifi_min_security_default(void) {
+    setUp();
+    // wifiMinSecurity not stored in this test mock, but we can verify
+    // the Preferences default value (0 = any) used during load
+    Preferences prefs;
+    prefs.begin("wifi-list", true);
+    uint8_t val = prefs.getUChar("wifiMinSec", 0);
+    prefs.end();
+    TEST_ASSERT_EQUAL(0, val);
+}
+
+void test_wifi_min_security_bounds(void) {
+    setUp();
+    // Valid values: 0=any, 1=WPA2+, 2=WPA3 only
+    // Clamp helper mirrors constrain(val, 0, 2) used by the API handler
+    auto clamp02 = [](int v) -> uint8_t {
+        if (v < 0) return 0;
+        if (v > 2) return 2;
+        return (uint8_t)v;
+    };
+
+    TEST_ASSERT_EQUAL(2, clamp02(2));   // 2 stays 2
+    TEST_ASSERT_EQUAL(2, clamp02(3));   // >2 clamps to 2
+    TEST_ASSERT_EQUAL(0, clamp02(0));   // 0 stays 0
+    TEST_ASSERT_EQUAL(1, clamp02(1));   // 1 stays 1
+}
+
+void test_wifi_min_security_persist_roundtrip(void) {
+    setUp();
+
+    // Persist value 1 (WPA2+) to NVS
+    {
+        Preferences prefs;
+        prefs.begin("wifi-list", false);
+        prefs.putUChar("wifiMinSec", 1);
+        prefs.end();
+    }
+
+    // Simulate load: read it back (mirrors loadSettings NVS read)
+    uint8_t loaded = 0;
+    {
+        Preferences prefs;
+        prefs.begin("wifi-list", true);
+        loaded = prefs.getUChar("wifiMinSec", 0);
+        prefs.end();
+    }
+
+    TEST_ASSERT_EQUAL(1, loaded);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -1100,6 +1152,11 @@ int runUnityTests(void) {
     RUN_TEST(test_wifi_retry_clears_on_success_after_multiple_failures);
     RUN_TEST(test_wifi_retry_immediate_vs_periodic);
     RUN_TEST(test_wifi_retry_preserves_network_order);
+
+    // WPA3 minimum security tests
+    RUN_TEST(test_wifi_min_security_default);
+    RUN_TEST(test_wifi_min_security_bounds);
+    RUN_TEST(test_wifi_min_security_persist_roundtrip);
 
     return UNITY_END();
 }

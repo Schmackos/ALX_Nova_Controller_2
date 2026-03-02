@@ -250,6 +250,14 @@ bool loadSettings() {
   // Line 30 was dcBlockEnabled (removed — now a DSP preset)
 #endif
 
+  // Load WiFi global settings from NVS (wifi-list namespace)
+  {
+    Preferences wifiPrefs;
+    wifiPrefs.begin("wifi-list", true); // Read-only
+    appState.wifiMinSecurity = wifiPrefs.getUChar("wifiMinSec", 0);
+    wifiPrefs.end();
+  }
+
   return true;
 }
 
@@ -318,6 +326,14 @@ void saveSettings() {
 #endif
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
+
+  // Save WiFi global settings to NVS (wifi-list namespace)
+  {
+    Preferences wifiPrefs;
+    wifiPrefs.begin("wifi-list", false);
+    wifiPrefs.putUChar("wifiMinSec", appState.wifiMinSecurity);
+    wifiPrefs.end();
+  }
 }
 
 // ===== Signal Generator Settings =====
