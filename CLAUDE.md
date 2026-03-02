@@ -170,6 +170,7 @@ When adding logging to new modules, follow these conventions:
 - Use `LOG_D` for high-frequency operational details (pattern steps, param snapshots)
 - Never log inside ISR paths or real-time FreeRTOS tasks (e.g., `audio_pipeline_task`) — `Serial.print` blocks when UART TX buffer fills, starving DMA and causing audio dropouts. Use dirty-flag pattern: task sets flag, main loop calls `audio_periodic_dump()` for actual Serial/WS output
 - Log transitions, not repetitive state (use static `prev` variables to detect changes)
+- **Log files**: Save all `.log` files (build output, test reports, serial captures) to the `logs/` directory — keep the project root clean
 
 ## Key Dependencies
 

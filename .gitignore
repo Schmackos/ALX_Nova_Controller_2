@@ -18,8 +18,9 @@ build_*.txt
 upload_*.txt
 *_log.txt
 
-# Runtime logs
-logs/
+# Runtime logs — all .log files go in logs/
+logs/*
+!logs/.gitkeep
 *.log
 
 # OS files
