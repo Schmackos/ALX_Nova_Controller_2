@@ -528,17 +528,21 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
     // NOTE: Standard SET_INTERFACE is handled by TinyUSB's USBD internally —
     // it calls _audio_driver_open() for the new alt setting (not this callback).
 
+    // Log every control transfer for debugging (helps diagnose Windows Code 10)
+    LOG_D("[USB Audio] ctrl: stage=%d bmRT=0x%02X bReq=0x%02X wVal=0x%04X wIdx=0x%04X wLen=%u",
+          stage, request->bmRequestType, request->bRequest,
+          request->wValue, request->wIndex, request->wLength);
+
     if (stage == CONTROL_STAGE_SETUP) {
         // Non-class requests (standard SET_INTERFACE etc.) may be forwarded by
         // TinyUSB to class drivers. STALLing them corrupts the EP0 state machine
         // and breaks subsequent control transfers (garbled data in _ctrlBuf).
         if (request->bmRequestType_bit.type != TUSB_REQ_TYPE_CLASS) {
-            LOG_D("[USB Audio] Non-class request: bmRT=0x%02X bReq=0x%02X wVal=0x%04X wIdx=0x%04X",
-                  request->bmRequestType, request->bRequest, request->wValue, request->wIndex);
-            if (request->wLength == 0) {
-                return tud_control_status(rhport, request);
-            }
-            return false; // Has data stage we can't serve
+            // Let TinyUSB's standard request handler process SET_INTERFACE,
+            // GET_INTERFACE, and other standard requests. Returning true here
+            // would prevent TinyUSB from calling process_set_interface() →
+            // _audio_driver_open() — breaking alt setting changes (Code 10).
+            return false;
         }
 
         uint8_t entity = TU_U16_HIGH(request->wIndex);
@@ -632,12 +636,40 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
             }
         }
 
-        // Unhandled class request — ACK if no data stage, STALL otherwise
-        LOG_W("[USB Audio] Unhandled class control: bReq=0x%02X wVal=0x%04X wIdx=0x%04X wLen=%u",
-              request->bRequest, request->wValue, request->wIndex, request->wLength);
-        if (request->wLength == 0) {
-            return tud_control_status(rhport, request);
+        // Input Terminal entity requests (Connector Control)
+        if (entity == UAC2_ENTITY_INPUT_TERM) {
+            uint8_t control_sel = TU_U16_HIGH(request->wValue);
+            if (control_sel == 0x02) { // TE_CONNECTOR_CONTROL
+                if (request->bRequest == AUDIO20_CS_REQ_CUR &&
+                    request->bmRequestType_bit.direction == TUSB_DIR_IN) {
+                    // GET CUR: USB streaming terminal is always "connected"
+                    _ctrlBuf[0] = 1;
+                    return tud_control_xfer(rhport, request, _ctrlBuf, 1);
+                }
+            }
+            // Unknown terminal control — STALL
+            return false;
         }
+
+        // Output Terminal entity requests (Connector Control)
+        if (entity == UAC2_ENTITY_OUTPUT_TERM) {
+            uint8_t control_sel = TU_U16_HIGH(request->wValue);
+            if (control_sel == 0x02) { // TE_CONNECTOR_CONTROL
+                if (request->bRequest == AUDIO20_CS_REQ_CUR &&
+                    request->bmRequestType_bit.direction == TUSB_DIR_IN) {
+                    // GET CUR: speaker output is always "connected"
+                    _ctrlBuf[0] = 1;
+                    return tud_control_xfer(rhport, request, _ctrlBuf, 1);
+                }
+            }
+            // Unknown terminal control — STALL
+            return false;
+        }
+
+        // Unhandled class request — always STALL (returning false).
+        // ACK-ing unknown requests confuses the host driver.
+        LOG_W("[USB Audio] Unhandled class control: entity=0x%02X bReq=0x%02X wVal=0x%04X wIdx=0x%04X wLen=%u",
+              entity, request->bRequest, request->wValue, request->wIndex, request->wLength);
         return false;
     }
 
@@ -803,7 +835,7 @@ void usb_audio_init(void) {
         // — it references Kconfig macros not available in Arduino framework builds)
         tinyusb_device_config_t cfg = {};
         cfg.vid = USB_ESPRESSIF_VID;
-        cfg.pid = 0x4002;
+        cfg.pid = 0x4003;  // Changed from 0x4002 to break stale Windows driver cache
         cfg.product_name = "ALX Nova Audio";
         cfg.manufacturer_name = "ALX Audio";
         cfg.serial_number = "ALX-USB-AUDIO";
