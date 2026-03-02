@@ -66,10 +66,14 @@ Each subsystem is a separate module in `src/`:
 - **usb_audio** — TinyUSB UAC2 speaker device on native USB OTG (GPIO 19/20). Custom audio class driver registered via `usbd_app_driver_get_cb()` weak function. SPSC lock-free ring buffer (1024 frames, PSRAM). Format conversion: USB PCM16/PCM24 → left-justified int32. FreeRTOS task on Core 0 with adaptive poll rate (100ms idle, 1ms streaming). Guarded by `-D USB_AUDIO_ENABLED`. Requires `build_unflags = -DARDUINO_USB_MODE -DARDUINO_USB_CDC_ON_BOOT` in platformio.ini
 - **debug_serial** — Log-level filtered serial output (`LOG_D`/`LOG_I`/`LOG_W`/`LOG_E`/`LOG_NONE`), runtime level control via `applyDebugSerialLevel()`, WebSocket log forwarding
 - **websocket_handler** — Real-time state broadcasting to web clients (port 81). Audio waveform and spectrum data use binary WebSocket frames (`sendBIN`) for efficiency; audio levels remain JSON. Binary message types defined as `WS_BIN_WAVEFORM` (0x01) and `WS_BIN_SPECTRUM` (0x02) in `websocket_handler.h`
-- **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`). **IMPORTANT: After ANY edit to `web_pages.cpp`, you MUST run `node build_web_assets.js` to regenerate `web_pages_gz.cpp` before building firmware.** The ESP32 serves the gzipped version — without this step, frontend changes will not take effect.
+- **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`). **IMPORTANT: Edit source files in `web_src/` — NOT `src/web_pages.cpp` (auto-generated). After ANY edit to `web_src/` files, run `node tools/build_web_assets.js` to regenerate `src/web_pages.cpp` and `src/web_pages_gz.cpp` before building firmware.**
+  - `web_src/index.html` — HTML shell (body content, no inline CSS/JS)
+  - `web_src/css/01-05-*.css` — CSS split by concern (variables, layout, components, canvas, responsive)
+  - `web_src/js/01-28-*.js` — JS modules in load order (core, state, UI, audio, DSP, WiFi, settings, system)
+  - `src/web_pages.cpp` and `src/web_pages_gz.cpp` are both auto-generated — do not edit manually
 
 ### GUI (LVGL on TFT Display)
-LVGL v9.4 + TFT_eSPI on ST7735S 128x160 (landscape 160x128). Runs on Core 1 via FreeRTOS `gui_task`. All GUI code is guarded by `-D GUI_ENABLED`.
+LVGL v9.4 + LovyanGFX on ST7735S 128x160 (landscape 160x128). Runs on Core 1 via FreeRTOS `gui_task`. All GUI code is guarded by `-D GUI_ENABLED`.
 
 Key GUI modules in `src/gui/`:
 - **gui_manager** — Init, FreeRTOS task, screen sleep/wake, dashboard refresh
@@ -173,6 +177,6 @@ When adding logging to new modules, follow these conventions:
 - `WebSockets@^2.7.2` — WebSocket server for real-time UI updates
 - `PubSubClient@^2.8` — MQTT client for Home Assistant integration
 - `lvgl@^9.4` — GUI framework (guarded by `GUI_ENABLED`)
-- `TFT_eSPI@^2.5.43` — TFT display driver for ST7735S
+- `LovyanGFX@^1.2.0` — TFT display driver for ST7735S (replaced TFT_eSPI)
 - `arduinoFFT@^2.0` — FFT spectrum analysis (**native tests only**; ESP32 uses pre-built ESP-DSP FFT)
 - **ESP-DSP pre-built library** (`libespressif__esp-dsp.a`) — S3 assembly-optimized biquad IIR, FIR, Radix-4 FFT, window functions, vector math (mulc/mul/add), dot product, SNR/SFDR analysis. Include paths added via `-I` flags in `platformio.ini`. `lib/esp_dsp_lite/` provides ANSI C fallbacks for native tests only (`lib_ignore = esp_dsp_lite` in ESP32 envs)

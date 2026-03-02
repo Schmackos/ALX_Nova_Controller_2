@@ -30,3 +30,6 @@ Thumbs.db
 *~
 *.swp
 *.swo
+
+# Auto-generated web assets (edit web_src/ instead)
+src/web_pages_gz.cpp
