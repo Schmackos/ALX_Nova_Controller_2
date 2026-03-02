@@ -59,6 +59,7 @@ extern void saveSmartSensingSettings();
 extern void sendSmartSensingStateInternal();
 extern void sendWiFiStatus();
 extern void saveSettings();
+extern void saveSettingsDeferred();
 extern void performFactoryReset();
 extern void checkForFirmwareUpdate();
 extern void setAmplifierState(bool state);
@@ -384,7 +385,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     if (appState.autoUpdateEnabled != enabled) {
       appState.autoUpdateEnabled = enabled;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Auto-update set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Broadcast to web clients
     }
@@ -395,7 +396,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     if (appState.darkMode != enabled) {
       appState.darkMode = enabled;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Dark mode set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Dark mode is part of WiFi status in web UI
     }
@@ -406,7 +407,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     if (appState.enableCertValidation != enabled) {
       appState.enableCertValidation = enabled;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Certificate validation set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Broadcast to web clients
     }
@@ -419,7 +420,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (timeoutMs == 0 || timeoutMs == 30000 || timeoutMs == 60000 ||
         timeoutMs == 300000 || timeoutMs == 600000) {
       appState.setScreenTimeout(timeoutMs);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Screen timeout set to %d seconds", timeoutSec);
       sendWiFiStatus();
     }
@@ -429,7 +430,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/display/dim_enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.setDimEnabled(newState);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Dim %s", newState ? "enabled" : "disabled");
     publishMqttDisplayState();
   }
@@ -440,7 +441,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (dimMs == 5000 || dimMs == 10000 || dimMs == 15000 ||
         dimMs == 30000 || dimMs == 60000) {
       appState.setDimTimeout(dimMs);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Dim timeout set to %d seconds", dimSec);
     }
     publishMqttDisplayState();
@@ -458,7 +459,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       return;
     }
     appState.setDimBrightness(pwm);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Dim brightness set to %d%% (PWM %d)", pct, pwm);
     publishMqttDisplayState();
   }
@@ -476,7 +477,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (bright >= 10 && bright <= 100) {
       uint8_t pwm = (uint8_t)(bright * 255 / 100);
       appState.setBacklightBrightness(pwm);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Brightness set to %d%% (PWM %d)", bright, pwm);
       publishMqttDisplayState();
     }
@@ -485,7 +486,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/settings/buzzer/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     appState.setBuzzerEnabled(enabled);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Buzzer set to %s", enabled ? "ON" : "OFF");
     publishMqttBuzzerState();
   }
@@ -494,7 +495,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     int vol = message.toInt();
     if (vol >= 0 && vol <= 2) {
       appState.setBuzzerVolume(vol);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Buzzer volume set to %d", vol);
       publishMqttBuzzerState();
     }
@@ -504,7 +505,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     int rate = message.toInt();
     if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
       appState.audioUpdateRate = (uint16_t)rate;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Audio update rate set to %d ms", rate);
       publishMqttDisplayState();
     }
@@ -592,7 +593,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/emergency_limiter/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.setEmergencyLimiterEnabled(newState);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Emergency limiter set to %s", newState ? "ON" : "OFF");
     publishMqttEmergencyLimiterState();
     sendEmergencyLimiterState();
@@ -602,7 +603,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     float threshold = message.toFloat();
     if (threshold >= -6.0f && threshold <= 0.0f) {
       appState.setEmergencyLimiterThreshold(threshold);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Emergency limiter threshold set to %.2f dBFS", threshold);
       publishMqttEmergencyLimiterState();
       sendEmergencyLimiterState();
@@ -623,14 +624,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/audio/input1/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.adcEnabled[0] = newState;
-    saveSettings();
+    saveSettingsDeferred();
     appState.markAdcEnabledDirty();
     LOG_I("[MQTT] ADC1 set to %s", newState ? "ON" : "OFF");
   }
   else if (topicStr == base + "/audio/input2/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.adcEnabled[1] = newState;
-    saveSettings();
+    saveSettingsDeferred();
     appState.markAdcEnabledDirty();
     LOG_I("[MQTT] ADC2 set to %s", newState ? "ON" : "OFF");
   }
@@ -638,7 +639,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/audio/vu_meter/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.vuMeterEnabled = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendAudioGraphState();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] VU meter set to %s", newState ? "ON" : "OFF");
@@ -647,7 +648,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/audio/waveform/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.waveformEnabled = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendAudioGraphState();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] Waveform set to %s", newState ? "ON" : "OFF");
@@ -656,7 +657,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/audio/spectrum/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.spectrumEnabled = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendAudioGraphState();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] Spectrum set to %s", newState ? "ON" : "OFF");
@@ -671,7 +672,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     else if (message == "nuttall") wt = FFT_WINDOW_NUTTALL;
     else if (message == "flat_top") wt = FFT_WINDOW_FLAT_TOP;
     appState.fftWindowType = wt;
-    saveSettings();
+    saveSettingsDeferred();
     sendAudioGraphState();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] FFT window set to %d", (int)wt);
@@ -681,7 +682,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugMode = newState;
     applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
-    saveSettings();
+    saveSettingsDeferred();
     sendDebugState();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug mode set to %s", newState ? "ON" : "OFF");
@@ -692,7 +693,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (level >= 0 && level <= 3) {
       appState.debugSerialLevel = level;
       applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
-      saveSettings();
+      saveSettingsDeferred();
       sendDebugState();
       publishMqttDebugState();
       LOG_I("[MQTT] Debug serial level set to %d", level);
@@ -702,7 +703,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/debug/hw_stats/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugHwStats = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendDebugState();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug HW stats set to %s", newState ? "ON" : "OFF");
@@ -711,7 +712,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/debug/i2s_metrics/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugI2sMetrics = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendDebugState();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug I2S metrics set to %s", newState ? "ON" : "OFF");
@@ -720,7 +721,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/debug/task_monitor/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugTaskMonitor = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendDebugState();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug task monitor set to %s", newState ? "ON" : "OFF");
@@ -730,7 +731,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     int offset = message.toInt();
     if (offset >= -12 && offset <= 14) {
       appState.timezoneOffset = offset;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Timezone offset set to %d", offset);
       publishMqttSystemStatus();
     }
@@ -752,7 +753,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/settings/boot_animation/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.bootAnimEnabled = newState;
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Boot animation set to %s", newState ? "ON" : "OFF");
     publishMqttBootAnimState();
   }
@@ -767,7 +768,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     else if (message == "heartbeat") style = 5;
     if (style >= 0) {
       appState.bootAnimStyle = style;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Boot animation style set to %s", message.c_str());
       publishMqttBootAnimState();
     }

@@ -318,6 +318,23 @@ void dac_load_settings() {
 #endif
 }
 
+// ===== Deferred DAC Save =====
+static bool _dacSavePending = false;
+static unsigned long _lastDacSaveRequest = 0;
+static const unsigned long DAC_SAVE_DEBOUNCE_MS = 2000;
+
+void dac_save_settings_deferred() {
+    _dacSavePending = true;
+    _lastDacSaveRequest = millis();
+}
+
+void dac_check_deferred_save() {
+    if (_dacSavePending && (millis() - _lastDacSaveRequest >= DAC_SAVE_DEBOUNCE_MS)) {
+        dac_save_settings();
+        _dacSavePending = false;
+    }
+}
+
 void dac_save_settings() {
 #ifndef NATIVE_TEST
     AppState& as = AppState::getInstance();

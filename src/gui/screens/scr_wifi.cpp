@@ -144,7 +144,7 @@ static void edit_ap_toggle(void) {
 
 static void on_auto_ap_confirm(int val, float, int) {
     AppState::getInstance().autoAPEnabled = (val != 0);
-    saveSettings();
+    saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
 }
 
@@ -159,7 +159,7 @@ static void edit_auto_ap(void) {
 
 static void on_ap_ssid_done(const char *text) {
     AppState::getInstance().apSSID = String(text);
-    saveSettings();
+    saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] AP SSID set to: %s", text);
 }
@@ -175,7 +175,7 @@ static void edit_ap_ssid(void) {
 
 static void on_ap_password_done(const char *text) {
     AppState::getInstance().apPassword = String(text);
-    saveSettings();
+    saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] AP password changed");
 }

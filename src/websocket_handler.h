@@ -47,6 +47,9 @@ void drainPendingInitState();
 // ===== Audio Streaming =====
 void sendAudioData();
 
+// ===== HTTP Page Serving Flag =====
+extern volatile bool httpServingPage;
+
 // ===== CPU Utilization Tracking =====
 void initCpuUsageMonitoring();
 void deinitCpuUsageMonitoring();

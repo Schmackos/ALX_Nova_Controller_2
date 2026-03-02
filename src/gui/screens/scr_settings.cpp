@@ -46,25 +46,25 @@ static const CycleOption dim_brightness_options[] = {
 
 static void on_screen_timeout_confirm(int int_val, float, int) {
     AppState::getInstance().setScreenTimeout((unsigned long)int_val);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[GUI] Screen timeout set to %d ms", int_val);
 }
 
 static void on_dim_timeout_confirm(int int_val, float, int) {
     AppState::getInstance().setDimTimeout((unsigned long)int_val);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[GUI] Dim timeout set to %d ms", int_val);
 }
 
 static void on_dim_enabled_confirm(int int_val, float, int) {
     AppState::getInstance().setDimEnabled(int_val != 0);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[GUI] Dim %s", int_val ? "enabled" : "disabled");
 }
 
 static void on_dim_brightness_confirm(int int_val, float, int) {
     AppState::getInstance().setDimBrightness((uint8_t)int_val);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[GUI] Dim brightness set to %d", int_val);
 }
 
@@ -89,28 +89,28 @@ static const CycleOption brightness_options[] = {
 static void on_brightness_confirm(int int_val, float, int) {
     AppState::getInstance().setBacklightBrightness((uint8_t)int_val);
     gui_set_brightness((uint8_t)int_val);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[GUI] Brightness set to %d", int_val);
 }
 
 static void on_dark_mode_confirm(int int_val, float, int) {
     AppState::getInstance().darkMode = (int_val != 0);
     gui_theme_set_dark(int_val != 0);
-    saveSettings();
+    saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] Dark mode %s", int_val ? "ON" : "OFF");
 }
 
 static void on_auto_update_confirm(int int_val, float, int) {
     AppState::getInstance().autoUpdateEnabled = (int_val != 0);
-    saveSettings();
+    saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] Auto update %s", int_val ? "enabled" : "disabled");
 }
 
 static void on_ssl_confirm(int int_val, float, int) {
     AppState::getInstance().enableCertValidation = (int_val != 0);
-    saveSettings();
+    saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] SSL validation %s", int_val ? "enabled" : "disabled");
 }
@@ -124,13 +124,13 @@ static const CycleOption buzzer_volume_options[] = {
 
 static void on_buzzer_enable_confirm(int int_val, float, int) {
     AppState::getInstance().setBuzzerEnabled(int_val != 0);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[GUI] Buzzer %s", int_val ? "ON" : "OFF");
 }
 
 static void on_buzzer_volume_confirm(int int_val, float, int) {
     AppState::getInstance().setBuzzerVolume(int_val);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[GUI] Buzzer volume set to %d", int_val);
 }
 
@@ -144,7 +144,7 @@ static const CycleOption audio_rate_options[] = {
 
 static void on_audio_rate_confirm(int int_val, float, int) {
     AppState::getInstance().audioUpdateRate = (uint16_t)int_val;
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[GUI] Audio update rate set to %d ms", int_val);
 }
 
@@ -159,7 +159,7 @@ static const CycleOption debug_level_options[] = {
 static void on_debug_mode_confirm(int int_val, float, int) {
     AppState::getInstance().debugMode = (int_val != 0);
     applyDebugSerialLevel(AppState::getInstance().debugMode, AppState::getInstance().debugSerialLevel);
-    saveSettings();
+    saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] Debug mode %s", int_val ? "ON" : "OFF");
 }
@@ -167,7 +167,7 @@ static void on_debug_mode_confirm(int int_val, float, int) {
 static void on_debug_level_confirm(int int_val, float, int) {
     AppState::getInstance().debugSerialLevel = int_val;
     applyDebugSerialLevel(AppState::getInstance().debugMode, int_val);
-    saveSettings();
+    saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] Debug serial level set to %d", int_val);
 }
@@ -193,7 +193,7 @@ static void on_boot_anim_confirm(int int_val, float, int) {
         st.bootAnimStyle = int_val;
         LOG_I("[GUI] Boot animation set to style %d", int_val);
     }
-    saveSettings();
+    saveSettingsDeferred();
 }
 
 /* ===== Reboot / Factory Reset with confirmation ===== */
