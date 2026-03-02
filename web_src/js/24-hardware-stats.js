@@ -1,0 +1,550 @@
+// ===== Performance History =====
+
+        function updateHardwareStats(data) {
+            // Update ADC count from hardware_stats (fires on all tabs)
+            if (data.audio && data.audio.numAdcsDetected !== undefined) {
+                numAdcsDetected = data.audio.numAdcsDetected;
+                updateAdc2Visibility();
+            }
+            // CPU Stats
+            if (data.cpu) {
+                var cpuCalibrating = (data.cpu.usageCore0 < 0 || data.cpu.usageCore1 < 0);
+                document.getElementById('cpuTotal').textContent = cpuCalibrating ? 'Calibrating...' : Math.round(data.cpu.usageTotal || 0) + '%';
+                document.getElementById('cpuCore0').textContent = cpuCalibrating ? '...' : Math.round(data.cpu.usageCore0 || 0) + '%';
+                document.getElementById('cpuCore1').textContent = cpuCalibrating ? '...' : Math.round(data.cpu.usageCore1 || 0) + '%';
+                document.getElementById('cpuTemp').textContent = (data.cpu.temperature || 0).toFixed(1) + '°C';
+                document.getElementById('cpuFreq').textContent = (data.cpu.freqMHz || 0) + ' MHz';
+                document.getElementById('cpuModel').textContent = data.cpu.model || '--';
+                document.getElementById('cpuRevision').textContent = data.cpu.revision || '--';
+                document.getElementById('cpuCores').textContent = data.cpu.cores || '--';
+            }
+
+            // Memory Stats (Heap)
+            if (data.memory) {
+                const heapTotal = data.memory.heapTotal || 0;
+                const heapFree = data.memory.heapFree || 0;
+                const heapPercent = heapTotal > 0 ? Math.round((1 - heapFree / heapTotal) * 100) : 0;
+                document.getElementById('heapPercent').textContent = heapPercent + '%';
+                document.getElementById('heapFree').textContent = formatBytes(heapFree);
+                document.getElementById('heapTotal').textContent = formatBytes(heapTotal);
+                document.getElementById('heapMinFree').textContent = formatBytes(data.memory.heapMinFree || 0);
+                document.getElementById('heapMaxBlock').textContent = formatBytes(data.memory.heapMaxBlock || 0);
+
+                // PSRAM
+                const psramTotal = data.memory.psramTotal || 0;
+                const psramFree = data.memory.psramFree || 0;
+                const psramPercent = psramTotal > 0 ? Math.round((1 - psramFree / psramTotal) * 100) : 0;
+                document.getElementById('psramPercent').textContent = psramTotal > 0 ? psramPercent + '%' : 'N/A';
+                document.getElementById('psramFree').textContent = psramTotal > 0 ? formatBytes(psramFree) : 'N/A';
+                document.getElementById('psramTotal').textContent = psramTotal > 0 ? formatBytes(psramTotal) : 'N/A';
+            }
+
+            // Storage Stats
+            if (data.storage) {
+                document.getElementById('flashSize').textContent = formatBytes(data.storage.flashSize || 0);
+                document.getElementById('sketchSize').textContent = formatBytes(data.storage.sketchSize || 0);
+                document.getElementById('sketchFree').textContent = formatBytes(data.storage.sketchFree || 0);
+
+                const sketchTotal = (data.storage.sketchSize || 0) + (data.storage.sketchFree || 0);
+                const sketchPercent = sketchTotal > 0 ? Math.round((data.storage.sketchSize / sketchTotal) * 100) : 0;
+                document.getElementById('sketchPercent').textContent = sketchPercent + '%';
+
+                const LittleFSTotal = data.storage.LittleFSTotal || 0;
+                const LittleFSUsed = data.storage.LittleFSUsed || 0;
+                const LittleFSPercent = LittleFSTotal > 0 ? Math.round((LittleFSUsed / LittleFSTotal) * 100) : 0;
+                document.getElementById('LittleFSPercent').textContent = LittleFSTotal > 0 ? LittleFSPercent + '%' : 'N/A';
+                document.getElementById('LittleFSUsed').textContent = LittleFSTotal > 0 ? formatBytes(LittleFSUsed) : 'N/A';
+                document.getElementById('LittleFSTotal').textContent = LittleFSTotal > 0 ? formatBytes(LittleFSTotal) : 'N/A';
+            }
+
+            // WiFi Stats
+            if (data.wifi) {
+                document.getElementById('wifiRssi').innerHTML = formatRssi(data.wifi.rssi);
+                document.getElementById('wifiChannel').textContent = data.wifi.channel || '--';
+                document.getElementById('apClients').textContent = data.wifi.apClients || 0;
+            }
+
+            // Audio ADC — per-ADC diagnostics from adcs array
+            if (data.audio) {
+                if (data.audio.adcs && Array.isArray(data.audio.adcs)) {
+                    var adcs = data.audio.adcs;
+                    // Show ADC 0 in the existing fields (legacy)
+                    if (adcs.length > 0) {
+                        document.getElementById('adcStatus').textContent = adcs[0].status || '--';
+                        document.getElementById('adcNoiseFloor').textContent = adcs[0].noiseFloorDbfs !== undefined ? adcs[0].noiseFloorDbfs.toFixed(1) + ' dBFS' : '--';
+                        document.getElementById('adcI2sErrors').textContent = adcs[0].i2sErrors !== undefined ? adcs[0].i2sErrors : '--';
+                        document.getElementById('adcConsecutiveZeros').textContent = adcs[0].consecutiveZeros !== undefined ? adcs[0].consecutiveZeros : '--';
+                        document.getElementById('adcTotalBuffers').textContent = adcs[0].totalBuffers !== undefined ? adcs[0].totalBuffers : '--';
+                        var snr0 = document.getElementById('audioSnr0');
+                        if (snr0 && adcs[0].snrDb !== undefined) snr0.textContent = adcs[0].snrDb.toFixed(1);
+                        var sfdr0 = document.getElementById('audioSfdr0');
+                        if (sfdr0 && adcs[0].sfdrDb !== undefined) sfdr0.textContent = adcs[0].sfdrDb.toFixed(1);
+                    }
+                    // Show ADC 1 fields if present
+                    var el2 = document.getElementById('adcStatus1');
+                    if (el2 && adcs.length > 1) {
+                        el2.textContent = adcs[1].status || '--';
+                        var nf2 = document.getElementById('adcNoiseFloor1');
+                        if (nf2) nf2.textContent = adcs[1].noiseFloorDbfs !== undefined ? adcs[1].noiseFloorDbfs.toFixed(1) + ' dBFS' : '--';
+                        var ie2 = document.getElementById('adcI2sErrors1');
+                        if (ie2) ie2.textContent = adcs[1].i2sErrors !== undefined ? adcs[1].i2sErrors : '--';
+                        var cz2 = document.getElementById('adcConsecutiveZeros1');
+                        if (cz2) cz2.textContent = adcs[1].consecutiveZeros !== undefined ? adcs[1].consecutiveZeros : '--';
+                        var tb2 = document.getElementById('adcTotalBuffers1');
+                        if (tb2) tb2.textContent = adcs[1].totalBuffers !== undefined ? adcs[1].totalBuffers : '--';
+                    }
+                } else {
+                    // Legacy flat format fallback
+                    document.getElementById('adcStatus').textContent = data.audio.adcStatus || '--';
+                    document.getElementById('adcNoiseFloor').textContent = (data.audio.noiseFloorDbfs !== undefined ? data.audio.noiseFloorDbfs.toFixed(1) + ' dBFS' : '--');
+                    document.getElementById('adcI2sErrors').textContent = data.audio.i2sErrors !== undefined ? data.audio.i2sErrors : '--';
+                    document.getElementById('adcConsecutiveZeros').textContent = data.audio.consecutiveZeros !== undefined ? data.audio.consecutiveZeros : '--';
+                    document.getElementById('adcTotalBuffers').textContent = data.audio.totalBuffers !== undefined ? data.audio.totalBuffers : '--';
+                }
+                document.getElementById('adcSampleRate').textContent = data.audio.sampleRate ? (data.audio.sampleRate / 1000).toFixed(1) + ' kHz' : '--';
+            }
+
+            // Audio DAC diagnostics
+            if (data.dac) {
+                var d = data.dac;
+                var statusEl = document.getElementById('dacStatus');
+                if (statusEl) {
+                    var statusText = d.ready ? 'Ready' : (d.enabled ? 'Not Ready' : 'Disabled');
+                    statusEl.textContent = statusText;
+                    statusEl.style.color = d.ready ? 'var(--success-color)' : (d.enabled ? 'var(--error-color)' : '');
+                }
+                var el;
+                el = document.getElementById('dacModel'); if (el) el.textContent = d.model || '--';
+                el = document.getElementById('dacManufacturer'); if (el) el.textContent = d.manufacturer || '--';
+                el = document.getElementById('dacDeviceId'); if (el) el.textContent = d.deviceId !== undefined ? '0x' + ('0000' + d.deviceId.toString(16)).slice(-4).toUpperCase() : '--';
+                el = document.getElementById('dacDetection'); if (el) el.textContent = d.detected ? 'EEPROM (Auto)' : 'Manual';
+                el = document.getElementById('dacDbgEnabled'); if (el) el.textContent = d.enabled ? 'Yes' : 'No';
+                el = document.getElementById('dacDbgVolume'); if (el) el.textContent = d.volume !== undefined ? d.volume + '%' : '--';
+                el = document.getElementById('dacDbgMute'); if (el) el.textContent = d.mute ? 'Yes' : 'No';
+                el = document.getElementById('dacDbgChannels'); if (el) el.textContent = d.outputChannels || '--';
+                el = document.getElementById('dacDbgFilter'); if (el) el.textContent = d.filterMode !== undefined ? d.filterMode : '--';
+                el = document.getElementById('dacHwVolume'); if (el) el.textContent = d.hwVolume ? 'Yes' : 'No';
+                el = document.getElementById('dacI2cControl'); if (el) el.textContent = d.i2cControl ? 'Yes' : 'No';
+                el = document.getElementById('dacIndepClock'); if (el) el.textContent = d.independentClock ? 'Yes' : 'No';
+                el = document.getElementById('dacHasFilters'); if (el) el.textContent = d.hasFilters ? 'Yes' : 'No';
+                // TX diagnostics
+                if (d.tx) {
+                    el = document.getElementById('dacI2sTxEnabled'); if (el) {
+                        el.textContent = d.tx.i2sTxEnabled ? 'Yes' : 'No';
+                        el.style.color = d.tx.i2sTxEnabled ? 'var(--success-color)' : 'var(--error-color)';
+                    }
+                    el = document.getElementById('dacVolumeGain'); if (el) el.textContent = d.tx.volumeGain !== undefined ? parseFloat(d.tx.volumeGain).toFixed(4) : '--';
+                    el = document.getElementById('dacTxWrites'); if (el) el.textContent = d.tx.writeCount || 0;
+                    el = document.getElementById('dacTxData'); if (el) {
+                        var written = d.tx.bytesWritten || 0;
+                        var expected = d.tx.bytesExpected || 0;
+                        var wKB = (written / 1024).toFixed(0);
+                        var eKB = (expected / 1024).toFixed(0);
+                        el.textContent = wKB + 'KB / ' + eKB + 'KB';
+                        el.style.color = (expected > 0 && written < expected) ? 'var(--warning-color)' : '';
+                    }
+                    el = document.getElementById('dacTxPeak'); if (el) el.textContent = d.tx.peakSample || 0;
+                    el = document.getElementById('dacTxZeroFrames'); if (el) el.textContent = d.tx.zeroFrames || 0;
+                }
+                el = document.getElementById('dacTxUnderruns'); if (el) {
+                    el.textContent = d.txUnderruns || 0;
+                    el.style.color = d.txUnderruns > 0 ? 'var(--warning-color)' : '';
+                }
+                // EEPROM diagnostics from hardware_stats
+                if (d.eeprom) handleEepromDiag(d.eeprom);
+            }
+
+            if (data.audio) {
+                // I2S Static Config
+                if (data.audio.i2sConfig && Array.isArray(data.audio.i2sConfig)) {
+                    for (var i = 0; i < data.audio.i2sConfig.length && i < 2; i++) {
+                        var c = data.audio.i2sConfig[i];
+                        var el;
+                        el = document.getElementById('i2sMode' + i); if (el) el.textContent = c.mode || '--';
+                        el = document.getElementById('i2sSampleRate' + i); if (el) el.textContent = c.sampleRate ? (c.sampleRate / 1000) + ' kHz' : '--';
+                        el = document.getElementById('i2sBits' + i); if (el) el.textContent = c.bitsPerSample ? c.bitsPerSample + '-bit (24-bit payload)' : '--';
+                        el = document.getElementById('i2sChannels' + i); if (el) el.textContent = c.channelFormat || '--';
+                        el = document.getElementById('i2sDma' + i); if (el) el.textContent = c.dmaBufCount && c.dmaBufLen ? c.dmaBufCount + ' x ' + c.dmaBufLen : '--';
+                        el = document.getElementById('i2sApll' + i); if (el) el.textContent = c.apll ? 'On' : 'Off';
+                        el = document.getElementById('i2sMclk' + i); if (el) el.textContent = c.mclkHz ? (c.mclkHz / 1e6).toFixed(3) + ' MHz' : 'N/A';
+                        el = document.getElementById('i2sFormat' + i); if (el) el.textContent = c.commFormat || '--';
+                    }
+                }
+
+                // I2S Runtime Metrics
+                if (data.audio.i2sRuntime) {
+                    var rt = data.audio.i2sRuntime;
+                    var stackEl = document.getElementById('i2sStackFree');
+                    if (stackEl) {
+                        var stackFree = rt.stackFree || 0;
+                        var stackTotal = 10240;
+                        var stackUsed = stackTotal - stackFree;
+                        var stackPct = stackTotal > 0 ? Math.round(stackUsed / stackTotal * 100) : 0;
+                        stackEl.textContent = stackFree + ' bytes (' + stackPct + '% used)';
+                        stackEl.style.color = stackFree < 1024 ? 'var(--error-color)' : '';
+                    }
+                    var expectedBps = 187.5;
+                    if (rt.buffersPerSec) {
+                        for (var i = 0; i < rt.buffersPerSec.length && i < 2; i++) {
+                            var tEl = document.getElementById('i2sThroughput' + i);
+                            if (tEl) {
+                                var bps = parseFloat(rt.buffersPerSec[i]) || 0;
+                                tEl.textContent = bps.toFixed(1) + ' buf/s';
+                                tEl.style.color = (bps > 0 && bps < expectedBps * 0.9) ? 'var(--error-color)' : '';
+                            }
+                        }
+                    }
+                    if (rt.avgReadLatencyUs) {
+                        for (var i = 0; i < rt.avgReadLatencyUs.length && i < 2; i++) {
+                            var lEl = document.getElementById('i2sLatency' + i);
+                            if (lEl) {
+                                var lat = parseFloat(rt.avgReadLatencyUs[i]) || 0;
+                                lEl.textContent = (lat / 1000).toFixed(2) + ' ms';
+                                lEl.style.color = lat > 10000 ? 'var(--error-color)' : '';
+                            }
+                        }
+                    }
+                }
+            }
+
+            // FreeRTOS Tasks — CPU load from hardware_stats
+            if (data.cpu) {
+                var tmCal = (data.cpu.usageCore0 < 0 || data.cpu.usageCore1 < 0);
+                var el0 = document.getElementById('tmCpuCore0');
+                if (el0) el0.textContent = tmCal ? '...' : Math.round(data.cpu.usageCore0 || 0) + '%';
+                var el1 = document.getElementById('tmCpuCore1');
+                if (el1) el1.textContent = tmCal ? '...' : Math.round(data.cpu.usageCore1 || 0) + '%';
+                var elt = document.getElementById('tmCpuTotal');
+                if (elt) elt.textContent = tmCal ? '...' : Math.round(data.cpu.usageTotal || 0) + '%';
+            }
+            if (data.tasks) {
+                var tc = document.getElementById('taskCount');
+                if (tc) tc.textContent = data.tasks.count || 0;
+                var avgUs = data.tasks.loopAvgUs || 0;
+                var la = document.getElementById('loopTimeAvg');
+                if (la) la.textContent = avgUs + ' us';
+                var lm = document.getElementById('loopTimeMax');
+                if (lm) lm.textContent = (data.tasks.loopMaxUs || 0) + ' us';
+                var lf = document.getElementById('tmLoopFreq');
+                if (lf) lf.textContent = avgUs > 0 ? Math.round(1000000 / avgUs) + ' Hz' : '-- Hz';
+
+                if (data.tasks.list) {
+                    _taskData = data.tasks.list;
+                    renderTaskTable();
+                }
+            } else {
+                var tbody = document.getElementById('taskTableBody');
+                if (tbody && !tbody.dataset.populated) {
+                    var tc = document.getElementById('taskCount');
+                    if (tc) tc.textContent = 'Disabled';
+                    var la = document.getElementById('loopTimeAvg');
+                    if (la) la.textContent = '-';
+                    var lm = document.getElementById('loopTimeMax');
+                    if (lm) lm.textContent = '-';
+                    var lf = document.getElementById('tmLoopFreq');
+                    if (lf) lf.textContent = '-';
+                    var el0 = document.getElementById('tmCpuCore0');
+                    if (el0) el0.textContent = '-';
+                    var el1 = document.getElementById('tmCpuCore1');
+                    if (el1) el1.textContent = '-';
+                    var elt = document.getElementById('tmCpuTotal');
+                    if (elt) elt.textContent = '--%';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5">Task monitor disabled</td></tr>';
+                }
+            }
+
+            // Uptime
+            if (data.uptime !== undefined) {
+                document.getElementById('uptime').textContent = formatUptime(data.uptime);
+            }
+
+            // Reset Reason
+            if (data.resetReason) {
+                document.getElementById('resetReason').textContent = formatResetReason(data.resetReason);
+            }
+
+            // Add to history
+            addHistoryDataPoint(data);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // ===== Task Table Sorting =====
+        var _taskData = [];
+        var _taskSortCol = 3; // default sort by priority
+        var _taskSortAsc = false; // descending by default
+
+        function sortTaskTable(col) {
+            if (_taskSortCol === col) {
+                _taskSortAsc = !_taskSortAsc;
+            } else {
+                _taskSortCol = col;
+                _taskSortAsc = (col === 0); // name ascending by default, others descending
+            }
+            renderTaskTable();
+        }
+
+        function renderTaskTable() {
+            var tbody = document.getElementById('taskTableBody');
+            if (!tbody || !_taskData.length) return;
+            tbody.dataset.populated = '1';
+
+            var stateNames = ['Run', 'Rdy', 'Blk', 'Sus', 'Del'];
+            // Build enriched rows for sorting
+            var rows = [];
+            for (var i = 0; i < _taskData.length; i++) {
+                var t = _taskData[i];
+                var stackFree = t.stackFree || 0;
+                var stackAlloc = t.stackAlloc || 0;
+                var usedPct = (stackAlloc > 0) ? Math.round((1 - stackFree / stackAlloc) * 100) : -1;
+                rows.push({ name: t.name, stackFree: stackFree, stackAlloc: stackAlloc, usedPct: usedPct, pri: t.pri, state: t.state, core: t.core });
+            }
+
+            // Sort
+            var col = _taskSortCol;
+            var asc = _taskSortAsc;
+            rows.sort(function(a, b) {
+                var va, vb;
+                switch (col) {
+                    case 0: va = a.name.toLowerCase(); vb = b.name.toLowerCase(); return asc ? (va < vb ? -1 : va > vb ? 1 : 0) : (vb < va ? -1 : vb > va ? 1 : 0);
+                    case 1: va = a.stackAlloc > 0 ? a.stackFree : 0; vb = b.stackAlloc > 0 ? b.stackFree : 0; break;
+                    case 2: va = a.usedPct; vb = b.usedPct; break;
+                    case 3: va = a.pri; vb = b.pri; break;
+                    case 4: va = a.state; vb = b.state; break;
+                    case 5: va = a.core; vb = b.core; break;
+                    default: va = 0; vb = 0;
+                }
+                return asc ? va - vb : vb - va;
+            });
+
+            // Update sort arrows
+            var ths = document.querySelectorAll('#taskTable thead th .sort-arrow');
+            for (var i = 0; i < ths.length; i++) {
+                ths[i].className = 'sort-arrow' + (i === col ? (asc ? ' asc' : ' desc') : '');
+            }
+
+            // Render rows
+            var html = '';
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                var stackStr = '', barHtml = '', pctHtml = '';
+                if (r.stackAlloc > 0) {
+                    var freePct = 100 - r.usedPct;
+                    var barClass = freePct > 50 ? 'task-stack-ok' : freePct > 25 ? 'task-stack-warn' : 'task-stack-crit';
+                    var pctClass = freePct > 50 ? 'task-pct-ok' : freePct > 25 ? 'task-pct-warn' : 'task-pct-crit';
+                    stackStr = formatBytes(r.stackFree) + '/' + formatBytes(r.stackAlloc);
+                    barHtml = ' <span class="task-stack-bar ' + barClass + '" style="width:' + Math.max(r.usedPct, 4) + 'px" title="' + r.usedPct + '% used"></span>';
+                    pctHtml = '<span class="task-pct-text ' + pctClass + '">' + r.usedPct + '%</span>';
+                } else {
+                    stackStr = formatBytes(r.stackFree);
+                    pctHtml = '<span class="task-pct-text" style="opacity:0.4">--</span>';
+                }
+                var stateName = r.state < stateNames.length ? stateNames[r.state] : '?';
+                html += '<tr><td>' + r.name + '</td><td>' + stackStr + barHtml + '</td><td>' + pctHtml + '</td><td>' + r.pri + '</td><td>' + stateName + '</td><td>' + r.core + '</td></tr>';
+            }
+            tbody.innerHTML = html;
+        }
+
+        function formatUptime(ms) {
+            const seconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+
+            if (days > 0) return `${days}d ${hours % 24}h`;
+            if (hours > 0) return `${hours}h ${minutes % 60}m`;
+            if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+            return `${seconds}s`;
+        }
+
+        function formatResetReason(reason) {
+            if (!reason) return '--';
+            // The reset reason from the backend is already formatted as a readable string
+            return reason;
+        }
+
+        function addHistoryDataPoint(data) {
+            historyData.timestamps.push(Date.now());
+            var c0 = data.cpu ? data.cpu.usageCore0 : 0;
+            var c1 = data.cpu ? data.cpu.usageCore1 : 0;
+            var ct = data.cpu ? data.cpu.usageTotal : 0;
+            historyData.cpuTotal.push(ct >= 0 ? ct : 0);
+            historyData.cpuCore0.push(c0 >= 0 ? c0 : 0);
+            historyData.cpuCore1.push(c1 >= 0 ? c1 : 0);
+
+            if (data.memory && data.memory.heapTotal > 0) {
+                const memPercent = (1 - data.memory.heapFree / data.memory.heapTotal) * 100;
+                historyData.memoryPercent.push(memPercent);
+            } else {
+                historyData.memoryPercent.push(0);
+            }
+
+            if (data.memory && data.memory.psramTotal > 0) {
+                const psramPercent = (1 - data.memory.psramFree / data.memory.psramTotal) * 100;
+                historyData.psramPercent.push(psramPercent);
+            } else {
+                historyData.psramPercent.push(0);
+            }
+
+            // Trim to max points
+            while (historyData.timestamps.length > maxHistoryPoints) {
+                historyData.timestamps.shift();
+                historyData.cpuTotal.shift();
+                historyData.cpuCore0.shift();
+                historyData.cpuCore1.shift();
+                historyData.memoryPercent.shift();
+                historyData.psramPercent.shift();
+            }
+
+            // Always redraw graphs (they're always visible now)
+            drawCpuGraph();
+            drawMemoryGraph();
+            drawPsramGraph();
+        }
+
+        function drawLineGraph(canvasId, lines, containerId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            if (containerId) {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                const psramTotal = document.getElementById('psramTotal');
+                if (!psramTotal || psramTotal.textContent === 'N/A') {
+                    container.style.display = 'none';
+                    return;
+                }
+                container.style.display = 'block';
+            }
+
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            const leftMargin = 35;
+            const bottomMargin = 20;
+            const w = rect.width - leftMargin;
+            const h = rect.height - bottomMargin;
+
+            ctx.fillStyle = '#1A1A1A';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+
+            ctx.save();
+            ctx.translate(leftMargin, 0);
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#999';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+
+            for (let i = 0; i <= 4; i++) {
+                const y = (h / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+                ctx.fillText((100 - i * 25) + '%', -5, y);
+            }
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            [0, 0.5, 1].forEach((point, idx) => {
+                ctx.fillText(['-60s', '-30s', 'now'][idx], w * point, h + 4);
+            });
+
+            if (lines[0].data.length < 2) {
+                ctx.restore();
+                return;
+            }
+
+            const step = w / (lines[0].data.length - 1);
+            lines.forEach(line => {
+                ctx.strokeStyle = line.color;
+                ctx.lineWidth = line.width || 2;
+                ctx.beginPath();
+                line.data.forEach((val, i) => {
+                    const x = i * step;
+                    const y = h - (val / 100) * h;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            });
+
+            ctx.restore();
+        }
+
+        function drawCpuGraph() {
+            drawLineGraph('cpuGraph', [
+                { data: historyData.cpuCore0, color: '#FFB74D', width: 1.5 },
+                { data: historyData.cpuCore1, color: '#F57C00', width: 1.5 },
+                { data: historyData.cpuTotal, color: '#FF9800', width: 2 }
+            ]);
+        }
+
+        function drawMemoryGraph() {
+            drawLineGraph('memoryGraph', [
+                { data: historyData.memoryPercent, color: '#2196F3' }
+            ]);
+        }
+
+        function drawPsramGraph() {
+            drawLineGraph('psramGraph', [
+                { data: historyData.psramPercent, color: '#9C27B0' }
+            ], 'psramGraphContainer');
+        }
+
+        function eepromScan() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'eepromScan' }));
+                showToast('Scanning I2C bus...', 'info');
+            }
+        }
+        function eepromFillPreset() {
+            var sel = document.getElementById('eepromPreset');
+            if (!sel || !sel.value) return;
+            var p = JSON.parse(sel.value);
+            document.getElementById('eepromDeviceId').value = '0x' + p.deviceId.toString(16).padStart(4,'0');
+            document.getElementById('eepromDeviceName').value = p.deviceName || '';
+            document.getElementById('eepromManufacturer').value = p.manufacturer || '';
+            document.getElementById('eepromMaxCh').value = p.maxChannels || 2;
+            document.getElementById('eepromDacAddr').value = p.dacI2cAddress ? '0x' + p.dacI2cAddress.toString(16).padStart(2,'0') : '0x00';
+            document.getElementById('eepromFlagClock').checked = !!(p.flags & 1);
+            document.getElementById('eepromFlagVol').checked = !!(p.flags & 2);
+            document.getElementById('eepromFlagFilter').checked = !!(p.flags & 4);
+            document.getElementById('eepromRates').value = (p.sampleRates || []).join(',');
+        }
+        function eepromLoadHex() {
+            apiFetch('/api/dac/eeprom')
+            .then(r => r.json())
+            .then(d => {
+                var el = document.getElementById('dbgEepromHex');
+                if (!el) return;
+                if (d.rawHex) {
+                    var hex = d.rawHex;
+                    var lines = [];
+                    for (var i = 0; i < hex.length; i += 32) {
+                        var addr = (i/2).toString(16).padStart(4,'0').toUpperCase();
+                        var row = hex.substring(i, i+32).match(/.{2}/g).join(' ');
+                        lines.push(addr + ': ' + row);
+                    }
+                    el.textContent = lines.join('\n');
+                    el.style.display = '';
+                } else {
+                    el.textContent = 'No EEPROM data available';
+                    el.style.display = '';
+                }
+            })
+            .catch(function(){
+                var el = document.getElementById('dbgEepromHex');
+                if (el) { el.textContent = 'Failed to load'; el.style.display = ''; }
+            });
+        }
