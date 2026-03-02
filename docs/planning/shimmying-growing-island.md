@@ -220,7 +220,7 @@ Add to per-network action menu (Phase 4):
 After each phase:
 - `pio run -e esp32-s3-devkitm-1` — build succeeds
 - `pio test -e native` — all existing tests pass
-- Manual test on device or Wokwi: navigate to new items, verify functionality
+- Manual test on device: navigate to new items, verify functionality
 - For OTA: test check update + progress bar flow
 - For Audio: verify VU bars update with audio input
 - Final: verify desktop carousel shows all 8 cards correctly

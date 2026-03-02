@@ -128,4 +128,4 @@ static DotColor get_mqtt_dot(bool enabled, bool connected);
 ## Verification
 1. `pio test -e native -f test_gui_home` — all 19 tests pass
 2. `pio run -e esp32-s3-devkitm-1` — firmware builds successfully
-3. Visual: flash to device or Wokwi — 6 cells visible, dots colored correctly, level bar moves, mode alternates with timer, download icon reflects update state, encoder click returns to desktop
+3. Visual: flash to device — 6 cells visible, dots colored correctly, level bar moves, mode alternates with timer, download icon reflects update state, encoder click returns to desktop

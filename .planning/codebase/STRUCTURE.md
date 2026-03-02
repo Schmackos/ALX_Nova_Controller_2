@@ -48,7 +48,6 @@ ALX_Nova_Controller/
 │   │   ├── gui_icons.h     # Icon data (encoded)
 │   │   ├── lv_conf.h       # LVGL feature configuration
 │   │   ├── User_Setup.h    # TFT_eSPI pin mappings (hardware)
-│   │   ├── User_Setup_Wokwi.h # TFT_eSPI pin mappings (Wokwi sim)
 │   │   └── screens/        # Individual screen implementations
 │   │       ├── scr_boot_anim.h/.cpp # 6 boot animations
 │   │       ├── scr_desktop.h/.cpp # Home carousel with gesture nav
@@ -126,8 +125,6 @@ ALX_Nova_Controller/
 ├── platformio.ini      # PlatformIO configuration, environments, build flags
 ├── CLAUDE.md           # Detailed architecture guide for Claude Code
 ├── README.md           # Quick start, build commands
-├── wokwi.toml          # Wokwi simulator configuration
-├── diagram.json        # Wokwi circuit diagram
 ├── build_web_assets.js # Script to regenerate web_pages_gz.cpp
 └── [docs/release notes] # RELEASE_NOTES.md, various .md guides
 ```
@@ -193,7 +190,6 @@ ALX_Nova_Controller/
 - `platformio.ini`: Build environments, compiler flags, library dependencies, upload configuration
 - `src/gui/gui_config.h`: LVGL feature config, display width/height
 - `src/gui/User_Setup.h`: TFT_eSPI pin mappings (hardware)
-- `src/gui/User_Setup_Wokwi.h`: TFT_eSPI pin mappings (simulator)
 
 **Core Logic:**
 - `src/app_state.h`: AppState class definition, all state fields, dirty flags
