@@ -44,6 +44,9 @@ void publishMqttAudioQualityState();
 #ifdef GUI_ENABLED
 void publishMqttBootAnimState();
 #endif
+#ifdef USB_AUDIO_ENABLED
+void publishMqttUsbAudioState();
+#endif
 
 // ===== Home Assistant Discovery =====
 void publishHADiscovery();

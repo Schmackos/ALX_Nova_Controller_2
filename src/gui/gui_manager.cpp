@@ -24,11 +24,7 @@
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
-#ifdef WOKWI_BUILD
-#include "lgfx_config_wokwi.h"
-#else
 #include "lgfx_config.h"
-#endif
 #include <lvgl.h>
 
 /* LVGL tick callback (millis returns unsigned long, LVGL expects uint32_t) */

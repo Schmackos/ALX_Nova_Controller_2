@@ -14,8 +14,22 @@
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #endif
+#ifdef USB_AUDIO_ENABLED
+#include "usb_audio.h"
+#endif
 #include <LittleFS.h>
 #include <cmath>
+
+#ifdef USB_AUDIO_ENABLED
+#define MQTT_TOPIC_USB_CONNECTED  "audio/usb/connected"
+#define MQTT_TOPIC_USB_STREAMING  "audio/usb/streaming"
+#define MQTT_TOPIC_USB_ENABLED    "audio/usb/enabled"
+#define MQTT_TOPIC_USB_RATE       "audio/usb/sampleRate"
+#define MQTT_TOPIC_USB_VOLUME     "audio/usb/volume"
+#define MQTT_TOPIC_USB_OVERRUNS   "audio/usb/overruns"
+#define MQTT_TOPIC_USB_UNDERRUNS  "audio/usb/underruns"
+#define MQTT_TOPIC_USB_ENABLE_SET "audio/usb/enabled/set"
+#endif
 
 // FFT window type name helper
 static const char* fftWindowName(FftWindowType t) {
@@ -228,6 +242,10 @@ void subscribeToMqttTopics() {
   }
   mqttClient.subscribe((base + "/dsp/peq/bypass/set").c_str());
   mqttClient.subscribe((base + "/dsp/preset/set").c_str());
+#endif
+
+#ifdef USB_AUDIO_ENABLED
+  mqttClient.subscribe((base + "/" + MQTT_TOPIC_USB_ENABLE_SET).c_str());
 #endif
 
   // Subscribe to HA birth message for re-discovery after HA restart
@@ -845,6 +863,16 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     }
   }
 #endif
+#ifdef USB_AUDIO_ENABLED
+  // Handle USB audio enable/disable
+  else if (topicStr == base + "/" + MQTT_TOPIC_USB_ENABLE_SET) {
+    bool newVal = (message == "true" || message == "1" || message == "ON");
+    AppState::getInstance().usbAudioEnabled = newVal;
+    AppState::getInstance().pipelineInputBypass[3] = !newVal;
+    AppState::getInstance().markUsbAudioDirty();
+    LOG_I("[MQTT] USB audio set to %s", newVal ? "enabled" : "disabled");
+  }
+#endif
   // Handle reboot command
   else if (topicStr == base + "/system/reboot") {
     LOG_W("[MQTT] Reboot command received");
@@ -1092,6 +1120,12 @@ void mqttLoop() {
       publishMqttAdcEnabledState();
       appState.clearAdcEnabledDirty();
     }
+#ifdef USB_AUDIO_ENABLED
+    if (appState.isUsbAudioDirty()) {
+      publishMqttUsbAudioState();
+      // Note: clearUsbAudioDirty() is handled by main loop WS handler — don't clear here
+    }
+#endif
     if (debugChanged) {
       publishMqttDebugState();
       appState.prevMqttDebugMode = appState.debugMode;
@@ -1619,6 +1653,36 @@ void publishMqttAdcEnabledState() {
                      appState.adcEnabled[1] ? "ON" : "OFF", true);
 }
 
+#ifdef USB_AUDIO_ENABLED
+// Publish USB audio state
+void publishMqttUsbAudioState() {
+    if (!mqttClient.connected()) return;
+    String base = getEffectiveMqttBaseTopic();
+
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_CONNECTED).c_str(),
+                       appState.usbAudioConnected ? "true" : "false", true);
+
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_STREAMING).c_str(),
+                       appState.usbAudioStreaming ? "true" : "false", true);
+
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_ENABLED).c_str(),
+                       appState.usbAudioEnabled ? "true" : "false", true);
+
+    char val[16];
+    snprintf(val, sizeof(val), "%u", (unsigned)appState.usbAudioSampleRate);
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_RATE).c_str(), val, true);
+
+    snprintf(val, sizeof(val), "%.1f", (float)appState.usbAudioVolume / 256.0f);
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_VOLUME).c_str(), val, true);
+
+    snprintf(val, sizeof(val), "%u", (unsigned)usb_audio_get_overruns());
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_OVERRUNS).c_str(), val, true);
+
+    snprintf(val, sizeof(val), "%u", (unsigned)usb_audio_get_underruns());
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_UNDERRUNS).c_str(), val, true);
+}
+#endif
+
 // Publish debug mode state
 void publishMqttDebugState() {
   if (!mqttClient.connected())
@@ -1774,6 +1838,9 @@ void publishMqttState() {
   publishMqttDebugState();
   publishMqttCrashDiagnostics();
   publishMqttInputNames();
+#ifdef USB_AUDIO_ENABLED
+  publishMqttUsbAudioState();
+#endif
 #ifdef DSP_ENABLED
   publishMqttDspState();
   publishMqttEmergencyLimiterState();
@@ -3445,6 +3512,121 @@ void publishHADiscovery() {
   }
 #endif
 
+#ifdef USB_AUDIO_ENABLED
+  // ===== USB Audio Connected Binary Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Connected";
+    doc["unique_id"] = deviceId + "_usb_audio_connected";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_CONNECTED;
+    doc["payload_on"] = "true";
+    doc["payload_off"] = "false";
+    doc["device_class"] = "connectivity";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:usb";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/usb_audio_connected/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Streaming Binary Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Streaming";
+    doc["unique_id"] = deviceId + "_usb_audio_streaming";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_STREAMING;
+    doc["payload_on"] = "true";
+    doc["payload_off"] = "false";
+    doc["device_class"] = "running";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:music";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/usb_audio_streaming/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Enabled Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Audio";
+    doc["unique_id"] = deviceId + "_usb_audio_enabled";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_ENABLED;
+    doc["command_topic"] = base + "/" + MQTT_TOPIC_USB_ENABLE_SET;
+    doc["payload_on"] = "true";
+    doc["payload_off"] = "false";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:usb-port";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/switch/" + deviceId + "/usb_audio_enabled/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Sample Rate Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Sample Rate";
+    doc["unique_id"] = deviceId + "_usb_audio_sample_rate";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_RATE;
+    doc["unit_of_measurement"] = "Hz";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_sample_rate/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Volume Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Volume";
+    doc["unique_id"] = deviceId + "_usb_audio_volume";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_VOLUME;
+    doc["unit_of_measurement"] = "dB";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:volume-high";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_volume/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Buffer Overruns Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Buffer Overruns";
+    doc["unique_id"] = deviceId + "_usb_audio_overruns";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_OVERRUNS;
+    doc["state_class"] = "total_increasing";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:alert-circle-outline";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_overruns/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Buffer Underruns Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Buffer Underruns";
+    doc["unique_id"] = deviceId + "_usb_audio_underruns";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_UNDERRUNS;
+    doc["state_class"] = "total_increasing";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:alert-outline";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_underruns/config").c_str(), payload.c_str(), true);
+  }
+#endif
+
   LOG_I("[MQTT] Home Assistant discovery configs published");
 }
 
@@ -3570,7 +3752,15 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/dsp_ch2_limiter_gr/config",
       "homeassistant/sensor/%s/dsp_ch3_limiter_gr/config",
       // PEQ bypass
-      "homeassistant/switch/%s/peq_bypass/config"};
+      "homeassistant/switch/%s/peq_bypass/config",
+      // USB audio entities
+      "homeassistant/binary_sensor/%s/usb_audio_connected/config",
+      "homeassistant/binary_sensor/%s/usb_audio_streaming/config",
+      "homeassistant/switch/%s/usb_audio_enabled/config",
+      "homeassistant/sensor/%s/usb_audio_sample_rate/config",
+      "homeassistant/sensor/%s/usb_audio_volume/config",
+      "homeassistant/sensor/%s/usb_audio_overruns/config",
+      "homeassistant/sensor/%s/usb_audio_underruns/config"};
 
   char topicBuf[160];
   for (const char *topicTemplate : topics) {

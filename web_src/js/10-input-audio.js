@@ -119,6 +119,8 @@
             var enableCb = document.getElementById('usbAudioEnable');
             var fields = document.getElementById('usbAudioFields');
             if (enableCb) enableCb.checked = !!d.enabled;
+            var laneEn3 = document.getElementById('laneEnable3');
+            if (laneEn3) laneEn3.checked = !!d.enabled;
             if (fields) fields.style.display = d.enabled ? '' : 'none';
 
             var badge = document.getElementById('usbAudioBadge');
@@ -142,7 +144,9 @@
                 if (details) details.style.display = 'none';
             }
             if (formatEl) {
-                if (d.connected) {
+                if (d.negotiatedRate) {
+                    formatEl.textContent = (d.negotiatedRate / 1000) + ' kHz / ' + (d.negotiatedDepth || d.bitDepth) + '-bit stereo';
+                } else if (d.connected) {
                     formatEl.textContent = (d.sampleRate/1000) + ' kHz / ' + d.bitDepth + '-bit ' + (d.channels === 1 ? 'mono' : 'stereo');
                 } else {
                     formatEl.textContent = '\u2014';
@@ -165,5 +169,22 @@
             if (ovr) ovr.textContent = d.overruns || 0;
             var udr = document.getElementById('usbAudioUnderruns');
             if (udr) udr.textContent = d.underruns || 0;
+            // VU meters (visible only when streaming)
+            var vuSection = document.getElementById('usbAudioVu');
+            if (vuSection) {
+                vuSection.style.display = d.streaming ? '' : 'none';
+                if (d.streaming && d.vuL !== undefined) {
+                    var pctL = Math.max(0, Math.min(100, 100 + (d.vuL || -90)));
+                    var pctR = Math.max(0, Math.min(100, 100 + (d.vuR || -90)));
+                    var barL = document.getElementById('usbVuBarL');
+                    var barR = document.getElementById('usbVuBarR');
+                    if (barL) barL.style.width = pctL + '%';
+                    if (barR) barR.style.width = pctR + '%';
+                    var readL = document.getElementById('usbVuReadL');
+                    var readR = document.getElementById('usbVuReadR');
+                    if (readL) readL.textContent = (d.vuL > -90) ? d.vuL.toFixed(1) + ' dBFS' : '-inf dBFS';
+                    if (readR) readR.textContent = (d.vuR > -90) ? d.vuR.toFixed(1) + ' dBFS' : '-inf dBFS';
+                }
+            }
             if (typeof overviewApplyUsbState === 'function') overviewApplyUsbState(d);
         }

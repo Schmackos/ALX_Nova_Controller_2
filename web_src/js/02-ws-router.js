@@ -1,8 +1,16 @@
         // Binary WS message handler (waveform + spectrum)
+        var _binDiag = { wf: 0, sp: 0, last: 0 };
         function handleBinaryMessage(buf) {
             const dv = new DataView(buf);
             const type = dv.getUint8(0);
             const adc = dv.getUint8(1);
+            if (type === 0x01) _binDiag.wf++;
+            else if (type === 0x02) _binDiag.sp++;
+            var now = Date.now();
+            if (now - _binDiag.last > 2000) {
+                console.log('[BIN diag] wf=' + _binDiag.wf + ' sp=' + _binDiag.sp + ' tab=' + currentActiveTab + ' bytes=' + buf.byteLength);
+                _binDiag.wf = 0; _binDiag.sp = 0; _binDiag.last = now;
+            }
             if (type === 0x01 && currentActiveTab === 'audio') {
                 // Waveform: [type:1][adc:1][samples:256]
                 if (adc < NUM_ADCS && buf.byteLength >= 258) {
@@ -180,24 +188,6 @@
                     vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                     startVuAnimation();
                 }
-            } else if (data.type === 'audioWaveform') {
-                if (currentActiveTab === 'audio' && data.w) {
-                    const a = data.adc || 0;
-                    if (a < NUM_ADCS) {
-                        waveformTarget[a] = data.w;
-                        if (!waveformCurrent[a]) waveformCurrent[a] = data.w.slice();
-                        startAudioAnimation();
-                    }
-                }
-            } else if (data.type === 'audioSpectrum') {
-                if (currentActiveTab === 'audio' && data.bands) {
-                    const a = data.adc || 0;
-                    if (a < NUM_ADCS) {
-                        for (let i = 0; i < data.bands.length && i < 16; i++) spectrumTarget[a][i] = data.bands[i];
-                        targetDominantFreq[a] = data.freq || 0;
-                        startAudioAnimation();
-                    }
-                }
             } else if (data.type === 'inputNames') {
                 if (data.names && Array.isArray(data.names)) {
                     for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
@@ -231,8 +221,9 @@
             } else if (data.type === 'adcState') {
                 if (Array.isArray(data.enabled)) {
                     for (var ai = 0; ai < data.enabled.length; ai++) {
-                        var cb = document.getElementById('adcEnable' + ai);
-                        if (cb) cb.checked = !!data.enabled[ai];
+                        var laneCb = document.getElementById('laneEnable' + ai);
+                        if (laneCb) laneCb.checked = !!data.enabled[ai];
+                        overviewApplyAdcEnabled(ai, !!data.enabled[ai]);
                     }
                 }
             } else if (data.type === 'usbAudioState') {

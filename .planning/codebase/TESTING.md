@@ -273,7 +273,6 @@ void setUp(void) { TestAuthState::reset(); }
 **E2E Tests:**
 - Not used in this codebase
 - Hardware tests require actual device (CH343 USB-to-UART, ESP32-S3 board)
-- Wokwi simulation available via `wokwi.toml` but not in CI
 
 ## Common Patterns
 

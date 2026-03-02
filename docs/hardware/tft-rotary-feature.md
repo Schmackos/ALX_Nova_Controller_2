@@ -146,17 +146,14 @@ DEBUG (Layer 1)
 
 ## Implementation Phases
 
-### Phase 1: Foundation — LVGL + TFT Driver + Input + Wokwi (The Scaffold)
-**Goal**: Screen lights up, LVGL renders, encoder input works. One static test screen. Wokwi simulation operational.
+### Phase 1: Foundation — LVGL + TFT Driver + Input (The Scaffold)
+**Goal**: Screen lights up, LVGL renders, encoder input works. One static test screen.
 
 **Files created:**
 - `src/gui/lv_conf.h` — LVGL v9 configuration (128x160, color depth 16-bit, memory pool ~32KB, encoder input enabled, SquareLine Studio compatible settings)
 - `src/gui/gui_config.h` — Pin defines, buffer sizes, timing constants
 - `src/gui/gui_manager.h/.cpp` — `gui_init()`: TFT_eSPI setup, LVGL display driver, buffer allocation, FreeRTOS task creation. `gui_task()`: main loop calling `lv_timer_handler()`
 - `src/gui/gui_input.h/.cpp` — EC11 interrupt-based driver, LVGL encoder indev registration, K0 button wake detection
-- `wokwi.toml` — PlatformIO-Wokwi integration config pointing to firmware build
-- `diagram.json` — Wokwi circuit: ESP32-S3 + TFT display + KY-040 rotary encoder + push button + LED, all wired to match proposed pin mapping
-
 **Files modified:**
 - `platformio.ini` — Add LVGL v9 + TFT_eSPI libs, add `-D GUI_ENABLED` build flag, add `User_Setup.h` config for ST7735S
 - `src/config.h` — Add `#ifdef GUI_ENABLED` pin definitions for TFT + encoder + GUI task constants
@@ -166,7 +163,6 @@ DEBUG (Layer 1)
 - Rotating encoder prints direction to serial
 - Pushing encoder prints "press" to serial
 - Build without `-D GUI_ENABLED` compiles clean (no GUI code included)
-- Wokwi simulation shows same "Hello World" screen with working encoder interaction
 
 ---
 
@@ -328,66 +324,3 @@ To ensure LVGL code can be imported into SquareLine Studio later:
 
 No existing functionality is modified. All GUI additions are additive and guarded.
 
----
-
-## Wokwi Simulation Environment
-
-A Wokwi simulation will be set up alongside Phase 1 to enable rapid GUI development and debugging without physical hardware. The simulation mirrors the exact pin mapping and components.
-
-### Files Created
-
-```
-wokwi.toml              # PlatformIO <-> Wokwi integration config
-diagram.json             # Circuit definition (ESP32-S3 + TFT + encoder + button)
-```
-
-### wokwi.toml
-
-```toml
-[wokwi]
-version = 1
-firmware = ".pio/build/esp32-s3-devkitm-1/firmware.bin"
-elf = ".pio/build/esp32-s3-devkitm-1/firmware.elf"
-```
-
-### diagram.json — Circuit Components
-
-| Component | Wokwi Part | Wiring |
-|-----------|-----------|--------|
-| ESP32-S3 | `board-esp32-s3-devkitm-1` | Main MCU |
-| 1.8" TFT | `ili9341` (stand-in for ST7735S*) | MOSI->GPIO11, SCLK->GPIO12, CS->GPIO10, DC->GPIO13, RST->GPIO14, BL->GPIO21 |
-| Rotary Encoder | `ky-040` (EC11-compatible) | CLK->GPIO5, DT->GPIO6, SW->GPIO7, VCC->3.3V, GND->GND |
-| K0 Push Button | `pushbutton` | Pin->GPIO15, GND->GND (matches existing RESET_BUTTON_PIN) |
-| LED | `led` | Anode->GPIO2 (existing LED_PIN) |
-
-> *Note: Wokwi may not have an exact ST7735S component. The ILI9341 or ST7789 uses the same SPI protocol and TFT_eSPI driver pattern. The simulation validates LVGL rendering, input handling, and menu navigation. The only difference is resolution (we configure LVGL for 128x160 regardless). If Wokwi adds ST7735 support, swap the component.*
-
-### What the Simulation Enables
-
-- **Phase 1**: Verify LVGL boots, displays content, encoder generates input events
-- **Phase 2**: Iterate on carousel layout, theme colors, card design visually in seconds (no flash cycle)
-- **Phase 3-6**: Test full menu navigation, value editing, keyboard input — all without touching hardware
-- **Debugging**: Serial Monitor + Wokwi logic analyzer to inspect SPI traffic, encoder interrupts, timing
-- **CI potential**: Wokwi CLI can run headless simulations for automated screenshot/smoke testing
-
-### PlatformIO Integration
-
-Add to `platformio.ini` under the ESP32 environment:
-
-```ini
-; Wokwi simulation (VS Code extension or CLI)
-; Run: pio run -e esp32-s3-devkitm-1 && wokwi-cli simulate
-```
-
-### Workflow
-
-1. Write/modify GUI code
-2. `pio run` to compile
-3. Open Wokwi simulation (VS Code extension: `Wokwi: Start Simulation`)
-4. Interact with simulated encoder (click CLK/DT pins) and push button
-5. See LVGL rendering on simulated TFT in real-time
-6. Iterate without flashing physical hardware
-
-### Phase 1 Addition
-
-Phase 1 now includes creating `wokwi.toml` and `diagram.json` as part of the foundation scaffold. The Wokwi simulation is verified working alongside the "Hello World" screen test — both physical hardware and simulation should show identical results.
