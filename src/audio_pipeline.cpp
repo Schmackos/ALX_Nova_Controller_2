@@ -39,11 +39,23 @@ static float *_laneR[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static float *_outL = nullptr;
 static float *_outR = nullptr;
 
+// Noise gate fade-out: last open-gate frame per ADC lane (PSRAM, 4 KB total)
+static float *_gatePrevL[2] = {};
+static float *_gatePrevR[2] = {};
+
+// DSP swap hold: last good pipeline output frame (PSRAM, 2 KB total)
+static float *_swapHoldL = nullptr;
+static float *_swapHoldR = nullptr;
+
 #ifdef NATIVE_TEST
 static float _laneL_buf[AUDIO_PIPELINE_MAX_INPUTS][I2S_DMA_BUF_LEN];
 static float _laneR_buf[AUDIO_PIPELINE_MAX_INPUTS][I2S_DMA_BUF_LEN];
 static float _outL_buf[I2S_DMA_BUF_LEN];
 static float _outR_buf[I2S_DMA_BUF_LEN];
+static float _gatePrevL_buf[2][I2S_DMA_BUF_LEN];
+static float _gatePrevR_buf[2][I2S_DMA_BUF_LEN];
+static float _swapHoldL_buf[I2S_DMA_BUF_LEN];
+static float _swapHoldR_buf[I2S_DMA_BUF_LEN];
 #endif
 
 // ===== Routing Matrix =====
@@ -55,6 +67,17 @@ static bool _inputBypass[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static bool _dspBypass[AUDIO_PIPELINE_MAX_INPUTS]   = {false, false, true, true};
 static bool _matrixBypass = false;   // Matrix active: routes ADC1 L/R + Siggen L/R → DAC L/R
 static bool _outputBypass = false;
+
+// ===== Noise Gate Fade State =====
+// _gateFadeCount: counts remaining fade-out buffers (2→1→0) after gate closes.
+// Pre-armed to 2 while gate is open so first-close buffer fades rather than cuts.
+static int _gateFadeCount[2] = {0, 0};
+
+// ===== DSP Swap Hold State =====
+// Set by audio_pipeline_notify_dsp_swap() (called from Core 0 before dsp_swap_config
+// sets _swapRequested). Causes pipeline_write_output() to use _swapHoldL/_swapHoldR
+// for one iteration, bridging the DSP-skipped buffer gap with the last good frame.
+static volatile bool _swapPending = false;
 
 // ===== Task Handle =====
 #ifndef NATIVE_TEST
@@ -148,11 +171,12 @@ static void pipeline_read_inputs() {
 }
 
 // Noise gate for ADC lanes: prevents PCM1808 noise floor from reaching the DAC.
-// Threshold -65 dBFS gives ~11 dB margin above the measured noise floor (-75.8 dBFS).
-// Compared against combined L+R sum-of-squares to avoid sqrtf().
-//   threshold_linear = 10^(-65/20) = 5.62e-4
-//   gate_sum_sq = threshold² × FRAMES × 2 = 3.16e-7 × 512 ≈ 1.62e-4
-static const float GATE_SUM_SQ_THRESH = 1.62e-4f;
+// Hysteresis thresholds (5 dB window) prevent rapid toggling near threshold.
+// Fade-out over 2 buffers (~10.7 ms) using PSRAM prev-frame copy prevents click.
+//   OPEN  threshold -65 dBFS: 10^(-65/20) = 5.62e-4 → sq = 3.16e-7 × 512 ≈ 1.62e-4
+//   CLOSE threshold -70 dBFS: 10^(-70/20) = 3.16e-4 → sq = 1.00e-7 × 512 ≈ 5.12e-5
+static const float GATE_OPEN_THRESH  = 1.62e-4f;  // -65 dBFS
+static const float GATE_CLOSE_THRESH = 5.12e-5f;  // -70 dBFS (5 dB hysteresis window)
 
 static bool _gateOpen[2] = {false, false};  // Gate state per ADC lane (for diagnostics)
 
@@ -167,11 +191,33 @@ static void pipeline_to_float() {
             for (int f = 0; f < FRAMES; f++) {
                 sumSq += _laneL[i][f] * _laneL[i][f] + _laneR[i][f] * _laneR[i][f];
             }
-            bool open = (sumSq >= GATE_SUM_SQ_THRESH);
-            _gateOpen[i] = open;
-            if (!open) {
-                memset(_laneL[i], 0, FRAMES * sizeof(float));
-                memset(_laneR[i], 0, FRAMES * sizeof(float));
+            // Hysteresis: open at -65 dBFS, stay open until -70 dBFS
+            bool open = _gateOpen[i]
+                ? (sumSq >= GATE_CLOSE_THRESH)
+                : (sumSq >= GATE_OPEN_THRESH);
+
+            if (open) {
+                _gateOpen[i] = true;
+                _gateFadeCount[i] = 2;  // Pre-arm: 2 fade buffers ready for next close
+                // Save last clean frame into PSRAM for fade-out
+                if (_gatePrevL[i]) memcpy(_gatePrevL[i], _laneL[i], FRAMES * sizeof(float));
+                if (_gatePrevR[i]) memcpy(_gatePrevR[i], _laneR[i], FRAMES * sizeof(float));
+                // Pass through: _laneL[i] / _laneR[i] unchanged
+            } else {
+                _gateOpen[i] = false;
+                if (_gateFadeCount[i] > 0 && _gatePrevL[i] && _gatePrevR[i]) {
+                    // Fade: count=2 → gain=1.0 (hold last frame), count=1 → gain=0.5
+                    float gain = (float)_gateFadeCount[i] / 2.0f;
+                    for (int f = 0; f < FRAMES; f++) {
+                        _laneL[i][f] = _gatePrevL[i][f] * gain;
+                        _laneR[i][f] = _gatePrevR[i][f] * gain;
+                    }
+                    _gateFadeCount[i]--;
+                } else {
+                    // Fully gated: write silence
+                    memset(_laneL[i], 0, FRAMES * sizeof(float));
+                    memset(_laneR[i], 0, FRAMES * sizeof(float));
+                }
             }
         }
     }
@@ -247,11 +293,21 @@ static void pipeline_mix_matrix() {
             dsps_add_f32(outCh[o], _matrixTemp, outCh[o], FRAMES, 1, 1, 1);
         }
     }
+
+    // Update DSP swap hold buffer with last good output (skip during pending swap)
+    if (!_swapPending && _swapHoldL && _swapHoldR) {
+        memcpy(_swapHoldL, _outL, FRAMES * sizeof(float));
+        memcpy(_swapHoldR, _outR, FRAMES * sizeof(float));
+    }
 #else
     // No ESP-DSP available (native without lib): fall back to identity
     if (_laneL[0] && _laneR[0]) {
         memcpy(_outL, _laneL[0], FRAMES * sizeof(float));
         memcpy(_outR, _laneR[0], FRAMES * sizeof(float));
+    }
+    if (!_swapPending && _swapHoldL && _swapHoldR) {
+        memcpy(_swapHoldL, _outL, FRAMES * sizeof(float));
+        memcpy(_swapHoldR, _outR, FRAMES * sizeof(float));
     }
 #endif
 }
@@ -259,8 +315,13 @@ static void pipeline_mix_matrix() {
 static void pipeline_write_output() {
     if (_outputBypass || !_outL || !_outR) return;
 #ifdef DAC_ENABLED
-    to_int32_lj(_outL, _outR, _dacBuf, FRAMES);
+    // During a DSP config swap, use the last good output frame (held in PSRAM)
+    // instead of the swap-gap buffer (which may contain un-DSP'd or zeroed data).
+    const float *outL = (_swapPending && _swapHoldL) ? _swapHoldL : _outL;
+    const float *outR = (_swapPending && _swapHoldR) ? _swapHoldR : _outR;
+    to_int32_lj(outL, outR, _dacBuf, FRAMES);
     dac_output_write(_dacBuf, FRAMES);
+    _swapPending = false;  // Clear after one iteration
 #endif
 }
 
@@ -408,6 +469,12 @@ void audio_pipeline_init() {
     }
     _outL = _outL_buf;
     _outR = _outR_buf;
+    for (int i = 0; i < 2; i++) {
+        _gatePrevL[i] = _gatePrevL_buf[i];
+        _gatePrevR[i] = _gatePrevR_buf[i];
+    }
+    _swapHoldL = _swapHoldL_buf;
+    _swapHoldR = _swapHoldR_buf;
 #else
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
         _laneL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
@@ -419,6 +486,18 @@ void audio_pipeline_init() {
     _outR = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
     if (!_outL) _outL = (float *)calloc(FRAMES, sizeof(float));
     if (!_outR) _outR = (float *)calloc(FRAMES, sizeof(float));
+    // Noise gate fade-out: PSRAM prev-frame buffers (~4 KB total)
+    for (int i = 0; i < 2; i++) {
+        _gatePrevL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+        _gatePrevR[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+        if (!_gatePrevL[i]) _gatePrevL[i] = (float *)calloc(FRAMES, sizeof(float));
+        if (!_gatePrevR[i]) _gatePrevR[i] = (float *)calloc(FRAMES, sizeof(float));
+    }
+    // DSP swap hold: PSRAM last-good-output buffer (~2 KB total)
+    _swapHoldL = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+    _swapHoldR = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+    if (!_swapHoldL) _swapHoldL = (float *)calloc(FRAMES, sizeof(float));
+    if (!_swapHoldR) _swapHoldR = (float *)calloc(FRAMES, sizeof(float));
 #endif
 
     init_matrix_siggen_direct();
@@ -488,6 +567,13 @@ float audio_pipeline_get_matrix_gain(int out_ch, int in_ch) {
 
 bool audio_pipeline_is_matrix_bypass() {
     return _matrixBypass;
+}
+
+void audio_pipeline_notify_dsp_swap() {
+    // Called from dsp_swap_config() (Core 0) before _swapRequested is set.
+    // Signals pipeline_write_output() (Core 1) to use the PSRAM hold buffer for
+    // one iteration, bridging the DSP-skipped buffer gap with the last good frame.
+    _swapPending = true;
 }
 
 void audio_pipeline_dump_raw_diag() {

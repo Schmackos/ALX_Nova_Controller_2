@@ -43,6 +43,14 @@ void audio_pipeline_set_matrix_gain_db(int out_ch, int in_ch, float gain_db);
 float audio_pipeline_get_matrix_gain(int out_ch, int in_ch);
 bool  audio_pipeline_is_matrix_bypass();
 
+// Called from dsp_swap_config() before _swapRequested is set — arms the
+// PSRAM hold buffer so pipeline_write_output() uses last good frame during the swap gap
+#ifdef NATIVE_TEST
+inline void audio_pipeline_notify_dsp_swap() {}  // No-op in native test (single-threaded)
+#else
+void audio_pipeline_notify_dsp_swap();
+#endif
+
 // Diagnostic — call from main-loop context only (not from audio task)
 void audio_pipeline_dump_raw_diag();
 

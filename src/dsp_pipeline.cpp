@@ -10,6 +10,7 @@
 #include "dsps_add.h"
 #include "dsp_convolution.h"
 #include "audio_quality.h"
+#include "audio_pipeline.h"
 #include "app_state.h"
 #include <math.h>
 #include <string.h>
@@ -425,6 +426,10 @@ bool dsp_swap_config() {
 
     int oldActive = _activeIndex;
     int newActive = 1 - oldActive;
+
+    // Arm pipeline hold buffer: next pipeline_write_output() uses last good PSRAM frame
+    // instead of the DSP-skipped/zeroed buffer — prevents audible click during swap.
+    audio_pipeline_notify_dsp_swap();
 
     // Set swap request flag for multi-ADC synchronization
     _swapRequested = true;
