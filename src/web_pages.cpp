@@ -2137,6 +2137,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             color: var(--text-primary, #eee);
             min-height: 1em;
         }
+        .input-lane .switch {
+            margin: 2px 0 -4px;
+        }
         @media (max-width: 480px) {
             .input-lane-grid { grid-template-columns: repeat(2, 1fr); }
         }
@@ -2853,25 +2856,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                   <div class="lane-name">ADC 1</div>
                   <div class="lane-status-dot" id="laneDot0"></div>
                   <div class="lane-level" id="laneLevel0">—</div>
-                  <button class="btn btn-small" onclick="setAdcEnabled(0, !inputLaneEnabled[0])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane1">
                   <div class="lane-name">ADC 2</div>
                   <div class="lane-status-dot" id="laneDot1"></div>
                   <div class="lane-level" id="laneLevel1">—</div>
-                  <button class="btn btn-small" onclick="setAdcEnabled(1, !inputLaneEnabled[1])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane2">
                   <div class="lane-name">SigGen</div>
                   <div class="lane-status-dot" id="laneDot2"></div>
                   <div class="lane-level" id="laneLevel2">—</div>
-                  <button class="btn btn-small" onclick="toggleSigGenLane()">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable2" onchange="toggleSigGenLane(this.checked)"><span class="slider round"></span></label>
                 </div>
                 <div class="input-lane" id="inputLane3">
                   <div class="lane-name">USB</div>
                   <div class="lane-status-dot" id="laneDot3"></div>
                   <div class="lane-level" id="laneLevel3">—</div>
-                  <button class="btn btn-small" onclick="setUsbAudioEnabled(!inputLaneEnabled[3])">Enable</button>
+                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable3" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
                 </div>
               </div>
             </div>
@@ -3108,14 +3111,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <!-- Audio Settings -->
             <div class="card">
                 <div class="card-title">Audio Settings</div>
-                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
-                    <label class="form-label" style="margin:0">ADC Input 1</label>
-                    <label class="switch"><input type="checkbox" id="adcEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
-                </div>
-                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
-                    <label class="form-label" style="margin:0">ADC Input 2</label>
-                    <label class="switch"><input type="checkbox" id="adcEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
-                </div>
                 <div class="form-group">
                     <label class="form-label">Update Rate</label>
                     <select class="form-input" id="audioUpdateRateSelect" onchange="setAudioUpdateRate()">
@@ -3154,6 +3149,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div id="usbAudioDetails" style="display:none">
                     <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
                     <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
+                    <div id="usbAudioVu" style="display:none;margin-top:8px">
+                        <div class="info-row" style="border-bottom:none;padding-bottom:2px"><span class="info-label">VU Level</span></div>
+                        <div class="vu-meter-row">
+                            <span class="vu-meter-label" style="min-width:14px">L</span>
+                            <div class="vu-meter-track">
+                                <div class="vu-meter-fill" id="usbVuBarL"></div>
+                            </div>
+                            <span class="vu-meter-db" id="usbVuReadL">-inf dBFS</span>
+                        </div>
+                        <div class="vu-meter-row" style="margin-bottom:0">
+                            <span class="vu-meter-label" style="min-width:14px">R</span>
+                            <div class="vu-meter-track">
+                                <div class="vu-meter-fill" id="usbVuBarR"></div>
+                            </div>
+                            <span class="vu-meter-db" id="usbVuReadR">-inf dBFS</span>
+                        </div>
+                    </div>
                 </div>
                 </div>
             </div>
@@ -4261,6 +4273,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="info-label">Largest Block</span>
                         <span class="info-value" id="heapMaxBlock">--</span>
                     </div>
+                    <div class="info-row" id="heapCriticalRow" style="display:none">
+                        <span class="info-label" style="color:var(--danger)">Heap Critical</span>
+                        <span class="info-value" id="heapCriticalValue" style="color:var(--danger)">YES</span>
+                    </div>
                     <div class="info-row">
                         <span class="info-label">PSRAM Free</span>
                         <span class="info-value" id="psramFree">--</span>
@@ -4858,10 +4874,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 //# sourceURL=01-core.js
 
         // Binary WS message handler (waveform + spectrum)
+        var _binDiag = { wf: 0, sp: 0, last: 0 };
         function handleBinaryMessage(buf) {
             const dv = new DataView(buf);
             const type = dv.getUint8(0);
             const adc = dv.getUint8(1);
+            if (type === 0x01) _binDiag.wf++;
+            else if (type === 0x02) _binDiag.sp++;
+            var now = Date.now();
+            if (now - _binDiag.last > 2000) {
+                console.log('[BIN diag] wf=' + _binDiag.wf + ' sp=' + _binDiag.sp + ' tab=' + currentActiveTab + ' bytes=' + buf.byteLength);
+                _binDiag.wf = 0; _binDiag.sp = 0; _binDiag.last = now;
+            }
             if (type === 0x01 && currentActiveTab === 'audio') {
                 // Waveform: [type:1][adc:1][samples:256]
                 if (adc < NUM_ADCS && buf.byteLength >= 258) {
@@ -5039,24 +5063,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                     startVuAnimation();
                 }
-            } else if (data.type === 'audioWaveform') {
-                if (currentActiveTab === 'audio' && data.w) {
-                    const a = data.adc || 0;
-                    if (a < NUM_ADCS) {
-                        waveformTarget[a] = data.w;
-                        if (!waveformCurrent[a]) waveformCurrent[a] = data.w.slice();
-                        startAudioAnimation();
-                    }
-                }
-            } else if (data.type === 'audioSpectrum') {
-                if (currentActiveTab === 'audio' && data.bands) {
-                    const a = data.adc || 0;
-                    if (a < NUM_ADCS) {
-                        for (let i = 0; i < data.bands.length && i < 16; i++) spectrumTarget[a][i] = data.bands[i];
-                        targetDominantFreq[a] = data.freq || 0;
-                        startAudioAnimation();
-                    }
-                }
             } else if (data.type === 'inputNames') {
                 if (data.names && Array.isArray(data.names)) {
                     for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
@@ -5090,8 +5096,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             } else if (data.type === 'adcState') {
                 if (Array.isArray(data.enabled)) {
                     for (var ai = 0; ai < data.enabled.length; ai++) {
-                        var cb = document.getElementById('adcEnable' + ai);
-                        if (cb) cb.checked = !!data.enabled[ai];
+                        var laneCb = document.getElementById('laneEnable' + ai);
+                        if (laneCb) laneCb.checked = !!data.enabled[ai];
+                        overviewApplyAdcEnabled(ai, !!data.enabled[ai]);
                     }
                 }
             } else if (data.type === 'usbAudioState') {
@@ -5228,13 +5235,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let vuAnimFrameId = null;
 
 //# sourceURL=04-shared-audio.js
-
-        // ===== Shared DSP State =====
-        // NOTE: DSP_MAX_CH, DSP_CH_NAMES are declared in 15-dsp-coeffs.js / 16-dsp-peq.js
-        // NOTE: peqGraphLayers, peqRtaData are declared in 16-dsp-peq.js
-        // This file is reserved for any additional shared DSP state not covered by those modules.
-
-//# sourceURL=05-shared-dsp.js
 
         // ===== Canvas Helpers =====
 
@@ -6351,6 +6351,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var enableCb = document.getElementById('usbAudioEnable');
             var fields = document.getElementById('usbAudioFields');
             if (enableCb) enableCb.checked = !!d.enabled;
+            var laneEn3 = document.getElementById('laneEnable3');
+            if (laneEn3) laneEn3.checked = !!d.enabled;
             if (fields) fields.style.display = d.enabled ? '' : 'none';
 
             var badge = document.getElementById('usbAudioBadge');
@@ -6374,7 +6376,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (details) details.style.display = 'none';
             }
             if (formatEl) {
-                if (d.connected) {
+                if (d.negotiatedRate) {
+                    formatEl.textContent = (d.negotiatedRate / 1000) + ' kHz / ' + (d.negotiatedDepth || d.bitDepth) + '-bit stereo';
+                } else if (d.connected) {
                     formatEl.textContent = (d.sampleRate/1000) + ' kHz / ' + d.bitDepth + '-bit ' + (d.channels === 1 ? 'mono' : 'stereo');
                 } else {
                     formatEl.textContent = '\u2014';
@@ -6397,6 +6401,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (ovr) ovr.textContent = d.overruns || 0;
             var udr = document.getElementById('usbAudioUnderruns');
             if (udr) udr.textContent = d.underruns || 0;
+            // VU meters (visible only when streaming)
+            var vuSection = document.getElementById('usbAudioVu');
+            if (vuSection) {
+                vuSection.style.display = d.streaming ? '' : 'none';
+                if (d.streaming && d.vuL !== undefined) {
+                    var pctL = Math.max(0, Math.min(100, 100 + (d.vuL || -90)));
+                    var pctR = Math.max(0, Math.min(100, 100 + (d.vuR || -90)));
+                    var barL = document.getElementById('usbVuBarL');
+                    var barR = document.getElementById('usbVuBarR');
+                    if (barL) barL.style.width = pctL + '%';
+                    if (barR) barR.style.width = pctR + '%';
+                    var readL = document.getElementById('usbVuReadL');
+                    var readR = document.getElementById('usbVuReadR');
+                    if (readL) readL.textContent = (d.vuL > -90) ? d.vuL.toFixed(1) + ' dBFS' : '-inf dBFS';
+                    if (readR) readR.textContent = (d.vuR > -90) ? d.vuR.toFixed(1) + ' dBFS' : '-inf dBFS';
+                }
+            }
             if (typeof overviewApplyUsbState === 'function') overviewApplyUsbState(d);
         }
 
@@ -6408,28 +6429,26 @@ var inputLaneEnabled = [true, true, false, false];
 var inputLaneLevels  = [null, null, null, null];
 
 function updateInputOverview() {
-    // Update from current VU data (called by audioAnimLoop / WS handler)
-    var dots  = ['laneDot0','laneDot1','laneDot2','laneDot3'];
+    var dots   = ['laneDot0','laneDot1','laneDot2','laneDot3'];
     var levels = ['laneLevel0','laneLevel1','laneLevel2','laneLevel3'];
 
     for (var i = 0; i < 4; i++) {
         var dot = document.getElementById(dots[i]);
         var lvl = document.getElementById(levels[i]);
-        var btn = dot && dot.parentElement.querySelector('button');
         if (!dot) continue;
 
         var dbVal = inputLaneLevels[i];
         var enabled = inputLaneEnabled[i];
 
-        // Button label
-        if (btn) btn.textContent = enabled ? 'Enabled' : 'Enable';
+        var cb = document.getElementById('laneEnable' + i);
+        if (cb) cb.checked = enabled;
 
         if (!enabled || dbVal === null) {
             dot.className = 'lane-status-dot';
-            if (lvl) lvl.textContent = '—';
+            if (lvl) lvl.textContent = '\u2014';
         } else {
             var dbNum = typeof dbVal === 'number' ? dbVal : -99;
-            if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '—';
+            if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '\u2014';
             dot.className = 'lane-status-dot' + (dbNum > -65 ? ' active' : dbNum > -80 ? ' low' : '');
         }
     }
@@ -6456,13 +6475,18 @@ function overviewApplySigGenState(d) {
 
 function overviewApplyUsbState(d) {
     inputLaneEnabled[3] = !!(d && d.enabled);
-    inputLaneLevels[3]  = null; // USB level not exposed yet
+    // USB VU level (active when streaming with VU data)
+    if (d && d.streaming && d.vuL !== undefined && d.vuL > -90) {
+        inputLaneLevels[3] = Math.max(d.vuL, d.vuR);
+    } else {
+        inputLaneLevels[3] = null;
+    }
     updateInputOverview();
 }
 
-function toggleSigGenLane() {
-    var newState = !inputLaneEnabled[2];
-    wsSend('setSigGenEnabled', { enabled: newState });
+function toggleSigGenLane(enabled) {
+    if (enabled === undefined) enabled = !inputLaneEnabled[2];
+    wsSend('setSignalGen', { enabled: !!enabled });
 }
 
 //# sourceURL=11-input-overview.js
@@ -6604,6 +6628,8 @@ function toggleSigGenLane() {
             document.getElementById('siggenSweepGroup').style.display = d.waveform === 3 ? '' : 'none';
             document.getElementById('siggenPwmNote').style.display = d.outputMode === 1 ? '' : 'none';
             if (typeof overviewApplySigGenState === 'function') overviewApplySigGenState(d);
+            var laneEn2 = document.getElementById('laneEnable2');
+            if (laneEn2) laneEn2.checked = !!d.enabled;
         }
 
 //# sourceURL=13-signal-gen.js
@@ -6701,28 +6727,6 @@ function toggleSigGenLane() {
         }
 
 //# sourceURL=14-audio-quality.js
-
-// 15-dsp-coeffs.js
-// DSP coefficient computation functions and constants.
-//
-// NOTE: All items that belong in this file are already declared in
-// 16-dsp-peq.js which was created in a prior extraction phase:
-//
-//   DSP_TYPES          — 16-dsp-peq.js line 2
-//   DSP_MAX_CH         — 16-dsp-peq.js line 3 (also 05-shared-dsp.js)
-//   DSP_CH_NAMES       — 16-dsp-peq.js line 4 (also 05-shared-dsp.js)
-//   DSP_PEQ_BANDS      — 16-dsp-peq.js line 14
-//   PEQ_COLORS         — 16-dsp-peq.js line 15
-//   PEQ_FILTER_TYPES   — 16-dsp-peq.js line 16
-//   PEQ_DEFAULT_FREQS  — 16-dsp-peq.js line 130
-//   dspBiquadMagDb()   — 16-dsp-peq.js line 384
-//   dspComputeCoeffs() — 16-dsp-peq.js line 398
-//   dspStageMagDb()    — 16-dsp-peq.js line 479
-//
-// To avoid duplicate declarations (which would cause runtime errors),
-// no code is redeclared here. See 16-dsp-peq.js for the implementations.
-
-//# sourceURL=15-dsp-coeffs.js
 
 // ===== DSP Tab Constants =====
 const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor','LPF 1st','HPF 1st','Linkwitz','Decimator','Convolution','Noise Gate','Tone Controls','Speaker Prot','Stereo Width','Loudness','Bass Enhance','Multiband Comp'];
@@ -10291,6 +10295,10 @@ function initFirmwareDragDrop() {
                 document.getElementById('heapTotal').textContent = formatBytes(heapTotal);
                 document.getElementById('heapMinFree').textContent = formatBytes(data.memory.heapMinFree || 0);
                 document.getElementById('heapMaxBlock').textContent = formatBytes(data.memory.heapMaxBlock || 0);
+
+                // Heap critical indicator
+                const critRow = document.getElementById('heapCriticalRow');
+                if (critRow) critRow.style.display = data.heapCritical ? '' : 'none';
 
                 // PSRAM
                 const psramTotal = data.memory.psramTotal || 0;

@@ -43,4 +43,6 @@
             document.getElementById('siggenSweepGroup').style.display = d.waveform === 3 ? '' : 'none';
             document.getElementById('siggenPwmNote').style.display = d.outputMode === 1 ? '' : 'none';
             if (typeof overviewApplySigGenState === 'function') overviewApplySigGenState(d);
+            var laneEn2 = document.getElementById('laneEnable2');
+            if (laneEn2) laneEn2.checked = !!d.enabled;
         }

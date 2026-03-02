@@ -241,7 +241,7 @@ public:
   float audioSfdrDb[NUM_AUDIO_ADCS] = {};        // Spurious-Free Dynamic Range (dB)
 
   // ===== Heap Health =====
-  bool heapCritical = false;       // True when largest free block < 20KB
+  bool heapCritical = false;       // True when largest free block < 40KB
 
   // ===== Debug Mode Toggles =====
   bool debugMode = true;           // Master debug gate
@@ -428,9 +428,22 @@ public:
   uint32_t usbAudioBufferUnderruns = 0;
   uint32_t usbAudioBufferOverruns = 0;
 
+  // VU metering (written by Core 1 pipeline task via markUsbAudioVuDirty)
+  float usbAudioVuL = -90.0f;
+  float usbAudioVuR = -90.0f;
+
+  // Dynamically negotiated format (set by control_xfer_cb on SET_CUR)
+  uint32_t usbAudioNegotiatedRate  = 48000;
+  uint8_t  usbAudioNegotiatedDepth = 16;
+
   void markUsbAudioDirty() { _usbAudioDirty = true; }
   bool isUsbAudioDirty() const { return _usbAudioDirty; }
   void clearUsbAudioDirty() { _usbAudioDirty = false; }
+
+  // Separate dirty flag for high-frequency VU updates (don't conflate with connection events)
+  void markUsbAudioVuDirty()    { _usbAudioVuDirty = true; }
+  bool isUsbAudioVuDirty() const { return _usbAudioVuDirty; }
+  void clearUsbAudioVuDirty()  { _usbAudioVuDirty = false; }
 #endif
 
   // ===== DAC Output State =====
@@ -550,6 +563,7 @@ private:
 #endif
 #ifdef USB_AUDIO_ENABLED
   bool _usbAudioDirty = false;
+  bool _usbAudioVuDirty = false;
 #endif
 #ifdef DAC_ENABLED
   bool _dacDirty = false;

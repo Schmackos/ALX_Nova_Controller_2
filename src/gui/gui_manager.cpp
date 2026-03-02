@@ -24,11 +24,7 @@
 #include <Arduino.h>
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
-#ifdef WOKWI_BUILD
-#include "lgfx_config_wokwi.h"
-#else
 #include "lgfx_config.h"
-#endif
 #include <lvgl.h>
 
 /* LVGL tick callback (millis returns unsigned long, LVGL expects uint32_t) */
@@ -326,17 +322,17 @@ void gui_init(void) {
     /* Boot animation + desktop push happen inside gui_task so all
        lv_timer_handler() calls stay in one FreeRTOS context. */
 
-    /* Start FreeRTOS GUI task on Core 1
+    /* Start FreeRTOS GUI task
      * NOTE: Task stacks MUST be in internal SRAM on ESP32 — PSRAM fails
      * xPortcheckValidStackMem() assertion in FreeRTOS port. */
     xTaskCreatePinnedToCore(
         gui_task,
         "gui_task",
-        GUI_TASK_STACK_SIZE,
+        TASK_STACK_SIZE_GUI,
         NULL,
-        GUI_TASK_PRIORITY,
+        TASK_PRIORITY_GUI,
         &gui_task_handle,
-        GUI_TASK_CORE
+        TASK_CORE_GUI
     );
 
     LOG_I("[GUI] Initialization complete");

@@ -54,4 +54,12 @@ void audio_pipeline_notify_dsp_swap();
 // Diagnostic — call from main-loop context only (not from audio task)
 void audio_pipeline_dump_raw_diag();
 
+// Register an AudioInputSource for a pipeline lane (used by USB, future dynamic inputs)
+struct AudioInputSource;  // Forward declaration
+void audio_pipeline_register_source(int lane, const AudioInputSource *src);
+
+// Get per-lane VU metering (dBFS). Returns -90.0f if lane has no registered source.
+float audio_pipeline_get_lane_vu_l(int lane);
+float audio_pipeline_get_lane_vu_r(int lane);
+
 #endif // AUDIO_PIPELINE_H

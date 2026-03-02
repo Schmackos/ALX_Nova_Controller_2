@@ -115,6 +115,10 @@
                 document.getElementById('heapMinFree').textContent = formatBytes(data.memory.heapMinFree || 0);
                 document.getElementById('heapMaxBlock').textContent = formatBytes(data.memory.heapMaxBlock || 0);
 
+                // Heap critical indicator
+                const critRow = document.getElementById('heapCriticalRow');
+                if (critRow) critRow.style.display = data.heapCritical ? '' : 'none';
+
                 // PSRAM
                 const psramTotal = data.memory.psramTotal || 0;
                 const psramFree = data.memory.psramFree || 0;

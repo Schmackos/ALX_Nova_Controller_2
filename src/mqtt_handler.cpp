@@ -14,8 +14,22 @@
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #endif
+#ifdef USB_AUDIO_ENABLED
+#include "usb_audio.h"
+#endif
 #include <LittleFS.h>
 #include <cmath>
+
+#ifdef USB_AUDIO_ENABLED
+#define MQTT_TOPIC_USB_CONNECTED  "audio/usb/connected"
+#define MQTT_TOPIC_USB_STREAMING  "audio/usb/streaming"
+#define MQTT_TOPIC_USB_ENABLED    "audio/usb/enabled"
+#define MQTT_TOPIC_USB_RATE       "audio/usb/sampleRate"
+#define MQTT_TOPIC_USB_VOLUME     "audio/usb/volume"
+#define MQTT_TOPIC_USB_OVERRUNS   "audio/usb/overruns"
+#define MQTT_TOPIC_USB_UNDERRUNS  "audio/usb/underruns"
+#define MQTT_TOPIC_USB_ENABLE_SET "audio/usb/enabled/set"
+#endif
 
 // FFT window type name helper
 static const char* fftWindowName(FftWindowType t) {
@@ -45,6 +59,7 @@ extern void saveSmartSensingSettings();
 extern void sendSmartSensingStateInternal();
 extern void sendWiFiStatus();
 extern void saveSettings();
+extern void saveSettingsDeferred();
 extern void performFactoryReset();
 extern void checkForFirmwareUpdate();
 extern void setAmplifierState(bool state);
@@ -230,6 +245,10 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/dsp/preset/set").c_str());
 #endif
 
+#ifdef USB_AUDIO_ENABLED
+  mqttClient.subscribe((base + "/" + MQTT_TOPIC_USB_ENABLE_SET).c_str());
+#endif
+
   // Subscribe to HA birth message for re-discovery after HA restart
   mqttClient.subscribe("homeassistant/status");
 
@@ -366,7 +385,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     if (appState.autoUpdateEnabled != enabled) {
       appState.autoUpdateEnabled = enabled;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Auto-update set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Broadcast to web clients
     }
@@ -377,7 +396,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     if (appState.darkMode != enabled) {
       appState.darkMode = enabled;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Dark mode set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Dark mode is part of WiFi status in web UI
     }
@@ -388,7 +407,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     if (appState.enableCertValidation != enabled) {
       appState.enableCertValidation = enabled;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Certificate validation set to %s", enabled ? "ON" : "OFF");
       sendWiFiStatus(); // Broadcast to web clients
     }
@@ -401,7 +420,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (timeoutMs == 0 || timeoutMs == 30000 || timeoutMs == 60000 ||
         timeoutMs == 300000 || timeoutMs == 600000) {
       appState.setScreenTimeout(timeoutMs);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Screen timeout set to %d seconds", timeoutSec);
       sendWiFiStatus();
     }
@@ -411,7 +430,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/display/dim_enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.setDimEnabled(newState);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Dim %s", newState ? "enabled" : "disabled");
     publishMqttDisplayState();
   }
@@ -422,7 +441,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (dimMs == 5000 || dimMs == 10000 || dimMs == 15000 ||
         dimMs == 30000 || dimMs == 60000) {
       appState.setDimTimeout(dimMs);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Dim timeout set to %d seconds", dimSec);
     }
     publishMqttDisplayState();
@@ -440,7 +459,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       return;
     }
     appState.setDimBrightness(pwm);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Dim brightness set to %d%% (PWM %d)", pct, pwm);
     publishMqttDisplayState();
   }
@@ -458,7 +477,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (bright >= 10 && bright <= 100) {
       uint8_t pwm = (uint8_t)(bright * 255 / 100);
       appState.setBacklightBrightness(pwm);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Brightness set to %d%% (PWM %d)", bright, pwm);
       publishMqttDisplayState();
     }
@@ -467,7 +486,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/settings/buzzer/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     appState.setBuzzerEnabled(enabled);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Buzzer set to %s", enabled ? "ON" : "OFF");
     publishMqttBuzzerState();
   }
@@ -476,7 +495,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     int vol = message.toInt();
     if (vol >= 0 && vol <= 2) {
       appState.setBuzzerVolume(vol);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Buzzer volume set to %d", vol);
       publishMqttBuzzerState();
     }
@@ -486,7 +505,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     int rate = message.toInt();
     if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
       appState.audioUpdateRate = (uint16_t)rate;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Audio update rate set to %d ms", rate);
       publishMqttDisplayState();
     }
@@ -574,7 +593,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/emergency_limiter/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.setEmergencyLimiterEnabled(newState);
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Emergency limiter set to %s", newState ? "ON" : "OFF");
     publishMqttEmergencyLimiterState();
     sendEmergencyLimiterState();
@@ -584,7 +603,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     float threshold = message.toFloat();
     if (threshold >= -6.0f && threshold <= 0.0f) {
       appState.setEmergencyLimiterThreshold(threshold);
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Emergency limiter threshold set to %.2f dBFS", threshold);
       publishMqttEmergencyLimiterState();
       sendEmergencyLimiterState();
@@ -605,14 +624,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/audio/input1/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.adcEnabled[0] = newState;
-    saveSettings();
+    saveSettingsDeferred();
     appState.markAdcEnabledDirty();
     LOG_I("[MQTT] ADC1 set to %s", newState ? "ON" : "OFF");
   }
   else if (topicStr == base + "/audio/input2/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.adcEnabled[1] = newState;
-    saveSettings();
+    saveSettingsDeferred();
     appState.markAdcEnabledDirty();
     LOG_I("[MQTT] ADC2 set to %s", newState ? "ON" : "OFF");
   }
@@ -620,7 +639,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/audio/vu_meter/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.vuMeterEnabled = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendAudioGraphState();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] VU meter set to %s", newState ? "ON" : "OFF");
@@ -629,7 +648,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/audio/waveform/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.waveformEnabled = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendAudioGraphState();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] Waveform set to %s", newState ? "ON" : "OFF");
@@ -638,7 +657,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/audio/spectrum/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.spectrumEnabled = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendAudioGraphState();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] Spectrum set to %s", newState ? "ON" : "OFF");
@@ -653,7 +672,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     else if (message == "nuttall") wt = FFT_WINDOW_NUTTALL;
     else if (message == "flat_top") wt = FFT_WINDOW_FLAT_TOP;
     appState.fftWindowType = wt;
-    saveSettings();
+    saveSettingsDeferred();
     sendAudioGraphState();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] FFT window set to %d", (int)wt);
@@ -663,7 +682,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugMode = newState;
     applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
-    saveSettings();
+    saveSettingsDeferred();
     sendDebugState();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug mode set to %s", newState ? "ON" : "OFF");
@@ -674,7 +693,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (level >= 0 && level <= 3) {
       appState.debugSerialLevel = level;
       applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
-      saveSettings();
+      saveSettingsDeferred();
       sendDebugState();
       publishMqttDebugState();
       LOG_I("[MQTT] Debug serial level set to %d", level);
@@ -684,7 +703,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/debug/hw_stats/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugHwStats = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendDebugState();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug HW stats set to %s", newState ? "ON" : "OFF");
@@ -693,7 +712,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/debug/i2s_metrics/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugI2sMetrics = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendDebugState();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug I2S metrics set to %s", newState ? "ON" : "OFF");
@@ -702,7 +721,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/debug/task_monitor/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugTaskMonitor = newState;
-    saveSettings();
+    saveSettingsDeferred();
     sendDebugState();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug task monitor set to %s", newState ? "ON" : "OFF");
@@ -712,7 +731,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     int offset = message.toInt();
     if (offset >= -12 && offset <= 14) {
       appState.timezoneOffset = offset;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Timezone offset set to %d", offset);
       publishMqttSystemStatus();
     }
@@ -734,7 +753,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/settings/boot_animation/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.bootAnimEnabled = newState;
-    saveSettings();
+    saveSettingsDeferred();
     LOG_I("[MQTT] Boot animation set to %s", newState ? "ON" : "OFF");
     publishMqttBootAnimState();
   }
@@ -749,7 +768,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     else if (message == "heartbeat") style = 5;
     if (style >= 0) {
       appState.bootAnimStyle = style;
-      saveSettings();
+      saveSettingsDeferred();
       LOG_I("[MQTT] Boot animation style set to %s", message.c_str());
       publishMqttBootAnimState();
     }
@@ -843,6 +862,16 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         LOG_I("[MQTT] DSP preset %d loaded", slot);
       }
     }
+  }
+#endif
+#ifdef USB_AUDIO_ENABLED
+  // Handle USB audio enable/disable
+  else if (topicStr == base + "/" + MQTT_TOPIC_USB_ENABLE_SET) {
+    bool newVal = (message == "true" || message == "1" || message == "ON");
+    AppState::getInstance().usbAudioEnabled = newVal;
+    AppState::getInstance().pipelineInputBypass[3] = !newVal;
+    AppState::getInstance().markUsbAudioDirty();
+    LOG_I("[MQTT] USB audio set to %s", newVal ? "enabled" : "disabled");
   }
 #endif
   // Handle reboot command
@@ -1092,6 +1121,12 @@ void mqttLoop() {
       publishMqttAdcEnabledState();
       appState.clearAdcEnabledDirty();
     }
+#ifdef USB_AUDIO_ENABLED
+    if (appState.isUsbAudioDirty()) {
+      publishMqttUsbAudioState();
+      // Note: clearUsbAudioDirty() is handled by main loop WS handler — don't clear here
+    }
+#endif
     if (debugChanged) {
       publishMqttDebugState();
       appState.prevMqttDebugMode = appState.debugMode;
@@ -1619,6 +1654,36 @@ void publishMqttAdcEnabledState() {
                      appState.adcEnabled[1] ? "ON" : "OFF", true);
 }
 
+#ifdef USB_AUDIO_ENABLED
+// Publish USB audio state
+void publishMqttUsbAudioState() {
+    if (!mqttClient.connected()) return;
+    String base = getEffectiveMqttBaseTopic();
+
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_CONNECTED).c_str(),
+                       appState.usbAudioConnected ? "true" : "false", true);
+
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_STREAMING).c_str(),
+                       appState.usbAudioStreaming ? "true" : "false", true);
+
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_ENABLED).c_str(),
+                       appState.usbAudioEnabled ? "true" : "false", true);
+
+    char val[16];
+    snprintf(val, sizeof(val), "%u", (unsigned)appState.usbAudioSampleRate);
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_RATE).c_str(), val, true);
+
+    snprintf(val, sizeof(val), "%.1f", (float)appState.usbAudioVolume / 256.0f);
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_VOLUME).c_str(), val, true);
+
+    snprintf(val, sizeof(val), "%u", (unsigned)usb_audio_get_overruns());
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_OVERRUNS).c_str(), val, true);
+
+    snprintf(val, sizeof(val), "%u", (unsigned)usb_audio_get_underruns());
+    mqttClient.publish((base + "/" + MQTT_TOPIC_USB_UNDERRUNS).c_str(), val, true);
+}
+#endif
+
 // Publish debug mode state
 void publishMqttDebugState() {
   if (!mqttClient.connected())
@@ -1774,6 +1839,9 @@ void publishMqttState() {
   publishMqttDebugState();
   publishMqttCrashDiagnostics();
   publishMqttInputNames();
+#ifdef USB_AUDIO_ENABLED
+  publishMqttUsbAudioState();
+#endif
 #ifdef DSP_ENABLED
   publishMqttDspState();
   publishMqttEmergencyLimiterState();
@@ -3445,6 +3513,121 @@ void publishHADiscovery() {
   }
 #endif
 
+#ifdef USB_AUDIO_ENABLED
+  // ===== USB Audio Connected Binary Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Connected";
+    doc["unique_id"] = deviceId + "_usb_audio_connected";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_CONNECTED;
+    doc["payload_on"] = "true";
+    doc["payload_off"] = "false";
+    doc["device_class"] = "connectivity";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:usb";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/usb_audio_connected/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Streaming Binary Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Streaming";
+    doc["unique_id"] = deviceId + "_usb_audio_streaming";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_STREAMING;
+    doc["payload_on"] = "true";
+    doc["payload_off"] = "false";
+    doc["device_class"] = "running";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:music";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/usb_audio_streaming/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Enabled Switch =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Audio";
+    doc["unique_id"] = deviceId + "_usb_audio_enabled";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_ENABLED;
+    doc["command_topic"] = base + "/" + MQTT_TOPIC_USB_ENABLE_SET;
+    doc["payload_on"] = "true";
+    doc["payload_off"] = "false";
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:usb-port";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/switch/" + deviceId + "/usb_audio_enabled/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Sample Rate Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Sample Rate";
+    doc["unique_id"] = deviceId + "_usb_audio_sample_rate";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_RATE;
+    doc["unit_of_measurement"] = "Hz";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_sample_rate/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Volume Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Volume";
+    doc["unique_id"] = deviceId + "_usb_audio_volume";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_VOLUME;
+    doc["unit_of_measurement"] = "dB";
+    doc["state_class"] = "measurement";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:volume-high";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_volume/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Buffer Overruns Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Buffer Overruns";
+    doc["unique_id"] = deviceId + "_usb_audio_overruns";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_OVERRUNS;
+    doc["state_class"] = "total_increasing";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:alert-circle-outline";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_overruns/config").c_str(), payload.c_str(), true);
+  }
+
+  // ===== USB Audio Buffer Underruns Sensor =====
+  {
+    JsonDocument doc;
+    doc["name"] = "USB Buffer Underruns";
+    doc["unique_id"] = deviceId + "_usb_audio_underruns";
+    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_UNDERRUNS;
+    doc["state_class"] = "total_increasing";
+    doc["entity_category"] = "diagnostic";
+    doc["icon"] = "mdi:alert-outline";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_underruns/config").c_str(), payload.c_str(), true);
+  }
+#endif
+
   LOG_I("[MQTT] Home Assistant discovery configs published");
 }
 
@@ -3570,7 +3753,15 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/dsp_ch2_limiter_gr/config",
       "homeassistant/sensor/%s/dsp_ch3_limiter_gr/config",
       // PEQ bypass
-      "homeassistant/switch/%s/peq_bypass/config"};
+      "homeassistant/switch/%s/peq_bypass/config",
+      // USB audio entities
+      "homeassistant/binary_sensor/%s/usb_audio_connected/config",
+      "homeassistant/binary_sensor/%s/usb_audio_streaming/config",
+      "homeassistant/switch/%s/usb_audio_enabled/config",
+      "homeassistant/sensor/%s/usb_audio_sample_rate/config",
+      "homeassistant/sensor/%s/usb_audio_volume/config",
+      "homeassistant/sensor/%s/usb_audio_overruns/config",
+      "homeassistant/sensor/%s/usb_audio_underruns/config"};
 
   char topicBuf[160];
   for (const char *topicTemplate : topics) {

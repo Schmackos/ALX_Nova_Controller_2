@@ -46,6 +46,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <esp_task_wdt.h>
+#include <esp_wifi.h>
 #include <mbedtls/md.h>
 #include <time.h>
 
@@ -309,9 +310,11 @@ void setup() {
 
   // Authentication routes (unprotected)
   server.on("/login", HTTP_GET, []() {
+    httpServingPage = true;
     if (!sendGzipped(server, loginPage_gz, loginPage_gz_len)) {
       server.send_P(200, "text/html", loginPage);
     }
+    httpServingPage = false;
   });
   server.on("/api/auth/login", HTTP_POST, handleLogin);
   server.on("/api/auth/logout", HTTP_POST, handleLogout);
@@ -324,9 +327,11 @@ void setup() {
       return;
 
     // Serve gzipped dashboard if client supports it (~85% smaller)
+    httpServingPage = true;
     if (!sendGzipped(server, htmlPage_gz, htmlPage_gz_len)) {
       server.send_P(200, "text/html", htmlPage);
     }
+    httpServingPage = false;
   });
 
   server.on("/api/wificonfig", HTTP_POST, []() {
@@ -670,6 +675,11 @@ void setup() {
     LOG_W("[Main] No WiFi connection established, running in AP mode");
   }
 
+  // Disable WiFi modem power save AFTER WiFi is initialized.
+  // Radio sleep/wake cycles cause 5-20ms latency spikes that generate
+  // memory bus contention with I2S DMA, causing audio pops.
+  esp_wifi_set_ps(WIFI_PS_NONE);
+
   // Always start server and WebSocket regardless of mode
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
@@ -704,6 +714,7 @@ void loop() {
     dnsServer.processNextRequest();
   }
   webSocket.loop();
+  drainPendingInitState();
   mqttLoop();
   updateWiFiConnection();
 
@@ -946,6 +957,12 @@ void loop() {
   dsp_check_debounced_save();
 #endif
 
+  // Deferred settings saves (debounced from WebSocket handlers)
+  checkDeferredSettingsSave();
+#ifdef DAC_ENABLED
+  dac_check_deferred_save();
+#endif
+
 #ifdef DAC_ENABLED
   // Broadcast DAC state changes (WS/API/MQTT -> all clients)
   if (appState.isDacDirty()) {
@@ -960,9 +977,29 @@ void loop() {
 #endif
 
 #ifdef USB_AUDIO_ENABLED
+  // Poll USB connection state (~1s) — detects cable disconnect/reconnect
+  {
+    static unsigned long lastUsbPoll = 0;
+    unsigned long nowMs = millis();
+    if (appState.usbAudioEnabled && (nowMs - lastUsbPoll >= 1000)) {
+      usb_audio_poll_connection();
+      lastUsbPoll = nowMs;
+    }
+  }
   if (appState.isUsbAudioDirty()) {
     sendUsbAudioState();
     appState.clearUsbAudioDirty();
+  }
+  // USB Audio VU broadcast (rate-limited to match audioUpdateRate)
+  {
+    static unsigned long lastUsbVuBroadcast = 0;
+    unsigned long nowMs = millis();
+    if (appState.isUsbAudioVuDirty()
+        && (nowMs - lastUsbVuBroadcast >= (unsigned long)appState.audioUpdateRate)) {
+      sendUsbAudioState();
+      appState.clearUsbAudioVuDirty();
+      lastUsbVuBroadcast = nowMs;
+    }
   }
 #endif
 

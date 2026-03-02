@@ -39,8 +39,33 @@ bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
 unsigned long wsAuthTimeout[MAX_WS_CLIENTS] = {0};
 static String wsSessionId[MAX_WS_CLIENTS];
 
+// ===== HTTP Page Serving Flag =====
+volatile bool httpServingPage = false;
+
 // ===== Per-client Audio Streaming Subscription =====
 static bool _audioSubscribed[MAX_WS_CLIENTS] = {};
+
+// Deferred initial-state queue — spreads the auth-success broadcast burst
+// across multiple main-loop iterations to prevent WiFi TX saturation that
+// causes cross-core audio pipeline interference.
+static uint32_t _pendingInitState[MAX_WS_CLIENTS] = {};
+
+enum InitStateBit : uint32_t {
+    INIT_WIFI        = (1u << 0),
+    INIT_SENSING     = (1u << 1),
+    INIT_DISPLAY     = (1u << 2),
+    INIT_BUZZER      = (1u << 3),
+    INIT_SIGGEN      = (1u << 4),
+    INIT_AUDIO_GRAPH = (1u << 5),
+    INIT_AUDIO_QUAL  = (1u << 6),
+    INIT_DEBUG       = (1u << 7),
+    INIT_ADC_STATE   = (1u << 8),
+    INIT_DSP         = (1u << 9),
+    INIT_DAC         = (1u << 10),
+    INIT_USB_AUDIO   = (1u << 11),
+    INIT_UPDATED     = (1u << 12),
+    INIT_ALL         = 0x1FFFu,
+};
 
 // ===== CPU Utilization Tracking =====
 // Uses FreeRTOS idle hooks with microsecond wall-clock timing.
@@ -94,6 +119,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
       wsAuthTimeout[num] = 0;
       wsSessionId[num] = "";
       _audioSubscribed[num] = false;
+      _pendingInitState[num] = 0;
       break;
 
     case WStype_CONNECTED:
@@ -135,39 +161,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             webSocket.sendTXT(num, "{\"type\":\"authSuccess\"}");
             LOG_D("[WebSocket] Client [%u] authenticated", num);
 
-            // Send initial state after authentication
-            sendWiFiStatus();
-            sendSmartSensingStateInternal();
-            sendDisplayState();
-            sendBuzzerState();
-            sendSignalGenState();
-            sendAudioGraphState();
-            sendAudioQualityState();
-            sendDebugState();
-            // Send per-ADC enabled state
-            {
-              JsonDocument adcDoc;
-              adcDoc["type"] = "adcState";
-              JsonArray arr = adcDoc["enabled"].to<JsonArray>();
-              for (int i = 0; i < NUM_AUDIO_ADCS; i++) arr.add(appState.adcEnabled[i]);
-              String adcJson;
-              serializeJson(adcDoc, adcJson);
-              webSocket.sendTXT(num, adcJson.c_str());
-            }
-#ifdef DSP_ENABLED
-            sendDspState();
-#endif
-#ifdef DAC_ENABLED
-            sendDacState();
-#endif
-#ifdef USB_AUDIO_ENABLED
-            sendUsbAudioState();
-#endif
-
-            // If device just updated, notify the client
-            if (appState.justUpdated) {
-              broadcastJustUpdated();
-            }
+            // Defer initial state sends — drainPendingInitState() will send
+            // 3 per main-loop iteration to avoid WiFi TX burst audio pops.
+            _pendingInitState[num] = INIT_ALL;
           } else {
             webSocket.sendTXT(num, "{\"type\":\"authFailed\",\"error\":\"Invalid session\"}");
             webSocket.disconnect(num);
@@ -220,7 +216,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (timeoutMs == 0 || timeoutMs == 30000 || timeoutMs == 60000 ||
               timeoutMs == 300000 || timeoutMs == 600000) {
             AppState::getInstance().setScreenTimeout(timeoutMs);
-            saveSettings();
+            saveSettingsDeferred();
             LOG_I("[WebSocket] Screen timeout set to %d seconds", timeoutSec);
             sendDisplayState();
           }
@@ -228,14 +224,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           int newBright = doc["value"].as<int>();
           if (newBright >= 1 && newBright <= 255) {
             AppState::getInstance().setBacklightBrightness((uint8_t)newBright);
-            saveSettings();
+            saveSettingsDeferred();
             LOG_I("[WebSocket] Brightness set to %d", newBright);
             sendDisplayState();
           }
         } else if (msgType == "setDimEnabled") {
           bool newState = doc["enabled"].as<bool>();
           AppState::getInstance().setDimEnabled(newState);
-          saveSettings();
+          saveSettingsDeferred();
           LOG_I("[WebSocket] Dim %s", newState ? "enabled" : "disabled");
           sendDisplayState();
         } else if (msgType == "setDimTimeout") {
@@ -244,7 +240,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (dimMs == 5000 || dimMs == 10000 || dimMs == 15000 ||
               dimMs == 30000 || dimMs == 60000) {
             AppState::getInstance().setDimTimeout(dimMs);
-            saveSettings();
+            saveSettingsDeferred();
             LOG_I("[WebSocket] Dim timeout set to %d seconds", dimSec);
             sendDisplayState();
           }
@@ -252,21 +248,21 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           int dimPwm = doc["value"].as<int>();
           if (dimPwm == 26 || dimPwm == 64 || dimPwm == 128 || dimPwm == 191) {
             AppState::getInstance().setDimBrightness((uint8_t)dimPwm);
-            saveSettings();
+            saveSettingsDeferred();
             LOG_I("[WebSocket] Dim brightness set to %d", dimPwm);
             sendDisplayState();
           }
         } else if (msgType == "setBuzzerEnabled") {
           bool newState = doc["enabled"].as<bool>();
           AppState::getInstance().setBuzzerEnabled(newState);
-          saveSettings();
+          saveSettingsDeferred();
           LOG_I("[WebSocket] Buzzer set to %s", newState ? "ON" : "OFF");
           sendBuzzerState();
         } else if (msgType == "setBuzzerVolume") {
           int newVol = doc["value"].as<int>();
           if (newVol >= 0 && newVol <= 2) {
             AppState::getInstance().setBuzzerVolume(newVol);
-            saveSettings();
+            saveSettingsDeferred();
             LOG_I("[WebSocket] Buzzer volume set to %d", newVol);
             sendBuzzerState();
           }
@@ -278,29 +274,29 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           int rate = doc["value"].as<int>();
           if (rate == 33 || rate == 50 || rate == 100) {
             appState.audioUpdateRate = (uint16_t)rate;
-            saveSettings();
+            saveSettingsDeferred();
             LOG_I("[WebSocket] Audio update rate set to %d ms", rate);
           }
         } else if (msgType == "setVuMeterEnabled") {
           appState.vuMeterEnabled = doc["enabled"].as<bool>();
-          saveSettings();
+          saveSettingsDeferred();
           sendAudioGraphState();
           LOG_I("[WebSocket] VU meter %s", appState.vuMeterEnabled ? "enabled" : "disabled");
         } else if (msgType == "setWaveformEnabled") {
           appState.waveformEnabled = doc["enabled"].as<bool>();
-          saveSettings();
+          saveSettingsDeferred();
           sendAudioGraphState();
           LOG_I("[WebSocket] Waveform %s", appState.waveformEnabled ? "enabled" : "disabled");
         } else if (msgType == "setSpectrumEnabled") {
           appState.spectrumEnabled = doc["enabled"].as<bool>();
-          saveSettings();
+          saveSettingsDeferred();
           sendAudioGraphState();
           LOG_I("[WebSocket] Spectrum %s", appState.spectrumEnabled ? "enabled" : "disabled");
         } else if (msgType == "setFftWindowType") {
           int wt = doc["value"].as<int>();
           if (wt >= 0 && wt < FFT_WINDOW_COUNT) {
             appState.fftWindowType = (FftWindowType)wt;
-            saveSettings();
+            saveSettingsDeferred();
             sendAudioGraphState();
             LOG_I("[WebSocket] FFT window type: %d", wt);
           }
@@ -344,7 +340,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (msgType == "setEmergencyLimiterEnabled") {
           if (doc["enabled"].is<bool>()) {
             appState.setEmergencyLimiterEnabled(doc["enabled"].as<bool>());
-            saveSettings();
+            saveSettingsDeferred();
             sendEmergencyLimiterState();
             LOG_I("[WebSocket] Emergency limiter enabled: %d", appState.emergencyLimiterEnabled);
           }
@@ -353,7 +349,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             float threshold = doc["threshold"].as<float>();
             if (threshold >= -6.0f && threshold <= 0.0f) {
               appState.setEmergencyLimiterThreshold(threshold);
-              saveSettings();
+              saveSettingsDeferred();
               sendEmergencyLimiterState();
               LOG_I("[WebSocket] Emergency limiter threshold: %.2f dBFS", threshold);
             }
@@ -382,7 +378,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (msgType == "setDebugMode") {
           appState.debugMode = doc["enabled"].as<bool>();
           applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
-          saveSettings();
+          saveSettingsDeferred();
           sendDebugState();
           LOG_I("[WebSocket] Debug mode %s", appState.debugMode ? "enabled" : "disabled");
         } else if (msgType == "setDebugSerialLevel") {
@@ -390,23 +386,23 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (level >= 0 && level <= 3) {
             appState.debugSerialLevel = level;
             applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
-            saveSettings();
+            saveSettingsDeferred();
             sendDebugState();
             LOG_I("[WebSocket] Debug serial level set to %d", level);
           }
         } else if (msgType == "setDebugHwStats") {
           appState.debugHwStats = doc["enabled"].as<bool>();
-          saveSettings();
+          saveSettingsDeferred();
           sendDebugState();
           LOG_I("[WebSocket] Debug HW stats %s", appState.debugHwStats ? "enabled" : "disabled");
         } else if (msgType == "setDebugI2sMetrics") {
           appState.debugI2sMetrics = doc["enabled"].as<bool>();
-          saveSettings();
+          saveSettingsDeferred();
           sendDebugState();
           LOG_I("[WebSocket] Debug I2S metrics %s", appState.debugI2sMetrics ? "enabled" : "disabled");
         } else if (msgType == "setDebugTaskMonitor") {
           appState.debugTaskMonitor = doc["enabled"].as<bool>();
-          saveSettings();
+          saveSettingsDeferred();
           sendDebugState();
           LOG_I("[WebSocket] Debug task monitor %s", appState.debugTaskMonitor ? "enabled" : "disabled");
         }
@@ -931,7 +927,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 #ifdef DAC_ENABLED
         else if (msgType == "setDacEnabled") {
           appState.dacEnabled = doc["enabled"].as<bool>();
-          dac_save_settings();  // Save BEFORE init so dac_output_init() loads correct value
+          dac_save_settings_deferred();  // Save BEFORE init so dac_output_init() loads correct value
           if (appState.dacEnabled && !appState.dacReady) {
             dac_output_init();
           } else if (!appState.dacEnabled) {
@@ -945,7 +941,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (v >= 0 && v <= 100) {
             appState.dacVolume = (uint8_t)v;
             dac_update_volume(appState.dacVolume);
-            dac_save_settings();
+            dac_save_settings_deferred();
             appState.markDacDirty();
           }
         }
@@ -954,7 +950,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           appState.dacMute = doc["mute"].as<bool>();
           DacDriver *drv = dac_get_driver();
           if (drv) drv->setMute(appState.dacMute);
-          dac_save_settings();
+          dac_save_settings_deferred();
           appState.markDacDirty();
           if (wasMuted != appState.dacMute) {
             LOG_I("[DAC] Mute: %s -> %s", wasMuted ? "ON" : "OFF", appState.dacMute ? "ON" : "OFF");
@@ -966,7 +962,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           appState.dacFilterMode = (uint8_t)fm;
           DacDriver *drv = dac_get_driver();
           if (drv) drv->setFilterMode(appState.dacFilterMode);
-          dac_save_settings();
+          dac_save_settings_deferred();
           appState.markDacDirty();
           LOG_I("[DAC] Filter mode: %d -> %d", prevFilter, appState.dacFilterMode);
         }
@@ -1108,7 +1104,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (adc >= 0 && adc < NUM_AUDIO_ADCS && newVal != appState.adcEnabled[adc]) {
             appState.adcEnabled[adc] = newVal;
             appState.markAdcEnabledDirty();
-            saveSettings();
+            saveSettingsDeferred();
             // Broadcast new state to all clients
             JsonDocument resp;
             resp["type"] = "adcState";
@@ -1126,11 +1122,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           bool newVal = doc["enabled"].as<bool>();
           if (newVal != appState.usbAudioEnabled) {
             appState.usbAudioEnabled = newVal;
-            saveSettings();
+            saveSettingsDeferred();
             if (newVal) {
               usb_audio_init();
+              appState.pipelineInputBypass[3] = false;
+              appState.pipelineDspBypass[3] = false;
             } else {
               usb_audio_deinit();
+              appState.pipelineInputBypass[3] = true;
             }
             appState.markUsbAudioDirty();
             LOG_I("[WebSocket] USB Audio %s", newVal ? "enabled" : "disabled");
@@ -1495,8 +1494,12 @@ void sendUsbAudioState() {
   doc["volume"] = appState.usbAudioVolume;
   doc["volumeLinear"] = usb_audio_get_volume_linear();
   doc["mute"] = appState.usbAudioMute;
-  doc["overruns"] = appState.usbAudioBufferOverruns;
-  doc["underruns"] = appState.usbAudioBufferUnderruns;
+  doc["overruns"]  = usb_audio_get_overruns();
+  doc["underruns"] = usb_audio_get_underruns();
+  doc["vuL"]             = appState.usbAudioVuL;
+  doc["vuR"]             = appState.usbAudioVuR;
+  doc["negotiatedRate"]  = appState.usbAudioNegotiatedRate;
+  doc["negotiatedDepth"] = appState.usbAudioNegotiatedDepth;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1843,9 +1846,66 @@ void sendHardwareStats() {
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
 
+// ===== Deferred Initial-State Drain =====
+// Sends up to 2 state messages per call, one client at a time.
+// Called from main loop after webSocket.loop() to spread WiFi TX load.
+
+void drainPendingInitState() {
+    for (int c = 0; c < MAX_WS_CLIENTS; c++) {
+        uint32_t &pending = _pendingInitState[c];
+        if (!pending || !wsAuthStatus[c]) continue;
+
+        int sent = 0;
+        const int MAX_PER_ITER = 2;
+
+        if (sent < MAX_PER_ITER && (pending & INIT_WIFI))        { sendWiFiStatus();                  pending &= ~INIT_WIFI;        sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_SENSING))     { sendSmartSensingStateInternal();   pending &= ~INIT_SENSING;     sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_DISPLAY))     { sendDisplayState();                pending &= ~INIT_DISPLAY;     sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_BUZZER))      { sendBuzzerState();                 pending &= ~INIT_BUZZER;      sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_SIGGEN))      { sendSignalGenState();              pending &= ~INIT_SIGGEN;      sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_AUDIO_GRAPH)) { sendAudioGraphState();             pending &= ~INIT_AUDIO_GRAPH; sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_AUDIO_QUAL))  { sendAudioQualityState();           pending &= ~INIT_AUDIO_QUAL;  sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_DEBUG))       { sendDebugState();                  pending &= ~INIT_DEBUG;       sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_ADC_STATE)) {
+            JsonDocument adcDoc;
+            adcDoc["type"] = "adcState";
+            JsonArray arr = adcDoc["enabled"].to<JsonArray>();
+            for (int i = 0; i < NUM_AUDIO_ADCS; i++) arr.add(appState.adcEnabled[i]);
+            String adcJson;
+            serializeJson(adcDoc, adcJson);
+            webSocket.sendTXT(c, adcJson.c_str());
+            pending &= ~INIT_ADC_STATE;
+            sent++; delay(1);
+        }
+#ifdef DSP_ENABLED
+        if (sent < MAX_PER_ITER && (pending & INIT_DSP))         { sendDspState();                    pending &= ~INIT_DSP;         sent++; delay(1); }
+#else
+        pending &= ~INIT_DSP;
+#endif
+#ifdef DAC_ENABLED
+        if (sent < MAX_PER_ITER && (pending & INIT_DAC))         { sendDacState();                    pending &= ~INIT_DAC;         sent++; delay(1); }
+#else
+        pending &= ~INIT_DAC;
+#endif
+#ifdef USB_AUDIO_ENABLED
+        if (sent < MAX_PER_ITER && (pending & INIT_USB_AUDIO))   { sendUsbAudioState();               pending &= ~INIT_USB_AUDIO;   sent++; delay(1); }
+#else
+        pending &= ~INIT_USB_AUDIO;
+#endif
+        if (sent < MAX_PER_ITER && (pending & INIT_UPDATED)) {
+            if (appState.justUpdated) broadcastJustUpdated();
+            pending &= ~INIT_UPDATED;
+            sent++; delay(1);
+        }
+
+        break; // Only drain one client per call to avoid starving the loop
+    }
+}
+
 // ===== Audio Streaming to Subscribed Clients =====
 
 void sendAudioData() {
+  if (httpServingPage) return;
   // Early return if no clients are subscribed
   bool anySubscribed = false;
   for (int i = 0; i < MAX_WS_CLIENTS; i++) {
