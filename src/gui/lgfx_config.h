@@ -2,7 +2,7 @@
  * LovyanGFX hardware configuration for ALX Nova Controller
  * ST7735S 128x160 TFT on ESP32-S3 via Hardware SPI2 (FSPI)
  *
- * Replaces TFT_eSPI User_Setup.h — LovyanGFX provides reliable DMA,
+ * Replaces legacy TFT_eSPI setup — LovyanGFX provides reliable DMA,
  * native BGR color order, and active ESP32-S3 support.
  */
 

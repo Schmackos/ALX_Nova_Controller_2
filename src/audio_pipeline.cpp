@@ -385,6 +385,10 @@ static void pipeline_update_metering() {
 static const uint32_t DUMP_INTERVAL_LOOPS = 2500;
 
 static void audio_pipeline_task_fn(void * /*param*/) {
+    // Create I2S channels here (Core 1) so the DMA ISR is pinned to Core 1,
+    // isolated from WiFi TX/RX interrupts on Core 0 that cause audio pops.
+    i2s_audio_init_channels();
+
     esp_task_wdt_add(NULL);
     uint32_t loopCount = 0;
     while (true) {

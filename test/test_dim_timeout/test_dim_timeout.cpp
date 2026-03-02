@@ -71,7 +71,7 @@ static MockAppState appState;
 
 // ===== Dim state machine simulation =====
 // Mirrors the logic in gui_manager.cpp gui_task loop for unit testing
-// without pulling in LVGL, TFT_eSPI, or FreeRTOS dependencies.
+// without pulling in LVGL, LovyanGFX, or FreeRTOS dependencies.
 
 static bool sim_screen_awake = true;
 static bool sim_screen_dimmed = false;

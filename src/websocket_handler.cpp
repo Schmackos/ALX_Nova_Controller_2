@@ -290,7 +290,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           LOG_I("[WebSocket] Client [%u] audio subscription %s", num, enabled ? "enabled" : "disabled");
         } else if (msgType == "setAudioUpdateRate") {
           int rate = doc["value"].as<int>();
-          if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
+          if (rate == 33 || rate == 50 || rate == 100) {
             appState.audioUpdateRate = (uint16_t)rate;
             saveSettings();
             LOG_I("[WebSocket] Audio update rate set to %d ms", rate);
