@@ -2,6 +2,7 @@
 #define I2S_AUDIO_H
 
 #include <stdint.h>
+#include <stddef.h>  // size_t
 
 #ifndef NUM_AUDIO_ADCS
 #define NUM_AUDIO_ADCS 2
@@ -118,6 +119,10 @@ int i2s_audio_get_num_adcs();
 // Serial output from the main loop context to avoid blocking I2S DMA.
 void audio_periodic_dump();
 
+// Called by the audio pipeline task every 5s to schedule a dump.
+// Safe to call from any FreeRTOS task — sets a volatile flag only.
+void i2s_audio_request_dump();
+
 // ===== Pure functions exposed for unit testing =====
 AudioHealthStatus audio_derive_health_status(const AdcDiagnostics &diag);
 AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag); // Legacy overload (uses adc[0])
@@ -151,5 +156,41 @@ void audio_downsample_waveform(const int32_t *stereo_frames, int frame_count,
 // bands: output array of SPECTRUM_BANDS floats (0.0-1.0 normalized)
 void audio_aggregate_fft_bands(const float *magnitudes, int fft_size,
                                float sample_rate, float *bands, int num_bands);
+
+// ===== ADC Read API (used by audio_pipeline) =====
+#ifndef NATIVE_TEST
+bool i2s_audio_read_adc1(void *buf, size_t size, size_t *bytes_read, uint32_t timeout_ms);
+bool i2s_audio_read_adc2(void *buf, size_t size, size_t *bytes_read, uint32_t timeout_ms);
+bool i2s_audio_adc2_ok();
+// Simple dBFS-only update (kept for backward compatibility).
+void i2s_audio_update_analysis_dbfs(float dbfs_adc1);
+// Full metering update — RMS/VU/peak/dBFS computed by audio_pipeline per buffer.
+// Uses same volatile-cast pattern as i2s_audio_get_analysis().
+void i2s_audio_update_analysis_metering(const AdcAnalysis &adc0);
+// Waveform + FFT accumulation — called once per DMA buffer from audio_pipeline_task.
+// rawLJ: left-justified int32 stereo interleaved (pre-float-conversion ADC data).
+// frames: DMA_BUF_LEN stereo frames. adcIndex: 0=ADC1, 1=ADC2.
+void i2s_audio_push_waveform_fft(const int32_t *rawLJ, int frames, int adcIndex);
+#else
+inline bool i2s_audio_read_adc1(void*, size_t, size_t* br, uint32_t) { if (br) *br = 0; return false; }
+inline bool i2s_audio_read_adc2(void*, size_t, size_t* br, uint32_t) { if (br) *br = 0; return false; }
+inline bool i2s_audio_adc2_ok() { return false; }
+inline void i2s_audio_update_analysis_dbfs(float) {}
+inline void i2s_audio_update_analysis_metering(const AdcAnalysis &) {}
+inline void i2s_audio_push_waveform_fft(const int32_t *, int, int) {}
+#endif
+
+// ===== I2S TX Bridge API (used by dac_hal to manage full-duplex on I2S0) =====
+// Enable I2S TX full-duplex: tears down RX-only channel, recreates as RX+TX.
+// Pauses audio task during reinit. Returns true on success.
+#ifndef NATIVE_TEST
+bool i2s_audio_enable_tx(uint32_t sample_rate);
+void i2s_audio_disable_tx();
+void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
+#else
+inline bool i2s_audio_enable_tx(uint32_t) { return true; }
+inline void i2s_audio_disable_tx() {}
+inline void i2s_audio_write(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+#endif
 
 #endif // I2S_AUDIO_H

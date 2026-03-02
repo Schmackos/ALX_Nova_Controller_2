@@ -1,5 +1,30 @@
 # Release Notes
 
+## Version 1.9.0
+
+## New Features
+- Modular audio pipeline (`audio_pipeline.cpp/h`): 4-lane input (ADC1, ADC2, Signal Generator, USB), 8×8 routing matrix, float32 processing in PSRAM, DMA int32 I/O at edges
+- Live waveform and frequency spectrum graphs on web UI: `i2s_audio_push_waveform_fft()` feeds raw ADC1 data into ring-buffer FFT accumulator, WebSocket graph display now fully functional
+- Signal generator software injection as a dedicated pipeline lane (lane 2) with additive mixing via routing matrix
+
+## Improvements
+- Migrated I2S ADC driver from legacy `<driver/i2s.h>` to IDF5 `<driver/i2s_std.h>` new API — eliminates `i2s_read()` timeout regression under Arduino 3.x/IDF5
+- PCM1808 full-duplex init order: TX-first with MCLK=GPIO3 in both TX and RX configs; IDF5 GPIO matrix re-routes to the same MCLK signal without clearing it — resolves PCM1808 PLL lock failure (noise floor → clean audio capture)
+- Audio pipeline task decoupled from I2S HAL: pipeline reads ADC, runs DSP, mixes matrix, writes DAC in a single priority-3 task on Core 1 — MCLK remains continuous regardless of DAC enable/disable state
+- DSP enable/disable toggle on web UI now correctly controls pipeline-level lane bypass via `audio_pipeline_bypass_dsp()`
+- Removed debug bypasses introduced during development: ADC1 DSP active by default, routing matrix no longer bypassed at startup
+
+## Bug Fixes
+- Fixed waveform and spectrum graphs showing no data (accumulator function never called from pipeline task)
+- Fixed DSP On/Off toggle always appearing as "on" (websocket handler only set AppState flag, never updated pipeline bypass flags)
+- Fixed routing matrix bypass flag default (`_matrixBypass = true`) conflicting with AppState sync
+
+## Breaking Changes
+None
+
+## Known Issues
+- None
+
 ## Version 1.8.9
 
 ## New Features

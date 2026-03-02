@@ -13,6 +13,7 @@
 #include "signal_generator.h"
 #include "task_monitor.h"
 #include "i2s_audio.h"
+#include "audio_pipeline.h"
 #ifdef DSP_ENABLED
 #include "dsp_api.h"
 #include "dsp_pipeline.h"
@@ -470,8 +471,6 @@ void setup() {
     doc["channel"] = chanNames[appState.sigGenChannel % 3];
     doc["outputMode"] = appState.sigGenOutputMode == 0 ? "software" : "pwm";
     doc["sweepSpeed"] = appState.sigGenSweepSpeed;
-    const char *targetNames[] = {"input1", "input2", "both"};
-    doc["targetAdc"] = targetNames[appState.sigGenTargetAdc % 3];
     String json;
     serializeJson(doc, json);
     server.send(200, "application/json", json);
@@ -528,17 +527,78 @@ void setup() {
       float s = doc["sweepSpeed"].as<float>();
       if (s >= 1.0f && s <= 22000.0f) { appState.sigGenSweepSpeed = s; changed = true; }
     }
-    if (doc["targetAdc"].is<String>()) {
-      String t = doc["targetAdc"].as<String>();
-      if (t == "input1") appState.sigGenTargetAdc = 0;
-      else if (t == "input2") appState.sigGenTargetAdc = 1;
-      else if (t == "both") appState.sigGenTargetAdc = 2;
-      changed = true;
-    }
     if (changed) {
       siggen_apply_params();
       saveSignalGenSettings();
       appState.markSignalGenDirty();
+    }
+    server.send(200, "application/json", "{\"success\":true}");
+  });
+  // Audio Pipeline Matrix API
+  server.on("/api/pipeline/matrix", HTTP_GET, []() {
+    if (!requireAuth())
+      return;
+    JsonDocument doc;
+    doc["success"] = true;
+    doc["bypass"]  = audio_pipeline_is_matrix_bypass();
+    doc["size"]    = AUDIO_PIPELINE_MATRIX_SIZE;
+    JsonArray matrix = doc["matrix"].to<JsonArray>();
+    for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+      JsonArray row = matrix.add<JsonArray>();
+      for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+        row.add(audio_pipeline_get_matrix_gain(o, i));
+      }
+    }
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+  });
+  server.on("/api/pipeline/matrix", HTTP_PUT, []() {
+    if (!requireAuth())
+      return;
+    if (!server.hasArg("plain")) {
+      server.send(400, "application/json",
+                  "{\"success\":false,\"message\":\"No data\"}");
+      return;
+    }
+    JsonDocument doc;
+    if (deserializeJson(doc, server.arg("plain"))) {
+      server.send(400, "application/json",
+                  "{\"success\":false,\"message\":\"Invalid JSON\"}");
+      return;
+    }
+    // Set bypass mode
+    if (doc["bypass"].is<bool>()) {
+      audio_pipeline_bypass_matrix(doc["bypass"].as<bool>());
+    }
+    // Set single cell (linear gain)
+    if (doc["cell"].is<JsonObject>()) {
+      int out_ch   = doc["cell"]["out"].as<int>();
+      int in_ch    = doc["cell"]["in"].as<int>();
+      float gain   = doc["cell"]["gain"].as<float>();
+      audio_pipeline_set_matrix_gain(out_ch, in_ch, gain);
+    }
+    // Set single cell (dB gain)
+    if (doc["cell_db"].is<JsonObject>()) {
+      int out_ch     = doc["cell_db"]["out"].as<int>();
+      int in_ch      = doc["cell_db"]["in"].as<int>();
+      float gain_db  = doc["cell_db"]["gain_db"].as<float>();
+      audio_pipeline_set_matrix_gain_db(out_ch, in_ch, gain_db);
+    }
+    // Set full matrix (array of 8 rows, each with 8 linear gain values)
+    if (doc["matrix"].is<JsonArray>()) {
+      JsonArray rows = doc["matrix"].as<JsonArray>();
+      int o = 0;
+      for (JsonArray row : rows) {
+        if (o >= AUDIO_PIPELINE_MATRIX_SIZE) break;
+        int i = 0;
+        for (float gain : row) {
+          if (i >= AUDIO_PIPELINE_MATRIX_SIZE) break;
+          audio_pipeline_set_matrix_gain(o, i, gain);
+          i++;
+        }
+        o++;
+      }
     }
     server.send(200, "application/json", "{\"success\":true}");
   });

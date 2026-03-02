@@ -314,6 +314,105 @@ void test_stereo_interleaved_format(void) {
     }
 }
 
+// ===== Pipeline-architecture tests (added for audio_pipeline refactor) =====
+// In the new modular pipeline, siggen is an independent input lane that
+// delivers float32 samples directly. The int32 left-justified format is
+// the I2S hardware boundary; the pipeline interior uses float32 [-1.0, +1.0].
+// These tests verify the conversion contract between the siggen buffer
+// and the float pipeline internal format.
+
+// Helper: convert left-justified 24-bit int32 to float32 [-1.0, +1.0]
+static inline float siggen_int32_to_float(int32_t raw) {
+    return (float)(raw >> 8) / 8388607.0f;
+}
+
+// 14. siggen int32 output after conversion to float is in [-1.0, +1.0]
+void test_siggen_float_output_range_sine(void) {
+    int32_t buf[480 * 2]; // 10ms at 48kHz
+    test_fill_buffer(buf, 480, 48000, WAVE_SINE, 1000.0f, 1.0f, SIGCHAN_BOTH);
+
+    for (int f = 0; f < 480; f++) {
+        float fL = siggen_int32_to_float(buf[f * 2]);
+        float fR = siggen_int32_to_float(buf[f * 2 + 1]);
+        TEST_ASSERT_TRUE(fL >= -1.01f && fL <= 1.01f);
+        TEST_ASSERT_TRUE(fR >= -1.01f && fR <= 1.01f);
+    }
+}
+
+// 15. siggen float output: sine RMS at 0 dBFS ≈ 0.707 (1/sqrt(2))
+void test_siggen_float_rms_sine_full_scale(void) {
+    int32_t buf[1024 * 2];
+    test_fill_buffer(buf, 1024, 48000, WAVE_SINE, 1000.0f, 1.0f, SIGCHAN_BOTH);
+
+    float sum_sq = 0.0f;
+    for (int f = 0; f < 1024; f++) {
+        float s = siggen_int32_to_float(buf[f * 2]);
+        sum_sq += s * s;
+    }
+    float rms = sqrtf(sum_sq / 1024.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.02f, 0.7071f, rms);
+}
+
+// 16. siggen float output: noise RMS at 0 dBFS ≈ 0.577 (uniform distribution)
+void test_siggen_float_rms_noise_full_scale(void) {
+    int32_t buf[8192 * 2]; // Large sample for statistical accuracy
+    test_fill_buffer(buf, 8192, 48000, WAVE_NOISE, 0.0f, 1.0f, SIGCHAN_BOTH);
+
+    float sum_sq = 0.0f;
+    for (int f = 0; f < 8192; f++) {
+        float s = siggen_int32_to_float(buf[f * 2]);
+        sum_sq += s * s;
+    }
+    float rms = sqrtf(sum_sq / 8192.0f);
+    // xorshift32 uniform distribution: RMS ≈ 1/sqrt(3) ≈ 0.577
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.577f, rms);
+}
+
+// 17. siggen float output: square wave at 0 dBFS has RMS = 1.0
+void test_siggen_float_rms_square_full_scale(void) {
+    int32_t buf[480 * 2];
+    test_fill_buffer(buf, 480, 48000, WAVE_SQUARE, 1000.0f, 1.0f, SIGCHAN_BOTH);
+
+    float sum_sq = 0.0f;
+    for (int f = 0; f < 480; f++) {
+        float s = siggen_int32_to_float(buf[f * 2]);
+        sum_sq += s * s;
+    }
+    float rms = sqrtf(sum_sq / 480.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, rms);
+}
+
+// 18. siggen is now an independent pipeline lane: SIGCHAN_CH1 produces a
+// stereo frame where only left is non-zero. In the pipeline the siggen
+// lane holds two float channels (L and R) derived from this buffer.
+// After conversion, the right channel float must be 0.0.
+void test_siggen_pipeline_lane_ch1_only_right_is_zero(void) {
+    int32_t buf[128 * 2];
+    test_fill_buffer(buf, 128, 48000, WAVE_SINE, 440.0f, 1.0f, SIGCHAN_CH1);
+
+    for (int f = 0; f < 128; f++) {
+        float fR = siggen_int32_to_float(buf[f * 2 + 1]);
+        TEST_ASSERT_EQUAL_FLOAT(0.0f, fR);
+    }
+}
+
+// 19. dbfs_to_linear used to scale siggen lane amplitude in float domain
+// Verifies the scaling contract: float output = sin(phase) * linear_amp
+void test_siggen_pipeline_lane_amplitude_contract(void) {
+    // At -6 dBFS: linear amp ≈ 0.501, so float peak ≈ ±0.501
+    float amp_linear = siggen_dbfs_to_linear(-6.02f);
+    int32_t buf[1024 * 2];
+    test_fill_buffer(buf, 1024, 48000, WAVE_SINE, 1000.0f, amp_linear, SIGCHAN_BOTH);
+
+    float peak = 0.0f;
+    for (int f = 0; f < 1024; f++) {
+        float s = fabsf(siggen_int32_to_float(buf[f * 2]));
+        if (s > peak) peak = s;
+    }
+    // Peak of a sine at -6 dBFS should be ~0.501
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.501f, peak);
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -338,6 +437,14 @@ int main(void) {
     RUN_TEST(test_phase_wraps);
     RUN_TEST(test_noise_seed_deterministic);
     RUN_TEST(test_stereo_interleaved_format);
+
+    // Pipeline-architecture tests (siggen as independent float lane)
+    RUN_TEST(test_siggen_float_output_range_sine);
+    RUN_TEST(test_siggen_float_rms_sine_full_scale);
+    RUN_TEST(test_siggen_float_rms_noise_full_scale);
+    RUN_TEST(test_siggen_float_rms_square_full_scale);
+    RUN_TEST(test_siggen_pipeline_lane_ch1_only_right_is_zero);
+    RUN_TEST(test_siggen_pipeline_lane_amplitude_contract);
 
     return UNITY_END();
 }

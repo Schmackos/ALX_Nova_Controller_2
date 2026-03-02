@@ -32,7 +32,7 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (708 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (915 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`.
 
 ## Architecture
 
@@ -54,13 +54,14 @@ Each subsystem is a separate module in `src/`:
 - **auth_handler** — Session token management, web password authentication
 - **button_handler** — Debouncing, short/long/very-long press and multi-click detection
 - **buzzer_handler** — Piezo buzzer with multi-pattern sequencer, ISR-safe encoder tick/click, volume control, FreeRTOS mutex for dual-core safety
-- **i2s_audio** — Dual PCM1808 I2S ADC driver, RMS/dBFS, VU metering, peak hold, waveform downsampling, FFT spectrum analysis (Radix-4 ESP-DSP on ESP32, arduinoFFT on native), 6 selectable FFT window types, SNR/SFDR analysis, audio health diagnostics
+- **audio_pipeline** — Modular audio pipeline: 4-lane input (ADC1, ADC2, Siggen, USB) → per-input DSP → 8×8 routing matrix → DAC output. Float32 [-1.0,+1.0] internally; int32↔float only at edges. DMA raw buffers in internal SRAM; float working buffers in PSRAM. RMS/VU/peak metering writes to shared `_analysis` struct via `i2s_audio_update_analysis_metering()`. **Never calls `i2s_configure_adc1()` in the task loop** — MCLK must remain continuous for PCM1808 PLL stability. Lives in `src/audio_pipeline.h/.cpp`.
+- **i2s_audio** — Dual PCM1808 I2S ADC HAL: driver init/config, I2S TX bridge, FFT/waveform buffers, pure computation functions (RMS, VU, peak, quantize, downsample, FFT bands, health status). `i2s_audio_init()` delegates audio task creation to `audio_pipeline_init()`. Analysis shared state written by pipeline, read by consumers via `i2s_audio_get_analysis()`.
 - **dsp_pipeline** — 4-channel audio DSP engine: biquad IIR, FIR, limiter, gain, delay, polarity, mute, compressor. Double-buffered config with glitch-free swap. ESP32 uses pre-built `libespressif__esp-dsp.a` (S3 assembly-optimized); native tests use `lib/esp_dsp_lite/` (ANSI C fallback, `lib_ignore`d on ESP32). Delay lines use PSRAM (`ps_calloc`) when available, with heap pre-flight check (40KB reserve) on fallback. `dsp_add_stage()` rolls back on pool exhaustion; config imports skip failed stages
 - **dsp_coefficients** — RBJ Audio EQ Cookbook biquad coefficient computation via `dsp_gen_*` functions in `src/dsp_biquad_gen.h/.c` (renamed from `dsps_biquad_gen_*` to avoid symbol conflicts with pre-built ESP-DSP)
 - **dsp_crossover** — Crossover presets (LR2/LR4/LR8, Butterworth), bass management, 4x4 routing matrix (SIMD-accelerated via dsps_mulc/dsps_add)
 - **dsp_rew_parser** — Equalizer APO + miniDSP import/export, FIR text, WAV IR loading
 - **dsp_api** — REST API endpoints for DSP config CRUD, persistence (LittleFS), debounced save
-- **signal_generator** — Multi-waveform test signal generator (sine, square, noise, sweep), software injection + PWM output modes
+- **signal_generator** — Multi-waveform test signal generator (sine, square, noise, sweep), software injection (lane 2 in audio_pipeline) + PWM output modes
 - **task_monitor** — FreeRTOS task enumeration via `pxTaskGetNext`, stack usage, priority, core affinity. Runs on a dedicated 5s timer in main loop (decoupled from HW stats broadcast). Only scans stack watermarks for known app tasks. Opt-in via `debugTaskMonitor` (default off). Uses ESP-IDF `task_snapshot.h` API (not `uxTaskGetSystemState` which is unavailable in pre-compiled Arduino FreeRTOS lib)
 - **usb_audio** — TinyUSB UAC2 speaker device on native USB OTG (GPIO 19/20). Custom audio class driver registered via `usbd_app_driver_get_cb()` weak function. SPSC lock-free ring buffer (1024 frames, PSRAM). Format conversion: USB PCM16/PCM24 → left-justified int32. FreeRTOS task on Core 0 with adaptive poll rate (100ms idle, 1ms streaming). Guarded by `-D USB_AUDIO_ENABLED`. Requires `build_unflags = -DARDUINO_USB_MODE -DARDUINO_USB_CDC_ON_BOOT` in platformio.ini
 - **debug_serial** — Log-level filtered serial output (`LOG_D`/`LOG_I`/`LOG_W`/`LOG_E`/`LOG_NONE`), runtime level control via `applyDebugSerialLevel()`, WebSocket log forwarding
@@ -81,9 +82,9 @@ Key GUI modules in `src/gui/`:
 HTTP server on port 80 with REST API endpoints under `/api/`. WebSocket server on port 81 for real-time updates. API endpoints are registered in `main.cpp`.
 
 ### FreeRTOS Tasks
-Concurrent tasks with configurable stack sizes and priorities defined in `src/config.h` (`TASK_STACK_SIZE_*`, `TASK_PRIORITY_*`, `I2S_DMA_BUF_COUNT`/`I2S_DMA_BUF_LEN`). Main loop runs on Core 0; GUI task and audio capture task (`audio_capture_task`, priority 3) run on Core 1 (`TASK_CORE_AUDIO`). USB audio task (`usb_audio`, priority 1) runs on Core 0 polling TinyUSB with adaptive timeout (100ms idle, 1ms streaming). OTA update check and download run as one-shot tasks on Core 1 via `startOTACheckTask()` / `startOTADownloadTask()` in `src/ota_updater.cpp`. Cross-core communication uses dirty flags in AppState — GUI/OTA tasks set flags, main loop handles WebSocket/MQTT broadcasts.
+Concurrent tasks with configurable stack sizes and priorities defined in `src/config.h` (`TASK_STACK_SIZE_*`, `TASK_PRIORITY_*`, `I2S_DMA_BUF_COUNT`/`I2S_DMA_BUF_LEN`). Main loop runs on Core 0; GUI task and audio pipeline task (`audio_pipeline_task`, priority 3) run on Core 1 (`TASK_CORE_AUDIO`). USB audio task (`usb_audio`, priority 1) runs on Core 0 polling TinyUSB with adaptive timeout (100ms idle, 1ms streaming). OTA update check and download run as one-shot tasks on Core 1 via `startOTACheckTask()` / `startOTADownloadTask()` in `src/ota_updater.cpp`. Cross-core communication uses dirty flags in AppState — GUI/OTA tasks set flags, main loop handles WebSocket/MQTT broadcasts.
 
-**I2S driver safety**: The DAC module may uninstall/reinstall the I2S_NUM_0 driver at runtime (e.g., toggling DAC on/off). To prevent crashes with `audio_capture_task` calling `i2s_read()` concurrently, the `appState.audioPaused` volatile flag is set before `i2s_driver_uninstall()` and cleared after reinstall. The audio task checks this flag each iteration and yields while paused.
+**I2S driver safety**: The DAC module may uninstall/reinstall the I2S_NUM_0 driver at runtime (e.g., toggling DAC on/off). To prevent crashes with `audio_pipeline_task` calling `i2s_read()` concurrently, the `appState.audioPaused` volatile flag is set before `i2s_driver_uninstall()` and cleared after reinstall. The audio task checks this flag each iteration and yields while paused.
 
 ### Heap Safety & PSRAM
 The board has 8MB OPI PSRAM (Freenove ESP32-S3 WROOM N16R8). DSP delay lines are allocated via `ps_calloc()` when PSRAM is available, falling back to regular `calloc()` with a pre-flight heap check (blocks allocation if free heap would drop below 40KB reserve). The `heapCritical` flag is set when `ESP.getMaxAllocHeap() < 40KB`, monitored every 30s in the main loop.
@@ -163,7 +164,7 @@ All modules use `debug_serial.h` macros (`LOG_D`, `LOG_I`, `LOG_W`, `LOG_E`) wit
 When adding logging to new modules, follow these conventions:
 - Use `LOG_I` for state transitions and significant events (start/stop, connect/disconnect, health changes)
 - Use `LOG_D` for high-frequency operational details (pattern steps, param snapshots)
-- Never log inside ISR paths or real-time FreeRTOS tasks (e.g., `audio_capture_task`) — `Serial.print` blocks when UART TX buffer fills, starving DMA and causing audio dropouts. Use dirty-flag pattern: task sets flag, main loop calls `audio_periodic_dump()` for actual Serial/WS output
+- Never log inside ISR paths or real-time FreeRTOS tasks (e.g., `audio_pipeline_task`) — `Serial.print` blocks when UART TX buffer fills, starving DMA and causing audio dropouts. Use dirty-flag pattern: task sets flag, main loop calls `audio_periodic_dump()` for actual Serial/WS output
 - Log transitions, not repetitive state (use static `prev` variables to detect changes)
 
 ## Key Dependencies

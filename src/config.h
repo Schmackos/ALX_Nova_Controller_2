@@ -192,6 +192,11 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define I2S_DMA_BUF_COUNT 8     // 8 buffers x 256 samples = ~42ms runway at 48kHz
 #define I2S_DMA_BUF_LEN   256
 
+// ===== Audio Pipeline Configuration =====
+#define AUDIO_PIPELINE_MAX_INPUTS  4   // ADC1, ADC2, Siggen, USB Audio
+#define AUDIO_PIPELINE_MAX_OUTPUTS 4   // DAC output channels
+#define AUDIO_PIPELINE_MATRIX_SIZE 8   // 8x8 routing matrix (4 inputs × 2ch = 8 input channels)
+
 // ===== GUI Configuration (TFT + Rotary Encoder) =====
 #ifdef GUI_ENABLED
 

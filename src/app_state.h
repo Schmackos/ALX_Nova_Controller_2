@@ -372,7 +372,6 @@ public:
   int sigGenChannel = 2;                // 0=Ch1, 1=Ch2, 2=Both
   int sigGenOutputMode = 0;             // 0=software, 1=PWM
   float sigGenSweepSpeed = 1000.0f;     // Hz per second
-  int sigGenTargetAdc = 2;              // 0=ADC 1, 1=ADC 2, 2=Both
 
   void setSignalGenEnabled(bool enabled);
   void markSignalGenDirty() { _sigGenDirty = true; }
@@ -507,6 +506,14 @@ public:
   bool bootAnimEnabled = true;         // Enable/disable boot animation
   int bootAnimStyle = 0;               // 0-5 animation style index
 #endif
+
+  // ===== Audio Pipeline Bypass Flags =====
+  // Normal operation: ADC1 + Siggen active, matrix routes both to DAC.
+  // ADC2 and USB bypassed until physically connected.
+  bool pipelineInputBypass[4] = {false, true, false, true};  // ADC1+Siggen active; ADC2/USB bypassed
+  bool pipelineDspBypass[4]   = {false, false, true, true};  // ADC1+ADC2 use DSP; Siggen+USB bypass DSP
+  bool pipelineMatrixBypass   = false;   // Matrix active: routes ADC1 L/R + Siggen L/R → DAC L/R
+  bool pipelineOutputBypass   = false;
 
   // ===== Error State =====
   int errorCode = 0;
