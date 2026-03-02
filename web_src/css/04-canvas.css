@@ -1,0 +1,279 @@
+/* ===== 04-canvas.css ===== */
+
+        /* ===== Graph Canvas ===== */
+        .graph-container {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .graph-canvas {
+            width: 100%;
+            height: 120px;
+            display: block;
+        }
+
+        .graph-embedded {
+            background: #1A1A1A;
+            border-radius: 8px;
+            padding: 12px;
+            padding-left: 40px;
+            padding-bottom: 28px;
+            margin-top: 12px;
+        }
+
+        .graph-legend {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .graph-embedded .graph-canvas {
+            width: 100%;
+            height: 140px;
+        }
+
+        /* ===== Audio Tab Styles ===== */
+        .audio-canvas-wrap {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 8px;
+            margin-top: 8px;
+        }
+
+        .audio-canvas-wrap canvas {
+            width: 100%;
+            display: block;
+            border-radius: 4px;
+        }
+
+        .audio-canvas-wrap canvas.waveform-canvas {
+            height: 160px;
+        }
+
+        .audio-canvas-wrap canvas.spectrum-canvas {
+            height: 140px;
+        }
+
+        .vu-meter-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .vu-meter-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            width: 16px;
+            text-align: right;
+        }
+
+        .vu-meter-track {
+            flex: 1;
+            height: 18px;
+            background: var(--bg-input);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .vu-meter-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(to right, #4CAF50 0%, #4CAF50 50%, #FFC107 70%, #FF9800 85%, #F44336 100%);
+            width: 0%;
+        }
+
+        .vu-meter-peak {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: #FFFFFF;
+            left: 0%;
+        }
+
+        .vu-meter-db {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            width: 72px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .vu-scale {
+            flex: 1;
+            position: relative;
+            height: 14px;
+            margin-top: 2px;
+        }
+        .vu-tick {
+            position: absolute;
+            font-size: 9px;
+            color: var(--text-secondary);
+            opacity: 0.6;
+            transform: translateX(-50%);
+        }
+        .vu-tick::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: 50%;
+            width: 1px;
+            height: 3px;
+            background: var(--text-secondary);
+            opacity: 0.4;
+        }
+
+        .ppm-canvas {
+            flex: 1;
+            height: 22px;
+            border-radius: 4px;
+        }
+
+        .signal-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #666;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+
+        .signal-dot.active {
+            background: #4CAF50;
+            box-shadow: 0 0 6px #4CAF50;
+        }
+
+        .dominant-freq-readout {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 6px;
+        }
+
+        .dominant-freq-readout span {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* Dual ADC responsive grid */
+        .dual-canvas-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .dual-canvas-grid .canvas-panel {
+            min-width: 0;
+        }
+        .canvas-panel-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        /* ADC section headers in VU meters */
+        .adc-section-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            margin-bottom: 6px;
+        }
+        .adc-section-header:first-child {
+            margin-top: 0;
+        }
+        .adc-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .adc-status-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .adc-status-badge.ok {
+            background: rgba(76,175,80,0.15);
+            color: #4CAF50;
+        }
+        .adc-status-badge.no-data {
+            background: rgba(158,158,158,0.15);
+            color: #9E9E9E;
+        }
+        .adc-status-badge.clipping {
+            background: rgba(244,67,54,0.15);
+            color: #F44336;
+        }
+        .adc-status-badge.noise-only {
+            background: rgba(255,193,7,0.15);
+            color: #FFC107;
+        }
+        .adc-status-badge.i2s-error {
+            background: rgba(244,67,54,0.15);
+            color: #F44336;
+        }
+        .adc-status-badge.hw-fault {
+            background: rgba(156,39,176,0.15);
+            color: #9C27B0;
+        }
+        .clip-indicator {
+            display: none;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #F44336;
+            color: #FFF;
+            letter-spacing: 0.5px;
+        }
+        .clip-indicator.active {
+            display: inline-block;
+            animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .adc-readout {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-left: auto;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* VU meter channel name labels */
+        .vu-meter-label.ch-name {
+            width: auto;
+            min-width: 24px;
+            max-width: 90px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 11px;
+        }
+
+        .comp-graph-wrap {
+            margin-bottom: 8px;
+            border-radius: 6px;
+            overflow: hidden;
+            background: rgba(0,0,0,0.25);
+        }
+        .comp-graph-wrap canvas {
+            display: block;
+            width: 100%;
+        }
+
+        .dsp-freq-canvas {
+            display: block;
+            width: 100%;
+            height: 220px;
+            border-radius: 8px;
+            background: var(--bg-card);
+        }

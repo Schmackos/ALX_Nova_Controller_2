@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#F5F5F5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>ALX Audio Controller</title>
+    <style>/* CSS_INJECT */</style>
+</head>
+<body class="has-status-bar">
+    <script>if(localStorage.getItem('darkMode')==='true'){document.body.classList.add('night-mode');document.querySelector('meta[name="theme-color"]').setAttribute('content','#121212');}</script>
+    <!-- Sidebar Navigation (Desktop) -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                <span>ALX Audio</span>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <button class="sidebar-item active" data-tab="control" onclick="switchTab('control')">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                <span>Control</span>
+            </button>
+            <button class="sidebar-item" data-tab="audio" onclick="switchTab('audio')">
+                <svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+                <span>Audio</span>
+            </button>
+            <button class="sidebar-item" data-tab="dsp" onclick="switchTab('dsp')">
+                <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm-8 8h2v-4H3v4zm12-6v8h2V8h-2zm4 2v4h2v-4h-2z"/></svg>
+                <span>DSP</span>
+            </button>
+            <button class="sidebar-item" data-tab="wifi" onclick="switchTab('wifi')">
+                <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+                <span>WiFi</span>
+            </button>
+            <button class="sidebar-item" data-tab="mqtt" onclick="switchTab('mqtt')">
+                <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/></svg>
+                <span>MQTT</span>
+            </button>
+            <button class="sidebar-item" data-tab="settings" onclick="switchTab('settings')">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                <span>Settings</span>
+            </button>
+            <button class="sidebar-item" data-tab="support" onclick="switchTab('support')">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                <span>Support</span>
+            </button>
+            <button class="sidebar-item" data-tab="debug" onclick="switchTab('debug')">
+                <svg viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
+                <span>Debug</span>
+            </button>
+            <button class="sidebar-item" data-tab="test" onclick="switchTab('test')">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l4.59-4.58L18 11l-6 6z"/></svg>
+                <span>Test</span>
+            </button>
+        </nav>
+        <div class="sidebar-footer">
+            <span id="sidebarVersion">v--</span>
+        </div>
+        <button class="sidebar-toggle" onclick="toggleSidebar()">
+            <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+        </button>
+    </aside>
+
+    <!-- Persistent Status Bar -->
+    <div class="status-bar" id="statusBar">
+        <div class="status-item" title="Amplifier State">
+            <div class="status-indicator" id="statusAmp"></div>
+            <span id="statusAmpText">Amp</span>
+        </div>
+        <div class="status-item" title="WiFi Connection">
+            <div class="status-indicator" id="statusWifi"></div>
+            <span id="statusWifiText">WiFi</span>
+        </div>
+        <div class="status-item" title="MQTT Connection">
+            <div class="status-indicator" id="statusMqtt"></div>
+            <span id="statusMqttText">MQTT</span>
+        </div>
+        <div class="status-item" title="WebSocket">
+            <div class="status-indicator" id="statusWs"></div>
+            <span>WS</span>
+        </div>
+    </div>
+
+    <!-- Tab Navigation Bar (Mobile) -->
+    <nav class="tab-bar">
+        <button class="tab active" data-tab="control" onclick="switchTab('control')">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+        </button>
+        <button class="tab" data-tab="audio" onclick="switchTab('audio')">
+            <svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+        </button>
+        <button class="tab" data-tab="dsp" onclick="switchTab('dsp')">
+            <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm-8 8h2v-4H3v4zm12-6v8h2V8h-2zm4 2v4h2v-4h-2z"/></svg>
+        </button>
+        <button class="tab" data-tab="wifi" onclick="switchTab('wifi')">
+            <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+        </button>
+        <button class="tab" data-tab="mqtt" onclick="switchTab('mqtt')">
+            <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/></svg>
+        </button>
+        <button class="tab" data-tab="settings" onclick="switchTab('settings')">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+        <button class="tab" data-tab="support" onclick="switchTab('support')">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+        </button>
+        <button class="tab" data-tab="debug" onclick="switchTab('debug')">
+            <svg viewBox="0 0 24 24"><path d="M20 19V7H4v12h16m0-16c1.11 0 2 .89 2 2v14c0 1.11-.89 2-2 2H4c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h16zM7 9h10v2H7V9zm0 4h7v2H7v-2z"/></svg>
+        </button>
+        <button class="tab" data-tab="test" onclick="switchTab('test')">
+            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>
+        </button>
+    </nav>
+
+    <!-- Tab Content Panels -->
+    <main class="tab-content">
+        <!-- ===== CONTROL TAB ===== -->
+        <section id="control" class="panel active">
+            <!-- Control Status -->
+            <div class="card">
+                <div class="card-title">Control Status</div>
+                <div class="info-box" id="controlStatusBox">
+                    <div class="info-row">
+                        <span class="info-label">WebSocket</span>
+                        <span class="info-value" id="wsConnectionStatus">Connecting...</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Signal Detected</span>
+                        <span class="info-value" id="signalDetected">No</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Audio Level</span>
+                        <span class="info-value" id="audioLevel">-96.0 dBFS</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Input Voltage</span>
+                        <span class="info-value" id="audioVrms">0.000 V</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Sensing Mode</span>
+                        <span class="info-value" id="infoSensingMode">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Auto-Off Timer</span>
+                        <span class="info-value" id="infoTimerDuration">-- min</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Audio Threshold (dBFS)</span>
+                        <span class="info-value" id="infoAudioThreshold">-- dBFS</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Amplifier Status -->
+            <div class="amplifier-display" id="amplifierDisplay">
+                <svg class="amplifier-icon" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                <div class="amplifier-label" id="amplifierStatus">OFF</div>
+            </div>
+
+            <!-- Timer Display -->
+            <div class="timer-display hidden" id="timerDisplay">
+                <div class="timer-value" id="timerValue">--:--</div>
+                <div class="timer-label">Time Remaining</div>
+            </div>
+
+            <!-- Smart Sensing Mode -->
+            <div class="card">
+                <div class="card-title">Smart Sensing Mode</div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="sensingMode" value="always_on" onchange="updateSensingMode()">
+                        <span>Always On</span>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="sensingMode" value="always_off" onchange="updateSensingMode()">
+                        <span>Always Off</span>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="sensingMode" value="smart_auto" onchange="updateSensingMode()">
+                        <span>Smart Auto Sensing</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Smart Auto Settings (collapsible, only shown when Smart Auto is selected) -->
+            <div class="card" id="smartAutoSettingsCard" style="display: none;">
+                <div class="collapsible-header" onclick="toggleSmartAutoSettings()">
+                    <span class="card-title" style="margin-bottom: 0;">Smart Auto Settings</span>
+                    <svg viewBox="0 0 24 24" id="smartAutoChevron"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" id="smartAutoContent">
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label class="form-label">Auto-Off Timer (minutes)</label>
+                        <input type="number" class="form-input" id="appState.timerDuration" inputmode="numeric" min="1" max="60" value="15" onchange="updateTimerDuration()">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Audio Threshold (dBFS)</label>
+                        <input type="number" class="form-input" id="audioThreshold" inputmode="decimal" min="-96" max="0" step="1" value="-60" onchange="updateAudioThreshold()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Controls -->
+            <div class="card">
+                <div class="card-title">Manual Control</div>
+                <div class="btn-row">
+                    <button class="btn btn-success" onclick="manualOverride(true)">Turn On</button>
+                    <button class="btn btn-danger" onclick="manualOverride(false)">Turn Off</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== AUDIO TAB ===== -->
+        <section id="audio" class="panel">
+            <!-- Input Channel Overview -->
+            <div class="card input-overview-card">
+              <div class="card-title">Input Channels</div>
+              <div class="input-lane-grid" id="inputLaneGrid">
+                <div class="input-lane" id="inputLane0">
+                  <div class="lane-name">ADC 1</div>
+                  <div class="lane-status-dot" id="laneDot0"></div>
+                  <div class="lane-level" id="laneLevel0">—</div>
+                  <button class="btn btn-small" onclick="setAdcEnabled(0, !inputLaneEnabled[0])">Enable</button>
+                </div>
+                <div class="input-lane" id="inputLane1">
+                  <div class="lane-name">ADC 2</div>
+                  <div class="lane-status-dot" id="laneDot1"></div>
+                  <div class="lane-level" id="laneLevel1">—</div>
+                  <button class="btn btn-small" onclick="setAdcEnabled(1, !inputLaneEnabled[1])">Enable</button>
+                </div>
+                <div class="input-lane" id="inputLane2">
+                  <div class="lane-name">SigGen</div>
+                  <div class="lane-status-dot" id="laneDot2"></div>
+                  <div class="lane-level" id="laneLevel2">—</div>
+                  <button class="btn btn-small" onclick="toggleSigGenLane()">Enable</button>
+                </div>
+                <div class="input-lane" id="inputLane3">
+                  <div class="lane-name">USB</div>
+                  <div class="lane-status-dot" id="laneDot3"></div>
+                  <div class="lane-level" id="laneLevel3">—</div>
+                  <button class="btn btn-small" onclick="setUsbAudioEnabled(!inputLaneEnabled[3])">Enable</button>
+                </div>
+              </div>
+            </div>
+            <!-- Audio Waveform -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Audio Waveform
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="waveformEnabledToggle" checked onchange="setGraphEnabled('waveform',this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                        <span style="font-size:11px;color:var(--text-secondary);">Auto-scale</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="waveformAutoScale" onchange="waveformAutoScaleEnabled=this.checked">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="waveformContent">
+                    <div class="dual-canvas-grid">
+                        <div class="canvas-panel">
+                            <div class="canvas-panel-title">ADC 1</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="waveform-canvas" id="audioWaveformCanvas0"></canvas>
+                            </div>
+                        </div>
+                        <div class="canvas-panel" id="waveformPanel1">
+                            <div class="canvas-panel-title">ADC 2</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="waveform-canvas" id="audioWaveformCanvas1"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frequency Spectrum -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Frequency Spectrum
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="spectrumEnabledToggle" checked onchange="setGraphEnabled('spectrum',this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                        <span style="font-size:11px;color:var(--text-secondary);">LED</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="ledModeToggle" onchange="toggleLedMode()">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="spectrumContent">
+                    <div class="dual-canvas-grid">
+                        <div class="canvas-panel">
+                            <div class="canvas-panel-title">ADC 1</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="spectrum-canvas" id="audioSpectrumCanvas0"></canvas>
+                            </div>
+                            <div class="dominant-freq-readout">Dominant: <span id="dominantFreq0">-- Hz</span></div>
+                        </div>
+                        <div class="canvas-panel" id="spectrumPanel1">
+                            <div class="canvas-panel-title">ADC 2</div>
+                            <div class="audio-canvas-wrap">
+                                <canvas class="spectrum-canvas" id="audioSpectrumCanvas1"></canvas>
+                            </div>
+                            <div class="dominant-freq-readout">Dominant: <span id="dominantFreq1">-- Hz</span></div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+                        <span style="font-size:12px;color:var(--text-secondary);">Window:</span>
+                        <select id="fftWindowSelect" class="select-sm" onchange="setFftWindow(this.value)">
+                            <option value="0">Hann</option>
+                            <option value="1">Blackman</option>
+                            <option value="2">Blackman-Harris</option>
+                            <option value="3">Blackman-Nuttall</option>
+                            <option value="4">Nuttall</option>
+                            <option value="5">Flat-Top</option>
+                        </select>
+                        <span style="font-size:11px;color:var(--text-secondary);margin-left:8px;">SNR: <span id="audioSnr0">--</span> dB</span>
+                        <span style="font-size:11px;color:var(--text-secondary);">SFDR: <span id="audioSfdr0">--</span> dB</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio Levels -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Audio Levels
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="vuMeterEnabledToggle" checked onchange="setGraphEnabled('vuMeter',this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                        <span style="font-size:11px;color:var(--text-secondary);">Segmented</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="vuSegmented" onchange="toggleVuMode(this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="vuMeterContent">
+                <!-- ADC 0 (ADC 1) -->
+                <div class="adc-section-header">
+                    <span class="adc-section-title">ADC 1</span>
+                    <span class="adc-status-badge ok" id="adcStatusBadge0">OK</span>
+                    <span class="clip-indicator" id="clipIndicator0">CLIP</span>
+                    <span class="adc-readout" id="adcReadout0">-- dBFS | -- Vrms</span>
+                </div>
+                <!-- Continuous bars ADC 0 -->
+                <div id="vuContinuous0">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name" id="vuChName0">Ch 1</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFill0L"></div>
+                            <div class="vu-meter-peak" id="vuPeak0L"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDb0L">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name" id="vuChName1">Ch 2</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFill0R"></div>
+                            <div class="vu-meter-peak" id="vuPeak0R"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDb0R">-inf dBFS</span>
+                    </div>
+                </div>
+                <!-- Segmented PPM ADC 0 -->
+                <div id="vuSegmented0" style="display:none">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg0">Ch 1</span>
+                        <canvas id="ppmCanvas0L" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg0L">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg1">Ch 2</span>
+                        <canvas id="ppmCanvas0R" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg0R">-inf dBFS</span>
+                    </div>
+                </div>
+
+                <!-- ADC 1 (ADC 2) -->
+                <div id="adcSection1">
+                <div class="adc-section-header">
+                    <span class="adc-section-title">ADC 2</span>
+                    <span class="adc-status-badge no-data" id="adcStatusBadge1">NO_DATA</span>
+                    <span class="clip-indicator" id="clipIndicator1">CLIP</span>
+                    <span class="adc-readout" id="adcReadout1">-- dBFS | -- Vrms</span>
+                </div>
+                <!-- Continuous bars ADC 1 -->
+                <div id="vuContinuous1">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name" id="vuChName2">Ch 3</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFill1L"></div>
+                            <div class="vu-meter-peak" id="vuPeak1L"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDb1L">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name" id="vuChName3">Ch 4</span>
+                        <div class="vu-meter-track">
+                            <div class="vu-meter-fill" id="vuFill1R"></div>
+                            <div class="vu-meter-peak" id="vuPeak1R"></div>
+                        </div>
+                        <span class="vu-meter-db" id="vuDb1R">-inf dBFS</span>
+                    </div>
+                </div>
+                <!-- Segmented PPM ADC 1 -->
+                <div id="vuSegmented1" style="display:none">
+                    <div class="vu-meter-row">
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg2">Ch 3</span>
+                        <canvas id="ppmCanvas1L" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg1L">-inf dBFS</span>
+                    </div>
+                    <div class="vu-meter-row" style="margin-bottom:0">
+                        <span class="vu-meter-label ch-name" id="vuChNameSeg3">Ch 4</span>
+                        <canvas id="ppmCanvas1R" class="ppm-canvas"></canvas>
+                        <span class="vu-meter-db" id="vuDbSeg1R">-inf dBFS</span>
+                    </div>
+                </div>
+                </div>
+
+                <!-- Shared scale row -->
+                <div class="vu-meter-row" style="margin-bottom:8px;margin-top:10px">
+                    <span class="vu-meter-label"></span>
+                    <div class="vu-scale">
+                        <span class="vu-tick" style="left:0%">-60</span>
+                        <span class="vu-tick" style="left:16.7%">-50</span>
+                        <span class="vu-tick" style="left:33.3%">-40</span>
+                        <span class="vu-tick" style="left:50%">-30</span>
+                        <span class="vu-tick" style="left:66.7%">-20</span>
+                        <span class="vu-tick" style="left:83.3%">-10</span>
+                        <span class="vu-tick" style="left:100%">0</span>
+                    </div>
+                    <span class="vu-meter-db"></span>
+                </div>
+                <div class="info-row" style="border-bottom: none; padding: 4px 0;">
+                    <span class="info-label"><span class="signal-dot" id="audioSignalDot"></span>Signal</span>
+                    <span class="info-value" id="audioSignalText">Not detected</span>
+                </div>
+                </div>
+            </div>
+
+            <!-- Input Names -->
+            <div class="card">
+                <div class="card-title">Input Names</div>
+                <div class="form-group">
+                    <label class="form-label">ADC 1 - Input 1</label>
+                    <input type="text" class="form-input" id="inputName0" placeholder="Subwoofer 1" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ADC 1 - Input 2</label>
+                    <input type="text" class="form-input" id="inputName1" placeholder="Subwoofer 2" maxlength="20">
+                </div>
+                <div id="inputNamesAdc1">
+                <div class="form-group">
+                    <label class="form-label">ADC 2 - Input 3</label>
+                    <input type="text" class="form-input" id="inputName2" placeholder="Subwoofer 3" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ADC 2 - Input 4</label>
+                    <input type="text" class="form-input" id="inputName3" placeholder="Subwoofer 4" maxlength="20">
+                </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveInputNames()">Save Names</button>
+            </div>
+
+            <!-- Audio Settings -->
+            <div class="card">
+                <div class="card-title">Audio Settings</div>
+                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
+                    <label class="form-label" style="margin:0">ADC Input 1</label>
+                    <label class="switch"><input type="checkbox" id="adcEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
+                    <label class="form-label" style="margin:0">ADC Input 2</label>
+                    <label class="switch"><input type="checkbox" id="adcEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Update Rate</label>
+                    <select class="form-input" id="audioUpdateRateSelect" onchange="setAudioUpdateRate()">
+                        <option value="100">100 ms</option>
+                        <option value="50" selected>50 ms</option>
+                        <option value="33">33 ms</option>
+                        <option value="20">20 ms</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Sample Rate</label>
+                    <select class="form-input" id="audioSampleRateSelect">
+                        <option value="16000">16000 Hz</option>
+                        <option value="44100">44100 Hz</option>
+                        <option value="48000" selected>48000 Hz</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="updateAudioSettings()">Update Sample Rate</button>
+            </div>
+
+            <!-- USB Audio Input -->
+            <div class="card" id="usbAudioCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    USB Audio Input
+                    <span id="usbAudioBadge" class="badge" style="font-size:10px;padding:2px 6px;background:#9E9E9E;color:#fff">Disabled</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Enable</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="usbAudioEnable" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div id="usbAudioFields" style="display:none">
+                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="usbAudioStatus">Disconnected</span></div>
+                <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="usbAudioFormat">—</span></div>
+                <div class="info-row"><span class="info-label">Host Volume</span><span class="info-value" id="usbAudioVolume">—</span></div>
+                <div id="usbAudioDetails" style="display:none">
+                    <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
+                    <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
+                </div>
+                </div>
+            </div>
+
+            <!-- DAC Output -->
+            <div class="card" id="dacCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    DAC Output
+                    <span id="dacReadyBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Ready</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Enable</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="dacEnable" onchange="updateDac()"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div id="dacFields" style="display:none">
+                <div class="info-row"><span class="info-label">Model</span><span class="info-value" id="dacModel">—</span></div>
+                <div class="form-group">
+                    <label class="form-label">Volume: <span id="dacVolVal">80</span>%</label>
+                    <input type="range" class="form-input" id="dacVolume" min="0" max="100" value="80" step="1" oninput="document.getElementById('dacVolVal').textContent=this.value" onchange="updateDac()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mute</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="dacMute" onchange="updateDac()"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div class="form-group" id="dacFilterGroup" style="display:none">
+                    <label class="form-label">Filter Mode</label>
+                    <select class="form-input" id="dacFilterMode" onchange="updateDacFilter()"></select>
+                </div>
+                <div class="info-row"><span class="info-label">TX Underruns</span><span class="info-value" id="dacUnderruns">0</span></div>
+                <div class="form-group">
+                    <label class="form-label">DAC Driver</label>
+                    <select class="form-input" id="dacDriverSelect" onchange="changeDacDriver()"></select>
+                </div>
+                </div>
+            </div>
+
+            <!-- EEPROM Programming -->
+            <div class="card" id="eepromCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    EEPROM Programming
+                    <span id="eepromFoundBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Found</span>
+                </div>
+                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="eepromStatus">Not scanned</span></div>
+                <div class="info-row"><span class="info-label">I2C Address</span><span class="info-value" id="eepromI2cAddr">—</span></div>
+                <div class="info-row"><span class="info-label">I2C Devices</span><span class="info-value" id="eepromI2cCount">—</span></div>
+                <div style="margin:8px 0">
+                    <button class="btn btn-secondary" onclick="eepromScan()">Scan I2C Bus</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Driver Preset</label>
+                    <select class="form-input" id="eepromPreset" onchange="eepromFillPreset()">
+                        <option value="">— Select preset —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device ID (hex)</label>
+                    <input type="text" class="form-input" id="eepromDeviceId" placeholder="0x0001">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device Name</label>
+                    <input type="text" class="form-input" id="eepromDeviceName" maxlength="32" placeholder="PCM5102A">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Manufacturer</label>
+                    <input type="text" class="form-input" id="eepromManufacturer" maxlength="32" placeholder="Texas Instruments">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">HW Revision</label>
+                    <input type="number" class="form-input" id="eepromHwRev" min="0" max="255" value="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Channels</label>
+                    <input type="number" class="form-input" id="eepromMaxCh" min="1" max="8" value="2">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">DAC I2C Address (hex, 0=none)</label>
+                    <input type="text" class="form-input" id="eepromDacAddr" placeholder="0x00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Flags</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:4px">
+                        <label><input type="checkbox" id="eepromFlagClock"> Indep. Clock</label>
+                        <label><input type="checkbox" id="eepromFlagVol"> HW Volume</label>
+                        <label><input type="checkbox" id="eepromFlagFilter"> Filters</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Sample Rates (comma-separated)</label>
+                    <input type="text" class="form-input" id="eepromRates" placeholder="44100,48000,96000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Target EEPROM Address</label>
+                    <select class="form-input" id="eepromTargetAddr">
+                        <option value="80">0x50</option>
+                        <option value="81">0x51</option>
+                        <option value="82">0x52</option>
+                        <option value="83">0x53</option>
+                        <option value="84">0x54</option>
+                        <option value="85">0x55</option>
+                        <option value="86">0x56</option>
+                        <option value="87">0x57</option>
+                    </select>
+                </div>
+                <div class="btn-row" style="margin-top:8px">
+                    <button class="btn btn-primary" onclick="eepromProgram()">Program</button>
+                    <button class="btn btn-danger" onclick="eepromErase()">Erase</button>
+                </div>
+            </div>
+
+            <!-- Emergency Protection -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>Emergency Protection</span>
+                    <span id="emergencyLimiterStatusBadge" class="badge" style="background:#4CAF50">Idle</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Enable Limiter</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="emergencyLimiterEnable" checked onchange="updateEmergencyLimiter('enabled')"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                    <small style="color:#888">Brick-wall limiter prevents speaker damage from audio peaks</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Threshold: <span id="emergencyLimiterThresholdVal">-0.5</span> dBFS</label>
+                    <input type="range" class="form-input" id="emergencyLimiterThreshold" min="-6" max="0" value="-0.5" step="0.1" oninput="document.getElementById('emergencyLimiterThresholdVal').textContent=parseFloat(this.value).toFixed(1)" onchange="updateEmergencyLimiter('threshold')">
+                    <small style="color:#888">Recommended: -0.5 to -1.0 dBFS for safety headroom</small>
+                </div>
+                <div class="info-row" style="margin-top:8px">
+                    <span>Status:</span>
+                    <span id="emergencyLimiterStatus">Idle</span>
+                </div>
+                <div class="info-row">
+                    <span>Gain Reduction:</span>
+                    <span id="emergencyLimiterGR">0.0 dB</span>
+                </div>
+                <div class="info-row">
+                    <span>Lifetime Triggers:</span>
+                    <span id="emergencyLimiterTriggers">0</span>
+                </div>
+            </div>
+
+            <!-- Test Signal Generator -->
+            <div class="card">
+                <div class="card-title">Test Signal Generator</div>
+                <div class="form-group">
+                    <label class="form-label">Enable</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="siggenEnable" onchange="updateSigGen()"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div id="siggenFields" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">Output Mode</label>
+                    <select class="form-input" id="siggenOutputMode" onchange="updateSigGen()">
+                        <option value="0">Software Injection</option>
+                        <option value="1">PWM Output (GPIO 38)</option>
+                    </select>
+                </div>
+                <div id="siggenTargetAdcGroup">
+                <div class="form-group">
+                    <label class="form-label">Target ADC</label>
+                    <select class="form-input" id="siggenTargetAdc" onchange="updateSigGen()">
+                        <option value="0">ADC 1</option>
+                        <option value="1">ADC 2</option>
+                        <option value="2" selected>Both</option>
+                    </select>
+                </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Waveform</label>
+                    <select class="form-input" id="siggenWaveform" onchange="updateSigGen()">
+                        <option value="0">Sine</option>
+                        <option value="1">Square</option>
+                        <option value="2">White Noise</option>
+                        <option value="3">Frequency Sweep</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Frequency: <span id="siggenFreqVal">1000</span> Hz</label>
+                    <input type="range" class="form-input" id="siggenFreq" min="1" max="22000" value="1000" step="1" oninput="document.getElementById('siggenFreqVal').textContent=this.value" onchange="updateSigGen()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Amplitude: <span id="siggenAmpVal">-6</span> dBFS</label>
+                    <input type="range" class="form-input" id="siggenAmp" min="-96" max="0" value="-6" step="1" oninput="document.getElementById('siggenAmpVal').textContent=this.value" onchange="updateSigGen()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Channel</label>
+                    <select class="form-input" id="siggenChannel" onchange="updateSigGen()">
+                        <option value="0">Ch 1</option>
+                        <option value="1">Ch 2</option>
+                        <option value="2" selected>Both</option>
+                    </select>
+                </div>
+                <div class="form-group" id="siggenSweepGroup" style="display:none">
+                    <label class="form-label">Sweep Speed (Hz/s)</label>
+                    <input type="number" class="form-input" id="siggenSweepSpeed" min="1" max="22000" value="1000" onchange="updateSigGen()">
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
+                    <button class="btn btn-outline" onclick="siggenPreset(0,440,-6)">440 Hz</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(0,1000,-6)">1 kHz</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(0,100,-6)">100 Hz</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(0,10000,-6)">10 kHz</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(2,1000,-6)">Noise</button>
+                    <button class="btn btn-outline" onclick="siggenPreset(3,20000,-6)">Sweep</button>
+                </div>
+                <p id="siggenPwmNote" style="display:none;font-size:11px;color:#FFA726;margin-top:8px">PWM output requires external RC low-pass filter for sine approximation.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== DSP TAB ===== -->
+        <section id="dsp" class="panel">
+            <!-- DSP Control -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    DSP Control
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="dspEnableToggle" onchange="dspSetEnabled(this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Global Bypass</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="dspBypassToggle" onchange="dspSetBypass(this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">DSP CPU</span>
+                        <span class="info-value" id="dspCpuText">0%</span>
+                    </div>
+                    <div class="dsp-cpu-bar"><div class="fill" id="dspCpuBar" style="width:0%"></div></div>
+                    <div class="info-row" style="margin-top:8px;">
+                        <span class="info-label">Sample Rate</span>
+                        <span class="info-value" id="dspSampleRate">48000 Hz</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DSP Presets -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span>Presets (<span id="dspPresetCount">0</span>)</span>
+                    <span id="dspPresetStatus" class="badge" style="font-size:10px;padding:2px 8px;border-radius:4px;display:none;">Saved</span>
+                </div>
+                <div id="dspPresetList" style="margin-top:8px;"></div>
+                <div id="dspPresetActions" style="display:flex;gap:8px;margin-top:8px;">
+                    <button class="dsp-add-btn" style="flex:1" onclick="dspShowAddPresetDialog()">+ Add Preset</button>
+                    <button class="btn btn-primary" id="dspSavePresetBtn" style="display:none;padding:8px 16px;font-size:12px;border-radius:10px;white-space:nowrap;" onclick="dspSaveCurrentPreset()">&#128190; Save</button>
+                </div>
+            </div>
+
+            <!-- Channel Selector -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Channel
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button class="btn btn-secondary" id="peqLinkBtn" onclick="peqToggleLink()" style="padding:2px 8px;font-size:11px;" title="Link L/R channels">Link L/R</button>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;">
+                    <div class="dsp-ch-tabs" id="dspChTabs" style="flex:1;"></div>
+                    <button id="dspCompareBtn" class="btn btn-small" onclick="toggleDspCompare()" title="Overlay all channel responses">Compare</button>
+                </div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Channel Bypass</span>
+                        <label class="switch" style="transform:scale(0.75);">
+                            <input type="checkbox" id="dspChBypassToggle" onchange="dspSetChBypass(this.checked)">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Frequency Response Graph -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Frequency Response
+                    <div style="display:flex;gap:8px;" id="peqGraphToggles">
+                        <button class="btn btn-secondary btn-small peq-graph-tog active" id="togIndividual" onclick="peqToggleGraphLayer('individual')">Individual</button>
+                        <button class="btn btn-secondary btn-small peq-graph-tog" id="togRta" onclick="peqToggleGraphLayer('rta')">RTA</button>
+                        <button class="btn btn-secondary btn-small peq-graph-tog active" id="togChain" onclick="peqToggleGraphLayer('chain')">Chain</button>
+                        <button class="btn btn-small" onclick="peqResetZoom()" title="Reset frequency zoom">Reset Zoom</button>
+                    </div>
+                </div>
+                <canvas class="dsp-freq-canvas" id="dspFreqCanvas" style="cursor:crosshair;"></canvas>
+            </div>
+
+            <!-- PEQ Bands -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    EQ Bands
+                    <div style="display:flex;gap:4px;">
+                        <button id="peqToggleAllBtn" class="btn btn-secondary" onclick="peqToggleAll()" style="padding:2px 8px;font-size:11px;">Enable All</button>
+                        <select id="peqCopyTo" class="select-sm" style="font-size:11px;" onchange="peqCopyChannel(this.value);this.value=''">
+                            <option value="">Copy to...</option>
+                            <option value="0">L1</option>
+                            <option value="1">R1</option>
+                            <option value="2">L2</option>
+                            <option value="3">R2</option>
+                            <option value="all">All Channels</option>
+                        </select>
+                        <select id="peqPresetSel" class="select-sm" style="font-size:11px;" onchange="peqPresetAction(this.value);this.value=''">
+                            <option value="">Presets...</option>
+                            <option value="_save">Save Preset...</option>
+                            <option value="_load">Load Preset...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="peq-band-strip" id="peqBandStrip"></div>
+                <div id="peqBandDetail" class="peq-band-detail"></div>
+            </div>
+
+            <!-- Additional Processing (chain stages) -->
+            <div class="card">
+                <div class="card-title" id="dspStageTitle" style="display:flex;align-items:center;justify-content:space-between;">
+                    <span id="dspStageTitleText">Additional Processing (0)</span>
+                    <select id="chainCopyTo" class="select-sm" style="font-size:11px;" onchange="dspCopyChainChannel(this.value);this.value=''">
+                        <option value="">Copy to...</option>
+                        <option value="0">L1</option>
+                        <option value="1">R1</option>
+                        <option value="2">L2</option>
+                        <option value="3">R2</option>
+                        <option value="all">All Channels</option>
+                    </select>
+                </div>
+                <div style="margin-top:8px;">
+                    <div id="dspStageList"></div>
+                    <button class="dsp-add-btn" id="dspAddBtn" onclick="dspToggleAddMenu()">+ Add Stage</button>
+                    <div class="dsp-add-menu" id="dspAddMenu">
+                        <div class="menu-cat" style="color:#e6a817">Dynamics</div>
+                        <div class="menu-item" onclick="dspAddStage(12)">Limiter</div>
+                        <div class="menu-item" onclick="dspAddStage(18)">Compressor</div>
+                        <div class="menu-item" onclick="dspAddStage(24)">Noise Gate</div>
+                        <div class="menu-item" onclick="dspAddStage(30)">Multiband Comp</div>
+                        <div class="menu-cat" style="color:#43a047">Tone Shaping</div>
+                        <div class="menu-item" onclick="dspAddStage(25)">Tone Controls</div>
+                        <div class="menu-item" onclick="dspAddStage(28)">Loudness Comp</div>
+                        <div class="menu-item" onclick="dspAddStage(29)">Bass Enhance</div>
+                        <div class="menu-cat" style="color:#8e24aa">Stereo / Protection</div>
+                        <div class="menu-item" onclick="dspAddStage(27)">Stereo Width</div>
+                        <div class="menu-item" onclick="dspAddStage(26)">Speaker Protection</div>
+                        <div class="menu-cat" style="color:#757575">Utility</div>
+                        <div class="menu-item" onclick="dspAddStage(14)">Gain</div>
+                        <div class="menu-item" onclick="dspAddStage(15)">Delay</div>
+                        <div class="menu-item" onclick="dspAddStage(16)">Polarity Invert</div>
+                        <div class="menu-item" onclick="dspAddStage(17)">Mute</div>
+                        <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
+                        <div class="menu-item" onclick="dspAddDCBlock()">DC Block</div>
+                        <div class="menu-item" onclick="dspShowBaffleModal()">Baffle Step...</div>
+                        <div class="menu-cat" style="color:#1e88e5">Crossover</div>
+                        <div class="menu-item" onclick="dspShowCrossoverModal()">Crossover Preset...</div>
+                        <div class="menu-cat" style="color:#ef6c00">Analysis</div>
+                        <div class="menu-item" onclick="dspShowThdModal()">THD+N Measurement...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import / Export -->
+            <div class="card">
+                <div class="card-title">Import / Export</div>
+                <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
+                    <button class="btn btn-secondary" onclick="dspImportApo()">Import REW</button>
+                    <button class="btn btn-secondary" onclick="dspExportApo()">Export REW</button>
+                    <button class="btn btn-secondary" onclick="dspImportJson()">Import JSON</button>
+                    <button class="btn btn-secondary" onclick="dspExportJson()">Export JSON</button>
+                </div>
+                <input type="file" id="dspFileInput" accept=".txt,.json" style="display:none" onchange="dspHandleFileImport(event)">
+            </div>
+
+            <!-- Quick Setup: Routing Matrix -->
+            <div class="card">
+                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                    <span class="card-title" style="margin-bottom:0;">Routing Matrix</span>
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" style="margin-top:8px;">
+                    <div class="btn-row" style="flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('identity')">1:1</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('mono_sum')">Mono Sum</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('swap_lr')">Swap L/R</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('sub_sum')">Sub Sum</button>
+                    </div>
+                    <div id="dspRoutingGrid" style="overflow-x:auto;"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== WIFI TAB ===== -->
+        <section id="wifi" class="panel">
+            <!-- WiFi Status -->
+            <div class="card">
+                <div class="card-title">Connection Status</div>
+                <div class="info-box" id="wifiStatusBox">
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text short"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </div>
+            </div>
+
+            <!-- Connect to WiFi -->
+            <div class="card">
+                <div class="card-title">Connect to Network</div>
+                <form onsubmit="submitWiFiConfig(event)">
+                    <div class="form-group">
+                        <label class="form-label">Available Networks</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select class="form-input" id="wifiNetworkSelect" style="flex: 1; min-width: 0;" onchange="onNetworkSelect()">
+                                <option value="">-- Select a network --</option>
+                            </select>
+                            <button type="button" class="btn btn-secondary" onclick="scanWiFiNetworks()" id="scanBtn" style="padding: 0; width: 48px; min-height: 48px; min-width: 48px; font-size: 18px; flex-shrink: 0;" title="Scan for networks">
+                                🔍
+                            </button>
+                        </div>
+                        <div id="scanStatus" style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Network Name (SSID)</label>
+                        <input type="text" class="form-input" id="appState.wifiSSID" inputmode="text" placeholder="Enter WiFi SSID or select from above">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" class="form-input" id="appState.wifiPassword" placeholder="Enter password">
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('appState.wifiPassword', this)">👁</button>
+                        </div>
+                    </div>
+                    <div class="toggle-row" style="margin: 16px 0;">
+                        <div>
+                            <div class="toggle-label">Static IP</div>
+                            <div class="toggle-sublabel">Use static IP instead of DHCP</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="useStaticIP" onchange="toggleStaticIPFields()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="staticIPFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">IPv4 Address</label>
+                            <input type="text" class="form-input" id="staticIP" inputmode="decimal" placeholder="e.g., 192.168.1.100" onchange="updateStaticIPDefaults()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Network Mask</label>
+                            <input type="text" class="form-input" id="subnet" inputmode="decimal" placeholder="e.g., 255.255.255.0" value="255.255.255.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Gateway</label>
+                            <input type="text" class="form-input" id="gateway" inputmode="decimal" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Primary DNS</label>
+                            <input type="text" class="form-input" id="dns1" inputmode="decimal" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Secondary DNS (Optional)</label>
+                            <input type="text" class="form-input" id="dns2" inputmode="decimal" placeholder="e.g., 8.8.8.8">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">Connect</button>
+                        <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="saveNetworkSettings(event)">Save Settings</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Network Configuration -->
+            <div class="card">
+                <div class="card-title">Network Configuration</div>
+                <div class="form-group">
+                    <label class="form-label">Select Network</label>
+                    <select class="form-input" id="configNetworkSelect" onchange="loadNetworkConfig()">
+                        <option value="">-- Select a saved network --</option>
+                    </select>
+                </div>
+                <div id="networkConfigFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" class="form-input" id="configPassword" placeholder="Enter network password">
+                            <button type="button" class="password-toggle" onclick="togglePasswordVisibility('configPassword', this)">👁</button>
+                        </div>
+                    </div>
+                    <div class="toggle-row" style="margin: 16px 0;">
+                        <div>
+                            <div class="toggle-label">Static IP</div>
+                            <div class="toggle-sublabel">Use static IP for this network</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="configUseStaticIP" onchange="toggleConfigStaticIPFields()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="configStaticIPFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">IPv4 Address</label>
+                            <input type="text" class="form-input" id="configStaticIP" inputmode="decimal" placeholder="e.g., 192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Network Mask</label>
+                            <input type="text" class="form-input" id="configSubnet" inputmode="decimal" placeholder="e.g., 255.255.255.0" value="255.255.255.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Gateway</label>
+                            <input type="text" class="form-input" id="configGateway" inputmode="decimal" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Primary DNS</label>
+                            <input type="text" class="form-input" id="configDns1" inputmode="decimal" placeholder="e.g., 192.168.1.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Secondary DNS (Optional)</label>
+                            <input type="text" class="form-input" id="configDns2" inputmode="decimal" placeholder="e.g., 8.8.8.8">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button id="connectUpdateBtn" class="btn btn-primary" style="flex: 1; min-width: 120px;" onclick="updateNetworkConfig(true)">Connect</button>
+                        <button class="btn btn-secondary" style="flex: 1; min-width: 120px;" onclick="updateNetworkConfig(false)">Update Network</button>
+                        <button class="btn btn-danger" style="flex: 1; min-width: 120px;" onclick="removeSelectedNetworkConfig()">Remove Network</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Access Point -->
+            <div class="card">
+                <div class="card-title">Access Point</div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Enable AP Mode</div>
+                        <div class="toggle-sublabel">Allow direct connections</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="apToggle" onchange="toggleAP()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div id="apFields" style="display:none">
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Auto AP Mode</div>
+                        <div class="toggle-sublabel">Enable AP if connection fails</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="autoAPToggle" onchange="toggleAutoAP()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="btn btn-secondary mt-12" onclick="openAPConfig()">Configure AP</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== MQTT TAB ===== -->
+        <section id="mqtt" class="panel">
+            <div class="card">
+                <div class="card-title">Connection Status</div>
+                <div class="info-box" id="mqttStatusBox">
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text short"></div>
+                    <div class="skeleton skeleton-text"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">MQTT Settings</div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Enable MQTT</div>
+                        <div class="toggle-sublabel">Toggle to connect/disconnect</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="appState.mqttEnabled" onchange="toggleMqttEnabled()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div id="mqttFields" style="display:none">
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Home Assistant Discovery</div>
+                        <div class="toggle-sublabel">Auto-configure in Home Assistant</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="appState.mqttHADiscovery">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="divider"></div>
+                <div class="form-group">
+                    <label class="form-label">Broker Address</label>
+                    <input type="text" class="form-input" id="appState.mqttBroker" inputmode="url" placeholder="mqtt.example.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Port</label>
+                    <input type="number" class="form-input" id="appState.mqttPort" inputmode="numeric" placeholder="1883" value="1883">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Username (optional)</label>
+                    <input type="text" class="form-input" id="appState.mqttUsername" placeholder="Username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password (optional)</label>
+                    <div class="password-wrapper">
+                        <input type="password" class="form-input" id="appState.mqttPassword" placeholder="Password">
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('appState.mqttPassword', this)">👁</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Base Topic</label>
+                    <input type="text" class="form-input" id="appState.mqttBaseTopic" placeholder="ALX/device-serial">
+                    <div class="text-secondary" style="font-size: 11px; margin-top: 4px;">Leave empty to use: <span id="mqttDefaultTopic">ALX/{serial}</span></div>
+                </div>
+                <button class="btn btn-primary" onclick="saveMqttSettings()">Save MQTT Settings</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SETTINGS TAB ===== -->
+        <section id="settings" class="panel">
+            <!-- Timezone -->
+            <div class="card">
+                <div class="card-title">Timezone</div>
+                <div class="form-group">
+                    <select class="form-select" id="timezoneSelect" onchange="updateTimezone()">
+                        <option value="-43200">UTC-12:00 (Baker Island)</option>
+                        <option value="-39600">UTC-11:00 (Samoa)</option>
+                        <option value="-36000">UTC-10:00 (Hawaii)</option>
+                        <option value="-32400">UTC-09:00 (Alaska)</option>
+                        <option value="-28800">UTC-08:00 (Pacific Time)</option>
+                        <option value="-25200">UTC-07:00 (Mountain Time)</option>
+                        <option value="-21600">UTC-06:00 (Central Time)</option>
+                        <option value="-18000">UTC-05:00 (Eastern Time)</option>
+                        <option value="-14400">UTC-04:00 (Atlantic Time)</option>
+                        <option value="-10800">UTC-03:00 (Buenos Aires)</option>
+                        <option value="-7200">UTC-02:00 (Mid-Atlantic)</option>
+                        <option value="-3600">UTC-01:00 (Azores)</option>
+                        <option value="0">UTC+00:00 (London, GMT)</option>
+                        <option value="3600" selected>UTC+01:00 (Amsterdam, Paris)</option>
+                        <option value="7200">UTC+02:00 (Cairo, Athens)</option>
+                        <option value="10800">UTC+03:00 (Moscow, Nairobi)</option>
+                        <option value="14400">UTC+04:00 (Dubai)</option>
+                        <option value="18000">UTC+05:00 (Karachi)</option>
+                        <option value="19800">UTC+05:30 (Mumbai)</option>
+                        <option value="21600">UTC+06:00 (Dhaka)</option>
+                        <option value="25200">UTC+07:00 (Bangkok)</option>
+                        <option value="28800">UTC+08:00 (Singapore)</option>
+                        <option value="32400">UTC+09:00 (Tokyo)</option>
+                        <option value="36000">UTC+10:00 (Sydney)</option>
+                        <option value="43200">UTC+12:00 (Auckland)</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Daylight Saving Time (DST)</div>
+                        <div class="toggle-sublabel">Add 1 hour for DST</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="dstToggle" onchange="updateDST()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="info-box">
+                    <div><span id="timezoneInfo">Current timezone offset will be shown here</span></div>
+                    <div style="margin-top: 8px;"><strong>Device time:</strong> <span id="currentTimeDisplay">Loading...</span></div>
+                </div>
+            </div>
+
+            <!-- General -->
+            <div class="card">
+                <div class="card-title">General</div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Dark Mode</div>
+                        <div class="toggle-sublabel">Use darker theme</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="darkModeToggle" onchange="toggleTheme()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Debug Mode</div>
+                        <div class="toggle-sublabel">Enable debug tools</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="debugModeToggle" onchange="setDebugToggle('setDebugMode',this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Display -->
+            <div class="card">
+                <div class="card-title">Display</div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Backlight</div>
+                        <div class="toggle-sublabel">Turn screen on/off</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="backlightToggle" onchange="toggleBacklight()" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Brightness</div>
+                        <div class="toggle-sublabel">Display brightness level</div>
+                    </div>
+                    <select id="brightnessSelect" onchange="setBrightness()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="10">10%</option>
+                        <option value="25">25%</option>
+                        <option value="50">50%</option>
+                        <option value="75">75%</option>
+                        <option value="100" selected>100%</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Screen Timeout</div>
+                        <div class="toggle-sublabel">Auto-sleep delay</div>
+                    </div>
+                    <select id="screenTimeoutSelect" onchange="setScreenTimeout()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="30">30 sec</option>
+                        <option value="60" selected>1 min</option>
+                        <option value="300">5 min</option>
+                        <option value="600">10 min</option>
+                        <option value="0">Never</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Dim Display</div>
+                        <div class="toggle-sublabel">Dim before sleep</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="dimToggle" onchange="toggleDim()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row" id="dimTimeoutRow" style="display:none;">
+                    <div>
+                        <div class="toggle-label">Dim Timeout</div>
+                        <div class="toggle-sublabel">Delay before dimming</div>
+                    </div>
+                    <select id="dimTimeoutSelect" onchange="setDimTimeout()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="5">5 sec</option>
+                        <option value="10" selected>10 sec</option>
+                        <option value="15">15 sec</option>
+                        <option value="30">30 sec</option>
+                        <option value="60">1 min</option>
+                    </select>
+                </div>
+                <div class="toggle-row" id="dimBrightnessRow" style="display:none;">
+                    <div>
+                        <div class="toggle-label">Dim Brightness</div>
+                        <div class="toggle-sublabel">Brightness when dimmed</div>
+                    </div>
+                    <select id="dimBrightnessSelect" onchange="setDimBrightness()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="26" selected>10%</option>
+                        <option value="64">25%</option>
+                        <option value="128">50%</option>
+                        <option value="191">75%</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Boot Animation</div>
+                        <div class="toggle-sublabel">Animation on startup</div>
+                    </div>
+                    <select id="bootAnimSelect" onchange="setBootAnimation()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="-1">None</option>
+                        <option value="0" selected>Wave Pulse</option>
+                        <option value="1">Speaker</option>
+                        <option value="2">Waveform</option>
+                        <option value="3">Beat Bounce</option>
+                        <option value="4">Freq Bars</option>
+                        <option value="5">Heartbeat</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Sound -->
+            <div class="card">
+                <div class="card-title">Sound</div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Buzzer</div>
+                        <div class="toggle-sublabel">Audio feedback sounds</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="buzzerToggle" onchange="toggleBuzzer()" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div id="buzzerFields" style="display:none">
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Buzzer Volume</div>
+                        <div class="toggle-sublabel">Feedback sound level</div>
+                    </div>
+                    <select id="buzzerVolumeSelect" onchange="setBuzzerVolume()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                        <option value="0">Low</option>
+                        <option value="1" selected>Medium</option>
+                        <option value="2">High</option>
+                    </select>
+                </div>
+                </div>
+            </div>
+
+            <!-- Security -->
+            <div class="card">
+                <div class="card-title">Security</div>
+                <div class="button-row">
+                    <button class="btn btn-secondary" onclick="showPasswordChangeModal()">Change Password</button>
+                    <button class="btn btn-secondary" onclick="logout()">Logout</button>
+                </div>
+                <div class="info-box">
+                    <div class="toggle-sublabel">Change your web interface password or logout from the current session.</div>
+                </div>
+            </div>
+
+            <!-- Firmware Update -->
+            <div class="card">
+                <div class="card-title">Firmware Update</div>
+                <div class="info-box">
+                    <div class="version-row">
+                        <span class="version-label">Current Version</span>
+                        <span class="version-value">
+                            <span id="currentVersion">Loading...</span>
+                            <a href="#" id="currentVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('current'); return false;" title="View release notes">?</a>
+                        </span>
+                    </div>
+                    <div class="version-row" id="latestVersionRow">
+                        <span class="version-label">Latest Version</span>
+                        <span class="version-value version-update">
+                            <span id="latestVersion" style="opacity: 0.6; font-style: italic;">Checking...</span>
+                            <a href="#" id="latestVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('latest'); return false;" title="View release notes">?</a>
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Inline Release Notes Accordion -->
+                <div id="inlineReleaseNotes" class="release-notes-inline">
+                    <div class="release-notes-header">
+                        <span id="inlineReleaseNotesTitle" class="release-notes-title">Release Notes</span>
+                        <button type="button" class="release-notes-close" onclick="toggleInlineReleaseNotes(false)">×</button>
+                    </div>
+                    <div id="inlineReleaseNotesContent" class="release-notes-body"></div>
+                </div>
+
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Auto Update</div>
+                        <div class="toggle-sublabel">Update on boot when available</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="autoUpdateToggle" onchange="toggleAutoUpdate()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">SSL Validation</div>
+                        <div class="toggle-sublabel">Verify update server certificate</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="certValidationToggle" onchange="toggleCertValidation()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="btn btn-secondary mb-8" onclick="checkForUpdate()">Check for Updates</button>
+                <button class="btn btn-primary hidden" id="updateBtn" onclick="startOTAUpdate()">Update Now</button>
+                <div class="progress-container hidden" id="progressContainer">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-text hidden" id="progressStatus"></div>
+
+                <div class="divider"></div>
+                <div class="text-secondary mb-8" style="font-size: 14px;">Or upload firmware manually:</div>
+                <div class="drop-zone" id="firmwareDropZone" onclick="document.getElementById('firmwareFile').click()">
+                    <svg class="drop-zone-icon" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+                    <div class="drop-zone-text">Tap to select or <strong>drag & drop</strong> .bin file</div>
+                </div>
+                <input type="file" id="firmwareFile" accept=".bin" style="display: none;" onchange="handleFirmwareSelect(event)">
+            </div>
+
+            <!-- Export/Import Settings -->
+            <div class="card">
+                <div class="card-title">Backup & Restore</div>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="exportSettings()">Export</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Import</button>
+                </div>
+                <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileSelect(event)">
+            </div>
+
+            <!-- Reboot & Factory Reset -->
+            <div class="card">
+                <div class="card-title">Device Actions</div>
+                <button class="btn btn-secondary mb-8" onclick="startReboot()">Reboot Device</button>
+                <button class="btn btn-danger" onclick="startFactoryReset()">Factory Reset</button>
+            </div>
+
+        </section>
+
+        <!-- ===== SUPPORT TAB ===== -->
+        <section id="support" class="panel">
+            <!-- Manual Access -->
+            <div class="card">
+                <div class="card-title">Manual Access</div>
+                <div class="qr-container">
+                    <div class="manual-description">Scan the QR code or click the link below to access the full user manual:</div>
+                    <div class="qr-code" id="manualQrCode"></div>
+                    <a href="#" id="manualLink" class="manual-link" target="_blank" rel="noopener noreferrer">Loading...</a>
+                    <div class="manual-description">The manual includes setup instructions, troubleshooting tips, and feature documentation.</div>
+                </div>
+            </div>
+
+            <!-- Documentation -->
+            <div class="card">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <div class="card-title" style="margin-bottom: 0;">Documentation</div>
+                    <input type="text" class="search-input" id="manualSearchInput" placeholder="Search..." oninput="searchManual(this.value)">
+                </div>
+                <div class="manual-search-status" id="manualSearchStatus"></div>
+                <div class="manual-rendered" id="manualRendered">
+                    <div class="manual-loading">Loading manual...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== DEBUG TAB ===== -->
+        <section id="debug" class="panel">
+            <!-- Debug Controls -->
+            <div class="card">
+                <div class="card-title">Debug Controls</div>
+                <div class="info-box">
+                    <div class="toggle-row">
+                        <span>Hardware Stats</span>
+                        <label class="switch"><input type="checkbox" id="debugHwStatsToggle" onchange="setDebugToggle('setDebugHwStats',this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>I2S Metrics</span>
+                        <label class="switch"><input type="checkbox" id="debugI2sMetricsToggle" onchange="setDebugToggle('setDebugI2sMetrics',this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Task Monitor</span>
+                        <label class="switch"><input type="checkbox" id="debugTaskMonitorToggle" onchange="setDebugToggle('setDebugTaskMonitor',this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <div>
+                            <div class="toggle-label">Serial Log Level</div>
+                            <div class="toggle-sublabel">Debug output verbosity</div>
+                        </div>
+                        <select id="debugSerialLevel" onchange="setDebugSerialLevel(this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                            <option value="0">Off</option>
+                            <option value="1">Errors Only</option>
+                            <option value="2">Info (Normal)</option>
+                            <option value="3">Debug (Verbose)</option>
+                        </select>
+                    </div>
+                    <div class="toggle-row">
+                        <div>
+                            <div class="toggle-label">Refresh Rate</div>
+                            <div class="toggle-sublabel">Stats update interval</div>
+                        </div>
+                        <select id="statsIntervalSelect" onchange="setStatsInterval()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                            <option value="1">1 second</option>
+                            <option value="2" selected>2 seconds</option>
+                            <option value="3">3 seconds</option>
+                            <option value="5">5 seconds</option>
+                            <option value="10">10 seconds</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FreeRTOS Tasks -->
+            <div id="taskMonitorSection">
+            <div class="card">
+                <div class="card-title">FreeRTOS Tasks</div>
+                <div class="info-box">
+                    <div class="stats-grid" style="margin-bottom:8px">
+                        <div class="stat-card">
+                            <div class="stat-value" id="tmCpuTotal">--%</div>
+                            <div class="stat-label">CPU Load</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="tmLoopFreq">-- Hz</div>
+                            <div class="stat-label">Loop Freq</div>
+                        </div>
+                    </div>
+                    <div class="info-row"><span class="info-label">Core 0 Load</span><span class="info-value" id="tmCpuCore0">--</span></div>
+                    <div class="info-row"><span class="info-label">Core 1 Load</span><span class="info-value" id="tmCpuCore1">--</span></div>
+                    <div class="info-row"><span class="info-label">Task Count</span><span class="info-value" id="taskCount">--</span></div>
+                    <div class="info-row"><span class="info-label">Loop Time (avg)</span><span class="info-value" id="loopTimeAvg">--</span></div>
+                    <div class="info-row"><span class="info-label">Loop Time (max)</span><span class="info-value" id="loopTimeMax">--</span></div>
+                    <div class="divider"></div>
+                    <table class="task-table" id="taskTable">
+                        <thead>
+                            <tr>
+                                <th onclick="sortTaskTable(0)" data-col="0" class="sortable">Name <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(1)" data-col="1" class="sortable">Stack <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(2)" data-col="2" class="sortable">Used% <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(3)" data-col="3" class="sortable">Pri <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(4)" data-col="4" class="sortable">State <span class="sort-arrow"></span></th>
+                                <th onclick="sortTaskTable(5)" data-col="5" class="sortable">Core <span class="sort-arrow"></span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="taskTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            </div>
+
+            <!-- CPU Stats (always visible when debug tab is shown) -->
+            <div class="card">
+                <div class="card-title">CPU</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="cpuTotal">--%</div>
+                        <div class="stat-label">Total Load</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="cpuTemp">--°C</div>
+                        <div class="stat-label">Temperature</div>
+                    </div>
+                </div>
+                <div class="graph-embedded">
+                    <div class="graph-legend">CPU Usage (Orange: Total, Light: Core 0, Dark: Core 1)</div>
+                    <canvas class="graph-canvas" id="cpuGraph"></canvas>
+                </div>
+                <div class="info-box-compact mt-12">
+                    <div class="info-row">
+                        <span class="info-label">Core 0 Load</span>
+                        <span class="info-value" id="cpuCore0">--%</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Core 1 Load</span>
+                        <span class="info-value" id="cpuCore1">--%</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Frequency</span>
+                        <span class="info-value" id="cpuFreq">-- MHz</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Chip Model</span>
+                        <span class="info-value" id="cpuModel">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Revision</span>
+                        <span class="info-value" id="cpuRevision">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Cores</span>
+                        <span class="info-value" id="cpuCores">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="hwStatsSection">
+            <!-- Memory Stats -->
+            <div class="card">
+                <div class="card-title">Memory</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="heapPercent">--%</div>
+                        <div class="stat-label">Heap Used</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="psramPercent">--%</div>
+                        <div class="stat-label">PSRAM Used</div>
+                    </div>
+                </div>
+                <div class="graph-embedded">
+                    <div class="graph-legend">Heap Memory Usage (%)</div>
+                    <canvas class="graph-canvas" id="memoryGraph"></canvas>
+                </div>
+                <div class="graph-embedded" id="psramGraphContainer" style="display: none;">
+                    <div class="graph-legend">PSRAM Usage (%)</div>
+                    <canvas class="graph-canvas" id="psramGraph"></canvas>
+                </div>
+                <div class="info-box-compact mt-12">
+                    <div class="info-row">
+                        <span class="info-label">Heap Free</span>
+                        <span class="info-value" id="heapFree">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Heap Total</span>
+                        <span class="info-value" id="heapTotal">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Heap Min Free</span>
+                        <span class="info-value" id="heapMinFree">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Largest Block</span>
+                        <span class="info-value" id="heapMaxBlock">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">PSRAM Free</span>
+                        <span class="info-value" id="psramFree">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">PSRAM Total</span>
+                        <span class="info-value" id="psramTotal">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Storage Stats -->
+            <div class="card">
+                <div class="card-title">Storage</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="sketchPercent">--%</div>
+                        <div class="stat-label">Sketch Used</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="LittleFSPercent">--%</div>
+                        <div class="stat-label">LittleFS Used</div>
+                    </div>
+                </div>
+                <div class="info-box mt-12">
+                    <div class="info-row">
+                        <span class="info-label">Flash Size</span>
+                        <span class="info-value" id="flashSize">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Sketch Size</span>
+                        <span class="info-value" id="sketchSize">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Sketch Free</span>
+                        <span class="info-value" id="sketchFree">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">LittleFS Used</span>
+                        <span class="info-value" id="LittleFSUsed">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">LittleFS Total</span>
+                        <span class="info-value" id="LittleFSTotal">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WiFi & System Stats -->
+            <div class="card">
+                <div class="card-title">WiFi & System</div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Reset Reason</span>
+                        <span class="info-value" id="resetReason">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Serial Number</span>
+                        <span class="info-value" id="deviceSerial">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">MAC Address</span>
+                        <span class="info-value" id="deviceMac">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Signal Strength</span>
+                        <span class="info-value" id="wifiRssi">-- dBm</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Channel</span>
+                        <span class="info-value" id="wifiChannel">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">AP Clients</span>
+                        <span class="info-value" id="apClients">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Uptime</span>
+                        <span class="info-value" id="uptime">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio ADC Diagnostics -->
+            <div class="card">
+                <div class="card-title">Audio ADC</div>
+                <div class="info-box">
+                    <div class="dual-canvas-grid">
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 1</div>
+                            <div class="info-row">
+                                <span class="info-label">ADC Status</span>
+                                <span class="info-value" id="adcStatus">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Noise Floor</span>
+                                <span class="info-value" id="adcNoiseFloor">-- dBFS</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">I2S Errors</span>
+                                <span class="info-value" id="adcI2sErrors">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Consecutive Zeros</span>
+                                <span class="info-value" id="adcConsecutiveZeros">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Total Buffers</span>
+                                <span class="info-value" id="adcTotalBuffers">--</span>
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 2</div>
+                            <div class="info-row">
+                                <span class="info-label">ADC Status</span>
+                                <span class="info-value" id="adcStatus1">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Noise Floor</span>
+                                <span class="info-value" id="adcNoiseFloor1">-- dBFS</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">I2S Errors</span>
+                                <span class="info-value" id="adcI2sErrors1">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Consecutive Zeros</span>
+                                <span class="info-value" id="adcConsecutiveZeros1">--</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Total Buffers</span>
+                                <span class="info-value" id="adcTotalBuffers1">--</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="info-row">
+                        <span class="info-label">Sample Rate</span>
+                        <span class="info-value" id="adcSampleRate">--</span>
+                    </div>
+                </div>
+            </div>
+
+            </div>
+
+            <!-- Audio DAC Diagnostics -->
+            <div class="card">
+                <div class="card-title">Audio DAC</div>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="info-label">Status</span>
+                        <span class="info-value" id="dacStatus">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Model</span>
+                        <span class="info-value" id="dacModel">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Manufacturer</span>
+                        <span class="info-value" id="dacManufacturer">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Device ID</span>
+                        <span class="info-value" id="dacDeviceId">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Detection</span>
+                        <span class="info-value" id="dacDetection">--</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="info-row">
+                        <span class="info-label">Enabled</span>
+                        <span class="info-value" id="dacDbgEnabled">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Volume</span>
+                        <span class="info-value" id="dacDbgVolume">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Mute</span>
+                        <span class="info-value" id="dacDbgMute">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Output Channels</span>
+                        <span class="info-value" id="dacDbgChannels">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Filter Mode</span>
+                        <span class="info-value" id="dacDbgFilter">--</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="info-row">
+                        <span class="info-label">HW Volume</span>
+                        <span class="info-value" id="dacHwVolume">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">I2C Control</span>
+                        <span class="info-value" id="dacI2cControl">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Independent Clock</span>
+                        <span class="info-value" id="dacIndepClock">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Filter Support</span>
+                        <span class="info-value" id="dacHasFilters">--</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="info-row">
+                        <span class="info-label">I2S TX Active</span>
+                        <span class="info-value" id="dacI2sTxEnabled">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Volume Gain</span>
+                        <span class="info-value" id="dacVolumeGain">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Writes</span>
+                        <span class="info-value" id="dacTxWrites">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Data</span>
+                        <span class="info-value" id="dacTxData">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Peak Sample</span>
+                        <span class="info-value" id="dacTxPeak">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Zero Frames</span>
+                        <span class="info-value" id="dacTxZeroFrames">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">TX Underruns</span>
+                        <span class="info-value" id="dacTxUnderruns">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EEPROM / I2C Diagnostics -->
+            <div class="card">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    EEPROM / I2C
+                    <button class="btn btn-secondary btn-small" onclick="eepromScan()">Re-Scan</button>
+                </div>
+                <div class="info-box">
+                    <div class="info-row"><span class="info-label">EEPROM Found</span><span class="info-value" id="dbgEepromFound">--</span></div>
+                    <div class="info-row"><span class="info-label">I2C Address</span><span class="info-value" id="dbgEepromAddr">--</span></div>
+                    <div class="info-row"><span class="info-label">Device ID</span><span class="info-value" id="dbgEepromDeviceId">--</span></div>
+                    <div class="info-row"><span class="info-label">Device Name</span><span class="info-value" id="dbgEepromName">--</span></div>
+                    <div class="info-row"><span class="info-label">Manufacturer</span><span class="info-value" id="dbgEepromMfr">--</span></div>
+                    <div class="info-row"><span class="info-label">HW Revision</span><span class="info-value" id="dbgEepromRev">--</span></div>
+                    <div class="info-row"><span class="info-label">Channels</span><span class="info-value" id="dbgEepromCh">--</span></div>
+                    <div class="info-row"><span class="info-label">DAC I2C Addr</span><span class="info-value" id="dbgEepromDacAddr">--</span></div>
+                    <div class="info-row"><span class="info-label">Flags</span><span class="info-value" id="dbgEepromFlags">--</span></div>
+                    <div class="info-row"><span class="info-label">Sample Rates</span><span class="info-value" id="dbgEepromRates">--</span></div>
+                    <div class="divider"></div>
+                    <div class="info-row"><span class="info-label">I2C Devices</span><span class="info-value" id="dbgI2cCount">--</span></div>
+                    <div class="info-row"><span class="info-label">Read Errors</span><span class="info-value" id="dbgEepromRdErr">0</span></div>
+                    <div class="info-row"><span class="info-label">Write Errors</span><span class="info-value" id="dbgEepromWrErr">0</span></div>
+                    <div class="divider"></div>
+                    <div style="margin-top:4px">
+                        <button class="btn btn-secondary btn-small" onclick="eepromLoadHex()">Load Hex Dump</button>
+                    </div>
+                    <pre id="dbgEepromHex" style="display:none;font-size:10px;overflow-x:auto;max-height:200px;background:var(--bg-secondary);padding:6px;border-radius:4px;margin-top:4px;word-break:break-all"></pre>
+                </div>
+            </div>
+
+            <!-- I2S Configuration -->
+            <div id="i2sMetricsSection">
+            <div class="card">
+                <div class="card-title">I2S Configuration</div>
+                <div class="info-box">
+                    <div class="dual-canvas-grid">
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 1 (Master)</div>
+                            <div class="info-row"><span class="info-label">Mode</span><span class="info-value" id="i2sMode0">--</span></div>
+                            <div class="info-row"><span class="info-label">Sample Rate</span><span class="info-value" id="i2sSampleRate0">--</span></div>
+                            <div class="info-row"><span class="info-label">Bits</span><span class="info-value" id="i2sBits0">--</span></div>
+                            <div class="info-row"><span class="info-label">Channels</span><span class="info-value" id="i2sChannels0">--</span></div>
+                            <div class="info-row"><span class="info-label">DMA Buffers</span><span class="info-value" id="i2sDma0">--</span></div>
+                            <div class="info-row"><span class="info-label">APLL</span><span class="info-value" id="i2sApll0">--</span></div>
+                            <div class="info-row"><span class="info-label">MCLK</span><span class="info-value" id="i2sMclk0">--</span></div>
+                            <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="i2sFormat0">--</span></div>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">ADC 2 (Master)</div>
+                            <div class="info-row"><span class="info-label">Mode</span><span class="info-value" id="i2sMode1">--</span></div>
+                            <div class="info-row"><span class="info-label">Sample Rate</span><span class="info-value" id="i2sSampleRate1">--</span></div>
+                            <div class="info-row"><span class="info-label">Bits</span><span class="info-value" id="i2sBits1">--</span></div>
+                            <div class="info-row"><span class="info-label">Channels</span><span class="info-value" id="i2sChannels1">--</span></div>
+                            <div class="info-row"><span class="info-label">DMA Buffers</span><span class="info-value" id="i2sDma1">--</span></div>
+                            <div class="info-row"><span class="info-label">APLL</span><span class="info-value" id="i2sApll1">--</span></div>
+                            <div class="info-row"><span class="info-label">MCLK</span><span class="info-value" id="i2sMclk1">--</span></div>
+                            <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="i2sFormat1">--</span></div>
+                        </div>
+                    </div>
+                    <div class="divider"></div>
+                    <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Runtime Performance</div>
+                    <div class="info-row"><span class="info-label">Audio Task Stack Free</span><span class="info-value" id="i2sStackFree">--</span></div>
+                    <div class="dual-canvas-grid">
+                        <div>
+                            <div class="info-row"><span class="info-label">ADC1 Throughput</span><span class="info-value" id="i2sThroughput0">--</span></div>
+                            <div class="info-row"><span class="info-label">ADC1 Read Latency</span><span class="info-value" id="i2sLatency0">--</span></div>
+                        </div>
+                        <div>
+                            <div class="info-row"><span class="info-label">ADC2 Throughput</span><span class="info-value" id="i2sThroughput1">--</span></div>
+                            <div class="info-row"><span class="info-label">ADC2 Read Latency</span><span class="info-value" id="i2sLatency1">--</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+
+
+            <!-- Pin Configuration -->
+            <div class="card">
+                <div class="card-title">Pin Configuration</div>
+                <table class="pin-table" id="pinTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortPinTable(0)" data-col="0">GPIO <span class="sort-arrow">&#9650;</span></th>
+                            <th onclick="sortPinTable(1)" data-col="1">Function <span class="sort-arrow">&#9650;</span></th>
+                            <th onclick="sortPinTable(2)" data-col="2">Device <span class="sort-arrow">&#9650;</span></th>
+                            <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow">&#9650;</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>2</td><td>LED</td><td>Status LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>4</td><td>Amplifier Relay</td><td>Relay Module</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>8</td><td>Buzzer (PWM)</td><td>Piezo Buzzer</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>15</td><td>Reset Button</td><td>Tactile Switch</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>38</td><td>Signal Gen (PWM)</td><td>Signal Generator</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
+                        <tr><td>3</td><td>I2S MCLK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC 1</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>9</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>40</td><td>I2S TX Data</td><td>DAC Output</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>41</td><td>I2C SDA</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>42</td><td>I2C SCL</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
+                        <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
+                        <tr><td>10</td><td>TFT CS</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>11</td><td>TFT MOSI</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>12</td><td>TFT SCLK</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>13</td><td>TFT DC</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>14</td><td>TFT RST</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                        <tr><td>21</td><td>TFT Backlight</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Audio Quality Diagnostics -->
+            <div class="card">
+                <div class="card-title">Audio Quality Diagnostics</div>
+                <div class="info-box">
+                    <div class="toggle-row">
+                        <span>Enable Diagnostics</span>
+                        <label class="switch"><input type="checkbox" id="audioQualityEnabled" onchange="updateAudioQuality('enabled')"><span class="slider round"></span></label>
+                    </div>
+                    <div class="form-row">
+                        <label for="audioQualityThreshold">Glitch Threshold (0.1-1.0):</label>
+                        <input type="number" id="audioQualityThreshold" min="0.1" max="1.0" step="0.1" value="0.5" onchange="updateAudioQuality('threshold')">
+                    </div>
+                </div>
+                <div class="stats-grid" id="audioQualityStats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="aqGlitchesTotal">0</div>
+                        <div class="stat-label">Total Glitches</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="aqGlitchesMinute">0</div>
+                        <div class="stat-label">Last Minute</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="aqLatencyAvg">--</div>
+                        <div class="stat-label">Avg Latency</div>
+                    </div>
+                </div>
+                <div class="info-box-compact mt-12">
+                    <div class="info-row">
+                        <span class="info-label">Last Glitch Type</span>
+                        <span class="info-value" id="aqLastGlitchType">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">DSP Swap Correlation</span>
+                        <span class="info-value badge" id="aqCorrelationDsp">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">WiFi Correlation</span>
+                        <span class="info-value badge" id="aqCorrelationWifi">--</span>
+                    </div>
+                </div>
+                <div class="btn-row mt-12">
+                    <button class="btn btn-secondary" onclick="resetAudioQualityStats()">Reset Statistics</button>
+                </div>
+            </div>
+
+            <!-- Debug Console -->
+            <div class="card">
+                <div class="card-title">Debug Console</div>
+                <div class="form-row mb-12">
+                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
+                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
+                        <option value="all">All Levels</option>
+                        <option value="debug">Debug</option>
+                        <option value="info">Info</option>
+                        <option value="warn">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                </div>
+                <div class="debug-console" id="debugConsole">
+                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
+                </div>
+                <div class="btn-row mt-12">
+                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
+                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
+                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== TEST TAB ===== -->
+        <section id="test" class="panel">
+            <div class="card">
+                <div class="card-title">LED Blink Test</div>
+                <div class="led-display">
+                    <div id="led" class="led off"></div>
+                    <div class="led-status" id="ledStatus">LED is OFF</div>
+                </div>
+                <button class="btn btn-primary" id="toggleBtn" onclick="toggleBlinking()">Start Blinking</button>
+                <div class="info-box mt-12" id="blinkStatus">
+                    <div class="text-center">Blinking: <strong id="blinkingState">OFF</strong></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- AP Config Modal -->
+    <div class="modal-overlay" id="apConfigModal">
+        <div class="modal">
+            <div class="modal-title">Configure Access Point</div>
+            <form onsubmit="submitAPConfig(event)">
+                <div class="form-group">
+                    <label class="form-label">AP Network Name (SSID)</label>
+                    <input type="text" class="form-input" id="appState.apSSID" placeholder="ALX-XXXXXXXXXXXX">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">AP Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" class="form-input" id="appState.apPassword" placeholder="Min 8 characters (leave empty to keep current)">
+                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('appState.apPassword', this)">👁</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary mb-8">Save AP Settings</button>
+                <button type="button" class="btn btn-secondary" onclick="closeAPConfig()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script>/* JS_INJECT */</script>
+</body>
+</html>

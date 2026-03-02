@@ -1,0 +1,39 @@
+/* ===== 01-variables.css ===== */
+
+        /* ===== CSS Variables - Light Theme (Day Mode) ===== */
+        :root {
+            --bg-primary: #F5F5F5;
+            --bg-surface: #FFFFFF;
+            --bg-card: #EEEEEE;
+            --bg-input: #E0E0E0;
+            --accent: #FF9800;
+            --accent-light: #FFB74D;
+            --accent-dark: #E68900;
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --text-disabled: #9E9E9E;
+            --success: #4CAF50;
+            --error: #F44336;
+            --warning: #FFC107;
+            --info: #2196F3;
+            --border: #E0E0E0;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --tab-height: 56px;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        /* ===== Dark Theme ===== */
+        body.night-mode {
+            --bg-primary: #121212;
+            --bg-surface: #1E1E1E;
+            --bg-card: #252525;
+            --bg-input: #2C2C2C;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B0B0B0;
+            --text-disabled: #666666;
+            --error: #F44336;
+            --info: #2196F3;
+            --border: #333333;
+            --shadow: rgba(0, 0, 0, 0.4);
+        }

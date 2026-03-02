@@ -1,0 +1,222 @@
+/* ===== 05-responsive.css ===== */
+
+        /* Mobile: single column */
+        @media (max-width: 767px) {
+            .info-box-compact {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Button hover effects for desktop */
+        @media (hover: hover) {
+            .btn:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px var(--shadow);
+            }
+
+            .btn-primary:hover {
+                background: var(--accent-light);
+            }
+
+            .btn-secondary:hover {
+                background: var(--bg-input);
+            }
+
+            .card:hover {
+                box-shadow: 0 2px 8px var(--shadow);
+            }
+        }
+
+        /* --- Responsive Breakpoints --- */
+
+        /* Mobile (max 480px) - Stack button rows vertically */
+        @media (max-width: 480px) {
+            .btn-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .btn-row .btn {
+                width: 100%;
+            }
+        }
+
+        /* Tablet (768px+) */
+        @media (min-width: 768px) {
+            :root {
+                --content-padding: 24px;
+            }
+
+            .tab-content {
+                max-width: 720px;
+                padding: 24px;
+            }
+
+            .card {
+                padding: 20px;
+                margin-bottom: 16px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }
+
+            .btn-row {
+                gap: 12px;
+            }
+
+            .modal {
+                max-width: 500px;
+                padding: 32px;
+            }
+
+            .status-bar {
+                gap: 24px;
+            }
+
+            .dsp-freq-canvas {
+                height: 280px;
+            }
+        }
+
+        /* Desktop (1024px+) - Enable sidebar */
+        @media (min-width: 1024px) {
+            .tab-bar {
+                display: none;
+            }
+
+            .toast {
+                bottom: calc(20px + var(--safe-bottom));
+            }
+
+            .sidebar {
+                display: flex;
+            }
+
+            body {
+                padding-left: 240px;
+                padding-top: calc(var(--safe-top) + 36px);
+                padding-bottom: var(--safe-bottom);
+            }
+
+            body.sidebar-collapsed {
+                padding-left: 64px;
+            }
+
+            body.has-status-bar {
+                padding-top: calc(var(--safe-top) + 36px);
+            }
+
+            .status-bar {
+                top: 0;
+                left: 240px;
+                padding-top: var(--safe-top);
+                height: calc(36px + var(--safe-top));
+            }
+
+            body.sidebar-collapsed .status-bar {
+                left: 64px;
+            }
+
+            .tab-content {
+                max-width: 900px;
+                padding: 32px;
+            }
+
+            .card {
+                padding: 24px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .dashboard-card.full-width {
+                grid-column: span 3;
+            }
+
+            .form-group {
+                margin-bottom: 20px;
+            }
+        }
+
+        /* Large Desktop (1280px+) */
+        @media (min-width: 1280px) {
+            .tab-content {
+                max-width: 1100px;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+
+            .dashboard-card.full-width {
+                grid-column: span 4;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        /* Reduce motion preference */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Dual ADC responsive grid */
+        @media (max-width: 768px) {
+            .dual-canvas-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .dsp-freq-canvas { height: 180px; }
+            .peq-band-strip .peq-band-item {
+                min-height: 48px;
+                padding: 8px 4px;
+            }
+        }
+
+        /* Mobile: PEQ band detail as bottom sheet */
+        @media (max-width: 600px) {
+            .peq-band-detail {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: var(--card-bg, #1e1e1e);
+                border-top: 1px solid var(--border-color, rgba(255,255,255,0.12));
+                border-radius: 16px 16px 0 0;
+                padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+                z-index: 200;
+                box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
+                max-height: 55vh;
+                overflow-y: auto;
+                display: none;
+            }
+            .peq-band-detail.visible {
+                display: block;
+            }
+            .peq-band-detail-handle {
+                width: 40px; height: 4px;
+                background: var(--text-secondary, #666);
+                border-radius: 2px;
+                margin: 0 auto 12px;
+            }
+        }
