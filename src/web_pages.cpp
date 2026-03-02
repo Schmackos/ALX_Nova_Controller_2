@@ -3154,6 +3154,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div id="usbAudioDetails" style="display:none">
                     <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
                     <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
+                    <div id="usbAudioVu" style="display:none;margin-top:8px">
+                        <div class="info-row" style="border-bottom:none;padding-bottom:2px"><span class="info-label">VU Level</span></div>
+                        <div class="vu-meter-row">
+                            <span class="vu-meter-label" style="min-width:14px">L</span>
+                            <div class="vu-meter-track">
+                                <div class="vu-meter-fill" id="usbVuBarL"></div>
+                            </div>
+                            <span class="vu-meter-db" id="usbVuReadL">-inf dBFS</span>
+                        </div>
+                        <div class="vu-meter-row" style="margin-bottom:0">
+                            <span class="vu-meter-label" style="min-width:14px">R</span>
+                            <div class="vu-meter-track">
+                                <div class="vu-meter-fill" id="usbVuBarR"></div>
+                            </div>
+                            <span class="vu-meter-db" id="usbVuReadR">-inf dBFS</span>
+                        </div>
+                    </div>
                 </div>
                 </div>
             </div>
@@ -5039,24 +5056,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                     startVuAnimation();
                 }
-            } else if (data.type === 'audioWaveform') {
-                if (currentActiveTab === 'audio' && data.w) {
-                    const a = data.adc || 0;
-                    if (a < NUM_ADCS) {
-                        waveformTarget[a] = data.w;
-                        if (!waveformCurrent[a]) waveformCurrent[a] = data.w.slice();
-                        startAudioAnimation();
-                    }
-                }
-            } else if (data.type === 'audioSpectrum') {
-                if (currentActiveTab === 'audio' && data.bands) {
-                    const a = data.adc || 0;
-                    if (a < NUM_ADCS) {
-                        for (let i = 0; i < data.bands.length && i < 16; i++) spectrumTarget[a][i] = data.bands[i];
-                        targetDominantFreq[a] = data.freq || 0;
-                        startAudioAnimation();
-                    }
-                }
             } else if (data.type === 'inputNames') {
                 if (data.names && Array.isArray(data.names)) {
                     for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
@@ -5228,13 +5227,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let vuAnimFrameId = null;
 
 //# sourceURL=04-shared-audio.js
-
-        // ===== Shared DSP State =====
-        // NOTE: DSP_MAX_CH, DSP_CH_NAMES are declared in 15-dsp-coeffs.js / 16-dsp-peq.js
-        // NOTE: peqGraphLayers, peqRtaData are declared in 16-dsp-peq.js
-        // This file is reserved for any additional shared DSP state not covered by those modules.
-
-//# sourceURL=05-shared-dsp.js
 
         // ===== Canvas Helpers =====
 
@@ -6374,7 +6366,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (details) details.style.display = 'none';
             }
             if (formatEl) {
-                if (d.connected) {
+                if (d.negotiatedRate) {
+                    formatEl.textContent = (d.negotiatedRate / 1000) + ' kHz / ' + (d.negotiatedDepth || d.bitDepth) + '-bit stereo';
+                } else if (d.connected) {
                     formatEl.textContent = (d.sampleRate/1000) + ' kHz / ' + d.bitDepth + '-bit ' + (d.channels === 1 ? 'mono' : 'stereo');
                 } else {
                     formatEl.textContent = '\u2014';
@@ -6397,6 +6391,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (ovr) ovr.textContent = d.overruns || 0;
             var udr = document.getElementById('usbAudioUnderruns');
             if (udr) udr.textContent = d.underruns || 0;
+            // VU meters (visible only when streaming)
+            var vuSection = document.getElementById('usbAudioVu');
+            if (vuSection) {
+                vuSection.style.display = d.streaming ? '' : 'none';
+                if (d.streaming && d.vuL !== undefined) {
+                    var pctL = Math.max(0, Math.min(100, 100 + (d.vuL || -90)));
+                    var pctR = Math.max(0, Math.min(100, 100 + (d.vuR || -90)));
+                    var barL = document.getElementById('usbVuBarL');
+                    var barR = document.getElementById('usbVuBarR');
+                    if (barL) barL.style.width = pctL + '%';
+                    if (barR) barR.style.width = pctR + '%';
+                    var readL = document.getElementById('usbVuReadL');
+                    var readR = document.getElementById('usbVuReadR');
+                    if (readL) readL.textContent = (d.vuL > -90) ? d.vuL.toFixed(1) + ' dBFS' : '-inf dBFS';
+                    if (readR) readR.textContent = (d.vuR > -90) ? d.vuR.toFixed(1) + ' dBFS' : '-inf dBFS';
+                }
+            }
             if (typeof overviewApplyUsbState === 'function') overviewApplyUsbState(d);
         }
 
@@ -6456,7 +6467,12 @@ function overviewApplySigGenState(d) {
 
 function overviewApplyUsbState(d) {
     inputLaneEnabled[3] = !!(d && d.enabled);
-    inputLaneLevels[3]  = null; // USB level not exposed yet
+    // USB VU level (active when streaming with VU data)
+    if (d && d.streaming && d.vuL !== undefined && d.vuL > -90) {
+        inputLaneLevels[3] = Math.max(d.vuL, d.vuR);
+    } else {
+        inputLaneLevels[3] = null;
+    }
     updateInputOverview();
 }
 
@@ -6701,28 +6717,6 @@ function toggleSigGenLane() {
         }
 
 //# sourceURL=14-audio-quality.js
-
-// 15-dsp-coeffs.js
-// DSP coefficient computation functions and constants.
-//
-// NOTE: All items that belong in this file are already declared in
-// 16-dsp-peq.js which was created in a prior extraction phase:
-//
-//   DSP_TYPES          — 16-dsp-peq.js line 2
-//   DSP_MAX_CH         — 16-dsp-peq.js line 3 (also 05-shared-dsp.js)
-//   DSP_CH_NAMES       — 16-dsp-peq.js line 4 (also 05-shared-dsp.js)
-//   DSP_PEQ_BANDS      — 16-dsp-peq.js line 14
-//   PEQ_COLORS         — 16-dsp-peq.js line 15
-//   PEQ_FILTER_TYPES   — 16-dsp-peq.js line 16
-//   PEQ_DEFAULT_FREQS  — 16-dsp-peq.js line 130
-//   dspBiquadMagDb()   — 16-dsp-peq.js line 384
-//   dspComputeCoeffs() — 16-dsp-peq.js line 398
-//   dspStageMagDb()    — 16-dsp-peq.js line 479
-//
-// To avoid duplicate declarations (which would cause runtime errors),
-// no code is redeclared here. See 16-dsp-peq.js for the implementations.
-
-//# sourceURL=15-dsp-coeffs.js
 
 // ===== DSP Tab Constants =====
 const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor','LPF 1st','HPF 1st','Linkwitz','Decimator','Convolution','Noise Gate','Tone Controls','Speaker Prot','Stereo Width','Loudness','Bass Enhance','Multiband Comp'];

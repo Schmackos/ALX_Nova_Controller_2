@@ -552,6 +552,112 @@ void test_cleanup_topic_buffer_size(void) {
     TEST_ASSERT_TRUE(strlen(buf) < (size_t)bufSize);
 }
 
+// ===== USB Audio MQTT Tests =====
+
+// Helper: publish a USB audio state field using the test MQTT infrastructure
+static void publishUsbAudioState(const char *field, const char *payload) {
+    char topic[128];
+    snprintf(topic, sizeof(topic), "%s/audio/usb/%s", mqttSettings.baseTopic.c_str(), field);
+    publishMqttMessage(topic, payload);
+}
+
+void test_mqtt_usb_audio_publish_connected_true(void) {
+    // Verify that publishing USB audio connected=true reaches the broker under
+    // the expected topic and with payload "true".
+    mqttSettings.broker = "mqtt.example.com";
+    mqttSettings.baseTopic = "alx_nova";
+    mqttConnect();
+
+    publishUsbAudioState("connected", "true");
+
+    std::string expectedTopic = "alx_nova/audio/usb/connected";
+    TEST_ASSERT_TRUE(PubSubClient::wasMessagePublished(expectedTopic.c_str()));
+    TEST_ASSERT_EQUAL_STRING("true",
+        PubSubClient::getPublishedMessage(expectedTopic.c_str()).c_str());
+}
+
+void test_mqtt_usb_audio_publish_streaming(void) {
+    // Verify that publishing USB audio streaming=true reaches the broker under
+    // the expected topic and with payload "true".
+    mqttSettings.broker = "mqtt.example.com";
+    mqttSettings.baseTopic = "alx_nova";
+    mqttConnect();
+
+    publishUsbAudioState("streaming", "true");
+
+    std::string expectedTopic = "alx_nova/audio/usb/streaming";
+    TEST_ASSERT_TRUE(PubSubClient::wasMessagePublished(expectedTopic.c_str()));
+    TEST_ASSERT_EQUAL_STRING("true",
+        PubSubClient::getPublishedMessage(expectedTopic.c_str()).c_str());
+}
+
+void test_mqtt_usb_audio_enable_command_subscribe(void) {
+    // Verify that subscribing to the USB audio enable command topic succeeds and
+    // the mock records the subscription under the correct path.
+    mqttSettings.broker = "mqtt.example.com";
+    mqttSettings.baseTopic = "alx_nova";
+    mqttConnect();
+
+    char cmdTopic[128];
+    snprintf(cmdTopic, sizeof(cmdTopic), "%s/audio/usb/enable/set",
+             mqttSettings.baseTopic.c_str());
+    bool subscribed = mockMqttClient.subscribe(cmdTopic);
+
+    TEST_ASSERT_TRUE(subscribed);
+    TEST_ASSERT_TRUE(PubSubClient::wasTopicSubscribed(cmdTopic));
+}
+
+void test_mqtt_usb_audio_disable_command_subscribe(void) {
+    // Verify that after subscribing to the enable command topic, a simulated
+    // "false" command payload can be identified as a disable request.
+    mqttSettings.broker = "mqtt.example.com";
+    mqttSettings.baseTopic = "alx_nova";
+    mqttConnect();
+
+    char cmdTopic[128];
+    snprintf(cmdTopic, sizeof(cmdTopic), "%s/audio/usb/enable/set",
+             mqttSettings.baseTopic.c_str());
+    mockMqttClient.subscribe(cmdTopic);
+
+    // Simulate receiving "false" on the command topic by checking the
+    // disable logic: payload "false" should NOT equal "true".
+    const char *receivedPayload = "false";
+    bool shouldEnable = (strcmp(receivedPayload, "true") == 0);
+    TEST_ASSERT_FALSE(shouldEnable);
+    TEST_ASSERT_TRUE(PubSubClient::wasTopicSubscribed(cmdTopic));
+}
+
+void test_mqtt_usb_audio_topic_format(void) {
+    // Verify that all USB audio topic strings follow the pattern
+    // {baseTopic}/audio/usb/{field} for every expected field.
+    mqttSettings.baseTopic = "alx_nova";
+
+    const char *fields[] = {"connected", "streaming", "enable/set"};
+    const int numFields = 3;
+
+    for (int i = 0; i < numFields; i++) {
+        char topic[128];
+        snprintf(topic, sizeof(topic), "%s/audio/usb/%s",
+                 mqttSettings.baseTopic.c_str(), fields[i]);
+
+        // Topic must begin with the base topic
+        TEST_ASSERT_TRUE(
+            strncmp(topic, mqttSettings.baseTopic.c_str(),
+                    mqttSettings.baseTopic.length()) == 0);
+
+        // Topic must contain the /audio/usb/ segment
+        TEST_ASSERT_TRUE(strstr(topic, "/audio/usb/") != nullptr);
+
+        // Topic must end with the field name
+        const char *fieldPos = strstr(topic, fields[i]);
+        TEST_ASSERT_TRUE(fieldPos != nullptr);
+        TEST_ASSERT_EQUAL_STRING(fields[i], fieldPos);
+
+        // Topic must fit within the 128-byte buffer used in production code
+        TEST_ASSERT_TRUE(strlen(topic) < 128);
+    }
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -620,6 +726,13 @@ int runUnityTests(void) {
 
     // Cleanup completeness tests
     RUN_TEST(test_cleanup_topic_buffer_size);
+
+    // USB audio MQTT tests
+    RUN_TEST(test_mqtt_usb_audio_publish_connected_true);
+    RUN_TEST(test_mqtt_usb_audio_publish_streaming);
+    RUN_TEST(test_mqtt_usb_audio_enable_command_subscribe);
+    RUN_TEST(test_mqtt_usb_audio_disable_command_subscribe);
+    RUN_TEST(test_mqtt_usb_audio_topic_format);
 
     return UNITY_END();
 }

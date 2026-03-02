@@ -20,6 +20,10 @@
 #endif
 #include <cstring>
 #include <cmath>
+#include "audio_input_source.h"
+#ifdef USB_AUDIO_ENABLED
+#include "usb_audio.h"
+#endif
 
 // ===== Constants =====
 static const int FRAMES      = I2S_DMA_BUF_LEN;    // 256 stereo frames per DMA buffer
@@ -67,6 +71,25 @@ static bool _inputBypass[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static bool _dspBypass[AUDIO_PIPELINE_MAX_INPUTS]   = {false, false, true, true};
 static bool _matrixBypass = false;   // Matrix active: routes ADC1 L/R + Siggen L/R → DAC L/R
 static bool _outputBypass = false;
+
+// ===== Registered Input Sources =====
+static AudioInputSource _sources[AUDIO_PIPELINE_MAX_INPUTS] = {
+    AUDIO_INPUT_SOURCE_INIT, AUDIO_INPUT_SOURCE_INIT,
+    AUDIO_INPUT_SOURCE_INIT, AUDIO_INPUT_SOURCE_INIT,
+};
+
+// ===== USB Source Adapter Functions (ESP32 only) =====
+#ifdef USB_AUDIO_ENABLED
+static uint32_t _usb_src_read(int32_t *dst, uint32_t frames) {
+    return usb_audio_read(dst, frames);
+}
+static bool _usb_src_isActive(void) {
+    return usb_audio_is_streaming();
+}
+static uint32_t _usb_src_getSampleRate(void) {
+    return usb_audio_get_negotiated_rate();
+}
+#endif
 
 // ===== Noise Gate Fade State =====
 // _gateFadeCount: counts remaining fade-out buffers (2→1→0) after gate closes.
@@ -166,8 +189,30 @@ static void pipeline_read_inputs() {
         memset(_rawBuf[2], 0, sizeof(_rawBuf[2]));
     }
 
-    // Lane 3: USB Audio — zero-fill (USB audio driver not present)
+    // Lane 3: USB Audio
+#ifdef USB_AUDIO_ENABLED
+    if (!_inputBypass[3] && _sources[3].isActive && _sources[3].isActive()) {
+        // Apply host volume/mute as pre-matrix gain
+        AppState &as = AppState::getInstance();
+        _sources[3].gainLinear = as.usbAudioMute
+            ? 0.0f : usb_audio_get_volume_linear();
+        uint32_t got = _sources[3].read ? _sources[3].read(_rawBuf[3], FRAMES) : 0;
+        if (got < (uint32_t)FRAMES) {
+            memset(&_rawBuf[3][got * 2], 0, (FRAMES - got) * 2 * sizeof(int32_t));
+        }
+        // Apply gain in-place (host volume/mute)
+        if (_sources[3].gainLinear != 1.0f) {
+            float g = _sources[3].gainLinear;
+            for (int i = 0; i < FRAMES * 2; i++) {
+                _rawBuf[3][i] = (int32_t)((float)_rawBuf[3][i] * g);
+            }
+        }
+    } else {
+        memset(_rawBuf[3], 0, sizeof(_rawBuf[3]));
+    }
+#else
     memset(_rawBuf[3], 0, sizeof(_rawBuf[3]));
+#endif
 }
 
 // Noise gate for ADC lanes: prevents PCM1808 noise floor from reaching the DAC.
@@ -377,6 +422,31 @@ static void pipeline_update_metering() {
     adc0.peakCombined = _meterState.peakCombined;
     adc0.dBFS        = dbfs;
     i2s_audio_update_analysis_metering(adc0);
+
+    // USB lane metering (same VU ballistics as ADC1)
+#ifdef USB_AUDIO_ENABLED
+    if (!_inputBypass[3] && _sources[3].isActive && _sources[3].isActive()
+        && _laneL[3] && _laneR[3]) {
+        float usbSumSqL = 0.0f, usbSumSqR = 0.0f;
+        for (int f = 0; f < FRAMES; f++) {
+            usbSumSqL += _laneL[3][f] * _laneL[3][f];
+            usbSumSqR += _laneR[3][f] * _laneR[3][f];
+        }
+        float usbRmsL = sqrtf(usbSumSqL / FRAMES);
+        float usbRmsR = sqrtf(usbSumSqR / FRAMES);
+        float usbDt = (float)FRAMES * 1000.0f / (float)AppState::getInstance().audioSampleRate;
+        _sources[3]._vuSmoothedL = audio_vu_update(_sources[3]._vuSmoothedL, usbRmsL, usbDt);
+        _sources[3]._vuSmoothedR = audio_vu_update(_sources[3]._vuSmoothedR, usbRmsR, usbDt);
+        _sources[3].vuL = (_sources[3]._vuSmoothedL > 1e-9f)
+            ? 20.0f * log10f(_sources[3]._vuSmoothedL) : -90.0f;
+        _sources[3].vuR = (_sources[3]._vuSmoothedR > 1e-9f)
+            ? 20.0f * log10f(_sources[3]._vuSmoothedR) : -90.0f;
+        AppState &asUsb = AppState::getInstance();
+        asUsb.usbAudioVuL = _sources[3].vuL;
+        asUsb.usbAudioVuR = _sources[3].vuR;
+        asUsb.markUsbAudioVuDirty();
+    }
+#endif
 }
 
 // ===== FreeRTOS Task =====
@@ -506,6 +576,21 @@ void audio_pipeline_init() {
 
     init_matrix_siggen_direct();
 
+#ifdef USB_AUDIO_ENABLED
+    // Register USB as pipeline lane 3 input source
+    AudioInputSource usbSrc = AUDIO_INPUT_SOURCE_INIT;
+    usbSrc.name = "USB";
+    usbSrc.lane = AUDIO_SRC_LANE_USB;
+    usbSrc.read = _usb_src_read;
+    usbSrc.isActive = _usb_src_isActive;
+    usbSrc.getSampleRate = _usb_src_getSampleRate;
+    audio_pipeline_register_source(AUDIO_SRC_LANE_USB, &usbSrc);
+
+    // Default routing: USB L (in_ch 6) → DAC L (out_ch 0), USB R (in_ch 7) → DAC R (out_ch 1)
+    _matrixGain[0][6] = 1.0f;
+    _matrixGain[1][7] = 1.0f;
+#endif
+
     // Sync bypass flags from AppState
     AppState &s = AppState::getInstance();
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
@@ -578,6 +663,21 @@ void audio_pipeline_notify_dsp_swap() {
     // Signals pipeline_write_output() (Core 1) to use the PSRAM hold buffer for
     // one iteration, bridging the DSP-skipped buffer gap with the last good frame.
     _swapPending = true;
+}
+
+void audio_pipeline_register_source(int lane, const AudioInputSource *src) {
+    if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS || !src) return;
+    _sources[lane] = *src;  // Value copy
+}
+
+float audio_pipeline_get_lane_vu_l(int lane) {
+    if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return -90.0f;
+    return _sources[lane].vuL;
+}
+
+float audio_pipeline_get_lane_vu_r(int lane) {
+    if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return -90.0f;
+    return _sources[lane].vuR;
 }
 
 void audio_pipeline_dump_raw_diag() {

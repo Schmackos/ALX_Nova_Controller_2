@@ -52,7 +52,12 @@ function overviewApplySigGenState(d) {
 
 function overviewApplyUsbState(d) {
     inputLaneEnabled[3] = !!(d && d.enabled);
-    inputLaneLevels[3]  = null; // USB level not exposed yet
+    // USB VU level (active when streaming with VU data)
+    if (d && d.streaming && d.vuL !== undefined && d.vuL > -90) {
+        inputLaneLevels[3] = Math.max(d.vuL, d.vuR);
+    } else {
+        inputLaneLevels[3] = null;
+    }
     updateInputOverview();
 }
 

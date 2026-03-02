@@ -964,6 +964,17 @@ void loop() {
     sendUsbAudioState();
     appState.clearUsbAudioDirty();
   }
+  // USB Audio VU broadcast (rate-limited to match audioUpdateRate)
+  {
+    static unsigned long lastUsbVuBroadcast = 0;
+    unsigned long nowMs = millis();
+    if (appState.isUsbAudioVuDirty()
+        && (nowMs - lastUsbVuBroadcast >= (unsigned long)appState.audioUpdateRate)) {
+      sendUsbAudioState();
+      appState.clearUsbAudioVuDirty();
+      lastUsbVuBroadcast = nowMs;
+    }
+  }
 #endif
 
   // Broadcast settings changes (GUI -> WS clients + MQTT)

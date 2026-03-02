@@ -137,14 +137,16 @@ float usb_volume_to_linear(int16_t volume_256db) {
 #include "esp32-hal-tinyusb.h"
 
 // ===== UAC2 Descriptor Constants =====
-#define USB_AUDIO_SAMPLE_RATE   48000
-#define USB_AUDIO_BIT_DEPTH     16
 #define USB_AUDIO_CHANNELS      2
-#define USB_AUDIO_SUBSLOT_SIZE  (USB_AUDIO_BIT_DEPTH / 8)
 
-// Endpoint max packet: frames_per_ms * channels * bytes_per_sample + slack
-// 48 frames/ms * 2 ch * 2 bytes = 192 bytes. +4 for adaptive slack = 196.
-#define USB_AUDIO_EP_SIZE       ((USB_AUDIO_SAMPLE_RATE / 1000 + 1) * USB_AUDIO_CHANNELS * USB_AUDIO_SUBSLOT_SIZE)
+// Per-alt max endpoint packet sizes at highest rate (96kHz)
+#define USB_AUDIO_MAX_EP_SIZE_16BIT  ((96000/1000+1) * 2 * 2)  // = 388 bytes
+#define USB_AUDIO_MAX_EP_SIZE_24BIT  ((96000/1000+1) * 2 * 3)  // = 582 bytes (< 1023 FS limit)
+#define USB_AUDIO_MAX_EP_SIZE        USB_AUDIO_MAX_EP_SIZE_24BIT
+
+// Runtime negotiated format (defaults; updated by host SET_CUR / SET_INTERFACE)
+static uint32_t _negotiatedRate  = 48000;
+static uint8_t  _negotiatedDepth = 16;
 
 // UAC2 Entity IDs
 #define UAC2_ENTITY_CLOCK       0x01
@@ -167,16 +169,19 @@ static bool _tinyusbHwReady = false; // True after tinyusb_init() succeeds (one-
 static uint8_t _ctrlBuf[64];
 
 // Buffer for receiving isochronous OUT data (must be declared before control_xfer which primes it)
-static uint8_t _isoOutBuf[USB_AUDIO_EP_SIZE] __attribute__((aligned(4)));
+static uint8_t _isoOutBuf[USB_AUDIO_MAX_EP_SIZE] __attribute__((aligned(4)));
 
-// Ring buffer capacity: 20ms at 48kHz = 960 frames, round up to power of 2 = 1024
-#define RING_BUF_CAPACITY 1024
+// Ring buffer capacity: 4096 frames = 42.7ms at 96kHz. PSRAM cost: 4096 × 2ch × 4 bytes = 32KB.
+#define RING_BUF_CAPACITY 4096
+
+// Static conversion buffer — avoids stack overflow in USBD task at 96kHz/24-bit
+static int32_t _convBuf[USB_AUDIO_MAX_EP_SIZE / 2];
 
 // ===== UAC2 Descriptor Builder =====
 
 // Total descriptor length (computed from structure)
 #define UAC2_AC_CS_LEN  (9 + 8 + 17 + 18 + 12)  // Header + Clock + IT + FU + OT = 64
-#define UAC2_DESC_TOTAL_LEN (8 + 9 + UAC2_AC_CS_LEN + 9 + 9 + 16 + 6 + 7 + 8)  // = 136
+#define UAC2_DESC_TOTAL_LEN (8 + 9 + UAC2_AC_CS_LEN + 9 + 9 + 16 + 6 + 7 + 8 + 9 + 16 + 6 + 7 + 8)  // = 182
 
 static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     uint8_t *p = dst;
@@ -227,8 +232,8 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
     *p++ = AUDIO20_CS_AC_INTERFACE_CLOCK_SOURCE;         // bDescriptorSubtype
     *p++ = UAC2_ENTITY_CLOCK;                          // bClockID
-    *p++ = 0x01;                                       // bmAttributes: internal fixed clock
-    *p++ = 0x05;                                       // bmControls: freq read-only, validity read-only
+    *p++ = 0x03;                                       // bmAttributes: internal programmable clock
+    *p++ = 0x07;                                       // bmControls: freq r/w (bits 1:0=11), validity r-only (bits 3:2=01)
     *p++ = 0;                                          // bAssocTerminal
     *p++ = 0;                                          // iClockSource
 
@@ -306,24 +311,73 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     *p++ = 0x03; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; // bmChannelConfig = FL+FR
     *p++ = 0;                                          // iChannelNames
 
-    // --- Type I Format Descriptor (UAC2) ---
+    // --- Type I Format Descriptor (UAC2) --- Alt 1 (16-bit)
     *p++ = 6;                                          // bLength
     *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
     *p++ = AUDIO20_CS_AS_INTERFACE_FORMAT_TYPE;          // bDescriptorSubtype
     *p++ = AUDIO20_FORMAT_TYPE_I;                        // bFormatType
-    *p++ = USB_AUDIO_SUBSLOT_SIZE;                     // bSubslotSize (2 for 16-bit)
-    *p++ = USB_AUDIO_BIT_DEPTH;                        // bBitResolution
+    *p++ = 2;                                          // bSubslotSize (2 for 16-bit)
+    *p++ = 16;                                         // bBitResolution
 
-    // --- Isochronous OUT Endpoint ---
+    // --- Isochronous OUT Endpoint --- Alt 1 (16-bit)
     *p++ = 7;                                          // bLength
     *p++ = TUSB_DESC_ENDPOINT;                         // bDescriptorType
     *p++ = _epOut;                                     // bEndpointAddress (OUT)
     *p++ = 0x09;                                       // bmAttributes: Isochronous, Adaptive
-    *p++ = (uint8_t)(USB_AUDIO_EP_SIZE);               // wMaxPacketSize (low)
-    *p++ = (uint8_t)(USB_AUDIO_EP_SIZE >> 8);          // wMaxPacketSize (high)
+    *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_16BIT);     // wMaxPacketSize (low) = 388
+    *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_16BIT >> 8);// wMaxPacketSize (high)
     *p++ = 1;                                          // bInterval (1ms at Full Speed)
 
-    // --- CS Endpoint (Audio Class) ---
+    // --- CS Endpoint (Audio Class) --- Alt 1
+    *p++ = 8;                                          // bLength
+    *p++ = TUSB_DESC_CS_ENDPOINT;                      // bDescriptorType
+    *p++ = AUDIO20_CS_EP_SUBTYPE_GENERAL;                // bDescriptorSubtype
+    *p++ = 0x00;                                       // bmAttributes
+    *p++ = 0x00;                                       // bmControls
+    *p++ = 0x00;                                       // bLockDelayUnits
+    *p++ = 0x00; *p++ = 0x00;                          // wLockDelay
+
+    // --- Audio Streaming Interface Alt 2 (24-bit active) ---
+    *p++ = 9;                                          // bLength
+    *p++ = TUSB_DESC_INTERFACE;                        // bDescriptorType
+    *p++ = as_itf;                                     // bInterfaceNumber
+    *p++ = 2;                                          // bAlternateSetting
+    *p++ = 1;                                          // bNumEndpoints
+    *p++ = TUSB_CLASS_AUDIO;                           // bInterfaceClass
+    *p++ = AUDIO_SUBCLASS_STREAMING;                   // bInterfaceSubClass
+    *p++ = AUDIO_INT_PROTOCOL_CODE_V2;                 // bInterfaceProtocol
+    *p++ = 0;                                          // iInterface
+
+    // --- CS AS General (UAC2) — Alt 2 ---
+    *p++ = 16;                                         // bLength
+    *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
+    *p++ = AUDIO20_CS_AS_INTERFACE_AS_GENERAL;           // bDescriptorSubtype
+    *p++ = UAC2_ENTITY_INPUT_TERM;                     // bTerminalLink
+    *p++ = 0x00;                                       // bmControls
+    *p++ = AUDIO20_FORMAT_TYPE_I;                        // bFormatType
+    *p++ = 0x01; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; // bmFormats = PCM (bit 0)
+    *p++ = USB_AUDIO_CHANNELS;                         // bNrChannels
+    *p++ = 0x03; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; // bmChannelConfig = FL+FR
+    *p++ = 0;                                          // iChannelNames
+
+    // --- Type I Format Descriptor (UAC2) — Alt 2 (24-bit) ---
+    *p++ = 6;                                          // bLength
+    *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
+    *p++ = AUDIO20_CS_AS_INTERFACE_FORMAT_TYPE;          // bDescriptorSubtype
+    *p++ = AUDIO20_FORMAT_TYPE_I;                        // bFormatType
+    *p++ = 3;                                          // bSubslotSize (3 for 24-bit)
+    *p++ = 24;                                         // bBitResolution
+
+    // --- Isochronous OUT Endpoint — Alt 2 (24-bit) ---
+    *p++ = 7;                                          // bLength
+    *p++ = TUSB_DESC_ENDPOINT;                         // bDescriptorType
+    *p++ = _epOut;                                     // bEndpointAddress (OUT)
+    *p++ = 0x09;                                       // bmAttributes: Isochronous, Adaptive
+    *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_24BIT);     // wMaxPacketSize (low) = 582
+    *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_24BIT >> 8);// wMaxPacketSize (high)
+    *p++ = 1;                                          // bInterval (1ms at Full Speed)
+
+    // --- CS Endpoint (Audio Class) — Alt 2 ---
     *p++ = 8;                                          // bLength
     *p++ = TUSB_DESC_CS_ENDPOINT;                      // bDescriptorType
     *p++ = AUDIO20_CS_EP_SUBTYPE_GENERAL;                // bDescriptorSubtype
@@ -336,6 +390,12 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     *itf = ac_itf + 2;
 
     uint16_t len = (uint16_t)(p - dst);
+
+    // Runtime sanity check: catch descriptor length drift
+    if (len != UAC2_DESC_TOTAL_LEN) {
+        LOG_E("[USB Audio] Descriptor length mismatch! got=%u expected=%u", len, UAC2_DESC_TOTAL_LEN);
+    }
+
     return len;
 }
 
@@ -441,15 +501,19 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
 
             // Start streaming
             _altSetting = desc_intf->bAlternateSetting;
+            _negotiatedDepth = (_altSetting == 2) ? 24 : 16;
+            AppState::getInstance().usbAudioNegotiatedDepth = _negotiatedDepth;
+            AppState::getInstance().usbAudioBitDepth = _negotiatedDepth;
             _usbState = USB_AUDIO_STREAMING;
             usb_rb_reset(&_ringBuffer);
             AppState::getInstance().usbAudioStreaming = true;
             AppState::getInstance().markUsbAudioDirty();
             LOG_I("[USB Audio] Streaming started (alt %d)", desc_intf->bAlternateSetting);
 
-            // Prime the OUT endpoint for first isochronous transfer
+            // Prime the OUT endpoint for first isochronous transfer with dynamic size
             if (_epOut) {
-                usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE, false);
+                uint32_t ep_size = (_negotiatedRate / 1000 + 1) * 2 * (_negotiatedDepth / 8);
+                usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, ep_size, false);
             }
         }
     }
@@ -463,6 +527,18 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
     // it calls _audio_driver_open() for the new alt setting (not this callback).
 
     if (stage == CONTROL_STAGE_SETUP) {
+        // Non-class requests (standard SET_INTERFACE etc.) may be forwarded by
+        // TinyUSB to class drivers. STALLing them corrupts the EP0 state machine
+        // and breaks subsequent control transfers (garbled data in _ctrlBuf).
+        if (request->bmRequestType_bit.type != TUSB_REQ_TYPE_CLASS) {
+            LOG_D("[USB Audio] Non-class request: bmRT=0x%02X bReq=0x%02X wVal=0x%04X wIdx=0x%04X",
+                  request->bmRequestType, request->bRequest, request->wValue, request->wIndex);
+            if (request->wLength == 0) {
+                return tud_control_status(rhport, request);
+            }
+            return false; // Has data stage we can't serve
+        }
+
         uint8_t entity = TU_U16_HIGH(request->wIndex);
 
         // Clock Source entity requests
@@ -471,14 +547,14 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                 if (TU_U16_HIGH(request->wValue) == 0x01) {
                     // SAM_FREQ_CONTROL — CUR
                     if (request->bmRequestType_bit.direction == TUSB_DIR_IN) {
-                        // GET: return current sample rate
-                        uint32_t rate = USB_AUDIO_SAMPLE_RATE;
+                        // GET: return current negotiated sample rate
+                        uint32_t rate = _negotiatedRate;
                         memcpy(_ctrlBuf, &rate, 4);
                         return tud_control_xfer(rhport, request, _ctrlBuf, 4);
                     } else {
-                        // SET: clock is fixed/read-only — STALL unsupported SET requests
-                        LOG_W("[USB Audio] Rejecting SET_CUR for clock frequency (read-only)");
-                        return false;
+                        // SET: accept data stage to receive requested rate
+                        memset(_ctrlBuf, 0, 4); // Clear stale data before DMA
+                        return tud_control_xfer(rhport, request, _ctrlBuf, 4);
                     }
                 } else if (TU_U16_HIGH(request->wValue) == 0x02) {
                     // CLOCK_VALID_CONTROL — always valid
@@ -489,16 +565,18 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                 }
             } else if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
                 if (TU_U16_HIGH(request->wValue) == 0x01) {
-                    // SAM_FREQ_CONTROL — RANGE: report single supported rate
-                    // Layout: wNumSubRanges(2), dMIN(4), dMAX(4), dRES(4)
-                    uint16_t numRanges = 1;
-                    uint32_t rate = USB_AUDIO_SAMPLE_RATE;
+                    // SAM_FREQ_CONTROL — RANGE: report 3 supported rates
+                    // Layout: wNumSubRanges(2) + 3 × (dMIN(4) + dMAX(4) + dRES(4)) = 38 bytes
+                    uint16_t numRanges = 3;
+                    uint32_t rates[] = {44100, 48000, 96000};
+                    uint32_t zero = 0;
                     memcpy(_ctrlBuf, &numRanges, 2);
-                    memcpy(_ctrlBuf + 2, &rate, 4);  // dMIN
-                    memcpy(_ctrlBuf + 6, &rate, 4);  // dMAX
-                    uint32_t res = 0;
-                    memcpy(_ctrlBuf + 10, &res, 4);  // dRES
-                    return tud_control_xfer(rhport, request, _ctrlBuf, 14);
+                    for (int i = 0; i < 3; i++) {
+                        memcpy(_ctrlBuf + 2 + i * 12, &rates[i], 4);     // dMIN
+                        memcpy(_ctrlBuf + 2 + i * 12 + 4, &rates[i], 4); // dMAX
+                        memcpy(_ctrlBuf + 2 + i * 12 + 8, &zero, 4);     // dRES
+                    }
+                    return tud_control_xfer(rhport, request, _ctrlBuf, 38);
                 }
             }
         }
@@ -517,6 +595,7 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                         return tud_control_xfer(rhport, request, _ctrlBuf, 1);
                     } else {
                         // SET mute — receive data in DATA stage
+                        memset(_ctrlBuf, 0, 1);
                         return tud_control_xfer(rhport, request, _ctrlBuf, 1);
                     }
                 } else if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
@@ -533,12 +612,13 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                         return tud_control_xfer(rhport, request, _ctrlBuf, 2);
                     } else {
                         // SET volume — receive data in DATA stage
+                        memset(_ctrlBuf, 0, 2);
                         return tud_control_xfer(rhport, request, _ctrlBuf, 2);
                     }
                 } else if (request->bRequest == AUDIO20_CS_REQ_RANGE) {
                     // Volume range: -128 dB to 0 dB in 1/256 dB steps
                     uint16_t numRanges = 1;
-                    int16_t volMin = -32768; // -128 dB
+                    int16_t volMin = -32767; // -128 dB (0x8000 is reserved as "silence" in UAC2)
                     int16_t volMax = 0;      // 0 dB
                     int16_t volRes = 256;    // 1 dB steps
                     memcpy(_ctrlBuf, &numRanges, 2);
@@ -550,9 +630,12 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
             }
         }
 
-        // Unhandled — stall
-        LOG_W("[USB Audio] Unhandled control: bReq=0x%02X, wVal=0x%04X, wIdx=0x%04X",
-              request->bRequest, request->wValue, request->wIndex);
+        // Unhandled class request — ACK if no data stage, STALL otherwise
+        LOG_W("[USB Audio] Unhandled class control: bReq=0x%02X wVal=0x%04X wIdx=0x%04X wLen=%u",
+              request->bRequest, request->wValue, request->wIndex, request->wLength);
+        if (request->wLength == 0) {
+            return tud_control_status(rhport, request);
+        }
         return false;
     }
 
@@ -560,16 +643,22 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
     if (stage == CONTROL_STAGE_DATA) {
         uint8_t entity = TU_U16_HIGH(request->wIndex);
 
-        // Clock SET_CUR: accept if it matches our fixed rate, otherwise stall
+        // Clock SET_CUR: validate and store negotiated rate
         if (entity == UAC2_ENTITY_CLOCK) {
             uint8_t control_sel = TU_U16_HIGH(request->wValue);
             if (control_sel == 0x01) { // SAM_FREQ_CONTROL
                 uint32_t requested_rate;
                 memcpy(&requested_rate, _ctrlBuf, 4);
-                if (requested_rate != USB_AUDIO_SAMPLE_RATE) {
+                LOG_D("[USB Audio] Clock SET_CUR raw: [%02X %02X %02X %02X] = %u Hz",
+                      _ctrlBuf[0], _ctrlBuf[1], _ctrlBuf[2], _ctrlBuf[3], requested_rate);
+                if (requested_rate != 44100 && requested_rate != 48000 && requested_rate != 96000) {
                     LOG_W("[USB Audio] Host requested unsupported rate: %u", requested_rate);
-                    // We only support one rate — host should use the rate from RANGE
+                    return false; // STALL
                 }
+                _negotiatedRate = requested_rate;
+                AppState::getInstance().usbAudioNegotiatedRate = requested_rate;
+                AppState::getInstance().usbAudioSampleRate = requested_rate;
+                AppState::getInstance().markUsbAudioDirty();
                 LOG_I("[USB Audio] Host set clock rate: %u Hz", requested_rate);
             }
             return true;
@@ -600,22 +689,20 @@ static bool _audio_driver_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t
     (void)result;
 
     if (ep_addr == _epOut && xferred_bytes > 0) {
-        // Convert received USB audio to I2S format and write to ring buffer
-        uint32_t frames = xferred_bytes / (USB_AUDIO_CHANNELS * USB_AUDIO_SUBSLOT_SIZE);
+        uint32_t subslotSize = (_negotiatedDepth == 24) ? 3 : 2;
+        uint32_t frames = xferred_bytes / (USB_AUDIO_CHANNELS * subslotSize);
 
-        // Temp buffer for converted samples (on stack, max ~196 bytes * 2 = ~800 bytes)
-        int32_t converted[USB_AUDIO_EP_SIZE / USB_AUDIO_SUBSLOT_SIZE];
-
-        if (USB_AUDIO_BIT_DEPTH == 16) {
-            usb_pcm16_to_int32((const int16_t *)_isoOutBuf, converted, frames);
+        if (_negotiatedDepth == 24) {
+            usb_pcm24_to_int32(_isoOutBuf, _convBuf, frames);
         } else {
-            usb_pcm24_to_int32(_isoOutBuf, converted, frames);
+            usb_pcm16_to_int32((const int16_t *)_isoOutBuf, _convBuf, frames);
         }
 
-        usb_rb_write(&_ringBuffer, converted, frames);
+        usb_rb_write(&_ringBuffer, _convBuf, frames);
 
-        // Re-arm the endpoint for next transfer
-        usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, USB_AUDIO_EP_SIZE, false);
+        // Re-arm for next packet with dynamic size
+        uint32_t ep_size = (_negotiatedRate / 1000 + 1) * USB_AUDIO_CHANNELS * subslotSize;
+        usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, ep_size, false);
     }
 
     return true;
@@ -735,8 +822,8 @@ void usb_audio_init(void) {
         // that calls tud_task() in a loop. No additional task needed.
         _tinyusbHwReady = true;
 
-        LOG_I("[USB Audio] TinyUSB started: %dHz/%dbit/%dch, ring=%d frames (%s)",
-              USB_AUDIO_SAMPLE_RATE, USB_AUDIO_BIT_DEPTH, USB_AUDIO_CHANNELS,
+        LOG_I("[USB Audio] TinyUSB started: %uHz/%ubit/%dch, ring=%d frames (%s)",
+              _negotiatedRate, _negotiatedDepth, USB_AUDIO_CHANNELS,
               RING_BUF_CAPACITY,
               _ringBufStorage ? "PSRAM" : "internal");
     } else {
@@ -748,8 +835,8 @@ void usb_audio_init(void) {
 
     // Set initial AppState
     AppState &as = AppState::getInstance();
-    as.usbAudioSampleRate = USB_AUDIO_SAMPLE_RATE;
-    as.usbAudioBitDepth = USB_AUDIO_BIT_DEPTH;
+    as.usbAudioSampleRate = _negotiatedRate;
+    as.usbAudioBitDepth = _negotiatedDepth;
     as.usbAudioChannels = USB_AUDIO_CHANNELS;
 }
 
@@ -787,11 +874,11 @@ uint32_t usb_audio_available_frames(void) {
 }
 
 uint32_t usb_audio_get_sample_rate(void) {
-    return USB_AUDIO_SAMPLE_RATE;
+    return _negotiatedRate;
 }
 
 uint8_t usb_audio_get_bit_depth(void) {
-    return USB_AUDIO_BIT_DEPTH;
+    return _negotiatedDepth;
 }
 
 uint8_t usb_audio_get_channels(void) {
@@ -818,32 +905,69 @@ uint32_t usb_audio_get_underruns(void) {
     return _ringBuffer.underruns;
 }
 
+uint32_t usb_audio_get_negotiated_rate(void) {
+    return _negotiatedRate;
+}
+
+uint8_t usb_audio_get_negotiated_depth(void) {
+    return _negotiatedDepth;
+}
+
 #elif defined(NATIVE_TEST)
 
-// ===== Native Test Stubs =====
+// ===== Native Test Stubs with Injectable State =====
 static UsbAudioState _nativeState = USB_AUDIO_DISCONNECTED;
+static uint32_t _nativeRate  = 48000;
+static uint8_t  _nativeDepth = 16;
+static int16_t  _nativeVolume = 0;
+static bool     _nativeMute = false;
+static UsbAudioRingBuffer _nativeRingBuffer = {};
+static int32_t _nativeRingBufStorage[256 * 2]; // Small buffer for read tests
 
-void usb_audio_init(void) {}
-void usb_audio_deinit(void) {}
+void usb_audio_init(void) {
+    usb_rb_init(&_nativeRingBuffer, _nativeRingBufStorage, 256);
+}
+void usb_audio_deinit(void) {
+    _nativeState = USB_AUDIO_DISCONNECTED;
+}
 
 UsbAudioState usb_audio_get_state(void) { return _nativeState; }
-
 bool usb_audio_is_connected(void) { return _nativeState >= USB_AUDIO_CONNECTED; }
 bool usb_audio_is_streaming(void) { return _nativeState == USB_AUDIO_STREAMING; }
 
 uint32_t usb_audio_read(int32_t *out, uint32_t frames) {
-    (void)out; (void)frames;
-    return 0;
+    if (_nativeState != USB_AUDIO_STREAMING) return 0;
+    return usb_rb_read(&_nativeRingBuffer, out, frames);
 }
-uint32_t usb_audio_available_frames(void) { return 0; }
-uint32_t usb_audio_get_sample_rate(void) { return 48000; }
-uint8_t usb_audio_get_bit_depth(void) { return 16; }
+uint32_t usb_audio_available_frames(void) {
+    return usb_rb_available(&_nativeRingBuffer);
+}
+
+uint32_t usb_audio_get_sample_rate(void) { return _nativeRate; }
+uint8_t usb_audio_get_bit_depth(void) { return _nativeDepth; }
 uint8_t usb_audio_get_channels(void) { return 2; }
-int16_t usb_audio_get_volume(void) { return 0; }
-bool usb_audio_get_mute(void) { return false; }
-float usb_audio_get_volume_linear(void) { return 1.0f; }
-uint32_t usb_audio_get_overruns(void) { return 0; }
-uint32_t usb_audio_get_underruns(void) { return 0; }
+int16_t usb_audio_get_volume(void) { return _nativeVolume; }
+bool usb_audio_get_mute(void) { return _nativeMute; }
+float usb_audio_get_volume_linear(void) {
+    if (_nativeMute) return 0.0f;
+    return usb_volume_to_linear(_nativeVolume);
+}
+uint32_t usb_audio_get_overruns(void) { return _nativeRingBuffer.overruns; }
+uint32_t usb_audio_get_underruns(void) { return _nativeRingBuffer.underruns; }
+
+uint32_t usb_audio_get_negotiated_rate(void) { return _nativeRate; }
+uint8_t  usb_audio_get_negotiated_depth(void) { return _nativeDepth; }
+
+// Test injection API
+void usb_audio_test_set_state(UsbAudioState state) { _nativeState = state; }
+void usb_audio_test_set_negotiated_format(uint32_t rate, uint8_t depth) {
+    _nativeRate = rate;
+    _nativeDepth = depth;
+}
+void usb_audio_test_set_volume(int16_t vol, bool mute) {
+    _nativeVolume = vol;
+    _nativeMute = mute;
+}
 
 #else
 // USB_AUDIO_ENABLED not defined and not NATIVE_TEST — empty stubs
@@ -862,4 +986,6 @@ bool usb_audio_get_mute(void) { return false; }
 float usb_audio_get_volume_linear(void) { return 1.0f; }
 uint32_t usb_audio_get_overruns(void) { return 0; }
 uint32_t usb_audio_get_underruns(void) { return 0; }
+uint32_t usb_audio_get_negotiated_rate(void) { return 48000; }
+uint8_t  usb_audio_get_negotiated_depth(void) { return 16; }
 #endif

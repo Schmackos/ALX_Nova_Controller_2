@@ -320,6 +320,169 @@ void test_api_defaults(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.0f, usb_audio_get_volume_linear());
 }
 
+// ===== Ring Buffer: 96kHz Capacity =====
+
+void test_rb_96khz_fill_rate(void) {
+    // Test that a 4096-frame buffer sustains 42ms of 96kHz without overflow.
+    // 42ms at 96kHz = 4032 frames — fits in 4095 usable slots (4096-1).
+    int32_t bigStorage[4096 * 2];
+    UsbAudioRingBuffer bigRb;
+    usb_rb_init(&bigRb, bigStorage, 4096);
+
+    int32_t frame[2] = {1000, 2000};
+    uint32_t total = 0;
+    for (int ms = 0; ms < 42; ms++) {
+        for (int f = 0; f < 96; f++) {  // 96 frames per ms at 96kHz
+            usb_rb_write(&bigRb, frame, 1);
+            total++;
+        }
+    }
+    TEST_ASSERT_EQUAL(4032, total);
+    TEST_ASSERT_EQUAL(0, bigRb.overruns);
+    TEST_ASSERT_EQUAL(4032, usb_rb_available(&bigRb));
+}
+
+void test_rb_96khz_drain_rate(void) {
+    // Drain 256 frames from a buffer with 512 frames
+    int32_t bigStorage[4096 * 2];
+    UsbAudioRingBuffer bigRb;
+    usb_rb_init(&bigRb, bigStorage, 4096);
+
+    int32_t frame[2] = {42, 43};
+    for (int i = 0; i < 512; i++) {
+        usb_rb_write(&bigRb, frame, 1);
+    }
+    TEST_ASSERT_EQUAL(512, usb_rb_available(&bigRb));
+
+    int32_t out[512];
+    uint32_t drained = usb_rb_read(&bigRb, out, 256);
+    TEST_ASSERT_EQUAL(256, drained);
+    TEST_ASSERT_EQUAL(256, usb_rb_available(&bigRb));
+    TEST_ASSERT_EQUAL(0, bigRb.underruns);
+}
+
+// ===== Format Conversion: PCM24 Multi-frame =====
+
+void test_pcm24_to_int32_stereo_multiframe(void) {
+    // 4 stereo frames = 8 samples = 24 bytes
+    uint8_t src[24];
+    int32_t dst[8];
+
+    // Frame 0: L=+1, R=-1 (in 24-bit)
+    src[0] = 0x01; src[1] = 0x00; src[2] = 0x00;  // +1
+    src[3] = 0xFF; src[4] = 0xFF; src[5] = 0xFF;  // -1
+    // Frame 1: L=0, R=0
+    src[6] = 0x00; src[7] = 0x00; src[8] = 0x00;
+    src[9] = 0x00; src[10] = 0x00; src[11] = 0x00;
+    // Frame 2: L=max positive, R=max negative
+    src[12] = 0xFF; src[13] = 0xFF; src[14] = 0x7F;  // 0x7FFFFF
+    src[15] = 0x00; src[16] = 0x00; src[17] = 0x80;  // 0x800000 (-8388608)
+    // Frame 3: L=mid positive, R=mid negative
+    src[18] = 0x00; src[19] = 0x00; src[20] = 0x40;  // 0x400000
+    src[21] = 0x00; src[22] = 0x00; src[23] = 0xC0;  // 0xC00000 (-4194304)
+
+    usb_pcm24_to_int32(src, dst, 4);
+
+    // Frame 0: +1 << 8 = 0x100, -1 sign-ext << 8 = 0xFFFFFF00
+    TEST_ASSERT_EQUAL_INT32(0x100, dst[0]);
+    TEST_ASSERT_EQUAL_INT32((int32_t)0xFFFFFF00, dst[1]);
+    // Frame 1: 0
+    TEST_ASSERT_EQUAL_INT32(0, dst[2]);
+    TEST_ASSERT_EQUAL_INT32(0, dst[3]);
+    // Frame 2: max positive, max negative
+    TEST_ASSERT_EQUAL_INT32(0x7FFFFF00, dst[4]);
+    TEST_ASSERT_EQUAL_INT32((int32_t)0x80000000, dst[5]);
+    // Frame 3: mid values
+    TEST_ASSERT_EQUAL_INT32(0x40000000, dst[6]);
+    TEST_ASSERT_EQUAL_INT32((int32_t)0xC0000000, dst[7]);
+}
+
+// ===== State Injection =====
+
+void test_native_state_injection(void) {
+    // Default state is disconnected
+    TEST_ASSERT_EQUAL(USB_AUDIO_DISCONNECTED, usb_audio_get_state());
+    TEST_ASSERT_FALSE(usb_audio_is_connected());
+    TEST_ASSERT_FALSE(usb_audio_is_streaming());
+
+    // Inject CONNECTED state
+    usb_audio_test_set_state(USB_AUDIO_CONNECTED);
+    TEST_ASSERT_EQUAL(USB_AUDIO_CONNECTED, usb_audio_get_state());
+    TEST_ASSERT_TRUE(usb_audio_is_connected());
+    TEST_ASSERT_FALSE(usb_audio_is_streaming());
+
+    // Inject STREAMING state
+    usb_audio_test_set_state(USB_AUDIO_STREAMING);
+    TEST_ASSERT_TRUE(usb_audio_is_streaming());
+
+    // Reset back
+    usb_audio_test_set_state(USB_AUDIO_DISCONNECTED);
+    TEST_ASSERT_FALSE(usb_audio_is_connected());
+}
+
+void test_negotiated_format_injection(void) {
+    // Default: 48000/16
+    TEST_ASSERT_EQUAL(48000, usb_audio_get_negotiated_rate());
+    TEST_ASSERT_EQUAL(16, usb_audio_get_negotiated_depth());
+
+    // Set 96kHz/24-bit
+    usb_audio_test_set_negotiated_format(96000, 24);
+    TEST_ASSERT_EQUAL(96000, usb_audio_get_negotiated_rate());
+    TEST_ASSERT_EQUAL(24, usb_audio_get_negotiated_depth());
+    TEST_ASSERT_EQUAL(96000, usb_audio_get_sample_rate());
+    TEST_ASSERT_EQUAL(24, usb_audio_get_bit_depth());
+
+    // Set 44.1kHz/16-bit
+    usb_audio_test_set_negotiated_format(44100, 16);
+    TEST_ASSERT_EQUAL(44100, usb_audio_get_negotiated_rate());
+    TEST_ASSERT_EQUAL(16, usb_audio_get_negotiated_depth());
+
+    // Reset to default
+    usb_audio_test_set_negotiated_format(48000, 16);
+}
+
+// ===== Volume/Mute Pipeline Gain =====
+
+void test_volume_mute_produces_zero_gain(void) {
+    usb_audio_test_set_volume(0, true);  // mute=true, vol=0dB
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, usb_audio_get_volume_linear());
+    usb_audio_test_set_volume(0, false);  // cleanup
+}
+
+void test_volume_unity_produces_unity_gain(void) {
+    usb_audio_test_set_volume(0, false);  // vol=0dB, no mute
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, usb_audio_get_volume_linear());
+}
+
+void test_volume_minus_6db_reduces_half(void) {
+    usb_audio_test_set_volume(-1536, false);  // -6dB = -6*256 = -1536
+    float gain = usb_audio_get_volume_linear();
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.501f, gain);
+    usb_audio_test_set_volume(0, false);  // cleanup
+}
+
+// ===== Native Ring Buffer Read =====
+
+void test_native_streaming_read(void) {
+    // The native stub has a 256-frame ring buffer
+    usb_audio_init(); // Inits native ring buffer
+    usb_audio_test_set_state(USB_AUDIO_STREAMING);
+
+    // Write some data to the native ring buffer
+    int32_t wdata[4] = {100, 200, 300, 400};
+    usb_rb_write(&_nativeRingBuffer, wdata, 2);
+
+    // Read via public API
+    int32_t rdata[4] = {};
+    uint32_t got = usb_audio_read(rdata, 2);
+    TEST_ASSERT_EQUAL(2, got);
+    TEST_ASSERT_EQUAL(100, rdata[0]);
+    TEST_ASSERT_EQUAL(200, rdata[1]);
+
+    // Cleanup
+    usb_audio_test_set_state(USB_AUDIO_DISCONNECTED);
+}
+
 // ===== Main =====
 
 int main(int argc, char **argv) {
@@ -360,6 +523,25 @@ int main(int argc, char **argv) {
     // State Machine
     RUN_TEST(test_state_initial_disconnected);
     RUN_TEST(test_api_defaults);
+
+    // 96kHz Ring Buffer
+    RUN_TEST(test_rb_96khz_fill_rate);
+    RUN_TEST(test_rb_96khz_drain_rate);
+
+    // Format Conversion: PCM24 Multi-frame
+    RUN_TEST(test_pcm24_to_int32_stereo_multiframe);
+
+    // State Injection
+    RUN_TEST(test_native_state_injection);
+    RUN_TEST(test_negotiated_format_injection);
+
+    // Volume/Mute Pipeline Gain
+    RUN_TEST(test_volume_mute_produces_zero_gain);
+    RUN_TEST(test_volume_unity_produces_unity_gain);
+    RUN_TEST(test_volume_minus_6db_reduces_half);
+
+    // Native Ring Buffer Read
+    RUN_TEST(test_native_streaming_read);
 
     return UNITY_END();
 }

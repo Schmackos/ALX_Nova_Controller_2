@@ -518,6 +518,23 @@
                 <div id="usbAudioDetails" style="display:none">
                     <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
                     <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
+                    <div id="usbAudioVu" style="display:none;margin-top:8px">
+                        <div class="info-row" style="border-bottom:none;padding-bottom:2px"><span class="info-label">VU Level</span></div>
+                        <div class="vu-meter-row">
+                            <span class="vu-meter-label" style="min-width:14px">L</span>
+                            <div class="vu-meter-track">
+                                <div class="vu-meter-fill" id="usbVuBarL"></div>
+                            </div>
+                            <span class="vu-meter-db" id="usbVuReadL">-inf dBFS</span>
+                        </div>
+                        <div class="vu-meter-row" style="margin-bottom:0">
+                            <span class="vu-meter-label" style="min-width:14px">R</span>
+                            <div class="vu-meter-track">
+                                <div class="vu-meter-fill" id="usbVuBarR"></div>
+                            </div>
+                            <span class="vu-meter-db" id="usbVuReadR">-inf dBFS</span>
+                        </div>
+                    </div>
                 </div>
                 </div>
             </div>

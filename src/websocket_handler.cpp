@@ -1129,8 +1129,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             saveSettings();
             if (newVal) {
               usb_audio_init();
+              appState.pipelineInputBypass[3] = false;
+              appState.pipelineDspBypass[3] = false;
             } else {
               usb_audio_deinit();
+              appState.pipelineInputBypass[3] = true;
             }
             appState.markUsbAudioDirty();
             LOG_I("[WebSocket] USB Audio %s", newVal ? "enabled" : "disabled");
@@ -1495,8 +1498,12 @@ void sendUsbAudioState() {
   doc["volume"] = appState.usbAudioVolume;
   doc["volumeLinear"] = usb_audio_get_volume_linear();
   doc["mute"] = appState.usbAudioMute;
-  doc["overruns"] = appState.usbAudioBufferOverruns;
-  doc["underruns"] = appState.usbAudioBufferUnderruns;
+  doc["overruns"]  = usb_audio_get_overruns();
+  doc["underruns"] = usb_audio_get_underruns();
+  doc["vuL"]             = appState.usbAudioVuL;
+  doc["vuR"]             = appState.usbAudioVuR;
+  doc["negotiatedRate"]  = appState.usbAudioNegotiatedRate;
+  doc["negotiatedDepth"] = appState.usbAudioNegotiatedDepth;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());

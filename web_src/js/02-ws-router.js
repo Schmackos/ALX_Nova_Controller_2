@@ -180,24 +180,6 @@
                     vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                     startVuAnimation();
                 }
-            } else if (data.type === 'audioWaveform') {
-                if (currentActiveTab === 'audio' && data.w) {
-                    const a = data.adc || 0;
-                    if (a < NUM_ADCS) {
-                        waveformTarget[a] = data.w;
-                        if (!waveformCurrent[a]) waveformCurrent[a] = data.w.slice();
-                        startAudioAnimation();
-                    }
-                }
-            } else if (data.type === 'audioSpectrum') {
-                if (currentActiveTab === 'audio' && data.bands) {
-                    const a = data.adc || 0;
-                    if (a < NUM_ADCS) {
-                        for (let i = 0; i < data.bands.length && i < 16; i++) spectrumTarget[a][i] = data.bands[i];
-                        targetDominantFreq[a] = data.freq || 0;
-                        startAudioAnimation();
-                    }
-                }
             } else if (data.type === 'inputNames') {
                 if (data.names && Array.isArray(data.names)) {
                     for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
