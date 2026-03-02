@@ -1,5 +1,89 @@
 // ===== Settings / Theme Functions =====
 
+        function handlePhysicalResetProgress(data) {
+            showToast('Factory reset: ' + data.progress + '%', 'info');
+        }
+
+        function handlePhysicalRebootProgress(data) {
+            showToast('Rebooting: ' + data.progress + '%', 'info');
+        }
+
+        function updateSmartAutoSettingsVisibility(mode) {
+            const settingsCard = document.getElementById('smartAutoSettingsCard');
+            if (settingsCard) {
+                settingsCard.style.display = (mode === 'smart_auto') ? 'block' : 'none';
+            }
+        }
+
+        function updateSmartSensingUI(data) {
+            if (data.mode !== undefined) {
+                let modeValue = data.mode;
+                if (typeof data.mode === 'number') {
+                    const modeMap = { 0: 'always_on', 1: 'always_off', 2: 'smart_auto' };
+                    modeValue = modeMap[data.mode] || 'smart_auto';
+                }
+                document.querySelectorAll('input[name="sensingMode"]').forEach(function(radio) {
+                    radio.checked = (radio.value === modeValue);
+                });
+                updateSmartAutoSettingsVisibility(modeValue);
+                const modeLabels = { 'always_on': 'Always On', 'always_off': 'Always Off', 'smart_auto': 'Smart Auto' };
+                const modeEl = document.getElementById('infoSensingMode');
+                if (modeEl) modeEl.textContent = modeLabels[modeValue] || modeValue;
+            }
+            if (data.timerDuration !== undefined && !inputFocusState.timerDuration) {
+                const el = document.getElementById('appState.timerDuration');
+                if (el) el.value = data.timerDuration;
+            }
+            if (data.timerDuration !== undefined) {
+                const el = document.getElementById('infoTimerDuration');
+                if (el) el.textContent = data.timerDuration + ' min';
+            }
+            if (data.audioThreshold !== undefined && !inputFocusState.audioThreshold) {
+                const el = document.getElementById('audioThreshold');
+                if (el) el.value = Math.round(data.audioThreshold);
+            }
+            if (data.audioThreshold !== undefined) {
+                const el = document.getElementById('infoAudioThreshold');
+                if (el) el.textContent = Math.round(data.audioThreshold) + ' dBFS';
+            }
+            if (data.amplifierState !== undefined) {
+                const display = document.getElementById('amplifierDisplay');
+                const status = document.getElementById('amplifierStatus');
+                if (display) display.classList.toggle('on', data.amplifierState);
+                if (status) status.textContent = data.amplifierState ? 'ON' : 'OFF';
+                currentAmpState = data.amplifierState;
+                updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, ws && ws.readyState === WebSocket.OPEN);
+            }
+            if (data.signalDetected !== undefined) {
+                const el = document.getElementById('signalDetected');
+                if (el) el.textContent = data.signalDetected ? 'Yes' : 'No';
+            }
+            if (data.audioLevel !== undefined) {
+                const el = document.getElementById('audioLevel');
+                if (el) el.textContent = data.audioLevel.toFixed(1) + ' dBFS';
+            }
+            if (data.audioVrms !== undefined) {
+                const el = document.getElementById('audioVrms');
+                if (el) el.textContent = data.audioVrms.toFixed(3) + ' V';
+            }
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerValue = document.getElementById('timerValue');
+            if (timerDisplay && timerValue) {
+                if (data.timerActive && data.timerRemaining !== undefined) {
+                    timerDisplay.classList.remove('hidden');
+                    const mins = Math.floor(data.timerRemaining / 60);
+                    const secs = data.timerRemaining % 60;
+                    timerValue.textContent = mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
+                } else {
+                    timerDisplay.classList.add('hidden');
+                }
+            }
+            if (data.audioSampleRate !== undefined) {
+                const sel = document.getElementById('audioSampleRateSelect');
+                if (sel) sel.value = data.audioSampleRate.toString();
+            }
+        }
+
 function toggleTheme() {
     darkMode = document.getElementById('darkModeToggle').checked;
     applyTheme(darkMode);

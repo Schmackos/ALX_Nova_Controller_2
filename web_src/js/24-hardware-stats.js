@@ -1,5 +1,71 @@
 // ===== Performance History =====
 
+        function handleEepromDiag(eep) {
+            if (!eep) return;
+            var chipDetected = eep.scanned && eep.i2cMask > 0;
+            var chipEmpty = chipDetected && !eep.found;
+            var chipAddr = 0;
+            if (eep.i2cMask > 0) {
+                for (var b = 0; b < 8; b++) { if (eep.i2cMask & (1 << b)) { chipAddr = 0x50 + b; break; } }
+            }
+            var st = document.getElementById('eepromStatus');
+            if (st) {
+                if (eep.found) st.textContent = 'Programmed';
+                else if (chipEmpty) st.textContent = 'Empty (blank)';
+                else if (eep.scanned) st.textContent = 'No EEPROM detected';
+                else st.textContent = 'Not scanned';
+            }
+            var addr = document.getElementById('eepromI2cAddr');
+            if (addr) addr.textContent = (eep.found || chipDetected) ? '0x' + (eep.found ? eep.addr : chipAddr).toString(16).padStart(2,'0').toUpperCase() : '—';
+            var cnt = document.getElementById('eepromI2cCount');
+            if (cnt) cnt.textContent = eep.scanned ? eep.i2cDevices : '—';
+            var badge = document.getElementById('eepromFoundBadge');
+            if (badge) {
+                badge.style.display = eep.scanned ? '' : 'none';
+                if (eep.found) { badge.textContent = 'Programmed'; badge.style.background = '#4CAF50'; }
+                else if (chipEmpty) { badge.textContent = 'Empty'; badge.style.background = '#FF9800'; }
+                else { badge.textContent = 'Not Found'; badge.style.background = '#F44336'; }
+                badge.style.color = '#fff';
+            }
+            var el;
+            el = document.getElementById('dbgEepromFound');
+            if (el) {
+                if (eep.found) el.textContent = 'Yes @ 0x' + eep.addr.toString(16).padStart(2,'0').toUpperCase();
+                else if (chipEmpty) el.textContent = 'Empty (blank) @ 0x' + chipAddr.toString(16).padStart(2,'0').toUpperCase();
+                else if (eep.scanned) el.textContent = 'No';
+                else el.textContent = '—';
+            }
+            el = document.getElementById('dbgEepromAddr');
+            if (el) el.textContent = (eep.found || chipDetected) ? '0x' + (eep.found ? eep.addr : chipAddr).toString(16).padStart(2,'0').toUpperCase() : '—';
+            el = document.getElementById('dbgI2cCount');
+            if (el) el.textContent = eep.i2cDevices != null ? eep.i2cDevices : '—';
+            el = document.getElementById('dbgEepromRdErr');
+            if (el) el.textContent = eep.readErrors || 0;
+            el = document.getElementById('dbgEepromWrErr');
+            if (el) el.textContent = eep.writeErrors || 0;
+            if (eep.found) {
+                var fields = { dbgEepromDeviceId: '0x' + (eep.deviceId||0).toString(16).padStart(4,'0').toUpperCase(),
+                               dbgEepromName: eep.deviceName || '—', dbgEepromMfr: eep.manufacturer || '—',
+                               dbgEepromRev: eep.hwRevision != null ? eep.hwRevision : '—',
+                               dbgEepromCh: eep.maxChannels || '—',
+                               dbgEepromDacAddr: eep.dacI2cAddress ? '0x' + eep.dacI2cAddress.toString(16).padStart(2,'0') : 'None' };
+                Object.entries(fields).forEach(function(kv) { el = document.getElementById(kv[0]); if (el) el.textContent = kv[1]; });
+                var flagStrs = [];
+                if (eep.flags & 1) flagStrs.push('IndepClk');
+                if (eep.flags & 2) flagStrs.push('HW Vol');
+                if (eep.flags & 4) flagStrs.push('Filters');
+                el = document.getElementById('dbgEepromFlags');
+                if (el) el.textContent = flagStrs.length ? flagStrs.join(', ') : 'None';
+                el = document.getElementById('dbgEepromRates');
+                if (el) el.textContent = (eep.sampleRates || []).join(', ') || '—';
+            } else {
+                ['dbgEepromDeviceId','dbgEepromName','dbgEepromMfr','dbgEepromRev','dbgEepromCh','dbgEepromDacAddr','dbgEepromFlags','dbgEepromRates'].forEach(function(id) {
+                    el = document.getElementById(id); if (el) el.textContent = '—';
+                });
+            }
+            eepromLoadPresets();
+        }
+
         function updateHardwareStats(data) {
             // Update ADC count from hardware_stats (fires on all tabs)
             if (data.audio && data.audio.numAdcsDetected !== undefined) {
@@ -500,6 +566,36 @@
             drawLineGraph('psramGraph', [
                 { data: historyData.psramPercent, color: '#9C27B0' }
             ], 'psramGraphContainer');
+        }
+
+        function eepromProgram() {
+            var rates = document.getElementById('eepromRates').value.split(',').map(Number).filter(function(n){return n>0;});
+            var flags = { independentClock: document.getElementById('eepromFlagClock').checked,
+                          hwVolume: document.getElementById('eepromFlagVol').checked,
+                          filters: document.getElementById('eepromFlagFilter').checked };
+            var payload = {
+                address: parseInt(document.getElementById('eepromTargetAddr').value),
+                deviceId: parseInt(document.getElementById('eepromDeviceId').value),
+                deviceName: document.getElementById('eepromDeviceName').value,
+                manufacturer: document.getElementById('eepromManufacturer').value,
+                hwRevision: parseInt(document.getElementById('eepromHwRev').value) || 1,
+                maxChannels: parseInt(document.getElementById('eepromMaxCh').value) || 2,
+                dacI2cAddress: parseInt(document.getElementById('eepromDacAddr').value),
+                flags: flags, sampleRates: rates
+            };
+            apiFetch('/api/dac/eeprom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if (d.success) showToast('EEPROM programmed successfully','success'); else showToast(d.message||'Program failed','error'); })
+            .catch(function(){ showToast('EEPROM program failed','error'); });
+        }
+
+        function eepromErase() {
+            if (!confirm('Erase EEPROM? This will clear all stored DAC identification data.')) return;
+            var addr = parseInt(document.getElementById('eepromTargetAddr').value);
+            apiFetch('/api/dac/eeprom/erase', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ address: addr }) })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if (d.success) showToast('EEPROM erased','success'); else showToast(d.message||'Erase failed','error'); })
+            .catch(function(){ showToast('EEPROM erase failed','error'); });
         }
 
         function eepromScan() {

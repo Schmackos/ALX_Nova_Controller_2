@@ -1,3 +1,11 @@
+        let LERP_SPEED = 0.25;
+        let VU_LERP = 0.3;
+
+        function updateLerpFactors(rateMs) {
+            LERP_SPEED = Math.min(0.25 * (50 / rateMs), 0.7);
+            VU_LERP = Math.min(0.3 * (50 / rateMs), 0.7);
+        }
+
         function drawRoundedBar(ctx, x, y, w, h, radius) {
             if (h < 1) return;
             const r = Math.min(radius, w / 2, h);
