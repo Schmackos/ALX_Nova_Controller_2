@@ -25,6 +25,12 @@ static DacDriver* _driver = nullptr;
 static bool _i2sTxEnabled = false;
 static float _volumeGain = 1.0f;  // Current linear gain from volume setting
 
+// Mute ramp: prevents abrupt silence→audio or audio→silence transitions.
+// Steps by 0.5f per buffer call (256 frames @ 48kHz ≈ 5.33ms each → ~10ms full ramp).
+static float _muteGain = 1.0f;        // Current mute envelope (0.0 = silent, 1.0 = full)
+static bool  _prevDacMute = false;    // Previous dacMute state to detect transitions
+static const float MUTE_RAMP_STEP = 0.5f;
+
 // Periodic logging state (5s interval, aligned with ADC dump)
 static unsigned long _lastDacDumpMs = 0;
 static uint32_t _prevTxUnderruns = 0;
@@ -169,9 +175,24 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
         needSoftwareVolume = false;
     }
 
-    if (as.dacMute || _volumeGain == 0.0f) {
-        // Muted — write silence (tx_desc_auto_clear handles this if we skip)
-        return;
+    // Mute ramp: fade out/in over ~10ms instead of hard cut (prevents click)
+    bool muteNow = as.dacMute || (_volumeGain == 0.0f);
+    if (muteNow != _prevDacMute) {
+        _prevDacMute = muteNow;
+        // On mute disengage: start from silence (prevents click if signal level jumped)
+        if (!muteNow) _muteGain = 0.0f;
+    }
+    if (muteNow) {
+        _muteGain -= MUTE_RAMP_STEP;
+        if (_muteGain <= 0.0f) {
+            _muteGain = 0.0f;
+            return;  // Fully muted — let tx_desc_auto_clear fill DMA with zeros
+        }
+    } else {
+        if (_muteGain < 1.0f) {
+            _muteGain += MUTE_RAMP_STEP;
+            if (_muteGain > 1.0f) _muteGain = 1.0f;
+        }
     }
 
 #ifndef NATIVE_TEST
@@ -190,7 +211,9 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
         if (allZero) _txZeroFrames++;
     }
 
-    if (needSoftwareVolume && _volumeGain < 1.0f) {
+    // Effective gain = volume × mute ramp (both applied via software volume path)
+    float effectiveGain = _volumeGain * _muteGain;
+    if (needSoftwareVolume && effectiveGain < 1.0f) {
         // Convert int32 → float, apply volume, convert back
         // Buffers allocated in PSRAM to save ~4KB internal SRAM
         static float *fBuf = nullptr;     // 512 floats = 256 stereo frames
@@ -214,7 +237,7 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
             for (int i = 0; i < chunk; i++) {
                 fBuf[i] = (float)src[i] / 2147483647.0f;
             }
-            dac_apply_software_volume(fBuf, chunk, _volumeGain);
+            dac_apply_software_volume(fBuf, chunk, effectiveGain);
             // Convert back to int32
             for (int i = 0; i < chunk; i++) {
                 txBuf[i] = (int32_t)(fBuf[i] * 2147483647.0f);
