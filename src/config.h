@@ -138,7 +138,7 @@ const unsigned long AUTO_UPDATE_COUNTDOWN = 30000; // 30 seconds countdown
 
 // ===== Smart Sensing Configuration =====
 const uint16_t DEFAULT_AUDIO_UPDATE_RATE =
-    50; // Default audio/VU update rate in ms (20=50Hz, 33=30Hz, 50=20Hz, 100=10Hz)
+    50; // Default audio/VU update rate in ms (33=30Hz, 50=20Hz, 100=10Hz)
 const unsigned long DEFAULT_TIMER_DURATION =
     15; // Default timer duration in minutes
 const float DEFAULT_AUDIO_THRESHOLD =

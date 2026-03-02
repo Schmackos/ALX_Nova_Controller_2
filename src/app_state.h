@@ -238,7 +238,7 @@ public:
   bool enableCertValidation = true;
 
   // ===== Audio Update Rate =====
-  uint16_t audioUpdateRate = DEFAULT_AUDIO_UPDATE_RATE; // ms (20, 33, 50, 100)
+  uint16_t audioUpdateRate = DEFAULT_AUDIO_UPDATE_RATE; // ms (33, 50, 100)
 
   // ===== Audio Graph Toggles =====
   bool vuMeterEnabled = true;      // Enable VU meter computation & display

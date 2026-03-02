@@ -172,7 +172,7 @@ bool loadSettings() {
   // Load audio update rate (if available, otherwise default to 50ms)
   if (lines[dataStart + 16].length() > 0) {
     int rate = lines[dataStart + 16].toInt();
-    if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
+    if (rate == 33 || rate == 50 || rate == 100) {
       appState.audioUpdateRate = (uint16_t)rate;
     }
   }
@@ -650,7 +650,7 @@ void handleSettingsUpdate() {
 
   if (doc["audioUpdateRate"].is<int>()) {
     int newRate = doc["audioUpdateRate"].as<int>();
-    if (newRate == 20 || newRate == 33 || newRate == 50 || newRate == 100) {
+    if (newRate == 33 || newRate == 50 || newRate == 100) {
       if ((uint16_t)newRate != appState.audioUpdateRate) {
         appState.audioUpdateRate = (uint16_t)newRate;
         settingsChanged = true;
@@ -1138,7 +1138,7 @@ void handleSettingsImport() {
     }
     if (doc["settings"]["audioUpdateRate"].is<int>()) {
       int rate = doc["settings"]["audioUpdateRate"].as<int>();
-      if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
+      if (rate == 33 || rate == 50 || rate == 100) {
         appState.audioUpdateRate = (uint16_t)rate;
         LOG_D("[Settings] Audio Update Rate: %d ms", rate);
       }

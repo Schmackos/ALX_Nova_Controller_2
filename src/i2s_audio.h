@@ -96,6 +96,9 @@ I2sStaticConfig i2s_audio_get_static_config();
 
 // ===== Public API =====
 void i2s_audio_init();
+// Create I2S channels — MUST be called from Core 1 (audio_pipeline_task) so the
+// DMA ISR is pinned to Core 1, isolated from WiFi interrupts on Core 0.
+void i2s_audio_init_channels();
 AudioAnalysis i2s_audio_get_analysis();
 AudioDiagnostics i2s_audio_get_diagnostics();
 bool i2s_audio_set_sample_rate(uint32_t rate);

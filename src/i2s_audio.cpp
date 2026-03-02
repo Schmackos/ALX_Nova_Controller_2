@@ -567,28 +567,33 @@ void i2s_audio_init() {
         _fftInitialized = true;
     }
 
+    // I2S channel creation is deferred to i2s_audio_init_channels(), called from
+    // audio_pipeline_task on Core 1.  This pins the I2S DMA ISR to Core 1,
+    // isolating it from WiFi TX/RX interrupts on Core 0 that cause audio pops.
+
+    audio_pipeline_init();
+}
+
+// Called from audio_pipeline_task on Core 1 — creates I2S channels so that the
+// DMA ISR is pinned to Core 1, isolated from WiFi interrupts on Core 0.
+void i2s_audio_init_channels() {
     // ADC2 (I2S_NUM_1) is skipped until physically connected.
-    // I2S_NUM_0 and I2S_NUM_1 are independent peripherals; skipping ADC2 init
-    // removes it as a diagnostic variable while ADC1 is being debugged.
     _adc2InitOk = false;
     // Uncomment when ADC2 hardware is attached:
     // _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
 
     i2s_configure_adc1(_currentSampleRate);
 
-    // Pull-down on DOUT2 in case ADC2 is later connected — prevents floating
-    // pin from reading all-1s (false CLIPPING status).
+    // Pull-down on DOUT2 — prevents floating pin reading all-1s (false CLIPPING).
     gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
 
     _numAdcsDetected = 1; // Will be updated once data flows
 
-    LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",
-          _currentSampleRate, I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
+    LOG_I("[Audio] I2S channels created on Core %d: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",
+          xPortGetCoreID(), _currentSampleRate, I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
           I2S_LRC_PIN, I2S_MCLK_PIN, _adc2InitOk ? "OK" : "FAIL");
 
     i2s_log_params(_currentSampleRate);
-
-    audio_pipeline_init();
 }
 
 int i2s_audio_get_num_adcs() {
@@ -926,6 +931,7 @@ void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32
 // Native test stubs
 static int _nativeNumAdcs = 1;
 void i2s_audio_init() {}
+void i2s_audio_init_channels() {}
 AudioAnalysis i2s_audio_get_analysis() { return AudioAnalysis{}; }
 AudioDiagnostics i2s_audio_get_diagnostics() { return AudioDiagnostics{}; }
 bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) { return false; }

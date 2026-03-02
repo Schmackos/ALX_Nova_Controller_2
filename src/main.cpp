@@ -1060,8 +1060,10 @@ void loop() {
   }
 
   // Flush periodic audio/DAC diagnostic logs from main loop context.
-  // (Moved out of audio_capture_task to avoid Serial blocking I2S DMA.)
-  audio_periodic_dump();
+  // Skip if HW stats just sent — avoids piling Serial TX on top of a WiFi burst.
+  if (!hwStatsJustSent) {
+    audio_periodic_dump();
+  }
 
   // IMPORTANT: blinking must NOT depend on appState.isAPMode
   if (appState.blinkingEnabled) {
