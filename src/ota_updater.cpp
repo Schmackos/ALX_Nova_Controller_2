@@ -1017,9 +1017,6 @@ void handleFirmwareUploadComplete() {
 
 // OTA download task — runs performOTAUpdate() on a separate core
 static void otaDownloadTask(void* param) {
-  // OTA download can take minutes — unsubscribe from watchdog
-  esp_task_wdt_delete(NULL);
-
   String firmwareUrl = appState.cachedFirmwareUrl;
   bool success = performOTAUpdate(firmwareUrl);
 
@@ -1074,10 +1071,6 @@ void startOTADownloadTask() {
 
 // OTA check task — runs checkForFirmwareUpdate() on a separate core
 static void otaCheckTaskFunc(void* param) {
-  // TLS handshake (ECDSA verification) can take 5-10s without yielding —
-  // unsubscribe from watchdog to prevent IDLE0 starvation panic on Core 0
-  esp_task_wdt_delete(NULL);
-
   // Heap pre-flight: must match the inner TLS threshold (30KB) used by
   // getLatestReleaseInfo(). When heap is 30-50KB, TLS runs in insecure mode
   // (no cert validation) which needs only ~15-20KB for the session.
