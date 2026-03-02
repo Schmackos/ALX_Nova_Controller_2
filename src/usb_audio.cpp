@@ -828,6 +828,10 @@ void usb_audio_init(void) {
               _ringBufStorage ? "PSRAM" : "internal");
     } else {
         LOG_I("[USB Audio] Re-enabled (TinyUSB already running)");
+        // Sync state with actual USB connection (host may still be attached)
+        if (tud_mounted()) {
+            _usbState = USB_AUDIO_CONNECTED;
+        }
     }
 
     // Reset ring buffer for clean start on each enable
@@ -838,6 +842,9 @@ void usb_audio_init(void) {
     as.usbAudioSampleRate = _negotiatedRate;
     as.usbAudioBitDepth = _negotiatedDepth;
     as.usbAudioChannels = USB_AUDIO_CHANNELS;
+    as.usbAudioConnected = (_usbState >= USB_AUDIO_CONNECTED);
+    as.usbAudioStreaming = (_usbState == USB_AUDIO_STREAMING);
+    as.markUsbAudioDirty();
 }
 
 void usb_audio_deinit(void) {
@@ -913,6 +920,33 @@ uint8_t usb_audio_get_negotiated_depth(void) {
     return _negotiatedDepth;
 }
 
+void usb_audio_poll_connection(void) {
+    if (!_tinyusbHwReady) return;
+
+    bool mounted = tud_mounted();
+    AppState &as = AppState::getInstance();
+
+    if (mounted && _usbState == USB_AUDIO_DISCONNECTED) {
+        // Host is connected but our state says disconnected — sync up.
+        // Happens after re-enable (deinit→init) while cable stays plugged in.
+        _usbState = USB_AUDIO_CONNECTED;
+        as.usbAudioConnected = true;
+        as.usbAudioStreaming = false;
+        as.markUsbAudioDirty();
+        LOG_I("[USB Audio] Connection detected (mounted)");
+    } else if (!mounted && _usbState >= USB_AUDIO_CONNECTED) {
+        // Host disconnected (cable pulled, or host powered off).
+        // tud_mounted() returns false when no SOF received for >3ms.
+        _usbState = USB_AUDIO_DISCONNECTED;
+        _altSetting = 0;
+        usb_rb_reset(&_ringBuffer);
+        as.usbAudioConnected = false;
+        as.usbAudioStreaming = false;
+        as.markUsbAudioDirty();
+        LOG_I("[USB Audio] Disconnection detected (unmounted)");
+    }
+}
+
 #elif defined(NATIVE_TEST)
 
 // ===== Native Test Stubs with Injectable State =====
@@ -969,6 +1003,8 @@ void usb_audio_test_set_volume(int16_t vol, bool mute) {
     _nativeMute = mute;
 }
 
+void usb_audio_poll_connection(void) {} // No-op in native tests
+
 #else
 // USB_AUDIO_ENABLED not defined and not NATIVE_TEST — empty stubs
 void usb_audio_init(void) {}
@@ -988,4 +1024,5 @@ uint32_t usb_audio_get_overruns(void) { return 0; }
 uint32_t usb_audio_get_underruns(void) { return 0; }
 uint32_t usb_audio_get_negotiated_rate(void) { return 48000; }
 uint8_t  usb_audio_get_negotiated_depth(void) { return 16; }
+void usb_audio_poll_connection(void) {}
 #endif

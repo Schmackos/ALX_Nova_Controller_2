@@ -960,6 +960,15 @@ void loop() {
 #endif
 
 #ifdef USB_AUDIO_ENABLED
+  // Poll USB connection state (~1s) — detects cable disconnect/reconnect
+  {
+    static unsigned long lastUsbPoll = 0;
+    unsigned long nowMs = millis();
+    if (appState.usbAudioEnabled && (nowMs - lastUsbPoll >= 1000)) {
+      usb_audio_poll_connection();
+      lastUsbPoll = nowMs;
+    }
+  }
   if (appState.isUsbAudioDirty()) {
     sendUsbAudioState();
     appState.clearUsbAudioDirty();

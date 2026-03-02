@@ -106,6 +106,11 @@ uint32_t usb_audio_get_underruns(void);
 uint32_t usb_audio_get_negotiated_rate(void);
 uint8_t  usb_audio_get_negotiated_depth(void);
 
+// Poll USB connection state — call periodically (~1s) from main loop.
+// Detects cable disconnect/reconnect via tud_mounted() since the ESP32-S3
+// has no VBUS detection when powered from the UART USB port.
+void usb_audio_poll_connection(void);
+
 #ifdef NATIVE_TEST
 // Native test injection API — set internal state for testing
 void usb_audio_test_set_state(UsbAudioState state);
