@@ -309,9 +309,11 @@ void setup() {
 
   // Authentication routes (unprotected)
   server.on("/login", HTTP_GET, []() {
+    httpServingPage = true;
     if (!sendGzipped(server, loginPage_gz, loginPage_gz_len)) {
       server.send_P(200, "text/html", loginPage);
     }
+    httpServingPage = false;
   });
   server.on("/api/auth/login", HTTP_POST, handleLogin);
   server.on("/api/auth/logout", HTTP_POST, handleLogout);
@@ -324,9 +326,11 @@ void setup() {
       return;
 
     // Serve gzipped dashboard if client supports it (~85% smaller)
+    httpServingPage = true;
     if (!sendGzipped(server, htmlPage_gz, htmlPage_gz_len)) {
       server.send_P(200, "text/html", htmlPage);
     }
+    httpServingPage = false;
   });
 
   server.on("/api/wificonfig", HTTP_POST, []() {
@@ -945,6 +949,12 @@ void loop() {
 
   // Check for debounced DSP settings save
   dsp_check_debounced_save();
+#endif
+
+  // Deferred settings saves (debounced from WebSocket handlers)
+  checkDeferredSettingsSave();
+#ifdef DAC_ENABLED
+  dac_check_deferred_save();
 #endif
 
 #ifdef DAC_ENABLED

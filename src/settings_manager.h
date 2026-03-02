@@ -6,6 +6,8 @@
 // ===== Settings Persistence =====
 bool loadSettings();
 void saveSettings();
+void saveSettingsDeferred();       // Mark dirty — actual save after 2s idle
+void checkDeferredSettingsSave();  // Call from main loop
 
 // Note: Certificate management removed - now using Mozilla certificate bundle
 // via ESP32CertBundle library for automatic SSL validation

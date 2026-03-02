@@ -82,6 +82,8 @@ void dac_output_write(const int32_t* buffer, int stereo_frames);
 // Settings persistence
 void dac_load_settings();
 void dac_save_settings();
+void dac_save_settings_deferred();
+void dac_check_deferred_save();
 
 // Volume update with gain recalculation + logging
 void dac_update_volume(uint8_t percent);

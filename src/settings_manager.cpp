@@ -261,6 +261,23 @@ bool loadSettings() {
   return true;
 }
 
+// ===== Deferred Settings Save =====
+static bool _settingsSavePending = false;
+static unsigned long _lastSettingsSaveRequest = 0;
+static const unsigned long SETTINGS_SAVE_DEBOUNCE_MS = 2000;
+
+void saveSettingsDeferred() {
+    _settingsSavePending = true;
+    _lastSettingsSaveRequest = millis();
+}
+
+void checkDeferredSettingsSave() {
+    if (_settingsSavePending && (millis() - _lastSettingsSaveRequest >= SETTINGS_SAVE_DEBOUNCE_MS)) {
+        saveSettings();
+        _settingsSavePending = false;
+    }
+}
+
 void saveSettings() {
   File file = LittleFS.open("/settings.txt", "w");
   if (!file) {
