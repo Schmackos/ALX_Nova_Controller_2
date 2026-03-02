@@ -212,12 +212,6 @@
                 applyDebugState(data);
             } else if (data.type === 'signalGenerator') {
                 applySigGenState(data);
-            } else if (data.type === 'emergencyLimiterState') {
-                applyEmergencyLimiterState(data);
-            } else if (data.type === 'audioQualityState') {
-                applyAudioQualityState(data);
-            } else if (data.type === 'audioQualityDiag') {
-                applyAudioQualityDiag(data);
             } else if (data.type === 'adcState') {
                 if (Array.isArray(data.enabled)) {
                     for (var ai = 0; ai < data.enabled.length; ai++) {

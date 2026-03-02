@@ -320,24 +320,6 @@ public:
   bool isBuzzerDirty() const { return _buzzerDirty; }
   void clearBuzzerDirty() { _buzzerDirty = false; }
 
-  // ===== Emergency Safety Limiter (Speaker Protection) =====
-  bool emergencyLimiterEnabled = true;       // Default ON for safety
-  float emergencyLimiterThresholdDb = -0.5f; // Threshold in dBFS (-6.0 to 0.0)
-
-  void setEmergencyLimiterEnabled(bool enabled);
-  void setEmergencyLimiterThreshold(float dbfs);
-  bool isEmergencyLimiterDirty() const { return _emergencyLimiterDirty; }
-  void clearEmergencyLimiterDirty() { _emergencyLimiterDirty = false; }
-
-  // ===== Audio Quality Diagnostics (Phase 3) =====
-  bool audioQualityEnabled = false;          // Default OFF (opt-in)
-  float audioQualityGlitchThreshold = 0.5f;  // Discontinuity threshold (0.1-1.0)
-
-  void setAudioQualityEnabled(bool enabled);
-  void setAudioQualityThreshold(float threshold);
-  bool isAudioQualityDirty() const { return _audioQualityDirty; }
-  void clearAudioQualityDirty() { _audioQualityDirty = false; }
-
   // ===== ADC Enabled Dirty Flag (for WS/MQTT sync) =====
   void markAdcEnabledDirty() { _adcEnabledDirty = true; }
   bool isAdcEnabledDirty() const { return _adcEnabledDirty; }
@@ -558,8 +540,6 @@ private:
   bool _dspConfigDirty = false;
   bool _dspMetricsDirty = false;
   bool _dspPresetDirty = false;
-  bool _emergencyLimiterDirty = false;
-  bool _audioQualityDirty = false;
 #endif
 #ifdef USB_AUDIO_ENABLED
   bool _usbAudioDirty = false;

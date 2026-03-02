@@ -638,37 +638,6 @@
                 </div>
             </div>
 
-            <!-- Emergency Protection -->
-            <div class="card">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    <span>Emergency Protection</span>
-                    <span id="emergencyLimiterStatusBadge" class="badge" style="background:#4CAF50">Idle</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable Limiter</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="emergencyLimiterEnable" checked onchange="updateEmergencyLimiter('enabled')"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                    <small style="color:#888">Brick-wall limiter prevents speaker damage from audio peaks</small>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Threshold: <span id="emergencyLimiterThresholdVal">-0.5</span> dBFS</label>
-                    <input type="range" class="form-input" id="emergencyLimiterThreshold" min="-6" max="0" value="-0.5" step="0.1" oninput="document.getElementById('emergencyLimiterThresholdVal').textContent=parseFloat(this.value).toFixed(1)" onchange="updateEmergencyLimiter('threshold')">
-                    <small style="color:#888">Recommended: -0.5 to -1.0 dBFS for safety headroom</small>
-                </div>
-                <div class="info-row" style="margin-top:8px">
-                    <span>Status:</span>
-                    <span id="emergencyLimiterStatus">Idle</span>
-                </div>
-                <div class="info-row">
-                    <span>Gain Reduction:</span>
-                    <span id="emergencyLimiterGR">0.0 dB</span>
-                </div>
-                <div class="info-row">
-                    <span>Lifetime Triggers:</span>
-                    <span id="emergencyLimiterTriggers">0</span>
-                </div>
-            </div>
-
             <!-- Test Signal Generator -->
             <div class="card">
                 <div class="card-title">Test Signal Generator</div>
@@ -1990,52 +1959,6 @@
                         <tr><td>21</td><td>TFT Backlight</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
                     </tbody>
                 </table>
-            </div>
-
-            <!-- Audio Quality Diagnostics -->
-            <div class="card">
-                <div class="card-title">Audio Quality Diagnostics</div>
-                <div class="info-box">
-                    <div class="toggle-row">
-                        <span>Enable Diagnostics</span>
-                        <label class="switch"><input type="checkbox" id="audioQualityEnabled" onchange="updateAudioQuality('enabled')"><span class="slider round"></span></label>
-                    </div>
-                    <div class="form-row">
-                        <label for="audioQualityThreshold">Glitch Threshold (0.1-1.0):</label>
-                        <input type="number" id="audioQualityThreshold" min="0.1" max="1.0" step="0.1" value="0.5" onchange="updateAudioQuality('threshold')">
-                    </div>
-                </div>
-                <div class="stats-grid" id="audioQualityStats">
-                    <div class="stat-card">
-                        <div class="stat-value" id="aqGlitchesTotal">0</div>
-                        <div class="stat-label">Total Glitches</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="aqGlitchesMinute">0</div>
-                        <div class="stat-label">Last Minute</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="aqLatencyAvg">--</div>
-                        <div class="stat-label">Avg Latency</div>
-                    </div>
-                </div>
-                <div class="info-box-compact mt-12">
-                    <div class="info-row">
-                        <span class="info-label">Last Glitch Type</span>
-                        <span class="info-value" id="aqLastGlitchType">--</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">DSP Swap Correlation</span>
-                        <span class="info-value badge" id="aqCorrelationDsp">--</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">WiFi Correlation</span>
-                        <span class="info-value badge" id="aqCorrelationWifi">--</span>
-                    </div>
-                </div>
-                <div class="btn-row mt-12">
-                    <button class="btn btn-secondary" onclick="resetAudioQualityStats()">Reset Statistics</button>
-                </div>
             </div>
 
             <!-- Debug Console -->
