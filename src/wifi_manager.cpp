@@ -469,6 +469,13 @@ void connectToWiFi(const WiFiNetworkConfig &config) {
                       config.dns2.c_str());
   }
 
+  // Apply minimum security requirement (IDF5 WPA3-SAE support)
+  if (appState.wifiMinSecurity == 2)
+    WiFi.setMinSecurity(WIFI_AUTH_WPA3_PSK);
+  else if (appState.wifiMinSecurity == 1)
+    WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
+  // else 0: accept any auth mode (default, backward compatible)
+
   WiFi.begin(config.ssid.c_str(), config.password.c_str());
 
   LOG_I("[WiFi] Connecting to: %s", config.ssid.c_str());
@@ -737,6 +744,13 @@ bool connectToStoredNetworks() {
 
   LOG_I("[WiFi] Trying %d saved network(s)", count);
 
+  // Apply minimum security requirement (IDF5 WPA3-SAE support)
+  if (appState.wifiMinSecurity == 2)
+    WiFi.setMinSecurity(WIFI_AUTH_WPA3_PSK);
+  else if (appState.wifiMinSecurity == 1)
+    WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
+  // else 0: accept any auth mode (default, backward compatible)
+
   for (int i = 0; i < count; i++) {
     WiFiNetworkConfig config;
     readNetworkFromOpenPrefs(prefs, i, config);
@@ -918,6 +932,7 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
 
   // Add saved networks count
   doc["networkCount"] = getWiFiNetworkCount();
+  doc["minSecurity"] = appState.wifiMinSecurity;
 
   // Add async connection status
   doc["appState.wifiConnecting"] = appState.wifiConnecting;
@@ -1104,6 +1119,12 @@ void handleWiFiConfig() {
     return;
   }
 
+  // Apply minimum security setting if provided
+  if (doc["minSecurity"].is<int>()) {
+    int val = doc["minSecurity"] | 0;
+    appState.wifiMinSecurity = constrain(val, 0, 2);
+  }
+
   // If password is empty, fetch the stored password for this SSID
   String connectionPassword = config.password;
   if (config.password.length() == 0) {
@@ -1253,8 +1274,11 @@ void handleWiFiScan() {
         // Keep the one with stronger signal
         if (WiFi.RSSI(i) > v["rssi"].as<int>()) {
           v["rssi"] = WiFi.RSSI(i);
-          v["encryption"] =
-              WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? "secured" : "open";
+          wifi_auth_mode_t auth = WiFi.encryptionType(i);
+          v["encryption"] = auth == WIFI_AUTH_OPEN          ? "open"      :
+                            auth == WIFI_AUTH_WPA3_PSK       ? "WPA3"      :
+                            auth == WIFI_AUTH_WPA2_WPA3_PSK  ? "WPA2/WPA3" :
+                            "secured";
         }
         duplicate = true;
         break;
@@ -1265,8 +1289,11 @@ void handleWiFiScan() {
       JsonObject network = networks.add<JsonObject>();
       network["ssid"] = ssid;
       network["rssi"] = WiFi.RSSI(i);
-      network["encryption"] =
-          WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? "secured" : "open";
+      wifi_auth_mode_t auth = WiFi.encryptionType(i);
+      network["encryption"] = auth == WIFI_AUTH_OPEN          ? "open"      :
+                              auth == WIFI_AUTH_WPA3_PSK       ? "WPA3"      :
+                              auth == WIFI_AUTH_WPA2_WPA3_PSK  ? "WPA2/WPA3" :
+                              "secured";
     }
   }
 
@@ -1430,6 +1457,14 @@ void updateWiFiConnection() {
     }
 
     LOG_I("[WiFi] Initiating connection to: %s", cfg.ssid.c_str());
+
+    // Apply minimum security requirement (IDF5 WPA3-SAE support)
+    if (appState.wifiMinSecurity == 2)
+      WiFi.setMinSecurity(WIFI_AUTH_WPA3_PSK);
+    else if (appState.wifiMinSecurity == 1)
+      WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
+    // else 0: accept any auth mode (default, backward compatible)
+
     WiFi.begin(cfg.ssid.c_str(), cfg.password.c_str());
   }
 

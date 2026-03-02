@@ -108,6 +108,9 @@ public:
   // ===== Web Authentication =====
   String webPassword = DEFAULT_AP_PASSWORD;
 
+  // ===== WiFi Security =====
+  uint8_t wifiMinSecurity = 0;  // 0=any, 1=WPA2+, 2=WPA3 only
+
   // ===== WiFi Connection State (Async) =====
   bool wifiConnecting = false;
   bool wifiConnectSuccess = false;
