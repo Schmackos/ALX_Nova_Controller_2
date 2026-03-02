@@ -136,8 +136,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_D("[WebSocket] Client [%u] authenticated", num);
 
             // Send initial state after authentication
-            sendLEDState();
-            sendBlinkingState();
             sendWiFiStatus();
             sendSmartSensingStateInternal();
             sendDisplayState();
@@ -186,19 +184,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           return;
         }
 
-        if (msgType == "toggle") {
-          appState.blinkingEnabled = doc["enabled"];
-          LOG_I("[WebSocket] Blinking %s by client [%u]", appState.blinkingEnabled ? "enabled" : "disabled", num);
-          
-          sendBlinkingState();
-          
-          if (!appState.blinkingEnabled) {
-            appState.ledState = false;
-            digitalWrite(LED_PIN, LOW);
-            sendLEDState();
-            LOG_I("[WebSocket] LED turned OFF");
-          }
-        } else if (doc["type"] == "toggleAP") {
+        if (doc["type"] == "toggleAP") {
           bool enabled = doc["enabled"].as<bool>();
           appState.apEnabled = enabled;
           
@@ -1160,24 +1146,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 }
 
 // ===== State Broadcasting Functions =====
-
-void sendLEDState() {
-  JsonDocument doc;
-  doc["type"] = "appState.ledState";
-  doc["state"] = appState.ledState;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
-}
-
-void sendBlinkingState() {
-  JsonDocument doc;
-  doc["type"] = "appState.blinkingEnabled";
-  doc["enabled"] = appState.blinkingEnabled;
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
-}
 
 void sendDisplayState() {
   JsonDocument doc;

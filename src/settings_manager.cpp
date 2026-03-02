@@ -925,7 +925,6 @@ void handleSettingsExport() {
   doc["settings"]["appState.dstOffset"] = appState.dstOffset;
   doc["settings"]["appState.darkMode"] = appState.darkMode;
   doc["settings"]["appState.enableCertValidation"] = appState.enableCertValidation;
-  doc["settings"]["appState.blinkingEnabled"] = appState.blinkingEnabled;
   doc["settings"]["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval / 1000;
   doc["settings"]["audioUpdateRate"] = appState.audioUpdateRate;
   doc["settings"]["screenTimeout"] = appState.screenTimeout / 1000;
@@ -1122,11 +1121,6 @@ void handleSettingsImport() {
       appState.enableCertValidation = doc["settings"]["appState.enableCertValidation"].as<bool>();
       LOG_D("[Settings] Cert Validation: %s",
             appState.enableCertValidation ? "enabled" : "disabled");
-    }
-    if (doc["settings"]["appState.blinkingEnabled"].is<bool>()) {
-      appState.blinkingEnabled = doc["settings"]["appState.blinkingEnabled"].as<bool>();
-      LOG_D("[Settings] Blinking: %s",
-            appState.blinkingEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["appState.hardwareStatsInterval"].is<int>()) {
       int interval = doc["settings"]["appState.hardwareStatsInterval"].as<int>();
@@ -1525,7 +1519,6 @@ void handleDiagnostics() {
   settings["appState.dstOffset"] = appState.dstOffset;
   settings["appState.darkMode"] = appState.darkMode;
   settings["appState.enableCertValidation"] = appState.enableCertValidation;
-  settings["appState.blinkingEnabled"] = appState.blinkingEnabled;
   settings["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval;
   settings["audioUpdateRate"] = appState.audioUpdateRate;
   settings["screenTimeout"] = appState.screenTimeout;
@@ -1685,7 +1678,6 @@ void handleDiagnostics() {
     fsmStateStr = "unknown";
   }
   doc["fsmState"] = fsmStateStr;
-  doc["appState.ledState"] = appState.ledState;
 
   // ===== Error State =====
   if (appState.hasError()) {

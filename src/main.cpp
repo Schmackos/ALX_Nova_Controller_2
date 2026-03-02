@@ -159,7 +159,7 @@ void setup() {
   resetButton.begin();
   buzzer_init();
   LOG_I("[Main] Factory reset button configured: GPIO%d", RESET_BUTTON_PIN);
-  LOG_D("[Main] Button: short=status, double=AP, triple=blink, long=restart, vlong=reboot");
+  LOG_D("[Main] Button: short=status, double=AP, long=restart, vlong=reboot");
 
   // Configure Smart Sensing pins
   pinMode(AMPLIFIER_PIN, OUTPUT);
@@ -742,8 +742,6 @@ void loop() {
                                     : "Disconnected");
       LOG_D("[Button] AP Mode: %s",
             appState.isAPMode ? "Active" : "Inactive");
-      LOG_D("[Button] LED Blinking: %s",
-            appState.blinkingEnabled ? "Enabled" : "Disabled");
       LOG_D("[Button] Firmware: %s", firmwareVer);
       break;
 
@@ -755,15 +753,6 @@ void loop() {
       } else {
         startAccessPoint();
       }
-      break;
-
-    case BTN_TRIPLE_CLICK:
-      buzzer_play(BUZZ_BTN_TRIPLE);
-      LOG_I("[Button] Triple click - toggle LED blinking");
-      appState.setBlinkingEnabled(!appState.blinkingEnabled);
-      LOG_D("[Button] LED Blinking is now: %s",
-            appState.blinkingEnabled ? "ON" : "OFF");
-      sendBlinkingState();
       break;
 
     case BTN_LONG_PRESS:
@@ -813,11 +802,10 @@ void loop() {
         }
       }
     } else {
-      // Button not pressed - restore LED to normal state if it was blinking for
-      // feedback
+      // Button not pressed - restore LED to low if it was lit for feedback
       static bool wasPressed = false;
       if (wasPressed) {
-        digitalWrite(LED_PIN, appState.ledState);
+        digitalWrite(LED_PIN, LOW);
         wasPressed = false;
       }
       if (resetButton.isPressed()) {
@@ -978,12 +966,6 @@ void loop() {
   }
 #endif
 
-  // Broadcast blinking state changes (GUI -> WS clients)
-  if (appState.isBlinkingDirty()) {
-    sendBlinkingState();
-    appState.clearBlinkingDirty();
-  }
-
   // Broadcast settings changes (GUI -> WS clients + MQTT)
   if (appState.isSettingsDirty()) {
     sendWiFiStatus();
@@ -1063,27 +1045,6 @@ void loop() {
   // Skip if HW stats just sent — avoids piling Serial TX on top of a WiFi burst.
   if (!hwStatsJustSent) {
     audio_periodic_dump();
-  }
-
-  // IMPORTANT: blinking must NOT depend on appState.isAPMode
-  if (appState.blinkingEnabled) {
-    unsigned long currentMillis = millis();
-    if (currentMillis - appState.previousMillis >= LED_BLINK_INTERVAL) {
-      appState.previousMillis = currentMillis;
-
-      appState.setLedState(!appState.ledState);
-      digitalWrite(LED_PIN, appState.ledState);
-
-      // Don't broadcast every toggle — client animates locally from appState.blinkingEnabled state.
-      // Only sendLEDState() on explicit user actions (toggle blink on/off).
-    }
-  } else {
-    if (appState.ledState) {
-      appState.setLedState(false);
-      digitalWrite(LED_PIN, LOW);
-      sendLEDState();
-      LOG_I("[Main] Blinking stopped - LED turned OFF");
-    }
   }
 
   // Fallback buzzer processing (primary path is gui_task on Core 1)

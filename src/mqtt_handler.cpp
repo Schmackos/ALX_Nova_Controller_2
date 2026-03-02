@@ -41,8 +41,6 @@ static bool prevMqttAutoUpdate = false;
 static bool prevMqttCertValidation = true;
 
 // External functions from other modules
-extern void sendBlinkingState();
-extern void sendLEDState();
 extern void saveSmartSensingSettings();
 extern void sendSmartSensingStateInternal();
 extern void sendWiFiStatus();
@@ -172,7 +170,6 @@ void subscribeToMqttTopics() {
   String base = getEffectiveMqttBaseTopic();
 
   // Subscribe to command topics
-  mqttClient.subscribe((base + "/led/blinking/set").c_str());
   mqttClient.subscribe((base + "/smartsensing/mode/set").c_str());
   mqttClient.subscribe((base + "/smartsensing/amplifier/set").c_str());
   mqttClient.subscribe((base + "/smartsensing/timer_duration/set").c_str());
@@ -266,24 +263,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     return;
   }
 
-  // Handle LED blinking control
-  if (topicStr == base + "/led/blinking/set") {
-    bool newState = (message == "ON" || message == "1" || message == "true");
-    if (appState.blinkingEnabled != newState) {
-      appState.blinkingEnabled = newState;
-      LOG_I("[MQTT] Blinking set to %s", appState.blinkingEnabled ? "ON" : "OFF");
-      sendBlinkingState();
-
-      if (!appState.blinkingEnabled) {
-        appState.ledState = false;
-        digitalWrite(LED_PIN, LOW);
-        sendLEDState();
-      }
-    }
-    publishMqttBlinkingState();
-  }
   // Handle Smart Sensing mode
-  else if (topicStr == base + "/smartsensing/mode/set") {
+  if (topicStr == base + "/smartsensing/mode/set") {
     SensingMode newMode;
     bool validMode = true;
 
@@ -1020,8 +1001,6 @@ void mqttLoop() {
     // Per-category change detection
     bool audioLevelChanged =
         (fabs(appState.audioLevel_dBFS - appState.prevMqttAudioLevel) > 0.5f);
-    bool ledChanged = (appState.ledState != appState.prevMqttLedState);
-    bool blinkingChanged = (appState.blinkingEnabled != appState.prevMqttBlinkingEnabled);
     bool sensingChanged =
         (appState.amplifierState != appState.prevMqttAmplifierState) ||
         (appState.currentMode != appState.prevMqttSensingMode) ||
@@ -1060,14 +1039,6 @@ void mqttLoop() {
         (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor);
 
     // Selective dispatch — only publish categories that actually changed
-    if (ledChanged) {
-      publishMqttLedState();
-      appState.prevMqttLedState = appState.ledState;
-    }
-    if (blinkingChanged) {
-      publishMqttBlinkingState();
-      appState.prevMqttBlinkingEnabled = appState.blinkingEnabled;
-    }
     // Smart sensing + audio level (combined to avoid double-publishing)
     if (sensingChanged || audioLevelChanged) {
       publishMqttSmartSensingState();
@@ -1165,26 +1136,6 @@ void mqttLoop() {
 }
 
 // ===== MQTT State Publishing Functions =====
-
-// Publish LED state
-void publishMqttLedState() {
-  if (!mqttClient.connected())
-    return;
-
-  String base = getEffectiveMqttBaseTopic();
-  mqttClient.publish((base + "/led/state").c_str(), appState.ledState ? "ON" : "OFF",
-                     true);
-}
-
-// Publish blinking state
-void publishMqttBlinkingState() {
-  if (!mqttClient.connected())
-    return;
-
-  String base = getEffectiveMqttBaseTopic();
-  mqttClient.publish((base + "/led/blinking").c_str(),
-                     appState.blinkingEnabled ? "ON" : "OFF", true);
-}
 
 // Publish Smart Sensing state
 void publishMqttSmartSensingState() {
@@ -1809,8 +1760,6 @@ void publishMqttBootAnimState() {
 
 // Publish all states
 void publishMqttState() {
-  publishMqttLedState();
-  publishMqttBlinkingState();
   publishMqttSmartSensingState();
   publishMqttWifiStatus();
   publishMqttSystemStatus();
@@ -1874,24 +1823,6 @@ void publishHADiscovery() {
 
   String deviceId = getMqttDeviceId();
   String base = getEffectiveMqttBaseTopic();
-
-  // ===== LED Blinking Switch =====
-  {
-    JsonDocument doc;
-    doc["name"] = "LED Blinking";
-    doc["unique_id"] = deviceId + "_blinking";
-    doc["state_topic"] = base + "/led/blinking";
-    doc["command_topic"] = base + "/led/blinking/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:led-on";
-    addHADeviceInfo(doc);
-
-    String payload;
-    serializeJson(doc, payload);
-    String topic = "homeassistant/switch/" + deviceId + "/blinking/config";
-    mqttClient.publish(topic.c_str(), payload.c_str(), true);
-  }
 
   // ===== Amplifier Switch =====
   {
@@ -3528,7 +3459,6 @@ void removeHADiscovery() {
 
   // List of all discovery topics to remove
   const char *topics[] = {
-      "homeassistant/switch/%s/blinking/config",
       "homeassistant/switch/%s/amplifier/config",
       "homeassistant/switch/%s/ap/config",
       "homeassistant/switch/%s/auto_update/config",

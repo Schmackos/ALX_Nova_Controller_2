@@ -45,45 +45,6 @@
             }
         }
 
-        // ===== LED Control =====
-        function updateLED() {
-            const led = document.getElementById('led');
-            const status = document.getElementById('ledStatus');
-            if (ledState) {
-                led.classList.remove('off');
-                led.classList.add('on');
-                status.textContent = 'LED is ON';
-            } else {
-                led.classList.remove('on');
-                led.classList.add('off');
-                status.textContent = 'LED is OFF';
-            }
-        }
-
-        function updateBlinkButton() {
-            const btn = document.getElementById('toggleBtn');
-            const state = document.getElementById('blinkingState');
-            if (blinkingEnabled) {
-                btn.textContent = 'Stop Blinking';
-                btn.classList.remove('btn-primary');
-                btn.classList.add('btn-danger');
-                state.textContent = 'ON';
-            } else {
-                btn.textContent = 'Start Blinking';
-                btn.classList.remove('btn-danger');
-                btn.classList.add('btn-primary');
-                state.textContent = 'OFF';
-            }
-        }
-
-        function toggleBlinking() {
-            blinkingEnabled = !blinkingEnabled;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'toggle', enabled: blinkingEnabled }));
-            }
-            updateBlinkButton();
-        }
-
         function toggleLedMode() {
             ledBarMode = document.getElementById('ledModeToggle').checked;
             localStorage.setItem('ledBarMode', ledBarMode.toString());

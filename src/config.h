@@ -110,9 +110,6 @@ const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
 const int WEB_SERVER_PORT = 80;
 const int WEBSOCKET_PORT = 81;
 
-// ===== LED Timing =====
-const unsigned long LED_BLINK_INTERVAL = 500; // LED blink interval in ms
-
 // ===== Button Configuration =====
 const unsigned long BTN_DEBOUNCE_TIME = 50;          // 50ms debounce
 const unsigned long BTN_SHORT_PRESS_MAX = 500;       // Short press < 500ms
