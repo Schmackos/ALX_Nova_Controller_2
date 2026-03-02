@@ -371,6 +371,23 @@ function handleFileSelect(event) {
     reader.readAsText(file);
 }
 
+function importSettings(settings) {
+    apiFetch('/api/settings/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Settings imported. Rebooting...', 'success');
+        } else {
+            showToast(data.message || 'Import failed', 'error');
+        }
+    })
+    .catch(err => showToast('Failed to import settings', 'error'));
+}
+
 function manualOverride(state) {
     apiFetch('/api/smartsensing', {
         method: 'POST',
