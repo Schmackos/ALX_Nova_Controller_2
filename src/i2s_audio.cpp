@@ -33,7 +33,6 @@
 #include <driver/gpio.h>
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
-#include <soc/i2s_struct.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #endif
@@ -499,18 +498,6 @@ static void i2s_log_params(uint32_t sample_rate) {
     LOG_I("[Audio] ----------------------------");
 }
 
-// Dump key I2S registers for both peripherals (debug aid)
-static void i2s_dump_registers() {
-    for (int p = 0; p < 2; p++) {
-        i2s_dev_t *dev = (p == 0) ? &I2S0 : &I2S1;
-        LOG_I("[Audio] I2S%d regs: rx_conf=0x%08lX rx_conf1=0x%08lX "
-              "rx_clkm_conf=0x%08lX rx_clkm_div=0x%08lX",
-              p, (unsigned long)dev->rx_conf.val,
-              (unsigned long)dev->rx_conf1.val,
-              (unsigned long)dev->rx_clkm_conf.val,
-              (unsigned long)dev->rx_clkm_div_conf.val);
-    }
-}
 
 // Dual I2S Master Architecture:
 // Both PCM1808 ADCs use master-mode I2S (not slave — ESP32-S3 slave DMA issues).
@@ -593,8 +580,6 @@ void i2s_audio_init() {
     // pin from reading all-1s (false CLIPPING status).
     gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
 
-    // Always dump registers to confirm ADC1 I2S0 configuration
-    i2s_dump_registers();
     _numAdcsDetected = 1; // Will be updated once data flows
 
     LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",
