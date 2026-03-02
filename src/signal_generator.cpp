@@ -8,6 +8,7 @@
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/portmacro.h>
+#include <driver/mcpwm_prelude.h>
 #else
 #include <cstdlib>
 #endif
@@ -72,6 +73,12 @@ static uint32_t _noiseSeed = 12345;   // PRNG seed
 
 #ifndef NATIVE_TEST
 static portMUX_TYPE _siggenSpinlock = portMUX_INITIALIZER_UNLOCKED;
+
+// MCPWM peripheral handles for PWM output mode
+static mcpwm_timer_handle_t _mcpwm_timer = NULL;
+static mcpwm_oper_handle_t  _mcpwm_oper  = NULL;
+static mcpwm_cmpr_handle_t  _mcpwm_cmpr  = NULL;
+static mcpwm_gen_handle_t   _mcpwm_gen   = NULL;
 #endif
 
 // ===== Pure testable functions =====
@@ -192,10 +199,45 @@ void siggen_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_rate) {
 #ifndef NATIVE_TEST
 
 void siggen_init() {
-    // Setup LEDC PWM for signal generator output
-    ledcAttach(SIGGEN_PWM_PIN, 1000, SIGGEN_PWM_RESOLUTION);
-    ledcWrite(SIGGEN_PWM_PIN, 0);
-    LOG_I("[SigGen] Initialized PWM on GPIO %d", SIGGEN_PWM_PIN);
+    // Setup MCPWM peripheral for signal generator PWM output
+    // Timer: 160 MHz clock, up-count, default period = 1 kHz
+    mcpwm_timer_config_t timer_cfg = {};
+    timer_cfg.group_id      = SIGGEN_MCPWM_GROUP;
+    timer_cfg.clk_src       = MCPWM_TIMER_CLK_SRC_DEFAULT;
+    timer_cfg.resolution_hz = SIGGEN_MCPWM_RESOLUTION;
+    timer_cfg.count_mode    = MCPWM_TIMER_COUNT_MODE_UP;
+    timer_cfg.period_ticks  = SIGGEN_MCPWM_RESOLUTION / 1000; // 1 kHz default
+    mcpwm_new_timer(&timer_cfg, &_mcpwm_timer);
+
+    mcpwm_operator_config_t oper_cfg = {};
+    oper_cfg.group_id = SIGGEN_MCPWM_GROUP;
+    mcpwm_new_operator(&oper_cfg, &_mcpwm_oper);
+    mcpwm_operator_connect_timer(_mcpwm_oper, _mcpwm_timer);
+
+    mcpwm_comparator_config_t cmpr_cfg = {};
+    mcpwm_new_comparator(_mcpwm_oper, &cmpr_cfg, &_mcpwm_cmpr);
+
+    mcpwm_generator_config_t gen_cfg = {};
+    gen_cfg.gen_gpio_num = SIGGEN_PWM_PIN;
+    mcpwm_new_generator(_mcpwm_oper, &gen_cfg, &_mcpwm_gen);
+
+    // GPIO HIGH at timer zero, LOW at comparator match — standard PWM
+    mcpwm_generator_set_action_on_timer_event(_mcpwm_gen,
+        MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP,
+                                     MCPWM_TIMER_EVENT_EMPTY,
+                                     MCPWM_GEN_ACTION_HIGH));
+    mcpwm_generator_set_action_on_compare_event(_mcpwm_gen,
+        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP,
+                                       _mcpwm_cmpr,
+                                       MCPWM_GEN_ACTION_LOW));
+
+    // Start with zero duty (output stays low)
+    mcpwm_comparator_set_compare_value(_mcpwm_cmpr, 0);
+
+    mcpwm_timer_enable(_mcpwm_timer);
+    mcpwm_timer_start_stop(_mcpwm_timer, MCPWM_TIMER_START_NO_STOP);
+
+    LOG_I("[SigGen] Initialized MCPWM on GPIO %d", SIGGEN_PWM_PIN);
 }
 
 bool siggen_is_active() {
@@ -230,15 +272,15 @@ void siggen_apply_params() {
 
     // Handle PWM mode
     if (shouldBeActive && p.outputMode == SIGOUT_PWM) {
-        // Set PWM frequency to the signal frequency
-        ledcChangeFrequency(SIGGEN_PWM_PIN, (uint32_t)p.frequency, SIGGEN_PWM_RESOLUTION);
-        // Duty cycle represents amplitude (512 = 50% = full amplitude for square)
-        uint32_t duty = (uint32_t)(512.0f * p.amplitude_linear);
-        ledcWrite(SIGGEN_PWM_PIN, duty);
-        LOG_I("[SigGen] PWM: %.0f Hz, duty=%lu", p.frequency, duty);
+        // Set PWM frequency and duty cycle via MCPWM
+        uint32_t period = (uint32_t)((float)SIGGEN_MCPWM_RESOLUTION / p.frequency);
+        mcpwm_timer_set_period(_mcpwm_timer, period);
+        uint32_t duty_ticks = (uint32_t)(period * 0.5f * p.amplitude_linear);
+        mcpwm_comparator_set_compare_value(_mcpwm_cmpr, duty_ticks);
+        LOG_I("[SigGen] PWM: %.0f Hz, duty_ticks=%lu", p.frequency, duty_ticks);
     } else if (!shouldBeActive && wasActive) {
-        // Stop PWM output
-        ledcWrite(SIGGEN_PWM_PIN, 0);
+        // Stop PWM output — set duty to zero
+        mcpwm_comparator_set_compare_value(_mcpwm_cmpr, 0);
         LOG_I("[SigGen] Stopped");
     }
 
