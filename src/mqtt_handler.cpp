@@ -6,7 +6,6 @@
 #include "debug_serial.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
-#include "audio_quality.h"
 #include "settings_manager.h"
 #include "utils.h"
 #include "websocket_handler.h"
@@ -213,10 +212,6 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/signalgenerator/channel/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/output_mode/set").c_str());
   mqttClient.subscribe((base + "/signalgenerator/target_adc/set").c_str());
-#ifdef DSP_ENABLED
-  mqttClient.subscribe((base + "/emergency_limiter/enabled/set").c_str());
-  mqttClient.subscribe((base + "/emergency_limiter/threshold/set").c_str());
-#endif
   mqttClient.subscribe((base + "/settings/adc_vref/set").c_str());
   mqttClient.subscribe((base + "/audio/input1/enabled/set").c_str());
   mqttClient.subscribe((base + "/audio/input2/enabled/set").c_str());
@@ -588,28 +583,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       sendSignalGenState();
     }
   }
-#ifdef DSP_ENABLED
-  // Handle emergency limiter enabled
-  else if (topicStr == base + "/emergency_limiter/enabled/set") {
-    bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.setEmergencyLimiterEnabled(newState);
-    saveSettingsDeferred();
-    LOG_I("[MQTT] Emergency limiter set to %s", newState ? "ON" : "OFF");
-    publishMqttEmergencyLimiterState();
-    sendEmergencyLimiterState();
-  }
-  // Handle emergency limiter threshold
-  else if (topicStr == base + "/emergency_limiter/threshold/set") {
-    float threshold = message.toFloat();
-    if (threshold >= -6.0f && threshold <= 0.0f) {
-      appState.setEmergencyLimiterThreshold(threshold);
-      saveSettingsDeferred();
-      LOG_I("[MQTT] Emergency limiter threshold set to %.2f dBFS", threshold);
-      publishMqttEmergencyLimiterState();
-      sendEmergencyLimiterState();
-    }
-  }
-#endif
   // Handle ADC reference voltage
   else if (topicStr == base + "/settings/adc_vref/set") {
     float vref = message.toFloat();
@@ -1524,54 +1497,6 @@ void publishMqttSignalGenState() {
                      String(appState.sigGenSweepSpeed, 0).c_str(), true);
 }
 
-#ifdef DSP_ENABLED
-void publishMqttEmergencyLimiterState() {
-  if (!mqttClient.connected())
-    return;
-
-  String base = getEffectiveMqttBaseTopic();
-
-  // Settings
-  mqttClient.publish((base + "/emergency_limiter/enabled").c_str(),
-                     appState.emergencyLimiterEnabled ? "ON" : "OFF", true);
-  mqttClient.publish((base + "/emergency_limiter/threshold").c_str(),
-                     String(appState.emergencyLimiterThresholdDb, 2).c_str(), true);
-
-  // Status (from DSP metrics)
-  DspMetrics metrics = dsp_get_metrics();
-  mqttClient.publish((base + "/emergency_limiter/status").c_str(),
-                     metrics.emergencyLimiterActive ? "active" : "idle", true);
-  mqttClient.publish((base + "/emergency_limiter/trigger_count").c_str(),
-                     String(metrics.emergencyLimiterTriggers).c_str(), true);
-  mqttClient.publish((base + "/emergency_limiter/gain_reduction").c_str(),
-                     String(metrics.emergencyLimiterGrDb, 2).c_str(), true);
-}
-
-void publishMqttAudioQualityState() {
-  if (!mqttClient.connected())
-    return;
-
-  String base = getEffectiveMqttBaseTopic();
-
-  // Settings
-  mqttClient.publish((base + "/audio_quality/enabled").c_str(),
-                     appState.audioQualityEnabled ? "ON" : "OFF", true);
-  mqttClient.publish((base + "/audio_quality/glitch_threshold").c_str(),
-                     String(appState.audioQualityGlitchThreshold, 2).c_str(), true);
-
-  // Diagnostics
-  AudioQualityDiag diag = audio_quality_get_diagnostics();
-  mqttClient.publish((base + "/audio_quality/glitches_total").c_str(),
-                     String(diag.glitchHistory.totalGlitches).c_str(), true);
-  mqttClient.publish((base + "/audio_quality/glitches_last_minute").c_str(),
-                     String(diag.glitchHistory.glitchesLastMinute).c_str(), true);
-  mqttClient.publish((base + "/audio_quality/correlation_dsp_swap").c_str(),
-                     diag.correlation.dspSwapRelated ? "ON" : "OFF", true);
-  mqttClient.publish((base + "/audio_quality/correlation_wifi").c_str(),
-                     diag.correlation.wifiRelated ? "ON" : "OFF", true);
-}
-#endif
-
 void publishMqttAudioDiagnostics() {
   if (!mqttClient.connected())
     return;
@@ -1844,7 +1769,6 @@ void publishMqttState() {
 #endif
 #ifdef DSP_ENABLED
   publishMqttDspState();
-  publishMqttEmergencyLimiterState();
 #endif
 #ifdef GUI_ENABLED
   publishMqttBootAnimState();
@@ -3428,88 +3352,6 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     mqttClient.publish(("homeassistant/select/" + deviceId + "/boot_animation_style/config").c_str(), payload.c_str(), true);
-  }
-#endif
-
-#ifdef DSP_ENABLED
-  // ===== Emergency Limiter Enabled Switch =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter";
-    doc["unique_id"] = deviceId + "_emergency_limiter_enabled";
-    doc["state_topic"] = base + "/emergency_limiter/enabled";
-    doc["command_topic"] = base + "/emergency_limiter/enabled/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:shield-alert";
-    doc["entity_category"] = "config";
-    addHADeviceInfo(doc);
-    String payload;
-    serializeJson(doc, payload);
-    mqttClient.publish(("homeassistant/switch/" + deviceId + "/emergency_limiter_enabled/config").c_str(), payload.c_str(), true);
-  }
-
-  // ===== Emergency Limiter Threshold Number =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter Threshold";
-    doc["unique_id"] = deviceId + "_emergency_limiter_threshold";
-    doc["state_topic"] = base + "/emergency_limiter/threshold";
-    doc["command_topic"] = base + "/emergency_limiter/threshold/set";
-    doc["min"] = -6.0;
-    doc["max"] = 0.0;
-    doc["step"] = 0.1;
-    doc["unit_of_measurement"] = "dBFS";
-    doc["icon"] = "mdi:volume-high";
-    doc["entity_category"] = "config";
-    addHADeviceInfo(doc);
-    String payload;
-    serializeJson(doc, payload);
-    mqttClient.publish(("homeassistant/number/" + deviceId + "/emergency_limiter_threshold/config").c_str(), payload.c_str(), true);
-  }
-
-  // ===== Emergency Limiter Status Sensor =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter Status";
-    doc["unique_id"] = deviceId + "_emergency_limiter_status";
-    doc["state_topic"] = base + "/emergency_limiter/status";
-    doc["icon"] = "mdi:shield-check";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
-    String payload;
-    serializeJson(doc, payload);
-    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/emergency_limiter_status/config").c_str(), payload.c_str(), true);
-  }
-
-  // ===== Emergency Limiter Trigger Count Sensor =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter Triggers";
-    doc["unique_id"] = deviceId + "_emergency_limiter_triggers";
-    doc["state_topic"] = base + "/emergency_limiter/trigger_count";
-    doc["icon"] = "mdi:counter";
-    doc["entity_category"] = "diagnostic";
-    doc["state_class"] = "total_increasing";
-    addHADeviceInfo(doc);
-    String payload;
-    serializeJson(doc, payload);
-    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/emergency_limiter_triggers/config").c_str(), payload.c_str(), true);
-  }
-
-  // ===== Emergency Limiter Gain Reduction Sensor =====
-  {
-    JsonDocument doc;
-    doc["name"] = "Emergency Limiter Gain Reduction";
-    doc["unique_id"] = deviceId + "_emergency_limiter_gr";
-    doc["state_topic"] = base + "/emergency_limiter/gain_reduction";
-    doc["unit_of_measurement"] = "dB";
-    doc["icon"] = "mdi:volume-minus";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
-    String payload;
-    serializeJson(doc, payload);
-    mqttClient.publish(("homeassistant/sensor/" + deviceId + "/emergency_limiter_gr/config").c_str(), payload.c_str(), true);
   }
 #endif
 

@@ -9,7 +9,6 @@
 #include "dsps_mul.h"
 #include "dsps_add.h"
 #include "dsp_convolution.h"
-#include "audio_quality.h"
 #include "audio_pipeline.h"
 #include "app_state.h"
 #include <math.h>
@@ -40,9 +39,6 @@ static DspState *_states = nullptr;
 static volatile int _activeIndex = 0;
 static volatile bool _processingActive = false;
 static DspMetrics _metrics;
-
-// ===== Emergency Safety Limiter State =====
-static EmergencyLimiterState _emergencyLimiter = {};
 
 // ===== DSP Swap Synchronization =====
 #ifndef NATIVE_TEST
@@ -367,7 +363,6 @@ void dsp_init() {
     }
 #endif
     _swapRequested = false;
-    _emergencyLimiter = {};
 
     LOG_I("[DSP] Pipeline initialized (double-buffered, %d channels, max %d stages/ch)",
           DSP_MAX_CHANNELS, DSP_MAX_STAGES);
@@ -551,11 +546,6 @@ bool dsp_swap_config() {
     // Update success counter
     AppState::getInstance().dspSwapSuccesses++;
 
-    // Mark DSP swap event for audio quality correlation (Phase 3)
-#ifndef NATIVE_TEST
-    audio_quality_mark_event("dsp_swap");
-#endif
-
     LOG_I("[DSP] Config swapped (active=%d)", newActive);
     return true;
 }
@@ -573,81 +563,6 @@ void dsp_reset_max_metrics() {
 void dsp_clear_cpu_load() {
     _metrics.processTimeUs = 0;
     _metrics.cpuLoadPercent = 0.0f;
-}
-
-// ===== Emergency Safety Limiter =====
-// Brick-wall limiter at DSP output stage for speaker protection.
-// Uses 8-sample lookahead to prevent overshoot, fast attack (0.1ms), moderate release (100ms).
-static void dsp_emergency_limiter_process(float *bufL, float *bufR, int frames, float thresholdDb, uint32_t sampleRate) {
-    const float thresholdLinear = powf(10.0f, thresholdDb / 20.0f);
-    const float attackCoeff = expf(-1.0f / (0.1f * 0.001f * (float)sampleRate));   // 0.1ms attack
-    const float releaseCoeff = expf(-1.0f / (100.0f * 0.001f * (float)sampleRate)); // 100ms release
-    const int lookaheadSamples = 8;
-
-    bool wasActive = false;
-    float maxPeak = 0.0f;
-
-    for (int f = 0; f < frames; f++) {
-        // Write current samples to lookahead buffer
-        int writePos = _emergencyLimiter.lookaheadPos;
-        _emergencyLimiter.lookahead[0][writePos] = bufL[f];
-        _emergencyLimiter.lookahead[1][writePos] = bufR[f];
-        _emergencyLimiter.lookaheadPos = (writePos + 1) % lookaheadSamples;
-
-        // Find peak in lookahead window (all 8 samples)
-        float peakL = 0.0f, peakR = 0.0f;
-        for (int i = 0; i < lookaheadSamples; i++) {
-            float absL = fabsf(_emergencyLimiter.lookahead[0][i]);
-            float absR = fabsf(_emergencyLimiter.lookahead[1][i]);
-            if (absL > peakL) peakL = absL;
-            if (absR > peakR) peakR = absR;
-        }
-        float peak = (peakL > peakR) ? peakL : peakR;
-        if (peak > maxPeak) maxPeak = peak;
-
-        // Envelope follower: instant attack, slow release
-        if (peak > _emergencyLimiter.envelope) {
-            _emergencyLimiter.envelope = peak; // Instant attack
-        } else {
-            _emergencyLimiter.envelope = releaseCoeff * _emergencyLimiter.envelope + (1.0f - releaseCoeff) * peak;
-        }
-
-        // Compute gain reduction (infinite ratio = hard ceiling)
-        float gain = 1.0f;
-        if (_emergencyLimiter.envelope > thresholdLinear) {
-            gain = thresholdLinear / _emergencyLimiter.envelope;
-            wasActive = true;
-            _emergencyLimiter.samplesSinceTrigger = 0;
-        } else {
-            _emergencyLimiter.samplesSinceTrigger++;
-        }
-
-        // Apply lookahead delay and gain only when limiting is active.
-        // When gain = 1.0 (below threshold), pass through transparently to avoid
-        // introducing latency into the signal path.
-        if (gain < 1.0f) {
-            int readPos = _emergencyLimiter.lookaheadPos;
-            bufL[f] = _emergencyLimiter.lookahead[0][readPos] * gain;
-            bufR[f] = _emergencyLimiter.lookahead[1][readPos] * gain;
-        }
-
-        // Update gain reduction (convert to dB)
-        if (gain < 1.0f) {
-            _emergencyLimiter.gainReduction = 20.0f * log10f(gain);
-        } else {
-            _emergencyLimiter.gainReduction = 0.0f;
-        }
-    }
-
-    // Update metrics
-    _metrics.emergencyLimiterGrDb = _emergencyLimiter.gainReduction;
-    _metrics.emergencyLimiterActive = wasActive || (_emergencyLimiter.envelope > thresholdLinear); // Active if currently limiting or in release phase
-
-    // Increment trigger counter if this buffer crossed threshold
-    if (wasActive && _emergencyLimiter.samplesSinceTrigger == 0) {
-        _emergencyLimiter.triggerCount++;
-        _metrics.emergencyLimiterTriggers = _emergencyLimiter.triggerCount;
-    }
 }
 
 // ===== Main Processing Entry Point =====
@@ -710,12 +625,6 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
             }
             break; // Only one stereo width stage per pair
         }
-    }
-
-    // Apply emergency safety limiter (non-bypassable brick-wall protection)
-    if (appState.emergencyLimiterEnabled) {
-        float threshold = appState.emergencyLimiterThresholdDb;
-        dsp_emergency_limiter_process(_dspBufL, _dspBufR, stereoFrames, threshold, cfg->sampleRate);
     }
 
     // Re-interleave float → int32 with clamp

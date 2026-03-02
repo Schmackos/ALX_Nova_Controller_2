@@ -10,7 +10,6 @@
 #include "debug_serial.h"
 #include "utils.h"
 #include "i2s_audio.h"
-#include "audio_quality.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
 #include "audio_pipeline.h"
@@ -57,14 +56,13 @@ enum InitStateBit : uint32_t {
     INIT_BUZZER      = (1u << 3),
     INIT_SIGGEN      = (1u << 4),
     INIT_AUDIO_GRAPH = (1u << 5),
-    INIT_AUDIO_QUAL  = (1u << 6),
-    INIT_DEBUG       = (1u << 7),
-    INIT_ADC_STATE   = (1u << 8),
-    INIT_DSP         = (1u << 9),
-    INIT_DAC         = (1u << 10),
-    INIT_USB_AUDIO   = (1u << 11),
-    INIT_UPDATED     = (1u << 12),
-    INIT_ALL         = 0x1FFFu,
+    INIT_DEBUG       = (1u << 6),
+    INIT_ADC_STATE   = (1u << 7),
+    INIT_DSP         = (1u << 8),
+    INIT_DAC         = (1u << 9),
+    INIT_USB_AUDIO   = (1u << 10),
+    INIT_UPDATED     = (1u << 11),
+    INIT_ALL         = 0x0FFFu,
 };
 
 // ===== CPU Utilization Tracking =====
@@ -336,25 +334,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             sendSignalGenState();
             LOG_I("[WebSocket] Signal generator updated by client [%u]", num);
           }
-#ifdef DSP_ENABLED
-        } else if (msgType == "setEmergencyLimiterEnabled") {
-          if (doc["enabled"].is<bool>()) {
-            appState.setEmergencyLimiterEnabled(doc["enabled"].as<bool>());
-            saveSettingsDeferred();
-            sendEmergencyLimiterState();
-            LOG_I("[WebSocket] Emergency limiter enabled: %d", appState.emergencyLimiterEnabled);
-          }
-        } else if (msgType == "setEmergencyLimiterThreshold") {
-          if (doc["threshold"].is<float>()) {
-            float threshold = doc["threshold"].as<float>();
-            if (threshold >= -6.0f && threshold <= 0.0f) {
-              appState.setEmergencyLimiterThreshold(threshold);
-              saveSettingsDeferred();
-              sendEmergencyLimiterState();
-              LOG_I("[WebSocket] Emergency limiter threshold: %.2f dBFS", threshold);
-            }
-          }
-#endif
         } else if (msgType == "setInputNames") {
           if (doc["names"].is<JsonArray>()) {
             JsonArray names = doc["names"].as<JsonArray>();
@@ -1209,53 +1188,6 @@ void sendSignalGenState() {
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
 
-#ifdef DSP_ENABLED
-void sendEmergencyLimiterState() {
-  JsonDocument doc;
-  doc["type"] = "emergencyLimiterState";
-  doc["enabled"] = appState.emergencyLimiterEnabled;
-  doc["threshold"] = serialized(String(appState.emergencyLimiterThresholdDb, 2));
-
-  // Include metrics from DSP pipeline
-  DspMetrics metrics = dsp_get_metrics();
-  doc["active"] = metrics.emergencyLimiterActive;
-  doc["gainReductionDb"] = serialized(String(metrics.emergencyLimiterGrDb, 2));
-  doc["triggerCount"] = metrics.emergencyLimiterTriggers;
-
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
-}
-
-void sendAudioQualityState() {
-  JsonDocument doc;
-  doc["type"] = "audioQualityState";
-  doc["enabled"] = appState.audioQualityEnabled;
-  doc["threshold"] = serialized(String(appState.audioQualityGlitchThreshold, 2));
-
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
-}
-
-void sendAudioQualityDiagnostics() {
-  AudioQualityDiag diag = audio_quality_get_diagnostics();
-  JsonDocument doc;
-  doc["type"] = "audioQualityDiag";
-  doc["glitchesTotal"] = diag.glitchHistory.totalGlitches;
-  doc["glitchesLastMinute"] = diag.glitchHistory.glitchesLastMinute;
-  doc["lastGlitchType"] = (int)diag.lastGlitchType;
-  doc["lastGlitchMs"] = diag.lastGlitchMs;
-  doc["correlationDsp"] = diag.correlation.dspSwapRelated;
-  doc["correlationWifi"] = diag.correlation.wifiRelated;
-  doc["correlationMqtt"] = diag.correlation.mqttRelated;
-
-  String json;
-  serializeJson(doc, json);
-  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
-}
-#endif
-
 void sendAudioGraphState() {
   JsonDocument doc;
   doc["type"] = "audioGraphState";
@@ -1864,7 +1796,6 @@ void drainPendingInitState() {
         if (sent < MAX_PER_ITER && (pending & INIT_BUZZER))      { sendBuzzerState();                 pending &= ~INIT_BUZZER;      sent++; delay(1); }
         if (sent < MAX_PER_ITER && (pending & INIT_SIGGEN))      { sendSignalGenState();              pending &= ~INIT_SIGGEN;      sent++; delay(1); }
         if (sent < MAX_PER_ITER && (pending & INIT_AUDIO_GRAPH)) { sendAudioGraphState();             pending &= ~INIT_AUDIO_GRAPH; sent++; delay(1); }
-        if (sent < MAX_PER_ITER && (pending & INIT_AUDIO_QUAL))  { sendAudioQualityState();           pending &= ~INIT_AUDIO_QUAL;  sent++; delay(1); }
         if (sent < MAX_PER_ITER && (pending & INIT_DEBUG))       { sendDebugState();                  pending &= ~INIT_DEBUG;       sent++; delay(1); }
         if (sent < MAX_PER_ITER && (pending & INIT_ADC_STATE)) {
             JsonDocument adcDoc;

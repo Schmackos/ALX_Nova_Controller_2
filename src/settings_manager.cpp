@@ -235,20 +235,7 @@ bool loadSettings() {
   }
 #endif
 
-#ifdef DSP_ENABLED
-  // Load emergency limiter settings (lines 28-29)
-  if (lines[dataStart + 28].length() > 0) {
-    appState.emergencyLimiterEnabled = (lines[dataStart + 28].toInt() != 0);
-  }
-  if (lines[dataStart + 29].length() > 0) {
-    float threshold = lines[dataStart + 29].toFloat();
-    // Validate range
-    if (threshold >= -6.0f && threshold <= 0.0f) {
-      appState.emergencyLimiterThresholdDb = threshold;
-    }
-  }
-  // Line 30 was dcBlockEnabled (removed — now a DSP preset)
-#endif
+  // Lines 28-29: reserved (was emergencyLimiter, removed)
 
   // Load WiFi global settings from NVS (wifi-list namespace)
   {
@@ -332,15 +319,9 @@ void saveSettings() {
 #else
   file.println("0"); // placeholder for usbAudioEnabled
 #endif
-#ifdef DSP_ENABLED
-  file.println(appState.emergencyLimiterEnabled ? "1" : "0");
-  file.println(appState.emergencyLimiterThresholdDb, 2); // 2 decimal places
+  file.println("0"); // line 28: reserved (was emergencyLimiterEnabled, removed)
+  file.println("0"); // line 29: reserved (was emergencyLimiterThresholdDb, removed)
   file.println("0"); // line 30: reserved (was dcBlockEnabled)
-#else
-  file.println("1"); // placeholder for emergencyLimiterEnabled (default ON)
-  file.println("-0.5"); // placeholder for emergencyLimiterThresholdDb
-  file.println("0"); // line 30: reserved (was dcBlockEnabled)
-#endif
   file.close();
   LOG_I("[Settings] Settings saved to LittleFS");
 

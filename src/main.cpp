@@ -1,5 +1,4 @@
 #include "app_state.h"
-#include "audio_quality.h"
 #include "auth_handler.h"
 #include "button_handler.h"
 #include "buzzer_handler.h"
@@ -223,11 +222,6 @@ void setup() {
 
   // Initialize I2S audio ADC (PCM1808) — uses sample rate from loaded settings
   i2s_audio_init();
-
-  // Initialize Audio Quality Diagnostics (Phase 3)
-  audio_quality_init();
-  audio_quality_enable(appState.audioQualityEnabled);
-  audio_quality_set_threshold(appState.audioQualityGlitchThreshold);
 
   // Load MQTT settings
   if (!loadMqttSettings()) {
@@ -906,20 +900,6 @@ void loop() {
   }
 
 #ifdef DSP_ENABLED
-  // Broadcast emergency limiter state changes (GUI/API -> WS clients + MQTT)
-  if (appState.isEmergencyLimiterDirty()) {
-    sendEmergencyLimiterState();
-    publishMqttEmergencyLimiterState();
-    appState.clearEmergencyLimiterDirty();
-  }
-
-  // Broadcast audio quality state changes (Phase 3 - GUI/API -> WS clients + MQTT)
-  if (appState.isAudioQualityDirty()) {
-    sendAudioQualityState();
-    publishMqttAudioQualityState();
-    appState.clearAudioQualityDirty();
-  }
-
   // Broadcast DSP config changes (API/MQTT -> WS clients + MQTT)
   if (appState.isDspConfigDirty()) {
     sendDspState();
@@ -937,20 +917,6 @@ void loop() {
       sendDspMetrics();
     }
     lastDspMetricsActive = dspActive;
-  }
-
-  // Emergency limiter state broadcast (1s interval when active, one final update when idle)
-  static unsigned long lastEmergencyLimiterBroadcast = 0;
-  static bool lastEmergencyLimiterActive = false;
-  DspMetrics dspMetrics = dsp_get_metrics();
-  bool limiterActive = dspMetrics.emergencyLimiterActive;
-  if (millis() - lastEmergencyLimiterBroadcast >= 1000) {
-    if (limiterActive || lastEmergencyLimiterActive) {
-      lastEmergencyLimiterBroadcast = millis();
-      sendEmergencyLimiterState();
-      publishMqttEmergencyLimiterState();
-    }
-    lastEmergencyLimiterActive = limiterActive;
   }
 
   // Check for debounced DSP settings save
@@ -1027,13 +993,6 @@ void loop() {
     }
   }
 
-  // Audio quality memory snapshot (Phase 3 - every 1s)
-  static unsigned long lastAudioQualityMemUpdate = 0;
-  if (millis() - lastAudioQualityMemUpdate >= 1000) {
-    lastAudioQualityMemUpdate = millis();
-    audio_quality_update_memory();
-  }
-
   // Heap health monitor — detect fragmentation before OOM crash (every 30s)
   static unsigned long lastHeapCheck = 0;
   if (millis() - lastHeapCheck >= 30000) {
@@ -1061,13 +1020,6 @@ void loop() {
       sendHardwareStats();
       hwStatsJustSent = true;
     }
-  }
-
-  // Broadcast Audio Quality Diagnostics (Phase 3 - every 5s when enabled)
-  static unsigned long lastAudioQualityDiagBroadcast = 0;
-  if (appState.audioQualityEnabled && millis() - lastAudioQualityDiagBroadcast >= 5000) {
-    lastAudioQualityDiagBroadcast = millis();
-    sendAudioQualityDiagnostics();
   }
 
   // Send audio waveform/spectrum data to subscribed WebSocket clients

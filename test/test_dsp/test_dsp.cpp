@@ -32,7 +32,6 @@
 
 void setUp(void) {
     dsp_init();
-    appState.emergencyLimiterEnabled = false;
 }
 
 void tearDown(void) {}
