@@ -86,18 +86,6 @@ public:
   // ===== Device Information =====
   String deviceSerialNumber;
 
-  // ===== LED State =====
-  bool blinkingEnabled = true;
-  bool ledState = false;
-  unsigned long previousMillis = 0;
-
-  void setLedState(bool state);
-  void setBlinkingEnabled(bool enabled);
-  bool isLedStateDirty() const { return _ledStateDirty; }
-  bool isBlinkingDirty() const { return _blinkingDirty; }
-  void clearLedStateDirty() { _ledStateDirty = false; }
-  void clearBlinkingDirty() { _blinkingDirty = false; }
-
   // ===== AP Mode State =====
   bool isAPMode = false;
   bool apEnabled = false;
@@ -278,8 +266,6 @@ public:
   unsigned long lastMqttPublish = 0;
 
   // ===== MQTT State Tracking (for change detection) =====
-  bool prevMqttLedState = false;
-  bool prevMqttBlinkingEnabled = true;
   bool prevMqttAmplifierState = false;
   SensingMode prevMqttSensingMode = ALWAYS_ON;
   unsigned long prevMqttTimerRemaining = 0;
@@ -545,8 +531,6 @@ private:
 
   // Dirty flags for change detection
   bool _fsmStateDirty = false;
-  bool _ledStateDirty = false;
-  bool _blinkingDirty = false;
   bool _amplifierDirty = false;
   bool _sensingModeDirty = false;
   bool _timerDirty = false;

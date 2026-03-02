@@ -8,21 +8,6 @@ void AppState::setFSMState(AppFSMState newState) {
   }
 }
 
-// ===== LED State Management =====
-void AppState::setLedState(bool state) {
-  if (ledState != state) {
-    ledState = state;
-    _ledStateDirty = true;
-  }
-}
-
-void AppState::setBlinkingEnabled(bool enabled) {
-  if (blinkingEnabled != enabled) {
-    blinkingEnabled = enabled;
-    _blinkingDirty = true;
-  }
-}
-
 // ===== Smart Sensing State Management =====
 void AppState::setAmplifierState(bool state) {
   if (amplifierState != state) {
@@ -190,8 +175,6 @@ void AppState::increaseMqttBackoff() {
 // ===== Dirty Flag Utilities =====
 void AppState::clearAllDirtyFlags() {
   _fsmStateDirty = false;
-  _ledStateDirty = false;
-  _blinkingDirty = false;
   _amplifierDirty = false;
   _sensingModeDirty = false;
   _timerDirty = false;
@@ -208,8 +191,7 @@ void AppState::clearAllDirtyFlags() {
 }
 
 bool AppState::hasAnyDirtyFlag() const {
-  bool hasDirty = _fsmStateDirty || _ledStateDirty || _blinkingDirty ||
-         _amplifierDirty || _sensingModeDirty || _timerDirty ||
+  bool hasDirty = _fsmStateDirty || _amplifierDirty || _sensingModeDirty || _timerDirty ||
          _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty ||
          _adcEnabledDirty || _sigGenDirty || _otaDirty;
 #ifdef DSP_ENABLED

@@ -2688,10 +2688,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <svg viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
                 <span>Debug</span>
             </button>
-            <button class="sidebar-item" data-tab="test" onclick="switchTab('test')">
-                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l4.59-4.58L18 11l-6 6z"/></svg>
-                <span>Test</span>
-            </button>
         </nav>
         <div class="sidebar-footer">
             <span id="sidebarVersion">v--</span>
@@ -2746,9 +2742,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         </button>
         <button class="tab" data-tab="debug" onclick="switchTab('debug')">
             <svg viewBox="0 0 24 24"><path d="M20 19V7H4v12h16m0-16c1.11 0 2 .89 2 2v14c0 1.11-.89 2-2 2H4c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h16zM7 9h10v2H7V9zm0 4h7v2H7v-2z"/></svg>
-        </button>
-        <button class="tab" data-tab="test" onclick="switchTab('test')">
-            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>
         </button>
     </nav>
 
@@ -4692,20 +4685,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             </div>
         </section>
 
-        <!-- ===== TEST TAB ===== -->
-        <section id="test" class="panel">
-            <div class="card">
-                <div class="card-title">LED Blink Test</div>
-                <div class="led-display">
-                    <div id="led" class="led off"></div>
-                    <div class="led-status" id="ledStatus">LED is OFF</div>
-                </div>
-                <button class="btn btn-primary" id="toggleBtn" onclick="toggleBlinking()">Start Blinking</button>
-                <div class="info-box mt-12" id="blinkStatus">
-                    <div class="text-center">Blinking: <strong id="blinkingState">OFF</strong></div>
-                </div>
-            </div>
-        </section>
     </main>
 
     <!-- AP Config Modal -->
@@ -4960,13 +4939,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     window.location.href = '/login';
                 }, 2000);
             }
-            else if (data.type === 'ledState') {
-                ledState = data.state;
-                updateLED();
-            } else if (data.type === 'blinkingEnabled') {
-                blinkingEnabled = data.enabled;
-                updateBlinkButton();
-            } else if (data.type === 'wifiStatus') {
+            else if (data.type === 'wifiStatus') {
                 updateWiFiStatus(data);
             } else if (data.type === 'updateStatus') {
                 handleUpdateStatus(data);
@@ -5144,8 +5117,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 //# sourceURL=02-ws-router.js
 
         // ===== State Variables =====
-        let ledState = false;
-        let blinkingEnabled = false;
         let autoUpdateEnabled = false;
         let darkMode = true;
         let waveformAutoScaleEnabled = false;
@@ -5471,45 +5442,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             } else {
                 wsIndicator.className = 'status-indicator offline';
             }
-        }
-
-        // ===== LED Control =====
-        function updateLED() {
-            const led = document.getElementById('led');
-            const status = document.getElementById('ledStatus');
-            if (ledState) {
-                led.classList.remove('off');
-                led.classList.add('on');
-                status.textContent = 'LED is ON';
-            } else {
-                led.classList.remove('on');
-                led.classList.add('off');
-                status.textContent = 'LED is OFF';
-            }
-        }
-
-        function updateBlinkButton() {
-            const btn = document.getElementById('toggleBtn');
-            const state = document.getElementById('blinkingState');
-            if (blinkingEnabled) {
-                btn.textContent = 'Stop Blinking';
-                btn.classList.remove('btn-primary');
-                btn.classList.add('btn-danger');
-                state.textContent = 'ON';
-            } else {
-                btn.textContent = 'Start Blinking';
-                btn.classList.remove('btn-danger');
-                btn.classList.add('btn-primary');
-                state.textContent = 'OFF';
-            }
-        }
-
-        function toggleBlinking() {
-            blinkingEnabled = !blinkingEnabled;
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'toggle', enabled: blinkingEnabled }));
-            }
-            updateBlinkButton();
         }
 
         function toggleLedMode() {

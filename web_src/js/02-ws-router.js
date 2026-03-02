@@ -80,13 +80,7 @@
                     window.location.href = '/login';
                 }, 2000);
             }
-            else if (data.type === 'ledState') {
-                ledState = data.state;
-                updateLED();
-            } else if (data.type === 'blinkingEnabled') {
-                blinkingEnabled = data.enabled;
-                updateBlinkButton();
-            } else if (data.type === 'wifiStatus') {
+            else if (data.type === 'wifiStatus') {
                 updateWiFiStatus(data);
             } else if (data.type === 'updateStatus') {
                 handleUpdateStatus(data);

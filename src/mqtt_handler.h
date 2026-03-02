@@ -19,8 +19,6 @@ void saveMqttSettings();
 
 // ===== MQTT State Publishing =====
 void publishMqttState();
-void publishMqttLedState();
-void publishMqttBlinkingState();
 void publishMqttSmartSensingState();
 void publishMqttWifiStatus();
 void publishMqttSystemStatusStatic();

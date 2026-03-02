@@ -1,6 +1,4 @@
         // ===== State Variables =====
-        let ledState = false;
-        let blinkingEnabled = false;
         let autoUpdateEnabled = false;
         let darkMode = true;
         let waveformAutoScaleEnabled = false;
