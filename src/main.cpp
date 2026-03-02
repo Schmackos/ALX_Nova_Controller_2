@@ -46,6 +46,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <esp_task_wdt.h>
+#include <esp_wifi.h>
 #include <mbedtls/md.h>
 #include <time.h>
 
@@ -661,6 +662,11 @@ void setup() {
 
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
+
+  // Disable WiFi modem power save — radio sleep/wake cycles cause latency
+  // spikes (5-20ms) that generate memory bus contention with I2S DMA,
+  // causing audio pops during WiFi TX bursts.
+  esp_wifi_set_ps(WIFI_PS_NONE);
 
   // Initialize WiFi event handler for automatic reconnection
   initWiFiEventHandler();

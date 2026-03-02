@@ -185,7 +185,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_CORE_AUDIO     1   // Core 1 — isolates audio from WiFi system tasks on Core 0
 
 // ===== I2S DMA Configuration =====
-#define I2S_DMA_BUF_COUNT 8     // 8 buffers x 256 samples = ~42ms runway at 48kHz
+#define I2S_DMA_BUF_COUNT 16    // 16 buffers x 256 samples = ~85ms runway at 48kHz
 #define I2S_DMA_BUF_LEN   256
 
 // ===== Audio Pipeline Configuration =====
