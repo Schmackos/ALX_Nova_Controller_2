@@ -8,7 +8,7 @@
 #include "config.h"
 
 #ifndef NATIVE_TEST
-#include <driver/i2s.h>
+#include "i2s_audio.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #ifdef BOARD_HAS_PSRAM
@@ -128,118 +128,26 @@ void dac_periodic_log() {
 #endif
 }
 
-// ===== I2S TX Full-Duplex =====
+// ===== I2S TX Full-Duplex (delegates to i2s_audio bridge) =====
 #ifndef NATIVE_TEST
-
-// I2S port definitions (match i2s_audio.cpp)
-#define I2S_PORT_ADC1 0
-#define DMA_BUF_COUNT I2S_DMA_BUF_COUNT
-#define DMA_BUF_LEN   I2S_DMA_BUF_LEN
 
 bool dac_enable_i2s_tx(uint32_t sampleRate) {
     if (_i2sTxEnabled) return true;
-
-    LOG_I("[DAC] Enabling I2S TX full-duplex on I2S_NUM_0, data_out=GPIO%d", I2S_TX_DATA_PIN);
-
-    // Pause audio_capture_task so it doesn't call i2s_read during driver reinstall
-    AppState::getInstance().audioPaused = true;
-    vTaskDelay(pdMS_TO_TICKS(50)); // Wait for audio task to exit i2s_read
-
-    // Uninstall I2S0
-    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
-
-    // Reinstall with TX+RX mode
-    i2s_config_t cfg = {};
-    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_TX);
-    cfg.sample_rate = sampleRate;
-    cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
-    cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-    cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-    cfg.dma_buf_count = DMA_BUF_COUNT;
-    cfg.dma_buf_len = DMA_BUF_LEN;
-    cfg.use_apll = true;
-    cfg.tx_desc_auto_clear = true;  // Output silence when no data written
-    cfg.fixed_mclk = sampleRate * 256;
-
-    esp_err_t err = i2s_driver_install((i2s_port_t)I2S_PORT_ADC1, &cfg, 0, NULL);
-    if (err != ESP_OK) {
-        LOG_E("[DAC] I2S TX+RX install failed (0x%x), falling back to RX-only", err);
-        // Fallback: reinstall RX-only
-        cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
-        cfg.tx_desc_auto_clear = false;
-        i2s_driver_install((i2s_port_t)I2S_PORT_ADC1, &cfg, 0, NULL);
-
-        i2s_pin_config_t pins = {};
-        pins.bck_io_num = I2S_BCK_PIN;
-        pins.ws_io_num = I2S_LRC_PIN;
-        pins.data_in_num = I2S_DOUT_PIN;
-        pins.data_out_num = I2S_PIN_NO_CHANGE;
-        pins.mck_io_num = I2S_MCLK_PIN;
-        i2s_set_pin((i2s_port_t)I2S_PORT_ADC1, &pins);
-        i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
-        AppState::getInstance().audioPaused = false; // Resume audio task
-        return false;
+    bool ok = i2s_audio_enable_tx(sampleRate);
+    if (ok) {
+        _i2sTxEnabled = true;
+        LOG_I("[DAC] I2S TX full-duplex enabled via bridge");
+    } else {
+        LOG_E("[DAC] I2S TX enable failed");
     }
-
-    // Set pins with TX data out
-    i2s_pin_config_t pins = {};
-    pins.bck_io_num = I2S_BCK_PIN;
-    pins.ws_io_num = I2S_LRC_PIN;
-    pins.data_in_num = I2S_DOUT_PIN;
-    pins.data_out_num = I2S_TX_DATA_PIN;
-    pins.mck_io_num = I2S_MCLK_PIN;
-    i2s_set_pin((i2s_port_t)I2S_PORT_ADC1, &pins);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
-
-    _i2sTxEnabled = true;
-    AppState::getInstance().audioPaused = false; // Resume audio task
-    LOG_I("[DAC] I2S TX full-duplex enabled: rate=%luHz data_out=GPIO%d APLL=%s MCLK=%luHz DMA=%dx%d",
-          (unsigned long)sampleRate, I2S_TX_DATA_PIN,
-          cfg.use_apll ? "on" : "off",
-          (unsigned long)cfg.fixed_mclk,
-          cfg.dma_buf_count, cfg.dma_buf_len);
-    return true;
+    return ok;
 }
 
 void dac_disable_i2s_tx() {
     if (!_i2sTxEnabled) return;
-
-    LOG_I("[DAC] Disabling I2S TX, reverting to RX-only");
-
-    // Pause audio_capture_task so it doesn't call i2s_read during driver reinstall
-    AppState::getInstance().audioPaused = true;
-    vTaskDelay(pdMS_TO_TICKS(50));
-
-    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
-
-    i2s_config_t cfg = {};
-    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
-    cfg.sample_rate = AppState::getInstance().audioSampleRate;
-    cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
-    cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-    cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-    cfg.dma_buf_count = DMA_BUF_COUNT;
-    cfg.dma_buf_len = DMA_BUF_LEN;
-    cfg.use_apll = true;
-    cfg.tx_desc_auto_clear = false;
-    cfg.fixed_mclk = cfg.sample_rate * 256;
-
-    i2s_driver_install((i2s_port_t)I2S_PORT_ADC1, &cfg, 0, NULL);
-
-    i2s_pin_config_t pins = {};
-    pins.bck_io_num = I2S_BCK_PIN;
-    pins.ws_io_num = I2S_LRC_PIN;
-    pins.data_in_num = I2S_DOUT_PIN;
-    pins.data_out_num = I2S_PIN_NO_CHANGE;
-    pins.mck_io_num = I2S_MCLK_PIN;
-    i2s_set_pin((i2s_port_t)I2S_PORT_ADC1, &pins);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
-
+    i2s_audio_disable_tx();
     _i2sTxEnabled = false;
-    AppState::getInstance().audioPaused = false; // Resume audio task
-    LOG_I("[DAC] Reverted to RX-only mode");
+    LOG_I("[DAC] I2S TX disabled via bridge");
 }
 
 #else
@@ -312,8 +220,7 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
                 txBuf[i] = (int32_t)(fBuf[i] * 2147483647.0f);
             }
             size_t bytes_written = 0;
-            i2s_write((i2s_port_t)I2S_PORT_ADC1, txBuf,
-                      chunk * sizeof(int32_t), &bytes_written, pdMS_TO_TICKS(20));
+            i2s_audio_write(txBuf, chunk * sizeof(int32_t), &bytes_written, 20);
             _txBytesWritten += bytes_written;
             if (bytes_written < (size_t)(chunk * sizeof(int32_t))) {
                 as.dacTxUnderruns++;
@@ -324,8 +231,7 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
     } else {
         // Unity gain — write buffer directly
         size_t bytes_written = 0;
-        i2s_write((i2s_port_t)I2S_PORT_ADC1, buffer,
-                  total_samples * sizeof(int32_t), &bytes_written, pdMS_TO_TICKS(20));
+        i2s_audio_write(buffer, total_samples * sizeof(int32_t), &bytes_written, 20);
         _txBytesWritten += bytes_written;
         if (bytes_written < (size_t)(total_samples * sizeof(int32_t))) {
             as.dacTxUnderruns++;

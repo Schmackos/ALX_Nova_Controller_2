@@ -253,8 +253,8 @@ void siggen_apply_params() {
     }
 
     if (shouldBeActive && wasActive) {
-        LOG_I("[SigGen] Params: waveform=%d, freq=%.0f Hz, amp=%.1f dBFS, ch=%d, target=%d",
-              p.waveform, p.frequency, st.sigGenAmplitude, p.channel, st.sigGenTargetAdc);
+        LOG_I("[SigGen] Params: waveform=%d, freq=%.0f Hz, amp=%.1f dBFS, ch=%d",
+              p.waveform, p.frequency, st.sigGenAmplitude, p.channel);
     }
 }
 

@@ -588,21 +588,6 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       sendSignalGenState();
     }
   }
-  // Handle signal generator target ADC
-  else if (topicStr == base + "/signalgenerator/target_adc/set") {
-    int target = -1;
-    if (message == "adc1") target = 0;
-    else if (message == "adc2") target = 1;
-    else if (message == "both") target = 2;
-    if (target >= 0) {
-      appState.sigGenTargetAdc = target;
-      siggen_apply_params();
-      saveSignalGenSettings();
-      LOG_I("[MQTT] Signal generator target ADC set to %s", message.c_str());
-      publishMqttSignalGenState();
-      sendSignalGenState();
-    }
-  }
 #ifdef DSP_ENABLED
   // Handle emergency limiter enabled
   else if (topicStr == base + "/emergency_limiter/enabled/set") {
@@ -1551,10 +1536,6 @@ void publishMqttSignalGenState() {
 
   mqttClient.publish((base + "/signalgenerator/sweep_speed").c_str(),
                      String(appState.sigGenSweepSpeed, 0).c_str(), true);
-
-  const char *targetNames[] = {"adc1", "adc2", "both"};
-  mqttClient.publish((base + "/signalgenerator/target_adc").c_str(),
-                     targetNames[appState.sigGenTargetAdc % 3], true);
 }
 
 #ifdef DSP_ENABLED

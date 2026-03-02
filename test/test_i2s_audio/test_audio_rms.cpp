@@ -500,6 +500,141 @@ void test_waveform_quantization(void) {
     TEST_ASSERT_EQUAL_UINT8(64, audio_quantize_sample(-0.5f)); // (-0.5+1)*127.5+0.5 = 64.25 → 64
 }
 
+// ===== Phase 4: Float-buffer waveform downsample =====
+// In the new audio pipeline the internal representation is float32 [-1.0, +1.0].
+// audio_downsample_waveform() currently operates on int32 left-justified frames,
+// but the kept pure functions (audio_quantize_sample) are used downstream.
+// These tests verify that:
+//   a) audio_quantize_sample is the common leaf used by both the legacy int32
+//      path (audio_downsample_waveform) and any future float-native path.
+//   b) A float-native downsample helper (peak per bin from float stereo pairs)
+//      produces the correct uint8 output.
+
+// Float-native peak-per-bin downsample (replicated logic for testing)
+static void float_downsample_waveform(const float *stereo_frames, int frame_count,
+                                      uint8_t *out, int out_size) {
+    float peaks[256];
+    int bins = (out_size > 256) ? 256 : out_size;
+    for (int i = 0; i < bins; i++) peaks[i] = 0.0f;
+
+    if (frame_count > 0 && bins > 0) {
+        for (int f = 0; f < frame_count; f++) {
+            int bin = (int)((long)f * bins / frame_count);
+            if (bin >= bins) bin = bins - 1;
+            float sL = stereo_frames[f * 2];
+            float sR = stereo_frames[f * 2 + 1];
+            float combined = (sL + sR) * 0.5f;
+            if (fabsf(combined) > fabsf(peaks[bin])) {
+                peaks[bin] = combined;
+            }
+        }
+    }
+
+    for (int i = 0; i < bins; i++) {
+        out[i] = audio_quantize_sample(peaks[i]);
+    }
+}
+
+// Test 25: Float silence buffer (all 0.0) → waveform all 128
+void test_float_waveform_downsample_silence(void) {
+    const int FRAMES = 512;
+    float buf[FRAMES * 2];
+    memset(buf, 0, sizeof(buf));
+
+    uint8_t waveform[WAVEFORM_BUFFER_SIZE];
+    float_downsample_waveform(buf, FRAMES, waveform, WAVEFORM_BUFFER_SIZE);
+
+    for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
+        TEST_ASSERT_EQUAL_UINT8(128, waveform[i]);
+    }
+}
+
+// Test 26: Float full-scale positive stereo → waveform near 255
+void test_float_waveform_downsample_full_scale_positive(void) {
+    const int FRAMES = 512;
+    float buf[FRAMES * 2];
+    for (int i = 0; i < FRAMES * 2; i++) buf[i] = 0.9f;
+
+    uint8_t waveform[WAVEFORM_BUFFER_SIZE];
+    float_downsample_waveform(buf, FRAMES, waveform, WAVEFORM_BUFFER_SIZE);
+
+    for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
+        TEST_ASSERT_GREATER_THAN(220, waveform[i]);
+    }
+}
+
+// Test 27: Float negative full-scale stereo → waveform near 0
+void test_float_waveform_downsample_full_scale_negative(void) {
+    const int FRAMES = 512;
+    float buf[FRAMES * 2];
+    for (int i = 0; i < FRAMES * 2; i++) buf[i] = -0.9f;
+
+    uint8_t waveform[WAVEFORM_BUFFER_SIZE];
+    float_downsample_waveform(buf, FRAMES, waveform, WAVEFORM_BUFFER_SIZE);
+
+    for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
+        TEST_ASSERT_LESS_THAN(40, waveform[i]);
+    }
+}
+
+// Test 28: Float spike in one bin → that bin captures the peak, others center
+void test_float_waveform_downsample_spike(void) {
+    const int FRAMES = 256;
+    float buf[FRAMES * 2];
+    memset(buf, 0, sizeof(buf));
+
+    // Spike at frame 50
+    buf[50 * 2]     = 0.8f; // Left
+    buf[50 * 2 + 1] = 0.8f; // Right
+
+    uint8_t waveform[WAVEFORM_BUFFER_SIZE];
+    float_downsample_waveform(buf, FRAMES, waveform, WAVEFORM_BUFFER_SIZE);
+
+    // Bin 50 should show the spike
+    TEST_ASSERT_GREATER_THAN(200, waveform[50]);
+
+    // Other bins should be 128 (silence)
+    TEST_ASSERT_EQUAL_UINT8(128, waveform[0]);
+    TEST_ASSERT_EQUAL_UINT8(128, waveform[100]);
+    TEST_ASSERT_EQUAL_UINT8(128, waveform[255]);
+}
+
+// Test 29: Sentinel bytes beyond out_size are not written
+void test_float_waveform_downsample_no_overflow(void) {
+    const int FRAMES = 512;
+    float buf[FRAMES * 2];
+    memset(buf, 0, sizeof(buf));
+
+    uint8_t waveform[WAVEFORM_BUFFER_SIZE + 16];
+    memset(waveform, 0xAA, sizeof(waveform));
+
+    float_downsample_waveform(buf, FRAMES, waveform, WAVEFORM_BUFFER_SIZE);
+
+    // Sentinel bytes must be untouched
+    for (int i = WAVEFORM_BUFFER_SIZE; i < WAVEFORM_BUFFER_SIZE + 16; i++) {
+        TEST_ASSERT_EQUAL_UINT8(0xAA, waveform[i]);
+    }
+}
+
+// Test 30: L+R averaging — asymmetric stereo averages to center
+// Left=+0.8, Right=0.0 → combined = 0.4 → quantized = (0.4+1)*127.5+0.5 = 179
+void test_float_waveform_downsample_lr_average(void) {
+    const int FRAMES = 256;
+    float buf[FRAMES * 2];
+    for (int f = 0; f < FRAMES; f++) {
+        buf[f * 2]     = 0.8f; // Left
+        buf[f * 2 + 1] = 0.0f; // Right
+    }
+
+    uint8_t waveform[WAVEFORM_BUFFER_SIZE];
+    float_downsample_waveform(buf, FRAMES, waveform, WAVEFORM_BUFFER_SIZE);
+
+    // combined = (0.8 + 0.0) / 2 = 0.4 → quantized: (0.4+1)*127.5+0.5 = 179.5 → 179
+    for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
+        TEST_ASSERT_INT_WITHIN(5, 179, waveform[i]);
+    }
+}
+
 // ===== Main =====
 
 int main(int argc, char **argv) {
@@ -528,5 +663,12 @@ int main(int argc, char **argv) {
     RUN_TEST(test_waveform_buffer_size);
     RUN_TEST(test_waveform_peak_hold_per_bin);
     RUN_TEST(test_waveform_quantization);
+    // Float-buffer waveform path (new pipeline architecture)
+    RUN_TEST(test_float_waveform_downsample_silence);
+    RUN_TEST(test_float_waveform_downsample_full_scale_positive);
+    RUN_TEST(test_float_waveform_downsample_full_scale_negative);
+    RUN_TEST(test_float_waveform_downsample_spike);
+    RUN_TEST(test_float_waveform_downsample_no_overflow);
+    RUN_TEST(test_float_waveform_downsample_lr_average);
     return UNITY_END();
 }

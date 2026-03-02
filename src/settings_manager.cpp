@@ -336,7 +336,6 @@ bool loadSignalGenSettings() {
   String line4 = file.readStringUntil('\n'); // channel
   String line5 = file.readStringUntil('\n'); // outputMode
   String line6 = file.readStringUntil('\n'); // sweepSpeed
-  String line7 = file.readStringUntil('\n'); // targetAdc (added for dual ADC)
   file.close();
 
   line1.trim();
@@ -345,7 +344,6 @@ bool loadSignalGenSettings() {
   line4.trim();
   line5.trim();
   line6.trim();
-  line7.trim();
 
   if (line1.length() > 0) {
     int wf = line1.toInt();
@@ -371,10 +369,6 @@ bool loadSignalGenSettings() {
     float speed = line6.toFloat();
     if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
   }
-  if (line7.length() > 0) {
-    int target = line7.toInt();
-    if (target >= 0 && target <= 2) appState.sigGenTargetAdc = target;
-  }
 
   // Always boot disabled regardless of saved state
   appState.sigGenEnabled = false;
@@ -396,7 +390,6 @@ void saveSignalGenSettings() {
   file.println(appState.sigGenChannel);
   file.println(appState.sigGenOutputMode);
   file.println(String(appState.sigGenSweepSpeed, 1));
-  file.println(appState.sigGenTargetAdc);
   file.close();
   LOG_I("[Settings] Signal generator settings saved");
 }
@@ -972,7 +965,6 @@ void handleSettingsExport() {
   doc["signalGenerator"]["channel"] = appState.sigGenChannel;
   doc["signalGenerator"]["outputMode"] = appState.sigGenOutputMode;
   doc["signalGenerator"]["sweepSpeed"] = appState.sigGenSweepSpeed;
-  doc["signalGenerator"]["targetAdc"] = appState.sigGenTargetAdc;
 
 #ifdef DAC_ENABLED
   // DAC Output settings
@@ -1341,10 +1333,6 @@ void handleSettingsImport() {
     if (doc["signalGenerator"]["sweepSpeed"].is<float>()) {
       float speed = doc["signalGenerator"]["sweepSpeed"].as<float>();
       if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
-    }
-    if (doc["signalGenerator"]["targetAdc"].is<int>()) {
-      int target = doc["signalGenerator"]["targetAdc"].as<int>();
-      if (target >= 0 && target <= 2) appState.sigGenTargetAdc = target;
     }
     appState.sigGenEnabled = false; // Always boot disabled
     saveSignalGenSettings();

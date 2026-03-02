@@ -1,9 +1,8 @@
 #include "i2s_audio.h"
+#include "audio_pipeline.h"
 #include "app_state.h"
-#include "audio_quality.h"
 #include "config.h"
 #include "debug_serial.h"
-#include "signal_generator.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #endif
@@ -30,7 +29,7 @@
 #include <cstring>
 
 #ifndef NATIVE_TEST
-#include <driver/i2s.h>
+#include <driver/i2s_std.h>
 #include <driver/gpio.h>
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
@@ -252,12 +251,13 @@ AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag) {
 // ===== Hardware-dependent code (ESP32 only) =====
 #ifndef NATIVE_TEST
 
-static const int I2S_PORT_ADC1 = 0; // I2S_NUM_0 — master RX (ADC1)
-static const int I2S_PORT_ADC2 = 1; // I2S_NUM_1 — master RX (ADC2, no clock output)
+// Channel handles for new IDF5 I2S std API
+static i2s_chan_handle_t _rx_handle_adc1 = NULL;
+static i2s_chan_handle_t _tx_handle_adc1 = NULL;  // NULL when TX not active
+static i2s_chan_handle_t _rx_handle_adc2 = NULL;
 
 static uint32_t _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
-static TaskHandle_t _audioTaskHandle = NULL;
 static int _numAdcsDetected = 1;
 static bool _adc2InitOk = false;
 
@@ -276,12 +276,6 @@ static float _peakC[NUM_AUDIO_ADCS] = {};
 static unsigned long _holdStartL[NUM_AUDIO_ADCS] = {};
 static unsigned long _holdStartR[NUM_AUDIO_ADCS] = {};
 static unsigned long _holdStartC[NUM_AUDIO_ADCS] = {};
-
-// DC-blocking IIR filter state per ADC
-static int32_t _dcPrevInL[NUM_AUDIO_ADCS] = {};
-static int32_t _dcPrevInR[NUM_AUDIO_ADCS] = {};
-static float _dcPrevOutL[NUM_AUDIO_ADCS] = {};
-static float _dcPrevOutR[NUM_AUDIO_ADCS] = {};
 
 // Waveform accumulation state per ADC — PSRAM-allocated on ESP32, static on native
 #ifdef NATIVE_TEST
@@ -339,83 +333,170 @@ static void i2s_audio_apply_window(FftWindowType type) {
 }
 
 static void i2s_configure_adc1(uint32_t sample_rate) {
-    // Check if DAC TX is active — preserve full-duplex mode during recovery
-    bool dacTxActive = false;
-#ifdef DAC_ENABLED
-    dacTxActive = AppState::getInstance().dacEnabled && AppState::getInstance().dacReady;
-#endif
-
-    i2s_config_t cfg = {};
-    cfg.mode = dacTxActive
-        ? (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_TX)
-        : (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
-    cfg.sample_rate = sample_rate;
-    cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
-    cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-    cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-    cfg.dma_buf_count = DMA_BUF_COUNT;
-    cfg.dma_buf_len = DMA_BUF_LEN;
-    cfg.use_apll = true;
-    cfg.tx_desc_auto_clear = dacTxActive;
-    cfg.fixed_mclk = sample_rate * 256;
-
-    i2s_driver_install((i2s_port_t)I2S_PORT_ADC1, &cfg, 0, NULL);
-
-    i2s_pin_config_t pins = {};
-    pins.bck_io_num = I2S_BCK_PIN;
-    pins.ws_io_num = I2S_LRC_PIN;
-    pins.data_in_num = I2S_DOUT_PIN;
-    pins.data_out_num = dacTxActive ? I2S_TX_DATA_PIN : I2S_PIN_NO_CHANGE;
-    pins.mck_io_num = I2S_MCLK_PIN;
-
-    i2s_set_pin((i2s_port_t)I2S_PORT_ADC1, &pins);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC1);
-
-    if (dacTxActive) {
-        LOG_I("[Audio] I2S0 recovery preserved TX full-duplex (data_out=GPIO%d)", I2S_TX_DATA_PIN);
+    // Teardown any existing handles (recovery path or full-duplex toggle)
+    if (_rx_handle_adc1) {
+        i2s_channel_disable(_rx_handle_adc1);
+        i2s_del_channel(_rx_handle_adc1);
+        _rx_handle_adc1 = NULL;
     }
+    if (_tx_handle_adc1) {
+        i2s_channel_disable(_tx_handle_adc1);
+        i2s_del_channel(_tx_handle_adc1);
+        _tx_handle_adc1 = NULL;
+    }
+
+    // Always full-duplex: TX+RX created together from boot.
+    // auto_clear fills TX DMA with zeros (silence) until dac_output_write() starts.
+    // This keeps MCLK continuous — PCM1808 PLL never loses lock between DAC enable/disable.
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = DMA_BUF_COUNT;
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;
+    chan_cfg.auto_clear = true; // TX: auto-fill zeros on underrun
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, &_tx_handle_adc1, &_rx_handle_adc1);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC1 channel alloc failed: %d", err);
+        return;
+    }
+
+    // TX config: full clock master — MCLK/BCK/WS output, DOUT to DAC.
+    // TX is initialized FIRST so clocks are live before the RX DMA starts.
+    i2s_std_config_t tx_cfg = {};
+    tx_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
+    tx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    tx_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;   // MCLK OUTPUT to PCM1808 (GPIO3)
+    tx_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
+    tx_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
+    tx_cfg.gpio_cfg.dout = (gpio_num_t)I2S_TX_DATA_PIN; // DAC data out
+    tx_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
+    tx_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    tx_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    tx_cfg.gpio_cfg.invert_flags.ws_inv   = false;
+
+    // RX config: MCLK=GPIO3 (same as TX). Both configs pointing to the same GPIO causes the
+    // IDF5 GPIO matrix to re-route GPIO3 to the same I2S MCLK output — no clearing occurs.
+    // Setting MCLK=I2S_GPIO_UNUSED in the second init call clears GPIO3's routing, removing
+    // MCLK from the PCM1808 SCKI → PLL never locks → noise floor only (~-68 dBFS).
+    i2s_std_config_t rx_cfg = tx_cfg;
+    rx_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;   // Same as TX — re-routes to same signal
+    rx_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;     // Keep — RX DMA needs BCK sync
+    rx_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;     // Keep — RX DMA needs WS sync
+    rx_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
+    rx_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT_PIN;    // ADC1 data in
+
+    // TX first, RX second — official Espressif init order (i2s_es8311 example, IDF v5.5.3).
+    // MCLK=GPIO3 in both configs: RX init re-routes GPIO3 to the same I2S MCLK output (no clearing).
+    err = i2s_channel_init_std_mode(_tx_handle_adc1, &tx_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC1 TX init failed: %d", err);
+        i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL;
+        i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL;
+        return;
+    }
+    err = i2s_channel_init_std_mode(_rx_handle_adc1, &rx_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC1 RX init failed: %d", err);
+        i2s_channel_disable(_tx_handle_adc1);
+        i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL;
+        i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL;
+        return;
+    }
+
+    // Boost MCLK drive strength to GPIO_DRIVE_CAP_3 (~40 mA).
+    // IDF5 I2S driver leaves GPIO drive at the default (CAP_2, ~10 mA).
+    // At 12.288 MHz, marginally driven signals can cause PCM1808 SCKI PLL instability.
+    gpio_set_drive_capability((gpio_num_t)I2S_MCLK_PIN, GPIO_DRIVE_CAP_3);
+
+    // Enable TX then RX — no delay between enables required.
+    // PCM1808 PLL stabilisation (2048 LRCK cycles = ~43 ms) completes during the
+    // caller's post-init delay before audio_pipeline_task starts reading.
+    i2s_channel_enable(_tx_handle_adc1);
+    i2s_channel_enable(_rx_handle_adc1);
+    LOG_I("[Audio] ADC1 TX+RX enabled — MCLK=GPIO%d @%lu Hz, drive=CAP_3",
+          I2S_MCLK_PIN, _currentSampleRate * 256UL);
 }
 
 // ADC2 uses I2S_NUM_1 configured as MASTER (not slave) to bypass ESP32-S3
-// slave mode constraints (bclk_div >= 8, DMA timeout). Both I2S peripherals
-// derive from the same 160MHz D2CLK with identical divider chains, giving
-// frequency-locked BCK. I2S1 does NOT output any clocks — only data_in is
+// slave mode constraints. I2S1 does NOT output any clocks — only data_in is
 // connected (GPIO9). The internal RX state machine samples at the same
-// frequency as I2S0's BCK, with a fixed phase offset that is well within
-// the PCM1808's data valid window (~305ns of 325ns period).
+// frequency as I2S0's BCK, with a fixed phase offset well within PCM1808's
+// data valid window (~305ns of 325ns period).
 static bool i2s_configure_adc2(uint32_t sample_rate) {
-    i2s_config_t cfg = {};
-    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
-    cfg.sample_rate = sample_rate;
-    cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT;
-    cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-    cfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-    cfg.intr_alloc_flags = ESP_INTR_FLAG_LEVEL1;
-    cfg.dma_buf_count = DMA_BUF_COUNT;
-    cfg.dma_buf_len = DMA_BUF_LEN;
-    cfg.use_apll = true;
-    cfg.tx_desc_auto_clear = false;
-    cfg.fixed_mclk = sample_rate * 256;
+    // Teardown any existing handle (recovery path)
+    if (_rx_handle_adc2) {
+        i2s_channel_disable(_rx_handle_adc2);
+        i2s_del_channel(_rx_handle_adc2);
+        _rx_handle_adc2 = NULL;
+    }
 
-    esp_err_t err = i2s_driver_install((i2s_port_t)I2S_PORT_ADC2, &cfg, 0, NULL);
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = DMA_BUF_COUNT;
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &_rx_handle_adc2);
     if (err != ESP_OK) {
-        LOG_E("[Audio] ADC2 driver install failed: %d", err);
+        LOG_E("[Audio] ADC2 RX channel alloc failed: %d", err);
         return false;
     }
 
-    // Only set data input pin — I2S1 does NOT output BCK/WS/MCK.
-    // I2S0 (ADC1) provides all clock outputs to both PCM1808 boards.
-    i2s_pin_config_t pins = {};
-    pins.bck_io_num = I2S_PIN_NO_CHANGE;
-    pins.ws_io_num = I2S_PIN_NO_CHANGE;
-    pins.data_in_num = I2S_DOUT2_PIN;
-    pins.data_out_num = I2S_PIN_NO_CHANGE;
-    pins.mck_io_num = I2S_PIN_NO_CHANGE;
+    // Only data_in pin — I2S1 does NOT output BCK/WS/MCLK.
+    // I2S0 (ADC1) provides all clock signals to both PCM1808 boards.
+    i2s_std_config_t std_cfg = {};
+    std_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
+    std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.ws   = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT2_PIN;
+    std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
 
-    i2s_set_pin((i2s_port_t)I2S_PORT_ADC2, &pins);
-    i2s_zero_dma_buffer((i2s_port_t)I2S_PORT_ADC2);
+    err = i2s_channel_init_std_mode(_rx_handle_adc2, &std_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC2 RX init failed: %d", err);
+        i2s_del_channel(_rx_handle_adc2);
+        _rx_handle_adc2 = NULL;
+        return false;
+    }
+
+    err = i2s_channel_enable(_rx_handle_adc2);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] ADC2 RX enable failed: %d", err);
+        i2s_del_channel(_rx_handle_adc2);
+        _rx_handle_adc2 = NULL;
+        return false;
+    }
     return true;
+}
+
+// Log computed I2S clock / framing parameters at boot
+static void i2s_log_params(uint32_t sample_rate) {
+    const uint32_t slot_bits   = 32;  // I2S_DATA_BIT_WIDTH_32BIT
+    const uint32_t slots       = 2;   // Stereo
+    const uint32_t mclk_mult   = 256; // I2S_STD_CLK_DEFAULT_CONFIG multiplier
+    const uint32_t bclk        = sample_rate * slots * slot_bits;
+    const uint32_t mclk        = sample_rate * mclk_mult;
+    const uint32_t bits_frame  = slots * slot_bits;
+    const uint32_t mclk_bclk   = mclk_mult / bits_frame; // MCLK/BCLK ratio
+
+    LOG_I("[Audio] ---- I2S Parameters ----");
+    LOG_I("[Audio]   Sample Rate : %lu Hz", (unsigned long)sample_rate);
+    LOG_I("[Audio]   MCLK        : %lu Hz (x%lu)", (unsigned long)mclk, (unsigned long)mclk_mult);
+    LOG_I("[Audio]   BCLK        : %lu Hz", (unsigned long)bclk);
+    LOG_I("[Audio]   LRCLK (WS)  : %lu Hz", (unsigned long)sample_rate);
+    LOG_I("[Audio]   Bits/frame  : %lu (%lu slots x %lu bits)", (unsigned long)bits_frame, (unsigned long)slots, (unsigned long)slot_bits);
+    LOG_I("[Audio]   MCLK/BCLK   : %lu", (unsigned long)mclk_bclk);
+    LOG_I("[Audio]   Data width  : 24-bit (in 32-bit frame, left-justified)");
+    LOG_I("[Audio]   Format      : I2S Philips (MSB-first)");
+    LOG_I("[Audio]   DMA         : %d bufs x %d frames (%lu ms runway)",
+          DMA_BUF_COUNT, DMA_BUF_LEN,
+          (unsigned long)((uint64_t)DMA_BUF_COUNT * DMA_BUF_LEN * 1000 / sample_rate));
+    LOG_I("[Audio]   Clock src   : PLL_F160M (no APLL on S3)");
+    LOG_I("[Audio]   GPIO        : MCLK=%d BCK=%d LRC=%d DIN1=%d DIN2=%d DOUT=%d",
+          I2S_MCLK_PIN, I2S_BCK_PIN, I2S_LRC_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN, I2S_TX_DATA_PIN);
+    LOG_I("[Audio] ----------------------------");
 }
 
 // Dump key I2S registers for both peripherals (debug aid)
@@ -431,519 +512,6 @@ static void i2s_dump_registers() {
     }
 }
 
-// Process a single ADC's buffer: diagnostics, DC filter, RMS, VU, peak, waveform, FFT
-static void process_adc_buffer(int a, int32_t *buffer, int stereo_frames,
-                                unsigned long now, float dt_ms, bool sigGenSw) {
-    int total_samples = stereo_frames * 2;
-    AdcDiagnostics &diag = _diagnostics.adc[a];
-
-    // Pre-compute VU/peak exponential coefficients (3 expf calls instead of 12)
-    float coeffAttack = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / VU_ATTACK_MS) : 0.0f;
-    float coeffDecay  = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / VU_DECAY_MS) : 0.0f;
-    float coeffPeakDecay = (dt_ms > 0.0f) ? 1.0f - expf(-dt_ms / PEAK_DECAY_AFTER_HOLD_MS) : 0.0f;
-
-    // --- Pass 1: Diagnostics + DC offset + DC-blocking IIR (merged) ---
-    diag.totalBuffersRead++;
-    diag.lastReadMs = now;
-    {
-        bool allZero = true;
-        uint32_t clipCount = 0;
-        const int32_t CLIP_THRESHOLD = 8300000;
-        float dcSum = 0.0f;
-        static const float DC_BLOCK_ALPHA = 0.9987f;
-
-        for (int f = 0; f < stereo_frames; f++) {
-            int32_t rawL = buffer[f * 2];
-            int32_t rawR = buffer[f * 2 + 1];
-            int32_t parsedL = audio_parse_24bit_sample(rawL);
-            int32_t parsedR = audio_parse_24bit_sample(rawR);
-
-            // Diagnostics: zero/clip detection
-            if (parsedL != 0 || parsedR != 0) allZero = false;
-            if (parsedL > CLIP_THRESHOLD || parsedL < -CLIP_THRESHOLD) clipCount++;
-            if (parsedR > CLIP_THRESHOLD || parsedR < -CLIP_THRESHOLD) clipCount++;
-
-            // DC offset accumulation (float — matches 24-bit precision)
-            dcSum += (float)parsedL + (float)parsedR;
-
-            // DC-blocking IIR (modifies buffer in-place)
-            float outL = (float)(rawL - _dcPrevInL[a]) + DC_BLOCK_ALPHA * _dcPrevOutL[a];
-            _dcPrevInL[a] = rawL;
-            _dcPrevOutL[a] = outL;
-            buffer[f * 2] = (int32_t)outL;
-
-            float outR = (float)(rawR - _dcPrevInR[a]) + DC_BLOCK_ALPHA * _dcPrevOutR[a];
-            _dcPrevInR[a] = rawR;
-            _dcPrevOutR[a] = outR;
-            buffer[f * 2 + 1] = (int32_t)outR;
-        }
-
-        if (allZero) {
-            diag.allZeroBuffers++;
-            diag.consecutiveZeros++;
-        } else {
-            diag.consecutiveZeros = 0;
-            diag.lastNonZeroMs = now;
-        }
-        diag.clippedSamples += clipCount;
-        float bufferClipRate = (total_samples > 0) ? (float)clipCount / (float)total_samples : 0.0f;
-        diag.clipRate = diag.clipRate * (1.0f - CLIP_RATE_ALPHA) + bufferClipRate * CLIP_RATE_ALPHA;
-
-        float mean = (dcSum / (float)total_samples) / 8388607.0f;
-        diag.dcOffset += (mean - diag.dcOffset) * 0.01f;
-    }
-
-    // === SILENCE FAST-PATH ===
-    // When buffer is confirmed zeros and siggen is off, skip heavy processing
-    // (DSP, RMS, waveform, FFT). Still decay VU/peak meters using pre-computed coefficients.
-    if (diag.consecutiveZeros > 0 && !sigGenSw) {
-        if (AppState::getInstance().vuMeterEnabled) {
-            // VU decay toward 0 using pre-computed coefficient
-            _vuL[a] += coeffDecay * (0.0f - _vuL[a]);
-            _vuR[a] += coeffDecay * (0.0f - _vuR[a]);
-            _vuC[a] += coeffDecay * (0.0f - _vuC[a]);
-            // Peak hold: 0.0f input → instant capture, hold, or decay
-            if (0.0f >= _peakL[a]) { _holdStartL[a] = now; _peakL[a] = 0.0f; }
-            else if (now - _holdStartL[a] >= (unsigned long)PEAK_HOLD_MS)
-                _peakL[a] *= (1.0f - coeffPeakDecay);
-            if (0.0f >= _peakR[a]) { _holdStartR[a] = now; _peakR[a] = 0.0f; }
-            else if (now - _holdStartR[a] >= (unsigned long)PEAK_HOLD_MS)
-                _peakR[a] *= (1.0f - coeffPeakDecay);
-            if (0.0f >= _peakC[a]) { _holdStartC[a] = now; _peakC[a] = 0.0f; }
-            else if (now - _holdStartC[a] >= (unsigned long)PEAK_HOLD_MS)
-                _peakC[a] *= (1.0f - coeffPeakDecay);
-        } else {
-            _vuL[a] = _vuR[a] = _vuC[a] = 0.0f;
-            _peakL[a] = _peakR[a] = _peakC[a] = 0.0f;
-        }
-#ifdef DSP_ENABLED
-        dsp_clear_cpu_load();
-#endif
-        diag.noiseFloorDbfs += (DBFS_FLOOR - diag.noiseFloorDbfs) * 0.001f;
-        diag.status = audio_derive_health_status(diag);
-
-        _analysis.adc[a].rms1 = 0.0f;
-        _analysis.adc[a].rms2 = 0.0f;
-        _analysis.adc[a].rmsCombined = 0.0f;
-        _analysis.adc[a].vu1 = _vuL[a];
-        _analysis.adc[a].vu2 = _vuR[a];
-        _analysis.adc[a].vuCombined = _vuC[a];
-        _analysis.adc[a].peak1 = _peakL[a];
-        _analysis.adc[a].peak2 = _peakR[a];
-        _analysis.adc[a].peakCombined = _peakC[a];
-        _analysis.adc[a].dBFS = DBFS_FLOOR;
-        return;
-    }
-
-    // DSP pipeline processing (after DC filter, before analysis)
-    // Buffer contains raw left-justified I2S data (24-bit in bits [31:8]).
-    // DSP normalizes by MAX_24BIT (8388607) so we must parse to right-justified
-    // 24-bit first, then left-justify back after DSP for DAC output and analysis.
-#ifdef DSP_ENABLED
-    if (AppState::getInstance().dspEnabled && !AppState::getInstance().dspBypass) {
-        // Parse: left-justified → right-justified 24-bit (>> 8)
-        for (int i = 0; i < stereo_frames * 2; i++) {
-            buffer[i] = audio_parse_24bit_sample(buffer[i]);
-        }
-        dsp_process_buffer(buffer, stereo_frames, a);
-        // Restore: right-justified → left-justified (<< 8) for DAC + analysis
-        for (int i = 0; i < stereo_frames * 2; i++) {
-            buffer[i] = buffer[i] << 8;
-        }
-    } else {
-        dsp_clear_cpu_load();
-    }
-#endif
-
-    // DAC output: route ADC1 post-DSP audio to I2S TX (non-blocking)
-#ifdef DAC_ENABLED
-    if (a == 0 && AppState::getInstance().dacEnabled && AppState::getInstance().dacReady) {
-        dac_output_write(buffer, stereo_frames);
-    }
-#endif
-
-    // --- Pass 2: RMS + waveform + FFT ring (merged single loop) ---
-    {
-        float sumSqL = 0.0f, sumSqR = 0.0f;
-        bool wfEnabled = AppState::getInstance().waveformEnabled;
-        bool spEnabled = AppState::getInstance().spectrumEnabled;
-
-        for (int f = 0; f < stereo_frames; f++) {
-            float nL = (float)audio_parse_24bit_sample(buffer[f * 2]) / MAX_24BIT_F;
-            float nR = (float)audio_parse_24bit_sample(buffer[f * 2 + 1]) / MAX_24BIT_F;
-
-            // RMS accumulation
-            sumSqL += nL * nL;
-            sumSqR += nR * nR;
-
-            float combined = (nL + nR) * 0.5f;
-
-            // Waveform accumulation
-            if (wfEnabled) {
-                int bin = (int)((long)(_wfFramesSeen[a] + f) * WAVEFORM_BUFFER_SIZE / _wfTargetFrames);
-                if (bin < WAVEFORM_BUFFER_SIZE) {
-                    if (fabsf(combined) > fabsf(_wfAccum[a][bin])) {
-                        _wfAccum[a][bin] = combined;
-                    }
-                }
-            }
-
-            // FFT ring buffer fill
-            if (spEnabled) {
-                _fftRing[a][_fftRingPos[a]] = combined;
-                _fftRingPos[a] = (_fftRingPos[a] + 1) % FFT_SIZE;
-            }
-        }
-
-        float rmsL = (stereo_frames > 0) ? sqrtf(sumSqL / stereo_frames) : 0.0f;
-        float rmsR = (stereo_frames > 0) ? sqrtf(sumSqR / stereo_frames) : 0.0f;
-        float rmsC = sqrtf((rmsL * rmsL + rmsR * rmsR) * 0.5f);
-        float dBFS = audio_rms_to_dbfs(rmsC);
-
-        // Waveform buffer flush
-        if (wfEnabled) {
-            _wfFramesSeen[a] += stereo_frames;
-            if (_wfFramesSeen[a] >= _wfTargetFrames) {
-                for (int i = 0; i < WAVEFORM_BUFFER_SIZE; i++) {
-                    _wfOutput[a][i] = audio_quantize_sample(_wfAccum[a][i]);
-                    _wfAccum[a][i] = 0.0f;
-                }
-                _wfFramesSeen[a] = 0;
-                _wfReady[a] = true;
-            }
-        }
-
-        // VU metering with pre-computed coefficients (inline — avoids 12 expf calls)
-        if (AppState::getInstance().vuMeterEnabled) {
-            _vuL[a] += ((rmsL > _vuL[a]) ? coeffAttack : coeffDecay) * (rmsL - _vuL[a]);
-            _vuR[a] += ((rmsR > _vuR[a]) ? coeffAttack : coeffDecay) * (rmsR - _vuR[a]);
-            _vuC[a] += ((rmsC > _vuC[a]) ? coeffAttack : coeffDecay) * (rmsC - _vuC[a]);
-
-            // Peak hold with pre-computed decay coefficient
-            if (rmsL >= _peakL[a]) { _holdStartL[a] = now; _peakL[a] = rmsL; }
-            else if (now - _holdStartL[a] >= (unsigned long)PEAK_HOLD_MS) {
-                float d = _peakL[a] * (1.0f - coeffPeakDecay);
-                _peakL[a] = (d > rmsL) ? d : rmsL;
-            }
-            if (rmsR >= _peakR[a]) { _holdStartR[a] = now; _peakR[a] = rmsR; }
-            else if (now - _holdStartR[a] >= (unsigned long)PEAK_HOLD_MS) {
-                float d = _peakR[a] * (1.0f - coeffPeakDecay);
-                _peakR[a] = (d > rmsR) ? d : rmsR;
-            }
-            if (rmsC >= _peakC[a]) { _holdStartC[a] = now; _peakC[a] = rmsC; }
-            else if (now - _holdStartC[a] >= (unsigned long)PEAK_HOLD_MS) {
-                float d = _peakC[a] * (1.0f - coeffPeakDecay);
-                _peakC[a] = (d > rmsC) ? d : rmsC;
-            }
-        } else {
-            _vuL[a] = _vuR[a] = _vuC[a] = 0.0f;
-            _peakL[a] = _peakR[a] = _peakC[a] = 0.0f;
-        }
-
-        // FFT compute (runs at audioUpdateRate, not every buffer)
-        if (spEnabled && now - _lastFftTime[a] >= AppState::getInstance().audioUpdateRate) {
-            _lastFftTime[a] = now;
-
-            // Check if window type changed at runtime
-            FftWindowType wantedWindow = AppState::getInstance().fftWindowType;
-            if (wantedWindow != _currentWindowType) {
-                i2s_audio_apply_window(wantedWindow);
-            }
-
-            // Copy ring buffer into interleaved complex format with window
-            for (int i = 0; i < FFT_SIZE; i++) {
-                float sample = _fftRing[a][(_fftRingPos[a] + i) % FFT_SIZE];
-                _fftData[i * 2] = sample * _fftWindow[i];     // Real
-                _fftData[i * 2 + 1] = 0.0f;                   // Imaginary
-            }
-
-            // ESP-DSP Radix-4 FFT + bit reversal (20-27% faster than Radix-2)
-            dsps_fft4r_fc32(_fftData, FFT_SIZE);
-            dsps_bit_rev4r_fc32(_fftData, FFT_SIZE);
-            dsps_cplx2real_fc32(_fftData, FFT_SIZE);
-
-            // Compute magnitudes in-place (overwrite first FFT_SIZE/2 entries)
-            float maxMag = 0.0f;
-            int maxBin = 0;
-            for (int i = 0; i < FFT_SIZE / 2; i++) {
-                float re = _fftData[i * 2];
-                float im = _fftData[i * 2 + 1];
-                float mag = sqrtf(re * re + im * im);
-                _fftData[i] = mag;
-                if (i > 0 && mag > maxMag) {
-                    maxMag = mag;
-                    maxBin = i;
-                }
-            }
-            _dominantFreqOutput[a] = (float)maxBin * (float)_currentSampleRate / (float)FFT_SIZE;
-
-            // SNR/SFDR analysis (computed from magnitude spectrum)
-            AppState::getInstance().audioSnrDb[a] = dsps_snr_f32(_fftData, FFT_SIZE / 2, 0);
-            AppState::getInstance().audioSfdrDb[a] = dsps_sfdr_f32(_fftData, FFT_SIZE / 2, 0);
-
-            audio_aggregate_fft_bands(_fftData, FFT_SIZE, (float)_currentSampleRate,
-                                      _spectrumOutput[a], SPECTRUM_BANDS);
-            _spectrumReady[a] = true;
-        }
-
-        // Noise floor and peak tracking (only when siggen is off)
-        if (!sigGenSw) {
-            if (dBFS > diag.noiseFloorDbfs) {
-                diag.noiseFloorDbfs += (dBFS - diag.noiseFloorDbfs) * 0.01f;
-            } else {
-                diag.noiseFloorDbfs += (dBFS - diag.noiseFloorDbfs) * 0.001f;
-            }
-            if (dBFS > diag.peakDbfs) diag.peakDbfs = dBFS;
-        }
-        // Clipping check for health: only flag when siggen is off
-        AdcDiagnostics diagCopy = diag;
-        if (sigGenSw) diagCopy.clipRate = 0.0f; // Mask siggen-induced clipping
-        diag.status = audio_derive_health_status(diagCopy);
-
-        // Write per-ADC analysis into shared struct
-        _analysis.adc[a].rms1 = rmsL;
-        _analysis.adc[a].rms2 = rmsR;
-        _analysis.adc[a].rmsCombined = rmsC;
-        _analysis.adc[a].vu1 = _vuL[a];
-        _analysis.adc[a].vu2 = _vuR[a];
-        _analysis.adc[a].vuCombined = _vuC[a];
-        _analysis.adc[a].peak1 = _peakL[a];
-        _analysis.adc[a].peak2 = _peakR[a];
-        _analysis.adc[a].peakCombined = _peakC[a];
-        _analysis.adc[a].dBFS = dBFS;
-    } // end Pass 2 scope
-}
-
-static void audio_capture_task(void *param) {
-    const int BUFFER_SAMPLES = DMA_BUF_LEN * 2; // stereo
-    // Static to keep off task stack (4KB) — safe since only one audio task instance
-    static int32_t buf1[BUFFER_SAMPLES];
-    static int32_t buf2[BUFFER_SAMPLES];
-
-    unsigned long prevTime = millis();
-    unsigned long lastDumpTime = 0;
-    bool adc2FirstReadLogged = false;
-
-    // Metrics counters for throughput and latency
-    uint32_t bufCount[NUM_AUDIO_ADCS] = {};
-    unsigned long readLatencyAccumUs[NUM_AUDIO_ADCS] = {};
-    uint32_t readLatencyCount[NUM_AUDIO_ADCS] = {};
-    unsigned long lastMetricsTime = millis();
-
-    // I2S timeout recovery state
-    uint32_t consecutiveTimeouts = 0;
-    static const uint32_t TIMEOUT_RECOVERY_THRESHOLD = 10; // ~5s at 500ms timeout
-
-    // Register this task with the Task Watchdog Timer
-    esp_task_wdt_add(NULL);
-
-    while (true) {
-        // Feed watchdog at the top of every iteration (even on timeout path)
-        esp_task_wdt_reset();
-
-        // Pause I2S reads when DAC is reinitializing the I2S driver
-        if (AppState::getInstance().audioPaused) {
-            vTaskDelay(pdMS_TO_TICKS(10));
-            continue;
-        }
-
-        size_t bytes_read1 = 0;
-        size_t bytes_read2 = 0;
-        bool adc2Ok = false;
-
-        // If both ADCs are disabled, sleep longer to reduce CPU usage
-        if (!AppState::getInstance().adcEnabled[0] && !AppState::getInstance().adcEnabled[1]) {
-            memset(buf1, 0, sizeof(buf1));
-            memset(buf2, 0, sizeof(buf2));
-            bytes_read1 = sizeof(buf1);
-            vTaskDelay(pdMS_TO_TICKS(50));
-            // Fall through to downstream processing with zero-filled buffers
-        } else {
-
-        // Read ADC1 (master) — 500ms timeout instead of portMAX_DELAY
-        if (AppState::getInstance().adcEnabled[0]) {
-            unsigned long t0 = micros();
-            esp_err_t err1 = i2s_read((i2s_port_t)I2S_PORT_ADC1, buf1,
-                                       sizeof(buf1), &bytes_read1, pdMS_TO_TICKS(500));
-            unsigned long t1 = micros();
-
-            if (err1 != ESP_OK || bytes_read1 == 0) {
-                if (err1 != ESP_OK) _diagnostics.adc[0].i2sReadErrors++;
-                if (bytes_read1 == 0) _diagnostics.adc[0].zeroByteReads++;
-
-                // Track consecutive timeouts for I2S recovery
-                consecutiveTimeouts++;
-                if (consecutiveTimeouts >= TIMEOUT_RECOVERY_THRESHOLD) {
-                    LOG_W("[Audio] ADC1 %lu consecutive timeouts — attempting I2S recovery",
-                          (unsigned long)consecutiveTimeouts);
-                    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
-                    vTaskDelay(pdMS_TO_TICKS(50));
-                    i2s_configure_adc1(_currentSampleRate);
-                    _diagnostics.adc[0].i2sRecoveries++;
-                    consecutiveTimeouts = 0;
-                    LOG_I("[Audio] I2S recovery #%lu complete",
-                          (unsigned long)_diagnostics.adc[0].i2sRecoveries);
-                }
-                vTaskDelay(pdMS_TO_TICKS(1));
-                continue;
-            }
-            consecutiveTimeouts = 0; // Reset on successful read
-            readLatencyAccumUs[0] += (t1 - t0);
-            readLatencyCount[0]++;
-            bufCount[0]++;
-        } else {
-            // ADC1 disabled — zero-fill buffer, still need ADC2 timing from I2S0 clocks
-            memset(buf1, 0, sizeof(buf1));
-            bytes_read1 = sizeof(buf1);
-        }
-
-        // Read ADC2 — near-instant if synced DMA is ready
-        if (_adc2InitOk && AppState::getInstance().adcEnabled[1]) {
-            unsigned long t2 = micros();
-            esp_err_t err2 = i2s_read((i2s_port_t)I2S_PORT_ADC2, buf2,
-                                       sizeof(buf2), &bytes_read2, pdMS_TO_TICKS(5));
-            unsigned long t3 = micros();
-            if (err2 == ESP_OK && bytes_read2 > 0) {
-                adc2Ok = true;
-                readLatencyAccumUs[1] += (t3 - t2);
-                readLatencyCount[1]++;
-                bufCount[1]++;
-            } else {
-                if (err2 != ESP_OK) _diagnostics.adc[1].i2sReadErrors++;
-                if (bytes_read2 == 0) _diagnostics.adc[1].zeroByteReads++;
-            }
-        } else if (!AppState::getInstance().adcEnabled[1]) {
-            // ADC2 disabled — zero-fill
-            memset(buf2, 0, sizeof(buf2));
-        }
-
-        // One-shot startup diagnostic for ADC2
-        if (!adc2FirstReadLogged) {
-            if (adc2Ok) {
-                LOG_I("[Audio] ADC2 first read OK: %d bytes, samples[0..3]=%08lX %08lX %08lX %08lX",
-                      (int)bytes_read2,
-                      (unsigned long)buf2[0], (unsigned long)buf2[1],
-                      (unsigned long)buf2[2], (unsigned long)buf2[3]);
-                adc2FirstReadLogged = true;
-            } else if (_diagnostics.adc[1].zeroByteReads >= 50) {
-                LOG_W("[Audio] ADC2 no data after 50 reads (DMA timeout — slave not clocking)");
-                adc2FirstReadLogged = true;
-            }
-        }
-
-        } // end of else (at least one ADC enabled)
-
-        unsigned long now = millis();
-        float dt_ms = (float)(now - prevTime);
-        prevTime = now;
-
-        int stereo_frames1 = (bytes_read1 / sizeof(int32_t)) / 2;
-        int stereo_frames2 = adc2Ok ? (bytes_read2 / sizeof(int32_t)) / 2 : 0;
-
-        bool sigGenSw = siggen_is_active() && siggen_is_software_mode();
-        _diagnostics.sigGenActive = sigGenSw;
-
-        // Signal generator injection (before per-ADC processing)
-        int targetAdc = AppState::getInstance().sigGenTargetAdc;
-        if (sigGenSw) {
-            if (targetAdc == 0 || targetAdc == 2)
-                siggen_fill_buffer(buf1, stereo_frames1, _currentSampleRate);
-            if ((targetAdc == 1 || targetAdc == 2) && adc2Ok)
-                siggen_fill_buffer(buf2, stereo_frames2, _currentSampleRate);
-        }
-
-        // Process ADC1
-        process_adc_buffer(0, buf1, stereo_frames1, now, dt_ms, sigGenSw);
-        if (appState.audioQualityEnabled) {
-            audio_quality_scan_buffer(0, buf1, stereo_frames1);
-        }
-
-        // Process ADC2 (if available)
-        if (adc2Ok) {
-            process_adc_buffer(1, buf2, stereo_frames2, now, dt_ms, sigGenSw);
-            if (appState.audioQualityEnabled) {
-                audio_quality_scan_buffer(1, buf2, stereo_frames2);
-            }
-        } else if (_adc2InitOk) {
-            // Slave read failed — still update diagnostics so health status reflects reality
-            AdcDiagnostics &diag = _diagnostics.adc[1];
-            diag.consecutiveZeros++;
-            diag.allZeroBuffers++;
-            diag.status = audio_derive_health_status(diag);
-        }
-
-        // Periodic dump: just set flag, main loop does the actual LOG calls.
-        // Serial.print blocks at low baud rates, starving I2S DMA buffers.
-        if (now - lastDumpTime >= 5000) {
-            lastDumpTime = now;
-            _dumpReady = true;
-        }
-
-        // Detect number of active ADCs (check every buffer)
-        if (_adc2InitOk && _diagnostics.adc[1].consecutiveZeros < 50) {
-            _numAdcsDetected = 2;
-        } else {
-            _numAdcsDetected = 1;
-        }
-        static int prevNumAdcs = 1;
-        if (_numAdcsDetected != prevNumAdcs) {
-            LOG_I("[Audio] ADCs detected: %d -> %d", prevNumAdcs, _numAdcsDetected);
-            prevNumAdcs = _numAdcsDetected;
-        }
-        _diagnostics.numAdcsDetected = _numAdcsDetected;
-
-        // Update runtime metrics every 1 second (gated by debug toggle)
-        bool metricsEnabled = AppState::getInstance().debugMode &&
-                              AppState::getInstance().debugI2sMetrics;
-        unsigned long metricsNow = millis();
-        if (metricsNow - lastMetricsTime >= 1000) {
-            float elapsed_s = (float)(metricsNow - lastMetricsTime) / 1000.0f;
-            AppState &as = AppState::getInstance();
-            if (metricsEnabled) {
-                for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
-                    as.i2sMetrics.buffersPerSec[a] = bufCount[a] / elapsed_s;
-                    as.i2sMetrics.avgReadLatencyUs[a] = readLatencyCount[a] > 0
-                        ? (float)readLatencyAccumUs[a] / readLatencyCount[a] : 0;
-                }
-                if (_audioTaskHandle) {
-                    as.i2sMetrics.audioTaskStackFree =
-                        uxTaskGetStackHighWaterMark(_audioTaskHandle) * 4;
-                }
-            } else {
-                // Zero out stale metrics when disabled
-                memset(&as.i2sMetrics, 0, sizeof(as.i2sMetrics));
-            }
-            for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
-                bufCount[a] = 0;
-                readLatencyAccumUs[a] = 0;
-                readLatencyCount[a] = 0;
-            }
-            lastMetricsTime = metricsNow;
-        }
-
-        // Recalculate waveform target on both ADCs
-        _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
-
-        // Combined analysis: overall dBFS = max across ADCs, signal detected = any
-        float overallDbfs = _analysis.adc[0].dBFS;
-        if (_numAdcsDetected >= 2 && _analysis.adc[1].dBFS > overallDbfs) {
-            overallDbfs = _analysis.adc[1].dBFS;
-        }
-        float threshold = AppState::getInstance().audioThreshold_dBFS;
-
-        portENTER_CRITICAL_ISR(&spinlock);
-        _analysis.dBFS = overallDbfs;
-        _analysis.signalDetected = (overallDbfs >= threshold);
-        _analysis.timestamp = now;
-        _analysisReady = true;
-        portEXIT_CRITICAL_ISR(&spinlock);
-
-        // Yield 2 ticks so IDLE0 can feed the Task Watchdog Timer.
-        // DMA has 8 buffers = ~42ms runway, so 2ms yield is safe.
-        vTaskDelay(2);
-    }
-}
-
 // Dual I2S Master Architecture:
 // Both PCM1808 ADCs use master-mode I2S (not slave — ESP32-S3 slave DMA issues).
 // I2S0 outputs BCK/WS/MCLK; I2S1 has data_in only (GPIO9).
@@ -956,6 +524,16 @@ void i2s_audio_init() {
 
     // Reset diagnostics
     _diagnostics = AudioDiagnostics{};
+
+    // Initialize analysis to floor — without this, zero-initialized dBFS=0.0f
+    // looks like a 0dBFS signal to smart sensing, keeping the amplifier relay ON
+    // and amplifying EMI/DAC noise floor while Stage 5 metering isn't active yet.
+    portENTER_CRITICAL(&spinlock);
+    _analysis.dBFS = DBFS_FLOOR;
+    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        _analysis.adc[a].dBFS = DBFS_FLOOR;
+    }
+    portEXIT_CRITICAL(&spinlock);
 
     // Allocate FFT/waveform buffers from PSRAM (one-time, ~22.5KB off internal SRAM)
     // Use heap_caps_calloc directly — ps_calloc requires psramFound() which may not
@@ -1002,45 +580,30 @@ void i2s_audio_init() {
         _fftInitialized = true;
     }
 
-    // Both I2S peripherals configured as master RX. I2S1 (ADC2) does NOT output
-    // any clocks — I2S0 (ADC1) provides BCK/WS/MCLK to both PCM1808 boards.
-    // I2S1 uses its own internal clock chain (same PLL, same dividers) to sample
-    // data from GPIO9. This bypasses ESP32-S3 slave mode DMA issues entirely.
-    _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
+    // ADC2 (I2S_NUM_1) is skipped until physically connected.
+    // I2S_NUM_0 and I2S_NUM_1 are independent peripherals; skipping ADC2 init
+    // removes it as a diagnostic variable while ADC1 is being debugged.
+    _adc2InitOk = false;
+    // Uncomment when ADC2 hardware is attached:
+    // _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
+
     i2s_configure_adc1(_currentSampleRate);
 
-    // Pull-down on DOUT2 AFTER i2s_set_pin() — the I2S driver reconfigures
-    // the GPIO via gpio_matrix, stripping any prior pulldown. Without this,
-    // an unconnected pin floats high → reads all-1s → false CLIPPING status.
+    // Pull-down on DOUT2 in case ADC2 is later connected — prevents floating
+    // pin from reading all-1s (false CLIPPING status).
     gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
 
-    // Dump registers for debugging
-    if (_adc2InitOk) {
-        i2s_dump_registers();
-    }
+    // Always dump registers to confirm ADC1 I2S0 configuration
+    i2s_dump_registers();
     _numAdcsDetected = 1; // Will be updated once data flows
-
-#ifdef DSP_ENABLED
-    dsp_init();
-#endif
-
-#ifdef DAC_ENABLED
-    dac_output_init();
-#endif
-
-    xTaskCreatePinnedToCore(
-        audio_capture_task,
-        "audio_cap",
-        TASK_STACK_SIZE_AUDIO,
-        NULL,
-        TASK_PRIORITY_AUDIO,
-        &_audioTaskHandle,
-        TASK_CORE_AUDIO  // Core 1 — isolates audio from WiFi system tasks on Core 0
-    );
 
     LOG_I("[Audio] I2S initialized: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",
           _currentSampleRate, I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
           I2S_LRC_PIN, I2S_MCLK_PIN, _adc2InitOk ? "OK" : "FAIL");
+
+    i2s_log_params(_currentSampleRate);
+
+    audio_pipeline_init();
 }
 
 int i2s_audio_get_num_adcs() {
@@ -1061,6 +624,10 @@ AudioDiagnostics i2s_audio_get_diagnostics() {
     result = _diagnostics;
     portEXIT_CRITICAL(&spinlock);
     return result;
+}
+
+void i2s_audio_request_dump() {
+    _dumpReady = true;
 }
 
 void audio_periodic_dump() {
@@ -1093,6 +660,7 @@ void audio_periodic_dump() {
 #ifdef DAC_ENABLED
     dac_periodic_log();
 #endif
+    audio_pipeline_dump_raw_diag();
 }
 
 bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) {
@@ -1143,8 +711,14 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
     LOG_I("[Audio] Changing sample rate: %lu -> %lu Hz", _currentSampleRate, rate);
 
-    i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC1);
-    if (_adc2InitOk) i2s_driver_uninstall((i2s_port_t)I2S_PORT_ADC2);
+    // Pause audio task during channel teardown/recreate
+    AppState::getInstance().audioPaused = true;
+    vTaskDelay(pdMS_TO_TICKS(60));
+
+    // Teardown all channels (configure functions handle this, but be explicit)
+    if (_rx_handle_adc1) { i2s_channel_disable(_rx_handle_adc1); i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL; }
+    if (_tx_handle_adc1) { i2s_channel_disable(_tx_handle_adc1); i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL; }
+    if (_rx_handle_adc2) { i2s_channel_disable(_rx_handle_adc2); i2s_del_channel(_rx_handle_adc2); _rx_handle_adc2 = NULL; }
 
     _currentSampleRate = rate;
     _wfTargetFrames = rate * AppState::getInstance().audioUpdateRate / 1000;
@@ -1156,8 +730,211 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     if (_adc2InitOk) _adc2InitOk = i2s_configure_adc2(rate);
     i2s_configure_adc1(rate);
 
+    AppState::getInstance().audioPaused = false;
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
     return true;
+}
+
+// ===== ADC Read API (used by audio_pipeline) =====
+
+bool i2s_audio_read_adc1(void *buf, size_t size, size_t *bytes_read, uint32_t timeout_ms) {
+    if (!_rx_handle_adc1) { if (bytes_read) *bytes_read = 0; return false; }
+    esp_err_t err = i2s_channel_read(_rx_handle_adc1, buf, size, bytes_read, timeout_ms);
+    if (err != ESP_OK) { _diagnostics.adc[0].i2sReadErrors++; }
+    return (err == ESP_OK && bytes_read && *bytes_read > 0);
+}
+
+bool i2s_audio_read_adc2(void *buf, size_t size, size_t *bytes_read, uint32_t timeout_ms) {
+    if (!_rx_handle_adc2 || !_adc2InitOk) { if (bytes_read) *bytes_read = 0; return false; }
+    esp_err_t err = i2s_channel_read(_rx_handle_adc2, buf, size, bytes_read, timeout_ms);
+    if (err != ESP_OK) { _diagnostics.adc[1].i2sReadErrors++; }
+    return (err == ESP_OK && bytes_read && *bytes_read > 0);
+}
+
+bool i2s_audio_adc2_ok() {
+    return _adc2InitOk;
+}
+
+// Called once per pipeline buffer — feeds measured dBFS into _analysis so that
+// smart sensing gets a real signal level without the pipeline task touching the
+// relay or any other sensing state.  This is the only coupling point between
+// the audio pipeline and the sensing layer.
+void i2s_audio_update_analysis_dbfs(float dbfs_adc1) {
+    portENTER_CRITICAL(&spinlock);
+    _analysis.dBFS          = dbfs_adc1;
+    _analysis.adc[0].dBFS   = dbfs_adc1;
+    _analysisReady          = true;
+    portEXIT_CRITICAL(&spinlock);
+}
+
+// Full metering update — RMS/VU/peak/dBFS for ADC1, computed by audio_pipeline.
+// Cast away volatile for bulk struct copy (safe: spinlock held, no concurrent write).
+void i2s_audio_update_analysis_metering(const AdcAnalysis &adc0) {
+    portENTER_CRITICAL(&spinlock);
+    *(AdcAnalysis *)&_analysis.adc[0] = adc0;
+    _analysis.dBFS  = adc0.dBFS;
+    _analysisReady  = true;
+    portEXIT_CRITICAL(&spinlock);
+}
+
+// Called once per pipeline buffer to accumulate waveform and FFT data for WebSocket display.
+// rawLJ: left-justified int32 stereo interleaved from ADC (same as _rawBuf[adcIndex]).
+// frames: number of stereo frames (== DMA_BUF_LEN).
+// adcIndex: 0=ADC1, 1=ADC2.
+void i2s_audio_push_waveform_fft(const int32_t *rawLJ, int frames, int adcIndex) {
+    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_ADCS) return;
+    if (!rawLJ || frames <= 0) return;
+    if (!_wfOutput[adcIndex] || !_fftRing[adcIndex]) return;
+
+    // ---- Waveform snapshot ----
+    // Count incoming frames; snapshot the current DMA buffer when the update window
+    // expires, giving a ~_wfTargetFrames refresh interval at the configured rate.
+    _wfFramesSeen[adcIndex] += frames;
+    if (_wfFramesSeen[adcIndex] >= _wfTargetFrames && !_wfReady[adcIndex]) {
+        audio_downsample_waveform(rawLJ, frames, _wfOutput[adcIndex], WAVEFORM_BUFFER_SIZE);
+        _wfReady[adcIndex] = true;
+        _wfFramesSeen[adcIndex] = 0;
+    }
+
+    // ---- FFT ring buffer ----
+    if (!_fftInitialized || !_fftData || !_fftWindow) return;
+
+    for (int f = 0; f < frames; f++) {
+        // Mono mix: average L and R; right-shift 8 to recover signed 24-bit from LJ int32
+        float L = (float)(rawLJ[f * 2]     >> 8) / 8388607.0f;
+        float R = (float)(rawLJ[f * 2 + 1] >> 8) / 8388607.0f;
+        _fftRing[adcIndex][_fftRingPos[adcIndex]++] = (L + R) * 0.5f;
+
+        if (_fftRingPos[adcIndex] < FFT_SIZE) continue;
+        _fftRingPos[adcIndex] = 0;  // Ring full — run FFT, then restart
+
+        // Build windowed complex input: [Re0, 0, Re1, 0, ...]
+        for (int i = 0; i < FFT_SIZE; i++) {
+            _fftData[i * 2]     = _fftRing[adcIndex][i] * _fftWindow[i];
+            _fftData[i * 2 + 1] = 0.0f;
+        }
+
+#ifndef NATIVE_TEST
+        dsps_fft4r_fc32(_fftData, FFT_SIZE);
+        dsps_bit_rev4r_fc32(_fftData, FFT_SIZE);
+#endif
+
+        // Compute magnitudes (first FFT_SIZE/2 bins); reuse ring buffer as temp
+        for (int i = 0; i < FFT_SIZE / 2; i++) {
+            float re = _fftData[i * 2];
+            float im = _fftData[i * 2 + 1];
+            _fftRing[adcIndex][i] = sqrtf(re * re + im * im);
+        }
+
+        // Aggregate magnitude bins into musically-spaced spectrum bands
+        audio_aggregate_fft_bands(_fftRing[adcIndex], FFT_SIZE,
+                                  (float)_currentSampleRate,
+                                  _spectrumOutput[adcIndex], SPECTRUM_BANDS);
+
+        // Find dominant frequency (skip DC bin 0)
+        float maxMag = 0.0f;
+        int maxBin = 1;
+        for (int i = 1; i < FFT_SIZE / 2; i++) {
+            if (_fftRing[adcIndex][i] > maxMag) {
+                maxMag = _fftRing[adcIndex][i];
+                maxBin = i;
+            }
+        }
+        _dominantFreqOutput[adcIndex] = (float)maxBin * ((float)_currentSampleRate / FFT_SIZE);
+        _spectrumReady[adcIndex] = true;
+        // Ring reset to 0 above; remaining frames of current DMA buffer fill the fresh ring
+    }
+}
+
+// ===== TX Bridge API (called by dac_hal to manage full-duplex on I2S0) =====
+
+bool i2s_audio_enable_tx(uint32_t sample_rate) {
+    if (_tx_handle_adc1) return true; // Already enabled
+
+    LOG_I("[Audio] Enabling I2S TX full-duplex on I2S0, data_out=GPIO%d", I2S_TX_DATA_PIN);
+
+    // Pause audio task during channel reinit
+    AppState::getInstance().audioPaused = true;
+    vTaskDelay(pdMS_TO_TICKS(60));
+
+    // Teardown existing RX-only channel
+    if (_rx_handle_adc1) {
+        i2s_channel_disable(_rx_handle_adc1);
+        i2s_del_channel(_rx_handle_adc1);
+        _rx_handle_adc1 = NULL;
+    }
+
+    // Allocate TX+RX channel pair on I2S0
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = DMA_BUF_COUNT;
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;
+    chan_cfg.auto_clear = true; // TX: auto-fill zeros on underrun
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, &_tx_handle_adc1, &_rx_handle_adc1);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] Full-duplex channel alloc failed: %d", err);
+        _tx_handle_adc1 = NULL; _rx_handle_adc1 = NULL;
+        AppState::getInstance().audioPaused = false;
+        return false;
+    }
+
+    // IDF5 full-duplex: BOTH handles must be initialized with the same config
+    i2s_std_config_t std_cfg = {};
+    std_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
+    std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    std_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;
+    std_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
+    std_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
+    std_cfg.gpio_cfg.dout = (gpio_num_t)I2S_TX_DATA_PIN;
+    std_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT_PIN;
+    std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
+
+    err = i2s_channel_init_std_mode(_rx_handle_adc1, &std_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] Full-duplex RX init failed: %d", err);
+        i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL;
+        i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL;
+        AppState::getInstance().audioPaused = false;
+        return false;
+    }
+    err = i2s_channel_init_std_mode(_tx_handle_adc1, &std_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] Full-duplex TX init failed: %d", err);
+        i2s_channel_disable(_rx_handle_adc1);
+        i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL;
+        i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL;
+        AppState::getInstance().audioPaused = false;
+        return false;
+    }
+
+    i2s_channel_enable(_rx_handle_adc1);
+    i2s_channel_enable(_tx_handle_adc1);
+
+    AppState::getInstance().audioPaused = false;
+    LOG_I("[Audio] I2S TX full-duplex enabled: rate=%luHz data_out=GPIO%d MCLK=%luHz DMA=%dx%d",
+          (unsigned long)sample_rate, I2S_TX_DATA_PIN,
+          (unsigned long)(sample_rate * 256),
+          DMA_BUF_COUNT, DMA_BUF_LEN);
+    return true;
+}
+
+void i2s_audio_disable_tx() {
+    // Keep the full-duplex channel alive to preserve MCLK continuity.
+    // PCM1808 PLL stays locked; auto_clear fills TX DMA with zeros (silence).
+    // dac_hal._i2sTxEnabled=false prevents dac_output_write() from feeding audio.
+    if (_tx_handle_adc1) {
+        LOG_I("[Audio] I2S TX write path disabled (MCLK remains active)");
+    }
+}
+
+void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms) {
+    if (!_tx_handle_adc1) {
+        if (bytes_written) *bytes_written = 0;
+        return;
+    }
+    i2s_channel_write(_tx_handle_adc1, src, size, bytes_written, timeout_ms);
 }
 
 #else

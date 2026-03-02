@@ -13,6 +13,7 @@
 #include "audio_quality.h"
 #include "signal_generator.h"
 #include "task_monitor.h"
+#include "audio_pipeline.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
@@ -347,10 +348,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             float s = doc["sweepSpeed"].as<float>();
             if (s >= 1.0f && s <= 22000.0f) { appState.sigGenSweepSpeed = s; changed = true; }
           }
-          if (doc["targetAdc"].is<int>()) {
-            int t = doc["targetAdc"].as<int>();
-            if (t >= 0 && t <= 2) { appState.sigGenTargetAdc = t; changed = true; }
-          }
           if (changed) {
             siggen_apply_params();
             saveSignalGenSettings();
@@ -429,9 +426,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         }
 #ifdef DSP_ENABLED
         else if (msgType == "setDspBypass") {
-          if (doc["enabled"].is<bool>()) appState.dspEnabled = doc["enabled"].as<bool>();
+          if (doc["enabled"].is<bool>()) {
+            appState.dspEnabled = doc["enabled"].as<bool>();
+            // Wire enable to pipeline-level lane bypass: disabled → skip DSP entirely for ADC1+ADC2
+            audio_pipeline_bypass_dsp(0, !appState.dspEnabled);
+            audio_pipeline_bypass_dsp(1, !appState.dspEnabled);
+          }
           if (doc["bypass"].is<bool>()) appState.dspBypass = doc["bypass"].as<bool>();
-          // Sync bypass to DSP config (must match appState for UI + pipeline consistency)
+          // Sync global bypass to DSP config (in-DSP bypass, independent of lane enable)
           dsp_copy_active_to_inactive();
           DspState *cfg = dsp_get_inactive_config();
           cfg->globalBypass = appState.dspBypass;
@@ -1235,7 +1237,6 @@ void sendSignalGenState() {
   doc["channel"] = appState.sigGenChannel;
   doc["outputMode"] = appState.sigGenOutputMode;
   doc["sweepSpeed"] = appState.sigGenSweepSpeed;
-  doc["targetAdc"] = appState.sigGenTargetAdc;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
