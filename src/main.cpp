@@ -704,6 +704,7 @@ void loop() {
     dnsServer.processNextRequest();
   }
   webSocket.loop();
+  drainPendingInitState();
   mqttLoop();
   updateWiFiConnection();
 

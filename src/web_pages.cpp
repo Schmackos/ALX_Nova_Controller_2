@@ -4870,10 +4870,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 //# sourceURL=01-core.js
 
         // Binary WS message handler (waveform + spectrum)
+        var _binDiag = { wf: 0, sp: 0, last: 0 };
         function handleBinaryMessage(buf) {
             const dv = new DataView(buf);
             const type = dv.getUint8(0);
             const adc = dv.getUint8(1);
+            if (type === 0x01) _binDiag.wf++;
+            else if (type === 0x02) _binDiag.sp++;
+            var now = Date.now();
+            if (now - _binDiag.last > 2000) {
+                console.log('[BIN diag] wf=' + _binDiag.wf + ' sp=' + _binDiag.sp + ' tab=' + currentActiveTab + ' bytes=' + buf.byteLength);
+                _binDiag.wf = 0; _binDiag.sp = 0; _binDiag.last = now;
+            }
             if (type === 0x01 && currentActiveTab === 'audio') {
                 // Waveform: [type:1][adc:1][samples:256]
                 if (adc < NUM_ADCS && buf.byteLength >= 258) {

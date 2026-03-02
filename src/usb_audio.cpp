@@ -410,6 +410,7 @@ static void _audio_driver_init(void) {
 
 static void _audio_driver_reset(uint8_t rhport) {
     (void)rhport;
+    LOG_I("[USB Audio] Bus reset");
     _usbState = USB_AUDIO_DISCONNECTED;
     _altSetting = 0;
     usb_rb_reset(&_ringBuffer);
@@ -508,6 +509,7 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
             usb_rb_reset(&_ringBuffer);
             AppState::getInstance().usbAudioStreaming = true;
             AppState::getInstance().markUsbAudioDirty();
+            LOG_I("[USB Audio] Alt setting %d selected (%u-bit)", _altSetting, _negotiatedDepth);
             LOG_I("[USB Audio] Streaming started (alt %d)", desc_intf->bAlternateSetting);
 
             // Prime the OUT endpoint for first isochronous transfer with dynamic size
@@ -660,6 +662,7 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                 AppState::getInstance().usbAudioSampleRate = requested_rate;
                 AppState::getInstance().markUsbAudioDirty();
                 LOG_I("[USB Audio] Host set clock rate: %u Hz", requested_rate);
+                LOG_I("[USB Audio] Host negotiated rate: %u Hz", _negotiatedRate);
             }
             return true;
         }
@@ -821,6 +824,19 @@ void usb_audio_init(void) {
         // tinyusb_init() creates its own "usbd" task (max priority, no core affinity)
         // that calls tud_task() in a loop. No additional task needed.
         _tinyusbHwReady = true;
+
+        // Lower the TinyUSB usbd task priority from configMAX_PRIORITIES-1
+        // to USB_AUDIO_TASK_PRIORITY (1). The hard-coded max priority causes
+        // the usbd task to preempt the audio pipeline (priority 3) on Core 1,
+        // resulting in I2S DMA timing violations and audible pops.
+        TaskHandle_t usbd_task = xTaskGetHandle("usbd");
+        if (usbd_task) {
+            vTaskPrioritySet(usbd_task, USB_AUDIO_TASK_PRIORITY);
+            LOG_I("[USB Audio] Lowered usbd task priority to %d (was %d)",
+                  USB_AUDIO_TASK_PRIORITY, configMAX_PRIORITIES - 1);
+        } else {
+            LOG_W("[USB Audio] Could not find usbd task to lower priority");
+        }
 
         LOG_I("[USB Audio] TinyUSB started: %uHz/%ubit/%dch, ring=%d frames (%s)",
               _negotiatedRate, _negotiatedDepth, USB_AUDIO_CHANNELS,

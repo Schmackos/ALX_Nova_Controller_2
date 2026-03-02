@@ -41,6 +41,9 @@ void sendDacState();
 void sendUsbAudioState();
 #endif
 
+// ===== Deferred Initial-State Drain =====
+void drainPendingInitState();
+
 // ===== Audio Streaming =====
 void sendAudioData();
 
