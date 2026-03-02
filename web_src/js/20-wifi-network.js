@@ -911,8 +911,13 @@ function showAPConfig() {
     document.getElementById('apConfigModal').classList.add('active');
 }
 
+function openAPConfig() {
+    document.getElementById('apConfigModal').style.display = 'flex';
+}
+
 function closeAPConfig() {
     document.getElementById('apConfigModal').classList.remove('active');
+    document.getElementById('apConfigModal').style.display = 'none';
 }
 
 function submitAPConfig(event) {

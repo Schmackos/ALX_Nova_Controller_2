@@ -5793,6 +5793,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
 //# sourceURL=08-ui-status.js
 
+        let LERP_SPEED = 0.25;
+        let VU_LERP = 0.3;
+
+        function updateLerpFactors(rateMs) {
+            LERP_SPEED = Math.min(0.25 * (50 / rateMs), 0.7);
+            VU_LERP = Math.min(0.3 * (50 / rateMs), 0.7);
+        }
+
         function drawRoundedBar(ctx, x, y, w, h, radius) {
             if (h < 1) return;
             const r = Math.min(radius, w / 2, h);
@@ -9255,8 +9263,13 @@ function showAPConfig() {
     document.getElementById('apConfigModal').classList.add('active');
 }
 
+function openAPConfig() {
+    document.getElementById('apConfigModal').style.display = 'flex';
+}
+
 function closeAPConfig() {
     document.getElementById('apConfigModal').classList.remove('active');
+    document.getElementById('apConfigModal').style.display = 'none';
 }
 
 function submitAPConfig(event) {
@@ -9413,6 +9426,90 @@ function toggleAutoAP() {
 //# sourceURL=21-mqtt-settings.js
 
 // ===== Settings / Theme Functions =====
+
+        function handlePhysicalResetProgress(data) {
+            showToast('Factory reset: ' + data.progress + '%', 'info');
+        }
+
+        function handlePhysicalRebootProgress(data) {
+            showToast('Rebooting: ' + data.progress + '%', 'info');
+        }
+
+        function updateSmartAutoSettingsVisibility(mode) {
+            const settingsCard = document.getElementById('smartAutoSettingsCard');
+            if (settingsCard) {
+                settingsCard.style.display = (mode === 'smart_auto') ? 'block' : 'none';
+            }
+        }
+
+        function updateSmartSensingUI(data) {
+            if (data.mode !== undefined) {
+                let modeValue = data.mode;
+                if (typeof data.mode === 'number') {
+                    const modeMap = { 0: 'always_on', 1: 'always_off', 2: 'smart_auto' };
+                    modeValue = modeMap[data.mode] || 'smart_auto';
+                }
+                document.querySelectorAll('input[name="sensingMode"]').forEach(function(radio) {
+                    radio.checked = (radio.value === modeValue);
+                });
+                updateSmartAutoSettingsVisibility(modeValue);
+                const modeLabels = { 'always_on': 'Always On', 'always_off': 'Always Off', 'smart_auto': 'Smart Auto' };
+                const modeEl = document.getElementById('infoSensingMode');
+                if (modeEl) modeEl.textContent = modeLabels[modeValue] || modeValue;
+            }
+            if (data.timerDuration !== undefined && !inputFocusState.timerDuration) {
+                const el = document.getElementById('appState.timerDuration');
+                if (el) el.value = data.timerDuration;
+            }
+            if (data.timerDuration !== undefined) {
+                const el = document.getElementById('infoTimerDuration');
+                if (el) el.textContent = data.timerDuration + ' min';
+            }
+            if (data.audioThreshold !== undefined && !inputFocusState.audioThreshold) {
+                const el = document.getElementById('audioThreshold');
+                if (el) el.value = Math.round(data.audioThreshold);
+            }
+            if (data.audioThreshold !== undefined) {
+                const el = document.getElementById('infoAudioThreshold');
+                if (el) el.textContent = Math.round(data.audioThreshold) + ' dBFS';
+            }
+            if (data.amplifierState !== undefined) {
+                const display = document.getElementById('amplifierDisplay');
+                const status = document.getElementById('amplifierStatus');
+                if (display) display.classList.toggle('on', data.amplifierState);
+                if (status) status.textContent = data.amplifierState ? 'ON' : 'OFF';
+                currentAmpState = data.amplifierState;
+                updateStatusBar(currentWifiConnected, currentMqttConnected, currentAmpState, ws && ws.readyState === WebSocket.OPEN);
+            }
+            if (data.signalDetected !== undefined) {
+                const el = document.getElementById('signalDetected');
+                if (el) el.textContent = data.signalDetected ? 'Yes' : 'No';
+            }
+            if (data.audioLevel !== undefined) {
+                const el = document.getElementById('audioLevel');
+                if (el) el.textContent = data.audioLevel.toFixed(1) + ' dBFS';
+            }
+            if (data.audioVrms !== undefined) {
+                const el = document.getElementById('audioVrms');
+                if (el) el.textContent = data.audioVrms.toFixed(3) + ' V';
+            }
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerValue = document.getElementById('timerValue');
+            if (timerDisplay && timerValue) {
+                if (data.timerActive && data.timerRemaining !== undefined) {
+                    timerDisplay.classList.remove('hidden');
+                    const mins = Math.floor(data.timerRemaining / 60);
+                    const secs = data.timerRemaining % 60;
+                    timerValue.textContent = mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
+                } else {
+                    timerDisplay.classList.add('hidden');
+                }
+            }
+            if (data.audioSampleRate !== undefined) {
+                const sel = document.getElementById('audioSampleRateSelect');
+                if (sel) sel.value = data.audioSampleRate.toString();
+            }
+        }
 
 function toggleTheme() {
     darkMode = document.getElementById('darkModeToggle').checked;
@@ -10069,6 +10166,72 @@ function initFirmwareDragDrop() {
 
 // ===== Performance History =====
 
+        function handleEepromDiag(eep) {
+            if (!eep) return;
+            var chipDetected = eep.scanned && eep.i2cMask > 0;
+            var chipEmpty = chipDetected && !eep.found;
+            var chipAddr = 0;
+            if (eep.i2cMask > 0) {
+                for (var b = 0; b < 8; b++) { if (eep.i2cMask & (1 << b)) { chipAddr = 0x50 + b; break; } }
+            }
+            var st = document.getElementById('eepromStatus');
+            if (st) {
+                if (eep.found) st.textContent = 'Programmed';
+                else if (chipEmpty) st.textContent = 'Empty (blank)';
+                else if (eep.scanned) st.textContent = 'No EEPROM detected';
+                else st.textContent = 'Not scanned';
+            }
+            var addr = document.getElementById('eepromI2cAddr');
+            if (addr) addr.textContent = (eep.found || chipDetected) ? '0x' + (eep.found ? eep.addr : chipAddr).toString(16).padStart(2,'0').toUpperCase() : '—';
+            var cnt = document.getElementById('eepromI2cCount');
+            if (cnt) cnt.textContent = eep.scanned ? eep.i2cDevices : '—';
+            var badge = document.getElementById('eepromFoundBadge');
+            if (badge) {
+                badge.style.display = eep.scanned ? '' : 'none';
+                if (eep.found) { badge.textContent = 'Programmed'; badge.style.background = '#4CAF50'; }
+                else if (chipEmpty) { badge.textContent = 'Empty'; badge.style.background = '#FF9800'; }
+                else { badge.textContent = 'Not Found'; badge.style.background = '#F44336'; }
+                badge.style.color = '#fff';
+            }
+            var el;
+            el = document.getElementById('dbgEepromFound');
+            if (el) {
+                if (eep.found) el.textContent = 'Yes @ 0x' + eep.addr.toString(16).padStart(2,'0').toUpperCase();
+                else if (chipEmpty) el.textContent = 'Empty (blank) @ 0x' + chipAddr.toString(16).padStart(2,'0').toUpperCase();
+                else if (eep.scanned) el.textContent = 'No';
+                else el.textContent = '—';
+            }
+            el = document.getElementById('dbgEepromAddr');
+            if (el) el.textContent = (eep.found || chipDetected) ? '0x' + (eep.found ? eep.addr : chipAddr).toString(16).padStart(2,'0').toUpperCase() : '—';
+            el = document.getElementById('dbgI2cCount');
+            if (el) el.textContent = eep.i2cDevices != null ? eep.i2cDevices : '—';
+            el = document.getElementById('dbgEepromRdErr');
+            if (el) el.textContent = eep.readErrors || 0;
+            el = document.getElementById('dbgEepromWrErr');
+            if (el) el.textContent = eep.writeErrors || 0;
+            if (eep.found) {
+                var fields = { dbgEepromDeviceId: '0x' + (eep.deviceId||0).toString(16).padStart(4,'0').toUpperCase(),
+                               dbgEepromName: eep.deviceName || '—', dbgEepromMfr: eep.manufacturer || '—',
+                               dbgEepromRev: eep.hwRevision != null ? eep.hwRevision : '—',
+                               dbgEepromCh: eep.maxChannels || '—',
+                               dbgEepromDacAddr: eep.dacI2cAddress ? '0x' + eep.dacI2cAddress.toString(16).padStart(2,'0') : 'None' };
+                Object.entries(fields).forEach(function(kv) { el = document.getElementById(kv[0]); if (el) el.textContent = kv[1]; });
+                var flagStrs = [];
+                if (eep.flags & 1) flagStrs.push('IndepClk');
+                if (eep.flags & 2) flagStrs.push('HW Vol');
+                if (eep.flags & 4) flagStrs.push('Filters');
+                el = document.getElementById('dbgEepromFlags');
+                if (el) el.textContent = flagStrs.length ? flagStrs.join(', ') : 'None';
+                el = document.getElementById('dbgEepromRates');
+                if (el) el.textContent = (eep.sampleRates || []).join(', ') || '—';
+            } else {
+                ['dbgEepromDeviceId','dbgEepromName','dbgEepromMfr','dbgEepromRev','dbgEepromCh','dbgEepromDacAddr','dbgEepromFlags','dbgEepromRates'].forEach(function(id) {
+                    el = document.getElementById(id); if (el) el.textContent = '—';
+                });
+            }
+            eepromLoadPresets();
+        }
+
         function updateHardwareStats(data) {
             // Update ADC count from hardware_stats (fires on all tabs)
             if (data.audio && data.audio.numAdcsDetected !== undefined) {
@@ -10569,6 +10732,36 @@ function initFirmwareDragDrop() {
             drawLineGraph('psramGraph', [
                 { data: historyData.psramPercent, color: '#9C27B0' }
             ], 'psramGraphContainer');
+        }
+
+        function eepromProgram() {
+            var rates = document.getElementById('eepromRates').value.split(',').map(Number).filter(function(n){return n>0;});
+            var flags = { independentClock: document.getElementById('eepromFlagClock').checked,
+                          hwVolume: document.getElementById('eepromFlagVol').checked,
+                          filters: document.getElementById('eepromFlagFilter').checked };
+            var payload = {
+                address: parseInt(document.getElementById('eepromTargetAddr').value),
+                deviceId: parseInt(document.getElementById('eepromDeviceId').value),
+                deviceName: document.getElementById('eepromDeviceName').value,
+                manufacturer: document.getElementById('eepromManufacturer').value,
+                hwRevision: parseInt(document.getElementById('eepromHwRev').value) || 1,
+                maxChannels: parseInt(document.getElementById('eepromMaxCh').value) || 2,
+                dacI2cAddress: parseInt(document.getElementById('eepromDacAddr').value),
+                flags: flags, sampleRates: rates
+            };
+            apiFetch('/api/dac/eeprom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if (d.success) showToast('EEPROM programmed successfully','success'); else showToast(d.message||'Program failed','error'); })
+            .catch(function(){ showToast('EEPROM program failed','error'); });
+        }
+
+        function eepromErase() {
+            if (!confirm('Erase EEPROM? This will clear all stored DAC identification data.')) return;
+            var addr = parseInt(document.getElementById('eepromTargetAddr').value);
+            apiFetch('/api/dac/eeprom/erase', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ address: addr }) })
+            .then(function(r){ return r.json(); })
+            .then(function(d){ if (d.success) showToast('EEPROM erased','success'); else showToast(d.message||'Erase failed','error'); })
+            .catch(function(){ showToast('EEPROM erase failed','error'); });
         }
 
         function eepromScan() {
