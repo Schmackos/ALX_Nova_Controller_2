@@ -7,6 +7,7 @@
 #include "debug_serial.h"
 #include "login_page.h"
 #include "mqtt_handler.h"
+#include "mqtt_task.h"
 #include "ota_updater.h"
 #include "settings_manager.h"
 #include "signal_generator.h"
@@ -686,6 +687,9 @@ void setup() {
   // Initialize task monitor (loop timing + FreeRTOS task snapshots)
   task_monitor_init();
 
+  // Start dedicated MQTT task (owns connection, reconnect, publish)
+  mqtt_task_init();
+
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
 
@@ -708,7 +712,6 @@ void loop() {
   }
   webSocket.loop();
   drainPendingInitState();
-  mqttLoop();
   updateWiFiConnection();
 
   // Monitor WiFi and auto-reconnect (throttled to every 5 seconds)
@@ -887,14 +890,12 @@ void loop() {
   // Broadcast buzzer state changes (GUI -> WS clients + MQTT)
   if (appState.isBuzzerDirty()) {
     sendBuzzerState();
-    publishMqttBuzzerState();
     appState.clearBuzzerDirty();
   }
 
   // Broadcast signal generator state changes (GUI/API -> WS clients + MQTT)
   if (appState.isSignalGenDirty()) {
     sendSignalGenState();
-    publishMqttSignalGenState();
     appState.clearSignalGenDirty();
   }
 
@@ -902,7 +903,6 @@ void loop() {
   // Broadcast DSP config changes (API/MQTT -> WS clients + MQTT)
   if (appState.isDspConfigDirty()) {
     sendDspState();
-    publishMqttDspState();
     appState.clearDspConfigDirty();
   }
 
@@ -922,8 +922,28 @@ void loop() {
   dsp_check_debounced_save();
 #endif
 
+  // Execute pending AP toggle requested by mqttCallback()
+  if (appState._pendingApToggle != 0) {
+    int8_t toggle = appState._pendingApToggle;
+    appState._pendingApToggle = 0;
+    if (toggle > 0) {
+      // Enable AP mode (add AP to existing station mode)
+      WiFi.mode(WIFI_AP_STA);
+      wifi_ensure_ps_none();
+      WiFi.softAP(appState.apSSID.c_str(), appState.apPassword.c_str());
+    } else {
+      // Disable AP mode
+      WiFi.softAPdisconnect(true);
+      WiFi.mode(WIFI_STA);
+      wifi_ensure_ps_none();
+    }
+    appState.markSettingsDirty();
+  }
+
   // Deferred settings saves (debounced from WebSocket handlers)
   checkDeferredSettingsSave();
+  checkDeferredSmartSensingSave();
+  checkDeferredSignalGenSave();
 #ifdef DAC_ENABLED
   dac_check_deferred_save();
 #endif
@@ -972,7 +992,8 @@ void loop() {
   if (appState.isSettingsDirty()) {
     sendWiFiStatus();
     sendMqttSettingsState();
-    publishMqttSystemStatus();
+    sendAudioGraphState();
+    sendDebugState();
     appState.clearSettingsDirty();
   }
 

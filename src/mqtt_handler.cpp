@@ -3761,14 +3761,11 @@ void handleMqttUpdate() {
     LOG_I("[MQTT] Settings updated");
   }
 
-  // Reconnect if needed
+  // Reconnect if needed — signal mqtt_task to handle reconnection
   if (needReconnect && appState.mqttEnabled && appState.mqttBroker.length() > 0) {
-    if (mqttClient.connected()) {
-      mqttClient.disconnect();
-    }
     appState.mqttConnected = false;
     appState.lastMqttReconnect = 0; // Force immediate reconnect attempt
-    setupMqtt();
+    appState._mqttReconfigPending = true;
   }
 
   // Send response
