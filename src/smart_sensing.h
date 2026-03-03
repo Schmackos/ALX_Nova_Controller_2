@@ -15,6 +15,8 @@ void sendSmartSensingStateInternal();
 // ===== Smart Sensing Settings =====
 bool loadSmartSensingSettings();
 void saveSmartSensingSettings();
+void saveSmartSensingSettingsDeferred();  // Mark dirty — actual save after 2s idle
+void checkDeferredSmartSensingSave();     // Call from main loop
 
 // ===== Smart Sensing HTTP API Handlers =====
 void handleSmartSensingGet();

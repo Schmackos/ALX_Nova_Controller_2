@@ -408,6 +408,24 @@ void saveSignalGenSettings() {
   LOG_I("[Settings] Signal generator settings saved");
 }
 
+// ===== Deferred Signal Generator Settings Save =====
+static bool _sigGenSavePending = false;
+static unsigned long _lastSigGenSaveRequest = 0;
+static const unsigned long SIGGEN_SAVE_DEBOUNCE_MS = 2000;
+
+void saveSignalGenSettingsDeferred() {
+    _sigGenSavePending = true;
+    _lastSigGenSaveRequest = millis();
+}
+
+void checkDeferredSignalGenSave() {
+    if (_sigGenSavePending &&
+        (millis() - _lastSigGenSaveRequest >= SIGGEN_SAVE_DEBOUNCE_MS)) {
+        _sigGenSavePending = false;
+        saveSignalGenSettings();
+    }
+}
+
 // ===== Input Names Settings =====
 
 static const char *INPUT_NAME_DEFAULTS[] = {"Subwoofer 1", "Subwoofer 2",

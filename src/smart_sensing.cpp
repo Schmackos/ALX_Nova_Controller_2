@@ -555,3 +555,21 @@ void saveSmartSensingSettings() {
 
   LOG_I("[Sensing] Settings saved");
 }
+
+// ===== Deferred Smart Sensing Settings Save =====
+static bool _smartSensingSavePending = false;
+static unsigned long _lastSmartSensingSaveRequest = 0;
+static const unsigned long SMART_SENSING_SAVE_DEBOUNCE_MS = 2000;
+
+void saveSmartSensingSettingsDeferred() {
+    _smartSensingSavePending = true;
+    _lastSmartSensingSaveRequest = millis();
+}
+
+void checkDeferredSmartSensingSave() {
+    if (_smartSensingSavePending &&
+        (millis() - _lastSmartSensingSaveRequest >= SMART_SENSING_SAVE_DEBOUNCE_MS)) {
+        _smartSensingSavePending = false;
+        saveSmartSensingSettings();
+    }
+}
