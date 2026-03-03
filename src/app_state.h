@@ -76,8 +76,6 @@ public:
   // ===== FSM State =====
   AppFSMState fsmState = STATE_IDLE;
   void setFSMState(AppFSMState newState);
-  bool isFSMStateDirty() const { return _fsmStateDirty; }
-  void clearFSMStateDirty() { _fsmStateDirty = false; }
 
   // ===== WiFi State =====
   String wifiSSID;
@@ -206,18 +204,7 @@ public:
   // Input channel names (user-configurable, 4 channels = 2 ADCs x 2 channels)
   String inputNames[NUM_AUDIO_ADCS * 2];
 
-  void setAmplifierState(bool state);
   void setSensingMode(SensingMode mode);
-  void setTimerRemaining(unsigned long remaining);
-  void setAudioLevel(float dBFS);
-  bool isAmplifierDirty() const { return _amplifierDirty; }
-  bool isSensingModeDirty() const { return _sensingModeDirty; }
-  bool isTimerDirty() const { return _timerDirty; }
-  bool isAudioDirty() const { return _audioDirty; }
-  void clearAmplifierDirty() { _amplifierDirty = false; }
-  void clearSensingModeDirty() { _sensingModeDirty = false; }
-  void clearTimerDirty() { _timerDirty = false; }
-  void clearAudioDirty() { _audioDirty = false; }
 
   // Smart Sensing heartbeat
   unsigned long lastSmartSensingHeartbeat = 0;
@@ -368,18 +355,10 @@ public:
 
   void markDspConfigDirty() {
     _dspConfigDirty = true;
-    if (dspPresetIndex >= 0) { dspPresetIndex = -1; _dspPresetDirty = true; }
+    if (dspPresetIndex >= 0) { dspPresetIndex = -1; }
   }
   bool isDspConfigDirty() const { return _dspConfigDirty; }
   void clearDspConfigDirty() { _dspConfigDirty = false; }
-
-  void markDspMetricsDirty() { _dspMetricsDirty = true; }
-  bool isDspMetricsDirty() const { return _dspMetricsDirty; }
-  void clearDspMetricsDirty() { _dspMetricsDirty = false; }
-
-  void markDspPresetDirty() { _dspPresetDirty = true; }
-  bool isDspPresetDirty() const { return _dspPresetDirty; }
-  void clearDspPresetDirty() { _dspPresetDirty = false; }
 
   // DSP config swap diagnostics
   uint32_t dspSwapFailures = 0;
@@ -517,19 +496,10 @@ public:
   void resetWiFiBackoff() { wifiBackoffDelay = 1000; }
   void resetMqttBackoff() { mqttBackoffDelay = 5000; }
 
-  // ===== Utility Methods =====
-  void clearAllDirtyFlags();
-  bool hasAnyDirtyFlag() const;
-
 private:
   AppState() {} // Private constructor
 
   // Dirty flags for change detection
-  bool _fsmStateDirty = false;
-  bool _amplifierDirty = false;
-  bool _sensingModeDirty = false;
-  bool _timerDirty = false;
-  bool _audioDirty = false;
   bool _displayDirty = false;
   bool _buzzerDirty = false;
   bool _settingsDirty = false;
@@ -538,8 +508,6 @@ private:
   bool _otaDirty = false;
 #ifdef DSP_ENABLED
   bool _dspConfigDirty = false;
-  bool _dspMetricsDirty = false;
-  bool _dspPresetDirty = false;
 #endif
 #ifdef USB_AUDIO_ENABLED
   bool _usbAudioDirty = false;

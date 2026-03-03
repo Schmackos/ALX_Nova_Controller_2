@@ -4,37 +4,13 @@
 void AppState::setFSMState(AppFSMState newState) {
   if (fsmState != newState) {
     fsmState = newState;
-    _fsmStateDirty = true;
   }
 }
 
 // ===== Smart Sensing State Management =====
-void AppState::setAmplifierState(bool state) {
-  if (amplifierState != state) {
-    amplifierState = state;
-    _amplifierDirty = true;
-  }
-}
-
 void AppState::setSensingMode(SensingMode mode) {
   if (currentMode != mode) {
     currentMode = mode;
-    _sensingModeDirty = true;
-  }
-}
-
-void AppState::setTimerRemaining(unsigned long remaining) {
-  if (timerRemaining != remaining) {
-    timerRemaining = remaining;
-    _timerDirty = true;
-  }
-}
-
-void AppState::setAudioLevel(float dBFS) {
-  // Use a small threshold to avoid float comparison issues
-  if (abs(audioLevel_dBFS - dBFS) > 0.1f) {
-    audioLevel_dBFS = dBFS;
-    _audioDirty = true;
   }
 }
 
@@ -130,25 +106,4 @@ void AppState::increaseWiFiBackoff() {
 
 void AppState::increaseMqttBackoff() {
   mqttBackoffDelay = min(mqttBackoffDelay * 2, MAX_BACKOFF_DELAY);
-}
-
-// ===== Dirty Flag Utilities =====
-void AppState::clearAllDirtyFlags() {
-  _fsmStateDirty = false;
-  _amplifierDirty = false;
-  _sensingModeDirty = false;
-  _timerDirty = false;
-  _audioDirty = false;
-  _displayDirty = false;
-  _buzzerDirty = false;
-  _settingsDirty = false;
-  _adcEnabledDirty = false;
-  _sigGenDirty = false;
-  _otaDirty = false;
-}
-
-bool AppState::hasAnyDirtyFlag() const {
-  return _fsmStateDirty || _amplifierDirty || _sensingModeDirty || _timerDirty ||
-         _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty ||
-         _adcEnabledDirty || _sigGenDirty || _otaDirty;
 }
