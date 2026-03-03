@@ -45,7 +45,6 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <esp_task_wdt.h>
-#include <esp_wifi.h>
 #include <mbedtls/md.h>
 #include <time.h>
 
@@ -672,7 +671,7 @@ void setup() {
   // Disable WiFi modem power save AFTER WiFi is initialized.
   // Radio sleep/wake cycles cause 5-20ms latency spikes that generate
   // memory bus contention with I2S DMA, causing audio pops.
-  esp_wifi_set_ps(WIFI_PS_NONE);
+  wifi_ensure_ps_none();
 
   // Always start server and WebSocket regardless of mode
   webSocket.begin();

@@ -274,6 +274,8 @@ void siggen_apply_params() {
     if (shouldBeActive && p.outputMode == SIGOUT_PWM) {
         // Set PWM frequency and duty cycle via MCPWM
         uint32_t period = (uint32_t)((float)SIGGEN_MCPWM_RESOLUTION / p.frequency);
+        if (period > 65535) period = 65535;   // clamp to 16-bit MCPWM timer max
+        if (period < 2)     period = 2;       // minimum for meaningful PWM
         mcpwm_timer_set_period(_mcpwm_timer, period);
         uint32_t duty_ticks = (uint32_t)(period * 0.5f * p.amplitude_linear);
         mcpwm_comparator_set_compare_value(_mcpwm_cmpr, duty_ticks);

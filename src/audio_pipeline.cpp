@@ -505,7 +505,7 @@ static void audio_pipeline_task_fn(void * /*param*/) {
 
         // Yield 2 ticks so loopTask (also on Core 1) gets scheduling time.
         // loopTask runs the main loop (HTTP, WebSocket, MQTT) at priority 1.
-        // DMA has 16 buffers = ~85ms runway; 2ms yield is safe.
+        // DMA has I2S_DMA_BUF_COUNT buffers = ~64ms runway at 48kHz; 2ms yield is safe.
         vTaskDelay(2);
     }
 }

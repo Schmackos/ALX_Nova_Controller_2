@@ -144,11 +144,13 @@ void task_monitor_update() {
         info.stackAllocBytes = task_monitor_lookup_stack_alloc(info.name);
         // Only scan stack watermark for known app tasks (expensive: walks entire stack)
         if (info.stackAllocBytes > 0) {
-            info.stackFreeBytes = uxTaskGetStackHighWaterMark(handle) * 4;
+            info.stackFreeBytes = uxTaskGetStackHighWaterMark(handle);
         } else {
             info.stackFreeBytes = 0;
         }
-        info.priority = (uint8_t)uxTaskPriorityGet(handle);
+        TaskStatus_t _ts;
+        vTaskGetInfo(handle, &_ts, pdFALSE, eInvalid);
+        info.priority = (uint8_t)_ts.uxBasePriority;
         info.state = (uint8_t)eTaskGetState(handle);
         info.coreId = get_core_id(handle);
         i++;

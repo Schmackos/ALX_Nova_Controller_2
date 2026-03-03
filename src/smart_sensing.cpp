@@ -462,8 +462,8 @@ void sendSmartSensingState() {
                       (appState.amplifierState != appState.prevBroadcastAmplifierState) ||
                       (appState.timerRemaining != appState.prevBroadcastTimerRemaining);
 
-  // Check if heartbeat interval has elapsed (1s, matches main loop call rate)
-  bool heartbeatDue = (currentMillis - appState.lastSmartSensingHeartbeat >= 1000);
+  // Check if heartbeat interval has elapsed (5s, reduced to lower WiFi TX burst traffic)
+  bool heartbeatDue = (currentMillis - appState.lastSmartSensingHeartbeat >= 5000);
 
   // Only broadcast if state changed or heartbeat is due
   if (stateChanged || heartbeatDue) {
