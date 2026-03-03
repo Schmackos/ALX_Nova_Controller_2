@@ -170,6 +170,13 @@ void buzzer_play(BuzzerPattern pattern) {
 
 static void start_pattern(const ToneStep *pat) {
   LOG_D("[Buzzer] Start pattern: freq=%d, dur=%d", pat[0].freq_hz, pat[0].duration_ms);
+
+  // Always detach first — ledcWriteTone() may have changed the timer resolution,
+  // causing ledcAttach() to fail with "Pin already attached" at a different resolution
+  if (playing) {
+    ledcDetach(BUZZER_PIN);
+  }
+
   current_pattern = pat;
   current_step = 0;
   step_start_ms = millis();
@@ -195,9 +202,8 @@ static void start_pattern(const ToneStep *pat) {
 
 static void stop_buzzer() {
   LOG_D("[Buzzer] Pattern complete");
+  // Silence then detach — skip ledcWriteTone(0) which changes timer resolution
   ledcWrite(BUZZER_PIN, 0);
-  ledcWriteTone(BUZZER_PIN, 0);
-  // Detach pin from LEDC and drive LOW to eliminate residual PWM noise
   ledcDetach(BUZZER_PIN);
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);

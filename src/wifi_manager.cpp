@@ -12,6 +12,7 @@
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 
 // ===== Deferred Connection State =====
 WiFiConnectionRequest pendingConnection;
@@ -216,6 +217,7 @@ void initializeNetworkServices() {
 void ensureAPModeWithSTA() {
   if (appState.apEnabled && !appState.isAPMode) {
     WiFi.mode(WIFI_AP_STA);
+    wifi_ensure_ps_none();
     WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
     appState.isAPMode = true;
@@ -376,6 +378,7 @@ void startAccessPoint() {
   appState.apEnabled = true;
 
   WiFi.mode(WIFI_AP);
+  wifi_ensure_ps_none();
   WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
 
   IPAddress apIP = WiFi.softAPIP();
@@ -456,6 +459,7 @@ bool configureStaticIP(const char *staticIP, const char *subnet,
 // Connect to WiFi using config struct
 void connectToWiFi(const WiFiNetworkConfig &config) {
   WiFi.mode(WIFI_STA);
+  wifi_ensure_ps_none();
 
   // Configure static IP if enabled
   if (config.useStaticIP) {
@@ -757,6 +761,7 @@ bool connectToStoredNetworks() {
     LOG_I("[WiFi] Attempting connection %d/%d: %s", i + 1, count, config.ssid.c_str());
 
     WiFi.mode(WIFI_STA);
+    wifi_ensure_ps_none();
 
     // Configure static IP if enabled
     if (config.useStaticIP && config.staticIP.length() > 0) {
@@ -989,6 +994,7 @@ void handleAPConfig() {
   appState.wifiConnectError = "";
 
   WiFi.mode(WIFI_AP_STA);
+  wifi_ensure_ps_none();
   WiFi.begin(ssid.c_str(), password.c_str());
 
   server.send(200, "application/json",
@@ -1044,6 +1050,7 @@ void handleAPConfigUpdate() {
       // If not connected, run in AP-only mode
       WiFi.mode(WIFI_AP);
     }
+    wifi_ensure_ps_none();
 
     WiFi.softAP(appState.apSSID.c_str(), appState.apPassword.c_str());
     LOG_I("[WiFi] AP restarted with new SSID: %s", appState.apSSID.c_str());
@@ -1067,6 +1074,7 @@ void handleAPToggle() {
     if (!appState.isAPMode) {
       // Start AP mode (can run alongside STA mode)
       WiFi.mode(WIFI_AP_STA);
+      wifi_ensure_ps_none();
       WiFi.softAP(appState.apSSID, appState.apPassword);
 
       // Start DNS server for AP mode
@@ -1085,10 +1093,12 @@ void handleAPToggle() {
         // Disable AP but keep STA connection
         WiFi.softAPdisconnect(true);
         WiFi.mode(WIFI_STA);
+        wifi_ensure_ps_none();
       } else {
         // Disable AP but keep WiFi in STA mode for scanning
         WiFi.softAPdisconnect(true);
         WiFi.mode(WIFI_STA);
+        wifi_ensure_ps_none();
       }
       appState.isAPMode = false;
       LOG_I("[WiFi] Access Point disabled");
@@ -1217,9 +1227,11 @@ void handleWiFiScan() {
   if (wifiMode == WIFI_MODE_NULL) {
     // If WiFi is off, set to STA mode
     WiFi.mode(WIFI_STA);
+    wifi_ensure_ps_none();
   } else if (wifiMode == WIFI_MODE_AP) {
     // If only AP mode, switch to AP+STA for scanning
     WiFi.mode(WIFI_AP_STA);
+    wifi_ensure_ps_none();
   }
   // For WIFI_MODE_STA or WIFI_MODE_APSTA, no change needed
 
@@ -1418,6 +1430,7 @@ void updateWiFiConnection() {
     if (appState.apEnabled || appState.isAPMode) {
       LOG_D("[WiFi] Maintaining AP mode during connection attempt");
       WiFi.mode(WIFI_AP_STA);
+      wifi_ensure_ps_none();
       // Ensure AP is up if it wasn't
       if (!appState.isAPMode) {
         WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
@@ -1426,6 +1439,7 @@ void updateWiFiConnection() {
       }
     } else {
       WiFi.mode(WIFI_STA);
+      wifi_ensure_ps_none();
     }
 
     // Disconnect current STA connection but keep radio on (false) if in AP_STA
@@ -1504,6 +1518,7 @@ void updateWiFiConnection() {
     if (appState.apEnabled && !appState.isAPMode) {
       LOG_I("[WiFi] Restoring AP mode after failed connection");
       WiFi.mode(WIFI_AP_STA);
+      wifi_ensure_ps_none();
       WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
       dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
       appState.isAPMode = true;
@@ -1512,4 +1527,8 @@ void updateWiFiConnection() {
 
     sendWiFiStatus();
   }
+}
+
+void wifi_ensure_ps_none() {
+    esp_wifi_set_ps(WIFI_PS_NONE);
 }

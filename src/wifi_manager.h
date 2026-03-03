@@ -85,6 +85,9 @@ void extractStaticIPConfig(const JsonDocument &doc, WiFiNetworkConfig &config);
 void initializeNetworkServices();
 void ensureAPModeWithSTA();
 
+// ===== WiFi Power Save =====
+void wifi_ensure_ps_none();   // Re-apply WIFI_PS_NONE after WiFi.mode() resets it
+
 // ===== WiFi Status Broadcasting =====
 void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing);
 void sendWiFiStatus();

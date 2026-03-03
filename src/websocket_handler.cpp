@@ -1788,15 +1788,15 @@ void drainPendingInitState() {
         if (!pending || !wsAuthStatus[c]) continue;
 
         int sent = 0;
-        const int MAX_PER_ITER = 2;
+        const int MAX_PER_ITER = 1;
 
-        if (sent < MAX_PER_ITER && (pending & INIT_WIFI))        { sendWiFiStatus();                  pending &= ~INIT_WIFI;        sent++; delay(1); }
-        if (sent < MAX_PER_ITER && (pending & INIT_SENSING))     { sendSmartSensingStateInternal();   pending &= ~INIT_SENSING;     sent++; delay(1); }
-        if (sent < MAX_PER_ITER && (pending & INIT_DISPLAY))     { sendDisplayState();                pending &= ~INIT_DISPLAY;     sent++; delay(1); }
-        if (sent < MAX_PER_ITER && (pending & INIT_BUZZER))      { sendBuzzerState();                 pending &= ~INIT_BUZZER;      sent++; delay(1); }
-        if (sent < MAX_PER_ITER && (pending & INIT_SIGGEN))      { sendSignalGenState();              pending &= ~INIT_SIGGEN;      sent++; delay(1); }
-        if (sent < MAX_PER_ITER && (pending & INIT_AUDIO_GRAPH)) { sendAudioGraphState();             pending &= ~INIT_AUDIO_GRAPH; sent++; delay(1); }
-        if (sent < MAX_PER_ITER && (pending & INIT_DEBUG))       { sendDebugState();                  pending &= ~INIT_DEBUG;       sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_WIFI))        { sendWiFiStatus();                  pending &= ~INIT_WIFI;        sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_SENSING))     { sendSmartSensingStateInternal();   pending &= ~INIT_SENSING;     sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_DISPLAY))     { sendDisplayState();                pending &= ~INIT_DISPLAY;     sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_BUZZER))      { sendBuzzerState();                 pending &= ~INIT_BUZZER;      sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_SIGGEN))      { sendSignalGenState();              pending &= ~INIT_SIGGEN;      sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_AUDIO_GRAPH)) { sendAudioGraphState();             pending &= ~INIT_AUDIO_GRAPH; sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_DEBUG))       { sendDebugState();                  pending &= ~INIT_DEBUG;       sent++; }
         if (sent < MAX_PER_ITER && (pending & INIT_ADC_STATE)) {
             JsonDocument adcDoc;
             adcDoc["type"] = "adcState";
@@ -1806,27 +1806,27 @@ void drainPendingInitState() {
             serializeJson(adcDoc, adcJson);
             webSocket.sendTXT(c, adcJson.c_str());
             pending &= ~INIT_ADC_STATE;
-            sent++; delay(1);
+            sent++;
         }
 #ifdef DSP_ENABLED
-        if (sent < MAX_PER_ITER && (pending & INIT_DSP))         { sendDspState();                    pending &= ~INIT_DSP;         sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_DSP))         { sendDspState();                    pending &= ~INIT_DSP;         sent++; }
 #else
         pending &= ~INIT_DSP;
 #endif
 #ifdef DAC_ENABLED
-        if (sent < MAX_PER_ITER && (pending & INIT_DAC))         { sendDacState();                    pending &= ~INIT_DAC;         sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_DAC))         { sendDacState();                    pending &= ~INIT_DAC;         sent++; }
 #else
         pending &= ~INIT_DAC;
 #endif
 #ifdef USB_AUDIO_ENABLED
-        if (sent < MAX_PER_ITER && (pending & INIT_USB_AUDIO))   { sendUsbAudioState();               pending &= ~INIT_USB_AUDIO;   sent++; delay(1); }
+        if (sent < MAX_PER_ITER && (pending & INIT_USB_AUDIO))   { sendUsbAudioState();               pending &= ~INIT_USB_AUDIO;   sent++; }
 #else
         pending &= ~INIT_USB_AUDIO;
 #endif
         if (sent < MAX_PER_ITER && (pending & INIT_UPDATED)) {
             if (appState.justUpdated) broadcastJustUpdated();
             pending &= ~INIT_UPDATED;
-            sent++; delay(1);
+            sent++;
         }
 
         break; // Only drain one client per call to avoid starving the loop
@@ -1901,39 +1901,46 @@ void sendAudioData() {
     }
   }
 
-  // --- Waveform data (per-ADC) — binary: [type:1][adc:1][samples:256] ---
-  if (appState.waveformEnabled && !appState.heapCritical) {
-    uint8_t wfBin[2 + WAVEFORM_BUFFER_SIZE]; // 258 bytes
-    wfBin[0] = WS_BIN_WAVEFORM;
-    for (int a = 0; a < appState.numAdcsDetected; a++) {
-      if (i2s_audio_get_waveform(wfBin + 2, a)) {
-        wfBin[1] = (uint8_t)a;
-        for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-          if (_audioSubscribed[i]) {
-            webSocket.sendBIN(i, wfBin, sizeof(wfBin));
-          }
-        }
-      }
-    }
-  }
+  // --- Waveform/Spectrum data — alternated each call to reduce WiFi TX burst ---
+  // One call sends waveform, the next sends spectrum (audio levels always sent).
+  static bool _sendWaveformNext = true;
 
-  // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:Nxf32LE] ---
-  if (appState.spectrumEnabled && !appState.heapCritical) {
-    uint8_t spBin[2 + sizeof(float) + SPECTRUM_BANDS * sizeof(float)]; // 70 bytes
-    spBin[0] = WS_BIN_SPECTRUM;
-    float bands[SPECTRUM_BANDS];
-    float freq = 0.0f;
-    for (int a = 0; a < appState.numAdcsDetected; a++) {
-      if (i2s_audio_get_spectrum(bands, &freq, a)) {
-        spBin[1] = (uint8_t)a;
-        memcpy(spBin + 2, &freq, sizeof(float));
-        memcpy(spBin + 2 + sizeof(float), bands, SPECTRUM_BANDS * sizeof(float));
-        for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-          if (_audioSubscribed[i]) {
-            webSocket.sendBIN(i, spBin, sizeof(spBin));
+  if (_sendWaveformNext) {
+    // --- Waveform data (per-ADC) — binary: [type:1][adc:1][samples:256] ---
+    if (appState.waveformEnabled && !appState.heapCritical) {
+      uint8_t wfBin[2 + WAVEFORM_BUFFER_SIZE]; // 258 bytes
+      wfBin[0] = WS_BIN_WAVEFORM;
+      for (int a = 0; a < appState.numAdcsDetected; a++) {
+        if (i2s_audio_get_waveform(wfBin + 2, a)) {
+          wfBin[1] = (uint8_t)a;
+          for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+            if (_audioSubscribed[i]) {
+              webSocket.sendBIN(i, wfBin, sizeof(wfBin));
+            }
+          }
+        }
+      }
+    }
+  } else {
+    // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:Nxf32LE] ---
+    if (appState.spectrumEnabled && !appState.heapCritical) {
+      uint8_t spBin[2 + sizeof(float) + SPECTRUM_BANDS * sizeof(float)]; // 70 bytes
+      spBin[0] = WS_BIN_SPECTRUM;
+      float bands[SPECTRUM_BANDS];
+      float freq = 0.0f;
+      for (int a = 0; a < appState.numAdcsDetected; a++) {
+        if (i2s_audio_get_spectrum(bands, &freq, a)) {
+          spBin[1] = (uint8_t)a;
+          memcpy(spBin + 2, &freq, sizeof(float));
+          memcpy(spBin + 2 + sizeof(float), bands, SPECTRUM_BANDS * sizeof(float));
+          for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+            if (_audioSubscribed[i]) {
+              webSocket.sendBIN(i, spBin, sizeof(spBin));
+            }
           }
         }
       }
     }
   }
+  _sendWaveformNext = !_sendWaveformNext;
 }

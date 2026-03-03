@@ -66,7 +66,7 @@ const int BUZZER_PIN = 8; // GPIO 8 - passive buzzer (PWM)
 const int SIGGEN_PWM_PIN = 38;   // GPIO 38 — no strapping constraints
 #endif
 #define SIGGEN_MCPWM_GROUP      0          // MCPWM group 0
-#define SIGGEN_MCPWM_RESOLUTION 160000000  // 160 MHz PLL_F160M clock
+#define SIGGEN_MCPWM_RESOLUTION 1000000    // 1 MHz prescaled (16-bit period; 20 Hz=50000, 20 kHz=50)
 
 // ===== DAC Output Pin Definitions =====
 #ifdef DAC_ENABLED
@@ -185,7 +185,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_CORE_AUDIO     1   // Core 1 — isolates audio from WiFi system tasks on Core 0
 
 // ===== I2S DMA Configuration =====
-#define I2S_DMA_BUF_COUNT 6     // 6 buffers x 256 samples = ~32ms runway at 48kHz
+#define I2S_DMA_BUF_COUNT 12    // 12 buffers x 256 frames = ~64ms runway at 48kHz
 #define I2S_DMA_BUF_LEN   256
 
 // ===== Audio Pipeline Configuration =====

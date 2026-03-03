@@ -9,6 +9,7 @@
 #include "settings_manager.h"
 #include "utils.h"
 #include "websocket_handler.h"
+#include "wifi_manager.h"
 #include "ota_updater.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
@@ -359,6 +360,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (enabled) {
       if (!appState.isAPMode) {
         WiFi.mode(WIFI_AP_STA);
+        wifi_ensure_ps_none();
         WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
         appState.isAPMode = true;
         LOG_I("[MQTT] Access Point enabled");
@@ -367,6 +369,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       if (appState.isAPMode && WiFi.status() == WL_CONNECTED) {
         WiFi.softAPdisconnect(true);
         WiFi.mode(WIFI_STA);
+        wifi_ensure_ps_none();
         appState.isAPMode = false;
         LOG_I("[MQTT] Access Point disabled");
       }
