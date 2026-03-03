@@ -1703,6 +1703,7 @@
         }
         .lane-status-dot.active  { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
         .lane-status-dot.low     { background: #ff9800; box-shadow: 0 0 6px #ff980088; }
+        .lane-status-dot.idle    { background: rgba(255,152,0,0.25); }
         .lane-status-dot.error   { background: #f44336; }
         .lane-level {
             font-size: 0.78rem;

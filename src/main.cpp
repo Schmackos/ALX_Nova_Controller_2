@@ -648,6 +648,10 @@ void setup() {
   // Register DSP API endpoints and load persisted config
   registerDspApiEndpoints();
   loadDspSettings();
+  // Sync pipeline bypass state with loaded dspEnabled flag.
+  // Without this the pipeline processes DSP stages on boot even when disabled.
+  audio_pipeline_bypass_dsp(0, !appState.dspEnabled);
+  audio_pipeline_bypass_dsp(1, !appState.dspEnabled);
 #endif
 
 #ifdef DAC_ENABLED
