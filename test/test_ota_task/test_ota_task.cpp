@@ -43,7 +43,6 @@ public:
   AppFSMState fsmState = STATE_IDLE;
   void setFSMState(AppFSMState s) {
     fsmState = s;
-    _fsmStateDirty = true;
   }
 
   // OTA dirty flag
@@ -52,14 +51,12 @@ public:
   void markOTADirty() { _otaDirty = true; }
 
   // Other dirty flags (subset needed for clearAllDirtyFlags test)
-  bool _fsmStateDirty = false;
   bool _displayDirty = false;
   bool _buzzerDirty = false;
   bool _settingsDirty = false;
   bool _sigGenDirty = false;
 
   void clearAllDirtyFlags() {
-    _fsmStateDirty = false;
     _displayDirty = false;
     _buzzerDirty = false;
     _settingsDirty = false;
@@ -68,7 +65,7 @@ public:
   }
 
   bool hasAnyDirtyFlag() const {
-    return _fsmStateDirty || _displayDirty || _buzzerDirty ||
+    return _displayDirty || _buzzerDirty ||
            _settingsDirty || _sigGenDirty || _otaDirty;
   }
 

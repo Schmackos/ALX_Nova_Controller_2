@@ -325,7 +325,7 @@ bool dsp_preset_save(int slot, const char *name) {
         appState.dspPresetNames[slot][20] = '\0';
     }
     appState.dspPresetIndex = slot;
-    appState.markDspPresetDirty();
+    appState.markDspConfigDirty();
 
     // Persist preset index in global settings (debounced to avoid stacking another 4KB alloc)
     saveDspSettingsDebounced();
@@ -387,7 +387,7 @@ bool dsp_preset_load(int slot) {
     strncpy(appState.dspPresetNames[slot], name, 20);
     appState.dspPresetNames[slot][20] = '\0';
     appState.dspPresetIndex = slot;
-    appState.markDspPresetDirty();
+    appState.markDspConfigDirty();
 
     // Save as active config + persist preset index
     saveDspSettings();
@@ -409,7 +409,7 @@ bool dsp_preset_delete(int slot) {
     if (appState.dspPresetIndex == slot) {
         appState.dspPresetIndex = -1;
     }
-    appState.markDspPresetDirty();
+    appState.markDspConfigDirty();
 
     LOG_I("[DSP] Preset %d deleted", slot);
     return true;
@@ -447,7 +447,7 @@ bool dsp_preset_rename(int slot, const char *newName) {
     // Update AppState
     strncpy(appState.dspPresetNames[slot], newName, 20);
     appState.dspPresetNames[slot][20] = '\0';
-    appState.markDspPresetDirty();
+    appState.markDspConfigDirty();
 
     // Persist to global settings
     saveDspSettingsDebounced();
