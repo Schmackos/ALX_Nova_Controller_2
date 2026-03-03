@@ -8,6 +8,7 @@
 #include "login_page.h"
 #include "mqtt_handler.h"
 #include "mqtt_task.h"
+#include "app_events.h"
 #include "ota_updater.h"
 #include "settings_manager.h"
 #include "signal_generator.h"
@@ -687,6 +688,9 @@ void setup() {
   // Initialize task monitor (loop timing + FreeRTOS task snapshots)
   task_monitor_init();
 
+  // Initialize app event group (main loop wakes immediately on dirty flags)
+  app_events_init();
+
   // Start dedicated MQTT task (owns connection, reconnect, publish)
   mqtt_task_init();
 
@@ -702,9 +706,9 @@ void loop() {
   esp_task_wdt_reset();  // Feed watchdog at top of every loop iteration
   task_monitor_loop_start();
 
-  // Small delay to reduce CPU usage - allows other tasks to run
-  // Without this, the loop runs as fast as possible (~49% CPU)
-  delay(5);
+  // Wake immediately on any dirty flag; fall back to 5ms tick when idle.
+  // Replaces delay(5) — identical worst-case latency, zero latency on state changes.
+  app_events_wait(5);
 
   server.handleClient();
   if (appState.isAPMode) {

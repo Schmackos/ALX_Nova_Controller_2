@@ -2,6 +2,7 @@
 #define APP_STATE_H
 
 #include "config.h"
+#include "app_events.h"
 
 #ifdef NATIVE_TEST
 #include "../test/test_mocks/Arduino.h"
@@ -312,19 +313,19 @@ public:
   void clearBuzzerDirty() { _buzzerDirty = false; }
 
   // ===== ADC Enabled Dirty Flag (for WS/MQTT sync) =====
-  void markAdcEnabledDirty() { _adcEnabledDirty = true; }
+  void markAdcEnabledDirty() { _adcEnabledDirty = true; app_events_signal(EVT_ADC_ENABLED); }
   bool isAdcEnabledDirty() const { return _adcEnabledDirty; }
   void clearAdcEnabledDirty() { _adcEnabledDirty = false; }
 
   // ===== Settings Dirty Flag (for GUI -> WS/MQTT sync) =====
   bool isSettingsDirty() const { return _settingsDirty; }
   void clearSettingsDirty() { _settingsDirty = false; }
-  void markSettingsDirty() { _settingsDirty = true; }
+  void markSettingsDirty() { _settingsDirty = true; app_events_signal(EVT_SETTINGS); }
 
   // ===== OTA Dirty Flag (for OTA task -> main loop WS broadcast) =====
   bool isOTADirty() const { return _otaDirty; }
   void clearOTADirty() { _otaDirty = false; }
-  void markOTADirty() { _otaDirty = true; }
+  void markOTADirty() { _otaDirty = true; app_events_signal(EVT_OTA); }
 
   // ===== Signal Generator State =====
   bool sigGenEnabled = false;           // Always boots false
@@ -336,7 +337,7 @@ public:
   float sigGenSweepSpeed = 1000.0f;     // Hz per second
 
   void setSignalGenEnabled(bool enabled);
-  void markSignalGenDirty() { _sigGenDirty = true; }
+  void markSignalGenDirty() { _sigGenDirty = true; app_events_signal(EVT_SIGGEN); }
   bool isSignalGenDirty() const { return _sigGenDirty; }
   void clearSignalGenDirty() { _sigGenDirty = false; }
 
@@ -360,6 +361,7 @@ public:
   void markDspConfigDirty() {
     _dspConfigDirty = true;
     if (dspPresetIndex >= 0) { dspPresetIndex = -1; }
+    app_events_signal(EVT_DSP_CONFIG);
   }
   bool isDspConfigDirty() const { return _dspConfigDirty; }
   void clearDspConfigDirty() { _dspConfigDirty = false; }
@@ -401,12 +403,12 @@ public:
   uint32_t usbAudioNegotiatedRate  = 48000;
   uint8_t  usbAudioNegotiatedDepth = 16;
 
-  void markUsbAudioDirty() { _usbAudioDirty = true; }
+  void markUsbAudioDirty() { _usbAudioDirty = true; app_events_signal(EVT_USB_AUDIO); }
   bool isUsbAudioDirty() const { return _usbAudioDirty; }
   void clearUsbAudioDirty() { _usbAudioDirty = false; }
 
   // Separate dirty flag for high-frequency VU updates (don't conflate with connection events)
-  void markUsbAudioVuDirty()    { _usbAudioVuDirty = true; }
+  void markUsbAudioVuDirty()    { _usbAudioVuDirty = true; app_events_signal(EVT_USB_VU); }
   bool isUsbAudioVuDirty() const { return _usbAudioVuDirty; }
   void clearUsbAudioVuDirty()  { _usbAudioVuDirty = false; }
 #endif
@@ -424,7 +426,7 @@ public:
   uint8_t dacFilterMode = 0;        // Digital filter mode (DAC-specific)
   uint32_t dacTxUnderruns = 0;      // TX DMA full count
 
-  void markDacDirty() { _dacDirty = true; }
+  void markDacDirty() { _dacDirty = true; app_events_signal(EVT_DAC); }
   bool isDacDirty() const { return _dacDirty; }
   void clearDacDirty() { _dacDirty = false; }
 
@@ -451,7 +453,7 @@ public:
   };
   EepromDiag eepromDiag;
 
-  void markEepromDirty() { _eepromDirty = true; }
+  void markEepromDirty() { _eepromDirty = true; app_events_signal(EVT_EEPROM); }
   bool isEepromDirty() const { return _eepromDirty; }
   void clearEepromDirty() { _eepromDirty = false; }
 
