@@ -12,6 +12,8 @@ void setupMqtt();
 void mqttLoop();
 void mqttReconnect();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
+void mqttPublishPendingState();
+void mqttPublishHeartbeat();
 
 // ===== MQTT Settings =====
 bool loadMqttSettings();

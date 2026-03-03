@@ -2,6 +2,7 @@
 #define APP_STATE_H
 
 #include "config.h"
+#include "app_events.h"
 
 #ifdef NATIVE_TEST
 #include "../test/test_mocks/Arduino.h"
@@ -76,8 +77,6 @@ public:
   // ===== FSM State =====
   AppFSMState fsmState = STATE_IDLE;
   void setFSMState(AppFSMState newState);
-  bool isFSMStateDirty() const { return _fsmStateDirty; }
-  void clearFSMStateDirty() { _fsmStateDirty = false; }
 
   // ===== WiFi State =====
   String wifiSSID;
@@ -206,18 +205,7 @@ public:
   // Input channel names (user-configurable, 4 channels = 2 ADCs x 2 channels)
   String inputNames[NUM_AUDIO_ADCS * 2];
 
-  void setAmplifierState(bool state);
   void setSensingMode(SensingMode mode);
-  void setTimerRemaining(unsigned long remaining);
-  void setAudioLevel(float dBFS);
-  bool isAmplifierDirty() const { return _amplifierDirty; }
-  bool isSensingModeDirty() const { return _sensingModeDirty; }
-  bool isTimerDirty() const { return _timerDirty; }
-  bool isAudioDirty() const { return _audioDirty; }
-  void clearAmplifierDirty() { _amplifierDirty = false; }
-  void clearSensingModeDirty() { _sensingModeDirty = false; }
-  void clearTimerDirty() { _timerDirty = false; }
-  void clearAudioDirty() { _audioDirty = false; }
 
   // Smart Sensing heartbeat
   unsigned long lastSmartSensingHeartbeat = 0;
@@ -252,6 +240,10 @@ public:
 
   // ===== Hardware Stats =====
   unsigned long hardwareStatsInterval = HARDWARE_STATS_INTERVAL;
+
+  // ===== Cross-task Coordination Flags =====
+  volatile bool _mqttReconfigPending = false;  // set by HTTP handler; mqtt_task reconnects
+  volatile int8_t _pendingApToggle = 0;        // 0=none, 1=enable AP, -1=disable AP; main loop executes
 
   // ===== MQTT State =====
   bool mqttEnabled = false;
@@ -321,19 +313,19 @@ public:
   void clearBuzzerDirty() { _buzzerDirty = false; }
 
   // ===== ADC Enabled Dirty Flag (for WS/MQTT sync) =====
-  void markAdcEnabledDirty() { _adcEnabledDirty = true; }
+  void markAdcEnabledDirty() { _adcEnabledDirty = true; app_events_signal(EVT_ADC_ENABLED); }
   bool isAdcEnabledDirty() const { return _adcEnabledDirty; }
   void clearAdcEnabledDirty() { _adcEnabledDirty = false; }
 
   // ===== Settings Dirty Flag (for GUI -> WS/MQTT sync) =====
   bool isSettingsDirty() const { return _settingsDirty; }
   void clearSettingsDirty() { _settingsDirty = false; }
-  void markSettingsDirty() { _settingsDirty = true; }
+  void markSettingsDirty() { _settingsDirty = true; app_events_signal(EVT_SETTINGS); }
 
   // ===== OTA Dirty Flag (for OTA task -> main loop WS broadcast) =====
   bool isOTADirty() const { return _otaDirty; }
   void clearOTADirty() { _otaDirty = false; }
-  void markOTADirty() { _otaDirty = true; }
+  void markOTADirty() { _otaDirty = true; app_events_signal(EVT_OTA); }
 
   // ===== Signal Generator State =====
   bool sigGenEnabled = false;           // Always boots false
@@ -345,7 +337,7 @@ public:
   float sigGenSweepSpeed = 1000.0f;     // Hz per second
 
   void setSignalGenEnabled(bool enabled);
-  void markSignalGenDirty() { _sigGenDirty = true; }
+  void markSignalGenDirty() { _sigGenDirty = true; app_events_signal(EVT_SIGGEN); }
   bool isSignalGenDirty() const { return _sigGenDirty; }
   void clearSignalGenDirty() { _sigGenDirty = false; }
 
@@ -368,18 +360,11 @@ public:
 
   void markDspConfigDirty() {
     _dspConfigDirty = true;
-    if (dspPresetIndex >= 0) { dspPresetIndex = -1; _dspPresetDirty = true; }
+    if (dspPresetIndex >= 0) { dspPresetIndex = -1; }
+    app_events_signal(EVT_DSP_CONFIG);
   }
   bool isDspConfigDirty() const { return _dspConfigDirty; }
   void clearDspConfigDirty() { _dspConfigDirty = false; }
-
-  void markDspMetricsDirty() { _dspMetricsDirty = true; }
-  bool isDspMetricsDirty() const { return _dspMetricsDirty; }
-  void clearDspMetricsDirty() { _dspMetricsDirty = false; }
-
-  void markDspPresetDirty() { _dspPresetDirty = true; }
-  bool isDspPresetDirty() const { return _dspPresetDirty; }
-  void clearDspPresetDirty() { _dspPresetDirty = false; }
 
   // DSP config swap diagnostics
   uint32_t dspSwapFailures = 0;
@@ -418,12 +403,12 @@ public:
   uint32_t usbAudioNegotiatedRate  = 48000;
   uint8_t  usbAudioNegotiatedDepth = 16;
 
-  void markUsbAudioDirty() { _usbAudioDirty = true; }
+  void markUsbAudioDirty() { _usbAudioDirty = true; app_events_signal(EVT_USB_AUDIO); }
   bool isUsbAudioDirty() const { return _usbAudioDirty; }
   void clearUsbAudioDirty() { _usbAudioDirty = false; }
 
   // Separate dirty flag for high-frequency VU updates (don't conflate with connection events)
-  void markUsbAudioVuDirty()    { _usbAudioVuDirty = true; }
+  void markUsbAudioVuDirty()    { _usbAudioVuDirty = true; app_events_signal(EVT_USB_VU); }
   bool isUsbAudioVuDirty() const { return _usbAudioVuDirty; }
   void clearUsbAudioVuDirty()  { _usbAudioVuDirty = false; }
 #endif
@@ -441,7 +426,7 @@ public:
   uint8_t dacFilterMode = 0;        // Digital filter mode (DAC-specific)
   uint32_t dacTxUnderruns = 0;      // TX DMA full count
 
-  void markDacDirty() { _dacDirty = true; }
+  void markDacDirty() { _dacDirty = true; app_events_signal(EVT_DAC); }
   bool isDacDirty() const { return _dacDirty; }
   void clearDacDirty() { _dacDirty = false; }
 
@@ -468,7 +453,7 @@ public:
   };
   EepromDiag eepromDiag;
 
-  void markEepromDirty() { _eepromDirty = true; }
+  void markEepromDirty() { _eepromDirty = true; app_events_signal(EVT_EEPROM); }
   bool isEepromDirty() const { return _eepromDirty; }
   void clearEepromDirty() { _eepromDirty = false; }
 
@@ -517,19 +502,10 @@ public:
   void resetWiFiBackoff() { wifiBackoffDelay = 1000; }
   void resetMqttBackoff() { mqttBackoffDelay = 5000; }
 
-  // ===== Utility Methods =====
-  void clearAllDirtyFlags();
-  bool hasAnyDirtyFlag() const;
-
 private:
   AppState() {} // Private constructor
 
   // Dirty flags for change detection
-  bool _fsmStateDirty = false;
-  bool _amplifierDirty = false;
-  bool _sensingModeDirty = false;
-  bool _timerDirty = false;
-  bool _audioDirty = false;
   bool _displayDirty = false;
   bool _buzzerDirty = false;
   bool _settingsDirty = false;
@@ -538,8 +514,6 @@ private:
   bool _otaDirty = false;
 #ifdef DSP_ENABLED
   bool _dspConfigDirty = false;
-  bool _dspMetricsDirty = false;
-  bool _dspPresetDirty = false;
 #endif
 #ifdef USB_AUDIO_ENABLED
   bool _usbAudioDirty = false;

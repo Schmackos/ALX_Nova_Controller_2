@@ -1,40 +1,17 @@
 #include "app_state.h"
+#include "app_events.h"
 
 // ===== FSM State Management =====
 void AppState::setFSMState(AppFSMState newState) {
   if (fsmState != newState) {
     fsmState = newState;
-    _fsmStateDirty = true;
   }
 }
 
 // ===== Smart Sensing State Management =====
-void AppState::setAmplifierState(bool state) {
-  if (amplifierState != state) {
-    amplifierState = state;
-    _amplifierDirty = true;
-  }
-}
-
 void AppState::setSensingMode(SensingMode mode) {
   if (currentMode != mode) {
     currentMode = mode;
-    _sensingModeDirty = true;
-  }
-}
-
-void AppState::setTimerRemaining(unsigned long remaining) {
-  if (timerRemaining != remaining) {
-    timerRemaining = remaining;
-    _timerDirty = true;
-  }
-}
-
-void AppState::setAudioLevel(float dBFS) {
-  // Use a small threshold to avoid float comparison issues
-  if (abs(audioLevel_dBFS - dBFS) > 0.1f) {
-    audioLevel_dBFS = dBFS;
-    _audioDirty = true;
   }
 }
 
@@ -43,6 +20,7 @@ void AppState::setBacklightOn(bool state) {
   if (backlightOn != state) {
     backlightOn = state;
     _displayDirty = true;
+    app_events_signal(EVT_DISPLAY);
   }
 }
 
@@ -50,6 +28,7 @@ void AppState::setScreenTimeout(unsigned long timeout) {
   if (screenTimeout != timeout) {
     screenTimeout = timeout;
     _displayDirty = true;
+    app_events_signal(EVT_DISPLAY);
   }
 }
 
@@ -58,6 +37,7 @@ void AppState::setBacklightBrightness(uint8_t brightness) {
   if (backlightBrightness != brightness) {
     backlightBrightness = brightness;
     _displayDirty = true;
+    app_events_signal(EVT_DISPLAY);
   }
 }
 
@@ -65,6 +45,7 @@ void AppState::setDimEnabled(bool enabled) {
   if (dimEnabled != enabled) {
     dimEnabled = enabled;
     _displayDirty = true;
+    app_events_signal(EVT_DISPLAY);
   }
 }
 
@@ -72,6 +53,7 @@ void AppState::setDimTimeout(unsigned long timeout) {
   if (dimTimeout != timeout) {
     dimTimeout = timeout;
     _displayDirty = true;
+    app_events_signal(EVT_DISPLAY);
   }
 }
 
@@ -80,6 +62,7 @@ void AppState::setDimBrightness(uint8_t brightness) {
   if (dimBrightness != brightness) {
     dimBrightness = brightness;
     _displayDirty = true;
+    app_events_signal(EVT_DISPLAY);
   }
 }
 
@@ -88,6 +71,7 @@ void AppState::setBuzzerEnabled(bool enabled) {
   if (buzzerEnabled != enabled) {
     buzzerEnabled = enabled;
     _buzzerDirty = true;
+    app_events_signal(EVT_BUZZER);
   }
 }
 
@@ -97,6 +81,7 @@ void AppState::setBuzzerVolume(int volume) {
   if (buzzerVolume != volume) {
     buzzerVolume = volume;
     _buzzerDirty = true;
+    app_events_signal(EVT_BUZZER);
   }
 }
 
@@ -105,6 +90,7 @@ void AppState::setSignalGenEnabled(bool enabled) {
   if (sigGenEnabled != enabled) {
     sigGenEnabled = enabled;
     _sigGenDirty = true;
+    app_events_signal(EVT_SIGGEN);
   }
 }
 
@@ -130,25 +116,4 @@ void AppState::increaseWiFiBackoff() {
 
 void AppState::increaseMqttBackoff() {
   mqttBackoffDelay = min(mqttBackoffDelay * 2, MAX_BACKOFF_DELAY);
-}
-
-// ===== Dirty Flag Utilities =====
-void AppState::clearAllDirtyFlags() {
-  _fsmStateDirty = false;
-  _amplifierDirty = false;
-  _sensingModeDirty = false;
-  _timerDirty = false;
-  _audioDirty = false;
-  _displayDirty = false;
-  _buzzerDirty = false;
-  _settingsDirty = false;
-  _adcEnabledDirty = false;
-  _sigGenDirty = false;
-  _otaDirty = false;
-}
-
-bool AppState::hasAnyDirtyFlag() const {
-  return _fsmStateDirty || _amplifierDirty || _sensingModeDirty || _timerDirty ||
-         _audioDirty || _displayDirty || _buzzerDirty || _settingsDirty ||
-         _adcEnabledDirty || _sigGenDirty || _otaDirty;
 }

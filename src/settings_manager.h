@@ -15,6 +15,8 @@ void checkDeferredSettingsSave();  // Call from main loop
 // ===== Signal Generator Settings =====
 bool loadSignalGenSettings();
 void saveSignalGenSettings();
+void saveSignalGenSettingsDeferred();  // Mark dirty — actual save after 2s idle
+void checkDeferredSignalGenSave();     // Call from main loop
 
 // ===== Input Names Settings =====
 bool loadInputNames();

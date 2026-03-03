@@ -32,12 +32,12 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (915 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (932 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`.
 
 ## Architecture
 
 ### State Management — AppState Singleton
-All application state lives in `src/app_state.h` as a singleton accessed via `AppState::getInstance()` or the `appState` macro. It uses **dirty flags** (e.g., `isAmplifierDirty()`, `isTimerDirty()`) to detect changes and minimize unnecessary WebSocket broadcasts and MQTT publishes.
+All application state lives in `src/app_state.h` as a singleton accessed via `AppState::getInstance()` or the `appState` macro. It uses **dirty flags** (e.g., `isBuzzerDirty()`, `isDisplayDirty()`, `isOTADirty()`) to detect changes and minimize unnecessary WebSocket broadcasts and MQTT publishes. Every dirty-flag setter also calls `app_events_signal(EVT_XXX)` (defined in `src/app_events.h`) so the main loop can replace `delay(5)` with `app_events_wait(5)` — waking immediately on any state change and falling back to a 5 ms tick when idle.
 
 Legacy code uses `#define` macros (e.g., `#define wifiSSID appState.wifiSSID`) to alias global variable names to AppState members. New code should use `appState.memberName` directly.
 
@@ -48,7 +48,8 @@ The application uses a finite state machine (`AppFSMState` in `app_state.h`): `S
 Each subsystem is a separate module in `src/`:
 - **smart_sensing** — Voltage detection, auto-off timer, amplifier relay control. `detectSignal()` rate matches `appState.audioUpdateRate` (not hardcoded) with dynamically scaled smoothing alpha to maintain ~308ms time constant
 - **wifi_manager** — Multi-network WiFi client, AP mode, async connection with retry/backoff
-- **mqtt_handler** — MQTT broker connection, Home Assistant discovery, heartbeat publishing
+- **mqtt_handler** — MQTT broker connection, Home Assistant discovery, heartbeat publishing. `mqttCallback()` is thread-safe: no direct WebSocket, LittleFS, or WiFi calls — all side-effects use dirty flags or coordination flags (`_pendingApToggle`). Periodic publish logic exposed as `mqttPublishPendingState()` + `mqttPublishHeartbeat()` (called by `mqtt_task`)
+- **mqtt_task** — Dedicated FreeRTOS task (Core 0, priority 2) that owns MQTT reconnect and publish. `mqttReconnect()` (1–3 s blocking TCP connect when broker unreachable) runs entirely inside this task so HTTP/WebSocket serving on the main loop is never stalled. Checks `appState._mqttReconfigPending` to reconnect when web UI saves new broker settings. Polls at 20 Hz (50 ms `vTaskDelay`); does **not** wait on the event group (avoids fan-out race with the main loop's single-consumer `pdTRUE` clear)
 - **ota_updater** — GitHub release checking, firmware download with SHA256 verification
 - **settings_manager** — NVS/Preferences persistence, export/import, factory reset
 - **auth_handler** — Session token management, web password authentication
@@ -73,7 +74,7 @@ Each subsystem is a separate module in `src/`:
   - `src/web_pages.cpp` and `src/web_pages_gz.cpp` are both auto-generated — do not edit manually
 
 ### GUI (LVGL on TFT Display)
-LVGL v9.4 + LovyanGFX on ST7735S 128x160 (landscape 160x128). Runs on Core 1 via FreeRTOS `gui_task`. All GUI code is guarded by `-D GUI_ENABLED`.
+LVGL v9.4 + LovyanGFX on ST7735S 128x160 (landscape 160x128). Runs on **Core 0** via FreeRTOS `gui_task` (`TASK_CORE_GUI=0`) — moved off Core 1 to keep Core 1 exclusively for audio. All GUI code is guarded by `-D GUI_ENABLED`.
 
 Key GUI modules in `src/gui/`:
 - **gui_manager** — Init, FreeRTOS task, screen sleep/wake, dashboard refresh
@@ -86,7 +87,17 @@ Key GUI modules in `src/gui/`:
 HTTP server on port 80 with REST API endpoints under `/api/`. WebSocket server on port 81 for real-time updates. API endpoints are registered in `main.cpp`.
 
 ### FreeRTOS Tasks
-Concurrent tasks with configurable stack sizes and priorities defined in `src/config.h` (`TASK_STACK_SIZE_*`, `TASK_PRIORITY_*`, `I2S_DMA_BUF_COUNT`/`I2S_DMA_BUF_LEN`). Main loop (`loopTask`, priority 1) runs on **Core 1** (Arduino ESP32 default). Audio pipeline task (`audio_pipeline_task`, priority 3) also runs on Core 1 (`TASK_CORE_AUDIO`) — it preempts the main loop during processing, then yields 2 ticks to let the main loop run. GUI task runs on **Core 0** (`GUI_TASK_CORE=0`) to avoid contending with audio. USB audio task (`usb_audio`, priority 1) runs on Core 0 polling TinyUSB with adaptive timeout (100ms idle, 1ms streaming). OTA update check and download run as one-shot tasks on Core 1 via `startOTACheckTask()` / `startOTADownloadTask()` in `src/ota_updater.cpp`. Cross-core communication uses dirty flags in AppState — GUI/OTA tasks set flags, main loop handles WebSocket/MQTT broadcasts.
+Concurrent tasks with configurable stack sizes and priorities defined in `src/config.h` (`TASK_STACK_SIZE_*`, `TASK_PRIORITY_*`, `I2S_DMA_BUF_COUNT`/`I2S_DMA_BUF_LEN`).
+
+**Core assignment** (Core 1 is reserved for audio):
+- **Core 1**: `loopTask` (Arduino main loop, priority 1) + `audio_pipeline_task` (priority 3, `TASK_CORE_AUDIO`). The audio task preempts the main loop during DMA processing then yields 2 ticks. No new tasks may be pinned to Core 1.
+- **Core 0**: `gui_task` (`TASK_CORE_GUI=0`), `mqtt_task` (priority 2), `usb_audio_task` (priority 1), one-shot OTA tasks (`startOTACheckTask()` / `startOTADownloadTask()`).
+
+**Main loop idle strategy**: `delay(5)` has been replaced with `app_events_wait(5)` (see `src/app_events.h`). The loop wakes in <1 µs whenever any dirty flag is set, or falls back to a 5 ms tick when idle — preserving all periodic timers unchanged.
+
+**MQTT**: The main loop no longer calls `mqttLoop()` or any `publishMqtt*()` function. All MQTT work (reconnect, `mqttClient.loop()`, periodic HA publishes) runs inside `mqtt_task` on Core 0. The main loop dispatches dirty flags to WS broadcasts only; MQTT publishes happen independently at 20 Hz.
+
+Cross-core communication uses dirty flags in AppState — GUI/OTA/MQTT tasks set flags, main loop handles WebSocket broadcasts. Two additional coordination flags in AppState: `volatile bool _mqttReconfigPending` (web UI broker change → mqtt_task reconnects) and `volatile int8_t _pendingApToggle` (MQTT command → main loop executes WiFi mode change).
 
 **I2S driver safety**: The DAC module may uninstall/reinstall the I2S_NUM_0 driver at runtime (e.g., toggling DAC on/off). To prevent crashes with `audio_pipeline_task` calling `i2s_read()` concurrently, the `appState.audioPaused` volatile flag is set before `i2s_driver_uninstall()` and cleared after reinstall. The audio task checks this flag each iteration and yields while paused.
 

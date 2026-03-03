@@ -123,15 +123,17 @@
                 document.getElementById('autoAPToggle').checked = !!data.autoAPEnabled;
             }
 
-            if (typeof data.timezoneOffset !== 'undefined') {
-                currentTimezoneOffset = data.timezoneOffset;
-                document.getElementById('timezoneSelect').value = data.timezoneOffset.toString();
-                updateTimezoneDisplay(data.timezoneOffset, data.dstOffset || 0);
+            var tzOffset = data['appState.timezoneOffset'];
+            var dstOff   = data['appState.dstOffset'];
+            if (typeof tzOffset !== 'undefined') {
+                currentTimezoneOffset = tzOffset;
+                document.getElementById('timezoneSelect').value = tzOffset.toString();
+                updateTimezoneDisplay(tzOffset, dstOff || 0);
             }
 
-            if (typeof data.dstOffset !== 'undefined') {
-                currentDstOffset = data.dstOffset;
-                document.getElementById('dstToggle').checked = (data.dstOffset === 3600);
+            if (typeof dstOff !== 'undefined') {
+                currentDstOffset = dstOff;
+                document.getElementById('dstToggle').checked = (dstOff === 3600);
             }
 
             if (typeof data.darkMode !== 'undefined') {
@@ -287,7 +289,7 @@
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
+                body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
             .then(res => res.json())
             .then(data => {
@@ -309,7 +311,7 @@
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
+                body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
             .then(res => res.json())
             .then(data => {
@@ -350,8 +352,8 @@
                 if (data.success) {
                     // Create date object with current UTC time
                     const now = new Date();
-                    // Apply timezone and DST offsets
-                    const offset = (data.timezoneOffset || 0) + (data.dstOffset || 0);
+                    // Apply timezone and DST offsets (backend uses appState. prefix for these keys)
+                    const offset = (data['appState.timezoneOffset'] || 0) + (data['appState.dstOffset'] || 0);
                     const localTime = new Date(now.getTime() + offset * 1000);
 
                     // Format time

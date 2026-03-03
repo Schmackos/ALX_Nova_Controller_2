@@ -2130,6 +2130,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
         .lane-status-dot.active  { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
         .lane-status-dot.low     { background: #ff9800; box-shadow: 0 0 6px #ff980088; }
+        .lane-status-dot.idle    { background: rgba(255,152,0,0.25); }
         .lane-status-dot.error   { background: #f44336; }
         .lane-level {
             font-size: 0.78rem;
@@ -5439,15 +5440,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('autoAPToggle').checked = !!data.autoAPEnabled;
             }
 
-            if (typeof data.timezoneOffset !== 'undefined') {
-                currentTimezoneOffset = data.timezoneOffset;
-                document.getElementById('timezoneSelect').value = data.timezoneOffset.toString();
-                updateTimezoneDisplay(data.timezoneOffset, data.dstOffset || 0);
+            var tzOffset = data['appState.timezoneOffset'];
+            var dstOff   = data['appState.dstOffset'];
+            if (typeof tzOffset !== 'undefined') {
+                currentTimezoneOffset = tzOffset;
+                document.getElementById('timezoneSelect').value = tzOffset.toString();
+                updateTimezoneDisplay(tzOffset, dstOff || 0);
             }
 
-            if (typeof data.dstOffset !== 'undefined') {
-                currentDstOffset = data.dstOffset;
-                document.getElementById('dstToggle').checked = (data.dstOffset === 3600);
+            if (typeof dstOff !== 'undefined') {
+                currentDstOffset = dstOff;
+                document.getElementById('dstToggle').checked = (dstOff === 3600);
             }
 
             if (typeof data.darkMode !== 'undefined') {
@@ -5603,7 +5606,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
+                body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
             .then(res => res.json())
             .then(data => {
@@ -5625,7 +5628,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             apiFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ timezoneOffset: offset, dstOffset: dstOffset })
+                body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
             .then(res => res.json())
             .then(data => {
@@ -5666,8 +5669,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (data.success) {
                     // Create date object with current UTC time
                     const now = new Date();
-                    // Apply timezone and DST offsets
-                    const offset = (data.timezoneOffset || 0) + (data.dstOffset || 0);
+                    // Apply timezone and DST offsets (backend uses appState. prefix for these keys)
+                    const offset = (data['appState.timezoneOffset'] || 0) + (data['appState.dstOffset'] || 0);
                     const localTime = new Date(now.getTime() + offset * 1000);
 
                     // Format time
@@ -6360,13 +6363,14 @@ function updateInputOverview() {
         var cb = document.getElementById('laneEnable' + i);
         if (cb) cb.checked = enabled;
 
-        if (!enabled || dbVal === null) {
+        if (!enabled) {
             dot.className = 'lane-status-dot';
             if (lvl) lvl.textContent = '\u2014';
         } else {
-            var dbNum = typeof dbVal === 'number' ? dbVal : -99;
+            var dbNum = (typeof dbVal === 'number') ? dbVal : -99;
             if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '\u2014';
-            dot.className = 'lane-status-dot' + (dbNum > -65 ? ' active' : dbNum > -80 ? ' low' : '');
+            dot.className = 'lane-status-dot' +
+                (dbNum > -65 ? ' active' : dbNum > -80 ? ' low' : ' idle');
         }
     }
 }

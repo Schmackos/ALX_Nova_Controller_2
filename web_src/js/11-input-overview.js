@@ -18,13 +18,14 @@ function updateInputOverview() {
         var cb = document.getElementById('laneEnable' + i);
         if (cb) cb.checked = enabled;
 
-        if (!enabled || dbVal === null) {
+        if (!enabled) {
             dot.className = 'lane-status-dot';
             if (lvl) lvl.textContent = '\u2014';
         } else {
-            var dbNum = typeof dbVal === 'number' ? dbVal : -99;
+            var dbNum = (typeof dbVal === 'number') ? dbVal : -99;
             if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '\u2014';
-            dot.className = 'lane-status-dot' + (dbNum > -65 ? ' active' : dbNum > -80 ? ' low' : '');
+            dot.className = 'lane-status-dot' +
+                (dbNum > -65 ? ' active' : dbNum > -80 ? ' low' : ' idle');
         }
     }
 }
