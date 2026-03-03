@@ -240,6 +240,10 @@ public:
   // ===== Hardware Stats =====
   unsigned long hardwareStatsInterval = HARDWARE_STATS_INTERVAL;
 
+  // ===== Cross-task Coordination Flags =====
+  volatile bool _mqttReconfigPending = false;  // set by HTTP handler; mqtt_task reconnects
+  volatile int8_t _pendingApToggle = 0;        // 0=none, 1=enable AP, -1=disable AP; main loop executes
+
   // ===== MQTT State =====
   bool mqttEnabled = false;
   String mqttBroker;

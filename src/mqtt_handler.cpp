@@ -5,6 +5,7 @@
 #include "crash_log.h"
 #include "debug_serial.h"
 #include "signal_generator.h"
+#include "smart_sensing.h"
 #include "task_monitor.h"
 #include "settings_manager.h"
 #include "utils.h"
@@ -55,16 +56,11 @@ static bool prevMqttAutoUpdate = false;
 static bool prevMqttCertValidation = true;
 
 // External functions from other modules
-extern void saveSmartSensingSettings();
-extern void sendSmartSensingStateInternal();
-extern void sendWiFiStatus();
 extern void saveSettings();
 extern void saveSettingsDeferred();
 extern void performFactoryReset();
 extern void checkForFirmwareUpdate();
 extern void setAmplifierState(bool state);
-extern void sendAudioGraphState();
-extern void sendDebugState();
 #ifdef DSP_ENABLED
 extern void saveDspSettingsDebounced();
 #endif
@@ -302,8 +298,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         appState.timerRemaining = appState.timerDuration * 60;
       }
 
-      saveSmartSensingSettings();
-      sendSmartSensingStateInternal();
+      saveSmartSensingSettingsDeferred();
     }
     publishMqttSmartSensingState();
   }
@@ -335,8 +330,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         }
       }
 
-      saveSmartSensingSettings();
-      sendSmartSensingStateInternal();
+      saveSmartSensingSettingsDeferred();
       LOG_I("[MQTT] Timer duration set to %d minutes", duration);
     }
     publishMqttSmartSensingState();
@@ -346,8 +340,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     float threshold = message.toFloat();
     if (threshold >= -96.0 && threshold <= 0.0) {
       appState.audioThreshold_dBFS = threshold;
-      saveSmartSensingSettings();
-      sendSmartSensingStateInternal();
+      saveSmartSensingSettingsDeferred();
       LOG_I("[MQTT] Audio threshold set to %+.0f dBFS", threshold);
     }
     publishMqttSmartSensingState();
@@ -356,26 +349,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/ap/enabled/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
     appState.apEnabled = enabled;
-
-    if (enabled) {
-      if (!appState.isAPMode) {
-        WiFi.mode(WIFI_AP_STA);
-        wifi_ensure_ps_none();
-        WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
-        appState.isAPMode = true;
-        LOG_I("[MQTT] Access Point enabled");
-      }
-    } else {
-      if (appState.isAPMode && WiFi.status() == WL_CONNECTED) {
-        WiFi.softAPdisconnect(true);
-        WiFi.mode(WIFI_STA);
-        wifi_ensure_ps_none();
-        appState.isAPMode = false;
-        LOG_I("[MQTT] Access Point disabled");
-      }
-    }
-
-    sendWiFiStatus();
+    // WiFi mode changes are unsafe from mqtt_task — defer to main loop
+    appState._pendingApToggle = enabled ? 1 : -1;
+    LOG_I("[MQTT] AP toggle requested: %s (deferred to main loop)", enabled ? "enable" : "disable");
+    appState.markSettingsDirty();
     publishMqttWifiStatus();
   }
   // Handle auto-update setting
@@ -385,7 +362,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       appState.autoUpdateEnabled = enabled;
       saveSettingsDeferred();
       LOG_I("[MQTT] Auto-update set to %s", enabled ? "ON" : "OFF");
-      sendWiFiStatus(); // Broadcast to web clients
+      appState.markSettingsDirty();
     }
     publishMqttSystemStatus();
   }
@@ -396,7 +373,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       appState.darkMode = enabled;
       saveSettingsDeferred();
       LOG_I("[MQTT] Dark mode set to %s", enabled ? "ON" : "OFF");
-      sendWiFiStatus(); // Dark mode is part of WiFi status in web UI
+      appState.markSettingsDirty();
     }
     publishMqttSystemStatus();
   }
@@ -407,7 +384,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       appState.enableCertValidation = enabled;
       saveSettingsDeferred();
       LOG_I("[MQTT] Certificate validation set to %s", enabled ? "ON" : "OFF");
-      sendWiFiStatus(); // Broadcast to web clients
+      appState.markSettingsDirty();
     }
     publishMqttSystemStatus();
   }
@@ -420,7 +397,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       appState.setScreenTimeout(timeoutMs);
       saveSettingsDeferred();
       LOG_I("[MQTT] Screen timeout set to %d seconds", timeoutSec);
-      sendWiFiStatus();
+      appState.markSettingsDirty();
     }
     publishMqttDisplayState();
   }
@@ -515,7 +492,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     siggen_apply_params();
     LOG_I("[MQTT] Signal generator %s", newState ? "enabled" : "disabled");
     publishMqttSignalGenState();
-    sendSignalGenState();
+    appState.markSignalGenDirty();
   }
   // Handle signal generator waveform
   else if (topicStr == base + "/signalgenerator/waveform/set") {
@@ -527,10 +504,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (wf >= 0) {
       appState.sigGenWaveform = wf;
       siggen_apply_params();
-      saveSignalGenSettings();
+      saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator waveform set to %s", message.c_str());
       publishMqttSignalGenState();
-      sendSignalGenState();
+      appState.markSignalGenDirty();
     }
   }
   // Handle signal generator frequency
@@ -539,10 +516,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (freq >= 1.0f && freq <= 22000.0f) {
       appState.sigGenFrequency = freq;
       siggen_apply_params();
-      saveSignalGenSettings();
+      saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator frequency set to %.0f Hz", freq);
       publishMqttSignalGenState();
-      sendSignalGenState();
+      appState.markSignalGenDirty();
     }
   }
   // Handle signal generator amplitude
@@ -551,10 +528,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (amp >= -96.0f && amp <= 0.0f) {
       appState.sigGenAmplitude = amp;
       siggen_apply_params();
-      saveSignalGenSettings();
+      saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator amplitude set to %.0f dBFS", amp);
       publishMqttSignalGenState();
-      sendSignalGenState();
+      appState.markSignalGenDirty();
     }
   }
   // Handle signal generator channel
@@ -566,10 +543,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (ch >= 0) {
       appState.sigGenChannel = ch;
       siggen_apply_params();
-      saveSignalGenSettings();
+      saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator channel set to %s", message.c_str());
       publishMqttSignalGenState();
-      sendSignalGenState();
+      appState.markSignalGenDirty();
     }
   }
   // Handle signal generator output mode
@@ -580,10 +557,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (mode >= 0) {
       appState.sigGenOutputMode = mode;
       siggen_apply_params();
-      saveSignalGenSettings();
+      saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator output mode set to %s", message.c_str());
       publishMqttSignalGenState();
-      sendSignalGenState();
+      appState.markSignalGenDirty();
     }
   }
   // Handle ADC reference voltage
@@ -591,7 +568,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     float vref = message.toFloat();
     if (vref >= 1.0f && vref <= 5.0f) {
       appState.adcVref = vref;
-      saveSmartSensingSettings();
+      saveSmartSensingSettingsDeferred();
       LOG_I("[MQTT] ADC VREF set to %.2f V", vref);
       publishMqttAudioDiagnostics();
     }
@@ -616,7 +593,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.vuMeterEnabled = newState;
     saveSettingsDeferred();
-    sendAudioGraphState();
+    appState.markSettingsDirty();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] VU meter set to %s", newState ? "ON" : "OFF");
   }
@@ -625,7 +602,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.waveformEnabled = newState;
     saveSettingsDeferred();
-    sendAudioGraphState();
+    appState.markSettingsDirty();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] Waveform set to %s", newState ? "ON" : "OFF");
   }
@@ -634,7 +611,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.spectrumEnabled = newState;
     saveSettingsDeferred();
-    sendAudioGraphState();
+    appState.markSettingsDirty();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] Spectrum set to %s", newState ? "ON" : "OFF");
   }
@@ -649,7 +626,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     else if (message == "flat_top") wt = FFT_WINDOW_FLAT_TOP;
     appState.fftWindowType = wt;
     saveSettingsDeferred();
-    sendAudioGraphState();
+    appState.markSettingsDirty();
     publishMqttAudioGraphState();
     LOG_I("[MQTT] FFT window set to %d", (int)wt);
   }
@@ -659,7 +636,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     appState.debugMode = newState;
     applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
     saveSettingsDeferred();
-    sendDebugState();
+    appState.markSettingsDirty();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug mode set to %s", newState ? "ON" : "OFF");
   }
@@ -670,7 +647,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       appState.debugSerialLevel = level;
       applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
       saveSettingsDeferred();
-      sendDebugState();
+      appState.markSettingsDirty();
       publishMqttDebugState();
       LOG_I("[MQTT] Debug serial level set to %d", level);
     }
@@ -680,7 +657,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugHwStats = newState;
     saveSettingsDeferred();
-    sendDebugState();
+    appState.markSettingsDirty();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug HW stats set to %s", newState ? "ON" : "OFF");
   }
@@ -689,7 +666,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugI2sMetrics = newState;
     saveSettingsDeferred();
-    sendDebugState();
+    appState.markSettingsDirty();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug I2S metrics set to %s", newState ? "ON" : "OFF");
   }
@@ -698,7 +675,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     appState.debugTaskMonitor = newState;
     saveSettingsDeferred();
-    sendDebugState();
+    appState.markSettingsDirty();
     publishMqttDebugState();
     LOG_I("[MQTT] Debug task monitor set to %s", newState ? "ON" : "OFF");
   }
@@ -718,10 +695,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (speed >= 0.1f && speed <= 10.0f) {
       appState.sigGenSweepSpeed = speed;
       siggen_apply_params();
-      saveSignalGenSettings();
+      saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator sweep speed set to %.1f Hz/s", speed);
       publishMqttSignalGenState();
-      sendSignalGenState();
+      appState.markSignalGenDirty();
     }
   }
 #ifdef GUI_ENABLED
@@ -997,153 +974,165 @@ void mqttLoop() {
 
   mqttClient.loop();
 
-  // Periodic state publishing — per-category selective dispatch
+  mqttPublishPendingState();
+  mqttPublishHeartbeat();
+}
+
+// Publish any pending state changes to MQTT broker.
+// Called from mqtt_task (or mqttLoop for backward compat).
+// Uses shadow prevMqtt* variables for per-category change detection.
+void mqttPublishPendingState() {
+  if (!mqttClient.connected()) return;
+
   unsigned long currentMillis = millis();
-  if (mqttClient.connected() &&
-      (currentMillis - appState.lastMqttPublish >= MQTT_PUBLISH_INTERVAL)) {
-    appState.lastMqttPublish = currentMillis;
+  if (currentMillis - appState.lastMqttPublish < MQTT_PUBLISH_INTERVAL) return;
+  appState.lastMqttPublish = currentMillis;
 
-    // Per-category change detection
-    bool audioLevelChanged =
-        (fabs(appState.audioLevel_dBFS - appState.prevMqttAudioLevel) > 0.5f);
-    bool sensingChanged =
-        (appState.amplifierState != appState.prevMqttAmplifierState) ||
-        (appState.currentMode != appState.prevMqttSensingMode) ||
-        (appState.timerRemaining != appState.prevMqttTimerRemaining);
-    bool displayChanged =
-        (appState.backlightOn != appState.prevMqttBacklightOn) ||
-        (appState.screenTimeout != appState.prevMqttScreenTimeout) ||
-        (appState.backlightBrightness != appState.prevMqttBrightness) ||
-        (appState.dimEnabled != appState.prevMqttDimEnabled) ||
-        (appState.dimTimeout != appState.prevMqttDimTimeout) ||
-        (appState.dimBrightness != appState.prevMqttDimBrightness);
-    bool settingsChanged =
-        (appState.darkMode != prevMqttDarkMode) ||
-        (appState.autoUpdateEnabled != prevMqttAutoUpdate) ||
-        (appState.enableCertValidation != prevMqttCertValidation);
-    bool buzzerChanged =
-        (appState.buzzerEnabled != appState.prevMqttBuzzerEnabled) ||
-        (appState.buzzerVolume != appState.prevMqttBuzzerVolume);
-    bool siggenChanged =
-        (appState.sigGenEnabled != appState.prevMqttSigGenEnabled) ||
-        (appState.sigGenWaveform != appState.prevMqttSigGenWaveform) ||
-        (fabs(appState.sigGenFrequency - appState.prevMqttSigGenFrequency) > 0.5f) ||
-        (fabs(appState.sigGenAmplitude - appState.prevMqttSigGenAmplitude) > 0.5f) ||
-        (appState.sigGenOutputMode != appState.prevMqttSigGenOutputMode) ||
-        (fabs(appState.sigGenSweepSpeed - appState.prevMqttSigGenSweepSpeed) > 0.05f);
-    bool audioGraphChanged =
-        (appState.vuMeterEnabled != appState.prevMqttVuMeterEnabled) ||
-        (appState.waveformEnabled != appState.prevMqttWaveformEnabled) ||
-        (appState.spectrumEnabled != appState.prevMqttSpectrumEnabled) ||
-        (appState.fftWindowType != appState.prevMqttFftWindowType);
-    bool debugChanged =
-        (appState.debugMode != appState.prevMqttDebugMode) ||
-        (appState.debugSerialLevel != appState.prevMqttDebugSerialLevel) ||
-        (appState.debugHwStats != appState.prevMqttDebugHwStats) ||
-        (appState.debugI2sMetrics != appState.prevMqttDebugI2sMetrics) ||
-        (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor);
+  // Per-category change detection
+  bool audioLevelChanged =
+      (fabs(appState.audioLevel_dBFS - appState.prevMqttAudioLevel) > 0.5f);
+  bool sensingChanged =
+      (appState.amplifierState != appState.prevMqttAmplifierState) ||
+      (appState.currentMode != appState.prevMqttSensingMode) ||
+      (appState.timerRemaining != appState.prevMqttTimerRemaining);
+  bool displayChanged =
+      (appState.backlightOn != appState.prevMqttBacklightOn) ||
+      (appState.screenTimeout != appState.prevMqttScreenTimeout) ||
+      (appState.backlightBrightness != appState.prevMqttBrightness) ||
+      (appState.dimEnabled != appState.prevMqttDimEnabled) ||
+      (appState.dimTimeout != appState.prevMqttDimTimeout) ||
+      (appState.dimBrightness != appState.prevMqttDimBrightness);
+  bool settingsChanged =
+      (appState.darkMode != prevMqttDarkMode) ||
+      (appState.autoUpdateEnabled != prevMqttAutoUpdate) ||
+      (appState.enableCertValidation != prevMqttCertValidation);
+  bool buzzerChanged =
+      (appState.buzzerEnabled != appState.prevMqttBuzzerEnabled) ||
+      (appState.buzzerVolume != appState.prevMqttBuzzerVolume);
+  bool siggenChanged =
+      (appState.sigGenEnabled != appState.prevMqttSigGenEnabled) ||
+      (appState.sigGenWaveform != appState.prevMqttSigGenWaveform) ||
+      (fabs(appState.sigGenFrequency - appState.prevMqttSigGenFrequency) > 0.5f) ||
+      (fabs(appState.sigGenAmplitude - appState.prevMqttSigGenAmplitude) > 0.5f) ||
+      (appState.sigGenOutputMode != appState.prevMqttSigGenOutputMode) ||
+      (fabs(appState.sigGenSweepSpeed - appState.prevMqttSigGenSweepSpeed) > 0.05f);
+  bool audioGraphChanged =
+      (appState.vuMeterEnabled != appState.prevMqttVuMeterEnabled) ||
+      (appState.waveformEnabled != appState.prevMqttWaveformEnabled) ||
+      (appState.spectrumEnabled != appState.prevMqttSpectrumEnabled) ||
+      (appState.fftWindowType != appState.prevMqttFftWindowType);
+  bool debugChanged =
+      (appState.debugMode != appState.prevMqttDebugMode) ||
+      (appState.debugSerialLevel != appState.prevMqttDebugSerialLevel) ||
+      (appState.debugHwStats != appState.prevMqttDebugHwStats) ||
+      (appState.debugI2sMetrics != appState.prevMqttDebugI2sMetrics) ||
+      (appState.debugTaskMonitor != appState.prevMqttDebugTaskMonitor);
 
-    // Selective dispatch — only publish categories that actually changed
-    // Smart sensing + audio level (combined to avoid double-publishing)
-    if (sensingChanged || audioLevelChanged) {
-      publishMqttSmartSensingState();
-      if (audioLevelChanged) {
-        publishMqttAudioDiagnostics();
-        appState.prevMqttAudioLevel = appState.audioLevel_dBFS;
-      }
-      if (sensingChanged) {
-        appState.prevMqttAmplifierState = appState.amplifierState;
-        appState.prevMqttSensingMode = appState.currentMode;
-        appState.prevMqttTimerRemaining = appState.timerRemaining;
-      }
+  // Selective dispatch — only publish categories that actually changed
+  // Smart sensing + audio level (combined to avoid double-publishing)
+  if (sensingChanged || audioLevelChanged) {
+    publishMqttSmartSensingState();
+    if (audioLevelChanged) {
+      publishMqttAudioDiagnostics();
+      appState.prevMqttAudioLevel = appState.audioLevel_dBFS;
     }
-    if (displayChanged) {
-      publishMqttDisplayState();
-      appState.prevMqttBacklightOn = appState.backlightOn;
-      appState.prevMqttScreenTimeout = appState.screenTimeout;
-      appState.prevMqttBrightness = appState.backlightBrightness;
-      appState.prevMqttDimEnabled = appState.dimEnabled;
-      appState.prevMqttDimTimeout = appState.dimTimeout;
-      appState.prevMqttDimBrightness = appState.dimBrightness;
+    if (sensingChanged) {
+      appState.prevMqttAmplifierState = appState.amplifierState;
+      appState.prevMqttSensingMode = appState.currentMode;
+      appState.prevMqttTimerRemaining = appState.timerRemaining;
     }
-    if (settingsChanged) {
-      publishMqttSystemStatus();
-      prevMqttDarkMode = appState.darkMode;
-      prevMqttAutoUpdate = appState.autoUpdateEnabled;
-      prevMqttCertValidation = appState.enableCertValidation;
-    }
-    if (buzzerChanged) {
-      publishMqttBuzzerState();
-      appState.prevMqttBuzzerEnabled = appState.buzzerEnabled;
-      appState.prevMqttBuzzerVolume = appState.buzzerVolume;
-    }
-    if (siggenChanged) {
-      publishMqttSignalGenState();
-      appState.prevMqttSigGenEnabled = appState.sigGenEnabled;
-      appState.prevMqttSigGenWaveform = appState.sigGenWaveform;
-      appState.prevMqttSigGenFrequency = appState.sigGenFrequency;
-      appState.prevMqttSigGenAmplitude = appState.sigGenAmplitude;
-      appState.prevMqttSigGenOutputMode = appState.sigGenOutputMode;
-      appState.prevMqttSigGenSweepSpeed = appState.sigGenSweepSpeed;
-    }
-    if (audioGraphChanged) {
-      publishMqttAudioGraphState();
-      appState.prevMqttVuMeterEnabled = appState.vuMeterEnabled;
-      appState.prevMqttWaveformEnabled = appState.waveformEnabled;
-      appState.prevMqttSpectrumEnabled = appState.spectrumEnabled;
-      appState.prevMqttFftWindowType = appState.fftWindowType;
-    }
-    if (appState.isAdcEnabledDirty()) {
-      publishMqttAdcEnabledState();
-      appState.clearAdcEnabledDirty();
-    }
+  }
+  if (displayChanged) {
+    publishMqttDisplayState();
+    appState.prevMqttBacklightOn = appState.backlightOn;
+    appState.prevMqttScreenTimeout = appState.screenTimeout;
+    appState.prevMqttBrightness = appState.backlightBrightness;
+    appState.prevMqttDimEnabled = appState.dimEnabled;
+    appState.prevMqttDimTimeout = appState.dimTimeout;
+    appState.prevMqttDimBrightness = appState.dimBrightness;
+  }
+  if (settingsChanged) {
+    publishMqttSystemStatus();
+    prevMqttDarkMode = appState.darkMode;
+    prevMqttAutoUpdate = appState.autoUpdateEnabled;
+    prevMqttCertValidation = appState.enableCertValidation;
+  }
+  if (buzzerChanged) {
+    publishMqttBuzzerState();
+    appState.prevMqttBuzzerEnabled = appState.buzzerEnabled;
+    appState.prevMqttBuzzerVolume = appState.buzzerVolume;
+  }
+  if (siggenChanged) {
+    publishMqttSignalGenState();
+    appState.prevMqttSigGenEnabled = appState.sigGenEnabled;
+    appState.prevMqttSigGenWaveform = appState.sigGenWaveform;
+    appState.prevMqttSigGenFrequency = appState.sigGenFrequency;
+    appState.prevMqttSigGenAmplitude = appState.sigGenAmplitude;
+    appState.prevMqttSigGenOutputMode = appState.sigGenOutputMode;
+    appState.prevMqttSigGenSweepSpeed = appState.sigGenSweepSpeed;
+  }
+  if (audioGraphChanged) {
+    publishMqttAudioGraphState();
+    appState.prevMqttVuMeterEnabled = appState.vuMeterEnabled;
+    appState.prevMqttWaveformEnabled = appState.waveformEnabled;
+    appState.prevMqttSpectrumEnabled = appState.spectrumEnabled;
+    appState.prevMqttFftWindowType = appState.fftWindowType;
+  }
+  if (appState.isAdcEnabledDirty()) {
+    publishMqttAdcEnabledState();
+    appState.clearAdcEnabledDirty();
+  }
 #ifdef USB_AUDIO_ENABLED
-    if (appState.isUsbAudioDirty()) {
-      publishMqttUsbAudioState();
-      // Note: clearUsbAudioDirty() is handled by main loop WS handler — don't clear here
-    }
+  if (appState.isUsbAudioDirty()) {
+    publishMqttUsbAudioState();
+    // Note: clearUsbAudioDirty() is handled by main loop WS handler — don't clear here
+  }
 #endif
-    if (debugChanged) {
-      publishMqttDebugState();
-      appState.prevMqttDebugMode = appState.debugMode;
-      appState.prevMqttDebugSerialLevel = appState.debugSerialLevel;
-      appState.prevMqttDebugHwStats = appState.debugHwStats;
-      appState.prevMqttDebugI2sMetrics = appState.debugI2sMetrics;
-      appState.prevMqttDebugTaskMonitor = appState.debugTaskMonitor;
-    }
+  if (debugChanged) {
+    publishMqttDebugState();
+    appState.prevMqttDebugMode = appState.debugMode;
+    appState.prevMqttDebugSerialLevel = appState.debugSerialLevel;
+    appState.prevMqttDebugHwStats = appState.debugHwStats;
+    appState.prevMqttDebugI2sMetrics = appState.debugI2sMetrics;
+    appState.prevMqttDebugTaskMonitor = appState.debugTaskMonitor;
+  }
 #ifdef GUI_ENABLED
-    if ((appState.bootAnimEnabled != appState.prevMqttBootAnimEnabled) ||
-        (appState.bootAnimStyle != appState.prevMqttBootAnimStyle)) {
-      publishMqttBootAnimState();
-      appState.prevMqttBootAnimEnabled = appState.bootAnimEnabled;
-      appState.prevMqttBootAnimStyle = appState.bootAnimStyle;
-    }
+  if ((appState.bootAnimEnabled != appState.prevMqttBootAnimEnabled) ||
+      (appState.bootAnimStyle != appState.prevMqttBootAnimStyle)) {
+    publishMqttBootAnimState();
+    appState.prevMqttBootAnimEnabled = appState.bootAnimEnabled;
+    appState.prevMqttBootAnimStyle = appState.bootAnimStyle;
+  }
 #endif
 #ifdef DSP_ENABLED
-    if ((appState.dspEnabled != appState.prevMqttDspEnabled) ||
-        (appState.dspBypass != appState.prevMqttDspBypass) ||
-        (appState.dspPresetIndex != appState.prevMqttDspPresetIndex)) {
-      publishMqttDspState();
-      appState.prevMqttDspEnabled = appState.dspEnabled;
-      appState.prevMqttDspBypass = appState.dspBypass;
-      appState.prevMqttDspPresetIndex = appState.dspPresetIndex;
-    }
+  if ((appState.dspEnabled != appState.prevMqttDspEnabled) ||
+      (appState.dspBypass != appState.prevMqttDspBypass) ||
+      (appState.dspPresetIndex != appState.prevMqttDspPresetIndex)) {
+    publishMqttDspState();
+    appState.prevMqttDspEnabled = appState.dspEnabled;
+    appState.prevMqttDspBypass = appState.dspBypass;
+    appState.prevMqttDspPresetIndex = appState.dspPresetIndex;
+  }
 #endif
-  }
+}
 
-  // 60-second heartbeat — essential status even when nothing changes
+// Publish 60-second heartbeat — essential status even when nothing changes.
+// Called from mqtt_task (or mqttLoop for backward compat).
+void mqttPublishHeartbeat() {
+  if (!mqttClient.connected()) return;
+
   static unsigned long lastMqttHeartbeat = 0;
-  if (mqttClient.connected() &&
-      (currentMillis - lastMqttHeartbeat >= MQTT_HEARTBEAT_INTERVAL)) {
-    lastMqttHeartbeat = currentMillis;
-    publishMqttSmartSensingState();
-    publishMqttWifiStatus();
-    publishMqttCrashDiagnostics();
-    publishMqttHardwareStats();
-    String base = getEffectiveMqttBaseTopic();
-    mqttClient.publish((base + "/system/uptime").c_str(),
-                       String(millis() / 1000).c_str(), true);
-  }
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastMqttHeartbeat < MQTT_HEARTBEAT_INTERVAL) return;
+  lastMqttHeartbeat = currentMillis;
+
+  publishMqttSmartSensingState();
+  publishMqttWifiStatus();
+  publishMqttCrashDiagnostics();
+  publishMqttHardwareStats();
+  String base = getEffectiveMqttBaseTopic();
+  mqttClient.publish((base + "/system/uptime").c_str(),
+                     String(millis() / 1000).c_str(), true);
 }
 
 // ===== MQTT State Publishing Functions =====
