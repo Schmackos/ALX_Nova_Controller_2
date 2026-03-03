@@ -1035,7 +1035,7 @@ void loop() {
     audio_periodic_dump();
   }
 
-  // Fallback buzzer processing (primary path is gui_task on Core 1)
+  // Fallback buzzer processing (primary path is gui_task on Core 0)
   // Non-blocking mutex: skips if gui_task is already processing
   buzzer_update();
 
