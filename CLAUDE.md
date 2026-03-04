@@ -206,6 +206,15 @@ All icons in the web UI **must** use inline SVG paths sourced from [Material Des
 | Icon | MDI name | Used for |
 |------|----------|---------|
 | ⓘ outline circle | `mdi-information-outline` | Release notes links |
+| ✕ | `mdi-close` | Close/dismiss buttons, clear search |
+| 💾 | `mdi-content-save` | Save preset button |
+| ▲ | `mdi-chevron-up` | Sort ascending, move item up |
+| ▼ | `mdi-chevron-down` | Sort descending, move item down |
+| ✏ | `mdi-pencil` | Rename/edit action |
+| ⚠ triangle | `mdi-alert` | Warning banners and modal titles |
+| ✔ circle | `mdi-check-circle` | WiFi connection success status |
+| ✕ circle | `mdi-close-circle` | WiFi connection error status |
+| 🗑 | `mdi-delete` | Delete DSP stage / preset |
 
 ## Key Dependencies
 

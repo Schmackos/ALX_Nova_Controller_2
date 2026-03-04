@@ -124,11 +124,13 @@
             rows.forEach(r => tbody.appendChild(r));
             table.querySelectorAll('th').forEach(th => {
                 th.classList.remove('sorted');
-                th.querySelector('.sort-arrow').innerHTML = '&#9650;';
+                th.querySelector('.sort-arrow').innerHTML = '<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg>';
             });
             const th = table.querySelectorAll('th')[col];
             th.classList.add('sorted');
-            th.querySelector('.sort-arrow').innerHTML = pinSortAsc ? '&#9650;' : '&#9660;';
+            th.querySelector('.sort-arrow').innerHTML = pinSortAsc
+                ? '<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg>'
+                : '<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
         }
 
         function clearDebugConsole() {

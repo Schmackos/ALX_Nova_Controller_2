@@ -352,9 +352,9 @@ function dspRenderStages() {
         html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
         html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
         html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
-        if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
-        if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down">&#9660;</button>';
-        html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete">&times;</button>';
+        if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></button>';
+        if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg></button>';
+        html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
         html += '</div></div>';
         html += '<div class="dsp-stage-body' + (open ? ' open' : '') + '">' + (open ? dspParamSliders(i, s) : '') + '</div>';
         html += '</div>';
@@ -405,8 +405,8 @@ function dspRenderPresetList(presets, activeIndex) {
         html += '<div class="dsp-preset-item' + (isActive ? ' active' : '') + '" onclick="dspLoadPreset(' + p.index + ')">';
         html += '<span class="preset-name">' + eName + '</span>';
         html += '<div class="dsp-stage-actions">';
-        html += '<button onclick="event.stopPropagation();dspRenamePresetDialog(' + p.index + ')" title="Rename">&#9998;</button>';
-        html += '<button class="del" onclick="event.stopPropagation();dspDeletePresetConfirm(' + p.index + ')" title="Delete">&times;</button>';
+        html += '<button onclick="event.stopPropagation();dspRenamePresetDialog(' + p.index + ')" title="Rename"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
+        html += '<button class="del" onclick="event.stopPropagation();dspDeletePresetConfirm(' + p.index + ')" title="Delete"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
         html += '</div></div>';
     }
     list.innerHTML = html;

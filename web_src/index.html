@@ -539,18 +539,18 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="dacEnable" onchange="updateDac()"><span class="slider round"></span></label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="dacEnable" onchange="updateDacEnable()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
                 <div id="dacFields" style="display:none">
                 <div class="info-row"><span class="info-label">Model</span><span class="info-value" id="dacModel">—</span></div>
                 <div class="form-group">
                     <label class="form-label">Volume: <span id="dacVolVal">80</span>%</label>
-                    <input type="range" class="form-input" id="dacVolume" min="0" max="100" value="80" step="1" oninput="document.getElementById('dacVolVal').textContent=this.value" onchange="updateDac()">
+                    <input type="range" class="form-input" id="dacVolume" min="0" max="100" value="80" step="1" oninput="document.getElementById('dacVolVal').textContent=this.value" onchange="updateDacVolume()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Mute</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="dacMute" onchange="updateDac()"><span class="slider round"></span></label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="dacMute" onchange="updateDacMute()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
                 <div class="form-group" id="dacFilterGroup" style="display:none">
@@ -573,17 +573,17 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Enable" onchange="updateEs8311()"><span class="slider round"></span></label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Enable" onchange="updateEs8311Enable()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
                 <div id="es8311Fields" style="display:none">
                 <div class="form-group">
                     <label class="form-label">Volume: <span id="es8311VolVal">80</span>%</label>
-                    <input type="range" class="form-input" id="es8311Volume" min="0" max="100" value="80" step="1" oninput="document.getElementById('es8311VolVal').textContent=this.value" onchange="updateEs8311()">
+                    <input type="range" class="form-input" id="es8311Volume" min="0" max="100" value="80" step="1" oninput="document.getElementById('es8311VolVal').textContent=this.value" onchange="updateEs8311Volume()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Mute</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Mute" onchange="updateEs8311()"><span class="slider round"></span></label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Mute" onchange="updateEs8311Mute()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
                 </div>
@@ -773,7 +773,7 @@
                 <div id="dspPresetList" style="margin-top:8px;"></div>
                 <div id="dspPresetActions" style="display:flex;gap:8px;margin-top:8px;">
                     <button class="dsp-add-btn" style="flex:1" onclick="dspShowAddPresetDialog()">+ Add Preset</button>
-                    <button class="btn btn-primary" id="dspSavePresetBtn" style="display:none;padding:8px 16px;font-size:12px;border-radius:10px;white-space:nowrap;" onclick="dspSaveCurrentPreset()">&#128190; Save</button>
+                    <button class="btn btn-primary" id="dspSavePresetBtn" style="display:none;padding:8px 16px;font-size:12px;border-radius:10px;white-space:nowrap;" onclick="dspSaveCurrentPreset()"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" style="vertical-align:middle;margin-right:4px;"><path d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>Save</button>
                 </div>
             </div>
 
@@ -1372,7 +1372,7 @@
                 <div id="inlineReleaseNotes" class="release-notes-inline">
                     <div class="release-notes-header">
                         <span id="inlineReleaseNotesTitle" class="release-notes-title">Release Notes</span>
-                        <button type="button" class="release-notes-close" onclick="toggleInlineReleaseNotes(false)">×</button>
+                        <button type="button" class="release-notes-close" onclick="toggleInlineReleaseNotes(false)" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg></button>
                     </div>
                     <div id="inlineReleaseNotesContent" class="release-notes-body"></div>
                 </div>
@@ -1411,7 +1411,7 @@
                 <div id="releasesBrowser" class="hidden" style="margin-bottom:12px;">
                     <div class="release-notes-header">
                         <span class="release-notes-title">Available Releases</span>
-                        <button type="button" class="release-notes-close" onclick="toggleReleasesBrowser()">×</button>
+                        <button type="button" class="release-notes-close" onclick="toggleReleasesBrowser()" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg></button>
                     </div>
                     <div id="releaseListContent" style="max-height:280px;overflow-y:auto;">
                         <div id="releaseListLoading" class="text-secondary" style="font-size:13px;padding:8px;">Loading...</div>
@@ -1550,7 +1550,7 @@
                     <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
                            oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
                     <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
-                            style="margin-left:4px;" title="Clear search">&#10005;</button>
+                            style="margin-left:4px;" title="Clear search"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg></button>
                     <button class="btn-chip btn-chip-action" id="timestampToggle"
                             onclick="toggleTimestampMode()" title="Toggle timestamp format"
                             style="margin-left:4px;">Uptime</button>
@@ -2013,10 +2013,10 @@
                 <table class="pin-table" id="pinTable">
                     <thead>
                         <tr>
-                            <th onclick="sortPinTable(0)" data-col="0">GPIO <span class="sort-arrow">&#9650;</span></th>
-                            <th onclick="sortPinTable(1)" data-col="1">Function <span class="sort-arrow">&#9650;</span></th>
-                            <th onclick="sortPinTable(2)" data-col="2">Device <span class="sort-arrow">&#9650;</span></th>
-                            <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow">&#9650;</span></th>
+                            <th onclick="sortPinTable(0)" data-col="0">GPIO <span class="sort-arrow"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></span></th>
+                            <th onclick="sortPinTable(1)" data-col="1">Function <span class="sort-arrow"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></span></th>
+                            <th onclick="sortPinTable(2)" data-col="2">Device <span class="sort-arrow"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></span></th>
+                            <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></span></th>
                         </tr>
                     </thead>
                     <tbody id="pinTableBody">

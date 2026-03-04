@@ -864,8 +864,32 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             font-size: 8px;
             opacity: 0.3;
         }
-        .task-table th .sort-arrow.asc::after { content: '\25B2'; opacity: 1; }
-        .task-table th .sort-arrow.desc::after { content: '\25BC'; opacity: 1; }
+        .task-table th .sort-arrow.asc::after {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: currentColor;
+            -webkit-mask-image: url("data:image/svg+xml,<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z'/></svg>");
+            mask-image: url("data:image/svg+xml,<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z'/></svg>");
+            mask-size: contain;
+            mask-repeat: no-repeat;
+            opacity: 1;
+            vertical-align: middle;
+        }
+        .task-table th .sort-arrow.desc::after {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: currentColor;
+            -webkit-mask-image: url("data:image/svg+xml,<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z'/></svg>");
+            mask-image: url("data:image/svg+xml,<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z'/></svg>");
+            mask-size: contain;
+            mask-repeat: no-repeat;
+            opacity: 1;
+            vertical-align: middle;
+        }
         .task-stack-ok { background: var(--success-color); }
         .task-stack-warn { background: #f0ad4e; }
         .task-stack-crit { background: var(--error-color); }
@@ -3194,18 +3218,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 <div class="form-group">
                     <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="dacEnable" onchange="updateDac()"><span class="slider round"></span></label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="dacEnable" onchange="updateDacEnable()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
                 <div id="dacFields" style="display:none">
                 <div class="info-row"><span class="info-label">Model</span><span class="info-value" id="dacModel">—</span></div>
                 <div class="form-group">
                     <label class="form-label">Volume: <span id="dacVolVal">80</span>%</label>
-                    <input type="range" class="form-input" id="dacVolume" min="0" max="100" value="80" step="1" oninput="document.getElementById('dacVolVal').textContent=this.value" onchange="updateDac()">
+                    <input type="range" class="form-input" id="dacVolume" min="0" max="100" value="80" step="1" oninput="document.getElementById('dacVolVal').textContent=this.value" onchange="updateDacVolume()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Mute</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="dacMute" onchange="updateDac()"><span class="slider round"></span></label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="dacMute" onchange="updateDacMute()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
                 <div class="form-group" id="dacFilterGroup" style="display:none">
@@ -3228,17 +3252,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
                 <div class="form-group">
                     <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Enable" onchange="updateEs8311()"><span class="slider round"></span></label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Enable" onchange="updateEs8311Enable()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
                 <div id="es8311Fields" style="display:none">
                 <div class="form-group">
                     <label class="form-label">Volume: <span id="es8311VolVal">80</span>%</label>
-                    <input type="range" class="form-input" id="es8311Volume" min="0" max="100" value="80" step="1" oninput="document.getElementById('es8311VolVal').textContent=this.value" onchange="updateEs8311()">
+                    <input type="range" class="form-input" id="es8311Volume" min="0" max="100" value="80" step="1" oninput="document.getElementById('es8311VolVal').textContent=this.value" onchange="updateEs8311Volume()">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Mute</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Mute" onchange="updateEs8311()"><span class="slider round"></span></label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Mute" onchange="updateEs8311Mute()"><span class="slider round"></span></label>
                     <div style="clear:both"></div>
                 </div>
                 </div>
@@ -3428,7 +3452,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div id="dspPresetList" style="margin-top:8px;"></div>
                 <div id="dspPresetActions" style="display:flex;gap:8px;margin-top:8px;">
                     <button class="dsp-add-btn" style="flex:1" onclick="dspShowAddPresetDialog()">+ Add Preset</button>
-                    <button class="btn btn-primary" id="dspSavePresetBtn" style="display:none;padding:8px 16px;font-size:12px;border-radius:10px;white-space:nowrap;" onclick="dspSaveCurrentPreset()">&#128190; Save</button>
+                    <button class="btn btn-primary" id="dspSavePresetBtn" style="display:none;padding:8px 16px;font-size:12px;border-radius:10px;white-space:nowrap;" onclick="dspSaveCurrentPreset()"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" style="vertical-align:middle;margin-right:4px;"><path d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>Save</button>
                 </div>
             </div>
 
@@ -4027,7 +4051,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div id="inlineReleaseNotes" class="release-notes-inline">
                     <div class="release-notes-header">
                         <span id="inlineReleaseNotesTitle" class="release-notes-title">Release Notes</span>
-                        <button type="button" class="release-notes-close" onclick="toggleInlineReleaseNotes(false)">×</button>
+                        <button type="button" class="release-notes-close" onclick="toggleInlineReleaseNotes(false)" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg></button>
                     </div>
                     <div id="inlineReleaseNotesContent" class="release-notes-body"></div>
                 </div>
@@ -4066,7 +4090,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div id="releasesBrowser" class="hidden" style="margin-bottom:12px;">
                     <div class="release-notes-header">
                         <span class="release-notes-title">Available Releases</span>
-                        <button type="button" class="release-notes-close" onclick="toggleReleasesBrowser()">×</button>
+                        <button type="button" class="release-notes-close" onclick="toggleReleasesBrowser()" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg></button>
                     </div>
                     <div id="releaseListContent" style="max-height:280px;overflow-y:auto;">
                         <div id="releaseListLoading" class="text-secondary" style="font-size:13px;padding:8px;">Loading...</div>
@@ -4205,7 +4229,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
                            oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
                     <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
-                            style="margin-left:4px;" title="Clear search">&#10005;</button>
+                            style="margin-left:4px;" title="Clear search"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg></button>
                     <button class="btn-chip btn-chip-action" id="timestampToggle"
                             onclick="toggleTimestampMode()" title="Toggle timestamp format"
                             style="margin-left:4px;">Uptime</button>
@@ -4668,10 +4692,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <table class="pin-table" id="pinTable">
                     <thead>
                         <tr>
-                            <th onclick="sortPinTable(0)" data-col="0">GPIO <span class="sort-arrow">&#9650;</span></th>
-                            <th onclick="sortPinTable(1)" data-col="1">Function <span class="sort-arrow">&#9650;</span></th>
-                            <th onclick="sortPinTable(2)" data-col="2">Device <span class="sort-arrow">&#9650;</span></th>
-                            <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow">&#9650;</span></th>
+                            <th onclick="sortPinTable(0)" data-col="0">GPIO <span class="sort-arrow"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></span></th>
+                            <th onclick="sortPinTable(1)" data-col="1">Function <span class="sort-arrow"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></span></th>
+                            <th onclick="sortPinTable(2)" data-col="2">Device <span class="sort-arrow"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></span></th>
+                            <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow"><svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></span></th>
                         </tr>
                     </thead>
                     <tbody id="pinTableBody">
@@ -6487,15 +6511,23 @@ function toggleSigGenLane(enabled) {
 //# sourceURL=11-input-overview.js
 
         // ===== DAC Output =====
-        function updateDac() {
+        function updateDacEnable() {
             var en = document.getElementById('dacEnable').checked;
             document.getElementById('dacFields').style.display = en ? '' : 'none';
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'setDacEnabled', enabled: en }));
+            }
+        }
+        function updateDacVolume() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'setDacVolume',
                     volume: parseInt(document.getElementById('dacVolume').value)
                 }));
+            }
+        }
+        function updateDacMute() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'setDacMute',
                     mute: document.getElementById('dacMute').checked
@@ -6525,15 +6557,23 @@ function toggleSigGenLane(enabled) {
             .catch(() => showToast('Failed to change DAC driver', 'error'));
         }
         // ===== ES8311 Secondary DAC Output =====
-        function updateEs8311() {
+        function updateEs8311Enable() {
             var en = document.getElementById('es8311Enable').checked;
             document.getElementById('es8311Fields').style.display = en ? '' : 'none';
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'setEs8311Enabled', enabled: en }));
+            }
+        }
+        function updateEs8311Volume() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'setEs8311Volume',
                     volume: parseInt(document.getElementById('es8311Volume').value)
                 }));
+            }
+        }
+        function updateEs8311Mute() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'setEs8311Mute',
                     mute: document.getElementById('es8311Mute').checked
@@ -7789,9 +7829,9 @@ function dspRenderStages() {
         html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
         html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
         html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
-        if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up">&#9650;</button>';
-        if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down">&#9660;</button>';
-        html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete">&times;</button>';
+        if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></button>';
+        if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg></button>';
+        html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
         html += '</div></div>';
         html += '<div class="dsp-stage-body' + (open ? ' open' : '') + '">' + (open ? dspParamSliders(i, s) : '') + '</div>';
         html += '</div>';
@@ -7842,8 +7882,8 @@ function dspRenderPresetList(presets, activeIndex) {
         html += '<div class="dsp-preset-item' + (isActive ? ' active' : '') + '" onclick="dspLoadPreset(' + p.index + ')">';
         html += '<span class="preset-name">' + eName + '</span>';
         html += '<div class="dsp-stage-actions">';
-        html += '<button onclick="event.stopPropagation();dspRenamePresetDialog(' + p.index + ')" title="Rename">&#9998;</button>';
-        html += '<button class="del" onclick="event.stopPropagation();dspDeletePresetConfirm(' + p.index + ')" title="Delete">&times;</button>';
+        html += '<button onclick="event.stopPropagation();dspRenamePresetDialog(' + p.index + ')" title="Rename"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
+        html += '<button class="del" onclick="event.stopPropagation();dspDeletePresetConfirm(' + p.index + ')" title="Delete"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
         html += '</div></div>';
     }
     list.innerHTML = html;
@@ -8485,7 +8525,7 @@ function updateWiFiConnectionStatus(type, message, ip) {
     statusText.innerHTML = message;
 
     if (type === 'success') {
-        loader.textContent = '✅';
+        loader.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="var(--success)" aria-hidden="true"><path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M11,16.5L18,9.5L16.59,8.09L11,13.67L7.91,10.59L6.5,12L11,16.5Z"/></svg>';
         loader.classList.remove('animate-pulse');
 
         if (ip) {
@@ -8499,7 +8539,7 @@ function updateWiFiConnectionStatus(type, message, ip) {
              actions.innerHTML = `<button class="btn btn-secondary" onclick="closeWiFiModal()">Close</button>`;
         }
     } else if (type === 'error') {
-        loader.textContent = '❌';
+        loader.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="var(--error)" aria-hidden="true"><path d="M12,2C17.53,2 22,6.47 22,12C22,17.53 17.53,22 12,22C6.47,22 2,17.53 2,12C2,6.47 6.47,2 12,2M15.59,7L12,10.59L8.41,7L7,8.41L10.59,12L7,15.59L8.41,17L12,13.41L15.59,17L17,15.59L13.41,12L17,8.41L15.59,7Z"/></svg>';
         loader.classList.remove('animate-pulse');
         actions.innerHTML = `<button class="btn btn-secondary" onclick="closeWiFiModal()">Close</button>`;
     }
@@ -9038,7 +9078,7 @@ function showRemoveCurrentNetworkModal(network, selectedIndex) {
     modal.className = 'modal-overlay active';
     modal.innerHTML = `
                 <div class="modal">
-                    <div class="modal-title">⚠️ Remove Current Network</div>
+                    <div class="modal-title"><svg viewBox="0 0 24 24" width="20" height="20" fill="var(--warning)" aria-hidden="true" style="vertical-align:middle;margin-right:6px;"><path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z"/></svg>Remove Current Network</div>
                     <div class="info-box" style="background: var(--error-bg); border-color: var(--error);">
                         <div style="padding: 20px;">
                             <div style="font-size: 16px; margin-bottom: 16px; font-weight: bold; color: var(--error);">
@@ -11073,11 +11113,13 @@ function initFirmwareDragDrop() {
             rows.forEach(r => tbody.appendChild(r));
             table.querySelectorAll('th').forEach(th => {
                 th.classList.remove('sorted');
-                th.querySelector('.sort-arrow').innerHTML = '&#9650;';
+                th.querySelector('.sort-arrow').innerHTML = '<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg>';
             });
             const th = table.querySelectorAll('th')[col];
             th.classList.add('sorted');
-            th.querySelector('.sort-arrow').innerHTML = pinSortAsc ? '&#9650;' : '&#9660;';
+            th.querySelector('.sort-arrow').innerHTML = pinSortAsc
+                ? '<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg>'
+                : '<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
         }
 
         function clearDebugConsole() {
@@ -11566,7 +11608,7 @@ function initFirmwareDragDrop() {
             banner.className = 'warning-banner';
             banner.id = 'passwordWarning';
             banner.innerHTML = `
-                <div class="warning-icon">⚠️</div>
+                <div class="warning-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="var(--warning)" aria-hidden="true"><path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z"/></svg></div>
                 <div class="warning-text">
                     <strong>Security Warning</strong>
                     You are using the default password. Anyone on your network can access this device.

@@ -197,7 +197,7 @@ function updateWiFiConnectionStatus(type, message, ip) {
     statusText.innerHTML = message;
 
     if (type === 'success') {
-        loader.textContent = '✅';
+        loader.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="var(--success)" aria-hidden="true"><path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M11,16.5L18,9.5L16.59,8.09L11,13.67L7.91,10.59L6.5,12L11,16.5Z"/></svg>';
         loader.classList.remove('animate-pulse');
 
         if (ip) {
@@ -211,7 +211,7 @@ function updateWiFiConnectionStatus(type, message, ip) {
              actions.innerHTML = `<button class="btn btn-secondary" onclick="closeWiFiModal()">Close</button>`;
         }
     } else if (type === 'error') {
-        loader.textContent = '❌';
+        loader.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="var(--error)" aria-hidden="true"><path d="M12,2C17.53,2 22,6.47 22,12C22,17.53 17.53,22 12,22C6.47,22 2,17.53 2,12C2,6.47 6.47,2 12,2M15.59,7L12,10.59L8.41,7L7,8.41L10.59,12L7,15.59L8.41,17L12,13.41L15.59,17L17,15.59L13.41,12L17,8.41L15.59,7Z"/></svg>';
         loader.classList.remove('animate-pulse');
         actions.innerHTML = `<button class="btn btn-secondary" onclick="closeWiFiModal()">Close</button>`;
     }
@@ -750,7 +750,7 @@ function showRemoveCurrentNetworkModal(network, selectedIndex) {
     modal.className = 'modal-overlay active';
     modal.innerHTML = `
                 <div class="modal">
-                    <div class="modal-title">⚠️ Remove Current Network</div>
+                    <div class="modal-title"><svg viewBox="0 0 24 24" width="20" height="20" fill="var(--warning)" aria-hidden="true" style="vertical-align:middle;margin-right:6px;"><path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z"/></svg>Remove Current Network</div>
                     <div class="info-box" style="background: var(--error-bg); border-color: var(--error);">
                         <div style="padding: 20px;">
                             <div style="font-size: 16px; margin-bottom: 16px; font-weight: bold; color: var(--error);">

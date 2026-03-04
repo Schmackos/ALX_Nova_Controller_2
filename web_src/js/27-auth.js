@@ -22,7 +22,7 @@
             banner.className = 'warning-banner';
             banner.id = 'passwordWarning';
             banner.innerHTML = `
-                <div class="warning-icon">⚠️</div>
+                <div class="warning-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="var(--warning)" aria-hidden="true"><path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z"/></svg></div>
                 <div class="warning-text">
                     <strong>Security Warning</strong>
                     You are using the default password. Anyone on your network can access this device.
