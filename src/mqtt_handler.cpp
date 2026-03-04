@@ -187,6 +187,7 @@ void subscribeToMqttTopics() {
   mqttClient.subscribe((base + "/smartsensing/audio_threshold/set").c_str());
   mqttClient.subscribe((base + "/ap/enabled/set").c_str());
   mqttClient.subscribe((base + "/settings/auto_update/set").c_str());
+  mqttClient.subscribe((base + "/settings/ota_channel/set").c_str());
   mqttClient.subscribe((base + "/settings/dark_mode/set").c_str());
   mqttClient.subscribe((base + "/settings/cert_validation/set").c_str());
   mqttClient.subscribe((base + "/settings/screen_timeout/set").c_str());
@@ -363,6 +364,19 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       saveSettingsDeferred();
       LOG_I("[MQTT] Auto-update set to %s", enabled ? "ON" : "OFF");
       appState.markSettingsDirty();
+    }
+    publishMqttSystemStatus();
+  }
+  // Handle OTA release channel setting
+  else if (topicStr == base + "/settings/ota_channel/set") {
+    uint8_t newCh = 0;
+    if (message == "beta" || message == "1") newCh = 1;
+    if (newCh != appState.otaChannel) {
+      appState.otaChannel = newCh;
+      saveSettingsDeferred();
+      LOG_I("[MQTT] OTA channel set to %s", newCh == 0 ? "stable" : "beta");
+      appState.markSettingsDirty();
+      appState.markOTADirty();
     }
     publishMqttSystemStatus();
   }
@@ -1005,7 +1019,8 @@ void mqttPublishPendingState() {
   bool settingsChanged =
       (appState.darkMode != prevMqttDarkMode) ||
       (appState.autoUpdateEnabled != prevMqttAutoUpdate) ||
-      (appState.enableCertValidation != prevMqttCertValidation);
+      (appState.enableCertValidation != prevMqttCertValidation) ||
+      (appState.otaChannel != appState.prevMqttOtaChannel);
   bool buzzerChanged =
       (appState.buzzerEnabled != appState.prevMqttBuzzerEnabled) ||
       (appState.buzzerVolume != appState.prevMqttBuzzerVolume);
@@ -1056,6 +1071,7 @@ void mqttPublishPendingState() {
     prevMqttDarkMode = appState.darkMode;
     prevMqttAutoUpdate = appState.autoUpdateEnabled;
     prevMqttCertValidation = appState.enableCertValidation;
+    appState.prevMqttOtaChannel = appState.otaChannel;
   }
   if (buzzerChanged) {
     publishMqttBuzzerState();
@@ -1249,6 +1265,8 @@ void publishMqttSystemStatus() {
   }
   mqttClient.publish((base + "/settings/auto_update").c_str(),
                      appState.autoUpdateEnabled ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/settings/ota_channel").c_str(),
+                     appState.otaChannel == 0 ? "stable" : "beta", true);
   mqttClient.publish((base + "/settings/timezone_offset").c_str(),
                      String(appState.timezoneOffset).c_str(), true);
   mqttClient.publish((base + "/settings/dark_mode").c_str(),
@@ -2117,6 +2135,26 @@ void publishHADiscovery() {
     String payload;
     serializeJson(doc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/auto_update/config";
+    mqttClient.publish(topic.c_str(), payload.c_str(), true);
+  }
+
+  // ===== OTA Channel Select =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Update Channel";
+    doc["unique_id"] = deviceId + "_ota_channel";
+    doc["state_topic"] = base + "/settings/ota_channel";
+    doc["command_topic"] = base + "/settings/ota_channel/set";
+    JsonArray options = doc["options"].to<JsonArray>();
+    options.add("stable");
+    options.add("beta");
+    doc["entity_category"] = "config";
+    doc["icon"] = "mdi:tag-multiple";
+    addHADeviceInfo(doc);
+
+    String payload;
+    serializeJson(doc, payload);
+    String topic = "homeassistant/select/" + deviceId + "/ota_channel/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
@@ -3479,6 +3517,7 @@ void removeHADiscovery() {
       "homeassistant/switch/%s/amplifier/config",
       "homeassistant/switch/%s/ap/config",
       "homeassistant/switch/%s/auto_update/config",
+      "homeassistant/select/%s/ota_channel/config",
       "homeassistant/switch/%s/dark_mode/config",
       "homeassistant/switch/%s/cert_validation/config",
       "homeassistant/select/%s/mode/config",

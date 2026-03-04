@@ -134,6 +134,22 @@ public:
   String cachedLatestVersion;
   unsigned long updateDiscoveredTime = 0;
 
+  // ===== OTA Release Channel =====
+  // 0 = stable (latest non-prerelease), 1 = beta (includes prereleases)
+  uint8_t otaChannel = 0;
+
+  // ===== Release List Cache (on-demand, populated by /api/releases) =====
+  struct ReleaseInfo {
+    String version;
+    String firmwareUrl;
+    String checksum;
+    bool isPrerelease;
+    String publishedAt;  // "YYYY-MM-DD"
+  };
+  static const int OTA_MAX_RELEASES = 5;
+  ReleaseInfo cachedReleaseList[OTA_MAX_RELEASES];
+  int cachedReleaseListCount = 0;
+
   // ===== OTA Just Updated State =====
   bool justUpdated = false;
   String previousFirmwareVersion;
@@ -486,6 +502,9 @@ public:
   uint8_t prevMqttDacVolume = 80;
   bool prevMqttDacMute = false;
 #endif
+
+  // MQTT state tracking for OTA channel (not GUI-gated — MQTT works without GUI)
+  uint8_t prevMqttOtaChannel = 0;
 
   // MQTT state tracking for boot animation
 #ifdef GUI_ENABLED
