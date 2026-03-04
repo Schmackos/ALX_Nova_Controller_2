@@ -145,16 +145,17 @@ static bool ledc_attached = false;  // track LEDC attachment to avoid spurious w
 // Low=20%, Medium=50%, High=100% of the 50%-duty value
 static const uint8_t volume_pct[] = {20, 50, 100};
 
-// ===== Set tone frequency + volume (resolution-independent) =====
-// Always detach first so ledcWriteTone() starts from a clean state —
-// calling ledcWriteTone() on an already-attached pin uses a different
-// code path in Arduino 3.x that can produce silence.
+// ===== Set tone frequency + volume =====
+// ledcWriteTone() always uses 10-bit resolution internally (50% duty = 512).
+// Do NOT use ledcRead() to get halfDuty — on P4 it returns 0, causing
+// ledcWrite(0) which auto-deregisters the pin and silences the buzzer.
 static void buzzer_set_tone(uint16_t freq_hz, int vol) {
-  if (ledc_attached) ledcDetach(BUZZER_PIN);    // only detach if previously attached (suppresses first-call warning)
-  ledcWriteTone(BUZZER_PIN, freq_hz);           // attaches fresh + sets 50% duty
+  if (ledc_attached) ledcDetach(BUZZER_PIN);    // detach only if previously attached (suppresses first-call warning)
+  ledcWriteTone(BUZZER_PIN, freq_hz);           // attaches fresh + sets 50% duty (10-bit = 512)
   ledc_attached = true;
-  uint32_t halfDuty = ledcRead(BUZZER_PIN);     // read back the 50% duty value
-  uint32_t duty = halfDuty * volume_pct[vol] / 100;
+  // Hardcode 10-bit half-duty instead of ledcRead() which returns 0 on P4.
+  static const uint32_t LEDC_TONE_HALF_DUTY = 512u;  // 50% of 10-bit max (1023)
+  uint32_t duty = LEDC_TONE_HALF_DUTY * volume_pct[vol] / 100;
   ledcWrite(BUZZER_PIN, duty);
 }
 
@@ -189,9 +190,9 @@ void buzzer_play(BuzzerPattern pattern) {
 static void start_pattern(const ToneStep *pat) {
   LOG_D("[Buzzer] Start pattern: freq=%d, dur=%d", pat[0].freq_hz, pat[0].duration_ms);
 
-  // Detach if interrupting a playing pattern
+  // Reset attachment state when interrupting — buzzer_set_tone() will
+  // call ledcDetach() before ledcWriteTone() if ledc_attached is true.
   if (playing && ledc_attached) {
-    ledcDetach(BUZZER_PIN);
     ledc_attached = false;
   }
 
@@ -209,19 +210,22 @@ static void start_pattern(const ToneStep *pat) {
     if (pat[0].freq_hz > 0) {
       buzzer_set_tone(pat[0].freq_hz, vol);
     } else {
-      // Silence gap as first step — attach with minimal config
-      ledcAttach(BUZZER_PIN, 1000, BUZZER_PWM_RESOLUTION);
-      ledc_attached = true;
-      ledcWrite(BUZZER_PIN, 0);
+      // Silence gap as first step — drive pin LOW via GPIO (no LEDC needed).
+      // Avoids ledcWrite(0) which auto-deregisters the pin on P4.
+      if (ledc_attached) { ledcDetach(BUZZER_PIN); ledc_attached = false; }
+      pinMode(BUZZER_PIN, OUTPUT);
+      digitalWrite(BUZZER_PIN, LOW);
     }
   }
 }
 
 static void stop_buzzer() {
   LOG_D("[Buzzer] Pattern complete");
+  // On ESP32-P4, ledcWrite(0) auto-deregisters the pin from the peripheral
+  // manager, so ledcDetach() after it always fails ("pin not attached").
+  // Silence via GPIO override instead — sufficient to drive the pin low.
   if (ledc_attached) {
     ledcWrite(BUZZER_PIN, 0);
-    ledcDetach(BUZZER_PIN);
     ledc_attached = false;
   }
   pinMode(BUZZER_PIN, OUTPUT);
@@ -253,8 +257,10 @@ void buzzer_update() {
         if (current_pattern[current_step].freq_hz > 0) {
           buzzer_set_tone(current_pattern[current_step].freq_hz, vol);
         } else {
-          // Silence gap
+          // Silence gap — on P4, ledcWrite(0) auto-deregisters the pin,
+          // so mark as detached so buzzer_set_tone() won't try to ledcDetach() next.
           ledcWrite(BUZZER_PIN, 0);
+          ledc_attached = false;
         }
       }
     }

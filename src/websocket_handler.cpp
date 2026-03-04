@@ -905,15 +905,18 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 #endif
 #ifdef DAC_ENABLED
         else if (msgType == "setDacEnabled") {
+          bool was = appState.dacEnabled;
           appState.dacEnabled = doc["enabled"].as<bool>();
-          dac_save_settings_deferred();  // Save BEFORE init so dac_output_init() loads correct value
-          if (appState.dacEnabled && !appState.dacReady) {
-            dac_output_init();
-          } else if (!appState.dacEnabled) {
-            dac_output_deinit();
+          dac_save_settings_deferred();
+          // Defer init/deinit to main loop — I2C EEPROM scan + I2S driver
+          // setup is too heavy for the WebSocket handler context (blocks SDIO)
+          if (appState.dacEnabled && !was && !appState.dacReady) {
+            appState._pendingDacToggle = 1;   // main loop calls dac_output_init()
+          } else if (!appState.dacEnabled && was) {
+            appState._pendingDacToggle = -1;  // main loop calls dac_output_deinit()
           }
           appState.markDacDirty();
-          LOG_I("[WebSocket] DAC %s", appState.dacEnabled ? "enabled" : "disabled");
+          LOG_I("[WebSocket] DAC %s (deferred)", appState.dacEnabled ? "enabled" : "disabled");
         }
         else if (msgType == "setDacVolume") {
           int v = doc["volume"].as<int>();
@@ -932,7 +935,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           dac_save_settings_deferred();
           appState.markDacDirty();
           if (wasMuted != appState.dacMute) {
-            LOG_I("[DAC] Mute: %s -> %s", wasMuted ? "ON" : "OFF", appState.dacMute ? "ON" : "OFF");
+            LOG_I("[DAC] (%s) mute: %s", appState.dacModelName, appState.dacMute ? "ON" : "OFF");
           }
         }
         else if (msgType == "setDacFilter") {
@@ -944,6 +947,36 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           dac_save_settings_deferred();
           appState.markDacDirty();
           LOG_I("[DAC] Filter mode: %d -> %d", prevFilter, appState.dacFilterMode);
+        }
+        else if (msgType == "setEs8311Enabled") {
+          bool was = appState.es8311Enabled;
+          appState.es8311Enabled = doc["enabled"].as<bool>();
+          // Defer init/deinit to main loop — ES8311 I2C + I2S2 setup is too heavy
+          // for the WebSocket handler context (blocks SDIO → WiFi crash)
+          if (appState.es8311Enabled && !was) {
+            appState._pendingEs8311Toggle = 1;   // main loop calls dac_secondary_init()
+          } else if (!appState.es8311Enabled && was) {
+            appState._pendingEs8311Toggle = -1;  // main loop calls dac_secondary_deinit()
+          }
+          dac_save_settings_deferred();
+          appState.markDacDirty();
+          LOG_I("[WebSocket] ES8311 %s (deferred)", appState.es8311Enabled ? "enabled" : "disabled");
+        }
+        else if (msgType == "setEs8311Volume") {
+          int v = doc["volume"].as<int>();
+          if (v >= 0 && v <= 100) {
+            appState.es8311Volume = (uint8_t)v;
+            dac_secondary_set_volume(appState.es8311Volume);
+            dac_save_settings_deferred();
+            appState.markDacDirty();
+          }
+        }
+        else if (msgType == "setEs8311Mute") {
+          appState.es8311Mute = doc["mute"].as<bool>();
+          dac_secondary_set_mute(appState.es8311Mute);
+          dac_save_settings_deferred();
+          appState.markDacDirty();
+          LOG_I("[DAC] (ES8311) mute: %s", appState.es8311Mute ? "ON" : "OFF");
         }
         else if (msgType == "eepromScan") {
           LOG_I("[WebSocket] EEPROM scan requested");
@@ -1208,6 +1241,47 @@ void sendDebugState() {
   doc["debugHwStats"] = appState.debugHwStats;
   doc["debugI2sMetrics"] = appState.debugI2sMetrics;
   doc["debugTaskMonitor"] = appState.debugTaskMonitor;
+  // Pin configuration — static board info, always sent once on connect
+  {
+    JsonArray pins = doc["pins"].to<JsonArray>();
+    struct { const char *d; const char *f; int g; const char *c; } pm[] = {
+      {"PCM1808 ADC 1&2", "BCK",   I2S_BCK_PIN,      "audio"},
+      {"PCM1808 ADC 1",   "DOUT",  I2S_DOUT_PIN,     "audio"},
+      {"PCM1808 ADC 2",   "DOUT2", I2S_DOUT2_PIN,    "audio"},
+      {"PCM1808 ADC 1&2", "LRC",   I2S_LRC_PIN,      "audio"},
+      {"PCM1808 ADC 1&2", "MCLK",  I2S_MCLK_PIN,     "audio"},
+#ifdef DAC_ENABLED
+      {"DAC Output",      "DOUT",  I2S_TX_DATA_PIN,   "audio"},
+      {"DAC I2C",         "SDA",   DAC_I2C_SDA_PIN,   "audio"},
+      {"DAC I2C",         "SCL",   DAC_I2C_SCL_PIN,   "audio"},
+#endif
+      {"ST7735S TFT",     "CS",    TFT_CS_PIN,        "display"},
+      {"ST7735S TFT",     "MOSI",  TFT_MOSI_PIN,     "display"},
+      {"ST7735S TFT",     "CLK",   TFT_SCLK_PIN,     "display"},
+      {"ST7735S TFT",     "DC",    TFT_DC_PIN,        "display"},
+      {"ST7735S TFT",     "RST",   TFT_RST_PIN,      "display"},
+      {"ST7735S TFT",     "BL",    TFT_BL_PIN,        "display"},
+      {"EC11 Encoder",    "A",     ENCODER_A_PIN,      "input"},
+      {"EC11 Encoder",    "B",     ENCODER_B_PIN,      "input"},
+      {"EC11 Encoder",    "SW",    ENCODER_SW_PIN,     "input"},
+      {"Piezo Buzzer",    "IO",    BUZZER_PIN,         "core"},
+      {"Status LED",      "LED",   LED_PIN,            "core"},
+      {"Relay Module",    "Amp",   AMPLIFIER_PIN,      "core"},
+      {"Tactile Switch",  "Btn",   RESET_BUTTON_PIN,   "core"},
+      {"Signal Generator","PWM",   SIGGEN_PWM_PIN,     "core"},
+#if CONFIG_IDF_TARGET_ESP32P4
+      {"ES8311 DAC",      "I2S TX",  9,               "audio"},
+      {"ES8311 DAC",      "PA Ctrl", 53,              "audio"},
+#endif
+    };
+    for (auto &p : pm) {
+      JsonObject pin = pins.add<JsonObject>();
+      pin["g"] = p.g;
+      pin["f"] = p.f;
+      pin["d"] = p.d;
+      pin["c"] = p.c;
+    }
+  }
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1352,6 +1426,11 @@ void sendDacState() {
   doc["ready"] = appState.dacReady;
   doc["filterMode"] = appState.dacFilterMode;
   doc["txUnderruns"] = appState.dacTxUnderruns;
+  // ES8311 secondary DAC state
+  doc["es8311Enabled"] = appState.es8311Enabled;
+  doc["es8311Volume"] = appState.es8311Volume;
+  doc["es8311Mute"] = appState.es8311Mute;
+  doc["es8311Ready"] = appState.es8311Ready;
   // TX diagnostics snapshot
   {
     DacTxDiag txd = dac_get_tx_diagnostics();
