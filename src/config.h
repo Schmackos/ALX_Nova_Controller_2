@@ -50,7 +50,7 @@ const int I2S_DOUT2_PIN = 9;  // GPIO 9 - I2S Data In (PCM1808 #2 OUT)
 const int I2S_LRC_PIN = 18; // GPIO 18 - I2S Word Select (L/R Clock)
 #endif
 #ifndef I2S_MCLK_PIN
-const int I2S_MCLK_PIN = 3; // GPIO 3 - Master Clock (APLL output)
+const int I2S_MCLK_PIN = 3; // GPIO 3 - Master Clock (PLL output)
 #endif
 
 #ifndef BUZZER_PIN
@@ -192,6 +192,25 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define AUDIO_PIPELINE_MAX_INPUTS  4   // ADC1, ADC2, Siggen, USB Audio
 #define AUDIO_PIPELINE_MAX_OUTPUTS 4   // DAC output channels
 #define AUDIO_PIPELINE_MATRIX_SIZE 8   // 8x8 routing matrix (4 inputs × 2ch = 8 input channels)
+
+// ===== ES8311 Onboard Codec (P4 only) =====
+// Waveshare ESP32-P4-WiFi6-DEV-Kit has ES8311 DAC + NS4150B speaker amp
+// I2S pins are internal to PCB (not on 40-pin header)
+#ifndef ES8311_I2S_DSDIN_PIN
+#define ES8311_I2S_DSDIN_PIN  9    // P4 → ES8311 DAC data
+#endif
+#ifndef ES8311_I2S_LRCK_PIN
+#define ES8311_I2S_LRCK_PIN   10   // Word select
+#endif
+#ifndef ES8311_I2S_ASDOUT_PIN
+#define ES8311_I2S_ASDOUT_PIN 11   // ES8311 → P4 ADC data (unused - no mic)
+#endif
+#ifndef ES8311_I2S_SCLK_PIN
+#define ES8311_I2S_SCLK_PIN   12   // Bit clock
+#endif
+#ifndef ES8311_I2S_MCLK_PIN
+#define ES8311_I2S_MCLK_PIN   13   // Master clock
+#endif
 
 // ===== GUI Configuration (TFT + Rotary Encoder) =====
 #ifdef GUI_ENABLED

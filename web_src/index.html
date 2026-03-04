@@ -1373,6 +1373,27 @@
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Update Channel</div>
+                        <div class="toggle-sublabel">Stable: tested releases. Beta: prerelease builds.</div>
+                    </div>
+                    <select id="otaChannelSelect" class="select-input" onchange="setOtaChannel()">
+                        <option value="0">Stable</option>
+                        <option value="1">Beta</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary mb-8" onclick="toggleReleasesBrowser()" id="browseReleasesBtn">Browse Releases</button>
+                <div id="releasesBrowser" class="hidden" style="margin-bottom:12px;">
+                    <div class="release-notes-header">
+                        <span class="release-notes-title">Available Releases</span>
+                        <button type="button" class="release-notes-close" onclick="toggleReleasesBrowser()">×</button>
+                    </div>
+                    <div id="releaseListContent" style="max-height:280px;overflow-y:auto;">
+                        <div id="releaseListLoading" class="text-secondary" style="font-size:13px;padding:8px;">Loading...</div>
+                        <div id="releaseListItems"></div>
+                    </div>
+                </div>
                 <button class="btn btn-secondary mb-8" onclick="checkForUpdate()">Check for Updates</button>
                 <button class="btn btn-primary hidden" id="updateBtn" onclick="startOTAUpdate()">Update Now</button>
                 <div class="progress-container hidden" id="progressContainer">
@@ -1477,6 +1498,46 @@
                             <option value="10">10 seconds</option>
                         </select>
                     </div>
+                </div>
+            </div>
+
+            <!-- Debug Console -->
+            <div class="card">
+                <div class="card-title">Debug Console</div>
+                <div class="form-row mb-12">
+                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
+                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
+                        <option value="all">All Levels</option>
+                        <option value="debug">Debug</option>
+                        <option value="info">Info</option>
+                        <option value="warn">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                </div>
+                <div class="form-row mb-8" id="moduleCategoryRow">
+                    <label style="margin-right: 8px; font-weight: 500;">Categories:</label>
+                    <div id="moduleChips" class="chip-container">
+                        <!-- Chips auto-populated from received messages -->
+                    </div>
+                    <button class="btn-chip btn-chip-action" onclick="clearModuleFilter()"
+                            title="Show all categories" style="margin-left:4px;">All</button>
+                </div>
+                <div class="form-row mb-8">
+                    <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
+                           oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
+                    <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
+                            style="margin-left:4px;" title="Clear search">&#10005;</button>
+                    <button class="btn-chip btn-chip-action" id="timestampToggle"
+                            onclick="toggleTimestampMode()" title="Toggle timestamp format"
+                            style="margin-left:4px;">Uptime</button>
+                </div>
+                <div class="debug-console" id="debugConsole">
+                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
+                </div>
+                <div class="btn-row mt-12">
+                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
+                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
+                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
                 </div>
             </div>
 
@@ -1934,55 +1995,12 @@
                             <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow">&#9650;</span></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr><td>2</td><td>LED</td><td>Status LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>4</td><td>Amplifier Relay</td><td>Relay Module</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>8</td><td>Buzzer (PWM)</td><td>Piezo Buzzer</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>15</td><td>Reset Button</td><td>Tactile Switch</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>38</td><td>Signal Gen (PWM)</td><td>Signal Generator</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>3</td><td>I2S MCLK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC 1</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>9</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>40</td><td>I2S TX Data</td><td>DAC Output</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>41</td><td>I2C SDA</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>42</td><td>I2C SCL</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>10</td><td>TFT CS</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>11</td><td>TFT MOSI</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>12</td><td>TFT SCLK</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>13</td><td>TFT DC</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>14</td><td>TFT RST</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>21</td><td>TFT Backlight</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                    <tbody id="pinTableBody">
+                        <tr><td colspan="4" style="text-align:center;opacity:0.5">Waiting for pin data...</td></tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Debug Console -->
-            <div class="card">
-                <div class="card-title">Debug Console</div>
-                <div class="form-row mb-12">
-                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
-                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
-                        <option value="all">All Levels</option>
-                        <option value="debug">Debug</option>
-                        <option value="info">Info</option>
-                        <option value="warn">Warning</option>
-                        <option value="error">Error</option>
-                    </select>
-                </div>
-                <div class="debug-console" id="debugConsole">
-                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
-                </div>
-                <div class="btn-row mt-12">
-                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
-                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
-                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
-                </div>
-            </div>
         </section>
 
     </main>

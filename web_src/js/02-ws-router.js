@@ -106,7 +106,7 @@
             } else if (data.type === 'rebootProgress') {
                 handlePhysicalRebootProgress(data);
             } else if (data.type === 'debugLog') {
-                appendDebugLog(data.timestamp, data.message, data.level);
+                appendDebugLog(data.timestamp, data.message, data.level, data.module);
             } else if (data.type === 'hardware_stats') {
                 updateHardwareStats(data);
             } else if (data.type === 'justUpdated') {

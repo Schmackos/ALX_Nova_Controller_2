@@ -1711,6 +1711,48 @@ void sendHardwareStats() {
     }
 #endif
 
+    // Pin configuration table — firmware-defined, correct per target board
+    {
+      JsonArray pins = doc["pins"].to<JsonArray>();
+      struct { const char *d; const char *f; int g; const char *c; } pm[] = {
+        {"PCM1808 ADC 1&2", "BCK",   I2S_BCK_PIN,      "audio"},
+        {"PCM1808 ADC 1",   "DOUT",  I2S_DOUT_PIN,     "audio"},
+        {"PCM1808 ADC 2",   "DOUT2", I2S_DOUT2_PIN,    "audio"},
+        {"PCM1808 ADC 1&2", "LRC",   I2S_LRC_PIN,      "audio"},
+        {"PCM1808 ADC 1&2", "MCLK",  I2S_MCLK_PIN,     "audio"},
+#ifdef DAC_ENABLED
+        {"DAC Output",      "DOUT",  I2S_TX_DATA_PIN,   "audio"},
+        {"DAC I2C",         "SDA",   DAC_I2C_SDA_PIN,   "audio"},
+        {"DAC I2C",         "SCL",   DAC_I2C_SCL_PIN,   "audio"},
+#endif
+        {"ST7735S TFT",     "CS",    TFT_CS_PIN,        "display"},
+        {"ST7735S TFT",     "MOSI",  TFT_MOSI_PIN,     "display"},
+        {"ST7735S TFT",     "CLK",   TFT_SCLK_PIN,     "display"},
+        {"ST7735S TFT",     "DC",    TFT_DC_PIN,        "display"},
+        {"ST7735S TFT",     "RST",   TFT_RST_PIN,      "display"},
+        {"ST7735S TFT",     "BL",    TFT_BL_PIN,        "display"},
+        {"EC11 Encoder",    "A",     ENCODER_A_PIN,      "input"},
+        {"EC11 Encoder",    "B",     ENCODER_B_PIN,      "input"},
+        {"EC11 Encoder",    "SW",    ENCODER_SW_PIN,     "input"},
+        {"Piezo Buzzer",    "IO",    BUZZER_PIN,         "core"},
+        {"Status LED",      "LED",   LED_PIN,            "core"},
+        {"Relay Module",    "Amp",   AMPLIFIER_PIN,      "core"},
+        {"Tactile Switch",  "Btn",   RESET_BUTTON_PIN,   "core"},
+        {"Signal Generator","PWM",   SIGGEN_PWM_PIN,     "core"},
+#if CONFIG_IDF_TARGET_ESP32P4
+        {"ES8311 DAC",      "I2S TX",  9,               "audio"},
+        {"ES8311 DAC",      "PA Ctrl", 53,              "audio"},
+#endif
+      };
+      for (auto &p : pm) {
+        JsonObject pin = pins.add<JsonObject>();
+        pin["g"] = p.g;
+        pin["f"] = p.f;
+        pin["d"] = p.d;
+        pin["c"] = p.c;
+      }
+    }
+
 #ifdef DSP_ENABLED
     // DSP diagnostics
     {
@@ -1736,7 +1778,7 @@ void sendHardwareStats() {
       c["channelFormat"] = i2sCfg.adc[a].channelFormat;
       c["dmaBufCount"] = i2sCfg.adc[a].dmaBufCount;
       c["dmaBufLen"] = i2sCfg.adc[a].dmaBufLen;
-      c["apll"] = i2sCfg.adc[a].apllEnabled;
+      c["apll"] = i2sCfg.adc[a].pllEnabled;
       c["mclkHz"] = i2sCfg.adc[a].mclkHz;
       c["commFormat"] = i2sCfg.adc[a].commFormat;
     }

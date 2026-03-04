@@ -68,6 +68,11 @@ static const PinEntry all_pins[] = {
     {"Core",         "LED",  LED_PIN},
     {"Core",         "Amp",  AMPLIFIER_PIN},
     {"Core",         "Btn",  RESET_BUTTON_PIN},
+    {"SigGen",       "PWM",  SIGGEN_PWM_PIN},
+#if CONFIG_IDF_TARGET_ESP32P4
+    {"ES8311 DAC",   "I2S TX", 9},
+    {"ES8311 DAC",   "PA Ctrl", 53},
+#endif
 };
 static const int PIN_COUNT = sizeof(all_pins) / sizeof(all_pins[0]);
 
@@ -125,12 +130,21 @@ static void update_pins_label(void) {
                  "HW-508 Buzzer\n"
                  "  IO=%d\n"
                  "Core\n"
-                 "  LED=%d Amp=%d Btn=%d",
+                 "  LED=%d Amp=%d Btn=%d\n"
+                 "SigGen\n"
+                 "  PWM=%d",
                  TFT_CS_PIN, TFT_MOSI_PIN, TFT_SCLK_PIN,
                  TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN,
                  ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
                  BUZZER_PIN,
-                 LED_PIN, AMPLIFIER_PIN, RESET_BUTTON_PIN);
+                 LED_PIN, AMPLIFIER_PIN, RESET_BUTTON_PIN,
+                 SIGGEN_PWM_PIN);
+#if CONFIG_IDF_TARGET_ESP32P4
+        pos += snprintf(buf + pos, sizeof(buf) - pos,
+                 "\nES8311 DAC\n"
+                 "  I2S TX=%d PA Ctrl=%d",
+                 9, 53);
+#endif
     } else {
         sort_pins(indices, PIN_COUNT, pin_sort_mode);
         pos = 0;
@@ -299,14 +313,14 @@ void scr_debug_refresh(void) {
             const auto &m = appState.i2sMetrics;
             snprintf(buf, sizeof(buf),
                      "Rate:%lukHz 32b(24) DMA:%dx%d\n"
-                     "APLL: M=%s S=%s\n"
+                     "PLL: M=%s S=%s\n"
                      "Stack: %lu/%dB free\n"
                      "Buf/s: %.0f / %.0f\n"
                      "Lat: %.1f / %.1fms",
                      (unsigned long)(i2sCfg.adc[0].sampleRate / 1000),
                      i2sCfg.adc[0].dmaBufCount, i2sCfg.adc[0].dmaBufLen,
-                     i2sCfg.adc[0].apllEnabled ? "On" : "Off",
-                     i2sCfg.adc[1].apllEnabled ? "On" : "Off",
+                     i2sCfg.adc[0].pllEnabled ? "On" : "Off",
+                     i2sCfg.adc[1].pllEnabled ? "On" : "Off",
                      (unsigned long)m.audioTaskStackFree, TASK_STACK_SIZE_AUDIO,
                      m.buffersPerSec[0], m.buffersPerSec[1],
                      m.avgReadLatencyUs[0] / 1000.0f,

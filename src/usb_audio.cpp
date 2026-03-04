@@ -169,7 +169,12 @@ static bool _tinyusbHwReady = false; // True after tinyusb_init() succeeds (one-
 static uint8_t _ctrlBuf[64];
 
 // Buffer for receiving isochronous OUT data (must be declared before control_xfer which primes it)
+// P4 DMA requires 64-byte alignment (UTMI PHY); S3 needs only 4-byte
+#if CONFIG_IDF_TARGET_ESP32P4
+static uint8_t _isoOutBuf[USB_AUDIO_MAX_EP_SIZE] __attribute__((aligned(64)));
+#else
 static uint8_t _isoOutBuf[USB_AUDIO_MAX_EP_SIZE] __attribute__((aligned(4)));
+#endif
 
 // Ring buffer capacity: 4096 frames = 42.7ms at 96kHz. PSRAM cost: 4096 × 2ch × 4 bytes = 32KB.
 #define RING_BUF_CAPACITY 4096
@@ -326,7 +331,11 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     *p++ = 0x09;                                       // bmAttributes: Isochronous, Adaptive
     *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_16BIT);     // wMaxPacketSize (low) = 388
     *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_16BIT >> 8);// wMaxPacketSize (high)
-    *p++ = 1;                                          // bInterval (1ms at Full Speed)
+#if CONFIG_IDF_TARGET_ESP32P4
+    *p++ = 4;                                          // bInterval: HS: 2^(4-1)=8 microframes = 1ms
+#else
+    *p++ = 1;                                          // bInterval: FS: every SOF = 1ms
+#endif
 
     // --- CS Endpoint (Audio Class) --- Alt 1
     *p++ = 8;                                          // bLength
@@ -375,7 +384,11 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     *p++ = 0x09;                                       // bmAttributes: Isochronous, Adaptive
     *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_24BIT);     // wMaxPacketSize (low) = 582
     *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_24BIT >> 8);// wMaxPacketSize (high)
-    *p++ = 1;                                          // bInterval (1ms at Full Speed)
+#if CONFIG_IDF_TARGET_ESP32P4
+    *p++ = 4;                                          // bInterval: HS: 2^(4-1)=8 microframes = 1ms
+#else
+    *p++ = 1;                                          // bInterval: FS: every SOF = 1ms
+#endif
 
     // --- CS Endpoint (Audio Class) — Alt 2 ---
     *p++ = 8;                                          // bLength
@@ -785,7 +798,7 @@ static uint8_t const _minimal_bos_descriptor[] = {
     7,                          // bLength
     0x10,                       // bDescriptorType = DEVICE_CAPABILITY
     0x02,                       // bDevCapabilityType = USB_2_0_EXTENSION
-    0x00, 0x00, 0x00, 0x00     // bmAttributes: no LPM (ESP32-S3 FS doesn't support it reliably)
+    0x00, 0x00, 0x00, 0x00     // bmAttributes: no LPM (ESP32-S3 FS / ESP32-P4 HS — not needed for UAC2 audio class)
 };
 
 extern "C" uint8_t const *__wrap_tud_descriptor_bos_cb(void) {

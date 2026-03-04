@@ -21,6 +21,7 @@
 #define DAC_ID_PCM5102A   0x0001
 #define DAC_ID_ES9038Q2M  0x0002
 #define DAC_ID_ES9842     0x0003
+#define DAC_ID_ES8311     0x0004
 
 // ===== DAC Capabilities =====
 struct DacCapabilities {
@@ -113,6 +114,16 @@ struct DacTxDiag {
     uint32_t underruns;         // Cumulative TX underruns (from AppState)
 };
 DacTxDiag dac_get_tx_diagnostics();
+
+// ===== Secondary DAC Output (ES8311 on P4) =====
+// Independent output path — receives same audio as primary DAC
+// but with its own hardware volume/mute control
+void dac_secondary_init();
+void dac_secondary_deinit();
+bool dac_secondary_is_ready();
+void dac_secondary_write(const int32_t* buffer, int stereo_frames);
+void dac_secondary_set_volume(uint8_t percent);
+void dac_secondary_set_mute(bool mute);
 
 #endif // DAC_ENABLED
 #endif // DAC_HAL_H

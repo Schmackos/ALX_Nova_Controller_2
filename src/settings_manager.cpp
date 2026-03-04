@@ -245,6 +245,14 @@ bool loadSettings() {
     wifiPrefs.end();
   }
 
+  // Load OTA channel from NVS (ota-prefs namespace)
+  {
+    Preferences otaPrefs;
+    otaPrefs.begin("ota-prefs", true);  // read-only
+    appState.otaChannel = otaPrefs.getUChar("otaChannel", 0);
+    otaPrefs.end();
+  }
+
   return true;
 }
 
@@ -331,6 +339,14 @@ void saveSettings() {
     wifiPrefs.begin("wifi-list", false);
     wifiPrefs.putUChar("wifiMinSec", appState.wifiMinSecurity);
     wifiPrefs.end();
+  }
+
+  // Save OTA channel to NVS (ota-prefs namespace)
+  {
+    Preferences otaPrefs;
+    otaPrefs.begin("ota-prefs", false);
+    otaPrefs.putUChar("otaChannel", appState.otaChannel);
+    otaPrefs.end();
   }
 }
 
@@ -577,6 +593,7 @@ void handleSettingsGet() {
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
 #endif
+  doc["otaChannel"] = appState.otaChannel;
 
   String json;
   serializeJson(doc, json);
@@ -867,6 +884,15 @@ void handleSettingsUpdate() {
   }
 #endif
 
+  if (doc["otaChannel"].is<int>()) {
+    uint8_t newChannel = (uint8_t)doc["otaChannel"].as<int>();
+    if (newChannel <= 1 && newChannel != appState.otaChannel) {
+      appState.otaChannel = newChannel;
+      settingsChanged = true;
+      LOG_I("[Settings] OTA channel set to %s", newChannel == 0 ? "stable" : "beta");
+    }
+  }
+
   if (settingsChanged) {
     saveSettings();
   }
@@ -906,6 +932,7 @@ void handleSettingsUpdate() {
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
 #endif
+  resp["otaChannel"] = appState.otaChannel;
   String json;
   serializeJson(resp, json);
   server.send(200, "application/json", json);
@@ -970,6 +997,7 @@ void handleSettingsExport() {
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
 #endif
+  doc["settings"]["otaChannel"] = appState.otaChannel;
 
   // Smart Sensing settings
   String modeStr;
@@ -1265,6 +1293,10 @@ void handleSettingsImport() {
       }
     }
 #endif
+    if (doc["settings"]["otaChannel"].is<int>()) {
+      uint8_t ch = (uint8_t)doc["settings"]["otaChannel"].as<int>();
+      if (ch <= 1) appState.otaChannel = ch;
+    }
     // Save general settings
     saveSettings();
   }
@@ -1638,7 +1670,7 @@ void handleDiagnostics() {
       c["channelFormat"] = i2sCfg.adc[a].channelFormat;
       c["dmaBufCount"] = i2sCfg.adc[a].dmaBufCount;
       c["dmaBufLen"] = i2sCfg.adc[a].dmaBufLen;
-      c["apll"] = i2sCfg.adc[a].apllEnabled;
+      c["apll"] = i2sCfg.adc[a].pllEnabled;
       c["mclkHz"] = i2sCfg.adc[a].mclkHz;
       c["commFormat"] = i2sCfg.adc[a].commFormat;
     }

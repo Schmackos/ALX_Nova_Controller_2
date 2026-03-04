@@ -18,6 +18,11 @@
         let debugLogBuffer = [];
         const DEBUG_MAX_LINES = 1000;
         let currentLogFilter = 'all'; // all, debug, info, warn, error
+        let currentModuleFilters = new Set();    // empty = show all; non-empty = show only these
+        let knownModules = {};                   // { "WiFi": { total: 0, errors: 0, warnings: 0 }, ... }
+        let debugSearchTerm = '';                // current search filter text
+        let debugTimestampMode = 'relative';     // 'relative' (uptime) or 'absolute' (wall clock)
+        let ntpOffsetMs = 0;                     // millis() offset to epoch (set from firmware)
         let audioSubscribed = false;
         let currentActiveTab = 'control';
 
@@ -52,6 +57,11 @@
 
         // WiFi
         let wifiConnectionPollTimer = null;
+
+        // OTA Channel & Release Browser
+        let otaChannel = 0;
+        let cachedReleaseList = [];
+        let releaseListLoading = false;
 
         // Window resize handler
         let resizeTimeout;

@@ -25,6 +25,11 @@ void handleCheckUpdate();
 void handleStartUpdate();
 void handleUpdateStatus();
 void handleGetReleaseNotes();
+void handleGetReleaseList();
+void handleInstallRelease();
+
+// ===== Release List =====
+bool fetchReleaseList(int maxCount);
 
 // ===== Non-Blocking OTA Task =====
 void startOTADownloadTask();

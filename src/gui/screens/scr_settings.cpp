@@ -115,6 +115,20 @@ static void on_ssl_confirm(int int_val, float, int) {
     LOG_I("[GUI] SSL validation %s", int_val ? "enabled" : "disabled");
 }
 
+/* OTA release channel cycle options */
+static const CycleOption ota_channel_options[] = {
+    {"Stable", 0},
+    {"Beta",   1},
+};
+
+static void on_ota_channel_confirm(int int_val, float, int) {
+    AppState::getInstance().otaChannel = (uint8_t)int_val;
+    saveSettingsDeferred();
+    AppState::getInstance().markSettingsDirty();
+    AppState::getInstance().markOTADirty();
+    LOG_I("[GUI] OTA channel set to %s", int_val == 0 ? "Stable" : "Beta");
+}
+
 /* Buzzer volume cycle options */
 static const CycleOption buzzer_volume_options[] = {
     {"Low",    0},
@@ -339,6 +353,19 @@ static void edit_ssl_validation(void) {
     scr_value_edit_open(&cfg);
 }
 
+static void edit_ota_channel(void) {
+    int cur = (int)AppState::getInstance().otaChannel;
+    if (cur < 0 || cur > 1) cur = 0;
+    ValueEditConfig cfg = {};
+    cfg.title = "Update Channel";
+    cfg.type = VE_CYCLE;
+    cfg.options = ota_channel_options;
+    cfg.option_count = 2;
+    cfg.current_option = cur;
+    cfg.on_confirm = on_ota_channel_confirm;
+    scr_value_edit_open(&cfg);
+}
+
 static void edit_buzzer_enable(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Buzzer";
@@ -493,6 +520,10 @@ static void build_settings_menu(void) {
     static char ssl_str[8];
     snprintf(ssl_str, sizeof(ssl_str), "%s", st.enableCertValidation ? "ON" : "OFF");
 
+    static char ota_channel_str[8];
+    snprintf(ota_channel_str, sizeof(ota_channel_str), "%s",
+             st.otaChannel == 0 ? "Stable" : "Beta");
+
     static char debug_str[8];
     snprintf(debug_str, sizeof(debug_str), "%s", st.debugMode ? "ON" : "OFF");
 
@@ -529,7 +560,7 @@ static void build_settings_menu(void) {
     snprintf(audio_rate_str, sizeof(audio_rate_str), "%s", ar);
 
     settings_menu.title = "Settings";
-    settings_menu.item_count = 19;
+    settings_menu.item_count = 20;
     settings_menu.items[0]  = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     settings_menu.items[1]  = {"Screen Timeout", timeout_str, nullptr, MENU_ACTION, edit_screen_timeout};
     settings_menu.items[2]  = {"Dim Display", dim_enabled_str, nullptr, MENU_ACTION, edit_dim_enabled};
@@ -544,11 +575,12 @@ static void build_settings_menu(void) {
     settings_menu.items[11] = {"Audio Rate", audio_rate_str, nullptr, MENU_ACTION, edit_audio_rate};
     settings_menu.items[12] = {"Auto Update", update_str, nullptr, MENU_ACTION, edit_auto_update};
     settings_menu.items[13] = {"SSL Validation", ssl_str, nullptr, MENU_ACTION, edit_ssl_validation};
-    settings_menu.items[14] = {"Debug Mode", debug_str, nullptr, MENU_ACTION, edit_debug_mode};
-    settings_menu.items[15] = {"Serial Level", debug_lvl_str, nullptr, MENU_ACTION, edit_debug_level};
-    settings_menu.items[16] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
-    settings_menu.items[17] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
-    settings_menu.items[18] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
+    settings_menu.items[14] = {"Update Chan", ota_channel_str, nullptr, MENU_ACTION, edit_ota_channel};
+    settings_menu.items[15] = {"Debug Mode", debug_str, nullptr, MENU_ACTION, edit_debug_mode};
+    settings_menu.items[16] = {"Serial Level", debug_lvl_str, nullptr, MENU_ACTION, edit_debug_level};
+    settings_menu.items[17] = {"Firmware", fw_str, ICON_SETTINGS, MENU_INFO, nullptr};
+    settings_menu.items[18] = {"Reboot", nullptr, ICON_REFRESH, MENU_ACTION, do_reboot};
+    settings_menu.items[19] = {"Factory Reset", nullptr, ICON_WARNING, MENU_ACTION, do_factory_reset};
 }
 
 lv_obj_t *scr_settings_create(void) {
@@ -648,14 +680,16 @@ void scr_settings_refresh(void) {
 
     scr_menu_set_item_value(13, st.enableCertValidation ? "ON" : "OFF");
 
-    scr_menu_set_item_value(14, st.debugMode ? "ON" : "OFF");
+    scr_menu_set_item_value(14, st.otaChannel == 0 ? "Stable" : "Beta");
+
+    scr_menu_set_item_value(15, st.debugMode ? "ON" : "OFF");
 
     static char dlvl_buf[8];
     const char *dlvl_names[] = {"Off", "Errors", "Info", "Debug"};
     int dlvl = st.debugSerialLevel;
     if (dlvl < 0 || dlvl > 3) dlvl = 2;
     snprintf(dlvl_buf, sizeof(dlvl_buf), "%s", dlvl_names[dlvl]);
-    scr_menu_set_item_value(15, dlvl_buf);
+    scr_menu_set_item_value(16, dlvl_buf);
 
     static char fw_buf[24];
     if (st.updateAvailable) {
@@ -663,7 +697,7 @@ void scr_settings_refresh(void) {
     } else {
         snprintf(fw_buf, sizeof(fw_buf), "%s", FIRMWARE_VERSION);
     }
-    scr_menu_set_item_value(16, fw_buf);
+    scr_menu_set_item_value(17, fw_buf);
 }
 
 #endif /* GUI_ENABLED */

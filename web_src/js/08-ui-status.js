@@ -57,8 +57,9 @@
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');
 
             // Store AP SSID for pre-filling the config modal
-            if (data.apSSID) {
-                currentAPSSID = data.apSSID;
+            // Firmware sends this as "appState.apSSID" (bracket notation required)
+            if (data['appState.apSSID']) {
+                currentAPSSID = data['appState.apSSID'];
             } else if (data.serialNumber) {
                 // Fallback to serial number if appState.apSSID not provided
                 currentAPSSID = data.serialNumber;
@@ -89,12 +90,12 @@
 
             // AP Details separator if both are relevant
             let apContentAdded = false;
-            if (data.mode === 'ap' || data.apEnabled) {
+            if (data.mode === 'ap' || data['appState.apEnabled']) {
                 if (html !== '') html += '<div class="divider"></div>';
 
                 html += `
                     <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
-                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
+                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data['appState.apSSID'] || 'ALX-Device'}</span></div>
                     <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
                 `;
 
@@ -110,17 +111,23 @@
             }
             html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
 
-            apToggle.checked = data.apEnabled || (data.mode === 'ap');
+            apToggle.checked = !!(data['appState.apEnabled']) || (data.mode === 'ap');
             document.getElementById('apFields').style.display = apToggle.checked ? '' : 'none';
             statusBox.innerHTML = html;
 
-            if (typeof data.autoUpdateEnabled !== 'undefined') {
-                autoUpdateEnabled = !!data.autoUpdateEnabled;
+            if (typeof data['appState.autoUpdateEnabled'] !== 'undefined') {
+                autoUpdateEnabled = !!data['appState.autoUpdateEnabled'];
                 autoUpdateToggle.checked = autoUpdateEnabled;
             }
 
-            if (typeof data.autoAPEnabled !== 'undefined') {
-                document.getElementById('autoAPToggle').checked = !!data.autoAPEnabled;
+            if (data.otaChannel !== undefined) {
+                otaChannel = data.otaChannel;
+                const sel = document.getElementById('otaChannelSelect');
+                if (sel) sel.value = String(otaChannel);
+            }
+
+            if (typeof data['appState.autoAPEnabled'] !== 'undefined') {
+                document.getElementById('autoAPToggle').checked = !!data['appState.autoAPEnabled'];
             }
 
             var tzOffset = data['appState.timezoneOffset'];
@@ -136,8 +143,8 @@
                 document.getElementById('dstToggle').checked = (dstOff === 3600);
             }
 
-            if (typeof data.darkMode !== 'undefined') {
-                darkMode = !!data.darkMode;
+            if (typeof data['appState.darkMode'] !== 'undefined') {
+                darkMode = !!data['appState.darkMode'];
                 document.getElementById('darkModeToggle').checked = darkMode;
                 applyTheme(darkMode);
             }
@@ -192,13 +199,13 @@
                 document.getElementById('buzzerVolumeSelect').value = data.buzzerVolume.toString();
             }
 
-            if (typeof data.enableCertValidation !== 'undefined') {
-                enableCertValidation = !!data.enableCertValidation;
+            if (typeof data['appState.enableCertValidation'] !== 'undefined') {
+                enableCertValidation = !!data['appState.enableCertValidation'];
                 document.getElementById('certValidationToggle').checked = enableCertValidation;
             }
 
-            if (typeof data.hardwareStatsInterval !== 'undefined') {
-                document.getElementById('statsIntervalSelect').value = data.hardwareStatsInterval.toString();
+            if (typeof data['appState.hardwareStatsInterval'] !== 'undefined') {
+                document.getElementById('statsIntervalSelect').value = data['appState.hardwareStatsInterval'].toString();
             }
 
             if (typeof data.audioUpdateRate !== 'undefined') {
@@ -221,7 +228,7 @@
                 latestVersionRow.style.display = 'flex';
 
                 // If up-to-date, show green "Up-To-Date" text and hide release notes link
-                if (!data.updateAvailable && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
+                if (!data['appState.updateAvailable'] && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
                     latestVersionEl.textContent = 'Up-To-Date, no newer version available';
                     latestVersionEl.style.opacity = '1';
                     latestVersionEl.style.fontStyle = 'normal';
@@ -247,7 +254,7 @@
                     }
                 }
 
-                if (data.updateAvailable) {
+                if (data['appState.updateAvailable']) {
                     document.getElementById('updateBtn').classList.remove('hidden');
                 } else {
                     document.getElementById('updateBtn').classList.add('hidden');

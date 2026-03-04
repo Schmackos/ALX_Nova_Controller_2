@@ -27,5 +27,6 @@ EventBits_t app_events_wait(uint32_t timeout_ms);
 #define EVT_USB_VU       (1UL <<  8)
 #define EVT_SETTINGS     (1UL <<  9)
 #define EVT_ADC_ENABLED  (1UL << 10)
-// Bits 11-23 reserved for future HA entities (13 spare bits in 24-bit event group)
-#define EVT_ANY          (0x7FFUL)
+// Bits 12-23 reserved for future HA entities (12 spare bits in 24-bit event group)
+#define EVT_ETHERNET     (1UL << 11)
+#define EVT_ANY          (0xFFFUL)

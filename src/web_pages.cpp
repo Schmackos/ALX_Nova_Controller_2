@@ -2145,6 +2145,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .input-lane-grid { grid-template-columns: repeat(2, 1fr); }
         }
 
+        /* ===== Debug Console Chips & Search ===== */
+        .chip-container { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+        .btn-chip {
+          display: inline-flex; align-items: center; gap: 4px;
+          padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
+          border: 1px solid var(--border); background: var(--bg-input); color: var(--text-secondary);
+          cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .btn-chip:hover { border-color: var(--accent); color: var(--text-primary); }
+        .btn-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn-chip .chip-badge {
+          font-size: 9px; padding: 1px 5px; border-radius: 8px;
+          background: rgba(255,255,255,0.2); margin-left: 2px;
+        }
+        .btn-chip .chip-badge.has-errors { background: var(--error); color: #fff; }
+        .btn-chip .chip-badge.has-warnings { background: var(--warning); color: #000; }
+        .btn-chip-action { font-size: 12px; padding: 3px 8px; }
+        .log-highlight { background: rgba(255, 165, 0, 0.3); border-radius: 2px; }
+
 /* ===== 04-canvas.css ===== */
 
         /* ===== Graph Canvas ===== */
@@ -4013,6 +4032,27 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Update Channel</div>
+                        <div class="toggle-sublabel">Stable: tested releases. Beta: prerelease builds.</div>
+                    </div>
+                    <select id="otaChannelSelect" class="select-input" onchange="setOtaChannel()">
+                        <option value="0">Stable</option>
+                        <option value="1">Beta</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary mb-8" onclick="toggleReleasesBrowser()" id="browseReleasesBtn">Browse Releases</button>
+                <div id="releasesBrowser" class="hidden" style="margin-bottom:12px;">
+                    <div class="release-notes-header">
+                        <span class="release-notes-title">Available Releases</span>
+                        <button type="button" class="release-notes-close" onclick="toggleReleasesBrowser()">×</button>
+                    </div>
+                    <div id="releaseListContent" style="max-height:280px;overflow-y:auto;">
+                        <div id="releaseListLoading" class="text-secondary" style="font-size:13px;padding:8px;">Loading...</div>
+                        <div id="releaseListItems"></div>
+                    </div>
+                </div>
                 <button class="btn btn-secondary mb-8" onclick="checkForUpdate()">Check for Updates</button>
                 <button class="btn btn-primary hidden" id="updateBtn" onclick="startOTAUpdate()">Update Now</button>
                 <div class="progress-container hidden" id="progressContainer">
@@ -4117,6 +4157,46 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <option value="10">10 seconds</option>
                         </select>
                     </div>
+                </div>
+            </div>
+
+            <!-- Debug Console -->
+            <div class="card">
+                <div class="card-title">Debug Console</div>
+                <div class="form-row mb-12">
+                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
+                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
+                        <option value="all">All Levels</option>
+                        <option value="debug">Debug</option>
+                        <option value="info">Info</option>
+                        <option value="warn">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                </div>
+                <div class="form-row mb-8" id="moduleCategoryRow">
+                    <label style="margin-right: 8px; font-weight: 500;">Categories:</label>
+                    <div id="moduleChips" class="chip-container">
+                        <!-- Chips auto-populated from received messages -->
+                    </div>
+                    <button class="btn-chip btn-chip-action" onclick="clearModuleFilter()"
+                            title="Show all categories" style="margin-left:4px;">All</button>
+                </div>
+                <div class="form-row mb-8">
+                    <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
+                           oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
+                    <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
+                            style="margin-left:4px;" title="Clear search">&#10005;</button>
+                    <button class="btn-chip btn-chip-action" id="timestampToggle"
+                            onclick="toggleTimestampMode()" title="Toggle timestamp format"
+                            style="margin-left:4px;">Uptime</button>
+                </div>
+                <div class="debug-console" id="debugConsole">
+                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
+                </div>
+                <div class="btn-row mt-12">
+                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
+                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
+                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
                 </div>
             </div>
 
@@ -4574,55 +4654,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow">&#9650;</span></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr><td>2</td><td>LED</td><td>Status LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>4</td><td>Amplifier Relay</td><td>Relay Module</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>8</td><td>Buzzer (PWM)</td><td>Piezo Buzzer</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>15</td><td>Reset Button</td><td>Tactile Switch</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>38</td><td>Signal Gen (PWM)</td><td>Signal Generator</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>3</td><td>I2S MCLK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC 1</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>9</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>40</td><td>I2S TX Data</td><td>DAC Output</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>41</td><td>I2C SDA</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>42</td><td>I2C SCL</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>10</td><td>TFT CS</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>11</td><td>TFT MOSI</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>12</td><td>TFT SCLK</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>13</td><td>TFT DC</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>14</td><td>TFT RST</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>21</td><td>TFT Backlight</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                    <tbody id="pinTableBody">
+                        <tr><td colspan="4" style="text-align:center;opacity:0.5">Waiting for pin data...</td></tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Debug Console -->
-            <div class="card">
-                <div class="card-title">Debug Console</div>
-                <div class="form-row mb-12">
-                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
-                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
-                        <option value="all">All Levels</option>
-                        <option value="debug">Debug</option>
-                        <option value="info">Info</option>
-                        <option value="warn">Warning</option>
-                        <option value="error">Error</option>
-                    </select>
-                </div>
-                <div class="debug-console" id="debugConsole">
-                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
-                </div>
-                <div class="btn-row mt-12">
-                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
-                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
-                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
-                </div>
-            </div>
         </section>
 
     </main>
@@ -4905,7 +4942,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             } else if (data.type === 'rebootProgress') {
                 handlePhysicalRebootProgress(data);
             } else if (data.type === 'debugLog') {
-                appendDebugLog(data.timestamp, data.message, data.level);
+                appendDebugLog(data.timestamp, data.message, data.level, data.module);
             } else if (data.type === 'hardware_stats') {
                 updateHardwareStats(data);
             } else if (data.type === 'justUpdated') {
@@ -5061,6 +5098,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let debugLogBuffer = [];
         const DEBUG_MAX_LINES = 1000;
         let currentLogFilter = 'all'; // all, debug, info, warn, error
+        let currentModuleFilters = new Set();    // empty = show all; non-empty = show only these
+        let knownModules = {};                   // { "WiFi": { total: 0, errors: 0, warnings: 0 }, ... }
+        let debugSearchTerm = '';                // current search filter text
+        let debugTimestampMode = 'relative';     // 'relative' (uptime) or 'absolute' (wall clock)
+        let ntpOffsetMs = 0;                     // millis() offset to epoch (set from firmware)
         let audioSubscribed = false;
         let currentActiveTab = 'control';
 
@@ -5095,6 +5137,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // WiFi
         let wifiConnectionPollTimer = null;
+
+        // OTA Channel & Release Browser
+        let otaChannel = 0;
+        let cachedReleaseList = [];
+        let releaseListLoading = false;
 
         // Window resize handler
         let resizeTimeout;
@@ -5374,8 +5421,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');
 
             // Store AP SSID for pre-filling the config modal
-            if (data.apSSID) {
-                currentAPSSID = data.apSSID;
+            // Firmware sends this as "appState.apSSID" (bracket notation required)
+            if (data['appState.apSSID']) {
+                currentAPSSID = data['appState.apSSID'];
             } else if (data.serialNumber) {
                 // Fallback to serial number if appState.apSSID not provided
                 currentAPSSID = data.serialNumber;
@@ -5406,12 +5454,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             // AP Details separator if both are relevant
             let apContentAdded = false;
-            if (data.mode === 'ap' || data.apEnabled) {
+            if (data.mode === 'ap' || data['appState.apEnabled']) {
                 if (html !== '') html += '<div class="divider"></div>';
 
                 html += `
                     <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
-                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
+                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data['appState.apSSID'] || 'ALX-Device'}</span></div>
                     <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
                 `;
 
@@ -5427,17 +5475,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
 
-            apToggle.checked = data.apEnabled || (data.mode === 'ap');
+            apToggle.checked = !!(data['appState.apEnabled']) || (data.mode === 'ap');
             document.getElementById('apFields').style.display = apToggle.checked ? '' : 'none';
             statusBox.innerHTML = html;
 
-            if (typeof data.autoUpdateEnabled !== 'undefined') {
-                autoUpdateEnabled = !!data.autoUpdateEnabled;
+            if (typeof data['appState.autoUpdateEnabled'] !== 'undefined') {
+                autoUpdateEnabled = !!data['appState.autoUpdateEnabled'];
                 autoUpdateToggle.checked = autoUpdateEnabled;
             }
 
-            if (typeof data.autoAPEnabled !== 'undefined') {
-                document.getElementById('autoAPToggle').checked = !!data.autoAPEnabled;
+            if (data.otaChannel !== undefined) {
+                otaChannel = data.otaChannel;
+                const sel = document.getElementById('otaChannelSelect');
+                if (sel) sel.value = String(otaChannel);
+            }
+
+            if (typeof data['appState.autoAPEnabled'] !== 'undefined') {
+                document.getElementById('autoAPToggle').checked = !!data['appState.autoAPEnabled'];
             }
 
             var tzOffset = data['appState.timezoneOffset'];
@@ -5453,8 +5507,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('dstToggle').checked = (dstOff === 3600);
             }
 
-            if (typeof data.darkMode !== 'undefined') {
-                darkMode = !!data.darkMode;
+            if (typeof data['appState.darkMode'] !== 'undefined') {
+                darkMode = !!data['appState.darkMode'];
                 document.getElementById('darkModeToggle').checked = darkMode;
                 applyTheme(darkMode);
             }
@@ -5509,13 +5563,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('buzzerVolumeSelect').value = data.buzzerVolume.toString();
             }
 
-            if (typeof data.enableCertValidation !== 'undefined') {
-                enableCertValidation = !!data.enableCertValidation;
+            if (typeof data['appState.enableCertValidation'] !== 'undefined') {
+                enableCertValidation = !!data['appState.enableCertValidation'];
                 document.getElementById('certValidationToggle').checked = enableCertValidation;
             }
 
-            if (typeof data.hardwareStatsInterval !== 'undefined') {
-                document.getElementById('statsIntervalSelect').value = data.hardwareStatsInterval.toString();
+            if (typeof data['appState.hardwareStatsInterval'] !== 'undefined') {
+                document.getElementById('statsIntervalSelect').value = data['appState.hardwareStatsInterval'].toString();
             }
 
             if (typeof data.audioUpdateRate !== 'undefined') {
@@ -5538,7 +5592,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 latestVersionRow.style.display = 'flex';
 
                 // If up-to-date, show green "Up-To-Date" text and hide release notes link
-                if (!data.updateAvailable && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
+                if (!data['appState.updateAvailable'] && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
                     latestVersionEl.textContent = 'Up-To-Date, no newer version available';
                     latestVersionEl.style.opacity = '1';
                     latestVersionEl.style.fontStyle = 'normal';
@@ -5564,7 +5618,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     }
                 }
 
-                if (data.updateAvailable) {
+                if (data['appState.updateAvailable']) {
                     document.getElementById('updateBtn').classList.remove('hidden');
                 } else {
                     document.getElementById('updateBtn').classList.add('hidden');
@@ -9342,7 +9396,7 @@ function toggleTheme() {
     apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ darkMode: darkMode })
+        body: JSON.stringify({ 'appState.darkMode': darkMode })
     });
 }
 
@@ -9826,6 +9880,12 @@ function startOTAUpdate() {
 }
 
 function handleUpdateStatus(data) {
+    if (data.otaChannel !== undefined) {
+        otaChannel = data.otaChannel;
+        const sel = document.getElementById('otaChannelSelect');
+        if (sel) sel.value = String(otaChannel);
+    }
+
     // Skip progress bar updates if manual upload is in progress
     // Manual upload manages its own progress bar
     if (manualUploadInProgress) {
@@ -9977,6 +10037,141 @@ function uploadFirmware(file) {
     };
 
     xhr.send(formData);
+}
+
+// ===== OTA Channel =====
+
+function setOtaChannel() {
+    const val = parseInt(document.getElementById('otaChannelSelect').value);
+    otaChannel = val;
+    apiFetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otaChannel: val })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showToast(val === 0 ? 'Channel: Stable' : 'Channel: Beta', 'success');
+            cachedReleaseList = [];
+            const browser = document.getElementById('releasesBrowser');
+            if (browser && !browser.classList.contains('hidden')) {
+                loadReleaseList();
+            }
+        }
+    })
+    .catch(() => showToast('Failed to set channel', 'error'));
+}
+
+// ===== Release Browser =====
+
+function toggleReleasesBrowser() {
+    const browser = document.getElementById('releasesBrowser');
+    if (!browser) return;
+    const isVisible = !browser.classList.contains('hidden');
+    if (isVisible) {
+        browser.classList.add('hidden');
+    } else {
+        browser.classList.remove('hidden');
+        loadReleaseList();
+    }
+}
+
+function loadReleaseList() {
+    if (releaseListLoading) return;
+    releaseListLoading = true;
+    const loading = document.getElementById('releaseListLoading');
+    const items = document.getElementById('releaseListItems');
+    if (loading) loading.style.display = '';
+    if (items) items.innerHTML = '';
+
+    apiFetch('/api/releases')
+    .then(res => res.json())
+    .then(data => {
+        releaseListLoading = false;
+        if (loading) loading.style.display = 'none';
+        if (!data.success || !data.releases || data.releases.length === 0) {
+            if (items) items.innerHTML = '<div class="text-secondary" style="font-size:13px;padding:8px;">No releases found.</div>';
+            return;
+        }
+        cachedReleaseList = data.releases;
+        renderReleaseList(data.releases);
+    })
+    .catch(() => {
+        releaseListLoading = false;
+        if (loading) loading.style.display = 'none';
+        if (items) items.innerHTML = '<div class="text-secondary" style="font-size:13px;padding:8px;">Failed to load releases.</div>';
+    });
+}
+
+function renderReleaseList(releases) {
+    const container = document.getElementById('releaseListItems');
+    if (!container) return;
+    const curVer = currentFirmwareVersion || '';
+    container.innerHTML = '';
+    releases.forEach(function(rel) {
+        const isCurrent = rel.version === curVer || rel.version === 'v' + curVer || 'v' + rel.version === curVer;
+        const isDown = isOlderRelease(rel.version, curVer);
+        const badge = rel.isPrerelease ? ' <span style="color:var(--warning);font-size:11px;font-weight:600;">[beta]</span>' : '';
+        const dateStr = rel.publishedAt || '';
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);';
+        let btnHtml = '';
+        if (isCurrent) {
+            btnHtml = '<span style="color:var(--success);font-size:12px;white-space:nowrap;">Current</span>';
+        } else if (isDown) {
+            btnHtml = '<button class="btn btn-sm" style="background:var(--warning);color:#000;white-space:nowrap;" onclick="installRelease(\'' + rel.version.replace(/'/g, "\\'") + '\',true)">Downgrade</button>';
+        } else {
+            btnHtml = '<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="installRelease(\'' + rel.version.replace(/'/g, "\\'") + '\',false)">Install</button>';
+        }
+        div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + rel.version + '</span>' + badge +
+            '<span class="text-secondary" style="font-size:12px;margin-left:8px;">' + dateStr + '</span></div>' +
+            '<div style="margin-left:8px;">' + btnHtml + '</div>';
+        container.appendChild(div);
+    });
+}
+
+function isOlderRelease(v1, v2) {
+    // Returns true if v1 is older than v2
+    const strip = function(v) { return v.replace(/^v/, ''); };
+    const a = strip(v1), b = strip(v2);
+    const baseParts = function(s) { return s.replace(/-beta\.\d+/, '').split('.').map(Number); };
+    const betaN = function(s) { const m = s.match(/-beta\.(\d+)/); return m ? parseInt(m[1]) : 0; };
+    const pa = baseParts(a), pb = baseParts(b);
+    for (let i = 0; i < 3; i++) {
+        if ((pa[i]||0) < (pb[i]||0)) return true;
+        if ((pa[i]||0) > (pb[i]||0)) return false;
+    }
+    const ba = betaN(a), bb = betaN(b);
+    if (ba === 0 && bb === 0) return false;
+    if (ba === 0 && bb > 0) return false;
+    if (ba > 0 && bb === 0) return true;
+    return ba < bb;
+}
+
+function installRelease(version, isDowngrade) {
+    const msg = isDowngrade
+        ? 'Downgrade to ' + version + '? Settings may be incompatible with older firmware.'
+        : 'Install version ' + version + '?';
+    if (!confirm(msg)) return;
+
+    apiFetch('/api/installrelease', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: version })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('releasesBrowser').classList.add('hidden');
+            document.getElementById('progressContainer').classList.remove('hidden');
+            document.getElementById('progressStatus').classList.remove('hidden');
+            showToast('Installing ' + version + '...', 'success');
+        } else {
+            showToast(data.message || 'Install failed', 'error');
+        }
+    })
+    .catch(() => showToast('Failed to start install', 'error'));
 }
 
 // Drag and drop for firmware
@@ -10362,6 +10557,22 @@ function initFirmwareDragDrop() {
 
             // Add to history
             addHistoryDataPoint(data);
+
+            // Pin table — populate from firmware data (once)
+            if (data.pins) {
+                var ptb = document.getElementById('pinTableBody');
+                if (ptb && !ptb.dataset.populated) {
+                    ptb.dataset.populated = '1';
+                    var catLabels = {audio:'Audio', display:'Display', input:'Input', core:'Core', network:'Network'};
+                    var html = '';
+                    for (var i = 0; i < data.pins.length; i++) {
+                        var p = data.pins[i];
+                        var catName = catLabels[p.c] || p.c;
+                        html += '<tr><td>' + p.g + '</td><td>' + p.f + '</td><td>' + p.d + '</td><td><span class="pin-cat pin-cat-' + p.c + '">' + catName + '</span></td></tr>';
+                    }
+                    ptb.innerHTML = html;
+                }
+            }
         }
 
         function formatBytes(bytes) {
@@ -10680,14 +10891,15 @@ function initFirmwareDragDrop() {
 
 // ===== Debug Console =====
 
-        function appendDebugLog(timestamp, message, level = 'info') {
+        function appendDebugLog(timestamp, message, level, module) {
+            level = level || 'info';
             if (debugPaused) {
-                debugLogBuffer.push({ timestamp, message, level });
+                debugLogBuffer.push({ timestamp: timestamp, message: message, level: level, module: module });
                 return;
             }
 
             // Determine log level from message if not provided
-            let detectedLevel = level;
+            var detectedLevel = level;
             if (message.includes('[E]') || message.includes('Error') || message.includes('❌')) {
                 detectedLevel = 'error';
             } else if (message.includes('[W]') || message.includes('Warning') || message.includes('⚠')) {
@@ -10698,49 +10910,79 @@ function initFirmwareDragDrop() {
                 detectedLevel = 'info';
             }
 
-            const console = document.getElementById('debugConsole');
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.dataset.level = detectedLevel; // Store level for filtering
+            // Track module for chip creation
+            module = module || extractModule(message) || 'Other';
+            if (!knownModules[module]) {
+                knownModules[module] = { total: 0, errors: 0, warnings: 0 };
+                createModuleChip(module);
+            }
+            knownModules[module].total++;
+            if (detectedLevel === 'error') knownModules[module].errors++;
+            if (detectedLevel === 'warn')  knownModules[module].warnings++;
+            updateChipBadge(module);
 
-            const ts = formatDebugTimestamp(timestamp);
-            let msgClass = 'log-message';
+            var consoleEl = document.getElementById('debugConsole');
+            var entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.dataset.level = detectedLevel;
+            entry.dataset.module = module;
+
+            var ts = formatDebugTimestamp(timestamp);
+            var msgClass = 'log-message';
             if (detectedLevel === 'error') msgClass += ' error';
             else if (detectedLevel === 'warn') msgClass += ' warning';
             else if (detectedLevel === 'debug') msgClass += ' debug';
             else if (message.includes('✅') || message.includes('Success')) msgClass += ' success';
             else msgClass += ' info';
 
-            entry.innerHTML = `<span class="log-timestamp">[${ts}]</span><span class="${msgClass}">${message}</span>`;
+            var tsSpan = document.createElement('span');
+            tsSpan.className = 'log-timestamp';
+            tsSpan.dataset.ms = timestamp;
+            tsSpan.textContent = '[' + ts + ']';
 
-            // Apply filter visibility (but always add to DOM)
-            if (currentLogFilter !== 'all' && detectedLevel !== currentLogFilter) {
-                entry.style.display = 'none';
-            }
+            var msgSpan = document.createElement('span');
+            msgSpan.className = msgClass;
+            msgSpan.textContent = message;
+
+            entry.appendChild(tsSpan);
+            entry.appendChild(msgSpan);
+
+            // Apply combined filter visibility
+            entry.style.display = isEntryVisible(entry) ? '' : 'none';
+
+            // Apply search highlight if active
+            if (debugSearchTerm) { applySearchHighlight(entry); }
 
             // Check if user is near the bottom before adding (within 40px)
-            const wasAtBottom = (console.scrollHeight - console.scrollTop - console.clientHeight) < 40;
+            var wasAtBottom = (consoleEl.scrollHeight - consoleEl.scrollTop - consoleEl.clientHeight) < 40;
 
-            console.appendChild(entry);
+            consoleEl.appendChild(entry);
 
             // Limit entries
-            while (console.children.length > DEBUG_MAX_LINES) {
-                console.removeChild(console.firstChild);
+            while (consoleEl.children.length > DEBUG_MAX_LINES) {
+                consoleEl.removeChild(consoleEl.firstChild);
             }
 
             // Only auto-scroll if user was already at the bottom
             if (wasAtBottom && entry.style.display !== 'none') {
-                console.scrollTop = console.scrollHeight;
+                consoleEl.scrollTop = consoleEl.scrollHeight;
             }
         }
 
-        function formatDebugTimestamp(millis) {
-            const date = new Date(millis);
-            const h = date.getHours().toString().padStart(2, '0');
-            const m = date.getMinutes().toString().padStart(2, '0');
-            const s = date.getSeconds().toString().padStart(2, '0');
-            const ms = date.getMilliseconds().toString().padStart(3, '0');
-            return `${h}:${m}:${s}.${ms}`;
+        function formatDebugTimestamp(ms) {
+            if (debugTimestampMode === 'absolute' && ntpOffsetMs > 0) {
+                var d = new Date(ntpOffsetMs + ms);
+                return d.toLocaleTimeString() + '.' + String(ms % 1000).padStart(3, '0');
+            }
+            // Relative (uptime) mode
+            var s = Math.floor(ms / 1000);
+            var frac = ms % 1000;
+            var hours = Math.floor(s / 3600); s %= 3600;
+            var mins = Math.floor(s / 60); var secs = s % 60;
+            return String(hours).padStart(2, '0') + ':' +
+                   String(mins).padStart(2, '0') + ':' +
+                   String(secs).padStart(2, '0') + '.' +
+                   String(frac).padStart(3, '0');
         }
 
         function toggleDebugPause() {
@@ -10751,7 +10993,7 @@ function initFirmwareDragDrop() {
             } else {
                 btn.textContent = 'Pause';
                 // Flush buffer
-                debugLogBuffer.forEach(log => appendDebugLog(log.timestamp, log.message, log.level));
+                debugLogBuffer.forEach(function(log) { appendDebugLog(log.timestamp, log.message, log.level, log.module); });
                 debugLogBuffer = [];
             }
         }
@@ -10781,35 +11023,26 @@ function initFirmwareDragDrop() {
         }
 
         function clearDebugConsole() {
-            const console = document.getElementById('debugConsole');
-            const entry = document.createElement('div');
+            knownModules = {};
+            var chipsContainer = document.getElementById('moduleChips');
+            if (chipsContainer) chipsContainer.innerHTML = '';
+
+            var consoleEl = document.getElementById('debugConsole');
+            var entry = document.createElement('div');
             entry.className = 'log-entry';
             entry.dataset.level = 'info';
+            entry.dataset.module = 'Other';
             entry.innerHTML = '<span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Console cleared</span>';
 
-            console.innerHTML = '';
-            console.appendChild(entry);
+            consoleEl.innerHTML = '';
+            consoleEl.appendChild(entry);
             debugLogBuffer = [];
         }
 
         function setLogFilter(level) {
             currentLogFilter = level;
-
-            // Apply filter to all console entries
-            const console = document.getElementById('debugConsole');
-            const allEntries = Array.from(console.children);
-
-            allEntries.forEach(entry => {
-                const entryLevel = entry.dataset.level;
-                if (level === 'all' || entryLevel === level) {
-                    entry.style.display = '';
-                } else {
-                    entry.style.display = 'none';
-                }
-            });
-
-            // Auto-scroll to bottom after filtering
-            console.scrollTop = console.scrollHeight;
+            refilterAll();
+            saveDebugFilters();
         }
 
         function downloadDebugLog() {
@@ -10884,6 +11117,184 @@ function initFirmwareDragDrop() {
                     console.error('Download error:', err);
                     showToast('Failed to download diagnostics', 'error');
                 });
+        }
+
+        // ===== Module Chip Filtering =====
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        function extractModule(msg) {
+            var m = msg.match(/\[[DIWE]\]\s*\[([^\]]+)\]/);
+            return m ? m[1] : null;
+        }
+
+        function createModuleChip(module) {
+            var container = document.getElementById('moduleChips');
+            if (!container) return;
+            var chip = document.createElement('button');
+            chip.className = 'btn-chip';
+            chip.dataset.module = module;
+            chip.innerHTML = escapeHtml(module) + ' <span class="chip-badge">0</span>';
+            chip.onclick = function() { toggleModuleFilter(module); };
+            if (currentModuleFilters.has(module)) {
+                chip.classList.add('active');
+            }
+            container.appendChild(chip);
+        }
+
+        function toggleModuleFilter(module) {
+            if (currentModuleFilters.has(module)) {
+                currentModuleFilters.delete(module);
+            } else {
+                currentModuleFilters.add(module);
+            }
+            var chips = document.querySelectorAll('#moduleChips .btn-chip');
+            for (var i = 0; i < chips.length; i++) {
+                chips[i].classList.toggle('active', currentModuleFilters.has(chips[i].dataset.module));
+            }
+            refilterAll();
+            saveDebugFilters();
+        }
+
+        function clearModuleFilter() {
+            currentModuleFilters.clear();
+            var chips = document.querySelectorAll('#moduleChips .btn-chip');
+            for (var i = 0; i < chips.length; i++) {
+                chips[i].classList.remove('active');
+            }
+            refilterAll();
+            saveDebugFilters();
+        }
+
+        function updateChipBadge(module) {
+            var chip = document.querySelector('#moduleChips .btn-chip[data-module="' + CSS.escape(module) + '"]');
+            if (!chip) return;
+            var info = knownModules[module];
+            var badge = chip.querySelector('.chip-badge');
+            if (!badge) return;
+            badge.textContent = info.total;
+            badge.className = 'chip-badge';
+            if (info.errors > 0) badge.classList.add('has-errors');
+            else if (info.warnings > 0) badge.classList.add('has-warnings');
+        }
+
+        // ===== Search =====
+
+        function setDebugSearch(term) {
+            debugSearchTerm = term.toLowerCase();
+            refilterAll();
+            saveDebugFilters();
+        }
+
+        function clearDebugSearch() {
+            debugSearchTerm = '';
+            var input = document.getElementById('debugSearchInput');
+            if (input) input.value = '';
+            refilterAll();
+            saveDebugFilters();
+        }
+
+        function applySearchHighlight(entry) {
+            var msgSpan = entry.querySelector('.log-message');
+            if (!msgSpan) return;
+            if (!debugSearchTerm) {
+                msgSpan.textContent = msgSpan.textContent;
+                return;
+            }
+            var text = msgSpan.textContent;
+            var lower = text.toLowerCase();
+            var idx = lower.indexOf(debugSearchTerm);
+            if (idx >= 0) {
+                var before = text.substring(0, idx);
+                var match = text.substring(idx, idx + debugSearchTerm.length);
+                var after = text.substring(idx + debugSearchTerm.length);
+                msgSpan.innerHTML = escapeHtml(before) +
+                    '<span class="log-highlight">' + escapeHtml(match) + '</span>' +
+                    escapeHtml(after);
+            } else {
+                msgSpan.textContent = msgSpan.textContent;
+            }
+        }
+
+        // ===== Combined Visibility & Re-filter =====
+
+        function isEntryVisible(entry) {
+            if (currentLogFilter !== 'all' && entry.dataset.level !== currentLogFilter) return false;
+            if (currentModuleFilters.size > 0 && !currentModuleFilters.has(entry.dataset.module)) return false;
+            if (debugSearchTerm) {
+                var msg = entry.querySelector('.log-message');
+                if (msg && msg.textContent.toLowerCase().indexOf(debugSearchTerm) === -1) return false;
+            }
+            return true;
+        }
+
+        function refilterAll() {
+            var consoleEl = document.getElementById('debugConsole');
+            if (!consoleEl) return;
+            for (var i = 0; i < consoleEl.children.length; i++) {
+                var entry = consoleEl.children[i];
+                entry.style.display = isEntryVisible(entry) ? '' : 'none';
+                if (debugSearchTerm) applySearchHighlight(entry);
+            }
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        // ===== Timestamp Toggle =====
+
+        function toggleTimestampMode() {
+            debugTimestampMode = (debugTimestampMode === 'relative') ? 'absolute' : 'relative';
+            var btn = document.getElementById('timestampToggle');
+            if (btn) btn.textContent = (debugTimestampMode === 'relative') ? 'Uptime' : 'Clock';
+            var entries = document.querySelectorAll('#debugConsole .log-entry');
+            for (var i = 0; i < entries.length; i++) {
+                var ts = entries[i].querySelector('.log-timestamp');
+                if (ts && ts.dataset.ms) {
+                    ts.textContent = '[' + formatDebugTimestamp(parseInt(ts.dataset.ms)) + ']';
+                }
+            }
+            saveDebugFilters();
+        }
+
+        // ===== Filter Persistence =====
+
+        function saveDebugFilters() {
+            try {
+                localStorage.setItem('debugFilters', JSON.stringify({
+                    level: currentLogFilter,
+                    modules: Array.from(currentModuleFilters),
+                    search: debugSearchTerm,
+                    timestampMode: debugTimestampMode
+                }));
+            } catch(e) {}
+        }
+
+        function loadDebugFilters() {
+            try {
+                var saved = JSON.parse(localStorage.getItem('debugFilters'));
+                if (!saved) return;
+                if (saved.level) {
+                    currentLogFilter = saved.level;
+                    var sel = document.getElementById('logLevelFilter');
+                    if (sel) sel.value = saved.level;
+                }
+                if (saved.modules && saved.modules.length) {
+                    currentModuleFilters = new Set(saved.modules);
+                }
+                if (saved.search) {
+                    debugSearchTerm = saved.search;
+                    var input = document.getElementById('debugSearchInput');
+                    if (input) input.value = saved.search;
+                }
+                if (saved.timestampMode) {
+                    debugTimestampMode = saved.timestampMode;
+                    var btn = document.getElementById('timestampToggle');
+                    if (btn) btn.textContent = (debugTimestampMode === 'relative') ? 'Uptime' : 'Clock';
+                }
+            } catch(e) {}
         }
 
 //# sourceURL=25-debug-console.js
@@ -11278,6 +11689,9 @@ function initFirmwareDragDrop() {
 
             // Check for default password warning
             checkPasswordWarning();
+
+            // Restore debug console filter state from localStorage
+            loadDebugFilters();
         };
 
 //# sourceURL=28-init.js
