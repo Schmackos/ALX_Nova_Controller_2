@@ -395,6 +395,14 @@ void setup() {
       return;
     handleGetReleaseNotes();
   });
+  server.on("/api/releases", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleGetReleaseList();
+  });
+  server.on("/api/installrelease", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleInstallRelease();
+  });
   server.on("/api/settings", HTTP_GET, []() {
     if (!requireAuth())
       return;

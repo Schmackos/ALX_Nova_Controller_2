@@ -139,6 +139,7 @@ void broadcastUpdateStatus() {
   doc["latestVersion"] = appState.cachedLatestVersion;
   doc["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
   doc["amplifierInUse"] = appState.amplifierState;
+  doc["otaChannel"] = appState.otaChannel;
   
   if (appState.otaTotalBytes > 0) {
     doc["bytesDownloaded"] = appState.otaProgressBytes;
@@ -404,6 +405,17 @@ void checkForFirmwareUpdate() {
 
 // Get latest release information from GitHub API
 bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum) {
+  // Beta channel: use /releases list, pick newest overall (including prereleases)
+  if (appState.otaChannel == 1) {
+    if (!fetchReleaseList(1)) return false;
+    if (appState.cachedReleaseListCount == 0) return false;
+    version = appState.cachedReleaseList[0].version;
+    firmwareUrl = appState.cachedReleaseList[0].firmwareUrl;
+    checksum = appState.cachedReleaseList[0].checksum;
+    return true;
+  }
+  // Stable channel: existing /releases/latest path below
+
   // TLS needs ~33KB contiguous: mbedtls_ssl_setup() allocates two 16KB buffers sequentially
   uint32_t maxBlock = ESP.getMaxAllocHeap();
   LOG_I("[OTA] Heap before TLS: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
@@ -536,6 +548,225 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   }
   
   return true;
+}
+
+// Shared helper: extract checksum from release body string
+static String extractChecksumFromBody(const String& body) {
+  int shaIndex = body.indexOf("SHA256:");
+  if (shaIndex == -1) shaIndex = body.indexOf("sha256:");
+  if (shaIndex == -1) return "";
+  String temp = body.substring(shaIndex);
+  int start = temp.indexOf(':') + 1;
+  while (start < (int)temp.length() && (temp[start] == ' ' || temp[start] == '\n' || temp[start] == '\r')) {
+    start++;
+  }
+  String cs = temp.substring(start, start + 64);
+  cs.trim();
+  if (cs.length() != 64) return "";
+  for (int i = 0; i < 64; i++) {
+    char c = cs[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return "";
+  }
+  return cs;
+}
+
+// Fetch a list of recent releases from GitHub, filtered by channel.
+// Stores qualifying entries in appState.cachedReleaseList[] up to maxCount.
+// Returns true on success.
+bool fetchReleaseList(int maxCount) {
+  uint32_t maxBlock = ESP.getMaxAllocHeap();
+  LOG_I("[OTA] fetchReleaseList: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
+  if (maxBlock < 35000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<35KB), skipping", (unsigned long)maxBlock);
+    return false;
+  }
+
+  WiFiClientSecure client;
+
+  if (maxBlock < 50000) {
+    LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
+    client.setInsecure();
+  } else if (appState.enableCertValidation) {
+    client.setCACert(GITHUB_ROOT_CA);
+  } else {
+    client.setInsecure();
+  }
+
+  client.setTimeout(15000);
+
+  HTTPClient https;
+  String apiUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases?per_page=20";
+
+  LOG_I("[OTA] Fetching release list from: %s", apiUrl.c_str());
+
+  if (!https.begin(client, apiUrl)) {
+    LOG_E("[OTA] Failed to initialize HTTPS connection");
+    return false;
+  }
+
+  https.addHeader("Accept", "application/vnd.github.v3+json");
+  https.addHeader("User-Agent", "ESP32-OTA-Updater");
+  https.setTimeout(15000);
+
+  int httpCode = https.GET();
+
+  if (httpCode != HTTP_CODE_OK) {
+    LOG_E("[OTA] fetchReleaseList: HTTP code %d", httpCode);
+    https.end();
+    return false;
+  }
+
+  // Use filter to reduce memory usage — only parse fields we need
+  JsonDocument filter;
+  JsonObject filterItem = filter[0].to<JsonObject>();
+  filterItem["tag_name"] = true;
+  filterItem["prerelease"] = true;
+  filterItem["published_at"] = true;
+  filterItem["body"] = true;
+  filterItem["assets"][0]["name"] = true;
+  filterItem["assets"][0]["browser_download_url"] = true;
+
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, https.getStream(), DeserializationOption::Filter(filter));
+  https.end();
+
+  if (error) {
+    LOG_E("[OTA] fetchReleaseList JSON parse failed: %s", error.c_str());
+    return false;
+  }
+
+  if (!doc.is<JsonArray>()) {
+    LOG_E("[OTA] fetchReleaseList: response is not an array");
+    return false;
+  }
+
+  int count = 0;
+  int limit = maxCount < AppState::OTA_MAX_RELEASES ? maxCount : AppState::OTA_MAX_RELEASES;
+
+  for (JsonObject rel : doc.as<JsonArray>()) {
+    if (count >= limit) break;
+
+    bool isPrerelease = rel["prerelease"] | false;
+
+    // Channel filter: stable (0) skips prereleases; beta (1) includes all
+    if (appState.otaChannel == 0 && isPrerelease) continue;
+
+    String tagName = rel["tag_name"] | "";
+    if (tagName.length() == 0) continue;
+
+    // Find firmware.bin in assets
+    String fwUrl;
+    JsonArray assets = rel["assets"].as<JsonArray>();
+    for (JsonObject asset : assets) {
+      String assetName = asset["name"] | "";
+      if (assetName == "firmware.bin") {
+        fwUrl = asset["browser_download_url"] | "";
+        break;
+      }
+    }
+    if (fwUrl.length() == 0) continue;  // Skip releases without firmware.bin
+
+    // Extract checksum from body
+    String body = rel["body"] | "";
+    String cs = extractChecksumFromBody(body);
+
+    // Truncate published_at to YYYY-MM-DD
+    String publishedAt = rel["published_at"] | "";
+    if (publishedAt.length() > 10) publishedAt = publishedAt.substring(0, 10);
+
+    appState.cachedReleaseList[count].version = tagName;
+    appState.cachedReleaseList[count].firmwareUrl = fwUrl;
+    appState.cachedReleaseList[count].checksum = cs;
+    appState.cachedReleaseList[count].isPrerelease = isPrerelease;
+    appState.cachedReleaseList[count].publishedAt = publishedAt;
+    count++;
+  }
+
+  appState.cachedReleaseListCount = count;
+  LOG_I("[OTA] fetchReleaseList: found %d qualifying release(s) (channel=%d)", count, appState.otaChannel);
+  return true;
+}
+
+// ===== New HTTP Handlers =====
+
+void handleGetReleaseList() {
+  if (WiFi.status() != WL_CONNECTED) {
+    server.send(200, "application/json", "{\"success\":false,\"message\":\"Not connected to WiFi\"}");
+    return;
+  }
+  if (appState.otaInProgress) {
+    server.send(200, "application/json", "{\"success\":false,\"message\":\"OTA in progress\"}");
+    return;
+  }
+
+  bool ok = fetchReleaseList(AppState::OTA_MAX_RELEASES);
+
+  JsonDocument doc;
+  doc["success"] = ok;
+  if (ok) {
+    JsonArray arr = doc["releases"].to<JsonArray>();
+    for (int i = 0; i < appState.cachedReleaseListCount; i++) {
+      JsonObject rel = arr.add<JsonObject>();
+      rel["version"] = appState.cachedReleaseList[i].version;
+      rel["isPrerelease"] = appState.cachedReleaseList[i].isPrerelease;
+      rel["publishedAt"] = appState.cachedReleaseList[i].publishedAt;
+      rel["hasChecksum"] = appState.cachedReleaseList[i].checksum.length() == 64;
+    }
+  } else {
+    doc["message"] = "Failed to fetch release list";
+  }
+
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
+}
+
+void handleInstallRelease() {
+  if (!server.hasArg("plain")) {
+    server.send(400, "application/json", "{\"success\":false,\"message\":\"No data\"}");
+    return;
+  }
+
+  JsonDocument doc;
+  if (deserializeJson(doc, server.arg("plain"))) {
+    server.send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+    return;
+  }
+
+  String targetVersion = doc["version"].as<String>();
+  if (targetVersion.length() == 0) {
+    server.send(400, "application/json", "{\"success\":false,\"message\":\"Version required\"}");
+    return;
+  }
+
+  // Find version in cached release list
+  bool found = false;
+  for (int i = 0; i < appState.cachedReleaseListCount; i++) {
+    if (appState.cachedReleaseList[i].version == targetVersion) {
+      appState.cachedFirmwareUrl = appState.cachedReleaseList[i].firmwareUrl;
+      appState.cachedChecksum = appState.cachedReleaseList[i].checksum;
+      appState.cachedLatestVersion = targetVersion;
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    server.send(404, "application/json", "{\"success\":false,\"message\":\"Version not in cached list. Browse releases first.\"}");
+    return;
+  }
+
+  if (appState.otaInProgress) {
+    server.send(409, "application/json", "{\"success\":false,\"message\":\"OTA already in progress\"}");
+    return;
+  }
+
+  appState.updateAvailable = true;
+  LOG_I("[OTA] User selected release %s for install", targetVersion.c_str());
+
+  startOTADownloadTask();
+
+  server.send(200, "application/json", "{\"success\":true,\"message\":\"Installing...\"}");
 }
 
 // Calculate SHA256 hash of data
