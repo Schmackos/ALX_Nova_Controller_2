@@ -9710,6 +9710,22 @@ function applyDebugState(d) {
 
     // Hide/show debug tab based on debugMode only
     updateDebugTabVisibility(d.debugMode);
+
+    // Populate pin table if included (sent once on connect)
+    if (d.pins) {
+        var ptb = document.getElementById('pinTableBody');
+        if (ptb && !ptb.dataset.populated) {
+            ptb.dataset.populated = '1';
+            var catLabels = {audio:'Audio', display:'Display', input:'Input', core:'Core', network:'Network'};
+            var html = '';
+            for (var i = 0; i < d.pins.length; i++) {
+                var p = d.pins[i];
+                var catName = catLabels[p.c] || p.c;
+                html += '<tr><td>' + p.g + '</td><td>' + p.f + '</td><td>' + p.d + '</td><td><span class="pin-cat pin-cat-' + p.c + '">' + catName + '</span></td></tr>';
+            }
+            ptb.innerHTML = html;
+        }
+    }
 }
 
 function updateDebugTabVisibility(visible) {
