@@ -1480,6 +1480,46 @@
                 </div>
             </div>
 
+            <!-- Debug Console -->
+            <div class="card">
+                <div class="card-title">Debug Console</div>
+                <div class="form-row mb-12">
+                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
+                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
+                        <option value="all">All Levels</option>
+                        <option value="debug">Debug</option>
+                        <option value="info">Info</option>
+                        <option value="warn">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                </div>
+                <div class="form-row mb-8" id="moduleCategoryRow">
+                    <label style="margin-right: 8px; font-weight: 500;">Categories:</label>
+                    <div id="moduleChips" class="chip-container">
+                        <!-- Chips auto-populated from received messages -->
+                    </div>
+                    <button class="btn-chip btn-chip-action" onclick="clearModuleFilter()"
+                            title="Show all categories" style="margin-left:4px;">All</button>
+                </div>
+                <div class="form-row mb-8">
+                    <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
+                           oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
+                    <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
+                            style="margin-left:4px;" title="Clear search">&#10005;</button>
+                    <button class="btn-chip btn-chip-action" id="timestampToggle"
+                            onclick="toggleTimestampMode()" title="Toggle timestamp format"
+                            style="margin-left:4px;">Uptime</button>
+                </div>
+                <div class="debug-console" id="debugConsole">
+                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
+                </div>
+                <div class="btn-row mt-12">
+                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
+                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
+                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
+                </div>
+            </div>
+
             <!-- FreeRTOS Tasks -->
             <div id="taskMonitorSection">
             <div class="card">
@@ -1940,45 +1980,6 @@
                 </table>
             </div>
 
-            <!-- Debug Console -->
-            <div class="card">
-                <div class="card-title">Debug Console</div>
-                <div class="form-row mb-12">
-                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
-                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
-                        <option value="all">All Levels</option>
-                        <option value="debug">Debug</option>
-                        <option value="info">Info</option>
-                        <option value="warn">Warning</option>
-                        <option value="error">Error</option>
-                    </select>
-                </div>
-                <div class="form-row mb-8" id="moduleCategoryRow">
-                    <label style="margin-right: 8px; font-weight: 500;">Categories:</label>
-                    <div id="moduleChips" class="chip-container">
-                        <!-- Chips auto-populated from received messages -->
-                    </div>
-                    <button class="btn-chip btn-chip-action" onclick="clearModuleFilter()"
-                            title="Show all categories" style="margin-left:4px;">All</button>
-                </div>
-                <div class="form-row mb-8">
-                    <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
-                           oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
-                    <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
-                            style="margin-left:4px;" title="Clear search">&#10005;</button>
-                    <button class="btn-chip btn-chip-action" id="timestampToggle"
-                            onclick="toggleTimestampMode()" title="Toggle timestamp format"
-                            style="margin-left:4px;">Uptime</button>
-                </div>
-                <div class="debug-console" id="debugConsole">
-                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
-                </div>
-                <div class="btn-row mt-12">
-                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
-                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
-                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
-                </div>
-            </div>
         </section>
 
     </main>

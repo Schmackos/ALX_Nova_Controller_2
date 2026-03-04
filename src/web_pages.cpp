@@ -4139,6 +4139,46 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <!-- Debug Console -->
+            <div class="card">
+                <div class="card-title">Debug Console</div>
+                <div class="form-row mb-12">
+                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
+                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
+                        <option value="all">All Levels</option>
+                        <option value="debug">Debug</option>
+                        <option value="info">Info</option>
+                        <option value="warn">Warning</option>
+                        <option value="error">Error</option>
+                    </select>
+                </div>
+                <div class="form-row mb-8" id="moduleCategoryRow">
+                    <label style="margin-right: 8px; font-weight: 500;">Categories:</label>
+                    <div id="moduleChips" class="chip-container">
+                        <!-- Chips auto-populated from received messages -->
+                    </div>
+                    <button class="btn-chip btn-chip-action" onclick="clearModuleFilter()"
+                            title="Show all categories" style="margin-left:4px;">All</button>
+                </div>
+                <div class="form-row mb-8">
+                    <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
+                           oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
+                    <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
+                            style="margin-left:4px;" title="Clear search">&#10005;</button>
+                    <button class="btn-chip btn-chip-action" id="timestampToggle"
+                            onclick="toggleTimestampMode()" title="Toggle timestamp format"
+                            style="margin-left:4px;">Uptime</button>
+                </div>
+                <div class="debug-console" id="debugConsole">
+                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
+                </div>
+                <div class="btn-row mt-12">
+                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
+                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
+                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
+                </div>
+            </div>
+
             <!-- FreeRTOS Tasks -->
             <div id="taskMonitorSection">
             <div class="card">
@@ -4599,45 +4639,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </table>
             </div>
 
-            <!-- Debug Console -->
-            <div class="card">
-                <div class="card-title">Debug Console</div>
-                <div class="form-row mb-12">
-                    <label for="logLevelFilter" style="margin-right: 8px; font-weight: 500;">Log Level:</label>
-                    <select id="logLevelFilter" class="select-sm" onchange="setLogFilter(this.value)" style="min-width:120px;">
-                        <option value="all">All Levels</option>
-                        <option value="debug">Debug</option>
-                        <option value="info">Info</option>
-                        <option value="warn">Warning</option>
-                        <option value="error">Error</option>
-                    </select>
-                </div>
-                <div class="form-row mb-8" id="moduleCategoryRow">
-                    <label style="margin-right: 8px; font-weight: 500;">Categories:</label>
-                    <div id="moduleChips" class="chip-container">
-                        <!-- Chips auto-populated from received messages -->
-                    </div>
-                    <button class="btn-chip btn-chip-action" onclick="clearModuleFilter()"
-                            title="Show all categories" style="margin-left:4px;">All</button>
-                </div>
-                <div class="form-row mb-8">
-                    <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
-                           oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
-                    <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
-                            style="margin-left:4px;" title="Clear search">&#10005;</button>
-                    <button class="btn-chip btn-chip-action" id="timestampToggle"
-                            onclick="toggleTimestampMode()" title="Toggle timestamp format"
-                            style="margin-left:4px;">Uptime</button>
-                </div>
-                <div class="debug-console" id="debugConsole">
-                    <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
-                </div>
-                <div class="btn-row mt-12">
-                    <button class="btn btn-secondary" id="pauseBtn" onclick="toggleDebugPause()">Pause</button>
-                    <button class="btn btn-secondary" onclick="clearDebugConsole()">Clear</button>
-                    <button class="btn btn-primary" onclick="downloadDebugLog()">Download Logs</button>
-                </div>
-            </div>
         </section>
 
     </main>
@@ -10867,22 +10868,8 @@ function initFirmwareDragDrop() {
 
         function setLogFilter(level) {
             currentLogFilter = level;
-
-            // Apply filter to all console entries
-            const console = document.getElementById('debugConsole');
-            const allEntries = Array.from(console.children);
-
-            allEntries.forEach(entry => {
-                const entryLevel = entry.dataset.level;
-                if (level === 'all' || entryLevel === level) {
-                    entry.style.display = '';
-                } else {
-                    entry.style.display = 'none';
-                }
-            });
-
-            // Auto-scroll to bottom after filtering
-            console.scrollTop = console.scrollHeight;
+            refilterAll();
+            saveDebugFilters();
         }
 
         function downloadDebugLog() {
@@ -10957,6 +10944,184 @@ function initFirmwareDragDrop() {
                     console.error('Download error:', err);
                     showToast('Failed to download diagnostics', 'error');
                 });
+        }
+
+        // ===== Module Chip Filtering =====
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        function extractModule(msg) {
+            var m = msg.match(/\[[DIWE]\]\s*\[([^\]]+)\]/);
+            return m ? m[1] : null;
+        }
+
+        function createModuleChip(module) {
+            var container = document.getElementById('moduleChips');
+            if (!container) return;
+            var chip = document.createElement('button');
+            chip.className = 'btn-chip';
+            chip.dataset.module = module;
+            chip.innerHTML = escapeHtml(module) + ' <span class="chip-badge">0</span>';
+            chip.onclick = function() { toggleModuleFilter(module); };
+            if (currentModuleFilters.has(module)) {
+                chip.classList.add('active');
+            }
+            container.appendChild(chip);
+        }
+
+        function toggleModuleFilter(module) {
+            if (currentModuleFilters.has(module)) {
+                currentModuleFilters.delete(module);
+            } else {
+                currentModuleFilters.add(module);
+            }
+            var chips = document.querySelectorAll('#moduleChips .btn-chip');
+            for (var i = 0; i < chips.length; i++) {
+                chips[i].classList.toggle('active', currentModuleFilters.has(chips[i].dataset.module));
+            }
+            refilterAll();
+            saveDebugFilters();
+        }
+
+        function clearModuleFilter() {
+            currentModuleFilters.clear();
+            var chips = document.querySelectorAll('#moduleChips .btn-chip');
+            for (var i = 0; i < chips.length; i++) {
+                chips[i].classList.remove('active');
+            }
+            refilterAll();
+            saveDebugFilters();
+        }
+
+        function updateChipBadge(module) {
+            var chip = document.querySelector('#moduleChips .btn-chip[data-module="' + CSS.escape(module) + '"]');
+            if (!chip) return;
+            var info = knownModules[module];
+            var badge = chip.querySelector('.chip-badge');
+            if (!badge) return;
+            badge.textContent = info.total;
+            badge.className = 'chip-badge';
+            if (info.errors > 0) badge.classList.add('has-errors');
+            else if (info.warnings > 0) badge.classList.add('has-warnings');
+        }
+
+        // ===== Search =====
+
+        function setDebugSearch(term) {
+            debugSearchTerm = term.toLowerCase();
+            refilterAll();
+            saveDebugFilters();
+        }
+
+        function clearDebugSearch() {
+            debugSearchTerm = '';
+            var input = document.getElementById('debugSearchInput');
+            if (input) input.value = '';
+            refilterAll();
+            saveDebugFilters();
+        }
+
+        function applySearchHighlight(entry) {
+            var msgSpan = entry.querySelector('.log-message');
+            if (!msgSpan) return;
+            if (!debugSearchTerm) {
+                msgSpan.textContent = msgSpan.textContent;
+                return;
+            }
+            var text = msgSpan.textContent;
+            var lower = text.toLowerCase();
+            var idx = lower.indexOf(debugSearchTerm);
+            if (idx >= 0) {
+                var before = text.substring(0, idx);
+                var match = text.substring(idx, idx + debugSearchTerm.length);
+                var after = text.substring(idx + debugSearchTerm.length);
+                msgSpan.innerHTML = escapeHtml(before) +
+                    '<span class="log-highlight">' + escapeHtml(match) + '</span>' +
+                    escapeHtml(after);
+            } else {
+                msgSpan.textContent = msgSpan.textContent;
+            }
+        }
+
+        // ===== Combined Visibility & Re-filter =====
+
+        function isEntryVisible(entry) {
+            if (currentLogFilter !== 'all' && entry.dataset.level !== currentLogFilter) return false;
+            if (currentModuleFilters.size > 0 && !currentModuleFilters.has(entry.dataset.module)) return false;
+            if (debugSearchTerm) {
+                var msg = entry.querySelector('.log-message');
+                if (msg && msg.textContent.toLowerCase().indexOf(debugSearchTerm) === -1) return false;
+            }
+            return true;
+        }
+
+        function refilterAll() {
+            var consoleEl = document.getElementById('debugConsole');
+            if (!consoleEl) return;
+            for (var i = 0; i < consoleEl.children.length; i++) {
+                var entry = consoleEl.children[i];
+                entry.style.display = isEntryVisible(entry) ? '' : 'none';
+                if (debugSearchTerm) applySearchHighlight(entry);
+            }
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        // ===== Timestamp Toggle =====
+
+        function toggleTimestampMode() {
+            debugTimestampMode = (debugTimestampMode === 'relative') ? 'absolute' : 'relative';
+            var btn = document.getElementById('timestampToggle');
+            if (btn) btn.textContent = (debugTimestampMode === 'relative') ? 'Uptime' : 'Clock';
+            var entries = document.querySelectorAll('#debugConsole .log-entry');
+            for (var i = 0; i < entries.length; i++) {
+                var ts = entries[i].querySelector('.log-timestamp');
+                if (ts && ts.dataset.ms) {
+                    ts.textContent = '[' + formatDebugTimestamp(parseInt(ts.dataset.ms)) + ']';
+                }
+            }
+            saveDebugFilters();
+        }
+
+        // ===== Filter Persistence =====
+
+        function saveDebugFilters() {
+            try {
+                localStorage.setItem('debugFilters', JSON.stringify({
+                    level: currentLogFilter,
+                    modules: Array.from(currentModuleFilters),
+                    search: debugSearchTerm,
+                    timestampMode: debugTimestampMode
+                }));
+            } catch(e) {}
+        }
+
+        function loadDebugFilters() {
+            try {
+                var saved = JSON.parse(localStorage.getItem('debugFilters'));
+                if (!saved) return;
+                if (saved.level) {
+                    currentLogFilter = saved.level;
+                    var sel = document.getElementById('logLevelFilter');
+                    if (sel) sel.value = saved.level;
+                }
+                if (saved.modules && saved.modules.length) {
+                    currentModuleFilters = new Set(saved.modules);
+                }
+                if (saved.search) {
+                    debugSearchTerm = saved.search;
+                    var input = document.getElementById('debugSearchInput');
+                    if (input) input.value = saved.search;
+                }
+                if (saved.timestampMode) {
+                    debugTimestampMode = saved.timestampMode;
+                    var btn = document.getElementById('timestampToggle');
+                    if (btn) btn.textContent = (debugTimestampMode === 'relative') ? 'Uptime' : 'Clock';
+                }
+            } catch(e) {}
         }
 
 //# sourceURL=25-debug-console.js
@@ -11351,6 +11516,9 @@ function initFirmwareDragDrop() {
 
             // Check for default password warning
             checkPasswordWarning();
+
+            // Restore debug console filter state from localStorage
+            loadDebugFilters();
         };
 
 //# sourceURL=28-init.js

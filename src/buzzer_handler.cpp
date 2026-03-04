@@ -143,11 +143,13 @@ static const ToneStep *get_pattern(BuzzerPattern p) {
 static const uint8_t volume_pct[] = {20, 50, 100};
 
 // ===== Set tone frequency + volume (resolution-independent) =====
-// ledcWriteTone() picks optimal resolution and sets 50% duty. We read back
-// the actual duty value and scale it for volume control.
+// Always detach first so ledcWriteTone() starts from a clean state —
+// calling ledcWriteTone() on an already-attached pin uses a different
+// code path in Arduino 3.x that can produce silence.
 static void buzzer_set_tone(uint16_t freq_hz, int vol) {
-  ledcWriteTone(BUZZER_PIN, freq_hz);          // sets 50% duty at auto-resolution
-  uint32_t halfDuty = ledcRead(BUZZER_PIN);    // read back the 50% duty value
+  ledcDetach(BUZZER_PIN);                       // ensure clean state
+  ledcWriteTone(BUZZER_PIN, freq_hz);           // attaches fresh + sets 50% duty
+  uint32_t halfDuty = ledcRead(BUZZER_PIN);     // read back the 50% duty value
   uint32_t duty = halfDuty * volume_pct[vol] / 100;
   ledcWrite(BUZZER_PIN, duty);
 }
@@ -183,8 +185,7 @@ void buzzer_play(BuzzerPattern pattern) {
 static void start_pattern(const ToneStep *pat) {
   LOG_D("[Buzzer] Start pattern: freq=%d, dur=%d", pat[0].freq_hz, pat[0].duration_ms);
 
-  // Always detach first — ledcWriteTone() may have changed the timer resolution,
-  // causing ledcAttach() to fail with "Pin already attached" at a different resolution
+  // Always detach first for clean state
   if (playing) {
     ledcDetach(BUZZER_PIN);
   }
@@ -194,10 +195,8 @@ static void start_pattern(const ToneStep *pat) {
   step_start_ms = millis();
   playing = true;
 
-  // Re-attach pin to LEDC for playback
-  ledcAttach(BUZZER_PIN, 2000, BUZZER_PWM_RESOLUTION);
-
-  // Start first step
+  // Start first step — NO ledcAttach() here; buzzer_set_tone() handles attach
+  // via ledcWriteTone() which picks the optimal resolution for each frequency
   if (pat[0].duration_ms > 0) {
     int vol = AppState::getInstance().buzzerVolume;
     if (vol < 0) vol = 0;
@@ -205,7 +204,8 @@ static void start_pattern(const ToneStep *pat) {
     if (pat[0].freq_hz > 0) {
       buzzer_set_tone(pat[0].freq_hz, vol);
     } else {
-      // Silence gap
+      // Silence gap as first step — attach with minimal config
+      ledcAttach(BUZZER_PIN, 1000, BUZZER_PWM_RESOLUTION);
       ledcWrite(BUZZER_PIN, 0);
     }
   }
