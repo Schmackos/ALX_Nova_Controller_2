@@ -1934,29 +1934,8 @@
                             <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow">&#9650;</span></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr><td>2</td><td>LED</td><td>Status LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>4</td><td>Amplifier Relay</td><td>Relay Module</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>8</td><td>Buzzer (PWM)</td><td>Piezo Buzzer</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>15</td><td>Reset Button</td><td>Tactile Switch</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>38</td><td>Signal Gen (PWM)</td><td>Signal Generator</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>3</td><td>I2S MCLK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC 1</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>9</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>40</td><td>I2S TX Data</td><td>DAC Output</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>41</td><td>I2C SDA</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>42</td><td>I2C SCL</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>10</td><td>TFT CS</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>11</td><td>TFT MOSI</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>12</td><td>TFT SCLK</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>13</td><td>TFT DC</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>14</td><td>TFT RST</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>21</td><td>TFT Backlight</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                    <tbody id="pinTableBody">
+                        <tr><td colspan="4" style="text-align:center;opacity:0.5">Waiting for pin data...</td></tr>
                     </tbody>
                 </table>
             </div>

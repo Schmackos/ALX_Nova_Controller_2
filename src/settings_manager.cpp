@@ -1638,7 +1638,7 @@ void handleDiagnostics() {
       c["channelFormat"] = i2sCfg.adc[a].channelFormat;
       c["dmaBufCount"] = i2sCfg.adc[a].dmaBufCount;
       c["dmaBufLen"] = i2sCfg.adc[a].dmaBufLen;
-      c["apll"] = i2sCfg.adc[a].apllEnabled;
+      c["apll"] = i2sCfg.adc[a].pllEnabled;
       c["mclkHz"] = i2sCfg.adc[a].mclkHz;
       c["commFormat"] = i2sCfg.adc[a].commFormat;
     }

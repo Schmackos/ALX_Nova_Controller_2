@@ -266,6 +266,114 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
 #endif
 }
 
+// ===== Secondary DAC (ES8311 on P4) =====
+#if CONFIG_IDF_TARGET_ESP32P4
+#include "drivers/dac_es8311.h"
+#include "drivers/es8311_regs.h"
+static DacDriver* _secondaryDriver = nullptr;
+static bool _secondaryI2sTxEnabled = false;
+static float _secondaryVolumeGain = 1.0f;
+#endif
+
+void dac_secondary_init() {
+#if CONFIG_IDF_TARGET_ESP32P4
+    AppState& as = AppState::getInstance();
+    if (!as.es8311Enabled) {
+        LOG_I("[DAC] ES8311 disabled in settings, skipping secondary init");
+        return;
+    }
+
+    _secondaryDriver = createDacEs8311();
+    if (!_secondaryDriver) {
+        LOG_E("[DAC] Failed to create ES8311 driver");
+        return;
+    }
+
+    DacPinConfig pins = { ES8311_I2S_DSDIN_PIN, ES8311_I2C_SDA_PIN, ES8311_I2C_SCL_PIN, ES8311_I2S_MCLK_PIN };
+    if (!_secondaryDriver->init(pins)) {
+        LOG_E("[DAC] ES8311 init failed");
+        delete _secondaryDriver;
+        _secondaryDriver = nullptr;
+        return;
+    }
+
+    if (!i2s_audio_enable_es8311_tx(as.audioSampleRate)) {
+        LOG_E("[DAC] ES8311 I2S2 TX enable failed");
+        _secondaryDriver->deinit();
+        delete _secondaryDriver;
+        _secondaryDriver = nullptr;
+        return;
+    }
+    _secondaryI2sTxEnabled = true;
+
+    if (!_secondaryDriver->configure(as.audioSampleRate, 32)) {
+        LOG_W("[DAC] ES8311 configure failed");
+    }
+
+    _secondaryDriver->setVolume(as.es8311Volume);
+    _secondaryDriver->setMute(as.es8311Mute);
+    _secondaryVolumeGain = dac_volume_to_linear(as.es8311Volume);
+
+    as.es8311Ready = true;
+    LOG_I("[DAC] ES8311 secondary output initialized, vol=%d%%", as.es8311Volume);
+#endif
+}
+
+void dac_secondary_deinit() {
+#if CONFIG_IDF_TARGET_ESP32P4
+    if (_secondaryDriver) {
+        _secondaryDriver->deinit();
+        delete _secondaryDriver;
+        _secondaryDriver = nullptr;
+    }
+    if (_secondaryI2sTxEnabled) {
+        i2s_audio_disable_es8311_tx();
+        _secondaryI2sTxEnabled = false;
+    }
+    AppState::getInstance().es8311Ready = false;
+    LOG_I("[DAC] ES8311 secondary output deinitialized");
+#endif
+}
+
+bool dac_secondary_is_ready() {
+#if CONFIG_IDF_TARGET_ESP32P4
+    return _secondaryI2sTxEnabled && _secondaryDriver && _secondaryDriver->isReady() &&
+           AppState::getInstance().es8311Enabled;
+#else
+    return false;
+#endif
+}
+
+void dac_secondary_write(const int32_t* buffer, int stereo_frames) {
+#if CONFIG_IDF_TARGET_ESP32P4
+    if (!_secondaryI2sTxEnabled || !buffer || stereo_frames <= 0) return;
+    if (!_secondaryDriver || !_secondaryDriver->isReady()) return;
+
+    size_t bytes_written = 0;
+    size_t total_bytes = stereo_frames * 2 * sizeof(int32_t);
+    i2s_audio_write_es8311(buffer, total_bytes, &bytes_written, 20);
+#endif
+}
+
+void dac_secondary_set_volume(uint8_t percent) {
+#if CONFIG_IDF_TARGET_ESP32P4
+    if (_secondaryDriver) {
+        _secondaryDriver->setVolume(percent);
+        _secondaryVolumeGain = dac_volume_to_linear(percent);
+        LOG_I("[DAC] ES8311 volume: %d%% [HW]", percent);
+    }
+#endif
+}
+
+void dac_secondary_set_mute(bool mute) {
+#if CONFIG_IDF_TARGET_ESP32P4
+    if (_secondaryDriver) {
+        _secondaryDriver->setMute(mute);
+        LOG_I("[DAC] ES8311 mute: %s", mute ? "on" : "off");
+    }
+#endif
+}
+
 // ===== TX Diagnostics Snapshot =====
 DacTxDiag dac_get_tx_diagnostics() {
     DacTxDiag d = {};

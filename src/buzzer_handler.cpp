@@ -137,8 +137,20 @@ static const ToneStep *get_pattern(BuzzerPattern p) {
   }
 }
 
-// ===== Volume duty lookup: Low=10%, Medium=30%, High=60% of 255 =====
-static const uint8_t volume_duty[] = {25, 76, 153};
+// ===== Volume scale factors (percentage of 50% duty, which is max for piezo) =====
+// ledcWriteTone() sets 50% duty automatically; we scale it down for lower volumes
+// Low=20%, Medium=50%, High=100% of the 50%-duty value
+static const uint8_t volume_pct[] = {20, 50, 100};
+
+// ===== Set tone frequency + volume (resolution-independent) =====
+// ledcWriteTone() picks optimal resolution and sets 50% duty. We read back
+// the actual duty value and scale it for volume control.
+static void buzzer_set_tone(uint16_t freq_hz, int vol) {
+  ledcWriteTone(BUZZER_PIN, freq_hz);          // sets 50% duty at auto-resolution
+  uint32_t halfDuty = ledcRead(BUZZER_PIN);    // read back the 50% duty value
+  uint32_t duty = halfDuty * volume_pct[vol] / 100;
+  ledcWrite(BUZZER_PIN, duty);
+}
 
 // ===== Sequencer state =====
 static const ToneStep *current_pattern = nullptr;
@@ -191,8 +203,7 @@ static void start_pattern(const ToneStep *pat) {
     if (vol < 0) vol = 0;
     if (vol > 2) vol = 2;
     if (pat[0].freq_hz > 0) {
-      ledcWriteTone(BUZZER_PIN, pat[0].freq_hz);
-      ledcWrite(BUZZER_PIN, volume_duty[vol]);
+      buzzer_set_tone(pat[0].freq_hz, vol);
     } else {
       // Silence gap
       ledcWrite(BUZZER_PIN, 0);
@@ -232,8 +243,7 @@ void buzzer_update() {
         if (vol < 0) vol = 0;
         if (vol > 2) vol = 2;
         if (current_pattern[current_step].freq_hz > 0) {
-          ledcWriteTone(BUZZER_PIN, current_pattern[current_step].freq_hz);
-          ledcWrite(BUZZER_PIN, volume_duty[vol]);
+          buzzer_set_tone(current_pattern[current_step].freq_hz, vol);
         } else {
           // Silence gap
           ledcWrite(BUZZER_PIN, 0);

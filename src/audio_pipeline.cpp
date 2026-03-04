@@ -366,6 +366,12 @@ static void pipeline_write_output() {
     const float *outR = (_swapPending && _swapHoldR) ? _swapHoldR : _outR;
     to_int32_lj(outL, outR, _dacBuf, FRAMES);
     dac_output_write(_dacBuf, FRAMES);
+
+    // Secondary DAC (ES8311 on P4) — same audio, independent hardware volume
+    if (dac_secondary_is_ready()) {
+        dac_secondary_write(_dacBuf, FRAMES);
+    }
+
     _swapPending = false;  // Clear after one iteration
 #endif
 }

@@ -943,6 +943,13 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   if (!appState.wifiConnecting && !appState.wifiConnectSuccess && appState.wifiConnectError.length() > 0) {
     doc["message"] = appState.wifiConnectError;
   }
+
+  // Ethernet state (P4 has onboard Ethernet; always present in JSON, false on S3)
+  doc["ethLinkUp"] = appState.ethLinkUp;
+  doc["ethConnected"] = appState.ethConnected;
+  doc["ethIP"] = appState.ethIP;
+  const char* ifNames[] = {"none", "ethernet", "wifi"};
+  doc["activeInterface"] = ifNames[appState.activeInterface];
 }
 
 void sendWiFiStatus() {
@@ -1529,6 +1536,8 @@ void updateWiFiConnection() {
   }
 }
 
+// On S3: disables WiFi power-save to prevent interrupt jitter from causing I2S DMA audio pops.
+// On P4: WiFi runs on a separate ESP32-C6 via SDIO — PS setting has no local effect; call is harmless.
 void wifi_ensure_ps_none() {
     esp_wifi_set_ps(WIFI_PS_NONE);
 }

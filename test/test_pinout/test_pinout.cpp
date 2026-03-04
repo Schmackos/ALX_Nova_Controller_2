@@ -36,7 +36,7 @@ static const int I2S_LRC_PIN = 18;
 static const int I2S_MCLK_PIN = 3;
 #endif
 #ifndef I2S_DOUT2_PIN
-static const int I2S_DOUT2_PIN = 19;
+static const int I2S_DOUT2_PIN = 9;  /* S3 default — matches config.h */
 #endif
 #ifndef RESET_BUTTON_PIN
 static const int RESET_BUTTON_PIN = 15;
@@ -73,6 +73,9 @@ static const int BUZZER_PIN = 8;
 #ifndef ENCODER_SW_PIN
 #define ENCODER_SW_PIN 7
 #endif
+#ifndef SIGGEN_PWM_PIN
+#define SIGGEN_PWM_PIN 38  /* S3 default — matches config.h */
+#endif
 
 /* ===== Local copy of pin data and formatters (mirrors scr_debug.cpp) ===== */
 
@@ -103,6 +106,11 @@ static const PinEntry all_pins[] = {
     {"Core",         "LED",  LED_PIN},
     {"Core",         "Amp",  AMPLIFIER_PIN},
     {"Core",         "Btn",  RESET_BUTTON_PIN},
+    {"SigGen",       "PWM",  SIGGEN_PWM_PIN},
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+    {"ES8311 DAC",   "TX",   9},
+    {"ES8311 DAC",   "PA",   53},
+#endif
 };
 static const int PIN_COUNT = sizeof(all_pins) / sizeof(all_pins[0]);
 
@@ -137,6 +145,8 @@ static void format_pin_info(char *buf, int len) {
              "  A=%d B=%d SW=%d\n"
              "HW-508 Buzzer\n"
              "  IO=%d\n"
+             "SigGen\n"
+             "  PWM=%d\n"
              "Core\n"
              "  LED=%d Amp=%d Btn=%d",
              I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
@@ -145,11 +155,12 @@ static void format_pin_info(char *buf, int len) {
              TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN,
              ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN,
              BUZZER_PIN,
+             SIGGEN_PWM_PIN,
              LED_PIN, AMPLIFIER_PIN, RESET_BUTTON_PIN);
 }
 
 static void format_pin_sorted(char *buf, int len, PinSortMode mode) {
-    int indices[18];
+    int indices[24];  /* sized for max possible pins (19 common + up to 5 target-specific) */
     for (int i = 0; i < PIN_COUNT; i++) indices[i] = i;
 
     if (mode == SORT_BY_DEVICE) {
@@ -179,18 +190,19 @@ void tearDown(void) {}
 
 /* Test: format_pin_info produces expected output */
 void test_pin_info_format_output(void) {
-    char buf[256];
+    char buf[384];
     format_pin_info(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "PCM1808 ADC"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "ST7735S TFT"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "EC11 Encoder"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "HW-508 Buzzer"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "SigGen"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "Core"));
 }
 
 /* Test: all core pin values present in output */
 void test_pin_info_core_pins(void) {
-    char buf[256];
+    char buf[384];
     format_pin_info(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "LED=2"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "Amp=4"));
@@ -199,25 +211,33 @@ void test_pin_info_core_pins(void) {
 
 /* Test: buzzer pin present */
 void test_pin_info_buzzer_pin(void) {
-    char buf[256];
+    char buf[384];
     format_pin_info(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "IO=8"));
 }
 
+/* Test: signal generator PWM pin present */
+void test_pin_info_siggen_pin(void) {
+    char buf[384];
+    format_pin_info(buf, sizeof(buf));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "SigGen"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "PWM=38"));
+}
+
 /* Test: all I2S pin values present in output */
 void test_pin_info_i2s_pins(void) {
-    char buf[256];
+    char buf[384];
     format_pin_info(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "BCK=16"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT=17"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT2=19"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT2=9"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "LRC=18"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "MCLK=3"));
 }
 
 /* Test: all encoder pin values present */
 void test_pin_info_encoder_pins(void) {
-    char buf[256];
+    char buf[384];
     format_pin_info(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "A=5"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "B=6"));
@@ -226,7 +246,7 @@ void test_pin_info_encoder_pins(void) {
 
 /* Test: all TFT pin values present */
 void test_pin_info_tft_pins(void) {
-    char buf[256];
+    char buf[384];
     format_pin_info(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "CS=10"));
     TEST_ASSERT_NOT_NULL(strstr(buf, "MOSI=11"));
@@ -238,10 +258,10 @@ void test_pin_info_tft_pins(void) {
 
 /* Test: output fits in expected buffer size */
 void test_pin_info_buffer_size(void) {
-    char buf[256];
+    char buf[384];
     format_pin_info(buf, sizeof(buf));
     size_t len = strlen(buf);
-    TEST_ASSERT_LESS_THAN(256, len);
+    TEST_ASSERT_LESS_THAN(384, len);
     TEST_ASSERT_GREATER_THAN(100, len);
 }
 
@@ -254,7 +274,7 @@ void test_pin_info_small_buffer(void) {
 
 /* Test: exact first line content */
 void test_pin_info_first_line(void) {
-    char buf[256];
+    char buf[384];
     format_pin_info(buf, sizeof(buf));
     char *newline = strchr(buf, '\n');
     TEST_ASSERT_NOT_NULL(newline);
@@ -265,15 +285,15 @@ void test_pin_info_first_line(void) {
     TEST_ASSERT_EQUAL_STRING("PCM1808 ADC 1&2", first_line);
 }
 
-/* Test: all 17 pin numbers are unique in output */
-void test_pin_info_all_17_pins_present(void) {
-    char buf[256];
-    format_pin_info(buf, sizeof(buf));
+/* Test: all 19 pin assignments appear in formatted output (one '=' per pin value) */
+void test_pin_info_all_pins_present(void) {
+    char buf[384];
+    format_pin_info(buf, sizeof(buf));  /* 19 = signs: 5 I2S + 6 TFT + 3 encoder + 1 buzzer + 1 SigGen + 3 core */
     int eq_count = 0;
     for (size_t i = 0; i < strlen(buf); i++) {
         if (buf[i] == '=') eq_count++;
     }
-    TEST_ASSERT_EQUAL(18, eq_count);
+    TEST_ASSERT_EQUAL(19, eq_count);
 }
 
 /* Test: multiline output has expected line count */
@@ -284,7 +304,10 @@ void test_pin_info_line_count(void) {
     for (size_t i = 0; i < strlen(buf); i++) {
         if (buf[i] == '\n') newline_count++;
     }
-    TEST_ASSERT_EQUAL(11, newline_count);
+    /* 13 newlines: PCM header, BCK line, LRC line, TFT header, CS line, DC line,
+       Encoder header, A line, Buzzer header, IO line, SigGen header, PWM line,
+       Core header — final "Core\n  LED=..." has no trailing newline */
+    TEST_ASSERT_EQUAL(13, newline_count);
 }
 
 /* ===== Sort tests ===== */
@@ -293,9 +316,9 @@ void test_pin_info_line_count(void) {
 void test_sort_by_gpio_ascending(void) {
     char buf[384];
     format_pin_sorted(buf, sizeof(buf), SORT_BY_GPIO);
-    /* First line should be GPIO 2 (LED), last should be GPIO 21 (BL) */
+    /* First line should be GPIO 2 (LED) on S3, last should be GPIO 38 (SigGen PWM) on S3 */
     TEST_ASSERT_NOT_NULL(strstr(buf, " 2 LED"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "21 BL"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "38 PWM"));
     /* Verify ascending: find positions of first few entries */
     char *pos2 = strstr(buf, " 2 LED");
     char *pos3 = strstr(buf, " 3 MCLK");
@@ -304,16 +327,16 @@ void test_sort_by_gpio_ascending(void) {
     TEST_ASSERT_TRUE(pos3 < pos4);
 }
 
-/* Test: sort by GPIO has all 17 pins */
+/* Test: sort by GPIO has all 19 pins (on S3 native target) */
 void test_sort_by_gpio_all_pins(void) {
-    char buf[384];
+    char buf[512];
     format_pin_sorted(buf, sizeof(buf), SORT_BY_GPIO);
     int line_count = 0;
     for (size_t i = 0; i < strlen(buf); i++) {
         if (buf[i] == '\n') line_count++;
     }
-    /* 18 pins = 17 newlines (last line has no trailing newline) */
-    TEST_ASSERT_EQUAL(17, line_count);
+    /* 19 pins = 18 newlines (last line has no trailing newline) */
+    TEST_ASSERT_EQUAL(18, line_count);
 }
 
 /* Test: sort by function produces alphabetical order */
@@ -343,8 +366,8 @@ void test_sort_by_function_has_devices(void) {
 
 /* Test: sort by device returns same as default format */
 void test_sort_by_device_matches_default(void) {
-    char default_buf[384];
-    char sorted_buf[384];
+    char default_buf[512];
+    char sorted_buf[512];
     format_pin_info(default_buf, sizeof(default_buf));
     format_pin_sorted(sorted_buf, sizeof(sorted_buf), SORT_BY_DEVICE);
     TEST_ASSERT_EQUAL_STRING(default_buf, sorted_buf);
@@ -360,13 +383,14 @@ int main(int argc, char **argv) {
     RUN_TEST(test_pin_info_format_output);
     RUN_TEST(test_pin_info_core_pins);
     RUN_TEST(test_pin_info_buzzer_pin);
+    RUN_TEST(test_pin_info_siggen_pin);
     RUN_TEST(test_pin_info_i2s_pins);
     RUN_TEST(test_pin_info_encoder_pins);
     RUN_TEST(test_pin_info_tft_pins);
     RUN_TEST(test_pin_info_buffer_size);
     RUN_TEST(test_pin_info_small_buffer);
     RUN_TEST(test_pin_info_first_line);
-    RUN_TEST(test_pin_info_all_17_pins_present);
+    RUN_TEST(test_pin_info_all_pins_present);
     RUN_TEST(test_pin_info_line_count);
     RUN_TEST(test_sort_by_gpio_ascending);
     RUN_TEST(test_sort_by_gpio_all_pins);

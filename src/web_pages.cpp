@@ -4574,29 +4574,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <th onclick="sortPinTable(3)" data-col="3">Category <span class="sort-arrow">&#9650;</span></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr><td>2</td><td>LED</td><td>Status LED</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>4</td><td>Amplifier Relay</td><td>Relay Module</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>8</td><td>Buzzer (PWM)</td><td>Piezo Buzzer</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>15</td><td>Reset Button</td><td>Tactile Switch</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>38</td><td>Signal Gen (PWM)</td><td>Signal Generator</td><td><span class="pin-cat pin-cat-core">Core</span></td></tr>
-                        <tr><td>3</td><td>I2S MCLK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>16</td><td>I2S BCK</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>17</td><td>I2S DOUT</td><td>PCM1808 ADC 1</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>18</td><td>I2S LRC</td><td>PCM1808 ADC 1 &amp; 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>9</td><td>I2S DOUT2</td><td>PCM1808 ADC 2</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>40</td><td>I2S TX Data</td><td>DAC Output</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>41</td><td>I2C SDA</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>42</td><td>I2C SCL</td><td>DAC EEPROM / I2C</td><td><span class="pin-cat pin-cat-audio">Audio</span></td></tr>
-                        <tr><td>5</td><td>Encoder A</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>6</td><td>Encoder B</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>7</td><td>Encoder SW</td><td>Rotary Encoder</td><td><span class="pin-cat pin-cat-input">Input</span></td></tr>
-                        <tr><td>10</td><td>TFT CS</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>11</td><td>TFT MOSI</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>12</td><td>TFT SCLK</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>13</td><td>TFT DC</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>14</td><td>TFT RST</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
-                        <tr><td>21</td><td>TFT Backlight</td><td>ST7735S TFT</td><td><span class="pin-cat pin-cat-display">Display</span></td></tr>
+                    <tbody id="pinTableBody">
+                        <tr><td colspan="4" style="text-align:center;opacity:0.5">Waiting for pin data...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -5374,8 +5353,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');
 
             // Store AP SSID for pre-filling the config modal
-            if (data.apSSID) {
-                currentAPSSID = data.apSSID;
+            // Firmware sends this as "appState.apSSID" (bracket notation required)
+            if (data['appState.apSSID']) {
+                currentAPSSID = data['appState.apSSID'];
             } else if (data.serialNumber) {
                 // Fallback to serial number if appState.apSSID not provided
                 currentAPSSID = data.serialNumber;
@@ -5406,12 +5386,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
             // AP Details separator if both are relevant
             let apContentAdded = false;
-            if (data.mode === 'ap' || data.apEnabled) {
+            if (data.mode === 'ap' || data['appState.apEnabled']) {
                 if (html !== '') html += '<div class="divider"></div>';
 
                 html += `
                     <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
-                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data.apSSID || 'ALX-Device'}</span></div>
+                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data['appState.apSSID'] || 'ALX-Device'}</span></div>
                     <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
                 `;
 
@@ -5427,17 +5407,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
 
-            apToggle.checked = data.apEnabled || (data.mode === 'ap');
+            apToggle.checked = !!(data['appState.apEnabled']) || (data.mode === 'ap');
             document.getElementById('apFields').style.display = apToggle.checked ? '' : 'none';
             statusBox.innerHTML = html;
 
-            if (typeof data.autoUpdateEnabled !== 'undefined') {
-                autoUpdateEnabled = !!data.autoUpdateEnabled;
+            if (typeof data['appState.autoUpdateEnabled'] !== 'undefined') {
+                autoUpdateEnabled = !!data['appState.autoUpdateEnabled'];
                 autoUpdateToggle.checked = autoUpdateEnabled;
             }
 
-            if (typeof data.autoAPEnabled !== 'undefined') {
-                document.getElementById('autoAPToggle').checked = !!data.autoAPEnabled;
+            if (typeof data['appState.autoAPEnabled'] !== 'undefined') {
+                document.getElementById('autoAPToggle').checked = !!data['appState.autoAPEnabled'];
             }
 
             var tzOffset = data['appState.timezoneOffset'];
@@ -5453,8 +5433,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('dstToggle').checked = (dstOff === 3600);
             }
 
-            if (typeof data.darkMode !== 'undefined') {
-                darkMode = !!data.darkMode;
+            if (typeof data['appState.darkMode'] !== 'undefined') {
+                darkMode = !!data['appState.darkMode'];
                 document.getElementById('darkModeToggle').checked = darkMode;
                 applyTheme(darkMode);
             }
@@ -5509,13 +5489,13 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 document.getElementById('buzzerVolumeSelect').value = data.buzzerVolume.toString();
             }
 
-            if (typeof data.enableCertValidation !== 'undefined') {
-                enableCertValidation = !!data.enableCertValidation;
+            if (typeof data['appState.enableCertValidation'] !== 'undefined') {
+                enableCertValidation = !!data['appState.enableCertValidation'];
                 document.getElementById('certValidationToggle').checked = enableCertValidation;
             }
 
-            if (typeof data.hardwareStatsInterval !== 'undefined') {
-                document.getElementById('statsIntervalSelect').value = data.hardwareStatsInterval.toString();
+            if (typeof data['appState.hardwareStatsInterval'] !== 'undefined') {
+                document.getElementById('statsIntervalSelect').value = data['appState.hardwareStatsInterval'].toString();
             }
 
             if (typeof data.audioUpdateRate !== 'undefined') {
@@ -5538,7 +5518,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 latestVersionRow.style.display = 'flex';
 
                 // If up-to-date, show green "Up-To-Date" text and hide release notes link
-                if (!data.updateAvailable && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
+                if (!data['appState.updateAvailable'] && data.latestVersion !== 'Checking...' && data.latestVersion !== 'Unknown') {
                     latestVersionEl.textContent = 'Up-To-Date, no newer version available';
                     latestVersionEl.style.opacity = '1';
                     latestVersionEl.style.fontStyle = 'normal';
@@ -5564,7 +5544,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     }
                 }
 
-                if (data.updateAvailable) {
+                if (data['appState.updateAvailable']) {
                     document.getElementById('updateBtn').classList.remove('hidden');
                 } else {
                     document.getElementById('updateBtn').classList.add('hidden');
@@ -10362,6 +10342,22 @@ function initFirmwareDragDrop() {
 
             // Add to history
             addHistoryDataPoint(data);
+
+            // Pin table — populate from firmware data (once)
+            if (data.pins) {
+                var ptb = document.getElementById('pinTableBody');
+                if (ptb && !ptb.dataset.populated) {
+                    ptb.dataset.populated = '1';
+                    var catLabels = {audio:'Audio', display:'Display', input:'Input', core:'Core', network:'Network'};
+                    var html = '';
+                    for (var i = 0; i < data.pins.length; i++) {
+                        var p = data.pins[i];
+                        var catName = catLabels[p.c] || p.c;
+                        html += '<tr><td>' + p.g + '</td><td>' + p.f + '</td><td>' + p.d + '</td><td><span class="pin-cat pin-cat-' + p.c + '">' + catName + '</span></td></tr>';
+                    }
+                    ptb.innerHTML = html;
+                }
+            }
         }
 
         function formatBytes(bytes) {

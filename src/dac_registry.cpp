@@ -2,12 +2,21 @@
 
 #include "dac_registry.h"
 #include "drivers/dac_pcm5102.h"
+#ifndef NATIVE_TEST
+#include <sdkconfig.h>
+#if CONFIG_IDF_TARGET_ESP32P4
+#include "drivers/dac_es8311.h"
+#endif
+#endif
 #include <string.h>
 
 // ===== Compile-time DAC Registry =====
 // Add new drivers here. Factory functions must be declared in the driver header.
 static const DacRegistryEntry DAC_REGISTRY[] = {
     { DAC_ID_PCM5102A,  "PCM5102A",  createDacPcm5102 },
+#if CONFIG_IDF_TARGET_ESP32P4
+    { DAC_ID_ES8311,    "ES8311",    createDacEs8311 },
+#endif
     // Future: { DAC_ID_ES9038Q2M, "ES9038Q2M", createDacEs9038 },
     // Future: { DAC_ID_ES9842,    "ES9842",    createDacEs9842 },
 };

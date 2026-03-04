@@ -32,6 +32,7 @@
 #include "web_pages.h"
 #include "websocket_handler.h"
 #include "wifi_manager.h"
+#include "eth_manager.h"
 #ifdef GUI_ENABLED
 #include "gui/gui_manager.h"
 #endif
@@ -142,7 +143,7 @@ void setup() {
     esp_task_wdt_reconfigure(&twdt_cfg);
   }
 
-  LOG_I("[Main] ESP32-S3 ALX Nova Controller starting");
+  LOG_I("[Main] ALX Nova Controller starting (%s)", ESP.getChipModel());
   LOG_I("[Main] Firmware version: %s", firmwareVer);
 
   // Initialize device serial number from NVS (generates on first boot or
@@ -223,6 +224,11 @@ void setup() {
 
   // Initialize I2S audio ADC (PCM1808) — uses sample rate from loaded settings
   i2s_audio_init();
+
+#ifdef DAC_ENABLED
+  // Initialize secondary DAC output (ES8311 codec on P4, no-op on S3)
+  dac_secondary_init();
+#endif
 
   // Load MQTT settings
   if (!loadMqttSettings()) {
@@ -679,6 +685,9 @@ void setup() {
   // memory bus contention with I2S DMA, causing audio pops.
   wifi_ensure_ps_none();
 
+  // Initialize Ethernet (P4 has onboard 100M Ethernet — primary network interface)
+  eth_manager_init();
+
   // Always start server and WebSocket regardless of mode
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
@@ -968,6 +977,12 @@ void loop() {
     appState.clearEepromDirty();
   }
 #endif
+
+  // Broadcast Ethernet state changes (link up/down, IP acquired/lost)
+  if (appState.isEthernetDirty()) {
+    sendWiFiStatus();  // WiFi status payload already includes ETH fields
+    appState.clearEthernetDirty();
+  }
 
 #ifdef USB_AUDIO_ENABLED
   // Poll USB connection state (~1s) — detects cable disconnect/reconnect

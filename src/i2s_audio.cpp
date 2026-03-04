@@ -255,6 +255,10 @@ static i2s_chan_handle_t _rx_handle_adc1 = NULL;
 static i2s_chan_handle_t _tx_handle_adc1 = NULL;  // NULL when TX not active
 static i2s_chan_handle_t _rx_handle_adc2 = NULL;
 
+#if CONFIG_IDF_TARGET_ESP32P4
+static i2s_chan_handle_t _tx_handle_es8311 = NULL; // I2S2 TX for ES8311 onboard DAC (P4 only)
+#endif
+
 static uint32_t _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 static int _numAdcsDetected = 1;
@@ -492,7 +496,7 @@ static void i2s_log_params(uint32_t sample_rate) {
     LOG_I("[Audio]   DMA         : %d bufs x %d frames (%lu ms runway)",
           DMA_BUF_COUNT, DMA_BUF_LEN,
           (unsigned long)((uint64_t)DMA_BUF_COUNT * DMA_BUF_LEN * 1000 / sample_rate));
-    LOG_I("[Audio]   Clock src   : PLL_F160M (no APLL on S3)");
+    LOG_I("[Audio]   Clock src   : DEFAULT (PLL_F160M on S3, APLL on P4)");
     LOG_I("[Audio]   GPIO        : MCLK=%d BCK=%d LRC=%d DIN1=%d DIN2=%d DOUT=%d",
           I2S_MCLK_PIN, I2S_BCK_PIN, I2S_LRC_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN, I2S_TX_DATA_PIN);
     LOG_I("[Audio] ----------------------------");
@@ -500,7 +504,7 @@ static void i2s_log_params(uint32_t sample_rate) {
 
 
 // Dual I2S Master Architecture:
-// Both PCM1808 ADCs use master-mode I2S (not slave — ESP32-S3 slave DMA issues).
+// ADC1: master full-duplex, ADC2: master no-clock-output (S3 slave DMA workaround).
 // I2S0 outputs BCK/WS/MCLK; I2S1 has data_in only (GPIO9).
 // Init order: ADC2 first, then ADC1 (clock source). See i2s_configure_adc2().
 void i2s_audio_init() {
@@ -679,7 +683,7 @@ I2sStaticConfig i2s_audio_get_static_config() {
     cfg.adc[0].channelFormat = "Stereo R/L";
     cfg.adc[0].dmaBufCount = DMA_BUF_COUNT;
     cfg.adc[0].dmaBufLen = DMA_BUF_LEN;
-    cfg.adc[0].apllEnabled = true;
+    cfg.adc[0].pllEnabled = true;
     cfg.adc[0].mclkHz = _currentSampleRate * 256;
     cfg.adc[0].commFormat = "Standard I2S";
     // ADC2 — Master (no clock output, data-only)
@@ -689,7 +693,7 @@ I2sStaticConfig i2s_audio_get_static_config() {
     cfg.adc[1].channelFormat = "Stereo R/L";
     cfg.adc[1].dmaBufCount = DMA_BUF_COUNT;
     cfg.adc[1].dmaBufLen = DMA_BUF_LEN;
-    cfg.adc[1].apllEnabled = true;
+    cfg.adc[1].pllEnabled = true;
     cfg.adc[1].mclkHz = _currentSampleRate * 256;
     cfg.adc[1].commFormat = "Standard I2S";
     return cfg;
@@ -881,26 +885,27 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
     std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
 
-    err = i2s_channel_init_std_mode(_rx_handle_adc1, &std_cfg);
+    // TX first, RX second — matches i2s_configure_adc1() canonical order (MCLK must route from TX init)
+    err = i2s_channel_init_std_mode(_tx_handle_adc1, &std_cfg);
     if (err != ESP_OK) {
-        LOG_E("[Audio] Full-duplex RX init failed: %d", err);
+        LOG_E("[Audio] Full-duplex TX init failed: %d", err);
         i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL;
         i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL;
         AppState::getInstance().audioPaused = false;
         return false;
     }
-    err = i2s_channel_init_std_mode(_tx_handle_adc1, &std_cfg);
+    err = i2s_channel_init_std_mode(_rx_handle_adc1, &std_cfg);
     if (err != ESP_OK) {
-        LOG_E("[Audio] Full-duplex TX init failed: %d", err);
-        i2s_channel_disable(_rx_handle_adc1);
+        LOG_E("[Audio] Full-duplex RX init failed: %d", err);
+        i2s_channel_disable(_tx_handle_adc1);
         i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL;
         i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL;
         AppState::getInstance().audioPaused = false;
         return false;
     }
 
-    i2s_channel_enable(_rx_handle_adc1);
     i2s_channel_enable(_tx_handle_adc1);
+    i2s_channel_enable(_rx_handle_adc1);
 
     AppState::getInstance().audioPaused = false;
     LOG_I("[Audio] I2S TX full-duplex enabled: rate=%luHz data_out=GPIO%d MCLK=%luHz DMA=%dx%d",
@@ -927,6 +932,95 @@ void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32
     i2s_channel_write(_tx_handle_adc1, src, size, bytes_written, timeout_ms);
 }
 
+// ===== ES8311 Secondary DAC TX Bridge (I2S2, P4 only) =====
+
+#if CONFIG_IDF_TARGET_ESP32P4
+
+bool i2s_audio_enable_es8311_tx(uint32_t sample_rate) {
+    if (_tx_handle_es8311) {
+        LOG_I("[ES8311] I2S2 TX already enabled");
+        return true;
+    }
+
+    LOG_I("[ES8311] Enabling I2S2 TX for ES8311 DAC, rate=%luHz", (unsigned long)sample_rate);
+
+    // Allocate I2S2 channel (TX only — ES8311 is a DAC, no RX needed)
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_2, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num  = DMA_BUF_COUNT;   // 12 buffers
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;     // 256 frames
+    chan_cfg.auto_clear    = true;             // Zero on underrun — silence, not noise
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, &_tx_handle_es8311, NULL);
+    if (err != ESP_OK) {
+        LOG_E("[ES8311] I2S2 TX channel alloc failed: %d", err);
+        _tx_handle_es8311 = NULL;
+        return false;
+    }
+
+    // Configure I2S standard mode (Philips format, 32-bit stereo, master clocks)
+    i2s_std_config_t std_cfg = {};
+    std_cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
+    std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    std_cfg.gpio_cfg.mclk = (gpio_num_t)ES8311_I2S_MCLK_PIN;   // GPIO 13
+    std_cfg.gpio_cfg.bclk = (gpio_num_t)ES8311_I2S_SCLK_PIN;   // GPIO 12
+    std_cfg.gpio_cfg.ws   = (gpio_num_t)ES8311_I2S_LRCK_PIN;    // GPIO 10
+    std_cfg.gpio_cfg.dout = (gpio_num_t)ES8311_I2S_DSDIN_PIN;   // GPIO 9
+    std_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;                     // No ADC input
+    std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
+    std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;      // 12.288MHz @ 48kHz
+
+    err = i2s_channel_init_std_mode(_tx_handle_es8311, &std_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[ES8311] I2S2 TX init failed: %d", err);
+        i2s_del_channel(_tx_handle_es8311);
+        _tx_handle_es8311 = NULL;
+        return false;
+    }
+
+    err = i2s_channel_enable(_tx_handle_es8311);
+    if (err != ESP_OK) {
+        LOG_E("[ES8311] I2S2 TX enable failed: %d", err);
+        i2s_del_channel(_tx_handle_es8311);
+        _tx_handle_es8311 = NULL;
+        return false;
+    }
+
+    LOG_I("[ES8311] I2S2 TX enabled: rate=%luHz MCLK=GPIO%d@%luHz BCK=GPIO%d WS=GPIO%d DOUT=GPIO%d DMA=%dx%d",
+          (unsigned long)sample_rate,
+          ES8311_I2S_MCLK_PIN, (unsigned long)(sample_rate * 256),
+          ES8311_I2S_SCLK_PIN, ES8311_I2S_LRCK_PIN, ES8311_I2S_DSDIN_PIN,
+          DMA_BUF_COUNT, DMA_BUF_LEN);
+    return true;
+}
+
+void i2s_audio_disable_es8311_tx() {
+    if (_tx_handle_es8311) {
+        i2s_channel_disable(_tx_handle_es8311);
+        i2s_del_channel(_tx_handle_es8311);
+        _tx_handle_es8311 = NULL;
+        LOG_I("[ES8311] I2S2 TX disabled");
+    }
+}
+
+void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms) {
+    if (!_tx_handle_es8311 || !src) {
+        if (bytes_written) *bytes_written = 0;
+        return;
+    }
+    i2s_channel_write(_tx_handle_es8311, src, size, bytes_written, timeout_ms);
+}
+
+#else // !CONFIG_IDF_TARGET_ESP32P4
+
+// Non-P4 targets: ES8311 functions are no-ops (I2S2 not available)
+bool i2s_audio_enable_es8311_tx(uint32_t) { return false; }
+void i2s_audio_disable_es8311_tx() {}
+void i2s_audio_write_es8311(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+
+#endif // CONFIG_IDF_TARGET_ESP32P4
+
 #else
 // Native test stubs
 static int _nativeNumAdcs = 1;
@@ -949,7 +1043,7 @@ I2sStaticConfig i2s_audio_get_static_config() {
     cfg.adc[0].channelFormat = "Stereo R/L";
     cfg.adc[0].dmaBufCount = 4;
     cfg.adc[0].dmaBufLen = 256;
-    cfg.adc[0].apllEnabled = true;
+    cfg.adc[0].pllEnabled = true;
     cfg.adc[0].mclkHz = 48000 * 256;
     cfg.adc[0].commFormat = "Standard I2S";
     cfg.adc[1].isMaster = true;
@@ -958,7 +1052,7 @@ I2sStaticConfig i2s_audio_get_static_config() {
     cfg.adc[1].channelFormat = "Stereo R/L";
     cfg.adc[1].dmaBufCount = 4;
     cfg.adc[1].dmaBufLen = 256;
-    cfg.adc[1].apllEnabled = true;
+    cfg.adc[1].pllEnabled = true;
     cfg.adc[1].mclkHz = 48000 * 256;
     cfg.adc[1].commFormat = "Standard I2S";
     return cfg;

@@ -58,8 +58,13 @@ static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
     uint32_t w = lv_area_get_width(area);
     uint32_t h = lv_area_get_height(area);
 
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+    // P4: GDMA not yet verified — use synchronous push to avoid waitDMA() spinning forever
+    tft.pushImage(area->x1, area->y1, w, h, (lgfx::swap565_t *)px_map);
+#else
     tft.pushImageDMA(area->x1, area->y1, w, h, (lgfx::swap565_t *)px_map);
     tft.waitDMA();
+#endif
 
     lv_display_flush_ready(disp);
 }
@@ -277,7 +282,9 @@ void gui_init(void) {
 
     /* Initialize TFT via LovyanGFX */
     tft.init();
-    tft.initDMA();
+#if !defined(CONFIG_IDF_TARGET_ESP32P4)
+    tft.initDMA();  // Skip DMA init on P4 — GDMA/LovyanGFX not yet verified (causes WDT hang)
+#endif
     tft.setRotation(1); /* Landscape: 160x128 */
     tft.startWrite();
     tft.fillScreen(0x0000); /* Black */

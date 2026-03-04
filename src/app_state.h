@@ -61,6 +61,9 @@ enum AppFSMState {
   STATE_ERROR
 };
 
+// ===== Network Interface =====
+enum NetIfType { NET_NONE, NET_ETHERNET, NET_WIFI };
+
 // ===== AppState Singleton Class =====
 class AppState {
 public:
@@ -103,6 +106,12 @@ public:
   bool wifiConnectSuccess = false;
   String wifiNewIP;
   String wifiConnectError;
+
+  // ===== Ethernet State =====
+  bool ethLinkUp = false;
+  bool ethConnected = false;
+  String ethIP = "";
+  NetIfType activeInterface = NET_NONE;
 
   // ===== Factory Reset State =====
   bool factoryResetInProgress = false;
@@ -317,6 +326,11 @@ public:
   bool isAdcEnabledDirty() const { return _adcEnabledDirty; }
   void clearAdcEnabledDirty() { _adcEnabledDirty = false; }
 
+  // ===== Ethernet Dirty Flag =====
+  bool isEthernetDirty() const { return _ethernetDirty; }
+  void markEthernetDirty() { _ethernetDirty = true; app_events_signal(EVT_ETHERNET); }
+  void clearEthernetDirty() { _ethernetDirty = false; }
+
   // ===== Settings Dirty Flag (for GUI -> WS/MQTT sync) =====
   bool isSettingsDirty() const { return _settingsDirty; }
   void clearSettingsDirty() { _settingsDirty = false; }
@@ -430,6 +444,16 @@ public:
   bool isDacDirty() const { return _dacDirty; }
   void clearDacDirty() { _dacDirty = false; }
 
+  // ES8311 secondary DAC (P4 onboard codec + NS4150B speaker amp)
+  bool es8311Enabled = false;
+  uint8_t es8311Volume = 80;     // 0-100 (hardware volume via I2C)
+  bool es8311Mute = false;
+  bool es8311Ready = false;
+
+  void markEs8311Dirty() { _es8311Dirty = true; app_events_signal(EVT_DAC); }
+  bool isEs8311Dirty() const { return _es8311Dirty; }
+  void clearEs8311Dirty() { _es8311Dirty = false; }
+
   // ===== EEPROM Diagnostics =====
   struct EepromDiag {
     bool scanned = false;           // Has a scan been performed?
@@ -506,6 +530,7 @@ private:
   AppState() {} // Private constructor
 
   // Dirty flags for change detection
+  bool _ethernetDirty = false;
   bool _displayDirty = false;
   bool _buzzerDirty = false;
   bool _settingsDirty = false;
@@ -522,6 +547,7 @@ private:
 #ifdef DAC_ENABLED
   bool _dacDirty = false;
   bool _eepromDirty = false;
+  bool _es8311Dirty = false;
 #endif
 };
 

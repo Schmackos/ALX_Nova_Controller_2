@@ -85,7 +85,7 @@ struct I2sAdcConfig {
     const char *channelFormat;   // "Stereo R/L"
     int dmaBufCount;
     int dmaBufLen;
-    bool apllEnabled;
+    bool pllEnabled;
     uint32_t mclkHz;             // sampleRate * 256, or 0 for slave
     const char *commFormat;      // "Standard I2S"
 };
@@ -190,10 +190,19 @@ inline void i2s_audio_push_waveform_fft(const int32_t *, int, int) {}
 bool i2s_audio_enable_tx(uint32_t sample_rate);
 void i2s_audio_disable_tx();
 void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
+
+// ES8311 secondary DAC output (I2S2 TX, P4 only)
+bool i2s_audio_enable_es8311_tx(uint32_t sample_rate);
+void i2s_audio_disable_es8311_tx();
+void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
 #else
 inline bool i2s_audio_enable_tx(uint32_t) { return true; }
 inline void i2s_audio_disable_tx() {}
 inline void i2s_audio_write(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+
+inline bool i2s_audio_enable_es8311_tx(uint32_t) { return false; }
+inline void i2s_audio_disable_es8311_tx() {}
+inline void i2s_audio_write_es8311(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
 #endif
 
 #endif // I2S_AUDIO_H
