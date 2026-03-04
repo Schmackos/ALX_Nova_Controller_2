@@ -280,12 +280,13 @@ function peqCanvasToFreqGain(canvas, x, y) {
     var w = dims.tw / dpr, h = dims.th / dpr;
     var padL = 35, padR = 10, padT = 10, padB = 20;
     var gw = w - padL - padR, gh = h - padT - padB;
-    var logMin = Math.log10(5), logRange = Math.log10(24000) - logMin;
+    var fMin = peqCanvasZoom.fMin, fMax = peqCanvasZoom.fMax;
+    var logMin = Math.log10(fMin), logRange = Math.log10(fMax) - logMin;
     var normX = (x - padL) / gw;
     var normY = (y - padT) / gh;
     var freq = Math.pow(10, logMin + logRange * normX);
     var gain = 24 - normY * 48;
-    return { freq: Math.max(5, Math.min(20000, Math.round(freq))), gain: Math.max(-24, Math.min(24, Math.round(gain * 2) / 2)) };
+    return { freq: Math.max(fMin, Math.min(fMax, Math.round(freq))), gain: Math.max(-24, Math.min(24, Math.round(gain * 2) / 2)) };
 }
 function peqFreqGainToCanvas(canvas, freq, gain) {
     var dpr = window.devicePixelRatio || 1;
@@ -294,7 +295,8 @@ function peqFreqGainToCanvas(canvas, freq, gain) {
     var w = dims.tw / dpr, h = dims.th / dpr;
     var padL = 35, padR = 10, padT = 10, padB = 20;
     var gw = w - padL - padR, gh = h - padT - padB;
-    var logMin = Math.log10(5), logRange = Math.log10(24000) - logMin;
+    var fMin = peqCanvasZoom.fMin, fMax = peqCanvasZoom.fMax;
+    var logMin = Math.log10(fMin), logRange = Math.log10(fMax) - logMin;
     return {
         x: padL + gw * (Math.log10(freq) - logMin) / logRange,
         y: padT + gh * (1 - (gain + 24) / 48)
