@@ -108,11 +108,11 @@ jobs:
       run: pip install --upgrade platformio
 
     - name: Build Firmware
-      run: pio run -e esp32-s3-devkitm-1
+      run: pio run -e esp32-p4
 
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v4
       with:
         name: firmware-${{ github.sha }}
-        path: .pio/build/esp32-s3-devkitm-1/firmware.bin
+        path: .pio/build/esp32-p4/firmware.bin
         retention-days: 30

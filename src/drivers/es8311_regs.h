@@ -14,9 +14,15 @@
 // ===== ES8311 PA Control Pin (NS4150B class-D amp on Waveshare board) =====
 #define ES8311_PA_PIN         53
 
-// ===== ES8311 Onboard I2C Pins (Waveshare board-internal, not configurable) =====
+// ===== ES8311 Onboard I2C Pins (Waveshare ESP32-P4 board) =====
+// GPIO7=SDA, GPIO8=SCL — dedicated onboard I2C bus, separate from DAC I2C (GPIO48/54).
+// Override at build time via -D ES8311_I2C_SDA_PIN=N / -D ES8311_I2C_SCL_PIN=N.
+#ifndef ES8311_I2C_SDA_PIN
 #define ES8311_I2C_SDA_PIN    7
+#endif
+#ifndef ES8311_I2C_SCL_PIN
 #define ES8311_I2C_SCL_PIN    8
+#endif
 
 // ===== Register Addresses =====
 

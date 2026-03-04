@@ -14,67 +14,69 @@
  * Tests the pin configuration string generation logic
  * used in the debug screen. Mirrors the snprintf call
  * in scr_debug.cpp to verify output format and pin values.
+ *
+ * Pin defaults match ESP32-P4 (Waveshare ESP32-P4-WiFi6-DEV-Kit).
  */
 
-/* Pin constants matching config.h defaults */
+/* Pin constants matching config.h defaults (P4) */
 #ifndef LED_PIN
-static const int LED_PIN = 2;
+static const int LED_PIN = 1;
 #endif
 #ifndef AMPLIFIER_PIN
-static const int AMPLIFIER_PIN = 4;
+static const int AMPLIFIER_PIN = 27;
 #endif
 #ifndef I2S_BCK_PIN
-static const int I2S_BCK_PIN = 16;
+static const int I2S_BCK_PIN = 20;
 #endif
 #ifndef I2S_DOUT_PIN
-static const int I2S_DOUT_PIN = 17;
+static const int I2S_DOUT_PIN = 23;
 #endif
 #ifndef I2S_LRC_PIN
-static const int I2S_LRC_PIN = 18;
+static const int I2S_LRC_PIN = 21;
 #endif
 #ifndef I2S_MCLK_PIN
-static const int I2S_MCLK_PIN = 3;
+static const int I2S_MCLK_PIN = 22;
 #endif
 #ifndef I2S_DOUT2_PIN
-static const int I2S_DOUT2_PIN = 9;  /* S3 default — matches config.h */
+static const int I2S_DOUT2_PIN = 25;
 #endif
 #ifndef RESET_BUTTON_PIN
-static const int RESET_BUTTON_PIN = 15;
+static const int RESET_BUTTON_PIN = 46;
 #endif
 #ifndef BUZZER_PIN
-static const int BUZZER_PIN = 8;
+static const int BUZZER_PIN = 45;
 #endif
 
 /* GUI pin defines (normally under #ifdef GUI_ENABLED) */
 #ifndef TFT_CS_PIN
-#define TFT_CS_PIN 10
+#define TFT_CS_PIN 4
 #endif
 #ifndef TFT_MOSI_PIN
-#define TFT_MOSI_PIN 11
+#define TFT_MOSI_PIN 2
 #endif
 #ifndef TFT_SCLK_PIN
-#define TFT_SCLK_PIN 12
+#define TFT_SCLK_PIN 3
 #endif
 #ifndef TFT_DC_PIN
-#define TFT_DC_PIN 13
+#define TFT_DC_PIN 5
 #endif
 #ifndef TFT_RST_PIN
-#define TFT_RST_PIN 14
+#define TFT_RST_PIN 6
 #endif
 #ifndef TFT_BL_PIN
-#define TFT_BL_PIN 21
+#define TFT_BL_PIN 26
 #endif
 #ifndef ENCODER_A_PIN
-#define ENCODER_A_PIN 5
+#define ENCODER_A_PIN 32
 #endif
 #ifndef ENCODER_B_PIN
-#define ENCODER_B_PIN 6
+#define ENCODER_B_PIN 33
 #endif
 #ifndef ENCODER_SW_PIN
-#define ENCODER_SW_PIN 7
+#define ENCODER_SW_PIN 36
 #endif
 #ifndef SIGGEN_PWM_PIN
-#define SIGGEN_PWM_PIN 38  /* S3 default — matches config.h */
+#define SIGGEN_PWM_PIN 47
 #endif
 
 /* ===== Local copy of pin data and formatters (mirrors scr_debug.cpp) ===== */
@@ -204,16 +206,16 @@ void test_pin_info_format_output(void) {
 void test_pin_info_core_pins(void) {
     char buf[384];
     format_pin_info(buf, sizeof(buf));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "LED=2"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "Amp=4"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "Btn=15"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "LED=1"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "Amp=27"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "Btn=46"));
 }
 
 /* Test: buzzer pin present */
 void test_pin_info_buzzer_pin(void) {
     char buf[384];
     format_pin_info(buf, sizeof(buf));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "IO=8"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "IO=45"));
 }
 
 /* Test: signal generator PWM pin present */
@@ -221,39 +223,39 @@ void test_pin_info_siggen_pin(void) {
     char buf[384];
     format_pin_info(buf, sizeof(buf));
     TEST_ASSERT_NOT_NULL(strstr(buf, "SigGen"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "PWM=38"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "PWM=47"));
 }
 
 /* Test: all I2S pin values present in output */
 void test_pin_info_i2s_pins(void) {
     char buf[384];
     format_pin_info(buf, sizeof(buf));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "BCK=16"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT=17"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT2=9"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "LRC=18"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "MCLK=3"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "BCK=20"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT=23"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "DOUT2=25"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "LRC=21"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "MCLK=22"));
 }
 
 /* Test: all encoder pin values present */
 void test_pin_info_encoder_pins(void) {
     char buf[384];
     format_pin_info(buf, sizeof(buf));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "A=5"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "B=6"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "SW=7"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "A=32"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "B=33"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "SW=36"));
 }
 
 /* Test: all TFT pin values present */
 void test_pin_info_tft_pins(void) {
     char buf[384];
     format_pin_info(buf, sizeof(buf));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "CS=10"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "MOSI=11"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "CLK=12"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "DC=13"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "RST=14"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "BL=21"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "CS=4"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "MOSI=2"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "CLK=3"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "DC=5"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "RST=6"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "BL=26"));
 }
 
 /* Test: output fits in expected buffer size */
@@ -316,18 +318,18 @@ void test_pin_info_line_count(void) {
 void test_sort_by_gpio_ascending(void) {
     char buf[384];
     format_pin_sorted(buf, sizeof(buf), SORT_BY_GPIO);
-    /* First line should be GPIO 2 (LED) on S3, last should be GPIO 38 (SigGen PWM) on S3 */
-    TEST_ASSERT_NOT_NULL(strstr(buf, " 2 LED"));
-    TEST_ASSERT_NOT_NULL(strstr(buf, "38 PWM"));
-    /* Verify ascending: find positions of first few entries */
-    char *pos2 = strstr(buf, " 2 LED");
-    char *pos3 = strstr(buf, " 3 MCLK");
-    char *pos4 = strstr(buf, " 4 Amp");
+    /* First line should be GPIO 1 (LED), last should be GPIO 47 (SigGen PWM) */
+    TEST_ASSERT_NOT_NULL(strstr(buf, " 1 LED"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "47 PWM"));
+    /* Verify ascending: find positions of first three entries */
+    char *pos1 = strstr(buf, " 1 LED");
+    char *pos2 = strstr(buf, " 2 MOSI");
+    char *pos3 = strstr(buf, " 3 CLK");
+    TEST_ASSERT_TRUE(pos1 < pos2);
     TEST_ASSERT_TRUE(pos2 < pos3);
-    TEST_ASSERT_TRUE(pos3 < pos4);
 }
 
-/* Test: sort by GPIO has all 19 pins (on S3 native target) */
+/* Test: sort by GPIO has all 19 pins */
 void test_sort_by_gpio_all_pins(void) {
     char buf[512];
     format_pin_sorted(buf, sizeof(buf), SORT_BY_GPIO);

@@ -137,6 +137,9 @@ static const ToneStep *get_pattern(BuzzerPattern p) {
   }
 }
 
+// ===== LEDC attachment tracking =====
+static bool ledc_attached = false;  // track LEDC attachment to avoid spurious warnings
+
 // ===== Volume scale factors (percentage of 50% duty, which is max for piezo) =====
 // ledcWriteTone() sets 50% duty automatically; we scale it down for lower volumes
 // Low=20%, Medium=50%, High=100% of the 50%-duty value
@@ -147,8 +150,9 @@ static const uint8_t volume_pct[] = {20, 50, 100};
 // calling ledcWriteTone() on an already-attached pin uses a different
 // code path in Arduino 3.x that can produce silence.
 static void buzzer_set_tone(uint16_t freq_hz, int vol) {
-  ledcDetach(BUZZER_PIN);                       // ensure clean state
+  if (ledc_attached) ledcDetach(BUZZER_PIN);    // only detach if previously attached (suppresses first-call warning)
   ledcWriteTone(BUZZER_PIN, freq_hz);           // attaches fresh + sets 50% duty
+  ledc_attached = true;
   uint32_t halfDuty = ledcRead(BUZZER_PIN);     // read back the 50% duty value
   uint32_t duty = halfDuty * volume_pct[vol] / 100;
   ledcWrite(BUZZER_PIN, duty);
@@ -185,9 +189,10 @@ void buzzer_play(BuzzerPattern pattern) {
 static void start_pattern(const ToneStep *pat) {
   LOG_D("[Buzzer] Start pattern: freq=%d, dur=%d", pat[0].freq_hz, pat[0].duration_ms);
 
-  // Always detach first for clean state
-  if (playing) {
+  // Detach if interrupting a playing pattern
+  if (playing && ledc_attached) {
     ledcDetach(BUZZER_PIN);
+    ledc_attached = false;
   }
 
   current_pattern = pat;
@@ -206,6 +211,7 @@ static void start_pattern(const ToneStep *pat) {
     } else {
       // Silence gap as first step — attach with minimal config
       ledcAttach(BUZZER_PIN, 1000, BUZZER_PWM_RESOLUTION);
+      ledc_attached = true;
       ledcWrite(BUZZER_PIN, 0);
     }
   }
@@ -213,8 +219,11 @@ static void start_pattern(const ToneStep *pat) {
 
 static void stop_buzzer() {
   LOG_D("[Buzzer] Pattern complete");
-  ledcWrite(BUZZER_PIN, 0);
-  ledcDetach(BUZZER_PIN);
+  if (ledc_attached) {
+    ledcWrite(BUZZER_PIN, 0);
+    ledcDetach(BUZZER_PIN);
+    ledc_attached = false;
+  }
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
   playing = false;
