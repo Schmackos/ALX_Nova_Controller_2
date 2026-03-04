@@ -132,7 +132,17 @@
         }
 
         function showReleaseNotesFor(which) {
-            let version = which === 'current' ? currentFirmwareVersion : currentLatestVersion;
+            let version, label;
+            if (which === 'current') {
+                version = currentFirmwareVersion;
+                label = 'Current';
+            } else if (which === 'latest') {
+                version = currentLatestVersion;
+                label = 'Latest';
+            } else {
+                version = which;
+                label = null;
+            }
 
             if (!version) {
                 showToast('Version information not available', 'error');
@@ -152,8 +162,8 @@
             apiFetch(`/api/releasenotes?version=${version}`)
             .then(res => res.json())
             .then(data => {
-                const label = which === 'current' ? 'Current' : 'Latest';
-                document.getElementById('inlineReleaseNotesTitle').textContent = `Release Notes v${version} (${label})`;
+                const titleText = label ? `Release Notes v${version} (${label})` : `Release Notes v${version}`;
+                document.getElementById('inlineReleaseNotesTitle').textContent = titleText;
                 document.getElementById('inlineReleaseNotesContent').textContent = data.notes || 'No release notes available for this version.';
 
                 container.dataset.version = version;

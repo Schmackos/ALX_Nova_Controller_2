@@ -325,7 +325,8 @@ function renderReleaseList(releases) {
         } else {
             btnHtml = '<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="installRelease(\'' + rel.version.replace(/'/g, "\\'") + '\',false)">Install</button>';
         }
-        div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + rel.version + '</span>' + badge +
+        const notesBtn = '<a href="#" class="release-notes-link" onclick="showReleaseNotesFor(\'' + rel.version.replace(/'/g, "\\'") + '\'); return false;" title="View release notes">?</a>';
+        div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + rel.version + '</span>' + badge + notesBtn +
             '<span class="text-secondary" style="font-size:12px;margin-left:8px;">' + dateStr + '</span></div>' +
             '<div style="margin-left:8px;">' + btnHtml + '</div>';
         container.appendChild(div);

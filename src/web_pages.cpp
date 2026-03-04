@@ -10124,7 +10124,8 @@ function renderReleaseList(releases) {
         } else {
             btnHtml = '<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="installRelease(\'' + rel.version.replace(/'/g, "\\'") + '\',false)">Install</button>';
         }
-        div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + rel.version + '</span>' + badge +
+        const notesBtn = '<a href="#" class="release-notes-link" onclick="showReleaseNotesFor(\'' + rel.version.replace(/'/g, "\\'") + '\'); return false;" title="View release notes">?</a>';
+        div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + rel.version + '</span>' + badge + notesBtn +
             '<span class="text-secondary" style="font-size:12px;margin-left:8px;">' + dateStr + '</span></div>' +
             '<div style="margin-left:8px;">' + btnHtml + '</div>';
         container.appendChild(div);
@@ -11433,7 +11434,17 @@ function initFirmwareDragDrop() {
         }
 
         function showReleaseNotesFor(which) {
-            let version = which === 'current' ? currentFirmwareVersion : currentLatestVersion;
+            let version, label;
+            if (which === 'current') {
+                version = currentFirmwareVersion;
+                label = 'Current';
+            } else if (which === 'latest') {
+                version = currentLatestVersion;
+                label = 'Latest';
+            } else {
+                version = which;
+                label = null;
+            }
 
             if (!version) {
                 showToast('Version information not available', 'error');
@@ -11453,8 +11464,8 @@ function initFirmwareDragDrop() {
             apiFetch(`/api/releasenotes?version=${version}`)
             .then(res => res.json())
             .then(data => {
-                const label = which === 'current' ? 'Current' : 'Latest';
-                document.getElementById('inlineReleaseNotesTitle').textContent = `Release Notes v${version} (${label})`;
+                const titleText = label ? `Release Notes v${version} (${label})` : `Release Notes v${version}`;
+                document.getElementById('inlineReleaseNotesTitle').textContent = titleText;
                 document.getElementById('inlineReleaseNotesContent').textContent = data.notes || 'No release notes available for this version.';
 
                 container.dataset.version = version;
