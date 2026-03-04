@@ -53,4 +53,7 @@
 
             // Check for default password warning
             checkPasswordWarning();
+
+            // Restore debug console filter state from localStorage
+            loadDebugFilters();
         };

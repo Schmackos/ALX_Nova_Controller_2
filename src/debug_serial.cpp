@@ -66,11 +66,22 @@ void DebugSerial::broadcastLine(const String &line, LogLevel level) {
     return;
   }
 
+  // Extract module name from "[X] [ModuleName] ..." pattern
+  String module = "";
+  int firstBracket = line.indexOf('[', 4);  // skip "[D] " prefix (4 chars)
+  if (firstBracket >= 0) {
+    int closeBracket = line.indexOf(']', firstBracket);
+    if (closeBracket > firstBracket) {
+      module = line.substring(firstBracket + 1, closeBracket);
+    }
+  }
+
   // Create JSON message
   JsonDocument doc;
   doc["type"] = "debugLog";
   doc["timestamp"] = millis();
   doc["level"] = levelToString(level);
+  doc["module"] = module;
   doc["message"] = line;
 
   String json;

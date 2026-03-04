@@ -90,7 +90,7 @@ function toggleTheme() {
     apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ darkMode: darkMode })
+        body: JSON.stringify({ 'appState.darkMode': darkMode })
     });
 }
 

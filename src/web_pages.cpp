@@ -2145,6 +2145,25 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .input-lane-grid { grid-template-columns: repeat(2, 1fr); }
         }
 
+        /* ===== Debug Console Chips & Search ===== */
+        .chip-container { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+        .btn-chip {
+          display: inline-flex; align-items: center; gap: 4px;
+          padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
+          border: 1px solid var(--border); background: var(--bg-input); color: var(--text-secondary);
+          cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .btn-chip:hover { border-color: var(--accent); color: var(--text-primary); }
+        .btn-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn-chip .chip-badge {
+          font-size: 9px; padding: 1px 5px; border-radius: 8px;
+          background: rgba(255,255,255,0.2); margin-left: 2px;
+        }
+        .btn-chip .chip-badge.has-errors { background: var(--error); color: #fff; }
+        .btn-chip .chip-badge.has-warnings { background: var(--warning); color: #000; }
+        .btn-chip-action { font-size: 12px; padding: 3px 8px; }
+        .log-highlight { background: rgba(255, 165, 0, 0.3); border-radius: 2px; }
+
 /* ===== 04-canvas.css ===== */
 
         /* ===== Graph Canvas ===== */
@@ -4593,6 +4612,23 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <option value="error">Error</option>
                     </select>
                 </div>
+                <div class="form-row mb-8" id="moduleCategoryRow">
+                    <label style="margin-right: 8px; font-weight: 500;">Categories:</label>
+                    <div id="moduleChips" class="chip-container">
+                        <!-- Chips auto-populated from received messages -->
+                    </div>
+                    <button class="btn-chip btn-chip-action" onclick="clearModuleFilter()"
+                            title="Show all categories" style="margin-left:4px;">All</button>
+                </div>
+                <div class="form-row mb-8">
+                    <input type="text" id="debugSearchInput" class="form-input" placeholder="Search logs..."
+                           oninput="setDebugSearch(this.value)" style="flex:1; font-size:13px;">
+                    <button class="btn-chip btn-chip-action" onclick="clearDebugSearch()"
+                            style="margin-left:4px;" title="Clear search">&#10005;</button>
+                    <button class="btn-chip btn-chip-action" id="timestampToggle"
+                            onclick="toggleTimestampMode()" title="Toggle timestamp format"
+                            style="margin-left:4px;">Uptime</button>
+                </div>
                 <div class="debug-console" id="debugConsole">
                     <div class="log-entry" data-level="info"><span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Waiting for messages...</span></div>
                 </div>
@@ -4884,7 +4920,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             } else if (data.type === 'rebootProgress') {
                 handlePhysicalRebootProgress(data);
             } else if (data.type === 'debugLog') {
-                appendDebugLog(data.timestamp, data.message, data.level);
+                appendDebugLog(data.timestamp, data.message, data.level, data.module);
             } else if (data.type === 'hardware_stats') {
                 updateHardwareStats(data);
             } else if (data.type === 'justUpdated') {
@@ -5040,6 +5076,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let debugLogBuffer = [];
         const DEBUG_MAX_LINES = 1000;
         let currentLogFilter = 'all'; // all, debug, info, warn, error
+        let currentModuleFilters = new Set();    // empty = show all; non-empty = show only these
+        let knownModules = {};                   // { "WiFi": { total: 0, errors: 0, warnings: 0 }, ... }
+        let debugSearchTerm = '';                // current search filter text
+        let debugTimestampMode = 'relative';     // 'relative' (uptime) or 'absolute' (wall clock)
+        let ntpOffsetMs = 0;                     // millis() offset to epoch (set from firmware)
         let audioSubscribed = false;
         let currentActiveTab = 'control';
 
@@ -9322,7 +9363,7 @@ function toggleTheme() {
     apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ darkMode: darkMode })
+        body: JSON.stringify({ 'appState.darkMode': darkMode })
     });
 }
 
@@ -10676,14 +10717,15 @@ function initFirmwareDragDrop() {
 
 // ===== Debug Console =====
 
-        function appendDebugLog(timestamp, message, level = 'info') {
+        function appendDebugLog(timestamp, message, level, module) {
+            level = level || 'info';
             if (debugPaused) {
-                debugLogBuffer.push({ timestamp, message, level });
+                debugLogBuffer.push({ timestamp: timestamp, message: message, level: level, module: module });
                 return;
             }
 
             // Determine log level from message if not provided
-            let detectedLevel = level;
+            var detectedLevel = level;
             if (message.includes('[E]') || message.includes('Error') || message.includes('❌')) {
                 detectedLevel = 'error';
             } else if (message.includes('[W]') || message.includes('Warning') || message.includes('⚠')) {
@@ -10694,49 +10736,79 @@ function initFirmwareDragDrop() {
                 detectedLevel = 'info';
             }
 
-            const console = document.getElementById('debugConsole');
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.dataset.level = detectedLevel; // Store level for filtering
+            // Track module for chip creation
+            module = module || extractModule(message) || 'Other';
+            if (!knownModules[module]) {
+                knownModules[module] = { total: 0, errors: 0, warnings: 0 };
+                createModuleChip(module);
+            }
+            knownModules[module].total++;
+            if (detectedLevel === 'error') knownModules[module].errors++;
+            if (detectedLevel === 'warn')  knownModules[module].warnings++;
+            updateChipBadge(module);
 
-            const ts = formatDebugTimestamp(timestamp);
-            let msgClass = 'log-message';
+            var consoleEl = document.getElementById('debugConsole');
+            var entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.dataset.level = detectedLevel;
+            entry.dataset.module = module;
+
+            var ts = formatDebugTimestamp(timestamp);
+            var msgClass = 'log-message';
             if (detectedLevel === 'error') msgClass += ' error';
             else if (detectedLevel === 'warn') msgClass += ' warning';
             else if (detectedLevel === 'debug') msgClass += ' debug';
             else if (message.includes('✅') || message.includes('Success')) msgClass += ' success';
             else msgClass += ' info';
 
-            entry.innerHTML = `<span class="log-timestamp">[${ts}]</span><span class="${msgClass}">${message}</span>`;
+            var tsSpan = document.createElement('span');
+            tsSpan.className = 'log-timestamp';
+            tsSpan.dataset.ms = timestamp;
+            tsSpan.textContent = '[' + ts + ']';
 
-            // Apply filter visibility (but always add to DOM)
-            if (currentLogFilter !== 'all' && detectedLevel !== currentLogFilter) {
-                entry.style.display = 'none';
-            }
+            var msgSpan = document.createElement('span');
+            msgSpan.className = msgClass;
+            msgSpan.textContent = message;
+
+            entry.appendChild(tsSpan);
+            entry.appendChild(msgSpan);
+
+            // Apply combined filter visibility
+            entry.style.display = isEntryVisible(entry) ? '' : 'none';
+
+            // Apply search highlight if active
+            if (debugSearchTerm) { applySearchHighlight(entry); }
 
             // Check if user is near the bottom before adding (within 40px)
-            const wasAtBottom = (console.scrollHeight - console.scrollTop - console.clientHeight) < 40;
+            var wasAtBottom = (consoleEl.scrollHeight - consoleEl.scrollTop - consoleEl.clientHeight) < 40;
 
-            console.appendChild(entry);
+            consoleEl.appendChild(entry);
 
             // Limit entries
-            while (console.children.length > DEBUG_MAX_LINES) {
-                console.removeChild(console.firstChild);
+            while (consoleEl.children.length > DEBUG_MAX_LINES) {
+                consoleEl.removeChild(consoleEl.firstChild);
             }
 
             // Only auto-scroll if user was already at the bottom
             if (wasAtBottom && entry.style.display !== 'none') {
-                console.scrollTop = console.scrollHeight;
+                consoleEl.scrollTop = consoleEl.scrollHeight;
             }
         }
 
-        function formatDebugTimestamp(millis) {
-            const date = new Date(millis);
-            const h = date.getHours().toString().padStart(2, '0');
-            const m = date.getMinutes().toString().padStart(2, '0');
-            const s = date.getSeconds().toString().padStart(2, '0');
-            const ms = date.getMilliseconds().toString().padStart(3, '0');
-            return `${h}:${m}:${s}.${ms}`;
+        function formatDebugTimestamp(ms) {
+            if (debugTimestampMode === 'absolute' && ntpOffsetMs > 0) {
+                var d = new Date(ntpOffsetMs + ms);
+                return d.toLocaleTimeString() + '.' + String(ms % 1000).padStart(3, '0');
+            }
+            // Relative (uptime) mode
+            var s = Math.floor(ms / 1000);
+            var frac = ms % 1000;
+            var hours = Math.floor(s / 3600); s %= 3600;
+            var mins = Math.floor(s / 60); var secs = s % 60;
+            return String(hours).padStart(2, '0') + ':' +
+                   String(mins).padStart(2, '0') + ':' +
+                   String(secs).padStart(2, '0') + '.' +
+                   String(frac).padStart(3, '0');
         }
 
         function toggleDebugPause() {
@@ -10747,7 +10819,7 @@ function initFirmwareDragDrop() {
             } else {
                 btn.textContent = 'Pause';
                 // Flush buffer
-                debugLogBuffer.forEach(log => appendDebugLog(log.timestamp, log.message, log.level));
+                debugLogBuffer.forEach(function(log) { appendDebugLog(log.timestamp, log.message, log.level, log.module); });
                 debugLogBuffer = [];
             }
         }
@@ -10777,14 +10849,19 @@ function initFirmwareDragDrop() {
         }
 
         function clearDebugConsole() {
-            const console = document.getElementById('debugConsole');
-            const entry = document.createElement('div');
+            knownModules = {};
+            var chipsContainer = document.getElementById('moduleChips');
+            if (chipsContainer) chipsContainer.innerHTML = '';
+
+            var consoleEl = document.getElementById('debugConsole');
+            var entry = document.createElement('div');
             entry.className = 'log-entry';
             entry.dataset.level = 'info';
+            entry.dataset.module = 'Other';
             entry.innerHTML = '<span class="log-timestamp">[--:--:--.---]</span><span class="log-message info">Console cleared</span>';
 
-            console.innerHTML = '';
-            console.appendChild(entry);
+            consoleEl.innerHTML = '';
+            consoleEl.appendChild(entry);
             debugLogBuffer = [];
         }
 
