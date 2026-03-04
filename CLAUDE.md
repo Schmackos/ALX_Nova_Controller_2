@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ESP32-S3 based intelligent amplifier controller (ALX Nova) with smart auto-sensing, WiFi management, MQTT/Home Assistant integration, OTA firmware updates, a web configuration interface, and an LVGL-based GUI on a ST7735S TFT display with rotary encoder input. Built with PlatformIO and the Arduino framework. Current firmware version is defined in `src/config.h` as `FIRMWARE_VERSION`.
+ESP32-P4 based intelligent amplifier controller (ALX Nova) with smart auto-sensing, WiFi management, MQTT/Home Assistant integration, OTA firmware updates, a web configuration interface, and an LVGL-based GUI on a ST7735S TFT display with rotary encoder input. Built with PlatformIO and the Arduino framework. Current firmware version is defined in `src/config.h` as `FIRMWARE_VERSION`.
 
-**Target board**: Freenove ESP32-S3 WROOM (FNK0085) — CH343 USB-to-UART bridge. PlatformIO board config: `esp32-s3-devkitm-1`.
+**Target board**: Waveshare ESP32-P4-WiFi6-DEV-Kit. PlatformIO board config: `esp32-p4`. Upload/monitor port: COM8.
 
 ## Build & Test Commands
 
 ```bash
-# Build firmware for ESP32-S3
+# Build firmware for ESP32-P4
 pio run
 
 # Upload firmware to device
@@ -103,33 +103,32 @@ Cross-core communication uses dirty flags in AppState — GUI/OTA/MQTT tasks set
 **I2S driver safety**: The DAC module may uninstall/reinstall the I2S_NUM_0 driver at runtime (e.g., toggling DAC on/off). To prevent crashes with `audio_pipeline_task` calling `i2s_read()` concurrently, the `appState.audioPaused` volatile flag is set before `i2s_driver_uninstall()` and cleared after reinstall. The audio task checks this flag each iteration and yields while paused.
 
 ### Heap Safety & PSRAM
-The board has 8MB OPI PSRAM (Freenove ESP32-S3 WROOM N16R8). DSP delay lines are allocated via `ps_calloc()` when PSRAM is available, falling back to regular `calloc()` with a pre-flight heap check (blocks allocation if free heap would drop below 40KB reserve). The `heapCritical` flag is set when `ESP.getMaxAllocHeap() < 40KB`, monitored every 30s in the main loop.
+The Waveshare ESP32-P4-WiFi6-DEV-Kit has PSRAM. DSP delay lines are allocated via `ps_calloc()` when PSRAM is available, falling back to regular `calloc()` with a pre-flight heap check (blocks allocation if free heap would drop below 40KB reserve). The `heapCritical` flag is set when `ESP.getMaxAllocHeap() < 40KB`, monitored every 30s in the main loop.
 
 **Critical lesson**: WiFi RX buffers are dynamically allocated from internal SRAM heap. If free heap drops below ~40KB, incoming packets (ping, HTTP, WebSocket) are silently dropped while outgoing (MQTT publish) still works. Always ensure DSP/audio allocations use PSRAM or are guarded by heap checks.
 
 ## Pin Configuration
 
 Defined as build flags in `platformio.ini` and with fallback defaults in `src/config.h`:
-- Core: LED=2, Amplifier=4, VoltSense(ADC)=1, Reset button=15, Buzzer=8
-- TFT: MOSI=11, SCLK=12, CS=10, DC=13, RST=14, BL=21
-- Encoder: A=5, B=6, SW=7
-- I2S Audio ADC1: BCK=16, DOUT=17, LRC=18, MCLK=3
-- I2S Audio ADC2: DOUT2=9 (shares BCK/LRC/MCLK with ADC1)
-- I2S DAC TX: DOUT=40 (full-duplex on I2S0), DAC I2C: SDA=41, SCL=42
-- Signal Generator PWM: GPIO 38
-- USB Audio: GPIO 19/20 (native USB D-/D+, used by TinyUSB UAC2 speaker device)
-
-**ESP32-S3 GPIO 19/20 — USB Audio**: With `ARDUINO_USB_MODE=0`, these pins are used by TinyUSB for the UAC2 audio device. Serial still works via CH343/UART0 on the other USB port. Do NOT use GPIO 19 or 20 for I2S or other peripherals.
+- Core: LED=1, Amplifier=27, Reset button=46, Buzzer=45
+- TFT: MOSI=2, SCLK=3, CS=4, DC=5, RST=6, BL=26
+- Encoder: A=32, B=33, SW=36
+- I2S Audio ADC1: BCK=20, DOUT=23, LRC=21, MCLK=22
+- I2S Audio ADC2: DOUT2=25 (shares BCK/LRC/MCLK with ADC1)
+- I2S DAC TX: DOUT=24 (full-duplex on I2S0), DAC I2C: SDA=48, SCL=54
+- Signal Generator PWM: GPIO 47
+- ES8311 Onboard DAC I2C: SDA=7, SCL=8 (dedicated onboard bus, PA=53)
+- USB Audio: native USB OTG on P4 (TinyUSB UAC2 speaker device)
 
 ### Dual I2S Configuration (Both Masters)
 
 Both PCM1808 ADCs share BCK/LRC/MCLK clock lines. **Both I2S peripherals are configured as master RX** — I2S_NUM_0 (ADC1) outputs BCK/WS/MCLK clocks, while I2S_NUM_1 (ADC2) has NO clock output (only data_in on GPIO9). Both derive from the same 160MHz D2CLK with identical divider chains, giving frequency-locked BCK.
 
-**Why not slave mode**: ESP32-S3 I2S slave mode has intractable DMA issues — the legacy driver always calculates `bclk_div = 4` (below the hardware minimum of 8), and the LL layer hard-codes `rx_clk_sel = 2` (D2CLK) regardless of APLL settings, making register overrides ineffective. Three separate slave-mode fixes were attempted (pin routing, APLL, direct register override) — all failed with DMA timeout.
+**Why not slave mode**: I2S slave mode has intractable DMA issues on ESP32 — the legacy driver always calculates `bclk_div = 4` (below the hardware minimum of 8), and the LL layer hard-codes the clock source regardless of APLL settings, making register overrides ineffective. Both master mode with coordinated init is the confirmed-working approach.
 
 Init order in `i2s_audio_init()`:
-1. **ADC2 first** — `i2s_configure_adc2()` installs master driver with only `data_in_num = GPIO9` (BCK/WS/MCK = `I2S_PIN_NO_CHANGE`)
-2. **ADC1 second** — `i2s_configure_adc1()` installs master driver with all pins (BCK=16, WS=18, MCLK=3, DOUT=17)
+1. **ADC2 first** — `i2s_configure_adc2()` installs master driver with only `data_in_num = GPIO25` (BCK/WS/MCK = `I2S_PIN_NO_CHANGE`)
+2. **ADC1 second** — `i2s_configure_adc1()` installs master driver with all pins (BCK=20, WS=21, MCLK=22, DOUT=23)
 
 DOUT2 uses `INPUT_PULLDOWN` so an unconnected pin reads zeros (→ NO_DATA) instead of floating noise (→ false OK). No GPIO matrix reconnection is needed since I2S1 uses internal clocking.
 
@@ -157,7 +156,7 @@ chore: Maintenance tasks
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/tests.yml`): runs all native tests, then builds ESP32-S3 firmware. Triggers on push/PR to `main` and `develop` branches. A separate `release.yml` workflow handles automated releases.
+GitHub Actions (`.github/workflows/tests.yml`): runs all native tests, then builds ESP32-P4 firmware. Triggers on push/PR to `main` and `develop` branches. A separate `release.yml` workflow handles automated releases.
 
 ## Serial Debug Logging
 

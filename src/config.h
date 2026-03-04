@@ -23,38 +23,38 @@
 // ===== Pin Definitions (can be overridden by build flags in platformio.ini)
 // =====
 #ifndef LED_PIN
-const int LED_PIN = 2; // Internal board LED pin
+const int LED_PIN = 1; // GPIO 1 - board LED (P4)
 #endif
 
 #ifndef RESET_BUTTON_PIN
-const int RESET_BUTTON_PIN = 15; // Factory reset button
+const int RESET_BUTTON_PIN = 46; // GPIO 46 - factory reset button (P4)
 #endif
 
 #ifndef AMPLIFIER_PIN
-const int AMPLIFIER_PIN = 4; // GPIO 4 - relay control
+const int AMPLIFIER_PIN = 27; // GPIO 27 - relay control (P4)
 #endif
 
 // VOLTAGE_SENSE_PIN removed — replaced by PCM1808 I2S ADC (see i2s_audio.h)
 
 // ===== I2S Audio ADC (PCM1808) Pin Definitions =====
 #ifndef I2S_BCK_PIN
-const int I2S_BCK_PIN = 16; // GPIO 16 - I2S Bit Clock
+const int I2S_BCK_PIN = 20; // GPIO 20 - I2S Bit Clock (P4)
 #endif
 #ifndef I2S_DOUT_PIN
-const int I2S_DOUT_PIN = 17; // GPIO 17 - I2S Data In (PCM1808 #1 OUT)
+const int I2S_DOUT_PIN = 23; // GPIO 23 - I2S Data In (PCM1808 #1 OUT) (P4)
 #endif
 #ifndef I2S_DOUT2_PIN
-const int I2S_DOUT2_PIN = 9;  // GPIO 9 - I2S Data In (PCM1808 #2 OUT)
+const int I2S_DOUT2_PIN = 25; // GPIO 25 - I2S Data In (PCM1808 #2 OUT) (P4)
 #endif
 #ifndef I2S_LRC_PIN
-const int I2S_LRC_PIN = 18; // GPIO 18 - I2S Word Select (L/R Clock)
+const int I2S_LRC_PIN = 21; // GPIO 21 - I2S Word Select (L/R Clock) (P4)
 #endif
 #ifndef I2S_MCLK_PIN
-const int I2S_MCLK_PIN = 3; // GPIO 3 - Master Clock (PLL output)
+const int I2S_MCLK_PIN = 22; // GPIO 22 - Master Clock (PLL output) (P4)
 #endif
 
 #ifndef BUZZER_PIN
-const int BUZZER_PIN = 8; // GPIO 8 - passive buzzer (PWM)
+const int BUZZER_PIN = 45; // GPIO 45 - passive buzzer (PWM) (P4)
 #endif
 
 // ===== Buzzer Configuration =====
@@ -63,7 +63,7 @@ const int BUZZER_PIN = 8; // GPIO 8 - passive buzzer (PWM)
 
 // ===== Signal Generator Configuration =====
 #ifndef SIGGEN_PWM_PIN
-const int SIGGEN_PWM_PIN = 38;   // GPIO 38 — no strapping constraints
+const int SIGGEN_PWM_PIN = 47;   // GPIO 47 (P4)
 #endif
 #define SIGGEN_MCPWM_GROUP      0          // MCPWM group 0
 #define SIGGEN_MCPWM_RESOLUTION 1000000    // 1 MHz prescaled (16-bit period; 20 Hz=50000, 20 kHz=50)
@@ -71,13 +71,13 @@ const int SIGGEN_PWM_PIN = 38;   // GPIO 38 — no strapping constraints
 // ===== DAC Output Pin Definitions =====
 #ifdef DAC_ENABLED
 #ifndef I2S_TX_DATA_PIN
-const int I2S_TX_DATA_PIN = 40;  // GPIO 40 - I2S TX data to DAC
+const int I2S_TX_DATA_PIN = 24;  // GPIO 24 - I2S TX data to DAC (P4)
 #endif
 #ifndef DAC_I2C_SDA_PIN
-const int DAC_I2C_SDA_PIN = 41;  // GPIO 41 - I2C SDA (EEPROM + I2C DACs)
+const int DAC_I2C_SDA_PIN = 48;  // GPIO 48 - I2C SDA (EEPROM + I2C DACs) (P4)
 #endif
 #ifndef DAC_I2C_SCL_PIN
-const int DAC_I2C_SCL_PIN = 42;  // GPIO 42 - I2C SCL (EEPROM + I2C DACs)
+const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #endif
 #endif // DAC_ENABLED
 
