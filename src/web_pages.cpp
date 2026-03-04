@@ -1338,20 +1338,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 18px;
-            height: 18px;
             margin-left: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-primary);
-            background: var(--accent);
-            border-radius: 50%;
+            color: var(--accent);
             text-decoration: none;
             vertical-align: middle;
+            opacity: 0.85;
         }
 
         .release-notes-link:hover {
-            background: var(--accent-dark);
+            color: var(--accent-dark);
+            opacity: 1;
         }
 
         /* ===== User Manual QR Code Section ===== */
@@ -3224,6 +3220,30 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <!-- ES8311 Secondary DAC Output (P4 onboard codec) -->
+            <div class="card" id="es8311Card" style="display:none">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    ES8311 Speaker Output
+                    <span id="es8311ReadyBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Ready</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Enable</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Enable" onchange="updateEs8311()"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                <div id="es8311Fields" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">Volume: <span id="es8311VolVal">80</span>%</label>
+                    <input type="range" class="form-input" id="es8311Volume" min="0" max="100" value="80" step="1" oninput="document.getElementById('es8311VolVal').textContent=this.value" onchange="updateEs8311()">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mute</label>
+                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Mute" onchange="updateEs8311()"><span class="slider round"></span></label>
+                    <div style="clear:both"></div>
+                </div>
+                </div>
+            </div>
+
             <!-- EEPROM Programming -->
             <div class="card" id="eepromCard">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3991,14 +4011,14 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                         <span class="version-label">Current Version</span>
                         <span class="version-value">
                             <span id="currentVersion">Loading...</span>
-                            <a href="#" id="currentVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('current'); return false;" title="View release notes">?</a>
+                            <a href="#" id="currentVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('current'); return false;" title="View release notes"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2M12 20C7.58 20 4 16.42 4 12C4 7.58 7.58 4 12 4C16.42 4 20 7.58 20 12C20 16.42 16.42 20 12 20Z"/></svg></a>
                         </span>
                     </div>
                     <div class="version-row" id="latestVersionRow">
                         <span class="version-label">Latest Version</span>
                         <span class="version-value version-update">
                             <span id="latestVersion" style="opacity: 0.6; font-style: italic;">Checking...</span>
-                            <a href="#" id="latestVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('latest'); return false;" title="View release notes">?</a>
+                            <a href="#" id="latestVersionNotes" class="release-notes-link" onclick="showReleaseNotesFor('latest'); return false;" title="View release notes"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2M12 20C7.58 20 4 16.42 4 12C4 7.58 7.58 4 12 4C16.42 4 20 7.58 20 12C20 16.42 16.42 20 12 20Z"/></svg></a>
                         </span>
                     </div>
                 </div>
@@ -6504,7 +6524,44 @@ function toggleSigGenLane(enabled) {
             })
             .catch(() => showToast('Failed to change DAC driver', 'error'));
         }
+        // ===== ES8311 Secondary DAC Output =====
+        function updateEs8311() {
+            var en = document.getElementById('es8311Enable').checked;
+            document.getElementById('es8311Fields').style.display = en ? '' : 'none';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setEs8311Enabled', enabled: en }));
+                ws.send(JSON.stringify({
+                    type: 'setEs8311Volume',
+                    volume: parseInt(document.getElementById('es8311Volume').value)
+                }));
+                ws.send(JSON.stringify({
+                    type: 'setEs8311Mute',
+                    mute: document.getElementById('es8311Mute').checked
+                }));
+            }
+        }
+        function handleEs8311State(d) {
+            var card = document.getElementById('es8311Card');
+            if (card) card.style.display = '';
+            var enEl = document.getElementById('es8311Enable');
+            if (enEl) enEl.checked = d.es8311Enabled;
+            var fields = document.getElementById('es8311Fields');
+            if (fields) fields.style.display = d.es8311Enabled ? '' : 'none';
+            var volSlider = document.getElementById('es8311Volume');
+            if (volSlider) { volSlider.value = d.es8311Volume; document.getElementById('es8311VolVal').textContent = d.es8311Volume; }
+            var muteEl = document.getElementById('es8311Mute');
+            if (muteEl) muteEl.checked = d.es8311Mute;
+            var badge = document.getElementById('es8311ReadyBadge');
+            if (badge) {
+                badge.style.display = d.es8311Enabled ? '' : 'none';
+                badge.textContent = d.es8311Ready ? 'Ready' : 'Not Ready';
+                badge.style.background = d.es8311Ready ? '#4CAF50' : '#F44336';
+                badge.style.color = '#fff';
+            }
+        }
         function handleDacState(d) {
+            // Update ES8311 secondary DAC if fields are present
+            if (d.es8311Enabled !== undefined) handleEs8311State(d);
             var enEl = document.getElementById('dacEnable');
             if (enEl) enEl.checked = d.enabled;
             var fields = document.getElementById('dacFields');
@@ -10124,7 +10181,7 @@ function renderReleaseList(releases) {
         } else {
             btnHtml = '<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="installRelease(\'' + rel.version.replace(/'/g, "\\'") + '\',false)">Install</button>';
         }
-        const notesBtn = '<a href="#" class="release-notes-link" onclick="showReleaseNotesFor(\'' + rel.version.replace(/'/g, "\\'") + '\'); return false;" title="View release notes">?</a>';
+        const notesBtn = '<a href="#" class="release-notes-link" onclick="showReleaseNotesFor(\'' + rel.version.replace(/'/g, "\\'") + '\'); return false;" title="View release notes"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2M12 20C7.58 20 4 16.42 4 12C4 7.58 7.58 4 12 4C16.42 4 20 7.58 20 12C20 16.42 16.42 20 12 20Z"/></svg></a>';
         div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + rel.version + '</span>' + badge + notesBtn +
             '<span class="text-secondary" style="font-size:12px;margin-left:8px;">' + dateStr + '</span></div>' +
             '<div style="margin-left:8px;">' + btnHtml + '</div>';

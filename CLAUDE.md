@@ -65,13 +65,14 @@ Each subsystem is a separate module in `src/`:
 - **signal_generator** — Multi-waveform test signal generator (sine, square, noise, sweep), software injection (lane 2 in audio_pipeline) + PWM output modes
 - **task_monitor** — FreeRTOS task enumeration via `xTaskGetNext`, stack usage, priority, core affinity. Runs on a dedicated 5s timer in main loop (decoupled from HW stats broadcast). Only scans stack watermarks for known app tasks. Opt-in via `debugTaskMonitor` (default off). Uses `<esp_private/freertos_debug.h>` + `TaskIterator_t` (`task_snapshot.h` was deprecated in IDF5)
 - **usb_audio** — TinyUSB UAC2 speaker device on native USB OTG (GPIO 19/20). Custom audio class driver registered via `usbd_app_driver_get_cb()` weak function. SPSC lock-free ring buffer (1024 frames, PSRAM). Format conversion: USB PCM16/PCM24 → left-justified int32. FreeRTOS task on Core 0 with adaptive poll rate (100ms idle, 1ms streaming). Guarded by `-D USB_AUDIO_ENABLED`. Requires `build_unflags = -DARDUINO_USB_MODE -DARDUINO_USB_CDC_ON_BOOT` in platformio.ini
-- **debug_serial** — Log-level filtered serial output (`LOG_D`/`LOG_I`/`LOG_W`/`LOG_E`/`LOG_NONE`), runtime level control via `applyDebugSerialLevel()`, WebSocket log forwarding
+- **debug_serial** — Log-level filtered serial output (`LOG_D`/`LOG_I`/`LOG_W`/`LOG_E`/`LOG_NONE`), runtime level control via `applyDebugSerialLevel()`, WebSocket log forwarding. `broadcastLine()` sends `"module"` as a separate JSON field extracted from the `[ModuleName]` prefix, enabling frontend category filtering
 - **websocket_handler** — Real-time state broadcasting to web clients (port 81). Audio waveform and spectrum data use binary WebSocket frames (`sendBIN`) for efficiency; audio levels remain JSON. Binary message types defined as `WS_BIN_WAVEFORM` (0x01) and `WS_BIN_SPECTRUM` (0x02) in `websocket_handler.h`
 - **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`). **IMPORTANT: Edit source files in `web_src/` — NOT `src/web_pages.cpp` (auto-generated). After ANY edit to `web_src/` files, run `node tools/build_web_assets.js` to regenerate `src/web_pages.cpp` and `src/web_pages_gz.cpp` before building firmware.**
   - `web_src/index.html` — HTML shell (body content, no inline CSS/JS)
   - `web_src/css/01-05-*.css` — CSS split by concern (variables, layout, components, canvas, responsive)
   - `web_src/js/01-28-*.js` — JS modules in load order (core, state, UI, audio, DSP, WiFi, settings, system)
   - `src/web_pages.cpp` and `src/web_pages_gz.cpp` are both auto-generated — do not edit manually
+  - Debug Console: module/category chip filtering (auto-populated), search/highlight, entry count badges (red=errors, amber=warnings), sticky filters (localStorage), relative/absolute timestamp toggle. Card positioned below Debug Controls
 
 ### GUI (LVGL on TFT Display)
 LVGL v9.4 + LovyanGFX on ST7735S 128x160 (landscape 160x128). Runs on **Core 0** via FreeRTOS `gui_task` (`TASK_CORE_GUI=0`) — moved off Core 1 to keep Core 1 exclusively for audio. All GUI code is guarded by `-D GUI_ENABLED`.
@@ -182,6 +183,29 @@ When adding logging to new modules, follow these conventions:
 - Never log inside ISR paths or real-time FreeRTOS tasks (e.g., `audio_pipeline_task`) — `Serial.print` blocks when UART TX buffer fills, starving DMA and causing audio dropouts. Use dirty-flag pattern: task sets flag, main loop calls `audio_periodic_dump()` for actual Serial/WS output
 - Log transitions, not repetitive state (use static `prev` variables to detect changes)
 - **Log files**: Save all `.log` files (build output, test reports, serial captures) to the `logs/` directory — keep the project root clean
+
+## Icons
+
+All icons in the web UI **must** use inline SVG paths sourced from [Material Design Icons (MDI)](https://pictogrammers.com/library/mdi/). No external icon CDN or font library is loaded — the page is self-contained and must work offline.
+
+**Standard pattern** (copy the SVG path from pictogrammers.com → select icon → SVG tab):
+
+```html
+<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+  <path d="<paste MDI path here>"/>
+</svg>
+```
+
+- Use `fill="currentColor"` so the icon inherits its colour from CSS (`color` property)
+- Set explicit `width`/`height` to match the surrounding context (18 px for inline text buttons, 24 px for standalone buttons)
+- Always add `aria-hidden="true"` on decorative icons; add `aria-label` on icon-only interactive elements
+- When generating icons in JavaScript strings, quote SVG attributes with double quotes and the outer JS string with single quotes (the two don't conflict)
+
+**Reference icons already in use:**
+
+| Icon | MDI name | Used for |
+|------|----------|---------|
+| ⓘ outline circle | `mdi-information-outline` | Release notes links |
 
 ## Key Dependencies
 

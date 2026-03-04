@@ -911,20 +911,16 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 18px;
-            height: 18px;
             margin-left: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-primary);
-            background: var(--accent);
-            border-radius: 50%;
+            color: var(--accent);
             text-decoration: none;
             vertical-align: middle;
+            opacity: 0.85;
         }
 
         .release-notes-link:hover {
-            background: var(--accent-dark);
+            color: var(--accent-dark);
+            opacity: 1;
         }
 
         /* ===== User Manual QR Code Section ===== */
