@@ -213,7 +213,6 @@ static void start_pattern(const ToneStep *pat) {
 
 static void stop_buzzer() {
   LOG_D("[Buzzer] Pattern complete");
-  // Silence then detach — skip ledcWriteTone(0) which changes timer resolution
   ledcWrite(BUZZER_PIN, 0);
   ledcDetach(BUZZER_PIN);
   pinMode(BUZZER_PIN, OUTPUT);
