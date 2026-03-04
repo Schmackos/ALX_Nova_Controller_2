@@ -1373,6 +1373,27 @@
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Update Channel</div>
+                        <div class="toggle-sublabel">Stable: tested releases. Beta: prerelease builds.</div>
+                    </div>
+                    <select id="otaChannelSelect" class="select-input" onchange="setOtaChannel()">
+                        <option value="0">Stable</option>
+                        <option value="1">Beta</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary mb-8" onclick="toggleReleasesBrowser()" id="browseReleasesBtn">Browse Releases</button>
+                <div id="releasesBrowser" class="hidden" style="margin-bottom:12px;">
+                    <div class="release-notes-header">
+                        <span class="release-notes-title">Available Releases</span>
+                        <button type="button" class="release-notes-close" onclick="toggleReleasesBrowser()">×</button>
+                    </div>
+                    <div id="releaseListContent" style="max-height:280px;overflow-y:auto;">
+                        <div id="releaseListLoading" class="text-secondary" style="font-size:13px;padding:8px;">Loading...</div>
+                        <div id="releaseListItems"></div>
+                    </div>
+                </div>
                 <button class="btn btn-secondary mb-8" onclick="checkForUpdate()">Check for Updates</button>
                 <button class="btn btn-primary hidden" id="updateBtn" onclick="startOTAUpdate()">Update Now</button>
                 <div class="progress-container hidden" id="progressContainer">

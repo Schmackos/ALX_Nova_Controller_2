@@ -12,6 +12,14 @@ on:
           - patch
           - minor
           - major
+      channel:
+        description: 'Release channel'
+        required: true
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - beta
 
 jobs:
   test:
@@ -104,16 +112,18 @@ jobs:
       - name: Get current version
         id: get_version
         run: |
-          CURRENT_VERSION=$(grep -oP '#define FIRMWARE_VERSION "\K[0-9]+\.[0-9]+\.[0-9]+' src/config.h)
+          CURRENT_VERSION=$(grep -oP '#define FIRMWARE_VERSION "\K[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?' src/config.h)
+          BASE_VERSION=$(echo "$CURRENT_VERSION" | grep -oP '^[0-9]+\.[0-9]+\.[0-9]+')
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: $CURRENT_VERSION"
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION (base: $BASE_VERSION)"
 
       - name: Calculate new version
         id: new_version
         run: |
-          CURRENT="${{ steps.get_version.outputs.current_version }}"
+          CURRENT="${{ steps.get_version.outputs.base_version }}"
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          
+
           case "${{ github.event.inputs.version_bump }}" in
             major)
               MAJOR=$((MAJOR + 1))
@@ -128,14 +138,31 @@ jobs:
               PATCH=$((PATCH + 1))
               ;;
           esac
-          
+
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "New version: $NEW_VERSION"
+
+          CHANNEL="${{ github.event.inputs.channel }}"
+          if [ "$CHANNEL" = "beta" ]; then
+            # Find highest existing beta tag for this base version
+            HIGHEST_BETA=$(git tag -l "${NEW_VERSION}-beta.*" | grep -oP '(?<=-beta\.)\d+' | sort -n | tail -1)
+            if [ -z "$HIGHEST_BETA" ]; then
+              NEXT_BETA=1
+            else
+              NEXT_BETA=$((HIGHEST_BETA + 1))
+            fi
+            FULL_VERSION="${NEW_VERSION}-beta.${NEXT_BETA}"
+          else
+            FULL_VERSION="${NEW_VERSION}"
+          fi
+          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
+          IS_PRE=$( [ "$CHANNEL" = "beta" ] && echo "true" || echo "false" )
+          echo "is_prerelease=$IS_PRE" >> $GITHUB_OUTPUT
+          echo "Full version: $FULL_VERSION (prerelease: $IS_PRE)"
 
       - name: Update version in config.h
         run: |
-          sed -i 's/#define FIRMWARE_VERSION ".*"/#define FIRMWARE_VERSION "${{ steps.new_version.outputs.new_version }}"/' src/config.h
+          sed -i 's/#define FIRMWARE_VERSION ".*"/#define FIRMWARE_VERSION "${{ steps.new_version.outputs.full_version }}"/' src/config.h
           echo "Updated config.h:"
           grep FIRMWARE_VERSION src/config.h
 
@@ -170,7 +197,7 @@ jobs:
 
       - name: Prepare release notes
         run: |
-          VERSION="${{ steps.new_version.outputs.new_version }}"
+          VERSION="${{ steps.new_version.outputs.full_version }}"
 
           # Get the previous version tag (latest tag before this release)
           PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
@@ -280,7 +307,7 @@ jobs:
           echo "" >> release_notes.md
           echo "| Property | Value |" >> release_notes.md
           echo "|----------|-------|" >> release_notes.md
-          echo "| **Version** | \`${{ steps.new_version.outputs.new_version }}\` |" >> release_notes.md
+          echo "| **Version** | \`${{ steps.new_version.outputs.full_version }}\` |" >> release_notes.md
           echo "| **SHA256** | \`${{ steps.checksum.outputs.sha256 }}\` |" >> release_notes.md
           echo "| **File Size** | ${{ steps.filesize.outputs.size_kb }} KB |" >> release_notes.md
           echo "| **Build Date** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> release_notes.md
@@ -305,7 +332,7 @@ jobs:
 
       - name: Update release notes with new version
         run: |
-          VERSION="${{ steps.new_version.outputs.new_version }}"
+          VERSION="${{ steps.new_version.outputs.full_version }}"
 
           # Check if this version already exists in RELEASE_NOTES.md
           if ! grep -q "^## Version $VERSION" RELEASE_NOTES.md 2>/dev/null; then
@@ -347,20 +374,24 @@ jobs:
 
       - name: Commit version change and release notes
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/config.h RELEASE_NOTES.md
-          git commit -m "chore: Bump version to ${{ steps.new_version.outputs.new_version }}"
-          git push
+          if [ "${{ github.event.inputs.channel }}" = "stable" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add src/config.h RELEASE_NOTES.md
+            git commit -m "chore: Bump version to ${{ steps.new_version.outputs.full_version }}"
+            git push
+          else
+            echo "Beta release: skipping version bump commit to working branch"
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.new_version.outputs.new_version }}
-          name: Version ${{ steps.new_version.outputs.new_version }}
+          tag_name: ${{ steps.new_version.outputs.full_version }}
+          name: Version ${{ steps.new_version.outputs.full_version }}
           body_path: release_notes.md
           files: .pio/build/esp32-s3-devkitm-1/firmware.bin
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.new_version.outputs.is_prerelease == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

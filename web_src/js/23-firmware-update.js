@@ -81,6 +81,12 @@ function startOTAUpdate() {
 }
 
 function handleUpdateStatus(data) {
+    if (data.otaChannel !== undefined) {
+        otaChannel = data.otaChannel;
+        const sel = document.getElementById('otaChannelSelect');
+        if (sel) sel.value = String(otaChannel);
+    }
+
     // Skip progress bar updates if manual upload is in progress
     // Manual upload manages its own progress bar
     if (manualUploadInProgress) {
@@ -232,6 +238,141 @@ function uploadFirmware(file) {
     };
 
     xhr.send(formData);
+}
+
+// ===== OTA Channel =====
+
+function setOtaChannel() {
+    const val = parseInt(document.getElementById('otaChannelSelect').value);
+    otaChannel = val;
+    apiFetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otaChannel: val })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showToast(val === 0 ? 'Channel: Stable' : 'Channel: Beta', 'success');
+            cachedReleaseList = [];
+            const browser = document.getElementById('releasesBrowser');
+            if (browser && !browser.classList.contains('hidden')) {
+                loadReleaseList();
+            }
+        }
+    })
+    .catch(() => showToast('Failed to set channel', 'error'));
+}
+
+// ===== Release Browser =====
+
+function toggleReleasesBrowser() {
+    const browser = document.getElementById('releasesBrowser');
+    if (!browser) return;
+    const isVisible = !browser.classList.contains('hidden');
+    if (isVisible) {
+        browser.classList.add('hidden');
+    } else {
+        browser.classList.remove('hidden');
+        loadReleaseList();
+    }
+}
+
+function loadReleaseList() {
+    if (releaseListLoading) return;
+    releaseListLoading = true;
+    const loading = document.getElementById('releaseListLoading');
+    const items = document.getElementById('releaseListItems');
+    if (loading) loading.style.display = '';
+    if (items) items.innerHTML = '';
+
+    apiFetch('/api/releases')
+    .then(res => res.json())
+    .then(data => {
+        releaseListLoading = false;
+        if (loading) loading.style.display = 'none';
+        if (!data.success || !data.releases || data.releases.length === 0) {
+            if (items) items.innerHTML = '<div class="text-secondary" style="font-size:13px;padding:8px;">No releases found.</div>';
+            return;
+        }
+        cachedReleaseList = data.releases;
+        renderReleaseList(data.releases);
+    })
+    .catch(() => {
+        releaseListLoading = false;
+        if (loading) loading.style.display = 'none';
+        if (items) items.innerHTML = '<div class="text-secondary" style="font-size:13px;padding:8px;">Failed to load releases.</div>';
+    });
+}
+
+function renderReleaseList(releases) {
+    const container = document.getElementById('releaseListItems');
+    if (!container) return;
+    const curVer = currentFirmwareVersion || '';
+    container.innerHTML = '';
+    releases.forEach(function(rel) {
+        const isCurrent = rel.version === curVer || rel.version === 'v' + curVer || 'v' + rel.version === curVer;
+        const isDown = isOlderRelease(rel.version, curVer);
+        const badge = rel.isPrerelease ? ' <span style="color:var(--warning);font-size:11px;font-weight:600;">[beta]</span>' : '';
+        const dateStr = rel.publishedAt || '';
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);';
+        let btnHtml = '';
+        if (isCurrent) {
+            btnHtml = '<span style="color:var(--success);font-size:12px;white-space:nowrap;">Current</span>';
+        } else if (isDown) {
+            btnHtml = '<button class="btn btn-sm" style="background:var(--warning);color:#000;white-space:nowrap;" onclick="installRelease(\'' + rel.version.replace(/'/g, "\\'") + '\',true)">Downgrade</button>';
+        } else {
+            btnHtml = '<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="installRelease(\'' + rel.version.replace(/'/g, "\\'") + '\',false)">Install</button>';
+        }
+        div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + rel.version + '</span>' + badge +
+            '<span class="text-secondary" style="font-size:12px;margin-left:8px;">' + dateStr + '</span></div>' +
+            '<div style="margin-left:8px;">' + btnHtml + '</div>';
+        container.appendChild(div);
+    });
+}
+
+function isOlderRelease(v1, v2) {
+    // Returns true if v1 is older than v2
+    const strip = function(v) { return v.replace(/^v/, ''); };
+    const a = strip(v1), b = strip(v2);
+    const baseParts = function(s) { return s.replace(/-beta\.\d+/, '').split('.').map(Number); };
+    const betaN = function(s) { const m = s.match(/-beta\.(\d+)/); return m ? parseInt(m[1]) : 0; };
+    const pa = baseParts(a), pb = baseParts(b);
+    for (let i = 0; i < 3; i++) {
+        if ((pa[i]||0) < (pb[i]||0)) return true;
+        if ((pa[i]||0) > (pb[i]||0)) return false;
+    }
+    const ba = betaN(a), bb = betaN(b);
+    if (ba === 0 && bb === 0) return false;
+    if (ba === 0 && bb > 0) return false;
+    if (ba > 0 && bb === 0) return true;
+    return ba < bb;
+}
+
+function installRelease(version, isDowngrade) {
+    const msg = isDowngrade
+        ? 'Downgrade to ' + version + '? Settings may be incompatible with older firmware.'
+        : 'Install version ' + version + '?';
+    if (!confirm(msg)) return;
+
+    apiFetch('/api/installrelease', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: version })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('releasesBrowser').classList.add('hidden');
+            document.getElementById('progressContainer').classList.remove('hidden');
+            document.getElementById('progressStatus').classList.remove('hidden');
+            showToast('Installing ' + version + '...', 'success');
+        } else {
+            showToast(data.message || 'Install failed', 'error');
+        }
+    })
+    .catch(() => showToast('Failed to start install', 'error'));
 }
 
 // Drag and drop for firmware

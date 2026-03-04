@@ -277,6 +277,114 @@ void test_settings_validation(void) {
     TEST_ASSERT_EQUAL(14 * 3600, appSettings.utcOffset);
 }
 
+// ===== OTA Channel Persistence Tests =====
+
+void test_settings_updateChannel_defaults_to_stable(void) {
+    // After loadDefaultSettings(), channel should be "stable"
+    loadDefaultSettings();
+    TEST_ASSERT_EQUAL_STRING("stable", appSettings.updateChannel.c_str());
+}
+
+void test_settings_save_beta_channel(void) {
+    // Set channel to beta and persist
+    appSettings.updateChannel = "beta";
+    saveSettings();
+
+    // Verify the NVS key holds "beta"
+    Preferences prefs;
+    prefs.begin("settings", false);
+    prefs.putString("device_name", "tmp"); // ensure isKey("device_name") passes on reload
+    prefs.end();
+
+    Preferences readPrefs;
+    readPrefs.begin("settings", true);
+    TEST_ASSERT_EQUAL_STRING("beta", readPrefs.getString("update_channel", "stable").c_str());
+    readPrefs.end();
+}
+
+void test_settings_load_restores_beta_channel(void) {
+    // Pre-populate NVS with beta channel and a sentinel key so loadSettings() returns true
+    Preferences prefs;
+    prefs.begin("settings", false);
+    prefs.putString("device_name", "ChannelTest");
+    prefs.putString("update_channel", "beta");
+    prefs.end();
+
+    bool loaded = loadSettings();
+
+    TEST_ASSERT_TRUE(loaded);
+    TEST_ASSERT_EQUAL_STRING("beta", appSettings.updateChannel.c_str());
+}
+
+void test_settings_load_restores_stable_channel(void) {
+    // Pre-populate NVS with stable channel
+    Preferences prefs;
+    prefs.begin("settings", false);
+    prefs.putString("device_name", "ChannelTest");
+    prefs.putString("update_channel", "stable");
+    prefs.end();
+
+    bool loaded = loadSettings();
+
+    TEST_ASSERT_TRUE(loaded);
+    TEST_ASSERT_EQUAL_STRING("stable", appSettings.updateChannel.c_str());
+}
+
+void test_settings_load_missing_channel_key_uses_default(void) {
+    // Pre-populate NVS without an update_channel key — getString should return default "stable"
+    Preferences prefs;
+    prefs.begin("settings", false);
+    prefs.putString("device_name", "NoChannelDevice");
+    // deliberately omit update_channel
+    prefs.end();
+
+    bool loaded = loadSettings();
+
+    TEST_ASSERT_TRUE(loaded);
+    // The mock getString returns the default "stable" when key is absent
+    TEST_ASSERT_EQUAL_STRING("stable", appSettings.updateChannel.c_str());
+}
+
+void test_settings_channel_roundtrip_stable_to_beta(void) {
+    // Start with stable, save, switch to beta, save, reload, verify beta persists
+    appSettings.updateChannel = "stable";
+    saveSettings();
+
+    appSettings.updateChannel = "beta";
+    saveSettings();
+
+    // Reset in-memory state then reload from NVS
+    appSettings.updateChannel = "stable";
+
+    Preferences prefs;
+    prefs.begin("settings", true);
+    appSettings.updateChannel = prefs.getString("update_channel", "stable");
+    prefs.end();
+
+    TEST_ASSERT_EQUAL_STRING("beta", appSettings.updateChannel.c_str());
+}
+
+void test_settings_factory_reset_clears_channel(void) {
+    // Save a beta channel preference
+    Preferences prefs;
+    prefs.begin("settings", false);
+    prefs.putString("device_name", "TestDevice");
+    prefs.putString("update_channel", "beta");
+    prefs.end();
+
+    // Factory reset should clear all keys and restore defaults
+    performFactoryReset();
+
+    // update_channel key should be gone
+    Preferences verify;
+    verify.begin("settings", true);
+    TEST_ASSERT_FALSE(verify.isKey("update_channel"));
+    verify.end();
+
+    // In-memory default should be "stable"
+    TEST_ASSERT_EQUAL_STRING("stable", appSettings.updateChannel.c_str());
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -291,6 +399,15 @@ int runUnityTests(void) {
     RUN_TEST(test_settings_api_update);
     RUN_TEST(test_settings_update_partial);
     RUN_TEST(test_settings_validation);
+
+    // OTA channel persistence tests
+    RUN_TEST(test_settings_updateChannel_defaults_to_stable);
+    RUN_TEST(test_settings_save_beta_channel);
+    RUN_TEST(test_settings_load_restores_beta_channel);
+    RUN_TEST(test_settings_load_restores_stable_channel);
+    RUN_TEST(test_settings_load_missing_channel_key_uses_default);
+    RUN_TEST(test_settings_channel_roundtrip_stable_to_beta);
+    RUN_TEST(test_settings_factory_reset_clears_channel);
 
     return UNITY_END();
 }

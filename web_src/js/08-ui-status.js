@@ -120,6 +120,12 @@
                 autoUpdateToggle.checked = autoUpdateEnabled;
             }
 
+            if (data.otaChannel !== undefined) {
+                otaChannel = data.otaChannel;
+                const sel = document.getElementById('otaChannelSelect');
+                if (sel) sel.value = String(otaChannel);
+            }
+
             if (typeof data['appState.autoAPEnabled'] !== 'undefined') {
                 document.getElementById('autoAPToggle').checked = !!data['appState.autoAPEnabled'];
             }

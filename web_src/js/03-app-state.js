@@ -58,6 +58,11 @@
         // WiFi
         let wifiConnectionPollTimer = null;
 
+        // OTA Channel & Release Browser
+        let otaChannel = 0;
+        let cachedReleaseList = [];
+        let releaseListLoading = false;
+
         // Window resize handler
         let resizeTimeout;
 

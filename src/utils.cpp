@@ -5,27 +5,45 @@
 #include <esp_system.h>
 
 int compareVersions(const String &v1, const String &v2) {
+  // Split on "-beta." to separate base version from pre-release ordinal
+  String base1 = v1, base2 = v2;
+  int beta1 = 0, beta2 = 0;  // 0 = stable (wins over any beta)
+
+  int idx1 = v1.indexOf("-beta.");
+  if (idx1 >= 0) {
+    base1 = v1.substring(0, idx1);
+    beta1 = v1.substring(idx1 + 6).toInt();
+    if (beta1 < 1) beta1 = 1;  // malformed beta still counts as pre-release
+  }
+
+  int idx2 = v2.indexOf("-beta.");
+  if (idx2 >= 0) {
+    base2 = v2.substring(0, idx2);
+    beta2 = v2.substring(idx2 + 6).toInt();
+    if (beta2 < 1) beta2 = 1;
+  }
+
+  // Compare base versions (MAJOR.MINOR.PATCH) numerically
   int i = 0, j = 0;
-  const int n1 = v1.length();
-  const int n2 = v2.length();
+  const int n1 = base1.length();
+  const int n2 = base2.length();
 
   while (i < n1 || j < n2) {
     long num1 = 0;
     long num2 = 0;
 
-    while (i < n1 && isDigit(v1[i])) {
-      num1 = num1 * 10 + (v1[i] - '0');
+    while (i < n1 && isDigit(base1[i])) {
+      num1 = num1 * 10 + (base1[i] - '0');
       i++;
     }
-    // Skip non-digit separators like '.'
-    while (i < n1 && !isDigit(v1[i]))
+    while (i < n1 && !isDigit(base1[i]))
       i++;
 
-    while (j < n2 && isDigit(v2[j])) {
-      num2 = num2 * 10 + (v2[j] - '0');
+    while (j < n2 && isDigit(base2[j])) {
+      num2 = num2 * 10 + (base2[j] - '0');
       j++;
     }
-    while (j < n2 && !isDigit(v2[j]))
+    while (j < n2 && !isDigit(base2[j]))
       j++;
 
     if (num1 < num2)
@@ -34,6 +52,12 @@ int compareVersions(const String &v1, const String &v2) {
       return 1;
   }
 
+  // Base versions equal — stable (beta=0) beats any beta
+  if (beta1 == 0 && beta2 > 0) return 1;   // v1 is stable, v2 is beta
+  if (beta1 > 0 && beta2 == 0) return -1;  // v1 is beta, v2 is stable
+  // Both betas or both stable: compare ordinals
+  if (beta1 < beta2) return -1;
+  if (beta1 > beta2) return 1;
   return 0;
 }
 
