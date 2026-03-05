@@ -17,86 +17,10 @@
 #include <freertos/task.h>
 
 // Root CA certificates for GitHub (api.github.com, github.com, and objects.githubusercontent.com)
-// GitHub migrated to Sectigo/USERTrust in March 2024, then Sectigo migrated
-// to new R46/E46 roots in 2025 (mandatory from Jan 2026).
-// Includes: USERTrust ECC+RSA (legacy compat), DigiCert Global Root G2 (CDN),
-// and Sectigo Public Server Authentication Root R46+E46 (current GitHub chain).
-// Valid until 2038-2046
+// Sectigo migrated from USERTrust to R46/E46 roots in 2025 (mandatory from Jan 2026).
+// DigiCert G2 handles CDN downloads on objects.githubusercontent.com.
+// Total: 3 certificates (R46 RSA, E46 ECC, DigiCert G2), valid until 2038-2046
 static const char* GITHUB_ROOT_CA = \
-// USERTrust ECC Certification Authority (for api.github.com and github.com) - valid until 2038
-"-----BEGIN CERTIFICATE-----\n" \
-"MIICjzCCAhWgAwIBAgIQXIuZxVqUxdJxVt7NiYDMJjAKBggqhkjOPQQDAzCBiDEL\n" \
-"MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl\n" \
-"eSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMT\n" \
-"JVVTRVJUcnVzdCBFQ0MgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTAwMjAx\n" \
-"MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjCBiDELMAkGA1UEBhMCVVMxEzARBgNVBAgT\n" \
-"Ck5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNleSBDaXR5MR4wHAYDVQQKExVUaGUg\n" \
-"VVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMTJVVTRVJUcnVzdCBFQ0MgQ2VydGlm\n" \
-"aWNhdGlvbiBBdXRob3JpdHkwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQarFRaqflo\n" \
-"I+d61SRvU8Za2EurxtW20eZzca7dnNYMYf3boIkDuAUU7FfO7l0/4iGzzvfUinng\n" \
-"o4N+LZfQYcTxmdwlkWOrfzCjtHDix6EznPO/LlxTsV+zfTJ/ijTjeXmjQjBAMB0G\n" \
-"A1UdDgQWBBQ64QmG1M8ZwpZ2dEl23OA1xmNjmjAOBgNVHQ8BAf8EBAMCAQYwDwYD\n" \
-"VR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAwNoADBlAjA2Z6EWCNzklwBBHU6+4WMB\n" \
-"zzuqQhFkoJ2UOQIReVx7Hfpkue4WQrO/isIJxOzksU0CMQDpKmFHjFJKS04YcPbW\n" \
-"RNZu9YO6bVi9JNlWSOrvxKJGgYhqOkbRqZtNyWHa0V1Xahg=\n" \
-"-----END CERTIFICATE-----\n" \
-// USERTrust RSA Certification Authority (for github.com RSA certificates) - valid until 2038
-"-----BEGIN CERTIFICATE-----\n" \
-"MIIFgTCCBGmgAwIBAgIQOXJEOvkit1HX02wQ3TE1lTANBgkqhkiG9w0BAQwFADB7\n" \
-"MQswCQYDVQQGEwJHQjEbMBkGA1UECAwSR3JlYXRlciBNYW5jaGVzdGVyMRAwDgYD\n" \
-"VQQHDAdTYWxmb3JkMRowGAYDVQQKDBFDb21vZG8gQ0EgTGltaXRlZDEhMB8GA1UE\n" \
-"AwwYQUFBIENlcnRpZmljYXRlIFNlcnZpY2VzMB4XDTE5MDMxMjAwMDAwMFoXDTI4\n" \
-"MTIzMTIzNTk1OVowgYgxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpOZXcgSmVyc2V5\n" \
-"MRQwEgYDVQQHEwtKZXJzZXkgQ2l0eTEeMBwGA1UEChMVVGhlIFVTRVJUUlVTVCBO\n" \
-"ZXR3b3JrMS4wLAYDVQQDEyVVU0VSVHJ1c3QgUlNBIENlcnRpZmljYXRpb24gQXV0\n" \
-"aG9yaXR5MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAgBJlFzYOw9sI\n" \
-"s9CsVw127c0n00ytUINh4qogTQktZAnczomfzD2p7PbPwdzx07HWezcoEStH2jnG\n" \
-"vDoZtF+mvX2do2NCtnbyqTsrkfjib9DsFiCQCT7i6HTJGLSR1GJk23+jBvGIGGqQ\n" \
-"Ijy8/hPwhxR79uQfjtTkUcYRZ0YIUcuGFFQ/vDP+fmyc/xadGL1RjjWmp2bIcmfb\n" \
-"IWax1Jt4A8BQOujM8Ny8nkz+rwWWNR9XWrf/zvk9tyy29lTdyOcSOk2uTIq3XJq0\n" \
-"tyA9yn8iNK5+O2hmAUTnAU5GU5szYPeUvlM3kHND8zLDU+/bqv50TmnHa4xgk97E\n" \
-"xwzf4TKuzJM7UXiVZ4vuPVb+DNBpDxsP8yUmazNt925H+nND5X4OpWaxKXwyhGNV\n" \
-"icQNwZNUMBkTrNN9N6frXTpsNVzbQdcS2qlJC9/YgIoJk2KOtWbPJYjNhLixP6Q5\n" \
-"D9kCnusSTJV882sFqV4Wg8y4Z+LoE53MW4LTTLPtW//e5XOsIzstAL81VXQJSdhJ\n" \
-"WBp/kjbmUZIO8yZ9HE0XvMnsQybQv0FfQKlERPSZ51eHnlAfV1SoPv10Yy+xUGUJ\n" \
-"5lhCLkMaTLTwJUdZ+gQek9QmRkpQgbLevni3/GcV4clXhB4PY9bpYrrWX1Uu6lzG\n" \
-"KAgEJTm4Diup8kyXHAc/DVL17e8vgg8CAwEAAaOB8jCB7zAfBgNVHSMEGDAWgBSg\n" \
-"EQojPpbxB+zirynvgqV/0DCktDAdBgNVHQ4EFgQUU3m/WqorSs9UgOHYm8Cd8rID\n" \
-"ZsswDgYDVR0PAQH/BAQDAgGGMA8GA1UdEwEB/wQFMAMBAf8wEQYDVR0gBAowCDAG\n" \
-"BgRVHSAAMEMGA1UdHwQ8MDowOKA2oDSGMmh0dHA6Ly9jcmwuY29tb2RvY2EuY29t\n" \
-"L0FBQUNlcnRpZmljYXRlU2VydmljZXMuY3JsMDQGCCsGAQUFBwEBBCgwJjAkBggr\n" \
-"BgEFBQcwAYYYaHR0cDovL29jc3AuY29tb2RvY2EuY29tMA0GCSqGSIb3DQEBDAUA\n" \
-"A4IBAQAYh1HcdCE9nIrgJ7cz0C7M7PDmy14R3iJvm3WOnnL+5Nb+qh+cli3vA0p+\n" \
-"rvSNb3I8QzvAP+u431yqqcau8vzY7qN7Q/aGNnwU4M309z/+3ri0ivCRlv79Q2R+\n" \
-"/czSAaF9ffgZGclCKxO/WIu6pKJmBHaIkU4MiRTOok3JMrO66BQavHHxW/BBC5gA\n" \
-"CiIDEOUMsfnNkjcZ7Tvx5Dq2+UUTJnWvu6rvP3t3O9LEApE9GQDTF1w52z97GA1F\n" \
-"zZOFli9d31kWTz9RvdVFGD/tSo7oBmF0Ixa1DVBzJ0RHfxBdiSprhTEUxOipakyA\n" \
-"vGp4z7h/jnZymQyd/teRCBaho1+V\n" \
-"-----END CERTIFICATE-----\n" \
-// DigiCert Global Root G2 (for objects.githubusercontent.com - GitHub releases CDN) - valid until 2038
-"-----BEGIN CERTIFICATE-----\n" \
-"MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh\n" \
-"MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n" \
-"d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\n" \
-"MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT\n" \
-"MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n" \
-"b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG\n" \
-"9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI\n" \
-"2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx\n" \
-"1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ\n" \
-"q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz\n" \
-"tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ\n" \
-"vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP\n" \
-"BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV\n" \
-"5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY\n" \
-"1Yl9PMCcit0BnuQ/8Kt+cTxZp2nh5w1TBVB0El8eTKt/IfVt8+yS2TY+Hp1VxS1x\n" \
-"mfo/7SfE85AmUptT/PCTTp/ShpMrnJN/QvmKp5h/Db0OuCFq5g0rLM3MnvsU2rFy\n" \
-"dHWqZdMI7TaWvRw0ng8NDYMBUu0F0R6xz1BqeOlF+v6PvMRyhPEZ7D6V3AVMuX4a\n" \
-"IjEcnAcLJlCH4nRmFBsKgyJhSz1cMq6cIsPE3ha6uPCTsjHRM63UPk5ZLkIQ5SeE\n" \
-"MppdNrYpMYL7I5lGCNvAk/b7QBQg9T3VwW8E4L8PqlKjFz5E8k4sFTbLCS7Q/l6a\n" \
-"o5c=\n" \
-"-----END CERTIFICATE-----\n" \
-// Sectigo Public Server Authentication Root R46 (RSA, for GitHub post-2025 migration) - valid until 2046
 "-----BEGIN CERTIFICATE-----\n" \
 "MIIFijCCA3KgAwIBAgIQdY39i658BwD6qSWn4cetFDANBgkqhkiG9w0BAQwFADBf\n" \
 "MQswCQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQD\n" \
@@ -129,7 +53,6 @@ static const char* GITHUB_ROOT_CA = \
 "0XZ60Vzk50lJLVU3aPAaOpg+VBeHVOmmJ1CJeyAvP/+/oYtKR5j/K3tJPsMpRmAY\n" \
 "QqszKbrAKbkTidOIijlBO8n9pu0f9GBj39ItVQGL\n" \
 "-----END CERTIFICATE-----\n" \
-// Sectigo Public Server Authentication Root E46 (ECC, for GitHub post-2025 migration) - valid until 2046
 "-----BEGIN CERTIFICATE-----\n" \
 "MIICOjCCAcGgAwIBAgIQQvLM2htpN0RfFf51KBC49DAKBggqhkjOPQQDAzBfMQsw\n" \
 "CQYDVQQGEwJHQjEYMBYGA1UEChMPU2VjdGlnbyBMaW1pdGVkMTYwNAYDVQQDEy1T\n" \
@@ -143,6 +66,28 @@ static const char* GITHUB_ROOT_CA = \
 "Af8EBAMCAYYwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAwNnADBkAjAn7qRa\n" \
 "qCG76UeXlImldCBteU/IvZNeWBj7LRoAasm4PdCkT0RHlAFWovgzJQxC36oCMB3q\n" \
 "4S6ILuH5px0CMk7yn2xVdOOurvulGu7t0vzCAxHrRVxgED1cf5kDW21USAGKcw==\n" \
+"-----END CERTIFICATE-----\n" \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh\n" \
+"MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n" \
+"d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\n" \
+"MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT\n" \
+"MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n" \
+"b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG\n" \
+"9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI\n" \
+"2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx\n" \
+"1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ\n" \
+"q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz\n" \
+"tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ\n" \
+"vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP\n" \
+"BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV\n" \
+"5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY\n" \
+"1Yl9PMCcit0BnuQ/8Kt+cTxZp2nh5w1TBVB0El8eTKt/IfVt8+yS2TY+Hp1VxS1x\n" \
+"mfo/7SfE85AmUptT/PCTTp/ShpMrnJN/QvmKp5h/Db0OuCFq5g0rLM3MnvsU2rFy\n" \
+"dHWqZdMI7TaWvRw0ng8NDYMBUu0F0R6xz1BqeOlF+v6PvMRyhPEZ7D6V3AVMuX4a\n" \
+"IjEcnAcLJlCH4nRmFBsKgyJhSz1cMq6cIsPE3ha6uPCTsjHRM63UPk5ZLkIQ5SeE\n" \
+"MppdNrYpMYL7I5lGCNvAk/b7QBQg9T3VwW8E4L8PqlKjFz5E8k4sFTbLCS7Q/l6a\n" \
+"o5c=\n" \
 "-----END CERTIFICATE-----\n";
 
 // External functions from main.cpp that OTA needs to call
@@ -630,110 +575,129 @@ bool fetchReleaseList(int maxCount) {
     return false;
   }
 
-  WiFiClientSecure client;
-
-  if (maxBlock < 50000) {
-    LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
-    client.setInsecure();
-  } else if (appState.enableCertValidation) {
-    client.setCACert(GITHUB_ROOT_CA);
-  } else {
-    client.setInsecure();
-  }
-
-  client.setTimeout(15000);
-
-  HTTPClient https;
-  String apiUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases?per_page=20";
-
-  LOG_I("[OTA] Fetching release list from: %s", apiUrl.c_str());
-
-  if (!https.begin(client, apiUrl)) {
-    LOG_E("[OTA] Failed to initialize HTTPS connection");
-    return false;
-  }
-
-  https.addHeader("Accept", "application/vnd.github.v3+json");
-  https.addHeader("User-Agent", "ESP32-OTA-Updater");
-  https.setTimeout(15000);
-
-  int httpCode = https.GET();
-
-  if (httpCode != HTTP_CODE_OK) {
-    LOG_E("[OTA] fetchReleaseList: HTTP code %d", httpCode);
-    https.end();
-    return false;
-  }
-
-  // Use filter to reduce memory usage — only parse fields we need
-  JsonDocument filter;
-  JsonObject filterItem = filter[0].to<JsonObject>();
-  filterItem["tag_name"] = true;
-  filterItem["prerelease"] = true;
-  filterItem["published_at"] = true;
-  filterItem["body"] = true;
-  filterItem["assets"][0]["name"] = true;
-  filterItem["assets"][0]["browser_download_url"] = true;
-
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, https.getStream(), DeserializationOption::Filter(filter));
-  https.end();
-
-  if (error) {
-    LOG_E("[OTA] fetchReleaseList JSON parse failed: %s", error.c_str());
-    return false;
-  }
-
-  if (!doc.is<JsonArray>()) {
-    LOG_E("[OTA] fetchReleaseList: response is not an array");
-    return false;
-  }
-
-  int count = 0;
-  int limit = maxCount < AppState::OTA_MAX_RELEASES ? maxCount : AppState::OTA_MAX_RELEASES;
-
-  for (JsonObject rel : doc.as<JsonArray>()) {
-    if (count >= limit) break;
-
-    bool isPrerelease = rel["prerelease"] | false;
-
-    // Channel filter: stable (0) skips prereleases; beta (1) includes all
-    if (appState.otaChannel == 0 && isPrerelease) continue;
-
-    String tagName = rel["tag_name"] | "";
-    if (tagName.length() == 0) continue;
-
-    // Find firmware.bin in assets
-    String fwUrl;
-    JsonArray assets = rel["assets"].as<JsonArray>();
-    for (JsonObject asset : assets) {
-      String assetName = asset["name"] | "";
-      if (assetName == "firmware.bin") {
-        fwUrl = asset["browser_download_url"] | "";
-        break;
-      }
+  // Retry loop: transient CDN/TLS issues may return non-array on first attempt
+  for (int attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) {
+      LOG_W("[OTA] fetchReleaseList: response not an array, retrying with fresh TLS connection...");
+      delay(1500);
     }
-    if (fwUrl.length() == 0) continue;  // Skip releases without firmware.bin
 
-    // Extract checksum from body
-    String body = rel["body"] | "";
-    String cs = extractChecksumFromBody(body);
+    WiFiClientSecure client;
 
-    // Truncate published_at to YYYY-MM-DD
-    String publishedAt = rel["published_at"] | "";
-    if (publishedAt.length() > 10) publishedAt = publishedAt.substring(0, 10);
+    if (maxBlock < 50000) {
+      LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
+      client.setInsecure();
+    } else if (appState.enableCertValidation) {
+      client.setCACert(GITHUB_ROOT_CA);
+    } else {
+      client.setInsecure();
+    }
 
-    appState.cachedReleaseList[count].version = tagName;
-    appState.cachedReleaseList[count].firmwareUrl = fwUrl;
-    appState.cachedReleaseList[count].checksum = cs;
-    appState.cachedReleaseList[count].isPrerelease = isPrerelease;
-    appState.cachedReleaseList[count].publishedAt = publishedAt;
-    count++;
+    client.setTimeout(15000);
+
+    HTTPClient https;
+    String apiUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases?per_page=20";
+
+    if (attempt == 0) {
+      LOG_I("[OTA] Fetching release list from: %s", apiUrl.c_str());
+    }
+
+    if (!https.begin(client, apiUrl)) {
+      LOG_E("[OTA] Failed to initialize HTTPS connection");
+      https.end();
+      continue;  // Try next attempt
+    }
+
+    https.addHeader("Accept", "application/vnd.github.v3+json");
+    https.addHeader("User-Agent", "ESP32-OTA-Updater");
+    https.setTimeout(15000);
+
+    int httpCode = https.GET();
+
+    if (httpCode != HTTP_CODE_OK) {
+      LOG_E("[OTA] fetchReleaseList: HTTP code %d", httpCode);
+      https.end();
+      return false;  // HTTP errors are not transient — hard fail
+    }
+
+    // Use filter to reduce memory usage — only parse fields we need
+    JsonDocument filter;
+    JsonObject filterItem = filter[0].to<JsonObject>();
+    filterItem["tag_name"] = true;
+    filterItem["prerelease"] = true;
+    filterItem["published_at"] = true;
+    filterItem["body"] = true;
+    filterItem["assets"][0]["name"] = true;
+    filterItem["assets"][0]["browser_download_url"] = true;
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, https.getStream(), DeserializationOption::Filter(filter));
+    https.end();
+
+    if (error) {
+      LOG_E("[OTA] fetchReleaseList JSON parse failed: %s", error.c_str());
+      return false;  // JSON parse errors are not transient — hard fail
+    }
+
+    if (!doc.is<JsonArray>()) {
+      // Transient error: retry once with fresh connection
+      if (attempt == 0) {
+        continue;  // Try again
+      }
+      // Second attempt also failed
+      LOG_E("[OTA] fetchReleaseList: response is not an array after retry");
+      return false;
+    }
+
+    // Array received — parse releases
+    int count = 0;
+    int limit = maxCount < AppState::OTA_MAX_RELEASES ? maxCount : AppState::OTA_MAX_RELEASES;
+
+    for (JsonObject rel : doc.as<JsonArray>()) {
+      if (count >= limit) break;
+
+      bool isPrerelease = rel["prerelease"] | false;
+
+      // Channel filter: stable (0) skips prereleases; beta (1) includes all
+      if (appState.otaChannel == 0 && isPrerelease) continue;
+
+      String tagName = rel["tag_name"] | "";
+      if (tagName.length() == 0) continue;
+
+      // Find firmware.bin in assets
+      String fwUrl;
+      JsonArray assets = rel["assets"].as<JsonArray>();
+      for (JsonObject asset : assets) {
+        String assetName = asset["name"] | "";
+        if (assetName == "firmware.bin") {
+          fwUrl = asset["browser_download_url"] | "";
+          break;
+        }
+      }
+      if (fwUrl.length() == 0) continue;  // Skip releases without firmware.bin
+
+      // Extract checksum from body
+      String body = rel["body"] | "";
+      String cs = extractChecksumFromBody(body);
+
+      // Truncate published_at to YYYY-MM-DD
+      String publishedAt = rel["published_at"] | "";
+      if (publishedAt.length() > 10) publishedAt = publishedAt.substring(0, 10);
+
+      appState.cachedReleaseList[count].version = tagName;
+      appState.cachedReleaseList[count].firmwareUrl = fwUrl;
+      appState.cachedReleaseList[count].checksum = cs;
+      appState.cachedReleaseList[count].isPrerelease = isPrerelease;
+      appState.cachedReleaseList[count].publishedAt = publishedAt;
+      count++;
+    }
+
+    appState.cachedReleaseListCount = count;
+    LOG_I("[OTA] fetchReleaseList: found %d qualifying release(s) (channel=%d)", count, appState.otaChannel);
+    return true;
   }
 
-  appState.cachedReleaseListCount = count;
-  LOG_I("[OTA] fetchReleaseList: found %d qualifying release(s) (channel=%d)", count, appState.otaChannel);
-  return true;
+  return false;  // Both attempts exhausted
 }
 
 // ===== New HTTP Handlers =====
