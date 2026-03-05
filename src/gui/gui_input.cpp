@@ -37,10 +37,10 @@ static void IRAM_ATTR encoder_isr() {
     uint8_t state = (a << 1) | b;
 
     static const int8_t transitions[] = {
-         0, +1, -1,  0,
-        -1,  0,  0, +1,
+         0, -1, +1,  0,
         +1,  0,  0, -1,
-         0, -1, +1,  0
+        -1,  0,  0, +1,
+         0, +1, -1,  0
     };
 
     int8_t dir = transitions[(encoder_last_state << 2) | state];
