@@ -504,6 +504,11 @@ public:
   bool isIoRegistryDirty() const { return _ioRegistryDirty; }
   void clearIoRegistryDirty() { _ioRegistryDirty = false; }
 
+  // ===== HAL Device Dirty Flag =====
+  void markHalDeviceDirty() { _halDeviceDirty = true; app_events_signal(EVT_HAL_DEVICE); }
+  bool isHalDeviceDirty() const { return _halDeviceDirty; }
+  void clearHalDeviceDirty() { _halDeviceDirty = false; }
+
   // MQTT state tracking for DAC
   bool prevMqttDacEnabled = false;
   uint8_t prevMqttDacVolume = 80;
@@ -575,6 +580,7 @@ private:
   bool _eepromDirty = false;
   bool _es8311Dirty = false;
   bool _ioRegistryDirty = false;
+  bool _halDeviceDirty = false;
 #endif
 };
 
