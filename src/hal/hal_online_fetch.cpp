@@ -29,9 +29,9 @@ HalFetchResult hal_online_fetch(const char* compatible, HalDeviceDescriptor* out
     // Check WiFi
     if (!appState.wifiConnectSuccess) return HAL_FETCH_NO_WIFI;
 
-    // Check heap — TLS needs ~44KB internal SRAM
+    // Check heap — TLS needs ~50KB internal SRAM (mbedTLS buffers + AES DMA descriptors)
     size_t maxBlock = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
-    if (maxBlock < 35000) {
+    if (maxBlock < 50000) {
         LOG_W("[HAL Fetch]", "Heap too low for TLS: %u bytes", maxBlock);
         return HAL_FETCH_LOW_HEAP;
     }

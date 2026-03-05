@@ -273,6 +273,7 @@ void handleGetReleaseNotes() {
   }
 
   WiFiClientSecure client;
+  client.setBufferSizes(4096, 1024);
 
   if (maxBlock < 50000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
@@ -410,17 +411,18 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   }
   // Stable channel: existing /releases/latest path below
 
-  // TLS needs ~33KB contiguous: mbedtls_ssl_setup() allocates two 16KB buffers sequentially
+  // TLS needs ~50KB contiguous: mbedTLS buffers + AES DMA descriptors + handshake state
   uint32_t maxBlock = ESP.getMaxAllocHeap();
   LOG_I("[OTA] Heap before TLS: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
-  if (maxBlock < 35000) {
-    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<35KB), skipping", (unsigned long)maxBlock);
+  if (maxBlock < 50000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<50KB), skipping", (unsigned long)maxBlock);
     return false;
   }
 
   WiFiClientSecure client;
+  client.setBufferSizes(4096, 1024);
 
-  if (maxBlock < 50000) {
+  if (maxBlock < 65000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
   } else if (appState.enableCertValidation) {
@@ -570,21 +572,25 @@ static String extractChecksumFromBody(const String& body) {
 bool fetchReleaseList(int maxCount) {
   uint32_t maxBlock = ESP.getMaxAllocHeap();
   LOG_I("[OTA] fetchReleaseList: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
-  if (maxBlock < 35000) {
-    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<35KB), skipping", (unsigned long)maxBlock);
+  if (maxBlock < 50000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<50KB), skipping", (unsigned long)maxBlock);
     return false;
   }
 
   // Retry loop: transient CDN/TLS issues may return non-array on first attempt
   for (int attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) {
-      LOG_W("[OTA] fetchReleaseList: response not an array, retrying with fresh TLS connection...");
+      uint32_t retryBlock = ESP.getMaxAllocHeap();
+      LOG_W("[OTA] fetchReleaseList: retrying with fresh TLS connection (maxBlock=%lu)", (unsigned long)retryBlock);
       delay(1500);
     }
 
     WiFiClientSecure client;
+    // Reduce TLS I/O buffer from 16KB default to 4KB to avoid esp-aes DMA
+    // descriptor allocation failure on fragmented internal SRAM heap
+    client.setBufferSizes(4096, 1024);
 
-    if (maxBlock < 50000) {
+    if (maxBlock < 65000) {
       LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
       client.setInsecure();
     } else if (appState.enableCertValidation) {
@@ -596,7 +602,7 @@ bool fetchReleaseList(int maxCount) {
     client.setTimeout(15000);
 
     HTTPClient https;
-    String apiUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases?per_page=20";
+    String apiUrl = String("https://api.github.com/repos/") + githubRepoOwner + "/" + githubRepoName + "/releases?per_page=5";
 
     if (attempt == 0) {
       LOG_I("[OTA] Fetching release list from: %s", apiUrl.c_str());
@@ -635,8 +641,12 @@ bool fetchReleaseList(int maxCount) {
     https.end();
 
     if (error) {
+      if (error == DeserializationError::IncompleteInput && attempt == 0) {
+        LOG_W("[OTA] fetchReleaseList: TLS dropped mid-stream (IncompleteInput), retrying...");
+        continue;  // TLS connection dropped — transient, retry with fresh connection
+      }
       LOG_E("[OTA] fetchReleaseList JSON parse failed: %s", error.c_str());
-      return false;  // JSON parse errors are not transient — hard fail
+      return false;
     }
 
     if (!doc.is<JsonArray>()) {
@@ -814,19 +824,20 @@ bool performOTAUpdate(String firmwareUrl) {
   LOG_I("[OTA] Starting OTA update");
   LOG_I("[OTA] Downloading from: %s", firmwareUrl.c_str());
 
-  // TLS needs ~33KB contiguous: mbedtls_ssl_setup() allocates two 16KB buffers sequentially
+  // TLS needs ~50KB contiguous: mbedTLS buffers + AES DMA descriptors + handshake state
   uint32_t maxBlock = ESP.getMaxAllocHeap();
   LOG_I("[OTA] Heap before TLS: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
-  if (maxBlock < 35000) {
-    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<35KB)", (unsigned long)maxBlock);
+  if (maxBlock < 50000) {
+    LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<50KB)", (unsigned long)maxBlock);
     setOTAProgress("error", "Insufficient memory for secure download", 0);
     appState.otaInProgress = false;
     return false;
   }
 
   WiFiClientSecure client;
+  client.setBufferSizes(4096, 1024);
 
-  if (maxBlock < 50000) {
+  if (maxBlock < 65000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
   } else if (appState.enableCertValidation) {
@@ -1321,8 +1332,8 @@ static void otaCheckTaskFunc(void* param) {
   // Heap pre-flight: must match the inner TLS threshold (35KB) used by
   // getLatestReleaseInfo(). MbedTLS allocates two 16KB buffers (~33KB total).
   uint32_t maxBlock = ESP.getMaxAllocHeap();
-  if (maxBlock < 35000) {
-    LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<35KB), skipping", (unsigned long)maxBlock);
+  if (maxBlock < 50000) {
+    LOG_W("[OTA] Heap too low for OTA check: %lu bytes (<50KB), skipping", (unsigned long)maxBlock);
     _otaConsecutiveFailures++;
     if (_otaConsecutiveFailures > 20) _otaConsecutiveFailures = 20;
     appState.markOTADirty();
