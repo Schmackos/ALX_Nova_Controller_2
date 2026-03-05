@@ -25,6 +25,10 @@
 #include "dac_api.h"
 #include "io_registry.h"
 #include "io_registry_api.h"
+#include "hal/hal_builtin_devices.h"
+#include "hal/hal_device_db.h"
+#include "hal/hal_device_manager.h"
+#include "hal/hal_api.h"
 #endif
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
@@ -228,6 +232,10 @@ void setup() {
   i2s_audio_init();
 
 #ifdef DAC_ENABLED
+  // Initialize HAL framework (before DAC init so drivers can register)
+  hal_register_builtins();
+  hal_db_init();
+
   // Initialize secondary DAC output (ES8311 codec on P4, no-op on S3)
   dac_secondary_init();
 #endif
@@ -674,6 +682,7 @@ void setup() {
   // Register DAC REST API endpoints
   registerDacApiEndpoints();
   registerIoRegistryApiEndpoints();
+  registerHalApiEndpoints(server);
 
   // Initialize I/O device registry (after DAC init so appState has device info)
   io_registry_init();
@@ -1023,6 +1032,11 @@ void loop() {
   if (appState.isIoRegistryDirty()) {
     sendIoRegistryState();
     appState.clearIoRegistryDirty();
+  }
+  // Broadcast HAL device state changes
+  if (appState.isHalDeviceDirty()) {
+    sendHalDeviceState();
+    appState.clearHalDeviceDirty();
   }
 #endif
 

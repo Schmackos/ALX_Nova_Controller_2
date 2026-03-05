@@ -34,6 +34,7 @@ void sendDspMetrics();
 #ifdef DAC_ENABLED
 void sendDacState();
 void sendIoRegistryState();
+void sendHalDeviceState();
 #endif
 #ifdef USB_AUDIO_ENABLED
 void sendUsbAudioState();

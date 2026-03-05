@@ -24,6 +24,8 @@
 #include "dac_registry.h"
 #include "dac_eeprom.h"
 #include "io_registry.h"
+#include "hal/hal_device_manager.h"
+#include "hal/hal_types.h"
 #endif
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
@@ -64,7 +66,8 @@ enum InitStateBit : uint32_t {
     INIT_USB_AUDIO   = (1u << 10),
     INIT_UPDATED     = (1u << 11),
     INIT_IO_REGISTRY = (1u << 12),
-    INIT_ALL         = 0x1FFFu,
+    INIT_HAL_DEVICE  = (1u << 13),
+    INIT_ALL         = 0x3FFFu,
 };
 
 // ===== CPU Utilization Tracking =====
@@ -1530,6 +1533,33 @@ void sendIoRegistryState() {
     serializeJson(doc, json);
     webSocket.broadcastTXT(json.c_str());
 }
+
+void sendHalDeviceState() {
+    JsonDocument doc;
+    doc["type"] = "halDeviceState";
+    doc["scanning"] = false;
+
+    JsonArray arr = doc["devices"].to<JsonArray>();
+    HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
+        JsonArray* a = static_cast<JsonArray*>(ctx);
+        const HalDeviceDescriptor& desc = dev->getDescriptor();
+        JsonObject obj = a->add<JsonObject>();
+        obj["slot"] = dev->getSlot();
+        obj["compatible"] = desc.compatible;
+        obj["name"] = desc.name;
+        obj["type"] = desc.type;
+        obj["state"] = dev->_state;
+        obj["discovery"] = dev->getDiscovery();
+        obj["ready"] = (bool)dev->_ready;
+        obj["i2cAddr"] = desc.i2cAddr;
+        obj["channels"] = desc.channelCount;
+        obj["capabilities"] = desc.capabilities;
+    }, &arr);
+
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json.c_str());
+}
 #endif
 
 #ifdef USB_AUDIO_ENABLED
@@ -1977,9 +2007,11 @@ void drainPendingInitState() {
 #ifdef DAC_ENABLED
         if (sent < MAX_PER_ITER && (pending & INIT_DAC))         { sendDacState();                    pending &= ~INIT_DAC;         sent++; }
         if (sent < MAX_PER_ITER && (pending & INIT_IO_REGISTRY)) { sendIoRegistryState();             pending &= ~INIT_IO_REGISTRY; sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_HAL_DEVICE))  { sendHalDeviceState();              pending &= ~INIT_HAL_DEVICE;  sent++; }
 #else
         pending &= ~INIT_DAC;
         pending &= ~INIT_IO_REGISTRY;
+        pending &= ~INIT_HAL_DEVICE;
 #endif
 #ifdef USB_AUDIO_ENABLED
         if (sent < MAX_PER_ITER && (pending & INIT_USB_AUDIO))   { sendUsbAudioState();               pending &= ~INIT_USB_AUDIO;   sent++; }

@@ -11,11 +11,16 @@
 #ifdef DSP_ENABLED
 #include "../../dsp_pipeline.h"
 #endif
+#ifdef DAC_ENABLED
+#include "../../hal/hal_device_manager.h"
+#endif
 #include <Arduino.h>
 #include <WiFi.h>
 
 /* Number of dashboard cards */
-#ifdef DSP_ENABLED
+#if defined(DSP_ENABLED) && defined(DAC_ENABLED)
+#define CARD_COUNT 9
+#elif defined(DSP_ENABLED) || defined(DAC_ENABLED)
 #define CARD_COUNT 8
 #else
 #define CARD_COUNT 7
@@ -47,6 +52,9 @@ static const CardDef cards[CARD_COUNT] = {
     {ICON_DEBUG,    "Debug",    SCR_DEBUG_MENU},
 #ifdef DSP_ENABLED
     {ICON_DSP,      "DSP",      SCR_DSP_MENU},
+#endif
+#ifdef DAC_ENABLED
+    {LV_SYMBOL_LIST, "Devices",  SCR_DEVICES_MENU},
 #endif
 };
 
@@ -126,6 +134,18 @@ static void get_card_summary(int idx, char *buf, size_t len) {
                      st.dspEnabled ? "Enabled" : "Disabled",
                      st.dspBypass ? " (BYP)" : "",
                      m.cpuLoadPercent);
+            break;
+        }
+#endif
+#ifdef DAC_ENABLED
+#ifdef DSP_ENABLED
+        case 8: /* Devices (DSP + DAC both enabled) */
+#else
+        case 7: /* Devices (DAC only, no DSP) */
+#endif
+        {
+            uint8_t count = HalDeviceManager::instance().getCount();
+            snprintf(buf, len, "%u device%s", count, count == 1 ? "" : "s");
             break;
         }
 #endif

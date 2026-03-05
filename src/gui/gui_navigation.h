@@ -30,6 +30,9 @@ enum ScreenId {
     SCR_PEQ_MENU,
     SCR_PEQ_BAND_EDIT,
 #endif
+#ifdef DAC_ENABLED
+    SCR_DEVICES_MENU,
+#endif
     SCR_COUNT
 };
 

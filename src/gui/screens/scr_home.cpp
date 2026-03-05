@@ -7,6 +7,9 @@
 #include "../../app_state.h"
 #include "../../config.h"
 #include "../../debug_serial.h"
+#ifdef DAC_ENABLED
+#include "../../hal/hal_device_manager.h"
+#endif
 #include <Arduino.h>
 #include <WiFi.h>
 
@@ -34,6 +37,9 @@ static lv_obj_t *lbl_mqtt_value = nullptr;
 static lv_obj_t *dot_mqtt = nullptr;
 static lv_obj_t *lbl_mode_value = nullptr;
 static lv_obj_t *bar_level = nullptr;
+#ifdef DAC_ENABLED
+static lv_obj_t *lbl_io_count = nullptr;
+#endif
 
 /* Back button callback */
 static void on_back(lv_event_t *e) {
@@ -121,6 +127,9 @@ lv_obj_t *scr_home_create(void) {
     dot_mqtt = nullptr;
     lbl_mode_value = nullptr;
     bar_level = nullptr;
+#ifdef DAC_ENABLED
+    lbl_io_count = nullptr;
+#endif
 
     lv_obj_t *scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, gui_style_screen(), LV_PART_MAIN);
@@ -195,6 +204,20 @@ lv_obj_t *scr_home_create(void) {
         lv_obj_set_style_bg_color(bar_level, COLOR_SUCCESS, LV_PART_INDICATOR);
         lv_obj_set_style_bg_opa(bar_level, LV_OPA_COVER, LV_PART_INDICATOR);
     }
+
+    /* === I/O device count (HAL) === */
+#ifdef DAC_ENABLED
+    {
+        lbl_io_count = lv_label_create(scr);
+        lv_obj_set_style_text_font(lbl_io_count, &lv_font_montserrat_10, LV_PART_MAIN);
+        lv_obj_set_style_text_color(lbl_io_count, COLOR_TEXT_SEC, LV_PART_MAIN);
+        lv_obj_align(lbl_io_count, LV_ALIGN_BOTTOM_MID, 0, -20);
+        uint8_t count = HalDeviceManager::instance().getCount();
+        char io_buf[24];
+        snprintf(io_buf, sizeof(io_buf), "I/O: %u device%s", count, count == 1 ? "" : "s");
+        lv_label_set_text(lbl_io_count, io_buf);
+    }
+#endif
 
     /* === Back button === */
     lv_obj_t *back_btn = lv_obj_create(scr);
@@ -286,6 +309,16 @@ void scr_home_refresh(void) {
             lv_label_set_text(lbl_mode_value, mode);
         }
     }
+
+    /* I/O device count */
+#ifdef DAC_ENABLED
+    if (lbl_io_count) {
+        uint8_t count = HalDeviceManager::instance().getCount();
+        char io_buf[24];
+        snprintf(io_buf, sizeof(io_buf), "I/O: %u device%s", count, count == 1 ? "" : "s");
+        lv_label_set_text(lbl_io_count, io_buf);
+    }
+#endif
 
     /* Level bar: VU combined, indicator green when signal detected */
     if (bar_level) {

@@ -20,6 +20,11 @@
                 stopTimeUpdates();
             }
 
+            // Load HAL devices when switching to devices tab
+            if (tabId === 'devices') {
+                loadHalDeviceList();
+            }
+
             // Load support content when switching to support tab
             if (tabId === 'support') {
                 generateManualQRCode();

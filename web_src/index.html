@@ -32,6 +32,10 @@
                 <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm-8 8h2v-4H3v4zm12-6v8h2V8h-2zm4 2v4h2v-4h-2z"/></svg>
                 <span>DSP</span>
             </button>
+            <button class="sidebar-item" data-tab="devices" onclick="switchTab('devices')">
+                <svg viewBox="0 0 24 24"><path d="M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11"/></svg>
+                <span>Devices</span>
+            </button>
             <button class="sidebar-item" data-tab="wifi" onclick="switchTab('wifi')">
                 <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
                 <span>WiFi</span>
@@ -91,6 +95,9 @@
         </button>
         <button class="tab" data-tab="dsp" onclick="switchTab('dsp')">
             <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm-8 8h2v-4H3v4zm12-6v8h2V8h-2zm4 2v4h2v-4h-2z"/></svg>
+        </button>
+        <button class="tab" data-tab="devices" onclick="switchTab('devices')">
+            <svg viewBox="0 0 24 24"><path d="M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11"/></svg>
         </button>
         <button class="tab" data-tab="wifi" onclick="switchTab('wifi')">
             <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
@@ -2053,6 +2060,16 @@
                 </table>
             </div>
 
+        </section>
+
+        <!-- ===== DEVICES TAB ===== -->
+        <section id="devices" class="panel" style="display:none">
+            <h2>HAL Devices</h2>
+            <div class="card-row" style="margin-bottom:12px;">
+                <button id="hal-rescan-btn" class="btn btn-primary" onclick="triggerHalRescan()">Rescan Devices</button>
+                <button class="btn" onclick="importDeviceYaml()">Import YAML</button>
+            </div>
+            <div id="hal-device-list"></div>
         </section>
 
     </main>

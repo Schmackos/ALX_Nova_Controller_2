@@ -239,5 +239,7 @@
                 thdUpdateResult(data);
             } else if (data.type === 'ioRegistryState') {
                 handleIoRegistryState(data);
+            } else if (data.type === 'halDeviceState') {
+                handleHalDeviceState(data);
             }
         }

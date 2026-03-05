@@ -17,6 +17,9 @@
 #ifdef DSP_ENABLED
 #include "screens/scr_dsp.h"
 #endif
+#ifdef DAC_ENABLED
+#include "screens/scr_devices.h"
+#endif
 #include "screens/scr_boot_anim.h"
 #include "../app_state.h"
 #include "../buzzer_handler.h"
@@ -229,6 +232,11 @@ static void gui_task(void *param) {
                 scr_peq_band_refresh();
             }
 #endif
+#ifdef DAC_ENABLED
+            else if (cur == SCR_DEVICES_MENU) {
+                scr_devices_refresh();
+            }
+#endif
         }
 
         /* Process buzzer patterns with low latency (same core as encoder ISR) */
@@ -270,6 +278,9 @@ static void register_screens(void) {
     gui_nav_register(SCR_DSP_MENU, scr_dsp_create);
     gui_nav_register(SCR_PEQ_MENU, scr_peq_create);
     gui_nav_register(SCR_PEQ_BAND_EDIT, scr_peq_band_create);
+#endif
+#ifdef DAC_ENABLED
+    gui_nav_register(SCR_DEVICES_MENU, scr_devices_create);
 #endif
 }
 
