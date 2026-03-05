@@ -23,6 +23,8 @@
 #include "dac_hal.h"
 #include "dac_registry.h"
 #include "dac_api.h"
+#include "io_registry.h"
+#include "io_registry_api.h"
 #endif
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
@@ -671,6 +673,10 @@ void setup() {
 #ifdef DAC_ENABLED
   // Register DAC REST API endpoints
   registerDacApiEndpoints();
+  registerIoRegistryApiEndpoints();
+
+  // Initialize I/O device registry (after DAC init so appState has device info)
+  io_registry_init();
 #endif
 
   // Initialize CPU usage monitoring
@@ -1012,6 +1018,11 @@ void loop() {
   if (appState.isEepromDirty()) {
     sendDacState();  // dacState includes EEPROM diag data
     appState.clearEepromDirty();
+  }
+  // Broadcast I/O Registry state changes
+  if (appState.isIoRegistryDirty()) {
+    sendIoRegistryState();
+    appState.clearIoRegistryDirty();
   }
 #endif
 

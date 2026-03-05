@@ -231,12 +231,7 @@
         }
 
         // ===== Module Chip Filtering =====
-
-        function escapeHtml(str) {
-            var div = document.createElement('div');
-            div.appendChild(document.createTextNode(str));
-            return div.innerHTML;
-        }
+        // escapeHtml() defined in 14-io-registry.js (loads earlier in concat order)
 
         function extractModule(msg) {
             var m = msg.match(/\[[DIWE]\]\s*\[([^\]]+)\]/);

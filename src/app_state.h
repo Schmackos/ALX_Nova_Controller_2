@@ -499,6 +499,11 @@ public:
   bool isEepromDirty() const { return _eepromDirty; }
   void clearEepromDirty() { _eepromDirty = false; }
 
+  // ===== I/O Registry Dirty Flag =====
+  void markIoRegistryDirty() { _ioRegistryDirty = true; app_events_signal(EVT_IO_REGISTRY); }
+  bool isIoRegistryDirty() const { return _ioRegistryDirty; }
+  void clearIoRegistryDirty() { _ioRegistryDirty = false; }
+
   // MQTT state tracking for DAC
   bool prevMqttDacEnabled = false;
   uint8_t prevMqttDacVolume = 80;
@@ -569,6 +574,7 @@ private:
   bool _dacDirty = false;
   bool _eepromDirty = false;
   bool _es8311Dirty = false;
+  bool _ioRegistryDirty = false;
 #endif
 };
 

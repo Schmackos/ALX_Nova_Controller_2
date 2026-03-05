@@ -237,5 +237,7 @@
                 peqHandlePresetsList(data.presets);
             } else if (data.type === 'thdResult') {
                 thdUpdateResult(data);
+            } else if (data.type === 'ioRegistryState') {
+                handleIoRegistryState(data);
             }
         }

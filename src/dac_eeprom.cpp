@@ -52,6 +52,10 @@ void dac_eeprom_init_mutex() {} // No-op for native tests
 // 0x4B  1B   Number of sample rates
 // 0x4C  16B  Supported rates (up to 4 × uint32_t LE)
 // 0x5C  164B Reserved / driver-specific
+// --- v2 extension ---
+// 0x5C  1B   Device type: 0=DAC, 1=ADC, 2=Codec (v1 default: DAC)
+// 0x5D  1B   I2S port: 0, 1, or 2 (v1 default: 0)
+// 0x5E  162B Reserved / driver-specific
 
 bool dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData* out) {
     if (!rawData || !out || len < 0x5C) {
@@ -69,7 +73,7 @@ bool dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData* out) {
 
     // Check version
     out->formatVersion = rawData[0x04];
-    if (out->formatVersion != DAC_EEPROM_VERSION) {
+    if (out->formatVersion != DAC_EEPROM_VERSION && out->formatVersion != DAC_EEPROM_VERSION_V2) {
         out->valid = false;
         return false;
     }
@@ -111,20 +115,31 @@ bool dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData* out) {
     }
 
     out->valid = true;
+
+    // v2 fields: deviceType at 0x5C, i2sPort at 0x5D
+    if (out->formatVersion >= DAC_EEPROM_VERSION_V2 && len >= DAC_EEPROM_DATA_SIZE_V2) {
+        out->deviceType = rawData[0x5C];
+        out->i2sPort = rawData[0x5D];
+    } else {
+        // v1 defaults
+        out->deviceType = DAC_DEVICE_TYPE_DAC;
+        out->i2sPort = 0;
+    }
+
     return true;
 }
 
 // ===== Serialize DacEepromData to raw EEPROM bytes =====
 int dac_eeprom_serialize(const DacEepromData* data, uint8_t* outBuf, int bufLen) {
-    if (!data || !outBuf || bufLen < DAC_EEPROM_DATA_SIZE) return 0;
+    if (!data || !outBuf || bufLen < DAC_EEPROM_DATA_SIZE_V2) return 0;
 
-    memset(outBuf, 0, DAC_EEPROM_DATA_SIZE);
+    memset(outBuf, 0, DAC_EEPROM_DATA_SIZE_V2);
 
     // Magic
     memcpy(&outBuf[0x00], DAC_EEPROM_MAGIC, DAC_EEPROM_MAGIC_LEN);
 
     // Format version
-    outBuf[0x04] = DAC_EEPROM_VERSION;
+    outBuf[0x04] = DAC_EEPROM_VERSION_V2;
 
     // Device ID (little-endian uint16)
     outBuf[0x05] = (uint8_t)(data->deviceId & 0xFF);
@@ -165,7 +180,11 @@ int dac_eeprom_serialize(const DacEepromData* data, uint8_t* outBuf, int bufLen)
         outBuf[offset + 3] = (uint8_t)((data->sampleRates[i] >> 24) & 0xFF);
     }
 
-    return DAC_EEPROM_DATA_SIZE;
+    // v2 fields
+    outBuf[0x5C] = data->deviceType;
+    outBuf[0x5D] = data->i2sPort;
+
+    return DAC_EEPROM_DATA_SIZE_V2;
 }
 
 #ifndef NATIVE_TEST
@@ -290,12 +309,12 @@ bool dac_eeprom_scan(DacEepromData* out, uint8_t eepromMask) {
 
         LOG_I("[DAC] EEPROM with ALXD magic found at 0x%02X", addr);
 
-        // Read the full header (0x5C = 92 bytes)
-        uint8_t rawData[0x5C];
+        // Read the full header (v2: 94 bytes)
+        uint8_t rawData[DAC_EEPROM_DATA_SIZE_V2];
         memcpy(rawData, magic, DAC_EEPROM_MAGIC_LEN);
 
         // Read remaining bytes in chunks (AT24C02 page size = 8)
-        int remaining = 0x5C - DAC_EEPROM_MAGIC_LEN;
+        int remaining = DAC_EEPROM_DATA_SIZE_V2 - DAC_EEPROM_MAGIC_LEN;
         int offset = DAC_EEPROM_MAGIC_LEN;
         while (remaining > 0) {
             int chunk = (remaining > 16) ? 16 : remaining;
@@ -309,7 +328,7 @@ bool dac_eeprom_scan(DacEepromData* out, uint8_t eepromMask) {
 
         if (remaining > 0) continue; // Read incomplete
 
-        if (dac_eeprom_parse(rawData, 0x5C, out)) {
+        if (dac_eeprom_parse(rawData, DAC_EEPROM_DATA_SIZE_V2, out)) {
             out->i2cAddress = addr;
             LOG_I("[DAC] EEPROM parsed: %s by %s (ID=0x%04X, rev=%d)",
                   out->deviceName, out->manufacturer, out->deviceId, out->hwRevision);

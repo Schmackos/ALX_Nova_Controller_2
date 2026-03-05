@@ -13,6 +13,15 @@
 #define DAC_EEPROM_ADDR_END   0x57
 #define DAC_EEPROM_MAX_RATES  4
 
+// v2 format extension
+#define DAC_EEPROM_VERSION_V2  2
+#define DAC_DEVICE_TYPE_DAC    0
+#define DAC_DEVICE_TYPE_ADC    1
+#define DAC_DEVICE_TYPE_CODEC  2
+
+// v2 data size: 94 bytes (v1 92 + deviceType + i2sPort)
+#define DAC_EEPROM_DATA_SIZE_V2  0x5E
+
 // EEPROM flags byte (offset 0x4A)
 #define DAC_FLAG_INDEPENDENT_CLOCK  0x01
 #define DAC_FLAG_HW_VOLUME          0x02
@@ -21,7 +30,7 @@
 // Parsed EEPROM data
 struct DacEepromData {
     bool valid;                   // Magic + version OK
-    uint8_t formatVersion;        // Format version (must be 1)
+    uint8_t formatVersion;        // Format version (1 or 2)
     uint16_t deviceId;            // Device ID (uint16_t LE)
     uint8_t hwRevision;           // Hardware revision
     char deviceName[33];          // Null-terminated (32 chars + null)
@@ -32,6 +41,9 @@ struct DacEepromData {
     uint8_t numSampleRates;       // Number of supported sample rates (max 4)
     uint32_t sampleRates[DAC_EEPROM_MAX_RATES]; // Supported sample rates
     uint8_t i2cAddress;           // EEPROM address where found
+    // v2 fields (defaults for v1: deviceType=DAC, i2sPort=0)
+    uint8_t deviceType;           // 0=DAC, 1=ADC, 2=Codec
+    uint8_t i2sPort;              // I2S port: 0, 1, or 2
 };
 
 // EEPROM data size (92 bytes = 0x5C)
@@ -45,12 +57,12 @@ struct DacEepromData {
 void dac_eeprom_init_mutex();
 
 // Parse raw EEPROM bytes into DacEepromData
-// rawData must be at least 92 bytes (0x5C)
+// rawData must be at least 92 bytes (0x5C) for v1, 94 bytes (0x5E) for v2
 bool dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData* out);
 
 // Serialize DacEepromData into raw EEPROM bytes (inverse of parse)
-// outBuf must be at least DAC_EEPROM_DATA_SIZE (92) bytes
-// Returns number of bytes written (92) on success, 0 on failure
+// outBuf must be at least DAC_EEPROM_DATA_SIZE_V2 (94) bytes
+// Returns number of bytes written on success, 0 on failure
 int dac_eeprom_serialize(const DacEepromData* data, uint8_t* outBuf, int bufLen);
 
 // Scan I2C bus for EEPROM with ALXD magic (requires Wire to be initialized)

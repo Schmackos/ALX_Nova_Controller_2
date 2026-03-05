@@ -242,7 +242,7 @@ function toggleCertValidation() {
     apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enableCertValidation: enableCertValidation })
+        body: JSON.stringify({ 'appState.enableCertValidation': enableCertValidation })
     })
     .then(res => res.json())
     .then(data => {

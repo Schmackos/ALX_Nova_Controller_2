@@ -19,6 +19,12 @@
 #define DAC_EEPROM_TOTAL_SIZE 256
 #define DAC_EEPROM_PAGE_SIZE  8
 
+#define DAC_EEPROM_VERSION_V2  2
+#define DAC_DEVICE_TYPE_DAC    0
+#define DAC_DEVICE_TYPE_ADC    1
+#define DAC_DEVICE_TYPE_CODEC  2
+#define DAC_EEPROM_DATA_SIZE_V2  0x5E
+
 #define DAC_FLAG_INDEPENDENT_CLOCK  0x01
 #define DAC_FLAG_HW_VOLUME          0x02
 #define DAC_FLAG_FILTERS            0x04
@@ -36,6 +42,8 @@ struct DacEepromData {
     uint8_t numSampleRates;
     uint32_t sampleRates[DAC_EEPROM_MAX_RATES];
     uint8_t i2cAddress;
+    uint8_t deviceType;
+    uint8_t i2sPort;
 };
 
 static bool test_dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData* out) {
@@ -50,7 +58,7 @@ static bool test_dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData
         return false;
     }
     out->formatVersion = rawData[0x04];
-    if (out->formatVersion != DAC_EEPROM_VERSION) {
+    if (out->formatVersion != DAC_EEPROM_VERSION && out->formatVersion != DAC_EEPROM_VERSION_V2) {
         out->valid = false;
         return false;
     }
@@ -75,15 +83,22 @@ static bool test_dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData
                             | ((uint32_t)rawData[offset + 3] << 24);
     }
     out->valid = true;
+    if (out->formatVersion >= DAC_EEPROM_VERSION_V2 && len >= DAC_EEPROM_DATA_SIZE_V2) {
+        out->deviceType = rawData[0x5C];
+        out->i2sPort = rawData[0x5D];
+    } else {
+        out->deviceType = DAC_DEVICE_TYPE_DAC;
+        out->i2sPort = 0;
+    }
     return true;
 }
 
 // ===== Inline re-implementation of serialize for native testing =====
 static int test_dac_eeprom_serialize(const DacEepromData* data, uint8_t* outBuf, int bufLen) {
-    if (!data || !outBuf || bufLen < DAC_EEPROM_DATA_SIZE) return 0;
-    memset(outBuf, 0, DAC_EEPROM_DATA_SIZE);
+    if (!data || !outBuf || bufLen < DAC_EEPROM_DATA_SIZE_V2) return 0;
+    memset(outBuf, 0, DAC_EEPROM_DATA_SIZE_V2);
     memcpy(&outBuf[0x00], DAC_EEPROM_MAGIC, DAC_EEPROM_MAGIC_LEN);
-    outBuf[0x04] = DAC_EEPROM_VERSION;
+    outBuf[0x04] = DAC_EEPROM_VERSION_V2;
     outBuf[0x05] = (uint8_t)(data->deviceId & 0xFF);
     outBuf[0x06] = (uint8_t)((data->deviceId >> 8) & 0xFF);
     outBuf[0x07] = data->hwRevision;
@@ -106,7 +121,9 @@ static int test_dac_eeprom_serialize(const DacEepromData* data, uint8_t* outBuf,
         outBuf[offset + 2] = (uint8_t)((data->sampleRates[i] >> 16) & 0xFF);
         outBuf[offset + 3] = (uint8_t)((data->sampleRates[i] >> 24) & 0xFF);
     }
-    return DAC_EEPROM_DATA_SIZE;
+    outBuf[0x5C] = data->deviceType;
+    outBuf[0x5D] = data->i2sPort;
+    return DAC_EEPROM_DATA_SIZE_V2;
 }
 
 // ===== Test Data Builder =====
@@ -284,12 +301,12 @@ void test_serialize_round_trip(void) {
     DacEepromData parsed;
     TEST_ASSERT_TRUE(test_dac_eeprom_parse(testEeprom, 0x5C, &parsed));
 
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     int written = test_dac_eeprom_serialize(&parsed, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL(DAC_EEPROM_DATA_SIZE, written);
+    TEST_ASSERT_EQUAL(DAC_EEPROM_DATA_SIZE_V2, written);
 
     DacEepromData reparsed;
-    TEST_ASSERT_TRUE(test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE, &reparsed));
+    TEST_ASSERT_TRUE(test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE_V2, &reparsed));
     TEST_ASSERT_TRUE(reparsed.valid);
     TEST_ASSERT_EQUAL_UINT16(parsed.deviceId, reparsed.deviceId);
     TEST_ASSERT_EQUAL_UINT8(parsed.hwRevision, reparsed.hwRevision);
@@ -313,7 +330,7 @@ void test_serialize_endianness(void) {
     data.numSampleRates = 1;
     data.sampleRates[0] = 0x12345678;
 
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     test_dac_eeprom_serialize(&data, buf, sizeof(buf));
 
     // Device ID LE: 0xEF, 0xBE
@@ -327,14 +344,14 @@ void test_serialize_endianness(void) {
 }
 
 void test_serialize_null_data(void) {
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     TEST_ASSERT_EQUAL(0, test_dac_eeprom_serialize(nullptr, buf, sizeof(buf)));
 }
 
 void test_serialize_null_buffer(void) {
     DacEepromData data;
     memset(&data, 0, sizeof(data));
-    TEST_ASSERT_EQUAL(0, test_dac_eeprom_serialize(&data, nullptr, DAC_EEPROM_DATA_SIZE));
+    TEST_ASSERT_EQUAL(0, test_dac_eeprom_serialize(&data, nullptr, DAC_EEPROM_DATA_SIZE_V2));
 }
 
 void test_serialize_short_buffer(void) {
@@ -351,14 +368,14 @@ void test_serialize_flags_all(void) {
     strcpy(data.deviceName, "X");
     strcpy(data.manufacturer, "Y");
 
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     test_dac_eeprom_serialize(&data, buf, sizeof(buf));
 
     TEST_ASSERT_EQUAL_UINT8(0x07, buf[0x4A]);
 
     // Parse back to verify
     DacEepromData reparsed;
-    test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE, &reparsed);
+    test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE_V2, &reparsed);
     TEST_ASSERT_TRUE(reparsed.flags & DAC_FLAG_INDEPENDENT_CLOCK);
     TEST_ASSERT_TRUE(reparsed.flags & DAC_FLAG_HW_VOLUME);
     TEST_ASSERT_TRUE(reparsed.flags & DAC_FLAG_FILTERS);
@@ -375,12 +392,12 @@ void test_serialize_max_sample_rates(void) {
     data.sampleRates[2] = 96000;
     data.sampleRates[3] = 192000;
 
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     int written = test_dac_eeprom_serialize(&data, buf, sizeof(buf));
-    TEST_ASSERT_EQUAL(DAC_EEPROM_DATA_SIZE, written);
+    TEST_ASSERT_EQUAL(DAC_EEPROM_DATA_SIZE_V2, written);
 
     DacEepromData reparsed;
-    test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE, &reparsed);
+    test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE_V2, &reparsed);
     TEST_ASSERT_EQUAL_UINT8(4, reparsed.numSampleRates);
     TEST_ASSERT_EQUAL_UINT32(192000, reparsed.sampleRates[3]);
 }
@@ -393,7 +410,7 @@ void test_serialize_name_truncation(void) {
     data.deviceName[32] = '\0';
     strcpy(data.manufacturer, "Short");
 
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     test_dac_eeprom_serialize(&data, buf, sizeof(buf));
 
     // Verify all 32 bytes are 'Z'
@@ -403,7 +420,7 @@ void test_serialize_name_truncation(void) {
 
     // Parse back — should be 32 chars
     DacEepromData reparsed;
-    test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE, &reparsed);
+    test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE_V2, &reparsed);
     TEST_ASSERT_EQUAL(32, (int)strlen(reparsed.deviceName));
 }
 
@@ -413,7 +430,7 @@ void test_serialize_magic_and_version(void) {
     strcpy(data.deviceName, "Test");
     strcpy(data.manufacturer, "Mfr");
 
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     test_dac_eeprom_serialize(&data, buf, sizeof(buf));
 
     // Verify magic
@@ -421,8 +438,8 @@ void test_serialize_magic_and_version(void) {
     TEST_ASSERT_EQUAL_UINT8('L', buf[1]);
     TEST_ASSERT_EQUAL_UINT8('X', buf[2]);
     TEST_ASSERT_EQUAL_UINT8('D', buf[3]);
-    // Verify version
-    TEST_ASSERT_EQUAL_UINT8(1, buf[4]);
+    // Verify version (serializer always writes v2)
+    TEST_ASSERT_EQUAL_UINT8(DAC_EEPROM_VERSION_V2, buf[4]);
 }
 
 void test_serialize_rate_count_clamped(void) {
@@ -432,7 +449,7 @@ void test_serialize_rate_count_clamped(void) {
     strcpy(data.manufacturer, "Mfr");
     data.numSampleRates = 10; // More than max
 
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     test_dac_eeprom_serialize(&data, buf, sizeof(buf));
 
     // Should be clamped to 4
@@ -447,13 +464,74 @@ void test_serialize_dac_i2c_address(void) {
     data.dacI2cAddress = 0x48;
     data.maxChannels = 6;
 
-    uint8_t buf[DAC_EEPROM_DATA_SIZE];
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
     test_dac_eeprom_serialize(&data, buf, sizeof(buf));
 
     DacEepromData reparsed;
-    test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE, &reparsed);
+    test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE_V2, &reparsed);
     TEST_ASSERT_EQUAL_UINT8(0x48, reparsed.dacI2cAddress);
     TEST_ASSERT_EQUAL_UINT8(6, reparsed.maxChannels);
+}
+
+// ===== EEPROM v2 Tests =====
+
+void test_eeprom_v2_parse_with_device_type(void) {
+    // Build a v2 EEPROM: version=2, deviceType=CODEC, i2sPort=2
+    testEeprom[0x04] = 2;  // v2
+    testEeprom[0x5C] = DAC_DEVICE_TYPE_CODEC;
+    testEeprom[0x5D] = 2;  // I2S2
+    DacEepromData data;
+    TEST_ASSERT_TRUE(test_dac_eeprom_parse(testEeprom, DAC_EEPROM_DATA_SIZE_V2, &data));
+    TEST_ASSERT_TRUE(data.valid);
+    TEST_ASSERT_EQUAL_UINT8(2, data.formatVersion);
+    TEST_ASSERT_EQUAL_UINT8(DAC_DEVICE_TYPE_CODEC, data.deviceType);
+    TEST_ASSERT_EQUAL_UINT8(2, data.i2sPort);
+}
+
+void test_eeprom_v1_defaults_device_type(void) {
+    // v1 EEPROM should default to DAC type, I2S port 0
+    DacEepromData data;
+    TEST_ASSERT_TRUE(test_dac_eeprom_parse(testEeprom, 0x5C, &data));
+    TEST_ASSERT_EQUAL_UINT8(1, data.formatVersion);
+    TEST_ASSERT_EQUAL_UINT8(DAC_DEVICE_TYPE_DAC, data.deviceType);
+    TEST_ASSERT_EQUAL_UINT8(0, data.i2sPort);
+}
+
+void test_eeprom_v2_serialize_round_trip(void) {
+    DacEepromData data;
+    memset(&data, 0, sizeof(data));
+    strcpy(data.deviceName, "ES8311 Codec");
+    strcpy(data.manufacturer, "Everest");
+    data.deviceId = 0x0004;
+    data.maxChannels = 2;
+    data.deviceType = DAC_DEVICE_TYPE_CODEC;
+    data.i2sPort = 2;
+    data.numSampleRates = 1;
+    data.sampleRates[0] = 48000;
+
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V2];
+    int written = test_dac_eeprom_serialize(&data, buf, sizeof(buf));
+    TEST_ASSERT_EQUAL(DAC_EEPROM_DATA_SIZE_V2, written);
+
+    // Verify v2 fields in raw bytes
+    TEST_ASSERT_EQUAL_UINT8(DAC_EEPROM_VERSION_V2, buf[0x04]);
+    TEST_ASSERT_EQUAL_UINT8(DAC_DEVICE_TYPE_CODEC, buf[0x5C]);
+    TEST_ASSERT_EQUAL_UINT8(2, buf[0x5D]);
+
+    // Parse back
+    DacEepromData reparsed;
+    TEST_ASSERT_TRUE(test_dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE_V2, &reparsed));
+    TEST_ASSERT_EQUAL_UINT8(DAC_DEVICE_TYPE_CODEC, reparsed.deviceType);
+    TEST_ASSERT_EQUAL_UINT8(2, reparsed.i2sPort);
+    TEST_ASSERT_EQUAL_STRING("ES8311 Codec", reparsed.deviceName);
+}
+
+void test_eeprom_v2_version_accepted(void) {
+    testEeprom[0x04] = DAC_EEPROM_VERSION_V2;
+    DacEepromData data;
+    TEST_ASSERT_TRUE(test_dac_eeprom_parse(testEeprom, DAC_EEPROM_DATA_SIZE_V2, &data));
+    TEST_ASSERT_TRUE(data.valid);
+    TEST_ASSERT_EQUAL_UINT8(DAC_EEPROM_VERSION_V2, data.formatVersion);
 }
 
 // ===== Main =====
@@ -493,6 +571,12 @@ int main(int argc, char **argv) {
     RUN_TEST(test_serialize_magic_and_version);
     RUN_TEST(test_serialize_rate_count_clamped);
     RUN_TEST(test_serialize_dac_i2c_address);
+
+    // v2 format tests
+    RUN_TEST(test_eeprom_v2_parse_with_device_type);
+    RUN_TEST(test_eeprom_v1_defaults_device_type);
+    RUN_TEST(test_eeprom_v2_serialize_round_trip);
+    RUN_TEST(test_eeprom_v2_version_accepted);
 
     return UNITY_END();
 }

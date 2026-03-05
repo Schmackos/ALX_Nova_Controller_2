@@ -23,6 +23,7 @@
 #include "dac_hal.h"
 #include "dac_registry.h"
 #include "dac_eeprom.h"
+#include "io_registry.h"
 #endif
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
@@ -62,7 +63,8 @@ enum InitStateBit : uint32_t {
     INIT_DAC         = (1u << 9),
     INIT_USB_AUDIO   = (1u << 10),
     INIT_UPDATED     = (1u << 11),
-    INIT_ALL         = 0x0FFFu,
+    INIT_IO_REGISTRY = (1u << 12),
+    INIT_ALL         = 0x1FFFu,
 };
 
 // ===== CPU Utilization Tracking =====
@@ -1490,6 +1492,44 @@ void sendDacState() {
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
+
+void sendIoRegistryState() {
+    JsonDocument doc;
+    doc["type"] = "ioRegistryState";
+
+    JsonArray outArr = doc["outputs"].to<JsonArray>();
+    const IoOutputEntry* outputs = io_registry_get_outputs();
+    for (int i = 0; i < IO_MAX_OUTPUTS; i++) {
+        if (!outputs[i].active) continue;
+        JsonObject o = outArr.add<JsonObject>();
+        o["index"] = outputs[i].index;
+        o["name"] = outputs[i].name;
+        o["deviceId"] = outputs[i].deviceId;
+        o["deviceType"] = outputs[i].deviceType;
+        o["discovery"] = (uint8_t)outputs[i].discovery;
+        o["i2sPort"] = outputs[i].i2sPort;
+        o["channelCount"] = outputs[i].channelCount;
+        o["firstChannel"] = outputs[i].firstOutputChannel;
+        o["ready"] = outputs[i].ready;
+    }
+
+    JsonArray inArr = doc["inputs"].to<JsonArray>();
+    const IoInputEntry* inputs = io_registry_get_inputs();
+    for (int i = 0; i < IO_MAX_INPUTS; i++) {
+        if (!inputs[i].active) continue;
+        JsonObject o = inArr.add<JsonObject>();
+        o["index"] = inputs[i].index;
+        o["name"] = inputs[i].name;
+        o["discovery"] = (uint8_t)inputs[i].discovery;
+        o["i2sPort"] = inputs[i].i2sPort;
+        o["channelCount"] = inputs[i].channelCount;
+        o["firstChannel"] = inputs[i].firstInputChannel;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json.c_str());
+}
 #endif
 
 #ifdef USB_AUDIO_ENABLED
@@ -1936,8 +1976,10 @@ void drainPendingInitState() {
 #endif
 #ifdef DAC_ENABLED
         if (sent < MAX_PER_ITER && (pending & INIT_DAC))         { sendDacState();                    pending &= ~INIT_DAC;         sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_IO_REGISTRY)) { sendIoRegistryState();             pending &= ~INIT_IO_REGISTRY; sent++; }
 #else
         pending &= ~INIT_DAC;
+        pending &= ~INIT_IO_REGISTRY;
 #endif
 #ifdef USB_AUDIO_ENABLED
         if (sent < MAX_PER_ITER && (pending & INIT_USB_AUDIO))   { sendUsbAudioState();               pending &= ~INIT_USB_AUDIO;   sent++; }

@@ -3268,6 +3268,34 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            <!-- I/O Devices -->
+            <div class="card" id="ioRegistryCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    I/O Devices
+                    <span style="font-size:11px;opacity:0.7"><span id="ioOutputCount">0</span> out / <span id="ioInputCount">0</span> in</span>
+                </div>
+                <div style="margin-bottom:8px"><strong style="font-size:12px;opacity:0.7">Outputs</strong></div>
+                <div id="ioOutputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
+                <div style="margin:12px 0 8px"><strong style="font-size:12px;opacity:0.7">Inputs</strong></div>
+                <div id="ioInputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
+                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="font-size:11px;opacity:0.7;margin-bottom:6px">Add Manual Output</div>
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                        <input type="text" class="form-input" id="ioManualName" placeholder="Name" style="flex:1;min-width:100px">
+                        <select class="form-input" id="ioManualI2s" style="width:70px">
+                            <option value="0">I2S0</option>
+                            <option value="1">I2S1</option>
+                            <option value="2">I2S2</option>
+                        </select>
+                        <select class="form-input" id="ioManualChannels" style="width:60px">
+                            <option value="2">2ch</option>
+                            <option value="1">1ch</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="ioAddManualOutput()" style="padding:4px 10px">Add</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- EEPROM Programming -->
             <div class="card" id="eepromCard">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -5117,6 +5145,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 peqHandlePresetsList(data.presets);
             } else if (data.type === 'thdResult') {
                 thdUpdateResult(data);
+            } else if (data.type === 'ioRegistryState') {
+                handleIoRegistryState(data);
             }
         }
 
@@ -6705,6 +6735,109 @@ function toggleSigGenLane(enabled) {
         }
 
 //# sourceURL=13-signal-gen.js
+
+        // ===== I/O Registry State =====
+        var ioOutputs = [];
+        var ioInputs = [];
+
+        function handleIoRegistryState(d) {
+            if (d.outputs) ioOutputs = d.outputs;
+            if (d.inputs) ioInputs = d.inputs;
+            renderIoRegistry();
+        }
+
+        function renderIoRegistry() {
+            var outList = document.getElementById('ioOutputList');
+            var inList = document.getElementById('ioInputList');
+            if (!outList || !inList) return;
+
+            // Render outputs
+            var outHtml = '';
+            for (var i = 0; i < ioOutputs.length; i++) {
+                var o = ioOutputs[i];
+                var disc = ['Builtin', 'EEPROM', 'Manual'][o.discovery] || 'Unknown';
+                var readyClass = o.ready ? 'badge-success' : 'badge-secondary';
+                var readyText = o.ready ? 'Ready' : 'Idle';
+                outHtml += '<div class="info-row" style="display:flex;align-items:center;justify-content:space-between">';
+                outHtml += '<span><strong>' + escapeHtml(o.name) + '</strong> <span style="opacity:0.6;font-size:11px">(I2S' + o.i2sPort + ', ch ' + o.firstChannel + '-' + (o.firstChannel + o.channelCount - 1) + ')</span></span>';
+                outHtml += '<span>';
+                outHtml += '<span class="badge ' + readyClass + '" style="font-size:10px;padding:2px 6px;margin-right:4px">' + readyText + '</span>';
+                outHtml += '<span class="badge" style="font-size:10px;padding:2px 6px">' + disc + '</span>';
+                if (o.discovery === 2) {
+                    outHtml += ' <button class="btn btn-secondary" style="padding:1px 6px;font-size:10px;margin-left:4px" onclick="ioRemoveOutput(' + o.index + ')">Remove</button>';
+                }
+                outHtml += '</span></div>';
+            }
+            outList.innerHTML = outHtml || '<div class="info-row" style="opacity:0.5">No outputs registered</div>';
+
+            // Render inputs
+            var inHtml = '';
+            for (var i = 0; i < ioInputs.length; i++) {
+                var inp = ioInputs[i];
+                var disc = ['Builtin', 'EEPROM', 'Manual'][inp.discovery] || 'Unknown';
+                inHtml += '<div class="info-row" style="display:flex;align-items:center;justify-content:space-between">';
+                inHtml += '<span><strong>' + escapeHtml(inp.name) + '</strong> <span style="opacity:0.6;font-size:11px">(I2S' + inp.i2sPort + ', ch ' + inp.firstChannel + '-' + (inp.firstChannel + inp.channelCount - 1) + ')</span></span>';
+                inHtml += '<span class="badge" style="font-size:10px;padding:2px 6px">' + disc + '</span>';
+                inHtml += '</div>';
+            }
+            inList.innerHTML = inHtml || '<div class="info-row" style="opacity:0.5">No inputs registered</div>';
+
+            // Update counts
+            var outCount = document.getElementById('ioOutputCount');
+            var inCount = document.getElementById('ioInputCount');
+            if (outCount) outCount.textContent = ioOutputs.length;
+            if (inCount) inCount.textContent = ioInputs.length;
+        }
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        async function ioAddManualOutput() {
+            var name = document.getElementById('ioManualName').value.trim();
+            var i2sPort = parseInt(document.getElementById('ioManualI2s').value) || 0;
+            var channelCount = parseInt(document.getElementById('ioManualChannels').value) || 2;
+            if (!name) { showToast('Name is required', 'error'); return; }
+
+            try {
+                var resp = await apiFetch('/api/io/output', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, i2sPort: i2sPort, channelCount: channelCount })
+                });
+                var data = await resp.json();
+                if (data.success) {
+                    showToast('Output added to slot ' + data.slot, 'success');
+                    document.getElementById('ioManualName').value = '';
+                } else {
+                    showToast(data.message || 'Failed to add output', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function ioRemoveOutput(idx) {
+            try {
+                var resp = await apiFetch('/api/io/output/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ index: idx })
+                });
+                var data = await resp.json();
+                if (data.success) {
+                    showToast('Output removed', 'success');
+                } else {
+                    showToast(data.message || 'Failed to remove output', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+//# sourceURL=14-io-registry.js
 
 // ===== DSP Tab Constants =====
 const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor','LPF 1st','HPF 1st','Linkwitz','Decimator','Convolution','Noise Gate','Tone Controls','Speaker Prot','Stereo Width','Loudness','Bass Enhance','Multiband Comp'];
@@ -9647,7 +9780,7 @@ function toggleCertValidation() {
     apiFetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enableCertValidation: enableCertValidation })
+        body: JSON.stringify({ 'appState.enableCertValidation': enableCertValidation })
     })
     .then(res => res.json())
     .then(data => {
@@ -11238,12 +11371,7 @@ function initFirmwareDragDrop() {
         }
 
         // ===== Module Chip Filtering =====
-
-        function escapeHtml(str) {
-            var div = document.createElement('div');
-            div.appendChild(document.createTextNode(str));
-            return div.innerHTML;
-        }
+        // escapeHtml() defined in 14-io-registry.js (loads earlier in concat order)
 
         function extractModule(msg) {
             var m = msg.match(/\[[DIWE]\]\s*\[([^\]]+)\]/);
