@@ -848,12 +848,16 @@ void loop() {
 
   // Periodic firmware check — backoff-aware interval (5min → 15min → 30min → 60min on failures)
   // Skip when heap is critical — TLS buffers need ~55KB and would worsen fragmentation
-  if (!appState.isAPMode && WiFi.status() == WL_CONNECTED &&
+  bool networkReady = (WiFi.status() == WL_CONNECTED) || eth_manager_is_connected();
+  if (!appState.isAPMode && networkReady &&
       !appState.otaInProgress && !isOTATaskRunning() &&
       !appState.heapCritical) {
     unsigned long currentMillis = millis();
     unsigned long effectiveInterval = getOTAEffectiveInterval();
-    if (currentMillis - appState.lastOTACheck >= effectiveInterval ||
+    // Delay first OTA check 30s after boot to let Ethernet DHCP + DNS stabilize
+    if (appState.lastOTACheck == 0 && currentMillis < 30000) {
+      // Too early — skip until network stack is stable
+    } else if (currentMillis - appState.lastOTACheck >= effectiveInterval ||
         appState.lastOTACheck == 0) {
       appState.lastOTACheck = currentMillis;
       startOTACheckTask();
@@ -974,6 +978,31 @@ void loop() {
 #endif
 
 #ifdef DAC_ENABLED
+  // Process deferred DAC enable/disable (set by WebSocket handler —
+  // I2C EEPROM scan + I2S driver init is too heavy for WS context, blocks SDIO → WiFi crash)
+  if (appState._pendingDacToggle != 0) {
+    if (appState._pendingDacToggle > 0) {
+      LOG_I("[DAC] Deferred primary DAC init (main loop)");
+      dac_output_init();
+    } else {
+      LOG_I("[DAC] Deferred primary DAC deinit (main loop)");
+      dac_output_deinit();
+    }
+    appState._pendingDacToggle = 0;
+    appState.markDacDirty();
+  }
+  // Process deferred ES8311 enable/disable
+  if (appState._pendingEs8311Toggle != 0) {
+    if (appState._pendingEs8311Toggle > 0) {
+      LOG_I("[DAC] Deferred ES8311 init (main loop)");
+      dac_secondary_init();
+    } else {
+      LOG_I("[DAC] Deferred ES8311 deinit (main loop)");
+      dac_secondary_deinit();
+    }
+    appState._pendingEs8311Toggle = 0;
+    appState.markDacDirty();
+  }
   // Broadcast DAC state changes (WS/API/MQTT -> all clients)
   if (appState.isDacDirty()) {
     sendDacState();

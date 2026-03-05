@@ -140,9 +140,9 @@ float usb_volume_to_linear(int16_t volume_256db) {
 #define USB_AUDIO_CHANNELS      2
 
 // Per-alt max endpoint packet sizes at highest rate (96kHz)
+// Alt 2 (24-bit) removed — PCM16 only simplifies Windows usbaudio2.sys matching
 #define USB_AUDIO_MAX_EP_SIZE_16BIT  ((96000/1000+1) * 2 * 2)  // = 388 bytes
-#define USB_AUDIO_MAX_EP_SIZE_24BIT  ((96000/1000+1) * 2 * 3)  // = 582 bytes (< 1023 FS limit)
-#define USB_AUDIO_MAX_EP_SIZE        USB_AUDIO_MAX_EP_SIZE_24BIT
+#define USB_AUDIO_MAX_EP_SIZE        USB_AUDIO_MAX_EP_SIZE_16BIT
 
 // Runtime negotiated format (defaults; updated by host SET_CUR / SET_INTERFACE)
 static uint32_t _negotiatedRate  = 48000;
@@ -185,8 +185,10 @@ static int32_t _convBuf[USB_AUDIO_MAX_EP_SIZE / 2];
 // ===== UAC2 Descriptor Builder =====
 
 // Total descriptor length (computed from structure)
+// IAD(8) + AC std(9) + AC CS(64) + AS Alt0(9) + AS Alt1(9) + CS AS General(16) + Format(6) + Endpoint(7) + CS Endpoint(8) = 136
+// Alt 2 (24-bit, 46 bytes) removed to simplify Windows usbaudio2.sys matching on Full-Speed USB
 #define UAC2_AC_CS_LEN  (9 + 8 + 17 + 18 + 12)  // Header + Clock + IT + FU + OT = 64
-#define UAC2_DESC_TOTAL_LEN (8 + 9 + UAC2_AC_CS_LEN + 9 + 9 + 16 + 6 + 7 + 8 + 9 + 16 + 6 + 7 + 8)  // = 182
+#define UAC2_DESC_TOTAL_LEN (8 + 9 + UAC2_AC_CS_LEN + 9 + 9 + 16 + 6 + 7 + 8)  // = 136
 
 static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     uint8_t *p = dst;
@@ -346,67 +348,22 @@ static uint16_t usb_audio_descriptor_cb(uint8_t *dst, uint8_t *itf) {
     *p++ = 0x00;                                       // bLockDelayUnits
     *p++ = 0x00; *p++ = 0x00;                          // wLockDelay
 
-    // --- Audio Streaming Interface Alt 2 (24-bit active) ---
-    *p++ = 9;                                          // bLength
-    *p++ = TUSB_DESC_INTERFACE;                        // bDescriptorType
-    *p++ = as_itf;                                     // bInterfaceNumber
-    *p++ = 2;                                          // bAlternateSetting
-    *p++ = 1;                                          // bNumEndpoints
-    *p++ = TUSB_CLASS_AUDIO;                           // bInterfaceClass
-    *p++ = AUDIO_SUBCLASS_STREAMING;                   // bInterfaceSubClass
-    *p++ = AUDIO_INT_PROTOCOL_CODE_V2;                 // bInterfaceProtocol
-    *p++ = 0;                                          // iInterface
-
-    // --- CS AS General (UAC2) — Alt 2 ---
-    *p++ = 16;                                         // bLength
-    *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO20_CS_AS_INTERFACE_AS_GENERAL;           // bDescriptorSubtype
-    *p++ = UAC2_ENTITY_INPUT_TERM;                     // bTerminalLink
-    *p++ = 0x00;                                       // bmControls
-    *p++ = AUDIO20_FORMAT_TYPE_I;                        // bFormatType
-    *p++ = 0x01; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; // bmFormats = PCM (bit 0)
-    *p++ = USB_AUDIO_CHANNELS;                         // bNrChannels
-    *p++ = 0x03; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; // bmChannelConfig = FL+FR
-    *p++ = 0;                                          // iChannelNames
-
-    // --- Type I Format Descriptor (UAC2) — Alt 2 (24-bit) ---
-    *p++ = 6;                                          // bLength
-    *p++ = TUSB_DESC_CS_INTERFACE;                     // bDescriptorType
-    *p++ = AUDIO20_CS_AS_INTERFACE_FORMAT_TYPE;          // bDescriptorSubtype
-    *p++ = AUDIO20_FORMAT_TYPE_I;                        // bFormatType
-    *p++ = 3;                                          // bSubslotSize (3 for 24-bit)
-    *p++ = 24;                                         // bBitResolution
-
-    // --- Isochronous OUT Endpoint — Alt 2 (24-bit) ---
-    *p++ = 7;                                          // bLength
-    *p++ = TUSB_DESC_ENDPOINT;                         // bDescriptorType
-    *p++ = _epOut;                                     // bEndpointAddress (OUT)
-    *p++ = 0x09;                                       // bmAttributes: Isochronous, Adaptive
-    *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_24BIT);     // wMaxPacketSize (low) = 582
-    *p++ = (uint8_t)(USB_AUDIO_MAX_EP_SIZE_24BIT >> 8);// wMaxPacketSize (high)
-#if CONFIG_IDF_TARGET_ESP32P4
-    *p++ = 4;                                          // bInterval: HS: 2^(4-1)=8 microframes = 1ms
-#else
-    *p++ = 1;                                          // bInterval: FS: every SOF = 1ms
-#endif
-
-    // --- CS Endpoint (Audio Class) — Alt 2 ---
-    *p++ = 8;                                          // bLength
-    *p++ = TUSB_DESC_CS_ENDPOINT;                      // bDescriptorType
-    *p++ = AUDIO20_CS_EP_SUBTYPE_GENERAL;                // bDescriptorSubtype
-    *p++ = 0x00;                                       // bmAttributes
-    *p++ = 0x00;                                       // bmControls
-    *p++ = 0x00;                                       // bLockDelayUnits
-    *p++ = 0x00; *p++ = 0x00;                          // wLockDelay
+    // Alt 2 (24-bit PCM) intentionally omitted.
+    // Dual alternate settings on Full-Speed USB confuses Windows usbaudio2.sys.
+    // PCM16 only (Alt 1) is the correct approach for FS UAC2 speaker devices.
 
     // Update interface counter (we used 2 interfaces: AC + AS)
     *itf = ac_itf + 2;
 
     uint16_t len = (uint16_t)(p - dst);
 
-    // Runtime sanity check: catch descriptor length drift
+    // Runtime sanity check: catch descriptor length drift.
+    // Use ets_printf (not LOG macros) — this runs in USB descriptor context
+    // where LOG macros may not be safe. A mismatch here is a critical error
+    // that would prevent Windows from recognizing the device.
     if (len != UAC2_DESC_TOTAL_LEN) {
-        LOG_E("[USB Audio] Descriptor length mismatch! got=%u expected=%u", len, UAC2_DESC_TOTAL_LEN);
+        ets_printf("[USB Audio] CRITICAL: Descriptor length mismatch! actual=%u expected=%u\n",
+                   len, UAC2_DESC_TOTAL_LEN);
     }
 
     return len;
@@ -513,9 +470,9 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
                 p += p[0];
             }
 
-            // Start streaming
+            // Start streaming — Alt 1 only (PCM16; Alt 2 / 24-bit removed)
             _altSetting = desc_intf->bAlternateSetting;
-            _negotiatedDepth = (_altSetting == 2) ? 24 : 16;
+            _negotiatedDepth = 16;  // PCM16 only; Alt 2 (24-bit) no longer advertised
             AppState::getInstance().usbAudioNegotiatedDepth = _negotiatedDepth;
             AppState::getInstance().usbAudioBitDepth = _negotiatedDepth;
             _usbState = USB_AUDIO_STREAMING;
@@ -737,19 +694,13 @@ static bool _audio_driver_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t
     (void)result;
 
     if (ep_addr == _epOut && xferred_bytes > 0) {
-        uint32_t subslotSize = (_negotiatedDepth == 24) ? 3 : 2;
-        uint32_t frames = xferred_bytes / (USB_AUDIO_CHANNELS * subslotSize);
-
-        if (_negotiatedDepth == 24) {
-            usb_pcm24_to_int32(_isoOutBuf, _convBuf, frames);
-        } else {
-            usb_pcm16_to_int32((const int16_t *)_isoOutBuf, _convBuf, frames);
-        }
-
+        // PCM16 only — Alt 2 (24-bit) no longer advertised in descriptor
+        uint32_t frames = xferred_bytes / (USB_AUDIO_CHANNELS * 2);
+        usb_pcm16_to_int32((const int16_t *)_isoOutBuf, _convBuf, frames);
         usb_rb_write(&_ringBuffer, _convBuf, frames);
 
-        // Re-arm for next packet with dynamic size
-        uint32_t ep_size = (_negotiatedRate / 1000 + 1) * USB_AUDIO_CHANNELS * subslotSize;
+        // Re-arm for next packet (PCM16: 2 bytes per sample)
+        uint32_t ep_size = (_negotiatedRate / 1000 + 1) * USB_AUDIO_CHANNELS * 2;
         usbd_edpt_xfer(rhport, _epOut, _isoOutBuf, ep_size, false);
     }
 
@@ -802,7 +753,11 @@ static uint8_t const _minimal_bos_descriptor[] = {
 };
 
 extern "C" uint8_t const *__wrap_tud_descriptor_bos_cb(void) {
-    LOG_I("[USB Audio] BOS descriptor served (minimal, no MSOS2)");
+    static uint32_t callCount = 0;
+    callCount++;
+    if (callCount <= 3) {  // only log first few to avoid spam
+        LOG_I("[USB Audio] BOS descriptor served #%u (minimal, no MSOS2)", callCount);
+    }
     return _minimal_bos_descriptor;
 }
 
@@ -848,7 +803,7 @@ void usb_audio_init(void) {
         // — it references Kconfig macros not available in Arduino framework builds)
         tinyusb_device_config_t cfg = {};
         cfg.vid = USB_ESPRESSIF_VID;
-        cfg.pid = 0x4003;  // Changed from 0x4002 to break stale Windows driver cache
+        cfg.pid = 0x4004;  // Bumped from 0x4003 to break stale Windows driver cache (Alt2 removal)
         cfg.product_name = "ALX Nova Audio";
         cfg.manufacturer_name = "ALX Audio";
         cfg.serial_number = "ALX-USB-AUDIO";
@@ -869,6 +824,23 @@ void usb_audio_init(void) {
         // tinyusb_init() creates its own "usbd" task (max priority, no core affinity)
         // that calls tud_task() in a loop. No additional task needed.
         _tinyusbHwReady = true;
+        LOG_I("[USB Audio] USB init OK: VID=0x%04X PID=0x%04X desc=%u bytes",
+              USB_ESPRESSIF_VID, 0x4004, UAC2_DESC_TOTAL_LEN);
+
+        // Diagnostic: verify TinyUSB is actually running
+        LOG_I("[USB Audio] tud_inited=%d tud_connected=%d tud_mounted=%d",
+              tud_inited(), tud_connected(), tud_mounted());
+
+        // Force a clean USB enumeration cycle:
+        // The DWC2 pull-up may activate during tinyusb_init() before the USB
+        // task is fully running. Windows starts enumeration immediately and
+        // fails with "Device Descriptor Request Failed" if TinyUSB can't
+        // respond in time. Disconnect briefly, let the task stabilize, then
+        // reconnect so the host sees a fresh device attachment.
+        tud_disconnect();
+        vTaskDelay(pdMS_TO_TICKS(200));
+        tud_connect();
+        LOG_I("[USB Audio] Soft disconnect/reconnect done — host will re-enumerate");
 
         // Lower the TinyUSB usbd task priority from configMAX_PRIORITIES-1
         // to USB_AUDIO_TASK_PRIORITY (1). The hard-coded max priority causes
@@ -984,7 +956,19 @@ uint8_t usb_audio_get_negotiated_depth(void) {
 void usb_audio_poll_connection(void) {
     if (!_tinyusbHwReady) return;
 
-    bool mounted = tud_mounted();
+    // Log mount state transitions (before connection logic updates _usbState)
+    static bool _prevMountState = false;
+    static bool _prevConnectState = false;
+    bool curMounted = tud_mounted();
+    bool curConnected = tud_connected();
+    if (curMounted != _prevMountState || curConnected != _prevConnectState) {
+        LOG_I("[USB Audio] State: mounted=%d->%d connected=%d->%d",
+              _prevMountState, curMounted, _prevConnectState, curConnected);
+        _prevMountState = curMounted;
+        _prevConnectState = curConnected;
+    }
+
+    bool mounted = curMounted;
     AppState &as = AppState::getInstance();
 
     if (mounted && _usbState == USB_AUDIO_DISCONNECTED) {

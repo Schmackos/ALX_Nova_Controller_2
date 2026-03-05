@@ -84,12 +84,14 @@ void registerDacApiEndpoints() {
         if (doc["enabled"].is<bool>()) {
             bool en = doc["enabled"].as<bool>();
             if (en != appState.dacEnabled) {
-                LOG_I("[DAC] API: enabled %s -> %s", appState.dacEnabled ? "ON" : "OFF", en ? "ON" : "OFF");
+                LOG_I("[DAC] API: enabled %s -> %s (deferred)", appState.dacEnabled ? "ON" : "OFF", en ? "ON" : "OFF");
+                bool was = appState.dacEnabled;
                 appState.dacEnabled = en;
-                if (en && !appState.dacReady) {
-                    dac_output_init();
-                } else if (!en) {
-                    dac_output_deinit();
+                // Defer init/deinit to main loop — I2C scan blocks SDIO
+                if (en && !was && !appState.dacReady) {
+                    appState._pendingDacToggle = 1;
+                } else if (!en && was) {
+                    appState._pendingDacToggle = -1;
                 }
                 changed = true;
             }

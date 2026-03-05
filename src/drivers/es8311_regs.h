@@ -66,7 +66,7 @@
 #define ES8311_REG_DAC_VOLUME     0x32  // 0x00=-95.5dB, 0xBF=0dB, 0xFF=+32dB (0.5dB steps)
 #define ES8311_REG_DAC_RAMP       0x37  // DAC ramp rate
 
-// GPIO
+// GPIO / General Purpose
 #define ES8311_REG_GPIO_CFG       0x44  // GPIO configuration / internal reference
 #define ES8311_REG_GP_CTRL        0x45  // General purpose control
 

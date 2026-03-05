@@ -465,6 +465,8 @@ public:
   uint8_t es8311Volume = 80;     // 0-100 (hardware volume via I2C)
   bool es8311Mute = false;
   bool es8311Ready = false;
+  volatile int8_t _pendingEs8311Toggle = 0;  // 0=none, 1=init, -1=deinit; main loop executes
+  volatile int8_t _pendingDacToggle = 0;    // 0=none, 1=init, -1=deinit; main loop executes
 
   void markEs8311Dirty() { _es8311Dirty = true; app_events_signal(EVT_DAC); }
   bool isEs8311Dirty() const { return _es8311Dirty; }

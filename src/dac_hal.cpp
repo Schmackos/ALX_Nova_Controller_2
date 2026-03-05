@@ -310,12 +310,14 @@ void dac_secondary_init() {
         LOG_W("[DAC] ES8311 configure failed");
     }
 
-    _secondaryDriver->setVolume(as.es8311Volume);
+    // Keep ES8311 hardware at 0 dB — software volume provides the perceptual
+    // log curve (same as primary DAC) for consistent volume across all outputs.
+    _secondaryDriver->setVolume(100);
     _secondaryDriver->setMute(as.es8311Mute);
     _secondaryVolumeGain = dac_volume_to_linear(as.es8311Volume);
 
     as.es8311Ready = true;
-    LOG_I("[DAC] ES8311 secondary output initialized, vol=%d%%", as.es8311Volume);
+    LOG_I("[DAC] ES8311 secondary output initialized, vol=%d%% (SW gain=%.4f)", as.es8311Volume, _secondaryVolumeGain);
 #endif
 }
 
@@ -349,18 +351,59 @@ void dac_secondary_write(const int32_t* buffer, int stereo_frames) {
     if (!_secondaryI2sTxEnabled || !buffer || stereo_frames <= 0) return;
     if (!_secondaryDriver || !_secondaryDriver->isReady()) return;
 
+    AppState& as = AppState::getInstance();
+    int total_samples = stereo_frames * 2;
+
+    // Mute: skip write entirely (DMA auto-clear fills zeros)
+    if (as.es8311Mute || _secondaryVolumeGain == 0.0f) return;
+
+    // Apply software volume (same perceptual curve as primary DAC)
     size_t bytes_written = 0;
-    size_t total_bytes = stereo_frames * 2 * sizeof(int32_t);
-    i2s_audio_write_es8311(buffer, total_bytes, &bytes_written, 20);
+    if (_secondaryVolumeGain < 1.0f) {
+        static float *fBuf = nullptr;
+        static int32_t *txBuf = nullptr;
+        if (!fBuf) {
+            fBuf = (float *)heap_caps_calloc(512, sizeof(float), MALLOC_CAP_SPIRAM);
+            if (!fBuf) fBuf = (float *)calloc(512, sizeof(float));
+        }
+        if (!txBuf) {
+            txBuf = (int32_t *)heap_caps_calloc(512, sizeof(int32_t), MALLOC_CAP_SPIRAM);
+            if (!txBuf) txBuf = (int32_t *)calloc(512, sizeof(int32_t));
+        }
+        if (!fBuf || !txBuf) return;
+
+        const int32_t* src = buffer;
+        int remaining = total_samples;
+        while (remaining > 0) {
+            int chunk = (remaining > 512) ? 512 : remaining;
+            for (int i = 0; i < chunk; i++) {
+                fBuf[i] = (float)src[i] / 2147483647.0f;
+            }
+            dac_apply_software_volume(fBuf, chunk, _secondaryVolumeGain);
+            for (int i = 0; i < chunk; i++) {
+                txBuf[i] = (int32_t)(fBuf[i] * 2147483647.0f);
+            }
+            size_t bw = 0;
+            i2s_audio_write_es8311(txBuf, chunk * sizeof(int32_t), &bw, 20);
+            bytes_written += bw;
+            src += chunk;
+            remaining -= chunk;
+        }
+    } else {
+        // Unity gain — write buffer directly
+        size_t total_bytes = total_samples * sizeof(int32_t);
+        i2s_audio_write_es8311(buffer, total_bytes, &bytes_written, 20);
+    }
 #endif
 }
 
 void dac_secondary_set_volume(uint8_t percent) {
 #if CONFIG_IDF_TARGET_ESP32P4
     if (_secondaryDriver) {
-        _secondaryDriver->setVolume(percent);
+        // Software volume only — ES8311 hardware stays at 0 dB for consistent
+        // perceptual curve matching the primary DAC
         _secondaryVolumeGain = dac_volume_to_linear(percent);
-        LOG_I("[DAC] ES8311 volume: %d%% [HW]", percent);
+        LOG_I("[DAC] (ES8311) volume: %d%% (SW gain=%.4f)", percent, _secondaryVolumeGain);
     }
 #endif
 }
@@ -369,7 +412,6 @@ void dac_secondary_set_mute(bool mute) {
 #if CONFIG_IDF_TARGET_ESP32P4
     if (_secondaryDriver) {
         _secondaryDriver->setMute(mute);
-        LOG_I("[DAC] ES8311 mute: %s", mute ? "on" : "off");
     }
 #endif
 }
@@ -420,9 +462,18 @@ void dac_load_settings() {
     }
     if (doc["filterMode"].is<int>()) as.dacFilterMode = (uint8_t)doc["filterMode"].as<int>();
 
+    // ES8311 secondary DAC settings (P4 onboard codec)
+    if (doc["es8311Enabled"].is<bool>()) as.es8311Enabled = doc["es8311Enabled"].as<bool>();
+    if (doc["es8311Volume"].is<int>()) {
+        int v = doc["es8311Volume"].as<int>();
+        if (v >= 0 && v <= 100) as.es8311Volume = (uint8_t)v;
+    }
+    if (doc["es8311Mute"].is<bool>()) as.es8311Mute = doc["es8311Mute"].as<bool>();
+
     _volumeGain = dac_volume_to_linear(as.dacVolume);
-    LOG_I("[DAC] Settings loaded: enabled=%d vol=%d mute=%d device=0x%04X (%s)",
-          as.dacEnabled, as.dacVolume, as.dacMute, as.dacDeviceId, as.dacModelName);
+    LOG_I("[DAC] Settings loaded: enabled=%d vol=%d mute=%d device=0x%04X (%s) es8311=%d/%d%%/%s",
+          as.dacEnabled, as.dacVolume, as.dacMute, as.dacDeviceId, as.dacModelName,
+          as.es8311Enabled, as.es8311Volume, as.es8311Mute ? "muted" : "unmuted");
 #endif
 }
 
@@ -454,6 +505,11 @@ void dac_save_settings() {
     doc["deviceId"] = as.dacDeviceId;
     doc["modelName"] = as.dacModelName;
     doc["filterMode"] = as.dacFilterMode;
+
+    // ES8311 secondary DAC settings (P4 onboard codec)
+    doc["es8311Enabled"] = as.es8311Enabled;
+    doc["es8311Volume"] = as.es8311Volume;
+    doc["es8311Mute"] = as.es8311Mute;
 
     File f = LittleFS.open("/dac_config.json", "w");
     if (!f) {
@@ -515,15 +571,27 @@ void dac_output_init() {
     // Initialize I2C mutex for thread-safe EEPROM access
     dac_eeprom_init_mutex();
 
-    // Load persisted settings
-    dac_load_settings();
+    // Load persisted settings only on first boot.
+    // Runtime re-init (via web UI toggle) must NOT reload — the deferred save
+    // hasn't flushed yet, so loading would clobber the just-set dacEnabled=true.
+    static bool _settingsLoaded = false;
+    if (!_settingsLoaded) {
+        _settingsLoaded = true;
+        dac_load_settings();
+    }
 
     // Update volume gain
     _volumeGain = dac_volume_to_linear(as.dacVolume);
     LOG_I("[DAC] Volume gain: %d%% -> %.4f linear", as.dacVolume, _volumeGain);
 
 #ifndef NATIVE_TEST
-    // Scan I2C bus and look for EEPROM
+    // Scan I2C bus and look for EEPROM — only on first boot.
+    // Skip re-scan on runtime re-init: GPIO 54 (DAC_I2C_SCL) is shared with
+    // SDIO WiFi reset (CONFIG_ESP_SDIO_GPIO_RESET_SLAVE=54 on P4).
+    // Calling Wire1.begin(48,54) at runtime reconfigures GPIO 54, killing WiFi.
+    static bool _eepromScanned = false;
+    if (!_eepromScanned) {
+    _eepromScanned = true;
     {
         AppState::EepromDiag& ed = as.eepromDiag;
         uint8_t eepMask = 0;
@@ -561,6 +629,7 @@ void dac_output_init() {
         }
         as.markEepromDirty();
     }
+    } // !_eepromScanned
 #endif
 
     if (!as.dacEnabled) {

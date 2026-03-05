@@ -1,13 +1,21 @@
         // ===== DAC Output =====
-        function updateDac() {
+        function updateDacEnable() {
             var en = document.getElementById('dacEnable').checked;
             document.getElementById('dacFields').style.display = en ? '' : 'none';
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'setDacEnabled', enabled: en }));
+            }
+        }
+        function updateDacVolume() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'setDacVolume',
                     volume: parseInt(document.getElementById('dacVolume').value)
                 }));
+            }
+        }
+        function updateDacMute() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: 'setDacMute',
                     mute: document.getElementById('dacMute').checked
@@ -36,7 +44,52 @@
             })
             .catch(() => showToast('Failed to change DAC driver', 'error'));
         }
+        // ===== ES8311 Secondary DAC Output =====
+        function updateEs8311Enable() {
+            var en = document.getElementById('es8311Enable').checked;
+            document.getElementById('es8311Fields').style.display = en ? '' : 'none';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setEs8311Enabled', enabled: en }));
+            }
+        }
+        function updateEs8311Volume() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'setEs8311Volume',
+                    volume: parseInt(document.getElementById('es8311Volume').value)
+                }));
+            }
+        }
+        function updateEs8311Mute() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'setEs8311Mute',
+                    mute: document.getElementById('es8311Mute').checked
+                }));
+            }
+        }
+        function handleEs8311State(d) {
+            var card = document.getElementById('es8311Card');
+            if (card) card.style.display = '';
+            var enEl = document.getElementById('es8311Enable');
+            if (enEl) enEl.checked = d.es8311Enabled;
+            var fields = document.getElementById('es8311Fields');
+            if (fields) fields.style.display = d.es8311Enabled ? '' : 'none';
+            var volSlider = document.getElementById('es8311Volume');
+            if (volSlider) { volSlider.value = d.es8311Volume; document.getElementById('es8311VolVal').textContent = d.es8311Volume; }
+            var muteEl = document.getElementById('es8311Mute');
+            if (muteEl) muteEl.checked = d.es8311Mute;
+            var badge = document.getElementById('es8311ReadyBadge');
+            if (badge) {
+                badge.style.display = d.es8311Enabled ? '' : 'none';
+                badge.textContent = d.es8311Ready ? 'Ready' : 'Not Ready';
+                badge.style.background = d.es8311Ready ? '#4CAF50' : '#F44336';
+                badge.style.color = '#fff';
+            }
+        }
         function handleDacState(d) {
+            // Update ES8311 secondary DAC if fields are present
+            if (d.es8311Enabled !== undefined) handleEs8311State(d);
             var enEl = document.getElementById('dacEnable');
             if (enEl) enEl.checked = d.enabled;
             var fields = document.getElementById('dacFields');
