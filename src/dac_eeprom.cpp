@@ -6,6 +6,16 @@
 
 #ifndef NATIVE_TEST
 #include <Wire.h>
+#include <sdkconfig.h>
+
+// On P4: use Wire1 for external EEPROM (pins 48/54) to avoid collision with
+// onboard ES8311 which uses Wire (pins 7/8)
+#if CONFIG_IDF_TARGET_ESP32P4
+#define EEPROM_I2C Wire1
+#else
+#define EEPROM_I2C Wire
+#endif
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
@@ -162,15 +172,15 @@ int dac_eeprom_serialize(const DacEepromData* data, uint8_t* outBuf, int bufLen)
 
 // Read a block of bytes from AT24C02 EEPROM
 static bool eeprom_read_block(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, int len) {
-    Wire.beginTransmission(i2cAddr);
-    Wire.write(memAddr);
-    if (Wire.endTransmission(false) != 0) return false;
+    EEPROM_I2C.beginTransmission(i2cAddr);
+    EEPROM_I2C.write(memAddr);
+    if (EEPROM_I2C.endTransmission(false) != 0) return false;
 
-    int received = Wire.requestFrom(i2cAddr, (uint8_t)len);
+    int received = EEPROM_I2C.requestFrom(i2cAddr, (uint8_t)len);
     if (received != len) return false;
 
     for (int i = 0; i < len; i++) {
-        buf[i] = Wire.read();
+        buf[i] = EEPROM_I2C.read();
     }
     return true;
 }
@@ -229,23 +239,23 @@ static void i2c_init() {
     }
 
     // Ensure clean Wire state
-    Wire.end();
+    EEPROM_I2C.end();
     delay(1);
 
-    bool ok = Wire.begin(DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
+    bool ok = EEPROM_I2C.begin(DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
     if (!ok) {
         LOG_W("[DAC] Wire.begin failed, retrying");
-        Wire.end();
+        EEPROM_I2C.end();
         delay(10);
-        ok = Wire.begin(DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
+        ok = EEPROM_I2C.begin(DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
     }
     if (!ok) {
         LOG_E("[DAC] Wire.begin(SDA=%d, SCL=%d) failed", DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
         return;
     }
 
-    Wire.setClock(100000);  // 100kHz standard mode
-    Wire.setTimeOut(100);   // 100ms timeout
+    EEPROM_I2C.setClock(100000);  // 100kHz standard mode
+    EEPROM_I2C.setTimeOut(100);   // 100ms timeout
     delay(2);               // Bus stabilization
 }
 
@@ -344,8 +354,8 @@ bool dac_eeprom_read_raw(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, int len
 static int eeprom_wait_ready(uint8_t i2cAddr, int timeoutMs) {
     unsigned long start = millis();
     while ((millis() - start) < (unsigned long)timeoutMs) {
-        Wire.beginTransmission(i2cAddr);
-        if (Wire.endTransmission() == 0) return (int)(millis() - start);
+        EEPROM_I2C.beginTransmission(i2cAddr);
+        if (EEPROM_I2C.endTransmission() == 0) return (int)(millis() - start);
         delay(1);
     }
     return -1; // timeout
@@ -364,10 +374,10 @@ static bool eeprom_write_probe(uint8_t i2cAddr) {
 
     // Write complement value
     uint8_t probe = (uint8_t)(~original);
-    Wire.beginTransmission(i2cAddr);
-    Wire.write((uint8_t)0x00);  // Memory address
-    Wire.write(probe);
-    if (Wire.endTransmission() != 0) {
+    EEPROM_I2C.beginTransmission(i2cAddr);
+    EEPROM_I2C.write((uint8_t)0x00);  // Memory address
+    EEPROM_I2C.write(probe);
+    if (EEPROM_I2C.endTransmission() != 0) {
         LOG_E("[DAC] EEPROM probe: I2C write NACK");
         return false;
     }
@@ -429,12 +439,12 @@ bool dac_eeprom_write(uint8_t i2cAddr, const uint8_t* data, int len) {
         int chunk = len - offset;
         if (chunk > pageRemaining) chunk = pageRemaining;
 
-        Wire.beginTransmission(i2cAddr);
-        Wire.write((uint8_t)offset);  // Memory address
+        EEPROM_I2C.beginTransmission(i2cAddr);
+        EEPROM_I2C.write((uint8_t)offset);  // Memory address
         for (int i = 0; i < chunk; i++) {
-            Wire.write(data[offset + i]);
+            EEPROM_I2C.write(data[offset + i]);
         }
-        if (Wire.endTransmission() != 0) {
+        if (EEPROM_I2C.endTransmission() != 0) {
             LOG_E("[DAC] EEPROM write failed at offset 0x%02X (I2C NACK)", offset);
             i2c_mutex_give();
             return false;
@@ -507,12 +517,12 @@ bool dac_eeprom_erase(uint8_t i2cAddr) {
 
     for (int page = 0; page < DAC_EEPROM_TOTAL_SIZE / DAC_EEPROM_PAGE_SIZE; page++) {
         uint8_t addr = (uint8_t)(page * DAC_EEPROM_PAGE_SIZE);
-        Wire.beginTransmission(i2cAddr);
-        Wire.write(addr);
+        EEPROM_I2C.beginTransmission(i2cAddr);
+        EEPROM_I2C.write(addr);
         for (int i = 0; i < DAC_EEPROM_PAGE_SIZE; i++) {
-            Wire.write(0xFF);
+            EEPROM_I2C.write(0xFF);
         }
-        if (Wire.endTransmission() != 0) {
+        if (EEPROM_I2C.endTransmission() != 0) {
             LOG_E("[DAC] EEPROM erase failed at page %d (addr 0x%02X)", page, addr);
             i2c_mutex_give();
             return false;
@@ -559,8 +569,8 @@ int dac_i2c_scan(uint8_t* eepromMask) {
     LOG_I("[DAC] I2C bus scan starting (SDA=%d SCL=%d, 0x08-0x77)", DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
 
     for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
-        Wire.beginTransmission(addr);
-        uint8_t err = Wire.endTransmission();
+        EEPROM_I2C.beginTransmission(addr);
+        uint8_t err = EEPROM_I2C.endTransmission();
         if (err == 0) {
             totalDevices++;
             LOG_I("[DAC] I2C device found at 0x%02X", addr);

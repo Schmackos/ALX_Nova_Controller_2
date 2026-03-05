@@ -1033,6 +1033,9 @@ void handleSettingsExport() {
   doc["dacOutput"]["deviceId"] = appState.dacDeviceId;
   doc["dacOutput"]["modelName"] = appState.dacModelName;
   doc["dacOutput"]["filterMode"] = appState.dacFilterMode;
+  doc["dacOutput"]["es8311Enabled"] = appState.es8311Enabled;
+  doc["dacOutput"]["es8311Volume"] = appState.es8311Volume;
+  doc["dacOutput"]["es8311Mute"] = appState.es8311Mute;
 #endif
 
   // Input channel names
@@ -1419,6 +1422,16 @@ void handleSettingsImport() {
     }
     if (doc["dacOutput"]["filterMode"].is<int>()) {
       appState.dacFilterMode = (uint8_t)doc["dacOutput"]["filterMode"].as<int>();
+    }
+    if (doc["dacOutput"]["es8311Enabled"].is<bool>()) {
+      appState.es8311Enabled = doc["dacOutput"]["es8311Enabled"].as<bool>();
+    }
+    if (doc["dacOutput"]["es8311Volume"].is<int>()) {
+      int v = doc["dacOutput"]["es8311Volume"].as<int>();
+      if (v >= 0 && v <= 100) appState.es8311Volume = (uint8_t)v;
+    }
+    if (doc["dacOutput"]["es8311Mute"].is<bool>()) {
+      appState.es8311Mute = doc["dacOutput"]["es8311Mute"].as<bool>();
     }
     dac_save_settings();
     LOG_I("[Settings] DAC output settings imported");

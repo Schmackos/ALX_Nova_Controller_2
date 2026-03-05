@@ -141,12 +141,13 @@ void DacEs8311::initClocks(uint32_t sampleRate) {
 
 void DacEs8311::powerUp() {
     // System power registers — bring up analog blocks
+    // Values aligned with Espressif reference driver (esp-adf es8311.c)
     writeReg(ES8311_REG_SYSTEM1, 0x00);   // Power on analog 1
     writeReg(ES8311_REG_SYSTEM2, 0x00);   // Power on analog 2
 
-    // Digital reference
-    writeReg(ES8311_REG_SYSTEM5, 0x10);   // Digital reference 1
-    writeReg(ES8311_REG_SYSTEM6, 0x00);   // Digital reference 2
+    // Digital reference — CRITICAL for output level
+    writeReg(ES8311_REG_SYSTEM5, 0x1F);   // Digital reference 1 (Espressif: 0x1F)
+    writeReg(ES8311_REG_SYSTEM6, 0x7F);   // Digital reference 2 (Espressif: 0x7F)
 
     // Analog reference: VMIDSEL=01 (normal mode), enable reference
     writeReg(ES8311_REG_SYSTEM3, 0x10);
@@ -157,8 +158,8 @@ void DacEs8311::powerUp() {
     // Headphone switch / analog reference
     writeReg(ES8311_REG_SYSTEM8, 0x10);
 
-    // Power down PGA and ADC modulator (we only use DAC)
-    writeReg(ES8311_REG_SYSTEM4, 0x0A);   // PDN_PGA=1, PDN_MOD_ADC=1, PDN_MOD_DAC=0
+    // Power down ADC modulator (DAC-only mode)
+    writeReg(ES8311_REG_SYSTEM4, 0x02);   // PDN_MOD_ADC=1, PDN_MOD_DAC=0 (Espressif: 0x02)
 }
 
 void DacEs8311::powerDown() {
@@ -186,7 +187,8 @@ const DacCapabilities& DacEs8311::getCapabilities() const {
 bool DacEs8311::init(const DacPinConfig& pins) {
     (void)pins;  // ES8311 uses dedicated onboard I2C, not the configurable DAC I2C pins
 
-    LOG_I("[ES8311] Initializing ES8311 DAC driver");
+    LOG_I("[ES8311] Initializing ES8311 DAC driver (I2C addr=0x%02X, SDA=%d, SCL=%d, PA=%d)",
+          ES8311_I2C_ADDR, ES8311_I2C_SDA_PIN, ES8311_I2C_SCL_PIN, ES8311_PA_PIN);
 
     // Configure PA control pin (NS4150B class-D amplifier)
     pinMode(ES8311_PA_PIN, OUTPUT);
@@ -195,6 +197,8 @@ bool DacEs8311::init(const DacPinConfig& pins) {
     // Initialize I2C on the onboard bus (GPIO 7=SDA, GPIO 8=SCL)
     // Use Wire (not Wire1 — Wire1 is reserved for external DAC I2C on GPIO 48/54)
     Wire.begin(ES8311_I2C_SDA_PIN, ES8311_I2C_SCL_PIN, 100000);
+    LOG_I("[ES8311] I2C bus initialized on Wire (SDA=%d, SCL=%d, 100kHz)",
+          ES8311_I2C_SDA_PIN, ES8311_I2C_SCL_PIN);
 
     // I2C noise immunity: write to GPIO config register twice (ES8311 datasheet recommendation)
     writeReg(ES8311_REG_GPIO_CFG, 0x08);
@@ -206,6 +210,7 @@ bool DacEs8311::init(const DacPinConfig& pins) {
         Wire.end();
         return false;
     }
+    LOG_I("[ES8311] Chip verified OK");
 
     // Initial clock setup (default 48kHz, reconfigured in configure())
     initClocks(48000);
@@ -227,6 +232,11 @@ bool DacEs8311::init(const DacPinConfig& pins) {
     // Tri-state ADC serial output (not used in DAC-only mode)
     uint8_t sdpout = readReg(ES8311_REG_SDPOUT);
     writeReg(ES8311_REG_SDPOUT, sdpout | ES8311_SDP_TRISTATE);
+
+    // Start-phase registers (from Espressif reference driver es8311_start)
+    writeReg(ES8311_REG_SYSTEM9, 0x1A);   // LINSEL + PGAGAIN config
+    writeReg(ES8311_REG_SYSTEM3, 0x01);   // VREF power enable
+    writeReg(ES8311_REG_GP_CTRL, 0x00);   // General purpose control
 
     // DAC ramp rate (smooth transitions)
     writeReg(ES8311_REG_DAC_RAMP, 0x08);
