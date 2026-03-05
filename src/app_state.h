@@ -504,6 +504,9 @@ public:
   bool isIoRegistryDirty() const { return _ioRegistryDirty; }
   void clearIoRegistryDirty() { _ioRegistryDirty = false; }
 
+  // ===== HAL Scan State =====
+  volatile bool _halScanInProgress = false;
+
   // ===== HAL Device Dirty Flag =====
   void markHalDeviceDirty() { _halDeviceDirty = true; app_events_signal(EVT_HAL_DEVICE); }
   bool isHalDeviceDirty() const { return _halDeviceDirty; }

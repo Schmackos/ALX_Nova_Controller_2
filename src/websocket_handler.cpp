@@ -1538,7 +1538,7 @@ void sendIoRegistryState() {
 void sendHalDeviceState() {
     JsonDocument doc;
     doc["type"] = "halDeviceState";
-    doc["scanning"] = false;
+    doc["scanning"] = appState._halScanInProgress;
 
     JsonArray arr = doc["devices"].to<JsonArray>();
     HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {

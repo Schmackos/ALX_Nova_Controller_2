@@ -63,7 +63,15 @@ void registerHalApiEndpoints(WebServer& server) {
 
     // POST /api/hal/scan — trigger device rescan
     server.on("/api/hal/scan", HTTP_POST, [&server]() {
+        if (appState._halScanInProgress) {
+            server.send(409, "application/json", "{\"error\":\"Scan already in progress\"}");
+            return;
+        }
+        appState._halScanInProgress = true;
+        appState.markHalDeviceDirty();  // Broadcast scanning=true
         int found = hal_rescan();
+        appState._halScanInProgress = false;
+        appState.markHalDeviceDirty();  // Broadcast scanning=false
         JsonDocument doc;
         doc["status"] = "ok";
         doc["devicesFound"] = found;

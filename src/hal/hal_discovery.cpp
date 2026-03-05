@@ -41,31 +41,35 @@ int hal_discover_devices() {
     uint8_t expMask = hal_i2c_scan_bus(HAL_I2C_BUS_EXP);
     LOG_I("[HAL Discovery]", "Bus EXP scan: 0x%02X", expMask);
 
-    // Phase 2: EEPROM probe — scan bus first to get ACK mask, then read only responding addresses
+    // Phase 2: EEPROM probe — skip when WiFi active (same GPIO48/54 SDIO conflict)
     uint8_t eepMask = 0;
-    dac_i2c_scan(&eepMask);
-    DacEepromData eepromData;
-    if (dac_eeprom_scan(&eepromData, eepMask)) {
-        LOG_I("[HAL Discovery]", "EEPROM found at 0x%02X: %s (id=0x%04X, v%u)",
-              eepromData.i2cAddress, eepromData.deviceName,
-              eepromData.deviceId, eepromData.formatVersion);
+    if (!wifiActive) {
+        dac_i2c_scan(&eepMask);
+        DacEepromData eepromData;
+        if (dac_eeprom_scan(&eepromData, eepMask)) {
+            LOG_I("[HAL Discovery]", "EEPROM found at 0x%02X: %s (id=0x%04X, v%u)",
+                  eepromData.i2cAddress, eepromData.deviceName,
+                  eepromData.deviceId, eepromData.formatVersion);
 
-        // Check for v3 compatible string
-        // For v1/v2 — try legacy ID lookup via driver registry
-        const HalDriverEntry* entry = nullptr;
-        if (eepromData.deviceId > 0) {
-            entry = hal_registry_find_by_legacy_id(eepromData.deviceId);
-        }
+            // Check for v3 compatible string
+            // For v1/v2 — try legacy ID lookup via driver registry
+            const HalDriverEntry* entry = nullptr;
+            if (eepromData.deviceId > 0) {
+                entry = hal_registry_find_by_legacy_id(eepromData.deviceId);
+            }
 
-        if (entry) {
-            // Found a driver — look up descriptor from DB
-            HalDeviceDescriptor desc;
-            if (hal_db_lookup(entry->compatible, &desc)) {
-                LOG_I("[HAL Discovery]", "Matched: %s via legacy ID 0x%04X",
-                      entry->compatible, eepromData.deviceId);
-                newDevices++;
+            if (entry) {
+                // Found a driver — look up descriptor from DB
+                HalDeviceDescriptor desc;
+                if (hal_db_lookup(entry->compatible, &desc)) {
+                    LOG_I("[HAL Discovery]", "Matched: %s via legacy ID 0x%04X",
+                          entry->compatible, eepromData.deviceId);
+                    newDevices++;
+                }
             }
         }
+    } else {
+        LOG_I("[HAL Discovery]", "Skipping EEPROM scan (WiFi active, SDIO conflict)");
     }
 
     LOG_I("[HAL Discovery]", "Discovery complete: %d new devices", newDevices);
