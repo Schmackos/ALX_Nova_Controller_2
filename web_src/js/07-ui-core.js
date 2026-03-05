@@ -36,6 +36,7 @@
                 canvasDims = {};
                 setTimeout(dspDrawFreqResponse, 50);
                 dspLoadRouting();
+                if (typeof outputDspLoadChannel === 'function') outputDspLoadChannel(outputDspCh);
                 if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
                 if (typeof updateChainCopyToDropdown === 'function') updateChainCopyToDropdown();
                 if (peqGraphLayers.rta && ws && ws.readyState === WebSocket.OPEN) {

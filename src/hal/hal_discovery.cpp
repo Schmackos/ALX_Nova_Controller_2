@@ -41,9 +41,11 @@ int hal_discover_devices() {
     uint8_t expMask = hal_i2c_scan_bus(HAL_I2C_BUS_EXP);
     LOG_I("[HAL Discovery]", "Bus EXP scan: 0x%02X", expMask);
 
-    // Phase 2: EEPROM probe (0x50-0x57) using existing dac_eeprom_scan()
+    // Phase 2: EEPROM probe — scan bus first to get ACK mask, then read only responding addresses
+    uint8_t eepMask = 0;
+    dac_i2c_scan(&eepMask);
     DacEepromData eepromData;
-    if (dac_eeprom_scan(&eepromData, 0xFF)) {
+    if (dac_eeprom_scan(&eepromData, eepMask)) {
         LOG_I("[HAL Discovery]", "EEPROM found at 0x%02X: %s (id=0x%04X, v%u)",
               eepromData.i2cAddress, eepromData.deviceName,
               eepromData.deviceId, eepromData.formatVersion);

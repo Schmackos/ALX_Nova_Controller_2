@@ -26,6 +26,7 @@
 #include "io_registry.h"
 #include "hal/hal_device_manager.h"
 #include "hal/hal_types.h"
+#include "hal/hal_temp_sensor.h"
 #endif
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
@@ -1554,6 +1555,32 @@ void sendHalDeviceState() {
         obj["i2cAddr"] = desc.i2cAddr;
         obj["channels"] = desc.channelCount;
         obj["capabilities"] = desc.capabilities;
+        obj["manufacturer"] = desc.manufacturer;
+        obj["busType"] = desc.bus.type;
+        obj["busIndex"] = desc.bus.index;
+        obj["pinA"] = desc.bus.pinA;
+        obj["pinB"] = desc.bus.pinB;
+        obj["busFreq"] = desc.bus.freqHz;
+        obj["sampleRates"] = desc.sampleRatesMask;
+        obj["legacyId"] = desc.legacyId;
+
+        // For sensor devices, include live readings
+        if (desc.type == HAL_DEV_SENSOR) {
+            HalTempSensor* ts = static_cast<HalTempSensor*>(dev);
+            obj["temperature"] = ts->getTemperature();
+        }
+
+        // Include per-device runtime config if available
+        HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(dev->getSlot());
+        if (cfg && cfg->valid) {
+            obj["userLabel"] = cfg->userLabel;
+            obj["cfgEnabled"] = cfg->enabled;
+            obj["cfgI2sPort"] = cfg->i2sPort;
+            obj["cfgVolume"] = cfg->volume;
+            obj["cfgMute"] = cfg->mute;
+            obj["cfgPinSda"] = cfg->pinSda;
+            obj["cfgPinScl"] = cfg->pinScl;
+        }
     }, &arr);
 
     String json;

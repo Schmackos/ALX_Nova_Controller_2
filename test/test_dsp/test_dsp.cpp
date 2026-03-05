@@ -1177,96 +1177,6 @@ void test_bass_management_setup(void) {
     TEST_ASSERT_EQUAL_INT(DSP_PEQ_BANDS, cfg->channels[3].stageCount);
 }
 
-// ===== Routing Matrix Tests =====
-
-void test_routing_identity(void) {
-    DspRoutingMatrix rm;
-    dsp_routing_preset_identity(rm);
-
-    // Diagonal should be 1.0, off-diagonal should be 0.0
-    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
-        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
-            float expected = (o == i) ? 1.0f : 0.0f;
-            TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, expected, rm.matrix[o][i]);
-        }
-    }
-}
-
-void test_routing_swap_lr(void) {
-    DspRoutingMatrix rm;
-    dsp_routing_preset_swap_lr(rm);
-
-    // L1↔R1 swap: [0][1]=1, [1][0]=1, diagonal=0
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[0][1]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[1][0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[1][1]);
-}
-
-void test_routing_apply_identity(void) {
-    DspRoutingMatrix rm;
-    dsp_routing_preset_identity(rm);
-
-    float ch0[] = {1.0f, 2.0f};
-    float ch1[] = {3.0f, 4.0f};
-    float *channels[] = {ch0, ch1};
-
-    dsp_routing_apply(rm, channels, 2, 2);
-
-    // Identity: no change
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, ch0[0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 2.0f, ch0[1]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 3.0f, ch1[0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 4.0f, ch1[1]);
-}
-
-void test_routing_apply_swap(void) {
-    DspRoutingMatrix rm;
-    dsp_routing_preset_swap_lr(rm);
-
-    float ch0[] = {1.0f, 2.0f};
-    float ch1[] = {3.0f, 4.0f};
-    float *channels[] = {ch0, ch1};
-
-    dsp_routing_apply(rm, channels, 2, 2);
-
-    // Swap: ch0 gets old ch1, ch1 gets old ch0
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 3.0f, ch0[0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 4.0f, ch0[1]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, ch1[0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 2.0f, ch1[1]);
-}
-
-void test_routing_set_gain_db(void) {
-    DspRoutingMatrix rm;
-    dsp_routing_preset_identity(rm);
-
-    // Set output 0, input 1 to -6dB
-    dsp_routing_set_gain_db(rm, 0, 1, -6.0f);
-    float expected = powf(10.0f, -6.0f / 20.0f); // ~0.501
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, rm.matrix[0][1]);
-
-    // Set to -inf (silence)
-    dsp_routing_set_gain_db(rm, 0, 1, -200.0f);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][1]);
-}
-
-void test_routing_mono_sum(void) {
-    DspRoutingMatrix rm;
-    dsp_routing_preset_mono_sum(rm);
-
-    float ch0[] = {1.0f};
-    float ch1[] = {1.0f};
-    float *channels[] = {ch0, ch1};
-
-    dsp_routing_apply(rm, channels, 2, 1);
-
-    // Mono sum: each output = average of all inputs = (1+1)/N
-    float expected = 2.0f / DSP_MAX_CHANNELS;
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, ch0[0]);
-    TEST_ASSERT_FLOAT_WITHIN(0.01f, expected, ch1[0]);
-}
-
 // ===== Expanded Crossover Tests =====
 
 void test_crossover_bw4_q_values(void) {
@@ -1630,41 +1540,6 @@ void test_gain_ramp_swap_preserves_state(void) {
     // After swap, currentLinear should be preserved from old active (0.75)
     cfg = dsp_get_active_config();
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.75f, cfg->channels[0].stages[idx].gain.currentLinear);
-}
-
-// ===== Routing Matrix Tests =====
-
-void test_routing_matrix_init_identity(void) {
-    DspRoutingMatrix rm;
-    dsp_routing_init(rm);
-    // Identity: diagonal = 1.0, off-diagonal = 0.0
-    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
-        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
-            if (o == i) {
-                TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[o][i]);
-            } else {
-                TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[o][i]);
-            }
-        }
-    }
-}
-
-void test_routing_matrix_presets(void) {
-    DspRoutingMatrix rm;
-    // Swap LR
-    dsp_routing_preset_swap_lr(rm);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[0][0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[0][1]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 1.0f, rm.matrix[1][0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, 0.0f, rm.matrix[1][1]);
-
-    // Mono sum: gain = 1/DSP_MAX_CHANNELS = 0.25 for 4 channels
-    float g = 1.0f / DSP_MAX_CHANNELS;
-    dsp_routing_preset_mono_sum(rm);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[0][0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[0][1]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[1][0]);
-    TEST_ASSERT_FLOAT_WITHIN(FLOAT_TOL, g, rm.matrix[1][1]);
 }
 
 void test_gain_init_sets_current_linear(void) {
@@ -3056,14 +2931,6 @@ int main(int argc, char **argv) {
     // Bass management
     RUN_TEST(test_bass_management_setup);
 
-    // Routing matrix
-    RUN_TEST(test_routing_identity);
-    RUN_TEST(test_routing_swap_lr);
-    RUN_TEST(test_routing_apply_identity);
-    RUN_TEST(test_routing_apply_swap);
-    RUN_TEST(test_routing_set_gain_db);
-    RUN_TEST(test_routing_mono_sum);
-
     // Linkwitz Transform
     RUN_TEST(test_linkwitz_coefficients_valid);
     RUN_TEST(test_linkwitz_identity_passthrough);
@@ -3076,10 +2943,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_gain_ramp_settled_uses_fast_path);
     RUN_TEST(test_gain_ramp_smooth_transition);
     RUN_TEST(test_gain_ramp_swap_preserves_state);
-
-    // Routing matrix
-    RUN_TEST(test_routing_matrix_init_identity);
-    RUN_TEST(test_routing_matrix_presets);
 
     // Config presets
     RUN_TEST(test_gain_init_sets_current_linear);

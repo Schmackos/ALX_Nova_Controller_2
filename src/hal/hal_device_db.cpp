@@ -1,6 +1,7 @@
 #ifdef DAC_ENABLED
 
 #include "hal_device_db.h"
+#include "hal_device_manager.h"
 #include <string.h>
 
 #ifndef NATIVE_TEST
@@ -65,6 +66,32 @@ static void hal_db_add_builtins() {
         d.bus.type = HAL_BUS_I2S;
         d.bus.index = 0;
         d.sampleRatesMask = HAL_RATE_48K | HAL_RATE_96K;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
+    // NS4150B
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ns,ns4150b-amp", 31);
+        strncpy(d.name, "NS4150B Amp", 32);
+        strncpy(d.manufacturer, "Nsiway", 32);
+        d.type = HAL_DEV_AMP;
+        d.channelCount = 1;
+        d.bus.type = HAL_BUS_GPIO;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
+    // Chip Temperature Sensor
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "espressif,esp32p4-temp", 31);
+        strncpy(d.name, "Chip Temperature", 32);
+        strncpy(d.manufacturer, "Espressif", 32);
+        d.type = HAL_DEV_SENSOR;
+        d.channelCount = 1;
+        d.bus.type = HAL_BUS_INTERNAL;
         d.capabilities = 0;
         hal_db_add(&d);
     }
@@ -197,15 +224,87 @@ const HalDeviceDescriptor* hal_db_get(int index) {
 void hal_load_device_configs() {
 #ifndef NATIVE_TEST
     if (!LittleFS.exists(HAL_CONFIG_FILE_PATH)) return;
-    // Config loading happens in Phase 4 — placeholder
+
+    File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "r");
+    if (!f) return;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) {
+        LOG_W("[HAL DB]", "Failed to parse %s: %s", HAL_CONFIG_FILE_PATH, err.c_str());
+        return;
+    }
+
+    JsonArray arr = doc.as<JsonArray>();
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    for (JsonObject obj : arr) {
+        uint8_t slot = obj["slot"] | 255;
+        if (slot >= HAL_MAX_DEVICES) continue;
+
+        HalDeviceConfig cfg;
+        memset(&cfg, 0, sizeof(cfg));
+        cfg.valid = true;
+        cfg.i2cAddr = obj["i2cAddr"] | 0;
+        cfg.i2cBusIndex = obj["i2cBus"] | 0;
+        cfg.i2cSpeedHz = obj["i2cSpeed"] | 0;
+        cfg.pinSda = obj["pinSda"] | -1;
+        cfg.pinScl = obj["pinScl"] | -1;
+        cfg.pinMclk = obj["pinMclk"] | -1;
+        cfg.pinData = obj["pinData"] | -1;
+        cfg.i2sPort = obj["i2sPort"] | 255;
+        cfg.sampleRate = obj["sampleRate"] | 0;
+        cfg.bitDepth = obj["bitDepth"] | 0;
+        cfg.volume = obj["volume"] | 100;
+        cfg.mute = obj["mute"] | false;
+        cfg.enabled = obj["enabled"] | true;
+        const char* label = obj["label"] | "";
+        strncpy(cfg.userLabel, label, 32);
+        cfg.userLabel[32] = '\0';
+
+        mgr.setConfig(slot, cfg);
+    }
     LOG_I("[HAL DB]", "Device configs loaded from %s", HAL_CONFIG_FILE_PATH);
 #endif
 }
 
 bool hal_save_device_config(uint8_t slot) {
 #ifndef NATIVE_TEST
-    (void)slot;
-    // Config saving happens in Phase 4 — placeholder
+    // Save ALL configs (simpler than surgical single-slot update)
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        HalDeviceConfig* cfg = mgr.getConfig(i);
+        if (!cfg || !cfg->valid) continue;
+
+        JsonObject obj = arr.add<JsonObject>();
+        obj["slot"] = i;
+        obj["i2cAddr"] = cfg->i2cAddr;
+        obj["i2cBus"] = cfg->i2cBusIndex;
+        obj["i2cSpeed"] = cfg->i2cSpeedHz;
+        obj["pinSda"] = cfg->pinSda;
+        obj["pinScl"] = cfg->pinScl;
+        obj["pinMclk"] = cfg->pinMclk;
+        obj["pinData"] = cfg->pinData;
+        obj["i2sPort"] = cfg->i2sPort;
+        obj["sampleRate"] = cfg->sampleRate;
+        obj["bitDepth"] = cfg->bitDepth;
+        obj["volume"] = cfg->volume;
+        obj["mute"] = cfg->mute;
+        obj["enabled"] = cfg->enabled;
+        if (cfg->userLabel[0]) obj["label"] = cfg->userLabel;
+    }
+
+    File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");
+    if (!f) {
+        LOG_E("[HAL DB]", "Failed to open %s for writing", HAL_CONFIG_FILE_PATH);
+        return false;
+    }
+    serializeJson(doc, f);
+    f.close();
+    LOG_I("[HAL DB]", "Saved device configs to %s", HAL_CONFIG_FILE_PATH);
     return true;
 #else
     (void)slot;

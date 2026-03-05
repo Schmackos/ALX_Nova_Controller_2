@@ -36,6 +36,10 @@ public:
     bool releasePin(int8_t gpio);
     bool isPinClaimed(int8_t gpio) const;
 
+    // Per-device config
+    HalDeviceConfig* getConfig(uint8_t slot);
+    bool setConfig(uint8_t slot, const HalDeviceConfig& cfg);
+
     // Reset all state (for testing)
     void reset();
 
@@ -45,7 +49,8 @@ private:
     HalDeviceManager(const HalDeviceManager&);
     HalDeviceManager& operator=(const HalDeviceManager&);
 
-    HalDevice*  _devices[HAL_MAX_DEVICES];
-    HalPinAlloc _pins[HAL_MAX_PINS];
-    uint8_t     _count;
+    HalDevice*      _devices[HAL_MAX_DEVICES];
+    HalDeviceConfig _configs[HAL_MAX_DEVICES];
+    HalPinAlloc     _pins[HAL_MAX_PINS];
+    uint8_t         _count;
 };

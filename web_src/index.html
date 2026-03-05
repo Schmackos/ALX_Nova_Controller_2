@@ -596,107 +596,6 @@
                 </div>
             </div>
 
-            <!-- I/O Devices -->
-            <div class="card" id="ioRegistryCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    I/O Devices
-                    <span style="font-size:11px;opacity:0.7"><span id="ioOutputCount">0</span> out / <span id="ioInputCount">0</span> in</span>
-                </div>
-                <div style="margin-bottom:8px"><strong style="font-size:12px;opacity:0.7">Outputs</strong></div>
-                <div id="ioOutputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
-                <div style="margin:12px 0 8px"><strong style="font-size:12px;opacity:0.7">Inputs</strong></div>
-                <div id="ioInputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
-                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="font-size:11px;opacity:0.7;margin-bottom:6px">Add Manual Output</div>
-                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-                        <input type="text" class="form-input" id="ioManualName" placeholder="Name" style="flex:1;min-width:100px">
-                        <select class="form-input" id="ioManualI2s" style="width:70px">
-                            <option value="0">I2S0</option>
-                            <option value="1">I2S1</option>
-                            <option value="2">I2S2</option>
-                        </select>
-                        <select class="form-input" id="ioManualChannels" style="width:60px">
-                            <option value="2">2ch</option>
-                            <option value="1">1ch</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="ioAddManualOutput()" style="padding:4px 10px">Add</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- EEPROM Programming -->
-            <div class="card" id="eepromCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    EEPROM Programming
-                    <span id="eepromFoundBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Found</span>
-                </div>
-                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="eepromStatus">Not scanned</span></div>
-                <div class="info-row"><span class="info-label">I2C Address</span><span class="info-value" id="eepromI2cAddr">—</span></div>
-                <div class="info-row"><span class="info-label">I2C Devices</span><span class="info-value" id="eepromI2cCount">—</span></div>
-                <div style="margin:8px 0">
-                    <button class="btn btn-secondary" onclick="eepromScan()">Scan I2C Bus</button>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Driver Preset</label>
-                    <select class="form-input" id="eepromPreset" onchange="eepromFillPreset()">
-                        <option value="">— Select preset —</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Device ID (hex)</label>
-                    <input type="text" class="form-input" id="eepromDeviceId" placeholder="0x0001">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Device Name</label>
-                    <input type="text" class="form-input" id="eepromDeviceName" maxlength="32" placeholder="PCM5102A">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Manufacturer</label>
-                    <input type="text" class="form-input" id="eepromManufacturer" maxlength="32" placeholder="Texas Instruments">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">HW Revision</label>
-                    <input type="number" class="form-input" id="eepromHwRev" min="0" max="255" value="1">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Max Channels</label>
-                    <input type="number" class="form-input" id="eepromMaxCh" min="1" max="8" value="2">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">DAC I2C Address (hex, 0=none)</label>
-                    <input type="text" class="form-input" id="eepromDacAddr" placeholder="0x00">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Flags</label>
-                    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:4px">
-                        <label><input type="checkbox" id="eepromFlagClock"> Indep. Clock</label>
-                        <label><input type="checkbox" id="eepromFlagVol"> HW Volume</label>
-                        <label><input type="checkbox" id="eepromFlagFilter"> Filters</label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Sample Rates (comma-separated)</label>
-                    <input type="text" class="form-input" id="eepromRates" placeholder="44100,48000,96000">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Target EEPROM Address</label>
-                    <select class="form-input" id="eepromTargetAddr">
-                        <option value="80">0x50</option>
-                        <option value="81">0x51</option>
-                        <option value="82">0x52</option>
-                        <option value="83">0x53</option>
-                        <option value="84">0x54</option>
-                        <option value="85">0x55</option>
-                        <option value="86">0x56</option>
-                        <option value="87">0x57</option>
-                    </select>
-                </div>
-                <div class="btn-row" style="margin-top:8px">
-                    <button class="btn btn-primary" onclick="eepromProgram()">Program</button>
-                    <button class="btn btn-danger" onclick="eepromErase()">Erase</button>
-                </div>
-            </div>
-
             <!-- Test Signal Generator -->
             <div class="card">
                 <div class="card-title">Test Signal Generator</div>
@@ -931,7 +830,7 @@
                 <input type="file" id="dspFileInput" accept=".txt,.json" style="display:none" onchange="dspHandleFileImport(event)">
             </div>
 
-            <!-- Quick Setup: Routing Matrix -->
+            <!-- Pipeline Routing Matrix (8x8) -->
             <div class="card">
                 <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
                     <span class="card-title" style="margin-bottom:0;">Routing Matrix</span>
@@ -940,11 +839,22 @@
                 <div class="collapsible-content" style="margin-top:8px;">
                     <div class="btn-row" style="flex-wrap:wrap;gap:6px;margin-bottom:12px;">
                         <button class="btn btn-secondary" onclick="dspRoutingPreset('identity')">1:1</button>
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('mono_sum')">Mono Sum</button>
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('swap_lr')">Swap L/R</button>
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('sub_sum')">Sub Sum</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('stereo')">Stereo</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('clear')">Clear All</button>
                     </div>
                     <div id="dspRoutingGrid" style="overflow-x:auto;"></div>
+                </div>
+            </div>
+
+            <!-- Per-Output DSP -->
+            <div class="card">
+                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                    <span class="card-title" style="margin-bottom:0;">Output DSP</span>
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" style="margin-top:8px;">
+                    <div id="outputDspChannelTabs" class="dsp-ch-tabs" style="margin-bottom:12px;"></div>
+                    <div id="outputDspPanel"></div>
                 </div>
             </div>
         </section>
@@ -2065,11 +1975,124 @@
         <!-- ===== DEVICES TAB ===== -->
         <section id="devices" class="panel">
             <h2>HAL Devices</h2>
-            <div class="card-row" style="margin-bottom:12px;">
+            <div class="card-row" style="margin-bottom:12px;gap:8px;">
                 <button id="hal-rescan-btn" class="btn btn-primary" onclick="triggerHalRescan()">Rescan Devices</button>
                 <button class="btn" onclick="importDeviceYaml()">Import YAML</button>
             </div>
             <div id="hal-device-list"></div>
+
+            <!-- Add Device Panel -->
+            <div class="card" style="margin-top:12px;">
+                <div class="card-title">Add Device</div>
+                <div class="hal-add-row">
+                    <select id="halAddPresetSelect" style="flex:1;font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);">
+                        <option value="">-- Select Device --</option>
+                    </select>
+                    <button class="btn btn-sm" onclick="halAddFromPreset()">Load Presets</button>
+                    <button class="btn btn-primary btn-sm" onclick="halRegisterPreset()">Register</button>
+                </div>
+            </div>
+
+            <!-- I/O Devices -->
+            <div class="card" id="ioRegistryCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    I/O Devices
+                    <span style="font-size:11px;opacity:0.7"><span id="ioOutputCount">0</span> out / <span id="ioInputCount">0</span> in</span>
+                </div>
+                <div style="margin-bottom:8px"><strong style="font-size:12px;opacity:0.7">Outputs</strong></div>
+                <div id="ioOutputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
+                <div style="margin:12px 0 8px"><strong style="font-size:12px;opacity:0.7">Inputs</strong></div>
+                <div id="ioInputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
+                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="font-size:11px;opacity:0.7;margin-bottom:6px">Add Manual Output</div>
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                        <input type="text" class="form-input" id="ioManualName" placeholder="Name" style="flex:1;min-width:100px">
+                        <select class="form-input" id="ioManualI2s" style="width:70px">
+                            <option value="0">I2S0</option>
+                            <option value="1">I2S1</option>
+                            <option value="2">I2S2</option>
+                        </select>
+                        <select class="form-input" id="ioManualChannels" style="width:60px">
+                            <option value="2">2ch</option>
+                            <option value="1">1ch</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="ioAddManualOutput()" style="padding:4px 10px">Add</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EEPROM Programming -->
+            <div class="card" id="eepromCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    EEPROM Programming
+                    <span id="eepromFoundBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Found</span>
+                </div>
+                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="eepromStatus">Not scanned</span></div>
+                <div class="info-row"><span class="info-label">I2C Address</span><span class="info-value" id="eepromI2cAddr">—</span></div>
+                <div class="info-row"><span class="info-label">I2C Devices</span><span class="info-value" id="eepromI2cCount">—</span></div>
+                <div style="margin:8px 0">
+                    <button class="btn btn-secondary" onclick="eepromScan()">Scan I2C Bus</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Driver Preset</label>
+                    <select class="form-input" id="eepromPreset" onchange="eepromFillPreset()">
+                        <option value="">— Select preset —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device ID (hex)</label>
+                    <input type="text" class="form-input" id="eepromDeviceId" placeholder="0x0001">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device Name</label>
+                    <input type="text" class="form-input" id="eepromDeviceName" maxlength="32" placeholder="PCM5102A">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Manufacturer</label>
+                    <input type="text" class="form-input" id="eepromManufacturer" maxlength="32" placeholder="Texas Instruments">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">HW Revision</label>
+                    <input type="number" class="form-input" id="eepromHwRev" min="0" max="255" value="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Channels</label>
+                    <input type="number" class="form-input" id="eepromMaxCh" min="1" max="8" value="2">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">DAC I2C Address (hex, 0=none)</label>
+                    <input type="text" class="form-input" id="eepromDacAddr" placeholder="0x00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Flags</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:4px">
+                        <label><input type="checkbox" id="eepromFlagClock"> Indep. Clock</label>
+                        <label><input type="checkbox" id="eepromFlagVol"> HW Volume</label>
+                        <label><input type="checkbox" id="eepromFlagFilter"> Filters</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Sample Rates (comma-separated)</label>
+                    <input type="text" class="form-input" id="eepromRates" placeholder="44100,48000,96000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Target EEPROM Address</label>
+                    <select class="form-input" id="eepromTargetAddr">
+                        <option value="80">0x50</option>
+                        <option value="81">0x51</option>
+                        <option value="82">0x52</option>
+                        <option value="83">0x53</option>
+                        <option value="84">0x54</option>
+                        <option value="85">0x55</option>
+                        <option value="86">0x56</option>
+                        <option value="87">0x57</option>
+                    </select>
+                </div>
+                <div class="btn-row" style="margin-top:8px">
+                    <button class="btn btn-primary" onclick="eepromProgram()">Program</button>
+                    <button class="btn btn-danger" onclick="eepromErase()">Erase</button>
+                </div>
+            </div>
         </section>
 
     </main>

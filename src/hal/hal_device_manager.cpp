@@ -9,6 +9,16 @@ HalDeviceManager& HalDeviceManager::instance() {
 
 HalDeviceManager::HalDeviceManager() : _count(0) {
     memset(_devices, 0, sizeof(_devices));
+    memset(_configs, 0, sizeof(_configs));
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        _configs[i].valid = false;
+        _configs[i].pinSda = -1;
+        _configs[i].pinScl = -1;
+        _configs[i].pinMclk = -1;
+        _configs[i].pinData = -1;
+        _configs[i].i2sPort = 255;
+        _configs[i].enabled = true;
+    }
     for (int i = 0; i < HAL_MAX_PINS; i++) {
         _pins[i].gpio = -1;
     }
@@ -174,10 +184,33 @@ bool HalDeviceManager::isPinClaimed(int8_t gpio) const {
     return false;
 }
 
+// ===== Per-device Config =====
+HalDeviceConfig* HalDeviceManager::getConfig(uint8_t slot) {
+    if (slot >= HAL_MAX_DEVICES) return nullptr;
+    return &_configs[slot];
+}
+
+bool HalDeviceManager::setConfig(uint8_t slot, const HalDeviceConfig& cfg) {
+    if (slot >= HAL_MAX_DEVICES) return false;
+    _configs[slot] = cfg;
+    _configs[slot].valid = true;
+    return true;
+}
+
 // ===== Reset (testing) =====
 void HalDeviceManager::reset() {
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         _devices[i] = nullptr;
+    }
+    memset(_configs, 0, sizeof(_configs));
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        _configs[i].valid = false;
+        _configs[i].pinSda = -1;
+        _configs[i].pinScl = -1;
+        _configs[i].pinMclk = -1;
+        _configs[i].pinData = -1;
+        _configs[i].i2sPort = 255;
+        _configs[i].enabled = true;
     }
     for (int i = 0; i < HAL_MAX_PINS; i++) {
         _pins[i].gpio = -1;

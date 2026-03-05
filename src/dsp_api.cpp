@@ -28,72 +28,6 @@ static bool dspFileExists(const char *path) {
     return (stat(fullPath.c_str(), &st) == 0);
 }
 
-// ===== Global Routing Matrix =====
-static DspRoutingMatrix _routingMatrix;
-static bool _routingMatrixLoaded = false;
-
-DspRoutingMatrix* dsp_get_routing_matrix() {
-    if (!_routingMatrixLoaded) {
-        dsp_routing_init(_routingMatrix);
-        _routingMatrixLoaded = true;
-    }
-    return &_routingMatrix;
-}
-
-// ===== Routing Matrix Persistence =====
-
-static void loadRoutingMatrix() {
-    if (!dspFileExists("/dsp_routing.json")) {
-        dsp_routing_init(_routingMatrix);
-        _routingMatrixLoaded = true;
-        return;
-    }
-    File f = LittleFS.open("/dsp_routing.json", "r");
-    if (f && f.size() > 0) {
-        String json = f.readString();
-        f.close();
-
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
-        if (!deserializeJson(doc, json)) {
-            JsonArray mat = doc["matrix"].as<JsonArray>();
-            if (!mat.isNull()) {
-                for (int o = 0; o < DSP_MAX_CHANNELS && o < (int)mat.size(); o++) {
-                    JsonArray row = mat[o].as<JsonArray>();
-                    if (row.isNull()) continue;
-                    for (int i = 0; i < DSP_MAX_CHANNELS && i < (int)row.size(); i++) {
-                        _routingMatrix.matrix[o][i] = row[i].as<float>();
-                    }
-                }
-            }
-        }
-        _routingMatrixLoaded = true;
-        LOG_I("[DSP] Routing matrix loaded from LittleFS");
-    } else {
-        if (f) f.close();
-        dsp_routing_init(_routingMatrix);
-        _routingMatrixLoaded = true;
-    }
-}
-
-static void saveRoutingMatrix() {
-    _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
-    JsonArray mat = doc["matrix"].to<JsonArray>();
-    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
-        JsonArray row = mat.add<JsonArray>();
-        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
-            row.add(_routingMatrix.matrix[o][i]);
-        }
-    }
-
-    String json;
-    serializeJson(doc, json);
-    File f = LittleFS.open("/dsp_routing.json", "w");
-    if (f) { f.print(json); f.close(); }
-    LOG_I("[DSP] Routing matrix saved to LittleFS");
-}
-
 // ===== DSP Settings Persistence =====
 
 static unsigned long _lastDspSaveRequest = 0;
@@ -173,9 +107,6 @@ void loadDspSettings() {
             ff.close();
         }
     }
-
-    // Load routing matrix
-    loadRoutingMatrix();
 
     // Recompute all coefficients and swap to make loaded config active
     DspState *cfg = dsp_get_inactive_config();
@@ -290,23 +221,13 @@ bool dsp_preset_save(int slot, const char *name) {
     }
     dsp_export_full_config_json(configBuf, 8192);
 
-    // Parse and augment with routing matrix + name
+    // Parse and augment with name
     _dspApiDoc.clear();
     JsonDocument &doc = _dspApiDoc;
     if (deserializeJson(doc, configBuf)) { free(configBuf); return false; }
 
     doc["name"] = name ? name : "";
     doc["dspEnabled"] = appState.dspEnabled;
-
-    // Add routing matrix
-    DspRoutingMatrix *rm = dsp_get_routing_matrix();
-    JsonArray routing = doc["routing"].to<JsonArray>();
-    for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
-        JsonArray row = routing.add<JsonArray>();
-        for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
-            row.add(rm->matrix[o][i]);
-        }
-    }
 
     // Write to file
     char path[24];
@@ -356,19 +277,6 @@ bool dsp_preset_load(int slot) {
 
     // Load dspEnabled
     if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
-
-    // Load routing matrix
-    if (doc["routing"].is<JsonArray>()) {
-        DspRoutingMatrix *rm = dsp_get_routing_matrix();
-        JsonArray routing = doc["routing"].as<JsonArray>();
-        for (int o = 0; o < DSP_MAX_CHANNELS && o < (int)routing.size(); o++) {
-            JsonArray row = routing[o].as<JsonArray>();
-            if (row.isNull()) continue;
-            for (int i = 0; i < DSP_MAX_CHANNELS && i < (int)row.size(); i++) {
-                rm->matrix[o][i] = row[i].as<float>();
-            }
-        }
-    }
 
     // Recompute all coefficients
     DspState *cfg = dsp_get_inactive_config();
@@ -1251,70 +1159,6 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         thd_stop_measurement();
         server.send(200, "application/json", "{\"success\":true}");
-    });
-
-    // ===== Routing Matrix Endpoints =====
-
-    // GET /api/dsp/routing — get routing matrix
-    server.on("/api/dsp/routing", HTTP_GET, []() {
-        if (!requireAuth()) return;
-
-        DspRoutingMatrix *rm = dsp_get_routing_matrix();
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
-        JsonArray mat = doc["matrix"].to<JsonArray>();
-        for (int o = 0; o < DSP_MAX_CHANNELS; o++) {
-            JsonArray row = mat.add<JsonArray>();
-            for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
-                row.add(rm->matrix[o][i]);
-            }
-        }
-
-        String json;
-        serializeJson(doc, json);
-        server.send(200, "application/json", json);
-    });
-
-    // PUT /api/dsp/routing — set routing matrix
-    server.on("/api/dsp/routing", HTTP_PUT, []() {
-        if (!requireAuth()) return;
-        if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
-
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
-        if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
-
-        DspRoutingMatrix *rm = dsp_get_routing_matrix();
-
-        // Check for preset shortcut
-        const char *preset = doc["preset"] | (const char *)nullptr;
-        if (preset) {
-            if (strcmp(preset, "identity") == 0) dsp_routing_preset_identity(*rm);
-            else if (strcmp(preset, "mono_sum") == 0) dsp_routing_preset_mono_sum(*rm);
-            else if (strcmp(preset, "swap_lr") == 0) dsp_routing_preset_swap_lr(*rm);
-            else if (strcmp(preset, "sub_sum") == 0) dsp_routing_preset_sub_sum(*rm);
-            else { sendJsonError(400, "Unknown preset"); return; }
-        } else if (doc["matrix"].is<JsonArray>()) {
-            JsonArray mat = doc["matrix"].as<JsonArray>();
-            for (int o = 0; o < DSP_MAX_CHANNELS && o < (int)mat.size(); o++) {
-                JsonArray row = mat[o].as<JsonArray>();
-                if (row.isNull()) continue;
-                for (int i = 0; i < DSP_MAX_CHANNELS && i < (int)row.size(); i++) {
-                    rm->matrix[o][i] = row[i].as<float>();
-                }
-            }
-        } else if (doc["output"].is<int>() && doc["input"].is<int>() && doc["gainDb"].is<float>()) {
-            // Single cell update
-            dsp_routing_set_gain_db(*rm, doc["output"].as<int>(), doc["input"].as<int>(), doc["gainDb"].as<float>());
-        } else {
-            sendJsonError(400, "Provide preset, matrix, or output/input/gainDb");
-            return;
-        }
-
-        saveRoutingMatrix();
-        appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
-        LOG_I("[DSP] Routing matrix updated");
     });
 
     // ===== PEQ Preset Endpoints =====

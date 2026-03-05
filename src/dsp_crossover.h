@@ -44,26 +44,5 @@ int dsp_insert_crossover_lr8(int channel, float freq, int role);
 // numMains: number of main channels
 int dsp_setup_bass_management(int subChannel, const int *mainChannels, int numMains, float crossoverFreq);
 
-// ===== Routing Matrix =====
-
-struct DspRoutingMatrix {
-    float matrix[DSP_MAX_CHANNELS][DSP_MAX_CHANNELS]; // [output][input] gain (linear)
-};
-
-void dsp_routing_init(DspRoutingMatrix &rm);
-void dsp_routing_apply(const DspRoutingMatrix &rm, float *channels[], int numChannels, int len);
-
-// Set a single matrix coefficient (gain in dB, -inf = -200 dB = silence)
-void dsp_routing_set_gain_db(DspRoutingMatrix &rm, int output, int input, float gainDb);
-
-// Preset: identity (1:1 mapping)
-void dsp_routing_preset_identity(DspRoutingMatrix &rm);
-// Preset: mono sum (all inputs → all outputs equally)
-void dsp_routing_preset_mono_sum(DspRoutingMatrix &rm);
-// Preset: swap L/R pairs
-void dsp_routing_preset_swap_lr(DspRoutingMatrix &rm);
-// Preset: sub sum (L1+R1 → Ch0, passthrough on others)
-void dsp_routing_preset_sub_sum(DspRoutingMatrix &rm);
-
 #endif // DSP_ENABLED
 #endif // DSP_CROSSOVER_H

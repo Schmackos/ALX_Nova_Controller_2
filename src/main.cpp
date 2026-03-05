@@ -18,6 +18,7 @@
 #ifdef DSP_ENABLED
 #include "dsp_api.h"
 #include "dsp_pipeline.h"
+#include "output_dsp.h"
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
@@ -31,6 +32,9 @@
 #include "hal/hal_api.h"
 #include "hal/hal_pipeline_bridge.h"
 #include "hal/hal_settings.h"
+#include "hal/hal_ns4150b.h"
+#include "hal/hal_temp_sensor.h"
+#include "drivers/es8311_regs.h"
 #include "pipeline_api.h"
 #endif
 #ifdef USB_AUDIO_ENABLED
@@ -88,6 +92,12 @@ const char *githubRepoName = GITHUB_REPO_NAME;
 
 // ===== Button Handler =====
 ButtonHandler resetButton(RESET_BUTTON_PIN);
+
+#ifdef DAC_ENABLED
+// ===== HAL device instances (registered during setup) =====
+static HalNs4150b* _halNs4150b = nullptr;
+static HalTempSensor* _halTempSensor = nullptr;
+#endif
 
 // Note: GitHub Root CA Certificate removed - now using Mozilla certificate
 // bundle via ESP32CertBundle library for automatic SSL validation of all public
@@ -231,6 +241,13 @@ void setup() {
     LOG_I("[Main] No Smart Sensing settings found, using defaults");
   }
 
+#ifdef DSP_ENABLED
+  // Initialize output DSP engine (post-matrix per-channel processing)
+  // Must be ready before audio_pipeline_init() so DSP config is loaded when pipeline starts
+  output_dsp_init();
+  output_dsp_load_all();
+#endif
+
   // Initialize I2S audio ADC (PCM1808) — uses sample rate from loaded settings
   i2s_audio_init();
 
@@ -245,6 +262,16 @@ void setup() {
 
   // Sync HAL pipeline bridge after all devices registered
   hal_pipeline_sync();
+
+  // Register NS4150B amplifier with HAL (ES8311 PA pin)
+  _halNs4150b = new HalNs4150b(ES8311_PA_PIN);
+  HalDeviceManager::instance().registerDevice(_halNs4150b, HAL_DISC_BUILTIN);
+
+  // Register ESP32-P4 internal temperature sensor
+#if CONFIG_IDF_TARGET_ESP32P4
+  _halTempSensor = new HalTempSensor();
+  HalDeviceManager::instance().registerDevice(_halTempSensor, HAL_DISC_BUILTIN);
+#endif
 #endif
 
   // Load MQTT settings

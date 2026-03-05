@@ -2184,6 +2184,58 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .btn-chip-action { font-size: 12px; padding: 3px 8px; }
         .log-highlight { background: rgba(255, 165, 0, 0.3); border-radius: 2px; }
 
+        /* ===== Routing Matrix Table ===== */
+        .routing-matrix-table { border-collapse: collapse; font-size: 11px; width: 100%; }
+        .routing-matrix-table td { padding: 3px 4px; text-align: center; white-space: nowrap; }
+        .routing-corner { width: 60px; }
+        .routing-header { font-weight: 600; color: var(--text-secondary); font-size: 10px; }
+        .routing-row-label { font-weight: 600; color: var(--text-secondary); text-align: left !important; font-size: 10px; }
+        .routing-cell { border: 1px solid var(--border); cursor: pointer; border-radius: 3px; transition: background 0.15s; color: var(--text-secondary); }
+        .routing-cell:hover { background: rgba(255,152,0,0.1); }
+        .routing-cell.active { background: rgba(255,152,0,0.12); color: var(--text-primary); }
+        .routing-cell.unity { background: rgba(255,152,0,0.22); color: var(--accent); font-weight: 600; }
+
+        /* ===== Output DSP Panels ===== */
+        .output-dsp-stage { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 4px; }
+        .output-dsp-stage .stage-label { flex: 1; font-size: 12px; font-weight: 500; }
+        .output-dsp-stage .stage-type { font-size: 10px; color: var(--text-secondary); padding: 1px 6px; background: var(--bg-card); border-radius: 3px; }
+        .output-dsp-stage .stage-params { font-size: 11px; color: var(--text-secondary); }
+        .output-dsp-bypass { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .output-dsp-add-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+        /* ===== HAL Device Cards ===== */
+        .hal-device-card { margin-bottom: 8px; }
+        .hal-device-card.expanded { border-color: var(--accent); }
+        .hal-device-header { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; }
+        .hal-device-name { flex: 1; font-weight: 600; font-size: 13px; }
+        .hal-temp-reading { font-size: 12px; color: var(--accent); font-weight: 500; }
+        .hal-expand-icon { transition: transform 0.2s; opacity: 0.5; }
+        .hal-expand-icon.rotated { transform: rotate(180deg); }
+        .hal-device-info { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
+        .hal-device-details { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+        .hal-detail-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+        .hal-detail-row span:first-child { color: var(--text-secondary); }
+        .hal-device-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+        .btn-sm { font-size: 11px; padding: 3px 8px; }
+        .hal-btn-remove { color: var(--error, #e53935); border-color: var(--error, #e53935); }
+        .hal-btn-remove:hover { background: var(--error, #e53935); color: white; }
+
+        /* HAL Edit Form */
+        .hal-edit-form { margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-surface); }
+        .hal-form-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--accent); }
+        .hal-form-section { font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-top: 10px; margin-bottom: 4px; border-top: 1px solid var(--border); padding-top: 6px; }
+        .hal-form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+        .hal-form-row label { min-width: 100px; color: var(--text-secondary); }
+        .hal-form-row input[type="text"], .hal-form-row input[type="number"], .hal-form-row select {
+            padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px;
+            background: var(--bg-primary); color: var(--text-primary); font-size: 12px;
+        }
+        .hal-form-row input[type="range"] { flex: 1; }
+        .hal-form-buttons { display: flex; gap: 8px; margin-top: 10px; }
+
+        /* HAL Add Device */
+        .hal-add-row { display: flex; gap: 8px; align-items: center; }
+
 /* ===== 04-canvas.css ===== */
 
         /* ===== Graph Canvas ===== */
@@ -3275,107 +3327,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
-            <!-- I/O Devices -->
-            <div class="card" id="ioRegistryCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    I/O Devices
-                    <span style="font-size:11px;opacity:0.7"><span id="ioOutputCount">0</span> out / <span id="ioInputCount">0</span> in</span>
-                </div>
-                <div style="margin-bottom:8px"><strong style="font-size:12px;opacity:0.7">Outputs</strong></div>
-                <div id="ioOutputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
-                <div style="margin:12px 0 8px"><strong style="font-size:12px;opacity:0.7">Inputs</strong></div>
-                <div id="ioInputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
-                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="font-size:11px;opacity:0.7;margin-bottom:6px">Add Manual Output</div>
-                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-                        <input type="text" class="form-input" id="ioManualName" placeholder="Name" style="flex:1;min-width:100px">
-                        <select class="form-input" id="ioManualI2s" style="width:70px">
-                            <option value="0">I2S0</option>
-                            <option value="1">I2S1</option>
-                            <option value="2">I2S2</option>
-                        </select>
-                        <select class="form-input" id="ioManualChannels" style="width:60px">
-                            <option value="2">2ch</option>
-                            <option value="1">1ch</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="ioAddManualOutput()" style="padding:4px 10px">Add</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- EEPROM Programming -->
-            <div class="card" id="eepromCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    EEPROM Programming
-                    <span id="eepromFoundBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Found</span>
-                </div>
-                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="eepromStatus">Not scanned</span></div>
-                <div class="info-row"><span class="info-label">I2C Address</span><span class="info-value" id="eepromI2cAddr">—</span></div>
-                <div class="info-row"><span class="info-label">I2C Devices</span><span class="info-value" id="eepromI2cCount">—</span></div>
-                <div style="margin:8px 0">
-                    <button class="btn btn-secondary" onclick="eepromScan()">Scan I2C Bus</button>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Driver Preset</label>
-                    <select class="form-input" id="eepromPreset" onchange="eepromFillPreset()">
-                        <option value="">— Select preset —</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Device ID (hex)</label>
-                    <input type="text" class="form-input" id="eepromDeviceId" placeholder="0x0001">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Device Name</label>
-                    <input type="text" class="form-input" id="eepromDeviceName" maxlength="32" placeholder="PCM5102A">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Manufacturer</label>
-                    <input type="text" class="form-input" id="eepromManufacturer" maxlength="32" placeholder="Texas Instruments">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">HW Revision</label>
-                    <input type="number" class="form-input" id="eepromHwRev" min="0" max="255" value="1">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Max Channels</label>
-                    <input type="number" class="form-input" id="eepromMaxCh" min="1" max="8" value="2">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">DAC I2C Address (hex, 0=none)</label>
-                    <input type="text" class="form-input" id="eepromDacAddr" placeholder="0x00">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Flags</label>
-                    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:4px">
-                        <label><input type="checkbox" id="eepromFlagClock"> Indep. Clock</label>
-                        <label><input type="checkbox" id="eepromFlagVol"> HW Volume</label>
-                        <label><input type="checkbox" id="eepromFlagFilter"> Filters</label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Sample Rates (comma-separated)</label>
-                    <input type="text" class="form-input" id="eepromRates" placeholder="44100,48000,96000">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Target EEPROM Address</label>
-                    <select class="form-input" id="eepromTargetAddr">
-                        <option value="80">0x50</option>
-                        <option value="81">0x51</option>
-                        <option value="82">0x52</option>
-                        <option value="83">0x53</option>
-                        <option value="84">0x54</option>
-                        <option value="85">0x55</option>
-                        <option value="86">0x56</option>
-                        <option value="87">0x57</option>
-                    </select>
-                </div>
-                <div class="btn-row" style="margin-top:8px">
-                    <button class="btn btn-primary" onclick="eepromProgram()">Program</button>
-                    <button class="btn btn-danger" onclick="eepromErase()">Erase</button>
-                </div>
-            </div>
-
             <!-- Test Signal Generator -->
             <div class="card">
                 <div class="card-title">Test Signal Generator</div>
@@ -3610,7 +3561,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <input type="file" id="dspFileInput" accept=".txt,.json" style="display:none" onchange="dspHandleFileImport(event)">
             </div>
 
-            <!-- Quick Setup: Routing Matrix -->
+            <!-- Pipeline Routing Matrix (8x8) -->
             <div class="card">
                 <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
                     <span class="card-title" style="margin-bottom:0;">Routing Matrix</span>
@@ -3619,11 +3570,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="collapsible-content" style="margin-top:8px;">
                     <div class="btn-row" style="flex-wrap:wrap;gap:6px;margin-bottom:12px;">
                         <button class="btn btn-secondary" onclick="dspRoutingPreset('identity')">1:1</button>
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('mono_sum')">Mono Sum</button>
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('swap_lr')">Swap L/R</button>
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('sub_sum')">Sub Sum</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('stereo')">Stereo</button>
+                        <button class="btn btn-secondary" onclick="dspRoutingPreset('clear')">Clear All</button>
                     </div>
                     <div id="dspRoutingGrid" style="overflow-x:auto;"></div>
+                </div>
+            </div>
+
+            <!-- Per-Output DSP -->
+            <div class="card">
+                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+                    <span class="card-title" style="margin-bottom:0;">Output DSP</span>
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                </div>
+                <div class="collapsible-content" style="margin-top:8px;">
+                    <div id="outputDspChannelTabs" class="dsp-ch-tabs" style="margin-bottom:12px;"></div>
+                    <div id="outputDspPanel"></div>
                 </div>
             </div>
         </section>
@@ -4744,11 +4706,124 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         <!-- ===== DEVICES TAB ===== -->
         <section id="devices" class="panel">
             <h2>HAL Devices</h2>
-            <div class="card-row" style="margin-bottom:12px;">
+            <div class="card-row" style="margin-bottom:12px;gap:8px;">
                 <button id="hal-rescan-btn" class="btn btn-primary" onclick="triggerHalRescan()">Rescan Devices</button>
                 <button class="btn" onclick="importDeviceYaml()">Import YAML</button>
             </div>
             <div id="hal-device-list"></div>
+
+            <!-- Add Device Panel -->
+            <div class="card" style="margin-top:12px;">
+                <div class="card-title">Add Device</div>
+                <div class="hal-add-row">
+                    <select id="halAddPresetSelect" style="flex:1;font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);">
+                        <option value="">-- Select Device --</option>
+                    </select>
+                    <button class="btn btn-sm" onclick="halAddFromPreset()">Load Presets</button>
+                    <button class="btn btn-primary btn-sm" onclick="halRegisterPreset()">Register</button>
+                </div>
+            </div>
+
+            <!-- I/O Devices -->
+            <div class="card" id="ioRegistryCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    I/O Devices
+                    <span style="font-size:11px;opacity:0.7"><span id="ioOutputCount">0</span> out / <span id="ioInputCount">0</span> in</span>
+                </div>
+                <div style="margin-bottom:8px"><strong style="font-size:12px;opacity:0.7">Outputs</strong></div>
+                <div id="ioOutputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
+                <div style="margin:12px 0 8px"><strong style="font-size:12px;opacity:0.7">Inputs</strong></div>
+                <div id="ioInputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
+                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="font-size:11px;opacity:0.7;margin-bottom:6px">Add Manual Output</div>
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                        <input type="text" class="form-input" id="ioManualName" placeholder="Name" style="flex:1;min-width:100px">
+                        <select class="form-input" id="ioManualI2s" style="width:70px">
+                            <option value="0">I2S0</option>
+                            <option value="1">I2S1</option>
+                            <option value="2">I2S2</option>
+                        </select>
+                        <select class="form-input" id="ioManualChannels" style="width:60px">
+                            <option value="2">2ch</option>
+                            <option value="1">1ch</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="ioAddManualOutput()" style="padding:4px 10px">Add</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EEPROM Programming -->
+            <div class="card" id="eepromCard">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    EEPROM Programming
+                    <span id="eepromFoundBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Found</span>
+                </div>
+                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="eepromStatus">Not scanned</span></div>
+                <div class="info-row"><span class="info-label">I2C Address</span><span class="info-value" id="eepromI2cAddr">—</span></div>
+                <div class="info-row"><span class="info-label">I2C Devices</span><span class="info-value" id="eepromI2cCount">—</span></div>
+                <div style="margin:8px 0">
+                    <button class="btn btn-secondary" onclick="eepromScan()">Scan I2C Bus</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Driver Preset</label>
+                    <select class="form-input" id="eepromPreset" onchange="eepromFillPreset()">
+                        <option value="">— Select preset —</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device ID (hex)</label>
+                    <input type="text" class="form-input" id="eepromDeviceId" placeholder="0x0001">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Device Name</label>
+                    <input type="text" class="form-input" id="eepromDeviceName" maxlength="32" placeholder="PCM5102A">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Manufacturer</label>
+                    <input type="text" class="form-input" id="eepromManufacturer" maxlength="32" placeholder="Texas Instruments">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">HW Revision</label>
+                    <input type="number" class="form-input" id="eepromHwRev" min="0" max="255" value="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Channels</label>
+                    <input type="number" class="form-input" id="eepromMaxCh" min="1" max="8" value="2">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">DAC I2C Address (hex, 0=none)</label>
+                    <input type="text" class="form-input" id="eepromDacAddr" placeholder="0x00">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Flags</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:4px">
+                        <label><input type="checkbox" id="eepromFlagClock"> Indep. Clock</label>
+                        <label><input type="checkbox" id="eepromFlagVol"> HW Volume</label>
+                        <label><input type="checkbox" id="eepromFlagFilter"> Filters</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Sample Rates (comma-separated)</label>
+                    <input type="text" class="form-input" id="eepromRates" placeholder="44100,48000,96000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Target EEPROM Address</label>
+                    <select class="form-input" id="eepromTargetAddr">
+                        <option value="80">0x50</option>
+                        <option value="81">0x51</option>
+                        <option value="82">0x52</option>
+                        <option value="83">0x53</option>
+                        <option value="84">0x54</option>
+                        <option value="85">0x55</option>
+                        <option value="86">0x56</option>
+                        <option value="87">0x57</option>
+                    </select>
+                </div>
+                <div class="btn-row" style="margin-top:8px">
+                    <button class="btn btn-primary" onclick="eepromProgram()">Program</button>
+                    <button class="btn btn-danger" onclick="eepromErase()">Erase</button>
+                </div>
+            </div>
         </section>
 
     </main>
@@ -5385,6 +5460,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 canvasDims = {};
                 setTimeout(dspDrawFreqResponse, 50);
                 dspLoadRouting();
+                if (typeof outputDspLoadChannel === 'function') outputDspLoadChannel(outputDspCh);
                 if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
                 if (typeof updateChainCopyToDropdown === 'function') updateChainCopyToDropdown();
                 if (peqGraphLayers.rta && ws && ws.readyState === WebSocket.OPEN) {
@@ -6863,11 +6939,13 @@ function toggleSigGenLane(enabled) {
 
 //# sourceURL=14-io-registry.js
 
-        // HAL Devices Management
-        // Provides device discovery, configuration, and monitoring UI
+        // ===== HAL Device Management =====
+        // Provides device discovery, configuration, monitoring, and CRUD UI
 
         var halDevices = [];
         var halScanning = false;
+        var halExpandedSlot = -1;
+        var halEditingSlot = -1;
 
         function handleHalDeviceState(data) {
             halScanning = data.scanning || false;
@@ -6892,58 +6970,376 @@ function toggleSigGenLane(enabled) {
 
             var html = '';
             for (var i = 0; i < halDevices.length; i++) {
-                var d = halDevices[i];
-                html += buildHalDeviceCard(d);
+                html += buildHalDeviceCard(halDevices[i]);
             }
             container.innerHTML = html;
         }
 
+        function halGetStateInfo(state) {
+            switch (state) {
+                case 1: return { cls: 'blue', label: 'Detected' };
+                case 2: return { cls: 'amber', label: 'Configuring' };
+                case 3: return { cls: 'green', label: 'Available' };
+                case 4: return { cls: 'red', label: 'Unavailable' };
+                case 5: return { cls: 'red', label: 'Error' };
+                case 6: return { cls: 'amber', label: 'Manual' };
+                case 7: return { cls: 'grey', label: 'Removed' };
+                default: return { cls: 'grey', label: 'Unknown' };
+            }
+        }
+
+        function halGetTypeInfo(type) {
+            var types = {
+                1: { label: 'DAC', icon: 'M12,3L1,9L12,15L21,10.09V17H23V9M5,13.18V17.18L12,21L19,17.18V13.18L12,17L5,13.18Z' },
+                2: { label: 'ADC', icon: 'M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z' },
+                3: { label: 'Codec', icon: 'M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11' },
+                4: { label: 'Amp', icon: 'M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z' },
+                5: { label: 'DSP', icon: 'M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11' },
+                6: { label: 'Sensor', icon: 'M15,13V5A3,3 0 0,0 9,5V13A5,5 0 1,0 15,13M12,4A1,1 0 0,1 13,5V8H11V5A1,1 0 0,1 12,4Z' }
+            };
+            return types[type] || { label: 'Unknown', icon: 'M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11' };
+        }
+
+        function halGetBusLabel(busType) {
+            return ['None', 'I2C', 'I2S', 'SPI', 'GPIO', 'Internal'][busType] || 'Unknown';
+        }
+
+        function halGetDiscLabel(disc) {
+            return ['Builtin', 'EEPROM', 'GPIO ID', 'Manual', 'Online'][disc] || 'Unknown';
+        }
+
         function buildHalDeviceCard(d) {
-            var stateClass = 'grey';
-            var stateLabel = 'Unknown';
-            switch (d.state) {
-                case 1: stateClass = 'blue'; stateLabel = 'Detected'; break;
-                case 2: stateClass = 'amber'; stateLabel = 'Configuring'; break;
-                case 3: stateClass = 'green'; stateLabel = 'Available'; break;
-                case 4: stateClass = 'red'; stateLabel = 'Unavailable'; break;
-                case 5: stateClass = 'red'; stateLabel = 'Error'; break;
-                case 6: stateClass = 'amber'; stateLabel = 'Manual'; break;
-                case 7: stateClass = 'grey'; stateLabel = 'Removed'; break;
+            var si = halGetStateInfo(d.state);
+            var ti = halGetTypeInfo(d.type);
+            var expanded = (halExpandedSlot === d.slot);
+            var editing = (halEditingSlot === d.slot);
+            var displayName = (d.userLabel && d.userLabel.length > 0) ? d.userLabel : (d.name || d.compatible);
+
+            var h = '<div class="card hal-device-card' + (expanded ? ' expanded' : '') + '">';
+
+            // Header row - clickable to expand
+            h += '<div class="hal-device-header" onclick="halToggleExpand(' + d.slot + ')">';
+            h += '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="' + ti.icon + '"/></svg>';
+            h += '<span class="hal-device-name">' + escapeHtml(displayName) + '</span>';
+            if (d.type === 6 && d.temperature !== undefined) {
+                h += '<span class="hal-temp-reading">' + d.temperature.toFixed(1) + ' &deg;C</span>';
+            }
+            h += '<span class="status-dot status-' + si.cls + '" title="' + si.label + '"></span>';
+            h += '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="hal-expand-icon' + (expanded ? ' rotated' : '') + '" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
+            h += '</div>';
+
+            // Badge row
+            h += '<div class="hal-device-info">';
+            h += '<span class="badge badge-' + si.cls + '">' + si.label + '</span>';
+            h += '<span class="badge">' + ti.label + '</span>';
+            h += '<span class="badge">' + halGetDiscLabel(d.discovery) + '</span>';
+            if (d.ready) h += '<span class="badge badge-green">Ready</span>';
+            h += '</div>';
+
+            // Expanded detail section
+            if (expanded) {
+                h += '<div class="hal-device-details">';
+
+                // Device info
+                h += '<div class="hal-detail-row"><span>Compatible:</span><span>' + escapeHtml(d.compatible || '') + '</span></div>';
+                if (d.manufacturer) h += '<div class="hal-detail-row"><span>Manufacturer:</span><span>' + escapeHtml(d.manufacturer) + '</span></div>';
+                h += '<div class="hal-detail-row"><span>Bus:</span><span>' + halGetBusLabel(d.busType || 0) + (d.busIndex > 0 ? ' #' + d.busIndex : '') + '</span></div>';
+                if (d.i2cAddr > 0) h += '<div class="hal-detail-row"><span>I2C Address:</span><span>0x' + d.i2cAddr.toString(16).toUpperCase().padStart(2, '0') + '</span></div>';
+                if (d.busFreq > 0) h += '<div class="hal-detail-row"><span>Bus Freq:</span><span>' + (d.busFreq >= 1000000 ? (d.busFreq/1000000).toFixed(1) + ' MHz' : (d.busFreq/1000) + ' kHz') + '</span></div>';
+                if (d.pinA >= 0) h += '<div class="hal-detail-row"><span>Pin A (SDA/Data):</span><span>GPIO ' + d.pinA + '</span></div>';
+                if (d.pinB >= 0) h += '<div class="hal-detail-row"><span>Pin B (SCL/CLK):</span><span>GPIO ' + d.pinB + '</span></div>';
+                if (d.channels > 0) h += '<div class="hal-detail-row"><span>Channels:</span><span>' + d.channels + '</span></div>';
+                h += '<div class="hal-detail-row"><span>Slot:</span><span>' + d.slot + '</span></div>';
+
+                // Capabilities
+                if (d.capabilities > 0) {
+                    var caps = [];
+                    if (d.capabilities & 1) caps.push('HW Volume');
+                    if (d.capabilities & 2) caps.push('Filters');
+                    if (d.capabilities & 4) caps.push('Mute');
+                    if (d.capabilities & 8) caps.push('ADC');
+                    if (d.capabilities & 16) caps.push('DAC');
+                    h += '<div class="hal-detail-row"><span>Capabilities:</span><span>' + caps.join(', ') + '</span></div>';
+                }
+
+                // Sample rates
+                if (d.sampleRates > 0) {
+                    var rates = [];
+                    if (d.sampleRates & 1) rates.push('8k');
+                    if (d.sampleRates & 2) rates.push('16k');
+                    if (d.sampleRates & 4) rates.push('44.1k');
+                    if (d.sampleRates & 8) rates.push('48k');
+                    if (d.sampleRates & 16) rates.push('96k');
+                    if (d.sampleRates & 32) rates.push('192k');
+                    h += '<div class="hal-detail-row"><span>Sample Rates:</span><span>' + rates.join(', ') + '</span></div>';
+                }
+
+                // Edit form
+                if (editing) {
+                    h += halBuildEditForm(d);
+                }
+
+                // Action buttons
+                h += '<div class="hal-device-actions">';
+                if (!editing) {
+                    h += '<button class="btn btn-sm" onclick="halStartEdit(' + d.slot + ')" title="Configure"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg> Edit</button>';
+                }
+                h += '<button class="btn btn-sm" onclick="halReinitDevice(' + d.slot + ')" title="Re-initialize"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg> Reinit</button>';
+                h += '<button class="btn btn-sm" onclick="exportDeviceYaml(' + d.slot + ')" title="Export YAML"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg> Export</button>';
+                if (d.discovery !== 0) {  // Can't remove builtins
+                    h += '<button class="btn btn-sm hal-btn-remove" onclick="halRemoveDevice(' + d.slot + ')" title="Remove"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg> Remove</button>';
+                }
+                h += '</div>';
+
+                h += '</div>'; // hal-device-details
             }
 
-            var typeLabel = 'Unknown';
-            var typeIcon = 'M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11'; // mdi-chip
-            switch (d.type) {
-                case 1: typeLabel = 'DAC'; typeIcon = 'M12,3L1,9L12,15L21,10.09V17H23V9M5,13.18V17.18L12,21L19,17.18V13.18L12,17L5,13.18Z'; break;
-                case 2: typeLabel = 'ADC'; typeIcon = 'M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z'; break;
-                case 3: typeLabel = 'Codec'; break;
-                case 4: typeLabel = 'Amp'; typeIcon = 'M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z'; break;
-                case 5: typeLabel = 'DSP'; break;
-                case 6: typeLabel = 'Sensor'; typeIcon = 'M15,13V5A3,3 0 0,0 9,5V13A5,5 0 1,0 15,13M12,4A1,1 0 0,1 13,5V8H11V5A1,1 0 0,1 12,4Z'; break;
+            h += '</div>'; // card
+            return h;
+        }
+
+        function halBuildEditForm(d) {
+            var busType = d.busType || 0;
+            var h = '<div class="hal-edit-form">';
+            h += '<div class="hal-form-title">Device Configuration</div>';
+
+            // User label
+            h += '<div class="hal-form-row">';
+            h += '<label>Label:</label>';
+            h += '<input type="text" id="halCfgLabel" value="' + escapeHtml(d.userLabel || '') + '" placeholder="' + escapeHtml(d.name || '') + '" maxlength="32">';
+            h += '</div>';
+
+            // Enable toggle
+            h += '<div class="hal-form-row">';
+            h += '<label>Enabled:</label>';
+            h += '<label class="toggle-label"><input type="checkbox" id="halCfgEnabled" ' + (d.cfgEnabled !== false ? 'checked' : '') + '> <span>Active</span></label>';
+            h += '</div>';
+
+            // I2C settings (for I2C bus devices)
+            if (busType === 1) {
+                h += '<div class="hal-form-section">I2C Settings</div>';
+                h += '<div class="hal-form-row">';
+                h += '<label>Address:</label>';
+                h += '<input type="text" id="halCfgI2cAddr" value="0x' + (d.i2cAddr || 0).toString(16).toUpperCase().padStart(2, '0') + '" style="width:60px;">';
+                h += '</div>';
+                h += '<div class="hal-form-row">';
+                h += '<label>Bus:</label>';
+                h += '<select id="halCfgI2cBus">';
+                h += '<option value="0"' + ((d.busIndex || 0) === 0 ? ' selected' : '') + '>External (GPIO 48/54)</option>';
+                h += '<option value="1"' + ((d.busIndex || 0) === 1 ? ' selected' : '') + '>Onboard (GPIO 7/8)</option>';
+                h += '<option value="2"' + ((d.busIndex || 0) === 2 ? ' selected' : '') + '>Expansion (GPIO 28/29)</option>';
+                h += '</select>';
+                h += '</div>';
+                h += '<div class="hal-form-row">';
+                h += '<label>Speed:</label>';
+                h += '<select id="halCfgI2cSpeed">';
+                h += '<option value="100000"' + ((d.busFreq || 0) <= 100000 ? ' selected' : '') + '>100 kHz</option>';
+                h += '<option value="400000"' + ((d.busFreq || 0) >= 400000 ? ' selected' : '') + '>400 kHz</option>';
+                h += '</select>';
+                h += '</div>';
             }
 
-            var discLabel = ['Builtin', 'EEPROM', 'GPIO ID', 'Manual', 'Online'][d.discovery] || 'Unknown';
+            // I2S settings (for audio devices: DAC, ADC, Codec)
+            if (d.type >= 1 && d.type <= 3) {
+                h += '<div class="hal-form-section">Audio Settings</div>';
+                h += '<div class="hal-form-row">';
+                h += '<label>I2S Port:</label>';
+                h += '<select id="halCfgI2sPort">';
+                for (var p = 0; p < 3; p++) {
+                    h += '<option value="' + p + '"' + (p === (d.cfgI2sPort !== undefined ? d.cfgI2sPort : 0) ? ' selected' : '') + '>I2S ' + p + '</option>';
+                }
+                h += '</select>';
+                h += '</div>';
 
-            var html = '<div class="card hal-device-card">';
-            html += '<div class="hal-device-header">';
-            html += '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="' + typeIcon + '"/></svg>';
-            html += '<span class="hal-device-name">' + escapeHtml(d.name || d.compatible) + '</span>';
-            html += '<span class="status-dot status-' + stateClass + '"></span>';
-            html += '</div>';
-            html += '<div class="hal-device-info">';
-            html += '<span class="badge badge-' + stateClass + '">' + stateLabel + '</span>';
-            html += '<span class="badge">' + typeLabel + '</span>';
-            html += '<span class="badge">' + discLabel + '</span>';
-            html += '</div>';
-            html += '<div class="hal-device-details">';
-            if (d.compatible) html += '<div class="hal-detail-row"><span>Compatible:</span><span>' + escapeHtml(d.compatible) + '</span></div>';
-            if (d.i2cAddr > 0) html += '<div class="hal-detail-row"><span>I2C Address:</span><span>0x' + d.i2cAddr.toString(16).toUpperCase().padStart(2, '0') + '</span></div>';
-            if (d.channels > 0) html += '<div class="hal-detail-row"><span>Channels:</span><span>' + d.channels + '</span></div>';
-            html += '<div class="hal-detail-row"><span>Slot:</span><span>' + d.slot + '</span></div>';
-            html += '<div class="hal-detail-row"><span>Ready:</span><span>' + (d.ready ? 'Yes' : 'No') + '</span></div>';
-            html += '</div>';
-            html += '</div>';
-            return html;
+                // Volume (for devices with HW volume capability)
+                if (d.capabilities & 1) {
+                    h += '<div class="hal-form-row">';
+                    h += '<label>Volume:</label>';
+                    h += '<input type="range" id="halCfgVolume" min="0" max="100" value="' + (d.cfgVolume !== undefined ? d.cfgVolume : 100) + '" oninput="document.getElementById(\'halCfgVolLabel\').textContent=this.value+\'%\'" style="flex:1;"><span id="halCfgVolLabel">' + (d.cfgVolume !== undefined ? d.cfgVolume : 100) + '%</span>';
+                    h += '</div>';
+                }
+
+                // Mute (for devices with mute capability)
+                if (d.capabilities & 4) {
+                    h += '<div class="hal-form-row">';
+                    h += '<label>Mute:</label>';
+                    h += '<label class="toggle-label"><input type="checkbox" id="halCfgMute" ' + (d.cfgMute ? 'checked' : '') + '> <span>Muted</span></label>';
+                    h += '</div>';
+                }
+            }
+
+            // GPIO settings (for GPIO devices like amp)
+            if (busType === 4) {
+                h += '<div class="hal-form-section">GPIO Settings</div>';
+                h += '<div class="hal-form-row">';
+                h += '<label>Pin:</label>';
+                h += '<input type="number" id="halCfgPinA" value="' + (d.pinA >= 0 ? d.pinA : '') + '" min="0" max="54" style="width:60px;">';
+                h += '</div>';
+            }
+
+            // Pin overrides (for I2C/I2S devices)
+            if (busType === 1 || busType === 2) {
+                h += '<div class="hal-form-section">Pin Overrides (-1 = default)</div>';
+                h += '<div class="hal-form-row">';
+                h += '<label>SDA/Data:</label>';
+                h += '<input type="number" id="halCfgPinSda" value="' + (d.cfgPinSda !== undefined ? d.cfgPinSda : -1) + '" min="-1" max="54" style="width:60px;">';
+                h += '</div>';
+                h += '<div class="hal-form-row">';
+                h += '<label>SCL/CLK:</label>';
+                h += '<input type="number" id="halCfgPinScl" value="' + (d.cfgPinScl !== undefined ? d.cfgPinScl : -1) + '" min="-1" max="54" style="width:60px;">';
+                h += '</div>';
+            }
+
+            // Save/Cancel
+            h += '<div class="hal-form-buttons">';
+            h += '<button class="btn btn-primary btn-sm" onclick="halSaveConfig(' + d.slot + ')">Save</button>';
+            h += '<button class="btn btn-sm" onclick="halCancelEdit()">Cancel</button>';
+            h += '</div>';
+
+            h += '</div>';
+            return h;
+        }
+
+        function halToggleExpand(slot) {
+            halExpandedSlot = (halExpandedSlot === slot) ? -1 : slot;
+            halEditingSlot = -1;
+            renderHalDevices();
+        }
+
+        function halStartEdit(slot) {
+            halEditingSlot = slot;
+            halExpandedSlot = slot;
+            renderHalDevices();
+        }
+
+        function halCancelEdit() {
+            halEditingSlot = -1;
+            renderHalDevices();
+        }
+
+        function halSaveConfig(slot) {
+            var cfg = {};
+            cfg.slot = slot;
+
+            var labelEl = document.getElementById('halCfgLabel');
+            if (labelEl) cfg.label = labelEl.value;
+
+            var enabledEl = document.getElementById('halCfgEnabled');
+            if (enabledEl) cfg.enabled = enabledEl.checked;
+
+            var i2cAddrEl = document.getElementById('halCfgI2cAddr');
+            if (i2cAddrEl) cfg.i2cAddr = parseInt(i2cAddrEl.value, 16) || 0;
+
+            var i2cBusEl = document.getElementById('halCfgI2cBus');
+            if (i2cBusEl) cfg.i2cBus = parseInt(i2cBusEl.value) || 0;
+
+            var i2cSpeedEl = document.getElementById('halCfgI2cSpeed');
+            if (i2cSpeedEl) cfg.i2cSpeed = parseInt(i2cSpeedEl.value) || 0;
+
+            var i2sPortEl = document.getElementById('halCfgI2sPort');
+            if (i2sPortEl) cfg.i2sPort = parseInt(i2sPortEl.value) || 0;
+
+            var volumeEl = document.getElementById('halCfgVolume');
+            if (volumeEl) cfg.volume = parseInt(volumeEl.value) || 0;
+
+            var muteEl = document.getElementById('halCfgMute');
+            if (muteEl) cfg.mute = muteEl.checked;
+
+            var pinSdaEl = document.getElementById('halCfgPinSda');
+            if (pinSdaEl) cfg.pinSda = parseInt(pinSdaEl.value);
+
+            var pinSclEl = document.getElementById('halCfgPinScl');
+            if (pinSclEl) cfg.pinScl = parseInt(pinSclEl.value);
+
+            var pinAEl = document.getElementById('halCfgPinA');
+            if (pinAEl) cfg.pinSda = parseInt(pinAEl.value);
+
+            fetch('/api/hal/devices', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cfg)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'ok') {
+                    showToast('Device config saved');
+                    halEditingSlot = -1;
+                    loadHalDeviceList();
+                } else {
+                    showToast('Save failed: ' + (data.error || ''), true);
+                }
+            })
+            .catch(function(err) { showToast('Error: ' + err, true); });
+        }
+
+        function halReinitDevice(slot) {
+            fetch('/api/hal/devices/reinit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slot: slot })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                showToast(data.status === 'ok' ? 'Device re-initialized' : 'Reinit failed', data.status !== 'ok');
+                loadHalDeviceList();
+            })
+            .catch(function(err) { showToast('Error: ' + err, true); });
+        }
+
+        function halRemoveDevice(slot) {
+            if (!confirm('Remove this device? It can be re-added later.')) return;
+            fetch('/api/hal/devices', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slot: slot })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'ok') {
+                    showToast('Device removed');
+                    halExpandedSlot = -1;
+                    loadHalDeviceList();
+                } else {
+                    showToast('Remove failed: ' + (data.error || ''), true);
+                }
+            })
+            .catch(function(err) { showToast('Error: ' + err, true); });
+        }
+
+        function halAddFromPreset() {
+            fetch('/api/hal/db/presets')
+                .then(function(r) { return r.json(); })
+                .then(function(presets) {
+                    var sel = document.getElementById('halAddPresetSelect');
+                    if (!sel) return;
+                    sel.innerHTML = '<option value="">-- Select Device --</option>';
+                    for (var i = 0; i < presets.length; i++) {
+                        var p = presets[i];
+                        sel.innerHTML += '<option value="' + escapeHtml(p.compatible) + '">' + escapeHtml(p.name) + ' (' + ['Unknown','DAC','ADC','Codec','Amp','DSP','Sensor'][p.type || 0] + ')</option>';
+                    }
+                })
+                .catch(function(err) { showToast('Failed to load presets: ' + err, true); });
+        }
+
+        function halRegisterPreset() {
+            var sel = document.getElementById('halAddPresetSelect');
+            if (!sel || !sel.value) { showToast('Select a device first', true); return; }
+
+            fetch('/api/hal/devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ compatible: sel.value })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'ok') {
+                    showToast('Device registered in slot ' + data.slot);
+                    loadHalDeviceList();
+                } else {
+                    showToast('Registration failed: ' + (data.error || ''), true);
+                }
+            })
+            .catch(function(err) { showToast('Error: ' + err, true); });
         }
 
         function triggerHalRescan() {
@@ -6952,10 +7348,10 @@ function toggleSigGenLane(enabled) {
             fetch('/api/hal/scan', { method: 'POST' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    showToast('Scan complete: ' + (data.devicesFound || 0) + ' devices found', 'success');
+                    showToast('Scan complete: ' + (data.devicesFound || 0) + ' devices found');
                 })
                 .catch(function(err) {
-                    showToast('Scan failed: ' + err.message, 'error');
+                    showToast('Scan failed: ' + err.message, true);
                     halScanning = false;
                     renderHalDevices();
                 });
@@ -6986,6 +7382,42 @@ function toggleSigGenLane(enabled) {
             a.download = (d.compatible || 'device').replace(/,/g, '_') + '.yaml';
             a.click();
             URL.revokeObjectURL(a.href);
+        }
+
+        function importDeviceYaml() {
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.yaml,.yml';
+            input.onchange = function() {
+                if (!input.files || !input.files[0]) return;
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var text = e.target.result;
+                    var parsed = parseDeviceYaml(text);
+                    if (!parsed || !parsed.compatible) {
+                        showToast('Invalid YAML: missing compatible field', true);
+                        return;
+                    }
+                    // Register with server
+                    fetch('/api/hal/devices', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(parsed)
+                    })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.status === 'ok') {
+                            showToast('Device imported to slot ' + data.slot);
+                            loadHalDeviceList();
+                        } else {
+                            showToast('Import failed: ' + (data.error || ''), true);
+                        }
+                    })
+                    .catch(function(err) { showToast('Import error: ' + err, true); });
+                };
+                reader.readAsText(input.files[0]);
+            };
+            input.click();
         }
 
 //# sourceURL=15-hal-devices.js
@@ -7026,26 +7458,7 @@ function toggleSigGenLane(enabled) {
             return lines.join('\n') + '\n';
         }
 
-        function importDeviceYaml() {
-            var input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.yaml,.yml';
-            input.onchange = function(e) {
-                var file = e.target.files[0];
-                if (!file) return;
-                var reader = new FileReader();
-                reader.onload = function(ev) {
-                    var parsed = parseDeviceYaml(ev.target.result);
-                    if (parsed.compatible) {
-                        showToast('Imported: ' + (parsed.name || parsed.compatible), 'success');
-                    } else {
-                        showToast('YAML missing required "compatible" field', 'error');
-                    }
-                };
-                reader.readAsText(file);
-            };
-            input.click();
-        }
+        // importDeviceYaml() is defined in 15-hal-devices.js (full version with server registration)
 
 //# sourceURL=15a-yaml-parser.js
 
@@ -8536,61 +8949,128 @@ function thdUpdateResult(d) {
 
 //# sourceURL=17-dsp-chain.js
 
-// ===== DSP Routing Matrix =====
-let dspRouting = null;
+// ===== Pipeline Routing Matrix (8x8) =====
+// Replaces old 4x4 DspRoutingMatrix — now driven by audio_pipeline 8x8 matrix.
+// Uses GET /api/pipeline/matrix and POST /api/pipeline/matrix/cell endpoints.
 
-function dspRoutingPreset(name) {
-    fetch('/api/dsp/routing', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preset: name })
-    })
-    .then(r => r.json())
-    .then(d => { if (d.success) { showToast('Routing: ' + name); dspLoadRouting(); } })
-    .catch(err => showToast('Error: ' + err, true));
-}
+let pipelineMatrix = null;
+let pipelineInputNames = [];
+let pipelineOutputNames = [];
+let pipelineMatrixBypass = false;
+
 function dspLoadRouting() {
-    fetch('/api/dsp/routing')
-        .then(r => r.json())
-        .then(d => { dspRouting = d.matrix; dspRenderRouting(); })
-        .catch(() => {});
+    fetch('/api/pipeline/matrix')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            pipelineMatrix = d.matrix;
+            pipelineInputNames = d.inputs || [];
+            pipelineOutputNames = d.outputs || [];
+            pipelineMatrixBypass = !!d.bypass;
+            dspRenderRouting();
+        })
+        .catch(function() {});
 }
+
 function dspRenderRouting() {
     var el = document.getElementById('dspRoutingGrid');
-    if (!el || !dspRouting) return;
-    var h = '<table style="border-collapse:collapse;font-size:12px;width:100%;">';
-    h += '<tr><td></td>';
-    for (var i = 0; i < DSP_MAX_CH; i++) h += '<td style="padding:4px;text-align:center;font-weight:600;color:var(--text-secondary);">' + dspChLabel(i) + '</td>';
+    if (!el || !pipelineMatrix) return;
+    var numOut = pipelineMatrix.length;
+    var numIn = numOut > 0 ? pipelineMatrix[0].length : 0;
+    if (numOut === 0 || numIn === 0) { el.innerHTML = '<p style="color:var(--text-secondary);">No matrix data</p>'; return; }
+
+    var h = '<table class="routing-matrix-table">';
+    // Header row: input names
+    h += '<tr><td class="routing-corner"></td>';
+    for (var i = 0; i < numIn; i++) {
+        var inName = pipelineInputNames[i] || ('In ' + i);
+        h += '<td class="routing-header">' + inName + '</td>';
+    }
     h += '</tr>';
-    for (var o = 0; o < DSP_MAX_CH; o++) {
-        h += '<tr><td style="padding:4px;font-weight:600;color:var(--text-secondary);">' + dspChLabel(o) + '</td>';
-        for (var i = 0; i < DSP_MAX_CH; i++) {
-            var v = dspRouting[o] ? dspRouting[o][i] : 0;
-            var db = v <= 0.0001 ? 'Off' : (20 * Math.log10(v)).toFixed(1);
-            var bg = v > 0.001 ? 'rgba(255,152,0,0.15)' : 'transparent';
-            h += '<td style="padding:4px;text-align:center;background:' + bg + ';border:1px solid var(--border);cursor:pointer;border-radius:4px;" onclick="dspEditRoutingCell(' + o + ',' + i + ')">' + db + '</td>';
+
+    // Data rows: one per output
+    for (var o = 0; o < numOut; o++) {
+        var outName = pipelineOutputNames[o] || ('Out ' + o);
+        h += '<tr><td class="routing-row-label">' + outName + '</td>';
+        for (var i = 0; i < numIn; i++) {
+            var linear = pipelineMatrix[o][i];
+            var db = linear <= 0.0001 ? 'Off' : (20 * Math.log10(linear)).toFixed(1);
+            var active = linear > 0.001;
+            var isUnity = Math.abs(linear - 1.0) < 0.001;
+            var cellClass = 'routing-cell' + (active ? ' active' : '') + (isUnity ? ' unity' : '');
+            h += '<td class="' + cellClass + '" onclick="dspEditRoutingCell(' + o + ',' + i + ')" title="' + outName + ' \u2190 ' + (pipelineInputNames[i] || 'In ' + i) + '">' + db + '</td>';
         }
         h += '</tr>';
     }
     h += '</table>';
     el.innerHTML = h;
 }
+
 function dspEditRoutingCell(o, i) {
-    var current = dspRouting && dspRouting[o] ? dspRouting[o][i] : 0;
+    var current = pipelineMatrix && pipelineMatrix[o] ? pipelineMatrix[o][i] : 0;
     var currentDb = current <= 0.0001 ? 'Off' : (20 * Math.log10(current)).toFixed(1);
-    var val = prompt('Gain for ' + dspChLabel(o) + ' <- ' + dspChLabel(i) + ' (dB, or "off" for silence):', currentDb);
+    var outName = pipelineOutputNames[o] || ('Out ' + o);
+    var inName = pipelineInputNames[i] || ('In ' + i);
+    var val = prompt('Gain for ' + outName + ' \u2190 ' + inName + ' (dB, or "off" for silence):', currentDb);
     if (val === null) return;
     var lv = val.trim().toLowerCase();
-    var gainDb = lv === 'off' || lv === '-inf' || lv === '' ? -200 : parseFloat(val);
+    var gainDb = (lv === 'off' || lv === '-inf' || lv === '') ? -96 : parseFloat(val);
     if (isNaN(gainDb)) return;
-    fetch('/api/dsp/routing', {
-        method: 'PUT',
+
+    fetch('/api/pipeline/matrix/cell', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ output: o, input: i, gainDb: gainDb })
+        body: JSON.stringify({ out: o, in: i, gainDb: gainDb })
     })
-    .then(r => r.json())
-    .then(d => { if (d.success) dspLoadRouting(); })
-    .catch(err => showToast('Error: ' + err, true));
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.status === 'ok') {
+            // Update local state immediately
+            if (pipelineMatrix && pipelineMatrix[o]) {
+                pipelineMatrix[o][i] = d.gainLinear;
+            }
+            dspRenderRouting();
+        }
+    })
+    .catch(function(err) { showToast('Error: ' + err, true); });
+}
+
+function dspRoutingPreset(name) {
+    // Quick presets for the pipeline matrix
+    if (!pipelineMatrix) return;
+    var numCh = pipelineMatrix.length;
+    var promises = [];
+
+    for (var o = 0; o < numCh; o++) {
+        for (var i = 0; i < numCh; i++) {
+            var gainDb = -96;
+            if (name === 'identity') {
+                gainDb = (o === i) ? 0 : -96;
+            } else if (name === 'clear') {
+                gainDb = -96;
+            } else if (name === 'stereo') {
+                // Standard stereo: In0→Out0, In1→Out1
+                gainDb = (o === i && i < 2) ? 0 : -96;
+            }
+            if (pipelineMatrix[o][i] !== undefined) {
+                var currentLinear = pipelineMatrix[o][i];
+                var currentDb = currentLinear <= 0.0001 ? -96 : 20 * Math.log10(currentLinear);
+                // Only send changed cells
+                if (Math.abs(currentDb - gainDb) > 0.1) {
+                    promises.push(fetch('/api/pipeline/matrix/cell', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ out: o, in: i, gainDb: gainDb })
+                    }));
+                }
+            }
+        }
+    }
+
+    if (promises.length > 0) {
+        Promise.all(promises)
+            .then(function() { showToast('Routing: ' + name); dspLoadRouting(); })
+            .catch(function(err) { showToast('Error: ' + err, true); });
+    }
 }
 
 //# sourceURL=18-dsp-routing.js
@@ -8670,6 +9150,238 @@ function dspDrawCompareLegend(ctx, w, h, numCh) {
 }
 
 //# sourceURL=19-dsp-compare.js
+
+// ===== Per-Output DSP Panels =====
+// Manages per-output mono DSP chains (post-matrix, pre-sink).
+// Uses REST API at /api/output/dsp (GET, PUT, POST, DELETE).
+
+let outputDspCh = 0;
+let outputDspConfig = null;
+
+const OUTPUT_DSP_STAGE_TYPES = [
+    { value: 'PEQ', label: 'PEQ' },
+    { value: 'LPF', label: 'LPF' },
+    { value: 'HPF', label: 'HPF' },
+    { value: 'LOW_SHELF', label: 'Low Shelf' },
+    { value: 'HIGH_SHELF', label: 'High Shelf' },
+    { value: 'BPF', label: 'BPF' },
+    { value: 'NOTCH', label: 'Notch' },
+    { value: 'GAIN', label: 'Gain' },
+    { value: 'LIMITER', label: 'Limiter' },
+    { value: 'COMPRESSOR', label: 'Compressor' },
+    { value: 'POLARITY', label: 'Polarity' },
+    { value: 'MUTE', label: 'Mute' }
+];
+
+function outputDspLoadChannel(ch) {
+    if (ch === undefined) ch = outputDspCh;
+    fetch('/api/output/dsp?ch=' + ch)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            outputDspConfig = d;
+            outputDspCh = ch;
+            outputDspRenderTabs();
+            outputDspRenderPanel();
+        })
+        .catch(function() {});
+}
+
+function outputDspRenderTabs() {
+    var el = document.getElementById('outputDspChannelTabs');
+    if (!el) return;
+    var numCh = 8;
+    var names = pipelineOutputNames.length > 0 ? pipelineOutputNames : [];
+    var h = '';
+    for (var c = 0; c < numCh; c++) {
+        var name = names[c] || ('Out ' + c);
+        h += '<button class="dsp-ch-tab' + (c === outputDspCh ? ' active' : '') + '" onclick="outputDspSelectChannel(' + c + ')">' + name + '</button>';
+    }
+    el.innerHTML = h;
+}
+
+function outputDspSelectChannel(ch) {
+    outputDspCh = ch;
+    outputDspLoadChannel(ch);
+}
+
+function outputDspRenderPanel() {
+    var el = document.getElementById('outputDspPanel');
+    if (!el || !outputDspConfig) return;
+
+    var h = '';
+    var bypass = outputDspConfig.bypass;
+
+    // Bypass toggle
+    h += '<div class="output-dsp-bypass">';
+    h += '<label class="toggle-label"><input type="checkbox" ' + (bypass ? '' : 'checked') + ' onchange="outputDspSetBypass(!this.checked)"> <span>Active</span></label>';
+    h += '</div>';
+
+    // Stage list
+    var stages = outputDspConfig.stages || [];
+    if (stages.length === 0) {
+        h += '<p style="color:var(--text-secondary);font-size:12px;">No DSP stages. Add one below.</p>';
+    } else {
+        for (var i = 0; i < stages.length; i++) {
+            var s = stages[i];
+            h += '<div class="output-dsp-stage">';
+            h += '<input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="outputDspToggleStage(' + i + ',this.checked)" title="Enable/disable">';
+            h += '<span class="stage-type">' + (s.type || '?') + '</span>';
+            h += '<span class="stage-label">' + (s.label || '') + '</span>';
+            h += '<span class="stage-params">' + outputDspFormatParams(s) + '</span>';
+            h += '<button class="btn-icon" onclick="outputDspEditStage(' + i + ')" title="Edit"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
+            h += '<button class="btn-icon" onclick="outputDspRemoveStage(' + i + ')" title="Remove"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
+            h += '</div>';
+        }
+    }
+
+    // Add stage buttons
+    h += '<div class="output-dsp-add-row">';
+    h += '<select id="outputDspAddType" style="font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);">';
+    for (var t = 0; t < OUTPUT_DSP_STAGE_TYPES.length; t++) {
+        h += '<option value="' + OUTPUT_DSP_STAGE_TYPES[t].value + '">' + OUTPUT_DSP_STAGE_TYPES[t].label + '</option>';
+    }
+    h += '</select>';
+    h += '<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px;" onclick="outputDspAddStage()">Add Stage</button>';
+    h += '</div>';
+
+    // Crossover quick setup
+    h += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);">';
+    h += '<span style="font-size:11px;font-weight:600;color:var(--text-secondary);">Crossover</span>';
+    h += '<div class="btn-row" style="margin-top:6px;gap:6px;">';
+    h += '<input type="number" id="outputDspXoFreq" value="80" min="20" max="20000" step="1" style="width:70px;font-size:12px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg-surface);color:var(--text-primary);"> Hz';
+    h += '<select id="outputDspXoOrder" style="font-size:12px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg-surface);color:var(--text-primary);">';
+    h += '<option value="2">LR2 (12dB)</option><option value="4" selected>LR4 (24dB)</option><option value="8">LR8 (48dB)</option>';
+    h += '</select>';
+    h += '<input type="number" id="outputDspXoPairCh" value="0" min="0" max="7" style="width:50px;font-size:12px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg-surface);color:var(--text-primary);"> pair ch';
+    h += '<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px;" onclick="outputDspSetupCrossover()">Apply XO</button>';
+    h += '</div></div>';
+
+    el.innerHTML = h;
+}
+
+function outputDspFormatParams(s) {
+    if (!s) return '';
+    var type = s.type || '';
+    if (type === 'GAIN') return (s.gainDb !== undefined ? s.gainDb.toFixed(1) + ' dB' : '');
+    if (type === 'LIMITER') return (s.thresholdDb !== undefined ? s.thresholdDb.toFixed(1) + ' dB' : '');
+    if (type === 'COMPRESSOR') return (s.thresholdDb !== undefined ? s.thresholdDb.toFixed(1) + ' dB ' + (s.ratio || '') + ':1' : '');
+    if (type === 'POLARITY') return (s.inverted ? 'Inv' : 'Normal');
+    if (type === 'MUTE') return (s.muted ? 'Muted' : 'Unmuted');
+    // Biquad types
+    if (s.frequency !== undefined) {
+        var p = formatFreq(s.frequency);
+        if (s.gain !== undefined && s.gain !== 0) p += ' ' + s.gain.toFixed(1) + 'dB';
+        if (s.Q !== undefined) p += ' Q' + s.Q.toFixed(2);
+        return p;
+    }
+    return '';
+}
+
+function outputDspSetBypass(bp) {
+    fetch('/api/output/dsp', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ch: outputDspCh, bypass: bp })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function() { outputDspLoadChannel(); })
+    .catch(function(err) { showToast('Error: ' + err, true); });
+}
+
+function outputDspToggleStage(idx, enabled) {
+    // Use PUT to update the stage enable state
+    // For simplicity, reload the full config
+    fetch('/api/output/dsp', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ch: outputDspCh, stageIndex: idx, stageEnabled: enabled })
+    })
+    .then(function() { outputDspLoadChannel(); })
+    .catch(function(err) { showToast('Error: ' + err, true); });
+}
+
+function outputDspAddStage() {
+    var sel = document.getElementById('outputDspAddType');
+    if (!sel) return;
+    var type = sel.value;
+    fetch('/api/output/dsp/stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ch: outputDspCh, type: type })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.status === 'ok') { showToast('Stage added'); outputDspLoadChannel(); }
+        else showToast('Failed: ' + (d.error || ''), true);
+    })
+    .catch(function(err) { showToast('Error: ' + err, true); });
+}
+
+function outputDspRemoveStage(idx) {
+    fetch('/api/output/dsp/stage', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ch: outputDspCh, index: idx })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.status === 'ok') { showToast('Stage removed'); outputDspLoadChannel(); }
+        else showToast('Failed: ' + (d.error || ''), true);
+    })
+    .catch(function(err) { showToast('Error: ' + err, true); });
+}
+
+function outputDspEditStage(idx) {
+    if (!outputDspConfig || !outputDspConfig.stages) return;
+    var s = outputDspConfig.stages[idx];
+    if (!s) return;
+    var type = s.type || '';
+
+    // Simple prompt-based editing for now
+    if (type === 'GAIN') {
+        var val = prompt('Gain (dB):', s.gainDb !== undefined ? s.gainDb : 0);
+        if (val === null) return;
+        // Would need a stage-update endpoint — for now, rebuild via remove+add
+        showToast('Stage editing: use API directly for now');
+    } else if (type === 'POLARITY') {
+        showToast(s.inverted ? 'Toggling to normal' : 'Toggling to inverted');
+    } else if (s.frequency !== undefined) {
+        var freq = prompt('Frequency (Hz):', s.frequency);
+        if (freq === null) return;
+        showToast('Stage editing: use API directly for now');
+    } else {
+        showToast('Edit not available for this stage type');
+    }
+}
+
+function outputDspSetupCrossover() {
+    var freqEl = document.getElementById('outputDspXoFreq');
+    var orderEl = document.getElementById('outputDspXoOrder');
+    var pairEl = document.getElementById('outputDspXoPairCh');
+    if (!freqEl || !orderEl || !pairEl) return;
+
+    var freqHz = parseFloat(freqEl.value) || 80;
+    var order = parseInt(orderEl.value) || 4;
+    var pairCh = parseInt(pairEl.value) || 0;
+
+    fetch('/api/output/dsp/crossover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subCh: outputDspCh, mainCh: pairCh, freqHz: freqHz, order: order })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.status === 'ok') {
+            showToast('Crossover applied (' + d.stagesAdded + ' stages)');
+            outputDspLoadChannel();
+        } else {
+            showToast('Failed: ' + (d.error || ''), true);
+        }
+    })
+    .catch(function(err) { showToast('Error: ' + err, true); });
+}
+
+//# sourceURL=19-output-dsp.js
 
 // ===== WiFi Network Variables =====
 let wifiScanInProgress = false;

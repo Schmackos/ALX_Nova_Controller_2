@@ -104,6 +104,25 @@ struct HalDeviceDescriptor {
     uint8_t       capabilities;      // HAL_CAP_* flags
 };
 
+// ===== Per-Device Runtime Config (persisted in /hal_config.json) =====
+struct HalDeviceConfig {
+    bool     valid;           // Config has been set
+    uint8_t  i2cAddr;         // Override I2C address (0 = use default)
+    uint8_t  i2cBusIndex;     // I2C bus (0=ext, 1=onboard, 2=expansion)
+    uint32_t i2cSpeedHz;      // 100000 or 400000 (0 = default)
+    int8_t   pinSda;          // -1 = default
+    int8_t   pinScl;          // -1 = default
+    int8_t   pinMclk;         // -1 = default
+    int8_t   pinData;         // -1 = default
+    uint8_t  i2sPort;         // 0, 1, or 2 (255 = default)
+    uint32_t sampleRate;      // Preferred sample rate (0 = auto)
+    uint8_t  bitDepth;        // Preferred bit depth (0 = auto)
+    uint8_t  volume;          // Initial volume 0-100
+    bool     mute;            // Initial mute state
+    bool     enabled;         // User enable/disable
+    char     userLabel[33];   // Custom display name (empty = use descriptor name)
+};
+
 // Sample rate mask helpers
 #define HAL_RATE_8K    (1 << 0)
 #define HAL_RATE_16K   (1 << 1)

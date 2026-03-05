@@ -20,9 +20,5 @@ bool dsp_preset_load(int slot);
 bool dsp_preset_delete(int slot);
 bool dsp_preset_exists(int slot);
 
-// Routing matrix access (for preset export/import)
-struct DspRoutingMatrix;
-DspRoutingMatrix* dsp_get_routing_matrix();
-
 #endif // DSP_ENABLED
 #endif // DSP_API_H

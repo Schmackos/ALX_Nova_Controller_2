@@ -6,6 +6,7 @@
 #include "signal_generator.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
+#include "output_dsp.h"
 #include "dsps_mulc.h"
 #include "dsps_add.h"
 #endif
@@ -378,6 +379,15 @@ static void pipeline_mix_matrix() {
 #endif
 }
 
+static void pipeline_run_output_dsp() {
+#ifdef DSP_ENABLED
+    for (int ch = 0; ch < AUDIO_PIPELINE_MATRIX_SIZE; ch++) {
+        if (!_outCh[ch]) continue;
+        output_dsp_process(ch, _outCh[ch], FRAMES);
+    }
+#endif
+}
+
 static void pipeline_write_output() {
     if (_outputBypass || !_outCh[0] || !_outCh[1]) return;
 #ifdef DAC_ENABLED
@@ -533,6 +543,7 @@ static void audio_pipeline_task_fn(void * /*param*/) {
         pipeline_to_float();
         pipeline_run_dsp();
         pipeline_mix_matrix();
+        pipeline_run_output_dsp();
         pipeline_write_output();
         pipeline_update_metering();
         // Feed raw ADC1 data into waveform/FFT accumulator for WebSocket graph display.

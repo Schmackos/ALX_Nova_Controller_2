@@ -34,23 +34,4 @@
             return lines.join('\n') + '\n';
         }
 
-        function importDeviceYaml() {
-            var input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.yaml,.yml';
-            input.onchange = function(e) {
-                var file = e.target.files[0];
-                if (!file) return;
-                var reader = new FileReader();
-                reader.onload = function(ev) {
-                    var parsed = parseDeviceYaml(ev.target.result);
-                    if (parsed.compatible) {
-                        showToast('Imported: ' + (parsed.name || parsed.compatible), 'success');
-                    } else {
-                        showToast('YAML missing required "compatible" field', 'error');
-                    }
-                };
-                reader.readAsText(file);
-            };
-            input.click();
-        }
+        // importDeviceYaml() is defined in 15-hal-devices.js (full version with server registration)

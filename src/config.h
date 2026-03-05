@@ -93,6 +93,14 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define DSP_DEFAULT_Q        0.707f
 #define DSP_CPU_WARN_PERCENT 80.0f
 #define DSP_PRESET_MAX_SLOTS 32    // Max number of config preset slots
+
+// ===== Output DSP Configuration (post-matrix per-channel DSP) =====
+#ifndef OUTPUT_DSP_MAX_CHANNELS
+#define OUTPUT_DSP_MAX_CHANNELS 8    // One per mono output in 8x8 matrix
+#endif
+#ifndef OUTPUT_DSP_MAX_STAGES
+#define OUTPUT_DSP_MAX_STAGES   12   // Max stages per output channel
+#endif
 #endif
 
 // ===== USB Audio Configuration =====
