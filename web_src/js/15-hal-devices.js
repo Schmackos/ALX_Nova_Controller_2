@@ -74,7 +74,8 @@
             var editing = (halEditingSlot === d.slot);
             var displayName = (d.userLabel && d.userLabel.length > 0) ? d.userLabel : (d.name || d.compatible);
 
-            var h = '<div class="card hal-device-card' + (expanded ? ' expanded' : '') + '">';
+            var stateClass = 'state-' + si.label.toLowerCase();
+            var h = '<div class="card hal-device-card ' + stateClass + (expanded ? ' expanded' : '') + '">';
 
             // Header row - clickable to expand
             h += '<div class="hal-device-header" onclick="halToggleExpand(' + d.slot + ')">';
@@ -402,15 +403,24 @@
         }
 
         function triggerHalRescan() {
+            if (halScanning) return;  // Prevent double-click
             halScanning = true;
             renderHalDevices();
             fetch('/api/hal/scan', { method: 'POST' })
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (r.status === 409) {
+                        showToast('Scan already in progress');
+                        return null;
+                    }
+                    return r.json();
+                })
                 .then(function(data) {
-                    showToast('Scan complete: ' + (data.devicesFound || 0) + ' devices found');
+                    if (data) showToast('Scan complete: ' + (data.devicesFound || 0) + ' devices found');
                 })
                 .catch(function(err) {
                     showToast('Scan failed: ' + err.message, true);
+                })
+                .finally(function() {
                     halScanning = false;
                     renderHalDevices();
                 });
