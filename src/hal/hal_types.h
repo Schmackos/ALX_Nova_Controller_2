@@ -6,7 +6,7 @@
 #include <string.h>
 
 // ===== Limits =====
-#define HAL_MAX_DEVICES   8
+#define HAL_MAX_DEVICES  16
 #define HAL_MAX_PINS     24
 #define HAL_MAX_DRIVERS  16
 
@@ -19,6 +19,9 @@ enum HalDeviceType : uint8_t {
     HAL_DEV_AMP     = 4,   // Amplifier (GPIO control)
     HAL_DEV_DSP     = 5,   // External DSP chip
     HAL_DEV_SENSOR  = 6,   // Temperature, etc.
+    HAL_DEV_DISPLAY = 7,   // TFT/OLED display
+    HAL_DEV_INPUT   = 8,   // Rotary encoder, buttons
+    HAL_DEV_GPIO    = 9,   // Generic GPIO (LED, buzzer, relay, signal gen)
 };
 
 // ===== Device Lifecycle States =====

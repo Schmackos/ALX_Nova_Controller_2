@@ -95,6 +95,106 @@ static void hal_db_add_builtins() {
         d.capabilities = 0;
         hal_db_add(&d);
     }
+    // ST7735S TFT Display
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "sitronix,st7735s", 31);
+        strncpy(d.name, "ST7735S TFT", 32);
+        strncpy(d.manufacturer, "Sitronix", 32);
+        d.type = HAL_DEV_DISPLAY;
+        d.channelCount = 1;
+        d.bus.type = HAL_BUS_SPI;
+        d.bus.pinA = 2;   // MOSI
+        d.bus.pinB = 3;   // SCLK
+        d.sampleRatesMask = 0;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
+    // Rotary Encoder
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "alps,ec11", 31);
+        strncpy(d.name, "Rotary Encoder", 32);
+        strncpy(d.manufacturer, "Alps", 32);
+        d.type = HAL_DEV_INPUT;
+        d.channelCount = 3;
+        d.bus.type = HAL_BUS_GPIO;
+        d.sampleRatesMask = 0;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
+    // Piezo Buzzer
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "generic,piezo-buzzer", 31);
+        strncpy(d.name, "Piezo Buzzer", 32);
+        strncpy(d.manufacturer, "Generic", 32);
+        d.type = HAL_DEV_GPIO;
+        d.channelCount = 1;
+        d.bus.type = HAL_BUS_GPIO;
+        d.sampleRatesMask = 0;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
+    // Status LED
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "generic,status-led", 31);
+        strncpy(d.name, "Status LED", 32);
+        strncpy(d.manufacturer, "Generic", 32);
+        d.type = HAL_DEV_GPIO;
+        d.channelCount = 1;
+        d.bus.type = HAL_BUS_GPIO;
+        d.sampleRatesMask = 0;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
+    // Amplifier Relay
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "generic,relay-amp", 31);
+        strncpy(d.name, "Amplifier Relay", 32);
+        strncpy(d.manufacturer, "Generic", 32);
+        d.type = HAL_DEV_AMP;
+        d.channelCount = 1;
+        d.bus.type = HAL_BUS_GPIO;
+        d.sampleRatesMask = 0;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
+    // Reset Button
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "generic,tact-switch", 31);
+        strncpy(d.name, "Reset Button", 32);
+        strncpy(d.manufacturer, "Generic", 32);
+        d.type = HAL_DEV_INPUT;
+        d.channelCount = 1;
+        d.bus.type = HAL_BUS_GPIO;
+        d.sampleRatesMask = 0;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
+    // Signal Generator
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "generic,signal-gen", 31);
+        strncpy(d.name, "Signal Generator", 32);
+        strncpy(d.manufacturer, "Generic", 32);
+        d.type = HAL_DEV_GPIO;
+        d.channelCount = 1;
+        d.bus.type = HAL_BUS_GPIO;
+        d.sampleRatesMask = 0;
+        d.capabilities = 0;
+        hal_db_add(&d);
+    }
 }
 
 void hal_db_init() {

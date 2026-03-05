@@ -120,11 +120,15 @@ void test_remove_device() {
 // ===== Test 5: Max devices limit =====
 void test_max_devices_limit() {
     TestDevice devs[HAL_MAX_DEVICES + 1] = {
-        TestDevice("dev0", HAL_DEV_DAC), TestDevice("dev1", HAL_DEV_DAC),
-        TestDevice("dev2", HAL_DEV_DAC), TestDevice("dev3", HAL_DEV_DAC),
-        TestDevice("dev4", HAL_DEV_DAC), TestDevice("dev5", HAL_DEV_DAC),
-        TestDevice("dev6", HAL_DEV_DAC), TestDevice("dev7", HAL_DEV_DAC),
-        TestDevice("dev8", HAL_DEV_DAC),
+        TestDevice("dev0",  HAL_DEV_DAC), TestDevice("dev1",  HAL_DEV_DAC),
+        TestDevice("dev2",  HAL_DEV_DAC), TestDevice("dev3",  HAL_DEV_DAC),
+        TestDevice("dev4",  HAL_DEV_DAC), TestDevice("dev5",  HAL_DEV_DAC),
+        TestDevice("dev6",  HAL_DEV_DAC), TestDevice("dev7",  HAL_DEV_DAC),
+        TestDevice("dev8",  HAL_DEV_DAC), TestDevice("dev9",  HAL_DEV_DAC),
+        TestDevice("dev10", HAL_DEV_DAC), TestDevice("dev11", HAL_DEV_DAC),
+        TestDevice("dev12", HAL_DEV_DAC), TestDevice("dev13", HAL_DEV_DAC),
+        TestDevice("dev14", HAL_DEV_DAC), TestDevice("dev15", HAL_DEV_DAC),
+        TestDevice("dev16", HAL_DEV_DAC),
     };
 
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
@@ -132,7 +136,7 @@ void test_max_devices_limit() {
     }
     TEST_ASSERT_EQUAL(HAL_MAX_DEVICES, mgr->getCount());
 
-    // 9th registration should fail
+    // (HAL_MAX_DEVICES+1)th registration should fail
     TEST_ASSERT_EQUAL(-1, mgr->registerDevice(&devs[HAL_MAX_DEVICES], HAL_DISC_BUILTIN));
 }
 

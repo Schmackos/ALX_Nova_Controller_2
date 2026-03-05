@@ -1,0 +1,66 @@
+#ifdef DAC_ENABLED
+
+#include "hal_relay.h"
+#include "hal_device_manager.h"
+#include <string.h>
+
+#ifndef NATIVE_TEST
+#include "../debug_serial.h"
+#else
+#define LOG_I(tag, ...) ((void)0)
+#endif
+
+HalRelay::HalRelay(int pin)
+    : _pin(pin)
+{
+    memset(&_descriptor, 0, sizeof(_descriptor));
+    strncpy(_descriptor.compatible, "generic,relay-amp", 31);
+    strncpy(_descriptor.name, "Amplifier Relay", 32);
+    strncpy(_descriptor.manufacturer, "Generic", 32);
+    _descriptor.type = HAL_DEV_AMP;
+    _descriptor.bus.type = HAL_BUS_GPIO;
+    _descriptor.bus.index = 0;
+    _descriptor.bus.pinA = pin;
+    _descriptor.channelCount = 1;
+    _initPriority = HAL_PRIORITY_IO;
+}
+
+bool HalRelay::probe()
+{
+    _state = HAL_STATE_DETECTED;
+    LOG_I("[HAL] probe OK — Amplifier Relay (GPIO%d)", _pin);
+    return true;
+}
+
+bool HalRelay::init()
+{
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
+    _state = HAL_STATE_AVAILABLE;
+    _ready = true;
+    LOG_I("[HAL] init — Amplifier Relay ready on GPIO%d", _pin);
+    return true;
+}
+
+void HalRelay::deinit()
+{
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    mgr.releasePin(_pin);
+    _ready = false;
+    _state = HAL_STATE_REMOVED;
+    LOG_I("[HAL] deinit — Amplifier Relay removed");
+}
+
+void HalRelay::dumpConfig()
+{
+    LOG_I("[HAL] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL]   manufacturer: %s", _descriptor.manufacturer);
+    LOG_I("[HAL]   pin: GPIO%d", _pin);
+}
+
+bool HalRelay::healthCheck()
+{
+    return _ready;
+}
+
+#endif // DAC_ENABLED

@@ -34,6 +34,13 @@
 #include "hal/hal_settings.h"
 #include "hal/hal_ns4150b.h"
 #include "hal/hal_temp_sensor.h"
+#include "hal/hal_display.h"
+#include "hal/hal_encoder.h"
+#include "hal/hal_buzzer.h"
+#include "hal/hal_led.h"
+#include "hal/hal_relay.h"
+#include "hal/hal_button.h"
+#include "hal/hal_signal_gen.h"
 #include "drivers/es8311_regs.h"
 #include "pipeline_api.h"
 #endif
@@ -97,6 +104,15 @@ ButtonHandler resetButton(RESET_BUTTON_PIN);
 // ===== HAL device instances (registered during setup) =====
 static HalNs4150b* _halNs4150b = nullptr;
 static HalTempSensor* _halTempSensor = nullptr;
+#ifdef GUI_ENABLED
+static HalDisplay* _halDisplay = nullptr;
+static HalEncoder* _halEncoder = nullptr;
+#endif
+static HalBuzzer* _halBuzzer = nullptr;
+static HalLed* _halLed = nullptr;
+static HalRelay* _halRelay = nullptr;
+static HalButton* _halButton = nullptr;
+static HalSignalGen* _halSignalGen = nullptr;
 #endif
 
 // Note: GitHub Root CA Certificate removed - now using Mozilla certificate
@@ -272,6 +288,27 @@ void setup() {
   _halTempSensor = new HalTempSensor();
   HalDeviceManager::instance().registerDevice(_halTempSensor, HAL_DISC_BUILTIN);
 #endif
+
+  // Register peripheral devices
+  {
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+#ifdef GUI_ENABLED
+    _halDisplay = new HalDisplay(TFT_MOSI_PIN, TFT_SCLK_PIN, TFT_CS_PIN, TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN);
+    mgr.registerDevice(_halDisplay, HAL_DISC_BUILTIN);
+    _halEncoder = new HalEncoder(ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN);
+    mgr.registerDevice(_halEncoder, HAL_DISC_BUILTIN);
+#endif
+    _halBuzzer = new HalBuzzer(BUZZER_PIN);
+    mgr.registerDevice(_halBuzzer, HAL_DISC_BUILTIN);
+    _halLed = new HalLed(LED_PIN);
+    mgr.registerDevice(_halLed, HAL_DISC_BUILTIN);
+    _halRelay = new HalRelay(AMPLIFIER_PIN);
+    mgr.registerDevice(_halRelay, HAL_DISC_BUILTIN);
+    _halButton = new HalButton(RESET_BUTTON_PIN);
+    mgr.registerDevice(_halButton, HAL_DISC_BUILTIN);
+    _halSignalGen = new HalSignalGen(SIGGEN_PWM_PIN);
+    mgr.registerDevice(_halSignalGen, HAL_DISC_BUILTIN);
+  }
 #endif
 
   // Load MQTT settings

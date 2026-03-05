@@ -32,7 +32,7 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (975 tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (1089+ tests). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_device`, `test_hal_manager`, `test_hal_registry`, `test_hal_db`, `test_output_dsp`, `test_dac_settings`, `test_io_registry`.
 
 ## Architecture
 
@@ -55,17 +55,25 @@ Each subsystem is a separate module in `src/`:
 - **auth_handler** — Session token management, web password authentication
 - **button_handler** — Debouncing, short/long/very-long press and multi-click detection
 - **buzzer_handler** — Piezo buzzer with multi-pattern sequencer, ISR-safe encoder tick/click, volume control, FreeRTOS mutex for dual-core safety
-- **audio_pipeline** — Modular audio pipeline: 4-lane input (ADC1, ADC2, Siggen, USB) → per-input DSP → 8×8 routing matrix → DAC output. Float32 [-1.0,+1.0] internally; int32↔float only at edges. DMA raw buffers in internal SRAM; float working buffers in PSRAM. RMS/VU/peak metering writes to shared `_analysis` struct via `i2s_audio_update_analysis_metering()`. **Never calls `i2s_configure_adc1()` in the task loop** — MCLK must remain continuous for PCM1808 PLL stability. Lives in `src/audio_pipeline.h/.cpp`.
+- **audio_pipeline** — Modular audio pipeline: 4-lane input (ADC1, ADC2, Siggen, USB) → per-input DSP → 8×8 routing matrix → per-output DSP → DAC output. Float32 [-1.0,+1.0] internally; int32↔float only at edges. DMA raw buffers in internal SRAM; float working buffers in PSRAM. RMS/VU/peak metering writes to shared `_analysis` struct via `i2s_audio_update_analysis_metering()`. **Never calls `i2s_configure_adc1()` in the task loop** — MCLK must remain continuous for PCM1808 PLL stability. Lives in `src/audio_pipeline.h/.cpp`.
 - **i2s_audio** — Dual PCM1808 I2S ADC HAL: driver init/config, I2S TX bridge, FFT/waveform buffers, pure computation functions (RMS, VU, peak, quantize, downsample, FFT bands, health status). `i2s_audio_init()` delegates audio task creation to `audio_pipeline_init()`. Analysis shared state written by pipeline, read by consumers via `i2s_audio_get_analysis()`.
 - **dsp_pipeline** — 4-channel audio DSP engine: biquad IIR, FIR, limiter, gain, delay, polarity, mute, compressor. Double-buffered config with glitch-free swap. ESP32 uses pre-built `libespressif__esp-dsp.a` (S3 assembly-optimized); native tests use `lib/esp_dsp_lite/` (ANSI C fallback, `lib_ignore`d on ESP32). Delay lines use PSRAM (`ps_calloc`) when available, with heap pre-flight check (40KB reserve) on fallback. `dsp_add_stage()` rolls back on pool exhaustion; config imports skip failed stages
 - **dsp_coefficients** — RBJ Audio EQ Cookbook biquad coefficient computation via `dsp_gen_*` functions in `src/dsp_biquad_gen.h/.c` (renamed from `dsps_biquad_gen_*` to avoid symbol conflicts with pre-built ESP-DSP)
-- **dsp_crossover** — Crossover presets (LR2/LR4/LR8, Butterworth), bass management, 4x4 routing matrix (SIMD-accelerated via dsps_mulc/dsps_add)
+- **dsp_crossover** — Crossover presets (LR2/LR4/LR8, Butterworth), bass management
 - **dsp_rew_parser** — Equalizer APO + miniDSP import/export, FIR text, WAV IR loading
 - **dsp_api** — REST API endpoints for DSP config CRUD, persistence (LittleFS), debounced save
 - **signal_generator** — Multi-waveform test signal generator (sine, square, noise, sweep), software injection (lane 2 in audio_pipeline) + PWM output modes
 - **task_monitor** — FreeRTOS task enumeration via `xTaskGetNext`, stack usage, priority, core affinity. Runs on a dedicated 5s timer in main loop (decoupled from HW stats broadcast). Only scans stack watermarks for known app tasks. Opt-in via `debugTaskMonitor` (default off). Uses `<esp_private/freertos_debug.h>` + `TaskIterator_t` (`task_snapshot.h` was deprecated in IDF5)
 - **usb_audio** — TinyUSB UAC2 speaker device on native USB OTG (GPIO 19/20). Custom audio class driver registered via `usbd_app_driver_get_cb()` weak function. SPSC lock-free ring buffer (1024 frames, PSRAM). Format conversion: USB PCM16/PCM24 → left-justified int32. FreeRTOS task on Core 0 with adaptive poll rate (100ms idle, 1ms streaming). Guarded by `-D USB_AUDIO_ENABLED`. Requires `build_unflags = -DARDUINO_USB_MODE -DARDUINO_USB_CDC_ON_BOOT` in platformio.ini
 - **debug_serial** — Log-level filtered serial output (`LOG_D`/`LOG_I`/`LOG_W`/`LOG_E`/`LOG_NONE`), runtime level control via `applyDebugSerialLevel()`, WebSocket log forwarding. `broadcastLine()` sends `"module"` as a separate JSON field extracted from the `[ModuleName]` prefix, enabling frontend category filtering
+- **hal_device_manager** — Singleton managing up to 8 HAL devices with 24-pin tracking. Priority-sorted init (BUS=1000→LATE=100). Pin claim/release system prevents GPIO conflicts. Per-device `HalDeviceConfig` with I2C/I2S/GPIO overrides persisted to `/hal_config.json`. Lives in `src/hal/hal_device_manager.h/.cpp`
+- **hal_device_db** — In-memory device database with builtin entries (PCM5102A, ES8311, PCM1808, NS4150B, TempSensor) plus LittleFS JSON persistence. EEPROM v3 compatible string matching. Lives in `src/hal/hal_device_db.h/.cpp`
+- **hal_discovery** — 3-tier device discovery: I2C bus scan → EEPROM probe → manual config. Skips Bus 0 (GPIO 48/54) when WiFi active (SDIO conflict). Lives in `src/hal/hal_discovery.h/.cpp`
+- **hal_api** — REST endpoints for HAL device CRUD: `GET /api/hal/devices`, `POST /api/hal/scan`, `PUT /api/hal/devices` (config update), `DELETE /api/hal/devices` (remove), `POST /api/hal/devices/reinit`, `GET /api/hal/db/presets`. Lives in `src/hal/hal_api.h/.cpp`
+- **hal_builtin_devices** — Driver registry with compatible string → factory function mapping. Registers PCM5102A, ES8311, PCM1808, NS4150B, TempSensor drivers. Lives in `src/hal/hal_builtin_devices.h/.cpp`
+- **hal_temp_sensor** — ESP32-P4 internal chip temperature sensor using IDF5 `<driver/temperature_sensor.h>`. Range -10 to +80°C. Guarded by `CONFIG_IDF_TARGET_ESP32P4`. Lives in `src/hal/hal_temp_sensor.h/.cpp`
+- **hal_ns4150b** — NS4150B class-D amplifier driver. GPIO-controlled enable/disable on GPIO 53 (shared with ES8311 PA pin). Lives in `src/hal/hal_ns4150b.h/.cpp`
+- **output_dsp** — Per-output mono DSP engine applied post-matrix/pre-sink. Biquad, gain, limiter, compressor, polarity, mute stages. Double-buffered config with glitch-free atomic swap. Lives in `src/output_dsp.h/.cpp`
 - **websocket_handler** — Real-time state broadcasting to web clients (port 81). Audio waveform and spectrum data use binary WebSocket frames (`sendBIN`) for efficiency; audio levels remain JSON. Binary message types defined as `WS_BIN_WAVEFORM` (0x01) and `WS_BIN_SPECTRUM` (0x02) in `websocket_handler.h`
 - **web_pages** — Embedded HTML/CSS/JS served from the ESP32 (gzip-compressed in `web_pages_gz.cpp`). **IMPORTANT: Edit source files in `web_src/` — NOT `src/web_pages.cpp` (auto-generated). After ANY edit to `web_src/` files, run `node tools/build_web_assets.js` to regenerate `src/web_pages.cpp` and `src/web_pages_gz.cpp` before building firmware.**
   - `web_src/index.html` — HTML shell (body content, no inline CSS/JS)
@@ -86,6 +94,20 @@ Key GUI modules in `src/gui/`:
 
 ### Web Server
 HTTP server on port 80 with REST API endpoints under `/api/`. WebSocket server on port 81 for real-time updates. API endpoints are registered in `main.cpp`.
+
+### HAL Framework (Hardware Abstraction Layer)
+Device model in `src/hal/` with lifecycle management, discovery, and configuration. Guarded by `-D DAC_ENABLED`.
+
+**Device lifecycle**: UNKNOWN → DETECTED → CONFIGURING → AVAILABLE ⇄ UNAVAILABLE → ERROR / REMOVED / MANUAL. Volatile `_ready` flag and `_state` enum enable lock-free reads from the audio pipeline on Core 1.
+
+**Registered onboard devices**: PCM5102A (DAC, I2S), ES8311 (Codec, I2C bus 1), PCM1808 x2 (ADC, I2S), NS4150B (Amp, GPIO 53), Chip Temperature Sensor (Internal).
+
+**REST API**: `GET /api/hal/devices` (list), `POST /api/hal/scan` (rescan with 409 guard), `PUT /api/hal/devices` (config update), `DELETE /api/hal/devices` (remove), `POST /api/hal/devices/reinit`, `GET /api/hal/db/presets`. Config persisted to `/hal_config.json`.
+
+**I2C bus architecture** (ESP32-P4):
+- Bus 0 (EXT): GPIO 48/54 — **shares SDIO with WiFi**, never scan when WiFi active
+- Bus 1 (ONBOARD): GPIO 7/8 — ES8311 dedicated, always safe
+- Bus 2 (EXPANSION): GPIO 28/29 — always safe
 
 ### FreeRTOS Tasks
 Concurrent tasks with configurable stack sizes and priorities defined in `src/config.h` (`TASK_STACK_SIZE_*`, `TASK_PRIORITY_*`, `I2S_DMA_BUF_COUNT`/`I2S_DMA_BUF_LEN`).
@@ -118,7 +140,11 @@ Defined as build flags in `platformio.ini` and with fallback defaults in `src/co
 - I2S DAC TX: DOUT=24 (full-duplex on I2S0), DAC I2C: SDA=48, SCL=54
 - Signal Generator PWM: GPIO 47
 - ES8311 Onboard DAC I2C: SDA=7, SCL=8 (dedicated onboard bus, PA=53)
+- NS4150B Amp Enable: GPIO 53 (shared with ES8311 PA pin)
+- I2C Bus 2 (Expansion): SDA=28, SCL=29
 - USB Audio: native USB OTG on P4 (TinyUSB UAC2 speaker device)
+
+**I2C Bus 0 (GPIO 48/54) SDIO conflict**: These pins are shared with the ESP32-C6 WiFi SDIO interface. I2C transactions while WiFi is active cause `sdmmc_send_cmd` errors and MCU reset. HAL discovery skips this bus when WiFi is connected.
 
 ### Dual I2S Configuration (Both Masters)
 
@@ -175,6 +201,8 @@ All modules use `debug_serial.h` macros (`LOG_D`, `LOG_I`, `LOG_W`, `LOG_E`) wit
 | `usb_audio` | `[USB Audio]` | Init, connect/disconnect, streaming start/stop, host volume/mute changes |
 | `button_handler` | — | Logged from `main.cpp` (11 LOG calls covering all press types) |
 | `gui_*` | `[GUI]` | Navigation, screen transitions, theme changes |
+| `hal_*` modules | `[HAL]`, `[HAL Discovery]`, `[HAL DB]`, `[HAL API]` | Device lifecycle, discovery, config save/load |
+| `output_dsp` | `[OutputDSP]` | Per-output DSP stage add/remove |
 
 When adding logging to new modules, follow these conventions:
 - Use `LOG_I` for state transitions and significant events (start/stop, connect/disconnect, health changes)

@@ -729,6 +729,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .status-dot.warning { background: var(--warning); }
         .status-dot.info { background: var(--info); }
 
+        /* ===== HAL Device State Colors ===== */
+        .status-dot.status-green { background: var(--success, #4caf50); box-shadow: 0 0 4px var(--success, #4caf50); }
+        .status-dot.status-red { background: var(--error, #e53935); box-shadow: 0 0 4px var(--error, #e53935); }
+        .status-dot.status-amber { background: var(--warning, #ff9800); box-shadow: 0 0 4px var(--warning, #ff9800); }
+        .status-dot.status-blue { background: var(--info, #2196f3); box-shadow: 0 0 4px var(--info, #2196f3); }
+        .status-dot.status-grey { background: #666; }
+
+        .badge-green { background: rgba(76,175,80,0.15); color: #4caf50; }
+        .badge-red { background: rgba(229,57,53,0.15); color: #e53935; }
+        .badge-amber { background: rgba(255,152,0,0.15); color: #ff9800; }
+        .badge-blue { background: rgba(33,150,243,0.15); color: #2196f3; }
+        .badge-grey { background: rgba(102,102,102,0.15); color: #999; }
+
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -2206,6 +2219,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         /* ===== HAL Device Cards ===== */
         .hal-device-card { margin-bottom: 8px; }
         .hal-device-card.expanded { border-color: var(--accent); }
+        .hal-device-card.state-available { border-left: 3px solid var(--success, #4caf50); }
+        .hal-device-card.state-error, .hal-device-card.state-unavailable { border-left: 3px solid var(--error, #e53935); }
+        .hal-device-card.state-configuring, .hal-device-card.state-manual { border-left: 3px solid var(--warning, #ff9800); }
+        .hal-device-card.state-detected { border-left: 3px solid var(--info, #2196f3); }
+        .hal-device-card.state-unknown, .hal-device-card.state-removed { border-left: 3px solid #666; }
         .hal-device-header { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 0; }
         .hal-device-name { flex: 1; font-weight: 600; font-size: 13px; }
         .hal-temp-reading { font-size: 12px; color: var(--accent); font-weight: 500; }
@@ -4724,33 +4742,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
-            <!-- I/O Devices -->
-            <div class="card" id="ioRegistryCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    I/O Devices
-                    <span style="font-size:11px;opacity:0.7"><span id="ioOutputCount">0</span> out / <span id="ioInputCount">0</span> in</span>
-                </div>
-                <div style="margin-bottom:8px"><strong style="font-size:12px;opacity:0.7">Outputs</strong></div>
-                <div id="ioOutputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
-                <div style="margin:12px 0 8px"><strong style="font-size:12px;opacity:0.7">Inputs</strong></div>
-                <div id="ioInputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
-                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="font-size:11px;opacity:0.7;margin-bottom:6px">Add Manual Output</div>
-                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-                        <input type="text" class="form-input" id="ioManualName" placeholder="Name" style="flex:1;min-width:100px">
-                        <select class="form-input" id="ioManualI2s" style="width:70px">
-                            <option value="0">I2S0</option>
-                            <option value="1">I2S1</option>
-                            <option value="2">I2S2</option>
-                        </select>
-                        <select class="form-input" id="ioManualChannels" style="width:60px">
-                            <option value="2">2ch</option>
-                            <option value="1">1ch</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="ioAddManualOutput()" style="padding:4px 10px">Add</button>
-                    </div>
-                </div>
-            </div>
 
             <!-- EEPROM Programming -->
             <div class="card" id="eepromCard">
@@ -6836,105 +6827,18 @@ function toggleSigGenLane(enabled) {
 
 //# sourceURL=13-signal-gen.js
 
-        // ===== I/O Registry State =====
-        var ioOutputs = [];
-        var ioInputs = [];
+        // ===== I/O Registry -- Deprecated (merged into HAL Devices) =====
+        // Backend io_registry.cpp still exists for pipeline channel mapping
+        // but the web UI now uses HAL Devices exclusively.
 
         function handleIoRegistryState(d) {
-            if (d.outputs) ioOutputs = d.outputs;
-            if (d.inputs) ioInputs = d.inputs;
-            renderIoRegistry();
-        }
-
-        function renderIoRegistry() {
-            var outList = document.getElementById('ioOutputList');
-            var inList = document.getElementById('ioInputList');
-            if (!outList || !inList) return;
-
-            // Render outputs
-            var outHtml = '';
-            for (var i = 0; i < ioOutputs.length; i++) {
-                var o = ioOutputs[i];
-                var disc = ['Builtin', 'EEPROM', 'Manual'][o.discovery] || 'Unknown';
-                var readyClass = o.ready ? 'badge-success' : 'badge-secondary';
-                var readyText = o.ready ? 'Ready' : 'Idle';
-                outHtml += '<div class="info-row" style="display:flex;align-items:center;justify-content:space-between">';
-                outHtml += '<span><strong>' + escapeHtml(o.name) + '</strong> <span style="opacity:0.6;font-size:11px">(I2S' + o.i2sPort + ', ch ' + o.firstChannel + '-' + (o.firstChannel + o.channelCount - 1) + ')</span></span>';
-                outHtml += '<span>';
-                outHtml += '<span class="badge ' + readyClass + '" style="font-size:10px;padding:2px 6px;margin-right:4px">' + readyText + '</span>';
-                outHtml += '<span class="badge" style="font-size:10px;padding:2px 6px">' + disc + '</span>';
-                if (o.discovery === 2) {
-                    outHtml += ' <button class="btn btn-secondary" style="padding:1px 6px;font-size:10px;margin-left:4px" onclick="ioRemoveOutput(' + o.index + ')">Remove</button>';
-                }
-                outHtml += '</span></div>';
-            }
-            outList.innerHTML = outHtml || '<div class="info-row" style="opacity:0.5">No outputs registered</div>';
-
-            // Render inputs
-            var inHtml = '';
-            for (var i = 0; i < ioInputs.length; i++) {
-                var inp = ioInputs[i];
-                var disc = ['Builtin', 'EEPROM', 'Manual'][inp.discovery] || 'Unknown';
-                inHtml += '<div class="info-row" style="display:flex;align-items:center;justify-content:space-between">';
-                inHtml += '<span><strong>' + escapeHtml(inp.name) + '</strong> <span style="opacity:0.6;font-size:11px">(I2S' + inp.i2sPort + ', ch ' + inp.firstChannel + '-' + (inp.firstChannel + inp.channelCount - 1) + ')</span></span>';
-                inHtml += '<span class="badge" style="font-size:10px;padding:2px 6px">' + disc + '</span>';
-                inHtml += '</div>';
-            }
-            inList.innerHTML = inHtml || '<div class="info-row" style="opacity:0.5">No inputs registered</div>';
-
-            // Update counts
-            var outCount = document.getElementById('ioOutputCount');
-            var inCount = document.getElementById('ioInputCount');
-            if (outCount) outCount.textContent = ioOutputs.length;
-            if (inCount) inCount.textContent = ioInputs.length;
+            // No-op: I/O registry UI removed, HAL Devices tab handles everything
         }
 
         function escapeHtml(str) {
             var div = document.createElement('div');
             div.appendChild(document.createTextNode(str));
             return div.innerHTML;
-        }
-
-        async function ioAddManualOutput() {
-            var name = document.getElementById('ioManualName').value.trim();
-            var i2sPort = parseInt(document.getElementById('ioManualI2s').value) || 0;
-            var channelCount = parseInt(document.getElementById('ioManualChannels').value) || 2;
-            if (!name) { showToast('Name is required', 'error'); return; }
-
-            try {
-                var resp = await apiFetch('/api/io/output', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name, i2sPort: i2sPort, channelCount: channelCount })
-                });
-                var data = await resp.json();
-                if (data.success) {
-                    showToast('Output added to slot ' + data.slot, 'success');
-                    document.getElementById('ioManualName').value = '';
-                } else {
-                    showToast(data.message || 'Failed to add output', 'error');
-                }
-            } catch (e) {
-                showToast('Error: ' + e.message, 'error');
-            }
-        }
-
-        async function ioRemoveOutput(idx) {
-            try {
-                var resp = await apiFetch('/api/io/output/remove', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ index: idx })
-                });
-                var data = await resp.json();
-                if (data.success) {
-                    showToast('Output removed', 'success');
-                } else {
-                    showToast(data.message || 'Failed to remove output', 'error');
-                }
-            } catch (e) {
-                showToast('Error: ' + e.message, 'error');
-            }
         }
 
 //# sourceURL=14-io-registry.js
@@ -6995,7 +6899,10 @@ function toggleSigGenLane(enabled) {
                 3: { label: 'Codec', icon: 'M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11' },
                 4: { label: 'Amp', icon: 'M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z' },
                 5: { label: 'DSP', icon: 'M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11' },
-                6: { label: 'Sensor', icon: 'M15,13V5A3,3 0 0,0 9,5V13A5,5 0 1,0 15,13M12,4A1,1 0 0,1 13,5V8H11V5A1,1 0 0,1 12,4Z' }
+                6: { label: 'Sensor', icon: 'M15,13V5A3,3 0 0,0 9,5V13A5,5 0 1,0 15,13M12,4A1,1 0 0,1 13,5V8H11V5A1,1 0 0,1 12,4Z' },
+                7: { label: 'Display', icon: 'M21,16H3V4H21M21,2H3C1.89,2 1,2.89 1,4V16A2,2 0 0,0 3,18H10V20H8V22H16V20H14V18H21A2,2 0 0,0 23,16V4C23,2.89 22.1,2 21,2Z' },
+                8: { label: 'Input', icon: 'M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z' },
+                9: { label: 'GPIO', icon: 'M16,7V3H14V7H10V3H8V7H8C7,7 6,8 6,9V14.5L9.5,18V21H14.5V18L18,14.5V9C18,8 17,7 16,7Z' }
             };
             return types[type] || { label: 'Unknown', icon: 'M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11' };
         }
@@ -7015,7 +6922,8 @@ function toggleSigGenLane(enabled) {
             var editing = (halEditingSlot === d.slot);
             var displayName = (d.userLabel && d.userLabel.length > 0) ? d.userLabel : (d.name || d.compatible);
 
-            var h = '<div class="card hal-device-card' + (expanded ? ' expanded' : '') + '">';
+            var stateClass = 'state-' + si.label.toLowerCase();
+            var h = '<div class="card hal-device-card ' + stateClass + (expanded ? ' expanded' : '') + '">';
 
             // Header row - clickable to expand
             h += '<div class="hal-device-header" onclick="halToggleExpand(' + d.slot + ')">';
@@ -7343,15 +7251,24 @@ function toggleSigGenLane(enabled) {
         }
 
         function triggerHalRescan() {
+            if (halScanning) return;  // Prevent double-click
             halScanning = true;
             renderHalDevices();
             fetch('/api/hal/scan', { method: 'POST' })
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (r.status === 409) {
+                        showToast('Scan already in progress');
+                        return null;
+                    }
+                    return r.json();
+                })
                 .then(function(data) {
-                    showToast('Scan complete: ' + (data.devicesFound || 0) + ' devices found');
+                    if (data) showToast('Scan complete: ' + (data.devicesFound || 0) + ' devices found');
                 })
                 .catch(function(err) {
                     showToast('Scan failed: ' + err.message, true);
+                })
+                .finally(function() {
                     halScanning = false;
                     renderHalDevices();
                 });
