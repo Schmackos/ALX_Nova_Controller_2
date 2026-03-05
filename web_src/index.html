@@ -1993,33 +1993,6 @@
                 </div>
             </div>
 
-            <!-- I/O Devices -->
-            <div class="card" id="ioRegistryCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    I/O Devices
-                    <span style="font-size:11px;opacity:0.7"><span id="ioOutputCount">0</span> out / <span id="ioInputCount">0</span> in</span>
-                </div>
-                <div style="margin-bottom:8px"><strong style="font-size:12px;opacity:0.7">Outputs</strong></div>
-                <div id="ioOutputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
-                <div style="margin:12px 0 8px"><strong style="font-size:12px;opacity:0.7">Inputs</strong></div>
-                <div id="ioInputList"><div class="info-row" style="opacity:0.5">Loading...</div></div>
-                <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="font-size:11px;opacity:0.7;margin-bottom:6px">Add Manual Output</div>
-                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-                        <input type="text" class="form-input" id="ioManualName" placeholder="Name" style="flex:1;min-width:100px">
-                        <select class="form-input" id="ioManualI2s" style="width:70px">
-                            <option value="0">I2S0</option>
-                            <option value="1">I2S1</option>
-                            <option value="2">I2S2</option>
-                        </select>
-                        <select class="form-input" id="ioManualChannels" style="width:60px">
-                            <option value="2">2ch</option>
-                            <option value="1">1ch</option>
-                        </select>
-                        <button class="btn btn-primary" onclick="ioAddManualOutput()" style="padding:4px 10px">Add</button>
-                    </div>
-                </div>
-            </div>
 
             <!-- EEPROM Programming -->
             <div class="card" id="eepromCard">
