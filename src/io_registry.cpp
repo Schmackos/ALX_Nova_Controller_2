@@ -5,6 +5,8 @@
 #include "dac_hal.h"
 #include "dac_eeprom.h"
 #include "debug_serial.h"
+#include "hal/hal_device_manager.h"
+#include "hal/hal_types.h"
 #include <string.h>
 
 #ifndef NATIVE_TEST
@@ -99,16 +101,35 @@ void io_registry_init() {
     memset(_outputs, 0, sizeof(_outputs));
     memset(_inputs, 0, sizeof(_inputs));
 
-    // ===== Builtin outputs (P4) =====
+    // ===== Builtin outputs — sync from HAL if available =====
     AppState& as = AppState::getInstance();
+    HalDeviceManager& halMgr = HalDeviceManager::instance();
 
-    // Slot 0: Primary DAC — use dacModelName if available, else "PCM5102A"
-    register_builtin_output(0, as.dacDeviceId, as.dacModelName, 0 /*DAC*/, 0 /*I2S0*/, 2);
-    _outputs[0].ready = as.dacReady;
+    // Try to populate from HAL devices first
+    bool halSynced = false;
+    int ioSlot = 0;
+    halMgr.forEach([](HalDevice* dev, void* ctx) {
+        int* slotPtr = static_cast<int*>(ctx);
+        HalDeviceType type = dev->getType();
+        if (type != HAL_DEV_DAC && type != HAL_DEV_CODEC) return;
+        if (*slotPtr >= IO_MAX_OUTPUTS) return;
 
-    // Slot 1: ES8311 (onboard codec + NS4150B speaker amp)
-    register_builtin_output(1, 0x0004 /*DAC_ID_ES8311*/, "ES8311", 2 /*CODEC*/, 2 /*I2S2*/, 2);
-    _outputs[1].ready = as.es8311Ready;
+        const HalDeviceDescriptor& desc = dev->getDescriptor();
+        register_builtin_output(*slotPtr, desc.legacyId, desc.name,
+                                static_cast<uint8_t>(desc.type),
+                                desc.bus.index, desc.channelCount);
+        _outputs[*slotPtr].ready = dev->_ready;
+        (*slotPtr)++;
+    }, &ioSlot);
+    halSynced = (ioSlot > 0);
+
+    // Fallback: hardcoded builtins if HAL has no devices yet
+    if (!halSynced) {
+        register_builtin_output(0, as.dacDeviceId, as.dacModelName, 0 /*DAC*/, 0 /*I2S0*/, 2);
+        _outputs[0].ready = as.dacReady;
+        register_builtin_output(1, 0x0004 /*DAC_ID_ES8311*/, "ES8311", 2 /*CODEC*/, 2 /*I2S2*/, 2);
+        _outputs[1].ready = as.es8311Ready;
+    }
 
     // ===== Builtin inputs (P4) =====
     register_builtin_input(0, "ADC1 (PCM1808)", 0 /*I2S0*/, 2);

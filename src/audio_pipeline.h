@@ -62,4 +62,14 @@ void audio_pipeline_register_source(int lane, const AudioInputSource *src);
 float audio_pipeline_get_lane_vu_l(int lane);
 float audio_pipeline_get_lane_vu_r(int lane);
 
+// Output sink registration (called from dac_hal.cpp after driver init)
+struct AudioOutputSink;  // Forward declaration
+void audio_pipeline_register_sink(const AudioOutputSink *sink);
+int  audio_pipeline_get_sink_count();
+const AudioOutputSink* audio_pipeline_get_sink(int idx);
+
+// Matrix persistence
+void audio_pipeline_save_matrix();
+void audio_pipeline_load_matrix();
+
 #endif // AUDIO_PIPELINE_H

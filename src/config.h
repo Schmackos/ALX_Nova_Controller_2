@@ -175,7 +175,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_STACK_SIZE_WEB 8192
 #define TASK_STACK_SIZE_MQTT 4096
 #define TASK_STACK_SIZE_OTA 8192
-#define TASK_STACK_SIZE_AUDIO 8192
+#define TASK_STACK_SIZE_AUDIO 12288
 
 #define TASK_PRIORITY_SENSING 2 // High priority
 #define TASK_PRIORITY_WEB 1     // Medium priority
@@ -192,6 +192,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define AUDIO_PIPELINE_MAX_INPUTS  4   // ADC1, ADC2, Siggen, USB Audio
 #define AUDIO_PIPELINE_MAX_OUTPUTS 4   // DAC output channels
 #define AUDIO_PIPELINE_MATRIX_SIZE 8   // 8x8 routing matrix (4 inputs × 2ch = 8 input channels)
+#define AUDIO_OUT_MAX_SINKS AUDIO_PIPELINE_MAX_OUTPUTS
 
 // ===== ES8311 Onboard Codec (P4 only) =====
 // Waveshare ESP32-P4-WiFi6-DEV-Kit has ES8311 DAC + NS4150B speaker amp

@@ -29,6 +29,9 @@
 #include "hal/hal_device_db.h"
 #include "hal/hal_device_manager.h"
 #include "hal/hal_api.h"
+#include "hal/hal_pipeline_bridge.h"
+#include "hal/hal_settings.h"
+#include "pipeline_api.h"
 #endif
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
@@ -235,9 +238,13 @@ void setup() {
   // Initialize HAL framework (before DAC init so drivers can register)
   hal_register_builtins();
   hal_db_init();
+  hal_load_device_configs();
 
   // Initialize secondary DAC output (ES8311 codec on P4, no-op on S3)
   dac_secondary_init();
+
+  // Sync HAL pipeline bridge after all devices registered
+  hal_pipeline_sync();
 #endif
 
   // Load MQTT settings
@@ -683,6 +690,7 @@ void setup() {
   registerDacApiEndpoints();
   registerIoRegistryApiEndpoints();
   registerHalApiEndpoints(server);
+  registerPipelineApiEndpoints(server);
 
   // Initialize I/O device registry (after DAC init so appState has device info)
   io_registry_init();
@@ -990,6 +998,8 @@ void loop() {
   checkDeferredSignalGenSave();
 #ifdef DAC_ENABLED
   dac_check_deferred_save();
+  hal_check_deferred_save();
+  pipeline_api_check_deferred_save();
 #endif
 
 #ifdef DAC_ENABLED
@@ -1097,6 +1107,15 @@ void loop() {
       task_monitor_update();
     }
   }
+
+#ifdef DAC_ENABLED
+  // HAL periodic health check (every 30s, aligned with heap check)
+  static unsigned long lastHalHealthCheck = 0;
+  if (millis() - lastHalHealthCheck >= 30000) {
+    lastHalHealthCheck = millis();
+    HalDeviceManager::instance().healthCheckAll();
+  }
+#endif
 
   // Heap health monitor — detect fragmentation before OOM crash (every 30s)
   static unsigned long lastHeapCheck = 0;

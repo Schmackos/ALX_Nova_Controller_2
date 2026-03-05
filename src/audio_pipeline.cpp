@@ -20,7 +20,12 @@
 #endif
 #include <cstring>
 #include <cmath>
+#ifndef NATIVE_TEST
+#include <LittleFS.h>
+#include <ArduinoJson.h>
+#endif
 #include "audio_input_source.h"
+#include "audio_output_sink.h"
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
 #endif
@@ -40,26 +45,22 @@ static int32_t _dspBridgeBuf[RAW_SAMPLES];
 // ===== Float Working Buffers (PSRAM-allocated on ESP32, static on native) =====
 static float *_laneL[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static float *_laneR[AUDIO_PIPELINE_MAX_INPUTS] = {};
-static float *_outL = nullptr;
-static float *_outR = nullptr;
+static float *_outCh[AUDIO_PIPELINE_MATRIX_SIZE] = {};
 
 // Noise gate fade-out: last open-gate frame per ADC lane (PSRAM, 4 KB total)
 static float *_gatePrevL[2] = {};
 static float *_gatePrevR[2] = {};
 
 // DSP swap hold: last good pipeline output frame (PSRAM, 2 KB total)
-static float *_swapHoldL = nullptr;
-static float *_swapHoldR = nullptr;
+static float *_swapHoldCh[AUDIO_PIPELINE_MATRIX_SIZE] = {};
 
 #ifdef NATIVE_TEST
 static float _laneL_buf[AUDIO_PIPELINE_MAX_INPUTS][I2S_DMA_BUF_LEN];
 static float _laneR_buf[AUDIO_PIPELINE_MAX_INPUTS][I2S_DMA_BUF_LEN];
-static float _outL_buf[I2S_DMA_BUF_LEN];
-static float _outR_buf[I2S_DMA_BUF_LEN];
+static float _outCh_buf[AUDIO_PIPELINE_MATRIX_SIZE][I2S_DMA_BUF_LEN];
 static float _gatePrevL_buf[2][I2S_DMA_BUF_LEN];
 static float _gatePrevR_buf[2][I2S_DMA_BUF_LEN];
-static float _swapHoldL_buf[I2S_DMA_BUF_LEN];
-static float _swapHoldR_buf[I2S_DMA_BUF_LEN];
+static float _swapHoldCh_buf[AUDIO_PIPELINE_MATRIX_SIZE][I2S_DMA_BUF_LEN];
 #endif
 
 // ===== Routing Matrix =====
@@ -77,6 +78,15 @@ static AudioInputSource _sources[AUDIO_PIPELINE_MAX_INPUTS] = {
     AUDIO_INPUT_SOURCE_INIT, AUDIO_INPUT_SOURCE_INIT,
     AUDIO_INPUT_SOURCE_INIT, AUDIO_INPUT_SOURCE_INIT,
 };
+
+// ===== Registered Output Sinks =====
+static AudioOutputSink _sinks[AUDIO_OUT_MAX_SINKS] = {
+    AUDIO_OUTPUT_SINK_INIT, AUDIO_OUTPUT_SINK_INIT,
+    AUDIO_OUTPUT_SINK_INIT, AUDIO_OUTPUT_SINK_INIT,
+};
+static volatile int _sinkCount = 0;
+// Per-sink DMA buffers — internal SRAM (DMA cannot access PSRAM)
+static int32_t _sinkBuf[AUDIO_OUT_MAX_SINKS][RAW_SAMPLES];
 
 // ===== USB Source Adapter Functions (ESP32 only) =====
 #ifdef USB_AUDIO_ENABLED
@@ -98,7 +108,7 @@ static int _gateFadeCount[2] = {0, 0};
 
 // ===== DSP Swap Hold State =====
 // Set by audio_pipeline_notify_dsp_swap() (called from Core 0 before dsp_swap_config
-// sets _swapRequested). Causes pipeline_write_output() to use _swapHoldL/_swapHoldR
+// sets _swapRequested). Causes pipeline_write_output() to use _swapHoldCh[]
 // for one iteration, bridging the DSP-skipped buffer gap with the last good frame.
 static volatile bool _swapPending = false;
 
@@ -298,28 +308,29 @@ static void pipeline_run_dsp() {
 }
 
 static void pipeline_mix_matrix() {
-    if (!_outL || !_outR) return;
+    // Need at least ch0+ch1 allocated
+    if (!_outCh[0] || !_outCh[1]) return;
 
     if (_matrixBypass) {
-        // Identity passthrough: ADC1 L/R → output L/R
+        // Identity passthrough: ADC1 L/R → output ch 0/1, rest zeroed
         if (_laneL[0] && _laneR[0]) {
-            memcpy(_outL, _laneL[0], FRAMES * sizeof(float));
-            memcpy(_outR, _laneR[0], FRAMES * sizeof(float));
+            memcpy(_outCh[0], _laneL[0], FRAMES * sizeof(float));
+            memcpy(_outCh[1], _laneR[0], FRAMES * sizeof(float));
+        }
+        for (int o = 2; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+            if (_outCh[o]) memset(_outCh[o], 0, FRAMES * sizeof(float));
         }
         return;
     }
 
 #ifdef DSP_ENABLED
-    // Full 8×8 matrix: 8 input channels from 4 stereo lanes → DAC L/R (out ch 0 & 1).
-    // Remaining output channels (2-7) reserved for future multi-DAC routing.
-    // Uses SIMD dsps_mulc_f32 + dsps_add_f32 (same pattern as dsp_routing_apply).
+    // Full 8×8 matrix: 8 input channels from 4 stereo lanes → 8 output channels
     const float *inCh[AUDIO_PIPELINE_MATRIX_SIZE] = {
         _laneL[0], _laneR[0],
         _laneL[1], _laneR[1],
         _laneL[2], _laneR[2],
         _laneL[3], _laneR[3]
     };
-    float *outCh[2] = { _outL, _outR };
 
     // Lazy-allocate PSRAM scratch buffer for scaled copy
     static float *_matrixTemp = nullptr;
@@ -329,47 +340,89 @@ static void pipeline_mix_matrix() {
     }
     if (!_matrixTemp) return;
 
-    for (int o = 0; o < 2; o++) {
-        memset(outCh[o], 0, FRAMES * sizeof(float));
+    for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+        if (!_outCh[o]) continue;
+        memset(_outCh[o], 0, FRAMES * sizeof(float));
         for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
             float gain = _matrixGain[o][i];
             if (gain == 0.0f || !inCh[i]) continue;
             dsps_mulc_f32(inCh[i], _matrixTemp, FRAMES, gain, 1, 1);
-            dsps_add_f32(outCh[o], _matrixTemp, outCh[o], FRAMES, 1, 1, 1);
+            dsps_add_f32(_outCh[o], _matrixTemp, _outCh[o], FRAMES, 1, 1, 1);
         }
     }
 
     // Update DSP swap hold buffer with last good output (skip during pending swap)
-    if (!_swapPending && _swapHoldL && _swapHoldR) {
-        memcpy(_swapHoldL, _outL, FRAMES * sizeof(float));
-        memcpy(_swapHoldR, _outR, FRAMES * sizeof(float));
+    if (!_swapPending) {
+        for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+            if (_swapHoldCh[o] && _outCh[o]) {
+                memcpy(_swapHoldCh[o], _outCh[o], FRAMES * sizeof(float));
+            }
+        }
     }
 #else
     // No ESP-DSP available (native without lib): fall back to identity
     if (_laneL[0] && _laneR[0]) {
-        memcpy(_outL, _laneL[0], FRAMES * sizeof(float));
-        memcpy(_outR, _laneR[0], FRAMES * sizeof(float));
+        memcpy(_outCh[0], _laneL[0], FRAMES * sizeof(float));
+        memcpy(_outCh[1], _laneR[0], FRAMES * sizeof(float));
     }
-    if (!_swapPending && _swapHoldL && _swapHoldR) {
-        memcpy(_swapHoldL, _outL, FRAMES * sizeof(float));
-        memcpy(_swapHoldR, _outR, FRAMES * sizeof(float));
+    for (int o = 2; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+        if (_outCh[o]) memset(_outCh[o], 0, FRAMES * sizeof(float));
+    }
+    if (!_swapPending) {
+        for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+            if (_swapHoldCh[o] && _outCh[o]) {
+                memcpy(_swapHoldCh[o], _outCh[o], FRAMES * sizeof(float));
+            }
+        }
     }
 #endif
 }
 
 static void pipeline_write_output() {
-    if (_outputBypass || !_outL || !_outR) return;
+    if (_outputBypass || !_outCh[0] || !_outCh[1]) return;
 #ifdef DAC_ENABLED
-    // During a DSP config swap, use the last good output frame (held in PSRAM)
-    // instead of the swap-gap buffer (which may contain un-DSP'd or zeroed data).
-    const float *outL = (_swapPending && _swapHoldL) ? _swapHoldL : _outL;
-    const float *outR = (_swapPending && _swapHoldR) ? _swapHoldR : _outR;
-    to_int32_lj(outL, outR, _dacBuf, FRAMES);
-    dac_output_write(_dacBuf, FRAMES);
+    // Use swap hold buffers during DSP config swap
+    const float *ch0 = (_swapPending && _swapHoldCh[0]) ? _swapHoldCh[0] : _outCh[0];
+    const float *ch1 = (_swapPending && _swapHoldCh[1]) ? _swapHoldCh[1] : _outCh[1];
 
-    // Secondary DAC (ES8311 on P4) — same audio, independent hardware volume
-    if (dac_secondary_is_ready()) {
-        dac_secondary_write(_dacBuf, FRAMES);
+    if (_sinkCount > 0) {
+        // Sink dispatch path: iterate registered sinks
+        for (int s = 0; s < _sinkCount; s++) {
+            AudioOutputSink *sink = &_sinks[s];
+            if (!sink->write || !sink->isReady || !sink->isReady()) continue;
+            if (sink->muted) continue;
+
+            int chL = sink->firstChannel;
+            int chR = (sink->channelCount >= 2) ? chL + 1 : chL;
+            if (chL >= AUDIO_PIPELINE_MATRIX_SIZE) continue;
+            if (chR >= AUDIO_PIPELINE_MATRIX_SIZE) chR = chL;
+
+            const float *srcL = (_swapPending && _swapHoldCh[chL]) ? _swapHoldCh[chL] : _outCh[chL];
+            const float *srcR = (_swapPending && _swapHoldCh[chR]) ? _swapHoldCh[chR] : _outCh[chR];
+            if (!srcL || !srcR) continue;
+
+            if (sink->gainLinear != 1.0f) {
+                float g = sink->gainLinear;
+                for (int f = 0; f < FRAMES; f++) {
+                    float l = clampf(srcL[f] * g);
+                    float r = clampf(srcR[f] * g);
+                    _sinkBuf[s][f * 2]     = (int32_t)(l * MAX_24BIT_F) << 8;
+                    _sinkBuf[s][f * 2 + 1] = (int32_t)(r * MAX_24BIT_F) << 8;
+                }
+            } else {
+                to_int32_lj(srcL, srcR, _sinkBuf[s], FRAMES);
+            }
+            sink->write(_sinkBuf[s], FRAMES);
+        }
+    } else {
+        // Legacy fallback: no sinks registered, use hardcoded DAC calls
+        to_int32_lj(ch0, ch1, _dacBuf, FRAMES);
+        dac_output_write(_dacBuf, FRAMES);
+
+        // Secondary DAC (ES8311 on P4) — same audio, independent hardware volume
+        if (dac_secondary_is_ready()) {
+            dac_secondary_write(_dacBuf, FRAMES);
+        }
     }
 
     _swapPending = false;  // Clear after one iteration
@@ -507,6 +560,12 @@ static void audio_pipeline_task_fn(void * /*param*/) {
             _adcDiag.nonZero  = nonZero;
             _adcDiag.captured = true;
             i2s_audio_request_dump();
+
+            // Log stack high-water mark for safety monitoring
+            UBaseType_t hwm = uxTaskGetStackHighWaterMark(NULL);
+            if (hwm < 512) {
+                LOG_W("[Audio] Stack HWM LOW: %u words free", (unsigned)hwm);
+            }
         }
 
         // Yield 2 ticks so loopTask (also on Core 1) gets scheduling time.
@@ -548,14 +607,16 @@ void audio_pipeline_init() {
         _laneL[i] = _laneL_buf[i];
         _laneR[i] = _laneR_buf[i];
     }
-    _outL = _outL_buf;
-    _outR = _outR_buf;
+    for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+        _outCh[i] = _outCh_buf[i];
+    }
     for (int i = 0; i < 2; i++) {
         _gatePrevL[i] = _gatePrevL_buf[i];
         _gatePrevR[i] = _gatePrevR_buf[i];
     }
-    _swapHoldL = _swapHoldL_buf;
-    _swapHoldR = _swapHoldR_buf;
+    for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+        _swapHoldCh[i] = _swapHoldCh_buf[i];
+    }
 #else
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
         _laneL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
@@ -563,10 +624,10 @@ void audio_pipeline_init() {
         if (!_laneL[i]) _laneL[i] = (float *)calloc(FRAMES, sizeof(float));
         if (!_laneR[i]) _laneR[i] = (float *)calloc(FRAMES, sizeof(float));
     }
-    _outL = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-    _outR = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-    if (!_outL) _outL = (float *)calloc(FRAMES, sizeof(float));
-    if (!_outR) _outR = (float *)calloc(FRAMES, sizeof(float));
+    for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+        _outCh[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+        if (!_outCh[i]) _outCh[i] = (float *)calloc(FRAMES, sizeof(float));
+    }
     // Noise gate fade-out: PSRAM prev-frame buffers (~4 KB total)
     for (int i = 0; i < 2; i++) {
         _gatePrevL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
@@ -574,14 +635,15 @@ void audio_pipeline_init() {
         if (!_gatePrevL[i]) _gatePrevL[i] = (float *)calloc(FRAMES, sizeof(float));
         if (!_gatePrevR[i]) _gatePrevR[i] = (float *)calloc(FRAMES, sizeof(float));
     }
-    // DSP swap hold: PSRAM last-good-output buffer (~2 KB total)
-    _swapHoldL = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-    _swapHoldR = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-    if (!_swapHoldL) _swapHoldL = (float *)calloc(FRAMES, sizeof(float));
-    if (!_swapHoldR) _swapHoldR = (float *)calloc(FRAMES, sizeof(float));
+    // DSP swap hold: PSRAM last-good-output buffer
+    for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+        _swapHoldCh[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+        if (!_swapHoldCh[i]) _swapHoldCh[i] = (float *)calloc(FRAMES, sizeof(float));
+    }
 #endif
 
     init_matrix_siggen_direct();
+    audio_pipeline_load_matrix();  // Load persisted matrix (overwrites defaults if file exists)
 
 #ifdef USB_AUDIO_ENABLED
     // Register USB as pipeline lane 3 input source
@@ -674,7 +736,14 @@ void audio_pipeline_notify_dsp_swap() {
 
 void audio_pipeline_register_source(int lane, const AudioInputSource *src) {
     if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS || !src) return;
-    _sources[lane] = *src;  // Value copy
+#ifndef NATIVE_TEST
+    // Suspend scheduler to prevent audio task from reading a partially-written source struct.
+    vTaskSuspendAll();
+#endif
+    _sources[lane] = *src;  // Value copy — atomic w.r.t. task preemption
+#ifndef NATIVE_TEST
+    xTaskResumeAll();
+#endif
 }
 
 float audio_pipeline_get_lane_vu_l(int lane) {
@@ -721,4 +790,83 @@ void audio_pipeline_dump_raw_diag() {
     LOG_I("[Audio]   gate ADC1=%s ADC2=%s  (OPEN=audio present, CLOSED=noise floor only)",
           _gateOpen[0] ? "OPEN" : "CLOSED",
           _gateOpen[1] ? "OPEN" : "CLOSED");
+}
+
+// ===== Output Sink API =====
+
+void audio_pipeline_register_sink(const AudioOutputSink *sink) {
+    if (!sink || _sinkCount >= AUDIO_OUT_MAX_SINKS) return;
+#ifndef NATIVE_TEST
+    // Suspend scheduler to prevent audio task (priority 3) from preempting
+    // mid-struct-copy and reading a partially-written sink with garbage function pointers.
+    vTaskSuspendAll();
+#endif
+    _sinks[_sinkCount] = *sink;  // Value copy — atomic w.r.t. task preemption
+    _sinkCount = _sinkCount + 1;
+#ifndef NATIVE_TEST
+    xTaskResumeAll();
+#endif
+    LOG_I("[Audio] Sink registered: %s ch=%d,%d (count=%d)",
+          sink->name ? sink->name : "?",
+          sink->firstChannel, sink->firstChannel + sink->channelCount - 1,
+          (int)_sinkCount);
+}
+
+int audio_pipeline_get_sink_count() {
+    return _sinkCount;
+}
+
+const AudioOutputSink* audio_pipeline_get_sink(int idx) {
+    if (idx < 0 || idx >= _sinkCount) return nullptr;
+    return &_sinks[idx];
+}
+
+// ===== Matrix Persistence =====
+
+void audio_pipeline_save_matrix() {
+#ifndef NATIVE_TEST
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+    for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+        JsonArray row = arr.add<JsonArray>();
+        for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+            row.add(_matrixGain[o][i]);
+        }
+    }
+    File f = LittleFS.open("/pipeline_matrix.json", "w");
+    if (f) {
+        serializeJson(doc, f);
+        f.close();
+        LOG_I("[Audio] Matrix saved to /pipeline_matrix.json");
+    }
+#endif
+}
+
+void audio_pipeline_load_matrix() {
+#ifndef NATIVE_TEST
+    File f = LittleFS.open("/pipeline_matrix.json", "r");
+    if (!f) return;  // No saved matrix — keep defaults
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) {
+        LOG_W("[Audio] Matrix load parse error: %s", err.c_str());
+        return;
+    }
+
+    JsonArray arr = doc.as<JsonArray>();
+    if (arr.size() != AUDIO_PIPELINE_MATRIX_SIZE) {
+        LOG_W("[Audio] Matrix load: expected %d rows, got %d", AUDIO_PIPELINE_MATRIX_SIZE, (int)arr.size());
+        return;
+    }
+    for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+        JsonArray row = arr[o].as<JsonArray>();
+        if (row.size() != AUDIO_PIPELINE_MATRIX_SIZE) continue;
+        for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+            _matrixGain[o][i] = row[i].as<float>();
+        }
+    }
+    LOG_I("[Audio] Matrix loaded from /pipeline_matrix.json");
+#endif
 }

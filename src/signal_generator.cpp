@@ -152,9 +152,9 @@ void siggen_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_rate) {
                 break;
             case WAVE_SWEEP:
                 sample = siggen_sine_sample(_phase);
-                // Update sweep frequency
+                // Update sweep frequency (clamp to Nyquist to prevent phase_inc > 1.0)
                 sweep_freq += sweep_inc;
-                if (sweep_freq > p.sweepMax) {
+                if (sweep_freq > p.sweepMax || sweep_freq > (float)sample_rate * 0.5f) {
                     sweep_freq = p.sweepMin;
                 }
                 phase_inc = sweep_freq / (float)sample_rate;
@@ -187,9 +187,9 @@ void siggen_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_rate) {
                 break;
         }
 
-        // Advance phase
+        // Advance phase — floorf handles phase_inc > 1.0 (high freq / sweep)
         _phase += phase_inc;
-        if (_phase >= 1.0f) _phase -= 1.0f;
+        _phase -= floorf(_phase);
     }
 
     _sweepFreq = sweep_freq;

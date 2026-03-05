@@ -4742,7 +4742,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         </section>
 
         <!-- ===== DEVICES TAB ===== -->
-        <section id="devices" class="panel" style="display:none">
+        <section id="devices" class="panel">
             <h2>HAL Devices</h2>
             <div class="card-row" style="margin-bottom:12px;">
                 <button id="hal-rescan-btn" class="btn btn-primary" onclick="triggerHalRescan()">Rescan Devices</button>

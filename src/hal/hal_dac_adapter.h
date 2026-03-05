@@ -1,6 +1,6 @@
 #pragma once
-// HAL DAC Adapter — wraps existing DacDriver as HalAudioDevice
-// Phase 1: Bridges legacy DAC interface to HAL lifecycle
+// HAL DAC Adapter — wraps existing DacDriver as a HalAudioDevice
+// Phase 4: Bridges legacy DAC interface to HAL lifecycle
 
 #ifdef DAC_ENABLED
 
@@ -9,32 +9,33 @@
 
 class HalDacAdapter : public HalAudioDevice {
 public:
-    // Construct with an existing DacDriver and its capabilities
-    HalDacAdapter(DacDriver* driver, const DacCapabilities& caps,
-                  uint16_t priority = HAL_PRIORITY_HARDWARE);
-    ~HalDacAdapter() override {}
+    // Takes ownership of an existing DacDriver* (already init'd or not)
+    // If alreadyInitialized is true, probe()/init() become no-ops and state is set to AVAILABLE
+    HalDacAdapter(DacDriver* driver, const HalDeviceDescriptor& desc, bool alreadyInitialized = false);
+    virtual ~HalDacAdapter();
 
-    // ----- HalDevice lifecycle -----
+    // HalDevice lifecycle
     bool probe() override;
     bool init() override;
     void deinit() override;
     void dumpConfig() override;
     bool healthCheck() override;
 
-    // ----- HalAudioDevice methods -----
+    // HalAudioDevice methods
     bool configure(uint32_t sampleRate, uint8_t bitDepth) override;
     bool setVolume(uint8_t percent) override;
     bool setMute(bool mute) override;
     bool setFilterMode(uint8_t mode) override;
 
-    const DacCapabilities* getLegacyCapabilities() const override { return &_caps; }
+    // Legacy bridge
+    const DacCapabilities* getLegacyCapabilities() const override;
 
-    // Access the wrapped driver (for legacy code paths)
-    DacDriver* getDriver() { return _driver; }
+    // Direct access to wrapped driver (for dac_hal.cpp interop)
+    DacDriver* getDriver() const { return _driver; }
 
 private:
-    DacDriver*      _driver;
-    DacCapabilities _caps;
+    DacDriver* _driver;
+    bool _ownsDriver;  // If true, destructor deletes _driver
 };
 
 #endif // DAC_ENABLED

@@ -109,9 +109,9 @@ static void add_device_row(HalDevice* device, void* ctx) {
 
     const HalDeviceDescriptor& desc = device->getDescriptor();
 
-    /* Device row container */
+    /* Device row container — fixed height for 2 lines of montserrat_10 */
     lv_obj_t *row = lv_obj_create(rc->cont);
-    lv_obj_set_size(row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_size(row, LV_PCT(100), 30);
     lv_obj_set_style_bg_color(row, COLOR_BG_CARD, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(row, 4, LV_PART_MAIN);
@@ -130,25 +130,28 @@ static void add_device_row(HalDevice* device, void* ctx) {
     lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_align(dot, LV_ALIGN_TOP_RIGHT, 0, 0);
 
-    /* Device name */
+    /* Row content width = parent minus dot and padding */
+    lv_coord_t row_w = DISPLAY_HEIGHT - 24;  /* 160 - margins/padding/dot */
+
+    /* Device name — clips with "..." if too long */
     lv_obj_t *name_lbl = lv_label_create(row);
-    char name_buf[48];
-    snprintf(name_buf, sizeof(name_buf), "%s", desc.name);
-    lv_label_set_text(name_lbl, name_buf);
+    lv_label_set_text_fmt(name_lbl, "%s", desc.name);
+    lv_obj_set_width(name_lbl, row_w);
+    lv_label_set_long_mode(name_lbl, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_font(name_lbl, &lv_font_montserrat_10, LV_PART_MAIN);
     lv_obj_set_style_text_color(name_lbl, COLOR_TEXT_PRI, LV_PART_MAIN);
     lv_obj_align(name_lbl, LV_ALIGN_TOP_LEFT, 0, 0);
 
-    /* Type + State + Discovery on second line */
+    /* Type + State + Discovery on second line — clips with "..." */
     lv_obj_t *info_lbl = lv_label_create(row);
-    char info_buf[64];
-    snprintf(info_buf, sizeof(info_buf), "%s | %s | %s",
+    lv_label_set_text_fmt(info_lbl, "%s | %s | %s",
              type_to_label(desc.type),
              state_to_label(device->_state),
              discovery_to_label(device->getDiscovery()));
-    lv_label_set_text(info_lbl, info_buf);
+    lv_obj_set_width(info_lbl, row_w);
+    lv_label_set_long_mode(info_lbl, LV_LABEL_LONG_DOT);
     lv_obj_add_style(info_lbl, gui_style_dim(), LV_PART_MAIN);
-    lv_obj_align(info_lbl, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_align(info_lbl, LV_ALIGN_TOP_LEFT, 0, 13);
 
     rc->count++;
 }
