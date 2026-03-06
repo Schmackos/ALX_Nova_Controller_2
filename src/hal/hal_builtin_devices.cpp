@@ -3,12 +3,23 @@
 #include "hal_builtin_devices.h"
 #include "hal_driver_registry.h"
 #include "hal_types.h"
+#include "hal_es8311.h"
+#include "hal_pcm5102a.h"
+#include "hal_pcm1808.h"
+#include "hal_dsp_bridge.h"
 #include <string.h>
+
+// ===== Factory functions for new platform classes =====
+static HalDevice* factory_es8311()   { return new HalEs8311(); }
+static HalDevice* factory_pcm5102a() { return new HalPcm5102a(); }
+static HalDevice* factory_pcm1808()  { return new HalPcm1808(); }
+static HalDevice* factory_dsp()      { return new HalDspBridge(); }
 
 // ===== Compatible strings for builtin devices =====
 // Uses Linux DT "vendor,model" convention
 #define COMPAT_PCM5102A   "ti,pcm5102a"
-#define COMPAT_ES8311     "evergrande,es8311"
+#define COMPAT_ES8311     "everest-semi,es8311"   // Updated to match HalEs8311 descriptor
+#define COMPAT_ES8311_ALT "evergrande,es8311"     // Legacy alias kept for DB lookup
 #define COMPAT_PCM1808    "ti,pcm1808"
 #define COMPAT_NS4150B    "ns,ns4150b-amp"
 #define COMPAT_TEMP_SENSOR "espressif,esp32p4-temp"
@@ -30,7 +41,7 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_PCM5102A, 31);
         e.type = HAL_DEV_DAC;
         e.legacyId = 0x0001;  // DAC_ID_PCM5102A
-        e.factory = nullptr;  // Created by dac_output_init(), not factory
+        e.factory = factory_pcm5102a;
         hal_registry_register(e);
     }
 
@@ -41,7 +52,18 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_ES8311, 31);
         e.type = HAL_DEV_CODEC;
         e.legacyId = 0x0004;  // DAC_ID_ES8311
-        e.factory = nullptr;  // Created by dac_secondary_init()
+        e.factory = factory_es8311;
+        hal_registry_register(e);
+    }
+
+    // ES8311 legacy compatible alias (evergrande vs everest-semi)
+    {
+        HalDriverEntry e;
+        memset(&e, 0, sizeof(e));
+        strncpy(e.compatible, COMPAT_ES8311_ALT, 31);
+        e.type = HAL_DEV_CODEC;
+        e.legacyId = 0x0004;
+        e.factory = factory_es8311;
         hal_registry_register(e);
     }
 
@@ -52,7 +74,18 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_PCM1808, 31);
         e.type = HAL_DEV_ADC;
         e.legacyId = 0;  // No legacy DAC_ID for ADC
-        e.factory = nullptr;
+        e.factory = factory_pcm1808;
+        hal_registry_register(e);
+    }
+
+    // DSP Pipeline bridge
+    {
+        HalDriverEntry e;
+        memset(&e, 0, sizeof(e));
+        strncpy(e.compatible, "alx,dsp-pipeline", 31);
+        e.type = HAL_DEV_DSP;
+        e.legacyId = 0;
+        e.factory = factory_dsp;
         hal_registry_register(e);
     }
 

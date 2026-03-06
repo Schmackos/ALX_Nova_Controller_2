@@ -14,6 +14,8 @@
 
 #ifndef NATIVE_TEST
 #include "i2s_audio.h"
+#include "hal/hal_settings.h"
+#include "hal/hal_types.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #ifdef BOARD_HAS_PSRAM
@@ -306,14 +308,37 @@ void dac_secondary_init() {
         return;
     }
 
+#ifndef NATIVE_TEST
+    // Delegation guard: if HalEs8311 has already been initialised by the HAL
+    // manager (via hal_register_builtins → initAll), skip the legacy path.
+    {
+        HalDevice* halDev = HalDeviceManager::instance().findByCompatible("everest-semi,es8311");
+        if (!halDev) halDev = HalDeviceManager::instance().findByCompatible("evergrande,es8311");
+        if (halDev && halDev->_state == HAL_STATE_AVAILABLE) {
+            LOG_I("[DAC] ES8311 already initialised by HAL — skipping legacy path");
+            return;
+        }
+    }
+#endif
+
     _secondaryDriver = createDacEs8311();
     if (!_secondaryDriver) {
         LOG_E("[DAC] Failed to create ES8311 driver");
         return;
     }
 
-    DacPinConfig pins = { ES8311_I2S_DSDIN_PIN, ES8311_I2C_SDA_PIN, ES8311_I2C_SCL_PIN, ES8311_I2S_MCLK_PIN };
-    if (!_secondaryDriver->init(pins)) {
+#ifndef NATIVE_TEST
+    HalDeviceConfig* _halEsCfg = hal_get_config_for_type(HAL_DEV_CODEC);
+#else
+    HalDeviceConfig* _halEsCfg = nullptr;
+#endif
+    DacPinConfig esPins = {
+        (_halEsCfg && _halEsCfg->pinData > 0) ? (int)_halEsCfg->pinData : ES8311_I2S_DSDIN_PIN,
+        (_halEsCfg && _halEsCfg->pinSda  > 0) ? (int)_halEsCfg->pinSda  : ES8311_I2C_SDA_PIN,
+        (_halEsCfg && _halEsCfg->pinScl  > 0) ? (int)_halEsCfg->pinScl  : ES8311_I2C_SCL_PIN,
+        (_halEsCfg && _halEsCfg->pinMclk > 0) ? (int)_halEsCfg->pinMclk : ES8311_I2S_MCLK_PIN
+    };
+    if (!_secondaryDriver->init(esPins)) {
         LOG_E("[DAC] ES8311 init failed");
         delete _secondaryDriver;
         _secondaryDriver = nullptr;
@@ -382,13 +407,21 @@ void dac_secondary_init() {
 
 void dac_secondary_deinit() {
 #if CONFIG_IDF_TARGET_ESP32P4
-    // Update HAL adapter state before teardown
+    AppState& as = AppState::getInstance();
+
+    // Same race condition as primary deinit: pause audio task before
+    // deleting the secondary I2S channel to avoid Core 1 preemption crash.
+#ifndef NATIVE_TEST
+    as.audioPaused = true;
+    vTaskDelay(pdMS_TO_TICKS(40));
+#endif
+
     if (_halSecondaryAdapter) {
         uint8_t slot = _halSecondaryAdapter->getSlot();
         _halSecondaryAdapter->_ready = false;
         _halSecondaryAdapter->_state = HAL_STATE_UNAVAILABLE;
         hal_pipeline_on_device_removed(slot);
-        AppState::getInstance().markHalDeviceDirty();
+        as.markHalDeviceDirty();
     }
 
     if (_secondaryDriver) {
@@ -400,7 +433,11 @@ void dac_secondary_deinit() {
         i2s_audio_disable_es8311_tx();
         _secondaryI2sTxEnabled = false;
     }
-    AppState::getInstance().es8311Ready = false;
+    as.es8311Ready = false;
+
+#ifndef NATIVE_TEST
+    as.audioPaused = false;
+#endif
     LOG_I("[DAC] ES8311 secondary output deinitialized");
 #endif
 }
@@ -705,6 +742,26 @@ void dac_output_init() {
         return;
     }
 
+#ifndef NATIVE_TEST
+    // Delegation guard: handle HAL auto-provisioned PCM5102A placeholder.
+    // hal_load_auto_devices() may have registered a probe-only HalPcm5102a in DETECTED state.
+    // Remove it so HalDacAdapter can take its place (and register the audio pipeline sink).
+    // If already AVAILABLE (native HAL init completed), skip entirely.
+    {
+        HalDevice* halDev = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
+        if (halDev) {
+            if (halDev->_state == HAL_STATE_AVAILABLE) {
+                LOG_I("[DAC] PCM5102A already AVAILABLE in HAL — skipping legacy path");
+                return;
+            }
+            // Probe-only placeholder — remove to allow HalDacAdapter registration
+            uint8_t oldSlot = halDev->getSlot();
+            HalDeviceManager::instance().removeDevice(oldSlot);
+            LOG_I("[DAC] Removed PCM5102A placeholder (slot %u) — HalDacAdapter taking over", oldSlot);
+        }
+    }
+#endif
+
     // Select driver from saved device ID (default: PCM5102A)
     if (as.dacDeviceId == DAC_ID_NONE) {
         as.dacDeviceId = DAC_ID_PCM5102A;
@@ -720,11 +777,16 @@ void dac_output_init() {
         }
     }
 
-    // Init driver
+    // Init driver — allow HAL config to override individual pins
+#ifndef NATIVE_TEST
+    HalDeviceConfig* _halDacCfg = hal_get_config_for_type(HAL_DEV_DAC);
+#else
+    HalDeviceConfig* _halDacCfg = nullptr;
+#endif
     DacPinConfig pins = {
-        I2S_TX_DATA_PIN,
-        DAC_I2C_SDA_PIN,
-        DAC_I2C_SCL_PIN,
+        (_halDacCfg && _halDacCfg->pinData > 0) ? (int)_halDacCfg->pinData : I2S_TX_DATA_PIN,
+        (_halDacCfg && _halDacCfg->pinSda  > 0) ? (int)_halDacCfg->pinSda  : DAC_I2C_SDA_PIN,
+        (_halDacCfg && _halDacCfg->pinScl  > 0) ? (int)_halDacCfg->pinScl  : DAC_I2C_SCL_PIN,
         0  // Shared MCLK with ADC
     };
     if (!_driver->init(pins)) {
@@ -786,7 +848,7 @@ void dac_output_init() {
         if (caps.hasFilterModes) desc.capabilities |= HAL_CAP_FILTERS;
 
         _halPrimaryAdapter = new HalDacAdapter(_driver, desc, true);
-        int slot = HalDeviceManager::instance().registerDevice(_halPrimaryAdapter, HAL_DISC_BUILTIN);
+        int slot = HalDeviceManager::instance().registerDevice(_halPrimaryAdapter, HAL_DISC_MANUAL);
         if (slot >= 0) {
             hal_pipeline_on_device_available(slot);
             as.markHalDeviceDirty();
@@ -808,13 +870,29 @@ void dac_output_init() {
 }
 
 void dac_output_deinit() {
-    // Update HAL adapter state before teardown
+    AppState& as = AppState::getInstance();
+
+    // Pause the audio task BEFORE touching I2S or deleting the driver.
+    // Both loopTask and audio_pipeline_task run on Core 1; the audio task
+    // (priority 3) can be blocking inside i2s_channel_write() when loopTask
+    // (priority 1) calls this function.  Setting audioPaused=true causes the
+    // audio task to yield at the top of its loop after the current DMA write
+    // completes (~5 ms at 48 kHz / 256-frame buffer).  40 ms >> 5 ms.
+#ifndef NATIVE_TEST
+    as.audioPaused = true;
+    vTaskDelay(pdMS_TO_TICKS(40));
+#endif
+
+    // Remove sinks so pipeline_write_output() won't call _primary_sink_write()
+    // after we free the driver and I2S channel below.
+    audio_pipeline_clear_sinks();
+
     if (_halPrimaryAdapter) {
         uint8_t slot = _halPrimaryAdapter->getSlot();
         _halPrimaryAdapter->_ready = false;
         _halPrimaryAdapter->_state = HAL_STATE_UNAVAILABLE;
         hal_pipeline_on_device_removed(slot);
-        AppState::getInstance().markHalDeviceDirty();
+        as.markHalDeviceDirty();
     }
 
     if (_driver) {
@@ -822,8 +900,12 @@ void dac_output_deinit() {
         delete _driver;
         _driver = nullptr;
     }
-    dac_disable_i2s_tx();
-    AppState::getInstance().dacReady = false;
+    dac_disable_i2s_tx();   // safe — audio task is paused
+    as.dacReady = false;
+
+#ifndef NATIVE_TEST
+    as.audioPaused = false;
+#endif
     LOG_I("[DAC] Output deinitialized");
 }
 

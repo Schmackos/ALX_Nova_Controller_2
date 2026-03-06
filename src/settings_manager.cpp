@@ -253,6 +253,14 @@ bool loadSettings() {
     otaPrefs.end();
   }
 
+  // Load HAL settings from NVS (hal-prefs namespace)
+  {
+    Preferences halPrefs;
+    halPrefs.begin("hal-prefs", true);  // read-only
+    appState.halAutoDiscovery = halPrefs.getBool("halAutoDisco", true);
+    halPrefs.end();
+  }
+
   return true;
 }
 
@@ -347,6 +355,14 @@ void saveSettings() {
     otaPrefs.begin("ota-prefs", false);
     otaPrefs.putUChar("otaChannel", appState.otaChannel);
     otaPrefs.end();
+  }
+
+  // Save HAL settings to NVS (hal-prefs namespace)
+  {
+    Preferences halPrefs;
+    halPrefs.begin("hal-prefs", false);
+    halPrefs.putBool("halAutoDisco", appState.halAutoDiscovery);
+    halPrefs.end();
   }
 }
 

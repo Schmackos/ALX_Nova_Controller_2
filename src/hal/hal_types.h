@@ -69,11 +69,14 @@ enum HalBusType : uint8_t {
 #define HAL_PRIORITY_LATE       100   // Non-critical (diagnostics, logging)
 
 // ===== Capability Bit Flags =====
-#define HAL_CAP_HW_VOLUME  (1 << 0)
-#define HAL_CAP_FILTERS    (1 << 1)
-#define HAL_CAP_MUTE       (1 << 2)
-#define HAL_CAP_ADC_PATH   (1 << 3)
-#define HAL_CAP_DAC_PATH   (1 << 4)
+#define HAL_CAP_HW_VOLUME    (1 << 0)
+#define HAL_CAP_FILTERS      (1 << 1)
+#define HAL_CAP_MUTE         (1 << 2)
+#define HAL_CAP_ADC_PATH     (1 << 3)
+#define HAL_CAP_DAC_PATH     (1 << 4)
+#define HAL_CAP_PGA_CONTROL  (1 << 5)   // ADC gain knob
+#define HAL_CAP_HPF_CONTROL  (1 << 6)   // ADC HPF toggle
+#define HAL_CAP_CODEC        (1 << 7)   // both ADC + DAC paths
 
 // ===== Bus Reference =====
 struct HalBusRef {
@@ -124,6 +127,16 @@ struct HalDeviceConfig {
     bool     mute;            // Initial mute state
     bool     enabled;         // User enable/disable
     char     userLabel[33];   // Custom display name (empty = use descriptor name)
+    // Extended config fields (Phase 4)
+    uint16_t mclkMultiple;    // MCLK multiplier (e.g. 256, 384, 512)
+    uint8_t  i2sFormat;       // I2S data format (0=Philips, 1=left-justified, 2=right-justified)
+    uint8_t  pgaGain;         // PGA gain in dB (for ADC devices)
+    bool     hpfEnabled;      // High-pass filter enable
+    int8_t   paControlPin;    // Power amp control GPIO (-1 = none)
+    // I2S pin overrides (I2S devices only; -1 = use board default from config.h)
+    int8_t   pinBck;          // I2S bit clock GPIO
+    int8_t   pinLrc;          // I2S word select / LRCLK GPIO
+    int8_t   pinFmt;          // Format select GPIO (-1 = not wired; LOW=Philips, HIGH=MSB/left-justified)
 };
 
 // Sample rate mask helpers

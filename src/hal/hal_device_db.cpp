@@ -2,6 +2,8 @@
 
 #include "hal_device_db.h"
 #include "hal_device_manager.h"
+#include "hal_driver_registry.h"
+#include "hal_pipeline_bridge.h"
 #include <string.h>
 
 #ifndef NATIVE_TEST
@@ -36,21 +38,40 @@ static void hal_db_add_builtins() {
         d.capabilities = 0;
         hal_db_add(&d);
     }
-    // ES8311
+    // ES8311 (canonical compatible string: everest-semi,es8311)
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "everest-semi,es8311", 31);
+        strncpy(d.name, "ES8311", 32);
+        strncpy(d.manufacturer, "Everest Semiconductor", 32);
+        d.type = HAL_DEV_CODEC;
+        d.legacyId = 0x0004;
+        d.channelCount = 2;
+        d.i2cAddr = 0x18;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_ONBOARD;
+        d.sampleRatesMask = HAL_RATE_8K | HAL_RATE_16K | HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
+        d.capabilities = HAL_CAP_CODEC | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE |
+                         HAL_CAP_ADC_PATH | HAL_CAP_DAC_PATH;
+        hal_db_add(&d);
+    }
+    // ES8311 legacy alias (evergrande) — kept for backward compatibility
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
         strncpy(d.compatible, "evergrande,es8311", 31);
         strncpy(d.name, "ES8311", 32);
-        strncpy(d.manufacturer, "Evergrande", 32);
+        strncpy(d.manufacturer, "Everest Semiconductor", 32);
         d.type = HAL_DEV_CODEC;
         d.legacyId = 0x0004;
-        d.channelCount = 1;
+        d.channelCount = 2;
         d.i2cAddr = 0x18;
         d.bus.type = HAL_BUS_I2C;
         d.bus.index = HAL_I2C_BUS_ONBOARD;
         d.sampleRatesMask = HAL_RATE_8K | HAL_RATE_16K | HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
-        d.capabilities = HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_ADC_PATH | HAL_CAP_DAC_PATH;
+        d.capabilities = HAL_CAP_CODEC | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE |
+                         HAL_CAP_ADC_PATH | HAL_CAP_DAC_PATH;
         hal_db_add(&d);
     }
     // PCM1808
@@ -66,7 +87,7 @@ static void hal_db_add_builtins() {
         d.bus.type = HAL_BUS_I2S;
         d.bus.index = 0;
         d.sampleRatesMask = HAL_RATE_48K | HAL_RATE_96K;
-        d.capabilities = 0;
+        d.capabilities = HAL_CAP_ADC_PATH;
         hal_db_add(&d);
     }
     // NS4150B
@@ -415,6 +436,156 @@ bool hal_save_device_config(uint8_t slot) {
 void hal_db_reset() {
     _dbCount = 0;
     memset(_db, 0, sizeof(_db));
+}
+
+// ===== Auto-provisioning =====
+
+void hal_provision_defaults() {
+#ifndef NATIVE_TEST
+    if (LittleFS.exists("/hal_auto_devices.json")) return;
+
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+
+    // PCM5102A DAC — I2S TX (DOUT=24, shared BCK/LRC/MCLK with ADCs)
+    {
+        JsonObject o = arr.add<JsonObject>();
+        o["compatible"] = "ti,pcm5102a";
+        o["label"]      = "PCM5102A DAC";
+        o["i2sPort"]    = 0;
+        o["sampleRate"] = 48000;
+        o["bitDepth"]   = 32;
+        o["pinData"]    = 24;    // I2S_TX_DATA_PIN
+        o["pinBck"]     = 20;    // I2S_BCK_PIN (shared)
+        o["pinLrc"]     = 21;    // I2S_LRC_PIN (shared)
+        o["pinMclk"]    = 22;    // I2S_MCLK_PIN (shared)
+        o["pinFmt"]     = -1;
+        o["probeOnly"]  = true;  // HAL state holder; audio pipeline sink via dac_output_init()
+    }
+
+    // PCM1808 ADC1 — I2S RX channel 0 (DIN=23)
+    {
+        JsonObject o = arr.add<JsonObject>();
+        o["compatible"] = "ti,pcm1808";
+        o["label"]      = "PCM1808 ADC1";
+        o["i2sPort"]    = 0;
+        o["sampleRate"] = 48000;
+        o["bitDepth"]   = 32;
+        o["pinData"]    = 23;    // I2S_DOUT_PIN
+        o["pinBck"]     = 20;
+        o["pinLrc"]     = 21;
+        o["pinMclk"]    = 22;
+        o["pinFmt"]     = -1;
+        o["probeOnly"]  = false;
+    }
+
+    // PCM1808 ADC2 — I2S RX channel 1 (DIN=25, shared clocks)
+    {
+        JsonObject o = arr.add<JsonObject>();
+        o["compatible"] = "ti,pcm1808";
+        o["label"]      = "PCM1808 ADC2";
+        o["i2sPort"]    = 1;
+        o["sampleRate"] = 48000;
+        o["bitDepth"]   = 32;
+        o["pinData"]    = 25;    // I2S_DOUT2_PIN
+        o["pinBck"]     = 20;
+        o["pinLrc"]     = 21;
+        o["pinMclk"]    = 22;
+        o["pinFmt"]     = -1;
+        o["probeOnly"]  = false;
+    }
+
+    File f = LittleFS.open("/hal_auto_devices.json", "w");
+    if (!f) {
+        LOG_E("[HAL DB] Cannot create /hal_auto_devices.json");
+        return;
+    }
+    serializeJson(doc, f);
+    f.close();
+    LOG_I("[HAL DB] Default auto-devices written to /hal_auto_devices.json");
+#endif
+}
+
+void hal_load_auto_devices() {
+#ifndef NATIVE_TEST
+    if (!LittleFS.exists("/hal_auto_devices.json")) return;
+
+    File f = LittleFS.open("/hal_auto_devices.json", "r");
+    if (!f) return;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) {
+        LOG_E("[HAL DB] Parse error in /hal_auto_devices.json: %s", err.c_str());
+        return;
+    }
+
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+
+    for (JsonObject obj : doc.as<JsonArray>()) {
+        const char* compatible = obj["compatible"] | "";
+        if (!compatible[0]) continue;
+
+        // Skip if already registered (e.g. by dac_hal.cpp or a previous call)
+        if (mgr.findByCompatible(compatible) != nullptr) {
+            LOG_I("[HAL DB] '%s' already registered — skip", compatible);
+            continue;
+        }
+
+        // Look up driver factory
+        const HalDriverEntry* entry = hal_registry_find(compatible);
+        if (!entry || !entry->factory) {
+            LOG_W("[HAL DB] No factory for '%s' — skip", compatible);
+            continue;
+        }
+
+        HalDevice* dev = entry->factory();
+        int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL);
+        if (slot < 0) {
+            delete dev;
+            LOG_W("[HAL DB] No free slot for '%s' — skip", compatible);
+            continue;
+        }
+
+        // Apply config from JSON (pin overrides, sample rate, label)
+        HalDeviceConfig cfg;
+        memset(&cfg, 0, sizeof(cfg));
+        cfg.valid        = true;
+        cfg.enabled      = obj["enabled"]    | true;
+        cfg.i2sPort      = obj["i2sPort"]    | (uint8_t)255;
+        cfg.sampleRate   = obj["sampleRate"] | (uint32_t)0;
+        cfg.bitDepth     = obj["bitDepth"]   | (uint8_t)0;
+        cfg.pinData      = obj["pinData"]    | (int8_t)-1;
+        cfg.pinBck       = obj["pinBck"]     | (int8_t)-1;
+        cfg.pinLrc       = obj["pinLrc"]     | (int8_t)-1;
+        cfg.pinMclk      = obj["pinMclk"]    | (int8_t)-1;
+        cfg.pinFmt       = obj["pinFmt"]     | (int8_t)-1;
+        cfg.pinSda       = -1;
+        cfg.pinScl       = -1;
+        cfg.paControlPin = -1;
+        cfg.volume       = 100;
+        const char* label = obj["label"] | "";
+        strncpy(cfg.userLabel, label, 32);
+        cfg.userLabel[32] = '\0';
+        mgr.setConfig(slot, cfg);
+
+        // probeOnly=true  — device is a config/state holder; full init done elsewhere
+        //   (e.g. PCM5102A: audio pipeline sink registered by dac_output_init())
+        // probeOnly=false — probe + init now
+        //   (e.g. PCM1808: I2S RX managed by i2s_audio.cpp; HAL just tracks state)
+        bool probeOnly = obj["probeOnly"] | false;
+        dev->probe();
+        if (!probeOnly) {
+            dev->init();
+            hal_pipeline_on_device_available(slot);
+        }
+
+        LOG_I("[HAL DB] Auto-device '%s' (%s) slot %d%s",
+              compatible, label[0] ? label : "?", slot,
+              probeOnly ? " [probe-only]" : " [ready]");
+    }
+#endif
 }
 
 #endif // DAC_ENABLED

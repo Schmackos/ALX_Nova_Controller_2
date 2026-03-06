@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "hal_types.h"
 
 #ifdef DAC_ENABLED
 
@@ -23,5 +24,11 @@ bool hal_export_configs(char* buf, size_t bufSize);
 
 // Import configs from JSON blob (for restore)
 bool hal_import_configs(const char* json, size_t len);
+
+// Returns config for the first registered device of the given type, or nullptr if none/invalid
+HalDeviceConfig* hal_get_config_for_type(HalDeviceType type);
+
+// Apply saved HalDeviceConfig to hardware immediately (hot reconfigure).
+void hal_apply_config(uint8_t slot);
 
 #endif // DAC_ENABLED

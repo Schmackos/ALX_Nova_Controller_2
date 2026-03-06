@@ -2250,6 +2250,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
         .hal-form-row input[type="range"] { flex: 1; }
         .hal-form-buttons { display: flex; gap: 8px; margin-top: 10px; }
+        .hal-cap-badge { display:inline-block; padding:1px 5px; border-radius:3px; font-size:10px; background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.6); margin:0 1px; }
+
+        /* HAL Device Enable Toggle */
+        .hal-enable-toggle { display:inline-flex; align-items:center; cursor:pointer; margin-right:4px; vertical-align:middle; }
+        .hal-enable-toggle input { display:none; }
+        .hal-toggle-track { width:28px; height:14px; border-radius:7px; background:rgba(255,255,255,0.2); position:relative; transition:background .2s; flex-shrink:0; }
+        .hal-enable-toggle input:checked + .hal-toggle-track { background:#4aaa88; }
+        .hal-toggle-track::after { content:''; position:absolute; top:2px; left:2px; width:10px; height:10px; border-radius:50%; background:#fff; transition:left .2s; }
+        .hal-enable-toggle input:checked + .hal-toggle-track::after { left:16px; }
+
+        /* HAL card header icon action buttons */
+        .hal-icon-btn { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0; border:none; border-radius:4px; background:transparent; color:rgba(255,255,255,0.5); cursor:pointer; transition:background .15s, color .15s; flex-shrink:0; }
+        .hal-icon-btn:hover { background:rgba(255,255,255,0.12); color:rgba(255,255,255,0.9); }
+        .hal-icon-btn-danger { color:rgba(220,80,80,0.7); }
+        .hal-icon-btn-danger:hover { background:rgba(220,80,80,0.15); color:#e05555; }
+        .hal-remove-row { display:flex; align-items:center; gap:6px; justify-content:flex-end; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08); font-size:12px; }
 
         /* HAL Add Device */
         .hal-add-row { display: flex; gap: 8px; align-items: center; }
@@ -4727,8 +4743,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <div class="card-row" style="margin-bottom:12px;gap:8px;">
                 <button id="hal-rescan-btn" class="btn btn-primary" onclick="triggerHalRescan()">Rescan Devices</button>
                 <button class="btn" onclick="importDeviceYaml()">Import YAML</button>
+                <button class="btn" onclick="halOpenCustomUpload()">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,9V3.5L18.5,9H13M9,13H11V11H13V13H15V15H13V17H11V15H9V13Z"/></svg>
+                  Custom Device
+                </button>
+            </div>
+            <div class="card" style="padding:10px 16px;margin-bottom:4px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <span style="font-weight:500;font-size:13px;">Auto-configure detected devices</span>
+                        <div style="font-size:11px;opacity:0.55;margin-top:2px;">Automatically initialise devices with a recognised EEPROM or GPIO ID</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="halAutoDiscovery" onchange="setHalAutoDiscovery(this.checked)"><span class="slider round"></span></label>
+                </div>
             </div>
             <div id="hal-device-list"></div>
+            <div id="hal-unknown-list"></div>
 
             <!-- Add Device Panel -->
             <div class="card" style="margin-top:12px;">
@@ -5232,6 +5262,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 handleIoRegistryState(data);
             } else if (data.type === 'halDeviceState') {
                 handleHalDeviceState(data);
+                if (data.unknownDevices) handleHalUnknownDevices(data.unknownDevices);
             }
         }
 
@@ -6846,6 +6877,16 @@ function toggleSigGenLane(enabled) {
         // ===== HAL Device Management =====
         // Provides device discovery, configuration, monitoring, and CRUD UI
 
+        // Capability flags (mirrors HAL_CAP_* in hal_types.h)
+        var HAL_CAP_HW_VOLUME   = 1 << 0;
+        var HAL_CAP_FILTERS     = 1 << 1;
+        var HAL_CAP_MUTE        = 1 << 2;
+        var HAL_CAP_ADC_PATH    = 1 << 3;
+        var HAL_CAP_DAC_PATH    = 1 << 4;
+        var HAL_CAP_PGA_CONTROL = 1 << 5;
+        var HAL_CAP_HPF_CONTROL = 1 << 6;
+        var HAL_CAP_CODEC       = 1 << 7;
+
         var halDevices = [];
         var halScanning = false;
         var halExpandedSlot = -1;
@@ -6855,6 +6896,18 @@ function toggleSigGenLane(enabled) {
             halScanning = data.scanning || false;
             halDevices = data.devices || [];
             renderHalDevices();
+            halSyncAudioTabVisibility(halDevices);
+        }
+
+        function halSyncAudioTabVisibility(devices) {
+            // Show/hide Audio tab DAC card based on HAL device enabled state
+            var dac = devices.find(function(d) { return d.type === 1; }); // HAL_DEV_DAC
+            var dacCard = document.getElementById('dacCard');
+            if (dacCard && dac) dacCard.style.display = (dac.cfgEnabled !== false) ? '' : 'none';
+
+            var codec = devices.find(function(d) { return d.type === 3; }); // HAL_DEV_CODEC
+            var es8311Card = document.getElementById('es8311Card');
+            if (es8311Card && codec) es8311Card.style.display = (codec.cfgEnabled !== false) ? '' : 'none';
         }
 
         function renderHalDevices() {
@@ -6933,6 +6986,18 @@ function toggleSigGenLane(enabled) {
                 h += '<span class="hal-temp-reading">' + d.temperature.toFixed(1) + ' &deg;C</span>';
             }
             h += '<span class="status-dot status-' + si.cls + '" title="' + si.label + '"></span>';
+            // Icon action buttons — left of toggle, stopPropagation so card doesn't expand
+            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();halStartEdit(' + d.slot + ')" title="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
+            if (d.discovery !== 0) {  // Can't remove builtins
+                h += '<button class="hal-icon-btn hal-icon-btn-danger" onclick="event.stopPropagation();halConfirmRemove(' + d.slot + ',\'' + escapeHtml(displayName) + '\')" title="Remove device"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
+            }
+            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();halReinitDevice(' + d.slot + ')" title="Re-initialize"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg></button>';
+            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();exportDeviceYaml(' + d.slot + ')" title="Export YAML"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>';
+            // Enable/disable toggle — visible on card without needing to open edit form
+            var togChecked = (d.cfgEnabled !== false) ? 'checked' : '';
+            h += '<label class="hal-enable-toggle" title="' + (d.cfgEnabled !== false ? 'Enabled — click to disable' : 'Disabled — click to enable') + '" onclick="event.stopPropagation()">';
+            h += '<input type="checkbox" ' + togChecked + ' onchange="halToggleDeviceEnabled(' + d.slot + ',this.checked)">';
+            h += '<span class="hal-toggle-track"></span></label>';
             h += '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="hal-expand-icon' + (expanded ? ' rotated' : '') + '" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
             h += '</div>';
 
@@ -6942,6 +7007,14 @@ function toggleSigGenLane(enabled) {
             h += '<span class="badge">' + ti.label + '</span>';
             h += '<span class="badge">' + halGetDiscLabel(d.discovery) + '</span>';
             if (d.ready) h += '<span class="badge badge-green">Ready</span>';
+            // Capability badges
+            if (d.capabilities) {
+                if (d.capabilities & HAL_CAP_HW_VOLUME)   h += '<span class="hal-cap-badge">Vol</span>';
+                if (d.capabilities & HAL_CAP_MUTE)        h += '<span class="hal-cap-badge">Mute</span>';
+                if (d.capabilities & HAL_CAP_PGA_CONTROL) h += '<span class="hal-cap-badge">PGA</span>';
+                if (d.capabilities & HAL_CAP_HPF_CONTROL) h += '<span class="hal-cap-badge">HPF</span>';
+                if (d.capabilities & HAL_CAP_CODEC)       h += '<span class="hal-cap-badge">Codec</span>';
+            }
             h += '</div>';
 
             // Expanded detail section
@@ -6954,8 +7027,14 @@ function toggleSigGenLane(enabled) {
                 h += '<div class="hal-detail-row"><span>Bus:</span><span>' + halGetBusLabel(d.busType || 0) + (d.busIndex > 0 ? ' #' + d.busIndex : '') + '</span></div>';
                 if (d.i2cAddr > 0) h += '<div class="hal-detail-row"><span>I2C Address:</span><span>0x' + d.i2cAddr.toString(16).toUpperCase().padStart(2, '0') + '</span></div>';
                 if (d.busFreq > 0) h += '<div class="hal-detail-row"><span>Bus Freq:</span><span>' + (d.busFreq >= 1000000 ? (d.busFreq/1000000).toFixed(1) + ' MHz' : (d.busFreq/1000) + ' kHz') + '</span></div>';
-                if (d.pinA >= 0) h += '<div class="hal-detail-row"><span>Pin A (SDA/Data):</span><span>GPIO ' + d.pinA + '</span></div>';
-                if (d.pinB >= 0) h += '<div class="hal-detail-row"><span>Pin B (SCL/CLK):</span><span>GPIO ' + d.pinB + '</span></div>';
+                if (d.pinA > 0) {
+                    var pinALabel = (d.busType === 1) ? 'Pin A (SDA):' : 'Pin A (Data):';
+                    h += '<div class="hal-detail-row"><span>' + pinALabel + '</span><span>GPIO ' + d.pinA + '</span></div>';
+                }
+                if (d.pinB > 0) {
+                    var pinBLabel = (d.busType === 1) ? 'Pin B (SCL):' : 'Pin B (CLK):';
+                    h += '<div class="hal-detail-row"><span>' + pinBLabel + '</span><span>GPIO ' + d.pinB + '</span></div>';
+                }
                 if (d.channels > 0) h += '<div class="hal-detail-row"><span>Channels:</span><span>' + d.channels + '</span></div>';
                 h += '<div class="hal-detail-row"><span>Slot:</span><span>' + d.slot + '</span></div>';
 
@@ -6987,17 +7066,6 @@ function toggleSigGenLane(enabled) {
                     h += halBuildEditForm(d);
                 }
 
-                // Action buttons
-                h += '<div class="hal-device-actions">';
-                if (!editing) {
-                    h += '<button class="btn btn-sm" onclick="halStartEdit(' + d.slot + ')" title="Configure"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg> Edit</button>';
-                }
-                h += '<button class="btn btn-sm" onclick="halReinitDevice(' + d.slot + ')" title="Re-initialize"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg> Reinit</button>';
-                h += '<button class="btn btn-sm" onclick="exportDeviceYaml(' + d.slot + ')" title="Export YAML"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg> Export</button>';
-                if (d.discovery !== 0) {  // Can't remove builtins
-                    h += '<button class="btn btn-sm hal-btn-remove" onclick="halRemoveDevice(' + d.slot + ')" title="Remove"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg> Remove</button>';
-                }
-                h += '</div>';
 
                 h += '</div>'; // hal-device-details
             }
@@ -7076,6 +7144,66 @@ function toggleSigGenLane(enabled) {
                 }
             }
 
+            // Audio Config section (for audio devices: DAC, ADC, Codec)
+            if (d.type >= 1 && d.type <= 3) {
+                h += '<div class="hal-form-section">Audio Config</div>';
+                h += '<div class="hal-form-row"><label>Sample Rate:</label>';
+                h += '<select id="halCfgSampleRate">';
+                h += '<option value="0"' + (!(d.cfgSampleRate) || d.cfgSampleRate === 0 ? ' selected' : '') + '>Auto</option>';
+                h += '<option value="44100"' + (d.cfgSampleRate === 44100 ? ' selected' : '') + '>44100 Hz</option>';
+                h += '<option value="48000"' + (d.cfgSampleRate === 48000 ? ' selected' : '') + '>48000 Hz</option>';
+                h += '<option value="96000"' + (d.cfgSampleRate === 96000 ? ' selected' : '') + '>96000 Hz</option>';
+                h += '</select></div>';
+
+                h += '<div class="hal-form-row"><label>Bit Depth:</label>';
+                h += '<select id="halCfgBitDepth">';
+                h += '<option value="0"' + (!(d.cfgBitDepth) || d.cfgBitDepth === 0 ? ' selected' : '') + '>Auto</option>';
+                h += '<option value="16"' + (d.cfgBitDepth === 16 ? ' selected' : '') + '>16-bit</option>';
+                h += '<option value="24"' + (d.cfgBitDepth === 24 ? ' selected' : '') + '>24-bit</option>';
+                h += '<option value="32"' + (d.cfgBitDepth === 32 ? ' selected' : '') + '>32-bit</option>';
+                h += '</select></div>';
+            }
+
+            // Advanced section (all audio devices)
+            if (d.type >= 1 && d.type <= 3) {
+                h += '<div class="hal-form-section">Advanced</div>';
+
+                h += '<div class="hal-form-row"><label>MCLK Multiple:</label>';
+                h += '<select id="halCfgMclkMultiple">';
+                h += '<option value="0"' + (!d.cfgMclkMultiple || d.cfgMclkMultiple === 0 ? ' selected' : '') + '>Auto (256×)</option>';
+                h += '<option value="256"' + (d.cfgMclkMultiple === 256 ? ' selected' : '') + '>256×</option>';
+                h += '<option value="384"' + (d.cfgMclkMultiple === 384 ? ' selected' : '') + '>384×</option>';
+                h += '<option value="512"' + (d.cfgMclkMultiple === 512 ? ' selected' : '') + '>512×</option>';
+                h += '</select></div>';
+
+                h += '<div class="hal-form-row"><label>I2S Format:</label>';
+                h += '<select id="halCfgI2sFormat">';
+                h += '<option value="0"' + (d.cfgI2sFormat === 0 || d.cfgI2sFormat === undefined ? ' selected' : '') + '>Philips (I2S)</option>';
+                h += '<option value="1"' + (d.cfgI2sFormat === 1 ? ' selected' : '') + '>MSB / Left-Justified</option>';
+                h += '<option value="2"' + (d.cfgI2sFormat === 2 ? ' selected' : '') + '>LSB / Right-Justified</option>';
+                h += '</select></div>';
+
+                h += '<div class="hal-form-row"><label>PA Control Pin:</label>';
+                h += '<input type="number" id="halCfgPaControlPin" value="' + (d.cfgPaControlPin !== undefined ? d.cfgPaControlPin : -1) + '" min="-1" max="53" style="width:60px;">';
+                h += ' <span style="font-size:10px;opacity:0.5">(-1 = none)</span></div>';
+
+                if (d.capabilities & HAL_CAP_PGA_CONTROL) {
+                    h += '<div class="hal-form-row"><label>PGA Gain:</label>';
+                    h += '<select id="halCfgPgaGain">';
+                    var pgaOpts = [0, 6, 12, 18, 23];
+                    for (var pi = 0; pi < pgaOpts.length; pi++) {
+                        h += '<option value="' + pgaOpts[pi] + '"' + (d.cfgPgaGain === pgaOpts[pi] ? ' selected' : '') + '>' + pgaOpts[pi] + ' dB</option>';
+                    }
+                    h += '</select></div>';
+                }
+
+                if (d.capabilities & HAL_CAP_HPF_CONTROL) {
+                    h += '<div class="hal-form-row"><label>High-Pass Filter:</label>';
+                    h += '<label class="toggle-label"><input type="checkbox" id="halCfgHpfEnabled"' + (d.cfgHpfEnabled ? ' checked' : '') + '> <span>Enabled</span></label>';
+                    h += '</div>';
+                }
+            }
+
             // GPIO settings (for GPIO devices like amp)
             if (busType === 4) {
                 h += '<div class="hal-form-section">GPIO Settings</div>';
@@ -7085,17 +7213,31 @@ function toggleSigGenLane(enabled) {
                 h += '</div>';
             }
 
-            // Pin overrides (for I2C/I2S devices)
+            // Pin configuration
             if (busType === 1 || busType === 2) {
-                h += '<div class="hal-form-section">Pin Overrides (-1 = default)</div>';
-                h += '<div class="hal-form-row">';
-                h += '<label>SDA/Data:</label>';
-                h += '<input type="number" id="halCfgPinSda" value="' + (d.cfgPinSda !== undefined ? d.cfgPinSda : -1) + '" min="-1" max="54" style="width:60px;">';
-                h += '</div>';
-                h += '<div class="hal-form-row">';
-                h += '<label>SCL/CLK:</label>';
-                h += '<input type="number" id="halCfgPinScl" value="' + (d.cfgPinScl !== undefined ? d.cfgPinScl : -1) + '" min="-1" max="54" style="width:60px;">';
-                h += '</div>';
+                h += '<div class="hal-form-section">Pin Configuration <span style="font-size:10px;opacity:0.5">(-1 = board default)</span></div>';
+                if (busType === 1) {
+                    h += '<div class="hal-form-row"><label>SDA Pin:</label>';
+                    h += '<input type="number" id="halCfgPinSda" value="' + (d.cfgPinSda !== undefined ? d.cfgPinSda : -1) + '" min="-1" max="54" style="width:60px;"></div>';
+                    h += '<div class="hal-form-row"><label>SCL Pin:</label>';
+                    h += '<input type="number" id="halCfgPinScl" value="' + (d.cfgPinScl !== undefined ? d.cfgPinScl : -1) + '" min="-1" max="54" style="width:60px;"></div>';
+                }
+                if (busType === 2) {
+                    h += '<div class="hal-form-row"><label>Data Pin:</label>';
+                    h += '<input type="number" id="halCfgPinData" value="' + (d.cfgPinData !== undefined ? d.cfgPinData : -1) + '" min="-1" max="54" style="width:60px;"></div>';
+                    h += '<div class="hal-form-row"><label>MCLK Pin:</label>';
+                    h += '<input type="number" id="halCfgPinMclk" value="' + (d.cfgPinMclk !== undefined ? d.cfgPinMclk : -1) + '" min="-1" max="54" style="width:60px;"></div>';
+                    h += '<div class="hal-form-row"><label>BCK Pin:</label>';
+                    h += '<input type="number" id="halCfgPinBck" value="' + (d.cfgPinBck !== undefined ? d.cfgPinBck : -1) + '" min="-1" max="54" style="width:60px;"></div>';
+                    h += '<div class="hal-form-row"><label>LRC/WS Pin:</label>';
+                    h += '<input type="number" id="halCfgPinLrc" value="' + (d.cfgPinLrc !== undefined ? d.cfgPinLrc : -1) + '" min="-1" max="54" style="width:60px;"></div>';
+                    if (d.type === 2) {  // ADC only — FMT selects Philips vs MSB format
+                        h += '<div class="hal-form-row"><label>FMT Pin:</label>';
+                        h += '<input type="number" id="halCfgPinFmt" value="' + (d.cfgPinFmt !== undefined ? d.cfgPinFmt : -1) + '" min="-1" max="54" style="width:60px;">';
+                        h += ' <span style="font-size:10px;opacity:0.5">(-1 = not wired; set HIGH for MSB, LOW for Philips)</span></div>';
+                    }
+                }
+                h += '<div style="font-size:11px;opacity:0.55;margin-top:4px;padding:0 2px">Changes apply immediately on Save. I2S devices will have a brief audio dropout.</div>';
             }
 
             // Save/Cancel
@@ -7112,6 +7254,16 @@ function toggleSigGenLane(enabled) {
             halExpandedSlot = (halExpandedSlot === slot) ? -1 : slot;
             halEditingSlot = -1;
             renderHalDevices();
+        }
+
+        function halToggleDeviceEnabled(slot, enabled) {
+            fetch('/api/hal/devices', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({slot: slot, enabled: enabled})
+            }).then(function(r) {
+                if (r.ok) loadHalDeviceList();
+            });
         }
 
         function halStartEdit(slot) {
@@ -7159,8 +7311,34 @@ function toggleSigGenLane(enabled) {
             var pinSclEl = document.getElementById('halCfgPinScl');
             if (pinSclEl) cfg.pinScl = parseInt(pinSclEl.value);
 
+            cfg.pinData = parseInt(document.getElementById('halCfgPinData') ? document.getElementById('halCfgPinData').value : '-1') || -1;
+            cfg.pinMclk = parseInt(document.getElementById('halCfgPinMclk') ? document.getElementById('halCfgPinMclk').value : '-1') || -1;
+
             var pinAEl = document.getElementById('halCfgPinA');
             if (pinAEl) cfg.pinSda = parseInt(pinAEl.value);
+
+            // Audio config fields (key names match backend PUT handler)
+            var srEl = document.getElementById('halCfgSampleRate');
+            if (srEl) cfg.sampleRate = parseInt(srEl.value) || 0;
+            var bdEl = document.getElementById('halCfgBitDepth');
+            if (bdEl) cfg.bitDepth = parseInt(bdEl.value) || 0;
+            var mclkEl = document.getElementById('halCfgMclkMultiple');
+            if (mclkEl) cfg.cfgMclkMultiple = parseInt(mclkEl.value) || 0;
+            var i2sfEl = document.getElementById('halCfgI2sFormat');
+            if (i2sfEl) cfg.cfgI2sFormat = parseInt(i2sfEl.value) || 0;
+            var pgaEl = document.getElementById('halCfgPgaGain');
+            if (pgaEl) cfg.cfgPgaGain = parseInt(pgaEl.value) || 0;
+            var hpfEl = document.getElementById('halCfgHpfEnabled');
+            if (hpfEl) cfg.cfgHpfEnabled = hpfEl.checked;
+            var paEl = document.getElementById('halCfgPaControlPin');
+            if (paEl) cfg.cfgPaControlPin = parseInt(paEl.value);
+            // New I2S pin fields
+            var pinBckEl = document.getElementById('halCfgPinBck');
+            if (pinBckEl) cfg.pinBck = parseInt(pinBckEl.value);
+            var pinLrcEl = document.getElementById('halCfgPinLrc');
+            if (pinLrcEl) cfg.pinLrc = parseInt(pinLrcEl.value);
+            var pinFmtEl = document.getElementById('halCfgPinFmt');
+            if (pinFmtEl) cfg.pinFmt = parseInt(pinFmtEl.value);
 
             fetch('/api/hal/devices', {
                 method: 'PUT',
@@ -7194,8 +7372,12 @@ function toggleSigGenLane(enabled) {
             .catch(function(err) { showToast('Error: ' + err, true); });
         }
 
+        function halConfirmRemove(slot, name) {
+            if (!confirm('Remove "' + name + '"?\nThe device can be re-added later via Add Device.')) return;
+            halRemoveDevice(slot);
+        }
+
         function halRemoveDevice(slot) {
-            if (!confirm('Remove this device? It can be re-added later.')) return;
             fetch('/api/hal/devices', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
@@ -7216,7 +7398,10 @@ function toggleSigGenLane(enabled) {
 
         function halAddFromPreset() {
             fetch('/api/hal/db/presets')
-                .then(function(r) { return r.json(); })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('Server error ' + r.status);
+                    return r.json();
+                })
                 .then(function(presets) {
                     var sel = document.getElementById('halAddPresetSelect');
                     if (!sel) return;
@@ -7238,16 +7423,15 @@ function toggleSigGenLane(enabled) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ compatible: sel.value })
             })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.status === 'ok') {
-                    showToast('Device registered in slot ' + data.slot);
-                    loadHalDeviceList();
-                } else {
-                    showToast('Registration failed: ' + (data.error || ''), true);
-                }
+            .then(function(r) {
+                if (!r.ok) return r.json().then(function(d) { throw new Error(d.error || ('HTTP ' + r.status)); });
+                return r.json();
             })
-            .catch(function(err) { showToast('Error: ' + err, true); });
+            .then(function(data) {
+                showToast('Device registered in slot ' + data.slot);
+                loadHalDeviceList();
+            })
+            .catch(function(err) { showToast('Registration failed: ' + err, true); });
         }
 
         function triggerHalRescan() {
@@ -7284,6 +7468,28 @@ function toggleSigGenLane(enabled) {
                 .catch(function(err) {
                     console.error('Failed to load HAL devices:', err);
                 });
+            loadHalSettings();
+        }
+
+        function loadHalSettings() {
+            fetch('/api/hal/settings')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    var cb = document.getElementById('halAutoDiscovery');
+                    if (cb) cb.checked = d.halAutoDiscovery !== false;
+                })
+                .catch(function() {});
+        }
+
+        function setHalAutoDiscovery(enabled) {
+            fetch('/api/hal/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ halAutoDiscovery: enabled })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function() { showToast('Auto-discovery ' + (enabled ? 'enabled' : 'disabled'), 'success'); })
+            .catch(function(err) { showToast('Failed: ' + err.message, 'error'); });
         }
 
         function exportDeviceYaml(slot) {
@@ -7335,6 +7541,99 @@ function toggleSigGenLane(enabled) {
                 reader.readAsText(input.files[0]);
             };
             input.click();
+        }
+
+        var halUnknownDevices = [];
+
+        function handleHalUnknownDevices(devices) {
+            halUnknownDevices = devices || [];
+            renderHalUnknownDevices();
+        }
+
+        // ===== Custom Device Upload =====
+
+        var halCustomFileContent = null;
+
+        function halOpenCustomUpload() {
+            var modal = document.getElementById('halCustomUploadModal');
+            if (modal) modal.style.display = 'flex';
+            var preview = document.getElementById('halCustomPreview');
+            if (preview) preview.style.display = 'none';
+            var btn = document.getElementById('halCustomUploadBtn');
+            if (btn) btn.disabled = true;
+            halCustomFileContent = null;
+        }
+
+        function halCloseCustomUpload() {
+            var modal = document.getElementById('halCustomUploadModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function halCustomFileSelected(input) {
+            var file = input.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var schema = JSON.parse(e.target.result);
+                    halCustomFileContent = e.target.result;
+                    var preview = document.getElementById('halCustomPreview');
+                    if (preview) {
+                        preview.style.display = 'block';
+                        preview.innerHTML = '<strong>' + escapeHtml(schema.name || schema.compatible || 'Unknown') + '</strong><br>' +
+                            'Compatible: ' + escapeHtml(schema.compatible || '—') + '<br>' +
+                            'Component: ' + escapeHtml(schema.component || '—') + '<br>' +
+                            'Bus: ' + escapeHtml(schema.bus || '—');
+                    }
+                    var btn = document.getElementById('halCustomUploadBtn');
+                    if (btn) btn.disabled = false;
+                } catch(err) {
+                    showToast('Invalid JSON file', true);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function halUploadCustomDevice() {
+            if (!halCustomFileContent) return;
+            fetch('/api/hal/devices/custom', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: halCustomFileContent
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    showToast('Custom device uploaded');
+                    halCloseCustomUpload();
+                    loadHalDeviceList();
+                } else {
+                    showToast('Upload failed: ' + (data.error || 'Unknown error'), true);
+                }
+            })
+            .catch(function(err) { showToast('Upload error: ' + err, true); });
+        }
+
+        function renderHalUnknownDevices() {
+            var container = document.getElementById('hal-unknown-list');
+            if (!container) return;
+            if (!halUnknownDevices || halUnknownDevices.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            var h = '<div style="margin-top:8px;font-size:12px;font-weight:500;opacity:0.7;">Unidentified Devices</div>';
+            for (var i = 0; i < halUnknownDevices.length; i++) {
+                var u = halUnknownDevices[i];
+                h += '<div class="card" style="border-left:3px solid #f90;margin-top:8px;">';
+                h += '<div class="card-title" style="display:flex;align-items:center;gap:8px;">';
+                h += '<svg viewBox="0 0 24 24" width="16" height="16" fill="#f90" aria-hidden="true"><path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z"/></svg>';
+                h += 'Unknown Device</div>';
+                h += '<div class="info-row"><span class="info-label">I2C Address</span><span class="info-value">0x' + ((u.i2cAddr || u.i2cAddress || 0)).toString(16).toUpperCase().padStart(2,'0') + '</span></div>';
+                if (u.deviceName) h += '<div class="info-row"><span class="info-label">Partial Name</span><span class="info-value">' + escapeHtml(u.deviceName) + '</span></div>';
+                h += '<div style="font-size:11px;opacity:0.55;margin-top:6px;">No driver match found. Program via EEPROM Programming, then Rescan.</div>';
+                h += '</div>';
+            }
+            container.innerHTML = h;
         }
 
 //# sourceURL=15-hal-devices.js
@@ -12791,6 +13090,28 @@ function initFirmwareDragDrop() {
 
 //# sourceURL=28-init.js
 </script>
+
+    <!-- Custom Device Upload Modal -->
+    <div id="halCustomUploadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+      <div style="background:#1e2025;border-radius:8px;padding:20px;width:460px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <span style="font-weight:600;font-size:14px;">Add Custom Device</span>
+          <button onclick="halCloseCustomUpload()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:18px;opacity:0.6;">&times;</button>
+        </div>
+        <p style="font-size:12px;opacity:0.6;margin:0 0 12px;">Upload a JSON device schema. The device will appear in the Devices list after upload.</p>
+        <div onclick="document.getElementById('halCustomFileInput').click()" style="border:2px dashed rgba(255,255,255,0.15);border-radius:6px;padding:20px;text-align:center;cursor:pointer;transition:border-color .15s;" onmouseover="this.style.borderColor='rgba(255,255,255,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true" style="opacity:0.35;margin-bottom:6px;display:block;margin-left:auto;margin-right:auto;"><path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/></svg>
+          <div style="font-size:12px;opacity:0.45;">Click to select JSON file</div>
+          <input type="file" id="halCustomFileInput" accept=".json" style="display:none" onchange="halCustomFileSelected(this)">
+        </div>
+        <div id="halCustomPreview" style="display:none;margin-top:10px;padding:8px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-size:12px;line-height:1.6;"></div>
+        <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn btn-sm" onclick="halCloseCustomUpload()">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="halCustomUploadBtn" onclick="halUploadCustomDevice()" disabled>Upload</button>
+        </div>
+      </div>
+    </div>
+
 </body>
 </html>
 )rawliteral";

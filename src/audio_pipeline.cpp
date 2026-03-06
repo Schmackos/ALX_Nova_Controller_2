@@ -823,6 +823,14 @@ void audio_pipeline_register_sink(const AudioOutputSink *sink) {
           (int)_sinkCount);
 }
 
+void audio_pipeline_clear_sinks() {
+    // Caller must set appState.audioPaused=true and vTaskDelay(40ms) before calling.
+    // The audio task checks audioPaused at the top of its loop, so it will be
+    // yielding by the time this runs. A single volatile write is atomic on RISC-V.
+    _sinkCount = 0;
+    LOG_I("[Audio] All sinks cleared");
+}
+
 int audio_pipeline_get_sink_count() {
     return _sinkCount;
 }

@@ -1978,8 +1978,22 @@
             <div class="card-row" style="margin-bottom:12px;gap:8px;">
                 <button id="hal-rescan-btn" class="btn btn-primary" onclick="triggerHalRescan()">Rescan Devices</button>
                 <button class="btn" onclick="importDeviceYaml()">Import YAML</button>
+                <button class="btn" onclick="halOpenCustomUpload()">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,9V3.5L18.5,9H13M9,13H11V11H13V13H15V15H13V17H11V15H9V13Z"/></svg>
+                  Custom Device
+                </button>
+            </div>
+            <div class="card" style="padding:10px 16px;margin-bottom:4px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <span style="font-weight:500;font-size:13px;">Auto-configure detected devices</span>
+                        <div style="font-size:11px;opacity:0.55;margin-top:2px;">Automatically initialise devices with a recognised EEPROM or GPIO ID</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="halAutoDiscovery" onchange="setHalAutoDiscovery(this.checked)"><span class="slider round"></span></label>
+                </div>
             </div>
             <div id="hal-device-list"></div>
+            <div id="hal-unknown-list"></div>
 
             <!-- Add Device Panel -->
             <div class="card" style="margin-top:12px;">
@@ -2096,5 +2110,27 @@
     <div class="toast" id="toast"></div>
 
     <script>/* JS_INJECT */</script>
+
+    <!-- Custom Device Upload Modal -->
+    <div id="halCustomUploadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+      <div style="background:#1e2025;border-radius:8px;padding:20px;width:460px;max-width:95vw;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <span style="font-weight:600;font-size:14px;">Add Custom Device</span>
+          <button onclick="halCloseCustomUpload()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:18px;opacity:0.6;">&times;</button>
+        </div>
+        <p style="font-size:12px;opacity:0.6;margin:0 0 12px;">Upload a JSON device schema. The device will appear in the Devices list after upload.</p>
+        <div onclick="document.getElementById('halCustomFileInput').click()" style="border:2px dashed rgba(255,255,255,0.15);border-radius:6px;padding:20px;text-align:center;cursor:pointer;transition:border-color .15s;" onmouseover="this.style.borderColor='rgba(255,255,255,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.15)'">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true" style="opacity:0.35;margin-bottom:6px;display:block;margin-left:auto;margin-right:auto;"><path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z"/></svg>
+          <div style="font-size:12px;opacity:0.45;">Click to select JSON file</div>
+          <input type="file" id="halCustomFileInput" accept=".json" style="display:none" onchange="halCustomFileSelected(this)">
+        </div>
+        <div id="halCustomPreview" style="display:none;margin-top:10px;padding:8px 10px;background:rgba(255,255,255,0.05);border-radius:4px;font-size:12px;line-height:1.6;"></div>
+        <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn btn-sm" onclick="halCloseCustomUpload()">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="halCustomUploadBtn" onclick="halUploadCustomDevice()" disabled>Upload</button>
+        </div>
+      </div>
+    </div>
+
 </body>
 </html>

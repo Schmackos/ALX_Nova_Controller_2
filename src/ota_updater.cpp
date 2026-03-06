@@ -273,7 +273,6 @@ void handleGetReleaseNotes() {
   }
 
   WiFiClientSecure client;
-  client.setBufferSizes(4096, 1024);
 
   if (maxBlock < 50000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
@@ -420,7 +419,6 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   }
 
   WiFiClientSecure client;
-  client.setBufferSizes(4096, 1024);
 
   if (maxBlock < 65000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
@@ -588,7 +586,6 @@ bool fetchReleaseList(int maxCount) {
     WiFiClientSecure client;
     // Reduce TLS I/O buffer from 16KB default to 4KB to avoid esp-aes DMA
     // descriptor allocation failure on fragmented internal SRAM heap
-    client.setBufferSizes(4096, 1024);
 
     if (maxBlock < 65000) {
       LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
@@ -835,7 +832,6 @@ bool performOTAUpdate(String firmwareUrl) {
   }
 
   WiFiClientSecure client;
-  client.setBufferSizes(4096, 1024);
 
   if (maxBlock < 65000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);

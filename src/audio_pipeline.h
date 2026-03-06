@@ -65,6 +65,7 @@ float audio_pipeline_get_lane_vu_r(int lane);
 // Output sink registration (called from dac_hal.cpp after driver init)
 struct AudioOutputSink;  // Forward declaration
 void audio_pipeline_register_sink(const AudioOutputSink *sink);
+void audio_pipeline_clear_sinks();   // Remove all sinks — caller must set audioPaused=true first
 int  audio_pipeline_get_sink_count();
 const AudioOutputSink* audio_pipeline_get_sink(int idx);
 

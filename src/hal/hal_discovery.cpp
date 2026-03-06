@@ -5,6 +5,7 @@
 #include "hal_device_db.h"
 #include "hal_driver_registry.h"
 #include "hal_eeprom_v3.h"
+#include "hal_dac_adapter.h"
 
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
@@ -47,25 +48,53 @@ int hal_discover_devices() {
         dac_i2c_scan(&eepMask);
         DacEepromData eepromData;
         if (dac_eeprom_scan(&eepromData, eepMask)) {
-            LOG_I("[HAL Discovery]", "EEPROM found at 0x%02X: %s (id=0x%04X, v%u)",
-                  eepromData.i2cAddress, eepromData.deviceName,
-                  eepromData.deviceId, eepromData.formatVersion);
-
-            // Check for v3 compatible string
-            // For v1/v2 — try legacy ID lookup via driver registry
             const HalDriverEntry* entry = nullptr;
             if (eepromData.deviceId > 0) {
                 entry = hal_registry_find_by_legacy_id(eepromData.deviceId);
             }
 
             if (entry) {
-                // Found a driver — look up descriptor from DB
                 HalDeviceDescriptor desc;
                 if (hal_db_lookup(entry->compatible, &desc)) {
-                    LOG_I("[HAL Discovery]", "Matched: %s via legacy ID 0x%04X",
-                          entry->compatible, eepromData.deviceId);
-                    newDevices++;
+                    LOG_I("[HAL Discovery]", "EEPROM found at 0x%02X: %s (id=0x%04X)",
+                          eepromData.i2cAddress, eepromData.deviceName, eepromData.deviceId);
+
+                    // Check if device is already registered (don't duplicate)
+                    bool alreadyRegistered = false;
+                    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+                        HalDevice* existing = mgr.getDevice(i);
+                        if (existing && existing->getDiscovery() == HAL_DISC_EEPROM &&
+                            strcmp(existing->getDescriptor().compatible, desc.compatible) == 0) {
+                            alreadyRegistered = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadyRegistered) {
+                        // Create HalDacAdapter for DAC-type devices
+                        if (desc.type == HAL_DEV_DAC) {
+                            HalDevice* dev = new HalDacAdapter(nullptr, desc);
+                            if (dev) {
+                                int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM);
+                                if (appState.halAutoDiscovery) {
+                                    dev->_state = HAL_STATE_AVAILABLE;
+                                    LOG_I("[HAL Discovery]", "Device auto-registered: %s (slot %d)", desc.name, slot);
+                                } else {
+                                    dev->_state = HAL_STATE_CONFIGURING;
+                                    LOG_I("[HAL Discovery]", "Device registered, awaiting init: %s (slot %d)", desc.name, slot);
+                                }
+                                newDevices++;
+                            }
+                        }
+                        // Future: add ADC, CODEC, GPIO device creation here
+                    } else {
+                        LOG_I("[HAL Discovery]", "Device already registered: %s", desc.compatible);
+                    }
                 }
+            } else {
+                LOG_I("[HAL Discovery]", "EEPROM at 0x%02X: no matching driver (id=0x%04X) — manual config required",
+                      eepromData.i2cAddress, eepromData.deviceId);
+                appState.markHalDeviceDirty();
             }
         }
     } else {

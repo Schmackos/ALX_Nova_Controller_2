@@ -35,6 +35,8 @@
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "hal/hal_settings.h"
+#include "hal/hal_types.h"
 #endif
 
 // ===== Constants =====
@@ -362,6 +364,20 @@ static void i2s_configure_adc1(uint32_t sample_rate) {
         return;
     }
 
+    // Query HAL config for optional pin overrides (TX data / RX data only —
+    // shared clocks BCK/LRC/MCLK are board-wired and must not be overridden).
+#ifndef NATIVE_TEST
+    HalDeviceConfig* _adcHalCfg = hal_get_config_for_type(HAL_DEV_ADC);
+    HalDeviceConfig* _dacHalCfg = hal_get_config_for_type(HAL_DEV_DAC);
+#else
+    HalDeviceConfig* _adcHalCfg = nullptr;
+    HalDeviceConfig* _dacHalCfg = nullptr;
+#endif
+    gpio_num_t _txDataPin = (_dacHalCfg && _dacHalCfg->pinData > 0)
+        ? (gpio_num_t)_dacHalCfg->pinData : (gpio_num_t)I2S_TX_DATA_PIN;
+    gpio_num_t _rxDataPin = (_adcHalCfg && _adcHalCfg->pinData > 0)
+        ? (gpio_num_t)_adcHalCfg->pinData : (gpio_num_t)I2S_DOUT_PIN;
+
     // TX config: full clock master — MCLK/BCK/WS output, DOUT to DAC.
     // TX is initialized FIRST so clocks are live before the RX DMA starts.
     i2s_std_config_t tx_cfg = {};
@@ -370,7 +386,7 @@ static void i2s_configure_adc1(uint32_t sample_rate) {
     tx_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;   // MCLK OUTPUT to PCM1808 (GPIO3)
     tx_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
     tx_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
-    tx_cfg.gpio_cfg.dout = (gpio_num_t)I2S_TX_DATA_PIN; // DAC data out
+    tx_cfg.gpio_cfg.dout = _txDataPin;                   // DAC data out (HAL-overridable)
     tx_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
     tx_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     tx_cfg.gpio_cfg.invert_flags.bclk_inv = false;
@@ -385,7 +401,7 @@ static void i2s_configure_adc1(uint32_t sample_rate) {
     rx_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;     // Keep — RX DMA needs BCK sync
     rx_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;     // Keep — RX DMA needs WS sync
     rx_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
-    rx_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT_PIN;    // ADC1 data in
+    rx_cfg.gpio_cfg.din  = _rxDataPin;                   // ADC1 data in (HAL-overridable)
 
     // TX first, RX second — official Espressif init order (i2s_es8311 example, IDF v5.5.3).
     // MCLK=GPIO3 in both configs: RX init re-routes GPIO3 to the same I2S MCLK output (no clearing).

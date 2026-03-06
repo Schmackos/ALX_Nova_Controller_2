@@ -41,6 +41,7 @@
 #include "hal/hal_relay.h"
 #include "hal/hal_button.h"
 #include "hal/hal_signal_gen.h"
+#include "hal/hal_custom_device.h"
 #include "drivers/es8311_regs.h"
 #include "pipeline_api.h"
 #endif
@@ -264,14 +265,21 @@ void setup() {
   output_dsp_load_all();
 #endif
 
+  // Initialize HAL framework (before audio/DAC init so drivers can register and
+  // so i2s_configure_adc1() can query HAL config for pin overrides)
+#ifdef DAC_ENABLED
+  hal_register_builtins();
+  hal_db_init();
+  hal_load_device_configs();
+  hal_load_custom_devices();
+  hal_provision_defaults();    // Write /hal_auto_devices.json on first boot only
+  hal_load_auto_devices();     // Instantiate add-on devices via HAL factory registry
+#endif
+
   // Initialize I2S audio ADC (PCM1808) — uses sample rate from loaded settings
   i2s_audio_init();
 
 #ifdef DAC_ENABLED
-  // Initialize HAL framework (before DAC init so drivers can register)
-  hal_register_builtins();
-  hal_db_init();
-  hal_load_device_configs();
 
   // Initialize secondary DAC output (ES8311 codec on P4, no-op on S3)
   dac_secondary_init();

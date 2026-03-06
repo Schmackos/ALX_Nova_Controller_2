@@ -41,4 +41,10 @@ bool hal_save_device_config(uint8_t slot);
 // Reset database (for testing)
 void hal_db_reset();
 
+// Write /hal_auto_devices.json with board defaults if the file does not yet exist (first boot)
+void hal_provision_defaults();
+
+// Read /hal_auto_devices.json and register each entry via the HAL factory + driver registry
+void hal_load_auto_devices();
+
 #endif // DAC_ENABLED

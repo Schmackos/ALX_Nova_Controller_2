@@ -7,8 +7,13 @@
 
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
+#include "../app_state.h"
+#include "../i2s_audio.h"
+#include "../audio_pipeline.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #else
 #define LOG_I(...)
 #define LOG_W(...)
@@ -108,6 +113,74 @@ bool hal_import_configs(const char* json, size_t len) {
     return true;
 }
 
+HalDeviceConfig* hal_get_config_for_type(HalDeviceType type) {
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+        HalDevice* dev = mgr.getDevice(i);
+        if (!dev) continue;
+        if (dev->getDescriptor().type != type) continue;
+        HalDeviceConfig* cfg = mgr.getConfig(i);
+        if (cfg && cfg->valid) return cfg;
+    }
+    return nullptr;
+}
+
+void hal_apply_config(uint8_t slot) {
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    HalDevice* dev = mgr.getDevice(slot);
+    HalDeviceConfig* cfg = mgr.getConfig(slot);
+    if (!dev || !cfg || !cfg->valid) return;
+
+    // DISABLE: deinit device and mark MANUAL (persisted disabled state)
+    if (!cfg->enabled) {
+        if (dev->_state == HAL_STATE_AVAILABLE || dev->_state == HAL_STATE_CONFIGURING) {
+            appState.audioPaused = true;
+            vTaskDelay(pdMS_TO_TICKS(40));
+            audio_pipeline_clear_sinks();   // prevent pipeline from writing to freed device
+            dev->deinit();
+            appState.audioPaused = false;
+        }
+        dev->_state = HAL_STATE_MANUAL;
+        dev->_ready = false;
+        LOG_I("[HAL] Device slot %u disabled", slot);
+        appState.markHalDeviceDirty();
+        return;
+    }
+
+    // RE-ENABLE from MANUAL state: probe + init
+    if (dev->_state == HAL_STATE_MANUAL) {
+        dev->_state = HAL_STATE_CONFIGURING;
+        bool ok = dev->probe() && dev->init();
+        dev->_state = ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR;
+        LOG_I("[HAL] Device slot %u %s", slot, ok ? "re-enabled" : "re-enable failed");
+        appState.markHalDeviceDirty();
+        return;
+    }
+
+    // RECONFIGURE (already enabled — update pins/rate/etc.)
+    const HalDeviceDescriptor& desc = dev->getDescriptor();
+
+    if (desc.bus.type == HAL_BUS_I2S) {
+        // Pause audio pipeline, reconfigure I2S with new pins, resume
+        appState.audioPaused = true;
+        vTaskDelay(pdMS_TO_TICKS(30));
+        i2s_audio_set_sample_rate(appState.audioSampleRate);
+        appState.audioPaused = false;
+        LOG_I("[HAL] I2S device slot %u reconfigured (hot)", slot);
+    } else {
+        dev->_state = HAL_STATE_CONFIGURING;
+        dev->deinit();
+        if (dev->init()) {
+            dev->_state = HAL_STATE_AVAILABLE;
+            LOG_I("[HAL] Device slot %u reinitialised", slot);
+        } else {
+            dev->_state = HAL_STATE_ERROR;
+            LOG_E("[HAL] Device slot %u reinit failed", slot);
+        }
+    }
+    appState.markHalDeviceDirty();
+}
+
 #else
 // Native test stubs
 void hal_save_all_configs() {}
@@ -115,6 +188,8 @@ void hal_save_device_config_deferred(uint8_t) {}
 void hal_check_deferred_save() {}
 bool hal_export_configs(char*, size_t) { return false; }
 bool hal_import_configs(const char*, size_t) { return false; }
+HalDeviceConfig* hal_get_config_for_type(HalDeviceType) { return nullptr; }
+void hal_apply_config(uint8_t) {}
 #endif
 
 #endif // DAC_ENABLED

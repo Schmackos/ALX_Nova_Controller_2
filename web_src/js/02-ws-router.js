@@ -241,5 +241,6 @@
                 handleIoRegistryState(data);
             } else if (data.type === 'halDeviceState') {
                 handleHalDeviceState(data);
+                if (data.unknownDevices) handleHalUnknownDevices(data.unknownDevices);
             }
         }
