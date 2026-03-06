@@ -216,6 +216,22 @@ static void hal_db_add_builtins() {
         d.capabilities = 0;
         hal_db_add(&d);
     }
+    // MCP4725 — 12-bit I2C voltage output DAC (add-on module)
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "microchip,mcp4725", 31);
+        strncpy(d.name, "MCP4725", 32);
+        strncpy(d.manufacturer, "Microchip Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 1;
+        d.i2cAddr = 0x60;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;  // GPIO 28/29 expansion bus
+        d.sampleRatesMask = 0;
+        d.capabilities = HAL_CAP_HW_VOLUME;
+        hal_db_add(&d);
+    }
 }
 
 void hal_db_init() {

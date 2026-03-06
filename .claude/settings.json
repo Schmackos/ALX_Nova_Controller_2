@@ -2,11 +2,13 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:www.waveshare.com)",
-      "WebFetch(domain:community.home-assistant.io)"
+      "WebFetch(domain:community.home-assistant.io)",
+      "Read(//c/Users/Necrosis/**)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Necrosis\\Documents\\GitHub\\ALX_Nova_Controller_2",
-      "C:\\Users\\Necrosis\\.claude\\skills"
+      "C:\\Users\\Necrosis\\.claude\\skills",
+      "C:\\Users\\Necrosis\\.claude"
     ]
   }
 }

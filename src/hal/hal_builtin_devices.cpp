@@ -7,6 +7,7 @@
 #include "hal_pcm5102a.h"
 #include "hal_pcm1808.h"
 #include "hal_dsp_bridge.h"
+#include "hal_mcp4725.h"
 #include <string.h>
 
 // ===== Factory functions for new platform classes =====
@@ -14,6 +15,7 @@ static HalDevice* factory_es8311()   { return new HalEs8311(); }
 static HalDevice* factory_pcm5102a() { return new HalPcm5102a(); }
 static HalDevice* factory_pcm1808()  { return new HalPcm1808(); }
 static HalDevice* factory_dsp()      { return new HalDspBridge(); }
+static HalDevice* factory_mcp4725()  { return new HalMcp4725(); }
 
 // ===== Compatible strings for builtin devices =====
 // Uses Linux DT "vendor,model" convention
@@ -30,6 +32,7 @@ static HalDevice* factory_dsp()      { return new HalDspBridge(); }
 #define COMPAT_RELAY       "generic,relay-amp"
 #define COMPAT_BUTTON      "generic,tact-switch"
 #define COMPAT_SIGGEN      "generic,signal-gen"
+#define COMPAT_MCP4725     "microchip,mcp4725"
 
 void hal_register_builtins() {
     hal_registry_init();
@@ -178,6 +181,17 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_SIGGEN, 31);
         e.type = HAL_DEV_GPIO;
         e.factory = nullptr;
+        hal_registry_register(e);
+    }
+
+    // MCP4725 — 12-bit I2C voltage output DAC (add-on module)
+    {
+        HalDriverEntry e;
+        memset(&e, 0, sizeof(e));
+        strncpy(e.compatible, COMPAT_MCP4725, 31);
+        e.type = HAL_DEV_DAC;
+        e.legacyId = 0;
+        e.factory = factory_mcp4725;
         hal_registry_register(e);
     }
 }
