@@ -1,377 +1,397 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-02-15
+**Analysis Date:** 2026-03-07
 
-## Test Framework
+## Test Frameworks
 
-**Runner:**
-- PlatformIO Unity framework (Unity 2.5 via PlatformIO)
-- Native environment: `pio test -e native` compiles tests with gcc/MinGW
-- Build flags: `-D UNIT_TEST -D NATIVE_TEST` enable conditional compilation in test code
-- Total tests: 754 native unit tests (all passing)
-- ESP32 environment: `test_ignore = *` — all tests run on native, not on device
+**C++ Unit Tests:**
+- Runner: Unity (via PlatformIO `test_framework = unity`)
+- Platform: `native` (host machine, gcc/MinGW — no hardware required)
+- Config: `platformio.ini` `[env:native]` section
+- 1,271+ tests across 57+ test modules
 
-**Assertion Library:**
-- Unity assertions: `TEST_ASSERT_*` macros
-- Common assertions:
-  - `TEST_ASSERT_TRUE(condition)`
-  - `TEST_ASSERT_FALSE(condition)`
-  - `TEST_ASSERT_EQUAL(expected, actual)`
-  - `TEST_ASSERT_EQUAL_STRING(expected, actual)`
-  - `TEST_ASSERT_FLOAT_WITHIN(tolerance, expected, actual)`
-  - `TEST_ASSERT_EQUAL_HEX8(expected, actual)` for bytewise comparisons
+**Browser / E2E Tests:**
+- Runner: Playwright
+- Config: `e2e/playwright.config.js`
+- 26 tests across 19 specs
+- Mock server: Express (`e2e/mock-server/server.js`, port 3000)
+
+**Static Analysis (CI-only):**
+- `cppcheck` on `src/` (excluding `src/gui/`)
+- ESLint on `web_src/js/` via `web_src/.eslintrc.json`
+- `node tools/find_dups.js` — duplicate JS declarations
+- `node tools/check_missing_fns.js` — undefined JS function references
 
 **Run Commands:**
 ```bash
-pio test -e native                    # Run all tests
-pio test -e native -f test_wifi       # Run specific test module
-pio test -e native -f test_mqtt       # Run MQTT tests
-pio test -e native -f test_auth       # Run auth/security tests
-pio test -e native -v                 # Verbose test output
+# C++ unit tests (all modules)
+pio test -e native
+
+# Verbose C++ tests
+pio test -e native -v
+
+# Single C++ test module
+pio test -e native -f test_hal_core
+pio test -e native -f test_hal_bridge
+
+# E2E browser tests
+cd e2e && npx playwright test
+
+# Single E2E spec
+cd e2e && npx playwright test tests/hal-devices.spec.js
+
+# E2E with visible browser
+cd e2e && npx playwright test --headed
+
+# E2E debug mode
+cd e2e && npx playwright test --debug
+
+# ESLint
+cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json
+
+# Duplicate/missing JS checks
+node tools/find_dups.js && node tools/check_missing_fns.js
 ```
 
 ## Test File Organization
 
-**Location:**
-- `test/test_<module>/test_<module>.cpp` — one test module per directory
-- Mocks in `test/test_mocks/` — shared across all tests
-- `test_build_src = no` in `platformio.ini`: Tests don't compile `src/` directly; they include specific headers and mock implementations
+**C++ tests:**
+- Location: `test/` — each module in its own directory (required to prevent duplicate `main`/`setUp`/`tearDown` symbols)
+- Naming: `test_<module>/test_<module>.cpp` or `test_<module>/test_<module>_<topic>.cpp`
+- Examples:
+  ```
+  test/test_utils/test_utils.cpp
+  test/test_hal_core/test_hal_core.cpp
+  test/test_hal_retry/test_hal_retry.cpp
+  test/test_hal_bridge/test_hal_bridge.cpp
+  test/test_smart_sensing/test_smart_sensing_logic.cpp
+  ```
+- Mocks: `test/test_mocks/` (shared across all test modules)
 
-**Naming:**
-- Directory: `test_<feature>` (e.g., `test_wifi`, `test_auth`, `test_dsp`)
-- File: `test_<feature>.cpp` (single file per test module)
-- Functions: `void test_<scenario>(void)` (e.g., `test_version_comparison_equal`, `test_session_creation_empty_slot`)
+**E2E tests:**
+- Location: `e2e/tests/*.spec.js`
+- Fixtures: `e2e/fixtures/ws-messages/*.json` (15 WS broadcast fixtures) and `e2e/fixtures/api-responses/*.json` (14 REST response fixtures)
+- Helpers: `e2e/helpers/` (`fixtures.js`, `ws-helpers.js`, `selectors.js`)
+- Mock routes: `e2e/mock-server/routes/*.js` (12 route files matching firmware REST API)
 
-**Structure:**
-```
-test/
-├── test_mocks/              # Shared mock implementations
-│   ├── Arduino.h/.cpp       # Mock millis(), GPIO, analogRead()
-│   ├── Preferences.h/.cpp   # Mock NVS/preferences
-│   ├── WiFi.h/.cpp          # Mock WiFi library
-│   ├── PubSubClient.h       # Mock MQTT client
-│   ├── esp_random.h         # Mock random number generation
-│   ├── esp_task_wdt.h       # Mock watchdog
-│   └── mbedtls/md.h         # Mock SHA256
-├── test_utils/              # Utility functions (version compare, RSSI, etc.)
-├── test_auth/               # Auth handler tests (session, password, security)
-├── test_wifi/               # WiFi manager tests (connection, AP mode)
-├── test_mqtt/               # MQTT handler tests
-├── test_settings/           # Settings persistence
-├── test_ota/                # OTA updater tests
-├── test_ota_task/           # Non-blocking OTA task tests
-├── test_button/             # Button press detection (short/long/multi-click)
-├── test_websocket/          # WebSocket message handlers
-├── test_i2s_audio/          # I2S audio ADC driver
-├── test_fft/                # FFT spectrum analysis (256-pt, 16-band)
-├── test_dsp/                # DSP pipeline (144 tests)
-├── test_dsp_rew/            # REW file import/export (22 tests)
-├── test_esp_dsp/            # ESP-DSP library features (23 tests)
-├── test_gui_home/           # GUI home screen
-├── test_gui_navigation/      # GUI screen navigation
-├── test_gui_input/           # Rotary encoder input (Gray code)
-├── test_smart_sensing/      # Audio detection, auto-off timer
-├── test_signal_generator/   # Test signal generator (sine, square, noise, sweep)
-├── test_buzzer/             # Buzzer patterns and ISR safety
-├── test_audio_diagnostics/  # Per-ADC health status detection
-├── test_vrms/               # Input voltage (Vrms) calculation
-├── test_api/                # REST API endpoints
-├── test_crash_log/          # Crash log ring buffer (24 tests)
-├── test_task_monitor/       # FreeRTOS task enumeration (17 tests)
-├── test_debug_mode/         # Debug serial level filtering (24 tests)
-├── test_usb_audio/          # USB UAC2 speaker device (26 tests)
-└── test_mocks/              # Shared mock implementations
+**platformio.ini native environment:**
+```ini
+test_build_src = no      # Tests do NOT compile src/ directly
+test_ignore = test_mocks # test_mocks is not a test module
+build_flags = -D UNIT_TEST -D NATIVE_TEST -D DSP_ENABLED ...
 ```
 
-Test modules with most tests:
-- `test_dsp/` — 144 tests (biquad coefficients, filtering, routing matrix, gain, delay, convolution, crossover)
-- `test_i2s_audio/` — 24 tests (sampling, dBFS, VU metering, peak hold, waveform, FFT)
-- `test_auth/` — 27+ tests (session creation, password hashing, timing-safe compare, NVS migration)
-- `test_crash_log/` — 24 tests (ring buffer, persistence, recovery)
-- `test_debug_mode/` — 24 tests (log level filtering, state consistency)
+## C++ Test Structure
 
-## Test Structure
-
-**Suite Organization:**
+**Module pattern (Arrange-Act-Assert):**
 ```cpp
-// Standard test structure (example from test_utils.cpp)
 #include <unity.h>
-#include "../test_mocks/Arduino.h"
-
-// Namespace for test-local state
-namespace TestUtilsState {
-  void reset() {
-    // Reset all mock state
-    mockResetReason = ESP_RST_POWERON;
 #ifdef NATIVE_TEST
-    ArduinoMock::reset();
+#include "../test_mocks/Arduino.h"
+#else
+#include <Arduino.h>
 #endif
-  }
-}
 
-// Implementation source (sometimes pulled in for native testing)
-// #include "../../src/utils.cpp"  // OR inline implementations
+// Inline .cpp files for native testing (since test_build_src = no)
+#include "../test_mocks/Preferences.h"
+#include "../test_mocks/LittleFS.h"
+#include "../../src/hal/hal_device_manager.cpp"
+#include "../../src/hal/hal_driver_registry.cpp"
 
-// Test setup/teardown
-void setUp(void) {
-  TestUtilsState::reset();  // Run before each test
-}
+// Test device / mock implementation
+class TestDevice : public HalDevice {
+public:
+    bool initResult;
+    int  initCallCount;
 
-void tearDown(void) {
-  // Clean up after each test (usually empty)
-}
+    TestDevice(const char* compatible, HalDeviceType type) { ... }
 
-// Test functions
-void test_version_comparison_equal(void) {
-  TEST_ASSERT_EQUAL(0, compareVersions("1.0.0", "1.0.0"));
-}
-
-void test_version_comparison_less(void) {
-  TEST_ASSERT_EQUAL(-1, compareVersions("1.0.0", "1.0.1"));
-}
-```
-
-**Patterns:**
-- **Setup**: Each test begins with `setUp()` that resets all module state via a namespace function
-- **Teardown**: Usually empty or used for cleanup of allocated resources
-- **Arrange-Act-Assert**: Tests follow clear pattern:
-  1. Arrange: Set up test state (e.g., mock WiFi connection)
-  2. Act: Call function under test
-  3. Assert: Verify expected outcome
-
-**Example Pattern:**
-```cpp
-void test_dsp_biquad_lpf_gain(void) {
-    // Arrange: Initialize biquad with known parameters
-    DspBiquadParams p;
-    dsp_init_biquad_params(p);
-    p.frequency = 1000.0f;
-    p.Q = 0.707f;
-    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_LPF, 48000);
-
-    // Act: Compute DC gain from coefficients
-    float dcGain = (p.coeffs[0] + p.coeffs[1] + p.coeffs[2]) /
-                   (1.0f + p.coeffs[3] + p.coeffs[4]);
-
-    // Assert: Verify LPF passes DC (gain = 1.0)
-    TEST_ASSERT_FLOAT_WITHIN(COEFF_TOL, 1.0f, dcGain);
-    TEST_ASSERT_TRUE(p.coeffs[0] > 0.0f);
-}
-```
-
-## Mocking
-
-**Framework:** Custom mocks in `test/test_mocks/` directory
-
-**Mock Implementations:**
-- `Arduino.h/.cpp` — Mock `millis()`, `micros()`, `delay()`, `analogRead()`, `digitalWrite()`
-  - `ArduinoMock::mockMillis` allows advancing time in tests
-  - GPIO state tracked per pin
-- `Preferences.h/.cpp` — NVS/EEPROM mock using in-memory map
-  - Namespace/key-value storage matching hardware API
-  - `Preferences::reset()` clears all entries between tests
-- `WiFi.h/.cpp` — WiFi library stubs (SSID, password, status)
-- `PubSubClient.h` — MQTT client mock
-- `esp_random.h` — Deterministic random generation for reproducible tests
-- `mbedtls/md.h` — SHA256 hashing mock
-- `esp_task_wdt.h` — Watchdog mock (no-op in tests)
-
-**Mock State Reset Pattern:**
-```cpp
-// Example from test_auth.cpp
-namespace TestAuthState {
-  void reset() {
-    // Clear all sessions
-    for (int i = 0; i < MAX_SESSIONS; i++) {
-      activeSessions[i].sessionId = "";
+    bool probe() override { return true; }
+    HalInitResult init() override {
+        initCallCount++;
+        return initResult ? hal_init_ok() : hal_init_fail(DIAG_HAL_INIT_FAILED, "test fail");
     }
-    mockWebPassword = "default_password";
-    Preferences::reset();           // Clear NVS mock
-    EspRandomMock::reset();         // Reset random state
-    ArduinoMock::reset();           // Reset time/GPIO
-  }
+    void deinit() override {}
+    void dumpConfig() override {}
+    bool healthCheck() override { return true; }
+};
+
+// Fixture state
+static HalDeviceManager* mgr;
+
+void setUp() {
+    mgr = &HalDeviceManager::instance();
+    mgr->reset();
+    hal_registry_reset();
+    ArduinoMock::mockMillis = 0;
 }
 
-void setUp(void) { TestAuthState::reset(); }
+void tearDown() {}
+
+// Test naming: test_<what>_<expected_outcome>
+void test_hal_init_ok_returns_success() {
+    HalInitResult r = hal_init_ok();
+
+    TEST_ASSERT_TRUE(r.success);
+    TEST_ASSERT_EQUAL_UINT16((uint16_t)DIAG_OK, r.errorCode);
+    TEST_ASSERT_EQUAL_CHAR('\0', r.reason[0]);
+}
+
+// Test runner
+int runUnityTests(void) {
+    UNITY_BEGIN();
+    RUN_TEST(test_hal_init_ok_returns_success);
+    RUN_TEST(test_hal_init_fail_returns_failure);
+    // ...
+    return UNITY_END();
+}
+
+#ifdef NATIVE_TEST
+int main(void) { return runUnityTests(); }
+#endif
+#ifndef NATIVE_TEST
+void setup() { delay(2000); runUnityTests(); }
+void loop() {}
+#endif
 ```
 
-**What to Mock:**
-- All hardware: GPIO, ADC, timers, I2S, USB, NVS
-- Network libraries: WiFi, MQTT (stubs, no actual connections)
-- Random number generation: Make deterministic for reproducible tests
-- Time: Advance manually via `ArduinoMock::mockMillis += ms`
+**Grouping pattern:**
+Tests are grouped with section-comment headers and numbered:
+```cpp
+// =====================================================================
+// Group 1: HalInitResult Basics (5 tests)
+// =====================================================================
+// 1. hal_init_ok() returns success with correct defaults
+void test_hal_init_ok_returns_success() { ... }
+// 2. hal_init_fail() returns failure with error code and reason
+void test_hal_init_fail_returns_failure() { ... }
+```
 
-**What NOT to Mock:**
-- STL containers: Use real `String`, `vector`, etc.
-- Cryptographic algorithms: For auth tests, include real SHA256 via `#include <mbedtls/md.h>`
-- DSP math: Include real DSP source files (e.g., `#include "../../lib/esp_dsp_lite/src/dsps_biquad_f32_ansi.c"`)
-- JSON parsing: Include real `ArduinoJson.h` (native tests support it)
+## Mocking (C++)
 
-## Fixtures and Factories
+**Mock location:** `test/test_mocks/`
 
-**Test Data:**
-- Inline in test files using simple C++ structs and helper functions
-- Example from `test_dsp.cpp`:
-  ```cpp
-  void test_lpf_coefficients(void) {
-      DspBiquadParams p;
-      dsp_init_biquad_params(p);        // Factory function
-      p.frequency = 1000.0f;
-      p.Q = 0.707f;
-      // ... test continues
-  }
-  ```
+**Available mocks:**
+- `Arduino.h` — `String` class, GPIO functions, `millis()`/`micros()`/`delay()`, `analogRead()`, `digitalWrite()`, LEDC, PSRAM (`ps_calloc`), `ArduinoMock::reset()`
+- `Preferences.h` — Full NVS mock using `std::map<string,map<string,string>>` keyed by namespace. Has static `Preferences::reset()` to clear all storage between tests
+- `PubSubClient.h` — MQTT client mock with `PubSubClient::reset()` and call tracking
+- `LittleFS.h` — Filesystem stub
+- `WiFi.h`, `Wire.h`, `ETH.h` — Peripheral stubs
+- `i2s_std_mock.h` — I2S driver stub
+- `esp_timer.h`, `esp_random.h` — IDF stubs
 
-- Per-ADC audio fixture pattern:
-  ```cpp
-  // Initialize dual ADC test state
-  void test_dual_adc_diagnostics(void) {
-      appState.audioAdc[0].healthStatus = AUDIO_OK;
-      appState.audioAdc[1].healthStatus = AUDIO_NO_DATA;
-      appState.numAdcsDetected = 2;
-      // ... test continues
-  }
-  ```
+**Key mock patterns:**
 
-**Location:**
-- Test data defined within test functions (no separate fixture files)
-- Reset happens in `setUp()` namespace reset function
-- Large reference data (e.g., FFT windows, DSP coefficients) computed inline or pulled from source
+Controlling time:
+```cpp
+ArduinoMock::mockMillis = 5000; // Advance time for retry tests
+```
+
+Resetting all state in setUp:
+```cpp
+void setUp() {
+    ArduinoMock::reset();
+    Preferences::reset();
+    PubSubClient::reset();
+}
+```
+
+Module state reset with namespace:
+```cpp
+namespace TestMQTTState {
+    void reset() {
+        mqttSettings.broker = "";
+        mqttSettings.port = 1883;
+        PubSubClient::reset();
+        Preferences::reset();
+        ArduinoMock::reset();
+    }
+}
+
+void setUp() { TestMQTTState::reset(); }
+```
+
+**What to mock:**
+- All Arduino hardware calls (GPIO, I2S, LEDC, millis)
+- NVS/Preferences storage
+- MQTT client operations
+- LittleFS filesystem
+
+**What NOT to mock:**
+- The module under test's own logic — use `#include "../../src/module.cpp"` to inline the real implementation
+- ArduinoJson parsing — use the real library (included in native env deps)
+
+**Inline .cpp technique** — since `test_build_src = no`, tests directly include implementation files:
+```cpp
+#include "../../src/diag_journal.cpp"
+#include "../../src/hal/hal_device_manager.cpp"
+#include "../../src/hal/hal_driver_registry.cpp"
+```
+
+## Fixtures and Factories (C++)
+
+**Test device pattern** — each test module defines its own `TestDevice` subclass of `HalDevice`:
+```cpp
+class TestDevice : public HalDevice {
+public:
+    bool probeResult   = true;
+    bool initResult    = true;
+    bool healthResult  = true;
+    int  initCallCount = 0;
+
+    TestDevice(const char* compatible, HalDeviceType type,
+               uint16_t priority = HAL_PRIORITY_HARDWARE) {
+        strncpy(_descriptor.compatible, compatible, 31);
+        _descriptor.compatible[31] = '\0';
+        _descriptor.type = type;
+        _initPriority = priority;
+    }
+    // ... override all 5 pure virtuals
+};
+```
+
+**State injection** — mock state is set directly on the struct/object under test:
+```cpp
+dac._state = HAL_STATE_AVAILABLE;
+dac._ready = true;
+TestState::currentMode = TestState::SMART_AUTO;
+```
+
+## E2E Test Structure (Playwright)
+
+**connectedPage fixture** — all stateful tests use this custom fixture from `e2e/helpers/fixtures.js`:
+- Acquires a real session cookie from the mock server's `/api/auth/login`
+- Intercepts WebSocket connections to `*:81` via `page.routeWebSocket()`
+- Completes WS auth handshake (`authRequired` → `auth` → `authSuccess`)
+- Broadcasts all 10 initial-state fixture messages after auth
+- Waits for `#wsConnectionStatus` to show "Connected" before yielding
+
+```javascript
+const { test, expect } = require('../helpers/fixtures');
+
+test('device cards render', async ({ connectedPage: page }) => {
+  await page.locator('.sidebar-item[data-tab="devices"]').click();
+  const cards = page.locator('#hal-device-list .hal-device-card');
+  await expect(cards).toHaveCount(6, { timeout: 5000 });
+});
+```
+
+**Sending additional WS messages in tests:**
+```javascript
+page.wsRoute.send({ type: 'smartSensing', amplifierState: true });
+page.wsRoute.sendBinary(buildWaveformFrame());
+```
+
+**Tab navigation in tests** — use `page.evaluate()` to call `switchTab()` rather than clicking sidebar (avoids scroll issues at 720px viewport height):
+```javascript
+await page.evaluate((tabId) => switchTab(tabId), 'audio');
+await expect(page.locator('#audio')).toHaveClass(/active/);
+```
+
+**CSS-hidden checkboxes** — toggle inputs styled with `label.switch` require `toBeChecked()` not `toBeVisible()`:
+```javascript
+await expect(page.locator('#toggleBuzzer')).toBeChecked();
+// NOT: await expect(page.locator('#toggleBuzzer')).toBeVisible();
+```
+
+**Intercepting REST calls:**
+```javascript
+let scanCalled = false;
+await page.route('/api/hal/scan', async (route) => {
+    scanCalled = true;
+    await route.fulfill({ status: 200, body: JSON.stringify({ status: 'ok' }) });
+});
+await page.locator('#hal-rescan-btn').click();
+expect(scanCalled).toBe(true);
+```
+
+**Strict mode** — use `.first()` when a selector might match multiple elements:
+```javascript
+const firstCard = cards.first();
+```
+
+## E2E Fixtures
+
+**WS message fixtures** (`e2e/fixtures/ws-messages/*.json`):
+- `wifi-status.json`, `smart-sensing.json`, `display-state.json`, `buzzer-state.json`
+- `mqtt-settings.json`, `hal-device-state.json`, `audio-channel-map.json`, `audio-graph-state.json`
+- `signal-generator.json`, `debug-state.json`, `audio-levels.json`, `auth-required.json`, `auth-success.json`, `debug-log.json`, `hardware-stats.json`
+
+**API response fixtures** (`e2e/fixtures/api-responses/*.json`):
+- `hal-devices.json`, `hal-presets.json`, `wifi-list.json`, `wifi-scan.json`, `wifi-status.json`
+- `mqtt-config.json`, `settings.json`, `signal-generator.json`, `smart-sensing.json`
+- `releases.json`, `check-update.json`, `auth-status.json`, `diagnostics.json`, `pipeline-matrix.json`
+
+**DOM selectors** — centralized in `e2e/helpers/selectors.js` as a `SELECTORS` object. All selectors reference real HTML IDs/classes from `web_src/index.html`.
 
 ## Coverage
 
-**Requirements:** Not enforced (no coverage gates in CI)
+**C++ coverage:** No coverage tooling configured. `pio test -e native` runs the full suite but does not measure coverage.
 
-**View Coverage:** Not detected in codebase (no gcov integration)
+**E2E coverage:** No formal coverage measurement. Tests are structured to cover:
+- Tab navigation (all 8 tabs)
+- Authentication flow (login, session, logout)
+- Core UI features: HAL devices, WiFi, MQTT, OTA, settings, audio, debug console
 
-**High-Coverage Modules:**
-- Auth handler: 27+ tests covering all session paths, password hashing, NVS migration
-- DSP pipeline: 144 tests covering all 31 stage types, routing matrix, coefficient generation
-- Crash log: 24 tests covering ring buffer, persistence, recovery
-- Debug mode: 24 tests covering state consistency and log level filtering
+**Coverage enforcement:** Mandatory by policy (see CLAUDE.md). Every code change must keep both test suites green before the task is considered complete.
 
-**Low-Coverage Areas:**
-- GUI rendering: 3 test modules (home, input, navigation) but limited rendering tests
-- Real-time audio task: No tests (real-time constraints + DMA make this hardware-dependent)
-- WebSocket binary frames: Tested via WebSocket handler tests but frame parsing limited
-- MQTT discovery: Basic tests, full Home Assistant discovery not deeply tested
+## CI/CD Quality Gates
 
-## Test Types
+All 4 gates run in parallel and must pass before firmware build:
 
-**Unit Tests:**
-- Scope: Single function or module in isolation
-- Approach: Mock all dependencies, test inputs/outputs
-- Examples: `test_version_comparison_*`, `test_session_creation_*`, `test_lpf_coefficients`
-- Framework: Unity assertions
+1. `cpp-tests` — `pio test -e native -v` (1,271+ Unity tests, 57+ modules)
+2. `cpp-lint` — cppcheck on `src/` (excluding `src/gui/`)
+3. `js-lint` — `find_dups.js` + `check_missing_fns.js` + ESLint on `web_src/js/`
+4. `e2e-tests` — Playwright (26 tests, 19 specs, Chromium only)
 
-**Integration Tests:**
-- Scope: Multiple modules working together (still via mocks)
-- Approach: Call module A which calls module B, verify state changes
-- Examples: `test_dsp_stage_signal_flow` (DSP → audio → conversion), `test_websocket_audio_broadcast`
-- Framework: Unity assertions + mock state inspection
+**Pre-commit hooks** (`.githooks/pre-commit`):
+1. `node tools/find_dups.js`
+2. `node tools/check_missing_fns.js`
+3. ESLint on `web_src/js/`
 
-**E2E Tests:**
-- Not used in this codebase
-- Hardware tests require actual device (CH343 USB-to-UART, ESP32-S3 board)
+Activate: `git config core.hooksPath .githooks`
 
-## Common Patterns
+## Test Coverage Rules (Mandatory)
 
-**Async Testing:**
-- Time advancement: `ArduinoMock::mockMillis += 5000` to fast-forward
-- State polling: Call function, check state flag, repeat
-- Example from OTA task tests:
-  ```cpp
-  void test_ota_task_completion(void) {
-      startOTACheckTask();
-      // Advance time to allow task to complete
-      ArduinoMock::mockMillis += 10000;
-      TEST_ASSERT_TRUE(otaCheckTaskRunning);
+**C++ firmware changes (`src/`):**
+- Run `pio test -e native -v`
+- New modules: add `test/test_<module>/test_<module>.cpp`
+- Changed function signatures: update affected test modules
 
-      // Simulate task completion
-      otaCheckTaskRunning = false;
-      // Verify state updated
-      TEST_ASSERT_EQUAL_STRING("idle", otaStatus.c_str());
-  }
-  ```
+**Web UI changes (`web_src/`):**
+- Run `cd e2e && npx playwright test`
+- New toggle/button/dropdown: add test verifying correct WS command is sent
+- New WS broadcast type: add fixture JSON + test verifying DOM update
+- New tab or section: add navigation + element presence tests
+- Changed element IDs: update `e2e/helpers/selectors.js` + affected specs
+- New top-level JS declarations: add to `web_src/.eslintrc.json` globals
 
-**Error Testing:**
-- Boolean returns: `TEST_ASSERT_FALSE(createSession(...))` when out of space
-- State transitions: Verify error state set correctly (e.g., `wifiConnectError` populated)
-- Example from auth tests:
-  ```cpp
-  void test_session_creation_full_eviction(void) {
-      // Fill all 5 slots
-      for (int i = 0; i < 5; i++) {
-          createSession(sessionIds[i]);
-      }
-      // Verify 6th creation evicts oldest
-      String newId;
-      bool created = createSession(newId);
-      TEST_ASSERT_TRUE(created);
-      TEST_ASSERT_NOT_EQUAL_STRING(sessionIds[0].c_str(), newId.c_str());
-  }
-  ```
+**WebSocket protocol changes (`src/websocket_handler.cpp`):**
+- Update `e2e/fixtures/ws-messages/` with new/changed fixture
+- Update `e2e/helpers/ws-helpers.js` (`buildInitialState()` and `handleCommand()`)
+- Update `e2e/mock-server/ws-state.js` if new state fields are added
 
-**Float Tolerance Testing:**
-- Use `TEST_ASSERT_FLOAT_WITHIN(tolerance, expected, actual)`
-- DSP tests typically use `FLOAT_TOL = 0.001f` for precision math
-- Audio level tests use larger tolerance (0.1f dB range) for dynamic measurements
-- Example:
-  ```cpp
-  void test_audio_rms_calculation(void) {
-      float rms = audio_calculate_rms(testBuffer, 256);
-      TEST_ASSERT_FLOAT_WITHIN(0.01f, 0.707f, rms);  // ±0.01 tolerance
-  }
-  ```
+**REST API changes (`src/main.cpp`, `src/hal/hal_api.cpp`):**
+- Update matching route in `e2e/mock-server/routes/*.js`
+- Update `e2e/fixtures/api-responses/` if response shape changes
 
-**Dirty Flag Testing:**
-- Set flag, call function, verify flag cleared
-- Example from AppState tests:
-  ```cpp
-  void test_fsm_state_dirty_flag(void) {
-      appState.setFSMState(STATE_SIGNAL_DETECTED);
-      TEST_ASSERT_TRUE(appState.isFSMStateDirty());
-      appState.clearFSMStateDirty();
-      TEST_ASSERT_FALSE(appState.isFSMStateDirty());
-  }
-  ```
+## Test Type Summary
 
-**Multi-Step Sequences:**
-- Tests that verify state machine transitions
-- Example from smart sensing tests:
-  ```cpp
-  void test_signal_detection_timer_sequence(void) {
-      // Step 1: Detect signal
-      appState.currentMode = AUTO_OFF;
-      TEST_ASSERT_TRUE(detectSignal());
-      TEST_ASSERT_TRUE(appState.amplifierState);
+**Unit Tests (C++/Unity):**
+- Scope: Pure logic — version comparison, sensing logic, DSP coefficients, HAL lifecycle, retry, settings persistence
+- No hardware — all peripherals mocked
+- File-level state isolated with `setUp()` and `namespace TestXxxState::reset()`
 
-      // Step 2: Advance time past timer
-      ArduinoMock::mockMillis += DEFAULT_TIMER_DURATION + 1000;
-      updateSmartSensingLogic();
+**Integration Tests (C++/Unity):**
+- `test/test_hal_integration/` — HAL manager + bridge + pipeline together
+- `test/test_hal_bridge/` — bridge mapping tables
+- Uses same inline .cpp technique; tests cross-module interactions
 
-      // Step 3: Verify auto-off
-      TEST_ASSERT_FALSE(appState.amplifierState);
-  }
-  ```
-
-## Special Testing Considerations
-
-**UNIT_TEST Flag:**
-- `#ifdef UNIT_TEST` guards code that's only compiled for native tests
-- Allows conditional implementation paths (e.g., mock vs real for some functions)
-- Example: `#ifdef UNIT_TEST` in some modules enables direct state access
-
-**NATIVE_TEST Flag:**
-- `#ifdef NATIVE_TEST` guards native-specific mock includes
-- Allows same header to include real or mock depending on target
-- Example: `#ifdef NATIVE_TEST #include "../test_mocks/Arduino.h" #else #include <Arduino.h> #endif`
-
-**Build Configuration for Tests:**
-- Compile flags in native env: `-D UNIT_TEST -D NATIVE_TEST -D DSP_ENABLED`
-- Exclusions: `lib_compat_mode = off` (needed for arduinoFFT), `lib_ignore = esp_dsp_lite` (uses native ANSI C fallback for DSP)
-- Test discovery: PlatformIO scans `test/test_*/test_*.cpp` for `void test_*()` functions
+**E2E Tests (Playwright/Chromium):**
+- Scope: Frontend UI behaviour against mock REST + WS server
+- No real firmware — Express mock server at port 3000
+- Tests: login, tab navigation, sensor state display, HAL device cards, WiFi/MQTT settings forms, OTA controls, audio sub-views, PEQ overlay, debug console, dark mode, responsive layout
 
 ---
 
-*Testing analysis: 2026-02-15*
+*Testing analysis: 2026-03-07*

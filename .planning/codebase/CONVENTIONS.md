@@ -1,194 +1,188 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-02-15
+**Analysis Date:** 2026-03-07
 
 ## Naming Patterns
 
 **Files:**
-- `snake_case.h` / `snake_case.cpp` for implementation files
-- Headers use `#ifndef HEADER_H` / `#define HEADER_H` / `#endif` guards
-- GUI screens: `scr_<name>.h/.cpp` (e.g., `scr_home.h`, `scr_settings.cpp`)
-- Driver modules: `dac_<type>.h/.cpp` (e.g., `dac_pcm5102.h`)
-- DSP modules: `dsp_<subsystem>.h/.cpp` (e.g., `dsp_pipeline.h`, `dsp_coefficients.cpp`)
-- Test files: `test_<module>.cpp` in dedicated test directories
+- C++ source pairs: `snake_case.h` / `snake_case.cpp` — e.g., `smart_sensing.h`, `hal_device_manager.cpp`
+- HAL files grouped in `src/hal/` subdirectory with `hal_` prefix — e.g., `hal_types.h`, `hal_pipeline_bridge.cpp`
+- GUI files in `src/gui/` with `gui_` prefix — e.g., `gui_manager.cpp`, `gui_navigation.cpp`
+- JavaScript modules: `NN-kebab-case.js` numbered for load order — e.g., `01-core.js`, `15-hal-devices.js`
+- Test files: one directory per module, file named `test_<module>.cpp` or `test_<module>_<topic>.cpp`
 
-**Functions:**
-- `camelCase` for function names (e.g., `detectSignal()`, `setAmplifierState()`, `createSession()`)
-- Public API functions: descriptive names like `loadSmartSensingSettings()`, `sendSmartSensingState()`
-- Boolean-returning functions: prefix with `is`, `has`, or similar (e.g., `isAPMode`, `isFSMStateDirty()`)
-- Handler functions: `handle<Action>` or `handle<Module><Action>` (e.g., `handleSmartSensingGet()`, `handleSmartSensingUpdate()`)
-- Static/local helper functions: descriptive names in implementation (e.g., `getWiFiDisconnectReason()`)
+**Functions (C++):**
+- Public API functions: `snake_case` matching module prefix — e.g., `audio_pipeline_set_sink()`, `hal_pipeline_on_device_available()`
+- Class methods: `camelCase` — e.g., `mgr->registerDevice()`, `dev->healthCheck()`
+- Static file-scope helpers: `camelCase` with leading underscore or descriptive name — e.g., `audioHealthName()`, `fftWindowName()`
+- HTTP handlers: `handle<Subject><Verb>` — e.g., `handleSmartSensingGet()`, `handleSmartSensingUpdate()`
+- HTTP API loaders/savers: `load<Subject>Settings()` / `save<Subject>Settings()` — e.g., `loadMqttSettings()`, `saveSmartSensingSettings()`
+- Deferred save pattern: `save<Subject>SettingsDeferred()` + `checkDeferred<Subject>Save()` — e.g., `saveSmartSensingSettingsDeferred()`
 
-**Variables:**
-- Class members: `camelCase` with underscore prefix for private members (e.g., `_webSocket`, `_minLevel`, `_lineBuffer`)
-- Local variables: `camelCase` (e.g., `pendingConnection`, `wifiStatusUpdateRequested`)
-- Constants/Enums: `SCREAMING_SNAKE_CASE` or `camelCase` (enum values use `camelCase`, e.g., `LOG_DEBUG`, `STATE_IDLE`)
-- Boolean variables: descriptive names like `isAPMode`, `wifiConnected`, `amplifierState`
-- Module-scoped statics: lowercase snake_case with descriptive name (e.g., `wifiDisconnected`, `wifiScanInProgress`, `lastReconnectAttempt`)
+**Variables (C++):**
+- Module-level static state: `_camelCase` with underscore prefix — e.g., `_smoothedAudioLevel`, `_halSlotToSinkSlot[]`
+- Module-level static previous-state trackers: `prev<Name>` — e.g., `prevMqttUptime`, `prevMqttHeapFree`
+- AppState members: `camelCase` public — e.g., `appState.amplifierState`, `appState.audioThreshold_dBFS`
+- Temporary/loop locals: descriptive camelCase — e.g., `modeStr`, `adcArr`
 
-**Types:**
-- Classes/Structs: `PascalCase` (e.g., `AppState`, `ButtonHandler`, `DebugSerial`)
-- Enums: `PascalCase` for enum type (e.g., `AppFSMState`, `LogLevel`, `FftWindowType`)
-- Enum values: `SCREAMING_SNAKE_CASE` (e.g., `STATE_IDLE`, `LOG_ERROR`, `FFT_WINDOW_HANN`)
-- Type aliases: `camelCase` with descriptive suffix (e.g., `WiFiConnectionRequest`)
-- Struct sub-types: `PascalCase` (e.g., `AdcState`, `I2sRuntimeMetrics`)
+**Variables (JavaScript):**
+- Global shared state: `camelCase` — e.g., `vuSegmentedMode`, `debugLogBuffer`, `audioChannelMap`
+- Constants: `UPPER_SNAKE_CASE` — e.g., `WS_MIN_RECONNECT_DELAY`, `DEBUG_MAX_LINES`
+- DOM element IDs (HTML): `camelCase` matching JS — e.g., `#wsConnectionStatus`, `#signalDetected`
+
+**Types/Enums (C++):**
+- Enum names: `PascalCase` — e.g., `AppFSMState`, `HalDeviceState`, `DspStageType`
+- Enum values: `UPPER_SNAKE_CASE` with type prefix — e.g., `STATE_IDLE`, `HAL_STATE_AVAILABLE`, `DSP_BIQUAD_LPF`
+- Struct names: `PascalCase` — e.g., `HalDeviceDescriptor`, `HalRetryState`, `HalBusRef`
+- Classes: `PascalCase` — e.g., `HalDevice`, `HalDeviceManager`, `DebugSerial`
+- Type aliases: `PascalCase` matching convention — e.g., `HalDeviceCallback`, `HalStateChangeCb`
+
+**Constants/Defines (C++):**
+- Build-flag constants: `UPPER_SNAKE_CASE` — e.g., `HAL_MAX_DEVICES`, `HAL_PRIORITY_BUS`
+- Capability bit flags: `HAL_CAP_*` prefix — e.g., `HAL_CAP_HW_VOLUME`, `HAL_CAP_DAC_PATH`
+- Rate mask constants: `HAL_RATE_*` prefix — e.g., `HAL_RATE_48K`
 
 ## Code Style
 
 **Formatting:**
-- No enforced formatter detected in codebase
-- Manual formatting conventions observed:
-  - 2-space indentation throughout
-  - Opening braces on same line: `if (...) {`
-  - Class members grouped by category with comment headers: `// ===== Category Name =====`
-  - Section separators: `// ===== SECTION NAME =====` (all caps, equals signs)
-  - Blank lines between logical sections within functions
+- No autoformatter config detected (no `.clang-format`). Style is consistent by convention.
+- Indentation: 4 spaces in HAL/test files; 2 spaces in some older modules (inconsistency exists)
+- Brace style: Allman/K&R mixed — HAL files use same-line `{`, older modules use new-line
+- Max line length: ~100 characters observed
 
-**Linting:**
-- No ESLint or ClangFormat config detected
-- Code follows consistent Arduino/C++ style conventions
-- Enum declarations use colons for explicit types: `enum LogLevel : uint8_t { ... }` or `enum FftWindowType : uint8_t { ... }`
+**Linting (JavaScript):**
+- ESLint at `web_src/.eslintrc.json`
+- Rules enforced: `no-undef`, `no-redeclare`, `eqeqeq: "smart"`
+- All JS files concatenated into a single script scope — 380+ globals declared in the ESLint config
+- JS source: ES2020, `sourceType: "script"` (not modules)
 
-**Includes:**
-- Order typically:
-  1. Standard C/C++ headers (`<cstring>`, `<math.h>`, `<string>`)
-  2. Arduino headers (`<Arduino.h>`)
-  3. Third-party library headers (`<ArduinoJson.h>`, `<WebSocketsServer.h>`, `<WiFi.h>`)
-  4. Custom local headers (quoted: `"app_state.h"`)
-- Conditional includes guarded by preprocessor flags (e.g., `#ifdef DSP_ENABLED`, `#ifdef GUI_ENABLED`)
+**Static Analysis (C++):**
+- cppcheck runs on `src/` in CI (excludes `src/gui/`)
+- `tools/find_dups.js` — detects duplicate JS declarations
+- `tools/check_missing_fns.js` — detects undefined JS function references
+
+## Header Guards
+
+- Old headers: `#ifndef HEADER_NAME_H / #define HEADER_NAME_H / ... / #endif // HEADER_NAME_H`
+- HAL headers: `#pragma once` (no traditional guards)
+- Pattern example from `src/utils.h`:
+  ```cpp
+  #ifndef UTILS_H
+  #define UTILS_H
+  // ...
+  #endif // UTILS_H
+  ```
+
+## Conditional Compilation
+
+- Always guard hardware-specific code: `#ifdef DSP_ENABLED`, `#ifdef DAC_ENABLED`, `#ifdef USB_AUDIO_ENABLED`, `#ifdef GUI_ENABLED`
+- Native test compatibility: `#ifdef NATIVE_TEST` with mock includes, `#else` with real Arduino includes
+- Pattern across all modules:
+  ```cpp
+  #ifdef NATIVE_TEST
+  #include "../test_mocks/Arduino.h"
+  #else
+  #include <Arduino.h>
+  #endif
+  ```
+- Platform-specific inline stubs for native tests:
+  ```cpp
+  #ifdef NATIVE_TEST
+  inline void audio_pipeline_notify_dsp_swap() {}
+  #else
+  void audio_pipeline_notify_dsp_swap();
+  #endif
+  ```
+
+## Section Comments
+
+- All header and source files use `// ===== Section Title =====` banners to group related declarations
+- Test groups use the same pattern: `// ===== Group 1: Description (N tests) =====`
+- Individual test functions begin with a comment describing the scenario (numbered for groups)
+- Module-level explanation comments for non-obvious design decisions (e.g., "Why not slave mode")
 
 ## Import Organization
 
-**Order:**
-1. Standard library includes
-2. Platform/framework includes (`<Arduino.h>`, `<WiFi.h>`)
-3. External library includes (JSON, WebSockets, MQTT, etc.)
-4. Local module headers (relative paths in quotes)
-5. DSP/DAC/GUI headers (conditionally compiled)
+**C++ headers order:**
+1. Module's own header (`.h` for `.cpp` files)
+2. Other project headers (alphabetical or logical grouping)
+3. Arduino framework and library headers (`<Arduino.h>`, `<ArduinoJson.h>`)
+4. C++ standard library (`<cmath>`, `<cstring>`)
+5. IDF-specific headers (`<LittleFS.h>`, `<driver/i2s_std.h>`)
 
-**Path Aliases:**
-- No path aliases (no `jsconfig.json` or similar) — direct relative includes
-- Some forward declarations in header files for circular dependency avoidance
-- Example: `src/wifi_manager.cpp` includes `"app_state.h"` directly, not via alias
+**JavaScript modules:**
+- Load order encoded in filename prefix (`01-core.js` → `28-init.js`)
+- All files concatenated in order — shared scope, no `import`/`export`
 
 ## Error Handling
 
-**Patterns:**
-- Return-based error codes: Functions return `bool` for success/failure (e.g., `createSession()`, `detectSignal()`)
-- Error messages stored in AppState: `wifiConnectError`, `otaStatusMessage` for user-facing errors
-- Serial logging for diagnostics: `LOG_E()` macro for error-level messages
-- Graceful degradation: Failed allocations check heap and fall back (e.g., DSP delay lines fall back from PSRAM to heap with pre-flight check)
-- No exceptions: C++ exceptions not used; errors propagated via return values or state flags
+**C++ patterns:**
+- Boolean return from init/config functions: `bool loadMqttSettings()`, `bool removeDevice(uint8_t slot)`
+- Structured result type for HAL init: `HalInitResult` with `.success`, `.errorCode`, `.reason[48]`
+  - Created with `hal_init_ok()` or `hal_init_fail(errorCode, "reason")`
+- Early return on failure: check result immediately, log with `LOG_E`, return false/null
+- No exceptions — this is embedded C++ with Arduino framework
+- Null pointer defensively handled before use: `if (!key) return false;`, `if (!device) return;`
 
-**Exception Handling:**
-- Not used; all error handling via return codes, state flags, and logging
-- Watchdog protection: WDT configured with 15s timeout, monitored via `esp_task_wdt_init()`
-
-**State Validation:**
-- Dirty flags used to detect changes (e.g., `isFSMStateDirty()`, `isLedStateDirty()`)
-- Validation occurs before persistence: `loadPasswordFromPrefs()` checks key existence before reading
-- Preference migrations handled inline (e.g., legacy plaintext → SHA256 hash migration in auth handler)
+**JavaScript patterns:**
+- Async/await with try/catch for fetch: `apiFetch()` wrapper handles 401 → redirect
+- WS send wrapped in ready check: `ws && ws.readyState === WebSocket.OPEN` guard pattern
 
 ## Logging
 
-**Framework:** Custom `DebugSerial` class in `src/debug_serial.h/.cpp`
+**Framework:** `DebugSerial` class via `debug_serial.h` macros
 
-**Patterns:**
-- Macros: `LOG_D()`, `LOG_I()`, `LOG_W()`, `LOG_E()` for debug, info, warn, error levels
-- Module prefixes in brackets: `[ModuleName]` at start of message (e.g., `[WiFi]`, `[Audio]`, `[Sensing]`)
-- Level filtering: `currentLogLevel` global gate; master `debugMode` in AppState forces LOG_ERROR when disabled
-- Real-time filtering: `applyDebugSerialLevel()` applies master + sublevel settings at runtime
-- WebSocket forwarding: Log messages sent to connected web clients via `broadcastLine()`
-- High-frequency tasks: NO serial logging in real-time paths (e.g., `audio_capture_task`). Use dirty-flag pattern: task sets flag, main loop calls `audio_periodic_dump()` for batch output
+**Macros:**
+```cpp
+LOG_D(fmt, ...)  // Debug — high-frequency operational details
+LOG_I(fmt, ...)  // Info  — state transitions, significant events
+LOG_W(fmt, ...)  // Warn  — unexpected but non-fatal
+LOG_E(fmt, ...)  // Error — failures requiring attention
+```
 
-## Comments
+**Module prefix convention:** Every log line starts with `[ModuleName]`:
+- `[Sensing]`, `[Audio]`, `[MQTT]`, `[WiFi]`, `[OTA]`, `[HAL]`, `[HAL Discovery]`, `[HAL DB]`, `[HAL API]`
+- `[USB Audio]`, `[Buzzer]`, `[SigGen]`, `[Settings]`, `[GUI]`, `[OutputDSP]`
 
-**When to Comment:**
-- Section headers: `// ===== SECTION NAME =====` (all caps, equals signs on both sides)
-- Complex logic: Explain WHY, not WHAT (e.g., "Timing-safe comparison prevents timing attacks")
-- Algorithm choices: Document rationale (e.g., "Radix-4 FFT via ESP-DSP for speed optimization")
-- Gotchas and workarounds: Flag non-obvious solutions (e.g., "ESP32-S3 I2S slave mode has DMA issues — must use master mode with GPIO matrix routing")
-- TODO/FIXME: `// TODO:` or `// FIXME:` with context (e.g., `// TODO: Remove these legacy extern aliases once all handlers use appState directly`)
-- Avoid redundant comments: Don't repeat what the code already expresses
-
-**JSDoc/TSDoc:**
-- Not used in this C++ codebase
-- Function documentation via header comments above declarations:
-  ```cpp
-  // Generate cryptographically random session ID (UUID format)
-  String generateSessionId();
-
-  // Create a new session; returns true if successful, false if eviction needed
-  bool createSession(String &sessionId);
-  ```
-
-## Function Design
-
-**Size:**
-- Functions typically 30-100 lines
-- DSP pipeline handlers larger (150+ lines) for complex stage processing
-- Handler functions tend to be 50-200 lines (HTTP/WebSocket/MQTT handlers)
-- Helper functions kept under 30 lines
-
-**Parameters:**
-- Passed by value for primitives (`bool`, `int`, `float`)
-- Passed by reference for objects to avoid copies (`const String &`, `String &`)
-- Output parameters use references (e.g., `String &sessionId` for output from `createSession()`)
-- Variadic functions use `va_list` for logging (e.g., `logWithLevel(LogLevel level, const char *format, va_list args)`)
-
-**Return Values:**
-- `void` for setters and state mutations
-- `bool` for success/failure
-- `String` for text results
-- `float` for numerical results (e.g., audio levels)
-- Enum values for state queries (e.g., `AppFSMState`, `AudioHealthStatus`)
-- Const references for efficiency: `const String &`, `const uint8_t *`
+**Rules:**
+- Use `LOG_I` for state transitions (connect/disconnect, start/stop, health changes)
+- Use `LOG_D` for high-frequency per-cycle details — never in audio task hot path
+- Use static `prev` variables to detect changes — log transitions, not repetitive state
+- Never log inside ISR paths or `audio_pipeline_task` (UART TX blocks, causes audio dropouts)
+- Dirty-flag pattern for audio task logging: task sets flag, main loop calls `audio_periodic_dump()`
 
 ## Module Design
 
+**Singleton pattern:**
+- `AppState::getInstance()` — Meyers singleton with `appState` macro alias
+- `HalDeviceManager::instance()` — Meyers singleton with private constructor
+
 **Exports:**
-- Header files define public API as function declarations
-- Private implementation details in `.cpp` files with static functions
-- Module initialization: `moduleName_init()` or module-specific setup function (e.g., `i2s_audio_init()`, `dac_hal_init()`)
-- State management via AppState singleton for cross-module communication
+- C++ modules expose free functions declared in `.h`, implemented in `.cpp`
+- No barrel files in C++ — include specific headers
+- HAL devices implement `HalDevice` abstract class with five virtual methods: `probe()`, `init()`, `deinit()`, `dumpConfig()`, `healthCheck()`
 
-**Barrel Files:**
-- Not used; each module has its own header file
-- App state is centralized via `AppState` singleton in `app_state.h`
-- Main loop in `main.cpp` orchestrates module function calls
+**AppState dirty flags:**
+- Every state change should set a dirty flag AND call `app_events_signal(EVT_XXX)`
+- Main loop reads dirty flags to decide what to broadcast/save
+- Never call WebSocket, LittleFS, or WiFi directly from MQTT callback — use dirty flags
 
-**Conditional Compilation:**
-- Entire modules guarded by feature flags: `-D GUI_ENABLED`, `-D DAC_ENABLED`, `-D DSP_ENABLED`, `-D USB_AUDIO_ENABLED`
-- Header includes wrapped: `#ifdef GUI_ENABLED ... #endif`
-- Build flags in `platformio.ini` define availability
+**Deferred save pattern:**
+```cpp
+void saveSmartSensingSettingsDeferred();  // Mark dirty — actual save after 2s idle
+void checkDeferredSmartSensingSave();     // Call from main loop
+```
 
-## Preprocessor & Macros
+## Comments
 
-**Common Patterns:**
-- Configuration macros: Defined in `src/config.h` and overridable via build flags
-- Pin definitions: Via `-D LED_PIN=2` build flags with fallback defaults in config.h
-- Logging macros: `LOG_D()`, `LOG_I()`, `LOG_W()`, `LOG_E()` provide consistent interface
-- Legacy compatibility: `#define wifiSSID appState.wifiSSID` for gradual migration to direct member access
-- Guard macros: `#ifndef UNIT_TEST`, `#ifdef NATIVE_TEST`, `#ifdef DSP_ENABLED` for conditional compilation
+**When to comment:**
+- All public API functions in `.h` files get a brief doc comment
+- Non-obvious design decisions get explanation comments (especially hardware quirks)
+- Enum values get inline comments explaining purpose or constraint
+- Magic numbers always commented — e.g., `// 40KB reserve`, `// 308ms time constant`
 
-**Avoid:**
-- Function-like macros for complex logic (use inline functions)
-- Macro constants without uppercase naming (SCREAMING_SNAKE_CASE enforced for `#define` constants)
-
-## Concurrency & Thread Safety
-
-**FreeRTOS Task Safety:**
-- Shared state protected via volatile flags: `appState.audioPaused`, `heapCritical`
-- Cross-core communication uses dirty flags (main loop reads, tasks write)
-- Mutexes for hardware access: `buzzer_handler` uses mutex for dual-core safety
-- Critical sections: `esp_task_wdt_delete()` in setup to prevent IDLE task watchdog
-- No direct locking on AppState reads — dirty-flag pattern is sufficient for WiFi/MQTT state
-
-**Audio Real-Time Constraints:**
-- No Serial/LOG calls in `audio_capture_task` (Core 1, priority 3)
-- `audioPaused` volatile flag gates I2S reads during driver reinit
-- Main loop staggers broadcasts (5ms delay, 5s WiFi check throttle) to prevent blocking
+**No JSDoc/TSDoc used** — plain `//` and `/* */` comments throughout.
 
 ---
 
-*Convention analysis: 2026-02-15*
+*Convention analysis: 2026-03-07*

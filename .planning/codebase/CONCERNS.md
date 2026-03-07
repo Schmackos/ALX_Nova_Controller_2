@@ -1,396 +1,227 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-02-15
+**Analysis Date:** 2026-03-07
 
 ## Tech Debt
 
-### Legacy Macro-Based Global Variable Aliases
-
-**Issue:** The codebase uses `#define` macros to alias AppState singleton members (e.g., `#define wifiSSID appState.wifiSSID`) for backward compatibility. This pattern obfuscates the actual global state access and makes code harder to trace.
-
-**Files:**
-- `src/main.cpp` lines 81-131 (50+ macro aliases)
-- `src/app_state.h` line 522 (TODO comment)
-
-**Impact:** New code must use these aliases or the direct `appState.memberName` approach, creating two incompatible patterns in the same codebase. Makes refactoring risky.
-
-**Fix approach:** Incrementally update all handlers to use `appState.memberName` directly, then remove macro aliases. No API impact, but requires careful verification of each module.
-
-### Settings File Line-Based Persistence
-
-**Issue:** Settings are persisted as 28 lines in `/settings.txt` with no version header or schema documentation. Adding new settings requires appending to the end and updating `loadSettings()` to parse the correct line number.
-
-**Files:**
-- `src/settings_manager.cpp` (lines 27-200+ with hardcoded line parsing)
-- Each feature adds more `String lineN = file.readStringUntil('\n')` calls
-
-**Impact:** Schema is fragile. Missing a line number offset breaks all loaded settings. No way to version the file format. Expansion becomes linear complexity O(N).
-
-**Fix approach:** Migrate to JSON-based settings file (`/settings.json`) with schema versioning. Gradual migration: load both formats, write JSON only. Keep backward compatibility window for firmware updates.
-
-### Dual-ADC I2S Configuration Workaround
-
-**Issue:** PCM1808 ADCs use ESP32-S3 I2S0 and I2S1 both configured as **master RX** (not slave) due to intractable ESP32-S3 I2S slave mode DMA bug. This is a known hardware limitation documented in CLAUDE.md but represents a significant deviation from typical I2S usage.
-
-**Files:**
-- `src/i2s_audio.cpp` (I2S init and driver configuration)
-- `src/config.h` NUM_AUDIO_ADCS = 2
-
-**Impact:** Both ADCs depend on I2S0 clock outputs. If I2S0 is uninitialized or reconfigured, I2S1 data becomes invalid. DAC TX changes can destabilize ADC RX. I2S clock line sharing increases noise coupling risk.
-
-**Fix approach:** Document the dependency graph clearly. Add boot validation to confirm both ADCs sync to same clock. Consider single-master multi-slave redesign (requires hardware change).
-
-## Known Bugs
-
-### Session Timeout Calculation Uses `millis()` in Safety-Critical Path
-
-**Issue:** Session timeout uses `unsigned long` millis-based clock which wraps every 49 days. After wraparound, all sessions become invalid (timeout comparison breaks). Worse, new sessions created at wraparound have `createdAt = 0` which could be interpreted as ancient.
-
-**Files:**
-- `src/auth_handler.cpp` lines 192-206 (validateSession)
-- `src/auth_handler.cpp` line 145 (createSession)
-
-**Impact:** Every 49 days, all users are logged out and cannot re-login until device is restarted. High-impact availability issue for always-on installations.
-
-**Fix approach:** Use `esp_timer_get_time()` (64-bit microseconds, good for ~292 million years) instead of `millis()`. Update Session struct to use uint64_t timestamps. Add wraparound unit test.
-
-### I2S Driver Reinstall Race Condition Incomplete Mitigation
-
-**Issue:** DAC enable/disable uninstalls and reinstalls I2S0 driver while audio task may be calling `i2s_read()`. The `appState.audioPaused` flag mitigation has a potential edge case: the audio task checks the flag at loop entry, but if the flag is set mid-read, the task is not interrupted.
-
-**Files:**
-- `src/dac_hal.cpp` (dac_enable_i2s_tx / dac_disable_i2s_tx)
-- `src/i2s_audio.cpp` audio_capture_task
-
-**Impact:** Rare crashes when user toggles DAC on/off while audio is streaming. 50ms delay after setting flag reduces but doesn't eliminate risk on highly loaded systems.
-
-**Fix approach:** Use FreeRTOS task suspend/resume (`vTaskSuspend(audioTaskHandle)`) instead of yield loop. More robust and immediate. Or: redesign to avoid driver reinstall (keep both RX+TX drivers installed, disable via I2S channel control).
-
-### OTA Backoff Arithmetic Vulnerability
-
-**Issue:** OTA check failure count increments unboundedly; backoff calculation has no upper bound check. If `_otaConsecutiveFailures` overflows (>INT_MAX), backoff returns negative interval causing logic inversion.
-
-**Files:**
-- `src/ota_updater.cpp` lines 108-119 (getOTAEffectiveInterval)
-
-**Impact:** Low severity (requires months of continuous failures), but could cause rapid OTA polling at 1kHz if integer overflows.
-
-**Fix approach:** Cap `_otaConsecutiveFailures` to 20 (already mapped in getOTAEffectiveInterval). Add compile-time assertion or explicit cast to unsigned.
-
-## Security Considerations
-
-### WebSocket Authentication Token Validation Uses Simple Equality
-
-**Issue:** Session IDs are validated via direct string equality comparison in a loop (not constant-time). While not a password comparison, timing-based side-channel attacks could theoretically enumerate valid session IDs.
-
-**Files:**
-- `src/auth_handler.cpp` line 195 (activeSessions[i].sessionId == sessionId)
-
-**Impact:** Low (attacker already needs to guess UUID format), but WebSocket is untrusted input. Multiple comparison attempts could be logged/analyzed.
-
-**Fix approach:** Use `timingSafeCompare()` (already exists in auth_handler for passwords) for session ID validation as well. Prevents timing leaks.
-
-### Crash Log Ring Buffer No Size Validation
-
-**Issue:** Crash log counts are stored as plain integers with no bounds validation on load. Corrupted file could specify `count > CRASH_LOG_MAX_ENTRIES`, then writeIndex wraparound logic fails.
-
-**Files:**
-- `src/crash_log.cpp` lines 11-27 (crashlog_load)
-
-**Impact:** Corrupted crash log prevents boot if read() silently fails or returns garbage. Could cause device to be unrecoverable without serial access.
-
-**Fix approach:** Validate `count` and `writeIndex` on load, reset to 0 if out of bounds. Add CRC32 footer to detect corruption. Log warning when recovered.
-
-### EEPROM I2C Access Not Protected from Concurrent Tasks
-
-**Issue:** DAC EEPROM operations (`eeprom_read_block`, `eeprom_write_block`) run on main loop (Core 0) without mutex protection. If another task (unlikely but possible via WebSocket handler) attempts I2C access, race condition causes data corruption or lockup.
-
-**Files:**
-- `src/dac_eeprom.cpp` (all I2C functions)
-- No mutex in `src/dac_hal.cpp` eeprom operations
-
-**Impact:** Currently low (only main loop writes), but architecture doesn't prevent future concurrent access. I2C is not thread-safe by design.
-
-**Fix approach:** Add `xSemaphoreMutex` for all I2C bus access (DAC EEPROM + any I2C DAC control). Pattern already used in buzzer_handler for GPIO ISR protection.
-
-### Default AP Password Hardcoded in Firmware
-
-**Issue:** `DEFAULT_AP_PASSWORD` (defined in config.h, likely "12345678" or similar) is compiled into every firmware binary. Reverse engineering firmware reveals access credentials for AP mode, which is enabled by default in public deployments.
-
-**Files:**
-- `src/config.h` (DEFAULT_AP_PASSWORD)
-- `src/app_state.h` line 75 (initialized to DEFAULT_AP_PASSWORD)
-
-**Impact:** Medium. AP mode is meant as fallback for WiFi setup, but compromises device if user doesn't change default password. No forced password change on first boot.
-
-**Fix approach:** Generate random AP password from eFuse on first boot, store in NVS. Display in web UI during onboarding. Require password change before AP can be disabled.
-
-## Performance Bottlenecks
-
-### Large Web Pages String in Flash (11KB web_pages.cpp)
-
-**Issue:** HTML/CSS/JS for web interface is embedded as 11KB uncompressed string in `src/web_pages.cpp`, then gzipped to `web_pages_gz.cpp`. Decompression happens on every HTTP request from the ESP32. Large allocations for decompression may spike heap usage.
-
-**Files:**
-- `src/web_pages.cpp` (11283 lines)
-- Decompression during HTTP handling
-
-**Impact:** Web UI load time on slow networks or high-frequency requests could cause heap fragmentation. Heap pressure during high WiFi RX traffic.
-
-**Fix approach:** Already using gzip (good). Consider splitting into multiple smaller chunks (CSS, JS modules) lazy-loaded by HTML. Or: serve static files directly from LittleFS instead of embedding.
-
-### Audio Waveform/Spectrum Broadcasting Every 20ms
-
-**Issue:** `sendAudioData()` broadcasts 1KB+ binary frames (waveform + spectrum) every 20ms when audio is present. On multiple WebSocket clients, this multiplies bandwidth usage. No client subscription filtering initially implemented.
-
-**Files:**
-- `src/websocket_handler.cpp` (sendAudioData)
-- Binary WS frames now implemented per MEMORY.md, but frequency not optimized
-
-**Impact:** High WiFi load with 3+ clients, potential packet loss. Heap pressure from binary frame allocations.
-
-**Fix approach:** Per-client subscription tracking already added (MEMORY.md). Implement adaptive update rate based on client count. Skip spectrum/waveform if all clients muted. Consider push-back on queue full.
-
-### Settings Export/Import Allocates Large JSON in Stack
-
-**Issue:** DSP config export creates large ArduinoJson documents (32+ KB) on the stack for serialization. On ESP32 with limited stack per task (typically 4-8KB per task), this risks stack overflow in non-main-loop contexts.
-
-**Files:**
-- `src/dsp_api.cpp` line 263 (export comment mentions heap allocation as workaround)
-
-**Impact:** Nested MQTT callbacks or WebSocket handlers calling export could cause stack overflow. Already mitigated in some places but not consistently.
-
-**Fix approach:** Always allocate JsonDocument on heap, not stack. Add size assertions at compile time for critical paths. Consider streaming JSON instead of buffering entire document.
-
-### Heap Critical Flag Checked Every 30s, But Not Used Proactively
-
-**Issue:** Main loop monitors `heapCritical` flag (free heap < 40KB) every 30s but only logs it. No proactive mitigation: high-memory operations aren't blocked, features aren't disabled, or buffers aren't shrunk.
-
-**Files:**
-- `src/main.cpp` (heap monitoring loop)
-- `src/app_state.h` heapCritical flag
-
-**Impact:** Device can silently degrade when heap is low (WiFi RX buffers fail silently, WebSocket broadcasts drop). User sees no warning. By the time heapCritical is true, operations are already failing.
-
-**Fix approach:** Implement heap quota system: pre-reserve 40KB always, deny new allocations if available < threshold. Disable optional features (spectrum, waveform, DSP) in heap-critical mode. Broadcast critical state to UI.
-
-## Fragile Areas
-
-### Audio Capture Task Real-Time Guarantees Depend on Core Affinity
-
-**Issue:** Audio capture runs on Core 1 with priority 3 to avoid starving Core 0 watchdog. But Core 1 also runs GUI task. If GUI task runs long without yield (LVGL draw operations), audio task is starved, causing DMA timeouts and I2S recovery cycles.
-
-**Files:**
-- `src/config.h` TASK_CORE_AUDIO = 1
-- `src/gui/gui_manager.cpp` gui_task
-- `src/i2s_audio.cpp` audio_capture_task
-
-**Impact:** Audio drops under heavy GUI load (e.g., long canvas redraws). Triggers watchdog/recovery, slowing down both audio and GUI. High frame rates (30Hz+) increase dropout risk.
-
-**Test coverage:** `test/test_i2s_audio/` tests don't model Core 1 contention.
-
-**Safe modification:** Measure LVGL frame times on actual hardware. Add `vTaskDelay(1)` yield points in long loops. Consider moving non-critical GUI to separate task on Core 0.
-
-### Settings File Format Fragility During Firmware Updates
-
-**Issue:** When firmware adds new settings, old settings files have fewer lines. `loadSettings()` calls `readStringUntil('\n')` for all 28 lines, and missing lines read as empty strings. Silent migration can lose user settings if line numbers shift.
-
-**Files:**
-- `src/settings_manager.cpp` (all line parsing)
-
-**Impact:** Firmware updates (even minor) risk silent settings loss if new features are added mid-list. No rollback mechanism.
-
-**Test coverage:** `test/test_settings/` tests don't cover partial-file scenarios.
-
-**Safe modification:** Add version header as line 1 (format: "VER=2"). Check version on load, apply migration functions per version. Preserve any lines not yet recognized (forward-compat). Never insert new settings mid-file.
-
-### DSP Pipeline State Swap Non-Atomic
-
-**Issue:** Double-buffered DSP config uses `volatile` exchange, but is not atomic with respect to audio processing. If config swap happens mid-frame, one half of audio processes with old config, second half with new config. Causes audible click/pop.
-
-**Files:**
-- `src/dsp_pipeline.cpp` (state swap logic)
-
-**Impact:** DSP parameter changes (EQ, gain) audible as brief clicks/pops. Rare but noticeable on live audio.
-
-**Test coverage:** `test/test_dsp/` tests don't measure frame-boundary timing.
-
-**Safe modification:** Swap config only at frame boundary (after I2S callback completes processing). Use atomic flag to signal when swap is safe. Or: process entire frame with one config, then swap for next frame.
-
-### WebSocket Broadcast Bypasses Auth Under Race Condition
-
-**Issue:** WebSocket event handler sends initial `getAllState()` before authentication is fully validated. If client disconnects immediately after connect, auth timer (`wsAuthTimeout`) may fire with valid old session from previous client.
-
-**Files:**
-- `src/websocket_handler.cpp` (webSocketEvent, WStype_CONNECTED)
-- `src/auth_handler.cpp` (session validation timeout logic)
-
-**Impact:** Rare leak of device state (audio levels, WiFi status) to unauthenticated client on connection reuse. Usually millisecond window.
-
-**Test coverage:** `test/test_websocket/` and `test/test_auth/` don't cover rapid connect/disconnect sequences.
-
-**Safe modification:** Require explicit auth command before ANY state broadcast. Send minimal "login required" message on connect, full state only after auth success.
-
-## Scaling Limits
-
-### Max Concurrent WebSocket Clients = 10
-
-**Issue:** Fixed array `wsAuthStatus[MAX_WS_CLIENTS]` with `MAX_WS_CLIENTS = 10` (see config). If more than 10 clients connect, server reuses oldest client's slot, overwriting its auth state and subscription flags.
-
-**Files:**
-- `src/websocket_handler.cpp` (wsAuthStatus array)
-- `src/config.h` likely defines MAX_WS_CLIENTS
-
-**Impact:** Home Assistant + 5 phones + 3 tablets = 9 clients is feasible. 11th client causes 1st client's session to be overwritten. Causes disconnection and re-auth of oldest client.
-
-**Fix approach:** Increase MAX_WS_CLIENTS to 32 (still modest heap). Or: migrate to dynamic std::vector (more complex but scalable). Monitor actual concurrent client count.
-
-### Max MQTT Topics Per Home Assistant Discovery = 1 Device
-
-**Issue:** MQTT HA discovery publishes one "ALX Nova" device with ~30 entities. Home Assistant UI becomes cluttered. Cannot group multiple controllers under one MQTT broker without name collision.
-
-**Files:**
-- `src/mqtt_handler.cpp` (HA discovery logic)
-
-**Impact:** Scaling to 5+ devices requires manual intervention. Device names must be globally unique or topics collide.
-
-**Fix approach:** Include `deviceSerialNumber` in MQTT base topic (already uses `appState.mqttBaseTopic`). HA discovery will auto-create separate device per serial. Verify in HA UI that discovery works multi-device.
-
-### DSP Max Stages = 24 Per Channel
-
-**Issue:** Each of 4 channels can have max 24 DSP stages. Complex audio chains (multiband + all PEQ + custom filters) quickly exceed limit. No graceful degradation, just silent truncation.
-
-**Files:**
-- `src/config.h` DSP_MAX_STAGES = 24
-- `src/dsp_api.cpp` silently skips stages beyond limit
-
-**Impact:** Complex presets from Equalizer APO (~60+ stages) must be manually downsampled. Users lose detail in complex setups.
-
-**Fix approach:** Expand to 40-50 stages (PSRAM permitting). Add warning when nearing limit. Implement stage compression (combine multiple EQ bands into single multiband compressor stage).
-
-## Dependencies at Risk
-
-### ArduinoJSON v7.4.2 Security Updates Lag
-
-**Issue:** ArduinoJSON is a community-maintained library with occasional version bumps. Current v7.4.2 (specified in platformio.ini) may have known JSON parsing vulnerabilities if not updated regularly.
-
-**Files:**
-- `platformio.ini` (ArduinoJSON@^7.4.2)
-
-**Impact:** Malformed JSON in API requests could trigger buffer overflows or DoS. Firmware updates infrequent, so vulnerability window is long.
-
-**Fix approach:** Set up monthly dependency scanning (e.g., GitHub Dependabot). Pin to specific patch version and update quarterly. Monitor ArduinoJSON GitHub releases.
-
-### Pre-Built ESP-DSP Library Cannot Be Updated
-
-**Issue:** DSP pipeline uses pre-built `libespressif__esp-dsp.a` (Espressif closed-source SIMD library). If vulnerabilities or bugs are found, cannot patch without waiting for Espressif Arduino release.
-
-**Files:**
-- `platformio.ini` ESP-DSP include paths
-- `lib/esp_dsp_lite/` ANSI C fallback (not used on ESP32)
-
-**Impact:** Medium. Pre-built libs are opaque; bugs are hard to diagnose. No fix control.
-
-**Fix approach:** Fallback `lib/esp_dsp_lite/` is already available for native tests. Consider porting critical SIMD ops to custom inline assembly (e.g., vector multiply for crossover routing). Limits future performance but enables control.
-
-## Missing Critical Features
-
-### No Firmware Rollback After Failed OTA
-
-**Issue:** OTA update downloads, verifies, and installs. If new firmware crashes immediately, device is stuck in bad state. Manual UART/serial recovery needed.
-
-**Files:**
-- `src/ota_updater.cpp` (OTA install logic)
-
-**Impact:** High for remote installations. A bad firmware release renders all devices unreachable.
-
-**Fix approach:** Implement A/B partitioning (requires bootloader change). Or: add boot counter—if new firmware crashes within 2 boots, rollback to previous. Needs crash detection.
-
-### No Rate Limiting on API Endpoints
-
-**Issue:** REST API endpoints (/api/smartsensing, /api/diagnostics, etc.) have no rate limiting. Malicious client can flood ESP32 with requests, starving legitimate traffic.
-
-**Files:**
-- `src/main.cpp` (all server.on() registrations)
-- No rate limiting middleware
-
-**Impact:** Medium. Device can be DoS'd from within local WiFi (not external internet). Affects availability.
-
-**Fix approach:** Track request count per client IP, return HTTP 429 if exceeded. Or: implement request queue with max pending (drop oldest if full). Add per-endpoint rate limits in config.
-
-### No Graceful Shutdown / Firmware Update Timeout
-
-**Issue:** When firmware update is initiated, device immediately begins download without waiting for existing operations to complete. Active DSP reconfiguration, MQTT publish, or WebSocket broadcast could be interrupted mid-operation.
-
-**Files:**
-- `src/ota_updater.cpp` (startOTADownloadTask)
-
-**Impact:** Low probability but high impact: incomplete settings writes, truncated MQTT messages, orphaned WebSocket connections.
-
-**Fix approach:** Implement shutdown sequence: 1) Notify all tasks to complete current operation. 2) Wait (timeout 10s) for each to ACK. 3) Begin OTA. Or: defer OTA to next reboot if critical operation in progress.
-
-## Test Coverage Gaps
-
-### WebSocket Concurrency Not Tested
-
-**Issue:** WebSocket handler processes client messages sequentially in event loop. If two clients send conflicting commands rapidly (e.g., setAmplifier(true) + setAmplifier(false) in 1ms), race condition in dirty flag logic could cause inconsistent state.
-
-**Files:**
-- `src/websocket_handler.cpp`
-- `test/test_websocket/` (no concurrency tests)
-
-**Risk:** Medium. Timing-dependent, hard to reproduce.
-
-**Priority:** High - WebSocket is user-facing and stress-tested.
-
-### OTA Checksum Verification Not Tested Against Corrupted Files
-
-**Issue:** OTA verifies SHA256 checksum, but tests only check happy path. No test for what happens if checksum verification fails mid-stream or firmware file is truncated.
-
-**Files:**
-- `src/ota_updater.cpp` (SHA256 verification)
-- `test/test_ota/` (no corruption tests)
-
-**Risk:** Low (GitHub releases are trusted), but edge case could leave device unrecoverable.
-
-**Priority:** Medium - OTA is critical infrastructure.
-
-### Audio Diagnostics Health Status Transitions Not Fully Tested
-
-**Issue:** Audio health status (OK → CLIPPING → NO_DATA transitions) depend on timing thresholds and signal levels. Edge cases like brief signal dropout, intermittent clipping, or glitched ADC detection are not covered.
-
-**Files:**
-- `src/i2s_audio.cpp` (audio_derive_health_status)
-- `test/test_audio_diagnostics/` (14 tests, but edge cases may be missing)
-
-**Risk:** Medium. Incorrect health status affects auto-off logic and user diagnostics.
-
-**Priority:** High - auto-off timer depends on health.
-
-### Button Handler Long-Press Timing Edge Cases Not Tested
-
-**Issue:** Button handler distinguishes long-press (2s) and very-long-press (10s) with no tolerance for timing jitter. If main loop runs late, millis() delta could be off by 10-50ms, causing wrong press type detected.
-
-**Files:**
-- `src/button_handler.cpp` (press timing logic)
-- `test/test_button/` (no jitter/timing tests)
-
-**Risk:** Low. Press timing is non-critical (just triggers factory reset or short commands).
-
-**Priority:** Low.
-
-### GUI State Sync with Web/MQTT Backend Not Tested
-
-**Issue:** GUI, Web UI, and MQTT maintain same state for brightness, volume, mode. Test coverage for `backlightOn`, `screenTimeout` sync is missing.
-
-**Files:**
-- `src/gui/gui_manager.cpp`
-- `test/test_gui_*` (no multi-backend sync tests)
-
-**Risk:** Medium. GUI desyncs from web UI if simultaneous changes occur.
-
-**Priority:** Medium - affects user experience.
+**DSP Float-Int Bridge (Per-Pipeline Buffer):**
+- Issue: The per-input DSP path (`pipeline_run_dsp()`) converts float→int32→dsp_process_buffer→int32→float on every buffer call (every ~5.33ms). This is an acknowledged temporary bridge at `src/audio_pipeline.cpp:284-308`.
+- Files: `src/audio_pipeline.cpp` lines 282-309, `src/dsp_pipeline.cpp`
+- Impact: ~2× float↔int conversion cost per DSP buffer; marginal CPU overhead at 48kHz/256-frame buffers. PSRAM bridge buffer `_dspBridgeBuf` wastes 2KB of internal SRAM (DMA constraint).
+- Fix approach: Port `dsp_pipeline.cpp` to operate natively on float32 buffers, removing the `_dspBridgeBuf` scratch and the `MAX_24BIT_F` normalization round-trips.
+
+**Legacy Line-Based Text Persistence:**
+- Issue: `settings.txt` and `mqtt_config.txt` use positional line-by-line text files instead of JSON. Adding, removing, or reordering settings requires careful line-index accounting, placeholder lines for missing features, and a manual version header (`VER=2`). Already has placeholder lines 28-29 for removed features.
+- Files: `src/settings_manager.cpp` (lines 27-340), `src/mqtt_handler.cpp` (lines 70-145)
+- Impact: Fragile migration path — adding any new setting requires updating line offsets for all existing callers. The 30-slot `lines[]` array has no overflow protection if the file grows unexpectedly.
+- Fix approach: Migrate both files to ArduinoJson (already a dependency). HAL config (`/hal_config.json`) demonstrates the correct pattern.
+
+**Legacy Flat AppState Accessors for Dual-ADC:**
+- Issue: 22 reference fields (`audioRmsLeft`, `audioRmsRight`, `audioVuLeft`, etc.) in `src/app_state.h` lines 199-221 are C++ references aliasing `audioAdc[0]`. These exist to avoid breaking existing WebSocket/MQTT code that predates the dual-ADC `AdcState` array.
+- Files: `src/app_state.h` lines 199-221
+- Impact: Adds confusion — any new ADC2 metering code must use `audioAdc[1]`, but ADC1 code may accidentally mix the alias form with the direct array form.
+- Fix approach: Audit all reference sites (WS/MQTT handlers) and replace with `audioAdc[0].fieldName` directly; remove the alias block.
+
+**Audio Pipeline Sink Cap Mismatch:**
+- Issue: `AUDIO_OUT_MAX_SINKS` is defined as 4 (`src/config.h` line 209: `AUDIO_PIPELINE_MAX_OUTPUTS`), but the matrix has 8 output channels (`AUDIO_PIPELINE_MATRIX_SIZE = 8`). Only the first 4 matrix output channels can be dispatched to physical sinks; channels 4-7 are silently dropped.
+- Files: `src/config.h` lines 207-209, `src/audio_output_sink.h` line 18, `src/audio_pipeline.cpp` lines 83-91
+- Impact: 8-output routing scenarios (e.g., 4-way active crossover to 4 stereo DACs) are architecturally blocked by the sink array size. Currently only 2 physical outputs exist (PCM5102A + ES8311), so this is latent.
+- Fix approach: Raise `AUDIO_PIPELINE_MAX_OUTPUTS` to 8 to match `AUDIO_PIPELINE_MATRIX_SIZE`; verify internal SRAM budget for the additional 4 `_sinkBuf` arrays (4 × 512 × 4 = 8KB).
+
+**HAL I2C Bus Scan Stub (Expansion Bus):**
+- Issue: `hal_i2c_scan_bus()` in `src/hal/hal_discovery.cpp` lines 127-142 is a non-functional stub that always returns 0. The function was created for "Phase 2 hardware validation" but never implemented. Bus EXT and Bus EXP scans in `hal_discover_devices()` call it, get empty masks, and proceed as if no devices were found.
+- Files: `src/hal/hal_discovery.cpp` lines 127-142
+- Impact: External I2C devices on the expansion bus (GPIO 28/29) are never discovered via the I2C scan path. EEPROM-probed devices still work because `dac_i2c_scan()` uses a different code path. MCP4725 and future expansion devices silently fail auto-discovery.
+- Fix approach: Implement `hal_i2c_scan_bus()` using the appropriate Wire instance per bus index, scanning address range 0x03-0x77.
+
+**Memory Leak in `hal_pipeline_sync()` forEach Context:**
+- Issue: `src/hal/hal_pipeline_bridge.cpp` line 225 allocates `new int[2]{0, 0}` as the forEach callback context but never frees it. The comment on line 227 acknowledges the issue: "forEach ctx lifetime is local above — recount here."
+- Files: `src/hal/hal_pipeline_bridge.cpp` lines 215-235
+- Impact: 8 bytes leaked on every call to `hal_pipeline_sync()`. Currently only called once at boot, so it is benign in practice. Would become significant if rescan ever calls sync.
+- Fix approach: Use a stack-allocated `int counts[2] = {0, 0}` and pass `&counts`.
+
+**HAL Discovery SDIO Conflict Check Ignores Ethernet:**
+- Issue: `hal_discover_devices()` in `src/hal/hal_discovery.cpp` line 32 checks only `appState.wifiConnectSuccess` to decide whether to skip Bus EXT (GPIO 48/54). When Ethernet is the active interface (WiFi off but `appState.activeInterface == NET_ETHERNET`), the SDIO bus is unused and Bus EXT would be safe to scan — but the code still skips it if `wifiConnectSuccess` is ever true.
+- Files: `src/hal/hal_discovery.cpp` lines 31-47
+- Impact: First device power-on with WiFi then switch to Ethernet would permanently skip Bus EXT scans for the session, even though no SDIO conflict exists.
+- Fix approach: Condition on `appState.activeInterface == NET_WIFI` or check `WiFi.isConnected()` at scan time rather than the cached `wifiConnectSuccess` flag.
+
+**`hal_online_fetch` References Non-Existent Repository:**
+- Issue: `src/hal/hal_online_fetch.cpp` line 21 hardcodes `https://raw.githubusercontent.com/alx-audio/hal-devices/main/devices/`. The `alx-audio` GitHub organization and `hal-devices` repository do not exist. The function `hal_online_fetch()` is declared but never called from production code.
+- Files: `src/hal/hal_online_fetch.cpp`, `src/hal/hal_online_fetch.h`
+- Impact: Dead code consuming ~8KB of flash; any future code that calls it will receive a TLS 404 and silently fail. The YAML parser stub is incomplete.
+- Fix approach: Either remove the file pair entirely, or replace the base URL with the correct repository when the device database is published.
 
 ---
 
-*Concerns audit: 2026-02-15*
+## Known Bugs
+
+**Blocking `delay()` on Login Failure Starves HTTP/WebSocket:**
+- Symptoms: On failed web login with accumulated failures, the HTTP server stalls for up to 30 seconds (progressive rate-limit delay). During this time, WebSocket keepalives time out, MQTT polling continues independently (it is on its own task), but all other web requests queue behind the login handler.
+- Files: `src/auth_handler.cpp` lines 371-375
+- Trigger: Any login attempt after 5+ failures.
+- Workaround: The rate limiting state resets automatically after 5 minutes of no failures (`LOGIN_COOLDOWN_US`). The 30-second stall can only occur if `_loginFailCount >= 5`.
+- Fix approach: Replace `delay(delayMs)` with a timestamp-based gate that rejects early requests without blocking, or move the login handler to return 429 immediately with a `Retry-After` header.
+
+**Session Cookie Missing `HttpOnly` Flag:**
+- Symptoms: Web session cookie is intentionally set without `HttpOnly` so client-side JavaScript can read it for WebSocket authentication. This exposes the session token to XSS.
+- Files: `src/auth_handler.cpp` line 418 (comment on line 416 acknowledges the trade-off)
+- Trigger: Any stored XSS vulnerability in the web UI would allow session token exfiltration.
+- Workaround: The web UI is self-contained (no external scripts) and served from flash, limiting XSS attack surface.
+- Fix approach: Implement WebSocket authentication via a short-lived one-time token issued by a separate `/api/ws-token` endpoint, allowing the session cookie to have `HttpOnly`.
+
+---
+
+## Security Considerations
+
+**Default Password Hardcoded and Shared Between AP and Web Interface:**
+- Risk: `DEFAULT_AP_PASSWORD "12345678"` in `src/config.h` line 180 is used for both the WiFi AP password and the default web UI password. Any device that has never had its password changed is accessible over both WiFi AP and the web UI with a known credential.
+- Files: `src/config.h` line 180, `src/auth_handler.cpp` lines 112-117
+- Current mitigation: The web UI warns when using the default password (`isDefaultPassword()` check on login response). The AP SSID contains the device serial number, so the device is uniquely identifiable.
+- Recommendations: Generate a unique random password per device on first boot (stored in NVS), using the serial number as a seed. Alert the user to change both passwords on first access.
+
+**Web Interface Served Over Plain HTTP:**
+- Risk: The web server runs on port 80 with no TLS. Credentials (session cookies, password change requests) are transmitted in plaintext on the local network.
+- Files: `src/main.cpp` (WebServer initialization), `src/config.h` line 124
+- Current mitigation: WiFiClientSecure is used for outbound connections (OTA, GitHub API). Inbound web traffic is unencrypted. SameSite=Strict on cookies prevents cross-site request forgery over HTTPS-to-HTTP downgrade vectors.
+- Recommendations: Consider a self-signed certificate for the web server, or at minimum document the HTTP-only limitation in the user manual.
+
+**SHA256 Password Hashing Without Salt:**
+- Risk: `hashPassword()` in `src/auth_handler.cpp` lines 44-66 applies SHA256 directly to the password with no salt. Identical passwords produce identical hashes, enabling rainbow table attacks if NVS storage is read.
+- Files: `src/auth_handler.cpp` lines 44-66
+- Current mitigation: NVS storage requires physical flash access. The default password is flagged as insecure via the UI.
+- Recommendations: Add a device-unique salt (e.g., eFuse MAC bytes) to the hash input. This makes the hash unique per device without requiring PBKDF2 or bcrypt overhead.
+
+---
+
+## Performance Bottlenecks
+
+**`mqtt_handler.cpp` Monolithic File (3819 lines):**
+- Problem: The entire MQTT system — settings load/save, Home Assistant discovery payload generation, state publish logic, WebSocket forwarding stubs, and all MQTT command handlers — is in one 3819-line file.
+- Files: `src/mqtt_handler.cpp`
+- Cause: Organic growth over multiple feature additions. No refactoring has occurred since the mqtt_task split.
+- Improvement path: Split into `mqtt_settings.cpp`, `mqtt_ha_discovery.cpp`, `mqtt_publish.cpp`, `mqtt_commands.cpp`. This also improves compile-time incrementality.
+
+**`websocket_handler.cpp` Large Broadcast Functions (2363 lines):**
+- Problem: Several broadcast functions (hardware stats, audio analysis, HAL device list) rebuild complete JSON documents on every call rather than diff-ing against previous state. The main loop calls these at 2-second intervals unconditionally.
+- Files: `src/websocket_handler.cpp`
+- Cause: Dirty-flag pattern is correctly used to gate broadcasts, but individual JSON builders are not incremental.
+- Improvement path: Cache serialized JSON strings for stable sub-objects (e.g., device list only changes on HAL events) and only re-serialize changed fields.
+
+**`pipeline_run_dsp()` Double Float↔Int Conversion Per Buffer:**
+- Problem: Two format conversion loops (512 multiply-divide operations each) run on every 5.33ms audio buffer for each active DSP lane. At 48kHz, this is ~188 conversions per second per lane.
+- Files: `src/audio_pipeline.cpp` lines 282-308
+- Cause: DSP pipeline was designed around int32 RJ buffers; float pipeline was added later with a bridge layer. See Tech Debt section above.
+- Improvement path: Port `dsp_process_buffer()` to accept float32, removing both conversion loops.
+
+---
+
+## Fragile Areas
+
+**DAC Toggle Deferred-Toggle Mechanism:**
+- Files: `src/app_state.h` lines 471-472 (`_pendingDacToggle`, `_pendingEs8311Toggle`), `src/main.cpp` (loop handling)
+- Why fragile: DAC init/deinit must be deferred to the main loop via volatile int8_t flags because direct `dev->deinit()` from HTTP handlers does not stop the audio pipeline. The deferred mechanism is undocumented in the code and requires correct sequencing: set flag → main loop observes → calls `dac_output_init()`/`es8311_init()`. Missing any step (e.g., calling deinit directly from a new code path) bypasses the handshake and causes audio task use-after-free crashes.
+- Safe modification: Any new code path that needs to toggle DAC output devices must go through `appState._pendingDacToggle = 1` or `-1`, never call `dev->deinit()` directly.
+- Test coverage: `test/test_dac_hal/` and `test/test_hal_adapter/` exist but do not cover the deferred-toggle path.
+
+**AppState as God Object (620-line Header):**
+- Files: `src/app_state.h`
+- Why fragile: All application state (60+ fields spanning WiFi, MQTT, OTA, audio, display, DSP, USB, HAL, diagnostics) lives in a single singleton header. Every module includes it, creating a full recompile cascade whenever any state field is added.
+- Safe modification: New state fields should be added in the appropriate section with dirty-flag methods. Do not access AppState from the `audio_pipeline_task` (Core 1 real-time) except through the already-approved `audioPaused`, `audioTaskPausedAck`, and `adcEnabled` fields — all other reads from the audio task are racy.
+- Test coverage: AppState is exercised indirectly by most test modules but has no dedicated unit test.
+
+**FreeRTOS `vTaskSuspendAll()` in Audio Pipeline Sink Management:**
+- Files: `src/audio_pipeline.cpp` lines 780, 841, 874, 899
+- Why fragile: `vTaskSuspendAll()` is used to atomically install or remove sinks while the audio task is running. If any suspended code path calls a FreeRTOS API that would block (e.g., `xSemaphoreTake`), it will trigger an assert. Current callers (HTTP handlers) are on the main loop, which does not hold any semaphores during sink operations. This invariant must be maintained for any future sink management callers.
+- Safe modification: Never call `audio_pipeline_set_sink()` or `audio_pipeline_remove_sink()` from within an ISR or from a task that holds a FreeRTOS semaphore.
+- Test coverage: `test/test_sink_slot_api/` covers the API but runs on native (no FreeRTOS scheduling).
+
+**I2S Dual-Master Clock Coordination:**
+- Files: `src/i2s_audio.cpp` (`i2s_configure_adc1()`, `i2s_configure_adc2()`)
+- Why fragile: Both I2S_NUM_0 (ADC1) and I2S_NUM_1 (ADC2) are configured as master with identical divider chains. Any change to sample rate, DMA buffer count, or clock divider for one ADC must be replicated identically to the other, or the BCK frequencies will desynchronize and ADC2 will produce corrupted data. The CLAUDE.md notes that "I2S slave mode has intractable DMA issues" on this platform, making the dual-master approach the only viable path.
+- Safe modification: Sample rate changes must update both ADCs atomically using the `audioPaused` semaphore handshake. Never change only one ADC's clock configuration.
+- Test coverage: `test/test_i2s_audio/` tests the module on native where I2S is mocked; hardware behavior is not covered.
+
+---
+
+## Scaling Limits
+
+**HAL Device Registry (16 Slots):**
+- Current capacity: `HAL_MAX_DEVICES = 16` hard limit in `src/hal/hal_types.h`
+- Limit: Adding more than 16 HAL devices (currently using ~12 builtins + PCM5102A + ES8311 + PCM1808 ×2 + NS4150B + TempSensor + display + encoder + buzzer + LED + relay + button + siggen) approaches the cap.
+- Scaling path: Increase `HAL_MAX_DEVICES` (requires verifying pin tracking and mapping table sizes).
+
+**DSP Preset Slots (32):**
+- Current capacity: `DSP_PRESET_MAX_SLOTS = 32` in `src/config.h` line 95
+- Limit: Preset name array `dspPresetNames[32][21]` in AppState occupies 672 bytes of SRAM permanently.
+- Scaling path: Load preset names lazily from LittleFS rather than caching all in AppState.
+
+**USB Audio Ring Buffer (20ms):**
+- Current capacity: `USB_AUDIO_RING_BUFFER_MS = 20` at 48kHz = 960 stereo frames (~7.5KB PSRAM)
+- Limit: USB audio buffer underruns occur if the audio pipeline task is preempted for more than 20ms. Currently the DMA runway is ~64ms (12 buffers × 256 frames), so this is safe. Any reduction in DMA buffer count would expose the ring buffer as the bottleneck.
+- Scaling path: Increase `USB_AUDIO_RING_BUFFER_MS` if underrun count (`usbAudioBufferUnderruns`) grows.
+
+---
+
+## Dependencies at Risk
+
+**PlatformIO ESP32-P4 Platform (Pinned Archive URL):**
+- Risk: `platformio.ini` line 16 pins the platform to a specific GitHub release archive URL (`platform-espressif32.zip`). If this URL becomes unavailable or the release is deleted, CI and fresh developer builds will fail silently or produce unclear errors.
+- Impact: All firmware builds blocked.
+- Migration plan: Mirror the platform archive in a controlled location (e.g., the repository's GitHub releases or an S3 bucket).
+
+**WebSockets Library Requires Patch Script:**
+- Risk: `pre:tools/patch_websockets.py` modifies the `links2004/WebSockets` library source after installation. If the library updates or the patch fails silently, the build may succeed with broken WebSocket behavior on ESP32-P4.
+- Files: `platformio.ini` line 24, `tools/patch_websockets.py`
+- Impact: WebSocket disconnections or frame corruption on ESP32-P4 RISC-V target.
+- Migration plan: Fork the library and reference the fork directly in `lib_deps`, eliminating the patch script dependency.
+
+---
+
+## Missing Critical Features
+
+**I2C Expansion Bus Auto-Discovery Not Implemented:**
+- Problem: The `hal_i2c_scan_bus()` function is a stub (always returns 0). External I2C devices on Bus EXP (GPIO 28/29) cannot be auto-discovered. The MCP4725 entry exists in the HAL database (`src/hal/hal_device_db.cpp` lines 219-234) but is never matched by discovery.
+- Blocks: Any expansion hardware that relies on I2C auto-discovery (MCP4725, future DACs, level sensors).
+
+**HAL Online Device Database Fetch Non-Functional:**
+- Problem: `hal_online_fetch()` in `src/hal/hal_online_fetch.cpp` targets a GitHub URL (`alx-audio/hal-devices`) that does not exist. The function is not called from any production code path.
+- Blocks: The planned "fetch unknown device descriptor from cloud registry" workflow.
+
+---
+
+## Test Coverage Gaps
+
+**`hal_audio_health_bridge.cpp` — New File, Limited Coverage:**
+- What's not tested: Flap guard edge cases (exactly 2 transitions in window vs. 3), timer wraparound in `_flap_record_transition()`, ERROR-state persistence across health checks, flap guard interaction with the pipeline bridge ADC lane disable.
+- Files: `src/hal/hal_audio_health_bridge.cpp`, `test/test_audio_health_bridge/test_audio_health_bridge.cpp`
+- Risk: Incorrect flap detection could leave an ADC permanently in ERROR state after transient noise, or allow a genuinely broken ADC to stay AVAILABLE.
+- Priority: High — newly merged code (modified 2026-03-07).
+
+**`hal_pipeline_bridge.cpp` — `hal_pipeline_sync()` Boot-Time Path:**
+- What's not tested: The `forEach` lambda path that calls `hal_pipeline_on_device_available()` for already-AVAILABLE devices at boot. The memory leak (unreleased `new int[2]`) is in this exact code path.
+- Files: `src/hal/hal_pipeline_bridge.cpp` lines 204-235, `test/test_hal_bridge/test_hal_bridge.cpp`
+- Risk: Boot-time sync may register duplicate sink slots if called more than once, or fail silently if the callback lambda does not fire.
+- Priority: Medium.
+
+**`dac_hal.cpp` Deferred-Toggle Paths:**
+- What's not tested: The `_pendingDacToggle` / `_pendingEs8311Toggle` deferred init/deinit flow through the main loop. Tests exercise `dac_output_init()` directly, not the flag-based deferred path.
+- Files: `src/dac_hal.cpp`, `src/main.cpp` (loop section handling pending toggles)
+- Risk: Code changes to the deferred mechanism could break DAC toggling without any failing tests.
+- Priority: Medium.
+
+**`hal_discovery.cpp` I2C Scan Paths:**
+- What's not tested: The `hal_i2c_scan_bus()` function body — it is a stub that always returns 0, so tests for it would currently trivially pass. The EEPROM probe path is tested in `test/test_hal_discovery/` but relies on mocked I2C.
+- Files: `src/hal/hal_discovery.cpp`, `test/test_hal_discovery/`
+- Risk: When the I2C scan is implemented, there are no baseline tests to validate correct behavior.
+- Priority: Low (cannot regress a stub).
+
+**`mqtt_handler.cpp` Login Blocking Behavior:**
+- What's not tested: The `delay(delayMs)` progressive rate-limiting path in `handleLogin()` has no E2E test that verifies either the blocking duration or its effect on concurrent WebSocket connections.
+- Files: `src/auth_handler.cpp` lines 368-385, `e2e/tests/auth.spec.js`
+- Risk: If the blocking delay is removed or reduced in a refactor, no test would catch a regression in brute-force protection.
+- Priority: Low (security hardening, not functionality).
+
+---
+
+*Concerns audit: 2026-03-07*
