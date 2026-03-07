@@ -185,38 +185,47 @@
             }
         }
 
+        /* Mobile: Audio tab channel strips stack vertically */
         @media (max-width: 767px) {
-            .dsp-freq-canvas { height: 180px; }
-            .peq-band-strip .peq-band-item {
-                min-height: 48px;
-                padding: 8px 4px;
+            .channel-strip-grid {
+                grid-template-columns: 1fr;
+            }
+            .audio-subnav {
+                gap: 2px;
+                padding: 6px 8px;
+            }
+            .audio-subnav-btn {
+                padding: 6px 8px;
+                font-size: 11px;
+            }
+            .peq-overlay-canvas {
+                height: 160px;
+            }
+            .peq-band-table {
+                font-size: 11px;
+            }
+            .peq-input {
+                width: 56px;
+                font-size: 11px;
+            }
+            .matrix-col-hdr {
+                font-size: 9px;
             }
         }
 
-        /* Mobile: PEQ band detail as bottom sheet */
-        @media (max-width: 600px) {
-            .peq-band-detail {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: var(--card-bg, #1e1e1e);
-                border-top: 1px solid var(--border-color, rgba(255,255,255,0.12));
-                border-radius: 16px 16px 0 0;
-                padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
-                z-index: 200;
-                box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
-                max-height: 55vh;
-                overflow-y: auto;
-                display: none;
+        /* Tablet: 2-col channel strips */
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .channel-strip-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
-            .peq-band-detail.visible {
-                display: block;
+        }
+
+        /* Desktop: wider channel strips */
+        @media (min-width: 1024px) {
+            .channel-strip-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
-            .peq-band-detail-handle {
-                width: 40px; height: 4px;
-                background: var(--text-secondary, #666);
-                border-radius: 2px;
-                margin: 0 auto 12px;
+            .peq-overlay-canvas {
+                height: 280px;
             }
         }

@@ -32,4 +32,5 @@ EventBits_t app_events_wait(uint32_t timeout_ms);
 #define EVT_IO_REGISTRY  (1UL << 12)
 #define EVT_DAC_SETTINGS (1UL << 13)
 #define EVT_HAL_DEVICE   (1UL << 14)
-#define EVT_ANY          (0x7FFFUL)
+#define EVT_CHANNEL_MAP  (1UL << 15)
+#define EVT_ANY          (0xFFFFUL)

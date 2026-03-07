@@ -35,6 +35,7 @@ void sendDspMetrics();
 void sendDacState();
 void sendIoRegistryState();
 void sendHalDeviceState();
+void sendAudioChannelMap();
 #endif
 #ifdef USB_AUDIO_ENABLED
 void sendUsbAudioState();

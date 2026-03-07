@@ -26,12 +26,6 @@
                     for (let i = 0; i < 16; i++) spectrumTarget[adc][i] = dv.getFloat32(6 + i * 4, true);
                     targetDominantFreq[adc] = freq;
                     if (currentActiveTab === 'audio') startAudioAnimation();
-                    // Feed RTA overlay for DSP tab
-                    if (currentActiveTab === 'dsp' && adc === 0) {
-                        peqRtaData = new Float32Array(16);
-                        for (let i = 0; i < 16; i++) peqRtaData[i] = spectrumTarget[0][i];
-                        if (peqGraphLayers.rta) dspDrawFreqResponse();
-                    }
                 }
             }
         }
@@ -63,10 +57,8 @@
                 drawMemoryGraph();
                 drawPsramGraph();
 
-                // Re-subscribe to audio stream if audio tab or DSP RTA is active
+                // Re-subscribe to audio stream if audio tab is active
                 if (audioSubscribed && currentActiveTab === 'audio') {
-                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
-                } else if (currentActiveTab === 'dsp' && peqGraphLayers.rta) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
                 }
 
@@ -188,6 +180,8 @@
                     vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                     startVuAnimation();
                 }
+                // Feed new Audio tab VU meters
+                audioTabUpdateLevels(data);
             } else if (data.type === 'inputNames') {
                 if (data.names && Array.isArray(data.names)) {
                     for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
@@ -229,18 +223,10 @@
                 showToast(data.success ? 'EEPROM programmed' : 'EEPROM program failed', data.success ? 'success' : 'error');
             } else if (data.type === 'eepromEraseResult') {
                 showToast(data.success ? 'EEPROM erased' : 'EEPROM erase failed', data.success ? 'success' : 'error');
-            } else if (data.type === 'dspState') {
-                dspHandleState(data);
-            } else if (data.type === 'dspMetrics') {
-                dspHandleMetrics(data);
-            } else if (data.type === 'peqPresets') {
-                peqHandlePresetsList(data.presets);
-            } else if (data.type === 'thdResult') {
-                thdUpdateResult(data);
-            } else if (data.type === 'ioRegistryState') {
-                handleIoRegistryState(data);
             } else if (data.type === 'halDeviceState') {
                 handleHalDeviceState(data);
                 if (data.unknownDevices) handleHalUnknownDevices(data.unknownDevices);
+            } else if (data.type === 'audioChannelMap') {
+                handleAudioChannelMap(data);
             }
         }

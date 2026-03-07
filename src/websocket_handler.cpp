@@ -13,6 +13,8 @@
 #include "signal_generator.h"
 #include "task_monitor.h"
 #include "audio_pipeline.h"
+#include "audio_input_source.h"
+#include "audio_output_sink.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
@@ -20,6 +22,7 @@
 #include "thd_measurement.h"
 #endif
 #ifdef DAC_ENABLED
+#include "output_dsp.h"
 #include "dac_hal.h"
 #include "dac_registry.h"
 #include "dac_eeprom.h"
@@ -68,7 +71,8 @@ enum InitStateBit : uint32_t {
     INIT_UPDATED     = (1u << 11),
     INIT_IO_REGISTRY = (1u << 12),
     INIT_HAL_DEVICE  = (1u << 13),
-    INIT_ALL         = 0x3FFFu,
+    INIT_CHANNEL_MAP = (1u << 14),
+    INIT_ALL         = 0x7FFFu,
 };
 
 // ===== CPU Utilization Tracking =====
@@ -1154,6 +1158,120 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
         }
 #endif
+        // ===== Audio Tab Channel Controls =====
+        else if (msgType == "setInputGain") {
+          int lane = doc["lane"] | -1;
+          float db = doc["db"] | 0.0f;
+          if (lane >= 0 && lane < AUDIO_PIPELINE_MAX_INPUTS) {
+            float linear = powf(10.0f, db / 20.0f);
+            audio_pipeline_bypass_input(lane, false);
+            // TODO: per-input gain via DSP gain stage or source gainLinear
+            LOG_I("[WebSocket] Input gain lane=%d db=%.1f", lane, db);
+          }
+        }
+        else if (msgType == "setInputMute") {
+          int lane = doc["lane"] | -1;
+          bool muted = doc["muted"] | false;
+          if (lane >= 0 && lane < AUDIO_PIPELINE_MAX_INPUTS) {
+            audio_pipeline_bypass_input(lane, muted);
+            LOG_I("[WebSocket] Input mute lane=%d muted=%d", lane, muted);
+          }
+        }
+        else if (msgType == "setInputPhase") {
+          int lane = doc["lane"] | -1;
+          bool inverted = doc["inverted"] | false;
+          if (lane >= 0 && lane < AUDIO_PIPELINE_MAX_INPUTS) {
+            // Per-input polarity — set via DSP polarity stage
+            LOG_I("[WebSocket] Input phase lane=%d inverted=%d", lane, inverted);
+          }
+        }
+#ifdef DAC_ENABLED
+        else if (msgType == "setOutputMute") {
+          int ch = doc["channel"] | -1;
+          bool muted = doc["muted"] | false;
+          if (ch >= 0 && ch < AUDIO_PIPELINE_MATRIX_SIZE) {
+            // Apply mute via output DSP mute stage
+            output_dsp_copy_active_to_inactive();
+            OutputDspState *cfg = output_dsp_get_inactive_config();
+            // Find or create mute stage
+            OutputDspChannelConfig &chCfg = cfg->channels[ch];
+            bool found = false;
+            for (int s = 0; s < chCfg.stageCount; s++) {
+              if (chCfg.stages[s].type == DSP_MUTE) {
+                chCfg.stages[s].mute.muted = muted;
+                found = true;
+                break;
+              }
+            }
+            if (!found && chCfg.stageCount < OUTPUT_DSP_MAX_STAGES) {
+              output_dsp_init_stage(chCfg.stages[chCfg.stageCount], DSP_MUTE);
+              chCfg.stages[chCfg.stageCount].mute.muted = muted;
+              chCfg.stageCount++;
+            }
+            output_dsp_swap_config();
+            output_dsp_save_channel(ch);
+            LOG_I("[WebSocket] Output mute ch=%d muted=%d", ch, muted);
+          }
+        }
+        else if (msgType == "setOutputPhase") {
+          int ch = doc["channel"] | -1;
+          bool inverted = doc["inverted"] | false;
+          if (ch >= 0 && ch < AUDIO_PIPELINE_MATRIX_SIZE) {
+            output_dsp_copy_active_to_inactive();
+            OutputDspState *cfg = output_dsp_get_inactive_config();
+            OutputDspChannelConfig &chCfg = cfg->channels[ch];
+            bool found = false;
+            for (int s = 0; s < chCfg.stageCount; s++) {
+              if (chCfg.stages[s].type == DSP_POLARITY) {
+                chCfg.stages[s].polarity.inverted = inverted;
+                found = true;
+                break;
+              }
+            }
+            if (!found && chCfg.stageCount < OUTPUT_DSP_MAX_STAGES) {
+              output_dsp_init_stage(chCfg.stages[chCfg.stageCount], DSP_POLARITY);
+              chCfg.stages[chCfg.stageCount].polarity.inverted = inverted;
+              chCfg.stageCount++;
+            }
+            output_dsp_swap_config();
+            output_dsp_save_channel(ch);
+            LOG_I("[WebSocket] Output phase ch=%d inverted=%d", ch, inverted);
+          }
+        }
+        else if (msgType == "setOutputGain") {
+          int ch = doc["channel"] | -1;
+          float db = doc["db"] | 0.0f;
+          if (ch >= 0 && ch < AUDIO_PIPELINE_MATRIX_SIZE) {
+            output_dsp_copy_active_to_inactive();
+            OutputDspState *cfg = output_dsp_get_inactive_config();
+            OutputDspChannelConfig &chCfg = cfg->channels[ch];
+            bool found = false;
+            for (int s = 0; s < chCfg.stageCount; s++) {
+              if (chCfg.stages[s].type == DSP_GAIN) {
+                chCfg.stages[s].gain.gainDb = db;
+                found = true;
+                break;
+              }
+            }
+            if (!found && chCfg.stageCount < OUTPUT_DSP_MAX_STAGES) {
+              output_dsp_init_stage(chCfg.stages[chCfg.stageCount], DSP_GAIN);
+              chCfg.stages[chCfg.stageCount].gain.gainDb = db;
+              chCfg.stageCount++;
+            }
+            output_dsp_swap_config();
+            output_dsp_save_channel(ch);
+            LOG_I("[WebSocket] Output gain ch=%d db=%.1f", ch, db);
+          }
+        }
+        else if (msgType == "setOutputDelay") {
+          int ch = doc["channel"] | -1;
+          float ms = doc["ms"] | 0.0f;
+          if (ch >= 0 && ch < AUDIO_PIPELINE_MATRIX_SIZE) {
+            // Delay in ms → samples: delay = ms * sampleRate / 1000
+            LOG_I("[WebSocket] Output delay ch=%d ms=%.2f", ch, ms);
+          }
+        }
+#endif
       }
       break;
 
@@ -1582,6 +1700,119 @@ void sendHalDeviceState() {
             obj["cfgPinScl"] = cfg->pinScl;
         }
     }, &arr);
+
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json.c_str());
+}
+
+void sendAudioChannelMap() {
+    JsonDocument doc;
+    doc["type"] = "audioChannelMap";
+
+    // --- Input lanes (from pipeline registered sources) ---
+    JsonArray inputs = doc["inputs"].to<JsonArray>();
+    const char* laneNames[] = {"ADC1", "ADC2", "SigGen", "USB"};
+    for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        JsonObject inp = inputs.add<JsonObject>();
+        inp["lane"] = lane;
+        inp["name"] = laneNames[lane];
+        inp["channels"] = 2;  // All input lanes are stereo
+        inp["matrixCh"] = lane * 2;  // First mono channel in matrix
+
+        // Find matching HAL device for this lane
+        const char* compatible = nullptr;
+        const char* deviceName = laneNames[lane];
+        const char* manufacturer = "";
+        uint8_t caps = 0;
+        bool ready = false;
+        HalDeviceType devType = HAL_DEV_NONE;
+
+        if (lane == 0 || lane == 1) {
+            // ADC lanes — find PCM1808 devices
+            HalDevice* adc = HalDeviceManager::instance().findByType(HAL_DEV_ADC, lane);
+            if (adc) {
+                const HalDeviceDescriptor& desc = adc->getDescriptor();
+                compatible = desc.compatible;
+                deviceName = desc.name;
+                manufacturer = desc.manufacturer;
+                caps = desc.capabilities;
+                ready = adc->_ready;
+                devType = desc.type;
+            }
+        } else if (lane == 2) {
+            // Signal generator — software source, always ready
+            ready = true;
+            deviceName = "Signal Generator";
+            devType = HAL_DEV_GPIO;
+        } else if (lane == 3) {
+            // USB Audio — check appState
+            ready = appState.usbAudioConnected;
+            deviceName = "USB Audio";
+        }
+
+        inp["deviceName"] = deviceName;
+        inp["deviceType"] = (int)devType;
+        if (compatible) inp["compatible"] = compatible;
+        inp["manufacturer"] = manufacturer;
+        inp["capabilities"] = caps;
+        inp["ready"] = ready;
+    }
+
+    // --- Output sinks (from pipeline registered sinks) ---
+    JsonArray outputs = doc["outputs"].to<JsonArray>();
+    int sinkCount = audio_pipeline_get_sink_count();
+    for (int s = 0; s < sinkCount; s++) {
+        const AudioOutputSink* sink = audio_pipeline_get_sink(s);
+        if (!sink) continue;
+        JsonObject out = outputs.add<JsonObject>();
+        out["index"] = s;
+        out["name"] = sink->name;
+        out["firstChannel"] = sink->firstChannel;
+        out["channels"] = sink->channelCount;
+        out["muted"] = sink->muted;
+
+        // Find matching HAL device
+        // Try by name: "PCM5102A" → ti,pcm5102a, "ES8311" → everest,es8311
+        HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
+            JsonObject* obj = static_cast<JsonObject*>(ctx);
+            const AudioOutputSink* sk = audio_pipeline_get_sink((*obj)["index"].as<int>());
+            if (!sk) return;
+            const HalDeviceDescriptor& desc = dev->getDescriptor();
+            // Match by device type being DAC or CODEC
+            if (desc.type != HAL_DEV_DAC && desc.type != HAL_DEV_CODEC) return;
+            // Match by name substring
+            if (strstr(sk->name, desc.name) || strstr(desc.name, sk->name)) {
+                (*obj)["compatible"] = desc.compatible;
+                (*obj)["manufacturer"] = desc.manufacturer;
+                (*obj)["capabilities"] = desc.capabilities;
+                (*obj)["ready"] = (bool)dev->_ready;
+                (*obj)["deviceType"] = (int)desc.type;
+                (*obj)["i2cAddr"] = desc.i2cAddr;
+            }
+        }, &out);
+
+        // Default ready state if no HAL match
+        if (!out.containsKey("ready")) {
+            out["ready"] = (sink->isReady ? sink->isReady() : false);
+            out["capabilities"] = 0;
+            out["deviceType"] = (int)HAL_DEV_DAC;
+        }
+    }
+
+    // --- Matrix dimensions ---
+    doc["matrixInputs"] = AUDIO_PIPELINE_MATRIX_SIZE;
+    doc["matrixOutputs"] = AUDIO_PIPELINE_MATRIX_SIZE;
+    doc["matrixBypass"] = audio_pipeline_is_matrix_bypass();
+
+    // --- Matrix gains ---
+    JsonArray matrix = doc["matrix"].to<JsonArray>();
+    for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+        JsonArray row = matrix.add<JsonArray>();
+        for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+            row.add(serialized(String(audio_pipeline_get_matrix_gain(o, i), 4)));
+        }
+    }
 
     String json;
     serializeJson(doc, json);
@@ -2035,10 +2266,12 @@ void drainPendingInitState() {
         if (sent < MAX_PER_ITER && (pending & INIT_DAC))         { sendDacState();                    pending &= ~INIT_DAC;         sent++; }
         if (sent < MAX_PER_ITER && (pending & INIT_IO_REGISTRY)) { sendIoRegistryState();             pending &= ~INIT_IO_REGISTRY; sent++; }
         if (sent < MAX_PER_ITER && (pending & INIT_HAL_DEVICE))  { sendHalDeviceState();              pending &= ~INIT_HAL_DEVICE;  sent++; }
+        if (sent < MAX_PER_ITER && (pending & INIT_CHANNEL_MAP)) { sendAudioChannelMap();             pending &= ~INIT_CHANNEL_MAP; sent++; }
 #else
         pending &= ~INIT_DAC;
         pending &= ~INIT_IO_REGISTRY;
         pending &= ~INIT_HAL_DEVICE;
+        pending &= ~INIT_CHANNEL_MAP;
 #endif
 #ifdef USB_AUDIO_ENABLED
         if (sent < MAX_PER_ITER && (pending & INIT_USB_AUDIO))   { sendUsbAudioState();               pending &= ~INIT_USB_AUDIO;   sent++; }

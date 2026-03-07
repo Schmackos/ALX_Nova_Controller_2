@@ -1,0 +1,44 @@
+graph LR
+    subgraph INPUTS["Input Sources (HAL-driven)"]
+        ADC1["PCM1808 #1<br/>L+R (I2S0)"]
+        ADC2["PCM1808 #2<br/>L+R (I2S1)"]
+        SIG["Signal Gen<br/>L+R (Software)"]
+        USB["USB Audio<br/>L+R (TinyUSB)"]
+    end
+
+    subgraph INPUT_DSP["Per-Input DSP"]
+        IDSP0["Gain | Mute | PEQ<br/>(6-band)"]
+        IDSP1["Gain | Mute | PEQ"]
+        IDSP2["Gain | Mute | PEQ"]
+        IDSP3["Gain | Mute | PEQ"]
+    end
+
+    subgraph MATRIX["8x8 Mono Routing Matrix"]
+        MTX["IN[0..7] x OUT[0..7]<br/>Per-crosspoint gain<br/>-72 to +12 dB"]
+    end
+
+    subgraph OUTPUT_DSP["Per-Output DSP (x8 mono)"]
+        ODSP["PEQ (10-band)<br/>Crossover HP/LP<br/>Compressor<br/>Limiter<br/>Gain | Delay<br/>Polarity | Mute"]
+    end
+
+    subgraph OUTPUTS["Output Sinks (HAL-driven)"]
+        DAC1["PCM5102A<br/>L+R (I2S0 TX)"]
+        DAC2["ES8311<br/>L+R (I2S2 TX)"]
+        AMP["NS4150B<br/>(GPIO 53)"]
+        MCP["MCP4725<br/>(I2C DAC)"]
+    end
+
+    ADC1 --> IDSP0
+    ADC2 --> IDSP1
+    SIG --> IDSP2
+    USB --> IDSP3
+
+    IDSP0 -->|"ch 0,1"| MTX
+    IDSP1 -->|"ch 2,3"| MTX
+    IDSP2 -->|"ch 4,5"| MTX
+    IDSP3 -->|"ch 6,7"| MTX
+
+    MTX -->|"out 0..7"| ODSP
+    ODSP -->|"ch 0,1"| DAC1
+    ODSP -->|"ch 2,3"| DAC2
+    ODSP -->|"PA enable"| AMP

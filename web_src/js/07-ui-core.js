@@ -31,22 +31,9 @@
                 loadManualContent();
             }
 
-            // DSP tab: redraw frequency response, load routing, subscribe audio for RTA
-            if (tabId === 'dsp') {
-                canvasDims = {};
-                setTimeout(dspDrawFreqResponse, 50);
-                dspLoadRouting();
-                if (typeof outputDspLoadChannel === 'function') outputDspLoadChannel(outputDspCh);
-                if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
-                if (typeof updateChainCopyToDropdown === 'function') updateChainCopyToDropdown();
-                if (peqGraphLayers.rta && ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
-                    ws.send(JSON.stringify({ type: 'setSpectrumEnabled', enabled: true }));
-                }
-            } else if (currentActiveTab === 'dsp' && peqGraphLayers.rta && tabId !== 'audio') {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
-                }
+            // Audio tab — render active sub-view on tab switch
+            if (tabId === 'audio') {
+                renderAudioSubView();
             }
 
             // Audio tab subscription management
@@ -73,8 +60,7 @@
                 loadInputNameFields();
             } else if (tabId !== 'audio' && audioSubscribed) {
                 audioSubscribed = false;
-                var dspRtaTakeover = (tabId === 'dsp' && peqGraphLayers.rta);
-                if (!dspRtaTakeover && ws && ws.readyState === WebSocket.OPEN) {
+                if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
                 }
                 // Stop animation and reset state
@@ -82,7 +68,7 @@
                 if (vuAnimFrameId) { cancelAnimationFrame(vuAnimFrameId); vuAnimFrameId = null; }
                 for (let a = 0; a < NUM_ADCS; a++) {
                     waveformCurrent[a] = null; waveformTarget[a] = null;
-                    if (!dspRtaTakeover) { spectrumTarget[a].fill(0); }
+                    spectrumTarget[a].fill(0);
                     spectrumCurrent[a].fill(0);
                     spectrumPeaks[a].fill(0); spectrumPeakTimes[a].fill(0);
                 }

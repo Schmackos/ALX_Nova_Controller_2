@@ -2270,6 +2270,390 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         /* HAL Add Device */
         .hal-add-row { display: flex; gap: 8px; align-items: center; }
 
+        /* ===== Audio Tab Sub-Navigation ===== */
+        .audio-subnav {
+            display: flex;
+            gap: 2px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 3px;
+            margin-bottom: 12px;
+        }
+        .audio-subnav-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px 8px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .audio-subnav-btn.active {
+            background: var(--accent);
+            color: #000;
+        }
+        .audio-subnav-btn:not(.active):hover {
+            background: var(--bg-input);
+        }
+        .audio-subnav-btn svg {
+            flex-shrink: 0;
+        }
+
+        /* Sub-view panels */
+        .audio-subview {
+            display: none;
+        }
+        .audio-subview.active {
+            display: block;
+            animation: fadeIn 0.15s ease;
+        }
+
+        /* ===== Channel Strip Grid ===== */
+        .channel-strip-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .channel-strip {
+            background: var(--bg-surface);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .channel-strip-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .channel-device-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .channel-strip-sub {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: -4px;
+        }
+        .channel-status {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .channel-status.status-ok {
+            background: rgba(76,175,80,0.15);
+            color: #4CAF50;
+        }
+        .channel-status.status-off {
+            background: rgba(158,158,158,0.15);
+            color: #9E9E9E;
+        }
+
+        /* VU meters in channel strips */
+        .channel-vu-pair {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            justify-content: center;
+            min-height: 80px;
+        }
+        .channel-vu-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+        .channel-vu-canvas {
+            border-radius: 3px;
+            background: var(--bg-card);
+        }
+        .channel-vu-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+        .channel-vu-readout {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: monospace;
+            margin-left: 4px;
+            align-self: center;
+        }
+
+        /* Channel controls */
+        .channel-control-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .channel-control-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            min-width: 32px;
+        }
+        .channel-gain-slider {
+            flex: 1;
+            height: 4px;
+            -webkit-appearance: none;
+            background: var(--bg-card);
+            border-radius: 2px;
+            outline: none;
+        }
+        .channel-gain-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+        .channel-gain-value {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: monospace;
+            min-width: 50px;
+            text-align: right;
+        }
+        .channel-delay-input {
+            width: 60px;
+            font-size: 12px;
+            padding: 4px 6px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+        .channel-button-row {
+            display: flex;
+            gap: 4px;
+        }
+        .channel-btn {
+            flex: 1;
+            padding: 6px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        .channel-btn:hover {
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+        .channel-btn.active {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+        .channel-btn-wide {
+            flex: none;
+            width: 100%;
+        }
+        .channel-dsp-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-top: 4px;
+            border-top: 1px solid var(--border);
+        }
+        .channel-dsp-row {
+            display: flex;
+            gap: 4px;
+        }
+
+        /* ===== Matrix Grid ===== */
+        .matrix-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        .matrix-table th, .matrix-table td {
+            padding: 6px 4px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+        .matrix-col-hdr {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            writing-mode: vertical-lr;
+            transform: rotate(180deg);
+            max-width: 36px;
+            white-space: nowrap;
+        }
+        .matrix-row-hdr {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-align: right !important;
+            padding-right: 8px !important;
+            white-space: nowrap;
+        }
+        .matrix-cell {
+            cursor: pointer;
+            color: var(--text-disabled);
+            font-family: monospace;
+            transition: background 0.15s;
+        }
+        .matrix-cell:hover {
+            background: var(--bg-input);
+        }
+        .matrix-cell.matrix-active {
+            background: rgba(255,152,0,0.12);
+            color: var(--accent);
+            font-weight: 600;
+        }
+        .matrix-presets {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .btn-sm {
+            min-height: 32px;
+            padding: 6px 12px;
+            font-size: 12px;
+            width: auto;
+        }
+
+        /* Matrix gain popup */
+        .matrix-gain-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--bg-surface);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px var(--shadow);
+            z-index: 1000;
+            min-width: 260px;
+            display: none;
+        }
+        .matrix-gain-popup-inner {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .matrix-gain-popup-inner label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* ===== PEQ / DSP Overlay ===== */
+        .peq-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background: var(--bg-primary);
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .peq-overlay-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .peq-overlay-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .peq-overlay-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            transition: background 0.15s;
+        }
+        .peq-overlay-close:hover {
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+        .peq-graph-wrap {
+            padding: 8px 16px;
+            flex-shrink: 0;
+        }
+        .peq-overlay-canvas {
+            width: 100%;
+            height: 220px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .peq-band-table-wrap {
+            padding: 0 16px;
+            overflow-x: auto;
+        }
+        .peq-band-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .peq-band-table th {
+            text-align: left;
+            padding: 6px 4px;
+            border-bottom: 2px solid var(--accent);
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .peq-band-table td {
+            padding: 4px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+        .peq-input {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            padding: 4px 6px;
+            font-size: 12px;
+            width: 70px;
+        }
+        .peq-input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+        .peq-type-sel {
+            width: 80px;
+        }
+        .peq-overlay-actions {
+            display: flex;
+            gap: 6px;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
 /* ===== 04-canvas.css ===== */
 
         /* ===== Graph Canvas ===== */
@@ -2737,39 +3121,48 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
         }
 
+        /* Mobile: Audio tab channel strips stack vertically */
         @media (max-width: 767px) {
-            .dsp-freq-canvas { height: 180px; }
-            .peq-band-strip .peq-band-item {
-                min-height: 48px;
-                padding: 8px 4px;
+            .channel-strip-grid {
+                grid-template-columns: 1fr;
+            }
+            .audio-subnav {
+                gap: 2px;
+                padding: 6px 8px;
+            }
+            .audio-subnav-btn {
+                padding: 6px 8px;
+                font-size: 11px;
+            }
+            .peq-overlay-canvas {
+                height: 160px;
+            }
+            .peq-band-table {
+                font-size: 11px;
+            }
+            .peq-input {
+                width: 56px;
+                font-size: 11px;
+            }
+            .matrix-col-hdr {
+                font-size: 9px;
             }
         }
 
-        /* Mobile: PEQ band detail as bottom sheet */
-        @media (max-width: 600px) {
-            .peq-band-detail {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: var(--card-bg, #1e1e1e);
-                border-top: 1px solid var(--border-color, rgba(255,255,255,0.12));
-                border-radius: 16px 16px 0 0;
-                padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
-                z-index: 200;
-                box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
-                max-height: 55vh;
-                overflow-y: auto;
-                display: none;
+        /* Tablet: 2-col channel strips */
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .channel-strip-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
-            .peq-band-detail.visible {
-                display: block;
+        }
+
+        /* Desktop: wider channel strips */
+        @media (min-width: 1024px) {
+            .channel-strip-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
-            .peq-band-detail-handle {
-                width: 40px; height: 4px;
-                background: var(--text-secondary, #666);
-                border-radius: 2px;
-                margin: 0 auto 12px;
+            .peq-overlay-canvas {
+                height: 280px;
             }
         }
 </style>
@@ -2792,10 +3185,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <button class="sidebar-item" data-tab="audio" onclick="switchTab('audio')">
                 <svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
                 <span>Audio</span>
-            </button>
-            <button class="sidebar-item" data-tab="dsp" onclick="switchTab('dsp')">
-                <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm-8 8h2v-4H3v4zm12-6v8h2V8h-2zm4 2v4h2v-4h-2z"/></svg>
-                <span>DSP</span>
             </button>
             <button class="sidebar-item" data-tab="devices" onclick="switchTab('devices')">
                 <svg viewBox="0 0 24 24"><path d="M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11"/></svg>
@@ -2857,9 +3246,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         </button>
         <button class="tab" data-tab="audio" onclick="switchTab('audio')">
             <svg viewBox="0 0 24 24"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
-        </button>
-        <button class="tab" data-tab="dsp" onclick="switchTab('dsp')">
-            <svg viewBox="0 0 24 24"><path d="M7 18h2V6H7v12zm4-12v12h2V6h-2zm-8 8h2v-4H3v4zm12-6v8h2V8h-2zm4 2v4h2v-4h-2z"/></svg>
         </button>
         <button class="tab" data-tab="devices" onclick="switchTab('devices')">
             <svg viewBox="0 0 24 24"><path d="M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11"/></svg>
@@ -2981,36 +3367,65 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         <!-- ===== AUDIO TAB ===== -->
         <section id="audio" class="panel">
-            <!-- Input Channel Overview -->
-            <div class="card input-overview-card">
-              <div class="card-title">Input Channels</div>
-              <div class="input-lane-grid" id="inputLaneGrid">
-                <div class="input-lane" id="inputLane0">
-                  <div class="lane-name">ADC 1</div>
-                  <div class="lane-status-dot" id="laneDot0"></div>
-                  <div class="lane-level" id="laneLevel0">—</div>
-                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
-                </div>
-                <div class="input-lane" id="inputLane1">
-                  <div class="lane-name">ADC 2</div>
-                  <div class="lane-status-dot" id="laneDot1"></div>
-                  <div class="lane-level" id="laneLevel1">—</div>
-                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
-                </div>
-                <div class="input-lane" id="inputLane2">
-                  <div class="lane-name">SigGen</div>
-                  <div class="lane-status-dot" id="laneDot2"></div>
-                  <div class="lane-level" id="laneLevel2">—</div>
-                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable2" onchange="toggleSigGenLane(this.checked)"><span class="slider round"></span></label>
-                </div>
-                <div class="input-lane" id="inputLane3">
-                  <div class="lane-name">USB</div>
-                  <div class="lane-status-dot" id="laneDot3"></div>
-                  <div class="lane-level" id="laneLevel3">—</div>
-                  <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable3" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
-                </div>
-              </div>
+            <!-- Audio Sub-Navigation -->
+            <div class="audio-subnav">
+                <button class="audio-subnav-btn active" data-view="inputs" onclick="switchAudioSubView('inputs')">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M14,12L10,8V11H2V13H10V16M20,18V6C20,4.89 19.1,4 18,4H6A2,2 0 0,0 4,6V9H6V6H18V18H6V15H4V18A2,2 0 0,0 6,20H18A2,2 0 0,0 20,18Z"/></svg>
+                    Inputs
+                </button>
+                <button class="audio-subnav-btn" data-view="matrix" onclick="switchAudioSubView('matrix')">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M14,14H7V16H14M19,19H5V8H19M19,3H18V1H16V3H8V1H6V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M14,10H7V12H14V10Z"/></svg>
+                    Matrix
+                </button>
+                <button class="audio-subnav-btn" data-view="outputs" onclick="switchAudioSubView('outputs')">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M23,12L19,8V11H7V13H19V16M1,18V6C1,4.89 1.9,4 3,4H15A2,2 0 0,1 17,6V9H15V6H3V18H15V15H17V18A2,2 0 0,1 15,20H3A2,2 0 0,1 1,18Z"/></svg>
+                    Outputs
+                </button>
+                <button class="audio-subnav-btn" data-view="siggen" onclick="switchAudioSubView('siggen')">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>
+                    SigGen
+                </button>
             </div>
+
+            <!-- ===== INPUTS Sub-View ===== -->
+            <div id="audio-sv-inputs" class="audio-subview active">
+                <div class="channel-strip-grid" id="audio-inputs-container">
+                    <!-- Dynamically populated from audioChannelMap -->
+                    <div class="card" style="text-align:center;padding:32px;color:var(--text-secondary)">
+                        Waiting for device data...
+                    </div>
+                </div>
+
+                <!-- Legacy input lane overview (kept for backward compat during transition) -->
+                <div class="card input-overview-card" style="margin-top:12px">
+                  <div class="card-title">Pipeline Lanes</div>
+                  <div class="input-lane-grid" id="inputLaneGrid">
+                    <div class="input-lane" id="inputLane0">
+                      <div class="lane-name">ADC 1</div>
+                      <div class="lane-status-dot" id="laneDot0"></div>
+                      <div class="lane-level" id="laneLevel0">—</div>
+                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    <div class="input-lane" id="inputLane1">
+                      <div class="lane-name">ADC 2</div>
+                      <div class="lane-status-dot" id="laneDot1"></div>
+                      <div class="lane-level" id="laneLevel1">—</div>
+                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    <div class="input-lane" id="inputLane2">
+                      <div class="lane-name">SigGen</div>
+                      <div class="lane-status-dot" id="laneDot2"></div>
+                      <div class="lane-level" id="laneLevel2">—</div>
+                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable2" onchange="toggleSigGenLane(this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    <div class="input-lane" id="inputLane3">
+                      <div class="lane-name">USB</div>
+                      <div class="lane-status-dot" id="laneDot3"></div>
+                      <div class="lane-level" id="laneLevel3">—</div>
+                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable3" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
+                    </div>
+                  </div>
+                </div>
             <!-- Audio Waveform -->
             <div class="card">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3303,8 +3718,35 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
-            <!-- DAC Output -->
-            <div class="card" id="dacCard">
+            </div><!-- end audio-sv-inputs -->
+
+            <!-- ===== MATRIX Sub-View ===== -->
+            <div id="audio-sv-matrix" class="audio-subview">
+                <div class="card">
+                    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                        Routing Matrix
+                        <div style="display:flex;gap:4px;">
+                            <button class="btn btn-sm btn-secondary" onclick="matrixPreset1to1()">1:1 Pass</button>
+                            <button class="btn btn-sm btn-secondary" onclick="matrixPresetClear()">Clear</button>
+                        </div>
+                    </div>
+                    <div id="audio-matrix-container" style="overflow-x:auto;">
+                        <div style="text-align:center;padding:32px;color:var(--text-secondary)">Waiting for device data...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== OUTPUTS Sub-View ===== -->
+            <div id="audio-sv-outputs" class="audio-subview">
+                <div class="channel-strip-grid" id="audio-outputs-container">
+                    <!-- Dynamically populated from audioChannelMap -->
+                    <div class="card" style="text-align:center;padding:32px;color:var(--text-secondary)">
+                        Waiting for device data...
+                    </div>
+                </div>
+
+                <!-- Legacy DAC controls (kept during transition) -->
+                <div class="card" id="dacCard">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
                     DAC Output
                     <span id="dacReadyBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Ready</span>
@@ -3361,6 +3803,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
+            </div><!-- end audio-sv-outputs -->
+
+            <!-- ===== SIGGEN Sub-View ===== -->
+            <div id="audio-sv-siggen" class="audio-subview">
             <!-- Test Signal Generator -->
             <div class="card">
                 <div class="card-title">Test Signal Generator</div>
@@ -3427,202 +3873,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <p id="siggenPwmNote" style="display:none;font-size:11px;color:#FFA726;margin-top:8px">PWM output requires external RC low-pass filter for sine approximation.</p>
                 </div>
             </div>
+            </div><!-- end audio-sv-siggen -->
         </section>
 
-        <!-- ===== DSP TAB ===== -->
-        <section id="dsp" class="panel">
-            <!-- DSP Control -->
-            <div class="card">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    DSP Control
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <span style="font-size:11px;color:var(--text-secondary);">Enable</span>
-                        <label class="switch" style="transform:scale(0.75);">
-                            <input type="checkbox" id="dspEnableToggle" onchange="dspSetEnabled(this.checked)">
-                            <span class="slider round"></span>
-                        </label>
-                    </div>
-                </div>
-                <div class="info-box">
-                    <div class="info-row">
-                        <span class="info-label">Global Bypass</span>
-                        <label class="switch" style="transform:scale(0.75);">
-                            <input type="checkbox" id="dspBypassToggle" onchange="dspSetBypass(this.checked)">
-                            <span class="slider round"></span>
-                        </label>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">DSP CPU</span>
-                        <span class="info-value" id="dspCpuText">0%</span>
-                    </div>
-                    <div class="dsp-cpu-bar"><div class="fill" id="dspCpuBar" style="width:0%"></div></div>
-                    <div class="info-row" style="margin-top:8px;">
-                        <span class="info-label">Sample Rate</span>
-                        <span class="info-value" id="dspSampleRate">48000 Hz</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- DSP Presets -->
-            <div class="card">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    <span>Presets (<span id="dspPresetCount">0</span>)</span>
-                    <span id="dspPresetStatus" class="badge" style="font-size:10px;padding:2px 8px;border-radius:4px;display:none;">Saved</span>
-                </div>
-                <div id="dspPresetList" style="margin-top:8px;"></div>
-                <div id="dspPresetActions" style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="dsp-add-btn" style="flex:1" onclick="dspShowAddPresetDialog()">+ Add Preset</button>
-                    <button class="btn btn-primary" id="dspSavePresetBtn" style="display:none;padding:8px 16px;font-size:12px;border-radius:10px;white-space:nowrap;" onclick="dspSaveCurrentPreset()"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" style="vertical-align:middle;margin-right:4px;"><path d="M15,9H5V5H15M12,19A3,3 0 0,1 9,16A3,3 0 0,1 12,13A3,3 0 0,1 15,16A3,3 0 0,1 12,19M17,3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V7L17,3Z"/></svg>Save</button>
-                </div>
-            </div>
-
-            <!-- Channel Selector -->
-            <div class="card">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    Channel
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <button class="btn btn-secondary" id="peqLinkBtn" onclick="peqToggleLink()" style="padding:2px 8px;font-size:11px;" title="Link L/R channels">Link L/R</button>
-                    </div>
-                </div>
-                <div style="display:flex;align-items:center;">
-                    <div class="dsp-ch-tabs" id="dspChTabs" style="flex:1;"></div>
-                    <button id="dspCompareBtn" class="btn btn-small" onclick="toggleDspCompare()" title="Overlay all channel responses">Compare</button>
-                </div>
-                <div class="info-box">
-                    <div class="info-row">
-                        <span class="info-label">Channel Bypass</span>
-                        <label class="switch" style="transform:scale(0.75);">
-                            <input type="checkbox" id="dspChBypassToggle" onchange="dspSetChBypass(this.checked)">
-                            <span class="slider round"></span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Frequency Response Graph -->
-            <div class="card">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    Frequency Response
-                    <div style="display:flex;gap:8px;" id="peqGraphToggles">
-                        <button class="btn btn-secondary btn-small peq-graph-tog active" id="togIndividual" onclick="peqToggleGraphLayer('individual')">Individual</button>
-                        <button class="btn btn-secondary btn-small peq-graph-tog" id="togRta" onclick="peqToggleGraphLayer('rta')">RTA</button>
-                        <button class="btn btn-secondary btn-small peq-graph-tog active" id="togChain" onclick="peqToggleGraphLayer('chain')">Chain</button>
-                        <button class="btn btn-small" onclick="peqResetZoom()" title="Reset frequency zoom">Reset Zoom</button>
-                    </div>
-                </div>
-                <canvas class="dsp-freq-canvas" id="dspFreqCanvas" style="cursor:crosshair;"></canvas>
-            </div>
-
-            <!-- PEQ Bands -->
-            <div class="card">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    EQ Bands
-                    <div style="display:flex;gap:4px;">
-                        <button id="peqToggleAllBtn" class="btn btn-secondary" onclick="peqToggleAll()" style="padding:2px 8px;font-size:11px;">Enable All</button>
-                        <select id="peqCopyTo" class="select-sm" style="font-size:11px;" onchange="peqCopyChannel(this.value);this.value=''">
-                            <option value="">Copy to...</option>
-                            <option value="0">L1</option>
-                            <option value="1">R1</option>
-                            <option value="2">L2</option>
-                            <option value="3">R2</option>
-                            <option value="all">All Channels</option>
-                        </select>
-                        <select id="peqPresetSel" class="select-sm" style="font-size:11px;" onchange="peqPresetAction(this.value);this.value=''">
-                            <option value="">Presets...</option>
-                            <option value="_save">Save Preset...</option>
-                            <option value="_load">Load Preset...</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="peq-band-strip" id="peqBandStrip"></div>
-                <div id="peqBandDetail" class="peq-band-detail"></div>
-            </div>
-
-            <!-- Additional Processing (chain stages) -->
-            <div class="card">
-                <div class="card-title" id="dspStageTitle" style="display:flex;align-items:center;justify-content:space-between;">
-                    <span id="dspStageTitleText">Additional Processing (0)</span>
-                    <select id="chainCopyTo" class="select-sm" style="font-size:11px;" onchange="dspCopyChainChannel(this.value);this.value=''">
-                        <option value="">Copy to...</option>
-                        <option value="0">L1</option>
-                        <option value="1">R1</option>
-                        <option value="2">L2</option>
-                        <option value="3">R2</option>
-                        <option value="all">All Channels</option>
-                    </select>
-                </div>
-                <div style="margin-top:8px;">
-                    <div id="dspStageList"></div>
-                    <button class="dsp-add-btn" id="dspAddBtn" onclick="dspToggleAddMenu()">+ Add Stage</button>
-                    <div class="dsp-add-menu" id="dspAddMenu">
-                        <div class="menu-cat" style="color:#e6a817">Dynamics</div>
-                        <div class="menu-item" onclick="dspAddStage(12)">Limiter</div>
-                        <div class="menu-item" onclick="dspAddStage(18)">Compressor</div>
-                        <div class="menu-item" onclick="dspAddStage(24)">Noise Gate</div>
-                        <div class="menu-item" onclick="dspAddStage(30)">Multiband Comp</div>
-                        <div class="menu-cat" style="color:#43a047">Tone Shaping</div>
-                        <div class="menu-item" onclick="dspAddStage(25)">Tone Controls</div>
-                        <div class="menu-item" onclick="dspAddStage(28)">Loudness Comp</div>
-                        <div class="menu-item" onclick="dspAddStage(29)">Bass Enhance</div>
-                        <div class="menu-cat" style="color:#8e24aa">Stereo / Protection</div>
-                        <div class="menu-item" onclick="dspAddStage(27)">Stereo Width</div>
-                        <div class="menu-item" onclick="dspAddStage(26)">Speaker Protection</div>
-                        <div class="menu-cat" style="color:#757575">Utility</div>
-                        <div class="menu-item" onclick="dspAddStage(14)">Gain</div>
-                        <div class="menu-item" onclick="dspAddStage(15)">Delay</div>
-                        <div class="menu-item" onclick="dspAddStage(16)">Polarity Invert</div>
-                        <div class="menu-item" onclick="dspAddStage(17)">Mute</div>
-                        <div class="menu-item" onclick="dspAddStage(13)">FIR Filter</div>
-                        <div class="menu-item" onclick="dspAddDCBlock()">DC Block</div>
-                        <div class="menu-item" onclick="dspShowBaffleModal()">Baffle Step...</div>
-                        <div class="menu-cat" style="color:#1e88e5">Crossover</div>
-                        <div class="menu-item" onclick="dspShowCrossoverModal()">Crossover Preset...</div>
-                        <div class="menu-cat" style="color:#ef6c00">Analysis</div>
-                        <div class="menu-item" onclick="dspShowThdModal()">THD+N Measurement...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Import / Export -->
-            <div class="card">
-                <div class="card-title">Import / Export</div>
-                <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
-                    <button class="btn btn-secondary" onclick="dspImportApo()">Import REW</button>
-                    <button class="btn btn-secondary" onclick="dspExportApo()">Export REW</button>
-                    <button class="btn btn-secondary" onclick="dspImportJson()">Import JSON</button>
-                    <button class="btn btn-secondary" onclick="dspExportJson()">Export JSON</button>
-                </div>
-                <input type="file" id="dspFileInput" accept=".txt,.json" style="display:none" onchange="dspHandleFileImport(event)">
-            </div>
-
-            <!-- Pipeline Routing Matrix (8x8) -->
-            <div class="card">
-                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-                    <span class="card-title" style="margin-bottom:0;">Routing Matrix</span>
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-                </div>
-                <div class="collapsible-content" style="margin-top:8px;">
-                    <div class="btn-row" style="flex-wrap:wrap;gap:6px;margin-bottom:12px;">
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('identity')">1:1</button>
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('stereo')">Stereo</button>
-                        <button class="btn btn-secondary" onclick="dspRoutingPreset('clear')">Clear All</button>
-                    </div>
-                    <div id="dspRoutingGrid" style="overflow-x:auto;"></div>
-                </div>
-            </div>
-
-            <!-- Per-Output DSP -->
-            <div class="card">
-                <div class="collapsible-header" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
-                    <span class="card-title" style="margin-bottom:0;">Output DSP</span>
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--text-secondary);"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-                </div>
-                <div class="collapsible-content" style="margin-top:8px;">
-                    <div id="outputDspChannelTabs" class="dsp-ch-tabs" style="margin-bottom:12px;"></div>
-                    <div id="outputDspPanel"></div>
-                </div>
-            </div>
-        </section>
+        <!-- DSP tab removed — DSP controls merged into Audio tab overlays -->
 
         <!-- ===== WIFI TAB ===== -->
         <section id="wifi" class="panel">
@@ -5047,12 +5301,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     for (let i = 0; i < 16; i++) spectrumTarget[adc][i] = dv.getFloat32(6 + i * 4, true);
                     targetDominantFreq[adc] = freq;
                     if (currentActiveTab === 'audio') startAudioAnimation();
-                    // Feed RTA overlay for DSP tab
-                    if (currentActiveTab === 'dsp' && adc === 0) {
-                        peqRtaData = new Float32Array(16);
-                        for (let i = 0; i < 16; i++) peqRtaData[i] = spectrumTarget[0][i];
-                        if (peqGraphLayers.rta) dspDrawFreqResponse();
-                    }
                 }
             }
         }
@@ -5084,10 +5332,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 drawMemoryGraph();
                 drawPsramGraph();
 
-                // Re-subscribe to audio stream if audio tab or DSP RTA is active
+                // Re-subscribe to audio stream if audio tab is active
                 if (audioSubscribed && currentActiveTab === 'audio') {
-                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
-                } else if (currentActiveTab === 'dsp' && peqGraphLayers.rta) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
                 }
 
@@ -5209,6 +5455,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
                     startVuAnimation();
                 }
+                // Feed new Audio tab VU meters
+                audioTabUpdateLevels(data);
             } else if (data.type === 'inputNames') {
                 if (data.names && Array.isArray(data.names)) {
                     for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
@@ -5250,19 +5498,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 showToast(data.success ? 'EEPROM programmed' : 'EEPROM program failed', data.success ? 'success' : 'error');
             } else if (data.type === 'eepromEraseResult') {
                 showToast(data.success ? 'EEPROM erased' : 'EEPROM erase failed', data.success ? 'success' : 'error');
-            } else if (data.type === 'dspState') {
-                dspHandleState(data);
-            } else if (data.type === 'dspMetrics') {
-                dspHandleMetrics(data);
-            } else if (data.type === 'peqPresets') {
-                peqHandlePresetsList(data.presets);
-            } else if (data.type === 'thdResult') {
-                thdUpdateResult(data);
-            } else if (data.type === 'ioRegistryState') {
-                handleIoRegistryState(data);
             } else if (data.type === 'halDeviceState') {
                 handleHalDeviceState(data);
                 if (data.unknownDevices) handleHalUnknownDevices(data.unknownDevices);
+            } else if (data.type === 'audioChannelMap') {
+                handleAudioChannelMap(data);
             }
         }
 
@@ -5391,6 +5631,515 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
 //# sourceURL=04-shared-audio.js
 
+        // ===== Audio Tab Controller =====
+        // Unified Audio tab with sub-views: Inputs | Matrix | Outputs | SigGen
+        // Dynamically populated from HAL device channel map.
+
+        // Channel map state (received from firmware via WS)
+        let audioChannelMap = null;
+        let audioSubView = 'inputs';  // 'inputs' | 'matrix' | 'outputs' | 'siggen'
+
+        // Per-channel VU state for inputs (lane-indexed) and outputs (sink-indexed)
+        let inputVuCurrent = [], inputVuTarget = [];
+        let outputVuCurrent = [], outputVuTarget = [];
+        let audioTabAnimId = null;
+
+        // ===== Channel Map Handler =====
+        function handleAudioChannelMap(data) {
+            audioChannelMap = data;
+
+            // Resize VU arrays to match channel count
+            while (inputVuCurrent.length < (data.inputs || []).length) {
+                inputVuCurrent.push([0, 0]);
+                inputVuTarget.push([0, 0]);
+            }
+            while (outputVuCurrent.length < (data.outputs || []).length * 2) {
+                outputVuCurrent.push(0);
+                outputVuTarget.push(0);
+            }
+
+            // Re-render current sub-view if audio tab is active
+            if (currentActiveTab === 'audio') {
+                renderAudioSubView();
+            }
+        }
+
+        // ===== Sub-View Navigation =====
+        function switchAudioSubView(view) {
+            audioSubView = view;
+            // Update sub-nav buttons
+            document.querySelectorAll('.audio-subnav-btn').forEach(function(btn) {
+                btn.classList.toggle('active', btn.dataset.view === view);
+            });
+            // Update sub-view panels
+            document.querySelectorAll('.audio-subview').forEach(function(panel) {
+                panel.classList.toggle('active', panel.id === 'audio-sv-' + view);
+            });
+
+            // Subscribe to audio stream when inputs or outputs sub-view is active
+            if ((view === 'inputs' || view === 'outputs') && ws && ws.readyState === WebSocket.OPEN) {
+                if (!audioSubscribed) {
+                    audioSubscribed = true;
+                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
+                }
+            }
+
+            renderAudioSubView();
+        }
+
+        function renderAudioSubView() {
+            if (!audioChannelMap) return;
+            switch (audioSubView) {
+                case 'inputs':  renderInputStrips(); break;
+                case 'matrix':  renderMatrixGrid(); break;
+                case 'outputs': renderOutputStrips(); break;
+                case 'siggen':  renderSigGenView(); break;
+            }
+        }
+
+        // ===== Input Channel Strips =====
+        function renderInputStrips() {
+            var container = document.getElementById('audio-inputs-container');
+            if (!container || !audioChannelMap) return;
+
+            var inputs = audioChannelMap.inputs || [];
+            if (container.dataset.rendered === String(inputs.length)) return;  // Already rendered
+
+            var html = '';
+            for (var i = 0; i < inputs.length; i++) {
+                var inp = inputs[i];
+                var statusClass = inp.ready ? 'status-ok' : 'status-off';
+                var statusText = inp.ready ? 'OK' : 'Offline';
+
+                html += '<div class="channel-strip" data-lane="' + inp.lane + '">';
+                html += '  <div class="channel-strip-header">';
+                html += '    <span class="channel-device-name">' + escapeHtml(inp.deviceName) + '</span>';
+                html += '    <span class="channel-status ' + statusClass + '">' + statusText + '</span>';
+                html += '  </div>';
+
+                // Stereo VU meters
+                html += '  <div class="channel-vu-pair">';
+                html += '    <div class="channel-vu-wrapper">';
+                html += '      <canvas class="channel-vu-canvas" id="inputVu' + inp.lane + 'L" width="24" height="120"></canvas>';
+                html += '      <div class="channel-vu-label">L</div>';
+                html += '    </div>';
+                html += '    <div class="channel-vu-wrapper">';
+                html += '      <canvas class="channel-vu-canvas" id="inputVu' + inp.lane + 'R" width="24" height="120"></canvas>';
+                html += '      <div class="channel-vu-label">R</div>';
+                html += '    </div>';
+                html += '    <div class="channel-vu-readout" id="inputVuReadout' + inp.lane + '">-- dB</div>';
+                html += '  </div>';
+
+                // Gain slider
+                html += '  <div class="channel-control-row">';
+                html += '    <label class="channel-control-label">Gain</label>';
+                html += '    <input type="range" class="channel-gain-slider" id="inputGain' + inp.lane + '" min="-72" max="12" step="0.5" value="0"';
+                html += '      oninput="onInputGainChange(' + inp.lane + ',this.value)">';
+                html += '    <span class="channel-gain-value" id="inputGainVal' + inp.lane + '">0.0 dB</span>';
+                html += '  </div>';
+
+                // Mute / Phase / Solo buttons
+                html += '  <div class="channel-button-row">';
+                html += '    <button class="channel-btn" id="inputMute' + inp.lane + '" onclick="toggleInputMute(' + inp.lane + ')">Mute</button>';
+                html += '    <button class="channel-btn" id="inputPhase' + inp.lane + '" onclick="toggleInputPhase(' + inp.lane + ')">Phase</button>';
+                html += '  </div>';
+
+                // PEQ button
+                html += '  <div class="channel-dsp-row">';
+                html += '    <button class="channel-btn channel-btn-wide" onclick="openInputPeq(' + inp.lane + ')">';
+                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
+                html += '      PEQ';
+                html += '    </button>';
+                html += '  </div>';
+
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+            container.dataset.rendered = String(inputs.length);
+        }
+
+        // ===== Output Channel Strips =====
+        function renderOutputStrips() {
+            var container = document.getElementById('audio-outputs-container');
+            if (!container || !audioChannelMap) return;
+
+            var outputs = audioChannelMap.outputs || [];
+            if (container.dataset.rendered === String(outputs.length)) return;
+
+            var html = '';
+            for (var i = 0; i < outputs.length; i++) {
+                var out = outputs[i];
+                var statusClass = out.ready ? 'status-ok' : 'status-off';
+                var statusText = out.ready ? 'OK' : 'Offline';
+                var hasHwVol = (out.capabilities & 1);  // HAL_CAP_HW_VOLUME
+                var hasHwMute = (out.capabilities & 4);  // HAL_CAP_MUTE
+
+                html += '<div class="channel-strip channel-strip-output" data-sink="' + out.index + '">';
+                html += '  <div class="channel-strip-header">';
+                html += '    <span class="channel-device-name">' + escapeHtml(out.name) + '</span>';
+                html += '    <span class="channel-status ' + statusClass + '">' + statusText + '</span>';
+                html += '  </div>';
+                html += '  <div class="channel-strip-sub">Ch ' + out.firstChannel + '-' + (out.firstChannel + out.channels - 1) + '</div>';
+
+                // VU meters
+                html += '  <div class="channel-vu-pair">';
+                for (var ch = 0; ch < out.channels && ch < 2; ch++) {
+                    var label = out.channels > 1 ? (ch === 0 ? 'L' : 'R') : '';
+                    html += '    <div class="channel-vu-wrapper">';
+                    html += '      <canvas class="channel-vu-canvas" id="outputVu' + out.index + 'c' + ch + '" width="24" height="120"></canvas>';
+                    if (label) html += '      <div class="channel-vu-label">' + label + '</div>';
+                    html += '    </div>';
+                }
+                html += '    <div class="channel-vu-readout" id="outputVuReadout' + out.index + '">-- dB</div>';
+                html += '  </div>';
+
+                // Gain / HW Volume
+                if (hasHwVol) {
+                    html += '  <div class="channel-control-row">';
+                    html += '    <label class="channel-control-label">HW Vol</label>';
+                    html += '    <input type="range" class="channel-gain-slider" id="outputHwVol' + out.index + '" min="0" max="100" step="1" value="80"';
+                    html += '      oninput="onOutputHwVolChange(' + out.index + ',this.value)">';
+                    html += '    <span class="channel-gain-value" id="outputHwVolVal' + out.index + '">80%</span>';
+                    html += '  </div>';
+                }
+
+                html += '  <div class="channel-control-row">';
+                html += '    <label class="channel-control-label">Gain</label>';
+                html += '    <input type="range" class="channel-gain-slider" id="outputGain' + out.index + '" min="-72" max="12" step="0.5" value="0"';
+                html += '      oninput="onOutputGainChange(' + out.index + ',this.value)">';
+                html += '    <span class="channel-gain-value" id="outputGainVal' + out.index + '">0.0 dB</span>';
+                html += '  </div>';
+
+                // Mute / Phase / Solo
+                html += '  <div class="channel-button-row">';
+                html += '    <button class="channel-btn" id="outputMute' + out.index + '" onclick="toggleOutputMute(' + out.index + ')">' + (hasHwMute ? 'HW Mute' : 'Mute') + '</button>';
+                html += '    <button class="channel-btn" id="outputPhase' + out.index + '" onclick="toggleOutputPhase(' + out.index + ')">Phase</button>';
+                html += '  </div>';
+
+                // DSP controls
+                html += '  <div class="channel-dsp-section">';
+                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputPeq(' + out.firstChannel + ')">';
+                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M22,7L20,7V3H18V7L16,7V9H18V21H20V9H22V7M14,13L12,13V3H10V13L8,13V15H10V21H12V15H14V13M6,17L4,17V3H2V17L0,17V19H2V21H4V19H6V17Z"/></svg>';
+                html += '      PEQ 10-band</button>';
+                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputCrossover(' + out.firstChannel + ')">';
+                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M16,11.78L20.24,4.45L21.97,5.45L16.74,14.5L10.23,10.75L5.46,19H22V21H2V3H4V17.54L9.5,8L16,11.78Z"/></svg>';
+                html += '      Crossover</button>';
+                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputCompressor(' + out.firstChannel + ')">';
+                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M5,4V7H10.5V19H13.5V7H19V4H5Z"/></svg>';
+                html += '      Compressor</button>';
+                html += '    <button class="channel-btn channel-btn-wide" onclick="openOutputLimiter(' + out.firstChannel + ')">';
+                html += '      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2,12A10,10 0 0,1 12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12M4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12M7,12L12,7V17L7,12Z"/></svg>';
+                html += '      Limiter</button>';
+
+                // Delay
+                html += '    <div class="channel-control-row" style="margin-top:6px;">';
+                html += '      <label class="channel-control-label">Delay</label>';
+                html += '      <input type="number" class="channel-delay-input" id="outputDelay' + out.firstChannel + '" min="0" max="10" step="0.01" value="0.00"';
+                html += '        onchange="onOutputDelayChange(' + out.firstChannel + ',this.value)">';
+                html += '      <span class="channel-gain-value">ms</span>';
+                html += '    </div>';
+                html += '  </div>';
+
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+            container.dataset.rendered = String(outputs.length);
+        }
+
+        // ===== Matrix Grid =====
+        function renderMatrixGrid() {
+            var container = document.getElementById('audio-matrix-container');
+            if (!container || !audioChannelMap) return;
+
+            var matSize = audioChannelMap.matrixInputs || 8;
+            var inputs = audioChannelMap.inputs || [];
+            var outputs = audioChannelMap.outputs || [];
+            var matrixGains = audioChannelMap.matrix || [];
+
+            // Build column headers from output sinks
+            var colLabels = [];
+            for (var o = 0; o < matSize; o++) {
+                var label = 'OUT ' + (o + 1);
+                for (var si = 0; si < outputs.length; si++) {
+                    var sk = outputs[si];
+                    if (o >= sk.firstChannel && o < sk.firstChannel + sk.channels) {
+                        var chOff = o - sk.firstChannel;
+                        label = sk.name + (sk.channels > 1 ? (chOff === 0 ? ' L' : ' R') : '');
+                        break;
+                    }
+                }
+                colLabels.push(label);
+            }
+
+            // Build row labels from input lanes
+            var rowLabels = [];
+            for (var r = 0; r < matSize; r++) {
+                var laneIdx = Math.floor(r / 2);
+                var ch = r % 2;
+                if (laneIdx < inputs.length) {
+                    rowLabels.push(inputs[laneIdx].deviceName + (ch === 0 ? ' L' : ' R'));
+                } else {
+                    rowLabels.push('IN ' + (r + 1));
+                }
+            }
+
+            var html = '<table class="matrix-table"><thead><tr><th></th>';
+            for (var c = 0; c < matSize; c++) {
+                html += '<th class="matrix-col-hdr">' + escapeHtml(colLabels[c]) + '</th>';
+            }
+            html += '</tr></thead><tbody>';
+
+            for (var row = 0; row < matSize; row++) {
+                html += '<tr><td class="matrix-row-hdr">' + escapeHtml(rowLabels[row]) + '</td>';
+                for (var col = 0; col < matSize; col++) {
+                    var gain = (matrixGains[col] && matrixGains[col][row] !== undefined) ? parseFloat(matrixGains[col][row]) : 0;
+                    var active = gain > 0.0001 || gain < -0.0001;
+                    var displayVal = active ? (gain >= 1.0 ? '+' + (20 * Math.log10(gain)).toFixed(1) : (20 * Math.log10(Math.max(gain, 0.0001))).toFixed(1)) : '--';
+                    var cellClass = 'matrix-cell' + (active ? ' matrix-active' : '');
+                    html += '<td class="' + cellClass + '" data-out="' + col + '" data-in="' + row + '" onclick="onMatrixCellClick(' + col + ',' + row + ')">';
+                    html += displayVal;
+                    html += '</td>';
+                }
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+
+            // Quick presets
+            html += '<div class="matrix-presets">';
+            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixPreset1to1()">1:1 Pass</button>';
+            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixPresetClear()">Clear All</button>';
+            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixSave()">Save</button>';
+            html += '  <button class="btn btn-secondary btn-sm" onclick="matrixLoad()">Load</button>';
+            html += '</div>';
+
+            container.innerHTML = html;
+        }
+
+        // ===== Matrix Cell Click — Popup Gain Slider =====
+        function onMatrixCellClick(outCh, inCh) {
+            var currentGain = 0;
+            if (audioChannelMap && audioChannelMap.matrix && audioChannelMap.matrix[outCh]) {
+                currentGain = parseFloat(audioChannelMap.matrix[outCh][inCh]) || 0;
+            }
+            var currentDb = currentGain > 0.0001 ? (20 * Math.log10(currentGain)).toFixed(1) : '-72.0';
+
+            var popup = document.getElementById('matrixGainPopup');
+            if (!popup) {
+                popup = document.createElement('div');
+                popup.id = 'matrixGainPopup';
+                popup.className = 'matrix-gain-popup';
+                document.body.appendChild(popup);
+            }
+
+            popup.innerHTML = '<div class="matrix-gain-popup-inner">' +
+                '<label>OUT ' + (outCh + 1) + ' \u2190 IN ' + (inCh + 1) + '</label>' +
+                '<input type="range" id="matrixGainSlider" min="-72" max="12" step="0.5" value="' + currentDb + '" oninput="onMatrixGainSlide(' + outCh + ',' + inCh + ',this.value)">' +
+                '<span id="matrixGainDbVal">' + currentDb + ' dB</span>' +
+                '<div style="display:flex;gap:4px;margin-top:6px;">' +
+                '<button class="btn btn-sm btn-primary" onclick="setMatrixGainDb(' + outCh + ',' + inCh + ',0);closeMatrixPopup()">0 dB</button>' +
+                '<button class="btn btn-sm btn-secondary" onclick="setMatrixGainDb(' + outCh + ',' + inCh + ',-72);closeMatrixPopup()">Off</button>' +
+                '<button class="btn btn-sm btn-secondary" onclick="closeMatrixPopup()">Close</button>' +
+                '</div></div>';
+            popup.style.display = 'block';
+        }
+
+        function onMatrixGainSlide(outCh, inCh, dbVal) {
+            var label = document.getElementById('matrixGainDbVal');
+            if (label) label.textContent = parseFloat(dbVal).toFixed(1) + ' dB';
+            setMatrixGainDb(outCh, inCh, parseFloat(dbVal));
+        }
+
+        function closeMatrixPopup() {
+            var popup = document.getElementById('matrixGainPopup');
+            if (popup) popup.style.display = 'none';
+        }
+
+        function setMatrixGainDb(outCh, inCh, db) {
+            fetch('/api/pipeline/matrix/cell', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ out: outCh, in: inCh, gainDb: db })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.status === 'ok' && audioChannelMap && audioChannelMap.matrix && audioChannelMap.matrix[outCh]) {
+                    audioChannelMap.matrix[outCh][inCh] = d.gainLinear;
+                    renderMatrixGrid();
+                }
+            })
+            .catch(function() {});
+            // Optimistic local update for immediate UI feedback
+            if (audioChannelMap && audioChannelMap.matrix && audioChannelMap.matrix[outCh]) {
+                audioChannelMap.matrix[outCh][inCh] = Math.pow(10, db / 20);
+            }
+            renderMatrixGrid();
+        }
+
+        // Matrix presets — use existing REST endpoint
+        function matrixPreset1to1() {
+            var size = (audioChannelMap && audioChannelMap.matrixInputs) || 8;
+            for (var i = 0; i < size; i++) setMatrixGainDb(i, i, 0);
+        }
+        function matrixPresetClear() {
+            var size = (audioChannelMap && audioChannelMap.matrixInputs) || 8;
+            for (var o = 0; o < size; o++)
+                for (var i = 0; i < size; i++)
+                    setMatrixGainDb(o, i, -96);
+        }
+        function matrixSave() {
+            fetch('/api/pipeline/matrix/save', { method: 'POST' })
+                .then(function() { showToast('Matrix saved', 'success'); })
+                .catch(function() { showToast('Save failed', 'error'); });
+        }
+        function matrixLoad() {
+            fetch('/api/pipeline/matrix/load', { method: 'POST' })
+                .then(function() {
+                    showToast('Matrix loaded', 'success');
+                    // Refresh channel map to get updated matrix
+                    fetch('/api/pipeline/matrix').then(function(r) { return r.json(); }).then(function(d) {
+                        if (audioChannelMap) audioChannelMap.matrix = d.matrix;
+                        renderMatrixGrid();
+                    });
+                })
+                .catch(function() { showToast('Load failed', 'error'); });
+        }
+
+        // ===== Signal Generator Sub-View =====
+        function renderSigGenView() {
+            // Signal gen sub-view delegates to existing siggen controls (13-signal-gen.js)
+            // The HTML is statically in the siggen sub-view panel
+        }
+
+        // ===== Input Controls =====
+        function onInputGainChange(lane, val) {
+            var label = document.getElementById('inputGainVal' + lane);
+            if (label) label.textContent = parseFloat(val).toFixed(1) + ' dB';
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setInputGain', lane: lane, db: parseFloat(val) }));
+            }
+        }
+
+        function toggleInputMute(lane) {
+            var btn = document.getElementById('inputMute' + lane);
+            if (!btn) return;
+            var muted = !btn.classList.contains('active');
+            btn.classList.toggle('active', muted);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setInputMute', lane: lane, muted: muted }));
+            }
+        }
+
+        function toggleInputPhase(lane) {
+            var btn = document.getElementById('inputPhase' + lane);
+            if (!btn) return;
+            var inverted = !btn.classList.contains('active');
+            btn.classList.toggle('active', inverted);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setInputPhase', lane: lane, inverted: inverted }));
+            }
+        }
+
+        // ===== Output Controls =====
+        function onOutputGainChange(sinkIdx, val) {
+            var label = document.getElementById('outputGainVal' + sinkIdx);
+            if (label) label.textContent = parseFloat(val).toFixed(1) + ' dB';
+            // Output gain maps to per-output DSP gain stage
+            var out = audioChannelMap && audioChannelMap.outputs ? audioChannelMap.outputs[sinkIdx] : null;
+            if (out && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setOutputGain', channel: out.firstChannel, db: parseFloat(val) }));
+            }
+        }
+
+        function onOutputHwVolChange(sinkIdx, val) {
+            var label = document.getElementById('outputHwVolVal' + sinkIdx);
+            if (label) label.textContent = val + '%';
+            var out = audioChannelMap && audioChannelMap.outputs ? audioChannelMap.outputs[sinkIdx] : null;
+            if (out && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setOutputHwVolume', channel: out.firstChannel, volume: parseInt(val) }));
+            }
+        }
+
+        function toggleOutputMute(sinkIdx) {
+            var btn = document.getElementById('outputMute' + sinkIdx);
+            if (!btn) return;
+            var muted = !btn.classList.contains('active');
+            btn.classList.toggle('active', muted);
+            var out = audioChannelMap && audioChannelMap.outputs ? audioChannelMap.outputs[sinkIdx] : null;
+            if (out && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setOutputMute', channel: out.firstChannel, muted: muted }));
+            }
+        }
+
+        function toggleOutputPhase(sinkIdx) {
+            var btn = document.getElementById('outputPhase' + sinkIdx);
+            if (!btn) return;
+            var inverted = !btn.classList.contains('active');
+            btn.classList.toggle('active', inverted);
+            var out = audioChannelMap && audioChannelMap.outputs ? audioChannelMap.outputs[sinkIdx] : null;
+            if (out && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setOutputPhase', channel: out.firstChannel, inverted: inverted }));
+            }
+        }
+
+        function onOutputDelayChange(channel, val) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'setOutputDelay', channel: channel, ms: parseFloat(val) }));
+            }
+        }
+
+        // PEQ / DSP overlay openers defined in 06-peq-overlay.js:
+        // openInputPeq, openOutputPeq, openOutputCrossover, openOutputCompressor, openOutputLimiter
+
+        // ===== VU Meter Drawing for Channel Strips =====
+        function drawChannelVu(canvasId, value) {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+            var w = canvas.width, h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // Background
+            ctx.fillStyle = 'var(--bg-card)';
+            ctx.fillRect(0, 0, w, h);
+
+            // VU bar (bottom-up)
+            var pct = Math.max(0, Math.min(1, (value + 60) / 60));  // -60dB to 0dB range
+            var barH = Math.round(pct * h);
+            if (barH > 0) {
+                var grad = ctx.createLinearGradient(0, h, 0, 0);
+                grad.addColorStop(0, '#4CAF50');
+                grad.addColorStop(0.7, '#FFC107');
+                grad.addColorStop(1.0, '#F44336');
+                ctx.fillStyle = grad;
+                ctx.fillRect(2, h - barH, w - 4, barH);
+            }
+        }
+
+        // ===== Audio Levels Handler (extends existing audioLevels route) =====
+        function audioTabUpdateLevels(data) {
+            if (!audioChannelMap || currentActiveTab !== 'audio') return;
+
+            if (audioSubView === 'inputs' && data.adc) {
+                for (var a = 0; a < data.adc.length; a++) {
+                    var ad = data.adc[a];
+                    drawChannelVu('inputVu' + a + 'L', ad.vu1 || -90);
+                    drawChannelVu('inputVu' + a + 'R', ad.vu2 || -90);
+                    var readout = document.getElementById('inputVuReadout' + a);
+                    if (readout) readout.textContent = (ad.dBFS || -90).toFixed(1) + ' dB';
+                }
+            }
+            // Output VU levels will be added when pipeline outputs VU data
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+//# sourceURL=05-audio-tab.js
+
         // ===== Canvas Helpers =====
 
         // Canvas dimension cache — avoid GPU texture realloc every frame
@@ -5444,6 +6193,580 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
 //# sourceURL=06-canvas-helpers.js
 
+        // ===== PEQ / DSP Overlay Editor =====
+        // Full-screen overlay for editing per-channel PEQ, crossover, compressor, limiter.
+
+        // Biquad magnitude response: returns dB at frequency f (Hz) given coefficients [b0,b1,b2,a1,a2]
+        function dspBiquadMagDb(coeffs, f, fs) {
+            var b0=coeffs[0], b1=coeffs[1], b2=coeffs[2], a1=coeffs[3], a2=coeffs[4];
+            var omega = 2 * Math.PI * f / fs;
+            var cosW = Math.cos(omega), sinW = Math.sin(omega);
+            var cos2W = Math.cos(2*omega), sin2W = Math.sin(2*omega);
+            var numR = b0 + b1*cosW + b2*cos2W, numI = -(b1*sinW + b2*sin2W);
+            var denR = 1 + a1*cosW + a2*cos2W, denI = -(a1*sinW + a2*sin2W);
+            return 10 * Math.log10(Math.max((numR*numR + numI*numI) / (denR*denR + denI*denI), 1e-20));
+        }
+
+        // Client-side biquad coefficient computation (RBJ Audio EQ Cookbook).
+        // Returns [b0, b1, b2, a1, a2] normalized so a0=1.
+        function dspComputeCoeffs(type, freq, gain, Q, fs) {
+            var fn = freq / fs;
+            if (fn < 0.0001) fn = 0.0001;
+            if (fn > 0.4999) fn = 0.4999;
+            var w0 = 2 * Math.PI * fn;
+            var cosW = Math.cos(w0), sinW = Math.sin(w0);
+            if (Q <= 0) Q = 0.707;
+            var alpha = sinW / (2 * Q);
+            var A, b0, b1, b2, a0, a1, a2;
+            switch (type) {
+                case 0: b1 = 1 - cosW; b0 = b1 / 2; b2 = b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
+                case 1: b1 = -(1 + cosW); b0 = -b1 / 2; b2 = b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
+                case 2: b0 = sinW / 2; b1 = 0; b2 = -b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
+                case 3: b0 = 1; b1 = -2 * cosW; b2 = 1; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
+                case 4: A = Math.pow(10, gain / 40); b0 = 1 + alpha * A; b1 = -2 * cosW; b2 = 1 - alpha * A; a0 = 1 + alpha / A; a1 = -2 * cosW; a2 = 1 - alpha / A; break;
+                case 5: A = Math.pow(10, gain / 40); var sq = 2 * Math.sqrt(A) * alpha; b0 = A * ((A+1)-(A-1)*cosW+sq); b1 = 2*A*((A-1)-(A+1)*cosW); b2 = A*((A+1)-(A-1)*cosW-sq); a0 = (A+1)+(A-1)*cosW+sq; a1 = -2*((A-1)+(A+1)*cosW); a2 = (A+1)+(A-1)*cosW-sq; break;
+                case 6: A = Math.pow(10, gain / 40); var sq = 2 * Math.sqrt(A) * alpha; b0 = A*((A+1)+(A-1)*cosW+sq); b1 = -2*A*((A-1)+(A+1)*cosW); b2 = A*((A+1)+(A-1)*cosW-sq); a0 = (A+1)-(A-1)*cosW+sq; a1 = 2*((A-1)-(A+1)*cosW); a2 = (A+1)-(A-1)*cosW-sq; break;
+                case 7: case 8: b0 = 1 - alpha; b1 = -2 * cosW; b2 = 1 + alpha; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
+                case 9: b0 = -(1 - alpha); b1 = 2 * cosW; b2 = -(1 + alpha); a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
+                case 10: b0 = alpha; b1 = 0; b2 = -alpha; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
+                case 19: var wt = Math.tan(Math.PI * fn); var n = 1 / (1 + wt); return [wt * n, wt * n, 0, (wt - 1) * n, 0];
+                case 20: var wt = Math.tan(Math.PI * fn); var n = 1 / (1 + wt); return [n, -n, 0, (wt - 1) * n, 0];
+                default: return [1, 0, 0, 0, 0];
+            }
+            var inv = 1 / a0;
+            return [b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv];
+        }
+
+        let peqOverlayActive = false;
+        let peqOverlayTarget = null;  // {type:'input'|'output', channel:int}
+        let peqOverlayBands = [];     // [{type, freq, gain, Q, enabled}]
+        let peqOverlayFs = 48000;
+
+        // Filter type names matching firmware DspStageType enum
+        var PEQ_TYPES = [
+            {id: 0,  name: 'LPF'},
+            {id: 1,  name: 'HPF'},
+            {id: 2,  name: 'BPF'},
+            {id: 3,  name: 'Notch'},
+            {id: 4,  name: 'Peak'},
+            {id: 5,  name: 'Lo Shelf'},
+            {id: 6,  name: 'Hi Shelf'},
+            {id: 7,  name: 'AP 360'},
+            {id: 8,  name: 'AP 360'},
+            {id: 9,  name: 'AP 180'},
+            {id: 10, name: 'BPF0'},
+            {id: 19, name: 'LPF1'},
+            {id: 20, name: 'HPF1'}
+        ];
+
+        function peqTypeName(typeId) {
+            var t = PEQ_TYPES.find(function(x) { return x.id === typeId; });
+            return t ? t.name : 'PEQ';
+        }
+
+        // ===== Open PEQ Overlay =====
+        function openPeqOverlay(target, bands, fs) {
+            peqOverlayTarget = target;
+            peqOverlayBands = bands || [];
+            peqOverlayFs = fs || 48000;
+            peqOverlayActive = true;
+
+            var overlay = document.getElementById('peqOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'peqOverlay';
+                overlay.className = 'peq-overlay';
+                document.body.appendChild(overlay);
+            }
+
+            var title = target.type === 'input' ? 'Input PEQ — Lane ' + target.channel : 'Output PEQ — Ch ' + target.channel;
+            var maxBands = target.type === 'input' ? 6 : 10;
+
+            var html = '<div class="peq-overlay-header">';
+            html += '  <span class="peq-overlay-title">' + title + '</span>';
+            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
+            html += '  </button>';
+            html += '</div>';
+
+            // Frequency response graph
+            html += '<div class="peq-graph-wrap">';
+            html += '  <canvas id="peqOverlayCanvas" class="peq-overlay-canvas"></canvas>';
+            html += '</div>';
+
+            // Band table
+            html += '<div class="peq-band-table-wrap">';
+            html += '  <table class="peq-band-table">';
+            html += '    <thead><tr><th>#</th><th>Type</th><th>Freq</th><th>Gain</th><th>Q</th><th>On</th><th></th></tr></thead>';
+            html += '    <tbody id="peqBandRows">';
+            for (var i = 0; i < peqOverlayBands.length; i++) {
+                html += peqBandRowHtml(i);
+            }
+            html += '    </tbody>';
+            html += '  </table>';
+            html += '</div>';
+
+            // Actions
+            html += '<div class="peq-overlay-actions">';
+            if (peqOverlayBands.length < maxBands) {
+                html += '  <button class="btn btn-sm btn-primary" onclick="peqAddBand()">Add Band</button>';
+            }
+            html += '  <button class="btn btn-sm btn-secondary" onclick="peqResetAll()">Reset All</button>';
+            html += '  <button class="btn btn-sm btn-primary" onclick="peqApply()">Apply</button>';
+            html += '  <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '</div>';
+
+            overlay.innerHTML = html;
+            overlay.style.display = 'flex';
+
+            // Draw initial graph
+            setTimeout(peqDrawGraph, 50);
+        }
+
+        function peqBandRowHtml(idx) {
+            var b = peqOverlayBands[idx];
+            var typeOptions = '';
+            for (var t = 0; t < PEQ_TYPES.length; t++) {
+                var pt = PEQ_TYPES[t];
+                typeOptions += '<option value="' + pt.id + '"' + (pt.id === b.type ? ' selected' : '') + '>' + pt.name + '</option>';
+            }
+            var html = '<tr data-band="' + idx + '">';
+            html += '<td>' + (idx + 1) + '</td>';
+            html += '<td><select class="peq-input peq-type-sel" onchange="peqUpdateBand(' + idx + ',\'type\',parseInt(this.value))">' + typeOptions + '</select></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.freq || 1000) + '" min="20" max="20000" step="1" onchange="peqUpdateBand(' + idx + ',\'freq\',parseFloat(this.value))"></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.gain || 0).toFixed(1) + '" min="-24" max="24" step="0.5" onchange="peqUpdateBand(' + idx + ',\'gain\',parseFloat(this.value))"></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.Q || 0.707).toFixed(3) + '" min="0.1" max="30" step="0.01" onchange="peqUpdateBand(' + idx + ',\'Q\',parseFloat(this.value))"></td>';
+            html += '<td><input type="checkbox"' + (b.enabled !== false ? ' checked' : '') + ' onchange="peqUpdateBand(' + idx + ',\'enabled\',this.checked)"></td>';
+            html += '<td><button class="channel-btn" onclick="peqRemoveBand(' + idx + ')" style="padding:2px 6px;min-width:0">';
+            html += '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>';
+            html += '</button></td>';
+            html += '</tr>';
+            return html;
+        }
+
+        function peqUpdateBand(idx, field, value) {
+            if (idx >= 0 && idx < peqOverlayBands.length) {
+                peqOverlayBands[idx][field] = value;
+                peqDrawGraph();
+            }
+        }
+
+        function peqAddBand() {
+            var maxBands = peqOverlayTarget && peqOverlayTarget.type === 'input' ? 6 : 10;
+            if (peqOverlayBands.length >= maxBands) return;
+            peqOverlayBands.push({ type: 4, freq: 1000, gain: 0, Q: 1.41, enabled: true });
+            // Re-render table
+            var tbody = document.getElementById('peqBandRows');
+            if (tbody) tbody.innerHTML += peqBandRowHtml(peqOverlayBands.length - 1);
+            peqDrawGraph();
+        }
+
+        function peqRemoveBand(idx) {
+            peqOverlayBands.splice(idx, 1);
+            // Re-render entire table (index shift)
+            var tbody = document.getElementById('peqBandRows');
+            if (tbody) {
+                var html = '';
+                for (var i = 0; i < peqOverlayBands.length; i++) html += peqBandRowHtml(i);
+                tbody.innerHTML = html;
+            }
+            peqDrawGraph();
+        }
+
+        function peqResetAll() {
+            peqOverlayBands = [];
+            var tbody = document.getElementById('peqBandRows');
+            if (tbody) tbody.innerHTML = '';
+            peqDrawGraph();
+        }
+
+        function closePeqOverlay() {
+            peqOverlayActive = false;
+            var overlay = document.getElementById('peqOverlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        // ===== Apply PEQ changes to firmware =====
+        function peqApply() {
+            if (!peqOverlayTarget) return;
+            var target = peqOverlayTarget;
+            var bands = peqOverlayBands;
+
+            if (target.type === 'output') {
+                // Apply via output DSP REST API
+                // First get current config, then update biquad stages
+                fetch('/api/output/dsp?ch=' + target.channel)
+                    .then(function(r) { return r.json(); })
+                    .then(function(cfg) {
+                        // Build updated stages: keep non-biquad stages, replace biquads with new bands
+                        var stages = [];
+                        // Keep existing non-biquad stages
+                        if (cfg.stages) {
+                            for (var s = 0; s < cfg.stages.length; s++) {
+                                var st = cfg.stages[s];
+                                // Biquad types are 0-10, 19-20
+                                var isBiquad = st.type <= 10 || st.type === 19 || st.type === 20;
+                                if (!isBiquad) stages.push(st);
+                            }
+                        }
+                        // Add PEQ bands as biquad stages
+                        for (var i = 0; i < bands.length; i++) {
+                            stages.push({
+                                enabled: bands[i].enabled !== false,
+                                type: bands[i].type,
+                                frequency: bands[i].freq,
+                                gain: bands[i].gain,
+                                Q: bands[i].Q
+                            });
+                        }
+
+                        return fetch('/api/output/dsp', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                ch: target.channel,
+                                bypass: cfg.bypass || false,
+                                stages: stages
+                            })
+                        });
+                    })
+                    .then(function() {
+                        showToast('PEQ applied to Output Ch ' + target.channel, 'success');
+                        closePeqOverlay();
+                    })
+                    .catch(function(err) { showToast('PEQ apply failed: ' + err, 'error'); });
+            } else if (target.type === 'input') {
+                // Apply via DSP pipeline WS commands
+                // Input PEQ uses the per-input DSP (dsp_pipeline.h), channels 0-3
+                var ch = target.channel;
+                // Remove all existing biquad stages, then add new ones
+                // This is simplified — a full implementation would diff and patch
+                for (var i = 0; i < bands.length; i++) {
+                    var b = bands[i];
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'addDspStage', ch: ch, stageType: b.type,
+                            frequency: b.freq, gain: b.gain, Q: b.Q
+                        }));
+                    }
+                }
+                showToast('PEQ applied to Input Lane ' + ch, 'success');
+                closePeqOverlay();
+            }
+        }
+
+        // ===== Draw Frequency Response Graph =====
+        function peqDrawGraph() {
+            var canvas = document.getElementById('peqOverlayCanvas');
+            if (!canvas) return;
+            var ctx = canvas.getContext('2d');
+            var rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = Math.max(rect.width, 300);
+            canvas.height = Math.max(Math.min(rect.height, 300), 180);
+            var w = canvas.width, h = canvas.height;
+            var fs = peqOverlayFs;
+
+            // Styling
+            var isDark = document.body.classList.contains('night-mode');
+            var bgColor = isDark ? '#1E1E1E' : '#FFFFFF';
+            var gridColor = isDark ? '#333' : '#E0E0E0';
+            var textColor = isDark ? '#888' : '#999';
+            var combinedColor = '#FF9800';
+
+            // Clear
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, w, h);
+
+            // Axes
+            var padL = 40, padR = 10, padT = 15, padB = 25;
+            var gW = w - padL - padR, gH = h - padT - padB;
+            var dbMin = -18, dbMax = 18;
+
+            // Frequency range: 20Hz to 20kHz (log scale)
+            var fMin = 20, fMax = 20000;
+            function fToX(f) { return padL + gW * (Math.log10(f / fMin) / Math.log10(fMax / fMin)); }
+            function dbToY(db) { return padT + gH * (1 - (db - dbMin) / (dbMax - dbMin)); }
+
+            // Grid lines
+            ctx.strokeStyle = gridColor;
+            ctx.lineWidth = 0.5;
+            ctx.font = '10px monospace';
+            ctx.fillStyle = textColor;
+
+            // dB grid
+            for (var db = dbMin; db <= dbMax; db += 6) {
+                var y = dbToY(db);
+                ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+                ctx.fillText(db + '', 2, y + 3);
+            }
+
+            // Frequency grid
+            var freqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+            for (var fi = 0; fi < freqs.length; fi++) {
+                var x = fToX(freqs[fi]);
+                ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, h - padB); ctx.stroke();
+                var label = freqs[fi] >= 1000 ? (freqs[fi] / 1000) + 'k' : freqs[fi] + '';
+                ctx.fillText(label, x - 6, h - 5);
+            }
+
+            // 0dB reference line
+            ctx.strokeStyle = isDark ? '#555' : '#BBB';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(padL, dbToY(0)); ctx.lineTo(w - padR, dbToY(0)); ctx.stroke();
+
+            // Per-band curves
+            var bandColors = ['#F44336', '#2196F3', '#4CAF50', '#FFC107', '#9C27B0', '#00BCD4', '#FF5722', '#607D8B', '#E91E63', '#3F51B5'];
+            var numPoints = Math.max(gW, 200);
+
+            for (var bi = 0; bi < peqOverlayBands.length; bi++) {
+                var band = peqOverlayBands[bi];
+                if (band.enabled === false) continue;
+                var coeffs = dspComputeCoeffs(band.type, band.freq || 1000, band.gain || 0, band.Q || 0.707, fs);
+
+                ctx.strokeStyle = bandColors[bi % bandColors.length] + '55';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (var p = 0; p <= numPoints; p++) {
+                    var f = fMin * Math.pow(fMax / fMin, p / numPoints);
+                    var mag = dspBiquadMagDb(coeffs, f, fs);
+                    var x = fToX(f), y = dbToY(Math.max(dbMin, Math.min(dbMax, mag)));
+                    if (p === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            // Combined response
+            ctx.strokeStyle = combinedColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (var p = 0; p <= numPoints; p++) {
+                var f = fMin * Math.pow(fMax / fMin, p / numPoints);
+                var totalDb = 0;
+                for (var bi = 0; bi < peqOverlayBands.length; bi++) {
+                    if (peqOverlayBands[bi].enabled === false) continue;
+                    var coeffs = dspComputeCoeffs(peqOverlayBands[bi].type, peqOverlayBands[bi].freq || 1000,
+                        peqOverlayBands[bi].gain || 0, peqOverlayBands[bi].Q || 0.707, fs);
+                    totalDb += dspBiquadMagDb(coeffs, f, fs);
+                }
+                var x = fToX(f), y = dbToY(Math.max(dbMin, Math.min(dbMax, totalDb)));
+                if (p === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        // ===== Wire up overlay openers from 05-audio-tab.js =====
+        // Override the stubs defined in 05-audio-tab.js
+        function openInputPeq(lane) {
+            // Fetch current DSP state for this input channel
+            // Input DSP uses dsp_pipeline channels (lane 0=ch0, lane 1=ch1, etc.)
+            // For now, open with empty bands — user adds bands
+            openPeqOverlay({ type: 'input', channel: lane }, [], peqOverlayFs);
+        }
+
+        function openOutputPeq(channel) {
+            // Fetch current output DSP config and extract biquad stages
+            fetch('/api/output/dsp?ch=' + channel)
+                .then(function(r) { return r.json(); })
+                .then(function(cfg) {
+                    var bands = [];
+                    if (cfg.stages) {
+                        for (var s = 0; s < cfg.stages.length; s++) {
+                            var st = cfg.stages[s];
+                            var isBiquad = st.type <= 10 || st.type === 19 || st.type === 20;
+                            if (isBiquad) {
+                                bands.push({
+                                    type: st.type,
+                                    freq: st.frequency || 1000,
+                                    gain: st.gain || 0,
+                                    Q: st.Q || 0.707,
+                                    enabled: st.enabled !== false
+                                });
+                            }
+                        }
+                    }
+                    peqOverlayFs = cfg.sampleRate || 48000;
+                    openPeqOverlay({ type: 'output', channel: channel }, bands, peqOverlayFs);
+                })
+                .catch(function() {
+                    openPeqOverlay({ type: 'output', channel: channel }, [], 48000);
+                });
+        }
+
+        // ===== Crossover Overlay =====
+        function openOutputCrossover(channel) {
+            var overlay = document.getElementById('peqOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'peqOverlay';
+                overlay.className = 'peq-overlay';
+                document.body.appendChild(overlay);
+            }
+
+            var html = '<div class="peq-overlay-header">';
+            html += '  <span class="peq-overlay-title">Crossover — Ch ' + channel + '</span>';
+            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
+            html += '  </button>';
+            html += '</div>';
+            html += '<div class="peq-graph-wrap"><canvas id="peqOverlayCanvas" class="peq-overlay-canvas"></canvas></div>';
+            html += '<div style="padding:16px;">';
+            html += '  <div class="channel-control-row" style="margin-bottom:8px;">';
+            html += '    <label class="channel-control-label" style="min-width:80px">Type</label>';
+            html += '    <select class="form-input" id="xoverType" style="max-width:200px">';
+            html += '      <option value="lr2">Linkwitz-Riley 2nd (12dB/oct)</option>';
+            html += '      <option value="lr4" selected>Linkwitz-Riley 4th (24dB/oct)</option>';
+            html += '      <option value="lr8">Linkwitz-Riley 8th (48dB/oct)</option>';
+            html += '      <option value="bw6">Butterworth 1st (6dB/oct)</option>';
+            html += '      <option value="bw12">Butterworth 2nd (12dB/oct)</option>';
+            html += '      <option value="bw18">Butterworth 3rd (18dB/oct)</option>';
+            html += '      <option value="bw24">Butterworth 4th (24dB/oct)</option>';
+            html += '    </select>';
+            html += '  </div>';
+            html += '  <div class="channel-control-row" style="margin-bottom:8px;">';
+            html += '    <label class="channel-control-label" style="min-width:80px">Frequency</label>';
+            html += '    <input type="number" class="form-input" id="xoverFreq" value="80" min="20" max="20000" step="1" style="max-width:120px">';
+            html += '    <span class="channel-gain-value">Hz</span>';
+            html += '  </div>';
+            html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
+            html += '    <button class="btn btn-sm btn-primary" onclick="applyXover(' + channel + ')">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '  </div>';
+            html += '</div>';
+
+            overlay.innerHTML = html;
+            overlay.style.display = 'flex';
+        }
+
+        function applyXover(channel) {
+            var type = document.getElementById('xoverType').value;
+            var freq = parseFloat(document.getElementById('xoverFreq').value) || 80;
+            var orderMap = { lr2: 2, lr4: 4, lr8: 8, bw6: 1, bw12: 2, bw18: 3, bw24: 4 };
+            var order = orderMap[type] || 4;
+
+            // Use the output DSP crossover REST endpoint
+            fetch('/api/output/dsp/crossover', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subCh: channel, mainCh: channel + 1, freqHz: freq, order: order })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                showToast('Crossover applied (' + type + ' @ ' + freq + ' Hz)', 'success');
+                closePeqOverlay();
+            })
+            .catch(function() { showToast('Crossover failed', 'error'); });
+        }
+
+        // ===== Compressor Overlay =====
+        function openOutputCompressor(channel) {
+            var overlay = document.getElementById('peqOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'peqOverlay';
+                overlay.className = 'peq-overlay';
+                document.body.appendChild(overlay);
+            }
+
+            var html = '<div class="peq-overlay-header">';
+            html += '  <span class="peq-overlay-title">Compressor — Ch ' + channel + '</span>';
+            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
+            html += '  </button>';
+            html += '</div>';
+            html += '<div style="padding:16px;">';
+            html += peqControlRow('Threshold', 'compThreshold', -40, 0, -20, 0.5, 'dB');
+            html += peqControlRow('Ratio', 'compRatio', 1, 20, 4, 0.5, ':1');
+            html += peqControlRow('Attack', 'compAttack', 0.1, 200, 10, 0.1, 'ms');
+            html += peqControlRow('Release', 'compRelease', 10, 2000, 100, 1, 'ms');
+            html += peqControlRow('Knee', 'compKnee', 0, 20, 6, 0.5, 'dB');
+            html += peqControlRow('Makeup', 'compMakeup', 0, 24, 0, 0.5, 'dB');
+            html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
+            html += '    <button class="btn btn-sm btn-primary" onclick="applyCompressor(' + channel + ')">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '  </div>';
+            html += '</div>';
+
+            overlay.innerHTML = html;
+            overlay.style.display = 'flex';
+        }
+
+        function applyCompressor(channel) {
+            var params = {
+                thresholdDb: parseFloat(document.getElementById('compThreshold').value),
+                ratio: parseFloat(document.getElementById('compRatio').value),
+                attackMs: parseFloat(document.getElementById('compAttack').value),
+                releaseMs: parseFloat(document.getElementById('compRelease').value),
+                kneeDb: parseFloat(document.getElementById('compKnee').value),
+                makeupGainDb: parseFloat(document.getElementById('compMakeup').value)
+            };
+
+            // Add compressor stage via REST API
+            fetch('/api/output/dsp/stage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ch: channel, type: 14 })  // DSP_COMPRESSOR = 14
+            })
+            .then(function() {
+                showToast('Compressor applied to Ch ' + channel, 'success');
+                closePeqOverlay();
+            })
+            .catch(function() { showToast('Compressor failed', 'error'); });
+        }
+
+        // ===== Limiter Overlay =====
+        function openOutputLimiter(channel) {
+            var overlay = document.getElementById('peqOverlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'peqOverlay';
+                overlay.className = 'peq-overlay';
+                document.body.appendChild(overlay);
+            }
+
+            var html = '<div class="peq-overlay-header">';
+            html += '  <span class="peq-overlay-title">Limiter — Ch ' + channel + '</span>';
+            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
+            html += '  </button>';
+            html += '</div>';
+            html += '<div style="padding:16px;">';
+            html += peqControlRow('Threshold', 'limThreshold', -40, 0, -3, 0.5, 'dBFS');
+            html += peqControlRow('Attack', 'limAttack', 0.01, 50, 0.1, 0.01, 'ms');
+            html += peqControlRow('Release', 'limRelease', 1, 1000, 50, 1, 'ms');
+            html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
+            html += '    <button class="btn btn-sm btn-primary" onclick="applyLimiter(' + channel + ')">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '  </div>';
+            html += '</div>';
+
+            overlay.innerHTML = html;
+            overlay.style.display = 'flex';
+        }
+
+        function applyLimiter(channel) {
+            fetch('/api/output/dsp/stage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ch: channel, type: 11 })  // DSP_LIMITER = 11
+            })
+            .then(function() {
+                showToast('Limiter applied to Ch ' + channel, 'success');
+                closePeqOverlay();
+            })
+            .catch(function() { showToast('Limiter failed', 'error'); });
+        }
+
+        // Helper: control row for dynamics overlays
+        function peqControlRow(label, id, min, max, defaultVal, step, unit) {
+            return '<div class="channel-control-row" style="margin-bottom:8px;">' +
+                '<label class="channel-control-label" style="min-width:80px">' + label + '</label>' +
+                '<input type="range" class="channel-gain-slider" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + defaultVal + '" oninput="document.getElementById(\'' + id + 'Val\').textContent=this.value">' +
+                '<span class="channel-gain-value" id="' + id + 'Val">' + defaultVal + ' ' + unit + '</span>' +
+                '</div>';
+        }
+
+//# sourceURL=06-peq-overlay.js
+
         // ===== Tab Switching =====
         function switchTab(tabId) {
             // Update mobile tab buttons
@@ -5477,22 +6800,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 loadManualContent();
             }
 
-            // DSP tab: redraw frequency response, load routing, subscribe audio for RTA
-            if (tabId === 'dsp') {
-                canvasDims = {};
-                setTimeout(dspDrawFreqResponse, 50);
-                dspLoadRouting();
-                if (typeof outputDspLoadChannel === 'function') outputDspLoadChannel(outputDspCh);
-                if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
-                if (typeof updateChainCopyToDropdown === 'function') updateChainCopyToDropdown();
-                if (peqGraphLayers.rta && ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
-                    ws.send(JSON.stringify({ type: 'setSpectrumEnabled', enabled: true }));
-                }
-            } else if (currentActiveTab === 'dsp' && peqGraphLayers.rta && tabId !== 'audio') {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
-                }
+            // Audio tab — render active sub-view on tab switch
+            if (tabId === 'audio') {
+                renderAudioSubView();
             }
 
             // Audio tab subscription management
@@ -5519,8 +6829,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 loadInputNameFields();
             } else if (tabId !== 'audio' && audioSubscribed) {
                 audioSubscribed = false;
-                var dspRtaTakeover = (tabId === 'dsp' && peqGraphLayers.rta);
-                if (!dspRtaTakeover && ws && ws.readyState === WebSocket.OPEN) {
+                if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
                 }
                 // Stop animation and reset state
@@ -5528,7 +6837,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (vuAnimFrameId) { cancelAnimationFrame(vuAnimFrameId); vuAnimFrameId = null; }
                 for (let a = 0; a < NUM_ADCS; a++) {
                     waveformCurrent[a] = null; waveformTarget[a] = null;
-                    if (!dspRtaTakeover) { spectrumTarget[a].fill(0); }
+                    spectrumTarget[a].fill(0);
                     spectrumCurrent[a].fill(0);
                     spectrumPeaks[a].fill(0); spectrumPeakTimes[a].fill(0);
                 }
@@ -6858,22 +8167,6 @@ function toggleSigGenLane(enabled) {
 
 //# sourceURL=13-signal-gen.js
 
-        // ===== I/O Registry -- Deprecated (merged into HAL Devices) =====
-        // Backend io_registry.cpp still exists for pipeline channel mapping
-        // but the web UI now uses HAL Devices exclusively.
-
-        function handleIoRegistryState(d) {
-            // No-op: I/O registry UI removed, HAL Devices tab handles everything
-        }
-
-        function escapeHtml(str) {
-            var div = document.createElement('div');
-            div.appendChild(document.createTextNode(str));
-            return div.innerHTML;
-        }
-
-//# sourceURL=14-io-registry.js
-
         // ===== HAL Device Management =====
         // Provides device discovery, configuration, monitoring, and CRUD UI
 
@@ -7677,1927 +8970,6 @@ function toggleSigGenLane(enabled) {
         // importDeviceYaml() is defined in 15-hal-devices.js (full version with server registration)
 
 //# sourceURL=15a-yaml-parser.js
-
-// ===== DSP Tab Constants =====
-const DSP_TYPES = ['LPF','HPF','BPF','Notch','PEQ','Low Shelf','High Shelf','Allpass','AP360','AP180','BPF0dB','Custom','Limiter','FIR','Gain','Delay','Polarity','Mute','Compressor','LPF 1st','HPF 1st','Linkwitz','Decimator','Convolution','Noise Gate','Tone Controls','Speaker Prot','Stereo Width','Loudness','Bass Enhance','Multiband Comp'];
-const DSP_MAX_CH = 4;
-const DSP_CH_NAMES = ['L1','R1','L2','R2'];
-function dspChLabel(c) { return inputNames[c] || DSP_CH_NAMES[c]; }
-
-// ===== DSP/PEQ State Variables =====
-let dspState = null;
-let dspCh = 0; // selected channel
-let dspOpenStage = -1; // expanded stage index
-let dspImportMode = ''; // 'apo' or 'json'
-
-// ===== PEQ State =====
-const DSP_PEQ_BANDS = 10;
-const PEQ_COLORS = ['#F44336','#E91E63','#9C27B0','#3F51B5','#2196F3','#00BCD4','#4CAF50','#8BC34A','#FFC107','#FF5722'];
-const PEQ_FILTER_TYPES = [
-    {value:4,label:'PEQ'},{value:5,label:'Low Shelf'},{value:6,label:'High Shelf'},
-    {value:3,label:'Notch'},{value:2,label:'BPF'},{value:0,label:'LPF'},
-    {value:1,label:'HPF'},{value:7,label:'Allpass'}
-];
-let peqSelectedBand = 0;
-let peqLinked = false;
-let peqGraphLayers = { individual: true, rta: false, chain: true };
-let peqRtaData = null;
-let peqDragging = null;
-let peqCanvasInited = false;
-
-// Hit-test radii for mouse vs touch
-var PEQ_MOUSE_HIT_RADIUS = 12;  // pixels
-var PEQ_TOUCH_HIT_RADIUS = 22;  // larger for finger touch
-
-// Pinch-to-zoom state
-var peqCanvasZoom = { fMin: 20, fMax: 20000 };
-var _peqPinchStartDist = 0;
-var _peqPinchStartZoom = null;
-
-function peqGetBands() {
-    if (!dspState || !dspState.channels[dspCh]) return [];
-    return (dspState.channels[dspCh].stages || []).slice(0, DSP_PEQ_BANDS);
-}
-function peqRenderBandStrip() {
-    var el = document.getElementById('peqBandStrip');
-    if (!el) return;
-    var bands = peqGetBands();
-    var html = '';
-    for (var i = 0; i < DSP_PEQ_BANDS; i++) {
-        var b = bands[i];
-        var active = (i === peqSelectedBand);
-        var enabled = b && b.enabled;
-        html += '<button class="peq-band-pill' + (active ? ' active' : '') + (enabled ? ' enabled' : '') + '" onclick="peqSelectBand(' + i + ')" style="--band-color:' + PEQ_COLORS[i] + ';">' + (i + 1) + '</button>';
-    }
-    el.innerHTML = html;
-}
-function peqSelectBand(band) {
-    peqSelectedBand = band;
-    peqRenderBandStrip();
-    peqRenderBandDetail();
-    dspDrawFreqResponse();
-    // On mobile, show band detail as bottom sheet
-    if (window.innerWidth <= 600) {
-        var detail = document.querySelector('.peq-band-detail');
-        if (detail) {
-            detail.classList.add('visible');
-            // Add handle if not present
-            if (!detail.querySelector('.peq-band-detail-handle')) {
-                var handle = document.createElement('div');
-                handle.className = 'peq-band-detail-handle';
-                detail.insertBefore(handle, detail.firstChild);
-            }
-        }
-    }
-}
-function peqRenderBandDetail() {
-    var el = document.getElementById('peqBandDetail');
-    if (!el || !dspState || !dspState.channels[dspCh]) return;
-    var bands = peqGetBands();
-    var b = bands[peqSelectedBand];
-    if (!b) { el.innerHTML = ''; return; }
-    var t = b.type;
-    var hasGain = (t === 4 || t === 5 || t === 6);
-    var html = '<div class="peq-detail-panel" style="border-left:3px solid ' + PEQ_COLORS[peqSelectedBand] + ';">';
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
-    html += '<label class="switch" style="transform:scale(0.75);"><input type="checkbox" ' + (b.enabled ? 'checked' : '') + ' onchange="peqSetBandEnabled(' + peqSelectedBand + ',this.checked)"><span class="slider round"></span></label>';
-    html += '<select class="select-sm" onchange="peqSetBandType(' + peqSelectedBand + ',parseInt(this.value))">';
-    for (var fi = 0; fi < PEQ_FILTER_TYPES.length; fi++) {
-        var ft = PEQ_FILTER_TYPES[fi];
-        html += '<option value="' + ft.value + '"' + (t === ft.value ? ' selected' : '') + '>' + ft.label + '</option>';
-    }
-    html += '</select>';
-    html += '<button class="btn btn-secondary" style="padding:2px 8px;font-size:11px;margin-left:auto;" onclick="peqResetBand(' + peqSelectedBand + ')">Reset</button>';
-    html += '<span style="font-size:11px;color:var(--text-secondary);">Band ' + (peqSelectedBand + 1) + '</span>';
-    html += '</div>';
-    html += peqSlider('freq', 'Frequency', b.freq || 1000, 5, 20000, 1, 'Hz');
-    if (hasGain) html += peqSlider('gain', 'Gain', b.gain || 0, -24, 24, 0.5, 'dB');
-    html += peqSlider('Q', 'Q Factor', b.Q || 0.707, 0.1, 25, 0.01, '');
-    html += '</div>';
-    el.innerHTML = html;
-}
-function peqSlider(key, label, val, min, max, step, unit) {
-    var numVal = parseFloat(val) || 0;
-    var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
-    var id = 'peq_' + peqSelectedBand + '_' + key;
-    return '<div class="dsp-param"><label>' + label + '</label>' +
-        '<button class="dsp-step-btn" onclick="peqParamStep(\'' + key + '\',' + (-step) + ',' + min + ',' + max + ',' + step + ')">&lsaquo;</button>' +
-        '<input type="range" id="' + id + '_s" min="' + min + '" max="' + max + '" step="' + step + '" value="' + numVal + '" ' +
-        'oninput="document.getElementById(\'' + id + '_n\').value=parseFloat(this.value).toFixed(' + dec + ')" ' +
-        'onchange="peqParamSync(\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
-        '<button class="dsp-step-btn" onclick="peqParamStep(\'' + key + '\',' + step + ',' + min + ',' + max + ',' + step + ')">&rsaquo;</button>' +
-        '<input type="number" class="dsp-num-input" id="' + id + '_n" value="' + numVal.toFixed(dec) + '" min="' + min + '" max="' + max + '" step="' + step + '" ' +
-        'onchange="peqParamSync(\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
-        '<span class="dsp-unit">' + unit + '</span></div>';
-}
-function peqParamSync(key, val, min, max, step) {
-    val = Math.min(max, Math.max(min, parseFloat(val) || 0));
-    peqUpdateBandParam(peqSelectedBand, key, val);
-}
-function peqParamStep(key, delta, min, max, step) {
-    var id = 'peq_' + peqSelectedBand + '_' + key;
-    var sl = document.getElementById(id + '_s');
-    var cur = sl ? parseFloat(sl.value) : 0;
-    var newVal = Math.min(max, Math.max(min, cur + delta));
-    var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
-    if (sl) sl.value = newVal;
-    var ni = document.getElementById(id + '_n');
-    if (ni) ni.value = newVal.toFixed(dec);
-    peqUpdateBandParam(peqSelectedBand, key, newVal);
-}
-function peqUpdateBandParam(band, key, val) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    var bands = peqGetBands();
-    var b = bands[band];
-    if (!b) return;
-    var msg = { type: 'updatePeqBand', ch: dspCh, band: band,
-        freq: b.freq || 1000, gain: b.gain || 0, Q: b.Q || 0.707,
-        filterType: b.type, enabled: b.enabled };
-    if (key === 'filterType') msg.filterType = val;
-    else msg[key] = val;
-    ws.send(JSON.stringify(msg));
-    if (peqLinked) {
-        ws.send(JSON.stringify(Object.assign({}, msg, { ch: dspCh ^ 1 })));
-    }
-}
-function peqSetBandEnabled(band, en) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'setPeqBandEnabled', ch: dspCh, band: band, enabled: en }));
-    if (peqLinked) ws.send(JSON.stringify({ type: 'setPeqBandEnabled', ch: dspCh ^ 1, band: band, enabled: en }));
-}
-function peqSetBandType(band, typeInt) {
-    peqUpdateBandParam(band, 'filterType', typeInt);
-}
-// Equal logarithmic spacing from 20 Hz to 20 kHz (10 bands)
-const PEQ_DEFAULT_FREQS = [20,43,93,200,430,930,2000,4300,9300,20000];
-function peqResetBand(band) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    var msg = { type: 'updatePeqBand', ch: dspCh, band: band,
-        freq: PEQ_DEFAULT_FREQS[band] || 1000, gain: 0, Q: 1.0, filterType: 4, enabled: true };
-    ws.send(JSON.stringify(msg));
-    if (peqLinked) ws.send(JSON.stringify(Object.assign({}, msg, { ch: dspCh ^ 1 })));
-}
-function peqToggleLink() {
-    peqLinked = !peqLinked;
-    var btn = document.getElementById('peqLinkBtn');
-    if (btn) {
-        btn.classList.toggle('active', peqLinked);
-        btn.style.background = peqLinked ? 'var(--accent)' : '';
-        btn.style.color = peqLinked ? '#fff' : '';
-    }
-}
-function peqToggleAll() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    var bands = peqGetBands();
-    var allEnabled = bands.length > 0 && bands.every(function(b) { return b && b.enabled; });
-    var en = !allEnabled;
-    ws.send(JSON.stringify({ type: 'setPeqAllEnabled', ch: dspCh, enabled: en }));
-    if (peqLinked) ws.send(JSON.stringify({ type: 'setPeqAllEnabled', ch: dspCh ^ 1, enabled: en }));
-}
-function peqUpdateToggleAllBtn() {
-    var btn = document.getElementById('peqToggleAllBtn');
-    if (!btn) return;
-    var bands = peqGetBands();
-    var allEnabled = bands.length > 0 && bands.every(function(b) { return b && b.enabled; });
-    btn.textContent = allEnabled ? 'Disable All' : 'Enable All';
-}
-function peqCopyChannel(target) {
-    if (!target || !ws || ws.readyState !== WebSocket.OPEN) return;
-    if (target === 'all') {
-        for (var c = 0; c < DSP_MAX_CH; c++) {
-            if (c !== dspCh) ws.send(JSON.stringify({ type: 'copyPeqChannel', from: dspCh, to: c }));
-        }
-    } else {
-        ws.send(JSON.stringify({ type: 'copyPeqChannel', from: dspCh, to: parseInt(target) }));
-    }
-}
-function dspCopyChainChannel(target) {
-    if (!target || !ws || ws.readyState !== WebSocket.OPEN) return;
-    if (target === 'all') {
-        for (var c = 0; c < DSP_MAX_CH; c++) {
-            if (c !== dspCh) ws.send(JSON.stringify({ type: 'copyChainStages', from: dspCh, to: c }));
-        }
-    } else {
-        ws.send(JSON.stringify({ type: 'copyChainStages', from: dspCh, to: parseInt(target) }));
-    }
-}
-function updateChainCopyToDropdown() {
-    var sel = document.getElementById('chainCopyTo');
-    if (!sel) return;
-    var html = '<option value="">Copy to...</option>';
-    for (var i = 0; i < DSP_MAX_CH; i++) {
-        var name = inputNames[i] || DSP_CH_NAMES[i];
-        html += '<option value="' + i + '">' + name + '</option>';
-    }
-    html += '<option value="all">All Channels</option>';
-    sel.innerHTML = html;
-}
-function peqPresetAction(val) {
-    if (!val) return;
-    if (val === '_save') {
-        var name = prompt('Preset name (max 20 chars):');
-        if (!name) return;
-        if (ws && ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({ type: 'savePeqPreset', ch: dspCh, name: name.substring(0, 20) }));
-    } else if (val === '_load') {
-        if (ws && ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({ type: 'listPeqPresets' }));
-    } else {
-        if (ws && ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({ type: 'loadPeqPreset', ch: dspCh, name: val }));
-    }
-}
-function peqToggleGraphLayer(layer) {
-    peqGraphLayers[layer] = !peqGraphLayers[layer];
-    var btn = document.getElementById('tog' + layer.charAt(0).toUpperCase() + layer.slice(1));
-    if (btn) btn.classList.toggle('active', peqGraphLayers[layer]);
-    if (layer === 'rta' && ws && ws.readyState === WebSocket.OPEN) {
-        if (peqGraphLayers.rta) {
-            ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: true }));
-            ws.send(JSON.stringify({ type: 'setSpectrumEnabled', enabled: true }));
-        } else if (!audioSubscribed) {
-            ws.send(JSON.stringify({ type: 'subscribeAudio', enabled: false }));
-        }
-    }
-    dspDrawFreqResponse();
-}
-function peqHandlePresetsList(presets) {
-    var sel = document.getElementById('peqPresetSel');
-    if (!sel) return;
-    var html = '<option value="">Presets...</option><option value="_save">Save Preset...</option><option value="_load">Refresh List</option>';
-    if (presets && presets.length > 0) {
-        html += '<option disabled>──────────</option>';
-        for (var i = 0; i < presets.length; i++) {
-            html += '<option value="' + presets[i] + '">' + presets[i] + '</option>';
-        }
-    }
-    sel.innerHTML = html;
-    showToast('Found ' + (presets ? presets.length : 0) + ' presets');
-}
-
-// ===== PEQ Canvas Interaction (drag control points) =====
-function peqInitCanvas() {
-    if (peqCanvasInited) return;
-    var canvas = document.getElementById('dspFreqCanvas');
-    if (!canvas) return;
-    peqCanvasInited = true;
-    canvas.addEventListener('mousedown', peqCanvasMouseDown);
-    canvas.addEventListener('mousemove', peqCanvasMouseMove);
-    canvas.addEventListener('mouseup', peqCanvasMouseUp);
-    canvas.addEventListener('mouseleave', peqCanvasMouseUp);
-    canvas.addEventListener('touchstart', peqCanvasTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', peqCanvasTouchMove, { passive: false });
-    canvas.addEventListener('touchend', peqCanvasMouseUp);
-}
-function peqCanvasCoords(canvas, clientX, clientY) {
-    var rect = canvas.getBoundingClientRect();
-    return { x: clientX - rect.left, y: clientY - rect.top };
-}
-function peqCanvasToFreqGain(canvas, x, y) {
-    var dpr = window.devicePixelRatio || 1;
-    var dims = canvasDims[canvas.id];
-    if (!dims) return null;
-    var w = dims.tw / dpr, h = dims.th / dpr;
-    var padL = 35, padR = 10, padT = 10, padB = 20;
-    var gw = w - padL - padR, gh = h - padT - padB;
-    var fMin = peqCanvasZoom.fMin, fMax = peqCanvasZoom.fMax;
-    var logMin = Math.log10(fMin), logRange = Math.log10(fMax) - logMin;
-    var normX = (x - padL) / gw;
-    var normY = (y - padT) / gh;
-    var freq = Math.pow(10, logMin + logRange * normX);
-    var gain = 24 - normY * 48;
-    return { freq: Math.max(fMin, Math.min(fMax, Math.round(freq))), gain: Math.max(-24, Math.min(24, Math.round(gain * 2) / 2)) };
-}
-function peqFreqGainToCanvas(canvas, freq, gain) {
-    var dpr = window.devicePixelRatio || 1;
-    var dims = canvasDims[canvas.id];
-    if (!dims) return null;
-    var w = dims.tw / dpr, h = dims.th / dpr;
-    var padL = 35, padR = 10, padT = 10, padB = 20;
-    var gw = w - padL - padR, gh = h - padT - padB;
-    var fMin = peqCanvasZoom.fMin, fMax = peqCanvasZoom.fMax;
-    var logMin = Math.log10(fMin), logRange = Math.log10(fMax) - logMin;
-    return {
-        x: padL + gw * (Math.log10(freq) - logMin) / logRange,
-        y: padT + gh * (1 - (gain + 24) / 48)
-    };
-}
-function peqFindNearestBand(canvas, x, y, maxDist) {
-    var bands = peqGetBands();
-    var closest = -1, closestDist = (maxDist !== undefined && maxDist !== null) ? maxDist : 25;
-    for (var i = 0; i < bands.length; i++) {
-        var b = bands[i];
-        var pos = peqFreqGainToCanvas(canvas, b.freq || 1000, b.gain || 0);
-        if (!pos) continue;
-        var dist = Math.sqrt(Math.pow(x - pos.x, 2) + Math.pow(y - pos.y, 2));
-        if (dist < closestDist) { closestDist = dist; closest = i; }
-    }
-    return closest;
-}
-function peqCanvasMouseDown(e) {
-    var canvas = e.target;
-    var pos = peqCanvasCoords(canvas, e.clientX, e.clientY);
-    var band = peqFindNearestBand(canvas, pos.x, pos.y, PEQ_MOUSE_HIT_RADIUS);
-    if (band >= 0) {
-        peqSelectBand(band);
-        peqDragging = { band: band };
-        canvas.style.cursor = 'grabbing';
-        e.preventDefault();
-    } else {
-        var nearest = peqFindNearestBand(canvas, pos.x, pos.y, Infinity);
-        if (nearest >= 0) peqSelectBand(nearest);
-    }
-}
-function peqCanvasMouseMove(e) {
-    var canvas = e.target;
-    var pos = peqCanvasCoords(canvas, e.clientX, e.clientY);
-    if (!peqDragging) {
-        var hover = peqFindNearestBand(canvas, pos.x, pos.y, PEQ_MOUSE_HIT_RADIUS);
-        canvas.style.cursor = hover >= 0 ? 'grab' : 'crosshair';
-        return;
-    }
-    var fg = peqCanvasToFreqGain(canvas, pos.x, pos.y);
-    if (!fg) return;
-    var b = peqDragging.band;
-    var bands = peqGetBands();
-    if (bands[b]) {
-        bands[b].freq = fg.freq;
-        bands[b].gain = fg.gain;
-    }
-    var freqSl = document.getElementById('peq_' + b + '_freq_s');
-    var freqNi = document.getElementById('peq_' + b + '_freq_n');
-    var gainSl = document.getElementById('peq_' + b + '_gain_s');
-    var gainNi = document.getElementById('peq_' + b + '_gain_n');
-    if (freqSl) freqSl.value = fg.freq;
-    if (freqNi) freqNi.value = fg.freq;
-    if (gainSl) gainSl.value = fg.gain.toFixed(1);
-    if (gainNi) gainNi.value = fg.gain.toFixed(1);
-    dspDrawFreqResponse();
-    e.preventDefault();
-}
-function peqCanvasMouseUp(e) {
-    if (!peqDragging) return;
-    var canvas = e.target || document.getElementById('dspFreqCanvas');
-    canvas.style.cursor = 'crosshair';
-    var b = peqDragging.band;
-    peqDragging = null;
-    var bands = peqGetBands();
-    if (bands[b]) {
-        peqUpdateBandParam(b, 'freq', bands[b].freq);
-        setTimeout(function() { peqUpdateBandParam(b, 'gain', bands[b].gain); }, 10);
-    }
-}
-function peqCanvasTouchStart(e) {
-    // Two-finger pinch: capture start state
-    if (e.touches.length === 2) {
-        var dx = e.touches[0].clientX - e.touches[1].clientX;
-        var dy = e.touches[0].clientY - e.touches[1].clientY;
-        _peqPinchStartDist = Math.sqrt(dx * dx + dy * dy);
-        _peqPinchStartZoom = { fMin: peqCanvasZoom.fMin, fMax: peqCanvasZoom.fMax };
-        e.preventDefault();
-        return;
-    }
-    if (e.touches.length !== 1) return;
-    var canvas = e.target;
-    var touch = e.touches[0];
-    var pos = peqCanvasCoords(canvas, touch.clientX, touch.clientY);
-    var band = peqFindNearestBand(canvas, pos.x, pos.y, PEQ_TOUCH_HIT_RADIUS);
-    if (band >= 0) {
-        peqSelectBand(band);
-        peqDragging = { band: band };
-        e.preventDefault();
-    }
-}
-function peqCanvasTouchMove(e) {
-    // Two-finger pinch: scale zoom window
-    if (e.touches.length === 2 && _peqPinchStartZoom) {
-        var dx = e.touches[0].clientX - e.touches[1].clientX;
-        var dy = e.touches[0].clientY - e.touches[1].clientY;
-        var dist = Math.sqrt(dx * dx + dy * dy);
-        var scale = _peqPinchStartDist / dist; // pinch in = scale > 1 = zoom in
-        var logMin = Math.log10(20), logMax = Math.log10(20000);
-        var logRange = (Math.log10(_peqPinchStartZoom.fMax) - Math.log10(_peqPinchStartZoom.fMin)) * scale;
-        logRange = Math.max(0.5, Math.min(logMax - logMin, logRange));
-        var logCenter = (Math.log10(_peqPinchStartZoom.fMin) + Math.log10(_peqPinchStartZoom.fMax)) / 2;
-        peqCanvasZoom.fMin = Math.max(20, Math.pow(10, logCenter - logRange / 2));
-        peqCanvasZoom.fMax = Math.min(20000, Math.pow(10, logCenter + logRange / 2));
-        dspDrawFreqResponse();
-        e.preventDefault();
-        return;
-    }
-    if (!peqDragging || e.touches.length !== 1) return;
-    var canvas = e.target;
-    var touch = e.touches[0];
-    var pos = peqCanvasCoords(canvas, touch.clientX, touch.clientY);
-    var fg = peqCanvasToFreqGain(canvas, pos.x, pos.y);
-    if (!fg) return;
-    var b = peqDragging.band;
-    var bands = peqGetBands();
-    if (bands[b]) {
-        bands[b].freq = fg.freq;
-        bands[b].gain = fg.gain;
-    }
-    var freqSl = document.getElementById('peq_' + b + '_freq_s');
-    var freqNi = document.getElementById('peq_' + b + '_freq_n');
-    var gainSl = document.getElementById('peq_' + b + '_gain_s');
-    var gainNi = document.getElementById('peq_' + b + '_gain_n');
-    if (freqSl) freqSl.value = fg.freq;
-    if (freqNi) freqNi.value = fg.freq;
-    if (gainSl) gainSl.value = fg.gain.toFixed(1);
-    if (gainNi) gainNi.value = fg.gain.toFixed(1);
-    dspDrawFreqResponse();
-    e.preventDefault();
-}
-function peqResetZoom() {
-    peqCanvasZoom = { fMin: 20, fMax: 20000 };
-    dspDrawFreqResponse();
-}
-
-// ===== Frequency Response Graph (PEQ-aware) =====
-function dspBiquadMagDb(coeffs, f, fs) {
-    var b0=coeffs[0], b1=coeffs[1], b2=coeffs[2], a1=coeffs[3], a2=coeffs[4];
-    var omega = 2 * Math.PI * f / fs;
-    var cosW = Math.cos(omega), sinW = Math.sin(omega);
-    var cos2W = Math.cos(2*omega), sin2W = Math.sin(2*omega);
-    var numR = b0 + b1*cosW + b2*cos2W, numI = -(b1*sinW + b2*sin2W);
-    var denR = 1 + a1*cosW + a2*cos2W, denI = -(a1*sinW + a2*sin2W);
-    return 10 * Math.log10(Math.max((numR*numR + numI*numI) / (denR*denR + denI*denI), 1e-20));
-}
-
-// Client-side biquad coefficient computation (RBJ Audio EQ Cookbook).
-// Returns [b0, b1, b2, a1, a2] normalized so a0=1.
-// Uses ESP-DSP sign convention: denominator is 1 + a1*z^-1 + a2*z^-2,
-// processing uses y = b0*x + d0; d0 = b1*x - a1*y + d1; d1 = b2*x - a2*y.
-function dspComputeCoeffs(type, freq, gain, Q, fs) {
-    var fn = freq / fs;
-    if (fn < 0.0001) fn = 0.0001;
-    if (fn > 0.4999) fn = 0.4999;
-    var w0 = 2 * Math.PI * fn;
-    var cosW = Math.cos(w0), sinW = Math.sin(w0);
-    if (Q <= 0) Q = 0.707;
-    var alpha = sinW / (2 * Q);
-    var A, b0, b1, b2, a0, a1, a2;
-
-    switch (type) {
-        case 0: // LPF
-            b1 = 1 - cosW; b0 = b1 / 2; b2 = b0;
-            a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
-            break;
-        case 1: // HPF
-            b1 = -(1 + cosW); b0 = -b1 / 2; b2 = b0;
-            a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
-            break;
-        case 2: // BPF
-            b0 = sinW / 2; b1 = 0; b2 = -b0;
-            a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
-            break;
-        case 3: // Notch
-            b0 = 1; b1 = -2 * cosW; b2 = 1;
-            a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
-            break;
-        case 4: // PEQ
-            A = Math.pow(10, gain / 40);
-            b0 = 1 + alpha * A; b1 = -2 * cosW; b2 = 1 - alpha * A;
-            a0 = 1 + alpha / A; a1 = -2 * cosW; a2 = 1 - alpha / A;
-            break;
-        case 5: // Low Shelf
-            A = Math.pow(10, gain / 40);
-            var sq = 2 * Math.sqrt(A) * alpha;
-            b0 = A * ((A + 1) - (A - 1) * cosW + sq);
-            b1 = 2 * A * ((A - 1) - (A + 1) * cosW);
-            b2 = A * ((A + 1) - (A - 1) * cosW - sq);
-            a0 = (A + 1) + (A - 1) * cosW + sq;
-            a1 = -2 * ((A - 1) + (A + 1) * cosW);
-            a2 = (A + 1) + (A - 1) * cosW - sq;
-            break;
-        case 6: // High Shelf
-            A = Math.pow(10, gain / 40);
-            var sq = 2 * Math.sqrt(A) * alpha;
-            b0 = A * ((A + 1) + (A - 1) * cosW + sq);
-            b1 = -2 * A * ((A - 1) + (A + 1) * cosW);
-            b2 = A * ((A + 1) + (A - 1) * cosW - sq);
-            a0 = (A + 1) - (A - 1) * cosW + sq;
-            a1 = 2 * ((A - 1) - (A + 1) * cosW);
-            a2 = (A + 1) - (A - 1) * cosW - sq;
-            break;
-        case 7: case 8: // Allpass / AP360
-            b0 = 1 - alpha; b1 = -2 * cosW; b2 = 1 + alpha;
-            a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
-            break;
-        case 9: // AP180
-            b0 = -(1 - alpha); b1 = 2 * cosW; b2 = -(1 + alpha);
-            a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
-            break;
-        case 10: // BPF 0dB
-            b0 = alpha; b1 = 0; b2 = -alpha;
-            a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha;
-            break;
-        case 19: // LPF 1st order
-            var wt = Math.tan(Math.PI * fn);
-            var n = 1 / (1 + wt);
-            return [wt * n, wt * n, 0, (wt - 1) * n, 0];
-        case 20: // HPF 1st order
-            var wt = Math.tan(Math.PI * fn);
-            var n = 1 / (1 + wt);
-            return [n, -n, 0, (wt - 1) * n, 0];
-        default: // passthrough
-            return [1, 0, 0, 0, 0];
-    }
-    // Normalize by a0
-    var inv = 1 / a0;
-    return [b0 * inv, b1 * inv, b2 * inv, a1 * inv, a2 * inv];
-}
-
-// Compute magnitude in dB from stage parameters (no server coefficients needed)
-function dspStageMagDb(s, f, fs) {
-    var coeffs = dspComputeCoeffs(s.type, s.freq || 1000, s.gain || 0, s.Q || 0.707, fs);
-    return dspBiquadMagDb(coeffs, f, fs);
-}
-
-function dspDrawFreqResponse() {
-    var canvas = document.getElementById('dspFreqCanvas');
-    if (!canvas || !dspState || currentActiveTab !== 'dsp') return;
-    peqInitCanvas();
-    var ctx = canvas.getContext('2d');
-    var resized = resizeCanvasIfNeeded(canvas);
-    if (resized === -1) return;
-    var dims = canvasDims[canvas.id];
-    var w = dims.tw, h = dims.th;
-    var dpr = window.devicePixelRatio;
-
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-card').trim();
-    ctx.fillRect(0, 0, w, h);
-
-    // Compare mode — draw all channels and return
-    if (typeof dspCompareMode !== 'undefined' && dspCompareMode) {
-        var _sr = (dspState && dspState.sampleRate) ? dspState.sampleRate : 48000;
-        dspCompareDrawAllChannels(canvas, ctx, w, h, _sr);
-        return;
-    }
-
-    var padL = 35 * dpr, padR = 10 * dpr, padT = 10 * dpr, padB = 20 * dpr;
-    var gw = w - padL - padR, gh = h - padT - padB;
-    var yMin = -24, yMax = 24;
-    var fMin = (typeof peqCanvasZoom !== 'undefined') ? peqCanvasZoom.fMin : 20;
-    var fMax = (typeof peqCanvasZoom !== 'undefined') ? peqCanvasZoom.fMax : 20000;
-    var logMin = Math.log10(fMin), logRange = Math.log10(fMax) - logMin;
-
-    // Grid
-    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim();
-    ctx.lineWidth = 0.5 * dpr;
-    ctx.font = (9 * dpr) + 'px sans-serif';
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-disabled').trim();
-    for (var db = yMin; db <= yMax; db += 6) {
-        var y = padT + gh * (1 - (db - yMin) / (yMax - yMin));
-        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
-        ctx.textAlign = 'right';
-        ctx.fillText(db + '', padL - 4 * dpr, y + 3 * dpr);
-    }
-    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text-secondary').trim();
-    ctx.lineWidth = 1 * dpr;
-    var y0 = padT + gh * (1 - (0 - yMin) / (yMax - yMin));
-    ctx.beginPath(); ctx.moveTo(padL, y0); ctx.lineTo(w - padR, y0); ctx.stroke();
-    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border').trim();
-    ctx.lineWidth = 0.5 * dpr;
-    ctx.textAlign = 'center';
-    var freqs = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
-    var labels = ['5','10','20','50','100','200','500','1k','2k','5k','10k','20k'];
-    for (var fi = 0; fi < freqs.length; fi++) {
-        var x = padL + gw * (Math.log10(freqs[fi]) - logMin) / logRange;
-        ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + gh); ctx.stroke();
-        ctx.fillText(labels[fi], x, h - 2 * dpr);
-    }
-
-    var ch = dspState.channels[dspCh];
-    if (!ch || !ch.stages) return;
-    var fs = dspState.sampleRate || 48000;
-    var nPts = 256;
-    var stages = ch.stages || [];
-
-    // Layer 1: RTA overlay (dBFS spectrum mapped to full graph height)
-    if (peqGraphLayers.rta && peqRtaData && peqRtaData.length >= 16) {
-        var BAND_EDGES = [0, 60, 150, 250, 400, 600, 1000, 2500, 4000, 6000, 8000, 10000, 12000, 14000, 16000, 20000, 24000];
-        var rtaFloor = -96, rtaCeil = 0;
-        ctx.beginPath();
-        ctx.moveTo(padL, padT + gh);
-        for (var bi = 0; bi < 16; bi++) {
-            var midF = Math.max(fMin, (BAND_EDGES[bi] + BAND_EDGES[bi+1]) / 2);
-            var xb = padL + gw * (Math.log10(midF) - logMin) / logRange;
-            var rtaNorm = Math.max(0, Math.min(1, (peqRtaData[bi] - rtaFloor) / (rtaCeil - rtaFloor)));
-            var rtaY = padT + gh * (1 - rtaNorm);
-            ctx.lineTo(xb, rtaY);
-        }
-        ctx.lineTo(w - padR, padT + gh);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(76,175,80,0.12)';
-        ctx.fill();
-        // RTA line stroke
-        ctx.beginPath();
-        for (var bi = 0; bi < 16; bi++) {
-            var midF = Math.max(fMin, (BAND_EDGES[bi] + BAND_EDGES[bi+1]) / 2);
-            var xb = padL + gw * (Math.log10(midF) - logMin) / logRange;
-            var rtaNorm = Math.max(0, Math.min(1, (peqRtaData[bi] - rtaFloor) / (rtaCeil - rtaFloor)));
-            var rtaY = padT + gh * (1 - rtaNorm);
-            if (bi === 0) ctx.moveTo(xb, rtaY); else ctx.lineTo(xb, rtaY);
-        }
-        ctx.strokeStyle = 'rgba(76,175,80,0.5)';
-        ctx.lineWidth = 1.5 * dpr;
-        ctx.stroke();
-    }
-
-    // Separate PEQ bands (0-9) from chain stages (10+)
-    var peqBands = stages.slice(0, DSP_PEQ_BANDS);
-    var chainStages = stages.slice(DSP_PEQ_BANDS);
-    var peqCombined = new Float32Array(nPts);
-    var chainCombined = new Float32Array(nPts);
-    var hasPeq = false, hasChain = false;
-
-    // Layer 2: Individual PEQ band curves (client-side coefficient computation)
-    for (var si = 0; si < peqBands.length; si++) {
-        var s = peqBands[si];
-        if (!dspIsBiquad(s.type) || !s.enabled) continue;
-        var peqCoeffs = dspComputeCoeffs(s.type, s.freq || 1000, s.gain || 0, s.Q || 0.707, fs);
-        hasPeq = true;
-        if (peqGraphLayers.individual) {
-            ctx.beginPath();
-            ctx.strokeStyle = PEQ_COLORS[si] + '40';
-            ctx.lineWidth = 1 * dpr;
-        }
-        for (var p = 0; p < nPts; p++) {
-            var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
-            var magDb = dspBiquadMagDb(peqCoeffs, f, fs);
-            peqCombined[p] += magDb;
-            if (peqGraphLayers.individual) {
-                var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
-                var xp = padL + gw * p / (nPts - 1);
-                if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
-            }
-        }
-        if (peqGraphLayers.individual) ctx.stroke();
-    }
-
-    // Layer 3: Chain biquad curves (use server coefficients, fallback to client-side)
-    for (var si = 0; si < chainStages.length; si++) {
-        var s = chainStages[si];
-        if (!dspIsBiquad(s.type) || !s.enabled) continue;
-        var chainCoeffs = s.coeffs || dspComputeCoeffs(s.type, s.freq || 1000, s.gain || 0, s.Q || 0.707, fs);
-        hasChain = true;
-        if (peqGraphLayers.chain) {
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(180,180,180,0.15)';
-            ctx.lineWidth = 1 * dpr;
-        }
-        for (var p = 0; p < nPts; p++) {
-            var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
-            var magDb = dspBiquadMagDb(chainCoeffs, f, fs);
-            chainCombined[p] += magDb;
-            if (peqGraphLayers.chain) {
-                var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
-                var xp = padL + gw * p / (nPts - 1);
-                if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
-            }
-        }
-        if (peqGraphLayers.chain) ctx.stroke();
-    }
-
-    // Layer 4: Combined PEQ response (orange dashed)
-    if (hasPeq) {
-        ctx.beginPath();
-        ctx.strokeStyle = '#FF9800';
-        ctx.lineWidth = 1.5 * dpr;
-        ctx.setLineDash([4*dpr, 4*dpr]);
-        for (var p = 0; p < nPts; p++) {
-            var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, peqCombined[p])) - yMin) / (yMax - yMin));
-            var xp = padL + gw * p / (nPts - 1);
-            if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-    }
-
-    // Layer 5: Combined total response (PEQ + chain, orange solid)
-    if (hasPeq || hasChain) {
-        ctx.beginPath();
-        ctx.strokeStyle = '#FF9800';
-        ctx.lineWidth = 2.5 * dpr;
-        for (var p = 0; p < nPts; p++) {
-            var total = peqCombined[p] + chainCombined[p];
-            var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, total)) - yMin) / (yMax - yMin));
-            var xp = padL + gw * p / (nPts - 1);
-            if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
-        }
-        ctx.stroke();
-    }
-
-    // Highlight selected chain stage (if expanded)
-    if (dspOpenStage >= DSP_PEQ_BANDS && dspOpenStage < stages.length) {
-        var ss = stages[dspOpenStage];
-        if (dspIsBiquad(ss.type)) {
-            var hlCoeffs = ss.coeffs || dspComputeCoeffs(ss.type, ss.freq || 1000, ss.gain || 0, ss.Q || 0.707, fs);
-            ctx.beginPath();
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 2 * dpr;
-            ctx.setLineDash([4*dpr, 4*dpr]);
-            for (var p = 0; p < nPts; p++) {
-                var f = Math.pow(10, logMin + logRange * p / (nPts - 1));
-                var magDb = dspBiquadMagDb(hlCoeffs, f, fs);
-                var yp = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, magDb)) - yMin) / (yMax - yMin));
-                var xp = padL + gw * p / (nPts - 1);
-                if (p === 0) ctx.moveTo(xp, yp); else ctx.lineTo(xp, yp);
-            }
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-    }
-
-    // Layer 6: PEQ control point circles with band numbers
-    for (var i = 0; i < peqBands.length; i++) {
-        var b = peqBands[i];
-        var freq = b.freq || 1000, gain = b.gain || 0;
-        var cx = padL + gw * (Math.log10(freq) - logMin) / logRange;
-        var cy = padT + gh * (1 - (Math.max(yMin, Math.min(yMax, gain)) - yMin) / (yMax - yMin));
-        var isSelected = (i === peqSelectedBand);
-        var radius = isSelected ? 11 * dpr : 9 * dpr;
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-        if (b.enabled) {
-            ctx.fillStyle = PEQ_COLORS[i];
-            ctx.fill();
-        } else {
-            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-card').trim();
-            ctx.fill();
-            ctx.strokeStyle = PEQ_COLORS[i];
-            ctx.lineWidth = 1.5 * dpr;
-            ctx.stroke();
-        }
-        // Band number label inside dot
-        ctx.font = 'bold ' + (isSelected ? 11 * dpr : 10 * dpr) + 'px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = b.enabled ? '#fff' : PEQ_COLORS[i];
-        ctx.fillText('' + (i + 1), cx, cy + 0.5 * dpr);
-        if (isSelected) {
-            ctx.beginPath();
-            ctx.arc(cx, cy, radius + 3 * dpr, 0, 2 * Math.PI);
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1.5 * dpr;
-            ctx.stroke();
-        }
-    }
-}
-
-//# sourceURL=16-dsp-peq.js
-
-// ===== DSP Stage/Chain Management =====
-
-function dspSetEnabled(en) {
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'setDspBypass', enabled: en, bypass: dspState ? dspState.dspBypass : false }));
-}
-function dspSetBypass(bp) {
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'setDspBypass', enabled: dspState ? dspState.dspEnabled : false, bypass: bp }));
-}
-function dspSetChBypass(bp) {
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'setDspChannelBypass', ch: dspCh, bypass: bp }));
-}
-function dspAddStage(typeInt) {
-    document.getElementById('dspAddMenu').classList.remove('open');
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'addDspStage', ch: dspCh, stageType: typeInt }));
-}
-function dspAddDCBlock() {
-    dspToggleAddMenu();
-    fetch('/api/dsp/crossover?ch=' + dspCh, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ freq: 10, type: 'bw2', role: 1 })
-    })
-    .then(r => r.json())
-    .then(d => { if (d.success) showToast('DC Block added (10 Hz HPF)'); else showToast('Failed: ' + (d.message || ''), true); })
-    .catch(err => showToast('Error: ' + err, true));
-}
-function dspRemoveStage(idx) {
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'removeDspStage', ch: dspCh, stage: idx }));
-}
-function dspMoveStage(from, to) {
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'reorderDspStage', ch: dspCh, from: from, to: to }));
-}
-function dspToggleAddMenu() {
-    document.getElementById('dspAddMenu').classList.toggle('open');
-}
-function dspUpdateParam(idx, key, val) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        var msg = { type: 'updateDspStage', ch: dspCh, stage: idx };
-        msg[key] = val;
-        ws.send(JSON.stringify(msg));
-    }
-}
-function dspToggleStageEnabled(idx, en) {
-    dspUpdateParam(idx, 'enabled', en);
-}
-
-function dspSelectChannel(ch) {
-    dspCh = ch;
-    dspOpenStage = -1;
-    peqSelectedBand = 0;
-    dspRenderChannelTabs();
-    peqRenderBandStrip();
-    peqRenderBandDetail();
-    peqUpdateToggleAllBtn();
-    dspRenderStages();
-    dspDrawFreqResponse();
-}
-
-function dspRenderChannelTabs() {
-    var el = document.getElementById('dspChTabs');
-    if (!el || !dspState) return;
-    var html = '';
-    for (var c = 0; c < DSP_MAX_CH; c++) {
-        var ch = dspState.channels[c];
-        var peqActive = 0, chainCount = 0;
-        if (ch && ch.stages) {
-            for (var i = 0; i < Math.min(DSP_PEQ_BANDS, ch.stages.length); i++) {
-                if (ch.stages[i] && ch.stages[i].enabled) peqActive++;
-            }
-            chainCount = Math.max(0, (ch.stageCount || 0) - DSP_PEQ_BANDS);
-        }
-        var badge = peqActive + 'P' + (chainCount > 0 ? ' ' + chainCount + 'C' : '');
-        html += '<button class="dsp-ch-tab' + (c === dspCh ? ' active' : '') + '" onclick="dspSelectChannel(' + c + ')">' + dspChLabel(c) + '<span class="badge">' + badge + '</span></button>';
-    }
-    el.innerHTML = html;
-    var byp = document.getElementById('dspChBypassToggle');
-    if (byp && dspState.channels[dspCh]) byp.checked = dspState.channels[dspCh].bypass;
-}
-
-function dspIsBiquad(t) { return t <= 11 || t === 19 || t === 20 || t === 21; }
-function dspStageSummary(s) {
-    var t = s.type;
-    if (t === 21) return 'F0=' + (s.freq || 50).toFixed(0) + ' Q0=' + (s.Q || 0.707).toFixed(2) + ' Fp=' + (s.gain || 25).toFixed(0) + ' Qp=' + (s.Q2 || 0.5).toFixed(2);
-    if (dspIsBiquad(t)) return (s.freq || 1000).toFixed(0) + ' Hz' + (s.gain ? ' ' + (s.gain > 0 ? '+' : '') + s.gain.toFixed(1) + ' dB' : '') + ' Q=' + (s.Q || 0.707).toFixed(2);
-    if (t === 12) return s.thresholdDb.toFixed(1) + ' dBFS ' + s.ratio.toFixed(0) + ':1';
-    if (t === 13) return s.numTaps + ' taps';
-    if (t === 14) return (s.gainDb > 0 ? '+' : '') + s.gainDb.toFixed(1) + ' dB';
-    if (t === 15) return s.delaySamples + ' smp';
-    if (t === 16) return s.inverted ? 'Inverted' : 'Normal';
-    if (t === 17) return s.muted ? 'Muted' : 'Active';
-    if (t === 18) return s.thresholdDb.toFixed(1) + ' dBFS ' + s.ratio.toFixed(1) + ':1';
-    if (t === 24) return (s.thresholdDb || -40).toFixed(0) + ' dB ' + (s.ratio || 1).toFixed(0) + ':1';
-    if (t === 25) return 'B' + (s.bassGain || 0).toFixed(0) + ' M' + (s.midGain || 0).toFixed(0) + ' T' + (s.trebleGain || 0).toFixed(0);
-    if (t === 26) return (s.currentTempC || 25).toFixed(0) + '\u00B0C GR=' + (s.gr || 0).toFixed(1);
-    if (t === 27) return 'W=' + (s.width || 100).toFixed(0) + '%';
-    if (t === 28) return 'Ref=' + (s.referenceLevelDb || 85).toFixed(0) + ' Cur=' + (s.currentLevelDb || 75).toFixed(0);
-    if (t === 29) return (s.frequency || 80).toFixed(0) + ' Hz mix=' + (s.mix || 50).toFixed(0) + '%';
-    if (t === 30) return (s.numBands || 3) + ' bands';
-    return '';
-}
-
-function dspParamSliders(idx, s) {
-    var t = s.type;
-    var h = '';
-    if (t === 21) {
-        h += dspSlider(idx, 'freq', 'F0 (Speaker Fs)', s.freq || 50, 20, 200, 1, 'Hz');
-        h += dspSlider(idx, 'Q', 'Q0 (Speaker Qts)', s.Q || 0.707, 0.1, 2.0, 0.01, '');
-        h += dspSlider(idx, 'gain', 'Fp (Target Fs)', s.gain || 25, 10, 100, 1, 'Hz');
-        h += dspSlider(idx, 'Q2', 'Qp (Target Qts)', s.Q2 || 0.5, 0.1, 2.0, 0.01, '');
-    } else if (t <= 11 || t === 19 || t === 20) {
-        h += dspSlider(idx, 'freq', 'Frequency', s.freq || 1000, 5, 20000, 1, 'Hz');
-        if (t === 4 || t === 5 || t === 6) h += dspSlider(idx, 'gain', 'Gain', s.gain || 0, -24, 24, 0.5, 'dB');
-        if (t !== 19 && t !== 20) h += dspSlider(idx, 'Q', 'Q Factor', s.Q || 0.707, 0.1, 20, 0.01, '');
-    } else if (t === 18) {
-        var cHook = ';dspDrawCompressorGraph(' + idx + ')';
-        h += '<div class="comp-graph-wrap"><canvas id="compCanvas_' + idx + '" height="180"></canvas></div>';
-        h += dspSlider(idx, 'thresholdDb', 'Threshold', s.thresholdDb, -60, 0, 0.5, 'dBFS', cHook);
-        h += dspSlider(idx, 'ratio', 'Ratio', s.ratio, 1, 100, 0.5, ':1', cHook);
-        h += dspSlider(idx, 'attackMs', 'Attack', s.attackMs, 0.1, 100, 0.1, 'ms');
-        h += dspSlider(idx, 'releaseMs', 'Release', s.releaseMs, 1, 1000, 1, 'ms');
-        h += dspSlider(idx, 'kneeDb', 'Knee', s.kneeDb, 0, 24, 0.5, 'dB', cHook);
-        h += dspSlider(idx, 'makeupGainDb', 'Makeup', s.makeupGainDb, 0, 24, 0.5, 'dB', cHook);
-        var gr = s.gr !== undefined ? s.gr : 0;
-        h += '<div class="comp-gr-wrap"><label>GR</label><div class="comp-gr-track"><div class="comp-gr-fill" id="compGr_' + idx + '" style="width:' + Math.min(100, Math.abs(gr) / 24 * 100).toFixed(1) + '%"></div></div><span class="comp-gr-val" id="compGrVal_' + idx + '">' + gr.toFixed(1) + ' dB</span></div>';
-    } else if (t === 12) {
-        h += dspSlider(idx, 'thresholdDb', 'Threshold', s.thresholdDb, -60, 0, 0.5, 'dBFS');
-        h += dspSlider(idx, 'attackMs', 'Attack', s.attackMs, 0.1, 100, 0.1, 'ms');
-        h += dspSlider(idx, 'releaseMs', 'Release', s.releaseMs, 1, 1000, 1, 'ms');
-        h += dspSlider(idx, 'ratio', 'Ratio', s.ratio, 1, 100, 0.5, ':1');
-        if (s.gr !== undefined) h += '<div class="dsp-param"><label>GR</label><span class="dsp-val" style="color:var(--error)">' + s.gr.toFixed(1) + ' dB</span></div>';
-    } else if (t === 14) {
-        h += dspSlider(idx, 'gainDb', 'Gain', s.gainDb, -60, 24, 0.5, 'dB');
-    } else if (t === 15) {
-        h += dspSlider(idx, 'delaySamples', 'Delay', s.delaySamples, 0, 4800, 1, 'smp');
-        var ms = (s.delaySamples / (dspState.sampleRate || 48000) * 1000).toFixed(2);
-        h += '<div class="dsp-param"><label>Time</label><span class="dsp-val">' + ms + ' ms</span></div>';
-    } else if (t === 16) {
-        h += '<div class="dsp-param"><label>Invert</label><label class="switch" style="transform:scale(0.75);"><input type="checkbox" ' + (s.inverted ? 'checked' : '') + ' onchange="dspUpdateParam(' + idx + ',\'inverted\',this.checked)"><span class="slider round"></span></label></div>';
-    } else if (t === 17) {
-        h += '<div class="dsp-param"><label>Mute</label><label class="switch" style="transform:scale(0.75);"><input type="checkbox" ' + (s.muted ? 'checked' : '') + ' onchange="dspUpdateParam(' + idx + ',\'muted\',this.checked)"><span class="slider round"></span></label></div>';
-    } else if (t === 13) {
-        h += '<div class="dsp-param"><label>Taps</label><span class="dsp-val">' + (s.numTaps || 0) + '</span></div>';
-    } else if (t === 24) {
-        h += dspSlider(idx, 'thresholdDb', 'Threshold', s.thresholdDb, -80, 0, 0.5, 'dB');
-        h += dspSlider(idx, 'attackMs', 'Attack', s.attackMs, 0.1, 100, 0.1, 'ms');
-        h += dspSlider(idx, 'holdMs', 'Hold', s.holdMs, 0, 500, 1, 'ms');
-        h += dspSlider(idx, 'releaseMs', 'Release', s.releaseMs, 1, 2000, 1, 'ms');
-        h += dspSlider(idx, 'ratio', 'Ratio (1=gate)', s.ratio, 1, 20, 0.5, ':1');
-        h += dspSlider(idx, 'rangeDb', 'Range', s.rangeDb, -80, 0, 0.5, 'dB');
-        if (s.gr !== undefined) h += '<div class="dsp-param"><label>GR</label><span class="dsp-val" style="color:var(--error)">' + s.gr.toFixed(1) + ' dB</span></div>';
-    } else if (t === 25) {
-        h += dspSlider(idx, 'bassGain', 'Bass (100 Hz)', s.bassGain, -12, 12, 0.5, 'dB');
-        h += dspSlider(idx, 'midGain', 'Mid (1 kHz)', s.midGain, -12, 12, 0.5, 'dB');
-        h += dspSlider(idx, 'trebleGain', 'Treble (10 kHz)', s.trebleGain, -12, 12, 0.5, 'dB');
-    } else if (t === 26) {
-        h += dspSlider(idx, 'powerRatingW', 'Power Rating', s.powerRatingW, 1, 1000, 1, 'W');
-        h += dspSlider(idx, 'impedanceOhms', 'Impedance', s.impedanceOhms, 2, 32, 0.5, '\u03A9');
-        h += dspSlider(idx, 'thermalTauMs', 'Thermal \u03C4', s.thermalTauMs, 100, 10000, 100, 'ms');
-        h += dspSlider(idx, 'excursionLimitMm', 'Xmax', s.excursionLimitMm, 0.5, 30, 0.5, 'mm');
-        h += dspSlider(idx, 'driverDiameterMm', 'Driver \u00D8', s.driverDiameterMm, 25, 460, 1, 'mm');
-        h += dspSlider(idx, 'maxTempC', 'Max Temp', s.maxTempC, 50, 300, 5, '\u00B0C');
-        h += '<div class="dsp-param"><label>Temp</label><span class="dsp-val">' + (s.currentTempC || 25).toFixed(1) + ' \u00B0C</span></div>';
-        if (s.gr !== undefined) h += '<div class="dsp-param"><label>GR</label><span class="dsp-val" style="color:var(--error)">' + s.gr.toFixed(1) + ' dB</span></div>';
-    } else if (t === 27) {
-        h += dspSlider(idx, 'width', 'Width', s.width, 0, 200, 1, '%');
-        h += dspSlider(idx, 'centerGainDb', 'Center Gain', s.centerGainDb, -12, 12, 0.5, 'dB');
-    } else if (t === 28) {
-        h += dspSlider(idx, 'referenceLevelDb', 'Reference Level', s.referenceLevelDb, 60, 100, 1, 'dB SPL');
-        h += dspSlider(idx, 'currentLevelDb', 'Current Level', s.currentLevelDb, 20, 100, 1, 'dB SPL');
-        h += dspSlider(idx, 'amount', 'Amount', s.amount, 0, 100, 1, '%');
-    } else if (t === 29) {
-        h += dspSlider(idx, 'frequency', 'Crossover Freq', s.frequency, 20, 200, 1, 'Hz');
-        h += dspSlider(idx, 'harmonicGainDb', 'Harmonic Gain', s.harmonicGainDb, -12, 12, 0.5, 'dB');
-        h += dspSlider(idx, 'mix', 'Mix', s.mix, 0, 100, 1, '%');
-        h += '<div class="dsp-param"><label>Harmonics</label><select class="form-input" style="width:auto;padding:2px 6px;" onchange="dspUpdateParam(' + idx + ',\'order\',parseInt(this.value))">';
-        h += '<option value="0"' + (s.order===0?' selected':'') + '>2nd</option>';
-        h += '<option value="1"' + (s.order===1?' selected':'') + '>3rd</option>';
-        h += '<option value="2"' + (s.order===2?' selected':'') + '>Both</option>';
-        h += '</select></div>';
-    } else if (t === 30) {
-        h += '<div class="dsp-param"><label>Bands</label><select class="form-input" style="width:auto;padding:2px 6px;" onchange="dspUpdateParam(' + idx + ',\'numBands\',parseInt(this.value))">';
-        h += '<option value="2"' + (s.numBands===2?' selected':'') + '>2</option>';
-        h += '<option value="3"' + ((s.numBands||3)===3?' selected':'') + '>3</option>';
-        h += '<option value="4"' + (s.numBands===4?' selected':'') + '>4</option>';
-        h += '</select></div>';
-    }
-    return h;
-}
-
-function dspParamSync(idx, key, val, min, max, step) {
-    val = Math.min(max, Math.max(min, parseFloat(val) || 0));
-    var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
-    var id = 'dsp_' + idx + '_' + key;
-    var sl = document.getElementById(id + '_s');
-    var ni = document.getElementById(id + '_n');
-    if (sl) sl.value = val;
-    dspDrawCompressorGraph(idx);
-    if (ni) ni.value = val.toFixed(dec);
-    dspUpdateParam(idx, key, val);
-}
-function dspParamStep(idx, key, delta, min, max, step) {
-    var id = 'dsp_' + idx + '_' + key;
-    var sl = document.getElementById(id + '_s');
-    var cur = sl ? parseFloat(sl.value) : 0;
-    dspParamSync(idx, key, cur + delta, min, max, step);
-}
-function dspSlider(idx, key, label, val, min, max, step, unit, extraOninput) {
-    var numVal = parseFloat(val) || 0;
-    var dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
-    var id = 'dsp_' + idx + '_' + key;
-    var oninp = 'document.getElementById(\'' + id + '_n\').value=parseFloat(this.value).toFixed(' + dec + ')' + (extraOninput || '');
-    return '<div class="dsp-param"><label>' + label + '</label>' +
-        '<button class="dsp-step-btn" onclick="dspParamStep(' + idx + ',\'' + key + '\',' + (-step) + ',' + min + ',' + max + ',' + step + ')" title="Decrease">&lsaquo;</button>' +
-        '<input type="range" id="' + id + '_s" min="' + min + '" max="' + max + '" step="' + step + '" value="' + numVal + '" ' +
-        'oninput="' + oninp + '" ' +
-        'onchange="dspParamSync(' + idx + ',\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
-        '<button class="dsp-step-btn" onclick="dspParamStep(' + idx + ',\'' + key + '\',' + step + ',' + min + ',' + max + ',' + step + ')" title="Increase">&rsaquo;</button>' +
-        '<input type="number" class="dsp-num-input" id="' + id + '_n" value="' + numVal.toFixed(dec) + '" min="' + min + '" max="' + max + '" step="' + step + '" ' +
-        'onchange="dspParamSync(' + idx + ',\'' + key + '\',parseFloat(this.value),' + min + ',' + max + ',' + step + ')">' +
-        '<span class="dsp-unit">' + unit + '</span></div>';
-}
-
-function dspDrawCompressorGraph(idx) {
-    var canvas = document.getElementById('compCanvas_' + idx);
-    if (!canvas) return;
-    var ctx = canvas.getContext('2d');
-    var getVal = function(key, def) {
-        var el = document.getElementById('dsp_' + idx + '_' + key + '_s');
-        return el ? parseFloat(el.value) : def;
-    };
-    var threshold = getVal('thresholdDb', -20);
-    var ratio = getVal('ratio', 4);
-    var knee = getVal('kneeDb', 6);
-    var makeup = getVal('makeupGainDb', 0);
-    var dpr = window.devicePixelRatio || 1;
-    var rect = canvas.getBoundingClientRect();
-    var w = rect.width || 300;
-    var h = 180;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.height = h + 'px';
-    ctx.scale(dpr, dpr);
-    var pad = { l: 34, r: 8, t: 10, b: 22 };
-    var gw = w - pad.l - pad.r;
-    var gh = h - pad.t - pad.b;
-    var dbMin = -60, dbMax = 0;
-    var xOf = function(db) { return pad.l + (db - dbMin) / (dbMax - dbMin) * gw; };
-    var yOf = function(db) { return pad.t + (1 - (db - dbMin) / (dbMax - dbMin)) * gh; };
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(pad.l, pad.t, gw, gh);
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 0.5;
-    var grid = [-48, -36, -24, -12];
-    for (var g = 0; g < grid.length; g++) {
-        ctx.beginPath(); ctx.moveTo(xOf(grid[g]), pad.t); ctx.lineTo(xOf(grid[g]), pad.t + gh); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(pad.l, yOf(grid[g])); ctx.lineTo(pad.l + gw, yOf(grid[g])); ctx.stroke();
-    }
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.font = '9px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    for (var g = 0; g < grid.length; g++) ctx.fillText(grid[g], xOf(grid[g]), pad.t + gh + 4);
-    ctx.fillText('0', xOf(0), pad.t + gh + 4);
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    for (var g = 0; g < grid.length; g++) ctx.fillText(grid[g], pad.l - 4, yOf(grid[g]));
-    ctx.fillText('0', pad.l - 4, yOf(0));
-    ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(xOf(dbMin), yOf(dbMin)); ctx.lineTo(xOf(dbMax), yOf(dbMax)); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 1;
-    if (threshold >= dbMin && threshold <= dbMax) {
-        ctx.beginPath(); ctx.moveTo(xOf(threshold), pad.t); ctx.lineTo(xOf(threshold), pad.t + gh); ctx.stroke();
-    }
-    ctx.setLineDash([]);
-    ctx.strokeStyle = '#FF9800';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    var first = true;
-    for (var inDb = dbMin; inDb <= dbMax; inDb += 0.5) {
-        var overDb = inDb - threshold;
-        var halfK = knee / 2;
-        var grDb = 0;
-        if (knee > 0 && overDb > -halfK && overDb < halfK) {
-            grDb = (1 - 1 / ratio) * (overDb + halfK) * (overDb + halfK) / (2 * knee);
-        } else if (overDb >= halfK) {
-            grDb = overDb * (1 - 1 / ratio);
-        }
-        var outDb = inDb - grDb + makeup;
-        var py = yOf(Math.max(dbMin, Math.min(dbMax, outDb)));
-        if (first) { ctx.moveTo(xOf(inDb), py); first = false; } else ctx.lineTo(xOf(inDb), py);
-    }
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '9px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('Input (dBFS)', pad.l + gw / 2, h - 1);
-    ctx.save();
-    ctx.translate(9, pad.t + gh / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('Output', 0, 0);
-    ctx.restore();
-}
-
-function dspStageColor(t) {
-    // Dynamics: Limiter(12), Compressor(18), Noise Gate(24), Multiband Comp(30)
-    if (t===12||t===18||t===24||t===30) return '#e6a817';
-    // Tone Shaping: Tone Controls(25), Loudness Comp(28), Bass Enhance(29)
-    if (t===25||t===28||t===29) return '#43a047';
-    // Stereo / Protection: Stereo Width(27), Speaker Protection(26)
-    if (t===26||t===27) return '#8e24aa';
-    // Utility: FIR(13), Gain(14), Delay(15), Polarity(16), Mute(17)
-    if (t>=13&&t<=17) return '#757575';
-    // Analysis / Other: Decimator(22), Convolution(23)
-    if (t===22||t===23) return '#ef6c00';
-    // Crossover / Filters: all EQ/filter types (0-11, 19-21)
-    return '#1e88e5';
-}
-
-function dspRenderStages() {
-    if (!dspState || !dspState.channels[dspCh]) return;
-    var ch = dspState.channels[dspCh];
-    var list = document.getElementById('dspStageList');
-    var title = document.getElementById('dspStageTitleText');
-    var chainCount = Math.max(0, (ch.stageCount || 0) - DSP_PEQ_BANDS);
-    if (title) title.textContent = 'Additional Processing (' + chainCount + ')';
-    if (!list) return;
-    var html = '';
-    var stages = ch.stages || [];
-    for (var i = DSP_PEQ_BANDS; i < stages.length; i++) {
-        var s = stages[i];
-        var typeName = DSP_TYPES[s.type] || 'Unknown';
-        var label = s.label || typeName;
-        var open = (i === dspOpenStage);
-        html += '<div class="dsp-stage-card' + (!s.enabled ? ' disabled' : '') + '">';
-        html += '<div class="dsp-stage-header" onclick="dspOpenStage=' + (open ? -1 : i) + ';dspRenderStages();dspDrawFreqResponse();">';
-        html += '<span class="dsp-stage-type" style="background:' + dspStageColor(s.type) + '">' + typeName + '</span>';
-        html += '<span class="dsp-stage-name">' + label + '</span>';
-        html += '<span class="dsp-stage-info">' + dspStageSummary(s) + '</span>';
-        html += '<div class="dsp-stage-actions" onclick="event.stopPropagation()">';
-        html += '<label class="switch" style="transform:scale(0.6);margin:0;"><input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="dspToggleStageEnabled(' + i + ',this.checked)"><span class="slider round"></span></label>';
-        if (i > DSP_PEQ_BANDS) html += '<button onclick="dspMoveStage(' + i + ',' + (i-1) + ')" title="Move up"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7.41,15.41L12,10.83L16.59,15.41L18,14L12,8L6,14L7.41,15.41Z"/></svg></button>';
-        if (i < stages.length - 1) html += '<button onclick="dspMoveStage(' + i + ',' + (i+1) + ')" title="Move down"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg></button>';
-        html += '<button class="del" onclick="dspRemoveStage(' + i + ')" title="Delete"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
-        html += '</div></div>';
-        html += '<div class="dsp-stage-body' + (open ? ' open' : '') + '">' + (open ? dspParamSliders(i, s) : '') + '</div>';
-        html += '</div>';
-    }
-    list.innerHTML = html;
-    if (dspOpenStage >= DSP_PEQ_BANDS && stages[dspOpenStage] && stages[dspOpenStage].type === 18) {
-        requestAnimationFrame(function() { dspDrawCompressorGraph(dspOpenStage); });
-    }
-}
-
-function dspHandleState(d) {
-    dspState = d;
-    var enTgl = document.getElementById('dspEnableToggle');
-    var bpTgl = document.getElementById('dspBypassToggle');
-    if (enTgl) enTgl.checked = d.dspEnabled;
-    if (bpTgl) bpTgl.checked = d.globalBypass;
-    var sr = document.getElementById('dspSampleRate');
-    if (sr) sr.textContent = (d.sampleRate || 48000) + ' Hz';
-    dspRenderPresetList(d.presets || [], d.presetIndex != null ? d.presetIndex : -1);
-    dspRenderChannelTabs();
-    peqRenderBandStrip();
-    peqRenderBandDetail();
-    peqUpdateToggleAllBtn();
-    dspRenderStages();
-    dspDrawFreqResponse();
-}
-
-// ===== DSP Config Presets =====
-var _dspLastActivePreset = -1;
-
-function dspRenderPresetList(presets, activeIndex) {
-    var list = document.getElementById('dspPresetList');
-    var count = document.getElementById('dspPresetCount');
-    var status = document.getElementById('dspPresetStatus');
-    var saveBtn = document.getElementById('dspSavePresetBtn');
-    if (!list) return;
-
-    if (activeIndex >= 0) _dspLastActivePreset = activeIndex;
-
-    var html = '';
-    var anyExists = false;
-    for (var i = 0; i < presets.length; i++) {
-        var p = presets[i];
-        if (!p.exists) continue;
-        anyExists = true;
-        var isActive = (activeIndex === p.index);
-        var eName = (p.name || ('Slot ' + (p.index + 1))).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        html += '<div class="dsp-preset-item' + (isActive ? ' active' : '') + '" onclick="dspLoadPreset(' + p.index + ')">';
-        html += '<span class="preset-name">' + eName + '</span>';
-        html += '<div class="dsp-stage-actions">';
-        html += '<button onclick="event.stopPropagation();dspRenamePresetDialog(' + p.index + ')" title="Rename"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
-        html += '<button class="del" onclick="event.stopPropagation();dspDeletePresetConfirm(' + p.index + ')" title="Delete"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
-        html += '</div></div>';
-    }
-    list.innerHTML = html;
-    if (count) count.textContent = presets.filter(function(p){ return p.exists; }).length;
-
-    // Status badge
-    if (status) {
-        if (activeIndex >= 0) {
-            status.textContent = 'Saved';
-            status.style.background = 'var(--success)';
-            status.style.color = '#fff';
-            status.style.display = 'inline';
-        } else if (anyExists) {
-            status.textContent = 'Modified';
-            status.style.background = 'var(--error)';
-            status.style.color = '#fff';
-            status.style.display = 'inline';
-        } else {
-            status.style.display = 'none';
-        }
-    }
-    // Save button visible when modified and presets exist
-    if (saveBtn) saveBtn.style.display = (activeIndex === -1 && anyExists) ? '' : 'none';
-}
-function dspLoadPreset(slot) {
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'loadDspPreset', slot: slot }));
-}
-function dspSaveCurrentPreset() {
-    if (_dspLastActivePreset >= 0) {
-        // Overwrite the last active preset
-        var presets = dspState && dspState.presets ? dspState.presets : [];
-        var preset = presets.find(function(p) { return p.index === _dspLastActivePreset; });
-        var name = preset ? preset.name : ('Preset ' + (_dspLastActivePreset + 1));
-        if (ws && ws.readyState === WebSocket.OPEN)
-            ws.send(JSON.stringify({ type: 'saveDspPreset', slot: _dspLastActivePreset, name: name }));
-    } else {
-        // No previous preset — act like Add Preset
-        dspShowAddPresetDialog();
-    }
-}
-function dspShowAddPresetDialog() {
-    var name = prompt('Preset name (max 20 chars):', '');
-    if (!name) return;
-    name = name.substring(0, 20);
-    // Backend will auto-assign next available slot
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'saveDspPreset', slot: -1, name: name }));
-}
-function dspRenamePresetDialog(slot) {
-    var presets = dspState && dspState.presets ? dspState.presets : [];
-    var current = presets.find(function(p) { return p.index === slot; });
-    var oldName = current ? current.name : '';
-    var name = prompt('Rename preset:', oldName);
-    if (!name || name === oldName) return;
-    name = name.substring(0, 20);
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'renameDspPreset', slot: slot, name: name }));
-}
-function dspDeletePresetConfirm(slot) {
-    var presets = dspState && dspState.presets ? dspState.presets : [];
-    var preset = presets.find(function(p) { return p.index === slot; });
-    if (!preset) return;
-    if (!confirm('Delete preset "' + preset.name + '"?')) return;
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({ type: 'deleteDspPreset', slot: slot }));
-}
-
-function dspHandleMetrics(d) {
-    var cpuText = document.getElementById('dspCpuText');
-    var cpuBar = document.getElementById('dspCpuBar');
-    if (cpuText) cpuText.textContent = (d.cpuLoad || 0).toFixed(1) + '%';
-    if (cpuBar) cpuBar.style.width = Math.min(d.cpuLoad || 0, 100) + '%';
-}
-
-// ===== DSP Import/Export =====
-function dspImportApo() {
-    dspImportMode = 'apo';
-    document.getElementById('dspFileInput').accept = '.txt';
-    document.getElementById('dspFileInput').click();
-}
-function dspImportJson() {
-    dspImportMode = 'json';
-    document.getElementById('dspFileInput').accept = '.json';
-    document.getElementById('dspFileInput').click();
-}
-function dspHandleFileImport(ev) {
-    var file = ev.target.files[0];
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function(e) {
-        var url = dspImportMode === 'apo' ? '/api/dsp/import/apo?ch=' + dspCh : '/api/dsp';
-        var method = dspImportMode === 'apo' ? 'POST' : 'PUT';
-        fetch(url, { method: method, headers: { 'Content-Type': dspImportMode === 'json' ? 'application/json' : 'text/plain' }, body: e.target.result })
-            .then(r => r.json())
-            .then(d => { if (d.success) showToast('Import successful'); else showToast('Import failed: ' + (d.message || ''), true); })
-            .catch(err => showToast('Import error: ' + err, true));
-    };
-    reader.readAsText(file);
-    ev.target.value = '';
-}
-function dspExportApo() {
-    window.open('/api/dsp/export/apo?ch=' + dspCh, '_blank');
-}
-function dspExportJson() {
-    window.open('/api/dsp/export/json', '_blank');
-}
-
-// ===== DSP Crossover Presets =====
-function dspShowCrossoverModal() {
-    dspToggleAddMenu();
-    var existing = document.getElementById('crossoverModal');
-    if (existing) existing.remove();
-    var modal = document.createElement('div');
-    modal.id = 'crossoverModal';
-    modal.className = 'modal-overlay active';
-    modal.innerHTML = '<div class="modal">' +
-        '<div class="modal-title">Crossover Preset</div>' +
-        '<div class="form-group"><label class="form-label">Crossover Frequency (Hz)</label>' +
-        '<input type="number" class="form-input" id="modalXoverFreq" value="2000" min="20" max="20000"></div>' +
-        '<div class="form-group"><label class="form-label">Slope</label>' +
-        '<select class="form-input" id="modalXoverType">' +
-        '<optgroup label="Butterworth">' +
-        '<option value="bw1">BW1 — 1st order (6 dB/oct)</option>' +
-        '<option value="bw2">BW2 — 2nd order (12 dB/oct)</option>' +
-        '<option value="bw3">BW3 — 3rd order (18 dB/oct)</option>' +
-        '<option value="bw4">BW4 — 4th order (24 dB/oct)</option>' +
-        '<option value="bw5">BW5 — 5th order (30 dB/oct)</option>' +
-        '<option value="bw6">BW6 — 6th order (36 dB/oct)</option>' +
-        '<option value="bw7">BW7 — 7th order (42 dB/oct)</option>' +
-        '<option value="bw8">BW8 — 8th order (48 dB/oct)</option>' +
-        '<option value="bw9">BW9 — 9th order (54 dB/oct)</option>' +
-        '<option value="bw10">BW10 — 10th order (60 dB/oct)</option>' +
-        '<option value="bw11">BW11 — 11th order (66 dB/oct)</option>' +
-        '<option value="bw12">BW12 — 12th order (72 dB/oct)</option>' +
-        '</optgroup>' +
-        '<optgroup label="Linkwitz-Riley">' +
-        '<option value="lr2">LR2 — 2nd order (12 dB/oct)</option>' +
-        '<option value="lr4" selected>LR4 — 4th order (24 dB/oct)</option>' +
-        '<option value="lr6">LR6 — 6th order (36 dB/oct)</option>' +
-        '<option value="lr8">LR8 — 8th order (48 dB/oct)</option>' +
-        '<option value="lr12">LR12 — 12th order (72 dB/oct)</option>' +
-        '<option value="lr16">LR16 — 16th order (96 dB/oct)</option>' +
-        '<option value="lr24">LR24 — 24th order (144 dB/oct)</option>' +
-        '</optgroup>' +
-        '<optgroup label="Bessel (flat group delay)">' +
-        '<option value="bessel2">Bessel 2nd order (12 dB/oct)</option>' +
-        '<option value="bessel4">Bessel 4th order (24 dB/oct)</option>' +
-        '<option value="bessel6">Bessel 6th order (36 dB/oct)</option>' +
-        '<option value="bessel8">Bessel 8th order (48 dB/oct)</option>' +
-        '</optgroup>' +
-        '</select></div>' +
-        '<div class="form-group"><label class="form-label">Role</label>' +
-        '<select class="form-input" id="modalXoverRole">' +
-        '<option value="0">Low Pass (LPF)</option>' +
-        '<option value="1">High Pass (HPF)</option>' +
-        '</select></div>' +
-        '<div class="modal-actions"><button class="btn btn-secondary" onclick="closeCrossoverModal()">Cancel</button>' +
-        '<button class="btn btn-primary" onclick="dspApplyCrossover()">Apply to Channel</button></div></div>';
-    modal.addEventListener('click', function(e) { if (e.target === modal) closeCrossoverModal(); });
-    document.body.appendChild(modal);
-}
-function closeCrossoverModal() {
-    var m = document.getElementById('crossoverModal');
-    if (m) m.remove();
-}
-function dspApplyCrossover() {
-    var freq = parseInt(document.getElementById('modalXoverFreq').value) || 2000;
-    var type = document.getElementById('modalXoverType').value;
-    var role = parseInt(document.getElementById('modalXoverRole').value);
-    fetch('/api/dsp/crossover?ch=' + dspCh, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ freq: freq, type: type, role: role })
-    })
-    .then(r => r.json())
-    .then(d => { if (d.success) showToast('Crossover applied'); else showToast('Failed: ' + (d.message || ''), true); })
-    .catch(err => showToast('Error: ' + err, true));
-    closeCrossoverModal();
-}
-
-// ===== Baffle Step =====
-function dspShowBaffleModal() {
-    dspToggleAddMenu();
-    var existing = document.getElementById('baffleModal');
-    if (existing) existing.remove();
-    var modal = document.createElement('div');
-    modal.id = 'baffleModal';
-    modal.className = 'modal-overlay active';
-    modal.innerHTML = '<div class="modal">' +
-        '<div class="modal-title">Baffle Step Correction</div>' +
-        '<div class="form-group"><label class="form-label">Baffle Width (mm)</label>' +
-        '<input type="number" class="form-input" id="modalBaffleWidth" value="250" min="50" max="600" step="1"></div>' +
-        '<div id="modalBafflePreview" style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Estimated: ~437 Hz, +6.0 dB high shelf</div>' +
-        '<div class="modal-actions"><button class="btn btn-secondary" onclick="closeBaffleModal()">Cancel</button>' +
-        '<button class="btn btn-primary" onclick="applyBaffleStep()">Apply to Channel</button></div></div>';
-    modal.addEventListener('click', function(e) { if (e.target === modal) closeBaffleModal(); });
-    document.body.appendChild(modal);
-    document.getElementById('modalBaffleWidth').addEventListener('input', function() {
-        var w = parseInt(this.value) || 250;
-        var f = 343000 / (3.14159 * w);
-        document.getElementById('modalBafflePreview').textContent = 'Estimated: ~' + f.toFixed(0) + ' Hz, +6.0 dB high shelf';
-    });
-}
-function closeBaffleModal() {
-    var m = document.getElementById('baffleModal');
-    if (m) m.remove();
-}
-function applyBaffleStep() {
-    var w = parseInt(document.getElementById('modalBaffleWidth').value) || 250;
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({type:'applyBaffleStep', ch:dspCh, baffleWidthMm:w}));
-    showToast('Baffle step applied');
-    closeBaffleModal();
-}
-
-// ===== THD Measurement =====
-function dspShowThdModal() {
-    dspToggleAddMenu();
-    var existing = document.getElementById('thdModal');
-    if (existing) existing.remove();
-    var modal = document.createElement('div');
-    modal.id = 'thdModal';
-    modal.className = 'modal-overlay active';
-    modal.innerHTML = '<div class="modal">' +
-        '<div class="modal-title">THD+N Measurement</div>' +
-        '<div class="form-group"><label class="form-label">Test Frequency</label>' +
-        '<select class="form-input" id="thdFreq"><option value="100">100 Hz</option>' +
-        '<option value="1000" selected>1 kHz</option><option value="10000">10 kHz</option></select></div>' +
-        '<div class="form-group"><label class="form-label">Averages</label>' +
-        '<select class="form-input" id="thdAverages"><option value="4">4 frames</option>' +
-        '<option value="8" selected>8 frames</option><option value="16">16 frames</option></select></div>' +
-        '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
-        '<button class="btn btn-primary" id="thdStartBtn" onclick="thdStart()">Start</button>' +
-        '<button class="btn btn-outline" id="thdStopBtn" onclick="thdStop()" style="display:none">Stop</button></div>' +
-        '<div id="thdResult" style="display:none;font-size:13px;">' +
-        '<div class="info-row"><span class="info-label">THD+N</span><span class="info-value" id="thdPercent">\u2014</span></div>' +
-        '<div class="info-row"><span class="info-label">THD+N (dB)</span><span class="info-value" id="thdDb">\u2014</span></div>' +
-        '<div class="info-row"><span class="info-label">Fundamental</span><span class="info-value" id="thdFund">\u2014</span></div>' +
-        '<div class="info-row"><span class="info-label">Progress</span><span class="info-value" id="thdProgress">\u2014</span></div>' +
-        '<div id="thdHarmonics" style="margin-top:8px;">' +
-        '<div style="font-weight:600;margin-bottom:4px;font-size:12px;">Harmonics (dB rel. fundamental)</div>' +
-        '<div id="thdHarmBars" style="display:flex;gap:2px;height:60px;align-items:flex-end;"></div></div></div>' +
-        '<div class="modal-actions" style="margin-top:12px;"><button class="btn btn-secondary" onclick="closeThdModal()">Close</button></div></div>';
-    modal.addEventListener('click', function(e) { if (e.target === modal) closeThdModal(); });
-    document.body.appendChild(modal);
-}
-function closeThdModal() {
-    thdStop();
-    var m = document.getElementById('thdModal');
-    if (m) m.remove();
-}
-function thdStart() {
-    var freq = parseInt(document.getElementById('thdFreq').value) || 1000;
-    var avg = parseInt(document.getElementById('thdAverages').value) || 8;
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({type:'startThdMeasurement', freq:freq, averages:avg}));
-    var sb = document.getElementById('thdStartBtn');
-    var stb = document.getElementById('thdStopBtn');
-    var tr = document.getElementById('thdResult');
-    if (sb) sb.style.display = 'none';
-    if (stb) stb.style.display = '';
-    if (tr) tr.style.display = '';
-}
-function thdStop() {
-    if (ws && ws.readyState === WebSocket.OPEN)
-        ws.send(JSON.stringify({type:'stopThdMeasurement'}));
-    var sb = document.getElementById('thdStartBtn');
-    var stb = document.getElementById('thdStopBtn');
-    if (sb) sb.style.display = '';
-    if (stb) stb.style.display = 'none';
-}
-function thdUpdateResult(d) {
-    if (!d) return;
-    var el;
-    el = document.getElementById('thdPercent');
-    if (el) el.textContent = d.valid ? d.thdPlusNPercent.toFixed(3) + '%' : '\u2014';
-    el = document.getElementById('thdDb');
-    if (el) el.textContent = d.valid ? d.thdPlusNDb.toFixed(1) + ' dB' : '\u2014';
-    el = document.getElementById('thdFund');
-    if (el) el.textContent = d.valid ? d.fundamentalDbfs.toFixed(1) + ' dBFS' : '\u2014';
-    el = document.getElementById('thdProgress');
-    if (el) el.textContent = d.framesProcessed + '/' + d.framesTarget;
-    if (d.valid && d.harmonicLevels) {
-        var bars = document.getElementById('thdHarmBars');
-        if (bars) {
-            var html = '';
-            for (var h = 0; h < d.harmonicLevels.length; h++) {
-                var lev = d.harmonicLevels[h];
-                var pct = Math.max(2, Math.min(100, (120 + lev) / 120 * 100));
-                html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;">';
-                html += '<div style="width:100%;background:var(--primary);border-radius:2px;height:' + pct + '%" title="' + lev.toFixed(1) + ' dB"></div>';
-                html += '<span style="font-size:10px;margin-top:2px;">' + (h+2) + '</span></div>';
-            }
-            bars.innerHTML = html;
-        }
-    }
-    if (d.valid && !d.measuring) {
-        var sb = document.getElementById('thdStartBtn');
-        var stb = document.getElementById('thdStopBtn');
-        if (sb) sb.style.display = '';
-        if (stb) stb.style.display = 'none';
-    }
-}
-
-//# sourceURL=17-dsp-chain.js
-
-// ===== Pipeline Routing Matrix (8x8) =====
-// Replaces old 4x4 DspRoutingMatrix — now driven by audio_pipeline 8x8 matrix.
-// Uses GET /api/pipeline/matrix and POST /api/pipeline/matrix/cell endpoints.
-
-let pipelineMatrix = null;
-let pipelineInputNames = [];
-let pipelineOutputNames = [];
-let pipelineMatrixBypass = false;
-
-function dspLoadRouting() {
-    fetch('/api/pipeline/matrix')
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            pipelineMatrix = d.matrix;
-            pipelineInputNames = d.inputs || [];
-            pipelineOutputNames = d.outputs || [];
-            pipelineMatrixBypass = !!d.bypass;
-            dspRenderRouting();
-        })
-        .catch(function() {});
-}
-
-function dspRenderRouting() {
-    var el = document.getElementById('dspRoutingGrid');
-    if (!el || !pipelineMatrix) return;
-    var numOut = pipelineMatrix.length;
-    var numIn = numOut > 0 ? pipelineMatrix[0].length : 0;
-    if (numOut === 0 || numIn === 0) { el.innerHTML = '<p style="color:var(--text-secondary);">No matrix data</p>'; return; }
-
-    var h = '<table class="routing-matrix-table">';
-    // Header row: input names
-    h += '<tr><td class="routing-corner"></td>';
-    for (var i = 0; i < numIn; i++) {
-        var inName = pipelineInputNames[i] || ('In ' + i);
-        h += '<td class="routing-header">' + inName + '</td>';
-    }
-    h += '</tr>';
-
-    // Data rows: one per output
-    for (var o = 0; o < numOut; o++) {
-        var outName = pipelineOutputNames[o] || ('Out ' + o);
-        h += '<tr><td class="routing-row-label">' + outName + '</td>';
-        for (var i = 0; i < numIn; i++) {
-            var linear = pipelineMatrix[o][i];
-            var db = linear <= 0.0001 ? 'Off' : (20 * Math.log10(linear)).toFixed(1);
-            var active = linear > 0.001;
-            var isUnity = Math.abs(linear - 1.0) < 0.001;
-            var cellClass = 'routing-cell' + (active ? ' active' : '') + (isUnity ? ' unity' : '');
-            h += '<td class="' + cellClass + '" onclick="dspEditRoutingCell(' + o + ',' + i + ')" title="' + outName + ' \u2190 ' + (pipelineInputNames[i] || 'In ' + i) + '">' + db + '</td>';
-        }
-        h += '</tr>';
-    }
-    h += '</table>';
-    el.innerHTML = h;
-}
-
-function dspEditRoutingCell(o, i) {
-    var current = pipelineMatrix && pipelineMatrix[o] ? pipelineMatrix[o][i] : 0;
-    var currentDb = current <= 0.0001 ? 'Off' : (20 * Math.log10(current)).toFixed(1);
-    var outName = pipelineOutputNames[o] || ('Out ' + o);
-    var inName = pipelineInputNames[i] || ('In ' + i);
-    var val = prompt('Gain for ' + outName + ' \u2190 ' + inName + ' (dB, or "off" for silence):', currentDb);
-    if (val === null) return;
-    var lv = val.trim().toLowerCase();
-    var gainDb = (lv === 'off' || lv === '-inf' || lv === '') ? -96 : parseFloat(val);
-    if (isNaN(gainDb)) return;
-
-    fetch('/api/pipeline/matrix/cell', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ out: o, in: i, gainDb: gainDb })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-        if (d.status === 'ok') {
-            // Update local state immediately
-            if (pipelineMatrix && pipelineMatrix[o]) {
-                pipelineMatrix[o][i] = d.gainLinear;
-            }
-            dspRenderRouting();
-        }
-    })
-    .catch(function(err) { showToast('Error: ' + err, true); });
-}
-
-function dspRoutingPreset(name) {
-    // Quick presets for the pipeline matrix
-    if (!pipelineMatrix) return;
-    var numCh = pipelineMatrix.length;
-    var promises = [];
-
-    for (var o = 0; o < numCh; o++) {
-        for (var i = 0; i < numCh; i++) {
-            var gainDb = -96;
-            if (name === 'identity') {
-                gainDb = (o === i) ? 0 : -96;
-            } else if (name === 'clear') {
-                gainDb = -96;
-            } else if (name === 'stereo') {
-                // Standard stereo: In0→Out0, In1→Out1
-                gainDb = (o === i && i < 2) ? 0 : -96;
-            }
-            if (pipelineMatrix[o][i] !== undefined) {
-                var currentLinear = pipelineMatrix[o][i];
-                var currentDb = currentLinear <= 0.0001 ? -96 : 20 * Math.log10(currentLinear);
-                // Only send changed cells
-                if (Math.abs(currentDb - gainDb) > 0.1) {
-                    promises.push(fetch('/api/pipeline/matrix/cell', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ out: o, in: i, gainDb: gainDb })
-                    }));
-                }
-            }
-        }
-    }
-
-    if (promises.length > 0) {
-        Promise.all(promises)
-            .then(function() { showToast('Routing: ' + name); dspLoadRouting(); })
-            .catch(function(err) { showToast('Error: ' + err, true); });
-    }
-}
-
-//# sourceURL=18-dsp-routing.js
-
-// 19-dsp-compare.js — Multi-channel DSP frequency response compare
-
-var dspCompareMode = false;
-
-// Colors for each channel in compare mode
-var DSP_COMPARE_COLORS = ['#FF9800', '#2196F3', '#4CAF50', '#E91E63'];
-
-function toggleDspCompare() {
-    dspCompareMode = !dspCompareMode;
-    var btn = document.getElementById('dspCompareBtn');
-    if (btn) {
-        btn.classList.toggle('active', dspCompareMode);
-        btn.textContent = dspCompareMode ? 'Compare ON' : 'Compare';
-    }
-    dspDrawFreqResponse();
-}
-
-function dspCompareDrawAllChannels(canvas, ctx, w, h, sampleRate) {
-    // Draw frequency response for each channel in a distinct color
-    if (!dspState || !dspState.channels) return;
-    var numCh = dspState.channels.length;
-    for (var ch = 0; ch < numCh; ch++) {
-        var color = DSP_COMPARE_COLORS[ch % DSP_COMPARE_COLORS.length];
-        dspDrawChannelResponse(ctx, w, h, ch, color, 0.7, sampleRate);
-    }
-    // Draw legend
-    dspDrawCompareLegend(ctx, w, h, numCh);
-}
-
-function dspDrawChannelResponse(ctx, w, h, ch, color, alpha, sampleRate) {
-    // Compute and draw the combined EQ+chain response for a single channel
-    var stages = dspState.channels[ch] && dspState.channels[ch].stages;
-    if (!stages) return;
-    var nPoints = w;
-    var fMin = 20, fMax = 20000;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    var firstPoint = true;
-    for (var i = 0; i < nPoints; i++) {
-        var t = i / (nPoints - 1);
-        var freq = fMin * Math.pow(fMax / fMin, t);
-        var magDb = 0;
-        for (var s = 0; s < stages.length; s++) {
-            var stage = stages[s];
-            if (!stage || !stage.enabled) continue;
-            magDb += dspStageMagDb(stage, freq, sampleRate || 48000);
-        }
-        var yNorm = 0.5 - magDb / 40; // ±20 dB range
-        var y = Math.max(0, Math.min(h, yNorm * h));
-        if (firstPoint) { ctx.moveTo(i, y); firstPoint = false; }
-        else ctx.lineTo(i, y);
-    }
-    ctx.stroke();
-    ctx.restore();
-}
-
-function dspDrawCompareLegend(ctx, w, h, numCh) {
-    if (!dspState || !dspState.channels) return;
-    var x = w - 10, y = 16;
-    ctx.save();
-    for (var ch = 0; ch < numCh; ch++) {
-        var label = (dspState.channels[ch] && dspState.channels[ch].name) || ('Ch ' + (ch + 1));
-        var color = DSP_COMPARE_COLORS[ch % DSP_COMPARE_COLORS.length];
-        ctx.fillStyle = color;
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText(label, x, y + ch * 16);
-    }
-    ctx.restore();
-}
-
-//# sourceURL=19-dsp-compare.js
-
-// ===== Per-Output DSP Panels =====
-// Manages per-output mono DSP chains (post-matrix, pre-sink).
-// Uses REST API at /api/output/dsp (GET, PUT, POST, DELETE).
-
-let outputDspCh = 0;
-let outputDspConfig = null;
-
-const OUTPUT_DSP_STAGE_TYPES = [
-    { value: 'PEQ', label: 'PEQ' },
-    { value: 'LPF', label: 'LPF' },
-    { value: 'HPF', label: 'HPF' },
-    { value: 'LOW_SHELF', label: 'Low Shelf' },
-    { value: 'HIGH_SHELF', label: 'High Shelf' },
-    { value: 'BPF', label: 'BPF' },
-    { value: 'NOTCH', label: 'Notch' },
-    { value: 'GAIN', label: 'Gain' },
-    { value: 'LIMITER', label: 'Limiter' },
-    { value: 'COMPRESSOR', label: 'Compressor' },
-    { value: 'POLARITY', label: 'Polarity' },
-    { value: 'MUTE', label: 'Mute' }
-];
-
-function outputDspLoadChannel(ch) {
-    if (ch === undefined) ch = outputDspCh;
-    fetch('/api/output/dsp?ch=' + ch)
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            outputDspConfig = d;
-            outputDspCh = ch;
-            outputDspRenderTabs();
-            outputDspRenderPanel();
-        })
-        .catch(function() {});
-}
-
-function outputDspRenderTabs() {
-    var el = document.getElementById('outputDspChannelTabs');
-    if (!el) return;
-    var numCh = 8;
-    var names = pipelineOutputNames.length > 0 ? pipelineOutputNames : [];
-    var h = '';
-    for (var c = 0; c < numCh; c++) {
-        var name = names[c] || ('Out ' + c);
-        h += '<button class="dsp-ch-tab' + (c === outputDspCh ? ' active' : '') + '" onclick="outputDspSelectChannel(' + c + ')">' + name + '</button>';
-    }
-    el.innerHTML = h;
-}
-
-function outputDspSelectChannel(ch) {
-    outputDspCh = ch;
-    outputDspLoadChannel(ch);
-}
-
-function outputDspRenderPanel() {
-    var el = document.getElementById('outputDspPanel');
-    if (!el || !outputDspConfig) return;
-
-    var h = '';
-    var bypass = outputDspConfig.bypass;
-
-    // Bypass toggle
-    h += '<div class="output-dsp-bypass">';
-    h += '<label class="toggle-label"><input type="checkbox" ' + (bypass ? '' : 'checked') + ' onchange="outputDspSetBypass(!this.checked)"> <span>Active</span></label>';
-    h += '</div>';
-
-    // Stage list
-    var stages = outputDspConfig.stages || [];
-    if (stages.length === 0) {
-        h += '<p style="color:var(--text-secondary);font-size:12px;">No DSP stages. Add one below.</p>';
-    } else {
-        for (var i = 0; i < stages.length; i++) {
-            var s = stages[i];
-            h += '<div class="output-dsp-stage">';
-            h += '<input type="checkbox" ' + (s.enabled ? 'checked' : '') + ' onchange="outputDspToggleStage(' + i + ',this.checked)" title="Enable/disable">';
-            h += '<span class="stage-type">' + (s.type || '?') + '</span>';
-            h += '<span class="stage-label">' + (s.label || '') + '</span>';
-            h += '<span class="stage-params">' + outputDspFormatParams(s) + '</span>';
-            h += '<button class="btn-icon" onclick="outputDspEditStage(' + i + ')" title="Edit"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
-            h += '<button class="btn-icon" onclick="outputDspRemoveStage(' + i + ')" title="Remove"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
-            h += '</div>';
-        }
-    }
-
-    // Add stage buttons
-    h += '<div class="output-dsp-add-row">';
-    h += '<select id="outputDspAddType" style="font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);">';
-    for (var t = 0; t < OUTPUT_DSP_STAGE_TYPES.length; t++) {
-        h += '<option value="' + OUTPUT_DSP_STAGE_TYPES[t].value + '">' + OUTPUT_DSP_STAGE_TYPES[t].label + '</option>';
-    }
-    h += '</select>';
-    h += '<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px;" onclick="outputDspAddStage()">Add Stage</button>';
-    h += '</div>';
-
-    // Crossover quick setup
-    h += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);">';
-    h += '<span style="font-size:11px;font-weight:600;color:var(--text-secondary);">Crossover</span>';
-    h += '<div class="btn-row" style="margin-top:6px;gap:6px;">';
-    h += '<input type="number" id="outputDspXoFreq" value="80" min="20" max="20000" step="1" style="width:70px;font-size:12px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg-surface);color:var(--text-primary);"> Hz';
-    h += '<select id="outputDspXoOrder" style="font-size:12px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg-surface);color:var(--text-primary);">';
-    h += '<option value="2">LR2 (12dB)</option><option value="4" selected>LR4 (24dB)</option><option value="8">LR8 (48dB)</option>';
-    h += '</select>';
-    h += '<input type="number" id="outputDspXoPairCh" value="0" min="0" max="7" style="width:50px;font-size:12px;padding:4px;border:1px solid var(--border);border-radius:4px;background:var(--bg-surface);color:var(--text-primary);"> pair ch';
-    h += '<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px;" onclick="outputDspSetupCrossover()">Apply XO</button>';
-    h += '</div></div>';
-
-    el.innerHTML = h;
-}
-
-function outputDspFormatParams(s) {
-    if (!s) return '';
-    var type = s.type || '';
-    if (type === 'GAIN') return (s.gainDb !== undefined ? s.gainDb.toFixed(1) + ' dB' : '');
-    if (type === 'LIMITER') return (s.thresholdDb !== undefined ? s.thresholdDb.toFixed(1) + ' dB' : '');
-    if (type === 'COMPRESSOR') return (s.thresholdDb !== undefined ? s.thresholdDb.toFixed(1) + ' dB ' + (s.ratio || '') + ':1' : '');
-    if (type === 'POLARITY') return (s.inverted ? 'Inv' : 'Normal');
-    if (type === 'MUTE') return (s.muted ? 'Muted' : 'Unmuted');
-    // Biquad types
-    if (s.frequency !== undefined) {
-        var p = formatFreq(s.frequency);
-        if (s.gain !== undefined && s.gain !== 0) p += ' ' + s.gain.toFixed(1) + 'dB';
-        if (s.Q !== undefined) p += ' Q' + s.Q.toFixed(2);
-        return p;
-    }
-    return '';
-}
-
-function outputDspSetBypass(bp) {
-    fetch('/api/output/dsp', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ch: outputDspCh, bypass: bp })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function() { outputDspLoadChannel(); })
-    .catch(function(err) { showToast('Error: ' + err, true); });
-}
-
-function outputDspToggleStage(idx, enabled) {
-    // Use PUT to update the stage enable state
-    // For simplicity, reload the full config
-    fetch('/api/output/dsp', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ch: outputDspCh, stageIndex: idx, stageEnabled: enabled })
-    })
-    .then(function() { outputDspLoadChannel(); })
-    .catch(function(err) { showToast('Error: ' + err, true); });
-}
-
-function outputDspAddStage() {
-    var sel = document.getElementById('outputDspAddType');
-    if (!sel) return;
-    var type = sel.value;
-    fetch('/api/output/dsp/stage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ch: outputDspCh, type: type })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-        if (d.status === 'ok') { showToast('Stage added'); outputDspLoadChannel(); }
-        else showToast('Failed: ' + (d.error || ''), true);
-    })
-    .catch(function(err) { showToast('Error: ' + err, true); });
-}
-
-function outputDspRemoveStage(idx) {
-    fetch('/api/output/dsp/stage', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ch: outputDspCh, index: idx })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-        if (d.status === 'ok') { showToast('Stage removed'); outputDspLoadChannel(); }
-        else showToast('Failed: ' + (d.error || ''), true);
-    })
-    .catch(function(err) { showToast('Error: ' + err, true); });
-}
-
-function outputDspEditStage(idx) {
-    if (!outputDspConfig || !outputDspConfig.stages) return;
-    var s = outputDspConfig.stages[idx];
-    if (!s) return;
-    var type = s.type || '';
-
-    // Simple prompt-based editing for now
-    if (type === 'GAIN') {
-        var val = prompt('Gain (dB):', s.gainDb !== undefined ? s.gainDb : 0);
-        if (val === null) return;
-        // Would need a stage-update endpoint — for now, rebuild via remove+add
-        showToast('Stage editing: use API directly for now');
-    } else if (type === 'POLARITY') {
-        showToast(s.inverted ? 'Toggling to normal' : 'Toggling to inverted');
-    } else if (s.frequency !== undefined) {
-        var freq = prompt('Frequency (Hz):', s.frequency);
-        if (freq === null) return;
-        showToast('Stage editing: use API directly for now');
-    } else {
-        showToast('Edit not available for this stage type');
-    }
-}
-
-function outputDspSetupCrossover() {
-    var freqEl = document.getElementById('outputDspXoFreq');
-    var orderEl = document.getElementById('outputDspXoOrder');
-    var pairEl = document.getElementById('outputDspXoPairCh');
-    if (!freqEl || !orderEl || !pairEl) return;
-
-    var freqHz = parseFloat(freqEl.value) || 80;
-    var order = parseInt(orderEl.value) || 4;
-    var pairCh = parseInt(pairEl.value) || 0;
-
-    fetch('/api/output/dsp/crossover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subCh: outputDspCh, mainCh: pairCh, freqHz: freqHz, order: order })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-        if (d.status === 'ok') {
-            showToast('Crossover applied (' + d.stagesAdded + ' stages)');
-            outputDspLoadChannel();
-        } else {
-            showToast('Failed: ' + (d.error || ''), true);
-        }
-    })
-    .catch(function(err) { showToast('Error: ' + err, true); });
-}
-
-//# sourceURL=19-output-dsp.js
 
 // ===== WiFi Network Variables =====
 let wifiScanInProgress = false;
@@ -13037,7 +12409,6 @@ function initFirmwareDragDrop() {
                 drawCpuGraph();
                 drawMemoryGraph();
                 drawPsramGraph();
-                dspDrawFreqResponse();
             }, 250);
         });
 

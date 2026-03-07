@@ -7,7 +7,6 @@
                 drawCpuGraph();
                 drawMemoryGraph();
                 drawPsramGraph();
-                dspDrawFreqResponse();
             }, 250);
         });
 

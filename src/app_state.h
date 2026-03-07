@@ -515,6 +515,11 @@ public:
   bool isHalDeviceDirty() const { return _halDeviceDirty; }
   void clearHalDeviceDirty() { _halDeviceDirty = false; }
 
+  // ===== Audio Channel Map Dirty Flag =====
+  void markChannelMapDirty() { _channelMapDirty = true; app_events_signal(EVT_CHANNEL_MAP); }
+  bool isChannelMapDirty() const { return _channelMapDirty; }
+  void clearChannelMapDirty() { _channelMapDirty = false; }
+
   // MQTT state tracking for DAC
   bool prevMqttDacEnabled = false;
   uint8_t prevMqttDacVolume = 80;
@@ -587,6 +592,7 @@ private:
   bool _es8311Dirty = false;
   bool _ioRegistryDirty = false;
   bool _halDeviceDirty = false;
+  bool _channelMapDirty = false;
 #endif
 };
 

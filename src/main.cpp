@@ -1118,7 +1118,13 @@ void loop() {
   // Broadcast HAL device state changes
   if (appState.isHalDeviceDirty()) {
     sendHalDeviceState();
+    sendAudioChannelMap();  // Channel map depends on HAL device state
     appState.clearHalDeviceDirty();
+  }
+  // Broadcast audio channel map changes
+  if (appState.isChannelMapDirty()) {
+    sendAudioChannelMap();
+    appState.clearChannelMapDirty();
   }
 #endif
 
