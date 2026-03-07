@@ -2,6 +2,8 @@
 #include "auth_handler.h"
 #include "config.h"
 #include "app_state.h"
+#include "diag_journal.h"
+#include "diag_event.h"
 #include "crash_log.h"
 #include "settings_manager.h"
 #include "wifi_manager.h"
@@ -1402,6 +1404,36 @@ void sendDebugState() {
       pin["c"] = p.c;
     }
   }
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}
+
+// ===== Diagnostic Event Broadcast =====
+void sendDiagEvent() {
+  DiagEvent ev;
+  if (!diag_journal_latest(&ev)) return;
+
+  JsonDocument doc;
+  doc["type"]  = "diagEvent";
+  doc["seq"]   = ev.seq;
+  doc["boot"]  = ev.bootId;
+  doc["t"]     = ev.timestamp;
+  doc["heap"]  = ev.heapFree;
+
+  // Error code as hex string "0x1001"
+  char codeBuf[8];
+  snprintf(codeBuf, sizeof(codeBuf), "0x%04X", ev.code);
+  doc["c"]     = codeBuf;
+
+  doc["corr"]  = ev.corrId;
+  doc["sub"]   = diag_subsystem_name(diag_subsystem_from_code((DiagErrorCode)ev.code));
+  doc["dev"]   = ev.device;
+  doc["slot"]  = ev.slot;
+  doc["msg"]   = ev.message;
+  doc["sev"]   = diag_severity_char((DiagSeverity)ev.severity);
+  doc["retry"] = ev.retryCount;
+
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());

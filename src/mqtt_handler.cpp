@@ -1,5 +1,7 @@
 #include "mqtt_handler.h"
 #include "app_state.h"
+#include "diag_journal.h"
+#include "diag_event.h"
 #include "buzzer_handler.h"
 #include "config.h"
 #include "crash_log.h"
@@ -1636,6 +1638,41 @@ void publishMqttDebugState() {
                      appState.debugI2sMetrics ? "ON" : "OFF", true);
   mqttClient.publish((base + "/debug/task_monitor").c_str(),
                      appState.debugTaskMonitor ? "ON" : "OFF", true);
+}
+
+// ===== Diagnostic Event Publishing =====
+void publishMqttDiagEvent() {
+  if (!mqttClient.connected()) return;
+
+  DiagEvent ev;
+  if (!diag_journal_latest(&ev)) return;
+
+  // Severity filtering: skip events below threshold
+  if (ev.severity < appState.mqttErrorThreshold) return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  JsonDocument doc;
+  doc["seq"]   = ev.seq;
+  doc["boot"]  = ev.bootId;
+  doc["t"]     = ev.timestamp;
+  doc["heap"]  = ev.heapFree;
+
+  char codeBuf[8];
+  snprintf(codeBuf, sizeof(codeBuf), "0x%04X", ev.code);
+  doc["c"]     = codeBuf;
+
+  doc["corr"]  = ev.corrId;
+  doc["sub"]   = diag_subsystem_name(diag_subsystem_from_code((DiagErrorCode)ev.code));
+  doc["dev"]   = ev.device;
+  doc["slot"]  = ev.slot;
+  doc["msg"]   = ev.message;
+  doc["sev"]   = diag_severity_char((DiagSeverity)ev.severity);
+  doc["retry"] = ev.retryCount;
+
+  String json;
+  serializeJson(doc, json);
+  mqttClient.publish((base + "/diagnostics/errors").c_str(), json.c_str());
 }
 
 #ifdef DSP_ENABLED

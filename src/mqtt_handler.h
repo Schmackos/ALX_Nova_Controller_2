@@ -48,6 +48,9 @@ void publishMqttBootAnimState();
 void publishMqttUsbAudioState();
 #endif
 
+// ===== Diagnostic Event Publishing =====
+void publishMqttDiagEvent();
+
 // ===== Home Assistant Discovery =====
 void publishHADiscovery();
 void removeHADiscovery();

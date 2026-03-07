@@ -40,6 +40,9 @@ void sendAudioChannelMap();
 void sendUsbAudioState();
 #endif
 
+// ===== Diagnostic Event Broadcast =====
+void sendDiagEvent();
+
 // ===== Deferred Initial-State Drain =====
 void drainPendingInitState();
 

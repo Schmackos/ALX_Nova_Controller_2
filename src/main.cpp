@@ -1,5 +1,7 @@
 #include "app_state.h"
 #include "auth_handler.h"
+#include "diag_journal.h"
+#include "diag_event.h"
 #include "button_handler.h"
 #include "buzzer_handler.h"
 #include "config.h"
@@ -29,6 +31,7 @@
 #include "hal/hal_device_manager.h"
 #include "hal/hal_api.h"
 #include "hal/hal_pipeline_bridge.h"
+#include "hal/hal_audio_health_bridge.h"
 #include "hal/hal_settings.h"
 #include "hal/hal_ns4150b.h"
 #include "hal/hal_temp_sensor.h"
@@ -210,6 +213,9 @@ void setup() {
     LOG_I("[Main] LittleFS initialized");
   }
 
+  // Initialize diagnostic journal (after LittleFS, before any diag_emit)
+  diag_journal_init();
+
   // Record reset reason to crash log ring buffer (persisted in LittleFS)
   String resetReason = getResetReasonString();
   crashlog_record(resetReason);
@@ -284,6 +290,9 @@ void setup() {
 
   // Sync HAL pipeline bridge after all devices registered
   hal_pipeline_sync();
+
+  // Initialize audio health bridge (flap guard state)
+  hal_audio_health_bridge_init();
 
   // Register NS4150B amplifier with HAL (ES8311 PA pin)
   _halNs4150b = new HalNs4150b(ES8311_PA_PIN);
@@ -514,6 +523,99 @@ void setup() {
     if (!requireAuth())
       return;
     handleDiagnostics();
+  });
+  // Diagnostic journal endpoints
+  server.on("/api/diagnostics/journal", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    doc["type"] = "diagJournal";
+    uint8_t count = diag_journal_count();
+    JsonArray entries = doc["entries"].to<JsonArray>();
+    for (uint8_t i = 0; i < count; i++) {
+      DiagEvent ev;
+      if (diag_journal_read(i, &ev)) {
+        JsonObject e = entries.add<JsonObject>();
+        e["seq"]   = ev.seq;
+        e["boot"]  = ev.bootId;
+        e["t"]     = ev.timestamp;
+        e["heap"]  = ev.heapFree;
+        char codeBuf[8];
+        snprintf(codeBuf, sizeof(codeBuf), "0x%04X", ev.code);
+        e["c"]     = codeBuf;
+        e["corr"]  = ev.corrId;
+        e["sub"]   = diag_subsystem_name(diag_subsystem_from_code((DiagErrorCode)ev.code));
+        e["dev"]   = ev.device;
+        e["slot"]  = ev.slot;
+        e["msg"]   = ev.message;
+        e["sev"]   = diag_severity_char((DiagSeverity)ev.severity);
+        e["retry"] = ev.retryCount;
+      }
+    }
+    doc["count"] = count;
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+  });
+  server.on("/api/diagnostics/journal", HTTP_DELETE, []() {
+    if (!requireAuth()) return;
+    diag_journal_clear();
+    server.send(200, "application/json", "{\"success\":true}");
+  });
+  // Diagnostic snapshot — single JSON blob for AI-assisted debugging
+  server.on("/api/diag/snapshot", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    JsonDocument doc;
+    doc["type"] = "diagSnapshot";
+    doc["timestamp"] = millis();
+    doc["freeHeap"] = ESP.getFreeHeap();
+    doc["freePsram"] = ESP.getFreePsram();
+    doc["maxAllocHeap"] = ESP.getMaxAllocHeap();
+    doc["fsmState"] = (int)appState.currentFSMState;
+    // HAL devices
+#ifdef DAC_ENABLED
+    {
+      JsonArray devs = doc["halDevices"].to<JsonArray>();
+      HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
+        JsonArray* arr = static_cast<JsonArray*>(ctx);
+        JsonObject d = arr->add<JsonObject>();
+        d["slot"]       = dev->getSlot();
+        d["name"]       = dev->getDescriptor().name;
+        d["compatible"] = dev->getDescriptor().compatible;
+        d["type"]       = (int)dev->getType();
+        d["state"]      = (int)dev->_state;
+        d["ready"]      = dev->_ready;
+        const HalRetryState* rs = HalDeviceManager::instance().getRetryState(dev->getSlot());
+        if (rs) {
+          d["retries"]  = rs->count;
+          d["lastErr"]  = rs->lastErrorCode;
+        }
+        d["faults"]     = HalDeviceManager::instance().getFaultCount(dev->getSlot());
+      }, &devs);
+    }
+#endif
+    // Recent diag events
+    {
+      JsonArray events = doc["recentEvents"].to<JsonArray>();
+      uint8_t count = diag_journal_count();
+      uint8_t limit = count < 10 ? count : 10;
+      for (uint8_t i = 0; i < limit; i++) {
+        DiagEvent ev;
+        if (diag_journal_read(i, &ev)) {
+          JsonObject e = events.add<JsonObject>();
+          e["seq"]  = ev.seq;
+          e["t"]    = ev.timestamp;
+          char codeBuf[8];
+          snprintf(codeBuf, sizeof(codeBuf), "0x%04X", ev.code);
+          e["c"]    = codeBuf;
+          e["dev"]  = ev.device;
+          e["msg"]  = ev.message;
+          e["sev"]  = diag_severity_char((DiagSeverity)ev.severity);
+        }
+      }
+    }
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
   });
   server.on("/api/factoryreset", HTTP_POST, []() {
     if (!requireAuth())
@@ -1160,6 +1262,22 @@ void loop() {
     appState.clearSettingsDirty();
   }
 
+  // Broadcast diagnostic events (EVT_DIAG handler)
+  if (appState.isDiagJournalDirty()) {
+    sendDiagEvent();
+    publishMqttDiagEvent();
+    appState.clearDiagJournalDirty();
+  }
+
+  // Periodic journal flush (WARN+ entries to LittleFS, every 60s)
+  {
+    static unsigned long lastJournalFlush = 0;
+    if (millis() - lastJournalFlush >= 60000) {
+      diag_journal_flush();
+      lastJournalFlush = millis();
+    }
+  }
+
   // Broadcast Smart Sensing state every second
   static unsigned long lastSmartSensingBroadcast = 0;
   if (millis() - lastSmartSensingBroadcast >= 1000) {
@@ -1182,6 +1300,15 @@ void loop() {
   if (millis() - lastHalHealthCheck >= 30000) {
     lastHalHealthCheck = millis();
     HalDeviceManager::instance().healthCheckAll();
+  }
+
+  // Audio → HAL health bridge (every 5s, aligned with audio_periodic_dump)
+  {
+    static unsigned long lastAudioHealthBridge = 0;
+    if (millis() - lastAudioHealthBridge >= 5000) {
+      lastAudioHealthBridge = millis();
+      hal_audio_health_check();
+    }
   }
 #endif
 
