@@ -114,6 +114,12 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define USB_AUDIO_TASK_CORE           0     // TinyUSB task on Core 0 (separate from audio on Core 1)
 #endif
 
+// ===== Diagnostic Journal Configuration =====
+#define DIAG_JOURNAL_HOT_ENTRIES    32    // In-memory ring buffer (PSRAM, 2KB)
+#define DIAG_JOURNAL_MAX_ENTRIES   800    // Persistent ring on LittleFS (64KB)
+#define DIAG_FLUSH_INTERVAL_MS   60000    // Persist WARN+ entries every 60s
+#define DIAG_JOURNAL_FILE "/diag_journal.bin"
+
 // ===== Server Ports =====
 const int WEB_SERVER_PORT = 80;
 const int WEBSOCKET_PORT = 81;

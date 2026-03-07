@@ -27,7 +27,7 @@ EventBits_t app_events_wait(uint32_t timeout_ms);
 #define EVT_USB_VU       (1UL <<  8)
 #define EVT_SETTINGS     (1UL <<  9)
 #define EVT_ADC_ENABLED  (1UL << 10)
-// Bit 12 is spare (gap between EVT_ETHERNET and EVT_DAC_SETTINGS)
+#define EVT_DIAG         (1UL << 12)
 // Bits 16-23 are spare (8 unused bits in the 24-bit FreeRTOS event group)
 #define EVT_ETHERNET     (1UL << 11)
 #define EVT_DAC_SETTINGS (1UL << 13)

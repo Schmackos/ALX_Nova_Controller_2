@@ -34,9 +34,6 @@ public:
     bool setVolume(uint8_t percent) override;
     bool setMute(bool mute) override;
 
-private:
-    uint8_t _cachedVolume = 0;
-    bool    _cachedMute   = false;
 };
 
 #endif // DAC_ENABLED

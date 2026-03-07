@@ -518,6 +518,14 @@ public:
   bool isChannelMapDirty() const { return _channelMapDirty; }
   void clearChannelMapDirty() { _channelMapDirty = false; }
 
+  // ===== Diagnostic Journal Dirty Flag =====
+  void markDiagJournalDirty() { _diagJournalDirty = true; app_events_signal(EVT_DIAG); }
+  bool isDiagJournalDirty() const { return _diagJournalDirty; }
+  void clearDiagJournalDirty() { _diagJournalDirty = false; }
+
+  // ===== Diagnostic Config =====
+  uint8_t mqttErrorThreshold = 2;  // 0=all, 1=warn+, 2=error+ (default), 3=crit only
+
   // MQTT state tracking for DAC
   bool prevMqttDacEnabled = false;
   uint8_t prevMqttDacVolume = 80;
@@ -591,6 +599,7 @@ private:
   bool _halDeviceDirty = false;
   bool _channelMapDirty = false;
 #endif
+  bool _diagJournalDirty = false;
 };
 
 // Convenience macro for accessing AppState

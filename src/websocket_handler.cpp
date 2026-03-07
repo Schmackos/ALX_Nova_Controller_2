@@ -1161,10 +1161,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           int lane = doc["lane"] | -1;
           float db = doc["db"] | 0.0f;
           if (lane >= 0 && lane < AUDIO_PIPELINE_MAX_INPUTS) {
-            float linear = powf(10.0f, db / 20.0f);
             audio_pipeline_bypass_input(lane, false);
-            // TODO: per-input gain via DSP gain stage or source gainLinear
-            LOG_I("[WebSocket] Input gain lane=%d db=%.1f", lane, db);
+            LOG_I("[WebSocket] Input gain lane=%d db=%.1f (gain not yet applied)", lane, db);
           }
         }
         else if (msgType == "setInputMute") {

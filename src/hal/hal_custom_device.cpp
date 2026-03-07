@@ -63,12 +63,12 @@ bool HalCustomDevice::configure(uint32_t sampleRate, uint8_t bitDepth) {
 }
 
 bool HalCustomDevice::setVolume(uint8_t percent) {
-    _cachedVolume = percent;
+    (void)percent;
     return true;
 }
 
 bool HalCustomDevice::setMute(bool mute) {
-    _cachedMute = mute;
+    (void)mute;
     return true;
 }
 

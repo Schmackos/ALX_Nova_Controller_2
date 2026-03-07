@@ -205,6 +205,19 @@ inline int digitalRead(uint8_t pin) {
 }
 inline void pinMode(uint8_t pin, uint8_t mode) { /* Mock - do nothing */ }
 
+// Mock ESP class
+class EspClass {
+public:
+    uint32_t getFreeHeap() { return 200000; }  // 200KB default
+    uint32_t getMaxAllocHeap() { return 180000; }
+    uint32_t getFreePsram() { return 4000000; }
+    void restart() {}
+};
+static EspClass ESP;
+
+// Mock PSRAM allocation (falls back to regular calloc in tests)
+inline void* ps_calloc(size_t n, size_t size) { return calloc(n, size); }
+
 // Mock random functions
 inline void randomSeed(unsigned long seed) { srand(seed); }
 inline long random(long max) { return max > 0 ? rand() % max : 0; }
