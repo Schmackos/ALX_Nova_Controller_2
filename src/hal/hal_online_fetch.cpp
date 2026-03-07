@@ -32,7 +32,7 @@ HalFetchResult hal_online_fetch(const char* compatible, HalDeviceDescriptor* out
     // Check heap — TLS needs ~50KB internal SRAM (mbedTLS buffers + AES DMA descriptors)
     size_t maxBlock = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
     if (maxBlock < 50000) {
-        LOG_W("[HAL Fetch]", "Heap too low for TLS: %u bytes", maxBlock);
+        LOG_W("[HAL:Fetch]", "Heap too low for TLS: %u bytes", maxBlock);
         return HAL_FETCH_LOW_HEAP;
     }
 
@@ -76,25 +76,25 @@ HalFetchResult hal_online_fetch(const char* compatible, HalDeviceDescriptor* out
 
     if (httpCode == 304) {
         http.end();
-        LOG_I("[HAL Fetch]", "%s: 304 Not Modified (ETag cached)", model);
+        LOG_I("[HAL:Fetch]", "%s: 304 Not Modified (ETag cached)", model);
         return HAL_FETCH_NOT_MODIFIED;
     }
 
     if (httpCode == 404) {
         http.end();
-        LOG_I("[HAL Fetch]", "%s: 404 Not Found", model);
+        LOG_I("[HAL:Fetch]", "%s: 404 Not Found", model);
         return HAL_FETCH_NOT_FOUND;
     }
 
     if (httpCode == 429) {
         http.end();
-        LOG_W("[HAL Fetch]", "%s: 429 Rate Limited", model);
+        LOG_W("[HAL:Fetch]", "%s: 429 Rate Limited", model);
         return HAL_FETCH_RATE_LIMITED;
     }
 
     if (httpCode != 200) {
         http.end();
-        LOG_E("[HAL Fetch]", "%s: HTTP %d", model, httpCode);
+        LOG_E("[HAL:Fetch]", "%s: HTTP %d", model, httpCode);
         return HAL_FETCH_ERROR;
     }
 
@@ -103,7 +103,7 @@ HalFetchResult hal_online_fetch(const char* compatible, HalDeviceDescriptor* out
     http.end();
 
     if (!hal_parse_device_yaml(body.c_str(), body.length(), out)) {
-        LOG_E("[HAL Fetch]", "%s: YAML parse failed", model);
+        LOG_E("[HAL:Fetch]", "%s: YAML parse failed", model);
         return HAL_FETCH_ERROR;
     }
 
@@ -115,7 +115,7 @@ HalFetchResult hal_online_fetch(const char* compatible, HalDeviceDescriptor* out
         prefs.end();
     }
 
-    LOG_I("[HAL Fetch]", "%s: OK, parsed '%s'", model, out->name);
+    LOG_I("[HAL:Fetch]", "%s: OK, parsed '%s'", model, out->name);
     return HAL_FETCH_OK;
 #else
     // Native test — network calls are not available

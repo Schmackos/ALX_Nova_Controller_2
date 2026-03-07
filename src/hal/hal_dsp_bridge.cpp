@@ -33,7 +33,7 @@ HalInitResult HalDspBridge::init() {
     // Just mark ourselves available
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HalDspBridge] DSP pipeline bridge ready");
+    LOG_I("[HAL:DspBridge] DSP pipeline bridge ready");
     return hal_init_ok();
 }
 
@@ -43,7 +43,7 @@ void HalDspBridge::deinit() {
 }
 
 void HalDspBridge::dumpConfig() {
-    LOG_I("[HalDspBridge] DSP Pipeline bridge — dspEnabled=%d",
+    LOG_I("[HAL:DspBridge] DSP Pipeline bridge — dspEnabled=%d",
 #ifndef NATIVE_TEST
           AppState::getInstance().dspEnabled
 #else

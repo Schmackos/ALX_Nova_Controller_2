@@ -176,7 +176,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
         hal_save_device_config(static_cast<uint8_t>(slot));
         appState.markHalDeviceDirty();
-        LOG_I("[HAL API]", "Manual register: %s slot %d (%s)", compatible, slot, ok ? "ok" : "init failed");
+        LOG_I("[HAL:API]", "Manual register: %s slot %d (%s)", compatible, slot, ok ? "ok" : "init failed");
 
         JsonDocument resp;
         resp["status"] = "ok";
@@ -286,7 +286,7 @@ void registerHalApiEndpoints(WebServer& server) {
         hal_save_device_config(slot);
 
         appState.markHalDeviceDirty();
-        LOG_I("[HAL API]", "Device removed from slot %d", slot);
+        LOG_I("[HAL:API]", "Device removed from slot %d", slot);
 
         server.send(200, "application/json", "{\"status\":\"ok\"}");
     });
@@ -420,7 +420,7 @@ void registerHalApiEndpoints(WebServer& server) {
         }
     });
 
-    LOG_I("[HAL API]", "Registered HAL REST endpoints");
+    LOG_I("[HAL:API]", "Registered HAL REST endpoints");
 }
 
 #endif // NATIVE_TEST

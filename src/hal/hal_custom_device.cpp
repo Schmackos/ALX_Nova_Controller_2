@@ -35,7 +35,7 @@ bool HalCustomDevice::probe() {
 HalInitResult HalCustomDevice::init() {
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL Custom]", "Custom device init: %s", _descriptor.name);
+    LOG_I("[HAL:Custom]", "Custom device init: %s", _descriptor.name);
     return hal_init_ok();
 }
 
@@ -45,7 +45,7 @@ void HalCustomDevice::deinit() {
 }
 
 void HalCustomDevice::dumpConfig() {
-    LOG_I("[HAL Custom]", "Custom: %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:Custom]", "Custom: %s (%s)", _descriptor.name, _descriptor.compatible);
 }
 
 bool HalCustomDevice::healthCheck() {
@@ -101,7 +101,7 @@ void hal_load_custom_devices() {
             String content = f.readString();
             JsonDocument doc;
             if (deserializeJson(doc, content) != DeserializationError::Ok) {
-                LOG_W("[HAL Custom]", "Bad JSON in %s — skipping", f.name());
+                LOG_W("[HAL:Custom]", "Bad JSON in %s — skipping", f.name());
                 f = dir.openNextFile();
                 continue;
             }
@@ -110,14 +110,14 @@ void hal_load_custom_devices() {
             const char* name = doc["name"] | compatible;
 
             if (strlen(compatible) == 0) {
-                LOG_W("[HAL Custom]", "Schema missing 'compatible' field — skipping");
+                LOG_W("[HAL:Custom]", "Schema missing 'compatible' field — skipping");
                 f = dir.openNextFile();
                 continue;
             }
 
             // Skip if already registered as a builtin
             if (mgr.findByCompatible(compatible)) {
-                LOG_I("[HAL Custom]", "Already registered: %s — skipping", compatible);
+                LOG_I("[HAL:Custom]", "Already registered: %s — skipping", compatible);
                 f = dir.openNextFile();
                 continue;
             }
@@ -138,14 +138,14 @@ void hal_load_custom_devices() {
 
             HalCustomDevice* dev = new HalCustomDevice(compatible, name, caps, busIdx);
             if (!dev) {
-                LOG_E("[HAL Custom]", "Out of memory allocating device: %s", compatible);
+                LOG_E("[HAL:Custom]", "Out of memory allocating device: %s", compatible);
                 f = dir.openNextFile();
                 continue;
             }
 
             int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL);
             if (slot < 0) {
-                LOG_E("[HAL Custom]", "No free slots for device: %s", compatible);
+                LOG_E("[HAL:Custom]", "No free slots for device: %s", compatible);
                 delete dev;
                 f = dir.openNextFile();
                 continue;
@@ -163,12 +163,12 @@ void hal_load_custom_devices() {
             }
 
             dev->init();
-            LOG_I("[HAL Custom]", "Loaded custom device: %s (slot %d)", name, slot);
+            LOG_I("[HAL:Custom]", "Loaded custom device: %s (slot %d)", name, slot);
         }
         f = dir.openNextFile();
     }
 #else
-    LOG_I("[HAL Custom]", "NATIVE_TEST: skipping LittleFS scan");
+    LOG_I("[HAL:Custom]", "NATIVE_TEST: skipping LittleFS scan");
 #endif // NATIVE_TEST
 }
 

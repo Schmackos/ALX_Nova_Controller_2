@@ -47,7 +47,7 @@ bool hal_i2s_tx_init(void** txHandle, const HalDeviceConfig* cfg) {
         return false;
     }
     *txHandle = (void*)tx;
-    LOG_I("[HAL I2S Bridge] TX channel init OK: %uHz %ubit pin=%d", rate, bits, dataPin);
+    LOG_I("[HAL:I2SBridge] TX channel init OK: %uHz %ubit pin=%d", rate, bits, dataPin);
     return true;
 #else
     *txHandle = (void*)0x1;  // Non-null mock handle
@@ -88,7 +88,7 @@ bool hal_i2s_rx_init(void** rxHandle, const HalDeviceConfig* cfg) {
         return false;
     }
     *rxHandle = (void*)rx;
-    LOG_I("[HAL I2S Bridge] RX channel init OK: %uHz %ubit pin=%d", rate, bits, dinPin);
+    LOG_I("[HAL:I2SBridge] RX channel init OK: %uHz %ubit pin=%d", rate, bits, dinPin);
     return true;
 #else
     *rxHandle = (void*)0x2;

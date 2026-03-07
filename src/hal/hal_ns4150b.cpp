@@ -36,7 +36,7 @@ bool HalNs4150b::probe()
 #endif
     // GPIO-only device — no read-back possible, always succeeds
     _state = HAL_STATE_DETECTED;
-    LOG_I("[NS4150B] probe OK — PA pin GPIO%d configured as output", _paPin);
+    LOG_I("[HAL:NS4150B] probe OK — PA pin GPIO%d configured as output", _paPin);
     return true;
 }
 
@@ -48,7 +48,7 @@ HalInitResult HalNs4150b::init()
     _enabled = true;
     _ready = true;
     _state = HAL_STATE_AVAILABLE;
-    LOG_I("[NS4150B] init — amplifier enabled on GPIO%d", _paPin);
+    LOG_I("[HAL:NS4150B] init — amplifier enabled on GPIO%d", _paPin);
     return hal_init_ok();
 }
 
@@ -60,14 +60,14 @@ void HalNs4150b::deinit()
     _enabled = false;
     _ready = false;
     _state = HAL_STATE_REMOVED;
-    LOG_I("[NS4150B] deinit — amplifier disabled on GPIO%d", _paPin);
+    LOG_I("[HAL:NS4150B] deinit — amplifier disabled on GPIO%d", _paPin);
 }
 
 void HalNs4150b::dumpConfig()
 {
-    LOG_I("[NS4150B] %s (%s)", _descriptor.name, _descriptor.compatible);
-    LOG_I("[NS4150B]   manufacturer: %s", _descriptor.manufacturer);
-    LOG_I("[NS4150B]   PA pin: GPIO%d, enabled: %s, state: %d",
+    LOG_I("[HAL:NS4150B] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:NS4150B]   manufacturer: %s", _descriptor.manufacturer);
+    LOG_I("[HAL:NS4150B]   PA pin: GPIO%d, enabled: %s, state: %d",
           _paPin, _enabled ? "yes" : "no", (int)_state);
 }
 
@@ -83,7 +83,7 @@ void HalNs4150b::setEnable(bool enabled)
     digitalWrite(_paPin, enabled ? HIGH : LOW);
 #endif
     _enabled = enabled;
-    LOG_I("[NS4150B] amplifier %s (GPIO%d)", enabled ? "enabled" : "disabled", _paPin);
+    LOG_I("[HAL:NS4150B] amplifier %s (GPIO%d)", enabled ? "enabled" : "disabled", _paPin);
 }
 
 #endif // DAC_ENABLED

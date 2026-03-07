@@ -29,7 +29,7 @@ HalEncoder::HalEncoder(int pinA, int pinB, int pinSw)
 bool HalEncoder::probe()
 {
     _state = HAL_STATE_DETECTED;
-    LOG_I("[HAL] probe OK — Rotary Encoder (A=%d, B=%d, SW=%d)", _pinA, _pinB, _pinSw);
+    LOG_I("[HAL:Encoder] probe OK — Rotary Encoder (A=%d, B=%d, SW=%d)", _pinA, _pinB, _pinSw);
     return true;
 }
 
@@ -41,7 +41,7 @@ HalInitResult HalEncoder::init()
     mgr.claimPin(_pinSw, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL] init — Rotary Encoder ready");
+    LOG_I("[HAL:Encoder] init — Rotary Encoder ready");
     return hal_init_ok();
 }
 
@@ -53,14 +53,14 @@ void HalEncoder::deinit()
     mgr.releasePin(_pinSw);
     _ready = false;
     _state = HAL_STATE_REMOVED;
-    LOG_I("[HAL] deinit — Rotary Encoder removed");
+    LOG_I("[HAL:Encoder] deinit — Rotary Encoder removed");
 }
 
 void HalEncoder::dumpConfig()
 {
-    LOG_I("[HAL] %s (%s)", _descriptor.name, _descriptor.compatible);
-    LOG_I("[HAL]   manufacturer: %s", _descriptor.manufacturer);
-    LOG_I("[HAL]   A=%d B=%d SW=%d", _pinA, _pinB, _pinSw);
+    LOG_I("[HAL:Encoder] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:Encoder]  manufacturer: %s", _descriptor.manufacturer);
+    LOG_I("[HAL:Encoder]  A=%d B=%d SW=%d", _pinA, _pinB, _pinSw);
 }
 
 bool HalEncoder::healthCheck()

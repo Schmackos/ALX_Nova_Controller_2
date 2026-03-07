@@ -28,7 +28,7 @@ HalButton::HalButton(int pin)
 bool HalButton::probe()
 {
     _state = HAL_STATE_DETECTED;
-    LOG_I("[HAL] probe OK — Reset Button (GPIO%d)", _pin);
+    LOG_I("[HAL:Button] probe OK — Reset Button (GPIO%d)", _pin);
     return true;
 }
 
@@ -38,7 +38,7 @@ HalInitResult HalButton::init()
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL] init — Reset Button ready on GPIO%d", _pin);
+    LOG_I("[HAL:Button] init — Reset Button ready on GPIO%d", _pin);
     return hal_init_ok();
 }
 
@@ -48,14 +48,14 @@ void HalButton::deinit()
     mgr.releasePin(_pin);
     _ready = false;
     _state = HAL_STATE_REMOVED;
-    LOG_I("[HAL] deinit — Reset Button removed");
+    LOG_I("[HAL:Button] deinit — Reset Button removed");
 }
 
 void HalButton::dumpConfig()
 {
-    LOG_I("[HAL] %s (%s)", _descriptor.name, _descriptor.compatible);
-    LOG_I("[HAL]   manufacturer: %s", _descriptor.manufacturer);
-    LOG_I("[HAL]   pin: GPIO%d", _pin);
+    LOG_I("[HAL:Button] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:Button]  manufacturer: %s", _descriptor.manufacturer);
+    LOG_I("[HAL:Button]  pin: GPIO%d", _pin);
 }
 
 bool HalButton::healthCheck()

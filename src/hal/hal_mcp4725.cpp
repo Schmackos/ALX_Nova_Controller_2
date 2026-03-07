@@ -33,12 +33,12 @@ bool HalMcp4725::probe()
     Wire.beginTransmission(_i2cAddr);
     uint8_t err = Wire.endTransmission();
     if (err != 0) {
-        LOG_I("[MCP4725] probe FAIL — no ACK at 0x%02X (err %d)", _i2cAddr, err);
+        LOG_I("[HAL:MCP4725] probe FAIL — no ACK at 0x%02X (err %d)", _i2cAddr, err);
         return false;
     }
 #endif
     _state = HAL_STATE_DETECTED;
-    LOG_I("[MCP4725] probe OK — 0x%02X on I2C bus %d", _i2cAddr, _busIndex);
+    LOG_I("[HAL:MCP4725] probe OK — 0x%02X on I2C bus %d", _i2cAddr, _busIndex);
     return true;
 }
 
@@ -46,13 +46,13 @@ HalInitResult HalMcp4725::init()
 {
     // Set DAC to 0V output on init
     if (!setVoltageCode(0)) {
-        LOG_I("[MCP4725] init FAIL — could not write DAC code");
+        LOG_I("[HAL:MCP4725] init FAIL — could not write DAC code");
         _state = HAL_STATE_ERROR;
         return hal_init_fail(DIAG_HAL_INIT_FAILED, "DAC write failed");
     }
     _ready = true;
     _state = HAL_STATE_AVAILABLE;
-    LOG_I("[MCP4725] init OK — 0x%02X, output at 0V", _i2cAddr);
+    LOG_I("[HAL:MCP4725] init OK — 0x%02X, output at 0V", _i2cAddr);
     return hal_init_ok();
 }
 
@@ -68,16 +68,16 @@ void HalMcp4725::deinit()
     _code  = 0;
     _ready = false;
     _state = HAL_STATE_REMOVED;
-    LOG_I("[MCP4725] deinit — 0x%02X", _i2cAddr);
+    LOG_I("[HAL:MCP4725] deinit — 0x%02X", _i2cAddr);
 }
 
 void HalMcp4725::dumpConfig()
 {
-    LOG_I("[MCP4725] %s (%s)", _descriptor.name, _descriptor.compatible);
-    LOG_I("[MCP4725]   manufacturer: %s", _descriptor.manufacturer);
-    LOG_I("[MCP4725]   I2C addr: 0x%02X, bus: %d", _i2cAddr, _busIndex);
-    LOG_I("[MCP4725]   DAC code: %u (%.1f%%)", _code, (_code * 100.0f) / 4095.0f);
-    LOG_I("[MCP4725]   state: %d, ready: %s", (int)_state, _ready ? "yes" : "no");
+    LOG_I("[HAL:MCP4725] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:MCP4725]   manufacturer: %s", _descriptor.manufacturer);
+    LOG_I("[HAL:MCP4725]   I2C addr: 0x%02X, bus: %d", _i2cAddr, _busIndex);
+    LOG_I("[HAL:MCP4725]   DAC code: %u (%.1f%%)", _code, (_code * 100.0f) / 4095.0f);
+    LOG_I("[HAL:MCP4725]   state: %d, ready: %s", (int)_state, _ready ? "yes" : "no");
 }
 
 bool HalMcp4725::healthCheck()
@@ -86,7 +86,7 @@ bool HalMcp4725::healthCheck()
     Wire.beginTransmission(_i2cAddr);
     uint8_t err = Wire.endTransmission();
     if (err != 0) {
-        LOG_I("[MCP4725] healthCheck FAIL — no ACK at 0x%02X", _i2cAddr);
+        LOG_I("[HAL:MCP4725] healthCheck FAIL — no ACK at 0x%02X", _i2cAddr);
         _ready = false;
         _state = HAL_STATE_UNAVAILABLE;
         return false;
@@ -113,11 +113,11 @@ bool HalMcp4725::setVoltageCode(uint16_t code)
     Wire.write((uint8_t)((code & 0x0F) << 4));  // Lower 4 bits, left-aligned
     uint8_t err = Wire.endTransmission();
     if (err != 0) {
-        LOG_I("[MCP4725] write FAIL — code %u, err %d", code, err);
+        LOG_I("[HAL:MCP4725] write FAIL — code %u, err %d", code, err);
         return false;
     }
 #endif
-    LOG_I("[MCP4725] DAC code = %u (%.1f%%)", code, (code * 100.0f) / 4095.0f);
+    LOG_I("[HAL:MCP4725] DAC code = %u (%.1f%%)", code, (code * 100.0f) / 4095.0f);
     return true;
 }
 

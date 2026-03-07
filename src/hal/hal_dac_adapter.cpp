@@ -71,7 +71,7 @@ void HalDacAdapter::deinit() {
 void HalDacAdapter::dumpConfig() {
     if (!_driver) return;
     const DacCapabilities& caps = _driver->getCapabilities();
-    LOG_I("[HAL] %s: %s by %s (legacy=0x%04X) ch=%u i2c=0x%02X hw_vol=%s",
+    LOG_I("[HAL:DacAdapter] %s: %s by %s (legacy=0x%04X) ch=%u i2c=0x%02X hw_vol=%s",
           _descriptor.compatible,
           _descriptor.name,
           caps.manufacturer ? caps.manufacturer : "?",

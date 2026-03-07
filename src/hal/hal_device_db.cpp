@@ -250,7 +250,7 @@ void hal_db_init() {
     DeserializationError err = deserializeJson(doc, f);
     f.close();
     if (err) {
-        LOG_W("[HAL DB]", "Failed to parse %s: %s", HAL_DB_FILE_PATH, err.c_str());
+        LOG_W("[HAL:DB]", "Failed to parse %s: %s", HAL_DB_FILE_PATH, err.c_str());
         return;
     }
 
@@ -272,7 +272,7 @@ void hal_db_init() {
         d.capabilities = obj["capabilities"] | 0;
         hal_db_add(&d);
     }
-    LOG_I("[HAL DB]", "Loaded %d entries (including builtins)", _dbCount);
+    LOG_I("[HAL:DB]", "Loaded %d entries (including builtins)", _dbCount);
 #endif
 }
 
@@ -339,12 +339,12 @@ bool hal_db_save() {
 
     File f = LittleFS.open(HAL_DB_FILE_PATH, "w");
     if (!f) {
-        LOG_E("[HAL DB]", "Failed to open %s for writing", HAL_DB_FILE_PATH);
+        LOG_E("[HAL:DB]", "Failed to open %s for writing", HAL_DB_FILE_PATH);
         return false;
     }
     serializeJson(doc, f);
     f.close();
-    LOG_I("[HAL DB]", "Saved %d entries to %s", _dbCount, HAL_DB_FILE_PATH);
+    LOG_I("[HAL:DB]", "Saved %d entries to %s", _dbCount, HAL_DB_FILE_PATH);
     return true;
 #else
     return true;
@@ -369,7 +369,7 @@ void hal_load_device_configs() {
     DeserializationError err = deserializeJson(doc, f);
     f.close();
     if (err) {
-        LOG_W("[HAL DB]", "Failed to parse %s: %s", HAL_CONFIG_FILE_PATH, err.c_str());
+        LOG_W("[HAL:DB]", "Failed to parse %s: %s", HAL_CONFIG_FILE_PATH, err.c_str());
         return;
     }
 
@@ -401,7 +401,7 @@ void hal_load_device_configs() {
 
         mgr.setConfig(slot, cfg);
     }
-    LOG_I("[HAL DB]", "Device configs loaded from %s", HAL_CONFIG_FILE_PATH);
+    LOG_I("[HAL:DB]", "Device configs loaded from %s", HAL_CONFIG_FILE_PATH);
 #endif
 }
 
@@ -436,12 +436,12 @@ bool hal_save_device_config(uint8_t slot) {
 
     File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");
     if (!f) {
-        LOG_E("[HAL DB]", "Failed to open %s for writing", HAL_CONFIG_FILE_PATH);
+        LOG_E("[HAL:DB]", "Failed to open %s for writing", HAL_CONFIG_FILE_PATH);
         return false;
     }
     serializeJson(doc, f);
     f.close();
-    LOG_I("[HAL DB]", "Saved device configs to %s", HAL_CONFIG_FILE_PATH);
+    LOG_I("[HAL:DB]", "Saved device configs to %s", HAL_CONFIG_FILE_PATH);
     return true;
 #else
     (void)slot;
@@ -513,12 +513,12 @@ void hal_provision_defaults() {
 
     File f = LittleFS.open("/hal_auto_devices.json", "w");
     if (!f) {
-        LOG_E("[HAL DB] Cannot create /hal_auto_devices.json");
+        LOG_E("[HAL:DB] Cannot create /hal_auto_devices.json");
         return;
     }
     serializeJson(doc, f);
     f.close();
-    LOG_I("[HAL DB] Default auto-devices written to /hal_auto_devices.json");
+    LOG_I("[HAL:DB] Default auto-devices written to /hal_auto_devices.json");
 #endif
 }
 
@@ -533,7 +533,7 @@ void hal_load_auto_devices() {
     DeserializationError err = deserializeJson(doc, f);
     f.close();
     if (err) {
-        LOG_E("[HAL DB] Parse error in /hal_auto_devices.json: %s", err.c_str());
+        LOG_E("[HAL:DB] Parse error in /hal_auto_devices.json: %s", err.c_str());
         return;
     }
 
@@ -545,14 +545,14 @@ void hal_load_auto_devices() {
 
         // Skip if already registered (e.g. by dac_hal.cpp or a previous call)
         if (mgr.findByCompatible(compatible) != nullptr) {
-            LOG_I("[HAL DB] '%s' already registered — skip", compatible);
+            LOG_I("[HAL:DB] '%s' already registered — skip", compatible);
             continue;
         }
 
         // Look up driver factory
         const HalDriverEntry* entry = hal_registry_find(compatible);
         if (!entry || !entry->factory) {
-            LOG_W("[HAL DB] No factory for '%s' — skip", compatible);
+            LOG_W("[HAL:DB]No factory for '%s' — skip", compatible);
             continue;
         }
 
@@ -560,7 +560,7 @@ void hal_load_auto_devices() {
         int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL);
         if (slot < 0) {
             delete dev;
-            LOG_W("[HAL DB] No free slot for '%s' — skip", compatible);
+            LOG_W("[HAL:DB]No free slot for '%s' — skip", compatible);
             continue;
         }
 
@@ -597,7 +597,7 @@ void hal_load_auto_devices() {
             hal_pipeline_on_device_available(slot);
         }
 
-        LOG_I("[HAL DB] Auto-device '%s' (%s) slot %d%s",
+        LOG_I("[HAL:DB]Auto-device '%s' (%s) slot %d%s",
               compatible, label[0] ? label : "?", slot,
               probeOnly ? " [probe-only]" : " [ready]");
     }

@@ -90,7 +90,7 @@ bool HalEs8311::_writeReg(uint8_t reg, uint8_t val) {
     Wire.write(val);
     uint8_t err = Wire.endTransmission();
     if (err != 0) {
-        LOG_E("[HalEs8311] I2C write failed: reg=0x%02X val=0x%02X err=%d", reg, val, err);
+        LOG_E("[HAL:ES8311] I2C write failed: reg=0x%02X val=0x%02X err=%d", reg, val, err);
         return false;
     }
     return true;
@@ -107,7 +107,7 @@ uint8_t HalEs8311::_readReg(uint8_t reg) {
     Wire.endTransmission(false);
     Wire.requestFrom(_i2cAddr, (uint8_t)1);
     if (Wire.available()) return Wire.read();
-    LOG_E("[HalEs8311] I2C read failed: reg=0x%02X", reg);
+    LOG_E("[HAL:ES8311] I2C read failed: reg=0x%02X", reg);
     return 0xFF;
 #else
     (void)reg;
@@ -125,13 +125,13 @@ void HalEs8311::_initClocks(uint32_t sampleRate) {
     if (!coeff) {
         coeff = es8311_find_coeff(ES8311_DEFAULT_MCLK, 48000);
         if (!coeff) {
-            LOG_E("[HalEs8311] Fatal: no 48kHz clock coefficients found");
+            LOG_E("[HAL:ES8311] Fatal: no 48kHz clock coefficients found");
             return;
         }
-        LOG_W("[HalEs8311] No coeff for %luHz, defaulting to 48kHz", (unsigned long)sampleRate);
+        LOG_W("[HAL:ES8311] No coeff for %luHz, defaulting to 48kHz", (unsigned long)sampleRate);
     }
 
-    LOG_I("[HalEs8311] Clock config: MCLK=%lu SR=%lu",
+    LOG_I("[HAL:ES8311] Clock config: MCLK=%lu SR=%lu",
           (unsigned long)coeff->mclk, (unsigned long)coeff->sampleRate);
 
     _writeReg(ES8311_REG_CLK_MANAGER1, 0x3F);
@@ -197,7 +197,7 @@ HalInitResult HalEs8311::init() {
         _muted = cfg->mute;
     }
 
-    LOG_I("[HalEs8311] Initializing (I2C addr=0x%02X, SDA=%d, SCL=%d, PA=%d)",
+    LOG_I("[HAL:ES8311] Initializing (I2C addr=0x%02X, SDA=%d, SCL=%d, PA=%d)",
           _i2cAddr, _sdaPin, _sclPin, _paPin);
 
 #ifndef NATIVE_TEST
@@ -207,7 +207,7 @@ HalInitResult HalEs8311::init() {
 
     // Initialize I2C on the onboard bus (Wire, not Wire1)
     Wire.begin(_sdaPin, _sclPin, 100000);
-    LOG_I("[HalEs8311] I2C initialized (SDA=%d, SCL=%d, 100kHz)", _sdaPin, _sclPin);
+    LOG_I("[HAL:ES8311] I2C initialized (SDA=%d, SCL=%d, 100kHz)", _sdaPin, _sclPin);
 
     // I2C noise immunity — write GPIO_CFG twice (ES8311 datasheet recommendation)
     _writeReg(ES8311_REG_GPIO_CFG, 0x08);
@@ -216,9 +216,9 @@ HalInitResult HalEs8311::init() {
     // Verify chip is present via ID registers
     uint8_t id1 = _readReg(ES8311_REG_CHIP_ID1);
     uint8_t id2 = _readReg(ES8311_REG_CHIP_ID2);
-    LOG_I("[HalEs8311] Chip ID: 0x%02X 0x%02X (expected 0x83 0x11)", id1, id2);
+    LOG_I("[HAL:ES8311] Chip ID: 0x%02X 0x%02X (expected 0x83 0x11)", id1, id2);
     if (id1 != 0x83 || id2 != 0x11) {
-        LOG_W("[HalEs8311] Unexpected chip ID — continuing anyway");
+        LOG_W("[HAL:ES8311] Unexpected chip ID — continuing anyway");
     }
 #endif
 
@@ -276,7 +276,7 @@ HalInitResult HalEs8311::init() {
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
 
-    LOG_I("[HalEs8311] Initialization complete — PA enabled, DAC unmuted, vol=%d%%", _volume);
+    LOG_I("[HAL:ES8311] Initialization complete — PA enabled, DAC unmuted, vol=%d%%", _volume);
     return hal_init_ok();
 }
 
@@ -300,11 +300,11 @@ void HalEs8311::deinit() {
     _ready = false;
     _state = HAL_STATE_REMOVED;
 
-    LOG_I("[HalEs8311] Deinitialized");
+    LOG_I("[HAL:ES8311] Deinitialized");
 }
 
 void HalEs8311::dumpConfig() {
-    LOG_I("[HalEs8311] %s by %s (compat=%s) i2c=0x%02X sda=%d scl=%d pa=%d vol=%d%% mute=%d sr=%luHz",
+    LOG_I("[HAL:ES8311] %s by %s (compat=%s) i2c=0x%02X sda=%d scl=%d pa=%d vol=%d%% mute=%d sr=%luHz",
           _descriptor.name, _descriptor.manufacturer, _descriptor.compatible,
           _i2cAddr, _sdaPin, _sclPin, _paPin, _volume, _muted, (unsigned long)_sampleRate);
 }
@@ -329,7 +329,7 @@ bool HalEs8311::configure(uint32_t sampleRate, uint8_t bitDepth) {
 
     _sampleRate = sampleRate;
     _bitDepth   = bitDepth;
-    LOG_I("[HalEs8311] Configured: %luHz %ubit", (unsigned long)sampleRate, bitDepth);
+    LOG_I("[HAL:ES8311] Configured: %luHz %ubit", (unsigned long)sampleRate, bitDepth);
     return true;
 }
 
@@ -339,7 +339,7 @@ bool HalEs8311::setVolume(uint8_t percent) {
     uint8_t regVal = (uint8_t)(((uint16_t)percent * ES8311_VOL_0DB) / 100);
     _writeReg(ES8311_REG_DAC_VOLUME, regVal);
     _volume = percent;
-    LOG_D("[HalEs8311] Volume: %d%% -> reg 0x%02X", percent, regVal);
+    LOG_D("[HAL:ES8311] Volume: %d%% -> reg 0x%02X", percent, regVal);
     return true;
 }
 
@@ -362,7 +362,7 @@ bool HalEs8311::setMute(bool mute) {
         _writeReg(ES8311_REG_DAC_CTRL, dacCtrl);
     }
     _muted = mute;
-    LOG_I("[HalEs8311] %s", mute ? "Muted (PA disabled)" : "Unmuted (PA enabled)");
+    LOG_I("[HAL:ES8311] %s", mute ? "Muted (PA disabled)" : "Unmuted (PA enabled)");
     return true;
 }
 
@@ -384,7 +384,7 @@ bool HalEs8311::adcSetGain(uint8_t gainDb) {
     uint8_t steps = gainDb / 3;  // 3dB per step, 0-8 steps
     uint8_t regVal = (steps & 0x07) << 4;
     _writeReg(ES8311_REG_ADC_MIC_GAIN, regVal);
-    LOG_I("[HalEs8311] ADC gain: %ddB -> reg 0x%02X", gainDb, regVal);
+    LOG_I("[HAL:ES8311] ADC gain: %ddB -> reg 0x%02X", gainDb, regVal);
     return true;
 }
 
@@ -399,7 +399,7 @@ bool HalEs8311::adcSetHpfEnabled(bool en) {
         regVal |= (1 << 5);   // Set bypass -> HPF disabled
     }
     _writeReg(ES8311_REG_ADC_EQ_DC, regVal);
-    LOG_I("[HalEs8311] ADC HPF: %s", en ? "enabled" : "disabled");
+    LOG_I("[HAL:ES8311] ADC HPF: %s", en ? "enabled" : "disabled");
     return true;
 }
 
@@ -437,7 +437,7 @@ bool HalEs8311::codecSetPaEnabled(bool en) {
 #ifndef NATIVE_TEST
     digitalWrite(_paPin, en ? HIGH : LOW);
 #endif
-    LOG_I("[HalEs8311] PA %s (pin %d)", en ? "enabled" : "disabled", _paPin);
+    LOG_I("[HAL:ES8311] PA %s (pin %d)", en ? "enabled" : "disabled", _paPin);
     return true;
 }
 

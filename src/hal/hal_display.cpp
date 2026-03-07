@@ -29,7 +29,7 @@ HalDisplay::HalDisplay(int mosi, int sclk, int cs, int dc, int rst, int bl)
 bool HalDisplay::probe()
 {
     _state = HAL_STATE_DETECTED;
-    LOG_I("[HAL] probe OK — ST7735S TFT (MOSI=%d, SCLK=%d)", _mosi, _sclk);
+    LOG_I("[HAL:Display] probe OK — ST7735S TFT (MOSI=%d, SCLK=%d)", _mosi, _sclk);
     return true;
 }
 
@@ -44,7 +44,7 @@ HalInitResult HalDisplay::init()
     mgr.claimPin(_bl,   HAL_BUS_SPI, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL] init — ST7735S TFT ready");
+    LOG_I("[HAL:Display] init — ST7735S TFT ready");
     return hal_init_ok();
 }
 
@@ -59,14 +59,14 @@ void HalDisplay::deinit()
     mgr.releasePin(_bl);
     _ready = false;
     _state = HAL_STATE_REMOVED;
-    LOG_I("[HAL] deinit — ST7735S TFT removed");
+    LOG_I("[HAL:Display] deinit — ST7735S TFT removed");
 }
 
 void HalDisplay::dumpConfig()
 {
-    LOG_I("[HAL] %s (%s)", _descriptor.name, _descriptor.compatible);
-    LOG_I("[HAL]   manufacturer: %s", _descriptor.manufacturer);
-    LOG_I("[HAL]   MOSI=%d SCLK=%d CS=%d DC=%d RST=%d BL=%d",
+    LOG_I("[HAL:Display] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:Display]  manufacturer: %s", _descriptor.manufacturer);
+    LOG_I("[HAL:Display]  MOSI=%d SCLK=%d CS=%d DC=%d RST=%d BL=%d",
           _mosi, _sclk, _cs, _dc, _rst, _bl);
 }
 

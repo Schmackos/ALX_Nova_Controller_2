@@ -37,13 +37,13 @@ bool HalTempSensor::probe()
     temperature_sensor_handle_t handle = nullptr;
     esp_err_t err = temperature_sensor_install(&cfg, &handle);
     if (err != ESP_OK || handle == nullptr) {
-        LOG_W("[TempSensor] probe failed: err=0x%x", err);
+        LOG_W("[HAL:TempSensor] probe failed: err=0x%x", err);
         _state = HAL_STATE_REMOVED;
         return false;
     }
     _handle = (void*)handle;
     _state = HAL_STATE_DETECTED;
-    LOG_I("[TempSensor] probe OK — ESP32-P4 internal temperature sensor");
+    LOG_I("[HAL:TempSensor] probe OK — ESP32-P4 internal temperature sensor");
     return true;
 #else
     // Non-P4 ESP32 targets: sensor API differs, not supported here
@@ -62,7 +62,7 @@ HalInitResult HalTempSensor::init()
 #ifndef NATIVE_TEST
 #if CONFIG_IDF_TARGET_ESP32P4
     if (_handle == nullptr) {
-        LOG_E("[TempSensor] init called without successful probe");
+        LOG_E("[HAL:TempSensor] init called without successful probe");
         _state = HAL_STATE_ERROR;
         return hal_init_fail(DIAG_HAL_INIT_FAILED, "no probe");
     }
@@ -70,7 +70,7 @@ HalInitResult HalTempSensor::init()
     temperature_sensor_handle_t handle = (temperature_sensor_handle_t)_handle;
     esp_err_t err = temperature_sensor_enable(handle);
     if (err != ESP_OK) {
-        LOG_E("[TempSensor] enable failed: err=0x%x", err);
+        LOG_E("[HAL:TempSensor] enable failed: err=0x%x", err);
         _state = HAL_STATE_ERROR;
         return hal_init_fail(DIAG_HAL_INIT_FAILED, "sensor enable failed");
     }
@@ -80,9 +80,9 @@ HalInitResult HalTempSensor::init()
     err = temperature_sensor_get_celsius(handle, &temp);
     if (err == ESP_OK) {
         _lastTemp = temp;
-        LOG_I("[TempSensor] init OK — initial temp: %.1f C", _lastTemp);
+        LOG_I("[HAL:TempSensor] init OK — initial temp: %.1f C", _lastTemp);
     } else {
-        LOG_W("[TempSensor] init OK but initial read failed: err=0x%x", err);
+        LOG_W("[HAL:TempSensor] init OK but initial read failed: err=0x%x", err);
     }
 
     _ready = true;
@@ -107,7 +107,7 @@ void HalTempSensor::deinit()
         temperature_sensor_disable(handle);
         temperature_sensor_uninstall(handle);
         _handle = nullptr;
-        LOG_I("[TempSensor] deinit — sensor uninstalled");
+        LOG_I("[HAL:TempSensor] deinit — sensor uninstalled");
     }
 #endif
 #endif
@@ -118,10 +118,10 @@ void HalTempSensor::deinit()
 
 void HalTempSensor::dumpConfig()
 {
-    LOG_I("[TempSensor] %s (%s)", _descriptor.name, _descriptor.compatible);
-    LOG_I("[TempSensor]   bus: INTERNAL, state: %d, ready: %d",
+    LOG_I("[HAL:TempSensor] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:TempSensor]   bus: INTERNAL, state: %d, ready: %d",
           (int)_state, (int)_ready);
-    LOG_I("[TempSensor]   last temperature: %.1f C", _lastTemp);
+    LOG_I("[HAL:TempSensor]   last temperature: %.1f C", _lastTemp);
 }
 
 bool HalTempSensor::healthCheck()
@@ -138,7 +138,7 @@ bool HalTempSensor::healthCheck()
     temperature_sensor_handle_t handle = (temperature_sensor_handle_t)_handle;
     esp_err_t err = temperature_sensor_get_celsius(handle, &temp);
     if (err != ESP_OK) {
-        LOG_W("[TempSensor] healthCheck read failed: err=0x%x", err);
+        LOG_W("[HAL:TempSensor] healthCheck read failed: err=0x%x", err);
         _state = HAL_STATE_UNAVAILABLE;
         _ready = false;
         return false;
@@ -146,7 +146,7 @@ bool HalTempSensor::healthCheck()
 
     // Sanity range check: -30 to 125 degrees Celsius
     if (temp < -30.0f || temp > 125.0f) {
-        LOG_W("[TempSensor] healthCheck out of range: %.1f C", temp);
+        LOG_W("[HAL:TempSensor] healthCheck out of range: %.1f C", temp);
         _state = HAL_STATE_UNAVAILABLE;
         _ready = false;
         return false;

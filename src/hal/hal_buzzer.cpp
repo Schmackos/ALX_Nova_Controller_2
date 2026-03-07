@@ -28,7 +28,7 @@ HalBuzzer::HalBuzzer(int pin)
 bool HalBuzzer::probe()
 {
     _state = HAL_STATE_DETECTED;
-    LOG_I("[HAL] probe OK — Piezo Buzzer (GPIO%d)", _pin);
+    LOG_I("[HAL:Buzzer] probe OK — Piezo Buzzer (GPIO%d)", _pin);
     return true;
 }
 
@@ -38,7 +38,7 @@ HalInitResult HalBuzzer::init()
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL] init — Piezo Buzzer ready on GPIO%d", _pin);
+    LOG_I("[HAL:Buzzer] init — Piezo Buzzer ready on GPIO%d", _pin);
     return hal_init_ok();
 }
 
@@ -48,14 +48,14 @@ void HalBuzzer::deinit()
     mgr.releasePin(_pin);
     _ready = false;
     _state = HAL_STATE_REMOVED;
-    LOG_I("[HAL] deinit — Piezo Buzzer removed");
+    LOG_I("[HAL:Buzzer] deinit — Piezo Buzzer removed");
 }
 
 void HalBuzzer::dumpConfig()
 {
-    LOG_I("[HAL] %s (%s)", _descriptor.name, _descriptor.compatible);
-    LOG_I("[HAL]   manufacturer: %s", _descriptor.manufacturer);
-    LOG_I("[HAL]   pin: GPIO%d", _pin);
+    LOG_I("[HAL:Buzzer] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:Buzzer]  manufacturer: %s", _descriptor.manufacturer);
+    LOG_I("[HAL:Buzzer]  pin: GPIO%d", _pin);
 }
 
 bool HalBuzzer::healthCheck()

@@ -50,12 +50,12 @@ void hal_save_all_configs() {
 
     File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");
     if (!f) {
-        LOG_E("[HAL] Failed to open %s for writing", HAL_CONFIG_FILE_PATH);
+        LOG_E("[HAL:Settings] Failed to open %s for writing", HAL_CONFIG_FILE_PATH);
         return;
     }
     serializeJson(doc, f);
     f.close();
-    LOG_I("[HAL] Configs saved to %s", HAL_CONFIG_FILE_PATH);
+    LOG_I("[HAL:Settings] Configs saved to %s", HAL_CONFIG_FILE_PATH);
 }
 
 void hal_save_device_config_deferred(uint8_t slot) {
@@ -98,19 +98,19 @@ bool hal_import_configs(const char* json, size_t len) {
 
     JsonDocument doc;
     if (deserializeJson(doc, json, len)) {
-        LOG_E("[HAL] Import parse error");
+        LOG_E("[HAL:Settings] Import parse error");
         return false;
     }
 
     // Write to file
     File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");
     if (!f) {
-        LOG_E("[HAL] Failed to open %s for import", HAL_CONFIG_FILE_PATH);
+        LOG_E("[HAL:Settings] Failed to open %s for import", HAL_CONFIG_FILE_PATH);
         return false;
     }
     serializeJson(doc, f);
     f.close();
-    LOG_I("[HAL] Config imported successfully");
+    LOG_I("[HAL:Settings] Config imported successfully");
     return true;
 }
 
@@ -151,7 +151,7 @@ void hal_apply_config(uint8_t slot) {
             } else if (desc.type == HAL_DEV_CODEC) {
                 appState._pendingEs8311Toggle = -1;
             }
-            LOG_I("[HAL] DAC-path device slot %u disable deferred", slot);
+            LOG_I("[HAL:Settings] DAC-path device slot %u disable deferred", slot);
             appState.markHalDeviceDirty();
             return;
         }
@@ -165,7 +165,7 @@ void hal_apply_config(uint8_t slot) {
             dev->_ready = false;
             hal_pipeline_state_change(slot, oldState, HAL_STATE_MANUAL);
         }
-        LOG_I("[HAL] Device slot %u disabled", slot);
+        LOG_I("[HAL:Settings] Device slot %u disabled", slot);
         appState.markHalDeviceDirty();
         return;
     }
@@ -180,7 +180,7 @@ void hal_apply_config(uint8_t slot) {
             } else if (desc.type == HAL_DEV_CODEC) {
                 appState._pendingEs8311Toggle = 1;
             }
-            LOG_I("[HAL] DAC-path device slot %u re-enable deferred", slot);
+            LOG_I("[HAL:Settings] DAC-path device slot %u re-enable deferred", slot);
             appState.markHalDeviceDirty();
             return;
         }
@@ -197,7 +197,7 @@ void hal_apply_config(uint8_t slot) {
             i2s_audio_set_sample_rate(appState.audioSampleRate);
             appState.audioPaused = false;
         }
-        LOG_I("[HAL] Device slot %u %s", slot, ok ? "re-enabled" : "re-enable failed");
+        LOG_I("[HAL:Settings] Device slot %u %s", slot, ok ? "re-enabled" : "re-enable failed");
         appState.markHalDeviceDirty();
         return;
     }
@@ -210,7 +210,7 @@ void hal_apply_config(uint8_t slot) {
         vTaskDelay(pdMS_TO_TICKS(30));
         i2s_audio_set_sample_rate(appState.audioSampleRate);
         appState.audioPaused = false;
-        LOG_I("[HAL] I2S device slot %u reconfigured (hot)", slot);
+        LOG_I("[HAL:Settings] I2S device slot %u reconfigured (hot)", slot);
     } else {
         HalDeviceState prevState = dev->_state;
         dev->_state = HAL_STATE_CONFIGURING;
@@ -219,11 +219,11 @@ void hal_apply_config(uint8_t slot) {
         if (dev->init()) {
             dev->_state = HAL_STATE_AVAILABLE;
             hal_pipeline_state_change(slot, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE);
-            LOG_I("[HAL] Device slot %u reinitialised", slot);
+            LOG_I("[HAL:Settings] Device slot %u reinitialised", slot);
         } else {
             dev->_state = HAL_STATE_ERROR;
             hal_pipeline_state_change(slot, HAL_STATE_CONFIGURING, HAL_STATE_ERROR);
-            LOG_E("[HAL] Device slot %u reinit failed", slot);
+            LOG_E("[HAL:Settings] Device slot %u reinit failed", slot);
         }
     }
     appState.markHalDeviceDirty();

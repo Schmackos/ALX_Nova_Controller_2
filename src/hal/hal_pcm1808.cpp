@@ -41,7 +41,7 @@ HalInitResult HalPcm1808::init() {
         if (cfg->bitDepth > 0)   _bitDepth   = cfg->bitDepth;
     }
 
-    LOG_I("[HalPcm1808] Initializing (sr=%luHz bits=%u)",
+    LOG_I("[HAL:PCM1808] Initializing (sr=%luHz bits=%u)",
           (unsigned long)_sampleRate, _bitDepth);
 
 #ifndef NATIVE_TEST
@@ -51,11 +51,11 @@ HalInitResult HalPcm1808::init() {
             bool msb = (cfg->i2sFormat == 1);
             pinMode(cfg->pinFmt, OUTPUT);
             digitalWrite(cfg->pinFmt, msb ? HIGH : LOW);
-            LOG_I("[HalPcm1808] FMT pin GPIO%d set %s", cfg->pinFmt, msb ? "HIGH (MSB)" : "LOW (Philips)");
+            LOG_I("[HAL:PCM1808] FMT pin GPIO%d set %s", cfg->pinFmt, msb ? "HIGH (MSB)" : "LOW (Philips)");
         }
         // Log configured clock pins (managed by i2s_audio.cpp legacy path)
         if (cfg->pinBck >= 0 || cfg->pinLrc >= 0) {
-            LOG_I("[HalPcm1808] I2S clock pins: BCK=GPIO%d LRC=GPIO%d (managed by i2s_audio)",
+            LOG_I("[HAL:PCM1808] I2S clock pins: BCK=GPIO%d LRC=GPIO%d (managed by i2s_audio)",
                   cfg->pinBck, cfg->pinLrc);
         }
     }
@@ -67,7 +67,7 @@ HalInitResult HalPcm1808::init() {
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
 
-    LOG_I("[HalPcm1808] Ready (I2S channel managed by legacy i2s_audio path)");
+    LOG_I("[HAL:PCM1808] Ready (I2S channel managed by legacy i2s_audio path)");
     return hal_init_ok();
 }
 
@@ -75,11 +75,11 @@ void HalPcm1808::deinit() {
     _ready = false;
     _state = HAL_STATE_REMOVED;
     _rxHandle = nullptr;
-    LOG_I("[HalPcm1808] Deinitialized");
+    LOG_I("[HAL:PCM1808] Deinitialized");
 }
 
 void HalPcm1808::dumpConfig() {
-    LOG_I("[HalPcm1808] %s by %s (compat=%s) sr=%luHz bits=%u",
+    LOG_I("[HAL:PCM1808] %s by %s (compat=%s) sr=%luHz bits=%u",
           _descriptor.name, _descriptor.manufacturer, _descriptor.compatible,
           (unsigned long)_sampleRate, _bitDepth);
 }
@@ -91,7 +91,7 @@ bool HalPcm1808::healthCheck() {
 bool HalPcm1808::configure(uint32_t sampleRate, uint8_t bitDepth) {
     bool validRate = (sampleRate == 48000 || sampleRate == 96000);
     if (!validRate) {
-        LOG_W("[HalPcm1808] Unsupported sample rate: %luHz", (unsigned long)sampleRate);
+        LOG_W("[HAL:PCM1808] Unsupported sample rate: %luHz", (unsigned long)sampleRate);
         return false;
     }
     _sampleRate = sampleRate;
@@ -103,14 +103,14 @@ bool HalPcm1808::adcSetGain(uint8_t gainDb) {
     (void)gainDb;
     // PCM1808 gain is set via FMT0/FMT1 GPIO mode pins, not register writes.
     // Provide this control via DSP gain stage instead.
-    LOG_W("[HalPcm1808] adcSetGain: PCM1808 gain via GPIO not yet wired — adjust DSP gain instead");
+    LOG_W("[HAL:PCM1808] adcSetGain: PCM1808 gain via GPIO not yet wired — adjust DSP gain instead");
     return false;
 }
 
 bool HalPcm1808::adcSetHpfEnabled(bool en) {
     (void)en;
     // PCM1808 HPF is always on in master mode; no register to control it.
-    LOG_W("[HalPcm1808] adcSetHpfEnabled: PCM1808 HPF not controllable via software");
+    LOG_W("[HAL:PCM1808] adcSetHpfEnabled: PCM1808 HPF not controllable via software");
     return false;
 }
 

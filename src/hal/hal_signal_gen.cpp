@@ -28,7 +28,7 @@ HalSignalGen::HalSignalGen(int pin)
 bool HalSignalGen::probe()
 {
     _state = HAL_STATE_DETECTED;
-    LOG_I("[HAL] probe OK — Signal Generator (GPIO%d)", _pin);
+    LOG_I("[HAL:SigGen] probe OK — Signal Generator (GPIO%d)", _pin);
     return true;
 }
 
@@ -38,7 +38,7 @@ HalInitResult HalSignalGen::init()
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL] init — Signal Generator ready on GPIO%d", _pin);
+    LOG_I("[HAL:SigGen] init — Signal Generator ready on GPIO%d", _pin);
     return hal_init_ok();
 }
 
@@ -48,14 +48,14 @@ void HalSignalGen::deinit()
     mgr.releasePin(_pin);
     _ready = false;
     _state = HAL_STATE_REMOVED;
-    LOG_I("[HAL] deinit — Signal Generator removed");
+    LOG_I("[HAL:SigGen] deinit — Signal Generator removed");
 }
 
 void HalSignalGen::dumpConfig()
 {
-    LOG_I("[HAL] %s (%s)", _descriptor.name, _descriptor.compatible);
-    LOG_I("[HAL]   manufacturer: %s", _descriptor.manufacturer);
-    LOG_I("[HAL]   pin: GPIO%d", _pin);
+    LOG_I("[HAL:SigGen] %s (%s)", _descriptor.name, _descriptor.compatible);
+    LOG_I("[HAL:SigGen]  manufacturer: %s", _descriptor.manufacturer);
+    LOG_I("[HAL:SigGen]  pin: GPIO%d", _pin);
 }
 
 bool HalSignalGen::healthCheck()

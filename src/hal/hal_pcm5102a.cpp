@@ -53,7 +53,7 @@ HalInitResult HalPcm5102a::init() {
         _muted  = cfg->mute;
     }
 
-    LOG_I("[HalPcm5102a] Initializing (sr=%luHz bits=%u xsmt=%d)",
+    LOG_I("[HAL:PCM5102A] Initializing (sr=%luHz bits=%u xsmt=%d)",
           (unsigned long)_sampleRate, _bitDepth, _paPin);
 
     // Configure XSMT (soft-mute) pin if provided
@@ -70,7 +70,7 @@ HalInitResult HalPcm5102a::init() {
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
 
-    LOG_I("[HalPcm5102a] Ready (I2S channel managed by legacy i2s_audio path)");
+    LOG_I("[HAL:PCM5102A] Ready (I2S channel managed by legacy i2s_audio path)");
     return hal_init_ok();
 }
 
@@ -83,11 +83,11 @@ void HalPcm5102a::deinit() {
     _ready = false;
     _state = HAL_STATE_REMOVED;
     _txHandle = nullptr;
-    LOG_I("[HalPcm5102a] Deinitialized");
+    LOG_I("[HAL:PCM5102A] Deinitialized");
 }
 
 void HalPcm5102a::dumpConfig() {
-    LOG_I("[HalPcm5102a] %s by %s (compat=%s) sr=%luHz bits=%u xsmt=%d vol=%d%% mute=%d",
+    LOG_I("[HAL:PCM5102A] %s by %s (compat=%s) sr=%luHz bits=%u xsmt=%d vol=%d%% mute=%d",
           _descriptor.name, _descriptor.manufacturer, _descriptor.compatible,
           (unsigned long)_sampleRate, _bitDepth, _paPin, _volume, _muted);
 }
@@ -101,11 +101,11 @@ bool HalPcm5102a::configure(uint32_t sampleRate, uint8_t bitDepth) {
     // Validate sample rate against sampleRatesMask
     bool validRate = (sampleRate == 44100 || sampleRate == 48000 || sampleRate == 96000);
     if (!validRate) {
-        LOG_W("[HalPcm5102a] Unsupported sample rate: %luHz", (unsigned long)sampleRate);
+        LOG_W("[HAL:PCM5102A] Unsupported sample rate: %luHz", (unsigned long)sampleRate);
         return false;
     }
     if (bitDepth != 16 && bitDepth != 24 && bitDepth != 32) {
-        LOG_W("[HalPcm5102a] Unsupported bit depth: %u", bitDepth);
+        LOG_W("[HAL:PCM5102A] Unsupported bit depth: %u", bitDepth);
         return false;
     }
     _sampleRate = sampleRate;
@@ -114,7 +114,7 @@ bool HalPcm5102a::configure(uint32_t sampleRate, uint8_t bitDepth) {
     if (_txHandle) {
         hal_i2s_reconfigure(_txHandle, sampleRate, bitDepth);
     }
-    LOG_I("[HalPcm5102a] Configured: %luHz %ubit", (unsigned long)sampleRate, bitDepth);
+    LOG_I("[HAL:PCM5102A] Configured: %luHz %ubit", (unsigned long)sampleRate, bitDepth);
     return true;
 }
 
