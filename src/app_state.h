@@ -262,35 +262,6 @@ public:
   bool mqttConnected = false;
   unsigned long lastMqttPublish = 0;
 
-  // ===== MQTT State Tracking (for change detection) =====
-  bool prevMqttAmplifierState = false;
-  SensingMode prevMqttSensingMode = ALWAYS_ON;
-  unsigned long prevMqttTimerRemaining = 0;
-  float prevMqttAudioLevel = -96.0f;
-  bool prevMqttBacklightOn = true;
-  unsigned long prevMqttScreenTimeout = 60000;
-  bool prevMqttBuzzerEnabled = true;
-  int prevMqttBuzzerVolume = 1;
-  uint8_t prevMqttBrightness = 255;
-  bool prevMqttDimEnabled = false;
-  unsigned long prevMqttDimTimeout = 10000;
-  uint8_t prevMqttDimBrightness = 26;
-  bool prevMqttVuMeterEnabled = true;
-  bool prevMqttWaveformEnabled = true;
-  bool prevMqttSpectrumEnabled = true;
-  bool prevMqttDebugMode = true;
-  int prevMqttDebugSerialLevel = 2;
-  bool prevMqttDebugHwStats = true;
-  bool prevMqttDebugI2sMetrics = true;
-  bool prevMqttDebugTaskMonitor = true;
-  FftWindowType prevMqttFftWindowType = FFT_WINDOW_HANN;
-
-  // ===== Smart Sensing Broadcast State Tracking =====
-  SensingMode prevBroadcastMode = ALWAYS_ON;
-  bool prevBroadcastAmplifierState = false;
-  unsigned long prevBroadcastTimerRemaining = 0;
-  float prevBroadcastAudioLevel = -96.0f;
-
   // ===== Display State (accessible from all interfaces) =====
   unsigned long screenTimeout = 60000; // Screen timeout in ms (default 60s)
   bool backlightOn = true;             // Runtime backlight state (not persisted)
@@ -351,14 +322,6 @@ public:
   bool isSignalGenDirty() const { return _sigGenDirty; }
   void clearSignalGenDirty() { _sigGenDirty = false; }
 
-  // MQTT state tracking for signal generator
-  bool prevMqttSigGenEnabled = false;
-  int prevMqttSigGenWaveform = 0;
-  float prevMqttSigGenFrequency = 1000.0f;
-  float prevMqttSigGenAmplitude = -6.0f;
-  int prevMqttSigGenOutputMode = 0;
-  float prevMqttSigGenSweepSpeed = 1000.0f;
-
   // ===== DSP Pipeline State =====
 #ifdef DSP_ENABLED
   bool dspEnabled = false;     // Master DSP enable
@@ -382,12 +345,6 @@ public:
   unsigned long lastDspSwapFailure = 0;
 
   // NOTE: Delay alignment removed in v1.8.3 - incomplete feature, never functional
-
-  // MQTT state tracking for DSP
-  bool prevMqttDspEnabled = false;
-  bool prevMqttDspBypass = false;
-  bool prevMqttDspChBypass[DSP_MAX_CHANNELS] = {};
-  int8_t prevMqttDspPresetIndex = -1;
 
   // NOTE: DC Block removed in v1.8.3 - use DSP highpass stage instead
 #endif
@@ -513,19 +470,6 @@ public:
   uint8_t mqttErrorThreshold = 2;  // 0=all, 1=warn+, 2=error+ (default), 3=crit only
   bool halSafeMode = false;        // Boot loop safe mode — skip HAL init, WiFi+web only
 
-  // MQTT state tracking for DAC
-  bool prevMqttDacEnabled = false;
-  uint8_t prevMqttDacVolume = 80;
-  bool prevMqttDacMute = false;
-#endif
-
-  // MQTT state tracking for OTA channel (not GUI-gated — MQTT works without GUI)
-  uint8_t prevMqttOtaChannel = 0;
-
-  // MQTT state tracking for boot animation
-#ifdef GUI_ENABLED
-  bool prevMqttBootAnimEnabled = true;
-  int prevMqttBootAnimStyle = 0;
 #endif
 
   // ===== GUI State =====

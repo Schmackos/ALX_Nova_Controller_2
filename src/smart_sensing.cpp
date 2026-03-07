@@ -10,6 +10,11 @@
 // Smoothed audio level for stable signal detection (EMA, α=0.15, τ≈308ms)
 static float _smoothedAudioLevel = -96.0f;
 
+// Broadcast state tracking (extracted from AppState — only used in this file)
+static SensingMode prevBroadcastMode = ALWAYS_ON;
+static bool prevBroadcastAmplifierState = false;
+static unsigned long prevBroadcastTimerRemaining = 0;
+
 static const char *audioHealthName(uint8_t status) {
     switch (status) {
     case AUDIO_OK:         return "OK";
@@ -446,9 +451,9 @@ void sendSmartSensingStateInternal() {
   webSocket.broadcastTXT((uint8_t *)json.c_str(), json.length());
 
   // Update tracked state after broadcast
-  appState.prevBroadcastMode = appState.currentMode;
-  appState.prevBroadcastAmplifierState = appState.amplifierState;
-  appState.prevBroadcastTimerRemaining = appState.timerRemaining;
+  prevBroadcastMode = appState.currentMode;
+  prevBroadcastAmplifierState = appState.amplifierState;
+  prevBroadcastTimerRemaining = appState.timerRemaining;
   appState.lastSmartSensingHeartbeat = millis();
 }
 
@@ -458,9 +463,9 @@ void sendSmartSensingState() {
   unsigned long currentMillis = millis();
 
   // Check if any state has changed
-  bool stateChanged = (appState.currentMode != appState.prevBroadcastMode) ||
-                      (appState.amplifierState != appState.prevBroadcastAmplifierState) ||
-                      (appState.timerRemaining != appState.prevBroadcastTimerRemaining);
+  bool stateChanged = (appState.currentMode != prevBroadcastMode) ||
+                      (appState.amplifierState != prevBroadcastAmplifierState) ||
+                      (appState.timerRemaining != prevBroadcastTimerRemaining);
 
   // Check if heartbeat interval has elapsed (5s, reduced to lower WiFi TX burst traffic)
   bool heartbeatDue = (currentMillis - appState.lastSmartSensingHeartbeat >= 5000);

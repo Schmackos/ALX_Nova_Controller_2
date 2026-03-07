@@ -50,24 +50,12 @@ struct MockAppState {
     bool debugI2sMetrics = true;
     bool debugTaskMonitor = true;
 
-    // MQTT prev-tracking
-    bool prevMqttDebugMode = true;
-    int prevMqttDebugSerialLevel = 2;
-    bool prevMqttDebugHwStats = true;
-    bool prevMqttDebugI2sMetrics = true;
-    bool prevMqttDebugTaskMonitor = true;
-
     void reset() {
         debugMode = true;
         debugSerialLevel = 2;
         debugHwStats = true;
         debugI2sMetrics = true;
         debugTaskMonitor = true;
-        prevMqttDebugMode = true;
-        prevMqttDebugSerialLevel = 2;
-        prevMqttDebugHwStats = true;
-        prevMqttDebugI2sMetrics = true;
-        prevMqttDebugTaskMonitor = true;
     }
 };
 

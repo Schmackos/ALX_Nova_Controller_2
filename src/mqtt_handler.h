@@ -7,6 +7,17 @@
 #include <PubSubClient.h>
 #include "config.h"
 
+#ifdef USB_AUDIO_ENABLED
+#define MQTT_TOPIC_USB_CONNECTED  "audio/usb/connected"
+#define MQTT_TOPIC_USB_STREAMING  "audio/usb/streaming"
+#define MQTT_TOPIC_USB_ENABLED    "audio/usb/enabled"
+#define MQTT_TOPIC_USB_RATE       "audio/usb/sampleRate"
+#define MQTT_TOPIC_USB_VOLUME     "audio/usb/volume"
+#define MQTT_TOPIC_USB_OVERRUNS   "audio/usb/overruns"
+#define MQTT_TOPIC_USB_UNDERRUNS  "audio/usb/underruns"
+#define MQTT_TOPIC_USB_ENABLE_SET "audio/usb/enabled/set"
+#endif
+
 // ===== MQTT Core Functions =====
 void setupMqtt();
 void mqttLoop();
@@ -50,6 +61,9 @@ void publishMqttUsbAudioState();
 
 // ===== Diagnostic Event Publishing =====
 void publishMqttDiagEvent();
+
+// ===== MQTT Topic Helpers =====
+String getEffectiveMqttBaseTopic();
 
 // ===== Home Assistant Discovery =====
 void publishHADiscovery();
