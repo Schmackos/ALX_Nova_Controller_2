@@ -1,0 +1,65 @@
+/* ===== 06-health-dashboard.css ===== */
+
+        .health-device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .health-device-card {
+            background: var(--bg-surface);
+            border-radius: 8px;
+            padding: 12px;
+            border-left: 3px solid var(--border);
+        }
+        .health-device-card.state-ok { border-left-color: var(--success); }
+        .health-device-card.state-warn { border-left-color: var(--warning); }
+        .health-device-card.state-error { border-left-color: var(--error); }
+        .health-device-card .device-name { font-weight: 600; font-size: 14px; }
+        .health-device-card .device-meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .health-device-card .device-stats {
+            font-size: 12px;
+            margin-top: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+        }
+        .health-device-card .device-stats .stat-label { color: var(--text-secondary); }
+        .health-device-card .device-stats .stat-val-err { color: var(--error); font-weight: 600; }
+        .health-device-card .device-stats .stat-val-ok { color: var(--text-secondary); }
+
+        .health-event-list { max-height: 400px; overflow-y: auto; }
+        .health-event-list table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .health-event-list th {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            background: var(--bg-card);
+        }
+        .health-event-list td {
+            padding: 4px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .health-event-list tr:hover { background: var(--bg-input); }
+        .health-event-list .sev-i { color: var(--info); }
+        .health-event-list .sev-w { color: var(--warning); }
+        .health-event-list .sev-e { color: var(--error); }
+        .health-event-list .sev-c { color: #CE93D8; }
+        .health-event-list .corr { color: var(--text-secondary); font-size: 11px; }
+
+        .health-counter-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+        .health-counter-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+        .health-counter-table .cnt-err { color: var(--error); font-weight: 600; }
+        .health-counter-table .cnt-warn { color: var(--warning); }
+        .health-counter-table .cnt-none { color: var(--text-secondary); }
+        .health-counter-table .subsys-label { font-weight: 500; }
+
+        .health-empty {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }

@@ -3120,6 +3120,72 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 height: 280px;
             }
         }
+
+/* ===== 06-health-dashboard.css ===== */
+
+        .health-device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .health-device-card {
+            background: var(--bg-surface);
+            border-radius: 8px;
+            padding: 12px;
+            border-left: 3px solid var(--border);
+        }
+        .health-device-card.state-ok { border-left-color: var(--success); }
+        .health-device-card.state-warn { border-left-color: var(--warning); }
+        .health-device-card.state-error { border-left-color: var(--error); }
+        .health-device-card .device-name { font-weight: 600; font-size: 14px; }
+        .health-device-card .device-meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .health-device-card .device-stats {
+            font-size: 12px;
+            margin-top: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px;
+        }
+        .health-device-card .device-stats .stat-label { color: var(--text-secondary); }
+        .health-device-card .device-stats .stat-val-err { color: var(--error); font-weight: 600; }
+        .health-device-card .device-stats .stat-val-ok { color: var(--text-secondary); }
+
+        .health-event-list { max-height: 400px; overflow-y: auto; }
+        .health-event-list table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .health-event-list th {
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            background: var(--bg-card);
+        }
+        .health-event-list td {
+            padding: 4px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .health-event-list tr:hover { background: var(--bg-input); }
+        .health-event-list .sev-i { color: var(--info); }
+        .health-event-list .sev-w { color: var(--warning); }
+        .health-event-list .sev-e { color: var(--error); }
+        .health-event-list .sev-c { color: #CE93D8; }
+        .health-event-list .corr { color: var(--text-secondary); font-size: 11px; }
+
+        .health-counter-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+        .health-counter-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+        .health-counter-table .cnt-err { color: var(--error); font-weight: 600; }
+        .health-counter-table .cnt-warn { color: var(--warning); }
+        .health-counter-table .cnt-none { color: var(--text-secondary); }
+        .health-counter-table .subsys-label { font-weight: 500; }
+
+        .health-empty {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
 </style>
 </head>
 <body class="has-status-bar">
@@ -3160,6 +3226,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             <button class="sidebar-item" data-tab="support" onclick="switchTab('support')">
                 <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
                 <span>Support</span>
+            </button>
+            <button class="sidebar-item" data-tab="health" onclick="switchTab('health')">
+                <svg viewBox="0 0 24 24"><path d="M13,3V9H21V3M13,21H21V11H13M3,21H11V15H3M3,13H11V3H3V13Z"/></svg>
+                <span>Health</span>
             </button>
             <button class="sidebar-item" data-tab="debug" onclick="switchTab('debug')">
                 <svg viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
@@ -3216,6 +3286,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         </button>
         <button class="tab" data-tab="support" onclick="switchTab('support')">
             <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+        </button>
+        <button class="tab" data-tab="health" onclick="switchTab('health')">
+            <svg viewBox="0 0 24 24"><path d="M13,3V9H21V3M13,21H21V11H13M3,21H11V15H3M3,13H11V3H3V13Z"/></svg>
         </button>
         <button class="tab" data-tab="debug" onclick="switchTab('debug')">
             <svg viewBox="0 0 24 24"><path d="M20 19V7H4v12h16m0-16c1.11 0 2 .89 2 2v14c0 1.11-.89 2-2 2H4c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h16zM7 9h10v2H7V9zm0 4h7v2H7v-2z"/></svg>
@@ -4229,6 +4302,36 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 <div class="manual-rendered" id="manualRendered">
                     <div class="manual-loading">Loading manual...</div>
                 </div>
+            </div>
+        </section>
+
+        <!-- ===== HEALTH TAB ===== -->
+        <section id="health" class="panel">
+            <!-- Quick Actions -->
+            <div class="card" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <h3 style="flex:1;margin:0;">Health Dashboard</h3>
+                <button class="btn btn-primary" onclick="healthSnapshot()">Snapshot</button>
+                <button class="btn btn-secondary" onclick="healthDownloadJournal()">Download</button>
+                <button class="btn btn-secondary" onclick="healthClearJournal()">Clear</button>
+                <span id="healthLastUpdate" style="font-size:12px;color:var(--text-secondary);"></span>
+            </div>
+
+            <!-- Device Health Grid -->
+            <div class="card">
+                <div class="card-title">Device Health</div>
+                <div id="healthDeviceGrid" class="health-device-grid"></div>
+            </div>
+
+            <!-- Error Counters -->
+            <div class="card">
+                <div class="card-title">Error Counters</div>
+                <div id="healthErrorCounters"></div>
+            </div>
+
+            <!-- Recent Events Table -->
+            <div class="card">
+                <div class="card-title">Recent Events</div>
+                <div id="healthEventList" class="health-event-list"></div>
             </div>
         </section>
 
@@ -5278,6 +5381,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (data.unknownDevices) handleHalUnknownDevices(data.unknownDevices);
             } else if (data.type === 'audioChannelMap') {
                 handleAudioChannelMap(data);
+            } else if (data.type === 'diagEvent') {
+                handleDiagEvent(data);
             }
         }
 
@@ -6593,6 +6698,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (tabId === 'support') {
                 generateManualQRCode();
                 loadManualContent();
+            }
+
+            // Health tab — lazy init + re-render
+            if (tabId === 'health') {
+                initHealthDashboard();
+                renderHealthDashboard();
             }
 
             // Audio tab — render active sub-view on tab switch
@@ -11769,6 +11880,250 @@ function initFirmwareDragDrop() {
         }
 
 //# sourceURL=27-auth.js
+
+        // ===== Health Dashboard =====
+        // Phase 8 of Debug Architecture: aggregated device health,
+        // error counters, and diagnostic event timeline.
+
+        // ----- State -----
+        var healthEvents = [];         // diagEvent objects, newest-first (max 100)
+        var healthErrorCounts = {};    // { subsystem: { err: N, warn: N } }
+        var healthInitialized = false;
+
+        // Subsystem list used for counter table (stable order)
+        var HEALTH_SUBSYSTEMS = ['HAL', 'Audio', 'DSP', 'WiFi', 'MQTT', 'System', 'OTA', 'USB'];
+
+        // ----- WS handler -----
+        function handleDiagEvent(data) {
+            // Prepend to local buffer, cap at 100
+            healthEvents.unshift(data);
+            if (healthEvents.length > 100) healthEvents.length = 100;
+
+            // Increment error/warn counter for subsystem
+            var sub = data.sub || 'System';
+            if (!healthErrorCounts[sub]) healthErrorCounts[sub] = { err: 0, warn: 0 };
+            if (data.sev === 'E' || data.sev === 'C') {
+                healthErrorCounts[sub].err++;
+            } else if (data.sev === 'W') {
+                healthErrorCounts[sub].warn++;
+            }
+
+            // Re-render if health tab is visible
+            if (currentActiveTab === 'health') {
+                renderHealthDashboard();
+            }
+        }
+
+        // ----- Rendering entry point -----
+        function renderHealthDashboard() {
+            renderHealthDeviceGrid();
+            renderHealthErrorCounters();
+            renderHealthEventList();
+            var ts = document.getElementById('healthLastUpdate');
+            if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
+        }
+
+        // ----- Device Grid -----
+        function renderHealthDeviceGrid() {
+            var container = document.getElementById('healthDeviceGrid');
+            if (!container) return;
+
+            if (!halDevices || halDevices.length === 0) {
+                container.innerHTML = '<div class="health-empty">No HAL devices registered</div>';
+                return;
+            }
+
+            var html = '';
+            for (var i = 0; i < halDevices.length; i++) {
+                var d = halDevices[i];
+                var si = halGetStateInfo(d.state);
+                var ti = halGetTypeInfo(d.type);
+                var stateClass = 'state-ok';
+                if (d.state === 5) stateClass = 'state-error';
+                else if (d.state === 4 || d.state === 2) stateClass = 'state-warn';
+                else if (d.state !== 3) stateClass = '';
+
+                var retries = (d.retries !== undefined) ? d.retries : 0;
+                var faults = (d.faults !== undefined) ? d.faults : 0;
+                var lastErr = (d.lastErr !== undefined && d.lastErr !== 0) ? '0x' + d.lastErr.toString(16).toUpperCase().padStart(4, '0') : '';
+
+                html += '<div class="health-device-card ' + stateClass + '">';
+                html += '<div class="device-name">' + escapeHtml(d.name || 'Device ' + d.slot) + '</div>';
+                html += '<div class="device-meta">' + escapeHtml(ti.label) + ' &middot; Slot ' + d.slot + ' &middot; <span style="color:var(--' + (si.cls === 'green' ? 'success' : si.cls === 'red' ? 'error' : si.cls === 'amber' ? 'warning' : 'text-secondary') + ')">' + escapeHtml(si.label) + '</span></div>';
+                html += '<div class="device-stats">';
+                html += '<span class="stat-label">Retries</span><span class="' + (retries > 0 ? 'stat-val-err' : 'stat-val-ok') + '">' + retries + '</span>';
+                html += '<span class="stat-label">Faults</span><span class="' + (faults > 0 ? 'stat-val-err' : 'stat-val-ok') + '">' + faults + '</span>';
+                if (lastErr) {
+                    html += '<span class="stat-label">Last Err</span><span class="stat-val-err">' + lastErr + '</span>';
+                }
+                html += '</div>';
+                html += '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        // ----- Error Counters -----
+        function renderHealthErrorCounters() {
+            var container = document.getElementById('healthErrorCounters');
+            if (!container) return;
+
+            var html = '<table class="health-counter-table">';
+            html += '<tr><th style="text-align:left;padding:6px 8px;color:var(--text-secondary);font-weight:500;">Subsystem</th>';
+            html += '<th style="text-align:center;padding:6px 8px;color:var(--text-secondary);font-weight:500;">Errors</th>';
+            html += '<th style="text-align:center;padding:6px 8px;color:var(--text-secondary);font-weight:500;">Warnings</th></tr>';
+
+            for (var i = 0; i < HEALTH_SUBSYSTEMS.length; i++) {
+                var sub = HEALTH_SUBSYSTEMS[i];
+                var counts = healthErrorCounts[sub] || { err: 0, warn: 0 };
+                html += '<tr>';
+                html += '<td class="subsys-label">' + escapeHtml(sub) + '</td>';
+                html += '<td style="text-align:center;" class="' + (counts.err > 0 ? 'cnt-err' : 'cnt-none') + '">';
+                if (counts.err > 0) {
+                    html += '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style="vertical-align:-1px;margin-right:2px;"><path d="M12,2C17.53,2 22,6.47 22,12C22,17.53 17.53,22 12,22C6.47,22 2,17.53 2,12C2,6.47 6.47,2 12,2Z"/></svg>';
+                    html += counts.err;
+                } else {
+                    html += '—';
+                }
+                html += '</td>';
+                html += '<td style="text-align:center;" class="' + (counts.warn > 0 ? 'cnt-warn' : 'cnt-none') + '">';
+                if (counts.warn > 0) {
+                    html += '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style="vertical-align:-1px;margin-right:2px;"><path d="M1,21H23L12,2L1,21Z"/></svg>';
+                    html += counts.warn;
+                } else {
+                    html += '—';
+                }
+                html += '</td>';
+                html += '</tr>';
+            }
+            html += '</table>';
+            container.innerHTML = html;
+        }
+
+        // ----- Event List -----
+        function renderHealthEventList() {
+            var container = document.getElementById('healthEventList');
+            if (!container) return;
+
+            if (healthEvents.length === 0) {
+                container.innerHTML = '<div class="health-empty">No diagnostic events recorded</div>';
+                return;
+            }
+
+            var html = '<table><thead><tr>';
+            html += '<th>Time</th><th>Sev</th><th>Code</th><th>Device</th><th>Message</th><th>Corr</th>';
+            html += '</tr></thead><tbody>';
+
+            var limit = Math.min(healthEvents.length, 50);
+            var now = Date.now();
+            for (var i = 0; i < limit; i++) {
+                var ev = healthEvents[i];
+                var sevClass = 'sev-i';
+                var sevIcon = '';
+                switch (ev.sev) {
+                    case 'E':
+                        sevClass = 'sev-e';
+                        sevIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12,2C17.53,2 22,6.47 22,12C22,17.53 17.53,22 12,22C6.47,22 2,17.53 2,12C2,6.47 6.47,2 12,2Z"/></svg>';
+                        break;
+                    case 'W':
+                        sevClass = 'sev-w';
+                        sevIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M1,21H23L12,2L1,21Z"/></svg>';
+                        break;
+                    case 'I':
+                        sevClass = 'sev-i';
+                        sevIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg>';
+                        break;
+                    case 'C':
+                        sevClass = 'sev-c';
+                        sevIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M12,2L2,12L12,22L22,12L12,2Z"/></svg>';
+                        break;
+                }
+
+                var timeStr = healthFormatRelativeTime(ev.ts, now);
+                var codeStr = ev.code ? '0x' + ev.code.toString(16).toUpperCase().padStart(4, '0') : '';
+                var deviceStr = ev.dev ? escapeHtml(ev.dev) : '';
+                var msgStr = ev.msg ? escapeHtml(ev.msg) : '';
+                var corrStr = (ev.corr !== undefined && ev.corr > 0) ? '#' + ev.corr : '';
+
+                html += '<tr>';
+                html += '<td style="white-space:nowrap;">' + timeStr + '</td>';
+                html += '<td class="' + sevClass + '">' + sevIcon + '</td>';
+                html += '<td style="font-family:monospace;font-size:12px;">' + codeStr + '</td>';
+                html += '<td>' + deviceStr + '</td>';
+                html += '<td>' + msgStr + '</td>';
+                html += '<td class="corr">' + corrStr + '</td>';
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // ----- Relative time formatter -----
+        function healthFormatRelativeTime(tsMs, nowMs) {
+            if (!tsMs) return '--';
+            var diff = Math.max(0, nowMs - tsMs);
+            if (diff < 1000) return 'now';
+            if (diff < 60000) return Math.floor(diff / 1000) + 's ago';
+            if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+            return Math.floor(diff / 86400000) + 'd ago';
+        }
+
+        // ----- Action: Snapshot download -----
+        function healthSnapshot() {
+            apiFetch('/api/diag/snapshot').then(function(r) {
+                return r.json();
+            }).then(function(data) {
+                var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'diag-snapshot-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                showToast('Snapshot downloaded', 'success');
+            }).catch(function(err) {
+                showToast('Snapshot failed: ' + err.message, 'error');
+            });
+        }
+
+        // ----- Action: Download journal -----
+        function healthDownloadJournal() {
+            apiFetch('/api/diagnostics/journal').then(function(r) {
+                return r.json();
+            }).then(function(data) {
+                var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'diag-journal-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                showToast('Journal downloaded', 'success');
+            }).catch(function(err) {
+                showToast('Download failed: ' + err.message, 'error');
+            });
+        }
+
+        // ----- Action: Clear journal -----
+        function healthClearJournal() {
+            if (!confirm('Clear diagnostic journal? This cannot be undone.')) return;
+            apiFetch('/api/diagnostics/journal', { method: 'DELETE' }).then(function() {
+                healthEvents = [];
+                healthErrorCounts = {};
+                renderHealthDashboard();
+                showToast('Journal cleared', 'success');
+            }).catch(function(err) {
+                showToast('Clear failed: ' + err.message, 'error');
+            });
+        }
+
+        // ----- Tab init (called from switchTab) -----
+        function initHealthDashboard() {
+            if (healthInitialized) return;
+            healthInitialized = true;
+            // Initial render with whatever state we have
+            renderHealthDashboard();
+        }
+
+//# sourceURL=27a-health-dashboard.js
 
         // ===== Window Resize Handler =====
         window.addEventListener('resize', function() {

@@ -48,6 +48,10 @@
                 <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
                 <span>Support</span>
             </button>
+            <button class="sidebar-item" data-tab="health" onclick="switchTab('health')">
+                <svg viewBox="0 0 24 24"><path d="M13,3V9H21V3M13,21H21V11H13M3,21H11V15H3M3,13H11V3H3V13Z"/></svg>
+                <span>Health</span>
+            </button>
             <button class="sidebar-item" data-tab="debug" onclick="switchTab('debug')">
                 <svg viewBox="0 0 24 24"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
                 <span>Debug</span>
@@ -103,6 +107,9 @@
         </button>
         <button class="tab" data-tab="support" onclick="switchTab('support')">
             <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+        </button>
+        <button class="tab" data-tab="health" onclick="switchTab('health')">
+            <svg viewBox="0 0 24 24"><path d="M13,3V9H21V3M13,21H21V11H13M3,21H11V15H3M3,13H11V3H3V13Z"/></svg>
         </button>
         <button class="tab" data-tab="debug" onclick="switchTab('debug')">
             <svg viewBox="0 0 24 24"><path d="M20 19V7H4v12h16m0-16c1.11 0 2 .89 2 2v14c0 1.11-.89 2-2 2H4c-1.11 0-2-.89-2-2V5c0-1.11.89-2 2-2h16zM7 9h10v2H7V9zm0 4h7v2H7v-2z"/></svg>
@@ -1116,6 +1123,36 @@
                 <div class="manual-rendered" id="manualRendered">
                     <div class="manual-loading">Loading manual...</div>
                 </div>
+            </div>
+        </section>
+
+        <!-- ===== HEALTH TAB ===== -->
+        <section id="health" class="panel">
+            <!-- Quick Actions -->
+            <div class="card" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <h3 style="flex:1;margin:0;">Health Dashboard</h3>
+                <button class="btn btn-primary" onclick="healthSnapshot()">Snapshot</button>
+                <button class="btn btn-secondary" onclick="healthDownloadJournal()">Download</button>
+                <button class="btn btn-secondary" onclick="healthClearJournal()">Clear</button>
+                <span id="healthLastUpdate" style="font-size:12px;color:var(--text-secondary);"></span>
+            </div>
+
+            <!-- Device Health Grid -->
+            <div class="card">
+                <div class="card-title">Device Health</div>
+                <div id="healthDeviceGrid" class="health-device-grid"></div>
+            </div>
+
+            <!-- Error Counters -->
+            <div class="card">
+                <div class="card-title">Error Counters</div>
+                <div id="healthErrorCounters"></div>
+            </div>
+
+            <!-- Recent Events Table -->
+            <div class="card">
+                <div class="card-title">Recent Events</div>
+                <div id="healthEventList" class="health-event-list"></div>
             </div>
         </section>
 

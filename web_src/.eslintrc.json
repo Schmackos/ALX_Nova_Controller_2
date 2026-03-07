@@ -394,6 +394,20 @@
     "logout": "readonly",
     "togglePasswordVisibility": "readonly",
     "QRCode": "readonly",
-    "marked": "readonly"
+    "marked": "readonly",
+    "healthEvents": "writable",
+    "healthErrorCounts": "writable",
+    "healthInitialized": "writable",
+    "HEALTH_SUBSYSTEMS": "readonly",
+    "handleDiagEvent": "readonly",
+    "renderHealthDashboard": "readonly",
+    "renderHealthDeviceGrid": "readonly",
+    "renderHealthErrorCounters": "readonly",
+    "renderHealthEventList": "readonly",
+    "healthFormatRelativeTime": "readonly",
+    "healthSnapshot": "readonly",
+    "healthDownloadJournal": "readonly",
+    "healthClearJournal": "readonly",
+    "initHealthDashboard": "readonly"
   }
 }

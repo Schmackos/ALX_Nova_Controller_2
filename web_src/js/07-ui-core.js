@@ -31,6 +31,12 @@
                 loadManualContent();
             }
 
+            // Health tab — lazy init + re-render
+            if (tabId === 'health') {
+                initHealthDashboard();
+                renderHealthDashboard();
+            }
+
             // Audio tab — render active sub-view on tab switch
             if (tabId === 'audio') {
                 renderAudioSubView();

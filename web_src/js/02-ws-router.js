@@ -202,5 +202,7 @@
                 if (data.unknownDevices) handleHalUnknownDevices(data.unknownDevices);
             } else if (data.type === 'audioChannelMap') {
                 handleAudioChannelMap(data);
+            } else if (data.type === 'diagEvent') {
+                handleDiagEvent(data);
             }
         }
