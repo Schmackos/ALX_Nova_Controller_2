@@ -35,6 +35,24 @@ int hal_pipeline_output_count();
 // Get count of pipeline-ready audio input devices (slots with an active ADC lane mapping)
 int hal_pipeline_input_count();
 
+// Reverse-lookup: return the HAL slot that owns the given ADC lane (0 or 1).
+// Returns -1 when no device is mapped to that lane.
+int8_t hal_pipeline_get_slot_for_adc_lane(uint8_t lane);
+
+// Reverse-lookup: return the HAL slot that owns the given pipeline sink slot.
+// Returns -1 when no device is mapped to that sink slot.
+int8_t hal_pipeline_get_slot_for_sink(uint8_t sinkSlot);
+
+// Cascade correlation ID support —————————————————————————————————————————
+// Call hal_pipeline_begin_correlation() before a multi-step operation that
+// should share one corrId across all diag_emit() calls.
+// Returns the new corrId (monotonically incrementing, wraps at 0xFFFF).
+// Call hal_pipeline_end_correlation() when the operation completes.
+// hal_pipeline_active_corr_id() returns 0 when no correlation is active.
+uint16_t hal_pipeline_begin_correlation();
+void     hal_pipeline_end_correlation();
+uint16_t hal_pipeline_active_corr_id();
+
 // Reset all bridge state — for unit tests only.
 // Clears the HAL-slot→sink-slot and HAL-slot→ADC-lane mapping tables.
 void hal_pipeline_reset();

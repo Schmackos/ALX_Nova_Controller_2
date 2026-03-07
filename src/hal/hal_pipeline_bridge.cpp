@@ -87,7 +87,7 @@ void hal_pipeline_on_device_available(uint8_t slot) {
         // The bridge only needs to record the mapping and update dirty flags
         // so the web UI reflects the new device immediately.
         _halSlotToSinkSlot[slot] = sinkSlot;
-        LOG_I("[HAL] Pipeline bridge: output %s (HAL slot %d) → sink slot %d",
+        LOG_I("[HAL:Bridge] Pipeline bridge: output %s (HAL slot %d) → sink slot %d",
               name, slot, (int)sinkSlot);
     }
 
@@ -95,7 +95,7 @@ void hal_pipeline_on_device_available(uint8_t slot) {
     int8_t adcLane = _adcLaneForDevice(dev);
     if (adcLane >= 0) {
         _halSlotToAdcLane[slot] = adcLane;
-        LOG_I("[HAL] Pipeline bridge: input %s (HAL slot %d) → ADC lane %d",
+        LOG_I("[HAL:Bridge] Pipeline bridge: input %s (HAL slot %d) → ADC lane %d",
               name, slot, (int)adcLane);
 #ifndef NATIVE_TEST
         appState.adcEnabled[adcLane] = true;
@@ -123,13 +123,13 @@ void hal_pipeline_on_device_unavailable(uint8_t slot) {
     if (_halSlotToSinkSlot[slot] >= 0) {
         // isReady() returns false because _ready is already false on the device.
         // The pipeline skips this sink automatically — no removal needed.
-        LOG_I("[HAL] Pipeline bridge: output %s (HAL slot %d) transiently unavailable"
+        LOG_I("[HAL:Bridge] Pipeline bridge: output %s (HAL slot %d) transiently unavailable"
               " — sink slot %d preserved", name, slot, (int)_halSlotToSinkSlot[slot]);
     }
     if (_halSlotToAdcLane[slot] >= 0) {
         // ADC lanes are hardware I2S; a transient unavailability does not warrant
         // disabling the lane — the DMA keeps running and DOUT may recover.
-        LOG_I("[HAL] Pipeline bridge: input %s (HAL slot %d) transiently unavailable"
+        LOG_I("[HAL:Bridge] Pipeline bridge: input %s (HAL slot %d) transiently unavailable"
               " — ADC lane %d preserved", name, slot, (int)_halSlotToAdcLane[slot]);
     }
 }
@@ -148,7 +148,7 @@ void hal_pipeline_on_device_removed(uint8_t slot) {
     // --- Remove output sink ---
     if (_halSlotToSinkSlot[slot] >= 0) {
         int8_t sinkSlot = _halSlotToSinkSlot[slot];
-        LOG_I("[HAL] Pipeline bridge: removing output %s (HAL slot %d) from sink slot %d",
+        LOG_I("[HAL:Bridge] Pipeline bridge: removing output %s (HAL slot %d) from sink slot %d",
               name, slot, (int)sinkSlot);
 #ifndef NATIVE_TEST
         audio_pipeline_remove_sink(sinkSlot);
@@ -159,7 +159,7 @@ void hal_pipeline_on_device_removed(uint8_t slot) {
     // --- Disable ADC lane ---
     if (_halSlotToAdcLane[slot] >= 0) {
         int8_t lane = _halSlotToAdcLane[slot];
-        LOG_I("[HAL] Pipeline bridge: disabling ADC lane %d (HAL slot %d, %s)",
+        LOG_I("[HAL:Bridge] Pipeline bridge: disabling ADC lane %d (HAL slot %d, %s)",
               (int)lane, slot, name);
 #ifndef NATIVE_TEST
         appState.adcEnabled[lane] = false;
@@ -232,7 +232,7 @@ void hal_pipeline_sync() {
         if (_halSlotToAdcLane[i]  >= 0) inputs++;
     }
 
-    LOG_I("[HAL] Pipeline bridge sync complete: %d output(s), %d input(s)", outputs, inputs);
+    LOG_I("[HAL:Bridge] Pipeline bridge sync complete: %d output(s), %d input(s)", outputs, inputs);
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +255,42 @@ int hal_pipeline_input_count() {
 }
 
 // ---------------------------------------------------------------------------
+// Reverse lookups
+// ---------------------------------------------------------------------------
+int8_t hal_pipeline_get_slot_for_adc_lane(uint8_t lane) {
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        if (_halSlotToAdcLane[i] == (int8_t)lane) return (int8_t)i;
+    }
+    return -1;
+}
+
+int8_t hal_pipeline_get_slot_for_sink(uint8_t sinkSlot) {
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        if (_halSlotToSinkSlot[i] == (int8_t)sinkSlot) return (int8_t)i;
+    }
+    return -1;
+}
+
+// ---------------------------------------------------------------------------
+// Cascade correlation IDs
+// ---------------------------------------------------------------------------
+static uint16_t _globalCorrCounter = 0;
+static uint16_t _activeCorrId      = 0;
+
+uint16_t hal_pipeline_begin_correlation() {
+    _activeCorrId = ++_globalCorrCounter;
+    return _activeCorrId;
+}
+
+void hal_pipeline_end_correlation() {
+    _activeCorrId = 0;
+}
+
+uint16_t hal_pipeline_active_corr_id() {
+    return _activeCorrId;
+}
+
+// ---------------------------------------------------------------------------
 // Reset — for unit tests only
 // ---------------------------------------------------------------------------
 void hal_pipeline_reset() {
@@ -262,6 +298,8 @@ void hal_pipeline_reset() {
         _halSlotToSinkSlot[i] = -1;
         _halSlotToAdcLane[i]  = -1;
     }
+    _globalCorrCounter = 0;
+    _activeCorrId      = 0;
 }
 
 #endif // DAC_ENABLED
