@@ -2305,6 +2305,18 @@ void sendAudioData() {
     doc["audioVrms1"] = appState.audioVrms1;
     doc["audioVrms2"] = appState.audioVrms2;
     doc["audioVrms"] = appState.audioVrmsCombined;
+    // Output sink VU data
+    JsonArray sinkArr = doc["sinks"].to<JsonArray>();
+    int sinkCnt = audio_pipeline_get_sink_count();
+    for (int s = 0; s < sinkCnt; s++) {
+        const AudioOutputSink* sk = audio_pipeline_get_sink(s);
+        if (!sk) continue;
+        JsonObject sinkObj = sinkArr.add<JsonObject>();
+        sinkObj["vuL"] = sk->vuL;
+        sinkObj["vuR"] = sk->vuR;
+        sinkObj["name"] = sk->name ? sk->name : "";
+        sinkObj["ch"] = sk->firstChannel;
+    }
     String json;
     serializeJson(doc, json);
     for (int i = 0; i < MAX_WS_CLIENTS; i++) {

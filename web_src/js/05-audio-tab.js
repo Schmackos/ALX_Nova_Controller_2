@@ -494,10 +494,29 @@
                     drawChannelVu('inputVu' + a + 'L', ad.vu1 || -90);
                     drawChannelVu('inputVu' + a + 'R', ad.vu2 || -90);
                     var readout = document.getElementById('inputVuReadout' + a);
-                    if (readout) readout.textContent = (ad.dBFS || -90).toFixed(1) + ' dB';
+                    if (readout) {
+                        var dbText = (ad.dBFS || -90).toFixed(1) + ' dB';
+                        if (ad.vrms1 !== undefined) {
+                            var avgVrms = ((ad.vrms1 || 0) + (ad.vrms2 || 0)) / 2;
+                            dbText += ' | ' + (avgVrms < 0.001 ? '0.000' : avgVrms.toFixed(3)) + ' Vrms';
+                        }
+                        readout.textContent = dbText;
+                    }
                 }
             }
-            // Output VU levels will be added when pipeline outputs VU data
+            // Output sink VU meters
+            if (data.sinks && audioSubView === 'outputs') {
+                for (var s = 0; s < data.sinks.length; s++) {
+                    var sk = data.sinks[s];
+                    drawChannelVu('outputVu' + s + 'c0', sk.vuL || -90);
+                    drawChannelVu('outputVu' + s + 'c1', sk.vuR || -90);
+                    var readout = document.getElementById('outputVuReadout' + s);
+                    if (readout) {
+                        var avg = ((sk.vuL || -90) + (sk.vuR || -90)) / 2;
+                        readout.textContent = avg.toFixed(1) + ' dB';
+                    }
+                }
+            }
         }
 
         function escapeHtml(str) {

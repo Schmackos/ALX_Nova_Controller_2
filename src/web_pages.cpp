@@ -4275,6 +4275,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             <option value="10">10 seconds</option>
                         </select>
                     </div>
+                    <div class="toggle-row">
+                        <div>
+                            <div class="toggle-label">Audio Stream Rate</div>
+                            <div class="toggle-sublabel">Audio level update interval</div>
+                        </div>
+                        <select id="audioUpdateRateSelect" onchange="setAudioUpdateRate()" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);font-size:14px;">
+                            <option value="33">30 fps (33ms)</option>
+                            <option value="50">20 fps (50ms)</option>
+                            <option value="100" selected>10 fps (100ms)</option>
+                            <option value="200">5 fps (200ms)</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -5890,10 +5902,29 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     drawChannelVu('inputVu' + a + 'L', ad.vu1 || -90);
                     drawChannelVu('inputVu' + a + 'R', ad.vu2 || -90);
                     var readout = document.getElementById('inputVuReadout' + a);
-                    if (readout) readout.textContent = (ad.dBFS || -90).toFixed(1) + ' dB';
+                    if (readout) {
+                        var dbText = (ad.dBFS || -90).toFixed(1) + ' dB';
+                        if (ad.vrms1 !== undefined) {
+                            var avgVrms = ((ad.vrms1 || 0) + (ad.vrms2 || 0)) / 2;
+                            dbText += ' | ' + (avgVrms < 0.001 ? '0.000' : avgVrms.toFixed(3)) + ' Vrms';
+                        }
+                        readout.textContent = dbText;
+                    }
                 }
             }
-            // Output VU levels will be added when pipeline outputs VU data
+            // Output sink VU meters
+            if (data.sinks && audioSubView === 'outputs') {
+                for (var s = 0; s < data.sinks.length; s++) {
+                    var sk = data.sinks[s];
+                    drawChannelVu('outputVu' + s + 'c0', sk.vuL || -90);
+                    drawChannelVu('outputVu' + s + 'c1', sk.vuR || -90);
+                    var readout = document.getElementById('outputVuReadout' + s);
+                    if (readout) {
+                        var avg = ((sk.vuL || -90) + (sk.vuR || -90)) / 2;
+                        readout.textContent = avg.toFixed(1) + ' dB';
+                    }
+                }
+            }
         }
 
         function escapeHtml(str) {

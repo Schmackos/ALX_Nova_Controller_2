@@ -423,14 +423,34 @@ static void pipeline_write_output() {
                 to_int32_lj(srcL, srcR, _sinkBuf[s], FRAMES);
             }
             sink->write(_sinkBuf[s], FRAMES);
+
+            // Compute output sink VU metering
+            {
+                float sinkSumSqL = 0, sinkSumSqR = 0;
+                float sg = sink->gainLinear;
+                for (int f = 0; f < FRAMES; f++) {
+                    float l = srcL[f] * sg;
+                    float r = srcR[f] * sg;
+                    sinkSumSqL += l * l;
+                    sinkSumSqR += r * r;
+                }
+                float sinkRmsL = sqrtf(sinkSumSqL / FRAMES);
+                float sinkRmsR = sqrtf(sinkSumSqR / FRAMES);
+                float sinkDt = (float)FRAMES * 1000.0f / (float)AppState::getInstance().audioSampleRate;
+                sink->_vuSmoothedL = audio_vu_update(sink->_vuSmoothedL, sinkRmsL, sinkDt);
+                sink->_vuSmoothedR = audio_vu_update(sink->_vuSmoothedR, sinkRmsR, sinkDt);
+                sink->vuL = (sink->_vuSmoothedL > 1e-9f) ? 20.0f * log10f(sink->_vuSmoothedL) : -90.0f;
+                sink->vuR = (sink->_vuSmoothedR > 1e-9f) ? 20.0f * log10f(sink->_vuSmoothedR) : -90.0f;
+            }
         }
     } else {
         // Legacy fallback: no sinks registered, use hardcoded DAC calls
-        to_int32_lj(ch0, ch1, _dacBuf, FRAMES);
-        dac_output_write(_dacBuf, FRAMES);
-
-        // Secondary DAC (ES8311 on P4) — same audio, independent hardware volume
+        if (dac_output_is_ready()) {
+            to_int32_lj(ch0, ch1, _dacBuf, FRAMES);
+            dac_output_write(_dacBuf, FRAMES);
+        }
         if (dac_secondary_is_ready()) {
+            to_int32_lj(ch0, ch1, _dacBuf, FRAMES);
             dac_secondary_write(_dacBuf, FRAMES);
         }
     }
