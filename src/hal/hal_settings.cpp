@@ -3,6 +3,7 @@
 #include "hal_settings.h"
 #include "hal_device_manager.h"
 #include "hal_device_db.h"
+#include "hal_pipeline_bridge.h"
 #include "hal_types.h"
 
 #ifndef NATIVE_TEST
@@ -138,8 +139,12 @@ void hal_apply_config(uint8_t slot) {
         // DAC-path devices: deferred legacy teardown via main loop
         // (I2S driver lifecycle is too heavy for direct call — must pause audio pipeline first)
         if (desc.capabilities & HAL_CAP_DAC_PATH) {
+            HalDeviceState oldState = dev->_state;
             dev->_ready = false;
             dev->_state = HAL_STATE_MANUAL;
+            // Fire state change callback — bridge removes the sink immediately,
+            // then the deferred deinit tears down the I2S driver safely.
+            hal_pipeline_state_change(slot, oldState, HAL_STATE_MANUAL);
             if (desc.type == HAL_DEV_DAC) {
                 appState.dacEnabled = false;
                 appState._pendingDacToggle = -1;
@@ -154,8 +159,12 @@ void hal_apply_config(uint8_t slot) {
             dev->_ready = false;
             dev->deinit();
         }
-        dev->_state = HAL_STATE_MANUAL;
-        dev->_ready = false;
+        {
+            HalDeviceState oldState = dev->_state;
+            dev->_state = HAL_STATE_MANUAL;
+            dev->_ready = false;
+            hal_pipeline_state_change(slot, oldState, HAL_STATE_MANUAL);
+        }
         LOG_I("[HAL] Device slot %u disabled", slot);
         appState.markHalDeviceDirty();
         return;
@@ -176,8 +185,11 @@ void hal_apply_config(uint8_t slot) {
             return;
         }
         dev->_state = HAL_STATE_CONFIGURING;
+        hal_pipeline_state_change(slot, HAL_STATE_MANUAL, HAL_STATE_CONFIGURING);
         bool ok = dev->probe() && dev->init();
         dev->_state = ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR;
+        hal_pipeline_state_change(slot, HAL_STATE_CONFIGURING,
+                                  ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR);
         // Re-enable I2S devices: reinit I2S with potentially changed pin config
         if (ok && desc.bus.type == HAL_BUS_I2S) {
             appState.audioPaused = true;
@@ -200,13 +212,17 @@ void hal_apply_config(uint8_t slot) {
         appState.audioPaused = false;
         LOG_I("[HAL] I2S device slot %u reconfigured (hot)", slot);
     } else {
+        HalDeviceState prevState = dev->_state;
         dev->_state = HAL_STATE_CONFIGURING;
+        hal_pipeline_state_change(slot, prevState, HAL_STATE_CONFIGURING);
         dev->deinit();
         if (dev->init()) {
             dev->_state = HAL_STATE_AVAILABLE;
+            hal_pipeline_state_change(slot, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE);
             LOG_I("[HAL] Device slot %u reinitialised", slot);
         } else {
             dev->_state = HAL_STATE_ERROR;
+            hal_pipeline_state_change(slot, HAL_STATE_CONFIGURING, HAL_STATE_ERROR);
             LOG_E("[HAL] Device slot %u reinit failed", slot);
         }
     }

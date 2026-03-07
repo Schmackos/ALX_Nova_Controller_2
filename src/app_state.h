@@ -226,6 +226,9 @@ public:
   float adcVref = DEFAULT_ADC_VREF; // ADC reference voltage (1.0-5.0V)
   bool adcEnabled[NUM_AUDIO_ADCS] = {true, true}; // Per-ADC input enable (persisted)
   volatile bool audioPaused = false; // Set true to pause audio_capture_task I2S reads (for I2S reinit)
+#ifndef UNIT_TEST
+  SemaphoreHandle_t audioTaskPausedAck = nullptr; // Binary semaphore: audio task gives when it has seen audioPaused=true
+#endif
 
   // Input channel names (user-configurable, 4 channels = 2 ADCs x 2 channels)
   String inputNames[NUM_AUDIO_ADCS * 2];

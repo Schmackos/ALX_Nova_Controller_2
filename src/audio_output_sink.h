@@ -46,6 +46,9 @@ typedef struct AudioOutputSink {
     // Internal VU ballistics state (smoothed RMS) — do not access directly.
     float _vuSmoothedL;
     float _vuSmoothedR;
+
+    // HAL device slot index that owns this sink. 0xFF = not bound to any HAL device.
+    uint8_t halSlot;
 } AudioOutputSink;
 
 // Default initializer
@@ -60,7 +63,8 @@ typedef struct AudioOutputSink {
     -90.0f, /* vuL */            \
     -90.0f, /* vuR */            \
     0.0f,   /* _vuSmoothedL */   \
-    0.0f    /* _vuSmoothedR */   \
+    0.0f,   /* _vuSmoothedR */   \
+    0xFF    /* halSlot */        \
 }
 
 #ifdef __cplusplus

@@ -69,6 +69,14 @@ void audio_pipeline_clear_sinks();   // Remove all sinks — caller must set aud
 int  audio_pipeline_get_sink_count();
 const AudioOutputSink* audio_pipeline_get_sink(int idx);
 
+// Slot-indexed sink API — preferred for HAL-managed devices.
+// audio_pipeline_set_sink()    atomically places a sink at a fixed slot index (0..AUDIO_OUT_MAX_SINKS-1).
+// audio_pipeline_remove_sink() atomically clears a slot; no-ops if the slot is already empty.
+// _sinkCount is updated after each call to reflect the highest occupied slot + 1,
+// keeping backward compatibility with legacy _sinkCount-based iteration.
+void audio_pipeline_set_sink(int slot, const AudioOutputSink *sink);
+void audio_pipeline_remove_sink(int slot);
+
 // Matrix persistence
 void audio_pipeline_save_matrix();
 void audio_pipeline_load_matrix();

@@ -396,8 +396,10 @@ static void pipeline_write_output() {
     const float *ch1 = (_swapPending && _swapHoldCh[1]) ? _swapHoldCh[1] : _outCh[1];
 
     if (_sinkCount > 0) {
-        // Sink dispatch path: iterate registered sinks
-        for (int s = 0; s < _sinkCount; s++) {
+        // Sink dispatch path: iterate all slots up to AUDIO_OUT_MAX_SINKS so that
+        // slot-indexed sinks with gaps between them (e.g., slot 0 empty, slot 1 active)
+        // are still dispatched. Empty slots are skipped by the write/isReady checks below.
+        for (int s = 0; s < AUDIO_OUT_MAX_SINKS; s++) {
             AudioOutputSink *sink = &_sinks[s];
             if (!sink->write || !sink->isReady || !sink->isReady()) continue;
             if (sink->muted) continue;
@@ -554,6 +556,11 @@ static void audio_pipeline_task_fn(void * /*param*/) {
         esp_task_wdt_reset();
 
         if (AppState::getInstance().audioPaused) {
+#ifndef NATIVE_TEST
+            if (AppState::getInstance().audioTaskPausedAck) {
+                xSemaphoreGive(AppState::getInstance().audioTaskPausedAck);
+            }
+#endif
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
@@ -701,6 +708,7 @@ void audio_pipeline_init() {
     _outputBypass = s.pipelineOutputBypass;
 
 #ifndef NATIVE_TEST
+    AppState::getInstance().audioTaskPausedAck = xSemaphoreCreateBinary();
     xTaskCreatePinnedToCore(
         audio_pipeline_task_fn,
         "audio_cap",
@@ -844,9 +852,9 @@ void audio_pipeline_register_sink(const AudioOutputSink *sink) {
 }
 
 void audio_pipeline_clear_sinks() {
-    // Caller must set appState.audioPaused=true and vTaskDelay(40ms) before calling.
-    // The audio task checks audioPaused at the top of its loop, so it will be
-    // yielding by the time this runs. A single volatile write is atomic on RISC-V.
+    // Caller must set appState.audioPaused=true and take audioTaskPausedAck before calling.
+    // The audio task gives the semaphore as soon as it sees audioPaused=true, guaranteeing
+    // it is yielding by the time this runs. A single volatile write is atomic on RISC-V.
     _sinkCount = 0;
     LOG_I("[Audio] All sinks cleared");
 }
@@ -858,6 +866,56 @@ int audio_pipeline_get_sink_count() {
 const AudioOutputSink* audio_pipeline_get_sink(int idx) {
     if (idx < 0 || idx >= _sinkCount) return nullptr;
     return &_sinks[idx];
+}
+
+void audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
+    if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS || !sink) return;
+#ifndef NATIVE_TEST
+    vTaskSuspendAll();
+#endif
+    _sinks[slot] = *sink;
+#ifndef NATIVE_TEST
+    xTaskResumeAll();
+#endif
+    // Update _sinkCount to reflect highest occupied slot + 1
+    _sinkCount = 0;
+    for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {
+        if (_sinks[i].write) _sinkCount = i + 1;
+    }
+#ifndef NATIVE_TEST
+    AppState::getInstance().markChannelMapDirty();
+#endif
+    LOG_I("[Audio] Sink set at slot %d: %s ch=%d,%d (count=%d)",
+          slot, sink->name ? sink->name : "?",
+          sink->firstChannel, sink->firstChannel + sink->channelCount - 1,
+          (int)_sinkCount);
+}
+
+void audio_pipeline_remove_sink(int slot) {
+    if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS) return;
+    if (!_sinks[slot].write) return;  // Already empty
+    const char *name = _sinks[slot].name;
+#ifndef NATIVE_TEST
+    vTaskSuspendAll();
+#endif
+    memset(&_sinks[slot], 0, sizeof(AudioOutputSink));
+    _sinks[slot].gainLinear = 1.0f;
+    _sinks[slot].vuL = -90.0f;
+    _sinks[slot].vuR = -90.0f;
+    _sinks[slot].halSlot = 0xFF;
+#ifndef NATIVE_TEST
+    xTaskResumeAll();
+#endif
+    // Update _sinkCount
+    _sinkCount = 0;
+    for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {
+        if (_sinks[i].write) _sinkCount = i + 1;
+    }
+#ifndef NATIVE_TEST
+    AppState::getInstance().markChannelMapDirty();
+#endif
+    LOG_I("[Audio] Sink removed from slot %d: %s (count=%d)",
+          slot, name ? name : "?", (int)_sinkCount);
 }
 
 // ===== Matrix Persistence =====

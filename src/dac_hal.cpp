@@ -385,34 +385,25 @@ void dac_secondary_init() {
         _halSecondaryAdapter = new HalDacAdapter(_secondaryDriver, desc, true);
         int slot = HalDeviceManager::instance().registerDevice(_halSecondaryAdapter, HAL_DISC_BUILTIN);
         if (slot >= 0) {
-            hal_pipeline_on_device_available(slot);
-            as.markHalDeviceDirty();
             LOG_I("[HAL] ES8311 registered in slot %d", slot);
         }
-
-        // Register as pipeline output sink (ch 2,3)
-        AudioOutputSink secondarySink = AUDIO_OUTPUT_SINK_INIT;
-        secondarySink.name = "ES8311";
-        secondarySink.firstChannel = 2;
-        secondarySink.channelCount = 2;
-        secondarySink.write = _secondary_sink_write;
-        secondarySink.isReady = _secondary_sink_ready;
-        audio_pipeline_register_sink(&secondarySink);
     } else {
-        // Re-enable: update state + re-register sink (cleared by dac_secondary_deinit)
+        // Re-enable: update state — bridge callback fires and records mapping
         _halSecondaryAdapter->_ready = true;
+        HalDeviceState oldState = _halSecondaryAdapter->_state;
         _halSecondaryAdapter->_state = HAL_STATE_AVAILABLE;
-        hal_pipeline_on_device_available(_halSecondaryAdapter->getSlot());
-        as.markHalDeviceDirty();
-
-        AudioOutputSink secondarySink = AUDIO_OUTPUT_SINK_INIT;
-        secondarySink.name = "ES8311";
-        secondarySink.firstChannel = 2;
-        secondarySink.channelCount = 2;
-        secondarySink.write = _secondary_sink_write;
-        secondarySink.isReady = _secondary_sink_ready;
-        audio_pipeline_register_sink(&secondarySink);
+        hal_pipeline_state_change(_halSecondaryAdapter->getSlot(), oldState, HAL_STATE_AVAILABLE);
     }
+
+    // Register/update pipeline output sink at fixed slot (ch 2,3)
+    AudioOutputSink secondarySink = AUDIO_OUTPUT_SINK_INIT;
+    secondarySink.name = "ES8311";
+    secondarySink.firstChannel = 2;
+    secondarySink.channelCount = 2;
+    secondarySink.write = _secondary_sink_write;
+    secondarySink.isReady = _secondary_sink_ready;
+    secondarySink.halSlot = _halSecondaryAdapter ? _halSecondaryAdapter->getSlot() : 0xFF;
+    audio_pipeline_set_sink(AUDIO_SINK_SLOT_ES8311, &secondarySink);
 #endif
 }
 
@@ -424,18 +415,21 @@ void dac_secondary_deinit() {
     // deleting the secondary I2S channel to avoid Core 1 preemption crash.
 #ifndef NATIVE_TEST
     as.audioPaused = true;
-    vTaskDelay(pdMS_TO_TICKS(40));
+    if (as.audioTaskPausedAck) {
+        // Wait up to 50ms for audio task to acknowledge pause
+        xSemaphoreTake(as.audioTaskPausedAck, pdMS_TO_TICKS(50));
+    }
 #endif
 
+    // Sink was already removed by the bridge state change callback when
+    // hal_apply_config() set _state = HAL_STATE_MANUAL.
     if (_halSecondaryAdapter) {
-        uint8_t slot = _halSecondaryAdapter->getSlot();
         _halSecondaryAdapter->_ready = false;
-        // Preserve HAL_STATE_MANUAL set by hal_apply_config() DISABLE path
         if (_halSecondaryAdapter->_state != HAL_STATE_MANUAL) {
+            HalDeviceState oldState = _halSecondaryAdapter->_state;
             _halSecondaryAdapter->_state = HAL_STATE_UNAVAILABLE;
+            hal_pipeline_state_change(_halSecondaryAdapter->getSlot(), oldState, HAL_STATE_UNAVAILABLE);
         }
-        hal_pipeline_on_device_removed(slot);
-        as.markHalDeviceDirty();
     }
 
     if (_secondaryDriver) {
@@ -870,34 +864,25 @@ void dac_output_init() {
         _halPrimaryAdapter = new HalDacAdapter(_driver, desc, true);
         int slot = HalDeviceManager::instance().registerDevice(_halPrimaryAdapter, HAL_DISC_MANUAL);
         if (slot >= 0) {
-            hal_pipeline_on_device_available(slot);
-            as.markHalDeviceDirty();
             LOG_I("[HAL] Primary DAC registered in slot %d", slot);
         }
-
-        // Register as pipeline output sink (ch 0,1)
-        AudioOutputSink primarySink = AUDIO_OUTPUT_SINK_INIT;
-        primarySink.name = as.dacModelName;
-        primarySink.firstChannel = 0;
-        primarySink.channelCount = 2;
-        primarySink.write = _primary_sink_write;
-        primarySink.isReady = _primary_sink_ready;
-        audio_pipeline_register_sink(&primarySink);
     } else {
-        // Re-enable: update state + re-register sink (cleared by dac_output_deinit)
+        // Re-enable: update state — bridge callback fires and records mapping
         _halPrimaryAdapter->_ready = true;
+        HalDeviceState oldState = _halPrimaryAdapter->_state;
         _halPrimaryAdapter->_state = HAL_STATE_AVAILABLE;
-        hal_pipeline_on_device_available(_halPrimaryAdapter->getSlot());
-        as.markHalDeviceDirty();
-
-        AudioOutputSink primarySink = AUDIO_OUTPUT_SINK_INIT;
-        primarySink.name = as.dacModelName;
-        primarySink.firstChannel = 0;
-        primarySink.channelCount = 2;
-        primarySink.write = _primary_sink_write;
-        primarySink.isReady = _primary_sink_ready;
-        audio_pipeline_register_sink(&primarySink);
+        hal_pipeline_state_change(_halPrimaryAdapter->getSlot(), oldState, HAL_STATE_AVAILABLE);
     }
+
+    // Register/update pipeline output sink at fixed slot (ch 0,1)
+    AudioOutputSink primarySink = AUDIO_OUTPUT_SINK_INIT;
+    primarySink.name = as.dacModelName;
+    primarySink.firstChannel = 0;
+    primarySink.channelCount = 2;
+    primarySink.write = _primary_sink_write;
+    primarySink.isReady = _primary_sink_ready;
+    primarySink.halSlot = _halPrimaryAdapter ? _halPrimaryAdapter->getSlot() : 0xFF;
+    audio_pipeline_set_sink(AUDIO_SINK_SLOT_PRIMARY, &primarySink);
 }
 
 void dac_output_deinit() {
@@ -908,26 +893,26 @@ void dac_output_deinit() {
     // (priority 3) can be blocking inside i2s_channel_write() when loopTask
     // (priority 1) calls this function.  Setting audioPaused=true causes the
     // audio task to yield at the top of its loop after the current DMA write
-    // completes (~5 ms at 48 kHz / 256-frame buffer).  40 ms >> 5 ms.
+    // completes (~5 ms at 48 kHz / 256-frame buffer).  The binary semaphore
+    // gives a deterministic ack instead of hoping a fixed delay is long enough.
 #ifndef NATIVE_TEST
     as.audioPaused = true;
-    vTaskDelay(pdMS_TO_TICKS(40));
+    if (as.audioTaskPausedAck) {
+        // Wait up to 50ms for audio task to acknowledge pause
+        xSemaphoreTake(as.audioTaskPausedAck, pdMS_TO_TICKS(50));
+    }
 #endif
 
-    // Remove sinks so pipeline_write_output() won't call _primary_sink_write()
-    // after we free the driver and I2S channel below.
-    audio_pipeline_clear_sinks();
-
+    // Sink was already removed by the bridge state change callback when
+    // hal_apply_config() set _state = HAL_STATE_MANUAL. If deinit is called
+    // without a prior MANUAL transition (e.g. driver error), remove it now.
     if (_halPrimaryAdapter) {
-        uint8_t slot = _halPrimaryAdapter->getSlot();
         _halPrimaryAdapter->_ready = false;
-        // Preserve HAL_STATE_MANUAL set by hal_apply_config() DISABLE path —
-        // only set UNAVAILABLE if not already MANUAL (user-initiated disable)
         if (_halPrimaryAdapter->_state != HAL_STATE_MANUAL) {
+            HalDeviceState oldState = _halPrimaryAdapter->_state;
             _halPrimaryAdapter->_state = HAL_STATE_UNAVAILABLE;
+            hal_pipeline_state_change(_halPrimaryAdapter->getSlot(), oldState, HAL_STATE_UNAVAILABLE);
         }
-        hal_pipeline_on_device_removed(slot);
-        as.markHalDeviceDirty();
     }
 
     if (_driver) {

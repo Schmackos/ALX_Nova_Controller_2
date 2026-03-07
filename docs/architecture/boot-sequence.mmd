@@ -1,0 +1,47 @@
+%% Boot Sequence — HAL + Audio Pipeline initialization order
+%% Critical: factories before devices, I2S before DAC, bridge sync after all registration
+
+sequenceDiagram
+    participant setup as setup() [Core 1]
+    participant HAL as HAL Framework
+    participant I2S as I2S Audio
+    participant DAC as DAC Layer
+    participant Bridge as Pipeline Bridge
+    participant Pipeline as Audio Pipeline
+
+    Note over setup: ESP32-P4 boot on Core 1 (loopTask)
+
+    setup->>HAL: hal_register_builtins()
+    Note right of HAL: Register factory functions:<br/>PCM5102A, ES8311, PCM1808,<br/>NS4150B, TempSensor
+
+    setup->>HAL: hal_db_init()
+    Note right of HAL: Load builtin device descriptors +<br/>LittleFS custom presets
+
+    setup->>HAL: hal_load_device_configs()
+    Note right of HAL: /hal_config.json -> _configs[slot]<br/>(pre-populate before registration)
+
+    setup->>HAL: hal_load_custom_devices()
+    Note right of HAL: /hal/custom/*.json -> HalCustomDevice
+
+    setup->>HAL: hal_provision_defaults()
+    Note right of HAL: Write /hal_auto_devices.json<br/>on first boot only
+
+    setup->>HAL: hal_load_auto_devices()
+    Note right of HAL: PCM5102A (probeOnly=true),<br/>PCM1808 x2 (probe+init=AVAILABLE)
+
+    setup->>I2S: i2s_audio_init()
+    Note right of I2S: ADC2 first (data-in only, GPIO25),<br/>then ADC1 (BCK=20, LRC=21, MCLK=22, DOUT=23).<br/>Creates audio_pipeline_task on Core 1.<br/>Creates audioTaskPausedAck semaphore.
+
+    setup->>DAC: dac_secondary_init()
+    Note right of DAC: ES8311 codec on I2S2 TX.<br/>Registers as HAL_DISC_BUILTIN.<br/>Calls audio_pipeline_set_sink(<br/>  SINK_SLOT_ES8311, &sink).
+
+    setup->>Bridge: hal_pipeline_sync()
+    Note right of Bridge: 1. Initialize mapping tables to -1<br/>2. Register stateChangeCb with manager<br/>3. Scan AVAILABLE devices:<br/>   - DAC/CODEC -> _halSlotToSinkSlot[]<br/>   - ADC -> _halSlotToAdcLane[] + adcEnabled[]<br/>4. Log: "N output(s), M input(s)"
+
+    setup->>HAL: Register BUILTIN peripherals
+    Note right of HAL: NS4150B (GPIO53), TempSensor,<br/>Display, Encoder, Buzzer,<br/>LED, Relay, Button, SignalGen
+
+    setup->>DAC: dac_output_init()
+    Note right of DAC: PCM5102A I2S TX on I2S0.<br/>HalDacAdapter wraps DacDriver.<br/>Calls audio_pipeline_set_sink(<br/>  SINK_SLOT_PRIMARY, &sink).<br/>Bridge callback fires automatically.
+
+    Note over setup: Main loop begins:<br/>app_events_wait(5) replaces delay(5)

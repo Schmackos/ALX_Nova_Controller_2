@@ -45,8 +45,10 @@ int HalDeviceManager::registerDevice(HalDevice* device, HalDiscovery discovery) 
 bool HalDeviceManager::removeDevice(uint8_t slot) {
     if (slot >= HAL_MAX_DEVICES || !_devices[slot]) return false;
 
+    HalDeviceState oldState = _devices[slot]->_state;
     _devices[slot]->_ready = false;
     _devices[slot]->_state = HAL_STATE_REMOVED;
+    if (_stateChangeCb) _stateChangeCb(slot, oldState, HAL_STATE_REMOVED);
     _devices[slot] = nullptr;
     _count--;
     return true;
@@ -107,13 +109,19 @@ void HalDeviceManager::initAll() {
     for (int i = 0; i < n; i++) {
         HalDevice* dev = sorted[i];
         if (dev->_state == HAL_STATE_UNKNOWN || dev->_state == HAL_STATE_CONFIGURING) {
+            HalDeviceState oldState = dev->_state;
             dev->_state = HAL_STATE_CONFIGURING;
+            if (_stateChangeCb && oldState != HAL_STATE_CONFIGURING) {
+                _stateChangeCb(dev->_slot, oldState, HAL_STATE_CONFIGURING);
+            }
             if (dev->init()) {
                 dev->_state = HAL_STATE_AVAILABLE;
                 dev->_ready = true;
+                if (_stateChangeCb) _stateChangeCb(dev->_slot, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE);
             } else {
                 dev->_state = HAL_STATE_ERROR;
                 dev->_ready = false;
+                if (_stateChangeCb) _stateChangeCb(dev->_slot, HAL_STATE_CONFIGURING, HAL_STATE_ERROR);
             }
         }
     }
@@ -127,12 +135,21 @@ void HalDeviceManager::healthCheckAll() {
 
         if (dev->healthCheck()) {
             if (dev->_state == HAL_STATE_UNAVAILABLE) {
+                HalDeviceState oldState = dev->_state;
                 dev->_state = HAL_STATE_AVAILABLE;
                 dev->_ready = true;
+                if (_stateChangeCb) _stateChangeCb(static_cast<uint8_t>(i), oldState, HAL_STATE_AVAILABLE);
             }
         } else {
-            dev->_state = HAL_STATE_UNAVAILABLE;
-            dev->_ready = false;
+            if (dev->_state != HAL_STATE_UNAVAILABLE) {
+                HalDeviceState oldState = dev->_state;
+                dev->_state = HAL_STATE_UNAVAILABLE;
+                dev->_ready = false;
+                if (_stateChangeCb) _stateChangeCb(static_cast<uint8_t>(i), oldState, HAL_STATE_UNAVAILABLE);
+            } else {
+                dev->_state = HAL_STATE_UNAVAILABLE;
+                dev->_ready = false;
+            }
         }
     }
 }
@@ -197,6 +214,11 @@ bool HalDeviceManager::setConfig(uint8_t slot, const HalDeviceConfig& cfg) {
     return true;
 }
 
+// ===== State Change Callback =====
+void HalDeviceManager::setStateChangeCallback(HalStateChangeCb cb) {
+    _stateChangeCb = cb;
+}
+
 // ===== Reset (testing) =====
 void HalDeviceManager::reset() {
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
@@ -216,4 +238,5 @@ void HalDeviceManager::reset() {
         _pins[i].gpio = -1;
     }
     _count = 0;
+    _stateChangeCb = nullptr;
 }

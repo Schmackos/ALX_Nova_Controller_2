@@ -1,0 +1,35 @@
+%% Event-Driven Architecture — Dirty Flags + FreeRTOS Event Group
+%% EVT_ANY = 0x00FFFFFF (24 usable bits, bits 24-31 reserved by FreeRTOS)
+
+sequenceDiagram
+    participant Producer as Producer<br/>(any task/ISR)
+    participant AS as AppState<br/>(dirty flags)
+    participant EG as FreeRTOS<br/>Event Group<br/>(24 usable bits)
+    participant Loop as Main Loop<br/>(Core 1)
+    participant WS as WebSocket<br/>Server (port 81)
+    participant MQTT as mqtt_task<br/>(Core 0, 20Hz)
+
+    Note over EG: EVT_ANY = 0x00FFFFFF<br/>15 bits assigned, 9 spare<br/>Bits 24-31 reserved by FreeRTOS
+
+    Producer->>AS: appState.markXxxDirty()
+    AS->>AS: _xxxDirty = true (volatile)
+    AS->>EG: app_events_signal(EVT_XXX)
+    Note right of EG: xEventGroupSetBits()<br/>from any core
+
+    Loop->>EG: app_events_wait(5ms)
+    Note right of Loop: Wakes in <1us on any bit<br/>OR 5ms timeout if idle
+
+    EG-->>Loop: returns set bits (pdTRUE clears)
+
+    Loop->>AS: isHalDeviceDirty()?
+    AS-->>Loop: true
+
+    Loop->>WS: sendHalDeviceState()
+    Loop->>WS: sendAudioChannelMap()
+    Loop->>AS: clearHalDeviceDirty()
+
+    Note over MQTT: Independent consumer:<br/>polls dirty flags at 20Hz<br/>does NOT use event group<br/>(avoids fan-out race)
+
+    MQTT->>AS: check dirty flags
+    AS-->>MQTT: publish if dirty
+    MQTT->>AS: clear MQTT-specific flags

@@ -1,0 +1,99 @@
+%% ALX Nova Controller 2 — System Architecture (post HAL-Pipeline integration)
+%% All paths are now connected. Legacy DAC layer still exists but bridge owns sink lifecycle.
+
+graph TB
+    classDef core1 fill:#1a3a5c,stroke:#2196F3,color:#fff
+    classDef core0 fill:#1a4a3a,stroke:#26A69A,color:#fff
+    classDef hal fill:#2d5016,stroke:#4CAF50,color:#fff
+    classDef pipeline fill:#4a1a5c,stroke:#9C27B0,color:#fff
+    classDef legacy fill:#5c4a00,stroke:#FF9800,color:#fff
+    classDef web fill:#5c1a3a,stroke:#E91E63,color:#fff
+    classDef state fill:#3a3a3a,stroke:#9E9E9E,color:#fff
+
+    subgraph Core1["Core 1 (Audio-Only)"]
+        AP["audio_pipeline_task\n(priority 3, DMA + DSP)"]
+        ML["loopTask / main loop\n(priority 1, WS dispatch)"]
+    end
+
+    subgraph Core0["Core 0"]
+        MQTT["mqtt_task\n(priority 2, 20Hz poll)"]
+        GUI["gui_task\n(LVGL on TFT)"]
+        USB["usb_audio_task\n(TinyUSB UAC2)"]
+        OTA["OTA one-shot tasks"]
+    end
+
+    subgraph HAL["HAL Framework (src/hal/)"]
+        HM["HalDeviceManager\nsingleton, 16 slots, 24-pin tracking"]
+        HD["HalDiscovery\nI2C scan / EEPROM / manual"]
+        HDB["HalDeviceDB\nbuiltin + LittleFS presets"]
+        HR["HalDriverRegistry\ncompatible string -> factory"]
+        HPB["HalPipelineBridge\nstate change callback\nslot-indexed sink API"]
+        HS["HalSettings\nhal_apply_config()"]
+    end
+
+    subgraph AudioPipeline["Audio Pipeline"]
+        INP["4-Lane Input\nADC1 | ADC2 | SigGen | USB"]
+        DSP["Per-Input DSP\nbiquad, FIR, limiter"]
+        MTX["8x8 Routing Matrix\nfloat32 mix + gain"]
+        ODSP["Per-Output DSP\n8 mono channels, 12 stages"]
+        SINKS["Slot-Indexed Sink Dispatch\nset_sink(slot) / remove_sink(slot)\nhalSlot for O(1) HAL lookup"]
+    end
+
+    subgraph LegacyDAC["DAC Layer (dac_hal.cpp)"]
+        style LegacyDAC stroke-dasharray: 5 5
+        DH["dac_hal.cpp\nI2S TX driver, HalDacAdapter"]
+        DR["DacRegistry\n(parallel to HalDriverRegistry)"]
+    end
+
+    subgraph WebGUI["Web Interface"]
+        WS["WebSocket Server\nport 81, binary + JSON"]
+        HTTP["HTTP Server\nport 80, REST API"]
+        WEB["web_src/ frontend\nAudio Tab, HAL Devices"]
+    end
+
+    AS["AppState Singleton\ndirty flags + FreeRTOS event group\n24 usable bits (EVT_ANY = 0x00FFFFFF)"]
+
+    %% HAL internal connections
+    HM -->|"registerDevice()"| HR
+    HD -->|"probe results"| HM
+    HDB -->|"preset lookup"| HD
+    HS -->|"config update\nfires stateChangeCb"| HM
+
+    %% HAL -> Pipeline Bridge (NEW: functional connection)
+    HM -->|"stateChangeCb(slot,\noldState, newState)"| HPB
+    HPB -->|"AVAILABLE:\nset_sink(slot, sink)"| SINKS
+    HPB -->|"MANUAL/ERROR/REMOVED:\nremove_sink(slot)"| SINKS
+    HPB -->|"ADC available:\nadcEnabled[lane]=true"| INP
+
+    %% Audio pipeline flow
+    AP --> INP --> DSP --> MTX --> ODSP --> SINKS
+
+    %% DAC layer creates sinks, bridge manages lifecycle
+    DH -->|"creates AudioOutputSink\nwith halSlot field"| SINKS
+    DH -->|"wraps as\nHalDacAdapter"| HM
+
+    %% State management
+    AS -->|"dirty flags +\nEVT_XXX bits"| ML
+    ML -->|"dispatch:\nsendHalDeviceState()\nsendAudioChannelMap()"| WS
+    HPB -->|"markHalDeviceDirty()\nmarkChannelMapDirty()"| AS
+
+    %% Cross-core
+    MQTT -->|"poll 20Hz\nindependent"| AS
+    GUI -->|"reads state"| AS
+    USB -->|"ring buffer\n-> lane 3"| INP
+
+    %% Web connections
+    WEB -->|"WS frames"| WS
+    HTTP -->|"/api/hal/*"| HS
+    WS -->|"halSlot O(1)\ndevice lookup"| HM
+
+    %% Semaphore for safe I2S teardown
+    DH -.->|"audioPaused +\nbinary semaphore"| AP
+
+    class AP,ML core1
+    class MQTT,GUI,USB,OTA core0
+    class HM,HD,HDB,HR,HPB,HS hal
+    class INP,DSP,MTX,ODSP,SINKS pipeline
+    class DH,DR legacy
+    class WS,HTTP,WEB web
+    class AS state

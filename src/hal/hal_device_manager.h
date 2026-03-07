@@ -7,6 +7,9 @@
 // Callback type for forEach iteration
 typedef void (*HalDeviceCallback)(HalDevice* device, void* ctx);
 
+// State change callback — fired on every _state transition
+typedef void (*HalStateChangeCb)(uint8_t slot, HalDeviceState oldState, HalDeviceState newState);
+
 class HalDeviceManager {
 public:
     // Meyers singleton — thread-safe on C++11
@@ -40,6 +43,9 @@ public:
     HalDeviceConfig* getConfig(uint8_t slot);
     bool setConfig(uint8_t slot, const HalDeviceConfig& cfg);
 
+    // State change callback — registered once at boot by hal_pipeline_bridge
+    void setStateChangeCallback(HalStateChangeCb cb);
+
     // Reset all state (for testing)
     void reset();
 
@@ -53,4 +59,5 @@ private:
     HalDeviceConfig _configs[HAL_MAX_DEVICES];
     HalPinAlloc     _pins[HAL_MAX_PINS];
     uint8_t         _count;
+    HalStateChangeCb _stateChangeCb = nullptr;
 };

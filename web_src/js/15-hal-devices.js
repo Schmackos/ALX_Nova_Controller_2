@@ -20,11 +20,6 @@
             halScanning = data.scanning || false;
             halDevices = data.devices || [];
             renderHalDevices();
-            halSyncAudioTabVisibility(halDevices);
-        }
-
-        function halSyncAudioTabVisibility(devices) {
-            // Legacy DAC/ES8311 cards removed — visibility now handled by audioChannelMap
         }
 
         function renderHalDevices() {

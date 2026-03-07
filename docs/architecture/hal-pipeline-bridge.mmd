@@ -1,0 +1,83 @@
+%% HAL-Pipeline Bridge — State Change to Audio Effect
+%% Shows the complete callback chain from device state change to pipeline action
+
+flowchart TB
+    subgraph triggers["State Change Triggers"]
+        T1["Web UI: Disable device\nPUT /api/hal/devices"]
+        T2["healthCheckAll()\n30s periodic timer"]
+        T3["initAll()\nboot-time init"]
+        T4["removeDevice()\nDELETE /api/hal/devices"]
+        T5["hal_apply_config()\nenable/disable/reconfigure"]
+    end
+
+    subgraph manager["HalDeviceManager"]
+        CB["_stateChangeCb(\n  slot,\n  oldState,\n  newState\n)"]
+    end
+
+    subgraph bridge["HalPipelineBridge"]
+        SC["hal_pipeline_state_change()"]
+        AVL["on_device_available(slot)"]
+        UNV["on_device_unavailable(slot)"]
+        REM["on_device_removed(slot)"]
+    end
+
+    subgraph tables["Mapping Tables"]
+        SINK_MAP["_halSlotToSinkSlot[16]\nDAC slot -> SINK_SLOT_PRIMARY (0)\nCODEC slot -> SINK_SLOT_ES8311 (1)"]
+        ADC_MAP["_halSlotToAdcLane[16]\nADC slot -> lane 0 or 1\n(max 2 ADC lanes)"]
+    end
+
+    subgraph pipeline["Audio Pipeline"]
+        SET["audio_pipeline_set_sink(\n  sinkSlot, &sink\n)\nvTaskSuspendAll() atomic"]
+        RMV["audio_pipeline_remove_sink(\n  sinkSlot\n)\nzeroes slot, halSlot=0xFF"]
+        ADC_EN["appState.adcEnabled[lane]\ntrue/false"]
+    end
+
+    subgraph output["Pipeline Effect"]
+        FLOWS["Audio flows to device\nsink->write() called each DMA cycle"]
+        SKIPS["Audio skipped\nisReady() returns false"]
+        STOPS["Audio stopped\nsink slot empty, no dispatch"]
+    end
+
+    subgraph dirty["Dirty Flags -> Web UI"]
+        DF["markHalDeviceDirty()\nmarkChannelMapDirty()\nmarkAdcEnabledDirty()"]
+        WS["Main loop dispatches:\nsendHalDeviceState()\nsendAudioChannelMap()"]
+    end
+
+    %% Trigger -> Manager
+    T1 --> CB
+    T2 --> CB
+    T3 --> CB
+    T4 --> CB
+    T5 --> CB
+
+    %% Manager -> Bridge dispatcher
+    CB --> SC
+
+    %% Dispatcher routes by newState
+    SC -->|"AVAILABLE"| AVL
+    SC -->|"UNAVAILABLE"| UNV
+    SC -->|"MANUAL / ERROR / REMOVED"| REM
+
+    %% Available path
+    AVL --> SINK_MAP
+    AVL --> ADC_MAP
+    SINK_MAP -->|"DAC/CODEC"| SET
+    ADC_MAP -->|"ADC"| ADC_EN
+    SET --> FLOWS
+    ADC_EN -->|"true"| FLOWS
+
+    %% Unavailable path (no table changes)
+    UNV -->|"volatile _ready=false\nno table changes"| SKIPS
+
+    %% Removed path
+    REM -->|"clear mapping"| SINK_MAP
+    REM -->|"clear mapping"| ADC_MAP
+    SINK_MAP -->|"DAC/CODEC"| RMV
+    ADC_MAP -->|"ADC"| ADC_EN
+    RMV --> STOPS
+    ADC_EN -->|"false"| STOPS
+
+    %% Dirty flags
+    AVL --> DF
+    REM --> DF
+    DF --> WS

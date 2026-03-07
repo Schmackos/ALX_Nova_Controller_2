@@ -1,0 +1,57 @@
+%% HAL Device Lifecycle State Machine
+%% Shows all state transitions with bridge actions and pipeline effects
+
+stateDiagram-v2
+    [*] --> UNKNOWN: registerDevice()
+
+    UNKNOWN --> DETECTED: probe() ACK
+    DETECTED --> CONFIGURING: init() called
+    CONFIGURING --> AVAILABLE: init() success\n[bridge: set_sink(slot)]
+    CONFIGURING --> ERROR: init() failure
+
+    AVAILABLE --> UNAVAILABLE: healthCheck fail\n[bridge: no action, _ready=false]
+    UNAVAILABLE --> AVAILABLE: healthCheck pass\n[bridge: no action, _ready=true]
+    UNAVAILABLE --> ERROR: 3 consecutive fails\n[bridge: remove_sink(slot)]
+
+    AVAILABLE --> MANUAL: user disable via Web UI\n[bridge: remove_sink(slot)]
+    MANUAL --> CONFIGURING: user re-enable\n[deferred via _pendingDacToggle]
+
+    AVAILABLE --> ERROR: fatal I2C/driver error\n[bridge: remove_sink(slot)]
+    ERROR --> CONFIGURING: reinit requested\n[POST /api/hal/devices/reinit]
+
+    AVAILABLE --> REMOVED: device absent on rescan\n[bridge: remove_sink(slot)]
+    REMOVED --> [*]
+
+    note right of AVAILABLE
+        Pipeline active:
+        - isReady() returns true
+        - Sink dispatches audio
+        - VU metering active
+        - halSlot links to HAL device
+    end note
+
+    note right of UNAVAILABLE
+        Hybrid transient policy:
+        - volatile _ready = false
+        - Sink STAYS registered
+        - isReady() returns false
+        - Pipeline skips (no dropout)
+        - Auto-recovery when _ready=true
+    end note
+
+    note right of MANUAL
+        Explicit teardown:
+        - remove_sink(slot) called
+        - DAC: deferred I2S deinit
+          via _pendingDacToggle
+        - ADC: adcEnabled[lane]=false
+        - Config persisted to LittleFS
+    end note
+
+    note right of ERROR
+        Explicit teardown:
+        - remove_sink(slot) called
+        - ADC lane disabled
+        - Device stays in manager
+        - Can be reinit'd via API
+    end note

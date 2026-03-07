@@ -1732,27 +1732,21 @@ void sendAudioChannelMap() {
         out["channels"] = sink->channelCount;
         out["muted"] = sink->muted;
 
-        // Find matching HAL device
-        // Try by name: "PCM5102A" → ti,pcm5102a, "ES8311" → everest,es8311
-        HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
-            JsonObject* obj = static_cast<JsonObject*>(ctx);
-            const AudioOutputSink* sk = audio_pipeline_get_sink((*obj)["index"].as<int>());
-            if (!sk) return;
-            const HalDeviceDescriptor& desc = dev->getDescriptor();
-            // Match by device type being DAC or CODEC
-            if (desc.type != HAL_DEV_DAC && desc.type != HAL_DEV_CODEC) return;
-            // Match by name substring
-            if (strstr(sk->name, desc.name) || strstr(desc.name, sk->name)) {
-                (*obj)["compatible"] = desc.compatible;
-                (*obj)["manufacturer"] = desc.manufacturer;
-                (*obj)["capabilities"] = desc.capabilities;
-                (*obj)["ready"] = (bool)dev->_ready;
-                (*obj)["deviceType"] = (int)desc.type;
-                (*obj)["i2cAddr"] = desc.i2cAddr;
+        // Find matching HAL device via O(1) halSlot lookup
+        if (sink->halSlot != 0xFF) {
+            HalDevice* dev = HalDeviceManager::instance().getDevice(sink->halSlot);
+            if (dev) {
+                const HalDeviceDescriptor& desc = dev->getDescriptor();
+                out["compatible"] = desc.compatible;
+                out["manufacturer"] = desc.manufacturer;
+                out["capabilities"] = desc.capabilities;
+                out["ready"] = (bool)dev->_ready;
+                out["deviceType"] = (int)desc.type;
+                out["i2cAddr"] = desc.i2cAddr;
             }
-        }, &out);
+        }
 
-        // Default ready state if no HAL match
+        // Default ready state if no HAL device is bound to this sink
         if (!out.containsKey("ready")) {
             out["ready"] = (sink->isReady ? sink->isReady() : false);
             out["capabilities"] = 0;

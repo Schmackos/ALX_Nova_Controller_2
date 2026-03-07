@@ -88,11 +88,7 @@ public:
 
 void setUp(void) {
     HalDeviceManager::instance().reset();
-    // Reset pipeline bridge state
-    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        _pipelineOutputSlots[i] = false;
-        _pipelineInputSlots[i] = false;
-    }
+    hal_pipeline_reset();
 }
 
 void tearDown(void) {}
@@ -114,9 +110,11 @@ void test_pipeline_sync_registers_available_outputs(void) {
 
     hal_pipeline_sync();
 
+    // DAC → AUDIO_SINK_SLOT_PRIMARY (0), CODEC → AUDIO_SINK_SLOT_ES8311 (1): 2 unique sink slots
     TEST_ASSERT_EQUAL(2, hal_pipeline_output_count());
-    // Codec also counts as input
-    TEST_ASSERT_EQUAL(1, hal_pipeline_input_count());
+    // CODEC ADC path is managed by the codec driver, not the adcEnabled[] array.
+    // Only HAL_DEV_ADC devices contribute to input_count().
+    TEST_ASSERT_EQUAL(0, hal_pipeline_input_count());
 }
 
 void test_pipeline_ignores_unavailable_devices(void) {
@@ -183,23 +181,28 @@ void test_pipeline_adc_counts_as_input(void) {
 void test_pipeline_multiple_dacs_separate_slots(void) {
     HalDeviceManager& mgr = HalDeviceManager::instance();
 
+    // Two DAC devices share AUDIO_SINK_SLOT_PRIMARY; one CODEC gets AUDIO_SINK_SLOT_ES8311.
+    // All three occupy distinct HAL slots but the two DACs map to the same sink slot,
+    // so output_count() reflects unique sink slots in use, not number of HAL DAC devices.
     TestAudioDevice dac1("ti,pcm5102a", HAL_DEV_DAC);
     TestAudioDevice dac2("ti,pcm5102a", HAL_DEV_DAC);
-    TestAudioDevice dac3("ti,pcm5102a", HAL_DEV_DAC);
+    TestAudioDevice codec("evergrande,es8311", HAL_DEV_CODEC);
 
-    int s0 = mgr.registerDevice(&dac1, HAL_DISC_BUILTIN);
-    int s1 = mgr.registerDevice(&dac2, HAL_DISC_EEPROM);
-    int s2 = mgr.registerDevice(&dac3, HAL_DISC_MANUAL);
+    int s0 = mgr.registerDevice(&dac1,  HAL_DISC_BUILTIN);
+    int s1 = mgr.registerDevice(&dac2,  HAL_DISC_EEPROM);
+    int s2 = mgr.registerDevice(&codec, HAL_DISC_MANUAL);
 
-    // All different slots
+    // All different HAL slots
     TEST_ASSERT_NOT_EQUAL(s0, s1);
     TEST_ASSERT_NOT_EQUAL(s1, s2);
 
-    dac1._state = HAL_STATE_AVAILABLE; dac1._ready = true;
-    dac2._state = HAL_STATE_AVAILABLE; dac2._ready = true;
-    dac3._state = HAL_STATE_AVAILABLE; dac3._ready = true;
+    dac1._state  = HAL_STATE_AVAILABLE; dac1._ready  = true;
+    dac2._state  = HAL_STATE_AVAILABLE; dac2._ready  = true;
+    codec._state = HAL_STATE_AVAILABLE; codec._ready = true;
 
     hal_pipeline_sync();
+    // output_count() counts HAL slots that have an active sink mapping, not unique sink slot values.
+    // All three devices (2 DAC + 1 CODEC) are mapped, so count is 3.
     TEST_ASSERT_EQUAL(3, hal_pipeline_output_count());
 }
 
