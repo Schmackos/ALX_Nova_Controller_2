@@ -8,6 +8,7 @@
 #include <esp_random.h>
 #include <esp_timer.h>
 #include <mbedtls/md.h>
+#include <mbedtls/pkcs5.h>
 
 Session activeSessions[MAX_SESSIONS];
 Preferences authPrefs;
@@ -17,6 +18,20 @@ static int _loginFailCount = 0;
 static uint64_t _lastFailTime = 0;
 static const uint64_t LOGIN_COOLDOWN_US = 300000000ULL; // 5 minutes in microseconds
 static unsigned long _nextLoginAllowedMs = 0; // millis() gate — non-blocking rate limit
+
+// WebSocket one-time token pool (replaces JS cookie reading for WS auth)
+#define WS_TOKEN_SLOTS 16
+#define WS_TOKEN_TTL_MS 60000  // 60 seconds
+struct WsToken {
+  char token[37];       // UUID string (36 chars + null)
+  char sessionId[37];   // session that generated this token
+  uint32_t createdMs;
+  bool used;
+};
+static WsToken _wsTokens[WS_TOKEN_SLOTS];
+
+// PBKDF2 migration flag — set on boot if stored hash is legacy SHA256
+static bool _passwordNeedsMigration = false;
 
 // Timing-safe string comparison — constant time regardless of where strings differ
 bool timingSafeCompare(const String &a, const String &b) {
@@ -66,6 +81,62 @@ String hashPassword(const String &password) {
   return String(hexStr);
 }
 
+// Helper: convert bytes to hex string
+static void bytesToHex(const uint8_t *bytes, size_t len, char *out) {
+  for (size_t i = 0; i < len; i++) {
+    snprintf(out + (i * 2), 3, "%02x", bytes[i]);
+  }
+  out[len * 2] = '\0';
+}
+
+// Helper: convert hex string to bytes
+static bool hexToBytes(const char *hex, uint8_t *out, size_t outLen) {
+  for (size_t i = 0; i < outLen; i++) {
+    unsigned int val;
+    if (sscanf(hex + (i * 2), "%02x", &val) != 1) return false;
+    out[i] = (uint8_t)val;
+  }
+  return true;
+}
+
+// Hash with explicit salt (for verification and re-hash)
+static String hashPasswordPbkdf2WithSalt(const String &password, const uint8_t *salt) {
+  uint8_t derivedKey[32];
+
+  mbedtls_pkcs5_pbkdf2_hmac_ext(
+    MBEDTLS_MD_SHA256,
+    (const unsigned char *)password.c_str(), password.length(),
+    salt, 16, 10000, 32, derivedKey);
+
+  char saltHex[33], keyHex[65];
+  bytesToHex(salt, 16, saltHex);
+  bytesToHex(derivedKey, 32, keyHex);
+
+  return String("p1:") + saltHex + ":" + keyHex;
+}
+
+// Hash password with PBKDF2-SHA256 + random salt
+String hashPasswordPbkdf2(const String &password) {
+  uint8_t salt[16];
+  esp_fill_random(salt, 16);
+  return hashPasswordPbkdf2WithSalt(password, salt);
+}
+
+// Verify password against stored hash (supports both legacy SHA256 and PBKDF2)
+bool verifyPassword(const String &inputPassword, const String &storedHash) {
+  if (storedHash.startsWith("p1:") && storedHash.length() == 101) {
+    // PBKDF2 format: "p1:<32-char salt>:<64-char key>"
+    uint8_t salt[16];
+    if (!hexToBytes(storedHash.c_str() + 3, salt, 16)) return false;
+
+    String computed = hashPasswordPbkdf2WithSalt(inputPassword, salt);
+    return timingSafeCompare(computed, storedHash);
+  }
+
+  // Legacy SHA256 format: 64-char hex
+  return timingSafeCompare(hashPassword(inputPassword), storedHash);
+}
+
 // Get progressive login delay based on fail count
 static unsigned long getLoginDelay() {
   // Progressive: 1s, 2s, 5s, 10s, 30s (capped)
@@ -85,6 +156,96 @@ void resetLoginRateLimit() {
   _nextLoginAllowedMs = 0;
 }
 
+// Generate a one-time WS auth token bound to the requesting session
+String generateWsToken() {
+  uint32_t now = millis();
+  String currentSession = getSessionFromCookie();
+
+  // Purge expired/used entries
+  for (int i = 0; i < WS_TOKEN_SLOTS; i++) {
+    if (_wsTokens[i].token[0] != '\0' &&
+        (_wsTokens[i].used || (now - _wsTokens[i].createdMs > WS_TOKEN_TTL_MS))) {
+      _wsTokens[i].token[0] = '\0';
+    }
+  }
+
+  // Find free slot
+  for (int i = 0; i < WS_TOKEN_SLOTS; i++) {
+    if (_wsTokens[i].token[0] == '\0') {
+      String uuid = generateSessionId();  // reuse UUID generator
+      strncpy(_wsTokens[i].token, uuid.c_str(), 36);
+      _wsTokens[i].token[36] = '\0';
+      strncpy(_wsTokens[i].sessionId, currentSession.c_str(), 36);
+      _wsTokens[i].sessionId[36] = '\0';
+      _wsTokens[i].createdMs = now;
+      _wsTokens[i].used = false;
+      return uuid;
+    }
+  }
+
+  return "";  // no free slot
+}
+
+// Validate and consume a one-time WS token, returns bound session ID
+bool validateWsToken(const String &token, String &outSessionId) {
+  if (token.length() == 0) return false;
+  uint32_t now = millis();
+
+  for (int i = 0; i < WS_TOKEN_SLOTS; i++) {
+    if (_wsTokens[i].token[0] != '\0' && !_wsTokens[i].used &&
+        (now - _wsTokens[i].createdMs <= WS_TOKEN_TTL_MS) &&
+        timingSafeCompare(String(_wsTokens[i].token), token)) {
+      _wsTokens[i].used = true;
+      outSessionId = String(_wsTokens[i].sessionId);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Handler: Get WS auth token (requires valid session cookie)
+void handleGetWsToken() {
+  String token = generateWsToken();
+
+  JsonDocument response;
+  if (token.length() > 0) {
+    response["success"] = true;
+    response["token"] = token;
+  } else {
+    response["success"] = false;
+    response["error"] = "Too many pending tokens";
+  }
+
+  String responseStr;
+  serializeJson(response, responseStr);
+  server.send(token.length() > 0 ? 200 : 429, "application/json", responseStr);
+}
+
+// Character set for default password (excludes ambiguous: 0/O, 1/l/I)
+static const char _pwdCharset[] =
+    "abcdefghijkmnopqrstuvwxyz"
+    "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    "23456789";
+static const size_t _pwdCharsetLen = sizeof(_pwdCharset) - 1;  // 57 chars
+
+// Generate random per-device default password (10 chars with dash: AbC3x-Kf9Yz)
+String generateDefaultPassword() {
+  uint8_t randomBytes[10];
+  esp_fill_random(randomBytes, 10);
+
+  char pwd[12];  // 5 + dash + 5 + null
+  for (int i = 0; i < 5; i++) {
+    pwd[i] = _pwdCharset[randomBytes[i] % _pwdCharsetLen];
+  }
+  pwd[5] = '-';
+  for (int i = 0; i < 5; i++) {
+    pwd[6 + i] = _pwdCharset[randomBytes[5 + i] % _pwdCharsetLen];
+  }
+  pwd[11] = '\0';
+
+  return String(pwd);
+}
+
 // Initialize authentication system
 void initAuth() {
   // Clear all sessions
@@ -94,32 +255,51 @@ void initAuth() {
     activeSessions[i].lastSeen = 0;
   }
 
-  // Load password hash from NVS (with migration from plaintext)
+  // Load password hash from NVS (supports PBKDF2, legacy SHA256, and plaintext)
   authPrefs.begin("auth", false);
 
   if (authPrefs.isKey("pwd_hash")) {
-    // New format: already hashed
     appState.webPassword = authPrefs.getString("pwd_hash", "");
-    LOG_I("[Auth] Loaded password hash from NVS");
+    if (appState.webPassword.startsWith("p1:")) {
+      LOG_I("[Auth] Loaded PBKDF2 password hash from NVS");
+    } else {
+      // Legacy bare SHA256 — flag for migration on next successful login
+      _passwordNeedsMigration = true;
+      LOG_I("[Auth] Loaded legacy SHA256 hash (will migrate on next login)");
+    }
   } else if (authPrefs.isKey("web_pwd")) {
-    // Legacy plaintext — migrate to hashed
+    // Legacy plaintext — migrate to PBKDF2 immediately
     String plaintext = authPrefs.getString("web_pwd", "");
     if (plaintext.length() > 0) {
-      String hashed = hashPassword(plaintext);
+      String hashed = hashPasswordPbkdf2(plaintext);
       authPrefs.putString("pwd_hash", hashed);
       authPrefs.remove("web_pwd");
       appState.webPassword = hashed;
-      LOG_I("[Auth] Migrated plaintext password to hash");
+      LOG_I("[Auth] Migrated plaintext password to PBKDF2 hash");
     } else {
-      appState.webPassword = hashPassword(appState.apPassword);
-      LOG_I("[Auth] Using default password (AP password)");
+      appState.webPassword = hashPasswordPbkdf2(appState.apPassword);
+      authPrefs.putString("pwd_hash", appState.webPassword);
+      LOG_I("[Auth] Using default password (AP password, PBKDF2)");
     }
   } else {
-    // No password saved, use hashed default (AP password)
-    appState.webPassword = hashPassword(appState.apPassword);
-    LOG_I("[Auth] Using default password (AP password)");
+    // First boot — generate unique per-device password
+    String defaultPwd = generateDefaultPassword();
+    appState.webPassword = hashPasswordPbkdf2(defaultPwd);
+    authPrefs.putString("pwd_hash", appState.webPassword);
+    authPrefs.putString("default_pwd", defaultPwd);  // plaintext for display
+    LOG_I("[Auth] Generated default password: %s", defaultPwd.c_str());
   }
 
+  authPrefs.end();
+
+  // Log the default password for serial console access
+  authPrefs.begin("auth", true);  // read-only
+  if (authPrefs.isKey("default_pwd")) {
+    String defPwd = authPrefs.getString("default_pwd", "");
+    if (defPwd.length() > 0) {
+      LOG_I("[Auth] Default password: %s", defPwd.c_str());
+    }
+  }
   authPrefs.end();
 
   LOG_I("[Auth] Authentication system initialized");
@@ -228,17 +408,8 @@ void removeSession(String sessionId) {
   }
 }
 
-// Helper: Get session ID from Cookie or Header
+// Helper: Get session ID from Cookie header (HttpOnly — no JS access)
 String getSessionFromCookie() {
-  // First try the custom header (more reliable for API calls)
-  if (server.hasHeader("X-Session-ID")) {
-    String headerId = server.header("X-Session-ID");
-    if (headerId.length() > 0) {
-      return headerId;
-    }
-  }
-
-  // Fallback to Cookie header
   if (!server.hasHeader("Cookie")) {
     return "";
   }
@@ -316,9 +487,18 @@ bool requireAuth() {
 // Get web password
 String getWebPassword() { return appState.webPassword; }
 
-// Set web password and save to NVS (stores hash, deletes legacy key)
+// Get stored default password (for TFT display on boot screen)
+String getDefaultPassword() {
+  Preferences prefs;
+  prefs.begin("auth", true);
+  String pwd = prefs.getString("default_pwd", "");
+  prefs.end();
+  return pwd;
+}
+
+// Set web password and save to NVS (PBKDF2 hash, deletes legacy key)
 void setWebPassword(String newPassword) {
-  String hashed = hashPassword(newPassword);
+  String hashed = hashPasswordPbkdf2(newPassword);
   appState.webPassword = hashed;
 
   authPrefs.begin("auth", false);
@@ -327,13 +507,26 @@ void setWebPassword(String newPassword) {
     authPrefs.remove("web_pwd");
   }
   authPrefs.end();
+  _passwordNeedsMigration = false;
 
-  LOG_I("[Auth] Password changed and saved to NVS");
+  LOG_I("[Auth] Password changed and saved to NVS (PBKDF2)");
 }
 
-// Check if using default password (hash of AP password)
+// Check if using default password (generated or legacy AP password)
 bool isDefaultPassword() {
-  return timingSafeCompare(appState.webPassword, hashPassword(appState.apPassword));
+  // Check against stored generated default password
+  authPrefs.begin("auth", true);
+  if (authPrefs.isKey("default_pwd")) {
+    String defPwd = authPrefs.getString("default_pwd", "");
+    authPrefs.end();
+    if (defPwd.length() > 0) {
+      return verifyPassword(defPwd, appState.webPassword);
+    }
+    return false;
+  }
+  authPrefs.end();
+  // Legacy fallback: AP password was the old default
+  return verifyPassword(appState.apPassword, appState.webPassword);
 }
 
 // Handler: Login
@@ -386,8 +579,8 @@ void handleLogin() {
     return;
   }
 
-  // Validate password — compare hash of input against stored hash
-  if (!timingSafeCompare(hashPassword(password), appState.webPassword)) {
+  // Validate password (supports PBKDF2 and legacy SHA256)
+  if (!verifyPassword(password, appState.webPassword)) {
     // Progressive rate limiting (non-blocking)
     _loginFailCount++;
     _lastFailTime = (uint64_t)esp_timer_get_time();
@@ -425,6 +618,17 @@ void handleLogin() {
   _lastFailTime = 0;
   _nextLoginAllowedMs = 0;
 
+  // Migrate legacy SHA256 hash to PBKDF2 on successful login
+  if (_passwordNeedsMigration) {
+    String newHash = hashPasswordPbkdf2(password);
+    appState.webPassword = newHash;
+    authPrefs.begin("auth", false);
+    authPrefs.putString("pwd_hash", newHash);
+    authPrefs.end();
+    _passwordNeedsMigration = false;
+    LOG_I("[Auth] Migrated password hash to PBKDF2");
+  }
+
   LOG_I("[Auth] Login successful");
 
   // Send response with cookie
@@ -436,10 +640,9 @@ void handleLogin() {
   String responseStr;
   serializeJson(response, responseStr);
 
-  // Set cookie (Path=/, Max-Age=3600, SameSite=Strict)
-  // Removing HttpOnly to allow JS to read it for WebSocket auth
+  // Set cookie with HttpOnly — JS uses /api/ws-token for WS auth instead
   String cookie =
-      "sessionId=" + sessionId + "; Path=/; Max-Age=3600; SameSite=Strict";
+      "sessionId=" + sessionId + "; Path=/; Max-Age=3600; SameSite=Strict; HttpOnly";
   server.sendHeader("Set-Cookie", cookie);
   LOG_D("[Auth] Set-Cookie for session %s...",
         sessionId.substring(0, 8).c_str());

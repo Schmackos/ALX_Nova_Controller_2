@@ -441,6 +441,10 @@ void setup() {
   server.on("/api/auth/logout", HTTP_POST, handleLogout);
   server.on("/api/auth/status", HTTP_GET, handleAuthStatus);
   server.on("/api/auth/change", HTTP_POST, handlePasswordChange);
+  server.on("/api/ws-token", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleGetWsToken();
+  });
 
   // Protected routes
   server.on("/", HTTP_GET, []() {

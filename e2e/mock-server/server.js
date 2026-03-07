@@ -49,6 +49,16 @@ const diagnostics = require('./routes/diagnostics');
 const system = require('./routes/system');
 
 app.use('/api/auth', auth);
+
+// WS token endpoint — returns one-time token for WS auth (mock always succeeds)
+app.get('/api/ws-token', (req, res) => {
+  const cookieId = req.cookies && req.cookies['sessionId'];
+  if (!cookieId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  res.json({ success: true, token: `ws-token-${Date.now()}` });
+});
+
 app.use('/api/hal', hal);
 app.use('/api', wifi);
 app.use('/api/mqtt', mqtt);

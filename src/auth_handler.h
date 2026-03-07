@@ -34,11 +34,20 @@ bool requireAuth();
 String getWebPassword();
 void setWebPassword(String newPassword);
 bool isDefaultPassword();
+String getDefaultPassword();
+String generateDefaultPassword();
 
 // Security utilities
 bool timingSafeCompare(const String &a, const String &b);
 String hashPassword(const String &password);
+String hashPasswordPbkdf2(const String &password);
+bool verifyPassword(const String &inputPassword, const String &storedHash);
 void resetLoginRateLimit();
+
+// WebSocket token auth
+String generateWsToken();
+bool validateWsToken(const String &token, String &outSessionId);
+void handleGetWsToken();
 
 // Handlers
 void handleLogin();

@@ -33,18 +33,16 @@
         // ===== WS Message Router =====
         function routeWsMessage(data) {
             if (data.type === 'authRequired') {
-                // Server requesting authentication
-                const sessionId = getSessionIdFromCookie();
-                if (sessionId) {
-                    ws.send(JSON.stringify({
-                        type: 'auth',
-                        sessionId: sessionId
-                    }));
-                } else {
-                    console.error('No session ID for WebSocket auth');
-                    // Do not redirect automatically to avoid loops
-                    showToast('Connection failed: No Session ID', 'error');
-                }
+                // Server requesting authentication — fetch one-time token
+                apiFetch('/api/ws-token').then(r => r.json()).then(d => {
+                    if (d.success && d.token) {
+                        ws.send(JSON.stringify({ type: 'auth', token: d.token }));
+                    } else {
+                        showToast('Connection failed: token error', 'error');
+                    }
+                }).catch(() => {
+                    showToast('Connection failed: auth error', 'error');
+                });
             }
             else if (data.type === 'authSuccess') {
                 console.log('WebSocket authenticated');

@@ -18,9 +18,9 @@ function generateSessionId() {
 
 function isAuthenticated(req) {
   const cookieId = req.cookies && req.cookies['sessionId'];
-  const headerId = req.headers['x-session-id'];
-  return _sessions.has(cookieId) || _sessions.has(headerId);
+  return _sessions.has(cookieId);
 }
+
 
 // POST /login — accepts {password}, returns session cookie
 router.post('/login', (req, res) => {

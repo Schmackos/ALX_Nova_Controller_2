@@ -19,7 +19,6 @@
     "WS_MAX_RECONNECT_DELAY": "readonly",
     "wasDisconnectedDuringUpdate": "writable",
     "hadPreviousConnection": "writable",
-    "getSessionIdFromCookie": "readonly",
     "apiFetch": "readonly",
     "currentWifiConnected": "writable",
     "currentWifiSSID": "writable",

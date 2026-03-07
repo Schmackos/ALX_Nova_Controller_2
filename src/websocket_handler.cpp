@@ -158,11 +158,23 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
         String msgType = doc["type"].as<String>();
 
-        // Handle authentication message
+        // Handle authentication message — token-based (preferred) or session fallback
         if (msgType == "auth") {
-          String sessionId = doc["sessionId"].as<String>();
+          String sessionId;
+          bool authenticated = false;
 
-          if (validateSession(sessionId)) {
+          // Prefer one-time WS token (from /api/ws-token endpoint)
+          if (doc.containsKey("token")) {
+            String token = doc["token"].as<String>();
+            authenticated = validateWsToken(token, sessionId);
+          }
+          // Fallback: direct session ID (legacy clients)
+          if (!authenticated && doc.containsKey("sessionId")) {
+            sessionId = doc["sessionId"].as<String>();
+            authenticated = validateSession(sessionId);
+          }
+
+          if (authenticated) {
             wsAuthStatus[num] = true;
             wsAuthTimeout[num] = 0;
             wsSessionId[num] = sessionId;

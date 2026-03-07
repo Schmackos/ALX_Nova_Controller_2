@@ -5041,31 +5041,12 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let hadPreviousConnection = false;
 
         // ===== Session & Authentication =====
-        function getSessionIdFromCookie() {
-            const name = "sessionId=";
-            const decodedCookie = decodeURIComponent(document.cookie);
-            const ca = decodedCookie.split(';');
-            for(let i = 0; i < ca.length; i++) {
-                let c = ca[i];
-                while (c.charAt(0) === ' ') {
-                    c = c.substring(1);
-                }
-                if (c.indexOf(name) === 0) {
-                    return c.substring(name.length, c.length);
-                }
-            }
-            return "";
-        }
+        // Cookie is HttpOnly — browser sends it automatically with credentials: 'include'
 
         // Global fetch wrapper for API calls (handles 401 Unauthorized)
         async function apiFetch(url, options = {}) {
-            // Auto-include credentials and session header for all API calls
-            const sessionId = getSessionIdFromCookie();
             const defaultOptions = {
-                credentials: 'include',
-                headers: {
-                    'X-Session-ID': sessionId
-                }
+                credentials: 'include'
             };
 
             // Merge options with defaults, ensuring headers are properly combined
@@ -5133,18 +5114,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ws = new WebSocket(`${wsProtocol}//${wsHost}:81`);
             ws.binaryType = 'arraybuffer';
 
-            ws.onopen = function() {
+            ws.onopen = async function() {
                 console.log('WebSocket connected');
 
-                // Send authentication immediately
-                const sessionId = getSessionIdFromCookie();
-                if (sessionId) {
-                    ws.send(JSON.stringify({
-                        type: 'auth',
-                        sessionId: sessionId
-                    }));
-                } else {
-                    console.error('No session ID for WebSocket auth');
+                // Fetch one-time WS token from server (cookie sent automatically)
+                try {
+                    const resp = await apiFetch('/api/ws-token');
+                    const data = await resp.json();
+                    if (data.success && data.token) {
+                        ws.send(JSON.stringify({ type: 'auth', token: data.token }));
+                    } else {
+                        console.error('Failed to get WS token:', data.error);
+                        window.location.href = '/login';
+                    }
+                } catch (e) {
+                    console.error('WS token fetch failed:', e);
                     window.location.href = '/login';
                 }
             };
@@ -5212,18 +5196,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         // ===== WS Message Router =====
         function routeWsMessage(data) {
             if (data.type === 'authRequired') {
-                // Server requesting authentication
-                const sessionId = getSessionIdFromCookie();
-                if (sessionId) {
-                    ws.send(JSON.stringify({
-                        type: 'auth',
-                        sessionId: sessionId
-                    }));
-                } else {
-                    console.error('No session ID for WebSocket auth');
-                    // Do not redirect automatically to avoid loops
-                    showToast('Connection failed: No Session ID', 'error');
-                }
+                // Server requesting authentication — fetch one-time token
+                apiFetch('/api/ws-token').then(r => r.json()).then(d => {
+                    if (d.success && d.token) {
+                        ws.send(JSON.stringify({ type: 'auth', token: d.token }));
+                    } else {
+                        showToast('Connection failed: token error', 'error');
+                    }
+                }).catch(() => {
+                    showToast('Connection failed: auth error', 'error');
+                });
             }
             else if (data.type === 'authSuccess') {
                 console.log('WebSocket authenticated');

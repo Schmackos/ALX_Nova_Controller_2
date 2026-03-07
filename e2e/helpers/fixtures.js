@@ -6,8 +6,8 @@
  *  2. The WebSocket connection to port 81 intercepted at browser level using
  *     page.routeWebSocket(/.*:81\//) so no real device is required.
  *  3. WS auth handshake completed automatically:
- *       server → {type:'authRequired'}
- *       client → {type:'auth', sessionId:'...'}
+ *       client → fetches /api/ws-token (cookie sent automatically)
+ *       client → {type:'auth', token:'...'}
  *       server → {type:'authSuccess'}
  *  4. All initial-state fixture messages broadcast after authSuccess.
  *  5. Waits until #wsConnectionStatus reads "Connected" before resolving.
