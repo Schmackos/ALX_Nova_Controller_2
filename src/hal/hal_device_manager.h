@@ -1,6 +1,5 @@
 #pragma once
 // HAL Device Manager — singleton managing all registered HAL devices
-// Phase 0: Purely additive — no existing files modified
 
 #include "hal_device.h"
 
@@ -9,6 +8,13 @@ typedef void (*HalDeviceCallback)(HalDevice* device, void* ctx);
 
 // State change callback — fired on every _state transition
 typedef void (*HalStateChangeCb)(uint8_t slot, HalDeviceState oldState, HalDeviceState newState);
+
+// Per-device retry state for self-healing (non-blocking, timestamp-based)
+struct HalRetryState {
+    uint8_t  count;         // Current retry count (0-3)
+    uint32_t nextRetryMs;   // millis() when next attempt is allowed
+    uint16_t lastErrorCode; // From last failed HalInitResult
+};
 
 class HalDeviceManager {
 public:
@@ -29,7 +35,7 @@ public:
 
     // Lifecycle — main loop only
     void initAll();           // Priority-sorted init (descending priority)
-    void healthCheckAll();    // Periodic health check (30s timer)
+    void healthCheckAll();    // Periodic health check + non-blocking retry
 
     // Iteration
     void forEach(HalDeviceCallback cb, void* ctx = nullptr);
@@ -43,6 +49,12 @@ public:
     HalDeviceConfig* getConfig(uint8_t slot);
     bool setConfig(uint8_t slot, const HalDeviceConfig& cfg);
 
+    // Retry state accessors
+    const HalRetryState* getRetryState(uint8_t slot) const;
+
+    // NVS hardware fault counter — incremented when retry exhaustion → ERROR
+    uint8_t getFaultCount(uint8_t slot) const;
+
     // State change callback — registered once at boot by hal_pipeline_bridge
     void setStateChangeCallback(HalStateChangeCb cb);
 
@@ -55,9 +67,13 @@ private:
     HalDeviceManager(const HalDeviceManager&);
     HalDeviceManager& operator=(const HalDeviceManager&);
 
+    void _resetRetryState(uint8_t slot);
+
     HalDevice*      _devices[HAL_MAX_DEVICES];
     HalDeviceConfig _configs[HAL_MAX_DEVICES];
     HalPinAlloc     _pins[HAL_MAX_PINS];
+    HalRetryState   _retryState[HAL_MAX_DEVICES];
+    uint8_t         _faultCount[HAL_MAX_DEVICES]; // Persistent across health checks, reset on manager reset
     uint8_t         _count;
     HalStateChangeCb _stateChangeCb = nullptr;
 };

@@ -42,7 +42,7 @@ bool HalPcm5102a::probe() {
     return true;
 }
 
-bool HalPcm5102a::init() {
+HalInitResult HalPcm5102a::init() {
     // Read config from HAL Device Manager
     HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
     if (cfg && cfg->valid) {
@@ -71,7 +71,7 @@ bool HalPcm5102a::init() {
     _ready = true;
 
     LOG_I("[HalPcm5102a] Ready (I2S channel managed by legacy i2s_audio path)");
-    return true;
+    return hal_init_ok();
 }
 
 void HalPcm5102a::deinit() {

@@ -32,14 +32,14 @@ bool HalBuzzer::probe()
     return true;
 }
 
-bool HalBuzzer::init()
+HalInitResult HalBuzzer::init()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL] init — Piezo Buzzer ready on GPIO%d", _pin);
-    return true;
+    return hal_init_ok();
 }
 
 void HalBuzzer::deinit()

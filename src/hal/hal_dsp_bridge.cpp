@@ -28,13 +28,13 @@ bool HalDspBridge::probe() {
     return true;  // DSP pipeline is always present (software module)
 }
 
-bool HalDspBridge::init() {
+HalInitResult HalDspBridge::init() {
     // dsp_pipeline is already initialised by audio_pipeline_init()
     // Just mark ourselves available
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HalDspBridge] DSP pipeline bridge ready");
-    return true;
+    return hal_init_ok();
 }
 
 void HalDspBridge::deinit() {

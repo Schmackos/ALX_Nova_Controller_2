@@ -41,25 +41,25 @@ bool HalDacAdapter::probe() {
     return true;  // Probe is non-destructive; actual HW check in init()
 }
 
-bool HalDacAdapter::init() {
-    if (!_driver) return false;
+HalInitResult HalDacAdapter::init() {
+    if (!_driver) return hal_init_fail(DIAG_HAL_INIT_FAILED, "no driver");
 
     // If already initialized by dac_output_init() or dac_secondary_init(),
     // just verify the driver is ready
     if (_state == HAL_STATE_AVAILABLE && _ready) {
-        return true;
+        return hal_init_ok();
     }
 
     // Driver was already init'd by the legacy path — just update state
     if (_driver->isReady()) {
         _state = HAL_STATE_AVAILABLE;
         _ready = true;
-        return true;
+        return hal_init_ok();
     }
 
     _state = HAL_STATE_ERROR;
     _ready = false;
-    return false;
+    return hal_init_fail(DIAG_HAL_INIT_FAILED, "driver not ready");
 }
 
 void HalDacAdapter::deinit() {

@@ -57,14 +57,14 @@ bool HalTempSensor::probe()
 #endif
 }
 
-bool HalTempSensor::init()
+HalInitResult HalTempSensor::init()
 {
 #ifndef NATIVE_TEST
 #if CONFIG_IDF_TARGET_ESP32P4
     if (_handle == nullptr) {
         LOG_E("[TempSensor] init called without successful probe");
         _state = HAL_STATE_ERROR;
-        return false;
+        return hal_init_fail(DIAG_HAL_INIT_FAILED, "no probe");
     }
 
     temperature_sensor_handle_t handle = (temperature_sensor_handle_t)_handle;
@@ -72,7 +72,7 @@ bool HalTempSensor::init()
     if (err != ESP_OK) {
         LOG_E("[TempSensor] enable failed: err=0x%x", err);
         _state = HAL_STATE_ERROR;
-        return false;
+        return hal_init_fail(DIAG_HAL_INIT_FAILED, "sensor enable failed");
     }
 
     // Read initial value
@@ -87,14 +87,14 @@ bool HalTempSensor::init()
 
     _ready = true;
     _state = HAL_STATE_AVAILABLE;
-    return true;
+    return hal_init_ok();
 #else
     _state = HAL_STATE_ERROR;
-    return false;
+    return hal_init_fail(DIAG_HAL_INIT_FAILED, "platform unsupported");
 #endif
 #else
     _state = HAL_STATE_ERROR;
-    return false;
+    return hal_init_fail(DIAG_HAL_INIT_FAILED, "platform unsupported");
 #endif
 }
 

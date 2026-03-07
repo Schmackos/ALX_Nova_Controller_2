@@ -33,7 +33,7 @@ bool HalDisplay::probe()
     return true;
 }
 
-bool HalDisplay::init()
+HalInitResult HalDisplay::init()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.claimPin(_mosi, HAL_BUS_SPI, 0, _slot);
@@ -45,7 +45,7 @@ bool HalDisplay::init()
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL] init — ST7735S TFT ready");
-    return true;
+    return hal_init_ok();
 }
 
 void HalDisplay::deinit()

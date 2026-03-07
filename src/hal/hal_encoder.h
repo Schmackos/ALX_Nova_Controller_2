@@ -8,7 +8,7 @@ public:
     HalEncoder(int pinA, int pinB, int pinSw);
 
     bool probe() override;
-    bool init() override;
+    HalInitResult init() override;
     void deinit() override;
     void dumpConfig() override;
     bool healthCheck() override;

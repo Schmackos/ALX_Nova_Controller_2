@@ -24,6 +24,9 @@
 #include "../../src/hal/hal_device.h"
 
 // Inline the .cpp files for native testing
+#include "../test_mocks/Preferences.h"
+#include "../test_mocks/LittleFS.h"
+#include "../../src/diag_journal.cpp"
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
 
@@ -73,7 +76,10 @@ public:
     }
 
     bool probe() override { return probeResult; }
-    bool init() override { initCallCount++; return initResult; }
+    HalInitResult init() override {
+        initCallCount++;
+        return initResult ? hal_init_ok() : hal_init_fail(DIAG_HAL_INIT_FAILED, "test fail");
+    }
     void deinit() override {}
     void dumpConfig() override {}
     bool healthCheck() override { healthCallCount++; return healthResult; }
@@ -302,7 +308,7 @@ void test_healthCheck_no_change_no_callback() {
     TEST_ASSERT_EQUAL(0, callbackCount);
 }
 
-// 3d: ERROR state is skipped by healthCheckAll (no callback)
+// 3d: ERROR state with exhausted retries is skipped by healthCheckAll (no callback)
 void test_healthCheck_skips_error_state() {
     mgr->setStateChangeCallback(spy_cb);
 
@@ -310,11 +316,14 @@ void test_healthCheck_skips_error_state() {
     dev._state = HAL_STATE_ERROR;
     dev._ready = false;
     dev.healthResult = false;
-    mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+    int slot = mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+
+    // Simulate exhausted retries so healthCheckAll truly skips this device
+    const_cast<HalRetryState*>(mgr->getRetryState((uint8_t)slot))->count = 3;
 
     mgr->healthCheckAll();
 
-    // ERROR is not AVAILABLE or UNAVAILABLE, so healthCheckAll skips it
+    // ERROR with exhausted retries is skipped — no callback, no health check
     TEST_ASSERT_EQUAL(0, callbackCount);
     TEST_ASSERT_EQUAL(0, dev.healthCallCount);
 }

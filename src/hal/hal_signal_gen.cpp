@@ -32,14 +32,14 @@ bool HalSignalGen::probe()
     return true;
 }
 
-bool HalSignalGen::init()
+HalInitResult HalSignalGen::init()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL] init — Signal Generator ready on GPIO%d", _pin);
-    return true;
+    return hal_init_ok();
 }
 
 void HalSignalGen::deinit()

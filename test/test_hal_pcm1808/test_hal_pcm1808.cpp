@@ -63,10 +63,10 @@ public:
 
     bool probe() override { return true; }   // No I2C — always present
 
-    bool init() override {
+    HalInitResult init() override {
         _state = HAL_STATE_AVAILABLE;
         _ready = true;
-        return true;
+        return hal_init_ok();
     }
 
     void deinit() override {
@@ -127,7 +127,7 @@ void test_probe_always_true(void) {
 
 // ----- 2. init() marks device AVAILABLE -----
 void test_init_marks_available(void) {
-    TEST_ASSERT_TRUE(adc->init());
+    TEST_ASSERT_TRUE(adc->init().success);
     TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, (int)adc->_state);
     TEST_ASSERT_TRUE(adc->_ready);
 }

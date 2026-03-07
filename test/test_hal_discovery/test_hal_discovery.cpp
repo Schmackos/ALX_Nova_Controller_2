@@ -11,6 +11,9 @@
 // ===== Inline HAL implementations for native testing =====
 #include "../../src/hal/hal_types.h"
 #include "../../src/hal/hal_device.h"
+#include "../test_mocks/Preferences.h"
+#include "../test_mocks/LittleFS.h"
+#include "../../src/diag_journal.cpp"
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
 

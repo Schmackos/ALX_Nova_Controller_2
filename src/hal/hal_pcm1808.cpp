@@ -33,7 +33,7 @@ bool HalPcm1808::probe() {
     return true;
 }
 
-bool HalPcm1808::init() {
+HalInitResult HalPcm1808::init() {
     // Read config from HAL Device Manager
     HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
     if (cfg && cfg->valid) {
@@ -68,7 +68,7 @@ bool HalPcm1808::init() {
     _ready = true;
 
     LOG_I("[HalPcm1808] Ready (I2S channel managed by legacy i2s_audio path)");
-    return true;
+    return hal_init_ok();
 }
 
 void HalPcm1808::deinit() {

@@ -33,7 +33,7 @@ bool HalEncoder::probe()
     return true;
 }
 
-bool HalEncoder::init()
+HalInitResult HalEncoder::init()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.claimPin(_pinA,  HAL_BUS_GPIO, 0, _slot);
@@ -42,7 +42,7 @@ bool HalEncoder::init()
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL] init — Rotary Encoder ready");
-    return true;
+    return hal_init_ok();
 }
 
 void HalEncoder::deinit()

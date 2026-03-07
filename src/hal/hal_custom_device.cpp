@@ -32,11 +32,11 @@ bool HalCustomDevice::probe() {
     return true;
 }
 
-bool HalCustomDevice::init() {
+HalInitResult HalCustomDevice::init() {
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL Custom]", "Custom device init: %s", _descriptor.name);
-    return true;
+    return hal_init_ok();
 }
 
 void HalCustomDevice::deinit() {

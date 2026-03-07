@@ -63,14 +63,14 @@ public:
         return Wire.endTransmission() == 0;
     }
 
-    bool init() override {
-        if (!probe()) return false;
+    HalInitResult init() override {
+        if (!probe()) return hal_init_fail(DIAG_HAL_INIT_FAILED, "probe failed");
 
         // Verify chip ID
         Wire.requestFrom(kI2cAddr, (uint8_t)2);
         uint8_t id0 = (uint8_t)Wire.read();
         uint8_t id1 = (uint8_t)Wire.read();
-        if (id0 != 0x80 || id1 != 0x45) return false;
+        if (id0 != 0x80 || id1 != 0x45) return hal_init_fail(DIAG_HAL_INIT_FAILED, "bad chip ID");
 
         // Reset codec
         Wire.beginTransmission(kI2cAddr);
@@ -80,7 +80,7 @@ public:
 
         _state = HAL_STATE_AVAILABLE;
         _ready = true;
-        return true;
+        return hal_init_ok();
     }
 
     void deinit() override {
@@ -159,7 +159,7 @@ void test_probe_fails_when_nack(void) {
 
 // ----- 3. init() succeeds with correct chip ID → state = AVAILABLE -----
 void test_init_success_with_valid_chip_id(void) {
-    TEST_ASSERT_TRUE(codec->init());
+    TEST_ASSERT_TRUE(codec->init().success);
     TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, (int)codec->_state);
     TEST_ASSERT_TRUE(codec->_ready);
 }
@@ -169,7 +169,7 @@ void test_init_fails_with_wrong_chip_id(void) {
     WireMock::reset();
     uint8_t bad[] = {0xFF, 0xFF};
     WireMock::registerDevice(0x18, 1, bad, 2);
-    TEST_ASSERT_FALSE(codec->init());
+    TEST_ASSERT_FALSE(codec->init().success);
 }
 
 // ----- 5. init() writes 0x1C to reset register 0x00 -----

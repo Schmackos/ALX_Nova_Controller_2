@@ -1,5 +1,19 @@
 #include "hal_device_manager.h"
+#include "../diag_journal.h"
 #include <string.h>
+
+#ifndef NATIVE_TEST
+#include <Arduino.h>
+#include "../debug_serial.h"
+#else
+#include "../../test/test_mocks/Arduino.h"
+#define LOG_I(fmt, ...) ((void)0)
+#define LOG_W(fmt, ...) ((void)0)
+#define LOG_E(fmt, ...) ((void)0)
+#endif
+
+// Maximum retries before permanent ERROR
+static const uint8_t HAL_MAX_RETRIES = 3;
 
 // ===== Singleton =====
 HalDeviceManager& HalDeviceManager::instance() {
@@ -10,6 +24,8 @@ HalDeviceManager& HalDeviceManager::instance() {
 HalDeviceManager::HalDeviceManager() : _count(0) {
     memset(_devices, 0, sizeof(_devices));
     memset(_configs, 0, sizeof(_configs));
+    memset(_retryState, 0, sizeof(_retryState));
+    memset(_faultCount, 0, sizeof(_faultCount));
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         _configs[i].valid = false;
         _configs[i].pinSda = -1;
@@ -38,6 +54,7 @@ int HalDeviceManager::registerDevice(HalDevice* device, HalDiscovery discovery) 
     device->_slot = static_cast<uint8_t>(slot);
     device->_discovery = discovery;
     _devices[slot] = device;
+    _resetRetryState(static_cast<uint8_t>(slot));
     _count++;
     return slot;
 }
@@ -50,6 +67,7 @@ bool HalDeviceManager::removeDevice(uint8_t slot) {
     _devices[slot]->_state = HAL_STATE_REMOVED;
     if (_stateChangeCb) _stateChangeCb(slot, oldState, HAL_STATE_REMOVED);
     _devices[slot] = nullptr;
+    _resetRetryState(slot);
     _count--;
     return true;
 }
@@ -114,13 +132,19 @@ void HalDeviceManager::initAll() {
             if (_stateChangeCb && oldState != HAL_STATE_CONFIGURING) {
                 _stateChangeCb(dev->_slot, oldState, HAL_STATE_CONFIGURING);
             }
-            if (dev->init()) {
+
+            HalInitResult result = dev->init();
+            if (result.success) {
                 dev->_state = HAL_STATE_AVAILABLE;
                 dev->_ready = true;
+                _resetRetryState(dev->_slot);
                 if (_stateChangeCb) _stateChangeCb(dev->_slot, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE);
             } else {
                 dev->_state = HAL_STATE_ERROR;
                 dev->_ready = false;
+                _retryState[dev->_slot].lastErrorCode = result.errorCode;
+                diag_emit((DiagErrorCode)result.errorCode, DIAG_SEV_ERROR,
+                          dev->_slot, dev->getDescriptor().name, result.reason);
                 if (_stateChangeCb) _stateChangeCb(dev->_slot, HAL_STATE_CONFIGURING, HAL_STATE_ERROR);
             }
         }
@@ -128,28 +152,71 @@ void HalDeviceManager::initAll() {
 }
 
 void HalDeviceManager::healthCheckAll() {
+    uint32_t now = millis();
+
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         if (!_devices[i]) continue;
         HalDevice* dev = _devices[i];
-        if (dev->_state != HAL_STATE_AVAILABLE && dev->_state != HAL_STATE_UNAVAILABLE) continue;
 
-        if (dev->healthCheck()) {
-            if (dev->_state == HAL_STATE_UNAVAILABLE) {
+        // --- Non-blocking retry for UNAVAILABLE/ERROR devices ---
+        if (dev->_state == HAL_STATE_UNAVAILABLE || dev->_state == HAL_STATE_ERROR) {
+            HalRetryState& rs = _retryState[i];
+            if (rs.count >= HAL_MAX_RETRIES) continue; // Exhausted — permanent ERROR
+            if (now < rs.nextRetryMs) continue;         // Not time yet
+
+            // Attempt reinit
+            dev->deinit();
+            HalInitResult result = dev->init();
+
+            if (result.success) {
+                // Recovery succeeded
                 HalDeviceState oldState = dev->_state;
                 dev->_state = HAL_STATE_AVAILABLE;
                 dev->_ready = true;
+                _resetRetryState(static_cast<uint8_t>(i));
+                diag_emit(DIAG_HAL_REINIT_OK, DIAG_SEV_INFO,
+                          static_cast<uint8_t>(i), dev->getDescriptor().name, "reinit OK");
                 if (_stateChangeCb) _stateChangeCb(static_cast<uint8_t>(i), oldState, HAL_STATE_AVAILABLE);
-            }
-        } else {
-            if (dev->_state != HAL_STATE_UNAVAILABLE) {
-                HalDeviceState oldState = dev->_state;
-                dev->_state = HAL_STATE_UNAVAILABLE;
-                dev->_ready = false;
-                if (_stateChangeCb) _stateChangeCb(static_cast<uint8_t>(i), oldState, HAL_STATE_UNAVAILABLE);
             } else {
-                dev->_state = HAL_STATE_UNAVAILABLE;
-                dev->_ready = false;
+                // Recovery failed
+                rs.count++;
+                rs.lastErrorCode = result.errorCode;
+                // Exponential backoff: 1s, 2s, 4s
+                rs.nextRetryMs = now + (1000UL << (rs.count - 1));
+
+                if (rs.count >= HAL_MAX_RETRIES) {
+                    // Exhausted — permanent ERROR
+                    HalDeviceState oldState = dev->_state;
+                    dev->_state = HAL_STATE_ERROR;
+                    dev->_ready = false;
+                    _faultCount[i]++;
+                    diag_emit(DIAG_HAL_REINIT_EXHAUSTED, DIAG_SEV_CRIT,
+                              static_cast<uint8_t>(i), dev->getDescriptor().name, "retries exhausted");
+                    if (_stateChangeCb && oldState != HAL_STATE_ERROR) {
+                        _stateChangeCb(static_cast<uint8_t>(i), oldState, HAL_STATE_ERROR);
+                    }
+                } else {
+                    diag_emit(DIAG_HAL_HEALTH_FAIL, DIAG_SEV_WARN,
+                              static_cast<uint8_t>(i), dev->getDescriptor().name, result.reason);
+                }
             }
+            continue;
+        }
+
+        // --- Normal health check for AVAILABLE devices ---
+        if (dev->_state != HAL_STATE_AVAILABLE) continue;
+
+        if (!dev->healthCheck()) {
+            HalDeviceState oldState = dev->_state;
+            dev->_state = HAL_STATE_UNAVAILABLE;
+            dev->_ready = false;
+            // Start retry sequence
+            HalRetryState& rs = _retryState[i];
+            rs.count = 0;
+            rs.nextRetryMs = now + 1000; // First retry in 1s
+            diag_emit(DIAG_HAL_HEALTH_FAIL, DIAG_SEV_WARN,
+                      static_cast<uint8_t>(i), dev->getDescriptor().name, "health check failed");
+            if (_stateChangeCb) _stateChangeCb(static_cast<uint8_t>(i), oldState, HAL_STATE_UNAVAILABLE);
         }
     }
 }
@@ -214,9 +281,28 @@ bool HalDeviceManager::setConfig(uint8_t slot, const HalDeviceConfig& cfg) {
     return true;
 }
 
+// ===== Retry State Accessors =====
+const HalRetryState* HalDeviceManager::getRetryState(uint8_t slot) const {
+    if (slot >= HAL_MAX_DEVICES) return nullptr;
+    return &_retryState[slot];
+}
+
+uint8_t HalDeviceManager::getFaultCount(uint8_t slot) const {
+    if (slot >= HAL_MAX_DEVICES) return 0;
+    return _faultCount[slot];
+}
+
 // ===== State Change Callback =====
 void HalDeviceManager::setStateChangeCallback(HalStateChangeCb cb) {
     _stateChangeCb = cb;
+}
+
+// ===== Internal helpers =====
+void HalDeviceManager::_resetRetryState(uint8_t slot) {
+    if (slot >= HAL_MAX_DEVICES) return;
+    _retryState[slot].count = 0;
+    _retryState[slot].nextRetryMs = 0;
+    _retryState[slot].lastErrorCode = 0;
 }
 
 // ===== Reset (testing) =====
@@ -237,6 +323,8 @@ void HalDeviceManager::reset() {
     for (int i = 0; i < HAL_MAX_PINS; i++) {
         _pins[i].gpio = -1;
     }
+    memset(_retryState, 0, sizeof(_retryState));
+    memset(_faultCount, 0, sizeof(_faultCount));
     _count = 0;
     _stateChangeCb = nullptr;
 }

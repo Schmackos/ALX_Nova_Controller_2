@@ -1,8 +1,8 @@
 #pragma once
 // HAL Device — abstract base class for all HAL-managed devices
-// Phase 0: Purely additive
 
 #include "hal_types.h"
+#include "hal_init_result.h"
 
 class HalDevice {
 public:
@@ -13,7 +13,8 @@ public:
     virtual bool probe() = 0;
 
     // init(): Full hardware initialisation. Called once after probe succeeds.
-    virtual bool init() = 0;
+    // Returns HalInitResult with error code and reason on failure.
+    virtual HalInitResult init() = 0;
 
     // deinit(): Shutdown and resource release. Safe to call multiple times.
     virtual void deinit() = 0;

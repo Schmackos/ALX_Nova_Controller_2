@@ -10,6 +10,9 @@
 // ===== Inline HAL core for native testing =====
 #include "../../src/hal/hal_types.h"
 #include "../../src/hal/hal_device.h"
+#include "../test_mocks/Preferences.h"
+#include "../test_mocks/LittleFS.h"
+#include "../../src/diag_journal.cpp"
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
 
@@ -95,7 +98,10 @@ public:
         if (!_caps.hasI2cControl || _caps.i2cAddress == 0) return true;
         return true;  // In tests, I2C always succeeds
     }
-    bool init() override { return _driver ? _driver->isReady() : false; }
+    HalInitResult init() override {
+        if (!_driver) return hal_init_fail(DIAG_HAL_INIT_FAILED, "no driver");
+        return _driver->isReady() ? hal_init_ok() : hal_init_fail(DIAG_HAL_INIT_FAILED, "driver not ready");
+    }
     void deinit() override {
         if (_driver) _driver->deinit();
         _ready = false;
@@ -212,10 +218,10 @@ void test_adapter_init_delegates() {
     MockPcm5102 drv;
     HalDacAdapter adapter(&drv, drv.getCapabilities());
 
-    TEST_ASSERT_TRUE(adapter.init());
-    // When driver reports not ready, init returns false
+    TEST_ASSERT_TRUE(adapter.init().success);
+    // When driver reports not ready, init returns failure
     drv._ready = false;
-    TEST_ASSERT_FALSE(adapter.init());
+    TEST_ASSERT_FALSE(adapter.init().success);
 }
 
 // ===== Test 3: Adapter deinit delegates and sets state =====

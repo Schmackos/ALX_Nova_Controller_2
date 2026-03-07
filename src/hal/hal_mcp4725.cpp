@@ -42,18 +42,18 @@ bool HalMcp4725::probe()
     return true;
 }
 
-bool HalMcp4725::init()
+HalInitResult HalMcp4725::init()
 {
     // Set DAC to 0V output on init
     if (!setVoltageCode(0)) {
         LOG_I("[MCP4725] init FAIL — could not write DAC code");
         _state = HAL_STATE_ERROR;
-        return false;
+        return hal_init_fail(DIAG_HAL_INIT_FAILED, "DAC write failed");
     }
     _ready = true;
     _state = HAL_STATE_AVAILABLE;
     LOG_I("[MCP4725] init OK — 0x%02X, output at 0V", _i2cAddr);
-    return true;
+    return hal_init_ok();
 }
 
 void HalMcp4725::deinit()

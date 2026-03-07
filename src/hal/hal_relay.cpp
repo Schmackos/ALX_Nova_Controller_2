@@ -32,14 +32,14 @@ bool HalRelay::probe()
     return true;
 }
 
-bool HalRelay::init()
+HalInitResult HalRelay::init()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL] init — Amplifier Relay ready on GPIO%d", _pin);
-    return true;
+    return hal_init_ok();
 }
 
 void HalRelay::deinit()

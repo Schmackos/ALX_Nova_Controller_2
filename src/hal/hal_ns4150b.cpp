@@ -40,7 +40,7 @@ bool HalNs4150b::probe()
     return true;
 }
 
-bool HalNs4150b::init()
+HalInitResult HalNs4150b::init()
 {
 #ifndef NATIVE_TEST
     digitalWrite(_paPin, HIGH);  // Enable amplifier
@@ -49,7 +49,7 @@ bool HalNs4150b::init()
     _ready = true;
     _state = HAL_STATE_AVAILABLE;
     LOG_I("[NS4150B] init — amplifier enabled on GPIO%d", _paPin);
-    return true;
+    return hal_init_ok();
 }
 
 void HalNs4150b::deinit()

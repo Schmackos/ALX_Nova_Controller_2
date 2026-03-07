@@ -54,11 +54,11 @@ public:
         return true;
     }
 
-    bool init() override {
+    HalInitResult init() override {
         setVoltageCode(0);
         _ready = true;
         _state = HAL_STATE_AVAILABLE;
-        return true;
+        return hal_init_ok();
     }
 
     void deinit() override {
@@ -109,7 +109,7 @@ void test_probe_succeeds(void) {
 }
 
 void test_init_marks_available(void) {
-    TEST_ASSERT_TRUE(dev->init());
+    TEST_ASSERT_TRUE(dev->init().success);
     TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, (int)dev->_state);
     TEST_ASSERT_TRUE(dev->_ready);
 }

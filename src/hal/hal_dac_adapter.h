@@ -16,7 +16,7 @@ public:
 
     // HalDevice lifecycle
     bool probe() override;
-    bool init() override;
+    HalInitResult init() override;
     void deinit() override;
     void dumpConfig() override;
     bool healthCheck() override;

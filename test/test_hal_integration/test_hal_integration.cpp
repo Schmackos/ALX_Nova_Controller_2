@@ -13,6 +13,9 @@
 #include "../../src/hal/hal_audio_device.h"
 
 // Inline the .cpp files
+#include "../test_mocks/Preferences.h"
+#include "../test_mocks/LittleFS.h"
+#include "../../src/diag_journal.cpp"
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
 #include "../../src/hal/hal_pipeline_bridge.cpp"
@@ -75,7 +78,10 @@ public:
     }
 
     bool probe() override { return probeResult; }
-    bool init() override { initCount++; return initResult; }
+    HalInitResult init() override {
+        initCount++;
+        return initResult ? hal_init_ok() : hal_init_fail(DIAG_HAL_INIT_FAILED, "test fail");
+    }
     void deinit() override {}
     void dumpConfig() override {}
     bool healthCheck() override { return healthResult; }
@@ -266,7 +272,7 @@ void test_dac_adapter_init_already_initialized(void) {
     HalDacAdapter adapter(&driver, desc, true);
 
     // init() should succeed immediately since already initialized
-    TEST_ASSERT_TRUE(adapter.init());
+    TEST_ASSERT_TRUE(adapter.init().success);
     TEST_ASSERT_TRUE(adapter._ready);
 }
 

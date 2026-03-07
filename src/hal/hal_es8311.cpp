@@ -183,7 +183,7 @@ bool HalEs8311::probe() {
 #endif
 }
 
-bool HalEs8311::init() {
+HalInitResult HalEs8311::init() {
     // Read config from HAL Device Manager (may override defaults)
     HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
     if (cfg && cfg->valid) {
@@ -277,7 +277,7 @@ bool HalEs8311::init() {
     _ready = true;
 
     LOG_I("[HalEs8311] Initialization complete — PA enabled, DAC unmuted, vol=%d%%", _volume);
-    return true;
+    return hal_init_ok();
 }
 
 void HalEs8311::deinit() {

@@ -15,6 +15,9 @@
 #include "../../src/hal/hal_device.h"
 
 // Inline the .cpp files for native testing
+#include "../test_mocks/Preferences.h"
+#include "../test_mocks/LittleFS.h"
+#include "../../src/diag_journal.cpp"
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
 
@@ -41,7 +44,10 @@ public:
     }
 
     bool probe() override { probeCallCount++; return probeResult; }
-    bool init() override { initCallCount++; return initResult; }
+    HalInitResult init() override {
+        initCallCount++;
+        return initResult ? hal_init_ok() : hal_init_fail(DIAG_HAL_INIT_FAILED, "test fail");
+    }
     void deinit() override { deinitCallCount++; }
     void dumpConfig() override { dumpConfigCalled = true; }
     bool healthCheck() override { healthCallCount++; return healthResult; }
@@ -262,8 +268,10 @@ void test_health_check_transitions() {
     TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, dev._state);
     TEST_ASSERT_FALSE(dev._ready);
 
-    // Health recovers → available again
+    // Health recovers → available again (retry after 1s delay)
     dev.healthResult = true;
+    dev.initResult = true;
+    ArduinoMock::mockMillis = 1000; // Advance past retry delay
     mgr->healthCheckAll();
     TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, dev._state);
     TEST_ASSERT_TRUE(dev._ready);

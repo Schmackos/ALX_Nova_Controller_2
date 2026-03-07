@@ -31,6 +31,9 @@
 #include "../../src/hal/hal_custom_device.h"
 
 // Inline the implementation so the linker has the symbols
+#include "../test_mocks/Preferences.h"
+#include "../test_mocks/LittleFS.h"
+#include "../../src/diag_journal.cpp"
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
 #include "../../src/hal/hal_custom_device.cpp"
@@ -242,7 +245,7 @@ void test_custom_device_init_available(void) {
                         HAL_CAP_DAC_PATH, HAL_BUS_I2S);
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.registerDevice(&dev, HAL_DISC_MANUAL);
-    TEST_ASSERT_TRUE(dev.init());
+    TEST_ASSERT_TRUE(dev.init().success);
     TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, (int)dev._state);
     TEST_ASSERT_TRUE(dev._ready);
 }
