@@ -24,17 +24,153 @@
 
 // ===== Settings Persistence =====
 
-bool loadSettings() {
-  // Use create=true to avoid "no permits for creation" error log if file is
-  // missing
-  File file = LittleFS.open("/settings.txt", "r", true);
+// Load NVS-stored settings (wifiMinSec, otaChannel, halAutoDisco)
+static void loadNvsSettings() {
+  {
+    Preferences wifiPrefs;
+    wifiPrefs.begin("wifi-list", true);
+    appState.wifiMinSecurity = wifiPrefs.getUChar("wifiMinSec", 0);
+    wifiPrefs.end();
+  }
+  {
+    Preferences otaPrefs;
+    otaPrefs.begin("ota-prefs", true);
+    appState.otaChannel = otaPrefs.getUChar("otaChannel", 0);
+    otaPrefs.end();
+  }
+  {
+    Preferences halPrefs;
+    halPrefs.begin("hal-prefs", true);
+    appState.halAutoDiscovery = halPrefs.getBool("halAutoDisco", true);
+    halPrefs.end();
+  }
+}
+
+// Apply settings from a parsed JSON document
+static void applySettingsFromJson(const JsonDocument &doc) {
+  if (doc["autoUpdate"].is<bool>()) appState.autoUpdateEnabled = doc["autoUpdate"].as<bool>();
+  if (doc["timezone"].is<int>()) appState.timezoneOffset = doc["timezone"].as<int>();
+  if (doc["dst"].is<int>()) appState.dstOffset = doc["dst"].as<int>();
+  if (doc["darkMode"].is<bool>()) appState.darkMode = doc["darkMode"].as<bool>();
+  if (doc["certValidation"].is<bool>()) appState.enableCertValidation = doc["certValidation"].as<bool>();
+
+  if (doc["hwStatsInterval"].is<unsigned long>()) {
+    unsigned long interval = doc["hwStatsInterval"].as<unsigned long>();
+    if (interval == 1000 || interval == 2000 || interval == 3000 ||
+        interval == 5000 || interval == 10000)
+      appState.hardwareStatsInterval = interval;
+  }
+
+  if (doc["autoAP"].is<bool>()) appState.autoAPEnabled = doc["autoAP"].as<bool>();
+
+#ifdef GUI_ENABLED
+  if (doc["bootAnim"].is<bool>()) appState.bootAnimEnabled = doc["bootAnim"].as<bool>();
+  if (doc["bootAnimStyle"].is<int>()) {
+    int style = doc["bootAnimStyle"].as<int>();
+    if (style >= 0 && style <= 5) appState.bootAnimStyle = style;
+  }
+#endif
+
+  if (doc["screenTimeout"].is<unsigned long>()) {
+    unsigned long timeout = doc["screenTimeout"].as<unsigned long>();
+    if (timeout == 0 || timeout == 30000 || timeout == 60000 ||
+        timeout == 300000 || timeout == 600000)
+      appState.screenTimeout = timeout;
+  }
+
+  if (doc["buzzer"].is<bool>()) appState.buzzerEnabled = doc["buzzer"].as<bool>();
+  if (doc["buzzerVol"].is<int>()) {
+    int vol = doc["buzzerVol"].as<int>();
+    if (vol >= 0 && vol <= 2) appState.buzzerVolume = vol;
+  }
+
+  if (doc["backlight"].is<int>()) {
+    int bright = doc["backlight"].as<int>();
+    if (bright >= 1 && bright <= 255) appState.backlightBrightness = (uint8_t)bright;
+  }
+
+  if (doc["dimTimeout"].is<unsigned long>()) {
+    unsigned long dimVal = doc["dimTimeout"].as<unsigned long>();
+    if (dimVal == 5000 || dimVal == 10000 || dimVal == 15000 ||
+        dimVal == 30000 || dimVal == 60000)
+      appState.dimTimeout = dimVal;
+  }
+  if (doc["dimBright"].is<int>()) {
+    int dimBright = doc["dimBright"].as<int>();
+    if (dimBright == 26 || dimBright == 64 || dimBright == 128 || dimBright == 191)
+      appState.dimBrightness = (uint8_t)dimBright;
+  }
+  if (doc["dimEnabled"].is<bool>()) appState.dimEnabled = doc["dimEnabled"].as<bool>();
+
+  if (doc["audioRate"].is<int>()) {
+    int rate = doc["audioRate"].as<int>();
+    if (rate == 33 || rate == 50 || rate == 100) appState.audioUpdateRate = (uint16_t)rate;
+  }
+
+  if (doc["vuMeter"].is<bool>()) appState.vuMeterEnabled = doc["vuMeter"].as<bool>();
+  if (doc["waveform"].is<bool>()) appState.waveformEnabled = doc["waveform"].as<bool>();
+  if (doc["spectrum"].is<bool>()) appState.spectrumEnabled = doc["spectrum"].as<bool>();
+
+  if (doc["debugMode"].is<bool>()) appState.debugMode = doc["debugMode"].as<bool>();
+  if (doc["debugSerial"].is<int>()) {
+    int level = doc["debugSerial"].as<int>();
+    if (level >= 0 && level <= 3) appState.debugSerialLevel = level;
+  }
+  if (doc["debugHwStats"].is<bool>()) appState.debugHwStats = doc["debugHwStats"].as<bool>();
+  if (doc["debugI2s"].is<bool>()) appState.debugI2sMetrics = doc["debugI2s"].as<bool>();
+  if (doc["debugTasks"].is<bool>()) appState.debugTaskMonitor = doc["debugTasks"].as<bool>();
+
+  if (doc["fftWindow"].is<int>()) {
+    int wt = doc["fftWindow"].as<int>();
+    if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.fftWindowType = (FftWindowType)wt;
+  }
+
+  if (doc["adcEnabled"].is<JsonArrayConst>()) {
+    JsonArrayConst arr = doc["adcEnabled"].as<JsonArrayConst>();
+    for (size_t i = 0; i < arr.size() && i < NUM_AUDIO_ADCS; i++)
+      appState.adcEnabled[i] = arr[i].as<bool>();
+  }
+
+#ifdef USB_AUDIO_ENABLED
+  if (doc["usbAudio"].is<bool>()) appState.usbAudioEnabled = doc["usbAudio"].as<bool>();
+#endif
+}
+
+// Try loading settings from /config.json
+static bool loadSettingsJson() {
+  File file = LittleFS.open("/config.json", "r");
   if (!file || file.size() == 0) {
-    if (file)
-      file.close();
+    if (file) file.close();
     return false;
   }
 
-  // Read ALL lines into array (30 slots for future growth)
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+
+  if (err) {
+    LOG_W("[Settings] config.json parse error: %s", err.c_str());
+    return false;
+  }
+
+  if (!doc["version"].is<int>()) {
+    LOG_W("[Settings] config.json missing version field");
+    return false;
+  }
+
+  applySettingsFromJson(doc);
+  LOG_I("[Settings] Loaded from config.json (v%d)", doc["version"].as<int>());
+  return true;
+}
+
+// Load settings from legacy /settings.txt (positional line format)
+static bool loadSettingsLegacy() {
+  File file = LittleFS.open("/settings.txt", "r", true);
+  if (!file || file.size() == 0) {
+    if (file) file.close();
+    return false;
+  }
+
   String lines[30];
   for (int i = 0; i < 30; i++) {
     if (file.available()) {
@@ -44,184 +180,101 @@ bool loadSettings() {
   }
   file.close();
 
-  // Detect format version
   int dataStart = 0;
   if (lines[0].startsWith("VER=")) {
-    int version = lines[0].substring(4).toInt();
-    dataStart = 1;  // Skip version line
-    (void)version;  // Unused for now, but parsed for future use
+    dataStart = 1;
   }
 
-  // Validate first data line
-  if (lines[dataStart].length() == 0) {
-    return false;
-  }
+  if (lines[dataStart].length() == 0) return false;
 
   appState.autoUpdateEnabled = (lines[dataStart + 0].toInt() != 0);
+  if (lines[dataStart + 1].length() > 0) appState.timezoneOffset = lines[dataStart + 1].toInt();
+  if (lines[dataStart + 2].length() > 0) appState.dstOffset = lines[dataStart + 2].toInt();
+  if (lines[dataStart + 3].length() > 0) appState.darkMode = (lines[dataStart + 3].toInt() != 0);
+  if (lines[dataStart + 4].length() > 0) appState.enableCertValidation = (lines[dataStart + 4].toInt() != 0);
 
-  // Load timezone offset (if available, otherwise default to 0)
-  if (lines[dataStart + 1].length() > 0) {
-    appState.timezoneOffset = lines[dataStart + 1].toInt();
-  }
-
-  // Load DST offset (if available, otherwise default to 0)
-  if (lines[dataStart + 2].length() > 0) {
-    appState.dstOffset = lines[dataStart + 2].toInt();
-  }
-
-  // Load night mode (if available, otherwise default to false)
-  if (lines[dataStart + 3].length() > 0) {
-    appState.darkMode = (lines[dataStart + 3].toInt() != 0);
-  }
-
-  // Load cert validation setting (if available, otherwise default to true from
-  // AppState)
-  if (lines[dataStart + 4].length() > 0) {
-    appState.enableCertValidation = (lines[dataStart + 4].toInt() != 0);
-  }
-
-  // Load hardware stats interval (if available, otherwise default to 2000ms)
   if (lines[dataStart + 5].length() > 0) {
     unsigned long interval = lines[dataStart + 5].toInt();
-    // Validate: only allow 1000, 2000, 3000, 5000, or 10000 ms
     if (interval == 1000 || interval == 2000 || interval == 3000 ||
-        interval == 5000 || interval == 10000) {
+        interval == 5000 || interval == 10000)
       appState.hardwareStatsInterval = interval;
-    }
   }
 
   if (lines[dataStart + 6].length() > 0) {
     appState.autoAPEnabled = (lines[dataStart + 6].toInt() != 0);
   } else {
-    // Default to true if not present (backward compatibility)
     appState.autoAPEnabled = true;
   }
 
 #ifdef GUI_ENABLED
-  // Load boot animation enabled (if available, otherwise default to true)
-  if (lines[dataStart + 7].length() > 0) {
-    appState.bootAnimEnabled = (lines[dataStart + 7].toInt() != 0);
-  }
-
-  // Load boot animation style (if available, otherwise default to 0)
+  if (lines[dataStart + 7].length() > 0) appState.bootAnimEnabled = (lines[dataStart + 7].toInt() != 0);
   if (lines[dataStart + 8].length() > 0) {
     int style = lines[dataStart + 8].toInt();
-    if (style >= 0 && style <= 5) {
-      appState.bootAnimStyle = style;
-    }
+    if (style >= 0 && style <= 5) appState.bootAnimStyle = style;
   }
 #endif
 
-  // Load screen timeout (if available, otherwise keep default)
   if (lines[dataStart + 9].length() > 0) {
     unsigned long timeout = lines[dataStart + 9].toInt();
-    // Validate: only allow 0 (never), 30000, 60000, 300000, 600000 ms
     if (timeout == 0 || timeout == 30000 || timeout == 60000 ||
-        timeout == 300000 || timeout == 600000) {
+        timeout == 300000 || timeout == 600000)
       appState.screenTimeout = timeout;
-    }
   }
 
-  // Load buzzer enabled (if available, otherwise default to true)
-  if (lines[dataStart + 10].length() > 0) {
-    appState.buzzerEnabled = (lines[dataStart + 10].toInt() != 0);
-  }
-
-  // Load buzzer volume (if available, otherwise default to 1=Medium)
+  if (lines[dataStart + 10].length() > 0) appState.buzzerEnabled = (lines[dataStart + 10].toInt() != 0);
   if (lines[dataStart + 11].length() > 0) {
     int vol = lines[dataStart + 11].toInt();
-    if (vol >= 0 && vol <= 2) {
-      appState.buzzerVolume = vol;
-    }
+    if (vol >= 0 && vol <= 2) appState.buzzerVolume = vol;
   }
-
-  // Load backlight brightness (if available, otherwise default to 255)
   if (lines[dataStart + 12].length() > 0) {
     int bright = lines[dataStart + 12].toInt();
-    if (bright >= 1 && bright <= 255) {
-      appState.backlightBrightness = (uint8_t)bright;
-    }
+    if (bright >= 1 && bright <= 255) appState.backlightBrightness = (uint8_t)bright;
   }
 
-  // Load dim timeout (if available)
-  // Legacy: dimVal==0 meant disabled; now handled by dimEnabled toggle
   if (lines[dataStart + 13].length() > 0) {
     unsigned long dimVal = lines[dataStart + 13].toInt();
     if (dimVal == 0) {
-      // Legacy "disabled" value — keep default timeout, dimEnabled stays false
+      // Legacy "disabled" value
     } else if (dimVal == 5000 || dimVal == 10000 || dimVal == 15000 ||
                dimVal == 30000 || dimVal == 60000) {
       appState.dimTimeout = dimVal;
     }
   }
-
-  // Load dim brightness (if available, otherwise default to 26 = 10%)
   if (lines[dataStart + 14].length() > 0) {
     int dimBright = lines[dataStart + 14].toInt();
-    if (dimBright == 26 || dimBright == 64 || dimBright == 128 ||
-        dimBright == 191) {
+    if (dimBright == 26 || dimBright == 64 || dimBright == 128 || dimBright == 191)
       appState.dimBrightness = (uint8_t)dimBright;
-    }
   }
+  if (lines[dataStart + 15].length() > 0) appState.dimEnabled = (lines[dataStart + 15] == "1");
 
-  // Load dim enabled (if available, otherwise default to false)
-  if (lines[dataStart + 15].length() > 0) {
-    appState.dimEnabled = (lines[dataStart + 15] == "1");
-  }
-
-  // Load audio update rate (if available, otherwise default to 50ms)
   if (lines[dataStart + 16].length() > 0) {
     int rate = lines[dataStart + 16].toInt();
-    if (rate == 33 || rate == 50 || rate == 100) {
-      appState.audioUpdateRate = (uint16_t)rate;
-    }
+    if (rate == 33 || rate == 50 || rate == 100) appState.audioUpdateRate = (uint16_t)rate;
   }
 
-  // Load audio graph toggles (if available, default to true)
-  if (lines[dataStart + 17].length() > 0) {
-    appState.vuMeterEnabled = (lines[dataStart + 17].toInt() != 0);
-  }
-  if (lines[dataStart + 18].length() > 0) {
-    appState.waveformEnabled = (lines[dataStart + 18].toInt() != 0);
-  }
-  if (lines[dataStart + 19].length() > 0) {
-    appState.spectrumEnabled = (lines[dataStart + 19].toInt() != 0);
-  }
+  if (lines[dataStart + 17].length() > 0) appState.vuMeterEnabled = (lines[dataStart + 17].toInt() != 0);
+  if (lines[dataStart + 18].length() > 0) appState.waveformEnabled = (lines[dataStart + 18].toInt() != 0);
+  if (lines[dataStart + 19].length() > 0) appState.spectrumEnabled = (lines[dataStart + 19].toInt() != 0);
 
-  // Load debug mode toggles (lines 21-25)
-  if (lines[dataStart + 20].length() > 0) {
-    appState.debugMode = (lines[dataStart + 20].toInt() != 0);
-  }
+  if (lines[dataStart + 20].length() > 0) appState.debugMode = (lines[dataStart + 20].toInt() != 0);
   if (lines[dataStart + 21].length() > 0) {
     int level = lines[dataStart + 21].toInt();
-    if (level >= 0 && level <= 3) {
-      appState.debugSerialLevel = level;
-    }
+    if (level >= 0 && level <= 3) appState.debugSerialLevel = level;
   }
-  if (lines[dataStart + 22].length() > 0) {
-    appState.debugHwStats = (lines[dataStart + 22].toInt() != 0);
-  }
-  if (lines[dataStart + 23].length() > 0) {
-    appState.debugI2sMetrics = (lines[dataStart + 23].toInt() != 0);
-  }
-  if (lines[dataStart + 24].length() > 0) {
-    appState.debugTaskMonitor = (lines[dataStart + 24].toInt() != 0);
-  }
+  if (lines[dataStart + 22].length() > 0) appState.debugHwStats = (lines[dataStart + 22].toInt() != 0);
+  if (lines[dataStart + 23].length() > 0) appState.debugI2sMetrics = (lines[dataStart + 23].toInt() != 0);
+  if (lines[dataStart + 24].length() > 0) appState.debugTaskMonitor = (lines[dataStart + 24].toInt() != 0);
   if (lines[dataStart + 25].length() > 0) {
     int wt = lines[dataStart + 25].toInt();
-    if (wt >= 0 && wt < FFT_WINDOW_COUNT)
-      appState.fftWindowType = (FftWindowType)wt;
+    if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.fftWindowType = (FftWindowType)wt;
   }
 
-  // Load per-ADC enabled (if available, default true)
   if (lines[dataStart + 26].length() > 0) {
     int commaIdx = lines[dataStart + 26].indexOf(',');
     if (commaIdx > 0) {
-      // New format: "1,1" (per-ADC)
       appState.adcEnabled[0] = (lines[dataStart + 26].substring(0, commaIdx).toInt() != 0);
       appState.adcEnabled[1] = (lines[dataStart + 26].substring(commaIdx + 1).toInt() != 0);
     } else {
-      // Old format: single "1" or "0" — apply to both
       bool val = (lines[dataStart + 26].toInt() != 0);
       appState.adcEnabled[0] = val;
       appState.adcEnabled[1] = val;
@@ -229,39 +282,37 @@ bool loadSettings() {
   }
 
 #ifdef USB_AUDIO_ENABLED
-  // Load USB audio enabled (if available, default false)
-  if (lines[dataStart + 27].length() > 0) {
+  if (lines[dataStart + 27].length() > 0)
     appState.usbAudioEnabled = (lines[dataStart + 27].toInt() != 0);
-  }
 #endif
 
-  // Lines 28-29: reserved (was emergencyLimiter, removed)
-
-  // Load WiFi global settings from NVS (wifi-list namespace)
-  {
-    Preferences wifiPrefs;
-    wifiPrefs.begin("wifi-list", true); // Read-only
-    appState.wifiMinSecurity = wifiPrefs.getUChar("wifiMinSec", 0);
-    wifiPrefs.end();
-  }
-
-  // Load OTA channel from NVS (ota-prefs namespace)
-  {
-    Preferences otaPrefs;
-    otaPrefs.begin("ota-prefs", true);  // read-only
-    appState.otaChannel = otaPrefs.getUChar("otaChannel", 0);
-    otaPrefs.end();
-  }
-
-  // Load HAL settings from NVS (hal-prefs namespace)
-  {
-    Preferences halPrefs;
-    halPrefs.begin("hal-prefs", true);  // read-only
-    appState.halAutoDiscovery = halPrefs.getBool("halAutoDisco", true);
-    halPrefs.end();
-  }
-
   return true;
+}
+
+bool loadSettings() {
+  // Recovery: if a .tmp file exists without config.json, the rename was
+  // interrupted — complete it now
+  if (LittleFS.exists("/config.json.tmp") && !LittleFS.exists("/config.json")) {
+    LittleFS.rename("/config.json.tmp", "/config.json");
+  }
+
+  // 1. Try JSON format first
+  if (loadSettingsJson()) {
+    loadNvsSettings();
+    return true;
+  }
+
+  // 2. Fall back to legacy text format
+  if (loadSettingsLegacy()) {
+    LOG_I("[Settings] Migrating settings.txt -> config.json");
+    loadNvsSettings();
+    saveSettings();  // Auto-migrate to JSON (old file preserved)
+    return true;
+  }
+
+  // 3. No settings found — use defaults
+  loadNvsSettings();
+  return false;
 }
 
 // ===== Deferred Settings Save =====
@@ -282,82 +333,76 @@ void checkDeferredSettingsSave() {
 }
 
 void saveSettings() {
-  File file = LittleFS.open("/settings.txt", "w");
-  if (!file) {
-    LOG_E("[Settings] Failed to open settings file for writing");
-    return;
-  }
-
-  // Write format version header
-  file.println("VER=2");
-
-  file.println(appState.autoUpdateEnabled ? "1" : "0");
-  file.println(appState.timezoneOffset);
-  file.println(appState.dstOffset);
-  file.println(appState.darkMode ? "1" : "0");
-  file.println(appState.enableCertValidation ? "1" : "0");
-  file.println(appState.hardwareStatsInterval);
-  file.println(appState.autoAPEnabled ? "1" : "0");
+  JsonDocument doc;
+  doc["version"] = 1;
+  doc["autoUpdate"] = appState.autoUpdateEnabled;
+  doc["timezone"] = appState.timezoneOffset;
+  doc["dst"] = appState.dstOffset;
+  doc["darkMode"] = appState.darkMode;
+  doc["certValidation"] = appState.enableCertValidation;
+  doc["hwStatsInterval"] = appState.hardwareStatsInterval;
+  doc["autoAP"] = appState.autoAPEnabled;
 #ifdef GUI_ENABLED
-  file.println(appState.bootAnimEnabled ? "1" : "0");
-  file.println(appState.bootAnimStyle);
+  doc["bootAnim"] = appState.bootAnimEnabled;
+  doc["bootAnimStyle"] = appState.bootAnimStyle;
 #else
-  file.println("1"); // placeholder for bootAnimEnabled
-  file.println("0"); // placeholder for bootAnimStyle
+  doc["bootAnim"] = true;
+  doc["bootAnimStyle"] = 0;
 #endif
-  file.println(appState.screenTimeout);
-  file.println(appState.buzzerEnabled ? "1" : "0");
-  file.println(appState.buzzerVolume);
-  file.println(appState.backlightBrightness);
-  file.println(appState.dimTimeout);
-  file.println(appState.dimBrightness);
-  file.println(appState.dimEnabled ? "1" : "0");
-  file.println(appState.audioUpdateRate);
-  file.println(appState.vuMeterEnabled ? "1" : "0");
-  file.println(appState.waveformEnabled ? "1" : "0");
-  file.println(appState.spectrumEnabled ? "1" : "0");
-  file.println(appState.debugMode ? "1" : "0");
-  file.println(appState.debugSerialLevel);
-  file.println(appState.debugHwStats ? "1" : "0");
-  file.println(appState.debugI2sMetrics ? "1" : "0");
-  file.println(appState.debugTaskMonitor ? "1" : "0");
-  file.println((int)appState.fftWindowType);
-  // Per-ADC enabled: "1,1" format
+  doc["screenTimeout"] = appState.screenTimeout;
+  doc["buzzer"] = appState.buzzerEnabled;
+  doc["buzzerVol"] = appState.buzzerVolume;
+  doc["backlight"] = appState.backlightBrightness;
+  doc["dimTimeout"] = appState.dimTimeout;
+  doc["dimBright"] = appState.dimBrightness;
+  doc["dimEnabled"] = appState.dimEnabled;
+  doc["audioRate"] = appState.audioUpdateRate;
+  doc["vuMeter"] = appState.vuMeterEnabled;
+  doc["waveform"] = appState.waveformEnabled;
+  doc["spectrum"] = appState.spectrumEnabled;
+  doc["debugMode"] = appState.debugMode;
+  doc["debugSerial"] = appState.debugSerialLevel;
+  doc["debugHwStats"] = appState.debugHwStats;
+  doc["debugI2s"] = appState.debugI2sMetrics;
+  doc["debugTasks"] = appState.debugTaskMonitor;
+  doc["fftWindow"] = (int)appState.fftWindowType;
   {
-    String adcLine;
-    adcLine += (appState.adcEnabled[0] ? "1" : "0");
-    adcLine += ",";
-    adcLine += (appState.adcEnabled[1] ? "1" : "0");
-    file.println(adcLine);
+    JsonArray adcArr = doc["adcEnabled"].to<JsonArray>();
+    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
-  file.println(appState.usbAudioEnabled ? "1" : "0");
+  doc["usbAudio"] = appState.usbAudioEnabled;
 #else
-  file.println("0"); // placeholder for usbAudioEnabled
+  doc["usbAudio"] = false;
 #endif
-  file.println("0"); // line 28: reserved (was emergencyLimiterEnabled, removed)
-  file.println("0"); // line 29: reserved (was emergencyLimiterThresholdDb, removed)
-  file.println("0"); // line 30: reserved (was dcBlockEnabled)
-  file.close();
-  LOG_I("[Settings] Settings saved to LittleFS");
 
-  // Save WiFi global settings to NVS (wifi-list namespace)
+  // Atomic write: write to .tmp then rename
+  File file = LittleFS.open("/config.json.tmp", "w");
+  if (!file) {
+    LOG_E("[Settings] Failed to open config.json.tmp for writing");
+    return;
+  }
+  serializeJson(doc, file);
+  file.close();
+
+  // Rename atomically (old settings.txt preserved as fallback)
+  LittleFS.remove("/config.json");
+  LittleFS.rename("/config.json.tmp", "/config.json");
+  LOG_I("[Settings] Settings saved to config.json");
+
+  // Save NVS settings (survive LittleFS format)
   {
     Preferences wifiPrefs;
     wifiPrefs.begin("wifi-list", false);
     wifiPrefs.putUChar("wifiMinSec", appState.wifiMinSecurity);
     wifiPrefs.end();
   }
-
-  // Save OTA channel to NVS (ota-prefs namespace)
   {
     Preferences otaPrefs;
     otaPrefs.begin("ota-prefs", false);
     otaPrefs.putUChar("otaChannel", appState.otaChannel);
     otaPrefs.end();
   }
-
-  // Save HAL settings to NVS (hal-prefs namespace)
   {
     Preferences halPrefs;
     halPrefs.begin("hal-prefs", false);

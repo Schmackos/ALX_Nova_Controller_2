@@ -32,15 +32,15 @@ int hal_discover_devices() {
     bool wifiActive = (appState.activeInterface == NET_WIFI);
 
     if (!wifiActive) {
-        uint8_t extMask = hal_i2c_scan_bus(HAL_I2C_BUS_EXT);
-        LOG_I("[HAL:Discovery]", "Bus EXT scan: 0x%02X", extMask);
+        uint8_t extCount = hal_i2c_scan_bus(HAL_I2C_BUS_EXT);
+        LOG_I("[HAL:Discovery]", "Bus EXT scan: %u device(s)", extCount);
     } else {
         LOG_I("[HAL:Discovery]", "Skipping Bus EXT (WiFi active, SDIO conflict)");
     }
 
     // HAL_I2C_BUS_EXP (GPIO28/29) — always safe to scan
-    uint8_t expMask = hal_i2c_scan_bus(HAL_I2C_BUS_EXP);
-    LOG_I("[HAL:Discovery]", "Bus EXP scan: 0x%02X", expMask);
+    uint8_t expCount = hal_i2c_scan_bus(HAL_I2C_BUS_EXP);
+    LOG_I("[HAL:Discovery]", "Bus EXP scan: %u device(s)", expCount);
 
     // Phase 2: EEPROM probe — skip when WiFi active (same GPIO48/54 SDIO conflict)
     uint8_t eepMask = 0;
@@ -128,14 +128,54 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
     uint8_t found = 0;
 
 #ifndef NATIVE_TEST
-    // Select the correct Wire instance based on bus index
-    // Bus 0 (EXT): Wire1 on P4 (GPIO48/54)
-    // Bus 1 (ONBOARD): Wire (GPIO7/8) — ES8311 dedicated
-    // Bus 2 (EXP): Would need Wire2 or software I2C — placeholder
-    (void)busIndex;
+    TwoWire *bus = nullptr;
+    bool needsInit = false;
 
-    // Scan EEPROM range 0x50-0x57 as a proof of concept
-    // Full bus scan deferred to Phase 2 hardware validation
+    switch (busIndex) {
+        case HAL_I2C_BUS_EXT:
+            // Bus 0: GPIO 48/54 — SDIO conflict check is done by caller
+            bus = &Wire1;
+            if (!Wire1.begin(48, 54, 100000)) {
+                LOG_W("[HAL:Discovery]", "Wire1.begin(48,54) failed — bus EXT unavailable");
+                return 0;
+            }
+            needsInit = true;
+            break;
+        case HAL_I2C_BUS_ONBOARD:
+            // Bus 1: GPIO 7/8 — already initialized by ES8311 driver
+            bus = &Wire;
+            break;
+        case HAL_I2C_BUS_EXP: {
+            // Bus 2: GPIO 28/29 — expansion bus
+            static TwoWire Wire2(2);
+            if (!Wire2.begin(28, 29, 100000)) {
+                LOG_W("[HAL:Discovery]", "Wire2.begin(28,29) failed — bus EXP unavailable");
+                return 0;
+            }
+            bus = &Wire2;
+            needsInit = true;
+            break;
+        }
+        default:
+            return 0;
+    }
+
+    // Scan standard I2C address range (0x08-0x77, skip reserved)
+    for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
+        bus->beginTransmission(addr);
+        uint8_t err = bus->endTransmission();
+        if (err == 0) {
+            found++;
+            LOG_I("[HAL:Discovery]", "Bus %u: device at 0x%02X", busIndex, addr);
+        }
+    }
+
+    // Release bus if we initialized it (avoid holding pins)
+    if (needsInit) {
+        bus->end();
+    }
+#else
+    (void)busIndex;
 #endif
 
     return found;

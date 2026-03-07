@@ -672,6 +672,97 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
     _processingActive = false;
 }
 
+// Float-native DSP entry point — operates directly on float L/R buffers
+// Eliminates the int32↔float conversion round-trip when the pipeline is float-native
+void dsp_process_buffer_float(float *left, float *right, int frames, int lane) {
+    if (!left || !right || frames <= 0 || frames > 256) return;
+
+#ifndef NATIVE_TEST
+    unsigned long startUs = (unsigned long)esp_timer_get_time();
+#else
+    unsigned long startUs = esp_timer_get_time();
+#endif
+
+    if (_swapRequested && lane == 0) return;
+
+    _processingActive = true;
+    int stateIdx = _activeIndex;
+    DspState *cfg = &_states[stateIdx];
+    if (cfg->globalBypass) {
+        _metrics.processTimeUs = 0;
+        _metrics.cpuLoadPercent = 0.0f;
+        _processingActive = false;
+        return;
+    }
+
+    int chL = lane * 2;
+    int chR = lane * 2 + 1;
+    if (chL >= DSP_MAX_CHANNELS || chR >= DSP_MAX_CHANNELS) {
+        _processingActive = false;
+        return;
+    }
+
+    // Process each channel directly on the caller's buffers
+    dsp_process_channel(left, frames, cfg->channels[chL], stateIdx);
+    dsp_process_channel(right, frames, cfg->channels[chR], stateIdx);
+
+    // Stereo width (mid-side)
+    DspChannelConfig &chLeft = cfg->channels[chL];
+    for (int i = 0; i < chLeft.stageCount; i++) {
+        DspStage &s = chLeft.stages[i];
+        if (s.enabled && s.type == DSP_STEREO_WIDTH) {
+            float widthScale = s.stereoWidth.width / 100.0f;
+            float centerGain = s.stereoWidth.centerGainLin;
+            for (int f = 0; f < frames; f++) {
+                float mid  = (left[f] + right[f]) * 0.5f * centerGain;
+                float side = (left[f] - right[f]) * 0.5f * widthScale;
+                left[f] = mid + side;
+                right[f] = mid - side;
+            }
+            break;
+        }
+    }
+
+    // Clamp to [-1.0, 1.0]
+    for (int f = 0; f < frames; f++) {
+        if (left[f] > 1.0f) left[f] = 1.0f; else if (left[f] < -1.0f) left[f] = -1.0f;
+        if (right[f] > 1.0f) right[f] = 1.0f; else if (right[f] < -1.0f) right[f] = -1.0f;
+    }
+
+    // Timing metrics
+#ifndef NATIVE_TEST
+    unsigned long endUs = (unsigned long)esp_timer_get_time();
+#else
+    unsigned long endUs = esp_timer_get_time();
+#endif
+    uint32_t elapsed = (uint32_t)(endUs - startUs);
+    _metrics.processTimeUs = elapsed;
+    if (elapsed > _metrics.maxProcessTimeUs) _metrics.maxProcessTimeUs = elapsed;
+
+    float bufferPeriodUs = (float)frames / (float)cfg->sampleRate * 1000000.0f;
+    if (bufferPeriodUs > 0.0f) {
+        _metrics.cpuLoadPercent = (float)elapsed / bufferPeriodUs * 100.0f;
+    }
+
+    // Collect GR metrics
+    for (int c = chL; c <= chR; c++) {
+        _metrics.limiterGrDb[c] = 0.0f;
+        DspChannelConfig &ch = cfg->channels[c];
+        for (int s = 0; s < ch.stageCount; s++) {
+            if (ch.stages[s].enabled) {
+                float gr = 0.0f;
+                if (ch.stages[s].type == DSP_LIMITER) gr = ch.stages[s].limiter.gainReduction;
+                else if (ch.stages[s].type == DSP_COMPRESSOR) gr = ch.stages[s].compressor.gainReduction;
+                else if (ch.stages[s].type == DSP_NOISE_GATE) gr = ch.stages[s].noiseGate.gainReduction;
+                else if (ch.stages[s].type == DSP_SPEAKER_PROT) gr = ch.stages[s].speakerProt.gainReduction;
+                if (gr < _metrics.limiterGrDb[c]) _metrics.limiterGrDb[c] = gr;
+            }
+        }
+    }
+
+    _processingActive = false;
+}
+
 // ===== Per-Channel Processing =====
 
 static int dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int stateIdx) {

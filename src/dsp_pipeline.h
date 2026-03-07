@@ -534,6 +534,7 @@ inline float dsp_time_coeff(float ms, float sampleRate) {
 // ===== Public API =====
 void dsp_init();
 void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex);
+void dsp_process_buffer_float(float *left, float *right, int frames, int lane);
 
 // Config access (double-buffered: active = read by audio task, inactive = modified by API)
 DspState *dsp_get_active_config();

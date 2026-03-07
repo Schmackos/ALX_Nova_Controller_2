@@ -37,11 +37,9 @@ static const int RAW_SAMPLES = FRAMES * 2;          // 512 int32_t per buffer (L
 static const float MAX_24BIT_F = 8388607.0f;        // 2^23 - 1
 
 // ===== DMA Buffers — MUST be in internal SRAM (DMA cannot access PSRAM) =====
-// 4 input lanes + 1 output + 1 DSP bridge: ~12 KB of internal SRAM
+// 4 input lanes + 1 output: ~10 KB of internal SRAM (DSP bridge removed — float-native)
 static int32_t _rawBuf[AUDIO_PIPELINE_MAX_INPUTS][RAW_SAMPLES];
 static int32_t _dacBuf[RAW_SAMPLES];
-// DSP bridge: float↔RJ-int32 scratch (shared across lanes, never concurrent)
-static int32_t _dspBridgeBuf[RAW_SAMPLES];
 
 // ===== Float Working Buffers (PSRAM-allocated on ESP32, static on native) =====
 static float *_laneL[AUDIO_PIPELINE_MAX_INPUTS] = {};
@@ -283,27 +281,10 @@ static void pipeline_to_float() {
 
 static void pipeline_run_dsp() {
 #ifdef DSP_ENABLED
-    // Temporary float→RJ-int32→dsp_process_buffer→RJ-int32→float bridge.
-    // dsp_process_buffer() uses 8388607.0f (right-justified 24-bit) internally.
-    // Lanes 0 & 1 (ADC1/ADC2); lanes 2 & 3 bypass DSP by default.
-    // Replace with float-native DSP in a future stage.
+    // Float-native DSP — no int32 bridge needed (saves ~2KB + 4 conversion loops)
     for (int lane = 0; lane < 2; lane++) {
         if (_dspBypass[lane] || !_laneL[lane] || !_laneR[lane]) continue;
-
-        // float [-1,+1] → right-justified int32 [-8388607, +8388607]
-        for (int f = 0; f < FRAMES; f++) {
-            _dspBridgeBuf[f * 2]     = (int32_t)(_laneL[lane][f] * MAX_24BIT_F);
-            _dspBridgeBuf[f * 2 + 1] = (int32_t)(_laneR[lane][f] * MAX_24BIT_F);
-        }
-
-        // DSP stages: EQ, crossover, compressor, limiter, etc. (modifies in-place)
-        dsp_process_buffer(_dspBridgeBuf, FRAMES, lane);
-
-        // right-justified int32 → float [-1,+1]
-        for (int f = 0; f < FRAMES; f++) {
-            _laneL[lane][f] = (float)_dspBridgeBuf[f * 2]     / MAX_24BIT_F;
-            _laneR[lane][f] = (float)_dspBridgeBuf[f * 2 + 1] / MAX_24BIT_F;
-        }
+        dsp_process_buffer_float(_laneL[lane], _laneR[lane], FRAMES, lane);
     }
 #else
     (void)_dspBypass;
