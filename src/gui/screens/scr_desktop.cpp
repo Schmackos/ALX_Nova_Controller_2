@@ -345,7 +345,7 @@ static void refresh_dashboard(void) {
     }
 
     if (dash_level_bar) {
-        int vu = (int)st.audioVuCombined;
+        int vu = (int)st.audioAdc[0].vuCombined;
         if (vu < -96) vu = -96;
         if (vu > 0) vu = 0;
         lv_bar_set_value(dash_level_bar, vu, LV_ANIM_ON);

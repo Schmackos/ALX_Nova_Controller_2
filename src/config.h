@@ -204,7 +204,7 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 
 // ===== Audio Pipeline Configuration =====
 #define AUDIO_PIPELINE_MAX_INPUTS  4   // ADC1, ADC2, Siggen, USB Audio
-#define AUDIO_PIPELINE_MAX_OUTPUTS 4   // DAC output channels
+#define AUDIO_PIPELINE_MAX_OUTPUTS 8   // Max output channels (matches matrix size)
 #define AUDIO_PIPELINE_MATRIX_SIZE 8   // 8x8 routing matrix (4 inputs × 2ch = 8 input channels)
 #define AUDIO_OUT_MAX_SINKS AUDIO_PIPELINE_MAX_OUTPUTS
 

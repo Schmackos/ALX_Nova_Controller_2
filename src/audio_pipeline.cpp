@@ -84,6 +84,8 @@ static AudioInputSource _sources[AUDIO_PIPELINE_MAX_INPUTS] = {
 static AudioOutputSink _sinks[AUDIO_OUT_MAX_SINKS] = {
     AUDIO_OUTPUT_SINK_INIT, AUDIO_OUTPUT_SINK_INIT,
     AUDIO_OUTPUT_SINK_INIT, AUDIO_OUTPUT_SINK_INIT,
+    AUDIO_OUTPUT_SINK_INIT, AUDIO_OUTPUT_SINK_INIT,
+    AUDIO_OUTPUT_SINK_INIT, AUDIO_OUTPUT_SINK_INIT,
 };
 static volatile int _sinkCount = 0;
 // Per-sink DMA buffers — internal SRAM (DMA cannot access PSRAM)

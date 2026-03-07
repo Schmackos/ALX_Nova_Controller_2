@@ -322,7 +322,7 @@ void scr_home_refresh(void) {
 
     /* Level bar: VU combined, indicator green when signal detected */
     if (bar_level) {
-        int vu = (int)st.audioVuCombined;
+        int vu = (int)st.audioAdc[0].vuCombined;
         if (vu < -96) vu = -96;
         if (vu > 0) vu = 0;
         lv_bar_set_value(bar_level, vu, LV_ANIM_ON);

@@ -70,16 +70,16 @@ void handleSmartSensingGet() {
     adcObj["dBFS"] = adc.dBFS;
   }
   // Legacy flat fields (ADC 0)
-  doc["audioRms1"] = appState.audioRmsLeft;
-  doc["audioRms2"] = appState.audioRmsRight;
-  doc["audioVu1"] = appState.audioVuLeft;
-  doc["audioVu2"] = appState.audioVuRight;
-  doc["audioPeak1"] = appState.audioPeakLeft;
-  doc["audioPeak2"] = appState.audioPeakRight;
-  doc["audioPeak"] = appState.audioPeakCombined;
-  doc["audioVrms1"] = appState.audioVrms1;
-  doc["audioVrms2"] = appState.audioVrms2;
-  doc["audioVrms"] = appState.audioVrmsCombined;
+  doc["audioRms1"] = appState.audioAdc[0].rms1;
+  doc["audioRms2"] = appState.audioAdc[0].rms2;
+  doc["audioVu1"] = appState.audioAdc[0].vu1;
+  doc["audioVu2"] = appState.audioAdc[0].vu2;
+  doc["audioPeak1"] = appState.audioAdc[0].peak1;
+  doc["audioPeak2"] = appState.audioAdc[0].peak2;
+  doc["audioPeak"] = appState.audioAdc[0].peakCombined;
+  doc["audioVrms1"] = appState.audioAdc[0].vrms1;
+  doc["audioVrms2"] = appState.audioAdc[0].vrms2;
+  doc["audioVrms"] = appState.audioAdc[0].vrmsCombined;
 
   String json;
   serializeJson(doc, json);
@@ -439,7 +439,7 @@ void sendSmartSensingStateInternal() {
   doc["audioLevel"] = appState.audioLevel_dBFS;
   doc["signalDetected"] = (_smoothedAudioLevel >= appState.audioThreshold_dBFS);
   doc["audioSampleRate"] = appState.audioSampleRate;
-  doc["audioVrms"] = appState.audioVrmsCombined;
+  doc["audioVrms"] = appState.audioAdc[0].vrmsCombined;
 
   String json;
   serializeJson(doc, json);

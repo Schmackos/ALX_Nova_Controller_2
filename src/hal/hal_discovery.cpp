@@ -29,7 +29,7 @@ int hal_discover_devices() {
 
     // Phase 1: I2C bus scan
     // Skip HAL_I2C_BUS_EXT (GPIO48/54) if WiFi is active (SDIO conflict)
-    bool wifiActive = appState.wifiConnectSuccess;
+    bool wifiActive = (appState.activeInterface == NET_WIFI);
 
     if (!wifiActive) {
         uint8_t extMask = hal_i2c_scan_bus(HAL_I2C_BUS_EXT);

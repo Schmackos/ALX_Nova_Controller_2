@@ -214,15 +214,16 @@ void hal_pipeline_sync() {
     // Scan devices that are already AVAILABLE (boot-time sync)
     int outputs = 0;
     int inputs  = 0;
+    int counts[2] = {0, 0};
     HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
-        int* counts = static_cast<int*>(ctx);
+        int* c = static_cast<int*>(ctx);
         if (dev->_state == HAL_STATE_AVAILABLE && dev->_ready) {
             uint8_t slot = dev->getSlot();
             hal_pipeline_on_device_available(slot);
-            if (_halSlotToSinkSlot[slot] >= 0) counts[0]++;
-            if (_halSlotToAdcLane[slot]  >= 0) counts[1]++;
+            if (_halSlotToSinkSlot[slot] >= 0) c[0]++;
+            if (_halSlotToAdcLane[slot]  >= 0) c[1]++;
         }
-    }, (void*)new int[2]{0, 0});
+    }, (void*)counts);
 
     // Recount from tables (forEach ctx lifetime is local above — recount here)
     outputs = 0;

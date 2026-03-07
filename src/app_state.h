@@ -196,29 +196,6 @@ public:
   };
   I2sRuntimeMetrics i2sMetrics;
 
-  // Legacy flat accessors (convenience aliases for audioAdc[0], used by existing WS/MQTT code)
-  float &audioRmsLeft = audioAdc[0].rms1;
-  float &audioRmsRight = audioAdc[0].rms2;
-  float &audioRmsCombined = audioAdc[0].rmsCombined;
-  float &audioVuLeft = audioAdc[0].vu1;
-  float &audioVuRight = audioAdc[0].vu2;
-  float &audioVuCombined = audioAdc[0].vuCombined;
-  float &audioPeakLeft = audioAdc[0].peak1;
-  float &audioPeakRight = audioAdc[0].peak2;
-  float &audioPeakCombined = audioAdc[0].peakCombined;
-  float &audioVrms1 = audioAdc[0].vrms1;
-  float &audioVrms2 = audioAdc[0].vrms2;
-  float &audioVrmsCombined = audioAdc[0].vrmsCombined;
-  uint8_t &audioHealthStatus = audioAdc[0].healthStatus;
-  uint32_t &audioI2sErrors = audioAdc[0].i2sErrors;
-  uint32_t &audioAllZeroBuffers = audioAdc[0].allZeroBuffers;
-  uint32_t &audioConsecutiveZeros = audioAdc[0].consecutiveZeros;
-  float &audioNoiseFloorDbfs = audioAdc[0].noiseFloorDbfs;
-  unsigned long &audioLastNonZeroMs = audioAdc[0].lastNonZeroMs;
-  uint32_t &audioTotalBuffers = audioAdc[0].totalBuffers;
-  uint32_t &audioClippedSamples = audioAdc[0].clippedSamples;
-  float &audioClipRate = audioAdc[0].clipRate;
-  float &audioDcOffset = audioAdc[0].dcOffset;
 
   float audioDominantFreq = 0.0f;
   float audioSpectrumBands[16] = {};

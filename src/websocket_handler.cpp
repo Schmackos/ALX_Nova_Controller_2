@@ -2021,8 +2021,8 @@ void sendHardwareStats() {
     doc["audio"]["fftWindowType"] = (int)appState.fftWindowType;
     // Legacy flat fields for backward compat
     doc["audio"]["adcStatus"] = adcArr[0]["status"];
-    doc["audio"]["noiseFloorDbfs"] = appState.audioNoiseFloorDbfs;
-    doc["audio"]["vrms"] = appState.audioVrmsCombined;
+    doc["audio"]["noiseFloorDbfs"] = appState.audioAdc[0].noiseFloorDbfs;
+    doc["audio"]["vrms"] = appState.audioAdc[0].vrmsCombined;
 
     // Uptime (milliseconds since boot)
     doc["uptime"] = millis();
@@ -2319,16 +2319,16 @@ void sendAudioData() {
       adcNoiseArr.add(adc.noiseFloorDbfs);
     }
     // Legacy flat fields for backward compat (ADC 0)
-    doc["audioRms1"] = appState.audioRmsLeft;
-    doc["audioRms2"] = appState.audioRmsRight;
-    doc["audioVu1"] = appState.audioVuLeft;
-    doc["audioVu2"] = appState.audioVuRight;
-    doc["audioPeak1"] = appState.audioPeakLeft;
-    doc["audioPeak2"] = appState.audioPeakRight;
-    doc["audioPeak"] = appState.audioPeakCombined;
-    doc["audioVrms1"] = appState.audioVrms1;
-    doc["audioVrms2"] = appState.audioVrms2;
-    doc["audioVrms"] = appState.audioVrmsCombined;
+    doc["audioRms1"] = appState.audioAdc[0].rms1;
+    doc["audioRms2"] = appState.audioAdc[0].rms2;
+    doc["audioVu1"] = appState.audioAdc[0].vu1;
+    doc["audioVu2"] = appState.audioAdc[0].vu2;
+    doc["audioPeak1"] = appState.audioAdc[0].peak1;
+    doc["audioPeak2"] = appState.audioAdc[0].peak2;
+    doc["audioPeak"] = appState.audioAdc[0].peakCombined;
+    doc["audioVrms1"] = appState.audioAdc[0].vrms1;
+    doc["audioVrms2"] = appState.audioAdc[0].vrms2;
+    doc["audioVrms"] = appState.audioAdc[0].vrmsCombined;
     // Output sink VU data
     JsonArray sinkArr = doc["sinks"].to<JsonArray>();
     int sinkCnt = audio_pipeline_get_sink_count();

@@ -1546,7 +1546,7 @@ void publishMqttAudioDiagnostics() {
 
   // Legacy combined topics (ADC 0)
   const char *statusStr = "OK";
-  switch (appState.audioHealthStatus) {
+  switch (appState.audioAdc[0].healthStatus) {
     case 1: statusStr = "NO_DATA"; break;
     case 2: statusStr = "NOISE_ONLY"; break;
     case 3: statusStr = "CLIPPING"; break;
@@ -1555,9 +1555,9 @@ void publishMqttAudioDiagnostics() {
   }
   mqttClient.publish((base + "/audio/adc_status").c_str(), statusStr, true);
   mqttClient.publish((base + "/audio/noise_floor").c_str(),
-                     String(appState.audioNoiseFloorDbfs, 1).c_str(), true);
+                     String(appState.audioAdc[0].noiseFloorDbfs, 1).c_str(), true);
   mqttClient.publish((base + "/audio/input_vrms").c_str(),
-                     String(appState.audioVrmsCombined, 3).c_str(), true);
+                     String(appState.audioAdc[0].vrmsCombined, 3).c_str(), true);
   mqttClient.publish((base + "/settings/adc_vref").c_str(),
                      String(appState.adcVref, 2).c_str(), true);
 }
