@@ -1,150 +1,283 @@
-# ALX Nova Controller
+# ALX Nova Controller 2
 
 ![Tests](https://github.com/Schmackos/ALX_Nova_Controller_2/actions/workflows/tests.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-1.2.4-blue)
-![Platform](https://img.shields.io/badge/platform-ESP32--S3-green)
+![Version](https://img.shields.io/badge/version-1.12.0-blue)
+![Platform](https://img.shields.io/badge/platform-ESP32--P4-green)
+![Tests](https://img.shields.io/badge/tests-1271%20passing-brightgreen)
 
-ESP32-S3 based intelligent amplifier controller with smart auto-sensing, WiFi management, MQTT integration, and OTA updates.
+ESP32-P4 based intelligent amplifier controller with a modular audio pipeline, HAL device framework, DSP engine, web configuration UI, LVGL touchscreen GUI, WiFi/Ethernet connectivity, MQTT/Home Assistant integration, and OTA firmware updates. Built with PlatformIO and the Arduino framework.
 
 ## Features
 
-### Smart Auto Sensing
-- Automatic voltage detection and amplifier control
-- Configurable auto-off timer (1-60 minutes)
-- Adjustable voltage threshold (0.1-3.3V)
-- Three modes: Always On, Always Off, Smart Auto
+### Audio Pipeline
+- 4-lane input: dual PCM1808 I2S ADC, software signal generator, USB Audio (TinyUSB UAC2)
+- Per-input DSP: biquad IIR parametric EQ, FIR filters, limiter, compressor, gain, delay, polarity, mute
+- 8x8 routing matrix with per-crosspoint gain
+- Per-output DSP with double-buffered config for glitch-free updates
+- Slot-indexed multi-sink dispatch to HAL-managed output devices
+- Real-time RMS/VU/peak metering with WebSocket broadcast
+- REW Equalizer APO and miniDSP import/export support
+
+### HAL Device Framework
+- Up to 16 managed devices with 24-pin tracking and GPIO conflict prevention
+- Device lifecycle: UNKNOWN -> DETECTED -> CONFIGURING -> AVAILABLE <-> UNAVAILABLE -> ERROR / REMOVED / MANUAL
+- 3-tier discovery: I2C bus scan, EEPROM probe, manual configuration
+- State change callbacks drive automatic audio pipeline sink management via HAL-Pipeline Bridge
+- Per-device config persistence to LittleFS JSON
+- REST API for device CRUD, scanning, and preset database
+
+### Web Configuration
+- Self-contained offline-capable web UI served from the ESP32
+- Unified Audio tab: HAL-driven channel strips, 8x8 matrix routing, DSP overlays with frequency response graph
+- HAL device management panel
+- WiFi, MQTT, OTA, and system settings
+- Debug console with module filtering, search/highlight, and WebSocket log forwarding
+- Binary WebSocket frames for waveform and spectrum data
+
+### LVGL GUI
+- LVGL v9.4 on ST7735S 128x160 TFT (landscape) with rotary encoder input
+- Desktop carousel, status dashboard, device screens, WiFi/MQTT settings
+- Screen stack navigation with transition animations
+- Dark/light theme with orange accent
 
 ### Connectivity
-- WiFi client and AP modes
-- Web-based configuration interface
-- WebSocket real-time updates
-- MQTT integration with Home Assistant discovery
-- OTA firmware updates
+- WiFi via ESP32-C6 co-processor (WiFi 6)
+- 100 Mbps Ethernet (full duplex)
+- MQTT with Home Assistant auto-discovery
+- OTA firmware updates with SHA256 verification from GitHub releases
 
-### Management
-- Settings persistence and export/import
-- Factory reset capability
-- Hardware statistics monitoring
-- Release notes for updates
+### Smart Auto-Sensing
+- Automatic voltage detection and amplifier relay control
+- Configurable auto-off timer (1-60 minutes)
+- Adjustable voltage threshold
+- Three modes: Always On, Always Off, Smart Auto
+
+### Signal Generator
+- Sine, square, noise, frequency sweep waveforms
+- Software injection into audio pipeline (lane 2) and PWM output
+
+### USB Audio
+- TinyUSB UAC2 high-speed speaker device on native USB OTG
+- PCM16 format, lock-free SPSC ring buffer (PSRAM)
+
+## Hardware
+
+| Component | Part | Interface |
+|-----------|------|-----------|
+| **Board** | Waveshare ESP32-P4-WiFi6-DEV-Kit | -- |
+| **Audio ADC** | 2x PCM1808 | I2S (dual-master, shared clock) |
+| **Audio DAC** | PCM5102A | I2S |
+| **Codec** | ES8311 | I2C Bus 1 (onboard, hardware volume) |
+| **Amplifier** | NS4150B Class-D | GPIO 53 |
+| **DAC** | MCP4725 12-bit | I2C |
+| **Display** | ST7735S 128x160 TFT | SPI |
+| **Input** | Rotary encoder (A/B/SW) | GPIO |
+| **Other** | Piezo buzzer, status LED, amplifier relay, reset button | GPIO |
 
 ## Quick Start
 
-### Hardware Requirements
-- ESP32-S3 DevKitM-1
-- Power supply (5V USB)
-- Amplifier control circuit (relay on GPIO 4)
-- Voltage sensing circuit (GPIO 1)
-
-### Building and Uploading
+### Build and Upload
 
 ```bash
-# Build firmware
-pio run
-
-# Upload to device
-pio run --target upload
-
-# Monitor serial output
-pio device monitor
+pio run                           # Build firmware
+pio run --target upload           # Upload to device (COM8)
+pio device monitor                # Serial monitor (115200 baud)
+pio test -e native                # Run all 1271 tests
+pio test -e native -f test_wifi   # Run a specific test module
+pio test -e native -v             # Verbose test output
 ```
 
 ### First-Time Setup
 
-1. Connect ESP32 to power
-2. Device creates WiFi AP: `ALX-XXXXXXXXXXXX`
-3. Connect to AP (password: `alxaudio2024`)
-4. Navigate to `http://192.168.4.1`
-5. Configure WiFi credentials
-6. Device connects to your network
+1. Power on the ESP32-P4
+2. Connect to the WiFi AP: `ALX-XXXXXXXXXXXX` (password: `alxaudio2024`)
+3. Navigate to `http://192.168.4.1`
+4. Configure WiFi credentials
+5. The device connects to your network and is accessible at its assigned IP
 
-## Testing
+## Architecture
 
-![Test Coverage](https://img.shields.io/badge/tests-23%20passing-brightgreen)
+### Dual-Core FreeRTOS Design
 
-### Run Tests
+**Core 1** is reserved exclusively for audio:
+- `audio_pipeline_task` (priority 3) -- DMA-driven audio processing
+- `loopTask` / Arduino main loop (priority 1) -- WebSocket broadcasts, periodic timers
 
-```bash
-# Requires MinGW/gcc on Windows
-pio test -e native
+**Core 0** handles everything else:
+- `gui_task` -- LVGL display rendering
+- `mqtt_task` -- dedicated MQTT reconnect and publish (20 Hz)
+- `usb_audio_task` -- TinyUSB UAC2 polling
+- One-shot OTA tasks
 
-# Or use GitHub Actions (automatic on push)
-```
+### Key Patterns
 
-### Test Coverage
-- ✅ Smart sensing timer logic (10 tests)
-- ✅ HTTP API endpoints (13 tests)
-- ⚠️ WiFi/MQTT/OTA (planned)
+- **Event-driven state**: `AppState` singleton with dirty flags and a 24-bit FreeRTOS event group. `app_events_wait(5)` replaces `delay(5)` -- sub-microsecond wake on any state change, 5 ms fallback tick
+- **HAL-Pipeline Bridge**: HAL device state changes fire callbacks that automatically create/remove audio pipeline sinks via slot-indexed API
+- **Lock-free cross-core reads**: Volatile `_ready` flags on output sinks allow the audio task on Core 1 to skip unavailable devices without locks
+- **Minimal broadcast traffic**: Dirty flags ensure WebSocket and MQTT only publish on actual state changes
 
-See [test/README.md](test/README.md) for details.
+### Architecture Diagrams
+
+Six Mermaid diagrams are available in [`docs/architecture/`](docs/architecture/):
+
+- `system-architecture.mmd` -- High-level system overview
+- `hal-lifecycle.mmd` -- HAL device state machine
+- `hal-pipeline-bridge.mmd` -- HAL to audio pipeline integration
+- `boot-sequence.mmd` -- Startup and initialization order
+- `event-architecture.mmd` -- Event group and dirty flag flow
+- `sink-dispatch.mmd` -- Audio output sink dispatch logic
+
+## Pin Configuration
+
+| Group | Pins |
+|-------|------|
+| **I2S ADC1** | BCK=20, DOUT=23, LRC=21, MCLK=22 |
+| **I2S ADC2** | DOUT2=25 (shares BCK/LRC/MCLK with ADC1) |
+| **I2S DAC TX** | DOUT=24 (full-duplex on I2S0) |
+| **TFT Display** | MOSI=2, SCLK=3, CS=4, DC=5, RST=6, BL=26 |
+| **Rotary Encoder** | A=32, B=33, SW=36 |
+| **Control** | LED=1, Amplifier=27, Buzzer=45, Reset=46 |
+| **ES8311 I2C** | SDA=7, SCL=8 (Bus 1, onboard) |
+| **I2C Expansion** | SDA=28, SCL=29 (Bus 2) |
+| **Signal Gen PWM** | GPIO 47 |
+| **NS4150B Enable** | GPIO 53 |
+
+Full pin definitions are in `platformio.ini` build flags with fallback defaults in `src/config.h`.
 
 ## API Endpoints
 
+### Audio and DSP
+- `GET/POST /api/audio/*` -- Pipeline config, DSP stages, routing matrix
+
+### HAL Devices
+- `GET /api/hal/devices` -- List all managed devices
+- `POST /api/hal/scan` -- Trigger device discovery
+- `PUT /api/hal/devices` -- Update device configuration
+- `DELETE /api/hal/devices` -- Remove a device
+- `POST /api/hal/devices/reinit` -- Reinitialize a device
+- `GET /api/hal/db/presets` -- Device database presets
+
 ### Smart Sensing
-- `GET /api/smartsensing` - Get current state
-- `POST /api/smartsensing` - Update settings
+- `GET/POST /api/smartsensing` -- State and settings
 
 ### WiFi
-- `GET /api/wifistatus` - Connection status
-- `GET /api/wifiscan` - Available networks
-- `POST /api/wificonfig` - Configure WiFi
+- `GET /api/wifistatus` -- Connection status
+- `GET /api/wifiscan` -- Available networks
+- `POST /api/wificonfig` -- Configure credentials
 
-### System
-- `GET /api/settings` - Get all settings
-- `POST /api/settings` - Update settings
-- `GET /api/settings/export` - Export config
-- `POST /api/settings/import` - Import config
-- `POST /api/factoryreset` - Reset to defaults
-- `POST /api/reboot` - Restart device
+### MQTT
+- `GET /api/mqttstatus` -- Broker connection status
+- `POST /api/mqttconfig` -- Configure broker settings
 
 ### OTA Updates
-- `GET /api/checkupdate` - Check for updates
-- `POST /api/startupdate` - Begin OTA update
-- `GET /api/updatestatus` - Update progress
+- `GET /api/checkupdate` -- Check for new firmware
+- `POST /api/startupdate` -- Begin OTA update
+- `GET /api/updatestatus` -- Download progress
 
-## Configuration
+### System
+- `GET/POST /api/settings` -- All settings (get/update)
+- `GET /api/settings/export` -- Export configuration
+- `POST /api/settings/import` -- Import configuration
+- `POST /api/factoryreset` -- Reset to defaults
+- `POST /api/reboot` -- Restart device
 
-### Pin Assignments
-- LED: GPIO 2 (internal)
-- Reset Button: GPIO 15
-- Amplifier Control: GPIO 4
-- Voltage Sensing: GPIO 1 (ADC)
+### WebSocket (Port 81)
+Real-time state updates, audio levels (JSON), waveform and spectrum data (binary frames).
 
-### Default Settings
-- AP SSID: Device serial number
-- AP Password: `alxaudio2024`
-- Auto-off Timer: 5 minutes
-- Voltage Threshold: 0.5V
+## Project Structure
+
+```
+src/
+  main.cpp                      Application entry, task orchestration
+  app_state.h                   Singleton state with dirty flags
+  app_events.h                  FreeRTOS event group (24-bit)
+  config.h                      Pin definitions, task config, version
+  audio_pipeline.cpp/.h         4-lane input -> matrix -> sink dispatch
+  audio_output_sink.h           Slot-indexed output sink API
+  dac_hal.cpp                   I2S DAC driver + legacy adapter
+  i2s_audio.cpp/.h              Dual PCM1808 ADC, I2S configuration
+  dsp_pipeline.cpp/.h           4-channel input DSP engine
+  output_dsp.cpp/.h             Per-output mono DSP
+  signal_generator.cpp/.h       Test signal generation
+  smart_sensing.cpp/.h          Voltage detection, auto-off
+  wifi_manager.cpp/.h           WiFi client/AP management
+  mqtt_handler.cpp/.h           MQTT + Home Assistant discovery
+  mqtt_task.cpp/.h              Dedicated MQTT FreeRTOS task
+  ota_updater.cpp/.h            OTA with SHA256 verification
+  websocket_handler.cpp/.h      Real-time WebSocket server
+  settings_manager.cpp/.h       NVS persistence
+  usb_audio.cpp/.h              TinyUSB UAC2 speaker device
+  hal/
+    hal_device_manager.*        Device lifecycle management (16 slots)
+    hal_pipeline_bridge.*       HAL -> audio pipeline integration
+    hal_discovery.*             3-tier device discovery
+    hal_device_db.*             Device database + config persistence
+    hal_api.*                   REST API for device CRUD
+    hal_es8311.*                ES8311 codec driver
+    hal_pcm5102a.*              PCM5102A DAC driver
+    hal_pcm1808.*               PCM1808 ADC driver
+    hal_ns4150b.*               NS4150B amplifier driver
+    hal_mcp4725.*               MCP4725 12-bit DAC driver
+    hal_temp_sensor.*           ESP32-P4 internal temperature sensor
+    hal_builtin_devices.*       Driver registry (compatible string -> factory)
+  gui/                          LVGL GUI (guarded by GUI_ENABLED)
+    gui_manager.*               Init, FreeRTOS task, screen management
+    gui_navigation.*            Screen stack with transitions
+    gui_theme.*                 Orange accent theme, dark/light mode
+    screens/                    Home, Control, WiFi, MQTT, Devices, etc.
+
+web_src/                        Web UI source (edit here, not src/)
+  index.html                    HTML shell
+  css/01-05-*.css               Modular CSS (variables, layout, components)
+  js/01-28-*.js                 JS modules in load order
+
+test/                           Unity test modules (native platform)
+  test_mocks/                   Arduino, WiFi, MQTT, NVS mock implementations
+  test_*/                       57 test module directories
+
+docs/
+  architecture/                 Mermaid diagrams + analysis documents
+  planning/                     Feature plans and designs
+  development/                  CI/CD, release process, OTA documentation
+  hardware/                     PCM1808 integration, TFT setup
+  user/                         Quick start guide, user manual
+```
+
+## Testing
+
+1271 tests across the native platform using the Unity framework. Tests run on the host machine with gcc/MinGW -- no hardware required.
+
+```bash
+pio test -e native                # Run all tests
+pio test -e native -f test_wifi   # Run a specific module
+pio test -e native -v             # Verbose output
+```
+
+Mock implementations in `test/test_mocks/` simulate Arduino core functions, WiFi, MQTT (`PubSubClient`), NVS (`Preferences`), and I2C (`Wire`).
+
+**CI**: GitHub Actions runs all native tests and builds ESP32-P4 firmware on every push and pull request to `main` and `develop`.
 
 ## Development
 
-### Project Structure
-```
-src/
-├── main.cpp              # Main application
-├── app_state.h/cpp       # Global state management
-├── smart_sensing.h/cpp   # Smart sensing logic
-├── wifi_manager.h/cpp    # WiFi functionality
-├── mqtt_handler.h/cpp    # MQTT integration
-├── ota_updater.h/cpp     # OTA updates
-├── websocket_handler.h   # WebSocket server
-├── settings_manager.h    # Settings persistence
-└── web_pages.h           # Web interface
+### Web UI Workflow
 
-test/
-├── test_smart_sensing/   # Smart sensing tests
-├── test_api/             # API endpoint tests
-└── test_mocks/           # Arduino mocks
+The web interface source lives in `web_src/`. The files `src/web_pages.cpp` and `src/web_pages_gz.cpp` are auto-generated -- never edit them directly.
+
+```bash
+# After editing any file in web_src/:
+node tools/build_web_assets.js
+
+# Then build firmware:
+pio run
 ```
 
 ### Contributing
 
-1. Create feature branch
+1. Create a feature branch
 2. Make changes
 3. Ensure tests pass: `pio test -e native`
 4. Build firmware: `pio run`
-5. Create pull request
-
-Tests run automatically on push via GitHub Actions.
+5. Create a pull request
 
 ### Commit Convention
 
@@ -159,27 +292,18 @@ chore: Maintenance tasks
 
 ## Version History
 
-See [RELEASE_NOTES.md](RELEASE_NOTES.md) for detailed changelog.
-
-### Latest: v1.2.4
-- Fixed smart auto sensing timer countdown logic
-- Timer now correctly stays at full value when voltage detected
-- Timer only counts down when no voltage present
+See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the detailed changelog.
 
 ## License
 
-Copyright © 2024-2026 ALX Audio
+Copyright 2024-2026 ALX Audio
 
-## Support
+## Links
 
+- Repository: https://github.com/Schmackos/ALX_Nova_Controller_2
 - Issues: https://github.com/Schmackos/ALX_Nova_Controller_2/issues
-- Documentation: See [docs/](docs/) (if available)
+- Documentation: [docs/](docs/)
 
-## Acknowledgments
+---
 
-Built with:
-- [PlatformIO](https://platformio.org/)
-- [Arduino Framework](https://www.arduino.cc/)
-- [ArduinoJson](https://arduinojson.org/)
-- [WebSockets](https://github.com/Links2004/arduinoWebSockets)
-- [PubSubClient](https://github.com/knolleary/pubsubclient)
+Built with [PlatformIO](https://platformio.org/), [Arduino](https://www.arduino.cc/), [ArduinoJson](https://arduinojson.org/), [WebSockets](https://github.com/Links2004/arduinoWebSockets), [PubSubClient](https://github.com/knolleary/pubsubclient), [LVGL](https://lvgl.io/), [LovyanGFX](https://github.com/lovyan03/LovyanGFX), [ESP-DSP](https://github.com/espressif/esp-dsp), [TinyUSB](https://github.com/hathach/tinyusb)
