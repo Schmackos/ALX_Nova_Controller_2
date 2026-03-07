@@ -16,6 +16,7 @@ Preferences authPrefs;
 static int _loginFailCount = 0;
 static uint64_t _lastFailTime = 0;
 static const uint64_t LOGIN_COOLDOWN_US = 300000000ULL; // 5 minutes in microseconds
+static unsigned long _nextLoginAllowedMs = 0; // millis() gate — non-blocking rate limit
 
 // Timing-safe string comparison — constant time regardless of where strings differ
 bool timingSafeCompare(const String &a, const String &b) {
@@ -81,6 +82,7 @@ static unsigned long getLoginDelay() {
 void resetLoginRateLimit() {
   _loginFailCount = 0;
   _lastFailTime = 0;
+  _nextLoginAllowedMs = 0;
 }
 
 // Initialize authentication system
@@ -361,17 +363,38 @@ void handleLogin() {
   uint64_t now = (uint64_t)esp_timer_get_time();
   if (_loginFailCount > 0 && (now - _lastFailTime) > LOGIN_COOLDOWN_US) {
     _loginFailCount = 0;
+    _nextLoginAllowedMs = 0;
+  }
+
+  // Non-blocking rate limit gate — reject immediately if in cooldown
+  unsigned long nowMs = millis();
+  if (_nextLoginAllowedMs > 0 && nowMs < _nextLoginAllowedMs) {
+    unsigned long remainMs = _nextLoginAllowedMs - nowMs;
+    unsigned long retryAfterSec = (remainMs + 999) / 1000; // round up
+
+    LOG_W("[Auth] Rate limited — retry after %lus", retryAfterSec);
+
+    server.sendHeader("Retry-After", String(retryAfterSec));
+    JsonDocument response;
+    response["success"] = false;
+    response["error"] = "Too many attempts. Try again later.";
+    response["retryAfter"] = retryAfterSec;
+
+    String responseStr;
+    serializeJson(response, responseStr);
+    server.send(429, "application/json", responseStr);
+    return;
   }
 
   // Validate password — compare hash of input against stored hash
   if (!timingSafeCompare(hashPassword(password), appState.webPassword)) {
-    // Progressive rate limiting
+    // Progressive rate limiting (non-blocking)
     _loginFailCount++;
     _lastFailTime = (uint64_t)esp_timer_get_time();
     unsigned long delayMs = getLoginDelay();
-    delay(delayMs);
+    _nextLoginAllowedMs = millis() + delayMs;
 
-    LOG_W("[Auth] Login failed - incorrect password (attempt %d, delay %lums)",
+    LOG_W("[Auth] Login failed - incorrect password (attempt %d, next allowed in %lums)",
           _loginFailCount, delayMs);
 
     JsonDocument response;
@@ -400,6 +423,7 @@ void handleLogin() {
   // Reset rate limiter on success
   _loginFailCount = 0;
   _lastFailTime = 0;
+  _nextLoginAllowedMs = 0;
 
   LOG_I("[Auth] Login successful");
 

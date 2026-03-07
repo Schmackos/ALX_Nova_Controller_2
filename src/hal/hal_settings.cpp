@@ -147,9 +147,9 @@ void hal_apply_config(uint8_t slot) {
             hal_pipeline_state_change(slot, oldState, HAL_STATE_MANUAL);
             if (desc.type == HAL_DEV_DAC) {
                 appState.dacEnabled = false;
-                appState._pendingDacToggle = -1;
+                appState.requestDacToggle(-1);
             } else if (desc.type == HAL_DEV_CODEC) {
-                appState._pendingEs8311Toggle = -1;
+                appState.requestEs8311Toggle(-1);
             }
             LOG_I("[HAL:Settings] DAC-path device slot %u disable deferred", slot);
             appState.markHalDeviceDirty();
@@ -176,9 +176,9 @@ void hal_apply_config(uint8_t slot) {
         if (desc.capabilities & HAL_CAP_DAC_PATH) {
             if (desc.type == HAL_DEV_DAC) {
                 appState.dacEnabled = true;
-                appState._pendingDacToggle = 1;
+                appState.requestDacToggle(1);
             } else if (desc.type == HAL_DEV_CODEC) {
-                appState._pendingEs8311Toggle = 1;
+                appState.requestEs8311Toggle(1);
             }
             LOG_I("[HAL:Settings] DAC-path device slot %u re-enable deferred", slot);
             appState.markHalDeviceDirty();

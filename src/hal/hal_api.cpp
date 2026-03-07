@@ -268,9 +268,9 @@ void registerHalApiEndpoints(WebServer& server) {
         if (delDesc.capabilities & HAL_CAP_DAC_PATH) {
             if (delDesc.type == HAL_DEV_DAC) {
                 appState.dacEnabled = false;
-                appState._pendingDacToggle = -1;
+                appState.requestDacToggle(-1);
             } else if (delDesc.type == HAL_DEV_CODEC) {
-                appState._pendingEs8311Toggle = -1;
+                appState.requestEs8311Toggle(-1);
             }
         }
 

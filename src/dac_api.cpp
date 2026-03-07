@@ -89,9 +89,9 @@ void registerDacApiEndpoints() {
                 appState.dacEnabled = en;
                 // Defer init/deinit to main loop — I2C scan blocks SDIO
                 if (en && !was && !appState.dacReady) {
-                    appState._pendingDacToggle = 1;
+                    appState.requestDacToggle(1);
                 } else if (!en && was) {
-                    appState._pendingDacToggle = -1;
+                    appState.requestDacToggle(-1);
                 }
                 changed = true;
             }

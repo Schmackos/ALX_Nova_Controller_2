@@ -921,9 +921,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           // Defer init/deinit to main loop — I2C EEPROM scan + I2S driver
           // setup is too heavy for the WebSocket handler context (blocks SDIO)
           if (appState.dacEnabled && !was && !appState.dacReady) {
-            appState._pendingDacToggle = 1;   // main loop calls dac_output_init()
+            appState.requestDacToggle(1);   // main loop calls dac_output_init()
           } else if (!appState.dacEnabled && was) {
-            appState._pendingDacToggle = -1;  // main loop calls dac_output_deinit()
+            appState.requestDacToggle(-1);  // main loop calls dac_output_deinit()
           }
           appState.markDacDirty();
           LOG_I("[WebSocket] DAC %s (deferred)", appState.dacEnabled ? "enabled" : "disabled");
@@ -964,9 +964,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           // Defer init/deinit to main loop — ES8311 I2C + I2S2 setup is too heavy
           // for the WebSocket handler context (blocks SDIO → WiFi crash)
           if (appState.es8311Enabled && !was) {
-            appState._pendingEs8311Toggle = 1;   // main loop calls dac_secondary_init()
+            appState.requestEs8311Toggle(1);   // main loop calls dac_secondary_init()
           } else if (!appState.es8311Enabled && was) {
-            appState._pendingEs8311Toggle = -1;  // main loop calls dac_secondary_deinit()
+            appState.requestEs8311Toggle(-1);  // main loop calls dac_secondary_deinit()
           }
           dac_save_settings_deferred();
           appState.markDacDirty();

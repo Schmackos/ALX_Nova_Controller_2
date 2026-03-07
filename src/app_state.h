@@ -448,6 +448,15 @@ public:
   volatile int8_t _pendingEs8311Toggle = 0;  // 0=none, 1=init, -1=deinit; main loop executes
   volatile int8_t _pendingDacToggle = 0;    // 0=none, 1=init, -1=deinit; main loop executes
 
+  // Validated setters — direct dev->deinit() is unsafe (audio task race),
+  // so all toggle requests go through deferred flags consumed by main loop
+  void requestDacToggle(int8_t action) {
+    if (action >= -1 && action <= 1) _pendingDacToggle = action;
+  }
+  void requestEs8311Toggle(int8_t action) {
+    if (action >= -1 && action <= 1) _pendingEs8311Toggle = action;
+  }
+
   void markEs8311Dirty() { _es8311Dirty = true; app_events_signal(EVT_DAC); }
   bool isEs8311Dirty() const { return _es8311Dirty; }
   void clearEs8311Dirty() { _es8311Dirty = false; }
