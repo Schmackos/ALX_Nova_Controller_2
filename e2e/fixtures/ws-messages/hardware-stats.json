@@ -1,0 +1,128 @@
+{
+  "type": "hardware_stats",
+  "cpu": {
+    "freqMHz": 360,
+    "model": "ESP32-P4",
+    "revision": 1,
+    "cores": 2,
+    "usageCore0": 15.2,
+    "usageCore1": 52.7,
+    "usageTotal": 33.95,
+    "temperature": 42.5
+  },
+  "memory": {
+    "heapTotal": 327680,
+    "heapFree": 182340,
+    "heapMinFree": 154880,
+    "heapMaxBlock": 131072,
+    "psramTotal": 8388608,
+    "psramFree": 4194304
+  },
+  "storage": {
+    "flashSize": 16777216,
+    "sketchSize": 1245184,
+    "sketchFree": 2883584,
+    "LittleFSTotal": 1441792,
+    "LittleFSUsed": 32768
+  },
+  "wifi": {
+    "rssi": -45,
+    "channel": 6,
+    "apClients": 0,
+    "connected": true
+  },
+  "audio": {
+    "sampleRate": 48000,
+    "adcVref": 3.3,
+    "numAdcsDetected": 2,
+    "adcs": [
+      {
+        "status": "OK",
+        "noiseFloorDbfs": -72.5,
+        "i2sErrors": 0,
+        "consecutiveZeros": 0,
+        "totalBuffers": 14400,
+        "vrms": 0.0,
+        "snrDb": 72.5,
+        "sfdrDb": 68.0,
+        "i2sRecoveries": 0
+      },
+      {
+        "status": "OK",
+        "noiseFloorDbfs": -71.8,
+        "i2sErrors": 0,
+        "consecutiveZeros": 0,
+        "totalBuffers": 14400,
+        "vrms": 0.0,
+        "snrDb": 71.8,
+        "sfdrDb": 67.2,
+        "i2sRecoveries": 0
+      }
+    ],
+    "fftWindowType": 2,
+    "adcStatus": "OK",
+    "noiseFloorDbfs": -72.5,
+    "vrms": 0.0
+  },
+  "uptime": 10000,
+  "resetReason": "PowerOn",
+  "heapCritical": false,
+  "crashHistory": [],
+  "tasks": {
+    "count": 6,
+    "loopUs": 1250,
+    "loopMaxUs": 8400,
+    "loopAvgUs": 1380,
+    "list": [
+      { "name": "loopTask",      "stackFree": 4096, "stackAlloc": 8192, "pri": 1, "state": "Running", "core": 1 },
+      { "name": "audio_task",    "stackFree": 3072, "stackAlloc": 6144, "pri": 3, "state": "Blocked", "core": 1 },
+      { "name": "mqtt_task",     "stackFree": 2048, "stackAlloc": 4096, "pri": 2, "state": "Blocked", "core": 0 },
+      { "name": "gui_task",      "stackFree": 2560, "stackAlloc": 5120, "pri": 1, "state": "Blocked", "core": 0 },
+      { "name": "IDLE0",         "stackFree": 512,  "stackAlloc": 1024, "pri": 0, "state": "Ready",   "core": 0 },
+      { "name": "IDLE1",         "stackFree": 512,  "stackAlloc": 1024, "pri": 0, "state": "Ready",   "core": 1 }
+    ]
+  },
+  "dac": {
+    "enabled": true,
+    "ready": true,
+    "detected": true,
+    "model": "PCM5102A",
+    "deviceId": 1,
+    "volume": 100,
+    "mute": false,
+    "filterMode": 0,
+    "outputChannels": 2,
+    "txUnderruns": 0,
+    "manufacturer": "Texas Instruments",
+    "hwVolume": false,
+    "i2cControl": false,
+    "independentClock": false,
+    "hasFilters": false,
+    "tx": {
+      "i2sTxEnabled": true,
+      "volumeGain": "1.0000",
+      "writeCount": 14400,
+      "bytesWritten": 921600,
+      "bytesExpected": 921600,
+      "peakSample": 0,
+      "zeroFrames": 14400
+    },
+    "eeprom": {
+      "scanned": true,
+      "found": true,
+      "addr": 80,
+      "i2cMask": 1,
+      "i2cDevices": 1,
+      "readErrors": 0,
+      "writeErrors": 0,
+      "deviceName": "PCM5102A",
+      "manufacturer": "Texas Instruments",
+      "deviceId": 1,
+      "hwRevision": 1,
+      "maxChannels": 2,
+      "dacI2cAddress": 0,
+      "flags": 0,
+      "sampleRates": [44100, 48000, 96000]
+    }
+  }
+}

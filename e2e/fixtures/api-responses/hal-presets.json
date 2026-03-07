@@ -1,0 +1,16 @@
+[
+  { "compatible": "ti,pcm5102a",             "name": "PCM5102A",         "type": 1 },
+  { "compatible": "everest-semi,es8311",      "name": "ES8311",           "type": 3 },
+  { "compatible": "evergrande,es8311",        "name": "ES8311",           "type": 3 },
+  { "compatible": "ti,pcm1808",              "name": "PCM1808",          "type": 2 },
+  { "compatible": "ns,ns4150b-amp",          "name": "NS4150B Amp",      "type": 4 },
+  { "compatible": "espressif,esp32p4-temp",  "name": "Chip Temperature", "type": 6 },
+  { "compatible": "sitronix,st7735s",        "name": "ST7735S TFT",      "type": 7 },
+  { "compatible": "alps,ec11",               "name": "Rotary Encoder",   "type": 8 },
+  { "compatible": "generic,piezo-buzzer",    "name": "Piezo Buzzer",     "type": 9 },
+  { "compatible": "generic,status-led",      "name": "Status LED",       "type": 9 },
+  { "compatible": "generic,relay-amp",       "name": "Amplifier Relay",  "type": 4 },
+  { "compatible": "generic,tact-switch",     "name": "Reset Button",     "type": 8 },
+  { "compatible": "generic,signal-gen",      "name": "Signal Generator", "type": 9 },
+  { "compatible": "microchip,mcp4725",       "name": "MCP4725",          "type": 1 }
+]

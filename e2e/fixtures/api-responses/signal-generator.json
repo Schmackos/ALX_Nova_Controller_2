@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "waveform": 0,
+  "frequency": 1000.0,
+  "amplitude": -20.0,
+  "channel": 0,
+  "outputMode": 0,
+  "sweepSpeed": 100.0
+}

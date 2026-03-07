@@ -1,0 +1,17 @@
+{
+  "heap": {
+    "free": 182340,
+    "total": 327680,
+    "minFree": 154880,
+    "maxBlock": 131072
+  },
+  "psram": {
+    "free": 4194304,
+    "total": 8388608
+  },
+  "uptime": 10000,
+  "cpuTemp": 42.5,
+  "firmwareVersion": "1.12.1",
+  "resetReason": "PowerOn",
+  "heapCritical": false
+}

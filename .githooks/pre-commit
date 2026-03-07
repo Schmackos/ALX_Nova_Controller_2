@@ -1,0 +1,21 @@
+#!/bin/sh
+# Pre-commit quality checks
+# To activate: git config core.hooksPath .githooks
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# 1. Check for duplicate declarations
+echo "[1/3] Checking for duplicate JS declarations..."
+node tools/find_dups.js || exit 1
+
+# 2. Check for missing function references
+echo "[2/3] Checking for missing function references..."
+node tools/check_missing_fns.js || exit 1
+
+# 3. ESLint on web_src/js/
+echo "[3/3] Running ESLint on web_src/js/..."
+cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json || exit 1
+
+echo "All pre-commit checks passed."

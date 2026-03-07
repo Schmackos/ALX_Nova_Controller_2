@@ -161,12 +161,113 @@ DOUT2 uses `INPUT_PULLDOWN` so an unconnected pin reads zeros (→ NO_DATA) inst
 
 ## Testing Conventions
 
+### C++ Unit Tests (Unity, native platform)
 - Tests use Arrange-Act-Assert pattern
 - Each test file has a `setUp()` that resets state
 - Mock headers in `test/test_mocks/` simulate Arduino functions (`millis()`, `analogRead()`, GPIO), WiFi, MQTT (`PubSubClient`), and NVS (`Preferences`)
 - The `native` environment compiles with `-D UNIT_TEST -D NATIVE_TEST` flags — use these for conditional compilation
 - `test_build_src = no` in platformio.ini means tests don't compile `src/` directly; they include specific headers and use mocks
 - Each test module must be in its own directory to avoid duplicate `main`/`setUp`/`tearDown` symbols
+
+### Browser / E2E Tests (Playwright)
+Playwright browser tests live in `e2e/tests/` (26 tests across 19 specs). They verify the web UI against a mock Express server + Playwright `routeWebSocket()` interception — no real hardware needed. Full architecture: `docs/testing-architecture.md`. Diagrams: `docs/architecture/test-infrastructure.mmd`, `e2e-test-flow.mmd`, `test-coverage-map.mmd`. Plan: `docs/planning/test-strategy.md`.
+
+```bash
+cd e2e
+npm install                              # First time only
+npx playwright install --with-deps chromium  # First time only
+npx playwright test                      # Run all 26 browser tests
+npx playwright test tests/auth.spec.js   # Run single spec
+npx playwright test --headed             # Run with visible browser
+npx playwright test --debug              # Debug mode with inspector
+```
+
+**Test infrastructure:**
+- `e2e/mock-server/server.js` — Express server (port 3000) assembling HTML from `web_src/`
+- `e2e/mock-server/assembler.js` — Replicates `tools/build_web_assets.js` HTML assembly
+- `e2e/mock-server/ws-state.js` — Deterministic mock state singleton, reset between tests
+- `e2e/mock-server/routes/*.js` — 12 Express route files matching firmware REST API
+- `e2e/helpers/fixtures.js` — `connectedPage` fixture: session cookie + WS auth + initial state broadcasts
+- `e2e/helpers/ws-helpers.js` — `buildInitialState()`, `handleCommand()`, binary frame builders
+- `e2e/helpers/selectors.js` — Reusable DOM selectors matching `web_src/index.html` IDs
+- `e2e/fixtures/ws-messages/*.json` — 15 hand-crafted WS broadcast fixtures
+- `e2e/fixtures/api-responses/*.json` — 14 deterministic REST response fixtures
+
+**Key Playwright patterns:**
+- WS interception: `page.routeWebSocket(/.*:81/, handler)` — uses `onMessage`/`onClose` (capital M/C)
+- Tab navigation in tests: `page.evaluate(() => switchTab('tabName'))` — avoids scroll issues with sidebar clicks
+- CSS-hidden checkboxes: use `toBeChecked()` not `toBeVisible()` for toggle inputs styled with `label.switch`
+- Strict mode: use `.first()` when a selector might match multiple elements
+
+### Mandatory Test Coverage Rules
+
+**Every code change MUST keep tests green.** Before completing any task:
+
+1. **C++ firmware changes** (`src/`):
+   - Run `pio test -e native -v` or use the `firmware-test-runner` agent
+   - New modules need a test file in `test/test_<module>/`
+   - Changed function signatures → update affected tests
+
+2. **Web UI changes** (`web_src/`):
+   - Run `cd e2e && npx playwright test` or use the `test-engineer` agent
+   - New toggle/button/dropdown → add test verifying it sends the correct WS command
+   - New WS broadcast type → add fixture JSON + test verifying DOM updates
+   - New tab or section → add navigation + element presence tests
+   - Changed element IDs → update `e2e/helpers/selectors.js` + affected specs
+   - Removed features → remove corresponding tests + fixtures
+   - New top-level JS declarations → add to `web_src/.eslintrc.json` globals
+
+3. **WebSocket protocol changes** (`src/websocket_handler.cpp`):
+   - Update `e2e/fixtures/ws-messages/` with new/changed message fixtures
+   - Update `e2e/helpers/ws-helpers.js` `buildInitialState()` and `handleCommand()`
+   - Update `e2e/mock-server/ws-state.js` if new state fields are added
+   - Add Playwright test verifying the frontend handles the new message type
+
+4. **REST API changes** (`src/main.cpp`, `src/hal/hal_api.cpp`):
+   - Update matching route in `e2e/mock-server/routes/*.js`
+   - Update `e2e/fixtures/api-responses/` with new/changed response fixtures
+   - Add Playwright test if the UI depends on the new endpoint
+
+### Agent Workflow for Test Maintenance
+
+**Always verify tests after code changes.** Use specialised agents in parallel:
+
+| Change Type | Agent(s) to Use | What They Do |
+|---|---|---|
+| C++ firmware only | `firmware-test-runner` | Runs `pio test -e native -v`, diagnoses failures |
+| Web UI only | `test-engineer` or `test-writer` | Runs Playwright, fixes selectors, adds coverage |
+| Both firmware + UI | Launch **both** agents in parallel | Full coverage verification |
+| New HAL driver | `hal-driver-scaffold` → `firmware-test-runner` | Scaffold creates test module automatically |
+| New web feature | `web-feature-scaffold` → `test-engineer` | Scaffold creates DOM, then add E2E tests |
+| Bug investigation | `debugger` or `debug` agent | Root cause analysis with test reproduction |
+
+**Parallel execution pattern** — when changes span firmware and web UI, launch both in a single message:
+```
+Agent 1 (firmware-test-runner): "Run pio test -e native -v and report results"
+Agent 2 (test-engineer): "Run cd e2e && npx playwright test and fix any failures"
+```
+
+### Static Analysis (CI-enforced)
+- **ESLint** (`web_src/.eslintrc.json`): Lints all JS files with 380 globals for concatenated scope. Rules: `no-undef`, `no-redeclare`, `eqeqeq`. Run: `cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json`
+- **cppcheck**: C++ static analysis on `src/` (excluding `src/gui/`). Run in CI only
+- **find_dups.js** + **check_missing_fns.js**: Duplicate/missing declaration checks. Run: `node tools/find_dups.js && node tools/check_missing_fns.js`
+
+### Quality Gates (CI/CD)
+All 4 gates must pass before firmware build proceeds (parallel execution):
+1. `cpp-tests` — `pio test -e native -v` (1,271+ Unity tests across 57 modules)
+2. `cpp-lint` — cppcheck on `src/`
+3. `js-lint` — find_dups + check_missing_fns + ESLint
+4. `e2e-tests` — Playwright browser tests (26 tests across 19 specs)
+
+See `docs/architecture/ci-quality-gates.mmd` for the pipeline flow diagram.
+
+### Pre-commit Hooks
+`.githooks/pre-commit` runs fast checks before every commit:
+1. `node tools/find_dups.js` — duplicate JS declarations
+2. `node tools/check_missing_fns.js` — undefined function references
+3. ESLint on `web_src/js/`
+
+Activate: `git config core.hooksPath .githooks`
 
 ## Commit Convention
 
@@ -183,7 +284,7 @@ chore: Maintenance tasks
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/tests.yml`): runs all native tests, then builds ESP32-P4 firmware. Triggers on push/PR to `main` and `develop` branches. A separate `release.yml` workflow handles automated releases.
+GitHub Actions (`.github/workflows/tests.yml`): 4 parallel quality gates (cpp-tests, cpp-lint, js-lint, e2e-tests) must all pass before firmware build. Triggers on push/PR to `main` and `develop` branches. A separate `release.yml` workflow runs the same 4 gates before release. Pipeline diagram: `docs/architecture/ci-quality-gates.mmd`. Playwright HTML report uploaded as artifact on failure (14-day retention).
 
 ## Serial Debug Logging
 

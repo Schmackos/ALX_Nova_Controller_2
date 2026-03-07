@@ -34,3 +34,9 @@ Thumbs.db
 
 # Auto-generated web assets (edit web_src/ instead)
 src/web_pages_gz.cpp
+
+# E2E test artifacts
+e2e/node_modules/
+e2e/playwright-report/
+e2e/test-results/
+e2e/blob-report/

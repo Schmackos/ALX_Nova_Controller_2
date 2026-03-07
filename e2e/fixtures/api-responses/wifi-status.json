@@ -1,0 +1,20 @@
+{
+  "type": "wifiStatus",
+  "ssid": "TestNetwork",
+  "ip": "192.168.1.100",
+  "staIP": "192.168.1.100",
+  "rssi": -45,
+  "usingStaticIP": false,
+  "networkCount": 1,
+  "minSecurity": 0,
+  "appState.wifiConnecting": false,
+  "appState.wifiConnectSuccess": true,
+  "appState.wifiNewIP": "192.168.1.100",
+  "appState.apSSID": "ALX-Nova-AP",
+  "ethLinkUp": false,
+  "ethConnected": false,
+  "ethIP": "",
+  "activeInterface": "wifi",
+  "latestVersion": "1.12.1",
+  "appState.updateAvailable": false
+}

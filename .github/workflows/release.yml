@@ -22,83 +22,75 @@ on:
           - beta
 
 jobs:
-  test:
+  cpp-tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.platformio/.cache
+        key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
+        restore-keys: ${{ runner.os }}-pio-
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - run: pip install --upgrade platformio
+    - name: Run C++ Unit Tests
+      run: pio test -e native -v
 
-      - name: Cache PlatformIO
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.platformio/.cache
-          key: ${{ runner.os }}-pio-${{ hashFiles('**/platformio.ini') }}
-          restore-keys: |
-            ${{ runner.os }}-pio-
+  cpp-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install cppcheck
+      run: sudo apt-get install -y cppcheck
+    - name: Run cppcheck
+      run: cppcheck --enable=warning,style,performance --suppress=missingInclude --suppress=unusedFunction --std=c++11 --error-exitcode=1 src/ --ignore=src/gui/
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+  js-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: 'e2e/package-lock.json'
+    - run: cd e2e && npm ci
+    - name: Check duplicate declarations
+      run: node tools/find_dups.js
+    - name: Check missing functions
+      run: node tools/check_missing_fns.js
+    - name: ESLint web_src/js/
+      run: cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json
 
-      - name: Install PlatformIO
-        run: |
-          python -m pip install --upgrade pip
-          pip install platformio
-
-      - name: Run Comprehensive Unit Tests
-        id: tests
-        run: |
-          echo "🧪 Running 237 comprehensive unit tests..."
-          pio test -e native -v
-          echo "✅ All tests passed!"
-
-      - name: Test Summary
-        if: always()
-        run: |
-          echo "## ✅ Unit Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "| Category | Tests | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Utils & Auth | 30 | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| WiFi & MQTT | 72 | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Settings, OTA, Button, WebSocket | 49 | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Smart Sensing & API | 23 | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Buzzer | 15 | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| GUI (Home, Input, Navigation) | 39 | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| Pinout | 9 | ✅ |" >> $GITHUB_STEP_SUMMARY
-          echo "| **TOTAL** | **237** | **✅** |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Modules Tested" >> $GITHUB_STEP_SUMMARY
-          echo "- Utils (version compare, RSSI, reset reasons)" >> $GITHUB_STEP_SUMMARY
-          echo "- Auth Handler (sessions, passwords, API)" >> $GITHUB_STEP_SUMMARY
-          echo "- WiFi Manager (networks, static IP, scanning, retry)" >> $GITHUB_STEP_SUMMARY
-          echo "- MQTT Handler (settings, connection, publishing)" >> $GITHUB_STEP_SUMMARY
-          echo "- Settings Manager (persistence, factory reset)" >> $GITHUB_STEP_SUMMARY
-          echo "- OTA Updater (version check, SHA256 verification)" >> $GITHUB_STEP_SUMMARY
-          echo "- Button Handler (state machine, debouncing)" >> $GITHUB_STEP_SUMMARY
-          echo "- WebSocket Handler (broadcasting, JSON)" >> $GITHUB_STEP_SUMMARY
-          echo "- Smart Sensing API (mode, timer, voltage)" >> $GITHUB_STEP_SUMMARY
-          echo "- Buzzer Handler (patterns, volume, ISR flags)" >> $GITHUB_STEP_SUMMARY
-          echo "- GUI Home (formatting, status display)" >> $GITHUB_STEP_SUMMARY
-          echo "- GUI Input (encoder state machine)" >> $GITHUB_STEP_SUMMARY
-          echo "- GUI Navigation (stack push/pop)" >> $GITHUB_STEP_SUMMARY
-          echo "- Pinout (pin info formatting)" >> $GITHUB_STEP_SUMMARY
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: .pio/build/native/test_report.xml
-          if-no-files-found: ignore
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: 'e2e/package-lock.json'
+    - run: cd e2e && npm ci
+    - name: Install Playwright Chromium
+      run: cd e2e && npx playwright install --with-deps chromium
+    - name: Run E2E tests
+      run: cd e2e && npx playwright test
+    - name: Upload Playwright report
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report-${{ github.sha }}
+        path: e2e/playwright-report/
+        retention-days: 14
 
   release:
     runs-on: ubuntu-latest
-    needs: test  # Release only runs if tests pass
+    needs: [cpp-tests, cpp-lint, js-lint, e2e-tests]
     permissions:
       contents: write
 
@@ -203,10 +195,10 @@ jobs:
           PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
           if [ -z "$PREV_TAG" ]; then
-            echo "⚠ No previous tag found, this is the first release"
+            echo "No previous tag found, this is the first release"
             COMMIT_RANGE="HEAD"
           else
-            echo "✓ Previous release: $PREV_TAG"
+            echo "Previous release: $PREV_TAG"
             COMMIT_RANGE="${PREV_TAG}..HEAD"
           fi
 
@@ -219,7 +211,7 @@ jobs:
             START_LINE=$(grep -n "^## Version $VERSION" RELEASE_NOTES.md | head -1 | cut -d: -f1)
 
             if [ -n "$START_LINE" ]; then
-              echo "✓ Found version $VERSION in RELEASE_NOTES.md"
+              echo "Found version $VERSION in RELEASE_NOTES.md"
 
               # Find the next version section
               NEXT_VERSION=$(tail -n +$((START_LINE + 1)) RELEASE_NOTES.md | grep -n "^## Version" | head -1 | cut -d: -f1)
@@ -233,26 +225,26 @@ jobs:
                 tail -n +$((START_LINE + 1)) RELEASE_NOTES.md >> release_notes.md
               fi
             else
-              echo "⚠ Version $VERSION not found in RELEASE_NOTES.md"
+              echo "Version $VERSION not found in RELEASE_NOTES.md"
             fi
           fi
 
           # Always append complete commit history since last release
           echo "" >> release_notes.md
-          echo "## 📝 All Commits Since Last Release" >> release_notes.md
+          echo "## All Commits Since Last Release" >> release_notes.md
           echo "" >> release_notes.md
 
           # Categorize commits by type
           declare -A sections
-          sections["feat"]="### ✨ New Features"
-          sections["fix"]="### 🐛 Bug Fixes"
-          sections["perf"]="### ⚡ Performance Improvements"
-          sections["docs"]="### 📚 Documentation"
-          sections["refactor"]="### ♻️ Code Refactoring"
-          sections["test"]="### ✅ Tests"
-          sections["chore"]="### 🔧 Chores"
-          sections["style"]="### 💄 Style"
-          sections["other"]="### 🔀 Other Changes"
+          sections["feat"]="### New Features"
+          sections["fix"]="### Bug Fixes"
+          sections["perf"]="### Performance Improvements"
+          sections["docs"]="### Documentation"
+          sections["refactor"]="### Code Refactoring"
+          sections["test"]="### Tests"
+          sections["chore"]="### Chores"
+          sections["style"]="### Style"
+          sections["other"]="### Other Changes"
 
           # Create temporary files for each category
           for key in "${!sections[@]}"; do
@@ -303,7 +295,7 @@ jobs:
           echo "" >> release_notes.md
           echo "---" >> release_notes.md
           echo "" >> release_notes.md
-          echo "## 📦 Firmware Details" >> release_notes.md
+          echo "## Firmware Details" >> release_notes.md
           echo "" >> release_notes.md
           echo "| Property | Value |" >> release_notes.md
           echo "|----------|-------|" >> release_notes.md
@@ -312,11 +304,10 @@ jobs:
           echo "| **File Size** | ${{ steps.filesize.outputs.size_kb }} KB |" >> release_notes.md
           echo "| **Build Date** | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> release_notes.md
           echo "| **Platform** | ESP32-P4 |" >> release_notes.md
-          echo "| **Unit Tests** | ✅ 237/237 passed (Utils, Auth, WiFi, MQTT, Settings, OTA, Button, WebSocket, API, Buzzer, GUI, Pinout) |" >> release_notes.md
-          echo "| **Code Coverage** | ~65-70% (critical paths) |" >> release_notes.md
+          echo "| **Unit Tests** | 1271/1271 passed |" >> release_notes.md
           echo "| **Commits** | $COMMIT_COUNT commits since $PREV_TAG |" >> release_notes.md
           echo "" >> release_notes.md
-          echo "### 🔐 Verification" >> release_notes.md
+          echo "### Verification" >> release_notes.md
           echo "" >> release_notes.md
           echo "To verify the firmware integrity:" >> release_notes.md
           echo "\`\`\`bash" >> release_notes.md
@@ -324,11 +315,8 @@ jobs:
           echo "# Should match: ${{ steps.checksum.outputs.sha256 }}" >> release_notes.md
           echo "\`\`\`" >> release_notes.md
 
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Release notes prepared for version $VERSION ($COMMIT_COUNT commits):"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Release notes prepared for version $VERSION ($COMMIT_COUNT commits)"
           cat release_notes.md
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Update release notes with new version
         run: |
@@ -367,7 +355,7 @@ jobs:
             } > RELEASE_NOTES_new.md
 
             mv RELEASE_NOTES_new.md RELEASE_NOTES.md
-            echo "✓ Created new version section for $VERSION"
+            echo "Created new version section for $VERSION"
           else
             echo "Version $VERSION already exists in RELEASE_NOTES.md"
           fi

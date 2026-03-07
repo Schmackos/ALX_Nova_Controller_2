@@ -1,0 +1,46 @@
+{
+  "type": "audioLevels",
+  "audioLevel": -80.0,
+  "signalDetected": false,
+  "numAdcsDetected": 2,
+  "adc": [
+    {
+      "vu1": 0.0,
+      "vu2": 0.0,
+      "peak1": 0.0,
+      "peak2": 0.0,
+      "rms1": 0.0,
+      "rms2": 0.0,
+      "vrms1": 0.0,
+      "vrms2": 0.0,
+      "dBFS": -80.0
+    },
+    {
+      "vu1": 0.0,
+      "vu2": 0.0,
+      "peak1": 0.0,
+      "peak2": 0.0,
+      "rms1": 0.0,
+      "rms2": 0.0,
+      "vrms1": 0.0,
+      "vrms2": 0.0,
+      "dBFS": -80.0
+    }
+  ],
+  "adcStatus": ["OK", "OK"],
+  "adcNoiseFloor": [-72.5, -71.8],
+  "audioRms1": 0.0,
+  "audioRms2": 0.0,
+  "audioVu1": 0.0,
+  "audioVu2": 0.0,
+  "audioPeak1": 0.0,
+  "audioPeak2": 0.0,
+  "audioPeak": 0.0,
+  "audioVrms1": 0.0,
+  "audioVrms2": 0.0,
+  "audioVrms": 0.0,
+  "sinks": [
+    { "vuL": 0.0, "vuR": 0.0, "name": "PCM5102A", "ch": 0 },
+    { "vuL": 0.0, "vuR": 0.0, "name": "ES8311", "ch": 2 }
+  ]
+}

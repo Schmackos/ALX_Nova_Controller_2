@@ -1,0 +1,51 @@
+%% E2E Test Execution Flow — Single Test Lifecycle
+%% Shows how connectedPage fixture sets up auth + WS mock
+
+sequenceDiagram
+    participant PW as Playwright<br/>Test Runner
+    participant FIX as connectedPage<br/>Fixture
+    participant BR as Chromium<br/>Browser
+    participant EXP as Express<br/>Mock Server<br/>(port 3000)
+    participant ASM as assembler.js<br/>(web_src/)
+    participant RWS as routeWebSocket<br/>(intercepts :81)
+
+    Note over PW: Test spec starts
+
+    PW->>FIX: setUp()
+    FIX->>BR: context.addCookies()<br/>sessionId = test-session
+
+    FIX->>RWS: page.routeWebSocket(/.*:81/)
+    Note right of RWS: Intercepts WS<br/>at browser level<br/>(no port 81 binding)
+
+    FIX->>BR: page.goto('http://localhost:3000/')
+    BR->>EXP: GET /
+    EXP->>ASM: assemble HTML
+    ASM-->>EXP: index.html + CSS + JS
+    EXP-->>BR: 200 OK (assembled page)
+
+    Note over BR: Frontend JS executes<br/>initWebSocket() connects :81
+
+    BR->>RWS: WebSocket connect :81
+    RWS-->>BR: { type: "authRequired" }
+    BR->>RWS: { type: "auth", sessionId: "test-session" }
+    RWS-->>BR: { type: "authSuccess" }
+
+    loop Initial State Broadcasts
+        RWS-->>BR: wifiStatus, smartSensing,<br/>displayState, halDeviceState,<br/>audioChannelMap, dacState, ...
+    end
+
+    Note over BR: UI renders with mock state<br/>Status bar shows connected
+
+    FIX->>PW: yield connectedPage
+
+    Note over PW: Test assertions run
+
+    PW->>BR: page.click('[data-tab="audio"]')
+    BR->>EXP: GET /api/pipeline/matrix
+    EXP-->>BR: 200 OK (fixture JSON)
+    PW->>BR: expect(locator).toBeVisible()
+
+    Note over PW: Test spec ends
+
+    PW->>FIX: tearDown()
+    FIX->>BR: close context

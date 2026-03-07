@@ -1,0 +1,22 @@
+{
+  "networks": [
+    {
+      "ssid": "TestNetwork",
+      "rssi": -45,
+      "encryption": 4,
+      "channel": 6
+    },
+    {
+      "ssid": "Neighbor-WiFi",
+      "rssi": -72,
+      "encryption": 3,
+      "channel": 11
+    },
+    {
+      "ssid": "OpenHotspot",
+      "rssi": -68,
+      "encryption": 0,
+      "channel": 1
+    }
+  ]
+}

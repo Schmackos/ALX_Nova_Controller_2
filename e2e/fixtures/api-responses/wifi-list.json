@@ -1,0 +1,10 @@
+{
+  "networks": [
+    {
+      "ssid": "TestNetwork",
+      "password": "********",
+      "index": 0,
+      "staticIP": false
+    }
+  ]
+}

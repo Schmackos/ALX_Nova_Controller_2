@@ -1,0 +1,7 @@
+{
+  "type": "audioGraphState",
+  "vuMeterEnabled": true,
+  "waveformEnabled": true,
+  "spectrumEnabled": true,
+  "fftWindowType": 2
+}

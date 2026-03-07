@@ -1,0 +1,92 @@
+{
+  "type": "audioChannelMap",
+  "inputs": [
+    {
+      "lane": 0,
+      "name": "ADC1",
+      "channels": 2,
+      "matrixCh": 0,
+      "deviceName": "PCM1808",
+      "deviceType": 2,
+      "compatible": "ti,pcm1808",
+      "manufacturer": "Texas Instruments",
+      "capabilities": 8,
+      "ready": true
+    },
+    {
+      "lane": 1,
+      "name": "ADC2",
+      "channels": 2,
+      "matrixCh": 2,
+      "deviceName": "PCM1808",
+      "deviceType": 2,
+      "compatible": "ti,pcm1808",
+      "manufacturer": "Texas Instruments",
+      "capabilities": 8,
+      "ready": true
+    },
+    {
+      "lane": 2,
+      "name": "SigGen",
+      "channels": 2,
+      "matrixCh": 4,
+      "deviceName": "Signal Generator",
+      "deviceType": 9,
+      "manufacturer": "",
+      "capabilities": 0,
+      "ready": true
+    },
+    {
+      "lane": 3,
+      "name": "USB",
+      "channels": 2,
+      "matrixCh": 6,
+      "deviceName": "USB Audio",
+      "deviceType": 0,
+      "manufacturer": "",
+      "capabilities": 0,
+      "ready": false
+    }
+  ],
+  "outputs": [
+    {
+      "index": 0,
+      "name": "PCM5102A",
+      "firstChannel": 0,
+      "channels": 2,
+      "muted": false,
+      "compatible": "ti,pcm5102a",
+      "manufacturer": "Texas Instruments",
+      "capabilities": 16,
+      "ready": true,
+      "deviceType": 1,
+      "i2cAddr": 0
+    },
+    {
+      "index": 1,
+      "name": "ES8311",
+      "firstChannel": 2,
+      "channels": 2,
+      "muted": false,
+      "compatible": "everest-semi,es8311",
+      "manufacturer": "Everest Semiconductor",
+      "capabilities": 199,
+      "ready": true,
+      "deviceType": 3,
+      "i2cAddr": 24
+    }
+  ],
+  "matrixInputs": 8,
+  "matrixOutputs": 8,
+  "matrixBypass": false,
+  "matrix": [
+    ["1.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000"],
+    ["0.0000", "1.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000"],
+    ["0.0000", "0.0000", "1.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000"],
+    ["0.0000", "0.0000", "0.0000", "1.0000", "0.0000", "0.0000", "0.0000", "0.0000"],
+    ["0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000"],
+    ["0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000"],
+    ["0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000"],
+    ["0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000", "0.0000"]
+  ]
+}

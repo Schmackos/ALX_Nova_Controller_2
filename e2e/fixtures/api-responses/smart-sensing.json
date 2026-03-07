@@ -1,0 +1,12 @@
+{
+  "mode": "smart_auto",
+  "timerDuration": 30,
+  "timerRemaining": 0,
+  "timerActive": false,
+  "amplifierState": false,
+  "audioThreshold": -40.0,
+  "audioLevel": -80.0,
+  "signalDetected": false,
+  "audioSampleRate": 48000,
+  "audioVrms": 0.0
+}

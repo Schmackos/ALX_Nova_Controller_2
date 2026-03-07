@@ -1,0 +1,39 @@
+%% ALX Nova Controller 2 — CI/CD Quality Gates
+%% All 4 gates run in parallel; build is gated on all passing
+
+graph LR
+    classDef trigger fill:#1a3a5c,stroke:#2196F3,color:#fff
+    classDef gate fill:#2d5016,stroke:#4CAF50,color:#fff
+    classDef build fill:#5c4a00,stroke:#FF9800,color:#fff
+    classDef release fill:#5c1a3a,stroke:#E91E63,color:#fff
+
+    PUSH["Push / PR\nto main or develop"]
+
+    subgraph Gates["Quality Gates (parallel)"]
+        direction TB
+        CPP["cpp-tests\npio test -e native -v\n1,271 Unity tests"]
+        CPPL["cpp-lint\ncppcheck src/\nwarning + style + performance"]
+        JSL["js-lint\nfind_dups.js\ncheck_missing_fns.js\nESLint web_src/js/"]
+        E2E["e2e-tests\nnpm ci\nplaywright install chromium\nplaywright test\n26 browser tests"]
+    end
+
+    BUILD["build\npio run -e esp32-p4\nfirmware.bin artifact"]
+
+    REL["release\nversion bump\nSHA256 checksum\nGitHub Release"]
+
+    PUSH --> CPP
+    PUSH --> CPPL
+    PUSH --> JSL
+    PUSH --> E2E
+
+    CPP --> BUILD
+    CPPL --> BUILD
+    JSL --> BUILD
+    E2E --> BUILD
+
+    BUILD --> REL
+
+    class PUSH trigger
+    class CPP,CPPL,JSL,E2E gate
+    class BUILD build
+    class REL release

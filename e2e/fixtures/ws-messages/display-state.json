@@ -1,0 +1,9 @@
+{
+  "type": "displayState",
+  "backlightOn": true,
+  "screenTimeout": 30,
+  "backlightBrightness": 200,
+  "dimEnabled": true,
+  "dimTimeout": 60,
+  "dimBrightness": 64
+}

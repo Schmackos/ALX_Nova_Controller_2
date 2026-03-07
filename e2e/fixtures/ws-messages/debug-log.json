@@ -1,0 +1,7 @@
+{
+  "type": "debugLog",
+  "timestamp": 10000,
+  "level": "info",
+  "module": "WiFi",
+  "message": "[WiFi] Connected to TestNetwork"
+}

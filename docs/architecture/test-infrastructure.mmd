@@ -1,0 +1,66 @@
+%% ALX Nova Controller 2 — E2E Test Infrastructure
+%% Shows how Playwright, mock server, and real frontend connect
+
+graph TB
+    classDef playwright fill:#1a3a5c,stroke:#2196F3,color:#fff
+    classDef mock fill:#2d5016,stroke:#4CAF50,color:#fff
+    classDef frontend fill:#5c1a3a,stroke:#E91E63,color:#fff
+    classDef fixture fill:#5c4a00,stroke:#FF9800,color:#fff
+    classDef schema fill:#3a3a3a,stroke:#9E9E9E,color:#fff
+
+    subgraph PlaywrightRunner["Playwright Test Runner (Chromium)"]
+        SPECS["19 spec files\n26 tests total"]
+        FIX["connectedPage fixture\nsession cookie + WS mock"]
+        RWS["page.routeWebSocket(/.*:81/)\nintercepts browser WS"]
+        SEL["selectors.js\nreusable DOM queries"]
+    end
+
+    subgraph MockServer["Express Mock Server (port 3000)"]
+        SRV["server.js\nExpress app"]
+        ASM["assembler.js\nHTML from web_src/\n(replicates build_web_assets.js)"]
+        ROUTES["12 route files\nauth, hal, wifi, mqtt,\nsettings, ota, pipeline,\ndsp, sensing, siggen,\ndiagnostics, system"]
+        STATE["ws-state.js\ndeterministic state singleton\nreset between tests"]
+    end
+
+    subgraph Fixtures["Test Fixtures (hand-crafted)"]
+        WSF["ws-messages/\n~15 JSON files\none per broadcast type"]
+        APIF["api-responses/\n~12 JSON files\none per REST endpoint"]
+    end
+
+    subgraph Frontend["Real Frontend (web_src/)"]
+        HTML["index.html\nHTML shell"]
+        CSS["css/01-05-*.css\n5 stylesheet files"]
+        JS["js/01-28-*.js\n24 JS modules\n(concatenated, global scope)"]
+    end
+
+    subgraph Schemas["JSON Schema (docs/api/schemas/)"]
+        SCH["~17 schema files\nJSON Schema 2020-12\nvalidated by ajv"]
+    end
+
+    %% Test execution flow
+    SPECS -->|"uses"| FIX
+    FIX -->|"intercepts WS\nat browser level"| RWS
+    FIX -->|"navigates to\nlocalhost:3000"| SRV
+    SPECS -->|"queries DOM"| SEL
+
+    %% Mock server serves real frontend
+    ASM -->|"reads & assembles"| HTML
+    ASM -->|"concatenates"| CSS
+    ASM -->|"concatenates"| JS
+    SRV -->|"GET /"| ASM
+    SRV -->|"/api/*"| ROUTES
+
+    %% Fixtures feed mock server + WS mock
+    WSF -->|"initial state\nbroadcasts"| RWS
+    APIF -->|"REST responses"| ROUTES
+    STATE -->|"current state"| ROUTES
+
+    %% Schema validation
+    SCH -->|"validates outbound"| WSF
+    SCH -->|"validates responses"| APIF
+
+    class SPECS,FIX,RWS,SEL playwright
+    class SRV,ASM,ROUTES,STATE mock
+    class HTML,CSS,JS frontend
+    class WSF,APIF fixture
+    class SCH schema

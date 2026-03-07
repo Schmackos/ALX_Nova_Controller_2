@@ -1,0 +1,22 @@
+{
+  "name": "alx-nova-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright E2E tests for ALX Nova Controller 2 WebGUI",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "test:ui": "npx playwright test --ui",
+    "mock-server": "node mock-server/server.js",
+    "lint": "npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "eslint": "^8.57.0"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "cookie-parser": "^1.4.7"
+  }
+}
