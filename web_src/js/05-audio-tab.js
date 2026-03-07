@@ -510,7 +510,7 @@
                     var sk = data.sinks[s];
                     drawChannelVu('outputVu' + s + 'c0', sk.vuL || -90);
                     drawChannelVu('outputVu' + s + 'c1', sk.vuR || -90);
-                    var readout = document.getElementById('outputVuReadout' + s);
+                    readout = document.getElementById('outputVuReadout' + s);
                     if (readout) {
                         var avg = ((sk.vuL || -90) + (sk.vuR || -90)) / 2;
                         readout.textContent = avg.toFixed(1) + ' dB';

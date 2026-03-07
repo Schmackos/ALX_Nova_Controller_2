@@ -86,6 +86,7 @@
         }
 
         function updateHardwareStats(data) {
+            var el, i;
             // Update ADC count from hardware_stats (fires on all tabs)
             if (data.audio && data.audio.numAdcsDetected !== undefined) {
                 numAdcsDetected = data.audio.numAdcsDetected;
@@ -201,7 +202,6 @@
                     statusEl.textContent = statusText;
                     statusEl.style.color = d.ready ? 'var(--success-color)' : (d.enabled ? 'var(--error-color)' : '');
                 }
-                var el;
                 el = document.getElementById('dacModel'); if (el) el.textContent = d.model || '--';
                 el = document.getElementById('dacManufacturer'); if (el) el.textContent = d.manufacturer || '--';
                 el = document.getElementById('dacDeviceId'); if (el) el.textContent = d.deviceId !== undefined ? '0x' + ('0000' + d.deviceId.toString(16)).slice(-4).toUpperCase() : '--';
@@ -245,9 +245,9 @@
             if (data.audio) {
                 // I2S Static Config
                 if (data.audio.i2sConfig && Array.isArray(data.audio.i2sConfig)) {
-                    for (var i = 0; i < data.audio.i2sConfig.length && i < 2; i++) {
+                    for (i = 0; i < data.audio.i2sConfig.length && i < 2; i++) {
                         var c = data.audio.i2sConfig[i];
-                        var el;
+                        el = undefined;
                         el = document.getElementById('i2sMode' + i); if (el) el.textContent = c.mode || '--';
                         el = document.getElementById('i2sSampleRate' + i); if (el) el.textContent = c.sampleRate ? (c.sampleRate / 1000) + ' kHz' : '--';
                         el = document.getElementById('i2sBits' + i); if (el) el.textContent = c.bitsPerSample ? c.bitsPerSample + '-bit (24-bit payload)' : '--';
@@ -273,7 +273,7 @@
                     }
                     var expectedBps = 187.5;
                     if (rt.buffersPerSec) {
-                        for (var i = 0; i < rt.buffersPerSec.length && i < 2; i++) {
+                        for (i = 0; i < rt.buffersPerSec.length && i < 2; i++) {
                             var tEl = document.getElementById('i2sThroughput' + i);
                             if (tEl) {
                                 var bps = parseFloat(rt.buffersPerSec[i]) || 0;
@@ -283,7 +283,7 @@
                         }
                     }
                     if (rt.avgReadLatencyUs) {
-                        for (var i = 0; i < rt.avgReadLatencyUs.length && i < 2; i++) {
+                        for (i = 0; i < rt.avgReadLatencyUs.length && i < 2; i++) {
                             var lEl = document.getElementById('i2sLatency' + i);
                             if (lEl) {
                                 var lat = parseFloat(rt.avgReadLatencyUs[i]) || 0;
@@ -323,19 +323,19 @@
             } else {
                 var tbody = document.getElementById('taskTableBody');
                 if (tbody && !tbody.dataset.populated) {
-                    var tc = document.getElementById('taskCount');
+                    tc = document.getElementById('taskCount');
                     if (tc) tc.textContent = 'Disabled';
-                    var la = document.getElementById('loopTimeAvg');
+                    la = document.getElementById('loopTimeAvg');
                     if (la) la.textContent = '-';
-                    var lm = document.getElementById('loopTimeMax');
+                    lm = document.getElementById('loopTimeMax');
                     if (lm) lm.textContent = '-';
-                    var lf = document.getElementById('tmLoopFreq');
+                    lf = document.getElementById('tmLoopFreq');
                     if (lf) lf.textContent = '-';
-                    var el0 = document.getElementById('tmCpuCore0');
+                    el0 = document.getElementById('tmCpuCore0');
                     if (el0) el0.textContent = '-';
-                    var el1 = document.getElementById('tmCpuCore1');
+                    el1 = document.getElementById('tmCpuCore1');
                     if (el1) el1.textContent = '-';
-                    var elt = document.getElementById('tmCpuTotal');
+                    elt = document.getElementById('tmCpuTotal');
                     if (elt) elt.textContent = '--%';
                     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5">Task monitor disabled</td></tr>';
                 }
@@ -361,7 +361,7 @@
                     ptb.dataset.populated = '1';
                     var catLabels = {audio:'Audio', display:'Display', input:'Input', core:'Core', network:'Network'};
                     var html = '';
-                    for (var i = 0; i < data.pins.length; i++) {
+                    for (i = 0; i < data.pins.length; i++) {
                         var p = data.pins[i];
                         var catName = catLabels[p.c] || p.c;
                         html += '<tr><td>' + p.g + '</td><td>' + p.f + '</td><td>' + p.d + '</td><td><span class="pin-cat pin-cat-' + p.c + '">' + catName + '</span></td></tr>';
@@ -399,8 +399,8 @@
 
             var stateNames = ['Run', 'Rdy', 'Blk', 'Sus', 'Del'];
             // Build enriched rows for sorting
-            var rows = [];
-            for (var i = 0; i < _taskData.length; i++) {
+            var rows = [], i;
+            for (i = 0; i < _taskData.length; i++) {
                 var t = _taskData[i];
                 var stackFree = t.stackFree || 0;
                 var stackAlloc = t.stackAlloc || 0;
@@ -427,13 +427,13 @@
 
             // Update sort arrows
             var ths = document.querySelectorAll('#taskTable thead th .sort-arrow');
-            for (var i = 0; i < ths.length; i++) {
+            for (i = 0; i < ths.length; i++) {
                 ths[i].className = 'sort-arrow' + (i === col ? (asc ? ' asc' : ' desc') : '');
             }
 
             // Render rows
             var html = '';
-            for (var i = 0; i < rows.length; i++) {
+            for (i = 0; i < rows.length; i++) {
                 var r = rows[i];
                 var stackStr = '', barHtml = '', pctHtml = '';
                 if (r.stackAlloc > 0) {

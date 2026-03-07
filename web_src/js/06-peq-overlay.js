@@ -22,20 +22,20 @@
             var cosW = Math.cos(w0), sinW = Math.sin(w0);
             if (Q <= 0) Q = 0.707;
             var alpha = sinW / (2 * Q);
-            var A, b0, b1, b2, a0, a1, a2;
+            var A, b0, b1, b2, a0, a1, a2, sq, wt, n;
             switch (type) {
                 case 0: b1 = 1 - cosW; b0 = b1 / 2; b2 = b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 1: b1 = -(1 + cosW); b0 = -b1 / 2; b2 = b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 2: b0 = sinW / 2; b1 = 0; b2 = -b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 3: b0 = 1; b1 = -2 * cosW; b2 = 1; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 4: A = Math.pow(10, gain / 40); b0 = 1 + alpha * A; b1 = -2 * cosW; b2 = 1 - alpha * A; a0 = 1 + alpha / A; a1 = -2 * cosW; a2 = 1 - alpha / A; break;
-                case 5: A = Math.pow(10, gain / 40); var sq = 2 * Math.sqrt(A) * alpha; b0 = A * ((A+1)-(A-1)*cosW+sq); b1 = 2*A*((A-1)-(A+1)*cosW); b2 = A*((A+1)-(A-1)*cosW-sq); a0 = (A+1)+(A-1)*cosW+sq; a1 = -2*((A-1)+(A+1)*cosW); a2 = (A+1)+(A-1)*cosW-sq; break;
-                case 6: A = Math.pow(10, gain / 40); var sq = 2 * Math.sqrt(A) * alpha; b0 = A*((A+1)+(A-1)*cosW+sq); b1 = -2*A*((A-1)+(A+1)*cosW); b2 = A*((A+1)+(A-1)*cosW-sq); a0 = (A+1)-(A-1)*cosW+sq; a1 = 2*((A-1)-(A+1)*cosW); a2 = (A+1)-(A-1)*cosW-sq; break;
+                case 5: A = Math.pow(10, gain / 40); sq = 2 * Math.sqrt(A) * alpha; b0 = A * ((A+1)-(A-1)*cosW+sq); b1 = 2*A*((A-1)-(A+1)*cosW); b2 = A*((A+1)-(A-1)*cosW-sq); a0 = (A+1)+(A-1)*cosW+sq; a1 = -2*((A-1)+(A+1)*cosW); a2 = (A+1)+(A-1)*cosW-sq; break;
+                case 6: A = Math.pow(10, gain / 40); sq = 2 * Math.sqrt(A) * alpha; b0 = A*((A+1)+(A-1)*cosW+sq); b1 = -2*A*((A-1)+(A+1)*cosW); b2 = A*((A+1)+(A-1)*cosW-sq); a0 = (A+1)-(A-1)*cosW+sq; a1 = 2*((A-1)-(A+1)*cosW); a2 = (A+1)-(A-1)*cosW-sq; break;
                 case 7: case 8: b0 = 1 - alpha; b1 = -2 * cosW; b2 = 1 + alpha; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 9: b0 = -(1 - alpha); b1 = 2 * cosW; b2 = -(1 + alpha); a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 10: b0 = alpha; b1 = 0; b2 = -alpha; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
-                case 19: var wt = Math.tan(Math.PI * fn); var n = 1 / (1 + wt); return [wt * n, wt * n, 0, (wt - 1) * n, 0];
-                case 20: var wt = Math.tan(Math.PI * fn); var n = 1 / (1 + wt); return [n, -n, 0, (wt - 1) * n, 0];
+                case 19: wt = Math.tan(Math.PI * fn); n = 1 / (1 + wt); return [wt * n, wt * n, 0, (wt - 1) * n, 0];
+                case 20: wt = Math.tan(Math.PI * fn); n = 1 / (1 + wt); return [n, -n, 0, (wt - 1) * n, 0];
                 default: return [1, 0, 0, 0, 0];
             }
             var inv = 1 / a0;
@@ -323,18 +323,19 @@
             var bandColors = ['#F44336', '#2196F3', '#4CAF50', '#FFC107', '#9C27B0', '#00BCD4', '#FF5722', '#607D8B', '#E91E63', '#3F51B5'];
             var numPoints = Math.max(gW, 200);
 
-            for (var bi = 0; bi < peqOverlayBands.length; bi++) {
+            var bi, p, f, coeffs;
+            for (bi = 0; bi < peqOverlayBands.length; bi++) {
                 var band = peqOverlayBands[bi];
                 if (band.enabled === false) continue;
-                var coeffs = dspComputeCoeffs(band.type, band.freq || 1000, band.gain || 0, band.Q || 0.707, fs);
+                coeffs = dspComputeCoeffs(band.type, band.freq || 1000, band.gain || 0, band.Q || 0.707, fs);
 
                 ctx.strokeStyle = bandColors[bi % bandColors.length] + '55';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                for (var p = 0; p <= numPoints; p++) {
-                    var f = fMin * Math.pow(fMax / fMin, p / numPoints);
+                for (p = 0; p <= numPoints; p++) {
+                    f = fMin * Math.pow(fMax / fMin, p / numPoints);
                     var mag = dspBiquadMagDb(coeffs, f, fs);
-                    var x = fToX(f), y = dbToY(Math.max(dbMin, Math.min(dbMax, mag)));
+                    x = fToX(f); y = dbToY(Math.max(dbMin, Math.min(dbMax, mag)));
                     if (p === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
                 }
                 ctx.stroke();
@@ -344,16 +345,16 @@
             ctx.strokeStyle = combinedColor;
             ctx.lineWidth = 2;
             ctx.beginPath();
-            for (var p = 0; p <= numPoints; p++) {
-                var f = fMin * Math.pow(fMax / fMin, p / numPoints);
+            for (p = 0; p <= numPoints; p++) {
+                f = fMin * Math.pow(fMax / fMin, p / numPoints);
                 var totalDb = 0;
-                for (var bi = 0; bi < peqOverlayBands.length; bi++) {
+                for (bi = 0; bi < peqOverlayBands.length; bi++) {
                     if (peqOverlayBands[bi].enabled === false) continue;
-                    var coeffs = dspComputeCoeffs(peqOverlayBands[bi].type, peqOverlayBands[bi].freq || 1000,
+                    coeffs = dspComputeCoeffs(peqOverlayBands[bi].type, peqOverlayBands[bi].freq || 1000,
                         peqOverlayBands[bi].gain || 0, peqOverlayBands[bi].Q || 0.707, fs);
                     totalDb += dspBiquadMagDb(coeffs, f, fs);
                 }
-                var x = fToX(f), y = dbToY(Math.max(dbMin, Math.min(dbMax, totalDb)));
+                x = fToX(f); y = dbToY(Math.max(dbMin, Math.min(dbMax, totalDb)));
                 if (p === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
             }
             ctx.stroke();

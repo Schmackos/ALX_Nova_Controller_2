@@ -4944,7 +4944,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             const ca = decodedCookie.split(';');
             for(let i = 0; i < ca.length; i++) {
                 let c = ca[i];
-                while (c.charAt(0) == ' ') {
+                while (c.charAt(0) === ' ') {
                     c = c.substring(1);
                 }
                 if (c.indexOf(name) === 0) {
@@ -5918,7 +5918,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     var sk = data.sinks[s];
                     drawChannelVu('outputVu' + s + 'c0', sk.vuL || -90);
                     drawChannelVu('outputVu' + s + 'c1', sk.vuR || -90);
-                    var readout = document.getElementById('outputVuReadout' + s);
+                    readout = document.getElementById('outputVuReadout' + s);
                     if (readout) {
                         var avg = ((sk.vuL || -90) + (sk.vuR || -90)) / 2;
                         readout.textContent = avg.toFixed(1) + ' dB';
@@ -6011,20 +6011,20 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var cosW = Math.cos(w0), sinW = Math.sin(w0);
             if (Q <= 0) Q = 0.707;
             var alpha = sinW / (2 * Q);
-            var A, b0, b1, b2, a0, a1, a2;
+            var A, b0, b1, b2, a0, a1, a2, sq, wt, n;
             switch (type) {
                 case 0: b1 = 1 - cosW; b0 = b1 / 2; b2 = b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 1: b1 = -(1 + cosW); b0 = -b1 / 2; b2 = b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 2: b0 = sinW / 2; b1 = 0; b2 = -b0; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 3: b0 = 1; b1 = -2 * cosW; b2 = 1; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 4: A = Math.pow(10, gain / 40); b0 = 1 + alpha * A; b1 = -2 * cosW; b2 = 1 - alpha * A; a0 = 1 + alpha / A; a1 = -2 * cosW; a2 = 1 - alpha / A; break;
-                case 5: A = Math.pow(10, gain / 40); var sq = 2 * Math.sqrt(A) * alpha; b0 = A * ((A+1)-(A-1)*cosW+sq); b1 = 2*A*((A-1)-(A+1)*cosW); b2 = A*((A+1)-(A-1)*cosW-sq); a0 = (A+1)+(A-1)*cosW+sq; a1 = -2*((A-1)+(A+1)*cosW); a2 = (A+1)+(A-1)*cosW-sq; break;
-                case 6: A = Math.pow(10, gain / 40); var sq = 2 * Math.sqrt(A) * alpha; b0 = A*((A+1)+(A-1)*cosW+sq); b1 = -2*A*((A-1)+(A+1)*cosW); b2 = A*((A+1)+(A-1)*cosW-sq); a0 = (A+1)-(A-1)*cosW+sq; a1 = 2*((A-1)-(A+1)*cosW); a2 = (A+1)-(A-1)*cosW-sq; break;
+                case 5: A = Math.pow(10, gain / 40); sq = 2 * Math.sqrt(A) * alpha; b0 = A * ((A+1)-(A-1)*cosW+sq); b1 = 2*A*((A-1)-(A+1)*cosW); b2 = A*((A+1)-(A-1)*cosW-sq); a0 = (A+1)+(A-1)*cosW+sq; a1 = -2*((A-1)+(A+1)*cosW); a2 = (A+1)+(A-1)*cosW-sq; break;
+                case 6: A = Math.pow(10, gain / 40); sq = 2 * Math.sqrt(A) * alpha; b0 = A*((A+1)+(A-1)*cosW+sq); b1 = -2*A*((A-1)+(A+1)*cosW); b2 = A*((A+1)+(A-1)*cosW-sq); a0 = (A+1)-(A-1)*cosW+sq; a1 = 2*((A-1)-(A+1)*cosW); a2 = (A+1)-(A-1)*cosW-sq; break;
                 case 7: case 8: b0 = 1 - alpha; b1 = -2 * cosW; b2 = 1 + alpha; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 9: b0 = -(1 - alpha); b1 = 2 * cosW; b2 = -(1 + alpha); a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
                 case 10: b0 = alpha; b1 = 0; b2 = -alpha; a0 = 1 + alpha; a1 = -2 * cosW; a2 = 1 - alpha; break;
-                case 19: var wt = Math.tan(Math.PI * fn); var n = 1 / (1 + wt); return [wt * n, wt * n, 0, (wt - 1) * n, 0];
-                case 20: var wt = Math.tan(Math.PI * fn); var n = 1 / (1 + wt); return [n, -n, 0, (wt - 1) * n, 0];
+                case 19: wt = Math.tan(Math.PI * fn); n = 1 / (1 + wt); return [wt * n, wt * n, 0, (wt - 1) * n, 0];
+                case 20: wt = Math.tan(Math.PI * fn); n = 1 / (1 + wt); return [n, -n, 0, (wt - 1) * n, 0];
                 default: return [1, 0, 0, 0, 0];
             }
             var inv = 1 / a0;
@@ -6312,18 +6312,19 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             var bandColors = ['#F44336', '#2196F3', '#4CAF50', '#FFC107', '#9C27B0', '#00BCD4', '#FF5722', '#607D8B', '#E91E63', '#3F51B5'];
             var numPoints = Math.max(gW, 200);
 
-            for (var bi = 0; bi < peqOverlayBands.length; bi++) {
+            var bi, p, f, coeffs;
+            for (bi = 0; bi < peqOverlayBands.length; bi++) {
                 var band = peqOverlayBands[bi];
                 if (band.enabled === false) continue;
-                var coeffs = dspComputeCoeffs(band.type, band.freq || 1000, band.gain || 0, band.Q || 0.707, fs);
+                coeffs = dspComputeCoeffs(band.type, band.freq || 1000, band.gain || 0, band.Q || 0.707, fs);
 
                 ctx.strokeStyle = bandColors[bi % bandColors.length] + '55';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                for (var p = 0; p <= numPoints; p++) {
-                    var f = fMin * Math.pow(fMax / fMin, p / numPoints);
+                for (p = 0; p <= numPoints; p++) {
+                    f = fMin * Math.pow(fMax / fMin, p / numPoints);
                     var mag = dspBiquadMagDb(coeffs, f, fs);
-                    var x = fToX(f), y = dbToY(Math.max(dbMin, Math.min(dbMax, mag)));
+                    x = fToX(f); y = dbToY(Math.max(dbMin, Math.min(dbMax, mag)));
                     if (p === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
                 }
                 ctx.stroke();
@@ -6333,16 +6334,16 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             ctx.strokeStyle = combinedColor;
             ctx.lineWidth = 2;
             ctx.beginPath();
-            for (var p = 0; p <= numPoints; p++) {
-                var f = fMin * Math.pow(fMax / fMin, p / numPoints);
+            for (p = 0; p <= numPoints; p++) {
+                f = fMin * Math.pow(fMax / fMin, p / numPoints);
                 var totalDb = 0;
-                for (var bi = 0; bi < peqOverlayBands.length; bi++) {
+                for (bi = 0; bi < peqOverlayBands.length; bi++) {
                     if (peqOverlayBands[bi].enabled === false) continue;
-                    var coeffs = dspComputeCoeffs(peqOverlayBands[bi].type, peqOverlayBands[bi].freq || 1000,
+                    coeffs = dspComputeCoeffs(peqOverlayBands[bi].type, peqOverlayBands[bi].freq || 1000,
                         peqOverlayBands[bi].gain || 0, peqOverlayBands[bi].Q || 0.707, fs);
                     totalDb += dspBiquadMagDb(coeffs, f, fs);
                 }
-                var x = fToX(f), y = dbToY(Math.max(dbMin, Math.min(dbMax, totalDb)));
+                x = fToX(f); y = dbToY(Math.max(dbMin, Math.min(dbMax, totalDb)));
                 if (p === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
             }
             ctx.stroke();
@@ -10418,6 +10419,7 @@ function initFirmwareDragDrop() {
         }
 
         function updateHardwareStats(data) {
+            var el, i;
             // Update ADC count from hardware_stats (fires on all tabs)
             if (data.audio && data.audio.numAdcsDetected !== undefined) {
                 numAdcsDetected = data.audio.numAdcsDetected;
@@ -10533,7 +10535,6 @@ function initFirmwareDragDrop() {
                     statusEl.textContent = statusText;
                     statusEl.style.color = d.ready ? 'var(--success-color)' : (d.enabled ? 'var(--error-color)' : '');
                 }
-                var el;
                 el = document.getElementById('dacModel'); if (el) el.textContent = d.model || '--';
                 el = document.getElementById('dacManufacturer'); if (el) el.textContent = d.manufacturer || '--';
                 el = document.getElementById('dacDeviceId'); if (el) el.textContent = d.deviceId !== undefined ? '0x' + ('0000' + d.deviceId.toString(16)).slice(-4).toUpperCase() : '--';
@@ -10577,9 +10578,9 @@ function initFirmwareDragDrop() {
             if (data.audio) {
                 // I2S Static Config
                 if (data.audio.i2sConfig && Array.isArray(data.audio.i2sConfig)) {
-                    for (var i = 0; i < data.audio.i2sConfig.length && i < 2; i++) {
+                    for (i = 0; i < data.audio.i2sConfig.length && i < 2; i++) {
                         var c = data.audio.i2sConfig[i];
-                        var el;
+                        el = undefined;
                         el = document.getElementById('i2sMode' + i); if (el) el.textContent = c.mode || '--';
                         el = document.getElementById('i2sSampleRate' + i); if (el) el.textContent = c.sampleRate ? (c.sampleRate / 1000) + ' kHz' : '--';
                         el = document.getElementById('i2sBits' + i); if (el) el.textContent = c.bitsPerSample ? c.bitsPerSample + '-bit (24-bit payload)' : '--';
@@ -10605,7 +10606,7 @@ function initFirmwareDragDrop() {
                     }
                     var expectedBps = 187.5;
                     if (rt.buffersPerSec) {
-                        for (var i = 0; i < rt.buffersPerSec.length && i < 2; i++) {
+                        for (i = 0; i < rt.buffersPerSec.length && i < 2; i++) {
                             var tEl = document.getElementById('i2sThroughput' + i);
                             if (tEl) {
                                 var bps = parseFloat(rt.buffersPerSec[i]) || 0;
@@ -10615,7 +10616,7 @@ function initFirmwareDragDrop() {
                         }
                     }
                     if (rt.avgReadLatencyUs) {
-                        for (var i = 0; i < rt.avgReadLatencyUs.length && i < 2; i++) {
+                        for (i = 0; i < rt.avgReadLatencyUs.length && i < 2; i++) {
                             var lEl = document.getElementById('i2sLatency' + i);
                             if (lEl) {
                                 var lat = parseFloat(rt.avgReadLatencyUs[i]) || 0;
@@ -10655,19 +10656,19 @@ function initFirmwareDragDrop() {
             } else {
                 var tbody = document.getElementById('taskTableBody');
                 if (tbody && !tbody.dataset.populated) {
-                    var tc = document.getElementById('taskCount');
+                    tc = document.getElementById('taskCount');
                     if (tc) tc.textContent = 'Disabled';
-                    var la = document.getElementById('loopTimeAvg');
+                    la = document.getElementById('loopTimeAvg');
                     if (la) la.textContent = '-';
-                    var lm = document.getElementById('loopTimeMax');
+                    lm = document.getElementById('loopTimeMax');
                     if (lm) lm.textContent = '-';
-                    var lf = document.getElementById('tmLoopFreq');
+                    lf = document.getElementById('tmLoopFreq');
                     if (lf) lf.textContent = '-';
-                    var el0 = document.getElementById('tmCpuCore0');
+                    el0 = document.getElementById('tmCpuCore0');
                     if (el0) el0.textContent = '-';
-                    var el1 = document.getElementById('tmCpuCore1');
+                    el1 = document.getElementById('tmCpuCore1');
                     if (el1) el1.textContent = '-';
-                    var elt = document.getElementById('tmCpuTotal');
+                    elt = document.getElementById('tmCpuTotal');
                     if (elt) elt.textContent = '--%';
                     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5">Task monitor disabled</td></tr>';
                 }
@@ -10693,7 +10694,7 @@ function initFirmwareDragDrop() {
                     ptb.dataset.populated = '1';
                     var catLabels = {audio:'Audio', display:'Display', input:'Input', core:'Core', network:'Network'};
                     var html = '';
-                    for (var i = 0; i < data.pins.length; i++) {
+                    for (i = 0; i < data.pins.length; i++) {
                         var p = data.pins[i];
                         var catName = catLabels[p.c] || p.c;
                         html += '<tr><td>' + p.g + '</td><td>' + p.f + '</td><td>' + p.d + '</td><td><span class="pin-cat pin-cat-' + p.c + '">' + catName + '</span></td></tr>';
@@ -10731,8 +10732,8 @@ function initFirmwareDragDrop() {
 
             var stateNames = ['Run', 'Rdy', 'Blk', 'Sus', 'Del'];
             // Build enriched rows for sorting
-            var rows = [];
-            for (var i = 0; i < _taskData.length; i++) {
+            var rows = [], i;
+            for (i = 0; i < _taskData.length; i++) {
                 var t = _taskData[i];
                 var stackFree = t.stackFree || 0;
                 var stackAlloc = t.stackAlloc || 0;
@@ -10759,13 +10760,13 @@ function initFirmwareDragDrop() {
 
             // Update sort arrows
             var ths = document.querySelectorAll('#taskTable thead th .sort-arrow');
-            for (var i = 0; i < ths.length; i++) {
+            for (i = 0; i < ths.length; i++) {
                 ths[i].className = 'sort-arrow' + (i === col ? (asc ? ' asc' : ' desc') : '');
             }
 
             // Render rows
             var html = '';
-            for (var i = 0; i < rows.length; i++) {
+            for (i = 0; i < rows.length; i++) {
                 var r = rows[i];
                 var stackStr = '', barHtml = '', pctHtml = '';
                 if (r.stackAlloc > 0) {

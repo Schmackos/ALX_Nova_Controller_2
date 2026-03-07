@@ -9,7 +9,7 @@
   },
   "rules": {
     "no-undef": "error",
-    "no-redeclare": "error",
+    "no-redeclare": ["error", { "builtinGlobals": false }],
     "eqeqeq": ["error", "smart"]
   },
   "globals": {
@@ -392,6 +392,8 @@
     "changePassword": "readonly",
     "closePasswordChangeModal": "readonly",
     "logout": "readonly",
-    "togglePasswordVisibility": "readonly"
+    "togglePasswordVisibility": "readonly",
+    "QRCode": "readonly",
+    "marked": "readonly"
   }
 }
