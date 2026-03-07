@@ -56,6 +56,9 @@ int HalDeviceManager::registerDevice(HalDevice* device, HalDiscovery discovery) 
     _devices[slot] = device;
     _resetRetryState(static_cast<uint8_t>(slot));
     _count++;
+
+    diag_emit(DIAG_HAL_DEVICE_DETECTED, DIAG_SEV_INFO,
+              static_cast<uint8_t>(slot), device->getDescriptor().name, "registered");
     return slot;
 }
 
@@ -63,8 +66,13 @@ bool HalDeviceManager::removeDevice(uint8_t slot) {
     if (slot >= HAL_MAX_DEVICES || !_devices[slot]) return false;
 
     HalDeviceState oldState = _devices[slot]->_state;
+    const char* name = _devices[slot]->getDescriptor().name;
     _devices[slot]->_ready = false;
     _devices[slot]->_state = HAL_STATE_REMOVED;
+
+    diag_emit(DIAG_HAL_DEVICE_REMOVED, DIAG_SEV_WARN,
+              slot, name, "removed");
+
     if (_stateChangeCb) _stateChangeCb(slot, oldState, HAL_STATE_REMOVED);
     _devices[slot] = nullptr;
     _resetRetryState(slot);
