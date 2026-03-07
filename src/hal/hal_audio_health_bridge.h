@@ -40,6 +40,12 @@ enum AudioHealthStatus {
 // Set mock health status for an ADC lane (lane 0 or 1).
 void hal_audio_health_bridge_set_mock_status(uint8_t lane, int status);
 
+// Set mock i2sRecoveries counter for an ADC lane (Rule 1 — I2S Recovery Storm).
+void hal_audio_health_bridge_set_mock_i2s_recoveries(uint8_t lane, uint32_t count);
+
+// Set mock dcOffset for an ADC lane (Rule 5 — DC Offset Drift).
+void hal_audio_health_bridge_set_mock_dc_offset(uint8_t lane, float offset);
+
 // Reset all bridge internal state for a clean test.
 void hal_audio_health_bridge_reset_for_test();
 #endif // NATIVE_TEST

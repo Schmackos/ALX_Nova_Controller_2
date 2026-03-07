@@ -70,6 +70,8 @@ void setUp() {
     hal_registry_reset();
     hal_pipeline_reset();
     hal_audio_health_bridge_reset_for_test();
+    diag_journal_reset_for_test();
+    diag_journal_init();
     ArduinoMock::mockMillis = 0;
 }
 
@@ -500,6 +502,446 @@ void test_reset_clears_flap_state() {
     TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adc2._state);
 }
 
+// =====================================================================
+// Group 8: Diagnostic rules 1, 4, 5 (14 tests)
+// =====================================================================
+
+// ---- Rule 1: I2S Recovery Storm ----
+
+// 8a: No storm when counter is stable (no increment)
+void test_rule1_no_storm_when_counter_stable() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    hal_audio_health_bridge_set_mock_i2s_recoveries(0, 0);
+    hal_audio_health_check(); // counter unchanged — no diag entry
+
+    // Journal should have 0 entries (diag_journal was reset in setUp via
+    // diag_journal_reset_for_test inside hal_audio_health_bridge_reset_for_test
+    // → actually we just check no I2S_RECOVERY code was emitted)
+    DiagEvent ev;
+    bool found = false;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_I2S_RECOVERY) {
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_FALSE(found);
+}
+
+// 8b: Each individual recovery increment below the storm threshold does not emit
+void test_rule1_below_threshold_no_emit() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    // 3 increments at 10s intervals — exactly at threshold, not above it
+    for (uint32_t i = 1; i <= 3; i++) {
+        ArduinoMock::mockMillis = i * 10000UL;
+        hal_audio_health_bridge_set_mock_i2s_recoveries(0, i);
+        hal_audio_health_check();
+    }
+
+    DiagEvent ev;
+    bool found = false;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_I2S_RECOVERY) {
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_FALSE(found);
+}
+
+// 8c: Fourth increment within 60s triggers DIAG_AUDIO_I2S_RECOVERY
+void test_rule1_storm_emits_on_fourth_increment() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    // Start at base=120000 (> window size of 60000) to avoid uint32_t underflow
+    // in the cutoff calculation (nowMs - 60000).
+    uint32_t base = 120000UL;
+
+    // 4 increments all within 60s
+    for (uint32_t i = 1; i <= 4; i++) {
+        ArduinoMock::mockMillis = base + i * 5000UL;
+        hal_audio_health_bridge_set_mock_i2s_recoveries(0, i);
+        hal_audio_health_check();
+    }
+
+    DiagEvent ev;
+    bool found = false;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        DiagEvent e2;
+        if (diag_journal_read(i, &e2) &&
+            (uint16_t)e2.code == (uint16_t)DIAG_AUDIO_I2S_RECOVERY) {
+            ev = e2;
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE(found);
+    TEST_ASSERT_EQUAL(DIAG_SEV_WARN, ev.severity);
+}
+
+// 8d: Increments spread >60s apart do not storm (old timestamps expire)
+void test_rule1_spread_over_time_no_storm() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    // First 3 at t=0,10,20s
+    for (uint32_t i = 1; i <= 3; i++) {
+        ArduinoMock::mockMillis = (i - 1) * 10000UL;
+        hal_audio_health_bridge_set_mock_i2s_recoveries(0, i);
+        hal_audio_health_check();
+    }
+    // Fourth at t=75s — first three timestamps have expired
+    ArduinoMock::mockMillis = 75000UL;
+    hal_audio_health_bridge_set_mock_i2s_recoveries(0, 4);
+    hal_audio_health_check();
+
+    DiagEvent ev;
+    bool found = false;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_I2S_RECOVERY) {
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_FALSE(found);
+}
+
+// 8e: Rule 1 is per-lane independent
+void test_rule1_independent_per_lane() {
+    TestAdcDevice adc1("ti,pcm1808-a");
+    TestAdcDevice adc2("ti,pcm1808-b");
+    registerAvailableAdc(&adc1);
+    registerAvailableAdc(&adc2);
+
+    // Start at base=120000 to avoid uint32_t underflow in cutoff calculation.
+    uint32_t base = 120000UL;
+
+    // Storm on lane 0 only (4 increments within the 60s window)
+    for (uint32_t i = 1; i <= 4; i++) {
+        ArduinoMock::mockMillis = base + i * 5000UL;
+        hal_audio_health_bridge_set_mock_i2s_recoveries(0, i);
+        hal_audio_health_check();
+    }
+
+    // Verify a DIAG_AUDIO_I2S_RECOVERY entry exists (lane 0)
+    DiagEvent ev;
+    bool found = false;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        DiagEvent e2;
+        if (diag_journal_read(i, &e2) &&
+            (uint16_t)e2.code == (uint16_t)DIAG_AUDIO_I2S_RECOVERY) {
+            ev = e2;
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE(found);
+    // Lane 1 counter was never incremented — no storm entry for lane 1's slot
+    uint8_t stormLane1 = 0;
+    n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        DiagEvent ev2;
+        if (diag_journal_read(i, &ev2) &&
+            (uint16_t)ev2.code == (uint16_t)DIAG_AUDIO_I2S_RECOVERY &&
+            ev2.slot != ev.slot) {
+            stormLane1++;
+        }
+    }
+    TEST_ASSERT_EQUAL(0, stormLane1);
+}
+
+// ---- Rule 4: Audio No-Data with HAL AVAILABLE ----
+
+// 8f: NO_DATA while AVAILABLE emits DIAG_AUDIO_PIPELINE_STALL once
+void test_rule4_no_data_available_emits_once() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_NO_DATA);
+    // Run 3 checks — should only emit on the first
+    hal_audio_health_check();
+    hal_audio_health_check();
+    hal_audio_health_check();
+
+    // Scan journal for PIPELINE_STALL entries only (journal may have other entries
+    // from device registration at setUp time, e.g. DIAG_HAL_DEVICE_DETECTED)
+    uint8_t stallCount = 0;
+    DiagEvent ev;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        DiagEvent e2;
+        if (diag_journal_read(i, &e2) &&
+            (uint16_t)e2.code == (uint16_t)DIAG_AUDIO_PIPELINE_STALL) {
+            ev = e2;
+            stallCount++;
+        }
+    }
+    TEST_ASSERT_EQUAL(1, stallCount);
+    TEST_ASSERT_EQUAL(DIAG_SEV_WARN, ev.severity);
+}
+
+// 8g: NO_DATA while UNAVAILABLE does NOT emit pipeline stall
+void test_rule4_no_data_unavailable_no_emit() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    adc._state = HAL_STATE_UNAVAILABLE;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_NO_DATA);
+    hal_audio_health_check();
+
+    DiagEvent ev;
+    bool found = false;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_PIPELINE_STALL) {
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_FALSE(found);
+}
+
+// 8h: After NO_DATA resolves, a new episode emits again
+void test_rule4_new_episode_emits_again() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    // Episode 1
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_NO_DATA);
+    hal_audio_health_check();
+
+    // Resolve
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+
+    // Episode 2 — counter resets so we emit again
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_NO_DATA);
+    hal_audio_health_check();
+
+    uint8_t stallCount = 0;
+    DiagEvent ev;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_PIPELINE_STALL) {
+            stallCount++;
+        }
+    }
+    TEST_ASSERT_EQUAL(2, stallCount);
+}
+
+// 8i: OK status (not NO_DATA) never emits stall
+void test_rule4_ok_no_stall() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+    hal_audio_health_check();
+
+    DiagEvent ev;
+    bool found = false;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_PIPELINE_STALL) {
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_FALSE(found);
+}
+
+// ---- Rule 5: DC Offset Drift ----
+
+// 8j: DC offset below threshold never emits
+void test_rule5_dc_below_threshold_no_emit() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    hal_audio_health_bridge_set_mock_dc_offset(0, 0.04f);
+    for (int i = 0; i < 15; i++) {
+        ArduinoMock::mockMillis = (uint32_t)(i * 5000);
+        hal_audio_health_check();
+    }
+
+    DiagEvent ev;
+    bool found = false;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_DC_OFFSET_HIGH) {
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_FALSE(found);
+}
+
+// 8k: DC offset above threshold emits exactly once after 11 checks
+void test_rule5_dc_high_emits_after_hold_period() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    hal_audio_health_bridge_set_mock_dc_offset(0, 0.10f);
+
+    // Run 10 checks — hold count reaches 10, not yet at 11
+    for (int i = 0; i < 10; i++) {
+        ArduinoMock::mockMillis = (uint32_t)(i * 5000);
+        hal_audio_health_check();
+    }
+    // Verify not yet emitted (need 11 checks to cross the hold threshold)
+    DiagEvent ev;
+    uint8_t preCount = 0;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        DiagEvent e2;
+        if (diag_journal_read(i, &e2) &&
+            (uint16_t)e2.code == (uint16_t)DIAG_AUDIO_DC_OFFSET_HIGH)
+            preCount++;
+    }
+    TEST_ASSERT_EQUAL(0, preCount);
+
+    // 11th check — should emit exactly once
+    ArduinoMock::mockMillis = 50000UL;
+    hal_audio_health_check();
+
+    uint8_t postCount = 0;
+    n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        DiagEvent e2;
+        if (diag_journal_read(i, &e2) &&
+            (uint16_t)e2.code == (uint16_t)DIAG_AUDIO_DC_OFFSET_HIGH) {
+            ev = e2;
+            postCount++;
+        }
+    }
+    TEST_ASSERT_EQUAL(1, postCount);
+    TEST_ASSERT_EQUAL(DIAG_SEV_WARN, ev.severity);
+
+    // Additional checks — still only one emit (sentinel resets to avoid re-fire)
+    ArduinoMock::mockMillis = 55000UL;
+    hal_audio_health_check();
+    ArduinoMock::mockMillis = 60000UL;
+    hal_audio_health_check();
+
+    uint8_t finalCount = 0;
+    n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        DiagEvent e2;
+        if (diag_journal_read(i, &e2) &&
+            (uint16_t)e2.code == (uint16_t)DIAG_AUDIO_DC_OFFSET_HIGH)
+            finalCount++;
+    }
+    TEST_ASSERT_EQUAL(1, finalCount);
+}
+
+// 8l: DC offset resets when it drops back below threshold
+void test_rule5_dc_resets_on_clear() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    hal_audio_health_bridge_set_mock_dc_offset(0, 0.10f);
+
+    // 5 checks high — not yet emitted
+    for (int i = 0; i < 5; i++) {
+        ArduinoMock::mockMillis = (uint32_t)(i * 5000);
+        hal_audio_health_check();
+    }
+
+    // Drop below threshold — counter resets
+    hal_audio_health_bridge_set_mock_dc_offset(0, 0.01f);
+    ArduinoMock::mockMillis = 25000UL;
+    hal_audio_health_check();
+
+    // Go high again — need a fresh 11 checks, no emit yet
+    hal_audio_health_bridge_set_mock_dc_offset(0, 0.10f);
+    for (int i = 0; i < 10; i++) {
+        ArduinoMock::mockMillis = 30000UL + (uint32_t)(i * 5000);
+        hal_audio_health_check();
+    }
+
+    DiagEvent ev;
+    uint8_t n = diag_journal_count();
+    uint8_t count = 0;
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_DC_OFFSET_HIGH)
+            count++;
+    }
+    TEST_ASSERT_EQUAL(0, count);
+}
+
+// 8m: DC offset high is per-lane independent
+void test_rule5_independent_per_lane() {
+    TestAdcDevice adc1("ti,pcm1808-a");
+    TestAdcDevice adc2("ti,pcm1808-b");
+    registerAvailableAdc(&adc1);
+    registerAvailableAdc(&adc2);
+
+    // Only lane 0 is high
+    hal_audio_health_bridge_set_mock_dc_offset(0, 0.10f);
+    hal_audio_health_bridge_set_mock_dc_offset(1, 0.01f);
+
+    for (int i = 0; i <= 11; i++) {
+        ArduinoMock::mockMillis = (uint32_t)(i * 5000);
+        hal_audio_health_check();
+    }
+
+    // Only 1 emit (from lane 0)
+    DiagEvent ev;
+    uint8_t count = 0;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_DC_OFFSET_HIGH)
+            count++;
+    }
+    TEST_ASSERT_EQUAL(1, count);
+}
+
+// 8n: reset_for_test zeroes all Rule 1/4/5 state
+void test_rule_state_cleared_by_reset() {
+    TestAdcDevice adc("ti,pcm1808");
+    registerAvailableAdc(&adc);
+
+    // Drive Rule 5 counter partway
+    hal_audio_health_bridge_set_mock_dc_offset(0, 0.10f);
+    for (int i = 0; i < 5; i++) {
+        ArduinoMock::mockMillis = (uint32_t)(i * 5000);
+        hal_audio_health_check();
+    }
+
+    // Reset
+    hal_audio_health_bridge_reset_for_test();
+    mgr->reset();
+    hal_pipeline_reset();
+
+    // Re-register and confirm we need a fresh full hold period
+    TestAdcDevice adc2("ti,pcm1808");
+    registerAvailableAdc(&adc2);
+    hal_audio_health_bridge_set_mock_dc_offset(0, 0.10f);
+
+    for (int i = 0; i < 10; i++) {
+        ArduinoMock::mockMillis = 50000UL + (uint32_t)(i * 5000);
+        hal_audio_health_check();
+    }
+
+    DiagEvent ev;
+    uint8_t count = 0;
+    uint8_t n = diag_journal_count();
+    for (uint8_t i = 0; i < n; i++) {
+        if (diag_journal_read(i, &ev) && ev.code == DIAG_AUDIO_DC_OFFSET_HIGH)
+            count++;
+    }
+    TEST_ASSERT_EQUAL(0, count); // Still no emit after only 10 checks
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     (void)argc;
@@ -546,6 +988,22 @@ int main(int argc, char** argv) {
     // Group 7: Reset
     RUN_TEST(test_reset_clears_mock_health);
     RUN_TEST(test_reset_clears_flap_state);
+
+    // Group 8: Diagnostic rules 1, 4, 5
+    RUN_TEST(test_rule1_no_storm_when_counter_stable);
+    RUN_TEST(test_rule1_below_threshold_no_emit);
+    RUN_TEST(test_rule1_storm_emits_on_fourth_increment);
+    RUN_TEST(test_rule1_spread_over_time_no_storm);
+    RUN_TEST(test_rule1_independent_per_lane);
+    RUN_TEST(test_rule4_no_data_available_emits_once);
+    RUN_TEST(test_rule4_no_data_unavailable_no_emit);
+    RUN_TEST(test_rule4_new_episode_emits_again);
+    RUN_TEST(test_rule4_ok_no_stall);
+    RUN_TEST(test_rule5_dc_below_threshold_no_emit);
+    RUN_TEST(test_rule5_dc_high_emits_after_hold_period);
+    RUN_TEST(test_rule5_dc_resets_on_clear);
+    RUN_TEST(test_rule5_independent_per_lane);
+    RUN_TEST(test_rule_state_cleared_by_reset);
 
     return UNITY_END();
 }

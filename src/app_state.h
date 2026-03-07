@@ -525,6 +525,7 @@ public:
 
   // ===== Diagnostic Config =====
   uint8_t mqttErrorThreshold = 2;  // 0=all, 1=warn+, 2=error+ (default), 3=crit only
+  bool halSafeMode = false;        // Boot loop safe mode — skip HAL init, WiFi+web only
 
   // MQTT state tracking for DAC
   bool prevMqttDacEnabled = false;

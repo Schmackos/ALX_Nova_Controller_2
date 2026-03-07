@@ -225,6 +225,26 @@ void setup() {
     LOG_I("[Main] Reset reason: %s", resetReason.c_str());
   }
 
+  // Rule 9: Boot Loop Detection — 3 consecutive crash boots → safe mode
+  {
+    const CrashLogData& cl = crashlog_get();
+    int consecutiveCrashes = 0;
+    for (int i = 0; i < cl.count && i < 3; i++) {
+      const CrashLogEntry* e = crashlog_get_recent(i);
+      if (e && crashlog_was_crash(e->reason)) {
+        consecutiveCrashes++;
+      } else {
+        break;
+      }
+    }
+    if (consecutiveCrashes >= 3) {
+      LOG_W("[Main] BOOT LOOP DETECTED: %d consecutive crashes — entering safe mode", consecutiveCrashes);
+      diag_emit(DIAG_SYS_BOOT_LOOP, DIAG_SEV_CRIT,
+                0xFF, "System", "boot loop safe mode");
+      appState.halSafeMode = true;
+    }
+  }
+
   // Check if device just rebooted after successful OTA update
   appState.justUpdated =
       checkAndClearOTASuccessFlag(appState.previousFirmwareVersion);
@@ -272,12 +292,16 @@ void setup() {
   // Initialize HAL framework (before audio/DAC init so drivers can register and
   // so i2s_configure_adc1() can query HAL config for pin overrides)
 #ifdef DAC_ENABLED
-  hal_register_builtins();
-  hal_db_init();
-  hal_load_device_configs();
-  hal_load_custom_devices();
-  hal_provision_defaults();    // Write /hal_auto_devices.json on first boot only
-  hal_load_auto_devices();     // Instantiate add-on devices via HAL factory registry
+  if (!appState.halSafeMode) {
+    hal_register_builtins();
+    hal_db_init();
+    hal_load_device_configs();
+    hal_load_custom_devices();
+    hal_provision_defaults();    // Write /hal_auto_devices.json on first boot only
+    hal_load_auto_devices();     // Instantiate add-on devices via HAL factory registry
+  } else {
+    LOG_W("[Main] HAL safe mode — skipping device registration");
+  }
 #endif
 
   // Initialize I2S audio ADC (PCM1808) — uses sample rate from loaded settings
@@ -1310,7 +1334,49 @@ void loop() {
       hal_audio_health_check();
     }
   }
+
+  // Rule 8: Sustained Clipping — clipRate >1% for >5 consecutive checks (25s)
+  {
+    static uint8_t clipHighCount[NUM_AUDIO_ADCS] = {};
+    static bool clipEmitted[NUM_AUDIO_ADCS] = {};
+    static unsigned long lastClipCheck = 0;
+    if (millis() - lastClipCheck >= 5000) {
+      lastClipCheck = millis();
+      for (uint8_t lane = 0; lane < NUM_AUDIO_ADCS; lane++) {
+        if (appState.audioAdc[lane].clipRate > 0.01f) {
+          clipHighCount[lane]++;
+          if (clipHighCount[lane] > 5 && !clipEmitted[lane]) {
+            clipEmitted[lane] = true;
+            char msg[24];
+            snprintf(msg, sizeof(msg), "ADC%u clip %.1f%%", lane, appState.audioAdc[lane].clipRate * 100.0f);
+            diag_emit(DIAG_AUDIO_CLIPPING, DIAG_SEV_WARN,
+                      0xFF, "Audio", msg);
+          }
+        } else {
+          clipHighCount[lane] = 0;
+          clipEmitted[lane] = false;
+        }
+      }
+    }
+  }
 #endif
+
+  // Rule 7: Loop Time Spike — loopTimeMaxUs > 50ms
+  {
+    static bool loopSpikeEmitted = false;
+    const TaskMonitorData& tmd = task_monitor_get_data();
+    if (tmd.loopTimeMaxUs > 50000) {
+      if (!loopSpikeEmitted) {
+        loopSpikeEmitted = true;
+        char msg[24];
+        snprintf(msg, sizeof(msg), "loop %lums", (unsigned long)(tmd.loopTimeMaxUs / 1000));
+        diag_emit(DIAG_SYS_LOOP_TIME_SPIKE, DIAG_SEV_WARN,
+                  0xFF, "System", msg);
+      }
+    } else {
+      loopSpikeEmitted = false;
+    }
+  }
 
   // Heap health monitor — detect fragmentation before OOM crash (every 30s)
   static unsigned long lastHeapCheck = 0;
@@ -1322,8 +1388,12 @@ void loop() {
     if (appState.heapCritical != wasCritical) {
       if (appState.heapCritical) {
         LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB)", (unsigned long)maxBlock);
+        diag_emit(DIAG_SYS_HEAP_CRITICAL, DIAG_SEV_WARN,
+                  0xFF, "System", "heap critical");
       } else {
         LOG_I("[Main] Heap recovered: largest free block=%lu bytes", (unsigned long)maxBlock);
+        diag_emit(DIAG_SYS_HEAP_RECOVERED, DIAG_SEV_INFO,
+                  0xFF, "System", "heap recovered");
       }
       // heapCritical is included in next sendHardwareStats() cycle
     }
