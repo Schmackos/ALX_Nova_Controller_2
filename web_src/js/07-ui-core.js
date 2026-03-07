@@ -54,10 +54,6 @@
                     drawAudioWaveform(null, a);
                     drawSpectrumBars(null, 0, a);
                 }
-                // Update ADC2 panel visibility
-                updateAdc2Visibility();
-                // Load input names into fields
-                loadInputNameFields();
             } else if (tabId !== 'audio' && audioSubscribed) {
                 audioSubscribed = false;
                 if (ws && ws.readyState === WebSocket.OPEN) {

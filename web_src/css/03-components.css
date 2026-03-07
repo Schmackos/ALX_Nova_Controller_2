@@ -1698,59 +1698,6 @@
           color: #000;
         }
 
-        /* ===== Input Channel Overview ===== */
-        .input-overview-card { margin-bottom: 12px; }
-        .input-lane-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-        }
-        .input-lane {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            padding: 10px 6px;
-            background: var(--card-bg, rgba(255,255,255,0.05));
-            border-radius: 8px;
-            border: 1px solid var(--border-color, rgba(255,255,255,0.08));
-            min-width: 0;
-        }
-        .lane-name {
-            font-size: 0.72rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--text-secondary, #888);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            width: 100%;
-            text-align: center;
-        }
-        .lane-status-dot {
-            width: 10px; height: 10px;
-            border-radius: 50%;
-            background: var(--text-secondary, #555);
-            flex-shrink: 0;
-        }
-        .lane-status-dot.active  { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
-        .lane-status-dot.low     { background: #ff9800; box-shadow: 0 0 6px #ff980088; }
-        .lane-status-dot.idle    { background: rgba(255,152,0,0.25); }
-        .lane-status-dot.error   { background: #f44336; }
-        .lane-level {
-            font-size: 0.78rem;
-            font-weight: 500;
-            color: var(--text-primary, #eee);
-            min-height: 1em;
-        }
-        .input-lane .switch {
-            margin: 2px 0 -4px;
-        }
-        @media (max-width: 480px) {
-            .input-lane-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
         /* ===== Debug Console Chips & Search ===== */
         .chip-container { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
         .btn-chip {
@@ -1875,6 +1822,10 @@
         .audio-subnav-btn:not(.active):hover {
             background: var(--bg-input);
         }
+        .audio-subnav-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
         .audio-subnav-btn svg {
             flex-shrink: 0;
         }
@@ -1901,6 +1852,10 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            transition: box-shadow 0.2s ease;
+        }
+        .channel-strip:hover {
+            box-shadow: 0 4px 16px var(--shadow);
         }
         .channel-strip-header {
             display: flex;
@@ -1922,14 +1877,15 @@
             font-weight: 600;
             padding: 2px 8px;
             border-radius: 10px;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
         .channel-status.status-ok {
             background: rgba(76,175,80,0.15);
-            color: #4CAF50;
+            color: var(--success);
         }
         .channel-status.status-off {
             background: rgba(158,158,158,0.15);
-            color: #9E9E9E;
+            color: var(--text-disabled);
         }
 
         /* VU meters in channel strips */
@@ -1982,6 +1938,10 @@
             border-radius: 2px;
             outline: none;
         }
+        .channel-gain-slider:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
         .channel-gain-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             width: 16px;
@@ -2006,6 +1966,10 @@
             border-radius: 4px;
             color: var(--text-primary);
         }
+        .channel-delay-input:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
         .channel-button-row {
             display: flex;
             gap: 4px;
@@ -2020,7 +1984,7 @@
             background: var(--bg-card);
             color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2029,6 +1993,10 @@
         .channel-btn:hover {
             border-color: var(--accent);
             color: var(--text-primary);
+        }
+        .channel-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
         .channel-btn.active {
             background: var(--accent);
@@ -2083,15 +2051,22 @@
             cursor: pointer;
             color: var(--text-disabled);
             font-family: monospace;
-            transition: background 0.15s;
+            transition: background-color 0.15s ease;
         }
         .matrix-cell:hover {
             background: var(--bg-input);
+        }
+        .matrix-cell:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
         }
         .matrix-cell.matrix-active {
             background: rgba(255,152,0,0.12);
             color: var(--accent);
             font-weight: 600;
+        }
+        .matrix-cell.matrix-active:hover {
+            background: rgba(255,152,0,0.22);
         }
         .matrix-presets {
             display: flex;
@@ -2132,14 +2107,21 @@
         }
 
         /* ===== PEQ / DSP Overlay ===== */
+        @keyframes peqSlideUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         .peq-overlay {
             position: fixed;
             inset: 0;
             z-index: 2000;
             background: var(--bg-primary);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
             display: none;
             flex-direction: column;
             overflow-y: auto;
+            animation: peqSlideUp 0.25s ease-out;
         }
         .peq-overlay-header {
             display: flex;
@@ -2169,6 +2151,10 @@
         .peq-overlay-close:hover {
             background: var(--bg-input);
             color: var(--text-primary);
+        }
+        .peq-overlay-close:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
         .peq-graph-wrap {
             padding: 8px 16px;
@@ -2203,6 +2189,9 @@
             border-bottom: 1px solid var(--border);
             vertical-align: middle;
         }
+        .peq-band-table tr:hover td {
+            background: var(--bg-card);
+        }
         .peq-input {
             background: var(--bg-input);
             border: 1px solid var(--border);
@@ -2215,6 +2204,10 @@
         .peq-input:focus {
             border-color: var(--accent);
             outline: none;
+        }
+        .peq-input:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
         .peq-type-sel {
             width: 80px;

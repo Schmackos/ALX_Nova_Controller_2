@@ -153,7 +153,6 @@
                 if (currentActiveTab === 'audio') {
                     if (data.numAdcsDetected !== undefined) {
                         numAdcsDetected = data.numAdcsDetected;
-                        updateAdc2Visibility();
                     }
                     // Per-ADC VU/peak data
                     if (data.adc && Array.isArray(data.adc)) {
@@ -163,18 +162,6 @@
                             vuTargetArr[a][1] = ad.vu2 !== undefined ? ad.vu2 : 0;
                             peakTargetArr[a][0] = ad.peak1 !== undefined ? ad.peak1 : 0;
                             peakTargetArr[a][1] = ad.peak2 !== undefined ? ad.peak2 : 0;
-                        }
-                    }
-                    // Per-ADC status badges and readouts
-                    if (data.adcStatus && Array.isArray(data.adcStatus)) {
-                        for (let a = 0; a < data.adcStatus.length && a < NUM_ADCS; a++) {
-                            updateAdcStatusBadge(a, data.adcStatus[a]);
-                        }
-                    }
-                    if (data.adc && Array.isArray(data.adc)) {
-                        for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
-                            const ad = data.adc[a];
-                            updateAdcReadout(a, ad.dBFS, ad.vrms1, ad.vrms2);
                         }
                     }
                     vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
@@ -187,8 +174,6 @@
                     for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
                         inputNames[i] = data.names[i];
                     }
-                    applyInputNames();
-                    loadInputNameFields();
                 }
             } else if (data.type === 'audioGraphState') {
                 var vuT = document.getElementById('vuMeterEnabledToggle');
@@ -206,18 +191,7 @@
                 applyDebugState(data);
             } else if (data.type === 'signalGenerator') {
                 applySigGenState(data);
-            } else if (data.type === 'adcState') {
-                if (Array.isArray(data.enabled)) {
-                    for (var ai = 0; ai < data.enabled.length; ai++) {
-                        var laneCb = document.getElementById('laneEnable' + ai);
-                        if (laneCb) laneCb.checked = !!data.enabled[ai];
-                        overviewApplyAdcEnabled(ai, !!data.enabled[ai]);
-                    }
-                }
-            } else if (data.type === 'usbAudioState') {
-                handleUsbAudioState(data);
             } else if (data.type === 'dacState') {
-                handleDacState(data);
                 if (data.eeprom) handleEepromDiag(data.eeprom);
             } else if (data.type === 'eepromProgramResult') {
                 showToast(data.success ? 'EEPROM programmed' : 'EEPROM program failed', data.success ? 'success' : 'error');

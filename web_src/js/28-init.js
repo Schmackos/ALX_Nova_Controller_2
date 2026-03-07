@@ -30,17 +30,6 @@
                 toggleVuMode(true);
             }
 
-            // Fetch input names
-            apiFetch('/api/inputnames')
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.names && Array.isArray(d.names)) {
-                        for (var i = 0; i < d.names.length && i < NUM_ADCS * 2; i++) inputNames[i] = d.names[i];
-                        applyInputNames();
-                    }
-                })
-                .catch(function() {});
-
             // Initial status bar update
             updateStatusBar(false, null, false, false);
 

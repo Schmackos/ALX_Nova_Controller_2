@@ -89,7 +89,6 @@
             // Update ADC count from hardware_stats (fires on all tabs)
             if (data.audio && data.audio.numAdcsDetected !== undefined) {
                 numAdcsDetected = data.audio.numAdcsDetected;
-                updateAdc2Visibility();
             }
             // CPU Stats
             if (data.cpu) {

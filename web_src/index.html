@@ -238,36 +238,8 @@
                     </div>
                 </div>
 
-                <!-- Legacy input lane overview (kept for backward compat during transition) -->
-                <div class="card input-overview-card" style="margin-top:12px">
-                  <div class="card-title">Pipeline Lanes</div>
-                  <div class="input-lane-grid" id="inputLaneGrid">
-                    <div class="input-lane" id="inputLane0">
-                      <div class="lane-name">ADC 1</div>
-                      <div class="lane-status-dot" id="laneDot0"></div>
-                      <div class="lane-level" id="laneLevel0">—</div>
-                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
-                    </div>
-                    <div class="input-lane" id="inputLane1">
-                      <div class="lane-name">ADC 2</div>
-                      <div class="lane-status-dot" id="laneDot1"></div>
-                      <div class="lane-level" id="laneLevel1">—</div>
-                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
-                    </div>
-                    <div class="input-lane" id="inputLane2">
-                      <div class="lane-name">SigGen</div>
-                      <div class="lane-status-dot" id="laneDot2"></div>
-                      <div class="lane-level" id="laneLevel2">—</div>
-                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable2" onchange="toggleSigGenLane(this.checked)"><span class="slider round"></span></label>
-                    </div>
-                    <div class="input-lane" id="inputLane3">
-                      <div class="lane-name">USB</div>
-                      <div class="lane-status-dot" id="laneDot3"></div>
-                      <div class="lane-level" id="laneLevel3">—</div>
-                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable3" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
-                    </div>
-                  </div>
-                </div>
+
+
             <!-- Audio Waveform -->
             <div class="card">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -474,91 +446,8 @@
                 </div>
             </div>
 
-            <!-- Input Names -->
-            <div class="card">
-                <div class="card-title">Input Names</div>
-                <div class="form-group">
-                    <label class="form-label">ADC 1 - Input 1</label>
-                    <input type="text" class="form-input" id="inputName0" placeholder="Subwoofer 1" maxlength="20">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">ADC 1 - Input 2</label>
-                    <input type="text" class="form-input" id="inputName1" placeholder="Subwoofer 2" maxlength="20">
-                </div>
-                <div id="inputNamesAdc1">
-                <div class="form-group">
-                    <label class="form-label">ADC 2 - Input 3</label>
-                    <input type="text" class="form-input" id="inputName2" placeholder="Subwoofer 3" maxlength="20">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">ADC 2 - Input 4</label>
-                    <input type="text" class="form-input" id="inputName3" placeholder="Subwoofer 4" maxlength="20">
-                </div>
-                </div>
-                <button class="btn btn-primary" onclick="saveInputNames()">Save Names</button>
-            </div>
 
-            <!-- Audio Settings -->
-            <div class="card">
-                <div class="card-title">Audio Settings</div>
-                <div class="form-group">
-                    <label class="form-label">Update Rate</label>
-                    <select class="form-input" id="audioUpdateRateSelect" onchange="setAudioUpdateRate()">
-                        <option value="100">100 ms</option>
-                        <option value="50" selected>50 ms</option>
-                        <option value="33">33 ms</option>
-                        <option value="20">20 ms</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Sample Rate</label>
-                    <select class="form-input" id="audioSampleRateSelect">
-                        <option value="16000">16000 Hz</option>
-                        <option value="44100">44100 Hz</option>
-                        <option value="48000" selected>48000 Hz</option>
-                    </select>
-                </div>
-                <button class="btn btn-primary" onclick="updateAudioSettings()">Update Sample Rate</button>
-            </div>
 
-            <!-- USB Audio Input -->
-            <div class="card" id="usbAudioCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    USB Audio Input
-                    <span id="usbAudioBadge" class="badge" style="font-size:10px;padding:2px 6px;background:#9E9E9E;color:#fff">Disabled</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="usbAudioEnable" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div id="usbAudioFields" style="display:none">
-                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="usbAudioStatus">Disconnected</span></div>
-                <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="usbAudioFormat">—</span></div>
-                <div class="info-row"><span class="info-label">Host Volume</span><span class="info-value" id="usbAudioVolume">—</span></div>
-                <div id="usbAudioDetails" style="display:none">
-                    <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
-                    <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
-                    <div id="usbAudioVu" style="display:none;margin-top:8px">
-                        <div class="info-row" style="border-bottom:none;padding-bottom:2px"><span class="info-label">VU Level</span></div>
-                        <div class="vu-meter-row">
-                            <span class="vu-meter-label" style="min-width:14px">L</span>
-                            <div class="vu-meter-track">
-                                <div class="vu-meter-fill" id="usbVuBarL"></div>
-                            </div>
-                            <span class="vu-meter-db" id="usbVuReadL">-inf dBFS</span>
-                        </div>
-                        <div class="vu-meter-row" style="margin-bottom:0">
-                            <span class="vu-meter-label" style="min-width:14px">R</span>
-                            <div class="vu-meter-track">
-                                <div class="vu-meter-fill" id="usbVuBarR"></div>
-                            </div>
-                            <span class="vu-meter-db" id="usbVuReadR">-inf dBFS</span>
-                        </div>
-                    </div>
-                </div>
-                </div>
-            </div>
 
             </div><!-- end audio-sv-inputs -->
 
@@ -587,63 +476,8 @@
                     </div>
                 </div>
 
-                <!-- Legacy DAC controls (kept during transition) -->
-                <div class="card" id="dacCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    DAC Output
-                    <span id="dacReadyBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Ready</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="dacEnable" onchange="updateDacEnable()"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div id="dacFields" style="display:none">
-                <div class="info-row"><span class="info-label">Model</span><span class="info-value" id="dacModel">—</span></div>
-                <div class="form-group">
-                    <label class="form-label">Volume: <span id="dacVolVal">80</span>%</label>
-                    <input type="range" class="form-input" id="dacVolume" min="0" max="100" value="80" step="1" oninput="document.getElementById('dacVolVal').textContent=this.value" onchange="updateDacVolume()">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Mute</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="dacMute" onchange="updateDacMute()"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div class="form-group" id="dacFilterGroup" style="display:none">
-                    <label class="form-label">Filter Mode</label>
-                    <select class="form-input" id="dacFilterMode" onchange="updateDacFilter()"></select>
-                </div>
-                <div class="info-row"><span class="info-label">TX Underruns</span><span class="info-value" id="dacUnderruns">0</span></div>
-                <div class="form-group">
-                    <label class="form-label">DAC Driver</label>
-                    <select class="form-input" id="dacDriverSelect" onchange="changeDacDriver()"></select>
-                </div>
-                </div>
-            </div>
 
-            <!-- ES8311 Secondary DAC Output (P4 onboard codec) -->
-            <div class="card" id="es8311Card" style="display:none">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    ES8311 Speaker Output
-                    <span id="es8311ReadyBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Ready</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Enable" onchange="updateEs8311Enable()"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div id="es8311Fields" style="display:none">
-                <div class="form-group">
-                    <label class="form-label">Volume: <span id="es8311VolVal">80</span>%</label>
-                    <input type="range" class="form-input" id="es8311Volume" min="0" max="100" value="80" step="1" oninput="document.getElementById('es8311VolVal').textContent=this.value" onchange="updateEs8311Volume()">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Mute</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Mute" onchange="updateEs8311Mute()"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                </div>
-            </div>
+
 
             </div><!-- end audio-sv-outputs -->
 

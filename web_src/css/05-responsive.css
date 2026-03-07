@@ -197,6 +197,15 @@
             .audio-subnav-btn {
                 padding: 6px 8px;
                 font-size: 11px;
+                min-height: 44px;
+            }
+            .channel-btn {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            .matrix-cell {
+                min-width: 36px;
+                min-height: 36px;
             }
             .peq-overlay-canvas {
                 height: 160px;
@@ -210,6 +219,28 @@
             }
             .matrix-col-hdr {
                 font-size: 9px;
+            }
+            /* Matrix horizontal scroll on narrow screens */
+            .matrix-table {
+                display: block;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+
+        /* Ultra-small screens (< 360px) */
+        @media (max-width: 359px) {
+            .audio-subnav-btn {
+                padding: 6px 4px;
+                font-size: 10px;
+                gap: 2px;
+            }
+            .audio-subnav-btn svg {
+                width: 14px;
+                height: 14px;
+            }
+            .channel-strip-grid {
+                grid-template-columns: 1fr;
             }
         }
 

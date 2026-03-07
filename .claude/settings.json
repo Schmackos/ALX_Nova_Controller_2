@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:www.waveshare.com)",
       "WebFetch(domain:community.home-assistant.io)",
-      "Read(//c/Users/Necrosis/**)"
+      "Read(//c/Users/Necrosis/**)",
+      "Bash(/c/Users/Necrosis/.platformio/penv/Scripts/pip.exe install --upgrade platformio)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Necrosis\\Documents\\GitHub\\ALX_Nova_Controller_2",

@@ -33,7 +33,6 @@ void sendDspMetrics();
 #endif
 #ifdef DAC_ENABLED
 void sendDacState();
-void sendIoRegistryState();
 void sendHalDeviceState();
 void sendAudioChannelMap();
 #endif

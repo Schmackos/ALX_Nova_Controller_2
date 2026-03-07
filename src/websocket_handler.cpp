@@ -26,7 +26,6 @@
 #include "dac_hal.h"
 #include "dac_registry.h"
 #include "dac_eeprom.h"
-#include "io_registry.h"
 #include "hal/hal_device_manager.h"
 #include "hal/hal_types.h"
 #include "hal/hal_temp_sensor.h"
@@ -69,7 +68,6 @@ enum InitStateBit : uint32_t {
     INIT_DAC         = (1u << 9),
     INIT_USB_AUDIO   = (1u << 10),
     INIT_UPDATED     = (1u << 11),
-    INIT_IO_REGISTRY = (1u << 12),
     INIT_HAL_DEVICE  = (1u << 13),
     INIT_CHANNEL_MAP = (1u << 14),
     INIT_ALL         = 0x7FFFu,
@@ -1615,44 +1613,6 @@ void sendDacState() {
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
 }
 
-void sendIoRegistryState() {
-    JsonDocument doc;
-    doc["type"] = "ioRegistryState";
-
-    JsonArray outArr = doc["outputs"].to<JsonArray>();
-    const IoOutputEntry* outputs = io_registry_get_outputs();
-    for (int i = 0; i < IO_MAX_OUTPUTS; i++) {
-        if (!outputs[i].active) continue;
-        JsonObject o = outArr.add<JsonObject>();
-        o["index"] = outputs[i].index;
-        o["name"] = outputs[i].name;
-        o["deviceId"] = outputs[i].deviceId;
-        o["deviceType"] = outputs[i].deviceType;
-        o["discovery"] = (uint8_t)outputs[i].discovery;
-        o["i2sPort"] = outputs[i].i2sPort;
-        o["channelCount"] = outputs[i].channelCount;
-        o["firstChannel"] = outputs[i].firstOutputChannel;
-        o["ready"] = outputs[i].ready;
-    }
-
-    JsonArray inArr = doc["inputs"].to<JsonArray>();
-    const IoInputEntry* inputs = io_registry_get_inputs();
-    for (int i = 0; i < IO_MAX_INPUTS; i++) {
-        if (!inputs[i].active) continue;
-        JsonObject o = inArr.add<JsonObject>();
-        o["index"] = inputs[i].index;
-        o["name"] = inputs[i].name;
-        o["discovery"] = (uint8_t)inputs[i].discovery;
-        o["i2sPort"] = inputs[i].i2sPort;
-        o["channelCount"] = inputs[i].channelCount;
-        o["firstChannel"] = inputs[i].firstInputChannel;
-    }
-
-    String json;
-    serializeJson(doc, json);
-    webSocket.broadcastTXT(json.c_str());
-}
-
 void sendHalDeviceState() {
     JsonDocument doc;
     doc["type"] = "halDeviceState";
@@ -2264,12 +2224,10 @@ void drainPendingInitState() {
 #endif
 #ifdef DAC_ENABLED
         if (sent < MAX_PER_ITER && (pending & INIT_DAC))         { sendDacState();                    pending &= ~INIT_DAC;         sent++; }
-        if (sent < MAX_PER_ITER && (pending & INIT_IO_REGISTRY)) { sendIoRegistryState();             pending &= ~INIT_IO_REGISTRY; sent++; }
         if (sent < MAX_PER_ITER && (pending & INIT_HAL_DEVICE))  { sendHalDeviceState();              pending &= ~INIT_HAL_DEVICE;  sent++; }
         if (sent < MAX_PER_ITER && (pending & INIT_CHANNEL_MAP)) { sendAudioChannelMap();             pending &= ~INIT_CHANNEL_MAP; sent++; }
 #else
         pending &= ~INIT_DAC;
-        pending &= ~INIT_IO_REGISTRY;
         pending &= ~INIT_HAL_DEVICE;
         pending &= ~INIT_CHANNEL_MAP;
 #endif

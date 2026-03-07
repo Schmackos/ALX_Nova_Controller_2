@@ -29,7 +29,6 @@ EventBits_t app_events_wait(uint32_t timeout_ms);
 #define EVT_ADC_ENABLED  (1UL << 10)
 // Bits 15-23 reserved for future use (9 spare bits in 24-bit event group)
 #define EVT_ETHERNET     (1UL << 11)
-#define EVT_IO_REGISTRY  (1UL << 12)
 #define EVT_DAC_SETTINGS (1UL << 13)
 #define EVT_HAL_DEVICE   (1UL << 14)
 #define EVT_CHANNEL_MAP  (1UL << 15)

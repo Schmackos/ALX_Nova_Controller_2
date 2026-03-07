@@ -2125,59 +2125,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
           color: #000;
         }
 
-        /* ===== Input Channel Overview ===== */
-        .input-overview-card { margin-bottom: 12px; }
-        .input-lane-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-        }
-        .input-lane {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-            padding: 10px 6px;
-            background: var(--card-bg, rgba(255,255,255,0.05));
-            border-radius: 8px;
-            border: 1px solid var(--border-color, rgba(255,255,255,0.08));
-            min-width: 0;
-        }
-        .lane-name {
-            font-size: 0.72rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: var(--text-secondary, #888);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            width: 100%;
-            text-align: center;
-        }
-        .lane-status-dot {
-            width: 10px; height: 10px;
-            border-radius: 50%;
-            background: var(--text-secondary, #555);
-            flex-shrink: 0;
-        }
-        .lane-status-dot.active  { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
-        .lane-status-dot.low     { background: #ff9800; box-shadow: 0 0 6px #ff980088; }
-        .lane-status-dot.idle    { background: rgba(255,152,0,0.25); }
-        .lane-status-dot.error   { background: #f44336; }
-        .lane-level {
-            font-size: 0.78rem;
-            font-weight: 500;
-            color: var(--text-primary, #eee);
-            min-height: 1em;
-        }
-        .input-lane .switch {
-            margin: 2px 0 -4px;
-        }
-        @media (max-width: 480px) {
-            .input-lane-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
         /* ===== Debug Console Chips & Search ===== */
         .chip-container { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
         .btn-chip {
@@ -2302,6 +2249,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .audio-subnav-btn:not(.active):hover {
             background: var(--bg-input);
         }
+        .audio-subnav-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
         .audio-subnav-btn svg {
             flex-shrink: 0;
         }
@@ -2328,6 +2279,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             display: flex;
             flex-direction: column;
             gap: 8px;
+            transition: box-shadow 0.2s ease;
+        }
+        .channel-strip:hover {
+            box-shadow: 0 4px 16px var(--shadow);
         }
         .channel-strip-header {
             display: flex;
@@ -2349,14 +2304,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             font-weight: 600;
             padding: 2px 8px;
             border-radius: 10px;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
         .channel-status.status-ok {
             background: rgba(76,175,80,0.15);
-            color: #4CAF50;
+            color: var(--success);
         }
         .channel-status.status-off {
             background: rgba(158,158,158,0.15);
-            color: #9E9E9E;
+            color: var(--text-disabled);
         }
 
         /* VU meters in channel strips */
@@ -2409,6 +2365,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             border-radius: 2px;
             outline: none;
         }
+        .channel-gain-slider:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
         .channel-gain-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             width: 16px;
@@ -2433,6 +2393,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             border-radius: 4px;
             color: var(--text-primary);
         }
+        .channel-delay-input:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
         .channel-button-row {
             display: flex;
             gap: 4px;
@@ -2447,7 +2411,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             background: var(--bg-card);
             color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2456,6 +2420,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .channel-btn:hover {
             border-color: var(--accent);
             color: var(--text-primary);
+        }
+        .channel-btn:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
         .channel-btn.active {
             background: var(--accent);
@@ -2510,15 +2478,22 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             cursor: pointer;
             color: var(--text-disabled);
             font-family: monospace;
-            transition: background 0.15s;
+            transition: background-color 0.15s ease;
         }
         .matrix-cell:hover {
             background: var(--bg-input);
+        }
+        .matrix-cell:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
         }
         .matrix-cell.matrix-active {
             background: rgba(255,152,0,0.12);
             color: var(--accent);
             font-weight: 600;
+        }
+        .matrix-cell.matrix-active:hover {
+            background: rgba(255,152,0,0.22);
         }
         .matrix-presets {
             display: flex;
@@ -2559,14 +2534,21 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
         /* ===== PEQ / DSP Overlay ===== */
+        @keyframes peqSlideUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         .peq-overlay {
             position: fixed;
             inset: 0;
             z-index: 2000;
             background: var(--bg-primary);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
             display: none;
             flex-direction: column;
             overflow-y: auto;
+            animation: peqSlideUp 0.25s ease-out;
         }
         .peq-overlay-header {
             display: flex;
@@ -2596,6 +2578,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .peq-overlay-close:hover {
             background: var(--bg-input);
             color: var(--text-primary);
+        }
+        .peq-overlay-close:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
         .peq-graph-wrap {
             padding: 8px 16px;
@@ -2630,6 +2616,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             border-bottom: 1px solid var(--border);
             vertical-align: middle;
         }
+        .peq-band-table tr:hover td {
+            background: var(--bg-card);
+        }
         .peq-input {
             background: var(--bg-input);
             border: 1px solid var(--border);
@@ -2642,6 +2631,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .peq-input:focus {
             border-color: var(--accent);
             outline: none;
+        }
+        .peq-input:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
         }
         .peq-type-sel {
             width: 80px;
@@ -2833,75 +2826,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             font-weight: 600;
             color: var(--text-secondary);
             margin-bottom: 4px;
-        }
-
-        /* ADC section headers in VU meters */
-        .adc-section-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 12px;
-            margin-bottom: 6px;
-        }
-        .adc-section-header:first-child {
-            margin-top: 0;
-        }
-        .adc-section-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        .adc-status-badge {
-            font-size: 10px;
-            font-weight: 600;
-            padding: 2px 8px;
-            border-radius: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-        .adc-status-badge.ok {
-            background: rgba(76,175,80,0.15);
-            color: #4CAF50;
-        }
-        .adc-status-badge.no-data {
-            background: rgba(158,158,158,0.15);
-            color: #9E9E9E;
-        }
-        .adc-status-badge.clipping {
-            background: rgba(244,67,54,0.15);
-            color: #F44336;
-        }
-        .adc-status-badge.noise-only {
-            background: rgba(255,193,7,0.15);
-            color: #FFC107;
-        }
-        .adc-status-badge.i2s-error {
-            background: rgba(244,67,54,0.15);
-            color: #F44336;
-        }
-        .adc-status-badge.hw-fault {
-            background: rgba(156,39,176,0.15);
-            color: #9C27B0;
-        }
-        .clip-indicator {
-            display: none;
-            font-size: 10px;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 10px;
-            background: #F44336;
-            color: #FFF;
-            letter-spacing: 0.5px;
-        }
-        .clip-indicator.active {
-            display: inline-block;
-            animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        .adc-readout {
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin-left: auto;
-            font-variant-numeric: tabular-nums;
         }
 
         /* VU meter channel name labels */
@@ -3133,6 +3057,15 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             .audio-subnav-btn {
                 padding: 6px 8px;
                 font-size: 11px;
+                min-height: 44px;
+            }
+            .channel-btn {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            .matrix-cell {
+                min-width: 36px;
+                min-height: 36px;
             }
             .peq-overlay-canvas {
                 height: 160px;
@@ -3146,6 +3079,28 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             .matrix-col-hdr {
                 font-size: 9px;
+            }
+            /* Matrix horizontal scroll on narrow screens */
+            .matrix-table {
+                display: block;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+
+        /* Ultra-small screens (< 360px) */
+        @media (max-width: 359px) {
+            .audio-subnav-btn {
+                padding: 6px 4px;
+                font-size: 10px;
+                gap: 2px;
+            }
+            .audio-subnav-btn svg {
+                width: 14px;
+                height: 14px;
+            }
+            .channel-strip-grid {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -3396,36 +3351,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                 </div>
 
-                <!-- Legacy input lane overview (kept for backward compat during transition) -->
-                <div class="card input-overview-card" style="margin-top:12px">
-                  <div class="card-title">Pipeline Lanes</div>
-                  <div class="input-lane-grid" id="inputLaneGrid">
-                    <div class="input-lane" id="inputLane0">
-                      <div class="lane-name">ADC 1</div>
-                      <div class="lane-status-dot" id="laneDot0"></div>
-                      <div class="lane-level" id="laneLevel0">—</div>
-                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable0" checked onchange="setAdcEnabled(0,this.checked)"><span class="slider round"></span></label>
-                    </div>
-                    <div class="input-lane" id="inputLane1">
-                      <div class="lane-name">ADC 2</div>
-                      <div class="lane-status-dot" id="laneDot1"></div>
-                      <div class="lane-level" id="laneLevel1">—</div>
-                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable1" checked onchange="setAdcEnabled(1,this.checked)"><span class="slider round"></span></label>
-                    </div>
-                    <div class="input-lane" id="inputLane2">
-                      <div class="lane-name">SigGen</div>
-                      <div class="lane-status-dot" id="laneDot2"></div>
-                      <div class="lane-level" id="laneLevel2">—</div>
-                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable2" onchange="toggleSigGenLane(this.checked)"><span class="slider round"></span></label>
-                    </div>
-                    <div class="input-lane" id="inputLane3">
-                      <div class="lane-name">USB</div>
-                      <div class="lane-status-dot" id="laneDot3"></div>
-                      <div class="lane-level" id="laneLevel3">—</div>
-                      <label class="switch" style="transform:scale(0.75);"><input type="checkbox" id="laneEnable3" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
-                    </div>
-                  </div>
-                </div>
+
+
             <!-- Audio Waveform -->
             <div class="card">
                 <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3632,91 +3559,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 </div>
             </div>
 
-            <!-- Input Names -->
-            <div class="card">
-                <div class="card-title">Input Names</div>
-                <div class="form-group">
-                    <label class="form-label">ADC 1 - Input 1</label>
-                    <input type="text" class="form-input" id="inputName0" placeholder="Subwoofer 1" maxlength="20">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">ADC 1 - Input 2</label>
-                    <input type="text" class="form-input" id="inputName1" placeholder="Subwoofer 2" maxlength="20">
-                </div>
-                <div id="inputNamesAdc1">
-                <div class="form-group">
-                    <label class="form-label">ADC 2 - Input 3</label>
-                    <input type="text" class="form-input" id="inputName2" placeholder="Subwoofer 3" maxlength="20">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">ADC 2 - Input 4</label>
-                    <input type="text" class="form-input" id="inputName3" placeholder="Subwoofer 4" maxlength="20">
-                </div>
-                </div>
-                <button class="btn btn-primary" onclick="saveInputNames()">Save Names</button>
-            </div>
 
-            <!-- Audio Settings -->
-            <div class="card">
-                <div class="card-title">Audio Settings</div>
-                <div class="form-group">
-                    <label class="form-label">Update Rate</label>
-                    <select class="form-input" id="audioUpdateRateSelect" onchange="setAudioUpdateRate()">
-                        <option value="100">100 ms</option>
-                        <option value="50" selected>50 ms</option>
-                        <option value="33">33 ms</option>
-                        <option value="20">20 ms</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Sample Rate</label>
-                    <select class="form-input" id="audioSampleRateSelect">
-                        <option value="16000">16000 Hz</option>
-                        <option value="44100">44100 Hz</option>
-                        <option value="48000" selected>48000 Hz</option>
-                    </select>
-                </div>
-                <button class="btn btn-primary" onclick="updateAudioSettings()">Update Sample Rate</button>
-            </div>
 
-            <!-- USB Audio Input -->
-            <div class="card" id="usbAudioCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    USB Audio Input
-                    <span id="usbAudioBadge" class="badge" style="font-size:10px;padding:2px 6px;background:#9E9E9E;color:#fff">Disabled</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="usbAudioEnable" onchange="setUsbAudioEnabled(this.checked)"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div id="usbAudioFields" style="display:none">
-                <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="usbAudioStatus">Disconnected</span></div>
-                <div class="info-row"><span class="info-label">Format</span><span class="info-value" id="usbAudioFormat">—</span></div>
-                <div class="info-row"><span class="info-label">Host Volume</span><span class="info-value" id="usbAudioVolume">—</span></div>
-                <div id="usbAudioDetails" style="display:none">
-                    <div class="info-row"><span class="info-label">Buffer Overruns</span><span class="info-value" id="usbAudioOverruns">0</span></div>
-                    <div class="info-row"><span class="info-label">Buffer Underruns</span><span class="info-value" id="usbAudioUnderruns">0</span></div>
-                    <div id="usbAudioVu" style="display:none;margin-top:8px">
-                        <div class="info-row" style="border-bottom:none;padding-bottom:2px"><span class="info-label">VU Level</span></div>
-                        <div class="vu-meter-row">
-                            <span class="vu-meter-label" style="min-width:14px">L</span>
-                            <div class="vu-meter-track">
-                                <div class="vu-meter-fill" id="usbVuBarL"></div>
-                            </div>
-                            <span class="vu-meter-db" id="usbVuReadL">-inf dBFS</span>
-                        </div>
-                        <div class="vu-meter-row" style="margin-bottom:0">
-                            <span class="vu-meter-label" style="min-width:14px">R</span>
-                            <div class="vu-meter-track">
-                                <div class="vu-meter-fill" id="usbVuBarR"></div>
-                            </div>
-                            <span class="vu-meter-db" id="usbVuReadR">-inf dBFS</span>
-                        </div>
-                    </div>
-                </div>
-                </div>
-            </div>
 
             </div><!-- end audio-sv-inputs -->
 
@@ -3745,63 +3589,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     </div>
                 </div>
 
-                <!-- Legacy DAC controls (kept during transition) -->
-                <div class="card" id="dacCard">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    DAC Output
-                    <span id="dacReadyBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Ready</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="dacEnable" onchange="updateDacEnable()"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div id="dacFields" style="display:none">
-                <div class="info-row"><span class="info-label">Model</span><span class="info-value" id="dacModel">—</span></div>
-                <div class="form-group">
-                    <label class="form-label">Volume: <span id="dacVolVal">80</span>%</label>
-                    <input type="range" class="form-input" id="dacVolume" min="0" max="100" value="80" step="1" oninput="document.getElementById('dacVolVal').textContent=this.value" onchange="updateDacVolume()">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Mute</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="dacMute" onchange="updateDacMute()"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div class="form-group" id="dacFilterGroup" style="display:none">
-                    <label class="form-label">Filter Mode</label>
-                    <select class="form-input" id="dacFilterMode" onchange="updateDacFilter()"></select>
-                </div>
-                <div class="info-row"><span class="info-label">TX Underruns</span><span class="info-value" id="dacUnderruns">0</span></div>
-                <div class="form-group">
-                    <label class="form-label">DAC Driver</label>
-                    <select class="form-input" id="dacDriverSelect" onchange="changeDacDriver()"></select>
-                </div>
-                </div>
-            </div>
 
-            <!-- ES8311 Secondary DAC Output (P4 onboard codec) -->
-            <div class="card" id="es8311Card" style="display:none">
-                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-                    ES8311 Speaker Output
-                    <span id="es8311ReadyBadge" class="badge" style="font-size:10px;padding:2px 6px;display:none">Ready</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Enable</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Enable" onchange="updateEs8311Enable()"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                <div id="es8311Fields" style="display:none">
-                <div class="form-group">
-                    <label class="form-label">Volume: <span id="es8311VolVal">80</span>%</label>
-                    <input type="range" class="form-input" id="es8311Volume" min="0" max="100" value="80" step="1" oninput="document.getElementById('es8311VolVal').textContent=this.value" onchange="updateEs8311Volume()">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Mute</label>
-                    <label class="switch" style="float:right"><input type="checkbox" id="es8311Mute" onchange="updateEs8311Mute()"><span class="slider round"></span></label>
-                    <div style="clear:both"></div>
-                </div>
-                </div>
-            </div>
+
 
             </div><!-- end audio-sv-outputs -->
 
@@ -5428,7 +5217,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 if (currentActiveTab === 'audio') {
                     if (data.numAdcsDetected !== undefined) {
                         numAdcsDetected = data.numAdcsDetected;
-                        updateAdc2Visibility();
                     }
                     // Per-ADC VU/peak data
                     if (data.adc && Array.isArray(data.adc)) {
@@ -5438,18 +5226,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                             vuTargetArr[a][1] = ad.vu2 !== undefined ? ad.vu2 : 0;
                             peakTargetArr[a][0] = ad.peak1 !== undefined ? ad.peak1 : 0;
                             peakTargetArr[a][1] = ad.peak2 !== undefined ? ad.peak2 : 0;
-                        }
-                    }
-                    // Per-ADC status badges and readouts
-                    if (data.adcStatus && Array.isArray(data.adcStatus)) {
-                        for (let a = 0; a < data.adcStatus.length && a < NUM_ADCS; a++) {
-                            updateAdcStatusBadge(a, data.adcStatus[a]);
-                        }
-                    }
-                    if (data.adc && Array.isArray(data.adc)) {
-                        for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
-                            const ad = data.adc[a];
-                            updateAdcReadout(a, ad.dBFS, ad.vrms1, ad.vrms2);
                         }
                     }
                     vuDetected = data.signalDetected !== undefined ? data.signalDetected : false;
@@ -5462,8 +5238,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
                         inputNames[i] = data.names[i];
                     }
-                    applyInputNames();
-                    loadInputNameFields();
                 }
             } else if (data.type === 'audioGraphState') {
                 var vuT = document.getElementById('vuMeterEnabledToggle');
@@ -5481,18 +5255,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 applyDebugState(data);
             } else if (data.type === 'signalGenerator') {
                 applySigGenState(data);
-            } else if (data.type === 'adcState') {
-                if (Array.isArray(data.enabled)) {
-                    for (var ai = 0; ai < data.enabled.length; ai++) {
-                        var laneCb = document.getElementById('laneEnable' + ai);
-                        if (laneCb) laneCb.checked = !!data.enabled[ai];
-                        overviewApplyAdcEnabled(ai, !!data.enabled[ai]);
-                    }
-                }
-            } else if (data.type === 'usbAudioState') {
-                handleUsbAudioState(data);
             } else if (data.type === 'dacState') {
-                handleDacState(data);
                 if (data.eeprom) handleEepromDiag(data.eeprom);
             } else if (data.type === 'eepromProgramResult') {
                 showToast(data.success ? 'EEPROM programmed' : 'EEPROM program failed', data.success ? 'success' : 'error');
@@ -6823,10 +6586,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     drawAudioWaveform(null, a);
                     drawSpectrumBars(null, 0, a);
                 }
-                // Update ADC2 panel visibility
-                updateAdc2Visibility();
-                // Load input names into fields
-                loadInputNameFields();
             } else if (tabId !== 'audio' && audioSubscribed) {
                 audioSubscribed = false;
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -7679,8 +7438,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 var vrmsPart = old.indexOf('|') >= 0 ? old.substring(old.indexOf('|')) : '| -- Vrms';
                 el.textContent = dbStr + ' ' + vrmsPart;
             }
-            if (typeof overviewUpdateAdc === 'function') overviewUpdateAdc(adcIdx, vu1, vu2);
-            if (typeof updateInputOverview === 'function') updateInputOverview();
+
+
         }
 
         function toggleVuMode(seg) {
@@ -7708,413 +7467,6 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         }
 
 //# sourceURL=09-audio-viz.js
-
-        // ===== Audio Tab Functions =====
-        function updateAdc2Visibility() {
-            var show = numAdcsDetected > 1;
-            var ids = ['adcSection1', 'waveformPanel1', 'spectrumPanel1', 'inputNamesAdc1', 'siggenTargetAdcGroup'];
-            for (var i = 0; i < ids.length; i++) {
-                var el = document.getElementById(ids[i]);
-                if (el) el.style.display = show ? '' : 'none';
-            }
-            var grids = document.querySelectorAll('#audio .dual-canvas-grid');
-            for (var i = 0; i < grids.length; i++) {
-                grids[i].style.gridTemplateColumns = show ? '1fr 1fr' : '1fr';
-            }
-        }
-
-        function updateAdcStatusBadge(adcIdx, status) {
-            var el = document.getElementById('adcStatusBadge' + adcIdx);
-            if (!el) return;
-            el.textContent = status || 'OK';
-            el.className = 'adc-status-badge';
-            var s = (status || 'OK').toUpperCase();
-            if (s === 'OK') el.classList.add('ok');
-            else if (s === 'NO_DATA') el.classList.add('no-data');
-            else if (s === 'CLIPPING') el.classList.add('clipping');
-            else if (s === 'NOISE_ONLY') el.classList.add('noise-only');
-            else if (s === 'I2S_ERROR') el.classList.add('i2s-error');
-            else if (s === 'HW_FAULT') el.classList.add('hw-fault');
-            var clip = document.getElementById('clipIndicator' + adcIdx);
-            if (clip) {
-                if (s === 'CLIPPING' || s === 'HW_FAULT') clip.classList.add('active');
-                else clip.classList.remove('active');
-            }
-        }
-
-        function updateAdcReadout(adcIdx, dBFS, vrms1, vrms2) {
-            var el = document.getElementById('adcReadout' + adcIdx);
-            if (!el) return;
-            var dbStr = (dBFS !== undefined && dBFS > -95) ? dBFS.toFixed(1) + ' dBFS' : '-inf dBFS';
-            var vrms = 0;
-            if (vrms1 !== undefined && vrms2 !== undefined) vrms = Math.max(vrms1, vrms2);
-            else if (vrms1 !== undefined) vrms = vrms1;
-            var vStr = vrms > 0.001 ? vrms.toFixed(3) + ' Vrms' : '-- Vrms';
-            el.textContent = dbStr + ' | ' + vStr;
-        }
-
-        function applyInputNames() {
-            for (var i = 0; i < NUM_ADCS * 2; i++) {
-                var el = document.getElementById('vuChName' + i);
-                if (el) el.textContent = inputNames[i] || ('Ch ' + (i + 1));
-                var segEl = document.getElementById('vuChNameSeg' + i);
-                if (segEl) segEl.textContent = inputNames[i] || ('Ch ' + (i + 1));
-            }
-            if (typeof dspRenderChannelTabs === 'function') dspRenderChannelTabs();
-            if (typeof dspRenderRouting === 'function') dspRenderRouting();
-            if (typeof updatePeqCopyToDropdown === 'function') updatePeqCopyToDropdown();
-            if (typeof updateChainCopyToDropdown === 'function') updateChainCopyToDropdown();
-        }
-
-        function updatePeqCopyToDropdown() {
-            var sel = document.getElementById('peqCopyTo');
-            if (!sel) return;
-            // Preserve first option and rebuild channel options
-            var html = '<option value="">Copy to...</option>';
-            for (var i = 0; i < DSP_MAX_CH; i++) {
-                var name = inputNames[i] || DSP_CH_NAMES[i];
-                html += '<option value="' + i + '">' + name + '</option>';
-            }
-            html += '<option value="all">All Channels</option>';
-            sel.innerHTML = html;
-        }
-
-        function loadInputNameFields() {
-            for (var i = 0; i < NUM_ADCS * 2; i++) {
-                var el = document.getElementById('inputName' + i);
-                if (el) el.value = inputNames[i] || '';
-            }
-        }
-
-        function saveInputNames() {
-            var names = [];
-            for (var i = 0; i < NUM_ADCS * 2; i++) {
-                var el = document.getElementById('inputName' + i);
-                names.push(el ? el.value : '');
-            }
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'setInputNames', names: names }));
-                showToast('Input names saved', 'success');
-            }
-        }
-
-        function updateAudioSettings() {
-            const sampleRate = parseInt(document.getElementById('audioSampleRateSelect').value);
-
-            apiFetch('/api/smartsensing', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audioSampleRate: sampleRate })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) showToast('Sample rate updated', 'success');
-                else showToast('Failed to update sample rate', 'error');
-            })
-            .catch(err => showToast('Failed to update sample rate', 'error'));
-        }
-
-        // ===== Per-ADC Input Enable/Disable =====
-        function setAdcEnabled(adc, en) {
-            if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({type:'setAdcEnabled',adc:adc,enabled:en}));
-        }
-
-        // ===== USB Audio Input =====
-        function setUsbAudioEnabled(en) {
-            if (ws && ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({type:'setUsbAudioEnabled',enabled:en}));
-        }
-
-        function handleUsbAudioState(d) {
-            var enableCb = document.getElementById('usbAudioEnable');
-            var fields = document.getElementById('usbAudioFields');
-            if (enableCb) enableCb.checked = !!d.enabled;
-            var laneEn3 = document.getElementById('laneEnable3');
-            if (laneEn3) laneEn3.checked = !!d.enabled;
-            if (fields) fields.style.display = d.enabled ? '' : 'none';
-
-            var badge = document.getElementById('usbAudioBadge');
-            var statusEl = document.getElementById('usbAudioStatus');
-            var formatEl = document.getElementById('usbAudioFormat');
-            var volEl = document.getElementById('usbAudioVolume');
-            var details = document.getElementById('usbAudioDetails');
-            if (!d.enabled) {
-                if (badge) { badge.textContent = 'Disabled'; badge.style.background = '#9E9E9E'; }
-            } else if (d.streaming) {
-                if (badge) { badge.textContent = 'Streaming'; badge.style.background = '#4CAF50'; }
-                if (statusEl) statusEl.textContent = 'Streaming';
-                if (details) details.style.display = '';
-            } else if (d.connected) {
-                if (badge) { badge.textContent = 'Connected'; badge.style.background = '#FF9800'; }
-                if (statusEl) statusEl.textContent = 'Connected (idle)';
-                if (details) details.style.display = '';
-            } else {
-                if (badge) { badge.textContent = 'Disconnected'; badge.style.background = '#9E9E9E'; }
-                if (statusEl) statusEl.textContent = 'Disconnected';
-                if (details) details.style.display = 'none';
-            }
-            if (formatEl) {
-                if (d.negotiatedRate) {
-                    formatEl.textContent = (d.negotiatedRate / 1000) + ' kHz / ' + (d.negotiatedDepth || d.bitDepth) + '-bit stereo';
-                } else if (d.connected) {
-                    formatEl.textContent = (d.sampleRate/1000) + ' kHz / ' + d.bitDepth + '-bit ' + (d.channels === 1 ? 'mono' : 'stereo');
-                } else {
-                    formatEl.textContent = '\u2014';
-                }
-            }
-            if (volEl) {
-                if (d.connected) {
-                    if (d.mute) {
-                        volEl.textContent = 'Muted';
-                    } else {
-                        var dbVal = (d.volume / 256).toFixed(1);
-                        var pct = Math.round(d.volumeLinear * 100);
-                        volEl.textContent = dbVal + ' dB (' + pct + '%)';
-                    }
-                } else {
-                    volEl.textContent = '\u2014';
-                }
-            }
-            var ovr = document.getElementById('usbAudioOverruns');
-            if (ovr) ovr.textContent = d.overruns || 0;
-            var udr = document.getElementById('usbAudioUnderruns');
-            if (udr) udr.textContent = d.underruns || 0;
-            // VU meters (visible only when streaming)
-            var vuSection = document.getElementById('usbAudioVu');
-            if (vuSection) {
-                vuSection.style.display = d.streaming ? '' : 'none';
-                if (d.streaming && d.vuL !== undefined) {
-                    var pctL = Math.max(0, Math.min(100, 100 + (d.vuL || -90)));
-                    var pctR = Math.max(0, Math.min(100, 100 + (d.vuR || -90)));
-                    var barL = document.getElementById('usbVuBarL');
-                    var barR = document.getElementById('usbVuBarR');
-                    if (barL) barL.style.width = pctL + '%';
-                    if (barR) barR.style.width = pctR + '%';
-                    var readL = document.getElementById('usbVuReadL');
-                    var readR = document.getElementById('usbVuReadR');
-                    if (readL) readL.textContent = (d.vuL > -90) ? d.vuL.toFixed(1) + ' dBFS' : '-inf dBFS';
-                    if (readR) readR.textContent = (d.vuR > -90) ? d.vuR.toFixed(1) + ' dBFS' : '-inf dBFS';
-                }
-            }
-            if (typeof overviewApplyUsbState === 'function') overviewApplyUsbState(d);
-        }
-
-//# sourceURL=10-input-audio.js
-
-// 11-input-overview.js — Input Channel Overview Panel
-
-var inputLaneEnabled = [true, true, false, false];
-var inputLaneLevels  = [null, null, null, null];
-
-function updateInputOverview() {
-    var dots   = ['laneDot0','laneDot1','laneDot2','laneDot3'];
-    var levels = ['laneLevel0','laneLevel1','laneLevel2','laneLevel3'];
-
-    for (var i = 0; i < 4; i++) {
-        var dot = document.getElementById(dots[i]);
-        var lvl = document.getElementById(levels[i]);
-        if (!dot) continue;
-
-        var dbVal = inputLaneLevels[i];
-        var enabled = inputLaneEnabled[i];
-
-        var cb = document.getElementById('laneEnable' + i);
-        if (cb) cb.checked = enabled;
-
-        if (!enabled) {
-            dot.className = 'lane-status-dot';
-            if (lvl) lvl.textContent = '\u2014';
-        } else {
-            var dbNum = (typeof dbVal === 'number') ? dbVal : -99;
-            if (lvl) lvl.textContent = dbNum > -90 ? dbNum.toFixed(1) + ' dBFS' : '\u2014';
-            dot.className = 'lane-status-dot' +
-                (dbNum > -65 ? ' active' : dbNum > -80 ? ' low' : ' idle');
-        }
-    }
-}
-
-function overviewUpdateAdc(adcIdx, vuL, vuR) {
-    // Called by updateLevelMeters() with per-ADC VU values (linear 0-1)
-    if (adcIdx < 0 || adcIdx > 1) return;
-    var peak = Math.max(vuL || 0, vuR || 0);
-    inputLaneLevels[adcIdx] = peak > 0 ? (20 * Math.log10(peak)).toFixed(1) * 1 : -99;
-}
-
-function overviewApplyAdcEnabled(adcIdx, enabled) {
-    if (adcIdx < 0 || adcIdx > 1) return;
-    inputLaneEnabled[adcIdx] = enabled;
-    updateInputOverview();
-}
-
-function overviewApplySigGenState(d) {
-    inputLaneEnabled[2] = !!(d && d.enabled);
-    inputLaneLevels[2]  = (d && d.enabled && d.amplitude) ? (20 * Math.log10(d.amplitude / 32767)).toFixed(1) * 1 : null;
-    updateInputOverview();
-}
-
-function overviewApplyUsbState(d) {
-    inputLaneEnabled[3] = !!(d && d.enabled);
-    // USB VU level (active when streaming with VU data)
-    if (d && d.streaming && d.vuL !== undefined && d.vuL > -90) {
-        inputLaneLevels[3] = Math.max(d.vuL, d.vuR);
-    } else {
-        inputLaneLevels[3] = null;
-    }
-    updateInputOverview();
-}
-
-function toggleSigGenLane(enabled) {
-    if (enabled === undefined) enabled = !inputLaneEnabled[2];
-    wsSend('setSignalGen', { enabled: !!enabled });
-}
-
-//# sourceURL=11-input-overview.js
-
-        // ===== DAC Output =====
-        function updateDacEnable() {
-            var en = document.getElementById('dacEnable').checked;
-            document.getElementById('dacFields').style.display = en ? '' : 'none';
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'setDacEnabled', enabled: en }));
-            }
-        }
-        function updateDacVolume() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'setDacVolume',
-                    volume: parseInt(document.getElementById('dacVolume').value)
-                }));
-            }
-        }
-        function updateDacMute() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'setDacMute',
-                    mute: document.getElementById('dacMute').checked
-                }));
-            }
-        }
-        function updateDacFilter() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'setDacFilter',
-                    filterMode: parseInt(document.getElementById('dacFilterMode').value)
-                }));
-            }
-        }
-        function changeDacDriver() {
-            var id = parseInt(document.getElementById('dacDriverSelect').value);
-            apiFetch('/api/dac', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ deviceId: id })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) showToast('DAC driver changed', 'success');
-                else showToast(data.message || 'Failed', 'error');
-            })
-            .catch(() => showToast('Failed to change DAC driver', 'error'));
-        }
-        // ===== ES8311 Secondary DAC Output =====
-        function updateEs8311Enable() {
-            var en = document.getElementById('es8311Enable').checked;
-            document.getElementById('es8311Fields').style.display = en ? '' : 'none';
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'setEs8311Enabled', enabled: en }));
-            }
-        }
-        function updateEs8311Volume() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'setEs8311Volume',
-                    volume: parseInt(document.getElementById('es8311Volume').value)
-                }));
-            }
-        }
-        function updateEs8311Mute() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'setEs8311Mute',
-                    mute: document.getElementById('es8311Mute').checked
-                }));
-            }
-        }
-        function handleEs8311State(d) {
-            var card = document.getElementById('es8311Card');
-            if (card) card.style.display = '';
-            var enEl = document.getElementById('es8311Enable');
-            if (enEl) enEl.checked = d.es8311Enabled;
-            var fields = document.getElementById('es8311Fields');
-            if (fields) fields.style.display = d.es8311Enabled ? '' : 'none';
-            var volSlider = document.getElementById('es8311Volume');
-            if (volSlider) { volSlider.value = d.es8311Volume; document.getElementById('es8311VolVal').textContent = d.es8311Volume; }
-            var muteEl = document.getElementById('es8311Mute');
-            if (muteEl) muteEl.checked = d.es8311Mute;
-            var badge = document.getElementById('es8311ReadyBadge');
-            if (badge) {
-                badge.style.display = d.es8311Enabled ? '' : 'none';
-                badge.textContent = d.es8311Ready ? 'Ready' : 'Not Ready';
-                badge.style.background = d.es8311Ready ? '#4CAF50' : '#F44336';
-                badge.style.color = '#fff';
-            }
-        }
-        function handleDacState(d) {
-            // Update ES8311 secondary DAC if fields are present
-            if (d.es8311Enabled !== undefined) handleEs8311State(d);
-            var enEl = document.getElementById('dacEnable');
-            if (enEl) enEl.checked = d.enabled;
-            var fields = document.getElementById('dacFields');
-            if (fields) fields.style.display = d.enabled ? '' : 'none';
-            var model = document.getElementById('dacModel');
-            if (model) model.textContent = d.modelName || '—';
-            var volSlider = document.getElementById('dacVolume');
-            if (volSlider) { volSlider.value = d.volume; document.getElementById('dacVolVal').textContent = d.volume; }
-            var muteEl = document.getElementById('dacMute');
-            if (muteEl) muteEl.checked = d.mute;
-            var badge = document.getElementById('dacReadyBadge');
-            if (badge) {
-                badge.style.display = d.enabled ? '' : 'none';
-                badge.textContent = d.ready ? 'Ready' : 'Not Ready';
-                badge.style.background = d.ready ? '#4CAF50' : '#F44336';
-                badge.style.color = '#fff';
-            }
-            var und = document.getElementById('dacUnderruns');
-            if (und) und.textContent = d.txUnderruns || 0;
-            // Filter modes
-            var fg = document.getElementById('dacFilterGroup');
-            if (d.filterModes && d.filterModes.length > 0) {
-                if (fg) fg.style.display = '';
-                var sel = document.getElementById('dacFilterMode');
-                if (sel) {
-                    sel.innerHTML = '';
-                    d.filterModes.forEach(function(name, i) {
-                        var opt = document.createElement('option');
-                        opt.value = i; opt.textContent = name;
-                        sel.appendChild(opt);
-                    });
-                    sel.value = d.filterMode || 0;
-                }
-            } else if (fg) {
-                fg.style.display = 'none';
-            }
-            // Driver select
-            if (d.drivers) {
-                var drvSel = document.getElementById('dacDriverSelect');
-                if (drvSel) {
-                    drvSel.innerHTML = '';
-                    d.drivers.forEach(function(drv) {
-                        var opt = document.createElement('option');
-                        opt.value = drv.id; opt.textContent = drv.name;
-                        drvSel.appendChild(opt);
-                    });
-                    drvSel.value = d.deviceId;
-                }
-            }
-        }
-
-//# sourceURL=12-output-dac.js
 
         function updateSigGen() {
             document.getElementById('siggenFields').style.display = document.getElementById('siggenEnable').checked ? '' : 'none';
@@ -8160,9 +7512,8 @@ function toggleSigGenLane(enabled) {
             if (d.targetAdc !== undefined) document.getElementById('siggenTargetAdc').value = d.targetAdc;
             document.getElementById('siggenSweepGroup').style.display = d.waveform === 3 ? '' : 'none';
             document.getElementById('siggenPwmNote').style.display = d.outputMode === 1 ? '' : 'none';
-            if (typeof overviewApplySigGenState === 'function') overviewApplySigGenState(d);
-            var laneEn2 = document.getElementById('laneEnable2');
-            if (laneEn2) laneEn2.checked = !!d.enabled;
+
+
         }
 
 //# sourceURL=13-signal-gen.js
@@ -8193,14 +7544,7 @@ function toggleSigGenLane(enabled) {
         }
 
         function halSyncAudioTabVisibility(devices) {
-            // Show/hide Audio tab DAC card based on HAL device enabled state
-            var dac = devices.find(function(d) { return d.type === 1; }); // HAL_DEV_DAC
-            var dacCard = document.getElementById('dacCard');
-            if (dacCard && dac) dacCard.style.display = (dac.cfgEnabled !== false) ? '' : 'none';
-
-            var codec = devices.find(function(d) { return d.type === 3; }); // HAL_DEV_CODEC
-            var es8311Card = document.getElementById('es8311Card');
-            if (es8311Card && codec) es8311Card.style.display = (codec.cfgEnabled !== false) ? '' : 'none';
+            // Legacy DAC/ES8311 cards removed — visibility now handled by audioChannelMap
         }
 
         function renderHalDevices() {
@@ -11051,7 +10395,6 @@ function initFirmwareDragDrop() {
             // Update ADC count from hardware_stats (fires on all tabs)
             if (data.audio && data.audio.numAdcsDetected !== undefined) {
                 numAdcsDetected = data.audio.numAdcsDetected;
-                updateAdc2Visibility();
             }
             // CPU Stats
             if (data.cpu) {
@@ -12431,17 +11774,6 @@ function initFirmwareDragDrop() {
                 document.getElementById('vuSegmented').checked = true;
                 toggleVuMode(true);
             }
-
-            // Fetch input names
-            apiFetch('/api/inputnames')
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.names && Array.isArray(d.names)) {
-                        for (var i = 0; i < d.names.length && i < NUM_ADCS * 2; i++) inputNames[i] = d.names[i];
-                        applyInputNames();
-                    }
-                })
-                .catch(function() {});
 
             // Initial status bar update
             updateStatusBar(false, null, false, false);

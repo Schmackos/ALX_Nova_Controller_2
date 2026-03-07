@@ -411,8 +411,8 @@
                 var vrmsPart = old.indexOf('|') >= 0 ? old.substring(old.indexOf('|')) : '| -- Vrms';
                 el.textContent = dbStr + ' ' + vrmsPart;
             }
-            if (typeof overviewUpdateAdc === 'function') overviewUpdateAdc(adcIdx, vu1, vu2);
-            if (typeof updateInputOverview === 'function') updateInputOverview();
+
+
         }
 
         function toggleVuMode(seg) {

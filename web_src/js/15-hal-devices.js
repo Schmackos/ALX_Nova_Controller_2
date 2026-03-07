@@ -24,14 +24,7 @@
         }
 
         function halSyncAudioTabVisibility(devices) {
-            // Show/hide Audio tab DAC card based on HAL device enabled state
-            var dac = devices.find(function(d) { return d.type === 1; }); // HAL_DEV_DAC
-            var dacCard = document.getElementById('dacCard');
-            if (dacCard && dac) dacCard.style.display = (dac.cfgEnabled !== false) ? '' : 'none';
-
-            var codec = devices.find(function(d) { return d.type === 3; }); // HAL_DEV_CODEC
-            var es8311Card = document.getElementById('es8311Card');
-            if (es8311Card && codec) es8311Card.style.display = (codec.cfgEnabled !== false) ? '' : 'none';
+            // Legacy DAC/ES8311 cards removed — visibility now handled by audioChannelMap
         }
 
         function renderHalDevices() {
