@@ -861,7 +861,12 @@ void i2s_audio_push_waveform_fft(const int32_t *rawLJ, int frames, int adcIndex)
 bool i2s_audio_enable_tx(uint32_t sample_rate) {
     if (_tx_handle_adc1) return true; // Already enabled
 
-    LOG_I("[Audio] Enabling I2S TX full-duplex on I2S0, data_out=GPIO%d", I2S_TX_DATA_PIN);
+    // Query HAL config for TX data pin override (matches i2s_configure_adc1 pattern)
+    HalDeviceConfig* _dacHalCfg = hal_get_config_for_type(HAL_DEV_DAC);
+    gpio_num_t _txDataPin = (_dacHalCfg && _dacHalCfg->pinData > 0)
+        ? (gpio_num_t)_dacHalCfg->pinData : (gpio_num_t)I2S_TX_DATA_PIN;
+
+    LOG_I("[Audio] Enabling I2S TX full-duplex on I2S0, data_out=GPIO%d", (int)_txDataPin);
 
     // Pause audio task during channel reinit
     AppState::getInstance().audioPaused = true;
@@ -895,7 +900,7 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
     std_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;
     std_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
     std_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
-    std_cfg.gpio_cfg.dout = (gpio_num_t)I2S_TX_DATA_PIN;
+    std_cfg.gpio_cfg.dout = _txDataPin;
     std_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT_PIN;
     std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
@@ -925,7 +930,7 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
 
     AppState::getInstance().audioPaused = false;
     LOG_I("[Audio] I2S TX full-duplex enabled: rate=%luHz data_out=GPIO%d MCLK=%luHz DMA=%dx%d",
-          (unsigned long)sample_rate, I2S_TX_DATA_PIN,
+          (unsigned long)sample_rate, (int)_txDataPin,
           (unsigned long)(sample_rate * 256),
           DMA_BUF_COUNT, DMA_BUF_LEN);
     return true;

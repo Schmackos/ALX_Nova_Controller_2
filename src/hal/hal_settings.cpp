@@ -135,8 +135,23 @@ void hal_apply_config(uint8_t slot) {
 
     // DISABLE: deinit device and mark MANUAL (persisted disabled state)
     if (!cfg->enabled) {
+        // DAC-path devices: deferred legacy teardown via main loop
+        // (I2S driver lifecycle is too heavy for direct call — must pause audio pipeline first)
+        if (desc.capabilities & HAL_CAP_DAC_PATH) {
+            dev->_ready = false;
+            dev->_state = HAL_STATE_MANUAL;
+            if (desc.type == HAL_DEV_DAC) {
+                appState.dacEnabled = false;
+                appState._pendingDacToggle = -1;
+            } else if (desc.type == HAL_DEV_CODEC) {
+                appState._pendingEs8311Toggle = -1;
+            }
+            LOG_I("[HAL] DAC-path device slot %u disable deferred", slot);
+            appState.markHalDeviceDirty();
+            return;
+        }
         if (dev->_state == HAL_STATE_AVAILABLE || dev->_state == HAL_STATE_CONFIGURING) {
-            dev->_ready = false;   // Sink isReady() callbacks check this — audio stops immediately
+            dev->_ready = false;
             dev->deinit();
         }
         dev->_state = HAL_STATE_MANUAL;
@@ -148,6 +163,18 @@ void hal_apply_config(uint8_t slot) {
 
     // RE-ENABLE from MANUAL state: probe + init
     if (dev->_state == HAL_STATE_MANUAL) {
+        // DAC-path devices: deferred legacy re-init via main loop
+        if (desc.capabilities & HAL_CAP_DAC_PATH) {
+            if (desc.type == HAL_DEV_DAC) {
+                appState.dacEnabled = true;
+                appState._pendingDacToggle = 1;
+            } else if (desc.type == HAL_DEV_CODEC) {
+                appState._pendingEs8311Toggle = 1;
+            }
+            LOG_I("[HAL] DAC-path device slot %u re-enable deferred", slot);
+            appState.markHalDeviceDirty();
+            return;
+        }
         dev->_state = HAL_STATE_CONFIGURING;
         bool ok = dev->probe() && dev->init();
         dev->_state = ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR;

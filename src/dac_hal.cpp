@@ -399,8 +399,19 @@ void dac_secondary_init() {
         secondarySink.isReady = _secondary_sink_ready;
         audio_pipeline_register_sink(&secondarySink);
     } else {
+        // Re-enable: update state + re-register sink (cleared by dac_secondary_deinit)
         _halSecondaryAdapter->_ready = true;
         _halSecondaryAdapter->_state = HAL_STATE_AVAILABLE;
+        hal_pipeline_on_device_available(_halSecondaryAdapter->getSlot());
+        as.markHalDeviceDirty();
+
+        AudioOutputSink secondarySink = AUDIO_OUTPUT_SINK_INIT;
+        secondarySink.name = "ES8311";
+        secondarySink.firstChannel = 2;
+        secondarySink.channelCount = 2;
+        secondarySink.write = _secondary_sink_write;
+        secondarySink.isReady = _secondary_sink_ready;
+        audio_pipeline_register_sink(&secondarySink);
     }
 #endif
 }
@@ -419,7 +430,10 @@ void dac_secondary_deinit() {
     if (_halSecondaryAdapter) {
         uint8_t slot = _halSecondaryAdapter->getSlot();
         _halSecondaryAdapter->_ready = false;
-        _halSecondaryAdapter->_state = HAL_STATE_UNAVAILABLE;
+        // Preserve HAL_STATE_MANUAL set by hal_apply_config() DISABLE path
+        if (_halSecondaryAdapter->_state != HAL_STATE_MANUAL) {
+            _halSecondaryAdapter->_state = HAL_STATE_UNAVAILABLE;
+        }
         hal_pipeline_on_device_removed(slot);
         as.markHalDeviceDirty();
     }
@@ -745,7 +759,7 @@ void dac_output_init() {
 #ifndef NATIVE_TEST
     // Delegation guard: handle HAL auto-provisioned PCM5102A placeholder.
     // hal_load_auto_devices() may have registered a probe-only HalPcm5102a in DETECTED state.
-    // Remove it so HalDacAdapter can take its place (and register the audio pipeline sink).
+    // If our own HalDacAdapter is being re-enabled, keep it in place (preserve slot & config).
     // If already AVAILABLE (native HAL init completed), skip entirely.
     {
         HalDevice* halDev = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
@@ -754,10 +768,16 @@ void dac_output_init() {
                 LOG_I("[DAC] PCM5102A already AVAILABLE in HAL — skipping legacy path");
                 return;
             }
-            // Probe-only placeholder — remove to allow HalDacAdapter registration
-            uint8_t oldSlot = halDev->getSlot();
-            HalDeviceManager::instance().removeDevice(oldSlot);
-            LOG_I("[DAC] Removed PCM5102A placeholder (slot %u) — HalDacAdapter taking over", oldSlot);
+            // If this is our own HalDacAdapter being re-enabled, keep it in its slot
+            if ((HalDevice*)_halPrimaryAdapter == halDev) {
+                LOG_I("[DAC] Re-enabling existing HalDacAdapter (slot %u)", halDev->getSlot());
+                // Don't remove — fall through to driver reinit, reuse slot
+            } else {
+                // Probe-only placeholder — remove to allow HalDacAdapter registration
+                uint8_t oldSlot = halDev->getSlot();
+                HalDeviceManager::instance().removeDevice(oldSlot);
+                LOG_I("[DAC] Removed PCM5102A placeholder (slot %u) — HalDacAdapter taking over", oldSlot);
+            }
         }
     }
 #endif
@@ -864,8 +884,19 @@ void dac_output_init() {
         primarySink.isReady = _primary_sink_ready;
         audio_pipeline_register_sink(&primarySink);
     } else {
+        // Re-enable: update state + re-register sink (cleared by dac_output_deinit)
         _halPrimaryAdapter->_ready = true;
         _halPrimaryAdapter->_state = HAL_STATE_AVAILABLE;
+        hal_pipeline_on_device_available(_halPrimaryAdapter->getSlot());
+        as.markHalDeviceDirty();
+
+        AudioOutputSink primarySink = AUDIO_OUTPUT_SINK_INIT;
+        primarySink.name = as.dacModelName;
+        primarySink.firstChannel = 0;
+        primarySink.channelCount = 2;
+        primarySink.write = _primary_sink_write;
+        primarySink.isReady = _primary_sink_ready;
+        audio_pipeline_register_sink(&primarySink);
     }
 }
 
@@ -890,7 +921,11 @@ void dac_output_deinit() {
     if (_halPrimaryAdapter) {
         uint8_t slot = _halPrimaryAdapter->getSlot();
         _halPrimaryAdapter->_ready = false;
-        _halPrimaryAdapter->_state = HAL_STATE_UNAVAILABLE;
+        // Preserve HAL_STATE_MANUAL set by hal_apply_config() DISABLE path —
+        // only set UNAVAILABLE if not already MANUAL (user-initiated disable)
+        if (_halPrimaryAdapter->_state != HAL_STATE_MANUAL) {
+            _halPrimaryAdapter->_state = HAL_STATE_UNAVAILABLE;
+        }
         hal_pipeline_on_device_removed(slot);
         as.markHalDeviceDirty();
     }

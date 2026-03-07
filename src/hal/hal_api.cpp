@@ -263,6 +263,17 @@ void registerHalApiEndpoints(WebServer& server) {
         HalDevice* dev = mgr.getDevice(slot);
         if (!dev) { server.send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
 
+        // DAC-path devices: trigger proper legacy teardown before removal
+        const HalDeviceDescriptor& delDesc = dev->getDescriptor();
+        if (delDesc.capabilities & HAL_CAP_DAC_PATH) {
+            if (delDesc.type == HAL_DEV_DAC) {
+                appState.dacEnabled = false;
+                appState._pendingDacToggle = -1;
+            } else if (delDesc.type == HAL_DEV_CODEC) {
+                appState._pendingEs8311Toggle = -1;
+            }
+        }
+
         // Deinit and remove
         dev->deinit();
         mgr.removeDevice(slot);
