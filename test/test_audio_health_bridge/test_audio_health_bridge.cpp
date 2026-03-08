@@ -905,7 +905,7 @@ void test_rule5_independent_per_lane() {
     TEST_ASSERT_EQUAL(1, count);
 }
 
-// 8n: reset_for_test zeroes all Rule 1/4/5 state
+// 8n: reset_for_test zeroes all Rule 1/4/5 state (continues below after Group 9)
 void test_rule_state_cleared_by_reset() {
     TestAdcDevice adc("ti,pcm1808");
     registerAvailableAdc(&adc);
@@ -940,6 +940,281 @@ void test_rule_state_cleared_by_reset() {
             count++;
     }
     TEST_ASSERT_EQUAL(0, count); // Still no emit after only 10 checks
+}
+
+// =====================================================================
+// Group 9: Flap guard edge cases (8 tests)
+// =====================================================================
+
+// 9a: Exactly 2 transitions within 30s should NOT escalate to ERROR.
+// FLAP_MAX_TRANSITIONS == 2 means >2 triggers. 2 is at the threshold, not over.
+void test_flap_exactly_two_transitions_no_escalation() {
+    TestAdcDevice adc("ti,pcm1808");
+    int slot = registerAvailableAdc(&adc);
+
+    uint32_t base = 60000;
+
+    // Transition 1: AVAILABLE -> UNAVAILABLE (fault)
+    ArduinoMock::mockMillis = base;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adc._state);
+
+    // Transition 2: UNAVAILABLE -> AVAILABLE (recovery)
+    ArduinoMock::mockMillis = base + 5000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+
+    // Should remain AVAILABLE — 2 transitions is not >2
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adc._state);
+    TEST_ASSERT_TRUE(adc._ready);
+}
+
+// 9b: Exactly 3 transitions within 30s SHOULD escalate to ERROR.
+// 3 > FLAP_MAX_TRANSITIONS(2) triggers the flap guard.
+void test_flap_exactly_three_transitions_escalates() {
+    TestAdcDevice adc("ti,pcm1808");
+    int slot = registerAvailableAdc(&adc);
+
+    uint32_t base = 60000;
+
+    // Transition 1: AVAILABLE -> UNAVAILABLE
+    ArduinoMock::mockMillis = base;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adc._state);
+
+    // Transition 2: UNAVAILABLE -> AVAILABLE
+    ArduinoMock::mockMillis = base + 2000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adc._state);
+
+    // Transition 3: AVAILABLE -> UNAVAILABLE — 3 > 2, escalate
+    ArduinoMock::mockMillis = base + 4000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc._state);
+    TEST_ASSERT_FALSE(adc._ready);
+}
+
+// 9c: Timer wraparound at uint32_t boundary.
+// millis() wraps at ~4.29 billion. The fix uses:
+//   cutoff = (nowMs >= FLAP_WINDOW_MS) ? (nowMs - FLAP_WINDOW_MS) : 0
+// When nowMs < FLAP_WINDOW_MS (30000), cutoff should be 0 (include all).
+// Pre-fix bug would compute nowMs - 30000 wrapping to ~4.29B, pruning everything.
+void test_flap_millis_wraparound_at_uint32_boundary() {
+    TestAdcDevice adc("ti,pcm1808");
+    int slot = registerAvailableAdc(&adc);
+
+    // Simulate millis near max uint32_t, then wrapping to low values.
+    // Phase 1: first transition at a very high millis value (near max)
+    uint32_t nearMax = 0xFFFFFFFF - 5000;  // ~4.29B - 5s
+    ArduinoMock::mockMillis = nearMax;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adc._state);
+
+    // Phase 2: recovery at a very low millis (wrapped around)
+    // nowMs=1000 < FLAP_WINDOW_MS=30000, so cutoff=0 — the old timestamp
+    // at nearMax will be >= 0 so it stays valid. This is correct behavior:
+    // after wrapping, we can't know the true elapsed time, so we keep history.
+    ArduinoMock::mockMillis = 1000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adc._state);
+
+    // Phase 3: fault again at nowMs=3000, still < 30000 so cutoff=0.
+    // All 3 transitions (nearMax, 1000, 3000) remain in window → escalate.
+    ArduinoMock::mockMillis = 3000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    // With cutoff=0 all stored timestamps survive → 3 transitions → ERROR
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc._state);
+    TEST_ASSERT_FALSE(adc._ready);
+}
+
+// 9d: ERROR-state persistence across multiple health check cycles.
+// Once a device reaches ERROR, subsequent OK or fault health checks
+// should NOT change the state. Neither fault nor recovery paths
+// trigger for ERROR state.
+void test_error_state_persists_across_health_checks() {
+    TestAdcDevice adc("ti,pcm1808");
+    int slot = registerAvailableAdc(&adc);
+
+    // Force ERROR via 3 rapid transitions
+    uint32_t base = 60000;
+    ArduinoMock::mockMillis = base;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    ArduinoMock::mockMillis = base + 1000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+
+    ArduinoMock::mockMillis = base + 2000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc._state);
+
+    // Now run multiple health checks with AUDIO_OK — ERROR should persist
+    for (int i = 1; i <= 5; i++) {
+        ArduinoMock::mockMillis = base + 2000 + (uint32_t)(i * 5000);
+        hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+        hal_audio_health_check();
+        TEST_ASSERT_EQUAL_MESSAGE(HAL_STATE_ERROR, adc._state,
+            "ERROR state must persist even with AUDIO_OK");
+    }
+
+    // Also verify with AUDIO_HW_FAULT — still stays ERROR
+    ArduinoMock::mockMillis = base + 50000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc._state);
+    TEST_ASSERT_FALSE(adc._ready);
+}
+
+// 9e: When flap guard escalates to ERROR, the pipeline bridge removes
+// the ADC lane mapping via hal_pipeline_on_device_removed(). Verify
+// that the HAL-to-ADC-lane mapping table entry is cleared.
+void test_flap_error_clears_adc_lane_mapping() {
+    TestAdcDevice adc("ti,pcm1808");
+    int slot = registerAvailableAdc(&adc);
+
+    // Confirm ADC lane 0 is mapped before flapping
+    int8_t laneBeforeFlap = hal_pipeline_get_input_lane((uint8_t)slot);
+    TEST_ASSERT_EQUAL(0, laneBeforeFlap);
+
+    // Trigger flap guard (3 transitions → ERROR)
+    uint32_t base = 60000;
+    ArduinoMock::mockMillis = base;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    ArduinoMock::mockMillis = base + 1000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+
+    ArduinoMock::mockMillis = base + 2000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc._state);
+
+    // ADC lane mapping should now be cleared (-1) by on_device_removed
+    int8_t laneAfterError = hal_pipeline_get_input_lane((uint8_t)slot);
+    TEST_ASSERT_EQUAL(-1, laneAfterError);
+
+    // Reverse lookup for lane 0 should also return -1 (unmapped)
+    int8_t slotForLane0 = hal_pipeline_get_slot_for_adc_lane(0);
+    TEST_ASSERT_EQUAL(-1, slotForLane0);
+}
+
+// 9f: Recovery from ERROR requires explicit re-enable — ERROR state
+// does NOT auto-recover when AUDIO_OK is observed.
+// The recovery path (section 3) only fires for currentState==UNAVAILABLE.
+void test_error_no_auto_recovery() {
+    TestAdcDevice adc("ti,pcm1808");
+    int slot = registerAvailableAdc(&adc);
+
+    // Manually set to ERROR (simulating a previous flap escalation)
+    adc._state = HAL_STATE_ERROR;
+    adc._ready = false;
+
+    // Multiple AUDIO_OK health checks should NOT change state
+    for (int i = 0; i < 10; i++) {
+        ArduinoMock::mockMillis = 60000 + (uint32_t)(i * 5000);
+        hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+        hal_audio_health_check();
+    }
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc._state);
+    TEST_ASSERT_FALSE(adc._ready);
+
+    // Also verify HW_FAULT doesn't transition ERROR devices (the fault
+    // path only fires from AVAILABLE)
+    ArduinoMock::mockMillis = 200000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc._state);
+}
+
+// 9g: Multiple ADCs flapping independently — lane 0 flapping should
+// NOT affect lane 1's state. Each lane has its own FlapState struct.
+void test_flap_multiple_adcs_independent_flap_state() {
+    TestAdcDevice adc0("ti,pcm1808-a");
+    TestAdcDevice adc1("ti,pcm1808-b");
+    registerAvailableAdc(&adc0);
+    registerAvailableAdc(&adc1);
+
+    uint32_t base = 60000;
+
+    // Flap lane 0 to ERROR (3 transitions)
+    ArduinoMock::mockMillis = base;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    ArduinoMock::mockMillis = base + 1000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+
+    ArduinoMock::mockMillis = base + 2000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc0._state);
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adc1._state);
+
+    // Now give lane 1 a single fault — should go UNAVAILABLE, not ERROR
+    ArduinoMock::mockMillis = base + 3000;
+    hal_audio_health_bridge_set_mock_status(1, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adc1._state);
+
+    // Recover lane 1 — should go AVAILABLE (only 2 transitions, not >2)
+    ArduinoMock::mockMillis = base + 4000;
+    hal_audio_health_bridge_set_mock_status(1, AUDIO_OK);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adc1._state);
+    TEST_ASSERT_TRUE(adc1._ready);
+
+    // Lane 0 still in ERROR throughout
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc0._state);
+}
+
+// 9h: Transition at exactly the window boundary.
+// A transition recorded at exactly 30000ms after the first transition
+// should cause the first one to be pruned (cutoff = nowMs - 30000 = base,
+// and timestamps[i] >= cutoff is checked with >=, so base == cutoff means
+// the old entry survives). A transition at base+30001 should prune it.
+void test_flap_transition_at_exact_window_boundary() {
+    TestAdcDevice adc("ti,pcm1808");
+    int slot = registerAvailableAdc(&adc);
+
+    uint32_t base = 60000;
+
+    // Transition 1: fault at base
+    ArduinoMock::mockMillis = base;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adc._state);
+
+    // Transition 2: recover at base+10000
+    ArduinoMock::mockMillis = base + 10000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_OK);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adc._state);
+
+    // Transition 3: fault at exactly base+30000 (exactly 30s after first)
+    // cutoff = (base+30000) - 30000 = base = 60000
+    // timestamps[0] = base = 60000 >= cutoff(60000) → survives (>=)
+    // So all 3 transitions remain in window → escalate to ERROR
+    ArduinoMock::mockMillis = base + 30000;
+    hal_audio_health_bridge_set_mock_status(0, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adc._state);
+    TEST_ASSERT_FALSE(adc._ready);
 }
 
 // ===== Test Runner =====
@@ -1004,6 +1279,16 @@ int main(int argc, char** argv) {
     RUN_TEST(test_rule5_dc_resets_on_clear);
     RUN_TEST(test_rule5_independent_per_lane);
     RUN_TEST(test_rule_state_cleared_by_reset);
+
+    // Group 9: Flap guard edge cases
+    RUN_TEST(test_flap_exactly_two_transitions_no_escalation);
+    RUN_TEST(test_flap_exactly_three_transitions_escalates);
+    RUN_TEST(test_flap_millis_wraparound_at_uint32_boundary);
+    RUN_TEST(test_error_state_persists_across_health_checks);
+    RUN_TEST(test_flap_error_clears_adc_lane_mapping);
+    RUN_TEST(test_error_no_auto_recovery);
+    RUN_TEST(test_flap_multiple_adcs_independent_flap_state);
+    RUN_TEST(test_flap_transition_at_exact_window_boundary);
 
     return UNITY_END();
 }

@@ -9,12 +9,14 @@
 #include "../test_mocks/esp_random.h"
 #include "../test_mocks/esp_timer.h"
 #include "../test_mocks/mbedtls/md.h"
+#include "../test_mocks/mbedtls/pkcs5.h"
 #else
 #include <Arduino.h>
 #include <Preferences.h>
 #include <esp_random.h>
 #include <esp_timer.h>
 #include <mbedtls/md.h>
+#include <mbedtls/pkcs5.h>
 #endif
 
 #define MAX_SESSIONS 5
@@ -81,6 +83,131 @@ String hashPassword(const String &password) {
   return String(hexStr);
 }
 
+// ===== PBKDF2 Hashing (mirrors auth_handler.cpp Phase 3) =====
+
+// Helper: convert bytes to hex string
+static void bytesToHex(const uint8_t *bytes, size_t len, char *out) {
+  for (size_t i = 0; i < len; i++) {
+    snprintf(out + (i * 2), 3, "%02x", bytes[i]);
+  }
+  out[len * 2] = '\0';
+}
+
+// Helper: convert hex string to bytes
+static bool hexToBytes(const char *hex, uint8_t *out, size_t outLen) {
+  for (size_t i = 0; i < outLen; i++) {
+    unsigned int val;
+    if (sscanf(hex + (i * 2), "%02x", &val) != 1) return false;
+    out[i] = (uint8_t)val;
+  }
+  return true;
+}
+
+// Hash with explicit salt (for verification and re-hash)
+static String hashPasswordPbkdf2WithSalt(const String &password, const uint8_t *salt) {
+  uint8_t derivedKey[32];
+
+  mbedtls_pkcs5_pbkdf2_hmac_ext(
+    MBEDTLS_MD_SHA256,
+    (const unsigned char *)password.c_str(), password.length(),
+    salt, 16, 10000, 32, derivedKey);
+
+  char saltHex[33], keyHex[65];
+  bytesToHex(salt, 16, saltHex);
+  bytesToHex(derivedKey, 32, keyHex);
+
+  return String("p1:") + saltHex + ":" + keyHex;
+}
+
+// Hash password with PBKDF2-SHA256 + random salt
+String hashPasswordPbkdf2(const String &password) {
+  uint8_t salt[16];
+  esp_fill_random(salt, 16);
+  return hashPasswordPbkdf2WithSalt(password, salt);
+}
+
+// Verify password against stored hash (supports both legacy SHA256 and PBKDF2)
+bool verifyPassword(const String &inputPassword, const String &storedHash) {
+  if (storedHash.find("p1:") == 0 && storedHash.length() == 100) {
+    // PBKDF2 format: "p1:<32-char salt>:<64-char key>"
+    uint8_t salt[16];
+    if (!hexToBytes(storedHash.c_str() + 3, salt, 16)) return false;
+
+    String computed = hashPasswordPbkdf2WithSalt(inputPassword, salt);
+    return timingSafeCompare(computed, storedHash);
+  }
+
+  // Legacy SHA256 format: 64-char hex
+  return timingSafeCompare(hashPassword(inputPassword), storedHash);
+}
+
+// ===== Non-blocking Rate Limiting (mirrors auth_handler.cpp Phase 2) =====
+
+static int _loginFailCount = 0;
+static uint64_t _lastFailTime = 0;
+static const uint64_t LOGIN_COOLDOWN_US = 300000000ULL; // 5 minutes in microseconds
+static unsigned long _nextLoginAllowedMs = 0;
+static bool _passwordNeedsMigration = false;
+
+static unsigned long getLoginDelay() {
+  static const unsigned long delays[] = {1000, 2000, 5000, 10000, 30000};
+  int idx = _loginFailCount - 1;
+  if (idx < 0) return 0;
+  if (idx > 4) idx = 4;
+  return delays[idx];
+}
+
+void resetLoginRateLimit() {
+  _loginFailCount = 0;
+  _lastFailTime = 0;
+  _nextLoginAllowedMs = 0;
+  _passwordNeedsMigration = false;
+}
+
+// Simulate handleLogin rate limiting logic — returns HTTP status code
+// and populates retryAfterSec when rate-limited (429)
+int simulateLogin(const String &password, unsigned long &retryAfterSec) {
+  retryAfterSec = 0;
+
+  // Auto-reset fail counter after cooldown period of no attempts
+  uint64_t now = (uint64_t)esp_timer_get_time();
+  if (_loginFailCount > 0 && (now - _lastFailTime) > LOGIN_COOLDOWN_US) {
+    _loginFailCount = 0;
+    _nextLoginAllowedMs = 0;
+  }
+
+  // Non-blocking rate limit gate — reject immediately if in cooldown
+  unsigned long nowMs = millis();
+  if (_nextLoginAllowedMs > 0 && nowMs < _nextLoginAllowedMs) {
+    unsigned long remainMs = _nextLoginAllowedMs - nowMs;
+    retryAfterSec = (remainMs + 999) / 1000; // round up
+    return 429;
+  }
+
+  // Validate password (supports PBKDF2 and legacy SHA256)
+  if (!verifyPassword(password, mockWebPassword)) {
+    _loginFailCount++;
+    _lastFailTime = (uint64_t)esp_timer_get_time();
+    unsigned long delayMs = getLoginDelay();
+    _nextLoginAllowedMs = millis() + delayMs;
+    return 401;
+  }
+
+  // Success — reset rate limiter
+  _loginFailCount = 0;
+  _lastFailTime = 0;
+  _nextLoginAllowedMs = 0;
+
+  // Migrate legacy SHA256 hash to PBKDF2 on successful login
+  if (_passwordNeedsMigration) {
+    String newHash = hashPasswordPbkdf2(password);
+    mockWebPassword = newHash;
+    _passwordNeedsMigration = false;
+  }
+
+  return 200;
+}
+
 // Test-local isDefaultPassword using the same logic as auth_handler.cpp
 bool isDefaultPassword() {
   return timingSafeCompare(mockWebPassword, hashPassword(mockAPPassword));
@@ -98,6 +225,7 @@ void reset() {
   mockAPPassword = "ap_password";
   Preferences::reset();
   EspRandomMock::reset();
+  resetLoginRateLimit();
 #ifdef NATIVE_TEST
   ArduinoMock::reset();
   ArduinoMock::mockTimerUs = 0;
@@ -635,6 +763,161 @@ void test_session_expiry_with_64bit_timestamps(void) {
   TEST_ASSERT_FALSE(validateSession(sessionId));
 }
 
+// ===== Non-blocking Rate Limiting Tests (Phase 2) =====
+
+void test_rate_limit_429_after_5_failures(void) {
+  // Arrange: set password and simulate 5 failed login attempts.
+  // Each failure sets _nextLoginAllowedMs, so advance millis past the window
+  // before each subsequent attempt to ensure it gets 401 (not 429).
+  // After the 5th failure, do NOT advance millis — immediate 6th attempt should
+  // hit the rate limit gate and return 429.
+  mockWebPassword = hashPasswordPbkdf2("correct_password");
+  unsigned long retryAfter = 0;
+
+  for (int i = 0; i < 5; i++) {
+    int status = simulateLogin("wrong_password", retryAfter);
+    TEST_ASSERT_EQUAL(401, status);
+    if (i < 4) {
+      // Advance millis past the current rate limit window (but not after the last)
+      ArduinoMock::mockMillis += 50000;
+    }
+  }
+
+  // Act: immediate 6th attempt — should be rate-limited with 429
+  int status = simulateLogin("wrong_password", retryAfter);
+
+  // Assert
+  TEST_ASSERT_EQUAL(429, status);
+}
+
+void test_rate_limit_retry_after_matches_delay(void) {
+  // Arrange: set password and simulate exactly 1 failed login
+  mockWebPassword = hashPasswordPbkdf2("correct_password");
+  unsigned long retryAfter = 0;
+
+  int status = simulateLogin("wrong_password", retryAfter);
+  TEST_ASSERT_EQUAL(401, status);
+  // After 1 failure, getLoginDelay() returns 1000ms
+  // _nextLoginAllowedMs is now millis()+1000
+
+  // Act: immediate retry should get 429 with ~1s retry-after
+  status = simulateLogin("wrong_password", retryAfter);
+  TEST_ASSERT_EQUAL(429, status);
+
+  // Assert: retryAfter should be 1 (ceiling of remaining ms / 1000)
+  TEST_ASSERT_EQUAL(1, retryAfter);
+}
+
+void test_rate_limit_resets_on_successful_login(void) {
+  // Arrange: accumulate 3 failed attempts, advancing past each rate limit window
+  mockWebPassword = hashPasswordPbkdf2("correct_password");
+  unsigned long retryAfter = 0;
+
+  for (int i = 0; i < 3; i++) {
+    simulateLogin("wrong_password", retryAfter);
+    ArduinoMock::mockMillis += 50000;
+    ArduinoMock::mockTimerUs += 50000000; // keep esp_timer in sync
+  }
+
+  // Act: successful login (millis is past the last rate limit window)
+  int status = simulateLogin("correct_password", retryAfter);
+  TEST_ASSERT_EQUAL(200, status);
+
+  // Now fail once — should start fresh at attempt 1 (delay = 1000ms), not attempt 4
+  ArduinoMock::mockMillis += 50000;
+  status = simulateLogin("wrong_password", retryAfter);
+  TEST_ASSERT_EQUAL(401, status);
+
+  // Immediate retry — should get 429 with 1s delay (not 10s if counter were still at 4)
+  status = simulateLogin("wrong_password", retryAfter);
+  TEST_ASSERT_EQUAL(429, status);
+  TEST_ASSERT_EQUAL(1, retryAfter);
+}
+
+void test_rate_limit_resets_after_5min_cooldown(void) {
+  // Arrange: accumulate 5 failed attempts
+  mockWebPassword = hashPasswordPbkdf2("correct_password");
+  unsigned long retryAfter = 0;
+
+  for (int i = 0; i < 5; i++) {
+    simulateLogin("wrong_password", retryAfter);
+    // Advance millis past each rate limit window
+    ArduinoMock::mockMillis += 50000;
+  }
+
+  // Act: advance esp_timer past the 5-minute cooldown (300000000 us)
+  ArduinoMock::mockTimerUs += LOGIN_COOLDOWN_US + 1;
+  // Also advance millis past the rate limit window
+  ArduinoMock::mockMillis += 50000;
+
+  // Assert: next attempt should not be rate-limited (counter auto-resets)
+  int status = simulateLogin("wrong_password", retryAfter);
+  TEST_ASSERT_EQUAL(401, status); // Fresh attempt 1 — gets 401, not 429
+}
+
+void test_rate_limit_is_non_blocking(void) {
+  // Arrange: accumulate failures and trigger 429
+  mockWebPassword = hashPasswordPbkdf2("correct_password");
+  unsigned long retryAfter = 0;
+
+  simulateLogin("wrong_password", retryAfter);
+
+  // Record millis before the rate-limited call
+  unsigned long millisBefore = ArduinoMock::mockMillis;
+
+  // Act: attempt while rate-limited
+  int status = simulateLogin("wrong_password", retryAfter);
+  TEST_ASSERT_EQUAL(429, status);
+
+  // Assert: millis should not have advanced (non-blocking — no delay() called)
+  TEST_ASSERT_EQUAL(millisBefore, ArduinoMock::mockMillis);
+}
+
+// ===== PBKDF2 Password Hashing Tests (Phase 3) =====
+
+void test_pbkdf2_hash_verifies_correctly(void) {
+  // Arrange: hash a password with PBKDF2
+  String password = "my_secure_password";
+  String hash = hashPasswordPbkdf2(password);
+
+  // Assert: format is "p1:<32-char salt>:<64-char key>" = 100 chars
+  TEST_ASSERT_EQUAL(100, (int)hash.length());
+  TEST_ASSERT_TRUE(hash.find("p1:") == 0);
+
+  // Act + Assert: verifyPassword should accept the correct password
+  TEST_ASSERT_TRUE(verifyPassword(password, hash));
+
+  // Act + Assert: verifyPassword should reject a wrong password
+  TEST_ASSERT_FALSE(verifyPassword("wrong_password", hash));
+}
+
+void test_legacy_sha256_migration_on_login(void) {
+  // Arrange: store a legacy SHA256 hash (64-char hex, no "p1:" prefix)
+  String password = "migrate_me";
+  String legacyHash = hashPassword(password);
+  mockWebPassword = legacyHash;
+  _passwordNeedsMigration = true;
+
+  // Verify the legacy hash is 64 chars and does NOT start with "p1:"
+  TEST_ASSERT_EQUAL(64, (int)mockWebPassword.length());
+  TEST_ASSERT_FALSE(mockWebPassword.find("p1:") == 0);
+
+  // Act: successful login should trigger migration
+  unsigned long retryAfter = 0;
+  int status = simulateLogin(password, retryAfter);
+  TEST_ASSERT_EQUAL(200, status);
+
+  // Assert: password should now be stored as PBKDF2 hash
+  TEST_ASSERT_EQUAL(100, (int)mockWebPassword.length());
+  TEST_ASSERT_TRUE(mockWebPassword.find("p1:") == 0);
+
+  // Assert: new PBKDF2 hash still verifies with the same password
+  TEST_ASSERT_TRUE(verifyPassword(password, mockWebPassword));
+
+  // Assert: migration flag is cleared
+  TEST_ASSERT_FALSE(_passwordNeedsMigration);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -688,6 +971,17 @@ int runUnityTests(void) {
   // Timing-safe session validation (Group 4A)
   RUN_TEST(test_session_validation_uses_timing_safe_compare);
   RUN_TEST(test_session_expiry_with_64bit_timestamps);
+
+  // Non-blocking rate limiting tests (Phase 2)
+  RUN_TEST(test_rate_limit_429_after_5_failures);
+  RUN_TEST(test_rate_limit_retry_after_matches_delay);
+  RUN_TEST(test_rate_limit_resets_on_successful_login);
+  RUN_TEST(test_rate_limit_resets_after_5min_cooldown);
+  RUN_TEST(test_rate_limit_is_non_blocking);
+
+  // PBKDF2 password hashing tests (Phase 3)
+  RUN_TEST(test_pbkdf2_hash_verifies_correctly);
+  RUN_TEST(test_legacy_sha256_migration_on_login);
 
   return UNITY_END();
 }

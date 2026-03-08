@@ -138,6 +138,51 @@ bool hal_parse_device_yaml(const char* yamlText, int len, HalDeviceDescriptor* o
     return hasCompatible;
 }
 
+// ===== Wire Mock for I2C bus scan tests =====
+#include "../test_mocks/Wire.h"
+
+// --- Test-local I2C scan that mirrors the production hal_i2c_scan_bus() logic
+//     but uses the WireMock instead of being #ifndef NATIVE_TEST guarded.
+//     Scans standard address range 0x08-0x77 (skips reserved 0x00-0x07, 0x78-0x7F).
+static uint8_t test_i2c_scan_bus(uint8_t busIndex) {
+    uint8_t found = 0;
+    WireClass *bus = nullptr;
+
+    switch (busIndex) {
+        case HAL_I2C_BUS_EXT:
+            bus = &Wire1;
+            bus->begin(48, 54, 100000);
+            break;
+        case HAL_I2C_BUS_ONBOARD:
+            bus = &Wire;
+            bus->begin(7, 8, 100000);
+            break;
+        case HAL_I2C_BUS_EXP:
+            bus = &Wire1;
+            bus->begin(28, 29, 100000);
+            break;
+        default:
+            return 0;
+    }
+
+    for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
+        bus->beginTransmission(addr);
+        uint8_t err = bus->endTransmission();
+        if (err == 0) {
+            found++;
+        }
+    }
+    return found;
+}
+
+// --- Test-local WiFi-skip logic (mirrors hal_discover_devices bus selection)
+static bool _testWifiActive = false;
+
+static bool test_should_scan_bus(uint8_t busIndex) {
+    if (busIndex == HAL_I2C_BUS_EXT && _testWifiActive) return false;
+    return true;  // ONBOARD and EXP always scanned
+}
+
 // ===== Test Fixtures =====
 static HalDeviceManager* mgr;
 
@@ -146,6 +191,8 @@ void setUp() {
     mgr->reset();
     hal_registry_reset();
     hal_db_reset();
+    WireMock::reset();
+    _testWifiActive = false;
 }
 
 void tearDown() {}
@@ -347,6 +394,102 @@ void test_db_get_by_index() {
     TEST_ASSERT_NULL(hal_db_get(-1));
 }
 
+// ===== I2C Bus Scan Tests =====
+
+void test_bus_scan_returns_addresses_for_mocked_i2c_devices() {
+    // Arrange: register two I2C devices on bus ONBOARD
+    WireMock::registerDevice(0x18, 1);  // ES8311 on bus 1
+    WireMock::registerDevice(0x50, 1);  // EEPROM on bus 1
+
+    // Act
+    uint8_t count = test_i2c_scan_bus(HAL_I2C_BUS_ONBOARD);
+
+    // Assert: both devices found
+    TEST_ASSERT_EQUAL(2, count);
+}
+
+void test_bus_ext_skipped_when_wifi_connected() {
+    // Arrange: WiFi is active — bus EXT should be skipped
+    _testWifiActive = true;
+    WireMock::registerDevice(0x18, 0);  // Device on bus EXT
+
+    // Act
+    bool shouldScan = test_should_scan_bus(HAL_I2C_BUS_EXT);
+
+    // Assert: bus EXT not scanned when WiFi active (SDIO conflict)
+    TEST_ASSERT_FALSE(shouldScan);
+}
+
+void test_bus_ext_scanned_when_wifi_not_connected() {
+    // Arrange: WiFi is NOT active — bus EXT should be scanned
+    _testWifiActive = false;
+    WireMock::registerDevice(0x20, 0);  // Device on bus EXT
+
+    // Act
+    bool shouldScan = test_should_scan_bus(HAL_I2C_BUS_EXT);
+
+    // Assert: bus EXT is scanned when WiFi is inactive
+    TEST_ASSERT_TRUE(shouldScan);
+
+    // Verify the scan actually finds the device
+    uint8_t count = test_i2c_scan_bus(HAL_I2C_BUS_EXT);
+    TEST_ASSERT_EQUAL(1, count);
+}
+
+void test_bus_onboard_always_scanned() {
+    // Arrange: WiFi active — should NOT affect bus ONBOARD
+    _testWifiActive = true;
+    WireMock::registerDevice(0x18, 1);  // ES8311 on bus ONBOARD
+
+    // Act
+    bool shouldScanOnboard = test_should_scan_bus(HAL_I2C_BUS_ONBOARD);
+
+    // Assert: bus ONBOARD is always scanned regardless of WiFi state
+    TEST_ASSERT_TRUE(shouldScanOnboard);
+
+    // Also verify WiFi=false still works
+    _testWifiActive = false;
+    TEST_ASSERT_TRUE(test_should_scan_bus(HAL_I2C_BUS_ONBOARD));
+
+    // And the actual scan returns the device
+    uint8_t count = test_i2c_scan_bus(HAL_I2C_BUS_ONBOARD);
+    TEST_ASSERT_EQUAL(1, count);
+}
+
+void test_empty_bus_returns_zero_devices() {
+    // Arrange: no devices registered on any bus
+    // WireMock::reset() already called in setUp()
+
+    // Act
+    uint8_t countOnboard = test_i2c_scan_bus(HAL_I2C_BUS_ONBOARD);
+    uint8_t countExt     = test_i2c_scan_bus(HAL_I2C_BUS_EXT);
+    uint8_t countExp     = test_i2c_scan_bus(HAL_I2C_BUS_EXP);
+
+    // Assert: all buses return 0
+    TEST_ASSERT_EQUAL(0, countOnboard);
+    TEST_ASSERT_EQUAL(0, countExt);
+    TEST_ASSERT_EQUAL(0, countExp);
+}
+
+void test_address_range_0x08_to_0x77() {
+    // Arrange: register devices at boundary addresses
+    //   0x07 is in the reserved low range  (0x00-0x07) — must NOT be found
+    //   0x08 is the first valid address    — must be found
+    //   0x77 is the last valid address     — must be found
+    //   0x78 is in the reserved high range (0x78-0x7F) — must NOT be found
+    WireMock::registerDevice(0x07, 1);  // Reserved low — should be skipped
+    WireMock::registerDevice(0x08, 1);  // First valid address
+    WireMock::registerDevice(0x3C, 1);  // Mid-range (e.g. OLED display)
+    WireMock::registerDevice(0x77, 1);  // Last valid address
+    WireMock::registerDevice(0x78, 1);  // Reserved high — should be skipped
+
+    // Act
+    uint8_t count = test_i2c_scan_bus(HAL_I2C_BUS_ONBOARD);
+
+    // Assert: only the 3 addresses in 0x08-0x77 range should be found
+    TEST_ASSERT_EQUAL(3, count);
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
@@ -369,6 +512,14 @@ int main(int argc, char** argv) {
     // Integration tests
     RUN_TEST(test_registry_to_db_lookup);
     RUN_TEST(test_discovery_without_eeprom_builtins_only);
+
+    // I2C bus scan tests
+    RUN_TEST(test_bus_scan_returns_addresses_for_mocked_i2c_devices);
+    RUN_TEST(test_bus_ext_skipped_when_wifi_connected);
+    RUN_TEST(test_bus_ext_scanned_when_wifi_not_connected);
+    RUN_TEST(test_bus_onboard_always_scanned);
+    RUN_TEST(test_empty_bus_returns_zero_devices);
+    RUN_TEST(test_address_range_0x08_to_0x77);
 
     return UNITY_END();
 }

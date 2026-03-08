@@ -60,6 +60,8 @@ public:
         initCount    = 0;
     }
 
+    void setCapabilities(uint8_t caps) { _descriptor.capabilities = caps; }
+
     bool probe() override { return probeResult; }
     HalInitResult init() override {
         initCount++;
@@ -321,8 +323,8 @@ void test_second_adc_gets_lane_1() {
     TEST_ASSERT_EQUAL(2, hal_pipeline_input_count());
 }
 
-// 3d: Third ADC is rejected (only 2 lanes)
-void test_third_adc_rejected() {
+// 3d: Three ADCs all get lanes (limit is now AUDIO_PIPELINE_MAX_INPUTS=8)
+void test_three_adcs_all_get_lanes() {
     TestAudioDevice adc1("adc1", HAL_DEV_ADC);
     TestAudioDevice adc2("adc2", HAL_DEV_ADC);
     TestAudioDevice adc3("adc3", HAL_DEV_ADC);
@@ -338,8 +340,8 @@ void test_third_adc_rejected() {
     hal_pipeline_on_device_available(s2);
     hal_pipeline_on_device_available(s3);
 
-    // Only 2 ADC lanes available
-    TEST_ASSERT_EQUAL(2, hal_pipeline_input_count());
+    // All 3 ADCs get lanes (limit is 8, not 2)
+    TEST_ASSERT_EQUAL(3, hal_pipeline_input_count());
 }
 
 // 3e: Non-ADC device does not touch ADC lanes
@@ -605,6 +607,155 @@ void test_sync_marks_counts() {
 }
 
 // =====================================================================
+// Group 5e: Boot sync edge cases (6 tests)
+// =====================================================================
+
+// 5e: sync with already-AVAILABLE devices registers sinks for each
+void test_sync_registers_all_available_devices() {
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    TestAudioDevice codec("evergrande,es8311", HAL_DEV_CODEC);
+    TestAudioDevice adc("ti,pcm1808", HAL_DEV_ADC);
+
+    mgr->registerDevice(&dac,   HAL_DISC_BUILTIN);
+    mgr->registerDevice(&codec, HAL_DISC_BUILTIN);
+    mgr->registerDevice(&adc,   HAL_DISC_BUILTIN);
+
+    // All set to AVAILABLE before sync (simulates boot-time init completing
+    // before the bridge is wired up)
+    dac._state   = HAL_STATE_AVAILABLE; dac._ready   = true;
+    codec._state = HAL_STATE_AVAILABLE; codec._ready = true;
+    adc._state   = HAL_STATE_AVAILABLE; adc._ready   = true;
+
+    // No mappings before sync
+    TEST_ASSERT_EQUAL(0, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(0, hal_pipeline_input_count());
+
+    hal_pipeline_sync();
+
+    // DAC + CODEC are output devices, ADC is an input device
+    TEST_ASSERT_EQUAL(2, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(1, hal_pipeline_input_count());
+
+    // Forward lookups confirm each device got a valid mapping
+    TEST_ASSERT_TRUE(hal_pipeline_get_sink_slot(0) >= 0);
+    TEST_ASSERT_TRUE(hal_pipeline_get_sink_slot(1) >= 0);
+    TEST_ASSERT_TRUE(hal_pipeline_get_input_lane(2) >= 0);
+}
+
+// 5f: Double sync does not create duplicate sink mappings
+void test_sync_double_call_no_duplicates() {
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    TestAudioDevice adc("ti,pcm1808", HAL_DEV_ADC);
+
+    mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    mgr->registerDevice(&adc, HAL_DISC_BUILTIN);
+
+    dac._state = HAL_STATE_AVAILABLE; dac._ready = true;
+    adc._state = HAL_STATE_AVAILABLE; adc._ready = true;
+
+    hal_pipeline_sync();
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(1, hal_pipeline_input_count());
+
+    // Second sync -- clears tables internally then re-scans, so counts
+    // should remain exactly the same, not double
+    hal_pipeline_sync();
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(1, hal_pipeline_input_count());
+}
+
+// 5g: sync with mixed AVAILABLE/ERROR/REMOVED -- only AVAILABLE gets sinks
+void test_sync_mixed_available_error_removed() {
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    TestAudioDevice codec("evergrande,es8311", HAL_DEV_CODEC);
+    TestAudioDevice adc1("adc1", HAL_DEV_ADC);
+    TestAudioDevice adc2("adc2", HAL_DEV_ADC);
+    TestAudioDevice sensor("chip,temp", HAL_DEV_SENSOR);
+
+    mgr->registerDevice(&dac,    HAL_DISC_BUILTIN);
+    mgr->registerDevice(&codec,  HAL_DISC_BUILTIN);
+    mgr->registerDevice(&adc1,   HAL_DISC_BUILTIN);
+    mgr->registerDevice(&adc2,   HAL_DISC_BUILTIN);
+    mgr->registerDevice(&sensor, HAL_DISC_BUILTIN);
+
+    dac._state    = HAL_STATE_AVAILABLE; dac._ready    = true;   // should register
+    codec._state  = HAL_STATE_ERROR;     codec._ready  = false;  // skipped
+    adc1._state   = HAL_STATE_REMOVED;   adc1._ready   = false;  // skipped
+    adc2._state   = HAL_STATE_AVAILABLE; adc2._ready   = true;   // should register
+    sensor._state = HAL_STATE_MANUAL;    sensor._ready  = false;  // skipped
+
+    hal_pipeline_sync();
+
+    // Only DAC (output) and ADC2 (input) should be mapped
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(1, hal_pipeline_input_count());
+}
+
+// 5h: sync uses stack-local counting (Phase 1a fix) -- no heap allocation.
+//     The Phase 1a fix replaced heap-allocated count tracking with
+//     stack-local int[2] in the forEach lambda. This test confirms
+//     correctness by running sync many times and checking deterministic
+//     output -- if there were a leak or stale pointer, repeated runs
+//     would eventually corrupt state.
+void test_sync_no_heap_allocation_phase_1a() {
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    TestAudioDevice adc("ti,pcm1808", HAL_DEV_ADC);
+
+    mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    mgr->registerDevice(&adc, HAL_DISC_BUILTIN);
+
+    dac._state = HAL_STATE_AVAILABLE; dac._ready = true;
+    adc._state = HAL_STATE_AVAILABLE; adc._ready = true;
+
+    // Run sync many times -- stack-local counting means each call is
+    // self-contained. sync() clears mapping tables first, so the count
+    // must be stable across every iteration.
+    for (int i = 0; i < 50; i++) {
+        hal_pipeline_sync();
+    }
+
+    // Counts must remain correct after many iterations
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(1, hal_pipeline_input_count());
+}
+
+// 5i: sync with empty device manager is a safe no-op
+void test_sync_empty_device_manager_no_crash() {
+    // No devices registered -- setUp() already reset the manager
+    TEST_ASSERT_EQUAL(0, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(0, hal_pipeline_input_count());
+
+    hal_pipeline_sync();
+
+    // Still zero -- no crash, no spurious mappings
+    TEST_ASSERT_EQUAL(0, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(0, hal_pipeline_input_count());
+}
+
+// 5j: sync after device removal -- removed device does not get a sink
+void test_sync_after_device_removal_no_sink() {
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    TestAudioDevice codec("evergrande,es8311", HAL_DEV_CODEC);
+
+    int sd = mgr->registerDevice(&dac,   HAL_DISC_BUILTIN);
+    mgr->registerDevice(&codec, HAL_DISC_BUILTIN);
+
+    dac._state   = HAL_STATE_AVAILABLE; dac._ready   = true;
+    codec._state = HAL_STATE_AVAILABLE; codec._ready = true;
+
+    // Remove the DAC between registration and sync -- simulates a device
+    // that was detected at boot but then physically disconnected before
+    // the bridge runs its initial scan
+    mgr->removeDevice(sd);
+
+    hal_pipeline_sync();
+
+    // Only the CODEC should be mapped -- the removed DAC slot is null
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(0, hal_pipeline_input_count());
+}
+
+// =====================================================================
 // Group 6: Count helpers + reset (3 tests)
 // =====================================================================
 
@@ -673,6 +824,175 @@ void test_reset_then_readd() {
     TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
 }
 
+// =====================================================================
+// Group 7: Dynamic ordinal slot assignment (6 tests)
+// =====================================================================
+
+// 7a: Two DACs get sequential sink slots (0, 1)
+void test_two_dacs_get_sequential_slots() {
+    TestAudioDevice dac1("ti,pcm5102a", HAL_DEV_DAC);
+    TestAudioDevice dac2("ess,es9038q2m", HAL_DEV_DAC);
+    int s1 = mgr->registerDevice(&dac1, HAL_DISC_BUILTIN);
+    int s2 = mgr->registerDevice(&dac2, HAL_DISC_EEPROM);
+
+    dac1._state = HAL_STATE_AVAILABLE; dac1._ready = true;
+    dac2._state = HAL_STATE_AVAILABLE; dac2._ready = true;
+
+    hal_pipeline_on_device_available(s1);
+    hal_pipeline_on_device_available(s2);
+
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(s1));
+    TEST_ASSERT_EQUAL(1, hal_pipeline_get_sink_slot(s2));
+}
+
+// 7b: Removing a DAC frees its slot for reuse
+void test_removed_sink_slot_reused() {
+    TestAudioDevice dac1("dac1", HAL_DEV_DAC);
+    TestAudioDevice dac2("dac2", HAL_DEV_DAC);
+    TestAudioDevice dac3("dac3", HAL_DEV_DAC);
+    int s1 = mgr->registerDevice(&dac1, HAL_DISC_BUILTIN);
+    int s2 = mgr->registerDevice(&dac2, HAL_DISC_BUILTIN);
+    int s3 = mgr->registerDevice(&dac3, HAL_DISC_BUILTIN);
+
+    dac1._state = HAL_STATE_AVAILABLE; dac1._ready = true;
+    dac2._state = HAL_STATE_AVAILABLE; dac2._ready = true;
+    dac3._state = HAL_STATE_AVAILABLE; dac3._ready = true;
+
+    hal_pipeline_on_device_available(s1);  // slot 0
+    hal_pipeline_on_device_available(s2);  // slot 1
+    hal_pipeline_on_device_removed(s1);    // free slot 0
+
+    hal_pipeline_on_device_available(s3);  // should get slot 0 (first free)
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(s3));
+    TEST_ASSERT_EQUAL(1, hal_pipeline_get_sink_slot(s2));
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(s1));
+}
+
+// 7c: ADCs get sequential input lanes
+void test_adcs_get_sequential_lanes() {
+    TestAudioDevice adc1("adc1", HAL_DEV_ADC);
+    TestAudioDevice adc2("adc2", HAL_DEV_ADC);
+    TestAudioDevice adc3("adc3", HAL_DEV_ADC);
+    int s1 = mgr->registerDevice(&adc1, HAL_DISC_BUILTIN);
+    int s2 = mgr->registerDevice(&adc2, HAL_DISC_BUILTIN);
+    int s3 = mgr->registerDevice(&adc3, HAL_DISC_BUILTIN);
+
+    adc1._state = HAL_STATE_AVAILABLE; adc1._ready = true;
+    adc2._state = HAL_STATE_AVAILABLE; adc2._ready = true;
+    adc3._state = HAL_STATE_AVAILABLE; adc3._ready = true;
+
+    hal_pipeline_on_device_available(s1);
+    hal_pipeline_on_device_available(s2);
+    hal_pipeline_on_device_available(s3);
+
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_input_lane(s1));
+    TEST_ASSERT_EQUAL(1, hal_pipeline_get_input_lane(s2));
+    TEST_ASSERT_EQUAL(2, hal_pipeline_get_input_lane(s3));
+}
+
+// 7d: Input lanes capped at AUDIO_PIPELINE_MAX_INPUTS (8)
+void test_input_lanes_capped_at_max() {
+    TestAudioDevice adcs[9] = {
+        TestAudioDevice("a0", HAL_DEV_ADC),
+        TestAudioDevice("a1", HAL_DEV_ADC),
+        TestAudioDevice("a2", HAL_DEV_ADC),
+        TestAudioDevice("a3", HAL_DEV_ADC),
+        TestAudioDevice("a4", HAL_DEV_ADC),
+        TestAudioDevice("a5", HAL_DEV_ADC),
+        TestAudioDevice("a6", HAL_DEV_ADC),
+        TestAudioDevice("a7", HAL_DEV_ADC),
+        TestAudioDevice("a8", HAL_DEV_ADC),
+    };
+    int slots[9];
+    for (int i = 0; i < 9; i++) {
+        slots[i] = mgr->registerDevice(&adcs[i], HAL_DISC_MANUAL);
+        adcs[i]._state = HAL_STATE_AVAILABLE;
+        adcs[i]._ready = true;
+        hal_pipeline_on_device_available(slots[i]);
+    }
+
+    // AUDIO_PIPELINE_MAX_INPUTS = 8; 9th ADC is rejected
+    TEST_ASSERT_EQUAL(8, hal_pipeline_input_count());
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_input_lane(slots[8]));
+}
+
+// 7e: Device with explicit HAL_CAP_ADC_PATH | HAL_CAP_DAC_PATH gets both
+void test_explicit_caps_dual_path() {
+    TestAudioDevice codec("custom,codec", HAL_DEV_CODEC);
+    codec.setCapabilities(HAL_CAP_ADC_PATH | HAL_CAP_DAC_PATH);
+    int slot = mgr->registerDevice(&codec, HAL_DISC_MANUAL);
+    codec._state = HAL_STATE_AVAILABLE;
+    codec._ready = true;
+
+    hal_pipeline_on_device_available(slot);
+
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(1, hal_pipeline_input_count());
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_input_lane(slot));
+}
+
+// 7f: CODEC without explicit caps only gets output (conservative inference)
+void test_codec_default_caps_output_only() {
+    TestAudioDevice codec("evergrande,es8311", HAL_DEV_CODEC);
+    // No explicit capabilities set — defaults to 0
+    int slot = mgr->registerDevice(&codec, HAL_DISC_BUILTIN);
+    codec._state = HAL_STATE_AVAILABLE;
+    codec._ready = true;
+
+    hal_pipeline_on_device_available(slot);
+
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+    TEST_ASSERT_EQUAL(0, hal_pipeline_input_count());
+}
+
+// =====================================================================
+// Group 8: Forward-lookup API (4 tests)
+// =====================================================================
+
+// 8a: Forward lookup returns correct sink slot
+void test_forward_lookup_sink_slot() {
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE; dac._ready = true;
+
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(slot));  // Not yet mapped
+    hal_pipeline_on_device_available(slot);
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));   // Now mapped
+}
+
+// 8b: Forward lookup returns correct input lane
+void test_forward_lookup_input_lane() {
+    TestAudioDevice adc("ti,pcm1808", HAL_DEV_ADC);
+    int slot = mgr->registerDevice(&adc, HAL_DISC_BUILTIN);
+    adc._state = HAL_STATE_AVAILABLE; adc._ready = true;
+
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_input_lane(slot));
+    hal_pipeline_on_device_available(slot);
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_input_lane(slot));
+}
+
+// 8c: Forward lookup returns -1 for out-of-bounds
+void test_forward_lookup_oob() {
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(HAL_MAX_DEVICES));
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_input_lane(HAL_MAX_DEVICES));
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(255));
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_input_lane(255));
+}
+
+// 8d: Forward lookup returns -1 after device removed
+void test_forward_lookup_after_remove() {
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE; dac._ready = true;
+
+    hal_pipeline_on_device_available(slot);
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));
+
+    hal_pipeline_on_device_removed(slot);
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(slot));
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     (void)argc;
@@ -701,7 +1021,7 @@ int main(int argc, char** argv) {
     RUN_TEST(test_pcm1808_available_enables_adc_lane);
     RUN_TEST(test_adc_removed_clears_lane);
     RUN_TEST(test_second_adc_gets_lane_1);
-    RUN_TEST(test_third_adc_rejected);
+    RUN_TEST(test_three_adcs_all_get_lanes);
     RUN_TEST(test_non_adc_no_adc_lane);
     RUN_TEST(test_input_output_counts_independent);
     RUN_TEST(test_amp_not_adc);
@@ -723,10 +1043,32 @@ int main(int argc, char** argv) {
     RUN_TEST(test_sync_mixed_states);
     RUN_TEST(test_sync_marks_counts);
 
+    // Group 5e: Boot sync edge cases
+    RUN_TEST(test_sync_registers_all_available_devices);
+    RUN_TEST(test_sync_double_call_no_duplicates);
+    RUN_TEST(test_sync_mixed_available_error_removed);
+    RUN_TEST(test_sync_no_heap_allocation_phase_1a);
+    RUN_TEST(test_sync_empty_device_manager_no_crash);
+    RUN_TEST(test_sync_after_device_removal_no_sink);
+
     // Group 6: Count helpers + reset
     RUN_TEST(test_counts_add_remove);
     RUN_TEST(test_reset_zeros_all);
     RUN_TEST(test_reset_then_readd);
+
+    // Group 7: Dynamic ordinal slot assignment
+    RUN_TEST(test_two_dacs_get_sequential_slots);
+    RUN_TEST(test_removed_sink_slot_reused);
+    RUN_TEST(test_adcs_get_sequential_lanes);
+    RUN_TEST(test_input_lanes_capped_at_max);
+    RUN_TEST(test_explicit_caps_dual_path);
+    RUN_TEST(test_codec_default_caps_output_only);
+
+    // Group 8: Forward-lookup API
+    RUN_TEST(test_forward_lookup_sink_slot);
+    RUN_TEST(test_forward_lookup_input_lane);
+    RUN_TEST(test_forward_lookup_oob);
+    RUN_TEST(test_forward_lookup_after_remove);
 
     return UNITY_END();
 }
