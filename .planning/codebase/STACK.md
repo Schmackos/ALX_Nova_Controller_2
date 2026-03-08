@@ -1,128 +1,118 @@
 # Technology Stack
 
-**Analysis Date:** 2026-03-07
+**Analysis Date:** 2026-03-08
 
 ## Languages
 
 **Primary:**
-- C++11 — All firmware source in `src/` (Arduino framework + IDF5 APIs)
-- C — DSP coefficient computation in `src/dsp_biquad_gen.c`, `src/safe_snr_sfdr.c`
+- C++11 — Firmware source in `src/` (Arduino framework style; PlatformIO enforces `-std=c++11` on native env)
+- C — Low-level DSP coefficient math in `src/dsp_biquad_gen.c`, `src/safe_snr_sfdr.c`
 
 **Secondary:**
-- JavaScript (ES2015+) — Web UI in `web_src/js/` (23 modules, concatenated single-scope bundle)
-- CSS — Web UI styling in `web_src/css/` (5 split files by concern)
-- Python — PlatformIO build scripts in `tools/fix_riscv_toolchain.py`, `tools/patch_websockets.py`
-- Node.js — Web asset build tooling in `tools/build_web_assets.js`, static analysis in `tools/find_dups.js`, `tools/check_missing_fns.js`
+- JavaScript (ES2015+) — Web UI in `web_src/js/01-28-*.js` (concatenated single-file delivery)
+- CSS — Web UI styling in `web_src/css/01-05-*.css`
+- HTML — Web UI shell in `web_src/index.html`
+- Python — Build tooling only (`tools/fix_riscv_toolchain.py` pre-script)
 
 ## Runtime
 
-**Firmware:**
-- ESP-IDF 5.x (IDF5), accessed via Arduino-ESP32 3.x wrapper
-- Platform package: `https://github.com/pioarduino/platform-espressif32/releases/download/55.03.37/platform-espressif32.zip`
-- Target: Waveshare ESP32-P4-WiFi6-DEV-Kit (`esp32-p4` PlatformIO board)
-- RTOS: FreeRTOS (built into ESP-IDF), dual-core — Core 0 for GUI/MQTT/USB, Core 1 for audio pipeline exclusively
+**Environment:**
+- ESP32-P4 RISC-V dual-core MCU (Waveshare ESP32-P4-WiFi6-DEV-Kit)
+- FreeRTOS (bundled with ESP-IDF 5.x via Arduino framework)
+- Core 0: GUI task, MQTT task, USB Audio task, OTA tasks
+- Core 1: Arduino main loop + audio pipeline task (isolated for real-time audio)
 
-**Test/Tooling:**
-- Node.js 20 (CI-enforced via `actions/setup-node@v4`)
-- Python 3.11 (CI-enforced via `actions/setup-python@v5`)
-- GCC/MinGW (native platform for C++ unit tests)
-
-## Package Manager
-
-**Firmware:**
-- PlatformIO — library management via `platformio.ini` `lib_deps`
-- No lockfile (PlatformIO resolves semver ranges at build time)
-
-**Web/Testing:**
-- npm — `e2e/package.json` / `e2e/package-lock.json` (lockfile present, `npm ci` used in CI)
+**Package Manager:**
+- PlatformIO (CLI) — manages both ESP32 and native test environments
+- npm — Node.js tooling only (`e2e/package.json`); not part of firmware build
+- Lockfile: none explicit (PlatformIO resolves versions from `platformio.ini`)
 
 ## Frameworks
 
-**Core Firmware:**
-- Arduino (framework = arduino) — HAL abstraction over ESP-IDF
-- ESP-IDF 5.x — used directly for IDF5 APIs: `<driver/i2s_std.h>`, `<driver/temperature_sensor.h>`, `<driver/mcpwm_prelude.h>`, `<driver/gpio.h>`, `<esp_task_wdt.h>`, `<esp_heap_caps.h>`, `<freertos/FreeRTOS.h>`
+**Core:**
+- Arduino framework (`framework = arduino`) — abstraction over ESP-IDF 5.x
+- ESP-IDF 5.1+ (`idf: '>=5.1'` in `src/idf_component.yml`) — underlying RTOS, I2S, I2C, LEDC, EMAC drivers
 
-**GUI:**
-- LVGL 9.4 (`lvgl/lvgl@^9.4`) — embedded GUI framework, guarded by `-D GUI_ENABLED`
-- LovyanGFX 1.2.0 (`lovyan03/LovyanGFX@^1.2.0`) — TFT driver for ST7735S 128x160, synchronous SPI on P4 (no DMA)
+**Display:**
+- LVGL v9.4 — GUI framework (guarded by `-D GUI_ENABLED`), defined in `platformio.ini` `lib_deps`
+- LovyanGFX v1.2.0 — TFT driver for ST7735S 128×160, synchronous SPI (no DMA on P4)
 
-**Networking / Protocol:**
-- WebSockets 2.7.2 (`links2004/WebSockets@^2.7.2`) — WebSocket server on port 81 (`WebSocketsServer`), patched via `pre:tools/patch_websockets.py`
-- PubSubClient 2.8 (`knolleary/PubSubClient@^2.8`) — MQTT client (Home Assistant integration)
-- Arduino `WebServer` — HTTP server on port 80 (bundled with Arduino-ESP32)
-- Arduino `WiFi`, `WiFiClientSecure`, `HTTPClient`, `DNSServer`, `ETH` — networking (bundled)
+**Audio DSP:**
+- ESP-DSP (pre-built, Xtensa/RISC-V assembly-optimised) — biquad IIR, Radix-4 FFT, FIR, vector math. Include paths added via `-I` in `platformio.ini`. Library binary at `libespressif__esp-dsp.a`
+- `lib/esp_dsp_lite/` — ANSI C fallback for native test env only (`lib_ignore = esp_dsp_lite` on ESP32)
+- arduinoFFT v2.0 — FFT used **in native test env only** (`kosme/arduinoFFT@^2.0` under `[env:native]`)
 
-**Data Serialization:**
-- ArduinoJson 7.4.2 (`bblanchon/ArduinoJson@^7.4.2`) — JSON throughout REST API, WebSocket messages, settings persistence, MQTT payloads
-
-**USB Audio:**
-- TinyUSB 0.20.1 (bundled with Arduino-ESP32 P4) — UAC2 USB audio class device on native USB OTG, custom class driver registered via `usbd_app_driver_get_cb()` weak function; guarded by `-D USB_AUDIO_ENABLED`
-
-**DSP / Audio:**
-- ESP-DSP (pre-built `libespressif__esp-dsp.a`) — S3 assembly-optimized biquad IIR, FIR, Radix-4 FFT, vector math (`dsps_mulc_f32`, `dsps_add_f32`, `dsps_biquad`, `dsps_fir`); include paths added via `-I` in `platformio.ini`; used on ESP32 target only (`lib_ignore = esp_dsp_lite`)
-- esp_dsp_lite (`lib/esp_dsp_lite/`) — ANSI C fallback for native unit tests; `lib_ignore`d on ESP32 environments
-- arduinoFFT 2.0 (`kosme/arduinoFFT@^2.0`) — FFT spectrum analysis, included in `src/i2s_audio.cpp` and native test environment
-
-**Crypto / Security:**
-- mbedTLS (bundled with ESP-IDF) — SHA256 hashing for OTA firmware verification (`src/ota_updater.cpp`) and password hashing (`src/auth_handler.cpp`) via `<mbedtls/md.h>`
-- `WiFiClientSecure` — TLS for HTTPS connections to GitHub API
-
-**Storage:**
-- LittleFS (`<LittleFS.h>`, Arduino-ESP32 bundled) — filesystem for settings, DSP config, HAL config, crash log, diagnostic journal; partition label `spiffs` (8 MB), `board_build.filesystem = littlefs`
-- NVS Preferences (`<Preferences.h>`, Arduino-ESP32 bundled) — key-value NVS for WiFi credentials, MQTT settings, auth tokens, OTA flags, diagnostic journal sequence counter
+**USB:**
+- TinyUSB v0.20.1 (bundled with Arduino-ESP32 3.x) — UAC2 speaker device on native USB OTG. Custom audio class driver registered via `usbd_app_driver_get_cb()` weak function (`src/usb_audio.cpp`)
 
 **Testing:**
-- Unity (PlatformIO built-in) — C++ unit test framework for native platform; 1271+ tests across 57 modules
-- Playwright 1.50.0 (`@playwright/test@^1.50.0`) — E2E browser tests (26 tests, Chromium only)
-- ESLint 8.57.0 (`eslint@^8.57.0`) — JS static analysis on `web_src/js/`
-- Express 4.21.0 + cookie-parser 1.4.7 — mock server for Playwright E2E tests (`e2e/mock-server/server.js`)
+- Unity (C) — unit test framework; provided by PlatformIO native platform. Config: `test_framework = unity` in `[env:native]`
+- Playwright — browser E2E tests in `e2e/tests/` (19 spec files, 26 tests). Config: `e2e/playwright.config.js`
+- Express.js — mock server for E2E tests (`e2e/mock-server/server.js`, port 3000)
+
+**Build/Dev:**
+- PlatformIO — build, upload, test orchestration
+- Node.js — web asset build pipeline (`tools/build_web_assets.js` → `src/web_pages.cpp` + `src/web_pages_gz.cpp`)
+- ESLint — JS linting (`web_src/.eslintrc.json`)
 
 ## Key Dependencies
 
-**Critical:**
-- `links2004/WebSockets@^2.7.2` — Real-time UI updates; requires websocket patch script at build time
-- `bblanchon/ArduinoJson@^7.4.2` — All JSON: REST API, WebSocket messages, MQTT payloads, settings files
-- `knolleary/PubSubClient@^2.8` — MQTT client for Home Assistant integration, buffer size 1024 bytes
-- `lvgl/lvgl@^9.4` — TFT GUI framework, FreeRTOS task on Core 0, `LVGL_CONF_INCLUDE_SIMPLE` flag required
-- `lovyan03/LovyanGFX@^1.2.0` — TFT display driver; synchronous SPI only on P4 (LovyanGFX GDMA not wired for P4)
+**Critical (firmware, via `platformio.ini` `lib_deps`):**
+- `bblanchon/ArduinoJson@^7.4.2` — JSON parsing throughout: settings, API, MQTT, HAL config
+- `knolleary/PubSubClient@^2.8` — MQTT client (lives in `src/mqtt_handler.cpp`, `src/mqtt_task.cpp`)
+- `lovyan03/LovyanGFX@^1.2.0` — TFT display driver for ST7735S (replaces TFT_eSPI)
+- `lvgl/lvgl@^9.4` — GUI framework for rotary encoder UI (guarded by `GUI_ENABLED`)
+- `WebSockets@^2.7.2` — WebSocket server port 81 (`lib/WebSockets/`; vendored in repo)
 
-**Infrastructure:**
-- `kosme/arduinoFFT@^2.0` — Native test FFT (ESP32 uses pre-built ESP-DSP FFT instead)
-- `lib/esp_dsp_lite/` — ANSI C DSP fallback, native test-only (`platforms = native`)
+**Critical (native test env):**
+- `kosme/arduinoFFT@^2.0` — FFT computation in native tests
+
+**Infrastructure (IDF built-ins, included via `<...>`):**
+- `<WiFi.h>`, `<WiFiClientSecure.h>` — via ESP32-C6 co-processor (SDIO)
+- `<HTTPClient.h>` — OTA downloads, GitHub API calls
+- `<WebServer.h>` — HTTP server port 80
+- `<WebSocketsServer.h>` — WebSocket server port 81
+- `<LittleFS.h>` — filesystem for config, DSP presets, HAL config, crash log, diagnostic journal
+- `<Preferences.h>` — NVS key-value store (WiFi credentials, auth, OTA flags)
+- `<Update.h>` — OTA flash write
+- `<DNSServer.h>` — captive portal in AP mode
+- `<mbedtls/md.h>` — PBKDF2-SHA256 password hashing, SHA256 firmware verification
+- `<driver/i2s_std.h>` — I2S audio driver (IDF5 new API)
+- `<driver/temperature_sensor.h>` — Internal chip temperature (ESP32-P4 only)
+- `<esp_task_wdt.h>` — Task watchdog timer (30s timeout configured at boot)
+- `<freertos/FreeRTOS.h>` — RTOS primitives throughout
 
 ## Configuration
 
 **Environment:**
-- All pin assignments are build flags in `platformio.ini` `[env:esp32-p4]` with fallback defaults in `src/config.h`
+- Build flags set all pin assignments in `platformio.ini` `build_flags` (e.g., `-D LED_PIN=1`)
+- Fallback defaults in `src/config.h` via `#ifndef` guards
 - Feature flags: `-D DSP_ENABLED`, `-D DAC_ENABLED`, `-D GUI_ENABLED`, `-D USB_AUDIO_ENABLED`
-- No `.env` file — the firmware has no secret environment variables; MQTT credentials, WiFi passwords, and web password are stored in NVS at runtime
-- Build flags also set: `WEBSOCKETS_MAX_DATA_SIZE=4096`, `CORE_DEBUG_LEVEL=2`, `LV_CONF_INCLUDE_SIMPLE`
+- Runtime settings stored in LittleFS at `/config.json` (primary) with atomic write via `.tmp` rename
+- Legacy format: `/settings.txt` + `/mqtt_config.txt` — auto-migrated on first boot
+- WiFi credentials and NVS settings survive LittleFS format (stored via `<Preferences.h>`)
+- HAL device configs persisted to `/hal_config.json`
+- DSP configs persisted to LittleFS per-channel JSON files (via `src/dsp_api.cpp`)
 
 **Build:**
-- `platformio.ini` — primary build configuration
-- `partitions_ota.csv` — custom partition table: nvs (20KB), otadata (8KB), app0/app1 (4MB each), spiffs (8MB), coredump (64KB); 16MB flash total
-- `src/idf_component.yml` — IDF component manifest (`idf: '>=5.1'`)
-- `src/gui/lv_conf.h` — LVGL configuration
-- `src/gui/lgfx_config.h` — LovyanGFX display configuration
-
-**Static Analysis (CI-enforced):**
-- `web_src/.eslintrc.json` — ESLint config with 380 globals for concatenated JS scope
-- cppcheck on `src/` (excludes `src/gui/`), `--std=c++11`
+- `platformio.ini` — three environments: `esp32-p4` (primary), `p4_hosted_update` (hosted update test), `native` (unit tests)
+- `partitions_ota.csv` — custom partition table: NVS 20KB, OTA data 8KB, app0 4MB, app1 4MB, spiffs 7.875MB, coredump 64KB
+- Flash total: 16MB
+- `tools/fix_riscv_toolchain.py` — pre-script fixing RISC-V toolchain path for ESP32-P4
 
 ## Platform Requirements
 
 **Development:**
-- PlatformIO (Python-based) with `pio run`, `pio test -e native`, `pio device monitor`
-- Upload port: COM8 at 115200 baud
-- Node.js for web asset build: `node tools/build_web_assets.js` must be run after any `web_src/` edit
-- RISC-V toolchain auto-patched by `tools/fix_riscv_toolchain.py` at build time
+- PlatformIO CLI (or IDE plugin)
+- Node.js (for `tools/build_web_assets.js` and `e2e/` tests)
+- Windows host (upload port `COM8`, MSYS2/bash shell used in CI scripts)
+- MinGW/GCC for native test compilation
 
 **Production:**
-- Waveshare ESP32-P4-WiFi6-DEV-Kit, 16MB flash, PSRAM available
-- WiFi via ESP32-C6 co-processor (firmware v2.11.6); Ethernet via EMAC + PHY at 100Mbps full duplex
-- OTA update partitions: ota_0 and ota_1 (4MB each), firmware downloaded from GitHub Releases
-- Serial monitor at 115200 baud, `monitor_filters = direct`
+- Waveshare ESP32-P4-WiFi6-DEV-Kit (ESP32-P4 + ESP32-C6 co-processor for WiFi6)
+- 16MB flash, PSRAM available (DSP delay lines use `ps_calloc()` when present)
+- Serial monitor at 115200 baud on COM8
 
 ---
 
-*Stack analysis: 2026-03-07*
+*Stack analysis: 2026-03-08*
