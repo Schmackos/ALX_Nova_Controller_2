@@ -9,6 +9,10 @@ void saveSettings();
 void saveSettingsDeferred();       // Mark dirty — actual save after 2s idle
 void checkDeferredSettingsSave();  // Call from main loop
 
+// Returns true if loadSettings() already loaded MQTT settings from /config.json.
+// Used by loadMqttSettings() to skip /mqtt_config.txt when not needed.
+bool settingsMqttLoadedFromJson();
+
 // Note: Certificate management removed - now using Mozilla certificate bundle
 // via ESP32CertBundle library for automatic SSL validation
 

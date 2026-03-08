@@ -136,6 +136,26 @@ static void applySettingsFromJson(const JsonDocument &doc) {
 #endif
 }
 
+// Flag set by loadSettingsJson() when the JSON config contains an "mqtt" section.
+// loadMqttSettings() checks this to skip /mqtt_config.txt when already loaded.
+static bool _mqttLoadedFromJson = false;
+
+bool settingsMqttLoadedFromJson() { return _mqttLoadedFromJson; }
+
+// Apply MQTT fields from a parsed /config.json document.
+// Only called when the document contains an "mqtt" object.
+static void applyMqttFromJson(const JsonDocument &doc) {
+  if (!doc["mqtt"].is<JsonObjectConst>()) return;
+  JsonObjectConst m = doc["mqtt"].as<JsonObjectConst>();
+  if (m["enabled"].is<bool>())        appState.mqttEnabled     = m["enabled"].as<bool>();
+  if (m["broker"].is<const char*>())  appState.mqttBroker      = m["broker"].as<const char*>();
+  if (m["port"].is<int>())            appState.mqttPort        = m["port"].as<int>();
+  if (m["username"].is<const char*>()) appState.mqttUsername   = m["username"].as<const char*>();
+  if (m["password"].is<const char*>()) appState.mqttPassword   = m["password"].as<const char*>();
+  if (m["baseTopic"].is<const char*>()) appState.mqttBaseTopic = m["baseTopic"].as<const char*>();
+  if (m["haDiscovery"].is<bool>())    appState.mqttHADiscovery = m["haDiscovery"].as<bool>();
+}
+
 // Try loading settings from /config.json
 static bool loadSettingsJson() {
   File file = LittleFS.open("/config.json", "r");
@@ -158,8 +178,19 @@ static bool loadSettingsJson() {
     return false;
   }
 
+  int version = doc["version"].as<int>();
   applySettingsFromJson(doc);
-  LOG_I("[Settings] Loaded from config.json (v%d)", doc["version"].as<int>());
+
+  // If the JSON file includes an "mqtt" section, load it now and record
+  // the fact so loadMqttSettings() can skip the legacy /mqtt_config.txt.
+  if (doc["mqtt"].is<JsonObjectConst>()) {
+    applyMqttFromJson(doc);
+    _mqttLoadedFromJson = true;
+    LOG_I("[Settings] JSON config v%d loaded (with MQTT), skipping legacy paths", version);
+  } else {
+    LOG_I("[Settings] JSON config v%d loaded, skipping legacy paths", version);
+  }
+
   return true;
 }
 

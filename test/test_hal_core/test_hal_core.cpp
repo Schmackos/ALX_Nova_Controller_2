@@ -33,6 +33,16 @@ public:
     int  deinitCallCount;
     bool dumpConfigCalled;
 
+    TestDevice()
+        : probeResult(true), initResult(true), healthResult(true),
+          initCallCount(0), probeCallCount(0), healthCallCount(0),
+          deinitCallCount(0), dumpConfigCalled(false) {
+        strncpy(_descriptor.compatible, "default", 31);
+        _descriptor.compatible[31] = '\0';
+        _descriptor.type = HAL_DEV_NONE;
+        _initPriority = HAL_PRIORITY_HARDWARE;
+    }
+
     TestDevice(const char* compatible, HalDeviceType type, uint16_t priority = HAL_PRIORITY_HARDWARE)
         : probeResult(true), initResult(true), healthResult(true),
           initCallCount(0), probeCallCount(0), healthCallCount(0),
@@ -125,17 +135,12 @@ void test_remove_device() {
 
 // ===== Test 5: Max devices limit =====
 void test_max_devices_limit() {
-    TestDevice devs[HAL_MAX_DEVICES + 1] = {
-        TestDevice("dev0",  HAL_DEV_DAC), TestDevice("dev1",  HAL_DEV_DAC),
-        TestDevice("dev2",  HAL_DEV_DAC), TestDevice("dev3",  HAL_DEV_DAC),
-        TestDevice("dev4",  HAL_DEV_DAC), TestDevice("dev5",  HAL_DEV_DAC),
-        TestDevice("dev6",  HAL_DEV_DAC), TestDevice("dev7",  HAL_DEV_DAC),
-        TestDevice("dev8",  HAL_DEV_DAC), TestDevice("dev9",  HAL_DEV_DAC),
-        TestDevice("dev10", HAL_DEV_DAC), TestDevice("dev11", HAL_DEV_DAC),
-        TestDevice("dev12", HAL_DEV_DAC), TestDevice("dev13", HAL_DEV_DAC),
-        TestDevice("dev14", HAL_DEV_DAC), TestDevice("dev15", HAL_DEV_DAC),
-        TestDevice("dev16", HAL_DEV_DAC),
-    };
+    TestDevice devs[HAL_MAX_DEVICES + 1];
+    for (int i = 0; i < HAL_MAX_DEVICES + 1; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "dev%d", i);
+        devs[i] = TestDevice(name, HAL_DEV_DAC);
+    }
 
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         TEST_ASSERT_GREATER_OR_EQUAL(0, mgr->registerDevice(&devs[i], HAL_DISC_BUILTIN));

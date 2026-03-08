@@ -33,9 +33,17 @@ static const int RAW_SAMPLES = FRAMES * 2;          // 512 int32_t per buffer (L
 static const float MAX_24BIT_F = 8388607.0f;        // 2^23 - 1
 
 // ===== DMA Buffers — MUST be in internal SRAM (DMA cannot access PSRAM) =====
-// 4 input lanes + 1 output: ~10 KB of internal SRAM (DSP bridge removed — float-native)
-static int32_t _rawBuf[AUDIO_PIPELINE_MAX_INPUTS][RAW_SAMPLES];
-static int32_t _dacBuf[RAW_SAMPLES];
+// Lazily allocated on first audio_pipeline_set_source() / audio_pipeline_set_sink() call
+// (ESP32 path only — native test keeps static 2D arrays below).
+#ifndef NATIVE_TEST
+static int32_t *_rawBuf[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static int32_t *_sinkBuf[AUDIO_OUT_MAX_SINKS] = {};
+#else
+static int32_t _rawBuf_storage[AUDIO_PIPELINE_MAX_INPUTS][RAW_SAMPLES];
+static int32_t _sinkBuf_storage[AUDIO_OUT_MAX_SINKS][RAW_SAMPLES];
+static int32_t *_rawBuf[AUDIO_PIPELINE_MAX_INPUTS];
+static int32_t *_sinkBuf[AUDIO_OUT_MAX_SINKS];
+#endif
 
 // ===== Float Working Buffers (PSRAM-allocated on ESP32, static on native) =====
 static float *_laneL[AUDIO_PIPELINE_MAX_INPUTS] = {};
@@ -84,8 +92,9 @@ static AudioOutputSink _sinks[AUDIO_OUT_MAX_SINKS] = {
     AUDIO_OUTPUT_SINK_INIT, AUDIO_OUTPUT_SINK_INIT,
 };
 static volatile int _sinkCount = 0;
-// Per-sink DMA buffers — internal SRAM (DMA cannot access PSRAM)
-static int32_t _sinkBuf[AUDIO_OUT_MAX_SINKS][RAW_SAMPLES];
+
+// ===== No-sink warning flag (reset when first sink is registered) =====
+static bool _noSinkWarned = false;
 
 // ===== Noise Gate Fade State =====
 // _gateFadeCount: counts remaining fade-out buffers (2→1→0) after gate closes.
@@ -155,6 +164,7 @@ static void pipeline_read_inputs() {
     const size_t bufBytes = FRAMES * 2 * sizeof(int32_t);
 
     for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        if (!_rawBuf[lane]) continue;  // Not yet allocated (no source registered)
         if (_inputBypass[lane]) {
             memset(_rawBuf[lane], 0, bufBytes);
             continue;
@@ -334,10 +344,6 @@ static void pipeline_run_output_dsp() {
 static void pipeline_write_output() {
     if (_outputBypass || !_outCh[0] || !_outCh[1]) return;
 #ifdef DAC_ENABLED
-    // Use swap hold buffers during DSP config swap
-    const float *ch0 = (_swapPending && _swapHoldCh[0]) ? _swapHoldCh[0] : _outCh[0];
-    const float *ch1 = (_swapPending && _swapHoldCh[1]) ? _swapHoldCh[1] : _outCh[1];
-
     if (_sinkCount > 0) {
         // Sink dispatch path: iterate all slots up to AUDIO_OUT_MAX_SINKS so that
         // slot-indexed sinks with gaps between them (e.g., slot 0 empty, slot 1 active)
@@ -355,6 +361,7 @@ static void pipeline_write_output() {
             const float *srcL = (_swapPending && _swapHoldCh[chL]) ? _swapHoldCh[chL] : _outCh[chL];
             const float *srcR = (_swapPending && _swapHoldCh[chR]) ? _swapHoldCh[chR] : _outCh[chR];
             if (!srcL || !srcR) continue;
+            if (!_sinkBuf[s]) continue;  // DMA buffer not yet allocated for this slot
 
             if (sink->gainLinear != 1.0f) {
                 float g = sink->gainLinear;
@@ -389,14 +396,10 @@ static void pipeline_write_output() {
             }
         }
     } else {
-        // Legacy fallback: no sinks registered, use hardcoded DAC calls
-        if (dac_output_is_ready()) {
-            to_int32_lj(ch0, ch1, _dacBuf, FRAMES);
-            dac_output_write(_dacBuf, FRAMES);
-        }
-        if (dac_secondary_is_ready()) {
-            to_int32_lj(ch0, ch1, _dacBuf, FRAMES);
-            dac_secondary_write(_dacBuf, FRAMES);
+        // No sinks registered — output silence
+        if (!_noSinkWarned) {
+            LOG_W("[Pipeline] No sinks registered, output silent");
+            _noSinkWarned = true;
         }
     }
 
@@ -528,28 +531,32 @@ static void audio_pipeline_task_fn(void * /*param*/) {
         pipeline_update_metering();
         // Feed raw ADC1 data into waveform/FFT accumulator for WebSocket graph display.
         // Uses pre-float int32 data; adcIndex 0 = ADC1.
-        i2s_audio_push_waveform_fft(_rawBuf[0], FRAMES, 0);
+        if (_rawBuf[0]) {
+            i2s_audio_push_waveform_fft(_rawBuf[0], FRAMES, 0);
+        }
 
         // Schedule periodic serial dump every ~5s (via main loop dirty-flag pattern)
         if (++loopCount >= DUMP_INTERVAL_LOOPS) {
             loopCount = 0;
             // Capture raw ADC1 diagnostic snapshot before requesting dump
-            for (int i = 0; i < 8; i++) _adcDiag.raw[i] = _rawBuf[0][i];
-            int32_t maxAbs = 0, minVal = INT32_MAX, maxVal = INT32_MIN;
-            uint32_t nonZero = 0;
-            for (int f = 0; f < RAW_SAMPLES; f++) {
-                int32_t v = _rawBuf[0][f];
-                if (v != 0) nonZero++;
-                int32_t a = (v < 0) ? -v : v;
-                if (a > maxAbs) maxAbs = a;
-                if (v < minVal) minVal = v;
-                if (v > maxVal) maxVal = v;
+            if (_rawBuf[0]) {
+                for (int i = 0; i < 8; i++) _adcDiag.raw[i] = _rawBuf[0][i];
+                int32_t maxAbs = 0, minVal = INT32_MAX, maxVal = INT32_MIN;
+                uint32_t nonZero = 0;
+                for (int f = 0; f < RAW_SAMPLES; f++) {
+                    int32_t v = _rawBuf[0][f];
+                    if (v != 0) nonZero++;
+                    int32_t a = (v < 0) ? -v : v;
+                    if (a > maxAbs) maxAbs = a;
+                    if (v < minVal) minVal = v;
+                    if (v > maxVal) maxVal = v;
+                }
+                _adcDiag.maxAbs   = maxAbs;
+                _adcDiag.minVal   = minVal;
+                _adcDiag.maxVal   = maxVal;
+                _adcDiag.nonZero  = nonZero;
+                _adcDiag.captured = true;
             }
-            _adcDiag.maxAbs   = maxAbs;
-            _adcDiag.minVal   = minVal;
-            _adcDiag.maxVal   = maxVal;
-            _adcDiag.nonZero  = nonZero;
-            _adcDiag.captured = true;
             i2s_audio_request_dump();
 
             // Log stack high-water mark for safety monitoring
@@ -594,9 +601,14 @@ void audio_pipeline_init() {
 
     // Allocate float working buffers
 #ifdef NATIVE_TEST
+    // Native test: point all pointer arrays at the static storage defined above
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-        _laneL[i] = _laneL_buf[i];
-        _laneR[i] = _laneR_buf[i];
+        _rawBuf[i]  = _rawBuf_storage[i];
+        _laneL[i]   = _laneL_buf[i];
+        _laneR[i]   = _laneR_buf[i];
+    }
+    for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {
+        _sinkBuf[i] = _sinkBuf_storage[i];
     }
     for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
         _outCh[i] = _outCh_buf[i];
@@ -714,6 +726,17 @@ void audio_pipeline_notify_dsp_swap() {
 void audio_pipeline_set_source(int lane, const AudioInputSource *src) {
     if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS || !src) return;
 #ifndef NATIVE_TEST
+    // Lazy-allocate DMA raw buffer for this lane on first source registration.
+    // Must be in internal SRAM — DMA cannot access PSRAM.
+    if (!_rawBuf[lane]) {
+        _rawBuf[lane] = (int32_t *)calloc(RAW_SAMPLES, sizeof(int32_t));
+        if (!_rawBuf[lane]) {
+            LOG_E("[Audio] Failed to allocate rawBuf for lane %d", lane);
+            return;
+        }
+        LOG_D("[Audio] Allocated rawBuf[%d] (%u bytes internal SRAM)", lane,
+              (unsigned)(RAW_SAMPLES * sizeof(int32_t)));
+    }
     vTaskSuspendAll();
 #endif
     _sources[lane] = *src;  // Value copy — atomic w.r.t. task preemption
@@ -828,6 +851,19 @@ const AudioOutputSink* audio_pipeline_get_sink(int idx) {
 void audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
     if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS || !sink) return;
 #ifndef NATIVE_TEST
+    // Lazy-allocate DMA output buffer for this sink slot on first registration.
+    // Must be in internal SRAM — DMA cannot access PSRAM.
+    if (!_sinkBuf[slot]) {
+        _sinkBuf[slot] = (int32_t *)calloc(RAW_SAMPLES, sizeof(int32_t));
+        if (!_sinkBuf[slot]) {
+            LOG_E("[Audio] Failed to allocate sinkBuf for slot %d", slot);
+            return;
+        }
+        LOG_D("[Audio] Allocated sinkBuf[%d] (%u bytes internal SRAM)", slot,
+              (unsigned)(RAW_SAMPLES * sizeof(int32_t)));
+    }
+    // Reset the no-sink warning so it fires again if all sinks are later removed
+    _noSinkWarned = false;
     vTaskSuspendAll();
 #endif
     _sinks[slot] = *sink;
@@ -910,17 +946,29 @@ void audio_pipeline_load_matrix() {
     }
 
     JsonArray arr = doc.as<JsonArray>();
-    if (arr.size() != AUDIO_PIPELINE_MATRIX_SIZE) {
-        LOG_W("[Audio] Matrix load: expected %d rows, got %d", AUDIO_PIPELINE_MATRIX_SIZE, (int)arr.size());
+    int oldSize = (int)arr.size();
+    if (oldSize == 0 || oldSize > AUDIO_PIPELINE_MATRIX_SIZE) {
+        LOG_W("[Audio] Matrix load: invalid size %d (max %d)", oldSize, AUDIO_PIPELINE_MATRIX_SIZE);
         return;
     }
-    for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++) {
+    // Backward compat: smaller matrix (e.g. 8x8 from older firmware) placed in top-left corner
+    if (oldSize < AUDIO_PIPELINE_MATRIX_SIZE) {
+        // Zero-fill entire matrix, then overlay the saved portion
+        for (int o = 0; o < AUDIO_PIPELINE_MATRIX_SIZE; o++)
+            for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++)
+                _matrixGain[o][i] = 0.0f;
+        LOG_I("[Pipeline] Migrated %dx%d matrix to %dx%d", oldSize, oldSize,
+              AUDIO_PIPELINE_MATRIX_SIZE, AUDIO_PIPELINE_MATRIX_SIZE);
+    }
+    int loadSize = (oldSize < AUDIO_PIPELINE_MATRIX_SIZE) ? oldSize : AUDIO_PIPELINE_MATRIX_SIZE;
+    for (int o = 0; o < loadSize; o++) {
         JsonArray row = arr[o].as<JsonArray>();
-        if (row.size() != AUDIO_PIPELINE_MATRIX_SIZE) continue;
-        for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+        int rowSize = (int)row.size();
+        if (rowSize > AUDIO_PIPELINE_MATRIX_SIZE) rowSize = AUDIO_PIPELINE_MATRIX_SIZE;
+        for (int i = 0; i < rowSize; i++) {
             _matrixGain[o][i] = row[i].as<float>();
         }
     }
-    LOG_I("[Audio] Matrix loaded from /pipeline_matrix.json");
+    LOG_I("[Audio] Matrix loaded from /pipeline_matrix.json (%dx%d)", oldSize, oldSize);
 #endif
 }

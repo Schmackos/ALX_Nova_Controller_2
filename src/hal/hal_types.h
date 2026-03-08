@@ -6,7 +6,7 @@
 #include <string.h>
 
 // ===== Limits =====
-#define HAL_MAX_DEVICES  16
+#define HAL_MAX_DEVICES  24
 #define HAL_MAX_PINS     24
 #define HAL_MAX_DRIVERS  16
 

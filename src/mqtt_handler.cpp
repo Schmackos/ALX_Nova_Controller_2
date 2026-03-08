@@ -32,6 +32,12 @@ extern void saveDspSettingsDebounced();
 
 // Load MQTT settings from LittleFS
 bool loadMqttSettings() {
+  // Skip legacy file when /config.json already provided MQTT settings.
+  if (settingsMqttLoadedFromJson()) {
+    LOG_I("[MQTT] MQTT settings already loaded from config.json, skipping mqtt_config.txt");
+    return true;
+  }
+
   // Use create=true to avoid "no permits for creation" error log if file is
   // missing
   File file = LittleFS.open("/mqtt_config.txt", "r", true);
