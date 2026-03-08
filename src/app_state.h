@@ -143,7 +143,7 @@ public:
     String version;
     String firmwareUrl;
     String checksum;
-    bool isPrerelease;
+    bool isPrerelease = false;
     String publishedAt;  // "YYYY-MM-DD"
   };
   static const int OTA_MAX_RELEASES = 5;

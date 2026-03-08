@@ -617,7 +617,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         }
         else if (msgType == "setDspStereoLink") {
           int pair = doc["pair"] | -1;
-          bool linked = doc["linked"] | true;
+          bool linked = doc["linked"] | true; // cppcheck-suppress badBitmaskCheck
           if (pair >= 0 && pair <= 1) {
             dsp_copy_active_to_inactive();
             DspState *cfg = dsp_get_inactive_config();
@@ -690,7 +690,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "setPeqBandEnabled") {
           int ch = doc["ch"] | -1;
           int band = doc["band"] | -1;
-          bool en = doc["enabled"] | true;
+          bool en = doc["enabled"] | true; // cppcheck-suppress badBitmaskCheck
           if (ch >= 0 && ch < DSP_MAX_CHANNELS && band >= 0 && band < DSP_PEQ_BANDS) {
             dsp_copy_active_to_inactive();
             DspState *cfg = dsp_get_inactive_config();
@@ -705,7 +705,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         }
         else if (msgType == "setPeqAllEnabled") {
           int ch = doc["ch"] | -1;
-          bool en = doc["enabled"] | true;
+          bool en = doc["enabled"] | true; // cppcheck-suppress badBitmaskCheck
           if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
             dsp_copy_active_to_inactive();
             DspState *cfg = dsp_get_inactive_config();

@@ -17,7 +17,7 @@
 
 class MockFile {
 public:
-    MockFile() : _valid(false), _pos(0), _writable(false) {}
+    MockFile() : _valid(false), _data(nullptr), _pos(0), _writable(false) {}
     MockFile(const std::string& path, std::string* data, bool writable, bool append)
         : _valid(true), _path(path), _data(data), _writable(writable) {
         _pos = append ? data->size() : 0;

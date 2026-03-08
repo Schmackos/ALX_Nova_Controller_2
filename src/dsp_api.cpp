@@ -1410,7 +1410,7 @@ void registerDspApiEndpoints() {
 
         int pair = doc["pair"] | -1; // 0 = ch0+1, 1 = ch2+3
         if (pair < 0 || pair > 1) { sendJsonError(400, "Invalid pair (0 or 1)"); return; }
-        bool linked = doc["linked"] | true;
+        bool linked = doc["linked"] | true; // cppcheck-suppress badBitmaskCheck
 
         dsp_copy_active_to_inactive();
         DspState *inactive = dsp_get_inactive_config();
