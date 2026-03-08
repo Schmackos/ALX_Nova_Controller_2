@@ -7,6 +7,9 @@
 #include "../debug_serial.h"
 #include "../app_state.h"
 #include "../i2s_audio.h"
+#include "../audio_pipeline.h"
+#include "../audio_output_sink.h"
+#include <math.h>
 #else
 #define LOG_I(fmt, ...) ((void)0)
 #define LOG_W(fmt, ...) ((void)0)
@@ -78,8 +81,8 @@ bool HalDspBridge::dspSetBypassed(bool bypass) {
 float HalDspBridge::dspGetInputLevel(uint8_t lane) const {
 #ifndef NATIVE_TEST
     AudioAnalysis analysis = i2s_audio_get_analysis();
-    // Return combined RMS for the requested ADC lane (0 or 1)
-    if (lane < 2) {
+    // Return combined RMS for the requested input lane
+    if (lane < AUDIO_PIPELINE_MAX_INPUTS) {
         return analysis.adc[lane].rmsCombined;
     }
     return 0.0f;
@@ -91,11 +94,11 @@ float HalDspBridge::dspGetInputLevel(uint8_t lane) const {
 
 float HalDspBridge::dspGetOutputLevel(uint8_t lane) const {
 #ifndef NATIVE_TEST
-    // Output level: use same analysis (post-pipeline RMS)
-    // Future: read from per-output VU metering when available
-    AudioAnalysis analysis = i2s_audio_get_analysis();
-    if (lane < 2) {
-        return analysis.adc[lane].rmsCombined;
+    // Read actual per-sink VU metering (dBFS), convert to linear 0.0-1.0
+    const AudioOutputSink* sink = audio_pipeline_get_sink(lane);
+    if (sink && sink->vuL > -89.0f) {
+        float avgDb = (sink->vuL + sink->vuR) * 0.5f;
+        return powf(10.0f, avgDb / 20.0f);
     }
     return 0.0f;
 #else

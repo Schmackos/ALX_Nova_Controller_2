@@ -98,12 +98,9 @@ These issues were identified by cppcheck in the 2026-03-08 CI run and currently 
 - Impact: When a DSP config swap races with the audio task and fails, the user's configuration change is silently dropped. The misleading log message delays diagnosis.
 - Fix approach: Either implement a retry (re-attempt `dsp_swap_config()` on the next main loop tick via a dirty flag), or change the log message to accurately describe the situation: `"Swap failed — change discarded, user must retry"`.
 
-### DEBT-2: `dspGetInputLevel`/`dspGetOutputLevel` Hard-Coded to Lanes 0-1
+### ~~DEBT-2: `dspGetInputLevel`/`dspGetOutputLevel` Hard-Coded to Lanes 0-1~~ RESOLVED
 
-- Issue: `src/hal/hal_dsp_bridge.cpp:84,99` checks `if (lane < 2)` before reading `analysis.adc[lane]`, even though `AUDIO_PIPELINE_MAX_INPUTS = 8` and the analysis struct has 8 ADC slots.
-- Files: `src/hal/hal_dsp_bridge.cpp:80-106`
-- Impact: Querying DSP I/O levels for lanes 2-7 returns `0.0f` silently, producing incorrect diagnostics for multi-lane setups.
-- Fix approach: Change the guard to `if (lane < AUDIO_PIPELINE_MAX_INPUTS)`.
+- **Fixed**: `dspGetInputLevel()` guard changed from `lane < 2` to `lane < AUDIO_PIPELINE_MAX_INPUTS`. `dspGetOutputLevel()` rewired to read actual per-sink VU metering via `audio_pipeline_get_sink()` with dBFS→linear conversion, replacing the stale input-data fallback. 16 new tests in `test/test_hal_dsp_bridge/`.
 
 ### DEBT-3: Legacy `dac_output_init()` Still Called in Audio Pipeline and Main Loop
 
