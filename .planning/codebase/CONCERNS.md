@@ -91,12 +91,9 @@ These issues were identified by cppcheck in the 2026-03-08 CI run and currently 
 
 ## Tech Debt
 
-### DEBT-1: DSP Swap Failure "Retry" Is a Lie
+### ~~DEBT-1: DSP Swap Failure "Retry" Is a Lie~~ RESOLVED
 
-- Issue: Fourteen callsites in `src/dsp_api.cpp` and three in `src/websocket_handler.cpp` log `"Swap failed, staged for retry"` but there is no retry mechanism anywhere in the codebase. `appState.dspSwapFailures` is incremented and broadcast in WS state but never acted upon.
-- Files: `src/dsp_api.cpp` (17 callsites), `src/websocket_handler.cpp` (3 callsites)
-- Impact: When a DSP config swap races with the audio task and fails, the user's configuration change is silently dropped. The misleading log message delays diagnosis.
-- Fix approach: Either implement a retry (re-attempt `dsp_swap_config()` on the next main loop tick via a dirty flag), or change the log message to accurately describe the situation: `"Swap failed — change discarded, user must retry"`.
+- **Fixed:** All 42 external callsites across 4 files (`dsp_api.cpp`, `websocket_handler.cpp`, `mqtt_handler.cpp`, `scr_dsp.cpp`) replaced with `dsp_log_swap_failure()` helper. Double-counting bug eliminated — only `dsp_swap_config()` itself increments the failure counter. 15 HTTP endpoints now return 503 on swap failure instead of lying with 200 success. Log message changed from "staged for retry" to "change not applied". 2 new tests verify single-increment behavior.
 
 ### ~~DEBT-2: `dspGetInputLevel`/`dspGetOutputLevel` Hard-Coded to Lanes 0-1~~ RESOLVED
 
