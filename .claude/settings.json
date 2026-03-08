@@ -4,7 +4,9 @@
       "WebFetch(domain:www.waveshare.com)",
       "WebFetch(domain:community.home-assistant.io)",
       "Read(//c/Users/Necrosis/**)",
-      "Bash(/c/Users/Necrosis/.platformio/penv/Scripts/pip.exe install --upgrade platformio)"
+      "Bash(/c/Users/Necrosis/.platformio/penv/Scripts/pip.exe install --upgrade platformio)",
+      "Read(//c/Users/Necrosis/Documents/GitHub/ALX_Nova_Controller_2/**)",
+      "Bash(npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Necrosis\\Documents\\GitHub\\ALX_Nova_Controller_2",
