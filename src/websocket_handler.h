@@ -49,6 +49,11 @@ void drainPendingInitState();
 // ===== Audio Streaming =====
 void sendAudioData();
 
+// ===== Authenticated Client Guard =====
+// Returns true if at least one WS client has completed authentication.
+// Used by broadcast functions to skip JSON serialization when no clients are listening.
+bool wsAnyClientAuthenticated();
+
 // ===== HTTP Page Serving Flag =====
 extern volatile bool httpServingPage;
 

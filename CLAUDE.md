@@ -32,7 +32,7 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (1556 tests across 65 modules). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_device`, `test_hal_manager`, `test_hal_registry`, `test_hal_db`, `test_output_dsp`, `test_dac_settings`, `test_evt_any`, `test_sink_slot_api`, `test_hal_state_callback`, `test_hal_bridge`, `test_deferred_toggle`, `test_hal_multi_instance`, `test_hal_siggen`, `test_hal_usb_audio`, `test_pipeline_bounds`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (1561 tests across 65 modules). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_device`, `test_hal_manager`, `test_hal_registry`, `test_hal_db`, `test_output_dsp`, `test_dac_settings`, `test_evt_any`, `test_sink_slot_api`, `test_hal_state_callback`, `test_hal_bridge`, `test_deferred_toggle`, `test_hal_multi_instance`, `test_hal_siggen`, `test_hal_usb_audio`, `test_pipeline_bounds`.
 
 ## Architecture
 
@@ -256,7 +256,7 @@ Agent 2 (test-engineer): "Run cd e2e && npx playwright test and fix any failures
 
 ### Quality Gates (CI/CD)
 All 4 gates must pass before firmware build proceeds (parallel execution):
-1. `cpp-tests` — `pio test -e native -v` (1,556 Unity tests across 65 modules)
+1. `cpp-tests` — `pio test -e native -v` (1,561 Unity tests across 65 modules)
 2. `cpp-lint` — cppcheck on `src/`
 3. `js-lint` — find_dups + check_missing_fns + ESLint
 4. `e2e-tests` — Playwright browser tests (26 tests across 19 specs)

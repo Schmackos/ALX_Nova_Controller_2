@@ -953,6 +953,7 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
 }
 
 void sendWiFiStatus() {
+  if (!wsAnyClientAuthenticated()) return;
   JsonDocument doc;
   doc["type"] = "wifiStatus";
   buildWiFiStatusJson(doc, false); // Don't block on version fetch for WebSocket

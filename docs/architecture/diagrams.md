@@ -462,7 +462,7 @@ graph LR
 
     subgraph Gates["Quality Gates (parallel)"]
         direction TB
-        CPP["cpp-tests\npio test -e native -v\n1,556 Unity tests"]
+        CPP["cpp-tests\npio test -e native -v\n1,561 Unity tests"]
         CPPL["cpp-lint\ncppcheck src/\nwarning + style + performance"]
         JSL["js-lint\nfind_dups.js\ncheck_missing_fns.js\nESLint web_src/js/"]
         E2E["e2e-tests\nnpm ci\nplaywright install chromium\nplaywright test\n26 browser tests"]
@@ -557,7 +557,7 @@ graph TB
     classDef untested fill:#5c1a1a,stroke:#F44336,color:#fff
     classDef schema fill:#3a3a3a,stroke:#9E9E9E,color:#fff
 
-    subgraph UnitTests["C++ Unit Tests (1,556 tests)"]
+    subgraph UnitTests["C++ Unit Tests (1,561 tests)"]
         UT_HAL["HAL Framework\n14 test modules\nlifecycle, bridge, drivers"]
         UT_PIPE["Audio Pipeline\n8 test modules\nsink dispatch, DSP, metering"]
         UT_NET["Networking\n5 test modules\nWiFi, MQTT, OTA, ETH"]

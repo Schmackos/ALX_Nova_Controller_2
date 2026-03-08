@@ -3,6 +3,7 @@
 #include "config.h"
 #include "debug_serial.h"
 #include "i2s_audio.h"
+#include "websocket_handler.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <cmath>
@@ -418,6 +419,7 @@ void updateSmartSensingLogic() {
 
 // Send Smart Sensing state via WebSocket (internal function, always sends)
 void sendSmartSensingStateInternal() {
+  if (!wsAnyClientAuthenticated()) return;
   JsonDocument doc;
   doc["type"] = "smartSensing";
 

@@ -22,6 +22,27 @@ std::vector<WSClient> wsClients;
 std::string lastBroadcastMessage;
 int broadcastCount = 0;
 
+// ===== Authenticated Client Counter (mirrors websocket_handler.cpp) =====
+#define MAX_WS_CLIENTS 10
+static bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
+static uint8_t _wsAuthCount = 0;
+
+bool wsAnyClientAuthenticated() { return _wsAuthCount > 0; }
+
+// Simulate auth success for a given client slot (mirrors webSocketEvent auth path)
+void simulateAuthSuccess(uint8_t num) {
+  if (num >= MAX_WS_CLIENTS) return;
+  wsAuthStatus[num] = true;
+  _wsAuthCount++;
+}
+
+// Simulate disconnect for a given client slot (mirrors webSocketEvent disconnect path)
+void simulateDisconnect(uint8_t num) {
+  if (num >= MAX_WS_CLIENTS) return;
+  if (wsAuthStatus[num] && _wsAuthCount > 0) _wsAuthCount--;
+  wsAuthStatus[num] = false;
+}
+
 // Mock app state
 struct MockAppState {
   bool ledState = false;
@@ -41,6 +62,9 @@ void reset() {
   appState.uptime = 0;
   appState.cpuUsage = 0;
   appState.memoryUsage = 0;
+  // Reset authenticated client tracking
+  for (int i = 0; i < MAX_WS_CLIENTS; i++) wsAuthStatus[i] = false;
+  _wsAuthCount = 0;
 #ifdef NATIVE_TEST
   ArduinoMock::reset();
 #endif
@@ -304,6 +328,69 @@ void test_websocket_message_size(void) {
   TEST_ASSERT_LESS_THAN(1000, json.length());
 }
 
+// ===== Authenticated Client Counter Tests =====
+
+void test_ws_auth_count_starts_zero(void) {
+  // After setUp() reset, no clients are authenticated
+  TEST_ASSERT_FALSE(wsAnyClientAuthenticated());
+  TEST_ASSERT_EQUAL(0, _wsAuthCount);
+}
+
+void test_ws_auth_count_increments_on_auth(void) {
+  // Simulate a single client authenticating
+  simulateAuthSuccess(0);
+
+  TEST_ASSERT_TRUE(wsAnyClientAuthenticated());
+  TEST_ASSERT_EQUAL(1, _wsAuthCount);
+  TEST_ASSERT_TRUE(wsAuthStatus[0]);
+}
+
+void test_ws_auth_count_decrements_on_disconnect(void) {
+  // Auth then disconnect — counter should return to zero
+  simulateAuthSuccess(0);
+  TEST_ASSERT_TRUE(wsAnyClientAuthenticated());
+
+  simulateDisconnect(0);
+  TEST_ASSERT_FALSE(wsAnyClientAuthenticated());
+  TEST_ASSERT_EQUAL(0, _wsAuthCount);
+  TEST_ASSERT_FALSE(wsAuthStatus[0]);
+}
+
+void test_ws_auth_count_no_underflow(void) {
+  // Disconnect without prior auth — counter must stay at zero
+  simulateDisconnect(0);
+  TEST_ASSERT_FALSE(wsAnyClientAuthenticated());
+  TEST_ASSERT_EQUAL(0, _wsAuthCount);
+
+  // Double disconnect on same slot
+  simulateDisconnect(0);
+  TEST_ASSERT_EQUAL(0, _wsAuthCount);
+
+  // Disconnect on a different unauthenticated slot
+  simulateDisconnect(5);
+  TEST_ASSERT_EQUAL(0, _wsAuthCount);
+}
+
+void test_ws_auth_multi_client(void) {
+  // Auth two clients on different slots
+  simulateAuthSuccess(0);
+  simulateAuthSuccess(3);
+  TEST_ASSERT_TRUE(wsAnyClientAuthenticated());
+  TEST_ASSERT_EQUAL(2, _wsAuthCount);
+
+  // Disconnect first — should still be true (one client remains)
+  simulateDisconnect(0);
+  TEST_ASSERT_TRUE(wsAnyClientAuthenticated());
+  TEST_ASSERT_EQUAL(1, _wsAuthCount);
+  TEST_ASSERT_FALSE(wsAuthStatus[0]);
+  TEST_ASSERT_TRUE(wsAuthStatus[3]);
+
+  // Disconnect second — now zero
+  simulateDisconnect(3);
+  TEST_ASSERT_FALSE(wsAnyClientAuthenticated());
+  TEST_ASSERT_EQUAL(0, _wsAuthCount);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -331,6 +418,13 @@ int runUnityTests(void) {
   RUN_TEST(test_websocket_message_json_valid);
   RUN_TEST(test_websocket_message_escaping);
   RUN_TEST(test_websocket_message_size);
+
+  // Authenticated client counter tests
+  RUN_TEST(test_ws_auth_count_starts_zero);
+  RUN_TEST(test_ws_auth_count_increments_on_auth);
+  RUN_TEST(test_ws_auth_count_decrements_on_disconnect);
+  RUN_TEST(test_ws_auth_count_no_underflow);
+  RUN_TEST(test_ws_auth_multi_client);
 
   return UNITY_END();
 }

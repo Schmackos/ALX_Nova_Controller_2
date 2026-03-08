@@ -53,6 +53,13 @@ volatile bool httpServingPage = false;
 // ===== Per-client Audio Streaming Subscription =====
 static bool _audioSubscribed[MAX_WS_CLIENTS] = {};
 
+// ===== Authenticated Client Counter =====
+// Tracked via webSocketEvent() connect/disconnect callbacks.
+// Used by broadcast functions to skip JSON serialization when no clients are listening.
+static uint8_t _wsAuthCount = 0;
+static inline bool _wsAnyAuth() { return _wsAuthCount > 0; }
+bool wsAnyClientAuthenticated() { return _wsAuthCount > 0; }
+
 // Deferred initial-state queue — spreads the auth-success broadcast burst
 // across multiple main-loop iterations to prevent WiFi TX saturation that
 // causes cross-core audio pipeline interference.
@@ -124,6 +131,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
   switch(type) {
     case WStype_DISCONNECTED:
       LOG_I("[WebSocket] Client [%u] disconnected", num);
+      if (wsAuthStatus[num] && _wsAuthCount > 0) _wsAuthCount--;
       wsAuthStatus[num] = false;
       wsAuthTimeout[num] = 0;
       wsSessionId[num] = "";
@@ -177,10 +185,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
           if (authenticated) {
             wsAuthStatus[num] = true;
+            _wsAuthCount++;
             wsAuthTimeout[num] = 0;
             wsSessionId[num] = sessionId;
             webSocket.sendTXT(num, "{\"type\":\"authSuccess\"}");
-            LOG_D("[WebSocket] Client [%u] authenticated", num);
+            LOG_D("[WebSocket] Client [%u] authenticated (total: %u)", num, _wsAuthCount);
 
             // Defer initial state sends — drainPendingInitState() will send
             // 3 per main-loop iteration to avoid WiFi TX burst audio pops.
@@ -1454,6 +1463,7 @@ void sendDiagEvent() {
 
 #ifdef DSP_ENABLED
 void sendDspState() {
+  if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "dspState";
   doc["dspEnabled"] = appState.dspEnabled;
@@ -1564,6 +1574,7 @@ void sendDspState() {
 }
 
 void sendDspMetrics() {
+  if (!_wsAnyAuth()) return;
   DspMetrics m = dsp_get_metrics();
   JsonDocument doc;
   doc["type"] = "dspMetrics";
@@ -1579,6 +1590,7 @@ void sendDspMetrics() {
 
 #ifdef DAC_ENABLED
 void sendDacState() {
+  if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "dacState";
   doc["enabled"] = appState.dacEnabled;
@@ -1657,6 +1669,7 @@ void sendDacState() {
 }
 
 void sendHalDeviceState() {
+    if (!_wsAnyAuth()) return;
     JsonDocument doc;
     doc["type"] = "halDeviceState";
     doc["scanning"] = appState._halScanInProgress;
@@ -1710,6 +1723,7 @@ void sendHalDeviceState() {
 }
 
 void sendAudioChannelMap() {
+    if (!_wsAnyAuth()) return;
     JsonDocument doc;
     doc["type"] = "audioChannelMap";
 
@@ -1805,6 +1819,7 @@ void sendAudioChannelMap() {
 
 #ifdef USB_AUDIO_ENABLED
 void sendUsbAudioState() {
+  if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "usbAudioState";
   doc["enabled"] = appState.usbAudioEnabled;
@@ -1829,6 +1844,7 @@ void sendUsbAudioState() {
 #endif
 
 void sendMqttSettingsState() {
+  if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "mqttSettings";
   doc["enabled"] = appState.mqttEnabled;
@@ -1937,6 +1953,7 @@ void sendHardwareStats() {
     if (cpuHooksInstalled) deinitCpuUsageMonitoring();
     return;
   }
+  if (!_wsAnyAuth()) return;
 
   JsonDocument doc;
   doc["type"] = "hardware_stats";
