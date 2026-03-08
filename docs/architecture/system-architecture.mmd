@@ -16,7 +16,7 @@ graph TB
     end
 
     subgraph Core0["Core 0"]
-        MQTT["mqtt_task\n(priority 2, 20Hz poll)"]
+        MQTT["mqtt_task\n(priority 2, 20Hz poll)\nmqtt_handler + mqtt_publish\n+ mqtt_ha_discovery"]
         GUI["gui_task\n(LVGL on TFT)"]
         USB["usb_audio_task\n(TinyUSB UAC2)"]
         OTA["OTA one-shot tasks"]
