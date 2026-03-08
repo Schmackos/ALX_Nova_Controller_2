@@ -26,34 +26,24 @@ The following concerns from the 2026-03-07 audit have been fully addressed:
 - **[RESOLVED - Phase 6] Test coverage gaps** -- Coverage expanded from 1271 to 1430+ tests across 62+ modules. `hal_audio_health_bridge`, `hal_pipeline_bridge` boot-time sync, and deferred toggle paths now have dedicated tests.
 - **[RESOLVED] `hal_online_fetch` dead code** -- Files `hal_online_fetch.cpp`/`.h` have been removed. No references remain in `src/`.
 - **[RESOLVED] `NUM_AUDIO_ADCS` deprecated** -- Fully removed. All references use `AUDIO_PIPELINE_MAX_INPUTS` (8).
+- **[RESOLVED - Concerns v3 Phase 1] Bypass array OOB** -- `pipelineInputBypass` and `pipelineDspBypass` arrays expanded to `[AUDIO_PIPELINE_MAX_INPUTS]` (8), default init covers all lanes.
+- **[RESOLVED - Concerns v3 Phase 2] Legacy DAC fallback path** -- Legacy `dac_output_is_ready()` / `dac_output_write()` fallback in `pipeline_write_output()` replaced with silent output + `LOG_W` when `_sinkCount == 0`.
+- **[RESOLVED - Concerns v3 Phase 2] Legacy settings paths guarded** -- JSON config version check added: skips legacy `settings.txt` / `mqtt_config.txt` loading entirely when `/config.json` v1+ is present on disk.
+- **[RESOLVED - Concerns v3 Phase 3] Hardcoded lane 0-1 broadcasts** -- Flat `audioAdc[0]`/`audioAdc[1]` fields deprecated as of v1.14. WS broadcasts and MQTT publishes use per-ADC arrays with dynamic iteration over `activeInputCount`. Worst-case health aggregation across all active lanes.
+- **[RESOLVED - Concerns v3 Phase 3] Static SRAM allocation** -- Pipeline DMA raw buffers and float working buffers use lazy allocation on `set_source()`/`set_sink()`, not statically allocated at init.
+- **[RESOLVED - Concerns v3 Phase 4] HAL_MAX_DEVICES=16 limit** -- Increased to `HAL_MAX_DEVICES=24`. Bridge mapping tables `_halSlotToSinkSlot[]`/`_halSlotToAdcLane[]` updated accordingly.
+- **[RESOLVED - Concerns v3 Phase 1] Noise gate hardcoded to lanes 0-1** -- Noise gate now uses `AudioInputSource.isHardwareAdc` flag instead of hardcoded lane indices. Any hardware ADC on any lane gets noise gating.
+- **[RESOLVED - Concerns v3 Phase 1] Per-input DSP hardcoded to lanes 0-1** -- DSP loop iterates `AUDIO_PIPELINE_MAX_INPUTS` (8), applying per-input DSP to all active lanes.
 
 ---
 
 ## Tech Debt
 
-**AppState `pipelineInputBypass` / `pipelineDspBypass` Array Size Mismatch:**
-- Issue: `pipelineInputBypass[4]` and `pipelineDspBypass[4]` in `src/app_state.h` lines 487-488 are hardcoded to size 4, but `AUDIO_PIPELINE_MAX_INPUTS` is now 8. The pipeline loop in `pipeline_sync_flags()` at `src/audio_pipeline.cpp` line 146-148 iterates all 8 lanes and reads `s.pipelineInputBypass[i]` / `s.pipelineDspBypass[i]` for i=4..7, causing out-of-bounds reads from adjacent AppState members.
-- Files: `src/app_state.h` lines 487-488, `src/audio_pipeline.cpp` lines 146-148, 641-643
-- Impact: Undefined behavior for lanes 4-7. Currently benign because the adjacent memory happens to be `pipelineMatrixBypass` (false) and `pipelineOutputBypass` (false), which read as 0/false. But any reordering of AppState members or compiler optimization change could cause lanes 4-7 to be randomly bypassed or active.
-- Fix approach: Change both arrays to `bool pipelineInputBypass[AUDIO_PIPELINE_MAX_INPUTS]` and `bool pipelineDspBypass[AUDIO_PIPELINE_MAX_INPUTS]` with appropriate default initializers. Update the initializer lists to cover all 8 lanes.
-
-**Legacy DAC Fallback Path in Pipeline:**
-- Issue: `pipeline_write_output()` at `src/audio_pipeline.cpp` lines 391-401 contains a legacy fallback that calls `dac_output_is_ready()` / `dac_secondary_is_ready()` / `dac_output_write()` / `dac_secondary_write()` when `_sinkCount == 0`. With HAL-managed sinks, this path should never execute in production -- but it creates a hidden dependency on the old dac_hal global functions.
-- Files: `src/audio_pipeline.cpp` lines 391-401, `src/dac_hal.h` lines 77, 123
-- Impact: If a bug causes all sinks to be removed (e.g., bridge race condition), the legacy path silently takes over with different routing. This masks the real problem and could produce unexpected audio output.
-- Fix approach: Replace the legacy fallback with a LOG_W and silence output when `_sinkCount == 0`. Or remove the fallback entirely once HAL sink management is proven stable.
-
-**Legacy `settings.txt` / `mqtt_config.txt` Read Paths Still Present:**
-- Issue: `loadSettingsLegacy()` in `src/settings_manager.cpp` lines 167-289 still reads from `/settings.txt` using positional line indexing. `loadMqttSettings()` in `src/mqtt_handler.cpp` line 37 still reads from `/mqtt_config.txt`. Both are retained for one-time migration from pre-Phase-4 firmware.
-- Files: `src/settings_manager.cpp` lines 167-289, `src/mqtt_handler.cpp` lines 37-97
-- Impact: ~200 lines of dead-after-first-boot code. The positional line parser is fragile and has the fixed 30-slot `lines[]` array (no overflow protection). After enough firmware versions have shipped with JSON migration, these paths should be removed.
-- Fix approach: Add a version check -- if `/config.json` version >= 2 on disk, skip legacy loading entirely. After 2-3 release cycles, remove `loadSettingsLegacy()` and the `settings.txt` parser.
-
 **Legacy Flat AppState ADC Accessors:**
 - Issue: This concern was present in the previous audit and remains. The alias block for `audioRmsLeft`, `audioVuLeft`, etc. has been removed, but 8 `AdcState audioAdc[AUDIO_PIPELINE_MAX_INPUTS]` elements (each with 17 fields) are allocated even though typically only lanes 0-1 are used for hardware ADCs. The comment at line 206 still references `{true, true}` initializer for 2 ADCs.
 - Files: `src/app_state.h` lines 188, 206
-- Impact: Minor memory waste (~1.6KB for unused AdcState entries). More importantly, health diagnostics, WS broadcasts, and MQTT publishes hardcode lane 0 and lane 1, not iterating over `activeInputCount`.
-- Fix approach: Iterate `activeInputCount` in broadcast/publish paths instead of hardcoding lanes 0-1.
+- Impact: Minor memory waste (~1.6KB for unused AdcState entries). Health diagnostics now iterate `activeInputCount`, but some legacy paths may still reference specific lanes.
+- Fix approach: Verify all broadcast/publish paths iterate dynamically. Remove hardcoded lane references in remaining edge cases.
 
 **`mqtt_ha_discovery.cpp` Remains Very Large (1883 Lines):**
 - Issue: The HA discovery payload generation file is the largest module after `web_pages.cpp` and `web_pages_gz.cpp`. Each HA entity requires a dedicated function generating a JSON payload with ~30 fields.
@@ -67,12 +57,6 @@ The following concerns from the 2026-03-07 audit have been fully addressed:
 - Impact: Long compile times; high cognitive load for any modification. The deferred initial-state queue (`_pendingInitState`) with 15 bit flags adds complexity.
 - Fix approach: Extract WS broadcast functions into domain-specific files (e.g., `ws_audio_broadcast.cpp`, `ws_hal_broadcast.cpp`). The CPU monitoring hooks could move to a `cpu_monitor.cpp`.
 
-**Static SRAM Allocation for 8-Lane Pipeline:**
-- Issue: With `AUDIO_PIPELINE_MAX_INPUTS=8`, the static buffers in `src/audio_pipeline.cpp` consume significant internal SRAM: `_rawBuf[8][512]` = 16KB, `_sinkBuf[8][512]` = 16KB, `_dacBuf[512]` = 2KB. Total ~34KB of internal SRAM for DMA buffers alone.
-- Files: `src/audio_pipeline.cpp` lines 37-38, 88
-- Impact: With ESP32-P4 having limited internal SRAM (~512KB shared with WiFi RX buffers), 34KB is 6.6% of total. Adding more sinks or inputs pushes closer to the 40KB heap critical threshold.
-- Fix approach: Allocate `_rawBuf` and `_sinkBuf` only for lanes/slots that have registered sources/sinks. Use lazy allocation with PSRAM fallback (DMA on P4 can access PSRAM via GDMA, unlike S3).
-
 **16x16 Matrix Gain Table (1KB):**
 - Issue: `_matrixGain[16][16]` at `src/audio_pipeline.cpp` line 63 is a 16x16 float matrix (1024 bytes). The actual pipeline uses 8 stereo inputs (16 mono channels) to 16 output channels, but the inner loop at line 290 iterates all 256 gain cells per output channel per buffer.
 - Files: `src/audio_pipeline.cpp` lines 63, 287-296
@@ -83,19 +67,7 @@ The following concerns from the 2026-03-07 audit have been fully addressed:
 
 ## Known Bugs
 
-**Noise Gate Hardcoded to ADC Lanes 0 and 1:**
-- Symptoms: The noise gate in `pipeline_to_float()` at `src/audio_pipeline.cpp` lines 204-239 only activates for `i == AUDIO_SRC_LANE_ADC1 || i == AUDIO_SRC_LANE_ADC2` (lanes 0, 1). Any future hardware ADC on lane 2+ will not benefit from noise gating, and its noise floor will pass through to the DAC.
-- Files: `src/audio_pipeline.cpp` lines 205-206
-- Trigger: Register a third PCM1808 ADC via HAL; its noise floor reaches the DAC without gating.
-- Workaround: None currently. The HAL bridge assigns ADC devices to sequential lanes starting from 0.
-- Fix approach: Gate on `_sources[i].read != NULL && (effective device type is hardware ADC)` rather than hardcoded lane indices. Or add a `noiseGateEnabled` flag to `AudioInputSource`.
-
-**Per-Input DSP Only Applied to Lanes 0-1:**
-- Symptoms: `pipeline_run_dsp()` at `src/audio_pipeline.cpp` line 245 hardcodes `for (int lane = 0; lane < 2; lane++)`. Lanes 2-7 never have per-input DSP applied, even if DSP bypass is false for those lanes.
-- Files: `src/audio_pipeline.cpp` line 245
-- Trigger: Register a DSP-enabled input source on lane 2+; DSP is silently skipped.
-- Workaround: Use output DSP (post-matrix) instead.
-- Fix approach: Change the loop bound to `AUDIO_PIPELINE_MAX_INPUTS` and check `_dspBypass[lane]` for each.
+*No critical bugs currently open. Previously known bugs (noise gate hardcoded to lanes 0-1, per-input DSP limited to lanes 0-1) have been resolved -- see Resolved Items above.*
 
 ---
 
@@ -124,7 +96,7 @@ The following concerns from the 2026-03-07 audit have been fully addressed:
 - Improvement path: Use a double-buffer ring (ping-pong) and swap pointers instead of copying. Only copy when the gate actually closes.
 
 **WS Broadcast Rebuilds Full JSON on Every Dirty Flag:**
-- Problem: `broadcastHardwareStats()`, `broadcastAudioState()`, and `broadcastHalDeviceList()` in `src/websocket_handler.cpp` rebuild complete JSON documents from scratch each call. The HAL device list serializes all 16 device slots (descriptor, config, state, capabilities) even when only one device changed.
+- Problem: `broadcastHardwareStats()`, `broadcastAudioState()`, and `broadcastHalDeviceList()` in `src/websocket_handler.cpp` rebuild complete JSON documents from scratch each call. The HAL device list serializes all 24 device slots (descriptor, config, state, capabilities) even when only one device changed.
 - Files: `src/websocket_handler.cpp`
 - Cause: Dirty-flag pattern gates the frequency but not the scope of broadcasts.
 - Improvement path: Cache serialized JSON for stable sub-objects. Only re-serialize the changed device (identified by `markHalDeviceDirty` slot parameter, which currently doesn't exist).
@@ -159,7 +131,7 @@ The following concerns from the 2026-03-07 audit have been fully addressed:
 
 **HAL Pipeline Bridge Slot Mapping Tables:**
 - Files: `src/hal/hal_pipeline_bridge.cpp` lines 41-42
-- Why fragile: `_halSlotToSinkSlot[16]` and `_halSlotToAdcLane[16]` map HAL device slots to pipeline slots/lanes. The mapping is modified by `on_device_available()` and `on_device_removed()`. If a device is removed and re-added, the slot assignment may differ from the original (first-free-slot algorithm). This could cause matrix routing to point at the wrong output.
+- Why fragile: `_halSlotToSinkSlot[HAL_MAX_DEVICES]` and `_halSlotToAdcLane[HAL_MAX_DEVICES]` (24 entries) map HAL device slots to pipeline slots/lanes. The mapping is modified by `on_device_available()` and `on_device_removed()`. If a device is removed and re-added, the slot assignment may differ from the original (first-free-slot algorithm). This could cause matrix routing to point at the wrong output.
 - Safe modification: When re-enabling a device, verify the sink slot assignment matches the matrix configuration. Consider persisting the HAL-slot-to-sink-slot mapping alongside the matrix.
 - Test coverage: `test/test_hal_bridge/` covers add/remove cycles but does not verify matrix routing consistency across re-add.
 
@@ -167,11 +139,10 @@ The following concerns from the 2026-03-07 audit have been fully addressed:
 
 ## Scaling Limits
 
-**HAL Device Registry (16 Slots):**
-- Current capacity: `HAL_MAX_DEVICES = 16` in `src/hal/hal_types.h` line 9.
-- Current usage: ~14 builtin devices registered at boot (PCM5102A, ES8311, PCM1808 x2, NS4150B, TempSensor, Display, Encoder, Buzzer, LED, Relay, Button, SignalGen, plus SigGen HAL + USB Audio HAL being added). Approaching the limit.
-- Limit: Adding 3+ more expansion devices (MCP4725, external DAC, etc.) exceeds the cap. Registration silently returns -1.
-- Scaling path: Increase `HAL_MAX_DEVICES` to 24 or 32. Also increases `_halSlotToSinkSlot`/`_halSlotToAdcLane` and `HalPinAlloc` arrays. Verify total SRAM cost.
+**HAL Device Registry (24 Slots) [RESOLVED]:**
+- Current capacity: `HAL_MAX_DEVICES = 24` in `src/hal/hal_types.h` (increased from 16).
+- Current usage: ~14 builtin devices registered at boot. Comfortable headroom for 10 more expansion devices.
+- Note: Bridge mapping tables `_halSlotToSinkSlot[]`/`_halSlotToAdcLane[]` and `HalPinAlloc` arrays updated to match.
 
 **DSP Preset Slots (32):**
 - Current capacity: `DSP_PRESET_MAX_SLOTS = 32` in `src/config.h` line 95.
@@ -192,16 +163,14 @@ The following concerns from the 2026-03-07 audit have been fully addressed:
 
 ## Dependencies at Risk
 
-**PlatformIO ESP32-P4 Platform (Pinned Archive URL):**
+**PlatformIO ESP32-P4 Platform (Pinned Archive URL) [DEFERRED]:**
 - Risk: `platformio.ini` pins the platform to a specific GitHub release archive URL. If deleted or moved, all builds fail.
 - Impact: CI and fresh developer builds blocked.
-- Migration plan: Mirror the archive to the project's GitHub releases.
+- Mitigation: PlatformIO caching mitigates CI impact. Manual mirror to project's GitHub releases is optional.
+- Status: Deferred -- PlatformIO caching provides adequate protection; manual archive mirror remains optional future work.
 
-**WebSockets Library Requires Patch Script:**
-- Risk: `pre:tools/patch_websockets.py` modifies the `links2004/WebSockets` library after install. If the library updates or the patch silently fails, WebSocket behavior breaks on ESP32-P4 RISC-V.
-- Files: `platformio.ini` (pre-script), `tools/patch_websockets.py`
-- Impact: WebSocket disconnections or frame corruption.
-- Migration plan: Fork the library, apply the patch permanently, reference the fork in `lib_deps`.
+**WebSockets Library Requires Patch Script [RESOLVED]:**
+- Resolution: Library vendored in `lib/WebSockets/` with patches applied permanently. Patch script deleted. No longer depends on external lib_deps registry or runtime patching.
 
 ---
 
@@ -219,35 +188,20 @@ The following concerns from the 2026-03-07 audit have been fully addressed:
 
 ## Test Coverage Gaps
 
-**`pipelineInputBypass`/`pipelineDspBypass` Array Bounds:**
-- What's not tested: No test verifies that `pipeline_sync_flags()` correctly reads bypass flags for lanes 4-7. The hardcoded size-4 arrays cause OOB reads.
-- Files: `src/app_state.h` lines 487-488, `src/audio_pipeline.cpp` lines 146-148
-- Risk: Undefined behavior on lanes 4+ if adjacent memory changes. Currently masked by struct layout.
-- Priority: **Critical** -- this is a real out-of-bounds access bug, not just a coverage gap.
+**`pipelineInputBypass`/`pipelineDspBypass` Array Bounds [RESOLVED]:**
+- Resolution: Arrays expanded to `[AUDIO_PIPELINE_MAX_INPUTS]` (8). `test_pipeline_bounds` module added to verify `pipeline_sync_flags()` reads bypass flags correctly for all 8 lanes. Default init covers all lanes.
 
-**HAL SigGen and USB Audio Device Lifecycle:**
-- What's not tested: `test/test_hal_siggen/` and `test/test_hal_usb_audio/` exist but are new. End-to-end flow through bridge (register HAL device -> bridge assigns lane -> pipeline reads source -> metering updates) is not covered as an integration test.
-- Files: `src/hal/hal_siggen.cpp`, `src/hal/hal_usb_audio.cpp`, `src/hal/hal_pipeline_bridge.cpp`
-- Risk: Regression in the bridge's source registration path for software devices. The `getInputSource()` virtual dispatch is a new code path.
-- Priority: Medium.
+**HAL SigGen and USB Audio Device Lifecycle [RESOLVED]:**
+- Resolution: `isHardwareAdc` tests added to `test_hal_siggen` and `test_hal_usb_audio`. Tests verify that software sources (SigGen, USB) set `isHardwareAdc=false`, ensuring noise gate correctly skips them.
 
-**Pipeline Per-Source VU Metering for Non-ADC1 Lanes:**
-- What's not tested: `pipeline_update_metering()` at `src/audio_pipeline.cpp` lines 461-493 iterates lanes 1-7 for per-source VU. No test verifies that VU values are correctly written to `_sources[lane].vuL`/`.vuR` for HAL-managed sources (SigGen, USB).
-- Files: `src/audio_pipeline.cpp` lines 461-493
-- Risk: VU meters for SigGen/USB could show stale -90dBFS values in the web UI without any test catching it.
-- Priority: Medium.
+**Pipeline Per-Source VU Metering for Non-ADC1 Lanes [RESOLVED]:**
+- Resolution: Lane 2 VU metering test added. Verifies that `pipeline_update_metering()` correctly writes VU values to `_sources[lane].vuL`/`.vuR` for HAL-managed sources beyond lane 0-1.
 
-**Matrix Persistence with 16x16 Expansion:**
-- What's not tested: `audio_pipeline_save_matrix()` / `audio_pipeline_load_matrix()` now serialize a 16x16 matrix. No test verifies backward compatibility when loading an old 8x8 matrix JSON (row count mismatch causes the loader at line 910-911 to reject the file and fall back to defaults).
-- Files: `src/audio_pipeline.cpp` lines 877-923
-- Risk: Users upgrading from firmware with 8x8 matrix lose their saved routing on first boot.
-- Priority: Medium.
+**Matrix Persistence with 16x16 Expansion [RESOLVED]:**
+- Resolution: Backward compatibility migration implemented and tested. Loading an old 8x8 matrix JSON places it in the top-left corner of the 16x16 matrix with zero-fill for remaining cells.
 
-**`hal_audio_health_bridge.cpp` Expanded Lanes:**
-- What's not tested: Flap guard and diagnostic rules now iterate `AUDIO_PIPELINE_MAX_INPUTS` (8) lanes. Tests in `test/test_audio_health_bridge/` were written for 2-lane scenarios and may not exercise lane indices 2-7.
-- Files: `src/hal/hal_audio_health_bridge.cpp` lines 181, 266
-- Risk: Off-by-one or uninitialized state for lanes 2-7 could emit spurious diagnostics.
-- Priority: Low.
+**`hal_audio_health_bridge.cpp` Expanded Lanes [RESOLVED]:**
+- Resolution: Lanes 2 and 7 added to health bridge test scenarios. Verifies flap guard and diagnostic rules work correctly for lane indices beyond 0-1.
 
 **WebSocket `broadcastAudioChannelMap()` for Dynamic Inputs:**
 - What's not tested: The `audioChannelMap` WS message (broadcasting available input/output devices from HAL) has no E2E test verifying the web UI renders channel strips for dynamically added devices.
