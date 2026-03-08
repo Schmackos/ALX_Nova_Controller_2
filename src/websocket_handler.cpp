@@ -2031,7 +2031,7 @@ void sendHardwareStats() {
       adcObj["sfdrDb"] = appState.audioSfdrDb[a];
     }
     doc["audio"]["fftWindowType"] = (int)appState.fftWindowType;
-    // Legacy flat fields for backward compat
+    // DEPRECATED v1.14: flat fields — use audio.adcs[] array. Kept for backward compat.
     doc["audio"]["adcStatus"] = adcArr[0]["status"];
     doc["audio"]["noiseFloorDbfs"] = appState.audioAdc[0].noiseFloorDbfs;
     doc["audio"]["vrms"] = appState.audioAdc[0].vrmsCombined;
@@ -2330,7 +2330,7 @@ void sendAudioData() {
       adcStatusArr.add(statusStr);
       adcNoiseArr.add(adc.noiseFloorDbfs);
     }
-    // Legacy flat fields for backward compat (ADC 0)
+    // DEPRECATED v1.14: flat fields — use adcs[] array. Kept for backward compat.
     doc["audioRms1"] = appState.audioAdc[0].rms1;
     doc["audioRms2"] = appState.audioAdc[0].rms2;
     doc["audioVu1"] = appState.audioAdc[0].vu1;

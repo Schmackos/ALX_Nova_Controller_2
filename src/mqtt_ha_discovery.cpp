@@ -904,19 +904,24 @@ void publishHADiscovery() {
   }
 
 
-  // ===== Per-ADC Audio Diagnostic Entities (only detected ADCs) =====
+  // ===== Per-ADC Audio Diagnostic Entities (only active inputs) =====
+  // Topic labels are generated dynamically to support up to AUDIO_PIPELINE_MAX_INPUTS lanes.
   {
-    const char *inputLabels[] = {"adc1", "adc2"};
-    const char *inputNames[] = {"ADC 1", "ADC 2"};
-    int adcCount = appState.numAdcsDetected < AUDIO_PIPELINE_MAX_INPUTS ? appState.numAdcsDetected : AUDIO_PIPELINE_MAX_INPUTS;
+    int adcCount = appState.activeInputCount;
+    if (adcCount <= 0) adcCount = appState.numAdcsDetected;
+    if (adcCount > AUDIO_PIPELINE_MAX_INPUTS) adcCount = AUDIO_PIPELINE_MAX_INPUTS;
     for (int a = 0; a < adcCount; a++) {
-      String prefix = base + "/audio/" + inputLabels[a];
-      String idSuffix = String("_") + inputLabels[a];
+      char labelBuf[8];
+      char nameBuf[16];
+      snprintf(labelBuf, sizeof(labelBuf), "adc%d", a + 1);
+      snprintf(nameBuf, sizeof(nameBuf), "ADC %d", a + 1);
+      String prefix = base + "/audio/" + labelBuf;
+      String idSuffix = String("_") + labelBuf;
 
       // Per-ADC Level Sensor
       {
         JsonDocument doc;
-        doc["name"] = String(inputNames[a]) + " Audio Level";
+        doc["name"] = String(nameBuf) + " Audio Level";
         doc["unique_id"] = deviceId + idSuffix + "_level";
         doc["state_topic"] = prefix + "/level";
         doc["unit_of_measurement"] = "dBFS";
@@ -925,13 +930,13 @@ void publishHADiscovery() {
         addHADeviceInfo(doc);
         String payload;
         serializeJson(doc, payload);
-        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_level/config").c_str(), payload.c_str(), true);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + labelBuf + "_level/config").c_str(), payload.c_str(), true);
       }
 
       // Per-ADC Status Sensor
       {
         JsonDocument doc;
-        doc["name"] = String(inputNames[a]) + " ADC Status";
+        doc["name"] = String(nameBuf) + " ADC Status";
         doc["unique_id"] = deviceId + idSuffix + "_adc_status";
         doc["state_topic"] = prefix + "/adc_status";
         doc["entity_category"] = "diagnostic";
@@ -939,13 +944,13 @@ void publishHADiscovery() {
         addHADeviceInfo(doc);
         String payload;
         serializeJson(doc, payload);
-        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_adc_status/config").c_str(), payload.c_str(), true);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + labelBuf + "_adc_status/config").c_str(), payload.c_str(), true);
       }
 
       // Per-ADC Noise Floor Sensor
       {
         JsonDocument doc;
-        doc["name"] = String(inputNames[a]) + " Noise Floor";
+        doc["name"] = String(nameBuf) + " Noise Floor";
         doc["unique_id"] = deviceId + idSuffix + "_noise_floor";
         doc["state_topic"] = prefix + "/noise_floor";
         doc["unit_of_measurement"] = "dBFS";
@@ -955,13 +960,13 @@ void publishHADiscovery() {
         addHADeviceInfo(doc);
         String payload;
         serializeJson(doc, payload);
-        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_noise_floor/config").c_str(), payload.c_str(), true);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + labelBuf + "_noise_floor/config").c_str(), payload.c_str(), true);
       }
 
       // Per-ADC Vrms Sensor
       {
         JsonDocument doc;
-        doc["name"] = String(inputNames[a]) + " Vrms";
+        doc["name"] = String(nameBuf) + " Vrms";
         doc["unique_id"] = deviceId + idSuffix + "_vrms";
         doc["state_topic"] = prefix + "/vrms";
         doc["unit_of_measurement"] = "V";
@@ -973,7 +978,7 @@ void publishHADiscovery() {
         addHADeviceInfo(doc);
         String payload;
         serializeJson(doc, payload);
-        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[a] + "_vrms/config").c_str(), payload.c_str(), true);
+        mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + labelBuf + "_vrms/config").c_str(), payload.c_str(), true);
       }
 
       // SNR/SFDR discovery removed — debug-only data, accessible via REST/WS/GUI.

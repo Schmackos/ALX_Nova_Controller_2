@@ -605,9 +605,10 @@ void publishMqttAudioDiagnostics() {
 
   String base = getEffectiveMqttBaseTopic();
 
-  // Per-ADC diagnostics (only publish detected ADCs)
-  const char *inputLabels[] = {"adc1", "adc2"};
-  int adcCount = appState.numAdcsDetected < AUDIO_PIPELINE_MAX_INPUTS ? appState.numAdcsDetected : AUDIO_PIPELINE_MAX_INPUTS;
+  // Per-ADC diagnostics — iterate all active inputs dynamically.
+  int adcCount = appState.activeInputCount;
+  if (adcCount <= 0) adcCount = appState.numAdcsDetected;
+  if (adcCount > AUDIO_PIPELINE_MAX_INPUTS) adcCount = AUDIO_PIPELINE_MAX_INPUTS;
   for (int a = 0; a < adcCount; a++) {
     const AppState::AdcState &adc = appState.audioAdc[a];
     const char *statusStr = "OK";
@@ -618,7 +619,9 @@ void publishMqttAudioDiagnostics() {
       case 4: statusStr = "I2S_ERROR"; break;
       case 5: statusStr = "HW_FAULT"; break;
     }
-    String prefix = base + "/audio/" + inputLabels[a];
+    char labelBuf[8];
+    snprintf(labelBuf, sizeof(labelBuf), "adc%d", a + 1);
+    String prefix = base + "/audio/" + labelBuf;
     mqttClient.publish((prefix + "/adc_status").c_str(), statusStr, true);
     mqttClient.publish((prefix + "/noise_floor").c_str(),
                        String(adc.noiseFloorDbfs, 1).c_str(), true);
@@ -634,9 +637,25 @@ void publishMqttAudioDiagnostics() {
     }
   }
 
-  // Legacy combined topics (ADC 0)
+  // Legacy combined topics — worst-case aggregation across all active inputs.
+  // C1: worst health status (highest enum value = most severe).
+  // C2: worst noise floor (highest dBFS = most noise), highest vrms (loudest input).
+  int worstHealth = 0;
+  float worstNoise = appState.audioAdc[0].noiseFloorDbfs;
+  float maxVrms = appState.audioAdc[0].vrmsCombined;
+  {
+    int laneCount = appState.activeInputCount;
+    if (laneCount <= 0) laneCount = adcCount; // fall back to per-ADC loop bound
+    if (laneCount > AUDIO_PIPELINE_MAX_INPUTS) laneCount = AUDIO_PIPELINE_MAX_INPUTS;
+    for (int a = 0; a < laneCount; a++) {
+      const AppState::AdcState &lane = appState.audioAdc[a];
+      if (lane.healthStatus > worstHealth) worstHealth = lane.healthStatus;
+      if (lane.noiseFloorDbfs > worstNoise) worstNoise = lane.noiseFloorDbfs;
+      if (lane.vrmsCombined > maxVrms) maxVrms = lane.vrmsCombined;
+    }
+  }
   const char *statusStr = "OK";
-  switch (appState.audioAdc[0].healthStatus) {
+  switch (worstHealth) {
     case 1: statusStr = "NO_DATA"; break;
     case 2: statusStr = "NOISE_ONLY"; break;
     case 3: statusStr = "CLIPPING"; break;
@@ -645,9 +664,9 @@ void publishMqttAudioDiagnostics() {
   }
   mqttClient.publish((base + "/audio/adc_status").c_str(), statusStr, true);
   mqttClient.publish((base + "/audio/noise_floor").c_str(),
-                     String(appState.audioAdc[0].noiseFloorDbfs, 1).c_str(), true);
+                     String(worstNoise, 1).c_str(), true);
   mqttClient.publish((base + "/audio/input_vrms").c_str(),
-                     String(appState.audioAdc[0].vrmsCombined, 3).c_str(), true);
+                     String(maxVrms, 3).c_str(), true);
   mqttClient.publish((base + "/settings/adc_vref").c_str(),
                      String(appState.adcVref, 2).c_str(), true);
 }
@@ -845,12 +864,18 @@ void publishMqttCrashDiagnostics() {
   mqttClient.publish((base + "/diagnostics/heap_critical").c_str(),
                      appState.heapCritical ? "ON" : "OFF", true);
 
-  // Per-ADC I2S recovery counts
-  mqttClient.publish((base + "/diagnostics/i2s_recoveries_adc1").c_str(),
-                     String(appState.audioAdc[0].i2sRecoveries).c_str(), true);
-  if (appState.numAdcsDetected >= 2) {
-    mqttClient.publish((base + "/diagnostics/i2s_recoveries_adc2").c_str(),
-                       String(appState.audioAdc[1].i2sRecoveries).c_str(), true);
+  // Per-ADC I2S recovery counts — iterate all active inputs dynamically (C3).
+  {
+    int adcCount = appState.activeInputCount;
+    if (adcCount <= 0) adcCount = appState.numAdcsDetected;
+    if (adcCount > AUDIO_PIPELINE_MAX_INPUTS) adcCount = AUDIO_PIPELINE_MAX_INPUTS;
+    for (int a = 0; a < adcCount; a++) {
+      char topic[80];
+      // Topic uses 1-based index to match legacy adc1/adc2 naming convention.
+      snprintf(topic, sizeof(topic), "%s/diagnostics/i2s_recoveries_adc%d",
+               base.c_str(), a + 1);
+      mqttClient.publish(topic, String(appState.audioAdc[a].i2sRecoveries).c_str(), true);
+    }
   }
 }
 

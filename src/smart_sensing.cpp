@@ -74,7 +74,7 @@ void handleSmartSensingGet() {
     adcObj["vrms"] = adc.vrmsCombined;
     adcObj["dBFS"] = adc.dBFS;
   }
-  // Legacy flat fields (ADC 0)
+  // DEPRECATED v1.14: flat fields — use adc[] array above. Kept for backward compat.
   doc["audioRms1"] = appState.audioAdc[0].rms1;
   doc["audioRms2"] = appState.audioAdc[0].rms2;
   doc["audioVu1"] = appState.audioAdc[0].vu1;
@@ -444,6 +444,7 @@ void sendSmartSensingStateInternal() {
   doc["audioLevel"] = appState.audioLevel_dBFS;
   doc["signalDetected"] = (_smoothedAudioLevel >= appState.audioThreshold_dBFS);
   doc["audioSampleRate"] = appState.audioSampleRate;
+  // DEPRECATED v1.14: use per-lane adc[] array
   doc["audioVrms"] = appState.audioAdc[0].vrmsCombined;
 
   String json;
