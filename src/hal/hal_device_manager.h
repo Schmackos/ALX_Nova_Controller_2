@@ -30,6 +30,8 @@ public:
     // Lookup
     HalDevice* getDevice(uint8_t slot);
     HalDevice* findByCompatible(const char* compatible);
+    HalDevice* findByCompatible(const char* compatible, uint8_t instanceId);
+    uint8_t    countByCompatible(const char* compatible) const;
     HalDevice* findByType(HalDeviceType type, uint8_t nth = 0);
     uint8_t    getCount() const;
 

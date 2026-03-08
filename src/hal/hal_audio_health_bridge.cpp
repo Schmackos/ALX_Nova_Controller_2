@@ -11,13 +11,15 @@
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../app_state.h"
-#include "../i2s_audio.h"   // AudioHealthStatus, NUM_AUDIO_ADCS
+#include "../i2s_audio.h"   // AudioHealthStatus, AUDIO_PIPELINE_MAX_INPUTS
 #else
 #include "../../test/test_mocks/Arduino.h"
 #define LOG_I(...)
 #define LOG_W(...)
 #define LOG_D(...)
-#define NUM_AUDIO_ADCS 2
+#ifndef AUDIO_PIPELINE_MAX_INPUTS
+#define AUDIO_PIPELINE_MAX_INPUTS 8
+#endif
 #endif
 
 #include <string.h>
@@ -32,21 +34,21 @@ struct FlapState {
     uint8_t  transitionCount;    // Number of transitions recorded in the window
 };
 
-static FlapState _flapState[NUM_AUDIO_ADCS];
+static FlapState _flapState[AUDIO_PIPELINE_MAX_INPUTS];
 
 // ===== Rule 1: I2S Recovery Storm =====
 // Emit DIAG_AUDIO_I2S_RECOVERY (WARN) when >3 I2S recoveries occur within 60s.
 static const uint8_t  I2S_RECOVERY_STORM_THRESHOLD = 3;
 static const uint32_t I2S_RECOVERY_STORM_WINDOW_MS  = 60000UL;
 
-static uint32_t _prevRecoveries[NUM_AUDIO_ADCS];           // Last seen recovery counter value
-static uint32_t _recoveryTimestamps[NUM_AUDIO_ADCS][4];    // Rolling timestamps of last 4 increments
-static uint8_t  _recoveryCount[NUM_AUDIO_ADCS];            // How many timestamps are valid
+static uint32_t _prevRecoveries[AUDIO_PIPELINE_MAX_INPUTS];           // Last seen recovery counter value
+static uint32_t _recoveryTimestamps[AUDIO_PIPELINE_MAX_INPUTS][4];    // Rolling timestamps of last 4 increments
+static uint8_t  _recoveryCount[AUDIO_PIPELINE_MAX_INPUTS];            // How many timestamps are valid
 
 // ===== Rule 4: Audio No-Data with HAL AVAILABLE =====
 // Emit DIAG_AUDIO_PIPELINE_STALL (WARN) once per episode when AUDIO_NO_DATA
 // is observed while the HAL device is still AVAILABLE.
-static uint8_t _noDataWithAvailCount[NUM_AUDIO_ADCS];  // 0=idle, >0=episode in progress
+static uint8_t _noDataWithAvailCount[AUDIO_PIPELINE_MAX_INPUTS];  // 0=idle, >0=episode in progress
 
 // ===== Rule 5: DC Offset Drift =====
 // Emit DIAG_AUDIO_DC_OFFSET_HIGH (WARN) when dcOffset > 0.05 for >10 consecutive
@@ -54,7 +56,7 @@ static uint8_t _noDataWithAvailCount[NUM_AUDIO_ADCS];  // 0=idle, >0=episode in 
 static const float    DC_OFFSET_THRESHOLD    = 0.05f;
 static const uint8_t  DC_OFFSET_HOLD_CHECKS  = 10;
 
-static uint8_t _dcOffsetHighCount[NUM_AUDIO_ADCS];
+static uint8_t _dcOffsetHighCount[AUDIO_PIPELINE_MAX_INPUTS];
 
 // ===== Firmware health source =====
 // Returns the AudioHealthStatus for the given ADC lane.
@@ -62,51 +64,51 @@ static uint8_t _dcOffsetHighCount[NUM_AUDIO_ADCS];
 
 #ifdef NATIVE_TEST
 
-static int      _mockAdcHealth[NUM_AUDIO_ADCS]    = { AUDIO_OK, AUDIO_OK };
-static uint32_t _mockI2sRecoveries[NUM_AUDIO_ADCS] = { 0, 0 };
-static float    _mockDcOffset[NUM_AUDIO_ADCS]      = { 0.0f, 0.0f };
+static int      _mockAdcHealth[AUDIO_PIPELINE_MAX_INPUTS]     = {};
+static uint32_t _mockI2sRecoveries[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static float    _mockDcOffset[AUDIO_PIPELINE_MAX_INPUTS]      = {};
 
 void hal_audio_health_bridge_set_mock_status(uint8_t lane, int status) {
-    if (lane < NUM_AUDIO_ADCS) _mockAdcHealth[lane] = status;
+    if (lane < AUDIO_PIPELINE_MAX_INPUTS) _mockAdcHealth[lane] = status;
 }
 
 void hal_audio_health_bridge_set_mock_i2s_recoveries(uint8_t lane, uint32_t count) {
-    if (lane < NUM_AUDIO_ADCS) _mockI2sRecoveries[lane] = count;
+    if (lane < AUDIO_PIPELINE_MAX_INPUTS) _mockI2sRecoveries[lane] = count;
 }
 
 void hal_audio_health_bridge_set_mock_dc_offset(uint8_t lane, float offset) {
-    if (lane < NUM_AUDIO_ADCS) _mockDcOffset[lane] = offset;
+    if (lane < AUDIO_PIPELINE_MAX_INPUTS) _mockDcOffset[lane] = offset;
 }
 
 static int _get_adc_health(uint8_t lane) {
-    if (lane >= NUM_AUDIO_ADCS) return AUDIO_OK;
+    if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return AUDIO_OK;
     return _mockAdcHealth[lane];
 }
 
 static uint32_t _get_i2s_recoveries(uint8_t lane) {
-    if (lane >= NUM_AUDIO_ADCS) return 0;
+    if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return 0;
     return _mockI2sRecoveries[lane];
 }
 
 static float _get_dc_offset(uint8_t lane) {
-    if (lane >= NUM_AUDIO_ADCS) return 0.0f;
+    if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return 0.0f;
     return _mockDcOffset[lane];
 }
 
 #else // Firmware
 
 static int _get_adc_health(uint8_t lane) {
-    if (lane >= NUM_AUDIO_ADCS) return (int)AUDIO_OK;
+    if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return (int)AUDIO_OK;
     return (int)appState.audioAdc[lane].healthStatus;
 }
 
 static uint32_t _get_i2s_recoveries(uint8_t lane) {
-    if (lane >= NUM_AUDIO_ADCS) return 0;
+    if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return 0;
     return appState.audioAdc[lane].i2sRecoveries;
 }
 
 static float _get_dc_offset(uint8_t lane) {
-    if (lane >= NUM_AUDIO_ADCS) return 0.0f;
+    if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return 0.0f;
     return appState.audioAdc[lane].dcOffset;
 }
 
@@ -117,7 +119,7 @@ static float _get_dc_offset(uint8_t lane) {
 // Record a new AVAIL↔UNAVAIL transition for a lane, pruning stale entries.
 // Returns true when the transition count in the window exceeds FLAP_MAX_TRANSITIONS.
 static bool _flap_record_transition(uint8_t lane, uint32_t nowMs) {
-    if (lane >= NUM_AUDIO_ADCS) return false;
+    if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return false;
     FlapState& fs = _flapState[lane];
 
     // Shift new timestamp into circular storage
@@ -146,7 +148,7 @@ static bool _flap_record_transition(uint8_t lane, uint32_t nowMs) {
 
 // Count transitions still within the window without adding a new one.
 static uint8_t _flap_count_in_window(uint8_t lane, uint32_t nowMs) {
-    if (lane >= NUM_AUDIO_ADCS) return 0;
+    if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return 0;
     FlapState& fs = _flapState[lane];
     uint32_t cutoff = (nowMs >= FLAP_WINDOW_MS) ? (nowMs - FLAP_WINDOW_MS) : 0;
     uint8_t count = 0;
@@ -176,7 +178,7 @@ void hal_audio_health_check() {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     uint32_t nowMs = (uint32_t)millis();
 
-    for (uint8_t lane = 0; lane < NUM_AUDIO_ADCS; lane++) {
+    for (uint8_t lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
         // 1. Resolve HAL slot for this ADC lane.
         int8_t halSlot = hal_pipeline_get_slot_for_adc_lane(lane);
         if (halSlot < 0) continue;  // No HAL device mapped to this lane
@@ -261,7 +263,7 @@ void hal_audio_health_check() {
     // regardless of the fault/recovery path taken above.
     // =========================================================
 
-    for (uint8_t lane = 0; lane < NUM_AUDIO_ADCS; lane++) {
+    for (uint8_t lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
         int8_t halSlot = hal_pipeline_get_slot_for_adc_lane(lane);
         if (halSlot < 0) continue;
 
@@ -364,7 +366,7 @@ void hal_audio_health_bridge_reset_for_test() {
     memset(_recoveryCount,        0, sizeof(_recoveryCount));
     memset(_noDataWithAvailCount, 0, sizeof(_noDataWithAvailCount));
     memset(_dcOffsetHighCount,    0, sizeof(_dcOffsetHighCount));
-    for (uint8_t i = 0; i < NUM_AUDIO_ADCS; i++) {
+    for (uint8_t i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
         _mockAdcHealth[i]     = (int)AUDIO_OK;
         _mockI2sRecoveries[i] = 0;
         _mockDcOffset[i]      = 0.0f;

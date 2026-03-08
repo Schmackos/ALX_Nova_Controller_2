@@ -185,14 +185,16 @@ public:
     float clipRate = 0.0f;           // EMA clip rate (0.0-1.0)
     uint32_t i2sRecoveries = 0;      // I2S driver restart count (timeout recovery)
   };
-  AdcState audioAdc[NUM_AUDIO_ADCS];
+  AdcState audioAdc[AUDIO_PIPELINE_MAX_INPUTS];
   int numAdcsDetected = 1; // How many ADCs are currently producing data
+  int activeInputCount = 0;  // HAL-driven: number of audio input lanes currently mapped
+  int activeOutputCount = 0; // HAL-driven: number of audio output sinks currently mapped
 
   // ===== I2S Runtime Metrics (written by audio task, read by diagnostics) =====
   struct I2sRuntimeMetrics {
     uint32_t audioTaskStackFree = 0;           // bytes remaining (high watermark × 4)
-    float buffersPerSec[NUM_AUDIO_ADCS] = {};  // actual buf/s per ADC
-    float avgReadLatencyUs[NUM_AUDIO_ADCS] = {};// avg i2s_read() time in µs
+    float buffersPerSec[AUDIO_PIPELINE_MAX_INPUTS] = {};  // actual buf/s per ADC
+    float avgReadLatencyUs[AUDIO_PIPELINE_MAX_INPUTS] = {};// avg i2s_read() time in µs
   };
   I2sRuntimeMetrics i2sMetrics;
 
@@ -201,14 +203,14 @@ public:
   float audioSpectrumBands[16] = {};
   uint32_t audioSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
   float adcVref = DEFAULT_ADC_VREF; // ADC reference voltage (1.0-5.0V)
-  bool adcEnabled[NUM_AUDIO_ADCS] = {true, true}; // Per-ADC input enable (persisted)
+  bool adcEnabled[AUDIO_PIPELINE_MAX_INPUTS] = {true, true}; // Per-ADC input enable (persisted)
   volatile bool audioPaused = false; // Set true to pause audio_capture_task I2S reads (for I2S reinit)
 #ifndef UNIT_TEST
   SemaphoreHandle_t audioTaskPausedAck = nullptr; // Binary semaphore: audio task gives when it has seen audioPaused=true
 #endif
 
   // Input channel names (user-configurable, 4 channels = 2 ADCs x 2 channels)
-  String inputNames[NUM_AUDIO_ADCS * 2];
+  String inputNames[AUDIO_PIPELINE_MAX_INPUTS * 2];
 
   void setSensingMode(SensingMode mode);
 
@@ -230,8 +232,8 @@ public:
   FftWindowType fftWindowType = FFT_WINDOW_HANN; // Default to Hann
 
   // ===== ADC Signal Quality Metrics =====
-  float audioSnrDb[NUM_AUDIO_ADCS] = {};         // Signal-to-Noise Ratio (dB)
-  float audioSfdrDb[NUM_AUDIO_ADCS] = {};        // Spurious-Free Dynamic Range (dB)
+  float audioSnrDb[AUDIO_PIPELINE_MAX_INPUTS] = {};         // Signal-to-Noise Ratio (dB)
+  float audioSfdrDb[AUDIO_PIPELINE_MAX_INPUTS] = {};        // Spurious-Free Dynamic Range (dB)
 
   // ===== Heap Health =====
   bool heapCritical = false;       // True when largest free block < 40KB

@@ -1,5 +1,6 @@
 #include "i2s_audio.h"
 #include "audio_pipeline.h"
+#include "audio_input_source.h"
 #include "app_state.h"
 #include "config.h"
 #include "debug_serial.h"
@@ -270,47 +271,47 @@ static bool _adc2InitOk = false;
 static const float MAX_24BIT_F = 8388607.0f;
 
 // VU meter state per ADC
-static float _vuL[NUM_AUDIO_ADCS] = {};
-static float _vuR[NUM_AUDIO_ADCS] = {};
-static float _vuC[NUM_AUDIO_ADCS] = {};
+static float _vuL[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static float _vuR[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static float _vuC[AUDIO_PIPELINE_MAX_INPUTS] = {};
 
 // Peak hold state per ADC
-static float _peakL[NUM_AUDIO_ADCS] = {};
-static float _peakR[NUM_AUDIO_ADCS] = {};
-static float _peakC[NUM_AUDIO_ADCS] = {};
-static unsigned long _holdStartL[NUM_AUDIO_ADCS] = {};
-static unsigned long _holdStartR[NUM_AUDIO_ADCS] = {};
-static unsigned long _holdStartC[NUM_AUDIO_ADCS] = {};
+static float _peakL[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static float _peakR[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static float _peakC[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static unsigned long _holdStartL[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static unsigned long _holdStartR[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static unsigned long _holdStartC[AUDIO_PIPELINE_MAX_INPUTS] = {};
 
 // Waveform accumulation state per ADC — PSRAM-allocated on ESP32, static on native
 #ifdef NATIVE_TEST
-static float _wfAccum[NUM_AUDIO_ADCS][WAVEFORM_BUFFER_SIZE];
-static uint8_t _wfOutput[NUM_AUDIO_ADCS][WAVEFORM_BUFFER_SIZE];
+static float _wfAccum[AUDIO_PIPELINE_MAX_INPUTS][WAVEFORM_BUFFER_SIZE];
+static uint8_t _wfOutput[AUDIO_PIPELINE_MAX_INPUTS][WAVEFORM_BUFFER_SIZE];
 #else
-static float *_wfAccum[NUM_AUDIO_ADCS] = {};
-static uint8_t *_wfOutput[NUM_AUDIO_ADCS] = {};
+static float *_wfAccum[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static uint8_t *_wfOutput[AUDIO_PIPELINE_MAX_INPUTS] = {};
 #endif
-static volatile bool _wfReady[NUM_AUDIO_ADCS] = {};
-static int _wfFramesSeen[NUM_AUDIO_ADCS] = {};
+static volatile bool _wfReady[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static int _wfFramesSeen[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static int _wfTargetFrames = 2400; // shared, recalculated from audioUpdateRate
 
 // FFT state per ADC — PSRAM-allocated on ESP32, static on native
 #ifdef NATIVE_TEST
-static float _fftRing[NUM_AUDIO_ADCS][FFT_SIZE];
+static float _fftRing[AUDIO_PIPELINE_MAX_INPUTS][FFT_SIZE];
 static float _fftData[FFT_SIZE * 2];
 static float _fftWindow[FFT_SIZE];
 #else
-static float *_fftRing[NUM_AUDIO_ADCS] = {};
+static float *_fftRing[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static float *_fftData = nullptr;
 static float *_fftWindow = nullptr;
 #endif
-static int _fftRingPos[NUM_AUDIO_ADCS] = {};
+static int _fftRingPos[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static FftWindowType _currentWindowType = FFT_WINDOW_HANN;
 static bool _fftInitialized = false;
-static float _spectrumOutput[NUM_AUDIO_ADCS][SPECTRUM_BANDS];
-static float _dominantFreqOutput[NUM_AUDIO_ADCS] = {};
-static volatile bool _spectrumReady[NUM_AUDIO_ADCS] = {};
-static unsigned long _lastFftTime[NUM_AUDIO_ADCS] = {};
+static float _spectrumOutput[AUDIO_PIPELINE_MAX_INPUTS][SPECTRUM_BANDS];
+static float _dominantFreqOutput[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static volatile bool _spectrumReady[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static unsigned long _lastFftTime[AUDIO_PIPELINE_MAX_INPUTS] = {};
 
 // Apply the selected FFT window function to the window buffer
 static void i2s_audio_apply_window(FftWindowType type) {
@@ -337,7 +338,8 @@ static void i2s_audio_apply_window(FftWindowType type) {
     _currentWindowType = type;
 }
 
-static void i2s_configure_adc1(uint32_t sample_rate) {
+// DEPRECATED: use i2s_audio_configure_adc(0, cfg) for new code.
+static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg = nullptr) {
     // Teardown any existing handles (recovery path or full-duplex toggle)
     if (_rx_handle_adc1) {
         i2s_channel_disable(_rx_handle_adc1);
@@ -364,15 +366,9 @@ static void i2s_configure_adc1(uint32_t sample_rate) {
         return;
     }
 
-    // Query HAL config for optional pin overrides (TX data / RX data only —
-    // shared clocks BCK/LRC/MCLK are board-wired and must not be overridden).
-#ifndef NATIVE_TEST
-    HalDeviceConfig* _adcHalCfg = hal_get_config_for_type(HAL_DEV_ADC);
+    // ADC pin overrides from passed config; DAC TX pin looked up separately.
+    const HalDeviceConfig* _adcHalCfg = cfg;
     HalDeviceConfig* _dacHalCfg = hal_get_config_for_type(HAL_DEV_DAC);
-#else
-    HalDeviceConfig* _adcHalCfg = nullptr;
-    HalDeviceConfig* _dacHalCfg = nullptr;
-#endif
     gpio_num_t _txDataPin = (_dacHalCfg && _dacHalCfg->pinData > 0)
         ? (gpio_num_t)_dacHalCfg->pinData : (gpio_num_t)I2S_TX_DATA_PIN;
     gpio_num_t _rxDataPin = (_adcHalCfg && _adcHalCfg->pinData > 0)
@@ -440,7 +436,8 @@ static void i2s_configure_adc1(uint32_t sample_rate) {
 // connected (GPIO9). The internal RX state machine samples at the same
 // frequency as I2S0's BCK, with a fixed phase offset well within PCM1808's
 // data valid window (~305ns of 325ns period).
-static bool i2s_configure_adc2(uint32_t sample_rate) {
+// DEPRECATED: use i2s_audio_configure_adc(1, cfg) for new code.
+static bool i2s_configure_adc2(uint32_t sample_rate, const HalDeviceConfig* cfg = nullptr) {
     // Teardown any existing handle (recovery path)
     if (_rx_handle_adc2) {
         i2s_channel_disable(_rx_handle_adc2);
@@ -448,7 +445,13 @@ static bool i2s_configure_adc2(uint32_t sample_rate) {
         _rx_handle_adc2 = NULL;
     }
 
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
+    // I2S port from config or default (I2S_NUM_1 for secondary ADCs)
+    i2s_port_t port = I2S_NUM_1;
+    if (cfg && cfg->valid && cfg->i2sPort != 255 && cfg->i2sPort > 0) {
+        port = (i2s_port_t)cfg->i2sPort;
+    }
+
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(port, I2S_ROLE_MASTER);
     chan_cfg.dma_desc_num = DMA_BUF_COUNT;
     chan_cfg.dma_frame_num = DMA_BUF_LEN;
 
@@ -458,7 +461,11 @@ static bool i2s_configure_adc2(uint32_t sample_rate) {
         return false;
     }
 
-    // Only data_in pin — I2S1 does NOT output BCK/WS/MCLK.
+    // Data-in pin from config or board default
+    gpio_num_t dinPin = (cfg && cfg->valid && cfg->pinData > 0)
+        ? (gpio_num_t)cfg->pinData : (gpio_num_t)I2S_DOUT2_PIN;
+
+    // Only data_in pin — secondary I2S does NOT output BCK/WS/MCLK.
     // I2S0 (ADC1) provides all clock signals to both PCM1808 boards.
     i2s_std_config_t std_cfg = {};
     std_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
@@ -467,7 +474,7 @@ static bool i2s_configure_adc2(uint32_t sample_rate) {
     std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;
     std_cfg.gpio_cfg.ws   = I2S_GPIO_UNUSED;
     std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
-    std_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT2_PIN;
+    std_cfg.gpio_cfg.din  = dinPin;
     std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
@@ -488,6 +495,21 @@ static bool i2s_configure_adc2(uint32_t sample_rate) {
         return false;
     }
     return true;
+}
+
+// Public generic ADC configuration — dispatches to primary (full-duplex) or
+// secondary (RX-only) based on lane index. Config provides pin/port overrides.
+bool i2s_audio_configure_adc(int lane, const HalDeviceConfig* cfg) {
+    if (lane == 0) {
+        i2s_configure_adc1(_currentSampleRate, cfg);
+        return (_rx_handle_adc1 != NULL);
+    } else if (lane == 1) {
+        bool ok = i2s_configure_adc2(_currentSampleRate, cfg);
+        _adc2InitOk = ok;
+        return ok;
+    }
+    LOG_W("[Audio] i2s_audio_configure_adc: lane %d not supported (max 1)", lane);
+    return false;
 }
 
 // Log computed I2S clock / framing parameters at boot
@@ -519,6 +541,61 @@ static void i2s_log_params(uint32_t sample_rate) {
 }
 
 
+// ===== ADC AudioInputSource wrappers (Phase 3) =====
+// These wrap i2s_audio_read_adc1/2 into the generic AudioInputSource interface
+// so the pipeline can read all inputs through a uniform loop.
+
+static uint32_t _adc1_src_read(int32_t *dst, uint32_t requestedFrames) {
+    size_t bytes_read = 0;
+    size_t size = requestedFrames * 2 * sizeof(int32_t);
+    bool ok = i2s_audio_read_adc1(dst, size, &bytes_read, 500);
+    if (!ok || bytes_read == 0) return 0;
+    return (uint32_t)(bytes_read / (2 * sizeof(int32_t)));
+}
+
+static bool _adc1_src_isActive(void) {
+    return true;  // ADC1 is the primary clock source — always active
+}
+
+static uint32_t _adc1_src_getSampleRate(void) {
+    return AppState::getInstance().audioSampleRate;
+}
+
+static uint32_t _adc2_src_read(int32_t *dst, uint32_t requestedFrames) {
+    if (!i2s_audio_adc2_ok()) return 0;
+    size_t bytes_read = 0;
+    size_t size = requestedFrames * 2 * sizeof(int32_t);
+    bool ok = i2s_audio_read_adc2(dst, size, &bytes_read, 5);
+    if (!ok || bytes_read == 0) return 0;
+    return (uint32_t)(bytes_read / (2 * sizeof(int32_t)));
+}
+
+static bool _adc2_src_isActive(void) {
+    return i2s_audio_adc2_ok();
+}
+
+static uint32_t _adc2_src_getSampleRate(void) {
+    return AppState::getInstance().audioSampleRate;
+}
+
+static void _register_adc_sources() {
+    AudioInputSource adc1 = AUDIO_INPUT_SOURCE_INIT;
+    adc1.name = "ADC1 (PCM1808)";
+    adc1.lane = AUDIO_SRC_LANE_ADC1;
+    adc1.read = _adc1_src_read;
+    adc1.isActive = _adc1_src_isActive;
+    adc1.getSampleRate = _adc1_src_getSampleRate;
+    audio_pipeline_set_source(AUDIO_SRC_LANE_ADC1, &adc1);
+
+    AudioInputSource adc2 = AUDIO_INPUT_SOURCE_INIT;
+    adc2.name = "ADC2 (PCM1808)";
+    adc2.lane = AUDIO_SRC_LANE_ADC2;
+    adc2.read = _adc2_src_read;
+    adc2.isActive = _adc2_src_isActive;
+    adc2.getSampleRate = _adc2_src_getSampleRate;
+    audio_pipeline_set_source(AUDIO_SRC_LANE_ADC2, &adc2);
+}
+
 // Dual I2S Master Architecture:
 // ADC1: master full-duplex, ADC2: master no-clock-output (S3 slave DMA workaround).
 // I2S0 outputs BCK/WS/MCLK; I2S1 has data_in only (GPIO9).
@@ -537,7 +614,7 @@ void i2s_audio_init() {
     // and amplifying EMI/DAC noise floor while Stage 5 metering isn't active yet.
     portENTER_CRITICAL(&spinlock);
     _analysis.dBFS = DBFS_FLOOR;
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
         _analysis.adc[a].dBFS = DBFS_FLOOR;
     }
     portEXIT_CRITICAL(&spinlock);
@@ -548,7 +625,7 @@ void i2s_audio_init() {
     if (!_fftData) {
         _fftData    = (float *)heap_caps_calloc(FFT_SIZE * 2, sizeof(float), MALLOC_CAP_SPIRAM);
         _fftWindow  = (float *)heap_caps_calloc(FFT_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
-        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
             _fftRing[a]  = (float *)heap_caps_calloc(FFT_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
             _wfAccum[a]  = (float *)heap_caps_calloc(WAVEFORM_BUFFER_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
             _wfOutput[a] = (uint8_t *)heap_caps_calloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t), MALLOC_CAP_SPIRAM);
@@ -556,7 +633,7 @@ void i2s_audio_init() {
         // Fallback to internal SRAM if PSRAM unavailable
         if (!_fftData)   _fftData   = (float *)calloc(FFT_SIZE * 2, sizeof(float));
         if (!_fftWindow) _fftWindow = (float *)calloc(FFT_SIZE, sizeof(float));
-        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
             if (!_fftRing[a])  _fftRing[a]  = (float *)calloc(FFT_SIZE, sizeof(float));
             if (!_wfAccum[a])  _wfAccum[a]  = (float *)calloc(WAVEFORM_BUFFER_SIZE, sizeof(float));
             if (!_wfOutput[a]) _wfOutput[a] = (uint8_t *)calloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t));
@@ -570,7 +647,7 @@ void i2s_audio_init() {
     }
 
     _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
         _wfFramesSeen[a] = 0;
         _wfReady[a] = false;
@@ -591,6 +668,9 @@ void i2s_audio_init() {
     // audio_pipeline_task on Core 1.  This pins the I2S DMA ISR to Core 1,
     // isolating it from WiFi TX/RX interrupts on Core 0 that cause audio pops.
 
+    // Register ADC input sources before starting the pipeline task
+    _register_adc_sources();
+
     audio_pipeline_init();
 }
 
@@ -600,9 +680,9 @@ void i2s_audio_init_channels() {
     // ADC2 (I2S_NUM_1) is skipped until physically connected.
     _adc2InitOk = false;
     // Uncomment when ADC2 hardware is attached:
-    // _adc2InitOk = i2s_configure_adc2(_currentSampleRate);
+    // _adc2InitOk = i2s_audio_configure_adc(1, nullptr);
 
-    i2s_configure_adc1(_currentSampleRate);
+    i2s_audio_configure_adc(0, nullptr);
 
     // Pull-down on DOUT2 — prevents floating pin reading all-1s (false CLIPPING).
     gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
@@ -674,7 +754,7 @@ void audio_periodic_dump() {
 }
 
 bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) {
-    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_ADCS) return false;
+    if (adcIndex < 0 || adcIndex >= AUDIO_PIPELINE_MAX_INPUTS) return false;
     if (!_wfReady[adcIndex]) return false;
     memcpy(out, (const void *)_wfOutput[adcIndex], WAVEFORM_BUFFER_SIZE);
     _wfReady[adcIndex] = false;
@@ -682,7 +762,7 @@ bool i2s_audio_get_waveform(uint8_t *out, int adcIndex) {
 }
 
 bool i2s_audio_get_spectrum(float *bands, float *dominant_freq, int adcIndex) {
-    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_ADCS) return false;
+    if (adcIndex < 0 || adcIndex >= AUDIO_PIPELINE_MAX_INPUTS) return false;
     if (!_spectrumReady[adcIndex]) return false;
     memcpy(bands, (const void *)_spectrumOutput[adcIndex], SPECTRUM_BANDS * sizeof(float));
     *dominant_freq = _dominantFreqOutput[adcIndex];
@@ -732,13 +812,13 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
     _currentSampleRate = rate;
     _wfTargetFrames = rate * AppState::getInstance().audioUpdateRate / 1000;
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
         _wfFramesSeen[a] = 0;
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
     }
 
-    if (_adc2InitOk) _adc2InitOk = i2s_configure_adc2(rate);
-    i2s_configure_adc1(rate);
+    if (_adc2InitOk) _adc2InitOk = i2s_audio_configure_adc(1, nullptr);
+    i2s_audio_configure_adc(0, nullptr);
 
     AppState::getInstance().audioPaused = false;
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
@@ -792,7 +872,7 @@ void i2s_audio_update_analysis_metering(const AdcAnalysis &adc0) {
 // frames: number of stereo frames (== DMA_BUF_LEN).
 // adcIndex: 0=ADC1, 1=ADC2.
 void i2s_audio_push_waveform_fft(const int32_t *rawLJ, int frames, int adcIndex) {
-    if (adcIndex < 0 || adcIndex >= NUM_AUDIO_ADCS) return;
+    if (adcIndex < 0 || adcIndex >= AUDIO_PIPELINE_MAX_INPUTS) return;
     if (!rawLJ || frames <= 0) return;
     if (!_wfOutput[adcIndex] || !_fftRing[adcIndex]) return;
 

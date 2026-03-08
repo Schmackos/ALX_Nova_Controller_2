@@ -840,7 +840,7 @@ void setup() {
     JsonDocument doc;
     doc["success"] = true;
     JsonArray names = doc["names"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
       names.add(appState.inputNames[i]);
     }
     doc["numAdcsDetected"] = appState.numAdcsDetected;
@@ -864,7 +864,7 @@ void setup() {
     }
     if (doc["names"].is<JsonArray>()) {
       JsonArray names = doc["names"].as<JsonArray>();
-      for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+      for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
         String name = names[i].as<String>();
         if (name.length() > 0) appState.inputNames[i] = name;
       }
@@ -1341,12 +1341,12 @@ void loop() {
 
   // Rule 8: Sustained Clipping — clipRate >1% for >5 consecutive checks (25s)
   {
-    static uint8_t clipHighCount[NUM_AUDIO_ADCS] = {};
-    static bool clipEmitted[NUM_AUDIO_ADCS] = {};
+    static uint8_t clipHighCount[AUDIO_PIPELINE_MAX_INPUTS] = {};
+    static bool clipEmitted[AUDIO_PIPELINE_MAX_INPUTS] = {};
     static unsigned long lastClipCheck = 0;
     if (millis() - lastClipCheck >= 5000) {
       lastClipCheck = millis();
-      for (uint8_t lane = 0; lane < NUM_AUDIO_ADCS; lane++) {
+      for (uint8_t lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
         if (appState.audioAdc[lane].clipRate > 0.01f) {
           clipHighCount[lane]++;
           if (clipHighCount[lane] > 5 && !clipEmitted[lane]) {

@@ -607,7 +607,7 @@ void publishMqttAudioDiagnostics() {
 
   // Per-ADC diagnostics (only publish detected ADCs)
   const char *inputLabels[] = {"adc1", "adc2"};
-  int adcCount = appState.numAdcsDetected < NUM_AUDIO_ADCS ? appState.numAdcsDetected : NUM_AUDIO_ADCS;
+  int adcCount = appState.numAdcsDetected < AUDIO_PIPELINE_MAX_INPUTS ? appState.numAdcsDetected : AUDIO_PIPELINE_MAX_INPUTS;
   for (int a = 0; a < adcCount; a++) {
     const AppState::AdcState &adc = appState.audioAdc[a];
     const char *statusStr = "OK";
@@ -862,7 +862,7 @@ void publishMqttInputNames() {
   String base = getEffectiveMqttBaseTopic();
 
   const char *labels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
-  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+  for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     mqttClient.publish((base + "/audio/" + labels[i]).c_str(),
                        appState.inputNames[i].c_str(), true);
   }

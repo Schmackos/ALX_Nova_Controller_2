@@ -158,9 +158,6 @@ const uint32_t DEFAULT_AUDIO_SAMPLE_RATE =
     48000; // Default I2S sample rate (Hz)
 const float DEFAULT_ADC_VREF = 3.3f; // PCM1808 full-scale reference voltage (V)
 
-// ===== Dual ADC Configuration =====
-#define NUM_AUDIO_ADCS 2  // Number of PCM1808 ADC modules (1 or 2)
-
 // Smart Sensing modes
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };
 
@@ -203,9 +200,9 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define I2S_DMA_BUF_LEN   256
 
 // ===== Audio Pipeline Configuration =====
-#define AUDIO_PIPELINE_MAX_INPUTS  4   // ADC1, ADC2, Siggen, USB Audio
+#define AUDIO_PIPELINE_MAX_INPUTS  8   // Max input lanes (HAL-driven, up to 8 stereo sources)
 #define AUDIO_PIPELINE_MAX_OUTPUTS 8   // Max output channels (matches matrix size)
-#define AUDIO_PIPELINE_MATRIX_SIZE 8   // 8x8 routing matrix (4 inputs × 2ch = 8 input channels)
+#define AUDIO_PIPELINE_MATRIX_SIZE 16  // 16x16 routing matrix (8 inputs × 2ch = 16 input channels)
 #define AUDIO_OUT_MAX_SINKS AUDIO_PIPELINE_MAX_OUTPUTS
 
 // ===== ES8311 Onboard Codec (P4 only) =====

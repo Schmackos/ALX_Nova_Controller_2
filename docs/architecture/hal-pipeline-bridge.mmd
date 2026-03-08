@@ -22,13 +22,15 @@ flowchart TB
     end
 
     subgraph tables["Mapping Tables"]
-        SINK_MAP["_halSlotToSinkSlot[16]\nDAC slot -> SINK_SLOT_PRIMARY (0)\nCODEC slot -> SINK_SLOT_ES8311 (1)"]
-        ADC_MAP["_halSlotToAdcLane[16]\nADC slot -> lane 0 or 1\n(max 2 ADC lanes)"]
+        SINK_MAP["_halSlotToSinkSlot[16]\nCapability-based ordinal counting\n(HAL_CAP_DAC_PATH → slot 0..7)"]
+        ADC_MAP["_halSlotToAdcLane[16]\nCapability-based ordinal counting\n(HAL_CAP_ADC_PATH → lane 0..7)"]
     end
 
     subgraph pipeline["Audio Pipeline"]
         SET["audio_pipeline_set_sink(\n  sinkSlot, &sink\n)\nvTaskSuspendAll() atomic"]
         RMV["audio_pipeline_remove_sink(\n  sinkSlot\n)\nzeroes slot, halSlot=0xFF"]
+        SRC_SET["audio_pipeline_set_source(\n  lane, &src\n)\nvia dev->getInputSource()"]
+        SRC_RMV["audio_pipeline_remove_source(\n  lane\n)"]
         ADC_EN["appState.adcEnabled[lane]\ntrue/false"]
     end
 
@@ -61,9 +63,11 @@ flowchart TB
     %% Available path
     AVL --> SINK_MAP
     AVL --> ADC_MAP
-    SINK_MAP -->|"DAC/CODEC"| SET
-    ADC_MAP -->|"ADC"| ADC_EN
+    SINK_MAP -->|"DAC_PATH"| SET
+    ADC_MAP -->|"ADC_PATH"| SRC_SET
+    ADC_MAP -->|"ADC_PATH"| ADC_EN
     SET --> FLOWS
+    SRC_SET --> FLOWS
     ADC_EN -->|"true"| FLOWS
 
     %% Unavailable path (no table changes)
@@ -72,9 +76,11 @@ flowchart TB
     %% Removed path
     REM -->|"clear mapping"| SINK_MAP
     REM -->|"clear mapping"| ADC_MAP
-    SINK_MAP -->|"DAC/CODEC"| RMV
-    ADC_MAP -->|"ADC"| ADC_EN
+    SINK_MAP -->|"DAC_PATH"| RMV
+    ADC_MAP -->|"ADC_PATH"| SRC_RMV
+    ADC_MAP -->|"ADC_PATH"| ADC_EN
     RMV --> STOPS
+    SRC_RMV --> STOPS
     ADC_EN -->|"false"| STOPS
 
     %% Dirty flags

@@ -9,7 +9,8 @@
     "additionalDirectories": [
       "c:\\Users\\Necrosis\\Documents\\GitHub\\ALX_Nova_Controller_2",
       "C:\\Users\\Necrosis\\.claude\\skills",
-      "C:\\Users\\Necrosis\\.claude"
+      "C:\\Users\\Necrosis\\.claude",
+      "c:\\Users\\Necrosis\\Documents\\GitHub\\ALX_Nova_Controller_2\\test\\test_audio_health_bridge"
     ]
   }
 }

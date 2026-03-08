@@ -60,7 +60,7 @@ void handleSmartSensingGet() {
   doc["numAdcsDetected"] = appState.numAdcsDetected;
   // Per-ADC data
   JsonArray adcArr = doc["adc"].to<JsonArray>();
-  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+  for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
     JsonObject adcObj = adcArr.add<JsonObject>();
     const AppState::AdcState &adc = appState.audioAdc[a];
     adcObj["rms1"] = adc.rms1;
@@ -266,7 +266,7 @@ bool detectSignal() {
   AudioDiagnostics diag = i2s_audio_get_diagnostics();
 
   // Copy per-ADC analysis and diagnostics into AppState
-  for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+  for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
     AppState::AdcState &dst = appState.audioAdc[a];
     const AdcAnalysis &src = analysis.adc[a];
     dst.rms1 = src.rms1;
@@ -290,9 +290,9 @@ bool detectSignal() {
     dst.healthStatus = (uint8_t)dsrc.status;
     // Debounced health transition logging: only log after new state is stable for 3 seconds.
     // Prevents 33K+ log lines/session from ADC2 oscillating at the CLIPPING boundary.
-    static uint8_t prevHealth[NUM_AUDIO_ADCS] = {0xFF, 0xFF};
-    static uint8_t pendingHealth[NUM_AUDIO_ADCS] = {0xFF, 0xFF};
-    static unsigned long pendingSince[NUM_AUDIO_ADCS] = {0, 0};
+    static uint8_t prevHealth[AUDIO_PIPELINE_MAX_INPUTS] = {0xFF, 0xFF};
+    static uint8_t pendingHealth[AUDIO_PIPELINE_MAX_INPUTS] = {0xFF, 0xFF};
+    static unsigned long pendingSince[AUDIO_PIPELINE_MAX_INPUTS] = {0, 0};
     if (dst.healthStatus != prevHealth[a]) {
         if (dst.healthStatus != pendingHealth[a]) {
             // New candidate state — start hold timer

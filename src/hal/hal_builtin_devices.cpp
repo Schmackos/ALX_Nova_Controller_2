@@ -8,6 +8,10 @@
 #include "hal_pcm1808.h"
 #include "hal_dsp_bridge.h"
 #include "hal_mcp4725.h"
+#include "hal_siggen.h"
+#ifdef USB_AUDIO_ENABLED
+#include "hal_usb_audio.h"
+#endif
 #include <string.h>
 
 // ===== Factory functions for new platform classes =====
@@ -16,6 +20,10 @@ static HalDevice* factory_pcm5102a() { return new HalPcm5102a(); }
 static HalDevice* factory_pcm1808()  { return new HalPcm1808(); }
 static HalDevice* factory_dsp()      { return new HalDspBridge(); }
 static HalDevice* factory_mcp4725()  { return new HalMcp4725(); }
+static HalDevice* factory_siggen()   { return new HalSigGen(); }
+#ifdef USB_AUDIO_ENABLED
+static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
+#endif
 
 // ===== Compatible strings for builtin devices =====
 // Uses Linux DT "vendor,model" convention
@@ -31,7 +39,7 @@ static HalDevice* factory_mcp4725()  { return new HalMcp4725(); }
 #define COMPAT_LED         "generic,status-led"
 #define COMPAT_RELAY       "generic,relay-amp"
 #define COMPAT_BUTTON      "generic,tact-switch"
-#define COMPAT_SIGGEN      "generic,signal-gen"
+#define COMPAT_SIGGEN      "alx,signal-gen"
 #define COMPAT_MCP4725     "microchip,mcp4725"
 
 void hal_register_builtins() {
@@ -174,15 +182,29 @@ void hal_register_builtins() {
         hal_registry_register(e);
     }
 
-    // Signal Generator
+    // Signal Generator — software audio source (HAL_DEV_ADC for pipeline input lane)
     {
         HalDriverEntry e;
         memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_SIGGEN, 31);
-        e.type = HAL_DEV_GPIO;
-        e.factory = nullptr;
+        strncpy(e.compatible, "alx,signal-gen", 31);
+        e.type = HAL_DEV_ADC;
+        e.legacyId = 0;
+        e.factory = factory_siggen;
         hal_registry_register(e);
     }
+
+    // USB Audio — software audio source (HAL_DEV_ADC for pipeline input lane)
+#ifdef USB_AUDIO_ENABLED
+    {
+        HalDriverEntry e;
+        memset(&e, 0, sizeof(e));
+        strncpy(e.compatible, "alx,usb-audio", 31);
+        e.type = HAL_DEV_ADC;
+        e.legacyId = 0;
+        e.factory = factory_usb_audio;
+        hal_registry_register(e);
+    }
+#endif
 
     // MCP4725 — 12-bit I2C voltage output DAC (add-on module)
     {

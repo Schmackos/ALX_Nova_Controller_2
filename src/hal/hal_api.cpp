@@ -156,8 +156,10 @@ void registerHalApiEndpoints(WebServer& server) {
         }
 
         HalDeviceManager& mgr = HalDeviceManager::instance();
-        if (mgr.findByCompatible(compatible)) {
-            server.send(409, "application/json", "{\"error\":\"Device already registered\"}"); return;
+        // Allow multiple instances of the same compatible string (multi-instance support).
+        // Max 8 instances per compatible — matches pipeline dimension limits.
+        if (mgr.countByCompatible(compatible) >= 8) {
+            server.send(409, "application/json", "{\"error\":\"Max instances reached for this device\"}"); return;
         }
         if (mgr.getCount() >= HAL_MAX_DEVICES) {
             server.send(409, "application/json", "{\"error\":\"No free slots\"}"); return;

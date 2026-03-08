@@ -8,11 +8,10 @@
 extern "C" {
 #endif
 
-// Lane indices matching AudioInputType values in audio_pipeline.h
+// Lane indices for hardware ADC sources (first two lanes by convention;
+// software sources like SigGen and USB get dynamic lanes from HAL bridge)
 #define AUDIO_SRC_LANE_ADC1   0
 #define AUDIO_SRC_LANE_ADC2   1
-#define AUDIO_SRC_LANE_SIGGEN 2
-#define AUDIO_SRC_LANE_USB    3
 
 // Maximum number of input sources (guarded so audio_pipeline.h can override)
 #ifndef AUDIO_PIPELINE_MAX_INPUTS
@@ -47,6 +46,9 @@ typedef struct AudioInputSource {
     // Internal VU ballistics state (smoothed RMS) — do not access directly.
     float _vuSmoothedL;
     float _vuSmoothedR;
+
+    // HAL device slot index that owns this source. 0xFF = not bound to any HAL device.
+    uint8_t halSlot;
 } AudioInputSource;
 
 // Default initializer — all NULLs, gain=1.0, VU=-90dBFS, smoothed=0
@@ -60,7 +62,8 @@ typedef struct AudioInputSource {
     -90.0f, /* vuL */            \
     -90.0f, /* vuR */            \
     0.0f,  /* _vuSmoothedL */    \
-    0.0f   /* _vuSmoothedR */    \
+    0.0f,  /* _vuSmoothedR */    \
+    0xFF   /* halSlot */         \
 }
 
 #ifdef __cplusplus

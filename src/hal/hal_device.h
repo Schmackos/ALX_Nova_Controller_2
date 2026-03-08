@@ -4,6 +4,8 @@
 #include "hal_types.h"
 #include "hal_init_result.h"
 
+struct AudioInputSource;  // Forward declaration for getInputSource()
+
 class HalDevice {
 public:
     virtual ~HalDevice() {}
@@ -24,6 +26,11 @@ public:
 
     // healthCheck(): Periodic I2C ACK or register read (30s timer)
     virtual bool healthCheck() = 0;
+
+    // Audio input source descriptor — override in ADC/input devices.
+    // Returns nullptr for non-input devices. The bridge copies the struct
+    // and sets lane/halSlot before registering with audio_pipeline_set_source().
+    virtual const AudioInputSource* getInputSource() const { return nullptr; }
 
     // ----- Descriptor -----
     const HalDeviceDescriptor& getDescriptor() const { return _descriptor; }

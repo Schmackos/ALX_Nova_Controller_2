@@ -6,23 +6,14 @@
 
 // ===== Dimensions (override via config.h build flags) =====
 #ifndef AUDIO_PIPELINE_MAX_INPUTS
-#define AUDIO_PIPELINE_MAX_INPUTS  4
+#define AUDIO_PIPELINE_MAX_INPUTS  8
 #endif
 #ifndef AUDIO_PIPELINE_MAX_OUTPUTS
-#define AUDIO_PIPELINE_MAX_OUTPUTS 4
+#define AUDIO_PIPELINE_MAX_OUTPUTS 8
 #endif
 #ifndef AUDIO_PIPELINE_MATRIX_SIZE
-#define AUDIO_PIPELINE_MATRIX_SIZE 8
+#define AUDIO_PIPELINE_MATRIX_SIZE 16
 #endif
-
-// ===== Input Lane Identifiers =====
-enum AudioInputType : uint8_t {
-    AUDIO_INPUT_ADC1   = 0,
-    AUDIO_INPUT_ADC2   = 1,
-    AUDIO_INPUT_SIGGEN = 2,
-    AUDIO_INPUT_USB    = 3,
-    AUDIO_INPUT_COUNT  = 4
-};
 
 // ===== Public API =====
 void audio_pipeline_init();
@@ -54,8 +45,14 @@ void audio_pipeline_notify_dsp_swap();
 // Diagnostic — call from main-loop context only (not from audio task)
 void audio_pipeline_dump_raw_diag();
 
-// Register an AudioInputSource for a pipeline lane (used by USB, future dynamic inputs)
+// Slot-indexed input source API — preferred for HAL-managed devices.
+// audio_pipeline_set_source()    atomically places a source at a lane index.
+// audio_pipeline_remove_source() atomically clears a lane; no-ops if empty.
 struct AudioInputSource;  // Forward declaration
+void audio_pipeline_set_source(int lane, const AudioInputSource *src);
+void audio_pipeline_remove_source(int lane);
+
+// DEPRECATED: alias for audio_pipeline_set_source() — use set_source for new code.
 void audio_pipeline_register_source(int lane, const AudioInputSource *src);
 
 // Get per-lane VU metering (dBFS). Returns -90.0f if lane has no registered source.
