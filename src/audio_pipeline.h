@@ -55,6 +55,10 @@ void audio_pipeline_remove_source(int lane);
 // DEPRECATED: alias for audio_pipeline_set_source() — use set_source for new code.
 void audio_pipeline_register_source(int lane, const AudioInputSource *src);
 
+// Read-only accessor for a registered input source. Returns NULL if lane is
+// out of range or has no source registered (read callback is NULL).
+const AudioInputSource* audio_pipeline_get_source(int lane);
+
 // Get per-lane VU metering (dBFS). Returns -90.0f if lane has no registered source.
 float audio_pipeline_get_lane_vu_l(int lane);
 float audio_pipeline_get_lane_vu_r(int lane);

@@ -56,7 +56,7 @@
                 canvasDims = {};
                 invalidateBgCache();
                 // Draw initial empty canvases for each ADC
-                for (let a = 0; a < NUM_ADCS; a++) {
+                for (let a = 0; a < numInputLanes; a++) {
                     drawAudioWaveform(null, a);
                     drawSpectrumBars(null, 0, a);
                 }
@@ -68,7 +68,7 @@
                 // Stop animation and reset state
                 if (audioAnimFrameId) { cancelAnimationFrame(audioAnimFrameId); audioAnimFrameId = null; }
                 if (vuAnimFrameId) { cancelAnimationFrame(vuAnimFrameId); vuAnimFrameId = null; }
-                for (let a = 0; a < NUM_ADCS; a++) {
+                for (let a = 0; a < numInputLanes; a++) {
                     waveformCurrent[a] = null; waveformTarget[a] = null;
                     spectrumTarget[a].fill(0);
                     spectrumCurrent[a].fill(0);

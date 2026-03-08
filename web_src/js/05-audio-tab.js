@@ -15,6 +15,9 @@
         function handleAudioChannelMap(data) {
             audioChannelMap = data;
 
+            // Resize shared audio arrays (waveform, spectrum, VU) to match input count
+            resizeAudioArrays(data.inputs ? data.inputs.length : 0);
+
             // Resize VU arrays to match channel count
             while (inputVuCurrent.length < (data.inputs || []).length) {
                 inputVuCurrent.push([0, 0]);

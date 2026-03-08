@@ -5176,7 +5176,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             }
             if (type === 0x01 && currentActiveTab === 'audio') {
                 // Waveform: [type:1][adc:1][samples:256]
-                if (adc < NUM_ADCS && buf.byteLength >= 258) {
+                if (adc < numInputLanes && buf.byteLength >= 258) {
                     const samples = new Uint8Array(buf, 2, 256);
                     waveformTarget[adc] = samples;
                     if (!waveformCurrent[adc]) waveformCurrent[adc] = new Uint8Array(samples);
@@ -5184,7 +5184,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 }
             } else if (type === 0x02) {
                 // Spectrum: [type:1][adc:1][freq:f32LE][bands:16xf32LE]
-                if (adc < NUM_ADCS && buf.byteLength >= 70) {
+                if (adc < numInputLanes && buf.byteLength >= 70) {
                     const freq = dv.getFloat32(2, true);
                     for (let i = 0; i < 16; i++) spectrumTarget[adc][i] = dv.getFloat32(6 + i * 4, true);
                     targetDominantFreq[adc] = freq;
@@ -5317,7 +5317,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     }
                     // Per-ADC VU/peak data
                     if (data.adc && Array.isArray(data.adc)) {
-                        for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
+                        for (let a = 0; a < data.adc.length && a < numInputLanes; a++) {
                             const ad = data.adc[a];
                             vuTargetArr[a][0] = ad.vu1 !== undefined ? ad.vu1 : 0;
                             vuTargetArr[a][1] = ad.vu2 !== undefined ? ad.vu2 : 0;
@@ -5332,7 +5332,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 audioTabUpdateLevels(data);
             } else if (data.type === 'inputNames') {
                 if (data.names && Array.isArray(data.names)) {
-                    for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
+                    for (let i = 0; i < data.names.length && i < numInputLanes * 2; i++) {
                         inputNames[i] = data.names[i];
                     }
                 }
@@ -5469,27 +5469,59 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         // ===== Shared Audio State =====
 
-        // Dual ADC count
-        const NUM_ADCS = 2;
+        // Dynamic input lane count — set by audioChannelMap broadcast
+        let numInputLanes = 0;
         let numAdcsDetected = 1;
-        let inputNames = ['Subwoofer 1','Subwoofer 2','Subwoofer 3','Subwoofer 4'];
+        let inputNames = [];
 
-        // Waveform and spectrum animation state — per-ADC
-        let waveformCurrent = [null, null], waveformTarget = [null, null];
-        let spectrumCurrent = [new Float32Array(16), new Float32Array(16)];
-        let spectrumTarget = [new Float32Array(16), new Float32Array(16)];
-        let currentDominantFreq = [0, 0], targetDominantFreq = [0, 0];
+        // Waveform and spectrum animation state — per-input, dynamically sized
+        let waveformCurrent = [], waveformTarget = [];
+        let spectrumCurrent = [], spectrumTarget = [];
+        let currentDominantFreq = [], targetDominantFreq = [];
         let audioAnimFrameId = null;
 
-        // Spectrum peak hold state — per-ADC
-        let spectrumPeaks = [new Float32Array(16), new Float32Array(16)];
-        let spectrumPeakTimes = [new Float64Array(16), new Float64Array(16)];
+        // Spectrum peak hold state — per-input
+        let spectrumPeaks = [], spectrumPeakTimes = [];
 
-        // VU meter animation state — per-ADC [adc][L=0,R=1]
-        let vuCurrent = [[0,0],[0,0]], vuTargetArr = [[0,0],[0,0]];
-        let peakCurrent = [[0,0],[0,0]], peakTargetArr = [[0,0],[0,0]];
+        // VU meter animation state — per-input [lane][L=0,R=1]
+        let vuCurrent = [], vuTargetArr = [];
+        let peakCurrent = [], peakTargetArr = [];
         let vuDetected = false;
         let vuAnimFrameId = null;
+
+        // Resize all per-input audio arrays when audioChannelMap reports new count
+        function resizeAudioArrays(count) {
+            if (count === numInputLanes) return;
+            numInputLanes = count;
+            while (waveformCurrent.length < count) {
+                waveformCurrent.push(null);
+                waveformTarget.push(null);
+                spectrumCurrent.push(new Float32Array(16));
+                spectrumTarget.push(new Float32Array(16));
+                currentDominantFreq.push(0);
+                targetDominantFreq.push(0);
+                spectrumPeaks.push(new Float32Array(16));
+                spectrumPeakTimes.push(new Float64Array(16));
+                vuCurrent.push([0, 0]);
+                vuTargetArr.push([0, 0]);
+                peakCurrent.push([0, 0]);
+                peakTargetArr.push([0, 0]);
+            }
+            waveformCurrent.length = count;
+            waveformTarget.length = count;
+            spectrumCurrent.length = count;
+            spectrumTarget.length = count;
+            currentDominantFreq.length = count;
+            targetDominantFreq.length = count;
+            spectrumPeaks.length = count;
+            spectrumPeakTimes.length = count;
+            vuCurrent.length = count;
+            vuTargetArr.length = count;
+            peakCurrent.length = count;
+            peakTargetArr.length = count;
+            while (inputNames.length < count * 2) inputNames.push('Input ' + (inputNames.length + 1));
+            inputNames.length = count * 2;
+        }
 
 //# sourceURL=04-shared-audio.js
 
@@ -5509,6 +5541,9 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         // ===== Channel Map Handler =====
         function handleAudioChannelMap(data) {
             audioChannelMap = data;
+
+            // Resize shared audio arrays (waveform, spectrum, VU) to match input count
+            resizeAudioArrays(data.inputs ? data.inputs.length : 0);
 
             // Resize VU arrays to match channel count
             while (inputVuCurrent.length < (data.inputs || []).length) {
@@ -6058,7 +6093,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         let vuDomRefs = null;
         function cacheVuDomRefs() {
             vuDomRefs = {};
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < numInputLanes; a++) {
                 vuDomRefs['fillL' + a] = document.getElementById('vuFill' + a + 'L');
                 vuDomRefs['fillR' + a] = document.getElementById('vuFill' + a + 'R');
                 vuDomRefs['pkL' + a] = document.getElementById('vuPeak' + a + 'L');
@@ -6707,7 +6742,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 canvasDims = {};
                 invalidateBgCache();
                 // Draw initial empty canvases for each ADC
-                for (let a = 0; a < NUM_ADCS; a++) {
+                for (let a = 0; a < numInputLanes; a++) {
                     drawAudioWaveform(null, a);
                     drawSpectrumBars(null, 0, a);
                 }
@@ -6719,7 +6754,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                 // Stop animation and reset state
                 if (audioAnimFrameId) { cancelAnimationFrame(audioAnimFrameId); audioAnimFrameId = null; }
                 if (vuAnimFrameId) { cancelAnimationFrame(vuAnimFrameId); vuAnimFrameId = null; }
-                for (let a = 0; a < NUM_ADCS; a++) {
+                for (let a = 0; a < numInputLanes; a++) {
                     waveformCurrent[a] = null; waveformTarget[a] = null;
                     spectrumTarget[a].fill(0);
                     spectrumCurrent[a].fill(0);
@@ -7179,7 +7214,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             audioAnimFrameId = null;
             let needsMore = false;
 
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < numInputLanes; a++) {
                 // Lerp waveform
                 if (waveformCurrent[a] && waveformTarget[a]) {
                     for (let i = 0; i < waveformCurrent[a].length && i < waveformTarget[a].length; i++) {
@@ -7457,7 +7492,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
 
         function vuAnimLoop() {
             vuAnimFrameId = null;
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < numInputLanes; a++) {
                 for (let ch = 0; ch < 2; ch++) {
                     vuCurrent[a][ch] += (vuTargetArr[a][ch] - vuCurrent[a][ch]) * VU_LERP;
                     peakCurrent[a][ch] += (peakTargetArr[a][ch] - peakCurrent[a][ch]) * VU_LERP;
@@ -7570,7 +7605,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         function toggleVuMode(seg) {
             vuSegmentedMode = seg;
             localStorage.setItem('vuSegmented', seg);
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < numInputLanes; a++) {
                 var cont = document.getElementById('vuContinuous' + a);
                 var segDiv = document.getElementById('vuSegmented' + a);
                 if (cont) cont.style.display = seg ? 'none' : '';

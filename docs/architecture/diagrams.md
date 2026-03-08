@@ -38,9 +38,9 @@ graph TB
     end
 
     subgraph AudioPipeline["Audio Pipeline"]
-        INP["4-Lane Input\nADC1 | ADC2 | SigGen | USB"]
+        INP["8-Lane Input\nHAL-managed dynamic sources\nADC | SigGen | USB via getInputSource()"]
         DSP["Per-Input DSP\nbiquad, FIR, limiter"]
-        MTX["8x8 Routing Matrix\nfloat32 mix + gain"]
+        MTX["16x16 Routing Matrix\nfloat32 mix + gain"]
         ODSP["Per-Output DSP\n8 mono channels, 12 stages"]
         SINKS["Slot-Indexed Sink Dispatch\nset_sink(slot) / remove_sink(slot)\nhalSlot for O(1) HAL lookup"]
     end
@@ -80,7 +80,7 @@ graph TB
 
     MQTT -->|"poll 20Hz\nindependent"| AS
     GUI -->|"reads state"| AS
-    USB -->|"ring buffer\n-> lane 3"| INP
+    USB -->|"ring buffer\n-> HAL-assigned lane"| INP
 
     WEB -->|"WS frames"| WS
     HTTP -->|"/api/hal/*"| HS
@@ -184,8 +184,8 @@ flowchart TB
     end
 
     subgraph tables["Mapping Tables"]
-        SINK_MAP["_halSlotToSinkSlot[16]\nDAC slot -> SINK_SLOT_PRIMARY (0)\nCODEC slot -> SINK_SLOT_ES8311 (1)"]
-        ADC_MAP["_halSlotToAdcLane[16]\nADC slot -> lane 0 or 1\n(max 2 ADC lanes)"]
+        SINK_MAP["_halSlotToSinkSlot[16]\nCapability-based ordinal counting\nDAC_PATH devices -> slot 0..7"]
+        ADC_MAP["_halSlotToAdcLane[16]\nCapability-based ordinal counting\nADC_PATH devices -> lane 0..7"]
     end
 
     subgraph pipeline["Audio Pipeline"]
@@ -302,7 +302,7 @@ sequenceDiagram
     participant WS as WebSocket<br/>Server (port 81)
     participant MQTT as mqtt_task<br/>(Core 0, 20Hz)
 
-    Note over EG: EVT_ANY = 0x00FFFFFF<br/>15 bits assigned, 9 spare<br/>Bits 24-31 reserved by FreeRTOS
+    Note over EG: EVT_ANY = 0x00FFFFFF<br/>16 bits assigned, 8 spare<br/>Bits 24-31 reserved by FreeRTOS
 
     Producer->>AS: appState.markXxxDirty()
     AS->>AS: _xxxDirty = true (volatile)
@@ -340,7 +340,7 @@ flowchart LR
 
     subgraph dispatch["Slot-Indexed Dispatch Loop"]
         direction TB
-        LOOP["for slot = 0..3"]
+        LOOP["for slot = 0..7"]
         CHK1{"_sinks[slot].write\n!= NULL?"}
         CHK2{"isReady()?"}
         CHK3{"!muted?"}
@@ -362,11 +362,10 @@ flowchart LR
         CONV --> WRITE
     end
 
-    subgraph sinks["Sink Slots (AudioOutputSink[4])"]
+    subgraph sinks["Sink Slots (AudioOutputSink[8])"]
         S0["Slot 0: PCM5102A\nfirstChannel=0, chCount=2\nhalSlot=0"]
         S1["Slot 1: ES8311\nfirstChannel=2, chCount=2\nhalSlot=1"]
-        S2["Slot 2: (empty)\nwrite=NULL"]
-        S3["Slot 3: (empty)\nwrite=NULL"]
+        S2["Slot 2..7: (empty)\nwrite=NULL"]
     end
 
     subgraph hw["Hardware"]
@@ -463,7 +462,7 @@ graph LR
 
     subgraph Gates["Quality Gates (parallel)"]
         direction TB
-        CPP["cpp-tests\npio test -e native -v\n1,271 Unity tests"]
+        CPP["cpp-tests\npio test -e native -v\n1,556 Unity tests"]
         CPPL["cpp-lint\ncppcheck src/\nwarning + style + performance"]
         JSL["js-lint\nfind_dups.js\ncheck_missing_fns.js\nESLint web_src/js/"]
         E2E["e2e-tests\nnpm ci\nplaywright install chromium\nplaywright test\n26 browser tests"]
@@ -558,7 +557,7 @@ graph TB
     classDef untested fill:#5c1a1a,stroke:#F44336,color:#fff
     classDef schema fill:#3a3a3a,stroke:#9E9E9E,color:#fff
 
-    subgraph UnitTests["C++ Unit Tests (1,271 tests)"]
+    subgraph UnitTests["C++ Unit Tests (1,556 tests)"]
         UT_HAL["HAL Framework\n14 test modules\nlifecycle, bridge, drivers"]
         UT_PIPE["Audio Pipeline\n8 test modules\nsink dispatch, DSP, metering"]
         UT_NET["Networking\n5 test modules\nWiFi, MQTT, OTA, ETH"]

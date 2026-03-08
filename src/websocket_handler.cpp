@@ -29,6 +29,7 @@
 #include "dac_registry.h"
 #include "dac_eeprom.h"
 #include "hal/hal_device_manager.h"
+#include "hal/hal_pipeline_bridge.h"
 #include "hal/hal_types.h"
 #include "hal/hal_temp_sensor.h"
 #endif
@@ -1714,51 +1715,37 @@ void sendAudioChannelMap() {
 
     // --- Input lanes (from pipeline registered sources) ---
     JsonArray inputs = doc["inputs"].to<JsonArray>();
-    const char* laneNames[] = {"ADC1", "ADC2", "SigGen", "USB"};
     for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
+        const AudioInputSource* src = audio_pipeline_get_source(lane);
+        if (!src) continue;  // Skip empty/unregistered lanes
+
         JsonObject inp = inputs.add<JsonObject>();
         inp["lane"] = lane;
-        inp["name"] = laneNames[lane];
+        inp["name"] = src->name ? src->name : "Unknown";
         inp["channels"] = 2;  // All input lanes are stereo
         inp["matrixCh"] = lane * 2;  // First mono channel in matrix
 
-        // Find matching HAL device for this lane
-        const char* compatible = nullptr;
-        const char* deviceName = laneNames[lane];
-        const char* manufacturer = "";
-        uint8_t caps = 0;
-        bool ready = false;
-        HalDeviceType devType = HAL_DEV_NONE;
-
-        if (lane >= 0 && lane < AUDIO_PIPELINE_MAX_INPUTS) {
-            // ADC lanes — find PCM1808 devices
-            HalDevice* adc = HalDeviceManager::instance().findByType(HAL_DEV_ADC, lane);
-            if (adc) {
-                const HalDeviceDescriptor& desc = adc->getDescriptor();
-                compatible = desc.compatible;
-                deviceName = desc.name;
-                manufacturer = desc.manufacturer;
-                caps = desc.capabilities;
-                ready = adc->_ready;
-                devType = desc.type;
+        // Enrich with HAL device info via reverse lookup
+        int8_t halSlot = hal_pipeline_get_slot_for_adc_lane(lane);
+        if (halSlot >= 0) {
+            HalDevice* dev = HalDeviceManager::instance().getDevice(halSlot);
+            if (dev) {
+                const HalDeviceDescriptor& desc = dev->getDescriptor();
+                inp["deviceName"] = desc.name;
+                inp["compatible"] = desc.compatible;
+                inp["manufacturer"] = desc.manufacturer;
+                inp["capabilities"] = desc.capabilities;
+                inp["ready"] = (bool)dev->_ready;
+                inp["deviceType"] = (int)desc.type;
             }
-        } else if (lane == 2) {
-            // Signal generator — software source, always ready
-            ready = true;
-            deviceName = "Signal Generator";
-            devType = HAL_DEV_GPIO;
-        } else if (lane == 3) {
-            // USB Audio — check appState
-            ready = appState.usbAudioConnected;
-            deviceName = "USB Audio";
+        } else {
+            // Software source not in bridge mapping (SigGen, USB, etc.)
+            inp["deviceName"] = src->name ? src->name : "Unknown";
+            inp["manufacturer"] = "";
+            inp["capabilities"] = 0;
+            inp["ready"] = src->isActive ? src->isActive() : false;
+            inp["deviceType"] = (int)HAL_DEV_ADC;
         }
-
-        inp["deviceName"] = deviceName;
-        inp["deviceType"] = (int)devType;
-        if (compatible) inp["compatible"] = compatible;
-        inp["manufacturer"] = manufacturer;
-        inp["capabilities"] = caps;
-        inp["ready"] = ready;
     }
 
     // --- Output sinks (from pipeline registered sinks) ---

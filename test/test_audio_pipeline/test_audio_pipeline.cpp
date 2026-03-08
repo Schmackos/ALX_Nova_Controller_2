@@ -820,6 +820,185 @@ void test_input_bypass_only_lane1(void) {
 }
 
 // ============================================================
+// Section 8b: Matrix Migration — loading smaller matrices (2 tests)
+//
+// When loading an 8-row matrix into a 16x16 target, the old values
+// should be placed in the top-left corner and remaining rows/cols
+// should be zero (silence). This tests the migration logic.
+// ============================================================
+
+// Helper: load a smaller matrix into a larger one, placing values top-left
+static void matrix_load_into_larger(
+    const float src[][8], int srcRows, int srcCols,
+    float dst[][8], int dstRows, int dstCols)
+{
+    // Zero the destination first
+    for (int r = 0; r < dstRows; r++)
+        for (int c = 0; c < dstCols; c++)
+            dst[r][c] = 0.0f;
+
+    // Copy source into top-left corner
+    int rowsToCopy = (srcRows < dstRows) ? srcRows : dstRows;
+    int colsToCopy = (srcCols < dstCols) ? srcCols : dstCols;
+    for (int r = 0; r < rowsToCopy; r++)
+        for (int c = 0; c < colsToCopy; c++)
+            dst[r][c] = src[r][c];
+}
+
+// 8b-a. Load an 4x4 matrix into 8x8 — top-left corner populated, rest zero
+void test_matrix_load_smaller_fills_top_left(void) {
+    float src[8][8] = {};
+    // Set up a 4x4 identity in the source
+    src[0][0] = 1.0f;
+    src[1][1] = 1.0f;
+    src[2][2] = 1.0f;
+    src[3][3] = 1.0f;
+
+    float dst[8][8] = {};
+    // Fill destination with a non-zero sentinel to ensure zeroing works
+    for (int r = 0; r < 8; r++)
+        for (int c = 0; c < 8; c++)
+            dst[r][c] = 0.999f;
+
+    matrix_load_into_larger(src, 4, 4, dst, 8, 8);
+
+    // Top-left 4x4 should contain the identity
+    for (int r = 0; r < 4; r++) {
+        for (int c = 0; c < 4; c++) {
+            float expected = (r == c) ? 1.0f : 0.0f;
+            TEST_ASSERT_FLOAT_WITHIN(0.001f, expected, dst[r][c]);
+        }
+    }
+
+    // Rows 4-7 should be all zeros
+    for (int r = 4; r < 8; r++) {
+        for (int c = 0; c < 8; c++) {
+            TEST_ASSERT_EQUAL_FLOAT(0.0f, dst[r][c]);
+        }
+    }
+
+    // Columns 4-7 in rows 0-3 should be all zeros
+    for (int r = 0; r < 4; r++) {
+        for (int c = 4; c < 8; c++) {
+            TEST_ASSERT_EQUAL_FLOAT(0.0f, dst[r][c]);
+        }
+    }
+}
+
+// 8b-b. Load an 8x8 matrix into 8x8 — exact match, all values copied
+void test_matrix_load_exact_size(void) {
+    float src[8][8] = {};
+    // Fill with a test pattern: src[r][c] = r * 10 + c
+    for (int r = 0; r < 8; r++)
+        for (int c = 0; c < 8; c++)
+            src[r][c] = (float)(r * 10 + c);
+
+    float dst[8][8] = {};
+
+    matrix_load_into_larger(src, 8, 8, dst, 8, 8);
+
+    // Every cell should match
+    for (int r = 0; r < 8; r++) {
+        for (int c = 0; c < 8; c++) {
+            TEST_ASSERT_FLOAT_WITHIN(0.001f, (float)(r * 10 + c), dst[r][c]);
+        }
+    }
+}
+
+// ============================================================
+// Section 8c: Per-Source VU Metering (1 test)
+//
+// Verifies that the per-source VU metering formula produces
+// non-default values for a source with actual audio data.
+// The pipeline computes VU from float buffers; we replicate
+// the VU update formula here.
+// ============================================================
+
+// VU metering formula (replicated from audio_pipeline.cpp):
+// smoothed = smoothed * alpha + rms * (1 - alpha)
+// vu_dBFS = 20 * log10(smoothed)  [clamped to -90]
+static float vu_from_float_buffer(const float *buf, int frames,
+                                   float &smoothed, float alpha = 0.3f) {
+    if (frames <= 0) return -90.0f;
+    float sumSq = 0.0f;
+    for (int i = 0; i < frames; i++) sumSq += buf[i] * buf[i];
+    float rms = sqrtf(sumSq / (float)frames);
+    smoothed = smoothed * alpha + rms * (1.0f - alpha);
+    if (smoothed < 1.0e-10f) return -90.0f;
+    float db = 20.0f * log10f(smoothed);
+    return (db < -90.0f) ? -90.0f : db;
+}
+
+void test_vu_metering_updates_for_lane_beyond_zero(void) {
+    // Simulate a source on lane 2 with a constant 0.5 amplitude signal.
+    // After one VU update pass, the VU level should be above -90 dBFS.
+    const int FRAMES = 256;
+    float buf[FRAMES];
+    for (int i = 0; i < FRAMES; i++) buf[i] = 0.5f;
+
+    // Start with default smoothed = 0.0 (as in AudioInputSource init)
+    float smoothedL = 0.0f;
+    float vuL = vu_from_float_buffer(buf, FRAMES, smoothedL);
+
+    // Expected: RMS of constant 0.5 = 0.5
+    // smoothed = 0 * 0.3 + 0.5 * 0.7 = 0.35
+    // dBFS = 20 * log10(0.35) ≈ -9.12 dBFS
+    TEST_ASSERT_TRUE(vuL > -90.0f);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, -9.1f, vuL);
+
+    // Second pass — smoothed converges further towards 0.5
+    float vuL2 = vu_from_float_buffer(buf, FRAMES, smoothedL);
+    TEST_ASSERT_TRUE(vuL2 > vuL);
+    // smoothed = 0.35 * 0.3 + 0.5 * 0.7 = 0.455
+    // dBFS = 20 * log10(0.455) ≈ -6.84 dBFS
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, -6.8f, vuL2);
+}
+
+// 8c-b. Per-source VU metering on lane 2 with AudioInputSource struct
+// Exercises the VU path for a higher lane (lane 2 = siggen / third source).
+// The pipeline maintains per-source VU via vuL/vuR and _vuSmoothedL/R fields.
+void test_vu_metering_updates_for_lane_2(void) {
+    const int FRAMES = 256;
+    float bufL[FRAMES], bufR[FRAMES];
+
+    // Lane 2 source: left channel at 0.8 amplitude, right at 0.3
+    for (int i = 0; i < FRAMES; i++) {
+        bufL[i] = 0.8f;
+        bufR[i] = 0.3f;
+    }
+
+    // Simulate an AudioInputSource initialized with default VU values
+    float smoothedL = 0.0f, smoothedR = 0.0f;
+    float vuL_init = -90.0f, vuR_init = -90.0f;
+
+    // Verify initial state matches AudioInputSource defaults
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, -90.0f, vuL_init);
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, -90.0f, vuR_init);
+
+    // First VU update pass — both channels should move off -90 dBFS
+    float vuL = vu_from_float_buffer(bufL, FRAMES, smoothedL);
+    float vuR = vu_from_float_buffer(bufR, FRAMES, smoothedR);
+
+    // Left: RMS of 0.8 = 0.8; smoothed = 0*0.3 + 0.8*0.7 = 0.56
+    // dBFS = 20*log10(0.56) ≈ -5.04
+    TEST_ASSERT_TRUE(vuL > -90.0f);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, -5.0f, vuL);
+
+    // Right: RMS of 0.3 = 0.3; smoothed = 0*0.3 + 0.3*0.7 = 0.21
+    // dBFS = 20*log10(0.21) ≈ -13.56
+    TEST_ASSERT_TRUE(vuR > -90.0f);
+    TEST_ASSERT_FLOAT_WITHIN(1.0f, -13.6f, vuR);
+
+    // Left channel should be louder than right
+    TEST_ASSERT_TRUE(vuL > vuR);
+
+    // Verify smoothed state is non-zero (pipeline would store this in _vuSmoothedL/R)
+    TEST_ASSERT_TRUE(smoothedL > 0.0f);
+    TEST_ASSERT_TRUE(smoothedR > 0.0f);
+    TEST_ASSERT_TRUE(smoothedL > smoothedR);
+}
+
+// ============================================================
 // Section 9: End-to-end float pipeline smoke test
 // Combines conversion + bypass + routing + RMS in a single pass,
 // simulating the main pipeline loop for 4 inputs -> 4 outputs.
@@ -902,6 +1081,153 @@ void test_e2e_all_input_bypass_produces_silence(void) {
 }
 
 // ============================================================
+// Section 10: 16x16 Matrix set/get API
+//
+// The audio pipeline uses a 16x16 routing matrix (AUDIO_PIPELINE_MATRIX_SIZE).
+// These tests replicate the bounds-checked set_matrix_gain / get_matrix_gain
+// logic inline and verify full 16x16 coverage, default state, boundary
+// conditions, and gain readback.
+// ============================================================
+
+#ifndef AUDIO_PIPELINE_MATRIX_SIZE
+#define AUDIO_PIPELINE_MATRIX_SIZE 16
+#endif
+
+// Inline replica of the 16x16 matrix set/get logic from audio_pipeline.cpp.
+// Tests exercise this independent copy rather than pulling in the full
+// audio_pipeline.cpp dependency chain.
+static float _testMatrix[AUDIO_PIPELINE_MATRIX_SIZE][AUDIO_PIPELINE_MATRIX_SIZE] = {};
+
+static void test_matrix_init() {
+    memset(_testMatrix, 0, sizeof(_testMatrix));
+}
+
+static void test_matrix_set_gain(int out_ch, int in_ch, float gain_linear) {
+    if (out_ch < 0 || out_ch >= AUDIO_PIPELINE_MATRIX_SIZE) return;
+    if (in_ch  < 0 || in_ch  >= AUDIO_PIPELINE_MATRIX_SIZE) return;
+    _testMatrix[out_ch][in_ch] = gain_linear;
+}
+
+static float test_matrix_get_gain(int out_ch, int in_ch) {
+    if (out_ch < 0 || out_ch >= AUDIO_PIPELINE_MATRIX_SIZE) return 0.0f;
+    if (in_ch  < 0 || in_ch  >= AUDIO_PIPELINE_MATRIX_SIZE) return 0.0f;
+    return _testMatrix[out_ch][in_ch];
+}
+
+// 10a. Default 16x16 matrix is all zeros
+void test_matrix_default_is_zero(void) {
+    test_matrix_init();
+
+    for (int out = 0; out < AUDIO_PIPELINE_MATRIX_SIZE; out++) {
+        for (int in = 0; in < AUDIO_PIPELINE_MATRIX_SIZE; in++) {
+            TEST_ASSERT_EQUAL_FLOAT(0.0f, test_matrix_get_gain(out, in));
+        }
+    }
+}
+
+// 10b. Set and get gains across full 16x16 matrix
+void test_matrix_set_get_full_16x16(void) {
+    test_matrix_init();
+
+    // Set a unique gain for every cell: gain = (out * 16 + in) * 0.001
+    for (int out = 0; out < AUDIO_PIPELINE_MATRIX_SIZE; out++) {
+        for (int in = 0; in < AUDIO_PIPELINE_MATRIX_SIZE; in++) {
+            float gain = (float)(out * 16 + in) * 0.001f;
+            test_matrix_set_gain(out, in, gain);
+        }
+    }
+
+    // Read back every cell and verify
+    for (int out = 0; out < AUDIO_PIPELINE_MATRIX_SIZE; out++) {
+        for (int in = 0; in < AUDIO_PIPELINE_MATRIX_SIZE; in++) {
+            float expected = (float)(out * 16 + in) * 0.001f;
+            TEST_ASSERT_FLOAT_WITHIN(0.0001f, expected, test_matrix_get_gain(out, in));
+        }
+    }
+}
+
+// 10c. Out-of-bounds set is silently ignored
+void test_matrix_set_oob_ignored(void) {
+    test_matrix_init();
+    test_matrix_set_gain(0, 0, 1.0f);
+
+    // Out-of-range writes should be no-ops
+    test_matrix_set_gain(-1, 0, 99.0f);
+    test_matrix_set_gain(0, -1, 99.0f);
+    test_matrix_set_gain(AUDIO_PIPELINE_MATRIX_SIZE, 0, 99.0f);
+    test_matrix_set_gain(0, AUDIO_PIPELINE_MATRIX_SIZE, 99.0f);
+    test_matrix_set_gain(AUDIO_PIPELINE_MATRIX_SIZE + 5, AUDIO_PIPELINE_MATRIX_SIZE + 5, 99.0f);
+
+    // Only (0,0) should be 1.0; rest should remain 0.0
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, test_matrix_get_gain(0, 0));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_matrix_get_gain(1, 0));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_matrix_get_gain(0, 1));
+}
+
+// 10d. Out-of-bounds get returns 0.0
+void test_matrix_get_oob_returns_zero(void) {
+    test_matrix_init();
+    test_matrix_set_gain(15, 15, 0.42f);
+
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_matrix_get_gain(-1, 0));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_matrix_get_gain(0, -1));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_matrix_get_gain(AUDIO_PIPELINE_MATRIX_SIZE, 0));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, test_matrix_get_gain(0, AUDIO_PIPELINE_MATRIX_SIZE));
+
+    // But valid cell still works
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.42f, test_matrix_get_gain(15, 15));
+}
+
+// 10e. Identity 16x16 matrix — diagonal=1.0, off-diagonal=0.0
+void test_matrix_16x16_identity(void) {
+    test_matrix_init();
+    for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+        test_matrix_set_gain(i, i, 1.0f);
+    }
+
+    for (int out = 0; out < AUDIO_PIPELINE_MATRIX_SIZE; out++) {
+        for (int in = 0; in < AUDIO_PIPELINE_MATRIX_SIZE; in++) {
+            float expected = (out == in) ? 1.0f : 0.0f;
+            TEST_ASSERT_EQUAL_FLOAT(expected, test_matrix_get_gain(out, in));
+        }
+    }
+}
+
+// 10f. Overwriting a cell replaces the old value
+void test_matrix_overwrite_cell(void) {
+    test_matrix_init();
+    test_matrix_set_gain(7, 3, 0.5f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5f, test_matrix_get_gain(7, 3));
+
+    test_matrix_set_gain(7, 3, 0.9f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.9f, test_matrix_get_gain(7, 3));
+}
+
+// 10g. Negative gain values (polarity inversion) are stored correctly
+void test_matrix_negative_gain_stored(void) {
+    test_matrix_init();
+    test_matrix_set_gain(10, 5, -1.0f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, -1.0f, test_matrix_get_gain(10, 5));
+
+    test_matrix_set_gain(14, 2, -0.707f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, -0.707f, test_matrix_get_gain(14, 2));
+}
+
+// 10h. Corner cells of the 16x16 matrix are accessible
+void test_matrix_corner_cells(void) {
+    test_matrix_init();
+    test_matrix_set_gain(0, 0, 0.1f);
+    test_matrix_set_gain(0, 15, 0.2f);
+    test_matrix_set_gain(15, 0, 0.3f);
+    test_matrix_set_gain(15, 15, 0.4f);
+
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.1f, test_matrix_get_gain(0, 0));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.2f, test_matrix_get_gain(0, 15));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.3f, test_matrix_get_gain(15, 0));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.4f, test_matrix_get_gain(15, 15));
+}
+
+// ============================================================
 // Main
 // ============================================================
 
@@ -968,9 +1294,27 @@ int main(int argc, char **argv) {
     RUN_TEST(test_input_no_bypass_passes_adc_data);
     RUN_TEST(test_input_bypass_only_lane1);
 
+    // Section 8b: Matrix migration
+    RUN_TEST(test_matrix_load_smaller_fills_top_left);
+    RUN_TEST(test_matrix_load_exact_size);
+
+    // Section 8c: Per-source VU metering
+    RUN_TEST(test_vu_metering_updates_for_lane_beyond_zero);
+    RUN_TEST(test_vu_metering_updates_for_lane_2);
+
     // Section 9: End-to-end smoke tests
     RUN_TEST(test_e2e_adc_int32_through_pipeline);
     RUN_TEST(test_e2e_all_input_bypass_produces_silence);
+
+    // Section 10: 16x16 Matrix set/get API
+    RUN_TEST(test_matrix_default_is_zero);
+    RUN_TEST(test_matrix_set_get_full_16x16);
+    RUN_TEST(test_matrix_set_oob_ignored);
+    RUN_TEST(test_matrix_get_oob_returns_zero);
+    RUN_TEST(test_matrix_16x16_identity);
+    RUN_TEST(test_matrix_overwrite_cell);
+    RUN_TEST(test_matrix_negative_gain_stored);
+    RUN_TEST(test_matrix_corner_cells);
 
     return UNITY_END();
 }

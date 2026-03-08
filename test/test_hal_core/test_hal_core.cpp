@@ -358,6 +358,72 @@ void test_registry_rejects_invalid() {
     TEST_ASSERT_FALSE(hal_registry_register(empty));
 }
 
+// ===== Test 15: Register 20 devices — no crash, all present =====
+void test_register_20_devices() {
+    TestDevice devs[20];
+    for (int i = 0; i < 20; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "dev%d", i);
+        devs[i] = TestDevice(name, HAL_DEV_DAC);
+        int slot = mgr->registerDevice(&devs[i], HAL_DISC_BUILTIN);
+        TEST_ASSERT_GREATER_OR_EQUAL(0, slot);
+    }
+    TEST_ASSERT_EQUAL(20, mgr->getCount());
+
+    // Verify all 20 are retrievable
+    int found = 0;
+    mgr->forEach([](HalDevice* dev, void* ctx) {
+        (*static_cast<int*>(ctx))++;
+    }, &found);
+    TEST_ASSERT_EQUAL(20, found);
+}
+
+// ===== Test 16: Register 25 exceeds HAL_MAX_DEVICES (24) — 25th rejected =====
+void test_register_25_exceeds_max() {
+    // HAL_MAX_DEVICES is 24 — we can register 24 but the 25th should fail
+    TestDevice devs[25];
+    for (int i = 0; i < 25; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "scale%d", i);
+        devs[i] = TestDevice(name, HAL_DEV_DAC);
+    }
+
+    // Register 24 — should all succeed
+    for (int i = 0; i < 24; i++) {
+        int slot = mgr->registerDevice(&devs[i], HAL_DISC_BUILTIN);
+        TEST_ASSERT_GREATER_OR_EQUAL_MESSAGE(0, slot,
+            "Devices 0-23 should register successfully");
+    }
+    TEST_ASSERT_EQUAL(24, mgr->getCount());
+
+    // 25th registration should fail with -1
+    int slot25 = mgr->registerDevice(&devs[24], HAL_DISC_BUILTIN);
+    TEST_ASSERT_EQUAL(-1, slot25);
+    TEST_ASSERT_EQUAL(24, mgr->getCount());
+}
+
+// ===== Test 17: Remove and re-register uses freed slot =====
+void test_remove_and_reregister_reclaims_slot() {
+    TestDevice dev1("dev1", HAL_DEV_DAC);
+    TestDevice dev2("dev2", HAL_DEV_ADC);
+    TestDevice dev3("dev3", HAL_DEV_CODEC);
+
+    int slot1 = mgr->registerDevice(&dev1, HAL_DISC_BUILTIN);
+    int slot2 = mgr->registerDevice(&dev2, HAL_DISC_BUILTIN);
+    TEST_ASSERT_EQUAL(2, mgr->getCount());
+
+    // Remove slot 0
+    mgr->removeDevice(slot1);
+    TEST_ASSERT_EQUAL(1, mgr->getCount());
+    TEST_ASSERT_NULL(mgr->getDevice(slot1));
+
+    // Register a new device — should reuse the freed slot
+    int slot3 = mgr->registerDevice(&dev3, HAL_DISC_BUILTIN);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, slot3);
+    TEST_ASSERT_EQUAL(2, mgr->getCount());
+    TEST_ASSERT_EQUAL_PTR(&dev3, mgr->getDevice(slot3));
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
@@ -376,6 +442,11 @@ int main(int argc, char** argv) {
     RUN_TEST(test_registry_find_by_compatible);
     RUN_TEST(test_registry_find_by_legacy_id);
     RUN_TEST(test_registry_rejects_invalid);
+
+    // Scaling tests
+    RUN_TEST(test_register_20_devices);
+    RUN_TEST(test_register_25_exceeds_max);
+    RUN_TEST(test_remove_and_reregister_reclaims_slot);
 
     return UNITY_END();
 }

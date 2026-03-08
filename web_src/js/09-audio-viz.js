@@ -27,7 +27,7 @@
             audioAnimFrameId = null;
             let needsMore = false;
 
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < numInputLanes; a++) {
                 // Lerp waveform
                 if (waveformCurrent[a] && waveformTarget[a]) {
                     for (let i = 0; i < waveformCurrent[a].length && i < waveformTarget[a].length; i++) {
@@ -305,7 +305,7 @@
 
         function vuAnimLoop() {
             vuAnimFrameId = null;
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < numInputLanes; a++) {
                 for (let ch = 0; ch < 2; ch++) {
                     vuCurrent[a][ch] += (vuTargetArr[a][ch] - vuCurrent[a][ch]) * VU_LERP;
                     peakCurrent[a][ch] += (peakTargetArr[a][ch] - peakCurrent[a][ch]) * VU_LERP;
@@ -418,7 +418,7 @@
         function toggleVuMode(seg) {
             vuSegmentedMode = seg;
             localStorage.setItem('vuSegmented', seg);
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < numInputLanes; a++) {
                 var cont = document.getElementById('vuContinuous' + a);
                 var segDiv = document.getElementById('vuSegmented' + a);
                 if (cont) cont.style.display = seg ? 'none' : '';

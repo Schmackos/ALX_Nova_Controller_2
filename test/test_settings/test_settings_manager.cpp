@@ -5,6 +5,7 @@
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
 #include "../test_mocks/Preferences.h"
+#include "../test_mocks/LittleFS.h"
 #else
 #include <Arduino.h>
 #include <Preferences.h>
@@ -33,6 +34,7 @@ namespace TestSettingsState {
         Preferences::reset();
 #ifdef NATIVE_TEST
         ArduinoMock::reset();
+        MockFS::reset();
 #endif
     }
 }
@@ -385,6 +387,115 @@ void test_settings_factory_reset_clears_channel(void) {
     TEST_ASSERT_EQUAL_STRING("stable", appSettings.updateChannel.c_str());
 }
 
+// ===== JSON Config Guard Tests =====
+//
+// Replicates the loadSettingsJson() + loadSettingsLegacy() fallback
+// logic from settings_manager.cpp. When /config.json exists with
+// version >= 1, legacy loading is skipped entirely.
+
+// Inline replicated loadSettingsJson: returns true if /config.json
+// exists, is valid JSON, and has a version field >= 1.
+static bool test_loadSettingsJson() {
+#ifdef NATIVE_TEST
+    LittleFS.begin();
+    MockFile file = LittleFS.open("/config.json", "r");
+    if (!file || file.size() == 0) {
+        if (file) file.close();
+        return false;
+    }
+    // Read the file contents
+    std::string content;
+    content.resize(file.size());
+    file.read((uint8_t*)&content[0], file.size());
+    file.close();
+    // Check for "version" field (simplified JSON check)
+    return content.find("\"version\"") != std::string::npos;
+#else
+    return false;
+#endif
+}
+
+// Inline replicated loadSettingsLegacy: returns true if /settings.txt exists.
+static bool test_loadSettingsLegacy() {
+#ifdef NATIVE_TEST
+    LittleFS.begin();
+    return LittleFS.exists("/settings.txt");
+#else
+    return false;
+#endif
+}
+
+// Replicated loadSettings() flow: JSON first, legacy fallback
+static bool test_loadSettingsFlow(bool &legacyWasCalled) {
+    legacyWasCalled = false;
+    if (test_loadSettingsJson()) {
+        return true; // JSON loaded — legacy skipped
+    }
+    // Fall back to legacy
+    if (test_loadSettingsLegacy()) {
+        legacyWasCalled = true;
+        return true;
+    }
+    return false;
+}
+
+void test_json_config_skips_legacy_load(void) {
+#ifdef NATIVE_TEST
+    // Set up mock filesystem with both JSON and legacy files
+    LittleFS.begin();
+    MockFS::injectFile("/config.json",
+        "{\"version\":1,\"autoUpdate\":true,\"timezone\":0}");
+    MockFS::injectFile("/settings.txt",
+        "1\n0\n0\n0\n1\n5000\n1\n1\n0\n0\n0\n");
+
+    bool legacyWasCalled = false;
+    bool loaded = test_loadSettingsFlow(legacyWasCalled);
+
+    TEST_ASSERT_TRUE(loaded);
+    TEST_ASSERT_FALSE(legacyWasCalled);
+
+    // Clean up
+    MockFS::reset();
+#endif
+}
+
+void test_json_config_absent_falls_back_to_legacy(void) {
+#ifdef NATIVE_TEST
+    // Only legacy file exists — no config.json
+    LittleFS.begin();
+    MockFS::injectFile("/settings.txt",
+        "1\n0\n0\n0\n1\n5000\n1\n1\n0\n0\n0\n");
+
+    bool legacyWasCalled = false;
+    bool loaded = test_loadSettingsFlow(legacyWasCalled);
+
+    TEST_ASSERT_TRUE(loaded);
+    TEST_ASSERT_TRUE(legacyWasCalled);
+
+    // Clean up
+    MockFS::reset();
+#endif
+}
+
+void test_json_config_empty_falls_back_to_legacy(void) {
+#ifdef NATIVE_TEST
+    // config.json exists but is empty — should fall through to legacy
+    LittleFS.begin();
+    MockFS::injectFile("/config.json", "");
+    MockFS::injectFile("/settings.txt",
+        "1\n0\n0\n0\n1\n5000\n1\n1\n0\n0\n0\n");
+
+    bool legacyWasCalled = false;
+    bool loaded = test_loadSettingsFlow(legacyWasCalled);
+
+    TEST_ASSERT_TRUE(loaded);
+    TEST_ASSERT_TRUE(legacyWasCalled);
+
+    // Clean up
+    MockFS::reset();
+#endif
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -408,6 +519,11 @@ int runUnityTests(void) {
     RUN_TEST(test_settings_load_missing_channel_key_uses_default);
     RUN_TEST(test_settings_channel_roundtrip_stable_to_beta);
     RUN_TEST(test_settings_factory_reset_clears_channel);
+
+    // JSON config guard tests
+    RUN_TEST(test_json_config_skips_legacy_load);
+    RUN_TEST(test_json_config_absent_falls_back_to_legacy);
+    RUN_TEST(test_json_config_empty_falls_back_to_legacy);
 
     return UNITY_END();
 }

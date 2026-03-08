@@ -35,7 +35,7 @@
         let vuDomRefs = null;
         function cacheVuDomRefs() {
             vuDomRefs = {};
-            for (let a = 0; a < NUM_ADCS; a++) {
+            for (let a = 0; a < numInputLanes; a++) {
                 vuDomRefs['fillL' + a] = document.getElementById('vuFill' + a + 'L');
                 vuDomRefs['fillR' + a] = document.getElementById('vuFill' + a + 'R');
                 vuDomRefs['pkL' + a] = document.getElementById('vuPeak' + a + 'L');

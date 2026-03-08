@@ -295,6 +295,19 @@ void test_usb_source_lane_default_zero() {
     TEST_ASSERT_EQUAL(0, src->lane);
 }
 
+// =====================================================================
+// Group 6: isHardwareAdc flag (1 test)
+//
+// USB Audio is a software source — its AudioInputSource must report
+// isHardwareAdc == false so the noise gate skips it.
+// =====================================================================
+
+void test_usb_audio_input_source_not_hardware_adc() {
+    const AudioInputSource* src = dev->getInputSource();
+    TEST_ASSERT_NOT_NULL(src);
+    TEST_ASSERT_FALSE(src->isHardwareAdc);
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     (void)argc;
@@ -349,6 +362,9 @@ int main(int argc, char** argv) {
     // Group 5: Base class contract
     RUN_TEST(test_usb_overrides_get_input_source);
     RUN_TEST(test_usb_source_lane_default_zero);
+
+    // Group 6: isHardwareAdc flag
+    RUN_TEST(test_usb_audio_input_source_not_hardware_adc);
 
     return UNITY_END();
 }

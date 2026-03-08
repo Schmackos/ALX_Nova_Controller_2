@@ -762,6 +762,12 @@ void audio_pipeline_register_source(int lane, const AudioInputSource *src) {
     audio_pipeline_set_source(lane, src);
 }
 
+const AudioInputSource* audio_pipeline_get_source(int lane) {
+    if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return nullptr;
+    if (!_sources[lane].read) return nullptr;
+    return &_sources[lane];
+}
+
 float audio_pipeline_get_lane_vu_l(int lane) {
     if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return -90.0f;
     return _sources[lane].vuL;

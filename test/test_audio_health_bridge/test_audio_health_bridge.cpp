@@ -1217,6 +1217,108 @@ void test_flap_transition_at_exact_window_boundary() {
     TEST_ASSERT_FALSE(adc._ready);
 }
 
+// =====================================================================
+// Group 10: 8-Lane Health Check Coverage (3 tests)
+//
+// Existing tests cover lanes 0 and 1. These verify that the health
+// bridge loops correctly up to AUDIO_PIPELINE_MAX_INPUTS (8) without
+// out-of-bounds access, and that flap guard state initializes for
+// higher lanes.
+// =====================================================================
+
+void test_health_check_lane_2() {
+    // Register 3 ADC devices (lanes 0, 1, 2)
+    TestAdcDevice adc0("ti,pcm1808-l0");
+    TestAdcDevice adc1("ti,pcm1808-l1");
+    TestAdcDevice adc2("ti,pcm1808-l2");
+    registerAvailableAdc(&adc0);
+    registerAvailableAdc(&adc1);
+    registerAvailableAdc(&adc2);
+    TestAdcDevice* adcs[] = {&adc0, &adc1, &adc2};
+
+    // Fault on lane 2 only
+    hal_audio_health_bridge_set_mock_status(2, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adcs[0]->_state);
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adcs[1]->_state);
+    TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adcs[2]->_state);
+    TEST_ASSERT_FALSE(adcs[2]->_ready);
+
+    // Recovery on lane 2
+    ArduinoMock::mockMillis = 5000;
+    hal_audio_health_bridge_set_mock_status(2, AUDIO_OK);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adcs[2]->_state);
+    TEST_ASSERT_TRUE(adcs[2]->_ready);
+}
+
+void test_health_check_lane_7() {
+    // Register 8 ADC devices (lanes 0-7) to exercise the full range
+    TestAdcDevice a0("ti,pcm1808-0"), a1("ti,pcm1808-1"),
+                  a2("ti,pcm1808-2"), a3("ti,pcm1808-3"),
+                  a4("ti,pcm1808-4"), a5("ti,pcm1808-5"),
+                  a6("ti,pcm1808-6"), a7("ti,pcm1808-7");
+    registerAvailableAdc(&a0); registerAvailableAdc(&a1);
+    registerAvailableAdc(&a2); registerAvailableAdc(&a3);
+    registerAvailableAdc(&a4); registerAvailableAdc(&a5);
+    registerAvailableAdc(&a6); registerAvailableAdc(&a7);
+    TestAdcDevice* adcs[] = {&a0, &a1, &a2, &a3, &a4, &a5, &a6, &a7};
+
+    // Fault on lane 7 only
+    hal_audio_health_bridge_set_mock_status(7, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    // Lanes 0-6 should be unaffected
+    for (int i = 0; i < 7; i++) {
+        TEST_ASSERT_EQUAL_MESSAGE(HAL_STATE_AVAILABLE, adcs[i]->_state,
+            "Lanes 0-6 should remain AVAILABLE");
+    }
+    TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adcs[7]->_state);
+    TEST_ASSERT_FALSE(adcs[7]->_ready);
+
+    // Recovery on lane 7
+    ArduinoMock::mockMillis = 5000;
+    hal_audio_health_bridge_set_mock_status(7, AUDIO_OK);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adcs[7]->_state);
+    TEST_ASSERT_TRUE(adcs[7]->_ready);
+}
+
+void test_flap_guard_init_higher_lanes() {
+    // Register 4 ADC devices (lanes 0-3) — verify flap guard works on lane 3
+    TestAdcDevice d0("ti,pcm1808-f0"), d1("ti,pcm1808-f1"),
+                  d2("ti,pcm1808-f2"), d3("ti,pcm1808-f3");
+    registerAvailableAdc(&d0); registerAvailableAdc(&d1);
+    registerAvailableAdc(&d2); registerAvailableAdc(&d3);
+    TestAdcDevice* adcs[] = {&d0, &d1, &d2, &d3};
+
+    uint32_t base = 60000;
+
+    // Flap lane 3: 3 transitions within 30s → ERROR
+    ArduinoMock::mockMillis = base;
+    hal_audio_health_bridge_set_mock_status(3, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_UNAVAILABLE, adcs[3]->_state);
+
+    ArduinoMock::mockMillis = base + 2000;
+    hal_audio_health_bridge_set_mock_status(3, AUDIO_OK);
+    hal_audio_health_check();
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adcs[3]->_state);
+
+    ArduinoMock::mockMillis = base + 4000;
+    hal_audio_health_bridge_set_mock_status(3, AUDIO_HW_FAULT);
+    hal_audio_health_check();
+
+    // Lane 3 should escalate to ERROR; lanes 0-2 remain AVAILABLE
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, adcs[3]->_state);
+    TEST_ASSERT_FALSE(adcs[3]->_ready);
+    for (int i = 0; i < 3; i++) {
+        TEST_ASSERT_EQUAL_MESSAGE(HAL_STATE_AVAILABLE, adcs[i]->_state,
+            "Lanes 0-2 should remain AVAILABLE during lane 3 flap");
+    }
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     (void)argc;
@@ -1289,6 +1391,11 @@ int main(int argc, char** argv) {
     RUN_TEST(test_error_no_auto_recovery);
     RUN_TEST(test_flap_multiple_adcs_independent_flap_state);
     RUN_TEST(test_flap_transition_at_exact_window_boundary);
+
+    // Group 10: 8-Lane Health Check Coverage
+    RUN_TEST(test_health_check_lane_2);
+    RUN_TEST(test_health_check_lane_7);
+    RUN_TEST(test_flap_guard_init_higher_lanes);
 
     return UNITY_END();
 }

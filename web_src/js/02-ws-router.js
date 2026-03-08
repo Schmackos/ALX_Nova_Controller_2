@@ -13,7 +13,7 @@
             }
             if (type === 0x01 && currentActiveTab === 'audio') {
                 // Waveform: [type:1][adc:1][samples:256]
-                if (adc < NUM_ADCS && buf.byteLength >= 258) {
+                if (adc < numInputLanes && buf.byteLength >= 258) {
                     const samples = new Uint8Array(buf, 2, 256);
                     waveformTarget[adc] = samples;
                     if (!waveformCurrent[adc]) waveformCurrent[adc] = new Uint8Array(samples);
@@ -21,7 +21,7 @@
                 }
             } else if (type === 0x02) {
                 // Spectrum: [type:1][adc:1][freq:f32LE][bands:16xf32LE]
-                if (adc < NUM_ADCS && buf.byteLength >= 70) {
+                if (adc < numInputLanes && buf.byteLength >= 70) {
                     const freq = dv.getFloat32(2, true);
                     for (let i = 0; i < 16; i++) spectrumTarget[adc][i] = dv.getFloat32(6 + i * 4, true);
                     targetDominantFreq[adc] = freq;
@@ -154,7 +154,7 @@
                     }
                     // Per-ADC VU/peak data
                     if (data.adc && Array.isArray(data.adc)) {
-                        for (let a = 0; a < data.adc.length && a < NUM_ADCS; a++) {
+                        for (let a = 0; a < data.adc.length && a < numInputLanes; a++) {
                             const ad = data.adc[a];
                             vuTargetArr[a][0] = ad.vu1 !== undefined ? ad.vu1 : 0;
                             vuTargetArr[a][1] = ad.vu2 !== undefined ? ad.vu2 : 0;
@@ -169,7 +169,7 @@
                 audioTabUpdateLevels(data);
             } else if (data.type === 'inputNames') {
                 if (data.names && Array.isArray(data.names)) {
-                    for (let i = 0; i < data.names.length && i < NUM_ADCS * 2; i++) {
+                    for (let i = 0; i < data.names.length && i < numInputLanes * 2; i++) {
                         inputNames[i] = data.names[i];
                     }
                 }

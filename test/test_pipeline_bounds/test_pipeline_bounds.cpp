@@ -541,6 +541,46 @@ void test_dsp_loop_single_lane_5_active(void) {
 }
 
 // ============================================================
+// Group 5b: Specific Lane Sync Flag Regressions (2 tests)
+//
+// These verify that specific higher-lane bypass combinations
+// produce the correct sync output -- regression tests for the
+// expansion from [4] to [8] arrays.
+// ============================================================
+
+// 5b-a. pipelineInputBypass[5] = true with adcEnabled[5] = true
+//       → sync output [5] should be true (bypass wins)
+void test_pipeline_sync_flags_lane_5_bypass(void) {
+    bool adcEnabled[8]  = {true, true, true, true, true, true, true, true};
+    bool inputBypass[8] = {false, false, false, false, false, true, false, false};
+    bool result[8];
+
+    sync_input_bypass(adcEnabled, inputBypass, result, 8);
+
+    // Lanes 0-4 and 6-7 should NOT be bypassed
+    for (int i = 0; i < 8; i++) {
+        if (i == 5) {
+            TEST_ASSERT_TRUE_MESSAGE(result[i],
+                "Lane 5 should be bypassed (pipelineInputBypass[5]=true)");
+        } else {
+            TEST_ASSERT_FALSE(result[i]);
+        }
+    }
+}
+
+// 5b-b. pipelineDspBypass[3] = true → DSP bypass active for lane 3 only
+void test_pipeline_sync_flags_dsp_bypass_lane_3(void) {
+    bool dspBypass[8] = {false, false, false, true, false, false, false, false};
+    int active = count_dsp_active_lanes(dspBypass, 8);
+    TEST_ASSERT_EQUAL(7, active);
+
+    // Verify lane 3 specifically
+    TEST_ASSERT_TRUE(dspBypass[3]);
+    TEST_ASSERT_FALSE(dspBypass[2]);
+    TEST_ASSERT_FALSE(dspBypass[4]);
+}
+
+// ============================================================
 // Group 6: AppState Array Bounds Safety (3 tests)
 //
 // Verify that accessing all 8 elements of the bypass arrays
@@ -650,6 +690,10 @@ int main(int argc, char **argv) {
     RUN_TEST(test_dsp_loop_default_active_count);
     RUN_TEST(test_dsp_loop_all_lanes_active);
     RUN_TEST(test_dsp_loop_single_lane_5_active);
+
+    // Group 5b: Specific Lane Sync Flag Regressions
+    RUN_TEST(test_pipeline_sync_flags_lane_5_bypass);
+    RUN_TEST(test_pipeline_sync_flags_dsp_bypass_lane_3);
 
     // Group 6: AppState Array Bounds Safety
     RUN_TEST(test_adc_enabled_array_size_8);
