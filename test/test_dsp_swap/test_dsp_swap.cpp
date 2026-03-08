@@ -187,6 +187,30 @@ void test_compressor_state_preserved() {
     TEST_ASSERT_EQUAL_FLOAT(-6.2f, active->channels[0].stages[stageIdx].compressor.gainReduction);
 }
 
+// Test 10: Successful swap does not increment failure counter
+void test_swap_success_does_not_increment_failures() {
+    appState.dspSwapFailures = 0;
+    appState.dspSwapSuccesses = 0;
+
+    dsp_swap_config();
+    dsp_swap_config();
+    dsp_swap_config();
+
+    TEST_ASSERT_EQUAL_UINT32(3, appState.dspSwapSuccesses);
+    TEST_ASSERT_EQUAL_UINT32(0, appState.dspSwapFailures);
+}
+
+// Test 11: dsp_log_swap_failure helper does not touch counters
+void test_log_swap_failure_does_not_increment_counter() {
+    appState.dspSwapFailures = 0;
+    appState.lastDspSwapFailure = 0;
+
+    dsp_log_swap_failure("Test");
+
+    TEST_ASSERT_EQUAL_UINT32(0, appState.dspSwapFailures);
+    TEST_ASSERT_EQUAL_UINT32(0, appState.lastDspSwapFailure);
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
 
@@ -199,6 +223,8 @@ int main(int argc, char **argv) {
     RUN_TEST(test_limiter_envelope_preserved);
     RUN_TEST(test_gain_ramping_preserved);
     RUN_TEST(test_compressor_state_preserved);
+    RUN_TEST(test_swap_success_does_not_increment_failures);
+    RUN_TEST(test_log_swap_failure_does_not_increment_counter);
 
     return UNITY_END();
 }

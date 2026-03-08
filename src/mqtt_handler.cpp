@@ -726,7 +726,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     dsp_copy_active_to_inactive();
     DspState *cfg = dsp_get_inactive_config();
     cfg->globalBypass = newState;
-    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[MQTT] Swap failed, staged for retry"); }
+    if (!dsp_swap_config()) { dsp_log_swap_failure("MQTT"); }
     saveDspSettingsDebounced();
     appState.markDspConfigDirty();
     LOG_I("[MQTT] DSP bypass set to %s", newState ? "ON" : "OFF");
@@ -743,7 +743,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         dsp_copy_active_to_inactive();
         DspState *cfg = dsp_get_inactive_config();
         cfg->channels[ch].bypass = newState;
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[MQTT] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("MQTT"); }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         LOG_I("[MQTT] DSP channel %d bypass set to %s", ch, newState ? "ON" : "OFF");
@@ -764,7 +764,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         dsp_copy_active_to_inactive();
         DspState *cfg = dsp_get_inactive_config();
         cfg->channels[ch].stages[band].enabled = newState;
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[MQTT] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("MQTT"); }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         LOG_I("[MQTT] PEQ ch%d band%d set to %s", ch, band + 1, newState ? "ON" : "OFF");
@@ -781,7 +781,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
         cfg->channels[ch].stages[b].enabled = !bypass;
       }
     }
-    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[MQTT] Swap failed, staged for retry"); }
+    if (!dsp_swap_config()) { dsp_log_swap_failure("MQTT"); }
     saveDspSettingsDebounced();
     appState.markDspConfigDirty();
     LOG_I("[MQTT] PEQ bypass set to %s", bypass ? "ON" : "OFF");

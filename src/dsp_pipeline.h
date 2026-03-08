@@ -8,6 +8,9 @@
 #endif
 #include <stdint.h>
 #include <math.h>
+#ifndef NATIVE_TEST
+#include "debug_serial.h"
+#endif
 
 // ===== Stage Types =====
 enum DspStageType : uint8_t {
@@ -540,6 +543,15 @@ void dsp_process_buffer_float(float *left, float *right, int frames, int lane);
 DspState *dsp_get_active_config();
 DspState *dsp_get_inactive_config();
 bool dsp_swap_config();  // Returns: true if swap successful, false if busy/timeout
+
+// Log swap failure warning. Counter is handled inside dsp_swap_config() — do NOT double-count.
+inline void dsp_log_swap_failure(const char *module) {
+#ifndef NATIVE_TEST
+    LOG_W("[%s] DSP swap failed, change not applied", module);
+#else
+    (void)module;
+#endif
+}
 
 // Deep copy active config to inactive (includes FIR pool data)
 void dsp_copy_active_to_inactive();

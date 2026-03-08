@@ -113,7 +113,7 @@ void loadDspSettings() {
     for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
         dsp_recompute_channel_coeffs(cfg->channels[ch], cfg->sampleRate);
     }
-    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+    if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); }
 
     LOG_I("[DSP] Settings loaded from LittleFS");
 }
@@ -285,7 +285,7 @@ bool dsp_preset_load(int slot) {
         dsp_recompute_channel_coeffs(cfg->channels[ch], cfg->sampleRate);
     }
 
-    if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+    if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); }
 
     // Mark config dirty first (this invalidates preset to -1), then restore
     appState.markDspConfigDirty();
@@ -465,7 +465,7 @@ void registerDspApiEndpoints() {
             if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
         }
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
@@ -487,7 +487,7 @@ void registerDspApiEndpoints() {
         } else {
             cfg->globalBypass = !cfg->globalBypass;
         }
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
@@ -543,7 +543,7 @@ void registerDspApiEndpoints() {
         } else {
             cfg->channels[ch].bypass = !cfg->channels[ch].bypass;
         }
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
@@ -649,7 +649,7 @@ void registerDspApiEndpoints() {
         }
 
         autoMirrorIfLinked(ch);
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
 
@@ -763,7 +763,7 @@ void registerDspApiEndpoints() {
         }
 
         autoMirrorIfLinked(ch);
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
@@ -785,7 +785,7 @@ void registerDspApiEndpoints() {
         }
 
         autoMirrorIfLinked(ch);
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
@@ -821,7 +821,7 @@ void registerDspApiEndpoints() {
             return;
         }
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
@@ -856,7 +856,7 @@ void registerDspApiEndpoints() {
             return;
         }
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
@@ -880,7 +880,7 @@ void registerDspApiEndpoints() {
 
         if (added < 0) { sendJsonError(400, "Parse error"); return; }
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
 
@@ -905,7 +905,7 @@ void registerDspApiEndpoints() {
 
         if (added < 0) { sendJsonError(400, "Parse error"); return; }
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
 
@@ -949,7 +949,7 @@ void registerDspApiEndpoints() {
         s.fir.numTaps = (uint16_t)taps;
         chCfg.stageCount++;
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
 
@@ -1034,7 +1034,7 @@ void registerDspApiEndpoints() {
 
         if (result < 0) { sendJsonError(400, "Failed to insert crossover"); return; }
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
 
@@ -1074,7 +1074,7 @@ void registerDspApiEndpoints() {
         int result = dsp_setup_bass_management(subChannel, mainChannels, numMains, crossoverFreq);
         if (result < 0) { sendJsonError(400, "Failed to setup bass management"); return; }
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");
@@ -1109,7 +1109,7 @@ void registerDspApiEndpoints() {
         dsp_compute_biquad_coeffs(s.biquad, DSP_BIQUAD_HIGH_SHELF, inactive->sampleRate);
 
         autoMirrorIfLinked(ch);
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
 
@@ -1424,7 +1424,7 @@ void registerDspApiEndpoints() {
             dsp_mirror_channel_config(chA, chB);
         }
 
-        if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[DSP API] Swap failed, staged for retry"); }
+        if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
         server.send(200, "application/json", "{\"success\":true}");

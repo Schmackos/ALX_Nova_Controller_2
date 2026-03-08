@@ -430,7 +430,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           dsp_copy_active_to_inactive();
           DspState *cfg = dsp_get_inactive_config();
           cfg->globalBypass = appState.dspBypass;
-          if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+          if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
           extern void saveDspSettingsDebounced();
           saveDspSettingsDebounced();
           appState.markDspConfigDirty();
@@ -456,7 +456,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 strncpy(added.label, doc["label"].as<const char*>(), sizeof(added.label) - 1);
                 added.label[sizeof(added.label) - 1] = '\0';
               }
-              if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+              if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
               appState.markDspConfigDirty();
@@ -477,7 +477,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (ch >= 0 && ch < DSP_MAX_CHANNELS) {
             dsp_copy_active_to_inactive();
             if (dsp_remove_stage(ch, si)) {
-              if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+              if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
               appState.markDspConfigDirty();
@@ -566,7 +566,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 extern void dsp_compute_bass_enhance_coeffs(DspBassEnhanceParams &, uint32_t);
                 dsp_compute_bass_enhance_coeffs(s.bassEnhance, cfg->sampleRate);
               }
-              if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+              if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
               appState.markDspConfigDirty();
@@ -593,7 +593,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               }
               order[to] = tmp;
               if (dsp_reorder_stages(ch, order, cnt)) {
-                if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+                if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
                 extern void saveDspSettingsDebounced();
                 saveDspSettingsDebounced();
                 appState.markDspConfigDirty();
@@ -609,7 +609,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             dsp_copy_active_to_inactive();
             DspState *cfg = dsp_get_inactive_config();
             cfg->channels[ch].bypass = bypass;
-            if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+            if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
             extern void saveDspSettingsDebounced();
             saveDspSettingsDebounced();
             appState.markDspConfigDirty();
@@ -626,7 +626,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             cfg->channels[chA].stereoLink = linked;
             cfg->channels[chB].stereoLink = linked;
             if (linked) dsp_mirror_channel_config(chA, chB);
-            if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+            if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
             extern void saveDspSettingsDebounced();
             saveDspSettingsDebounced();
             appState.markDspConfigDirty();
@@ -680,7 +680,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                 cfg->channels[partner].stages[band].biquad.delay[0] = savedDelay0;
                 cfg->channels[partner].stages[band].biquad.delay[1] = savedDelay1;
               }
-              if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+              if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
               appState.markDspConfigDirty();
@@ -696,7 +696,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             DspState *cfg = dsp_get_inactive_config();
             if (band < cfg->channels[ch].stageCount) {
               cfg->channels[ch].stages[band].enabled = en;
-              if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+              if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
               appState.markDspConfigDirty();
@@ -713,7 +713,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             for (int b = 0; b < limit; b++) {
               cfg->channels[ch].stages[b].enabled = en;
             }
-            if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+            if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
             extern void saveDspSettingsDebounced();
             saveDspSettingsDebounced();
             appState.markDspConfigDirty();
@@ -725,7 +725,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (from >= 0 && from < DSP_MAX_CHANNELS && to >= 0 && to < DSP_MAX_CHANNELS && from != to) {
             dsp_copy_active_to_inactive();
             dsp_copy_peq_bands(from, to);
-            if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+            if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
             extern void saveDspSettingsDebounced();
             saveDspSettingsDebounced();
             appState.markDspConfigDirty();
@@ -738,7 +738,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           if (from >= 0 && from < DSP_MAX_CHANNELS && to >= 0 && to < DSP_MAX_CHANNELS && from != to) {
             dsp_copy_active_to_inactive();
             dsp_copy_chain_stages(from, to);
-            if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+            if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
             extern void saveDspSettingsDebounced();
             saveDspSettingsDebounced();
             appState.markDspConfigDirty();
@@ -816,7 +816,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
                   dsp_compute_biquad_coeffs(s.biquad, s.type, cfg->sampleRate);
                   b++;
                 }
-                if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+                if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
                 extern void saveDspSettingsDebounced();
                 saveDspSettingsDebounced();
                 appState.markDspConfigDirty();
@@ -926,7 +926,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               cfg->channels[ch].stages[idx].biquad.gain = bsr.gainDb;
               cfg->channels[ch].stages[idx].biquad.Q = 0.707f;
               dsp_compute_biquad_coeffs(cfg->channels[ch].stages[idx].biquad, DSP_BIQUAD_HIGH_SHELF, cfg->sampleRate);
-              if (!dsp_swap_config()) { appState.dspSwapFailures++; appState.lastDspSwapFailure = millis(); LOG_W("[WebSocket] Swap failed, staged for retry"); }
+              if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
               extern void saveDspSettingsDebounced();
               saveDspSettingsDebounced();
               appState.markDspConfigDirty();
