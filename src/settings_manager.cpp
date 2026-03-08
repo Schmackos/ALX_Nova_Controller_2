@@ -536,8 +536,11 @@ void checkDeferredSignalGenSave() {
 
 // ===== Input Names Settings =====
 
-static const char *INPUT_NAME_DEFAULTS[] = {"Subwoofer 1", "Subwoofer 2",
-                                             "Subwoofer 3", "Subwoofer 4"};
+static const char *INPUT_NAME_DEFAULTS[] = {
+    "Subwoofer 1", "Subwoofer 2", "Subwoofer 3", "Subwoofer 4",
+    "Input 3 Left", "Input 3 Right", "Input 4 Left", "Input 4 Right",
+    "Input 5 Left", "Input 5 Right", "Input 6 Left", "Input 6 Right",
+    "Input 7 Left", "Input 7 Right", "Input 8 Left", "Input 8 Right"};
 
 bool loadInputNames() {
   File file = LittleFS.open("/inputnames.txt", "r", true);

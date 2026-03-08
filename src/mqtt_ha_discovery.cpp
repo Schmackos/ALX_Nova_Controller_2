@@ -1411,8 +1411,16 @@ void publishHADiscovery() {
 
   // ===== Input Names (4 read-only sensors) =====
   {
-    const char *inputLabels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
-    const char *inputDisplayNames[] = {"Input 1 Left Name", "Input 1 Right Name", "Input 2 Left Name", "Input 2 Right Name"};
+    const char *inputLabels[] = {
+        "input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r",
+        "input3_name_l", "input3_name_r", "input4_name_l", "input4_name_r",
+        "input5_name_l", "input5_name_r", "input6_name_l", "input6_name_r",
+        "input7_name_l", "input7_name_r", "input8_name_l", "input8_name_r"};
+    const char *inputDisplayNames[] = {
+        "Input 1 Left Name", "Input 1 Right Name", "Input 2 Left Name", "Input 2 Right Name",
+        "Input 3 Left Name", "Input 3 Right Name", "Input 4 Left Name", "Input 4 Right Name",
+        "Input 5 Left Name", "Input 5 Right Name", "Input 6 Left Name", "Input 6 Right Name",
+        "Input 7 Left Name", "Input 7 Right Name", "Input 8 Left Name", "Input 8 Right Name"};
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
       JsonDocument doc;
       doc["name"] = inputDisplayNames[i];

@@ -886,7 +886,11 @@ void publishMqttInputNames() {
 
   String base = getEffectiveMqttBaseTopic();
 
-  const char *labels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
+  const char *labels[] = {
+      "input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r",
+      "input3_name_l", "input3_name_r", "input4_name_l", "input4_name_r",
+      "input5_name_l", "input5_name_r", "input6_name_l", "input6_name_r",
+      "input7_name_l", "input7_name_r", "input8_name_l", "input8_name_r"};
   for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     mqttClient.publish((base + "/audio/" + labels[i]).c_str(),
                        appState.inputNames[i].c_str(), true);

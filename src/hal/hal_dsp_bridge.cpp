@@ -43,13 +43,11 @@ void HalDspBridge::deinit() {
 }
 
 void HalDspBridge::dumpConfig() {
-    LOG_I("[HAL:DspBridge] DSP Pipeline bridge — dspEnabled=%d",
+    int dspEnabled = 0;
 #ifndef NATIVE_TEST
-          AppState::getInstance().dspEnabled
-#else
-          0
+    dspEnabled = AppState::getInstance().dspEnabled;
 #endif
-    );
+    LOG_I("[HAL:DspBridge] DSP Pipeline bridge — dspEnabled=%d", dspEnabled);
 }
 
 bool HalDspBridge::healthCheck() {
