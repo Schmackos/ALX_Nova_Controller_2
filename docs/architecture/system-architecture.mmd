@@ -32,11 +32,11 @@ graph TB
     end
 
     subgraph AudioPipeline["Audio Pipeline"]
-        INP["4-Lane Input\nADC1 | ADC2 | SigGen | USB"]
+        INP["8-Lane Input\nHAL-managed sources\n(ADC, SigGen, USB Audio)\nvia getInputSource()"]
         DSP["Per-Input DSP\nbiquad, FIR, limiter"]
-        MTX["8x8 Routing Matrix\nfloat32 mix + gain"]
+        MTX["16x16 Routing Matrix\nfloat32 mix + gain"]
         ODSP["Per-Output DSP\n8 mono channels, 12 stages"]
-        SINKS["Slot-Indexed Sink Dispatch\nset_sink(slot) / remove_sink(slot)\nhalSlot for O(1) HAL lookup"]
+        SINKS["Slot-Indexed Sink Dispatch\nset_sink(slot) / remove_sink(slot)\n8 output slots, halSlot O(1) lookup"]
     end
 
     subgraph LegacyDAC["DAC Layer (dac_hal.cpp)"]
@@ -63,7 +63,7 @@ graph TB
     HM -->|"stateChangeCb(slot,\noldState, newState)"| HPB
     HPB -->|"AVAILABLE:\nset_sink(slot, sink)"| SINKS
     HPB -->|"MANUAL/ERROR/REMOVED:\nremove_sink(slot)"| SINKS
-    HPB -->|"ADC available:\nadcEnabled[lane]=true"| INP
+    HPB -->|"ADC_PATH available:\nset_source(lane, src)\nadcEnabled[lane]=true"| INP
 
     %% Audio pipeline flow
     AP --> INP --> DSP --> MTX --> ODSP --> SINKS
@@ -80,7 +80,7 @@ graph TB
     %% Cross-core
     MQTT -->|"poll 20Hz\nindependent"| AS
     GUI -->|"reads state"| AS
-    USB -->|"ring buffer\n-> lane 3"| INP
+    USB -->|"ring buffer\n-> HAL-assigned lane"| INP
 
     %% Web connections
     WEB -->|"WS frames"| WS

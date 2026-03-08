@@ -908,7 +908,7 @@ void publishHADiscovery() {
   {
     const char *inputLabels[] = {"adc1", "adc2"};
     const char *inputNames[] = {"ADC 1", "ADC 2"};
-    int adcCount = appState.numAdcsDetected < NUM_AUDIO_ADCS ? appState.numAdcsDetected : NUM_AUDIO_ADCS;
+    int adcCount = appState.numAdcsDetected < AUDIO_PIPELINE_MAX_INPUTS ? appState.numAdcsDetected : AUDIO_PIPELINE_MAX_INPUTS;
     for (int a = 0; a < adcCount; a++) {
       String prefix = base + "/audio/" + inputLabels[a];
       String idSuffix = String("_") + inputLabels[a];
@@ -1408,7 +1408,7 @@ void publishHADiscovery() {
   {
     const char *inputLabels[] = {"input1_name_l", "input1_name_r", "input2_name_l", "input2_name_r"};
     const char *inputDisplayNames[] = {"Input 1 Left Name", "Input 1 Right Name", "Input 2 Left Name", "Input 2 Right Name"};
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
       JsonDocument doc;
       doc["name"] = inputDisplayNames[i];
       doc["unique_id"] = deviceId + "_" + inputLabels[i];

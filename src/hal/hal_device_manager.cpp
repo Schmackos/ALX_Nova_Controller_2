@@ -53,6 +53,10 @@ int HalDeviceManager::registerDevice(HalDevice* device, HalDiscovery discovery) 
 
     device->_slot = static_cast<uint8_t>(slot);
     device->_discovery = discovery;
+
+    // Auto-assign instanceId by counting existing devices with the same compatible string
+    device->_descriptor.instanceId = countByCompatible(device->getDescriptor().compatible);
+
     _devices[slot] = device;
     _resetRetryState(static_cast<uint8_t>(slot));
     _count++;
@@ -94,6 +98,29 @@ HalDevice* HalDeviceManager::findByCompatible(const char* compatible) {
         }
     }
     return nullptr;
+}
+
+HalDevice* HalDeviceManager::findByCompatible(const char* compatible, uint8_t instanceId) {
+    if (!compatible) return nullptr;
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        if (_devices[i] &&
+            strcmp(_devices[i]->getDescriptor().compatible, compatible) == 0 &&
+            _devices[i]->getDescriptor().instanceId == instanceId) {
+            return _devices[i];
+        }
+    }
+    return nullptr;
+}
+
+uint8_t HalDeviceManager::countByCompatible(const char* compatible) const {
+    if (!compatible) return 0;
+    uint8_t count = 0;
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        if (_devices[i] && strcmp(_devices[i]->getDescriptor().compatible, compatible) == 0) {
+            count++;
+        }
+    }
+    return count;
 }
 
 HalDevice* HalDeviceManager::findByType(HalDeviceType type, uint8_t nth) {

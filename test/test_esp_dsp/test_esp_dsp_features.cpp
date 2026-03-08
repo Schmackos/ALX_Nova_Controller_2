@@ -24,8 +24,8 @@
  */
 
 // Mirror FftWindowType enum from app_state.h (avoids pulling in ESP32 deps)
-#ifndef NUM_AUDIO_ADCS
-#define NUM_AUDIO_ADCS 2
+#ifndef AUDIO_PIPELINE_MAX_INPUTS
+#define AUDIO_PIPELINE_MAX_INPUTS 2
 #endif
 
 enum FftWindowType : uint8_t {
@@ -42,8 +42,8 @@ enum FftWindowType : uint8_t {
 class AppState {
 public:
     FftWindowType fftWindowType = FFT_WINDOW_HANN;
-    float audioSnrDb[NUM_AUDIO_ADCS] = {};
-    float audioSfdrDb[NUM_AUDIO_ADCS] = {};
+    float audioSnrDb[AUDIO_PIPELINE_MAX_INPUTS] = {};
+    float audioSfdrDb[AUDIO_PIPELINE_MAX_INPUTS] = {};
     static AppState &getInstance() { static AppState inst; return inst; }
 };
 

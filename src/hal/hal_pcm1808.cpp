@@ -61,13 +61,15 @@ HalInitResult HalPcm1808::init() {
     }
 #endif
 
-    // NOTE: I2S RX channel is owned by i2s_audio.cpp (full-duplex shared with PCM5102A DAC).
-    // HalPcm1808 only manages device-level state; actual I2S setup stays in the legacy path.
+    // I2S channel setup is handled by i2s_audio_configure_adc() called from Core 1
+    // (audio_pipeline_task). HalPcm1808 provides device config for pin/port overrides;
+    // the bridge registers the AudioInputSource when this device transitions to AVAILABLE.
 
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
 
-    LOG_I("[HAL:PCM1808] Ready (I2S channel managed by legacy i2s_audio path)");
+    LOG_I("[HAL:PCM1808] Ready (I2S via i2s_audio_configure_adc, instance %u)",
+          _descriptor.instanceId);
     return hal_init_ok();
 }
 

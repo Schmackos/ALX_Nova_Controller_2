@@ -35,13 +35,21 @@ int hal_pipeline_output_count();
 // Get count of pipeline-ready audio input devices (slots with an active ADC lane mapping)
 int hal_pipeline_input_count();
 
-// Reverse-lookup: return the HAL slot that owns the given ADC lane (0 or 1).
+// Reverse-lookup: return the HAL slot that owns the given ADC lane.
 // Returns -1 when no device is mapped to that lane.
 int8_t hal_pipeline_get_slot_for_adc_lane(uint8_t lane);
 
 // Reverse-lookup: return the HAL slot that owns the given pipeline sink slot.
 // Returns -1 when no device is mapped to that sink slot.
 int8_t hal_pipeline_get_slot_for_sink(uint8_t sinkSlot);
+
+// Forward-lookup: return the pipeline sink slot assigned to a HAL device.
+// Returns -1 when the HAL slot has no sink mapping.
+int8_t hal_pipeline_get_sink_slot(uint8_t halSlot);
+
+// Forward-lookup: return the input lane assigned to a HAL device.
+// Returns -1 when the HAL slot has no input lane mapping.
+int8_t hal_pipeline_get_input_lane(uint8_t halSlot);
 
 // Cascade correlation ID support —————————————————————————————————————————
 // Call hal_pipeline_begin_correlation() before a multi-step operation that

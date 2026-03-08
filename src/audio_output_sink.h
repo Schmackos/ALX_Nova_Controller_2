@@ -8,14 +8,14 @@
 extern "C" {
 #endif
 
-// Sink slot indices (map to matrix output channel pairs)
+// Sink slot indices — DEPRECATED: use hal_pipeline_get_sink_slot() for dynamic assignment.
+// Kept as backward-compat aliases; bridge now assigns slots via ordinal counting.
 #define AUDIO_SINK_SLOT_PRIMARY   0   // PCM5102A — matrix channels 0,1
 #define AUDIO_SINK_SLOT_ES8311    1   // ES8311   — matrix channels 2,3
-// Slots 2,3 reserved for future external DAC boards
 
 // Maximum sinks
 #ifndef AUDIO_OUT_MAX_SINKS
-#define AUDIO_OUT_MAX_SINKS 4
+#define AUDIO_OUT_MAX_SINKS 8
 #endif
 
 // Output sink interface — mirrors AudioInputSource pattern.

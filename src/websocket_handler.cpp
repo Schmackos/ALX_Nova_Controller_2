@@ -359,7 +359,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (msgType == "setInputNames") {
           if (doc["names"].is<JsonArray>()) {
             JsonArray names = doc["names"].as<JsonArray>();
-            for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+            for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
               String name = names[i].as<String>();
               if (name.length() > 0) appState.inputNames[i] = name;
             }
@@ -368,7 +368,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             JsonDocument resp;
             resp["type"] = "inputNames";
             JsonArray outNames = resp["names"].to<JsonArray>();
-            for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+            for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
               outNames.add(appState.inputNames[i]);
             }
             String json;
@@ -1135,7 +1135,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "setAdcEnabled") {
           int adc = doc["adc"] | -1;
           bool newVal = doc["enabled"].as<bool>();
-          if (adc >= 0 && adc < NUM_AUDIO_ADCS && newVal != appState.adcEnabled[adc]) {
+          if (adc >= 0 && adc < AUDIO_PIPELINE_MAX_INPUTS && newVal != appState.adcEnabled[adc]) {
             appState.adcEnabled[adc] = newVal;
             appState.markAdcEnabledDirty();
             saveSettingsDeferred();
@@ -1143,7 +1143,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             JsonDocument resp;
             resp["type"] = "adcState";
             JsonArray arr = resp["enabled"].to<JsonArray>();
-            for (int i = 0; i < NUM_AUDIO_ADCS; i++) arr.add(appState.adcEnabled[i]);
+            for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) arr.add(appState.adcEnabled[i]);
             String rJson;
             serializeJson(resp, rJson);
             webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
@@ -2010,7 +2010,7 @@ void sendHardwareStats() {
     doc["audio"]["adcVref"] = appState.adcVref;
     doc["audio"]["numAdcsDetected"] = appState.numAdcsDetected;
     JsonArray adcArr = doc["audio"]["adcs"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       JsonObject adcObj = adcArr.add<JsonObject>();
       const AppState::AdcState &adc = appState.audioAdc[a];
       const char *statusStr = "OK";
@@ -2062,7 +2062,7 @@ void sendHardwareStats() {
     }
 
     // Per-ADC I2S recovery counts
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       doc["audio"]["adcs"][a]["i2sRecoveries"] = appState.audioAdc[a].i2sRecoveries;
     }
 
@@ -2173,7 +2173,7 @@ void sendHardwareStats() {
     // I2S Static Config
     I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
     JsonArray i2sCfgArr = doc["audio"]["i2sConfig"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       JsonObject c = i2sCfgArr.add<JsonObject>();
       c["mode"] = i2sCfg.adc[a].isMaster ? "Master RX" : "Slave RX";
       c["sampleRate"] = i2sCfg.adc[a].sampleRate;
@@ -2191,7 +2191,7 @@ void sendHardwareStats() {
     i2sRt["stackFree"] = appState.i2sMetrics.audioTaskStackFree;
     JsonArray bpsArr = i2sRt["buffersPerSec"].to<JsonArray>();
     JsonArray latArr = i2sRt["avgReadLatencyUs"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       bpsArr.add(serialized(String(appState.i2sMetrics.buffersPerSec[a], 1)));
       latArr.add(serialized(String(appState.i2sMetrics.avgReadLatencyUs[a], 0)));
     }
@@ -2246,7 +2246,7 @@ void drainPendingInitState() {
             JsonDocument adcDoc;
             adcDoc["type"] = "adcState";
             JsonArray arr = adcDoc["enabled"].to<JsonArray>();
-            for (int i = 0; i < NUM_AUDIO_ADCS; i++) arr.add(appState.adcEnabled[i]);
+            for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) arr.add(appState.adcEnabled[i]);
             String adcJson;
             serializeJson(adcDoc, adcJson);
             webSocket.sendTXT(c, adcJson.c_str());
@@ -2307,7 +2307,7 @@ void sendAudioData() {
     JsonArray adcArr = doc["adc"].to<JsonArray>();
     JsonArray adcStatusArr = doc["adcStatus"].to<JsonArray>();
     JsonArray adcNoiseArr = doc["adcNoiseFloor"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       const AppState::AdcState &adc = appState.audioAdc[a];
       JsonObject adcObj = adcArr.add<JsonObject>();
       adcObj["vu1"] = adc.vu1;

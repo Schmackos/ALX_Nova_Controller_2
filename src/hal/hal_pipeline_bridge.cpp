@@ -2,12 +2,14 @@
 
 #include "hal_pipeline_bridge.h"
 #include "hal_device_manager.h"
+#include "hal_device.h"
 #include "hal_types.h"
 
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
 #include "../app_state.h"
 #include "../audio_pipeline.h"
+#include "../audio_input_source.h"
 #include "../audio_output_sink.h"
 #else
 #define LOG_I(...)
@@ -18,6 +20,16 @@
 #define AUDIO_SINK_SLOT_PRIMARY 0
 #define AUDIO_SINK_SLOT_ES8311  1
 #endif
+#ifndef AUDIO_OUT_MAX_SINKS
+#define AUDIO_OUT_MAX_SINKS 8
+#endif
+#ifndef AUDIO_PIPELINE_MAX_INPUTS
+#define AUDIO_PIPELINE_MAX_INPUTS 8
+#endif
+// Stubs for source registration in native test builds
+struct AudioInputSource;
+inline void audio_pipeline_set_source(int, const AudioInputSource*) {}
+inline void audio_pipeline_remove_source(int) {}
 #endif
 
 // ---------------------------------------------------------------------------
@@ -33,37 +45,81 @@ static int8_t _halSlotToAdcLane[HAL_MAX_DEVICES];
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Map a HAL device's type to a pipeline sink slot index.
-// Returns -1 if the device is not an output device.
-static int8_t _sinkSlotForDevice(HalDevice* dev) {
-    HalDeviceType type = dev->getType();
-    if (type == HAL_DEV_DAC) {
-        return AUDIO_SINK_SLOT_PRIMARY;   // 0 — PCM5102A
+// Infer effective capability flags for a device.  When the device has
+// explicit caps (non-zero) we trust them; otherwise fall back to type-based
+// inference for backward compatibility with devices registered before the
+// capabilities field was populated.
+static uint8_t _effectiveCaps(HalDevice* dev) {
+    uint8_t caps = dev->getDescriptor().capabilities;
+    if (caps != 0) return caps;
+    // Infer from device type (conservative defaults)
+    switch (dev->getType()) {
+        case HAL_DEV_DAC:   return HAL_CAP_DAC_PATH;
+        case HAL_DEV_ADC:   return HAL_CAP_ADC_PATH;
+        case HAL_DEV_CODEC: return HAL_CAP_DAC_PATH;  // Conservative: DAC only until explicit caps set
+        default:            return 0;
     }
-    if (type == HAL_DEV_CODEC) {
-        return AUDIO_SINK_SLOT_ES8311;    // 1 — ES8311
-    }
-    return -1;
 }
 
-// Map a HAL device to an ADC lane index.
-// First PCM1808 in slot order → lane 0; second → lane 1.
-// Returns -1 if the device is not an input device.
-static int8_t _adcLaneForDevice(HalDevice* dev) {
-    HalDeviceType type = dev->getType();
-    if (type != HAL_DEV_ADC) return -1;
-    // CODEC with ADC path (e.g. ES8311) is handled as output only for simplicity —
-    // its ADC path is controlled via the codec driver directly.
-    // Count how many ADC slots are already mapped to find this device's ordinal.
-    uint8_t thisSlot = dev->getSlot();
-    int8_t lane = 0;
+// Map a HAL device to a pipeline sink slot index using ordinal counting.
+// Uses HAL_CAP_DAC_PATH capability — not device type.
+// Returns -1 if the device has no DAC path or all slots are taken.
+static int8_t _sinkSlotForDevice(HalDevice* dev) {
+    uint8_t caps = _effectiveCaps(dev);
+    if (!(caps & HAL_CAP_DAC_PATH)) return -1;
+
+    // If this HAL slot already has a mapping, return it (idempotent)
+    uint8_t halSlot = dev->getSlot();
+    if (_halSlotToSinkSlot[halSlot] >= 0) return _halSlotToSinkSlot[halSlot];
+
+    // Find first free sink slot
+    bool taken[AUDIO_OUT_MAX_SINKS] = {};
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        if (_halSlotToAdcLane[i] >= 0 && (uint8_t)i < thisSlot) {
-            lane++;
+        if (_halSlotToSinkSlot[i] >= 0 && _halSlotToSinkSlot[i] < (int8_t)AUDIO_OUT_MAX_SINKS) {
+            taken[(int)_halSlotToSinkSlot[i]] = true;
         }
     }
-    if (lane >= 2) return -1;  // Only 2 ADC lanes (NUM_AUDIO_ADCS)
-    return lane;
+    for (int8_t s = 0; s < (int8_t)AUDIO_OUT_MAX_SINKS; s++) {
+        if (!taken[s]) return s;
+    }
+    return -1;  // All slots taken
+}
+
+// Map a HAL device to an ADC lane index using ordinal counting.
+// Uses HAL_CAP_ADC_PATH capability — not device type.
+// Returns -1 if the device has no ADC path or all lanes are taken.
+static int8_t _adcLaneForDevice(HalDevice* dev) {
+    uint8_t caps = _effectiveCaps(dev);
+    if (!(caps & HAL_CAP_ADC_PATH)) return -1;
+
+    // If this HAL slot already has a mapping, return it (idempotent)
+    uint8_t halSlot = dev->getSlot();
+    if (_halSlotToAdcLane[halSlot] >= 0) return _halSlotToAdcLane[halSlot];
+
+    // Find first free lane
+    bool taken[AUDIO_PIPELINE_MAX_INPUTS] = {};
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        if (_halSlotToAdcLane[i] >= 0 && _halSlotToAdcLane[i] < (int8_t)AUDIO_PIPELINE_MAX_INPUTS) {
+            taken[(int)_halSlotToAdcLane[i]] = true;
+        }
+    }
+    for (int8_t l = 0; l < (int8_t)AUDIO_PIPELINE_MAX_INPUTS; l++) {
+        if (!taken[l]) return l;
+    }
+    return -1;  // All lanes taken
+}
+
+// Recount active inputs/outputs and update appState (Phase 2).
+static void _updateActiveCounts() {
+#ifndef NATIVE_TEST
+    int outputs = 0, inputs = 0;
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        if (_halSlotToSinkSlot[i] >= 0) outputs++;
+        if (_halSlotToAdcLane[i]  >= 0) inputs++;
+    }
+    appState.activeOutputCount = outputs;
+    appState.activeInputCount  = inputs;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +135,7 @@ void hal_pipeline_on_device_available(uint8_t slot) {
     HalDeviceType type = dev->getType();
     const char* name   = dev->getDescriptor().name;
 
-    // --- Output sink (DAC / CODEC) ---
+    // --- Output sink (DAC / CODEC with DAC path) ---
     int8_t sinkSlot = _sinkSlotForDevice(dev);
     if (sinkSlot >= 0) {
         // dac_hal.cpp registers the AudioOutputSink during init() via
@@ -91,7 +147,7 @@ void hal_pipeline_on_device_available(uint8_t slot) {
               name, slot, (int)sinkSlot);
     }
 
-    // --- Input lane (ADC) ---
+    // --- Input lane (ADC / CODEC with ADC path) ---
     int8_t adcLane = _adcLaneForDevice(dev);
     if (adcLane >= 0) {
         _halSlotToAdcLane[slot] = adcLane;
@@ -101,7 +157,22 @@ void hal_pipeline_on_device_available(uint8_t slot) {
         appState.adcEnabled[adcLane] = true;
         appState.markAdcEnabledDirty();
 #endif
+
+        // Register AudioInputSource with the pipeline if the device provides one
+#ifndef NATIVE_TEST
+        const AudioInputSource* src = dev->getInputSource();
+        if (src) {
+            AudioInputSource regSrc = *src;  // Value copy
+            regSrc.lane = (uint8_t)adcLane;
+            regSrc.halSlot = slot;
+            audio_pipeline_set_source((int)adcLane, &regSrc);
+            LOG_I("[HAL:Bridge] Pipeline bridge: registered input source '%s' at lane %d",
+                  regSrc.name ? regSrc.name : "?", (int)adcLane);
+        }
+#endif
     }
+
+    _updateActiveCounts();
 
     // Broadcast device list and audio channel map to all web clients
 #ifndef NATIVE_TEST
@@ -161,12 +232,16 @@ void hal_pipeline_on_device_removed(uint8_t slot) {
         int8_t lane = _halSlotToAdcLane[slot];
         LOG_I("[HAL:Bridge] Pipeline bridge: disabling ADC lane %d (HAL slot %d, %s)",
               (int)lane, slot, name);
+        // Remove AudioInputSource from pipeline
+        audio_pipeline_remove_source((int)lane);
 #ifndef NATIVE_TEST
         appState.adcEnabled[lane] = false;
         appState.markAdcEnabledDirty();
 #endif
         _halSlotToAdcLane[slot] = -1;
     }
+
+    _updateActiveCounts();
 
     // Broadcast updated state
 #ifndef NATIVE_TEST
@@ -233,6 +308,8 @@ void hal_pipeline_sync() {
         if (_halSlotToAdcLane[i]  >= 0) inputs++;
     }
 
+    _updateActiveCounts();
+
     LOG_I("[HAL:Bridge] Pipeline bridge sync complete: %d output(s), %d input(s)", outputs, inputs);
 }
 
@@ -270,6 +347,19 @@ int8_t hal_pipeline_get_slot_for_sink(uint8_t sinkSlot) {
         if (_halSlotToSinkSlot[i] == (int8_t)sinkSlot) return (int8_t)i;
     }
     return -1;
+}
+
+// ---------------------------------------------------------------------------
+// Forward lookups (Phase 1)
+// ---------------------------------------------------------------------------
+int8_t hal_pipeline_get_sink_slot(uint8_t halSlot) {
+    if (halSlot >= HAL_MAX_DEVICES) return -1;
+    return _halSlotToSinkSlot[halSlot];
+}
+
+int8_t hal_pipeline_get_input_lane(uint8_t halSlot) {
+    if (halSlot >= HAL_MAX_DEVICES) return -1;
+    return _halSlotToAdcLane[halSlot];
 }
 
 // ---------------------------------------------------------------------------

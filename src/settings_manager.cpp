@@ -127,7 +127,7 @@ static void applySettingsFromJson(const JsonDocument &doc) {
 
   if (doc["adcEnabled"].is<JsonArrayConst>()) {
     JsonArrayConst arr = doc["adcEnabled"].as<JsonArrayConst>();
-    for (size_t i = 0; i < arr.size() && i < NUM_AUDIO_ADCS; i++)
+    for (size_t i = 0; i < arr.size() && i < AUDIO_PIPELINE_MAX_INPUTS; i++)
       appState.adcEnabled[i] = arr[i].as<bool>();
   }
 
@@ -368,7 +368,7 @@ void saveSettings() {
   doc["fftWindow"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = doc["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
   doc["usbAudio"] = appState.usbAudioEnabled;
@@ -514,13 +514,13 @@ bool loadInputNames() {
     if (file)
       file.close();
     // Set defaults
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
       appState.inputNames[i] = INPUT_NAME_DEFAULTS[i];
     }
     return false;
   }
 
-  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+  for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     String line = file.readStringUntil('\n');
     line.trim();
     appState.inputNames[i] =
@@ -538,7 +538,7 @@ void saveInputNames() {
     return;
   }
 
-  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+  for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     file.println(appState.inputNames[i]);
   }
   file.close();
@@ -645,7 +645,7 @@ void handleSettingsGet() {
   doc["fftWindowType"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = doc["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
   doc["usbAudioEnabled"] = appState.usbAudioEnabled;
@@ -892,7 +892,7 @@ void handleSettingsUpdate() {
 
   if (doc["adcEnabled"].is<JsonArray>()) {
     JsonArray arr = doc["adcEnabled"].as<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS && i < (int)arr.size(); i++) {
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS && i < (int)arr.size(); i++) {
       bool newVal = arr[i].as<bool>();
       if (newVal != appState.adcEnabled[i]) {
         appState.adcEnabled[i] = newVal;
@@ -903,7 +903,7 @@ void handleSettingsUpdate() {
   } else if (doc["adcEnabled"].is<bool>()) {
     // Legacy single bool — apply to both
     bool newVal = doc["adcEnabled"].as<bool>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) {
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
       if (newVal != appState.adcEnabled[i]) {
         appState.adcEnabled[i] = newVal;
         settingsChanged = true;
@@ -984,7 +984,7 @@ void handleSettingsUpdate() {
   resp["fftWindowType"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = resp["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
   resp["usbAudioEnabled"] = appState.usbAudioEnabled;
@@ -1049,7 +1049,7 @@ void handleSettingsExport() {
   doc["settings"]["fftWindowType"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = doc["settings"]["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
   doc["settings"]["usbAudioEnabled"] = appState.usbAudioEnabled;
@@ -1101,7 +1101,7 @@ void handleSettingsExport() {
 
   // Input channel names
   JsonArray names = doc["inputNames"].to<JsonArray>();
-  for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+  for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     names.add(appState.inputNames[i]);
   }
 
@@ -1328,13 +1328,13 @@ void handleSettingsImport() {
     }
     if (doc["settings"]["adcEnabled"].is<JsonArray>()) {
       JsonArray arr = doc["settings"]["adcEnabled"].as<JsonArray>();
-      for (int i = 0; i < NUM_AUDIO_ADCS && i < (int)arr.size(); i++) {
+      for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS && i < (int)arr.size(); i++) {
         appState.adcEnabled[i] = arr[i].as<bool>();
         LOG_D("[Settings] ADC%d: %s", i + 1, appState.adcEnabled[i] ? "enabled" : "disabled");
       }
     } else if (doc["settings"]["adcEnabled"].is<bool>()) {
       bool val = doc["settings"]["adcEnabled"].as<bool>();
-      for (int i = 0; i < NUM_AUDIO_ADCS; i++) appState.adcEnabled[i] = val;
+      for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) appState.adcEnabled[i] = val;
       LOG_D("[Settings] ADC: %s", val ? "enabled" : "disabled");
     }
 #ifdef USB_AUDIO_ENABLED
@@ -1502,7 +1502,7 @@ void handleSettingsImport() {
   // Import input channel names
   if (!doc["inputNames"].isNull() && doc["inputNames"].is<JsonArray>()) {
     JsonArray names = doc["inputNames"].as<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2 && i < (int)names.size(); i++) {
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
       String name = names[i].as<String>();
       if (name.length() > 0) appState.inputNames[i] = name;
     }
@@ -1662,7 +1662,7 @@ void handleDiagnostics() {
   settings["fftWindowType"] = (int)appState.fftWindowType;
   {
     JsonArray adcArr = settings["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
   }
 #ifdef DSP_ENABLED
   // dcBlockEnabled removed (now a DSP preset)
@@ -1700,7 +1700,7 @@ void handleDiagnostics() {
     audioAdcObj["sampleRate"] = appState.audioSampleRate;
     audioAdcObj["adcVref"] = appState.adcVref;
     JsonArray adcArr = audioAdcObj["adcs"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       JsonObject adcObj = adcArr.add<JsonObject>();
       const AppState::AdcState &adc = appState.audioAdc[a];
       const char *statusStr = "OK";
@@ -1728,7 +1728,7 @@ void handleDiagnostics() {
     }
     // Input names
     JsonArray names = audioAdcObj["inputNames"].to<JsonArray>();
-    for (int i = 0; i < NUM_AUDIO_ADCS * 2; i++) {
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
       names.add(appState.inputNames[i]);
     }
 
@@ -1736,7 +1736,7 @@ void handleDiagnostics() {
     I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
     JsonObject i2sObj = audioAdcObj["i2sConfig"].to<JsonObject>();
     JsonArray i2sAdcArr = i2sObj["adcs"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       JsonObject c = i2sAdcArr.add<JsonObject>();
       c["mode"] = i2sCfg.adc[a].isMaster ? "Master RX" : "Slave RX";
       c["sampleRate"] = i2sCfg.adc[a].sampleRate;
@@ -1752,7 +1752,7 @@ void handleDiagnostics() {
     i2sRt["audioTaskStackFree"] = appState.i2sMetrics.audioTaskStackFree;
     JsonArray bpsArr = i2sRt["buffersPerSec"].to<JsonArray>();
     JsonArray latArr = i2sRt["avgReadLatencyUs"].to<JsonArray>();
-    for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+    for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       bpsArr.add(appState.i2sMetrics.buffersPerSec[a]);
       latArr.add(appState.i2sMetrics.avgReadLatencyUs[a]);
     }

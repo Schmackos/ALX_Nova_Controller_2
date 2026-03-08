@@ -42,12 +42,12 @@ struct AdcDiagnostics {
     uint32_t totalBuffersRead = 0;
 };
 
-#ifndef NUM_AUDIO_ADCS
-#define NUM_AUDIO_ADCS 2
+#ifndef AUDIO_PIPELINE_MAX_INPUTS
+#define AUDIO_PIPELINE_MAX_INPUTS 2
 #endif
 
 struct AudioDiagnostics {
-    AdcDiagnostics adc[NUM_AUDIO_ADCS];
+    AdcDiagnostics adc[AUDIO_PIPELINE_MAX_INPUTS];
     bool sigGenActive = false;
     int numAdcsDetected = 1;
 };
@@ -215,9 +215,9 @@ void test_adc_diagnostics_siggen_masking(void) {
     TEST_ASSERT_EQUAL(AUDIO_CLIPPING, audio_derive_health_status(diag.adc[0]));
 }
 
-// Test 14: NUM_AUDIO_ADCS array size
+// Test 14: AUDIO_PIPELINE_MAX_INPUTS array size
 void test_num_audio_adcs_array_size(void) {
-    TEST_ASSERT_EQUAL(2, NUM_AUDIO_ADCS);
+    TEST_ASSERT_EQUAL(2, AUDIO_PIPELINE_MAX_INPUTS);
     AudioDiagnostics diag;
     // Both ADCs should be independently addressable
     diag.adc[0].i2sReadErrors = 5;

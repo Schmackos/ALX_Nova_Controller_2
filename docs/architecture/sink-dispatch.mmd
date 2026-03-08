@@ -1,14 +1,14 @@
 %% Slot-Indexed Sink Dispatch — Audio Output Path
-%% Pipeline iterates ALL slots (0..3), skipping empty/not-ready/muted
+%% Pipeline iterates ALL slots (0..7), skipping empty/not-ready/muted
 
 flowchart LR
     subgraph matrix["Post-Matrix Output"]
-        OUT["_outCh[0..7]\n8 mono float32 channels\n256 frames each"]
+        OUT["_outCh[0..15]\n16 mono float32 channels\n256 frames each"]
     end
 
     subgraph dispatch["Slot-Indexed Dispatch Loop"]
         direction TB
-        LOOP["for slot = 0..3"]
+        LOOP["for slot = 0..7"]
         CHK1{"_sinks[slot].write\n!= NULL?"}
         CHK2{"isReady()?"}
         CHK3{"!muted?"}
@@ -30,21 +30,24 @@ flowchart LR
         CONV --> WRITE
     end
 
-    subgraph sinks["Sink Slots (AudioOutputSink[4])"]
-        S0["Slot 0: PCM5102A\nfirstChannel=0, chCount=2\nhalSlot=0"]
-        S1["Slot 1: ES8311\nfirstChannel=2, chCount=2\nhalSlot=1"]
-        S2["Slot 2: (empty)\nwrite=NULL"]
-        S3["Slot 3: (empty)\nwrite=NULL"]
+    subgraph sinks["Sink Slots (AudioOutputSink[8])"]
+        S0["Slot 0: PCM5102A\nfirstChannel=0, chCount=2\nhalSlot=N"]
+        S1["Slot 1: ES8311\nfirstChannel=2, chCount=2\nhalSlot=N"]
+        S2["Slot 2..7: (dynamic)\nassigned by HAL bridge\nordinal counting"]
     end
 
     subgraph hw["Hardware"]
         I2S0["I2S0 TX\nGPIO 24"]
         I2S2["I2S2 TX\nES8311 codec"]
+        EXT["Future outputs\n(MCP4725, etc.)"]
     end
 
     OUT -->|"channels 0,1"| S0
     OUT -->|"channels 2,3"| S1
+    OUT -->|"channels 4+"| S2
     S0 --> LOOP
     S1 --> LOOP
+    S2 --> LOOP
     WRITE -->|"slot 0"| I2S0
     WRITE -->|"slot 1"| I2S2
+    WRITE -->|"slot 2+"| EXT

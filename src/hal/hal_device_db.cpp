@@ -206,14 +206,28 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "generic,signal-gen", 31);
+        strncpy(d.compatible, "alx,signal-gen", 31);
         strncpy(d.name, "Signal Generator", 32);
-        strncpy(d.manufacturer, "Generic", 32);
-        d.type = HAL_DEV_GPIO;
-        d.channelCount = 1;
-        d.bus.type = HAL_BUS_GPIO;
-        d.sampleRatesMask = 0;
-        d.capabilities = 0;
+        strncpy(d.manufacturer, "ALX", 32);
+        d.type = HAL_DEV_ADC;
+        d.channelCount = 2;
+        d.bus.type = HAL_BUS_INTERNAL;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
+        d.capabilities = HAL_CAP_ADC_PATH;
+        hal_db_add(&d);
+    }
+    // USB Audio
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "alx,usb-audio", 31);
+        strncpy(d.name, "USB Audio", 32);
+        strncpy(d.manufacturer, "ALX", 32);
+        d.type = HAL_DEV_ADC;
+        d.channelCount = 2;
+        d.bus.type = HAL_BUS_INTERNAL;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
+        d.capabilities = HAL_CAP_ADC_PATH;
         hal_db_add(&d);
     }
     // MCP4725 — 12-bit I2C voltage output DAC (add-on module)

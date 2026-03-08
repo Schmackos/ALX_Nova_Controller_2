@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <stddef.h>  // size_t
 
-#ifndef NUM_AUDIO_ADCS
-#define NUM_AUDIO_ADCS 2
+#ifndef AUDIO_PIPELINE_MAX_INPUTS
+#define AUDIO_PIPELINE_MAX_INPUTS 8
 #endif
 
 // ===== VU Meter Constants =====
@@ -30,7 +30,7 @@ struct AdcAnalysis {
 
 // ===== Audio Analysis Result (shared between I2S task and consumers) =====
 struct AudioAnalysis {
-    AdcAnalysis adc[NUM_AUDIO_ADCS]; // Per-ADC data
+    AdcAnalysis adc[AUDIO_PIPELINE_MAX_INPUTS]; // Per-ADC data
     float dBFS;            // -96 to 0 (overall max across all ADCs)
     bool  signalDetected;  // any ADC above threshold
     unsigned long timestamp;
@@ -66,7 +66,7 @@ struct AdcDiagnostics {
 };
 
 struct AudioDiagnostics {
-    AdcDiagnostics adc[NUM_AUDIO_ADCS];
+    AdcDiagnostics adc[AUDIO_PIPELINE_MAX_INPUTS];
     bool sigGenActive = false;
     int numAdcsDetected = 1;  // How many ADCs are actually producing data
 
@@ -90,7 +90,7 @@ struct I2sAdcConfig {
     const char *commFormat;      // "Standard I2S"
 };
 struct I2sStaticConfig {
-    I2sAdcConfig adc[NUM_AUDIO_ADCS];
+    I2sAdcConfig adc[AUDIO_PIPELINE_MAX_INPUTS];
 };
 I2sStaticConfig i2s_audio_get_static_config();
 
@@ -181,6 +181,18 @@ inline bool i2s_audio_adc2_ok() { return false; }
 inline void i2s_audio_update_analysis_dbfs(float) {}
 inline void i2s_audio_update_analysis_metering(const AdcAnalysis &) {}
 inline void i2s_audio_push_waveform_fft(const int32_t *, int, int) {}
+#endif
+
+// ===== Generic ADC I2S Configuration =====
+// Configure an I2S ADC lane with optional HAL device config for pin/port overrides.
+// Lane 0: full-duplex (primary ADC + DAC TX), outputs MCLK/BCK/WS clocks.
+// Lane 1+: RX-only (secondary ADC), data-in pin only.
+// If cfg is NULL, uses board-default pins from config.h.
+struct HalDeviceConfig;  // Forward declaration
+#ifndef NATIVE_TEST
+bool i2s_audio_configure_adc(int lane, const HalDeviceConfig* cfg);
+#else
+inline bool i2s_audio_configure_adc(int, const HalDeviceConfig*) { return true; }
 #endif
 
 // ===== I2S TX Bridge API (used by dac_hal to manage full-duplex on I2S0) =====

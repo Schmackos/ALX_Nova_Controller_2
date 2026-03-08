@@ -108,6 +108,8 @@ struct HalDeviceDescriptor {
     uint8_t       channelCount;      // 1-8 audio channels
     uint32_t      sampleRatesMask;   // Bit per rate: b0=8k, b1=16k, b2=44.1k, b3=48k, b4=96k
     uint8_t       capabilities;      // HAL_CAP_* flags
+    uint8_t       instanceId;        // Auto-assigned per compatible string (0-based)
+    uint8_t       maxInstances;      // Max concurrent instances (0 = use default by type)
 };
 
 // ===== Per-Device Runtime Config (persisted in /hal_config.json) =====

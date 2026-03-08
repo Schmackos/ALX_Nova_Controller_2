@@ -23,7 +23,7 @@ static lv_obj_t *lbl_cpu = nullptr;
 static lv_obj_t *lbl_storage = nullptr;
 static lv_obj_t *lbl_network = nullptr;
 static lv_obj_t *lbl_system = nullptr;
-static lv_obj_t *lbl_audio_adc[NUM_AUDIO_ADCS] = {nullptr, nullptr};
+static lv_obj_t *lbl_audio_adc[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static lv_obj_t *lbl_i2s = nullptr;
 #ifdef DAC_ENABLED
 static lv_obj_t *lbl_dac = nullptr;
@@ -249,7 +249,7 @@ void scr_debug_refresh(void) {
     /* Audio ADC — per-ADC diagnostics (always show both) */
     {
         static const char *status_names[] = {"OK", "NO DATA", "NOISE", "CLIP", "I2S ERR", "HW FAULT"};
-        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
             if (!lbl_audio_adc[a]) continue;
             const AppState::AdcState &adc = appState.audioAdc[a];
             const char *st2 = status_names[adc.healthStatus < 6 ? adc.healthStatus : 0];
@@ -455,7 +455,7 @@ lv_obj_t *scr_debug_create(void) {
         lv_obj_set_style_border_width(adc_row, 0, LV_PART_MAIN);
         lv_obj_clear_flag(adc_row, LV_OBJ_FLAG_SCROLLABLE);
 
-        for (int a = 0; a < NUM_AUDIO_ADCS; a++) {
+        for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
             lbl_audio_adc[a] = lv_label_create(adc_row);
             lv_label_set_text(lbl_audio_adc[a], "...");
             lv_obj_add_style(lbl_audio_adc[a], gui_style_dim(), LV_PART_MAIN);
