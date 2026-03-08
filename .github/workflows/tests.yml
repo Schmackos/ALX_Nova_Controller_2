@@ -32,7 +32,7 @@ jobs:
     - name: Install cppcheck
       run: sudo apt-get install -y cppcheck
     - name: Run cppcheck
-      run: cppcheck --enable=warning,style,performance --suppress=missingInclude --suppress=unusedFunction --std=c++11 --error-exitcode=1 src/ --ignore=src/gui/
+      run: cppcheck --enable=warning,style,performance --suppress=missingInclude --suppress=unusedFunction --std=c++11 --error-exitcode=1 -i src/gui/ src/
 
   js-lint:
     runs-on: ubuntu-latest
