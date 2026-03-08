@@ -683,6 +683,8 @@ void dsp_process_buffer_float(float *left, float *right, int frames, int lane) {
     unsigned long startUs = esp_timer_get_time();
 #endif
 
+    // Sync point: config swap only triggers on lane 0 (always present, deterministic).
+    // This prevents mid-swap corruption when processing multiple lanes.
     if (_swapRequested && lane == 0) return;
 
     _processingActive = true;

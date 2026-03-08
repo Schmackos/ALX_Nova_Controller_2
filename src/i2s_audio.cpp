@@ -500,6 +500,8 @@ static bool i2s_configure_adc2(uint32_t sample_rate, const HalDeviceConfig* cfg 
 // Public generic ADC configuration — dispatches to primary (full-duplex) or
 // secondary (RX-only) based on lane index. Config provides pin/port overrides.
 bool i2s_audio_configure_adc(int lane, const HalDeviceConfig* cfg) {
+    // Intentional: ESP32-P4 has exactly 2 I2S RX ports (I2S0 for ADC1, I2S1 for ADC2).
+    // Software sources (SigGen, USB) don't use I2S and are not configured here.
     if (lane == 0) {
         i2s_configure_adc1(_currentSampleRate, cfg);
         return (_rx_handle_adc1 != NULL);
@@ -585,6 +587,7 @@ static void _register_adc_sources() {
     adc1.read = _adc1_src_read;
     adc1.isActive = _adc1_src_isActive;
     adc1.getSampleRate = _adc1_src_getSampleRate;
+    adc1.isHardwareAdc = true;
     audio_pipeline_set_source(AUDIO_SRC_LANE_ADC1, &adc1);
 
     AudioInputSource adc2 = AUDIO_INPUT_SOURCE_INIT;
@@ -593,6 +596,7 @@ static void _register_adc_sources() {
     adc2.read = _adc2_src_read;
     adc2.isActive = _adc2_src_isActive;
     adc2.getSampleRate = _adc2_src_getSampleRate;
+    adc2.isHardwareAdc = true;
     audio_pipeline_set_source(AUDIO_SRC_LANE_ADC2, &adc2);
 }
 

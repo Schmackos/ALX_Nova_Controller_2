@@ -8,8 +8,7 @@
 extern "C" {
 #endif
 
-// Lane indices for hardware ADC sources (first two lanes by convention;
-// software sources like SigGen and USB get dynamic lanes from HAL bridge)
+// DEPRECATED: Physical I2S port indices only. For dynamic lane assignment, use bridge-assigned lanes.
 #define AUDIO_SRC_LANE_ADC1   0
 #define AUDIO_SRC_LANE_ADC2   1
 
@@ -49,6 +48,10 @@ typedef struct AudioInputSource {
 
     // HAL device slot index that owns this source. 0xFF = not bound to any HAL device.
     uint8_t halSlot;
+
+    // True for physical ADC sources (PCM1808). False for software sources (SigGen, USB).
+    // Used by noise gate to determine which lanes get noise gating.
+    bool isHardwareAdc;
 } AudioInputSource;
 
 // Default initializer — all NULLs, gain=1.0, VU=-90dBFS, smoothed=0
@@ -63,7 +66,8 @@ typedef struct AudioInputSource {
     -90.0f, /* vuR */            \
     0.0f,  /* _vuSmoothedL */    \
     0.0f,  /* _vuSmoothedR */    \
-    0xFF   /* halSlot */         \
+    0xFF,  /* halSlot */         \
+    false  /* isHardwareAdc */   \
 }
 
 #ifdef __cplusplus

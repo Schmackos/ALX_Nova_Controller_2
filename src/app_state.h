@@ -484,8 +484,8 @@ public:
   // ===== Audio Pipeline Bypass Flags =====
   // Normal operation: ADC1 + Siggen active, matrix routes both to DAC.
   // ADC2 and USB bypassed until physically connected.
-  bool pipelineInputBypass[4] = {false, true, false, true};  // ADC1+Siggen active; ADC2/USB bypassed
-  bool pipelineDspBypass[4]   = {false, false, true, true};  // ADC1+ADC2 use DSP; Siggen+USB bypass DSP
+  bool pipelineInputBypass[AUDIO_PIPELINE_MAX_INPUTS] = {false, true, false, true, true, true, true, true};  // ADC1+SigGen active; ADC2/USB/rest bypassed
+  bool pipelineDspBypass[AUDIO_PIPELINE_MAX_INPUTS]   = {false, false, true, true, true, true, true, true};  // ADC1+ADC2 use DSP; rest bypass DSP
   bool pipelineMatrixBypass   = false;   // Matrix active: routes ADC1 L/R + Siggen L/R → DAC L/R
   bool pipelineOutputBypass   = false;
 

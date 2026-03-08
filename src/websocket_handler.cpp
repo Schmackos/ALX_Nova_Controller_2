@@ -1730,7 +1730,7 @@ void sendAudioChannelMap() {
         bool ready = false;
         HalDeviceType devType = HAL_DEV_NONE;
 
-        if (lane == 0 || lane == 1) {
+        if (lane >= 0 && lane < AUDIO_PIPELINE_MAX_INPUTS) {
             // ADC lanes — find PCM1808 devices
             HalDevice* adc = HalDeviceManager::instance().findByType(HAL_DEV_ADC, lane);
             if (adc) {

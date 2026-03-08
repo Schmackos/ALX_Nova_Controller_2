@@ -201,8 +201,8 @@ static void pipeline_to_float() {
         if (!_laneL[i] || !_laneR[i]) continue;
         to_float(_rawBuf[i], _laneL[i], _laneR[i], FRAMES);
 
-        // Noise gate: ADC lanes only (siggen/USB are always clean)
-        if (i == AUDIO_SRC_LANE_ADC1 || i == AUDIO_SRC_LANE_ADC2) {
+        // Noise gate: hardware ADC lanes only (siggen/USB are always clean)
+        if (_sources[i].isHardwareAdc) {
             float sumSq = 0.0f;
             for (int f = 0; f < FRAMES; f++) {
                 sumSq += _laneL[i][f] * _laneL[i][f] + _laneR[i][f] * _laneR[i][f];
@@ -242,7 +242,7 @@ static void pipeline_to_float() {
 static void pipeline_run_dsp() {
 #ifdef DSP_ENABLED
     // Float-native DSP — no int32 bridge needed (saves ~2KB + 4 conversion loops)
-    for (int lane = 0; lane < 2; lane++) {
+    for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
         if (_dspBypass[lane] || !_laneL[lane] || !_laneR[lane]) continue;
         dsp_process_buffer_float(_laneL[lane], _laneR[lane], FRAMES, lane);
     }
@@ -780,9 +780,12 @@ void audio_pipeline_dump_raw_diag() {
     uint8_t lowByte = (uint8_t)(_adcDiag.raw[0] & 0xFF);
     LOG_I("[Audio]   raw[0] low byte=0x%02X  (0x00 → left-justified OK; non-zero → format mismatch)",
           (unsigned int)lowByte);
-    LOG_I("[Audio]   gate ADC1=%s ADC2=%s  (OPEN=audio present, CLOSED=noise floor only)",
-          _gateOpen[0] ? "OPEN" : "CLOSED",
-          _gateOpen[1] ? "OPEN" : "CLOSED");
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
+        if (!_sources[i].read) continue;
+        LOG_I("[Audio]   gate lane%d (%s) = %s", i,
+              _sources[i].name ? _sources[i].name : "?",
+              _gateOpen[i] ? "OPEN" : "CLOSED");
+    }
 }
 
 // ===== Output Sink API =====
