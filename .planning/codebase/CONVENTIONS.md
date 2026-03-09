@@ -2,67 +2,74 @@
 
 **Analysis Date:** 2026-03-09
 
-## Naming Patterns
+---
 
-**Files:**
-- C++ source: `snake_case.cpp` / `snake_case.h` (e.g. `audio_pipeline.cpp`, `hal_device_manager.h`)
-- HAL drivers: `hal_<device>.cpp` / `hal_<device>.h` (e.g. `hal_pcm5102a.cpp`, `hal_es8311.h`)
-- Test files: `test_<module>.cpp` inside `test/test_<module>/` — one file per module directory
-- Web JS: `<NN>-<kebab-name>.js` (numeric prefix controls concat order, e.g. `01-core.js`, `05-audio-tab.js`)
-- Web CSS: `<NN>-<kebab-name>.css` (e.g. `00-tokens.css`, `03-components.css`)
-- E2E specs: `<kebab-name>.spec.js` (e.g. `hal-devices.spec.js`, `audio-inputs.spec.js`)
+## C++ Firmware
+
+### File Naming
+
+- Source files use `snake_case`: `wifi_manager.cpp`, `hal_device_manager.cpp`
+- Header/source pairs share the same base name: `debug_serial.h` / `debug_serial.cpp`
+- HAL drivers live under `src/hal/` and follow `hal_<name>.h/.cpp` — e.g. `src/hal/hal_pcm5102a.h`, `src/hal/hal_es8311.cpp`
+- Test files are named `test_<module>.cpp` inside `test/test_<module>/` — one `.cpp` per directory to avoid duplicate `main`/`setUp`/`tearDown` link symbols
+- Web JS modules: `<NN>-<kebab-name>.js` — numeric prefix controls concat order: `01-core.js`, `05-audio-tab.js`
+- Web CSS modules: `<NN>-<kebab-name>.css` — e.g. `00-tokens.css`, `03-components.css`
+- E2E specs: `<kebab-name>.spec.js` — e.g. `hal-devices.spec.js`, `audio-inputs.spec.js`
 - Fixtures: `<kebab-name>.json` in `e2e/fixtures/ws-messages/` and `e2e/fixtures/api-responses/`
 
-**C++ functions:**
-- Free functions: `snake_case` (e.g. `audio_pipeline_set_sink()`, `hal_registry_find()`)
-- Class methods: `camelCase` (e.g. `registerDevice()`, `findByCompatible()`, `healthCheck()`)
-- HAL lifecycle virtuals: `probe()`, `init()`, `deinit()`, `dumpConfig()`, `healthCheck()`, `getInputSource()`
-- Test functions: `test_<what_it_tests>` (e.g. `test_register_and_get_device()`, `test_max_devices_limit()`)
+### Symbol Naming
 
-**C++ variables:**
-- Local variables: `camelCase` or `snake_case` (both used; prefer `camelCase` for new code)
-- Private/protected class members: `_prefixedCamelCase` (e.g. `_ready`, `_state`, `_slot`, `_descriptor`)
-- Static file-local variables: `_prefixedCamelCase` (e.g. `_smoothedAudioLevel`, `_wsTokens`)
-- Constants / `#define`: `SCREAMING_SNAKE_CASE` (e.g. `HAL_MAX_DEVICES`, `BUZZER_PIN`, `LOG_NONE`)
-- Enum values: `SCREAMING_SNAKE_CASE` (e.g. `HAL_STATE_AVAILABLE`, `HAL_DEV_DAC`, `HAL_DISC_BUILTIN`)
+- **Classes**: `PascalCase` — `HalDevice`, `HalDeviceManager`, `DebugSerial`, `HalPcm5102a`
+- **Enums**: `PascalCase` type name with `SCREAMING_SNAKE_CASE` values:
+  ```cpp
+  enum HalDeviceType : uint8_t { HAL_DEV_NONE = 0, HAL_DEV_DAC = 1, HAL_DEV_ADC = 2 };
+  enum HalDeviceState : uint8_t { HAL_STATE_UNKNOWN = 0, HAL_STATE_AVAILABLE = 3 };
+  ```
+- **Free functions**: `snake_case` — `audio_pipeline_set_sink()`, `dsp_swap_config()`, `i2s_audio_init()`
+- **Class methods**: `camelCase` — `registerDevice()`, `findByCompatible()`, `getInputSource()`, `healthCheck()`
+- **Private/protected class members**: `_prefixedCamelCase` — `_descriptor`, `_slot`, `_initPriority`, `_ready`, `_state`
+- **File-local statics**: `_prefixedCamelCase` — `_smoothedAudioLevel`, `_wsTokens`, `_halSlotToSinkSlot[]`
+- **Constants/macros**: `SCREAMING_SNAKE_CASE` — `HAL_MAX_DEVICES`, `FIRMWARE_VERSION`, `BUZZER_PWM_CHANNEL`
+- **Compile-time pins in `config.h`**: declared as `const int` with `#ifndef` guard (not raw `#define`):
+  ```cpp
+  #ifndef LED_PIN
+  const int LED_PIN = 1;
+  #endif
+  ```
+- **Test functions**: `test_<what_it_tests>` — `test_register_and_get_device()`, `test_max_devices_limit()`
 
-**JavaScript:**
-- Functions: `camelCase` (e.g. `apiFetch()`, `buildInitialState()`, `renderHalDevices()`)
-- Variables: `camelCase` (e.g. `currentWifiConnected`, `audioChannelMap`, `halDevices`)
-- Constants: `SCREAMING_SNAKE_CASE` (e.g. `WS_MIN_RECONNECT_DELAY`, `HAL_CAP_HW_VOLUME`)
-- All top-level JS declarations must be listed in `web_src/.eslintrc.json` globals (380 entries)
+### Compile-Time Guard Macros
 
-**Types:**
-- C++ enums: `PascalCase` type name, `SCREAMING_SNAKE_CASE` values
-- C++ structs: `PascalCase` (e.g. `HalDeviceDescriptor`, `AudioInputSource`, `WsToken`)
-- C++ classes: `PascalCase` (e.g. `HalDevice`, `HalPcm5102a`, `DebugSerial`)
+These macros conditionally compile entire subsystems. Guard presence/absence must leave code coherent.
 
-## Code Style
+| Macro | Purpose | Where checked |
+|---|---|---|
+| `UNIT_TEST` | Native test build (set by `[env:native]`) | `config.h`, many src headers |
+| `NATIVE_TEST` | Native test build — selects mock headers | All test files and mocked headers |
+| `GUI_ENABLED` | Enables LVGL GUI subsystem (`src/gui/`) | All GUI code, `main.cpp` |
+| `DAC_ENABLED` | Enables HAL DAC framework + I2S TX | `dac_hal.h`, `hal_device_manager.h`, all HAL `.cpp` wrappers |
+| `DSP_ENABLED` | Enables biquad/FIR/DSP pipeline | `dsp_pipeline.h`, `dsp_coefficients.h` |
+| `USB_AUDIO_ENABLED` | Enables TinyUSB UAC2 speaker device | `usb_audio.h`, `state/usb_audio_state.h` |
+| `CONFIG_IDF_TARGET_ESP32P4` | Enables P4-only peripherals (temp sensor) | `hal_temp_sensor.cpp` |
 
-**Formatting:**
-- C++: No enforced formatter (cppcheck for static analysis only). Indentation: 4 spaces. Braces on same line for functions, new line accepted too.
-- JavaScript: ESLint enforced via `web_src/.eslintrc.json`. ES2020 syntax, `sourceType: "script"` (not module — all files concatenated into one `<script>` block).
-- No trailing whitespace rule enforced; no line-length limit enforced.
+**Standard mock-vs-hardware include pattern** (all test files follow this exactly):
 
-**Linting (C++):**
-- `cppcheck --enable=warning,performance --suppress=missingInclude --suppress=unusedFunction --suppress=badBitmaskCheck --std=c++11 --error-exitcode=1 -i src/gui/ src/`
-- `src/gui/` is excluded from cppcheck (LVGL complexity)
-- Run in CI (`cpp-lint` job) — not pre-commit
+```cpp
+#ifdef NATIVE_TEST
+#include "../test_mocks/Arduino.h"
+#include "../test_mocks/Preferences.h"
+#include "../test_mocks/WiFi.h"
+#else
+#include <Arduino.h>
+#include <Preferences.h>
+#include <WiFi.h>
+#endif
+```
 
-**Linting (JavaScript):**
-- ESLint rules enforced: `no-undef` (error), `no-redeclare` (error), `eqeqeq` (smart)
-- Run pre-commit and in CI (`js-lint` job)
-- Duplicate global declarations checked by `node tools/find_dups.js`
-- Undefined function references checked by `node tools/check_missing_fns.js`
-
-## Conditional Compilation Guards
-
-Every HAL driver `.cpp` file wraps its entire body in `#ifdef DAC_ENABLED`. Within those files, hardware-specific includes are further wrapped in `#ifndef NATIVE_TEST`. The standard pattern:
+**HAL driver `.cpp` wrapper pattern** — entire driver body wrapped in `#ifdef DAC_ENABLED`:
 
 ```cpp
 #ifdef DAC_ENABLED
-// HalFoo driver
-
 #include "hal_foo.h"
 #include "hal_device_manager.h"
 
@@ -87,20 +94,74 @@ static void digitalWrite(int, int) {}
 #endif // DAC_ENABLED
 ```
 
-Build flags controlling features: `DAC_ENABLED`, `DSP_ENABLED`, `GUI_ENABLED`, `USB_AUDIO_ENABLED`.
-Native test flags: `UNIT_TEST`, `NATIVE_TEST` (set by `[env:native]` in `platformio.ini`).
+### HAL Driver Pattern (ESPHome-Inspired)
 
-## Import Organization
+All hardware drivers inherit from `HalDevice` (`src/hal/hal_device.h`) and implement five pure virtual methods:
 
-**C++ headers — typical order:**
-1. Module's own header (e.g. `#include "smart_sensing.h"`)
-2. Application state (`#include "app_state.h"`, `#include "globals.h"`)
-3. Application utilities (`#include "debug_serial.h"`, `#include "config.h"`)
-4. Sibling modules (`#include "i2s_audio.h"`, `#include "websocket_handler.h"`)
-5. Third-party (`#include <ArduinoJson.h>`, `#include <LittleFS.h>`)
-6. Standard library (`#include <cmath>`, `#include <cstring>`)
+```cpp
+class HalMyDriver : public HalDevice {
+public:
+    bool probe() override;         // Non-destructive — I2C ACK, GPIO check, chip ID verify
+    HalInitResult init() override; // Full hardware init; returns error code on failure
+    void deinit() override;        // Idempotent shutdown + resource release
+    void dumpConfig() override;    // LOG_I output of full descriptor at boot
+    bool healthCheck() override;   // Periodic register read (30s timer)
+};
+```
 
-**Test file header pattern:**
+`initAll()` is never called on builtin devices at runtime — devices are explicitly `probe()`d then `init()`d after `registerDevice()`.
+
+**Init result factory functions** (`src/hal/hal_init_result.h`):
+
+```cpp
+return hal_init_ok();
+return hal_init_fail(DIAG_HAL_INIT_FAILED, "descriptive reason");
+```
+
+**Input device extension** — override `getInputSource()` for ADC/audio-source devices:
+
+```cpp
+virtual const AudioInputSource* getInputSource() const override { return &_inputSrc; }
+```
+
+**HAL device lifecycle states** (`src/hal/hal_types.h`):
+
+`HAL_STATE_UNKNOWN` → `HAL_STATE_DETECTED` → `HAL_STATE_CONFIGURING` → `HAL_STATE_AVAILABLE` ⇄ `HAL_STATE_UNAVAILABLE` → `HAL_STATE_ERROR` / `HAL_STATE_REMOVED` / `HAL_STATE_MANUAL`
+
+Volatile `_ready` and `_state` fields on `HalDevice` enable lock-free reads from Core 1 audio task.
+
+**Init priority constants** (higher = initialised first in priority-sorted `initAll()`):
+
+```cpp
+#define HAL_PRIORITY_BUS       1000   // I2C, I2S, SPI bus controllers
+#define HAL_PRIORITY_IO         900   // GPIO expanders
+#define HAL_PRIORITY_HARDWARE   800   // Audio codec/DAC/ADC hardware
+#define HAL_PRIORITY_DATA       600   // Data consumers (pipeline, metering)
+#define HAL_PRIORITY_LATE       100   // Non-critical (diagnostics)
+```
+
+**Capability bit flags** (`src/hal/hal_types.h`): `HAL_CAP_HW_VOLUME`, `HAL_CAP_FILTERS`, `HAL_CAP_MUTE`, `HAL_CAP_ADC_PATH`, `HAL_CAP_DAC_PATH`, `HAL_CAP_PGA_CONTROL`, `HAL_CAP_HPF_CONTROL`, `HAL_CAP_CODEC`
+
+### Header Guards
+
+- New HAL headers: `#pragma once`
+- Legacy non-HAL headers: `#ifndef MODULE_H / #define MODULE_H / #endif`
+
+Both styles coexist; new code uses `#pragma once`.
+
+### Import Organization
+
+**C++ headers — typical order in `.cpp` files:**
+1. Module's own header
+2. Application state (`app_state.h`, `globals.h`)
+3. Application utilities (`debug_serial.h`, `config.h`)
+4. Sibling modules (`i2s_audio.h`, `websocket_handler.h`)
+5. Third-party (`<ArduinoJson.h>`, `<LittleFS.h>`, `<Preferences.h>`)
+6. Platform (`<Arduino.h>`, `<esp_wifi.h>`)
+7. Standard library (`<cmath>`, `<cstring>`)
+
+**Test file include pattern** (test files include `.cpp` directly since `test_build_src = no`):
+
 ```cpp
 #include <unity.h>
 #include <cstring>
@@ -108,127 +169,259 @@ Native test flags: `UNIT_TEST`, `NATIVE_TEST` (set by `[env:native]` in `platfor
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
 #include "../test_mocks/Preferences.h"
-#include "../test_mocks/WiFi.h"
 #else
 #include <Arduino.h>
 #include <Preferences.h>
-#include <WiFi.h>
 #endif
 
-// Inline .cpp files directly (test_build_src = no)
+// Inline the .cpp files needed for the test
 #include "../../src/hal/hal_device_manager.cpp"
+#include "../../src/hal/hal_driver_registry.cpp"
 ```
 
-## AppState Access Pattern
+### AppState Access Pattern
 
-All application state is accessed through the `appState` singleton using domain-qualified paths:
-- `appState.wifi.ssid`, `appState.wifi.enabled`
-- `appState.audio.adcEnabled[i]`, `appState.audio.amplifierState`
-- `appState.dac.es8311Enabled`, `appState.dac.requestDacToggle(1)`
-- `appState.general.darkMode`, `appState.general.deviceSerialNumber`
-- `appState.dsp.enabled`, `appState.dsp.swapFailures`
-- `appState.mqtt.broker`, `appState.mqtt.port`
+Domain state accessed via nested composition — never via deprecated `#define` aliases in new code:
 
-Legacy macro aliases (e.g. `#define wifiSSID appState.wifiSSID`) exist for backward compat. New code uses `appState.domain.fieldName` directly.
+```cpp
+appState.wifi.ssid                    // WifiState
+appState.audio.adcEnabled[i]          // AudioState
+appState.dac.es8311Enabled            // DacState
+appState.general.darkMode             // GeneralState
+appState.dsp.enabled                  // DspSettingsState
+appState.mqtt.broker                  // MqttState
+appState.debug.hwStats                // DebugState
+```
 
-## Error Handling
+Cross-cutting flags remain at top level: `appState._mqttReconfigPending`, `appState._pendingApToggle`.
 
-**C++:**
-- Functions that can fail return `bool` (true=success) or `HalInitResult` (HAL drivers)
-- `HalInitResult` wraps success/failure with an error code (`diag_error_codes.h`) and reason string
-- Use `hal_init_ok()` / `hal_init_fail(DIAG_CODE, "reason")` factory functions
-- HTTP handlers: return JSON `{ "success": false, "error": "message" }` with appropriate HTTP status
-- HTTP 503 returned when DSP swap fails (15 endpoints guarded)
+Dirty flag setters call `app_events_signal(EVT_XXX)` to wake the main loop from `app_events_wait(5)`.
+
+**DAC toggle deferrals** — never call `dev->deinit()` directly for `HAL_CAP_DAC_PATH` devices from REST handlers. Use validated setters that only accept -1, 0, 1:
+
+```cpp
+appState.dac.requestDacToggle(1);
+appState.dac.requestEs8311Toggle(-1);
+```
+
+### Error Handling
+
+**HTTP REST handlers** — uniform pattern:
+
+```cpp
+if (!requireAuth()) return;
+if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
+if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
+server.send(200, "application/json", "{\"success\":true}");
+```
+
+- HTTP 503 when DSP swap fails (15 endpoints guarded)
 - HTTP 429 with `Retry-After` header for login rate limit violations
-- Never silently swallow errors; use `LOG_E` before returning false
+- HTTP 409 for concurrent HAL rescan attempt
 
-**JavaScript:**
-- `apiFetch()` wrapper handles 401 by redirecting to `/login`
-- Async errors in `try/catch` blocks; `console.error` for unexpected exceptions
-- WS reconnect with exponential backoff: `WS_MIN_RECONNECT_DELAY=2000ms` → `WS_MAX_RECONNECT_DELAY=30000ms`
+**Memory allocation guard**:
 
-## Logging
+```cpp
+char* buf = (char*)malloc(size);
+if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
+```
 
-**Framework:** `debug_serial.h` macros (`LOG_D`, `LOG_I`, `LOG_W`, `LOG_E`)
+**LittleFS file operations** — always check open and size:
 
-**Log level semantics:**
-- `LOG_I(fmt, ...)`: State transitions, significant events (connect/disconnect, start/stop, health changes)
-- `LOG_D(fmt, ...)`: High-frequency operational details (pattern steps, param snapshots)
-- `LOG_W(fmt, ...)`: Recoverable abnormal conditions (config fallback, unsupported value)
-- `LOG_E(fmt, ...)`: Errors requiring attention (init failure, write failure, assertion fail)
+```cpp
+File f = LittleFS.open(path, FILE_READ);
+if (!f || f.size() == 0) { if (f) f.close(); return false; }
+```
 
-**Mandatory prefix format — every log call includes `[ModuleName]`:**
+**Functions that fail**: return `bool` (true=success), `HalInitResult` (HAL drivers), or `int` slot index (-1 on failure). Never silently swallow errors — always `LOG_E` before returning false.
 
-| Module | Log Prefix | File |
-|--------|-----------|------|
-| MQTT handler | `[MQTT]` | `src/mqtt_handler.cpp`, `src/mqtt_publish.cpp` |
+### Logging
+
+All modules use macros from `src/debug_serial.h`:
+
+```cpp
+#define LOG_D(fmt, ...) DebugOut.debug(fmt, ##__VA_ARGS__)  // High-frequency operational detail
+#define LOG_I(fmt, ...) DebugOut.info(fmt, ##__VA_ARGS__)   // State transitions, significant events
+#define LOG_W(fmt, ...) DebugOut.warn(fmt, ##__VA_ARGS__)   // Recoverable abnormal conditions
+#define LOG_E(fmt, ...) DebugOut.error(fmt, ##__VA_ARGS__)  // Errors requiring attention
+```
+
+**Every log call includes a `[ModuleName]` prefix:**
+
+| Module | Prefix | File |
+|---|---|---|
 | Smart sensing | `[Sensing]` | `src/smart_sensing.cpp` |
-| HAL device manager | `[HAL]` | `src/hal/hal_device_manager.cpp` |
-| HAL discovery | `[HAL Discovery]` | `src/hal/hal_discovery.cpp` |
-| HAL device DB | `[HAL DB]` | `src/hal/hal_device_db.cpp` |
-| HAL API | `[HAL API]` | `src/hal/hal_api.cpp` |
-| HAL PCM5102A | `[HAL:PCM5102A]` | `src/hal/hal_pcm5102a.cpp` |
-| Audio / I2S | `[Audio]` | `src/i2s_audio.cpp` |
+| I2S audio | `[Audio]` | `src/i2s_audio.cpp` |
+| Signal generator | `[SigGen]` | `src/signal_generator.cpp` |
+| Buzzer | `[Buzzer]` | `src/buzzer_handler.cpp` |
 | WiFi | `[WiFi]` | `src/wifi_manager.cpp` |
+| MQTT | `[MQTT]` | `src/mqtt_handler.cpp`, `src/mqtt_publish.cpp` |
 | OTA | `[OTA]` | `src/ota_updater.cpp` |
 | Settings | `[Settings]` | `src/settings_manager.cpp` |
 | USB Audio | `[USB Audio]` | `src/usb_audio.cpp` |
-| Signal generator | `[SigGen]` | `src/signal_generator.cpp` |
-| Buzzer | `[Buzzer]` | `src/buzzer_handler.cpp` |
-| GUI | `[GUI]` | `src/gui/gui_manager.cpp` etc. |
+| Output DSP | `[OutputDSP]` | `src/output_dsp.cpp` |
+| HAL core | `[HAL]` | `src/hal/hal_device_manager.cpp` |
+| HAL discovery | `[HAL Discovery]` | `src/hal/hal_discovery.cpp` |
+| HAL device DB | `[HAL DB]` | `src/hal/hal_device_db.cpp` |
+| HAL API | `[HAL API]` | `src/hal/hal_api.cpp` |
+| GUI | `[GUI]` | `src/gui/gui_manager.cpp` |
 
-**ISR and audio task logging is FORBIDDEN.** The `audio_pipeline_task` (Core 1) must never call `LOG_*` or `Serial.print`. Use the dirty-flag pattern: task sets a flag, main loop calls `audio_periodic_dump()` for actual output.
+**Logging rules:**
+- `LOG_I` for state transitions and significant events (connect/disconnect, health changes, start/stop)
+- `LOG_D` for high-frequency operational details (pattern steps, parameter snapshots)
+- NEVER call `LOG_*` or `Serial.print` inside ISR paths or `audio_pipeline_task` (Core 1 — UART TX blocks, starves DMA, causes audio dropouts). Use dirty-flag pattern: task sets flag, main loop calls `audio_periodic_dump()` for actual output.
+- Log transitions, not steady state. Use a `static prev` variable to detect changes before logging.
+- Save log files (build output, test reports, serial captures) to `logs/` — keep project root clean.
 
-**Log transitions, not steady state.** Use a `static prev` variable to detect changes and log only when state differs.
+### FreeRTOS / Cross-Core Safety
 
-## Comments
+- `volatile` on fields read hot from Core 1 audio task: `appState.audioPaused`, `HalDevice::_ready`, `HalDevice::_state`
+- `vTaskSuspendAll()` / `xTaskResumeAll()` for atomic source/sink slot operations in audio pipeline
+- Binary semaphore `appState.audioTaskPausedAck` for deterministic DAC deinit/reinit handshake (replaces volatile + `vTaskDelay(40ms)` guesswork)
+- Main loop: `app_events_wait(5)` replaces `delay(5)` — wakes in <1µs on any dirty flag, falls back to 5ms tick
+- Core 1 is reserved for `loopTask` + `audio_pipeline_task` only. No new tasks may be pinned to Core 1.
+- MQTT runs entirely on Core 0 (`mqtt_task`). Main loop never calls `mqttLoop()` or `publishMqtt*()`.
 
-**When to comment:**
-- Non-obvious hardware interactions: clock topology, DMA constraints, ISR safety, I2C bus conflicts
-- Cross-module contracts (e.g. `// NOTE: I2S TX channel is owned by i2s_audio.cpp`)
-- Safety invariants (e.g. `// Never call i2s_configure_adc1() in the task loop`)
-- Section dividers use `// ===== Section Name =====` style
+---
 
-**JSDoc / TSDoc:**
-- Not used for internal functions. Header comment blocks at top of spec files describe test intent.
-- E2E test files start with a `/** ... */` JSDoc block naming the spec and key constraints.
+## JavaScript (Web Frontend)
 
-## Function Design
+### File Organization
 
-**Size:** Handlers and lifecycle methods are allowed to be long (MQTT handler ~1120 lines split across 3 files). New code should prefer extracting helpers.
+JS files in `web_src/js/` are concatenated in filename alphabetical order into a single `<script>` block by `tools/build_web_assets.js`. All files share one global scope.
 
-**Parameters:** C-style `(const char* name, int value)` over references for POD types in C; references for objects. HAL `init()` reads config from `HalDeviceManager::instance().getConfig(_slot)` rather than taking parameters.
+Current modules (load order by filename prefix):
+- `01-core.js` — WebSocket connection, `apiFetch`, reconnect with exponential backoff
+- `02-ws-router.js` — message dispatch (`routeWsMessage`), binary frame handling
+- `03-app-state.js` — global state variable declarations
+- `04-shared-audio.js` — dynamic `numInputLanes`, `resizeAudioArrays()` (no hardcoded `NUM_ADCS`)
+- `05-audio-tab.js` — Audio tab: HAL-driven input/output strips, 16×16 matrix UI, SigGen sub-view
+- `06-canvas-helpers.js` / `06-peq-overlay.js` — canvas drawing, PEQ/crossover/compressor/limiter overlays
+- `07-ui-core.js` / `08-ui-status.js` — sidebar, tab switching, status bar
+- `09-audio-viz.js` — waveform/spectrum canvas animation loops
+- `13-signal-gen.js` — SigGen controls
+- `15-hal-devices.js` / `15a-yaml-parser.js` — HAL device management UI
+- `20-wifi-network.js` / `21-mqtt-settings.js` — WiFi multi-network config, MQTT settings
+- `22-settings.js` through `28-init.js` — Settings, OTA, debug console, auth, health dashboard, init
 
-**Return values:**
-- Void for fire-and-forget operations
-- `bool` for fallible operations without detail needed
-- `HalInitResult` for HAL driver `init()` (structured error with code + reason)
-- `int` slot index (returns -1 on failure) for registration functions
+### Naming Patterns
 
-## Module Design
+- **Global variables**: `camelCase` — `numInputLanes`, `audioChannelMap`, `halDevices`, `currentWifiConnected`
+- **Functions**: `camelCase` — `resizeAudioArrays()`, `renderHalDevices()`, `openPeqOverlay()`, `buildInitialState()`
+- **Constants**: `SCREAMING_SNAKE_CASE` — `WS_MIN_RECONNECT_DELAY`, `HAL_CAP_DAC_PATH`, `DEBUG_MAX_LINES`
+- **DOM IDs** (from `web_src/index.html`): `camelCase` — `#halDeviceList`, `#wsConnectionStatus`, `#audioInputsContainer`
+- **Data attributes**: `kebab-case` — `data-tab="devices"`, `data-view="matrix"`
 
-**C++ modules** follow a header + implementation split:
-- Header declares public API with `#pragma once` or `#ifndef` guard
-- HAL headers wrap content in `#ifdef DAC_ENABLED`
-- Implementation files start with `#ifdef DAC_ENABLED` for HAL drivers
+### Concatenated Scope Rules
 
-**JavaScript modules** are concatenated scripts, not ES modules:
-- Variables declared with `let` / `const` at the top of the file contribute to shared scope
-- No `export`/`import` — all declarations must be in `web_src/.eslintrc.json` globals
-- Numeric filename prefix `NN-` controls load order strictly
+Because all JS shares one global scope, these rules are mandatory:
+
+- No duplicate `let`/`const`/`var` declarations across files — `node tools/find_dups.js` enforces this at pre-commit and CI
+- No ES module `import`/`export` syntax — `"sourceType": "script"` is set in `.eslintrc.json`
+- Every top-level function and variable must be declared in exactly one file
+- When adding a new global declaration, add it to `web_src/.eslintrc.json` under `"globals"` with `"writable"` or `"readonly"` appropriately
+
+### ESLint Rules
+
+Config: `web_src/.eslintrc.json`. Three enforced rules:
+
+```json
+"rules": {
+  "no-undef": "error",
+  "no-redeclare": ["error", { "builtinGlobals": false }],
+  "eqeqeq": ["error", "smart"]
+}
+```
+
+- `no-undef` — all referenced globals must be declared in the `"globals"` section (currently 380+ entries)
+- `no-redeclare` — no duplicate variable or function declarations
+- `eqeqeq: "smart"` — requires `===` except for null comparisons where `==` is acceptable
+
+Run: `cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json`
+
+### Static Analysis Tools
+
+Two Node.js tools run before every commit and in CI (`js-lint` job):
+
+**`node tools/find_dups.js`** — scans all `web_src/js/` files at scope depth=0 and reports any duplicate `let`/`const`/`var` or function declarations. Must pass before commit.
+
+**`node tools/check_missing_fns.js`** — verifies that functions referenced in HTML event handlers and WS router dispatch tables exist in the JS source. Must pass before commit.
+
+### WebSocket Protocol
+
+Binary WebSocket frames (sent with `sendBIN`) use a type byte prefix:
+- `0x01` — waveform: `[type:u8][adc:u8][256 samples:u8]` = 258 bytes total
+- `0x02` — spectrum: `[type:u8][adc:u8][dominantFreq:f32LE][16 bands:f32LE]` = 70 bytes total
+
+JSON frames dispatched by `routeWsMessage(data)` via `data.type` string.
+
+Flat `audioAdc[0]`/`audioAdc[1]` broadcast fields are deprecated as of v1.14 — use per-lane arrays with dynamic `numInputLanes` iteration instead.
+
+### Icon Convention
+
+All icons use inline SVG from Material Design Icons (MDI, `pictogrammers.com`). No external CDN.
+
+```html
+<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+  <path d="<MDI path data>"/>
+</svg>
+```
+
+- `fill="currentColor"` — inherits CSS `color` property
+- `width`/`height`: 18px for inline text buttons, 24px for standalone buttons
+- `aria-hidden="true"` on decorative icons; `aria-label` on icon-only interactive elements
+- In JS-generated strings: single-quoted outer JS string, double-quoted SVG attributes
+
+### Web Asset Build
+
+**NEVER edit `src/web_pages.cpp` or `src/web_pages_gz.cpp` directly.** Both files are auto-generated.
+
+After any change to `web_src/`:
+
+```bash
+node tools/build_web_assets.js
+```
+
+This regenerates both `.cpp` files from `web_src/index.html` + all CSS/JS files.
+
+---
 
 ## Commit Convention
 
-```
-feat: Add new feature
-fix: Fix bug
-docs: Update documentation
-refactor: Code refactoring
-test: Add/update tests
-chore: Maintenance tasks
+Format: `<type>: <short description>`
+
+| Type | Use |
+|---|---|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `docs` | Documentation update |
+| `refactor` | Code restructuring without behavior change |
+| `test` | Adding or updating tests |
+| `chore` | Maintenance tasks |
+
+**IMPORTANT**: Never add `Co-Authored-By` trailers to commit messages. No AI attribution lines.
+
+---
+
+## Pre-Commit Hooks
+
+Activate with `git config core.hooksPath .githooks`.
+
+The hook at `.githooks/pre-commit` runs three checks in sequence (`set -e` — any failure aborts):
+
+```bash
+node tools/find_dups.js           # 1/3 — duplicate JS declarations
+node tools/check_missing_fns.js  # 2/3 — missing function references
+cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json  # 3/3 — ESLint
 ```
 
-**IMPORTANT:** Never add `Co-Authored-By` trailers to commits. No AI attribution lines.
+---
+
+## Documentation and Diagrams
+
+- Architecture diagrams: `docs-internal/architecture/` — 10 Mermaid `.mmd` files (system-architecture, hal-lifecycle, hal-pipeline-bridge, boot-sequence, event-architecture, sink-dispatch, test-infrastructure, ci-quality-gates, e2e-test-flow, test-coverage-map)
+- Internal planning documents: `docs-internal/planning/`
+- Log files (build output, test reports, serial captures): `logs/` directory — keep project root clean
 
 ---
 
