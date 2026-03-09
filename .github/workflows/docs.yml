@@ -46,14 +46,26 @@ jobs:
           echo "sections=$SECTIONS" >> $GITHUB_OUTPUT
           echo "Sections to regenerate: $SECTIONS"
 
+      - name: Check Anthropic API key
+        id: check_key
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "has_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "::warning::ANTHROPIC_API_KEY secret not set — skipping doc generation, building existing site only"
+          fi
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
       - name: Generate docs (incremental)
-        if: steps.detect.outputs.sections != '[]' && !inputs.regen_all
+        if: steps.detect.outputs.sections != '[]' && !inputs.regen_all && steps.check_key.outputs.has_key == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node tools/generate_docs.js --sections '${{ steps.detect.outputs.sections }}'
 
       - name: Generate docs (full regeneration)
-        if: inputs.regen_all
+        if: inputs.regen_all && steps.check_key.outputs.has_key == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node tools/generate_docs.js --all
