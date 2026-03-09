@@ -890,6 +890,22 @@ void audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
           (int)_sinkCount);
 }
 
+void audio_pipeline_set_sink_muted(uint8_t slot, bool muted) {
+    if (slot >= AUDIO_OUT_MAX_SINKS) return;
+#ifndef NATIVE_TEST
+    vTaskSuspendAll();
+#endif
+    _sinks[slot].muted = muted;  // Single bool write — no heap allocation
+#ifndef NATIVE_TEST
+    xTaskResumeAll();
+#endif
+}
+
+bool audio_pipeline_is_sink_muted(uint8_t slot) {
+    if (slot >= AUDIO_OUT_MAX_SINKS) return false;
+    return _sinks[slot].muted;
+}
+
 void audio_pipeline_remove_sink(int slot) {
     if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS) return;
     if (!_sinks[slot].write) return;  // Already empty

@@ -98,6 +98,16 @@ static void audio_pipeline_remove_sink(int slot) {
     markChannelMapDirty();
 }
 
+static void audio_pipeline_set_sink_muted(uint8_t slot, bool muted) {
+    if (slot >= MAX_SINKS) return;
+    _sinks[slot].muted = muted;
+}
+
+static bool audio_pipeline_is_sink_muted(uint8_t slot) {
+    if (slot >= MAX_SINKS) return false;
+    return _sinks[slot].muted;
+}
+
 static int audio_pipeline_get_sink_count() {
     return _sinkCount;
 }
@@ -625,6 +635,43 @@ void test_not_dirty_on_empty_slot_remove() {
     TEST_ASSERT_FALSE(_channelMapDirty);
 }
 
+// ==========================================================================
+// Group 7: Sink mute API (3 tests)
+// ==========================================================================
+
+// 33. set_sink_muted updates the sink struct, is_sink_muted reflects it
+void test_set_sink_muted_updates_sink_struct() {
+    AudioOutputSink s = make_sink("DAC0", 0, 0, 2);
+    audio_pipeline_set_sink(0, &s);
+
+    // Mute
+    audio_pipeline_set_sink_muted(0, true);
+    TEST_ASSERT_TRUE(audio_pipeline_is_sink_muted(0));
+    TEST_ASSERT_TRUE(_sinks[0].muted);
+
+    // Unmute
+    audio_pipeline_set_sink_muted(0, false);
+    TEST_ASSERT_FALSE(audio_pipeline_is_sink_muted(0));
+    TEST_ASSERT_FALSE(_sinks[0].muted);
+}
+
+// 34. set_sink_muted ignores invalid slot indices without crashing
+void test_set_sink_muted_ignores_invalid_slot() {
+    // Slot >= MAX_SINKS
+    audio_pipeline_set_sink_muted(MAX_SINKS, true);
+    audio_pipeline_set_sink_muted(255, true);
+    // is_sink_muted returns false for invalid slots
+    TEST_ASSERT_FALSE(audio_pipeline_is_sink_muted(MAX_SINKS));
+    TEST_ASSERT_FALSE(audio_pipeline_is_sink_muted(255));
+}
+
+// 35. Newly registered sink is unmuted by default
+void test_unmuted_by_default() {
+    AudioOutputSink s = make_sink("DAC0", 0, 0, 2);
+    audio_pipeline_set_sink(0, &s);
+    TEST_ASSERT_FALSE(audio_pipeline_is_sink_muted(0));
+}
+
 // ===== Main =====
 
 int main() {
@@ -673,6 +720,11 @@ int main() {
     RUN_TEST(test_dirty_on_set);
     RUN_TEST(test_dirty_on_remove);
     RUN_TEST(test_not_dirty_on_empty_slot_remove);
+
+    // Group 7: Sink mute API
+    RUN_TEST(test_set_sink_muted_updates_sink_struct);
+    RUN_TEST(test_set_sink_muted_ignores_invalid_slot);
+    RUN_TEST(test_unmuted_by_default);
 
     return UNITY_END();
 }
