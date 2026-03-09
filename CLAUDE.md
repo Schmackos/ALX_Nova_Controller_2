@@ -311,6 +311,38 @@ chore: Maintenance tasks
 
 GitHub Actions (`.github/workflows/tests.yml`): 4 parallel quality gates (cpp-tests, cpp-lint, js-lint, e2e-tests) must all pass before firmware build. Triggers on push/PR to `main` and `develop` branches. A separate `release.yml` workflow runs the same 4 gates before release. Pipeline diagram: `docs-internal/architecture/ci-quality-gates.mmd`. Playwright HTML report uploaded as artifact on failure (14-day retention).
 
+## Documentation Site (Docusaurus v3)
+
+Public documentation site in `docs-site/` built with Docusaurus v3, deployed to GitHub Pages. 26 documentation pages across User Guide (9) and Developer Reference (17).
+
+```bash
+# Local development
+cd docs-site && npm install && npm run build && npm run serve
+
+# Design token sync (run after changing src/design_tokens.h)
+node tools/extract_tokens.js
+
+# API extraction from C++ source (informational — used by generate_docs.js)
+node tools/extract_api.js
+```
+
+**Key files:**
+- `docs-site/docusaurus.config.js` — Site config (Mermaid, local search, dark mode default, `routeBasePath: 'docs'`)
+- `docs-site/sidebars.js` — userSidebar (9 items) + devSidebar (17 items)
+- `docs-site/src/css/tokens.css` — Auto-generated from `src/design_tokens.h` via `tools/extract_tokens.js`
+- `docs-site/src/pages/index.js` — Hero landing page with feature cards
+- `tools/generate_docs.js` — Claude API orchestrator for CI doc regeneration
+- `tools/detect_doc_changes.js` — Git diff → section mapping for incremental updates
+- `tools/doc-mapping.json` — Source file → documentation section mapping (65 entries)
+- `tools/prompts/` — Writing style templates (api-reference, user-guide, developer-guide, hal-driver)
+- `.github/workflows/docs.yml` — CI: detect changes → generate docs → build → deploy to gh-pages
+
+**Design token pipeline:** `src/design_tokens.h` → `tools/extract_tokens.js` → CSS for both web UI (`web_src/css/00-tokens.css`) and Docusaurus (`docs-site/src/css/tokens.css`). Changing theme colours in `design_tokens.h` propagates to TFT, web UI, AND documentation site.
+
+**MDX compatibility:** Docusaurus uses MDX, which interprets `{variable}` as JSX expressions. Always escape curly braces in markdown text/tables: `\{variable\}`. Code blocks (``` `) are safe.
+
+**Internal working docs:** Moved to `docs-internal/` (renamed from `docs/`). These are separate from the public Docusaurus site and may be replaced by it over time.
+
 ## Serial Debug Logging
 
 All modules use `debug_serial.h` macros (`LOG_D`, `LOG_I`, `LOG_W`, `LOG_E`) with consistent `[ModuleName]` prefixes:
