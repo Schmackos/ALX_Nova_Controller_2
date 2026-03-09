@@ -806,7 +806,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle USB audio enable/disable
   else if (topicStr == base + "/" + MQTT_TOPIC_USB_ENABLE_SET) {
     bool newVal = (message == "true" || message == "1" || message == "ON");
-    AppState::getInstance().usbAudioEnabled = newVal;
+    AppState::getInstance().usbAudio.enabled = newVal;
     AppState::getInstance().pipelineInputBypass[3] = !newVal;
     AppState::getInstance().markUsbAudioDirty();
     LOG_I("[MQTT] USB audio set to %s", newVal ? "enabled" : "disabled");

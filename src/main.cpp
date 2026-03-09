@@ -610,7 +610,7 @@ void setup() {
     doc["freeHeap"] = ESP.getFreeHeap();
     doc["freePsram"] = ESP.getFreePsram();
     doc["maxAllocHeap"] = ESP.getMaxAllocHeap();
-    doc["fsmState"] = (int)appState.currentFSMState;
+    doc["fsmState"] = (int)appState.fsmState;
     // HAL devices
 #ifdef DAC_ENABLED
     {
