@@ -6,6 +6,9 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
+// ===== Forward declarations =====
+static void stop_buzzer();
+
 // ===== ISR-safe volatile flags =====
 volatile bool _buzzer_tick_pending = false;
 volatile bool _buzzer_click_pending = false;
