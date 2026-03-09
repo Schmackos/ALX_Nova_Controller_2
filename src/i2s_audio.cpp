@@ -593,63 +593,6 @@ bool i2s_audio_is_port_active(int port) {
 }
 
 
-// ===== ADC AudioInputSource wrappers (Phase 3) =====
-// These wrap i2s_audio_read_adc1/2 into the generic AudioInputSource interface
-// so the pipeline can read all inputs through a uniform loop.
-
-static uint32_t _adc1_src_read(int32_t *dst, uint32_t requestedFrames) {
-    size_t bytes_read = 0;
-    size_t size = requestedFrames * 2 * sizeof(int32_t);
-    bool ok = i2s_audio_read_adc1(dst, size, &bytes_read, 500);
-    if (!ok || bytes_read == 0) return 0;
-    return (uint32_t)(bytes_read / (2 * sizeof(int32_t)));
-}
-
-static bool _adc1_src_isActive(void) {
-    return true;  // ADC1 is the primary clock source — always active
-}
-
-static uint32_t _adc1_src_getSampleRate(void) {
-    return AppState::getInstance().audio.sampleRate;
-}
-
-static uint32_t _adc2_src_read(int32_t *dst, uint32_t requestedFrames) {
-    if (!i2s_audio_adc2_ok()) return 0;
-    size_t bytes_read = 0;
-    size_t size = requestedFrames * 2 * sizeof(int32_t);
-    bool ok = i2s_audio_read_adc2(dst, size, &bytes_read, 5);
-    if (!ok || bytes_read == 0) return 0;
-    return (uint32_t)(bytes_read / (2 * sizeof(int32_t)));
-}
-
-static bool _adc2_src_isActive(void) {
-    return i2s_audio_adc2_ok();
-}
-
-static uint32_t _adc2_src_getSampleRate(void) {
-    return AppState::getInstance().audio.sampleRate;
-}
-
-static void _register_adc_sources() {
-    AudioInputSource adc1 = AUDIO_INPUT_SOURCE_INIT;
-    adc1.name = "ADC1 (PCM1808)";
-    adc1.lane = AUDIO_SRC_LANE_ADC1;
-    adc1.read = _adc1_src_read;
-    adc1.isActive = _adc1_src_isActive;
-    adc1.getSampleRate = _adc1_src_getSampleRate;
-    adc1.isHardwareAdc = true;
-    audio_pipeline_set_source(AUDIO_SRC_LANE_ADC1, &adc1);
-
-    AudioInputSource adc2 = AUDIO_INPUT_SOURCE_INIT;
-    adc2.name = "ADC2 (PCM1808)";
-    adc2.lane = AUDIO_SRC_LANE_ADC2;
-    adc2.read = _adc2_src_read;
-    adc2.isActive = _adc2_src_isActive;
-    adc2.getSampleRate = _adc2_src_getSampleRate;
-    adc2.isHardwareAdc = true;
-    audio_pipeline_set_source(AUDIO_SRC_LANE_ADC2, &adc2);
-}
-
 // Dual I2S Master Architecture:
 // ADC1: master full-duplex, ADC2: master no-clock-output (S3 slave DMA workaround).
 // I2S0 outputs BCK/WS/MCLK; I2S1 has data_in only (GPIO9).
@@ -722,8 +665,8 @@ void i2s_audio_init() {
     // audio_pipeline_task on Core 1.  This pins the I2S DMA ISR to Core 1,
     // isolating it from WiFi TX/RX interrupts on Core 0 that cause audio pops.
 
-    // Register ADC input sources before starting the pipeline task
-    _register_adc_sources();
+    // ADC input sources are now registered by HalPcm1808 via the bridge
+    // (getInputSource() override in Phase 1).
 
     audio_pipeline_init();
 }

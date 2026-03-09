@@ -8,7 +8,8 @@
 extern "C" {
 #endif
 
-// DEPRECATED: Physical I2S port indices only. For dynamic lane assignment, use bridge-assigned lanes.
+// DEPRECATED (Phase 2): Physical I2S port indices only. For dynamic lane assignment, use bridge-assigned lanes.
+// Legacy hardcoded registration removed — ADC sources now registered via HalPcm1808::getInputSource().
 #define AUDIO_SRC_LANE_ADC1   0
 #define AUDIO_SRC_LANE_ADC2   1
 
