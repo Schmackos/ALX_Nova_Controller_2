@@ -6,7 +6,7 @@
 #include <stddef.h>
 
 // ===== USB Audio Connection States =====
-enum UsbAudioState : uint8_t {
+enum UsbAudioConnectionState : uint8_t {
     USB_AUDIO_DISCONNECTED = 0,
     USB_AUDIO_CONNECTED,       // Host attached but not streaming
     USB_AUDIO_STREAMING,       // Host actively sending audio
@@ -74,7 +74,7 @@ void usb_audio_init(void);
 void usb_audio_deinit(void);
 
 // Get current connection state
-UsbAudioState usb_audio_get_state(void);
+UsbAudioConnectionState usb_audio_get_state(void);
 
 // Check connection/streaming status
 bool usb_audio_is_connected(void);
@@ -113,7 +113,7 @@ void usb_audio_poll_connection(void);
 
 #ifdef NATIVE_TEST
 // Native test injection API — set internal state for testing
-void usb_audio_test_set_state(UsbAudioState state);
+void usb_audio_test_set_state(UsbAudioConnectionState state);
 void usb_audio_test_set_negotiated_format(uint32_t rate, uint8_t depth);
 void usb_audio_test_set_volume(int16_t vol, bool mute);
 #endif

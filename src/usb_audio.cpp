@@ -155,7 +155,7 @@ static uint8_t  _negotiatedDepth = 16;
 #define UAC2_ENTITY_OUTPUT_TERM 0x04
 
 // ===== Module State =====
-static UsbAudioState _usbState = USB_AUDIO_DISCONNECTED;
+static UsbAudioConnectionState _usbState = USB_AUDIO_DISCONNECTED;
 static UsbAudioRingBuffer _ringBuffer = {};
 static int32_t *_ringBufStorage = nullptr;
 static uint8_t _epOut = 0;
@@ -892,7 +892,7 @@ void usb_audio_deinit(void) {
     LOG_I("[USB Audio] Disabled (USB device still enumerated)");
 }
 
-UsbAudioState usb_audio_get_state(void) {
+UsbAudioConnectionState usb_audio_get_state(void) {
     return _usbState;
 }
 
@@ -995,7 +995,7 @@ void usb_audio_poll_connection(void) {
 #elif defined(NATIVE_TEST)
 
 // ===== Native Test Stubs with Injectable State =====
-static UsbAudioState _nativeState = USB_AUDIO_DISCONNECTED;
+static UsbAudioConnectionState _nativeState = USB_AUDIO_DISCONNECTED;
 static uint32_t _nativeRate  = 48000;
 static uint8_t  _nativeDepth = 16;
 static int16_t  _nativeVolume = 0;
@@ -1010,7 +1010,7 @@ void usb_audio_deinit(void) {
     _nativeState = USB_AUDIO_DISCONNECTED;
 }
 
-UsbAudioState usb_audio_get_state(void) { return _nativeState; }
+UsbAudioConnectionState usb_audio_get_state(void) { return _nativeState; }
 bool usb_audio_is_connected(void) { return _nativeState >= USB_AUDIO_CONNECTED; }
 bool usb_audio_is_streaming(void) { return _nativeState == USB_AUDIO_STREAMING; }
 
@@ -1038,7 +1038,7 @@ uint32_t usb_audio_get_negotiated_rate(void) { return _nativeRate; }
 uint8_t  usb_audio_get_negotiated_depth(void) { return _nativeDepth; }
 
 // Test injection API
-void usb_audio_test_set_state(UsbAudioState state) { _nativeState = state; }
+void usb_audio_test_set_state(UsbAudioConnectionState state) { _nativeState = state; }
 void usb_audio_test_set_negotiated_format(uint32_t rate, uint8_t depth) {
     _nativeRate = rate;
     _nativeDepth = depth;
@@ -1054,7 +1054,7 @@ void usb_audio_poll_connection(void) {} // No-op in native tests
 // USB_AUDIO_ENABLED not defined and not NATIVE_TEST — empty stubs
 void usb_audio_init(void) {}
 void usb_audio_deinit(void) {}
-UsbAudioState usb_audio_get_state(void) { return USB_AUDIO_DISCONNECTED; }
+UsbAudioConnectionState usb_audio_get_state(void) { return USB_AUDIO_DISCONNECTED; }
 bool usb_audio_is_connected(void) { return false; }
 bool usb_audio_is_streaming(void) { return false; }
 uint32_t usb_audio_read(int32_t *out, uint32_t frames) { (void)out; (void)frames; return 0; }

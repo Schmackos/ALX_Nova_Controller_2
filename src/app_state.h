@@ -125,7 +125,7 @@ public:
 
   // ===== USB Audio State =====
 #ifdef USB_AUDIO_ENABLED
-  UsbAudioState usbAudio;
+  UsbAudioState usbAudio{};  // Aggregate-init (all fields have in-class defaults)
 
   void markUsbAudioDirty() { _usbAudioDirty = true; app_events_signal(EVT_USB_AUDIO); }
   bool isUsbAudioDirty() const { return _usbAudioDirty; }
