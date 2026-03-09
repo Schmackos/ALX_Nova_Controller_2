@@ -311,8 +311,8 @@ void setup() {
 
 #ifdef DAC_ENABLED
 
-  // Initialize secondary DAC output (ES8311 codec on P4, no-op on S3)
-  dac_secondary_init();
+  // Secondary DAC (ES8311) activation is now handled by hal_pipeline_bridge
+  // when the device reaches HAL_STATE_AVAILABLE — removed legacy direct call
 
   // Sync HAL pipeline bridge after all devices registered
   hal_pipeline_sync();

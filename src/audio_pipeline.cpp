@@ -596,7 +596,7 @@ void audio_pipeline_init() {
     dsp_init();
 #endif
 #ifdef DAC_ENABLED
-    dac_output_init();
+    dac_boot_prepare();
 #endif
 
     // Allocate float working buffers

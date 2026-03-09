@@ -11,6 +11,7 @@
 #include "../audio_pipeline.h"
 #include "../audio_input_source.h"
 #include "../audio_output_sink.h"
+#include "../dac_hal.h"
 #else
 #define LOG_I(...)
 #define LOG_W(...)
@@ -138,13 +139,22 @@ void hal_pipeline_on_device_available(uint8_t slot) {
     // --- Output sink (DAC / CODEC with DAC path) ---
     int8_t sinkSlot = _sinkSlotForDevice(dev);
     if (sinkSlot >= 0) {
-        // dac_hal.cpp registers the AudioOutputSink during init() via
-        // audio_pipeline_register_sink() / audio_pipeline_set_sink().
-        // The bridge only needs to record the mapping and update dirty flags
-        // so the web UI reflects the new device immediately.
+        // Record the mapping and record it
         _halSlotToSinkSlot[slot] = sinkSlot;
         LOG_I("[HAL:Bridge] Pipeline bridge: output %s (HAL slot %d) → sink slot %d",
               name, slot, (int)sinkSlot);
+
+        // Activate any DAC-path device through the generic HAL activation pathway
+#ifndef NATIVE_TEST
+        uint8_t caps = _effectiveCaps(dev);
+        if (caps & HAL_CAP_DAC_PATH) {
+            if (dac_activate_for_hal(dev, (uint8_t)sinkSlot)) {
+                LOG_I("[HAL:Bridge] DAC activated: %s at sink slot %d", name, (int)sinkSlot);
+            } else {
+                LOG_W("[HAL:Bridge] DAC activation failed for %s", name);
+            }
+        }
+#endif
     }
 
     // --- Input lane (ADC / CODEC with ADC path) ---
@@ -221,7 +231,17 @@ void hal_pipeline_on_device_removed(uint8_t slot) {
         int8_t sinkSlot = _halSlotToSinkSlot[slot];
         LOG_I("[HAL:Bridge] Pipeline bridge: removing output %s (HAL slot %d) from sink slot %d",
               name, slot, (int)sinkSlot);
+
+        // Deactivate any DAC-path device through the generic deactivation pathway
+        // Must be done BEFORE audio_pipeline_remove_sink() to allow clean I2S teardown
 #ifndef NATIVE_TEST
+        if (dev) {
+            uint8_t caps = _effectiveCaps(dev);
+            if (caps & HAL_CAP_DAC_PATH) {
+                dac_deactivate_for_hal(dev);
+                LOG_I("[HAL:Bridge] DAC deactivated for %s", name);
+            }
+        }
         audio_pipeline_remove_sink(sinkSlot);
 #endif
         _halSlotToSinkSlot[slot] = -1;

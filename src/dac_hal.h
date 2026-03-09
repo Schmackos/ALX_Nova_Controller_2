@@ -72,9 +72,43 @@ float dac_volume_to_linear(uint8_t percent);
 void dac_apply_software_volume(float* buffer, int samples, float gain);
 
 // ===== DAC Output Manager Public API =====
-void dac_output_init();           // Load settings, create driver, enable I2S TX
-void dac_output_deinit();         // Tear down driver
-bool dac_output_is_ready();       // Is DAC ready for samples?
+
+// Phase 1 — New HAL-driven API
+// Forward declaration so dac_hal.h does not drag in all of hal_device.h
+class HalDevice;
+struct HalDeviceConfig;
+
+// dac_boot_prepare(): one-shot boot-time init extracted from dac_output_init().
+// Initialises the EEPROM mutex, loads persisted settings, computes volume gain,
+// and scans the I2C bus / EEPROM for the installed DAC module.
+// Safe to call multiple times (all operations are guarded by static-once flags).
+void dac_boot_prepare();
+
+// dac_activate_for_hal(): bind a HAL device to a pipeline sink slot.
+// Creates the driver (from device descriptor legacyId), inits hardware,
+// enables the correct I2S TX port, and registers the AudioOutputSink.
+// Idempotent: calling with an already-bound device is a safe no-op.
+// Returns true on success, false if driver init or I2S enable fails.
+bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot);
+
+// dac_deactivate_for_hal(): remove the sink and tear down hardware for a device.
+// Pauses the audio task, deinits the driver, disables I2S TX, and removes
+// the AudioOutputSink from the pipeline. Idempotent.
+void dac_deactivate_for_hal(HalDevice* dev);
+
+// dac_update_volume_for_slot(): update volume gain for a specific sink slot.
+// If the driver for that slot has hardware volume support it is applied directly.
+void dac_update_volume_for_slot(uint8_t slot, uint8_t percent);
+
+// Legacy API — kept for backward compatibility with existing callers.
+// Deprecated: prefer the slot-indexed and HAL-device variants above.
+[[deprecated("use dac_boot_prepare() + dac_activate_for_hal()")]]
+void dac_output_init();
+
+[[deprecated("use dac_deactivate_for_hal()")]]
+void dac_output_deinit();
+
+bool dac_output_is_ready();
 
 // Write processed audio to I2S TX (called from audio task, non-blocking)
 // buffer = interleaved 32-bit stereo I2S frames, stereo_frames = frame count
@@ -86,7 +120,7 @@ void dac_save_settings();
 void dac_save_settings_deferred();
 void dac_check_deferred_save();
 
-// Volume update with gain recalculation + logging
+// Volume update with gain recalculation + logging (operates on slot 0 / primary DAC)
 void dac_update_volume(uint8_t percent);
 
 // Periodic runtime dump (call from audio task, 5s interval)
@@ -95,7 +129,7 @@ void dac_periodic_log();
 // Select a driver by device ID (returns false if not found in registry)
 bool dac_select_driver(uint16_t deviceId);
 
-// Get current driver (nullptr if none)
+// Get current driver for slot 0 (nullptr if none)
 DacDriver* dac_get_driver();
 
 // I2S TX full-duplex control (called by dac_output_init)
@@ -118,11 +152,22 @@ DacTxDiag dac_get_tx_diagnostics();
 // ===== Secondary DAC Output (ES8311 on P4) =====
 // Independent output path — receives same audio as primary DAC
 // but with its own hardware volume/mute control
+[[deprecated("use dac_activate_for_hal() with ES8311 HalDevice")]]
 void dac_secondary_init();
+
+[[deprecated("use dac_deactivate_for_hal() with ES8311 HalDevice")]]
 void dac_secondary_deinit();
+
+[[deprecated("use dac_activate_for_hal()")]]
 bool dac_secondary_is_ready();
+
+[[deprecated("dispatched via slot thunk — no direct replacement needed")]]
 void dac_secondary_write(const int32_t* buffer, int stereo_frames);
+
+[[deprecated("use dac_update_volume_for_slot()")]]
 void dac_secondary_set_volume(uint8_t percent);
+
+[[deprecated("set mute via HalAudioDevice::setMute() on the ES8311 HalDevice")]]
 void dac_secondary_set_mute(bool mute);
 
 #endif // DAC_ENABLED
