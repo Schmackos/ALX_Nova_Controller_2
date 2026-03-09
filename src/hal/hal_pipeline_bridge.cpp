@@ -16,11 +16,8 @@
 #define LOG_I(...)
 #define LOG_W(...)
 #define LOG_D(...)
-// Provide sink slot constants for native test builds
-#ifndef AUDIO_SINK_SLOT_PRIMARY
-#define AUDIO_SINK_SLOT_PRIMARY 0
-#define AUDIO_SINK_SLOT_ES8311  1
-#endif
+// Removed in Phase 4: fallback sink slot defines (replaced by dynamic assignment)
+// Native tests now use hal_pipeline_get_sink_slot() for dynamic mapping
 #ifndef AUDIO_OUT_MAX_SINKS
 #define AUDIO_OUT_MAX_SINKS 8
 #endif

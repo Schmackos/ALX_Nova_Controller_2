@@ -100,13 +100,7 @@ void dac_deactivate_for_hal(HalDevice* dev);
 // If the driver for that slot has hardware volume support it is applied directly.
 void dac_update_volume_for_slot(uint8_t slot, uint8_t percent);
 
-// Legacy API — kept for backward compatibility with existing callers.
-// Deprecated: prefer the slot-indexed and HAL-device variants above.
-[[deprecated("use dac_boot_prepare() + dac_activate_for_hal()")]]
-void dac_output_init();
-
-[[deprecated("use dac_deactivate_for_hal()")]]
-void dac_output_deinit();
+// Removed in Phase 4: dac_output_init() and dac_output_deinit() — use dac_boot_prepare() + dac_activate_for_hal() instead
 
 bool dac_output_is_ready();
 
@@ -152,13 +146,8 @@ DacTxDiag dac_get_tx_diagnostics();
 // ===== Secondary DAC Output (ES8311 on P4) =====
 // Independent output path — receives same audio as primary DAC
 // but with its own hardware volume/mute control
-[[deprecated("use dac_activate_for_hal() with ES8311 HalDevice")]]
-void dac_secondary_init();
+// Removed in Phase 4: dac_secondary_init() and dac_secondary_deinit() — use dac_activate_for_hal() instead
 
-[[deprecated("use dac_deactivate_for_hal() with ES8311 HalDevice")]]
-void dac_secondary_deinit();
-
-[[deprecated("use dac_activate_for_hal()")]]
 bool dac_secondary_is_ready();
 
 [[deprecated("dispatched via slot thunk — no direct replacement needed")]]

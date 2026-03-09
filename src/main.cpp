@@ -1226,31 +1226,6 @@ void loop() {
     appState.dac.pendingToggle.action = 0;
   }
 
-  // Process deferred DAC enable/disable (DEPRECATED — legacy, for backward compat)
-  // New code should use pendingToggle + requestDeviceToggle(halSlot, action)
-  if (appState.dac.pendingDacToggle != 0) {
-    if (appState.dac.pendingDacToggle > 0) {
-      LOG_I("[DAC] Deferred primary DAC init (main loop — legacy)");
-      dac_output_init();
-    } else {
-      LOG_I("[DAC] Deferred primary DAC deinit (main loop — legacy)");
-      dac_output_deinit();
-    }
-    appState.dac.pendingDacToggle = 0;
-    appState.markDacDirty();
-  }
-  // Process deferred ES8311 enable/disable (DEPRECATED — legacy, for backward compat)
-  if (appState.dac.pendingEs8311Toggle != 0) {
-    if (appState.dac.pendingEs8311Toggle > 0) {
-      LOG_I("[DAC] Deferred ES8311 init (main loop — legacy)");
-      dac_secondary_init();
-    } else {
-      LOG_I("[DAC] Deferred ES8311 deinit (main loop — legacy)");
-      dac_secondary_deinit();
-    }
-    appState.dac.pendingEs8311Toggle = 0;
-    appState.markDacDirty();
-  }
   // Broadcast DAC state changes (WS/API/MQTT -> all clients)
   if (appState.isDacDirty()) {
     sendDacState();

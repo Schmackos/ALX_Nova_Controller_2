@@ -422,7 +422,12 @@ void test_reverse_lookup_sink_slot() {
     dac._ready = true;
     hal_pipeline_on_device_available(slot);
 
-    int8_t foundSlot = hal_pipeline_get_slot_for_sink(AUDIO_SINK_SLOT_PRIMARY);
+    // Forward lookup: get the pipeline sink slot assigned to this HAL device
+    int8_t sinkSlot = hal_pipeline_get_sink_slot(slot);
+    TEST_ASSERT_NOT_EQUAL(-1, sinkSlot);
+
+    // Reverse lookup: get the HAL device slot assigned to that sink slot
+    int8_t foundSlot = hal_pipeline_get_slot_for_sink(sinkSlot);
     TEST_ASSERT_EQUAL(slot, foundSlot);
 
     // Unmapped sink slot
