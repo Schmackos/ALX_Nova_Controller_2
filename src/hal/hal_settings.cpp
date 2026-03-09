@@ -178,7 +178,7 @@ void hal_apply_config(uint8_t slot) {
         }
         dev->_state = HAL_STATE_CONFIGURING;
         hal_pipeline_state_change(slot, HAL_STATE_MANUAL, HAL_STATE_CONFIGURING);
-        bool ok = dev->probe() && dev->init();
+        bool ok = dev->probe() && dev->init().success;
         dev->_state = ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR;
         hal_pipeline_state_change(slot, HAL_STATE_CONFIGURING,
                                   ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR);
@@ -208,7 +208,7 @@ void hal_apply_config(uint8_t slot) {
         dev->_state = HAL_STATE_CONFIGURING;
         hal_pipeline_state_change(slot, prevState, HAL_STATE_CONFIGURING);
         dev->deinit();
-        if (dev->init()) {
+        if (dev->init().success) {
             dev->_state = HAL_STATE_AVAILABLE;
             hal_pipeline_state_change(slot, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE);
             LOG_I("[HAL:Settings] Device slot %u reinitialised", slot);
