@@ -139,6 +139,11 @@ struct HalDeviceConfig {
     int8_t   pinBck;          // I2S bit clock GPIO
     int8_t   pinLrc;          // I2S word select / LRCLK GPIO
     int8_t   pinFmt;          // Format select GPIO (-1 = not wired; LOW=Philips, HIGH=MSB/left-justified)
+    // I2S clock topology — only meaningful for HAL_BUS_I2S devices
+    // true  = this device outputs MCLK/BCK/WS clocks (I2S master with clock output)
+    // false = this device receives clocks only (I2S master data-only, BCK/WS/MCLK = UNUSED)
+    // Default (false): only the port-0 device outputs clocks (legacy dual-master design)
+    bool     isI2sClockMaster;
 };
 
 // Sample rate mask helpers

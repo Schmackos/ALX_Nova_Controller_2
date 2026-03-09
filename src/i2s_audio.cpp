@@ -38,6 +38,7 @@
 #include <freertos/task.h>
 #include "hal/hal_settings.h"
 #include "hal/hal_types.h"
+#include "hal/hal_device_manager.h"
 #endif
 
 // ===== Constants =====
@@ -673,22 +674,55 @@ void i2s_audio_init() {
 
 // Called from audio_pipeline_task on Core 1 — creates I2S channels so that the
 // DMA ISR is pinned to Core 1, isolated from WiFi interrupts on Core 0.
+// Phase 3: Query HAL devices dynamically instead of hardcoding 2 lanes.
 void i2s_audio_init_channels() {
-    // ADC2 (I2S_NUM_1) is skipped until physically connected.
+#if !defined(NATIVE_TEST) && defined(DAC_ENABLED)
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    bool portOk[AUDIO_PIPELINE_MAX_INPUTS] = {};
+
+    // Pass 1: non-clock-masters (data-only, no MCLK/BCK/WS output)
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+        HalDevice* dev = mgr.getDevice(i);
+        if (!dev) continue;
+        auto& desc = dev->getDescriptor();
+        if (!(desc.capabilities & HAL_CAP_ADC_PATH)) continue;
+        if (desc.bus.type != HAL_BUS_I2S) continue;
+        HalDeviceConfig* cfg = mgr.getConfig(i);
+        if (cfg && cfg->valid && cfg->isI2sClockMaster) continue;  // skip clock master in pass 1
+        uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 1;
+        portOk[port] = i2s_audio_configure_adc(port, cfg);
+    }
+
+    // Pass 2: clock master (outputs MCLK/BCK/WS — must be last)
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+        HalDevice* dev = mgr.getDevice(i);
+        if (!dev) continue;
+        auto& desc = dev->getDescriptor();
+        if (!(desc.capabilities & HAL_CAP_ADC_PATH)) continue;
+        if (desc.bus.type != HAL_BUS_I2S) continue;
+        HalDeviceConfig* cfg = mgr.getConfig(i);
+        if (!cfg || !cfg->valid || !cfg->isI2sClockMaster) continue;
+        uint8_t port = (cfg->i2sPort != 255) ? cfg->i2sPort : 0;
+        portOk[port] = i2s_audio_configure_adc(port, cfg);
+    }
+
+    _adc2InitOk = portOk[1];
+    _numAdcsDetected = 0;
+    for (int p = 0; p < AUDIO_PIPELINE_MAX_INPUTS; p++) {
+        if (portOk[p]) _numAdcsDetected++;
+    }
+    gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);  // legacy: prevent float on unused port
+
+    LOG_I("[Audio] I2S channels created on Core %d: %lu Hz, %d ADCs detected, clock master init order enforced",
+          xPortGetCoreID(), _currentSampleRate, _numAdcsDetected);
+#else
+    // Fallback: hardcoded 2-lane init (safe mode or native tests)
     _adc2InitOk = false;
-    // Uncomment when ADC2 hardware is attached:
-    // _adc2InitOk = i2s_audio_configure_adc(1, nullptr);
-
     i2s_audio_configure_adc(0, nullptr);
-
-    // Pull-down on DOUT2 — prevents floating pin reading all-1s (false CLIPPING).
     gpio_pulldown_en((gpio_num_t)I2S_DOUT2_PIN);
-
-    _numAdcsDetected = 1; // Will be updated once data flows
-
-    LOG_I("[Audio] I2S channels created on Core %d: %lu Hz, BCK=%d, DOUT1=%d, DOUT2=%d, LRC=%d, MCLK=%d, ADC2=%s",
-          xPortGetCoreID(), _currentSampleRate, I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
-          I2S_LRC_PIN, I2S_MCLK_PIN, _adc2InitOk ? "OK" : "FAIL");
+    _numAdcsDetected = 1;
+    LOG_I("[Audio] I2S channels created (fallback: hardcoded 2-lane mode)");
+#endif
 
     i2s_log_params(_currentSampleRate);
 }

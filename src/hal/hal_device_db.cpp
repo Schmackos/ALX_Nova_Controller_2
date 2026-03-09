@@ -493,36 +493,38 @@ void hal_provision_defaults() {
         o["probeOnly"]  = true;  // HAL state holder; audio pipeline sink via dac_output_init()
     }
 
-    // PCM1808 ADC1 — I2S RX channel 0 (DIN=23)
+    // PCM1808 ADC1 — I2S RX channel 0 (DIN=23), clock master
     {
         JsonObject o = arr.add<JsonObject>();
-        o["compatible"] = "ti,pcm1808";
-        o["label"]      = "PCM1808 ADC1";
-        o["i2sPort"]    = 0;
-        o["sampleRate"] = 48000;
-        o["bitDepth"]   = 32;
-        o["pinData"]    = 23;    // I2S_DOUT_PIN
-        o["pinBck"]     = 20;
-        o["pinLrc"]     = 21;
-        o["pinMclk"]    = 22;
-        o["pinFmt"]     = -1;
-        o["probeOnly"]  = false;
+        o["compatible"]       = "ti,pcm1808";
+        o["label"]            = "PCM1808 ADC1";
+        o["i2sPort"]          = 0;
+        o["sampleRate"]       = 48000;
+        o["bitDepth"]         = 32;
+        o["pinData"]          = 23;    // I2S_DOUT_PIN
+        o["pinBck"]           = 20;
+        o["pinLrc"]           = 21;
+        o["pinMclk"]          = 22;
+        o["pinFmt"]           = -1;
+        o["isI2sClockMaster"] = true;  // ADC1 outputs MCLK/BCK/WS
+        o["probeOnly"]        = false;
     }
 
-    // PCM1808 ADC2 — I2S RX channel 1 (DIN=25, shared clocks)
+    // PCM1808 ADC2 — I2S RX channel 1 (DIN=25, shared clocks, data-only)
     {
         JsonObject o = arr.add<JsonObject>();
-        o["compatible"] = "ti,pcm1808";
-        o["label"]      = "PCM1808 ADC2";
-        o["i2sPort"]    = 1;
-        o["sampleRate"] = 48000;
-        o["bitDepth"]   = 32;
-        o["pinData"]    = 25;    // I2S_DOUT2_PIN
-        o["pinBck"]     = 20;
-        o["pinLrc"]     = 21;
-        o["pinMclk"]    = 22;
-        o["pinFmt"]     = -1;
-        o["probeOnly"]  = false;
+        o["compatible"]       = "ti,pcm1808";
+        o["label"]            = "PCM1808 ADC2";
+        o["i2sPort"]          = 1;
+        o["sampleRate"]       = 48000;
+        o["bitDepth"]         = 32;
+        o["pinData"]          = 25;    // I2S_DOUT2_PIN
+        o["pinBck"]           = 20;
+        o["pinLrc"]           = 21;
+        o["pinMclk"]          = 22;
+        o["pinFmt"]           = -1;
+        o["isI2sClockMaster"] = false; // ADC2 receives clocks only (data-only)
+        o["probeOnly"]        = false;
     }
 
     File f = LittleFS.open("/hal_auto_devices.json", "w");
