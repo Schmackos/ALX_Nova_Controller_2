@@ -25,6 +25,12 @@ struct EepromDiag {
   uint32_t sampleRates[4] = {};
 };
 
+// Generic device toggle request — device-independent, works with any HAL device
+struct PendingDeviceToggle {
+  uint8_t halSlot = 0xFF;  // 0xFF = none/invalid
+  int8_t action = 0;       // 1=enable, -1=disable, 0=none
+};
+
 // DAC output state (guarded by DAC_ENABLED at the AppState level)
 struct DacState {
   // Primary DAC
@@ -45,12 +51,25 @@ struct DacState {
   bool es8311Mute = false;
   bool es8311Ready = false;
 
-  // Deferred toggle flags — main loop executes actual init/deinit
+  // Generic deferred toggle — main loop executes actual activation/deactivation
+  // via dac_activate_for_hal() / dac_deactivate_for_hal() with HAL device pointer
+  volatile PendingDeviceToggle pendingToggle = {};
+
+  // Deferred toggle flags (DEPRECATED — for backward compatibility during Phase 3)
+  // New code should use pendingToggle + requestDeviceToggle(halSlot, action)
   volatile int8_t pendingEs8311Toggle = 0;  // 0=none, 1=init, -1=deinit
   volatile int8_t pendingDacToggle = 0;     // 0=none, 1=init, -1=deinit
 
-  // Validated setters — direct dev->deinit() is unsafe (audio task race),
-  // so all toggle requests go through deferred flags consumed by main loop
+  // Generic validated setter — routes through HAL slot, zero device-type knowledge
+  // Direct dev->deinit() is unsafe (audio task race), so all toggle requests use this
+  void requestDeviceToggle(uint8_t halSlot, int8_t action) {
+    if (halSlot < 0xFF && action >= -1 && action <= 1) {
+      pendingToggle.halSlot = halSlot;
+      pendingToggle.action = action;
+    }
+  }
+
+  // Legacy validated setters (DEPRECATED — for backward compatibility only)
   void requestDacToggle(int8_t action) {
     if (action >= -1 && action <= 1) pendingDacToggle = action;
   }

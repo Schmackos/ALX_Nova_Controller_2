@@ -1202,26 +1202,50 @@ void loop() {
 #endif
 
 #ifdef DAC_ENABLED
-  // Process deferred DAC enable/disable (set by WebSocket handler —
-  // I2C EEPROM scan + I2S driver init is too heavy for WS context, blocks SDIO → WiFi crash)
+  // Process generic deferred device toggle (Phase 3 — device-independent)
+  // Replaces pendingDacToggle and pendingEs8311Toggle with HAL-aware mechanism
+  if (appState.dac.pendingToggle.halSlot < 0xFF) {
+    HalDevice* dev = HalDeviceManager::instance().getDevice(appState.dac.pendingToggle.halSlot);
+    if (dev) {
+      if (appState.dac.pendingToggle.action > 0) {
+        // Enable: find sink slot for this device via bridge mapping
+        int8_t sinkSlot = hal_pipeline_get_sink_slot(appState.dac.pendingToggle.halSlot);
+        if (sinkSlot < 0) sinkSlot = 0;  // Fallback to primary sink if not yet mapped
+        LOG_I("[DAC] Deferred device activation for HAL slot %u → sink slot %d",
+              appState.dac.pendingToggle.halSlot, (int)sinkSlot);
+        if (dac_activate_for_hal(dev, (uint8_t)sinkSlot)) {
+          appState.markDacDirty();
+        }
+      } else if (appState.dac.pendingToggle.action < 0) {
+        LOG_I("[DAC] Deferred device deactivation for HAL slot %u", appState.dac.pendingToggle.halSlot);
+        dac_deactivate_for_hal(dev);
+        appState.markDacDirty();
+      }
+    }
+    appState.dac.pendingToggle.halSlot = 0xFF;
+    appState.dac.pendingToggle.action = 0;
+  }
+
+  // Process deferred DAC enable/disable (DEPRECATED — legacy, for backward compat)
+  // New code should use pendingToggle + requestDeviceToggle(halSlot, action)
   if (appState.dac.pendingDacToggle != 0) {
     if (appState.dac.pendingDacToggle > 0) {
-      LOG_I("[DAC] Deferred primary DAC init (main loop)");
+      LOG_I("[DAC] Deferred primary DAC init (main loop — legacy)");
       dac_output_init();
     } else {
-      LOG_I("[DAC] Deferred primary DAC deinit (main loop)");
+      LOG_I("[DAC] Deferred primary DAC deinit (main loop — legacy)");
       dac_output_deinit();
     }
     appState.dac.pendingDacToggle = 0;
     appState.markDacDirty();
   }
-  // Process deferred ES8311 enable/disable
+  // Process deferred ES8311 enable/disable (DEPRECATED — legacy, for backward compat)
   if (appState.dac.pendingEs8311Toggle != 0) {
     if (appState.dac.pendingEs8311Toggle > 0) {
-      LOG_I("[DAC] Deferred ES8311 init (main loop)");
+      LOG_I("[DAC] Deferred ES8311 init (main loop — legacy)");
       dac_secondary_init();
     } else {
-      LOG_I("[DAC] Deferred ES8311 deinit (main loop)");
+      LOG_I("[DAC] Deferred ES8311 deinit (main loop — legacy)");
       dac_secondary_deinit();
     }
     appState.dac.pendingEs8311Toggle = 0;
