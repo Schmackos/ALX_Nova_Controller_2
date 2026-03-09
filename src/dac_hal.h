@@ -101,9 +101,6 @@ void dac_deactivate_for_hal(HalDevice* dev);
 // If the driver for that slot has hardware volume support it is applied directly.
 void dac_update_volume_for_slot(uint8_t slot, uint8_t percent);
 
-// Set software mute state for a specific sink slot (called by WS/REST handlers)
-void dac_set_mute_for_slot(uint8_t slot, bool mute);
-
 bool dac_output_is_ready();
 
 // Periodic runtime dump (call from audio task, 5s interval)

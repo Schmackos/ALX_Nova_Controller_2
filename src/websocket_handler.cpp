@@ -995,7 +995,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           // Apply software mute via slot-indexed API
           if (halSlot != 0xFF) {
             int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
-            if (sinkSlot >= 0) dac_set_mute_for_slot((uint8_t)sinkSlot, newMute);
+            if (sinkSlot >= 0) {
+              audio_pipeline_set_sink_muted((uint8_t)sinkSlot, newMute);
+              DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
+              if (drv) drv->setMute(newMute);
+            }
             HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
             if (cfg) cfg->mute = newMute;
             hal_save_device_config_deferred(halSlot);
@@ -1067,7 +1071,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           bool newMute = doc["mute"].as<bool>();
           if (halSlot != 0xFF) {
             int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
-            if (sinkSlot >= 0) dac_set_mute_for_slot((uint8_t)sinkSlot, newMute);
+            if (sinkSlot >= 0) {
+              audio_pipeline_set_sink_muted((uint8_t)sinkSlot, newMute);
+              DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
+              if (drv) drv->setMute(newMute);
+            }
             HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
             if (cfg) cfg->mute = newMute;
             hal_save_device_config_deferred(halSlot);

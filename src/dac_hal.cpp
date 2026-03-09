@@ -44,9 +44,6 @@ static float         _volumeGainForSlot[AUDIO_OUT_MAX_SINKS] = {
 // Which I2S write port each slot uses: 0 = i2s_audio_write (primary), 2 = i2s_audio_write_es8311
 static uint8_t       _writePortForSlot[AUDIO_OUT_MAX_SINKS] = {};
 
-// Per-slot software mute state (lock-free read from audio task)
-static bool _muteForSlot[AUDIO_OUT_MAX_SINKS] = {};
-
 // I2S TX enable state per port index (0 = primary RX+TX, 2 = ES8311 I2S2)
 // Port 1 is ADC2 RX-only — never TX. Index 0/2 map to the two TX-capable ports.
 static bool _i2sTxEnabledFor[3] = {};
@@ -117,13 +114,6 @@ void dac_update_volume_for_slot(uint8_t slot, uint8_t percent) {
 #endif
 }
 
-void dac_set_mute_for_slot(uint8_t slot, bool mute) {
-    if (slot >= AUDIO_OUT_MAX_SINKS) return;
-    _muteForSlot[slot] = mute;
-    DacDriver* drv = _driverForSlot[slot];
-    if (drv) drv->setMute(mute);
-}
-
 // ===== Periodic DAC Runtime Dump =====
 // Called from audio task alongside ADC periodic dump (every 5s)
 void dac_periodic_log() {
@@ -142,7 +132,7 @@ void dac_periodic_log() {
     LOG_I("[DAC] slot0 ready=%d gain=%.4f%s wr=%lu ur=%lu(+%lu)",
           (_driverForSlot[0] && _driverForSlot[0]->isReady()) ? 1 : 0,
           _volumeGainForSlot[0],
-          _muteForSlot[0] ? " MUTE" : "",
+          audio_pipeline_is_sink_muted(0) ? " MUTE" : "",
           (unsigned long)_txWriteCount,
           (unsigned long)as.dac.txUnderruns,
           (unsigned long)newUnderruns);
@@ -290,7 +280,7 @@ static void _dac_write_for_slot(uint8_t slot, const int32_t* buffer, int stereo_
     // For slot 0 only: apply shared mute ramp (maintains existing behavior)
     float effectiveMuteGain = 1.0f;
     if (slot == 0) {
-        bool muteNow = _muteForSlot[slot] || (volGain == 0.0f);
+        bool muteNow = audio_pipeline_is_sink_muted(slot) || (volGain == 0.0f);
         if (muteNow != _prevDacMute) {
             _prevDacMute = muteNow;
             if (!muteNow) _muteGain = 0.0f;
@@ -625,7 +615,7 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot) {
 
         // Apply initial mute from settings
         bool initMute = (cfg) ? cfg->mute : false;
-        _muteForSlot[sinkSlot] = initMute;
+        audio_pipeline_set_sink_muted(sinkSlot, initMute);
         _driverForSlot[sinkSlot]->setMute(initMute);
 
         // Reset per-slot diagnostic counters
@@ -744,7 +734,7 @@ void dac_deactivate_for_hal(HalDevice* dev) {
     _adapterForSlot[sinkSlot]  = nullptr;
     _volumeGainForSlot[sinkSlot] = 1.0f;
     _writePortForSlot[sinkSlot]  = 0;
-    _muteForSlot[sinkSlot] = false;
+    audio_pipeline_set_sink_muted(sinkSlot, false);
 
 #ifndef NATIVE_TEST
     as.audio.paused = false;

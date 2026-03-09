@@ -4,6 +4,7 @@
 #include "dac_hal.h"
 #include "dac_registry.h"
 #include "dac_eeprom.h"
+#include "audio_pipeline.h"
 #include "app_state.h"
 #include "globals.h"
 #include "auth_handler.h"
@@ -129,7 +130,9 @@ void registerDacApiEndpoints() {
             if (cfg) cfg->mute = newMute;
             int8_t sinkSlot = (halSlot < 0xFF) ? hal_pipeline_get_sink_slot(halSlot) : -1;
             if (sinkSlot >= 0) {
-                dac_set_mute_for_slot((uint8_t)sinkSlot, newMute);
+                audio_pipeline_set_sink_muted((uint8_t)sinkSlot, newMute);
+                DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
+                if (drv) drv->setMute(newMute);
             }
             if (prev != newMute) {
                 LOG_I("[DAC] API: mute %s -> %s", prev ? "ON" : "OFF", newMute ? "ON" : "OFF");
