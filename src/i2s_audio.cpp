@@ -255,9 +255,13 @@ AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag) {
 #ifndef NATIVE_TEST
 
 // Channel handles for new IDF5 I2S std API
-static i2s_chan_handle_t _rx_handle_adc1 = NULL;
-static i2s_chan_handle_t _tx_handle_adc1 = NULL;  // NULL when TX not active
-static i2s_chan_handle_t _rx_handle_adc2 = NULL;
+// Phase 4: Dynamic array supports N ADCs instead of hardcoded 2
+static i2s_chan_handle_t _rx_handle[AUDIO_PIPELINE_MAX_INPUTS] = {};
+static i2s_chan_handle_t _tx_handle_adc1 = NULL;  // NULL when TX not active (used by full-duplex DAC toggle)
+
+// Backward-compat macros (Phase 4) — will be removed after full cutover
+#define _rx_handle_adc1 _rx_handle[0]
+#define _rx_handle_adc2 _rx_handle[1]
 
 #if CONFIG_IDF_TARGET_ESP32P4
 static i2s_chan_handle_t _tx_handle_es8311 = NULL; // I2S2 TX for ES8311 onboard DAC (P4 only)
