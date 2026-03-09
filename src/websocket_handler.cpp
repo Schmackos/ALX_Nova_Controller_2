@@ -961,7 +961,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             // Defer init/deinit to main loop — I2C EEPROM scan + I2S driver
             // setup is too heavy for the WebSocket handler context (blocks SDIO)
             HalDevice* dev = HalDeviceManager::instance().getDevice(halSlot);
-            if (en && !was && dev && !dev->isReady()) {
+            if (en && !was && dev && !dev->_ready) {
               appState.dac.requestDeviceToggle(halSlot, 1);   // main loop activates
             } else if (!en && was) {
               appState.dac.requestDeviceToggle(halSlot, -1);  // main loop deactivates
@@ -1673,7 +1673,7 @@ void sendDacState() {
     doc["modelName"] = dev ? dev->getDescriptor().name : "PCM5102A";
     doc["outputChannels"] = dev ? dev->getDescriptor().channelCount : 2;
     doc["detected"] = (dev != nullptr);
-    doc["ready"] = dev ? dev->isReady() : false;
+    doc["ready"] = dev ? dev->_ready : false;
     doc["filterMode"] = appState.dac.filterMode;   // filterMode has no HAL equivalent yet
     doc["txUnderruns"] = appState.dac.txUnderruns;  // Diagnostic counter stays in AppState
   }
@@ -1685,7 +1685,7 @@ void sendDacState() {
     doc["es8311Enabled"] = esCfg ? esCfg->enabled : false;
     doc["es8311Volume"] = esCfg ? esCfg->volume : 80;
     doc["es8311Mute"] = esCfg ? esCfg->mute : false;
-    doc["es8311Ready"] = esDev ? esDev->isReady() : false;
+    doc["es8311Ready"] = esDev ? esDev->_ready : false;
   }
   // TX diagnostics snapshot
   {
@@ -2156,7 +2156,7 @@ void sendHardwareStats() {
       HalDevice* pcmDev = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
       HalDeviceConfig* pcmCfg = pcmDev ? HalDeviceManager::instance().getConfig(pcmDev->getSlot()) : nullptr;
       dac["enabled"] = pcmCfg ? pcmCfg->enabled : false;
-      dac["ready"] = pcmDev ? pcmDev->isReady() : false;
+      dac["ready"] = pcmDev ? pcmDev->_ready : false;
       dac["detected"] = (pcmDev != nullptr);
       dac["model"] = pcmDev ? pcmDev->getDescriptor().name : "PCM5102A";
       dac["deviceId"] = pcmDev ? pcmDev->getDescriptor().legacyId : 0x0001;

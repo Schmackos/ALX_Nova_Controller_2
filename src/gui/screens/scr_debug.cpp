@@ -275,7 +275,7 @@ void scr_debug_refresh(void) {
         if (!dacDev) dacDev = HalDeviceManager::instance().findByType(HAL_DEV_CODEC);
         HalDeviceConfig* dacCfg = dacDev ? HalDeviceManager::instance().getConfig(dacDev->getSlot()) : nullptr;
         const char* model = dacDev ? dacDev->getDescriptor().name : "No DAC";
-        const char* statusStr = (dacDev && dacDev->isReady()) ? "Ready" :
+        const char* statusStr = (dacDev && dacDev->_ready) ? "Ready" :
                                 (dacCfg && dacCfg->enabled) ? "Not Ready" : "Off";
         snprintf(buf, sizeof(buf), "%s  %s\nVol:%u%% %s %s\nCh:%u Det:%s\nTX Underruns:%lu",
                  model, statusStr,

@@ -33,7 +33,7 @@ void registerDacApiEndpoints() {
         doc["modelName"] = dev ? dev->getDescriptor().name : "PCM5102A";
         doc["outputChannels"] = dev ? dev->getDescriptor().channelCount : 2;
         doc["detected"] = (dev != nullptr);
-        doc["ready"] = dev ? dev->isReady() : false;
+        doc["ready"] = dev ? dev->_ready : false;
         doc["filterMode"] = appState.dac.filterMode;
         doc["txUnderruns"] = appState.dac.txUnderruns;
 
