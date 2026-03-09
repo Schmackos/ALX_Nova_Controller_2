@@ -48,7 +48,7 @@ void HalDspBridge::deinit() {
 void HalDspBridge::dumpConfig() {
     int dspEnabled = 0;
 #ifndef NATIVE_TEST
-    dspEnabled = AppState::getInstance().dspEnabled;
+    dspEnabled = AppState::getInstance().dsp.enabled;
 #endif
     LOG_I("[HAL:DspBridge] DSP Pipeline bridge — dspEnabled=%d", dspEnabled);
 }
@@ -59,7 +59,7 @@ bool HalDspBridge::healthCheck() {
 
 bool HalDspBridge::dspIsActive() const {
 #ifndef NATIVE_TEST
-    return AppState::getInstance().dspEnabled;
+    return AppState::getInstance().dsp.enabled;
 #else
     return false;
 #endif
@@ -69,7 +69,7 @@ bool HalDspBridge::dspSetBypassed(bool bypass) {
 #ifndef NATIVE_TEST
     AppState& as = AppState::getInstance();
     // AppState has dspEnabled but no dspBypassed; bypass maps to !dspEnabled
-    as.dspEnabled = !bypass;
+    as.dsp.enabled = !bypass;
     as.markDspConfigDirty();
     return true;
 #else

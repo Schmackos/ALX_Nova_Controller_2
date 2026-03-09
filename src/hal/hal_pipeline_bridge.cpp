@@ -117,8 +117,8 @@ static void _updateActiveCounts() {
         if (_halSlotToSinkSlot[i] >= 0) outputs++;
         if (_halSlotToAdcLane[i]  >= 0) inputs++;
     }
-    appState.activeOutputCount = outputs;
-    appState.activeInputCount  = inputs;
+    appState.audio.activeOutputCount = outputs;
+    appState.audio.activeInputCount  = inputs;
 #endif
 }
 
@@ -154,7 +154,7 @@ void hal_pipeline_on_device_available(uint8_t slot) {
         LOG_I("[HAL:Bridge] Pipeline bridge: input %s (HAL slot %d) → ADC lane %d",
               name, slot, (int)adcLane);
 #ifndef NATIVE_TEST
-        appState.adcEnabled[adcLane] = true;
+        appState.audio.adcEnabled[adcLane] = true;
         appState.markAdcEnabledDirty();
 #endif
 
@@ -235,7 +235,7 @@ void hal_pipeline_on_device_removed(uint8_t slot) {
         // Remove AudioInputSource from pipeline
         audio_pipeline_remove_source((int)lane);
 #ifndef NATIVE_TEST
-        appState.adcEnabled[lane] = false;
+        appState.audio.adcEnabled[lane] = false;
         appState.markAdcEnabledDirty();
 #endif
         _halSlotToAdcLane[slot] = -1;

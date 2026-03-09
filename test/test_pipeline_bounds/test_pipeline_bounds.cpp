@@ -590,7 +590,7 @@ void test_pipeline_sync_flags_dsp_bypass_lane_3(void) {
 // 6a. Can write and read back all 8 elements of adcEnabled
 void test_adc_enabled_array_size_8(void) {
     AppState &as = AppState::getInstance();
-    int count = sizeof(as.adcEnabled) / sizeof(bool);
+    int count = sizeof(as.audio.adcEnabled) / sizeof(bool);
     TEST_ASSERT_EQUAL(AUDIO_PIPELINE_MAX_INPUTS, count);
 }
 

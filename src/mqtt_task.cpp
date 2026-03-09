@@ -1,6 +1,8 @@
 #include "mqtt_task.h"
 #include "mqtt_handler.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "config.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -16,7 +18,7 @@ static void mqtt_task_fn(void*) {
     while (true) {
         esp_task_wdt_reset();
 
-        if (!appState.mqttEnabled || appState.mqttBroker.length() == 0
+        if (!appState.mqtt.enabled || appState.mqtt.broker.length() == 0
                 || WiFi.status() != WL_CONNECTED) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
@@ -29,7 +31,7 @@ static void mqtt_task_fn(void*) {
         }
 
         if (!mqttClient.connected()) {
-            appState.mqttConnected = false;
+            appState.mqtt.connected = false;
             mqttReconnect();
         }
 

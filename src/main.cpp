@@ -1,4 +1,6 @@
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "auth_handler.h"
 #include "diag_journal.h"
 #include "diag_event.h"
@@ -143,19 +145,19 @@ void initSerialNumber() {
              (uint8_t)(mac), (uint8_t)(mac >> 8), (uint8_t)(mac >> 16),
              (uint8_t)(mac >> 24), (uint8_t)(mac >> 32), (uint8_t)(mac >> 40));
 
-    appState.deviceSerialNumber = String(serial);
+    appState.general.deviceSerialNumber = String(serial);
 
     // Store serial number and firmware version in NVS
-    prefs.putString("serial", appState.deviceSerialNumber);
+    prefs.putString("serial", appState.general.deviceSerialNumber);
     prefs.putString("fw_ver", currentFwVer);
 
     LOG_I("[Main] Serial number generated: %s (firmware: %s)",
-          appState.deviceSerialNumber.c_str(), currentFwVer.c_str());
+          appState.general.deviceSerialNumber.c_str(), currentFwVer.c_str());
   } else {
     // Load existing serial number
-    appState.deviceSerialNumber = prefs.getString("serial", "");
+    appState.general.deviceSerialNumber = prefs.getString("serial", "");
     LOG_I("[Main] Serial number loaded: %s",
-          appState.deviceSerialNumber.c_str());
+          appState.general.deviceSerialNumber.c_str());
   }
 
   prefs.end();
@@ -188,8 +190,8 @@ void setup() {
   initSerialNumber();
 
   // Set AP SSID to the device serial number (e.g., ALX-AABBCCDDEEFF)
-  appState.apSSID = appState.deviceSerialNumber;
-  LOG_I("[Main] AP SSID set to: %s", appState.apSSID.c_str());
+  appState.wifi.apSSID = appState.general.deviceSerialNumber;
+  LOG_I("[Main] AP SSID set to: %s", appState.wifi.apSSID.c_str());
 
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
@@ -246,11 +248,11 @@ void setup() {
   }
 
   // Check if device just rebooted after successful OTA update
-  appState.justUpdated =
-      checkAndClearOTASuccessFlag(appState.previousFirmwareVersion);
-  if (appState.justUpdated) {
+  appState.ota.justUpdated =
+      checkAndClearOTASuccessFlag(appState.ota.previousFirmwareVersion);
+  if (appState.ota.justUpdated) {
     LOG_I("[Main] Firmware updated from %s to %s",
-          appState.previousFirmwareVersion.c_str(), firmwareVer);
+          appState.ota.previousFirmwareVersion.c_str(), firmwareVer);
   }
 
   // Load persisted settings (e.g., auto-update preference)
@@ -259,12 +261,12 @@ void setup() {
   }
 
   // Apply debug serial log level from loaded settings
-  applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+  applyDebugSerialLevel(appState.debug.debugMode, appState.debug.serialLevel);
 
 #ifdef USB_AUDIO_ENABLED
   // Initialize USB Audio (TinyUSB UAC2 speaker device on native USB port)
   // Must be called before WiFi since TinyUSB init happens here
-  if (appState.usbAudioEnabled) {
+  if (appState.usbAudio.enabled) {
     usb_audio_init();
   } else {
     LOG_I("[Main] USB Audio disabled in settings, skipping init");
@@ -419,7 +421,7 @@ void setup() {
           server.method() == HTTP_POST ? "POST" : "OTHER",
           server.uri().c_str());
 
-    if (appState.isAPMode) {
+    if (appState.wifi.isAPMode) {
       server.sendHeader("Location",
                         String("http://") + WiFi.softAPIP().toString() + "/",
                         true);
@@ -693,15 +695,15 @@ void setup() {
       return;
     JsonDocument doc;
     doc["success"] = true;
-    doc["enabled"] = appState.sigGenEnabled;
+    doc["enabled"] = appState.sigGen.enabled;
     const char *waveNames[] = {"sine", "square", "white_noise", "sweep"};
-    doc["waveform"] = waveNames[appState.sigGenWaveform % 4];
-    doc["frequency"] = appState.sigGenFrequency;
-    doc["amplitude"] = appState.sigGenAmplitude;
+    doc["waveform"] = waveNames[appState.sigGen.waveform % 4];
+    doc["frequency"] = appState.sigGen.frequency;
+    doc["amplitude"] = appState.sigGen.amplitude;
     const char *chanNames[] = {"left", "right", "both"};
-    doc["channel"] = chanNames[appState.sigGenChannel % 3];
-    doc["outputMode"] = appState.sigGenOutputMode == 0 ? "software" : "pwm";
-    doc["sweepSpeed"] = appState.sigGenSweepSpeed;
+    doc["channel"] = chanNames[appState.sigGen.channel % 3];
+    doc["outputMode"] = appState.sigGen.outputMode == 0 ? "software" : "pwm";
+    doc["sweepSpeed"] = appState.sigGen.sweepSpeed;
     String json;
     serializeJson(doc, json);
     server.send(200, "application/json", json);
@@ -722,41 +724,41 @@ void setup() {
     }
     bool changed = false;
     if (doc["enabled"].is<bool>()) {
-      appState.sigGenEnabled = doc["enabled"].as<bool>();
+      appState.sigGen.enabled = doc["enabled"].as<bool>();
       changed = true;
     }
     if (doc["waveform"].is<String>()) {
       String w = doc["waveform"].as<String>();
-      if (w == "sine") appState.sigGenWaveform = 0;
-      else if (w == "square") appState.sigGenWaveform = 1;
-      else if (w == "white_noise") appState.sigGenWaveform = 2;
-      else if (w == "sweep") appState.sigGenWaveform = 3;
+      if (w == "sine") appState.sigGen.waveform = 0;
+      else if (w == "square") appState.sigGen.waveform = 1;
+      else if (w == "white_noise") appState.sigGen.waveform = 2;
+      else if (w == "sweep") appState.sigGen.waveform = 3;
       changed = true;
     }
     if (doc["frequency"].is<float>()) {
       float f = doc["frequency"].as<float>();
-      if (f >= 1.0f && f <= 22000.0f) { appState.sigGenFrequency = f; changed = true; }
+      if (f >= 1.0f && f <= 22000.0f) { appState.sigGen.frequency = f; changed = true; }
     }
     if (doc["amplitude"].is<float>()) {
       float a = doc["amplitude"].as<float>();
-      if (a >= -96.0f && a <= 0.0f) { appState.sigGenAmplitude = a; changed = true; }
+      if (a >= -96.0f && a <= 0.0f) { appState.sigGen.amplitude = a; changed = true; }
     }
     if (doc["channel"].is<String>()) {
       String c = doc["channel"].as<String>();
-      if (c == "left") appState.sigGenChannel = 0;
-      else if (c == "right") appState.sigGenChannel = 1;
-      else if (c == "both") appState.sigGenChannel = 2;
+      if (c == "left") appState.sigGen.channel = 0;
+      else if (c == "right") appState.sigGen.channel = 1;
+      else if (c == "both") appState.sigGen.channel = 2;
       changed = true;
     }
     if (doc["outputMode"].is<String>()) {
       String m = doc["outputMode"].as<String>();
-      if (m == "software") appState.sigGenOutputMode = 0;
-      else if (m == "pwm") appState.sigGenOutputMode = 1;
+      if (m == "software") appState.sigGen.outputMode = 0;
+      else if (m == "pwm") appState.sigGen.outputMode = 1;
       changed = true;
     }
     if (doc["sweepSpeed"].is<float>()) {
       float s = doc["sweepSpeed"].as<float>();
-      if (s >= 1.0f && s <= 22000.0f) { appState.sigGenSweepSpeed = s; changed = true; }
+      if (s >= 1.0f && s <= 22000.0f) { appState.sigGen.sweepSpeed = s; changed = true; }
     }
     if (changed) {
       siggen_apply_params();
@@ -841,9 +843,9 @@ void setup() {
     doc["success"] = true;
     JsonArray names = doc["names"].to<JsonArray>();
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-      names.add(appState.inputNames[i]);
+      names.add(appState.audio.inputNames[i]);
     }
-    doc["numAdcsDetected"] = appState.numAdcsDetected;
+    doc["numAdcsDetected"] = appState.audio.numAdcsDetected;
     String json;
     serializeJson(doc, json);
     server.send(200, "application/json", json);
@@ -866,7 +868,7 @@ void setup() {
       JsonArray names = doc["names"].as<JsonArray>();
       for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
         String name = names[i].as<String>();
-        if (name.length() > 0) appState.inputNames[i] = name;
+        if (name.length() > 0) appState.audio.inputNames[i] = name;
       }
       saveInputNames();
     }
@@ -881,8 +883,8 @@ void setup() {
   loadDspSettings();
   // Sync pipeline bypass state with loaded dspEnabled flag.
   // Without this the pipeline processes DSP stages on boot even when disabled.
-  audio_pipeline_bypass_dsp(0, !appState.dspEnabled);
-  audio_pipeline_bypass_dsp(1, !appState.dspEnabled);
+  audio_pipeline_bypass_dsp(0, !appState.dsp.enabled);
+  audio_pipeline_bypass_dsp(1, !appState.dsp.enabled);
 #endif
 
 #ifdef DAC_ENABLED
@@ -952,7 +954,7 @@ void loop() {
   app_events_wait(5);
 
   server.handleClient();
-  if (appState.isAPMode) {
+  if (appState.wifi.isAPMode) {
     dnsServer.processNextRequest();
   }
   webSocket.loop();
@@ -978,7 +980,7 @@ void loop() {
   }
 
   // Enhanced button monitoring with multiple press types
-  if (!appState.factoryResetInProgress) {
+  if (!appState.general.factoryResetInProgress) {
     ButtonPressType pressType = resetButton.update();
 
     // Handle different button press types
@@ -993,14 +995,14 @@ void loop() {
                                     ? "Connected"
                                     : "Disconnected");
       LOG_D("[Button] AP Mode: %s",
-            appState.isAPMode ? "Active" : "Inactive");
+            appState.wifi.isAPMode ? "Active" : "Inactive");
       LOG_D("[Button] Firmware: %s", firmwareVer);
       break;
 
     case BTN_DOUBLE_CLICK:
       buzzer_play(BUZZ_BTN_DOUBLE);
       LOG_I("[Button] Double click - toggle AP mode");
-      if (appState.isAPMode) {
+      if (appState.wifi.isAPMode) {
         stopAccessPoint();
       } else {
         startAccessPoint();
@@ -1069,35 +1071,35 @@ void loop() {
   // Periodic firmware check — backoff-aware interval (5min → 15min → 30min → 60min on failures)
   // Skip when heap is critical — TLS buffers need ~55KB and would worsen fragmentation
   bool networkReady = (WiFi.status() == WL_CONNECTED) || eth_manager_is_connected();
-  if (!appState.isAPMode && networkReady &&
-      !appState.otaInProgress && !isOTATaskRunning() &&
-      !appState.heapCritical) {
+  if (!appState.wifi.isAPMode && networkReady &&
+      !appState.ota.inProgress && !isOTATaskRunning() &&
+      !appState.debug.heapCritical) {
     unsigned long currentMillis = millis();
     unsigned long effectiveInterval = getOTAEffectiveInterval();
     // Delay first OTA check 30s after boot to let Ethernet DHCP + DNS stabilize
-    if (appState.lastOTACheck == 0 && currentMillis < 30000) {
+    if (appState.ota.lastCheck == 0 && currentMillis < 30000) {
       // Too early — skip until network stack is stable
-    } else if (currentMillis - appState.lastOTACheck >= effectiveInterval ||
-        appState.lastOTACheck == 0) {
-      appState.lastOTACheck = currentMillis;
+    } else if (currentMillis - appState.ota.lastCheck >= effectiveInterval ||
+        appState.ota.lastCheck == 0) {
+      appState.ota.lastCheck = currentMillis;
       startOTACheckTask();
     }
   }
 
   // Auto-update logic (runs on every periodic check when update is available)
   // Will retry on next periodic check (5 min) if amplifier is in use
-  if (appState.autoUpdateEnabled && appState.updateAvailable &&
-      !appState.otaInProgress && !isOTATaskRunning() &&
-      appState.updateDiscoveredTime > 0) {
-    if (appState.amplifierState) {
+  if (appState.ota.autoUpdateEnabled && appState.ota.updateAvailable &&
+      !appState.ota.inProgress && !isOTATaskRunning() &&
+      appState.ota.updateDiscoveredTime > 0) {
+    if (appState.audio.amplifierState) {
       // Amplifier is ON - skip this check, will retry on next periodic check
-      // Reset appState.updateDiscoveredTime so countdown restarts when amp turns off
+      // Reset appState.ota.updateDiscoveredTime so countdown restarts when amp turns off
       LOG_W("[OTA] Auto-update skipped: amplifier is in use, will retry on next check");
-      appState.updateDiscoveredTime = 0;
+      appState.ota.updateDiscoveredTime = 0;
       appState.markOTADirty();
     } else {
       // Amplifier is OFF - safe to proceed with countdown
-      unsigned long elapsed = millis() - appState.updateDiscoveredTime;
+      unsigned long elapsed = millis() - appState.ota.updateDiscoveredTime;
 
       // Broadcast countdown every second via dirty flag
       static unsigned long lastCountdownBroadcast = 0;
@@ -1108,9 +1110,9 @@ void loop() {
 
       if (elapsed >= AUTO_UPDATE_COUNTDOWN) {
         // Double-check amplifier state before starting update
-        if (appState.amplifierState) {
+        if (appState.audio.amplifierState) {
           LOG_W("[OTA] Auto-update cancelled: amplifier turned on during countdown, will retry on next check");
-          appState.updateDiscoveredTime = 0;
+          appState.ota.updateDiscoveredTime = 0;
           appState.markOTADirty();
         } else {
           LOG_I("[OTA] Auto-update starting (amplifier is off)");
@@ -1158,7 +1160,7 @@ void loop() {
   // DSP metrics broadcast (1s interval when DSP is active, one final 0% when disabled/bypassed)
   static unsigned long lastDspMetricsBroadcast = 0;
   static bool lastDspMetricsActive = false;
-  bool dspActive = appState.dspEnabled && !appState.dspBypass;
+  bool dspActive = appState.dsp.enabled && !appState.dsp.bypass;
   if (millis() - lastDspMetricsBroadcast >= 1000) {
     if (dspActive || lastDspMetricsActive) {
       lastDspMetricsBroadcast = millis();
@@ -1179,7 +1181,7 @@ void loop() {
       // Enable AP mode (add AP to existing station mode)
       WiFi.mode(WIFI_AP_STA);
       wifi_ensure_ps_none();
-      WiFi.softAP(appState.apSSID.c_str(), appState.apPassword.c_str());
+      WiFi.softAP(appState.wifi.apSSID.c_str(), appState.wifi.apPassword.c_str());
     } else {
       // Disable AP mode
       WiFi.softAPdisconnect(true);
@@ -1202,27 +1204,27 @@ void loop() {
 #ifdef DAC_ENABLED
   // Process deferred DAC enable/disable (set by WebSocket handler —
   // I2C EEPROM scan + I2S driver init is too heavy for WS context, blocks SDIO → WiFi crash)
-  if (appState._pendingDacToggle != 0) {
-    if (appState._pendingDacToggle > 0) {
+  if (appState.dac.pendingDacToggle != 0) {
+    if (appState.dac.pendingDacToggle > 0) {
       LOG_I("[DAC] Deferred primary DAC init (main loop)");
       dac_output_init();
     } else {
       LOG_I("[DAC] Deferred primary DAC deinit (main loop)");
       dac_output_deinit();
     }
-    appState._pendingDacToggle = 0;
+    appState.dac.pendingDacToggle = 0;
     appState.markDacDirty();
   }
   // Process deferred ES8311 enable/disable
-  if (appState._pendingEs8311Toggle != 0) {
-    if (appState._pendingEs8311Toggle > 0) {
+  if (appState.dac.pendingEs8311Toggle != 0) {
+    if (appState.dac.pendingEs8311Toggle > 0) {
       LOG_I("[DAC] Deferred ES8311 init (main loop)");
       dac_secondary_init();
     } else {
       LOG_I("[DAC] Deferred ES8311 deinit (main loop)");
       dac_secondary_deinit();
     }
-    appState._pendingEs8311Toggle = 0;
+    appState.dac.pendingEs8311Toggle = 0;
     appState.markDacDirty();
   }
   // Broadcast DAC state changes (WS/API/MQTT -> all clients)
@@ -1259,7 +1261,7 @@ void loop() {
   {
     static unsigned long lastUsbPoll = 0;
     unsigned long nowMs = millis();
-    if (appState.usbAudioEnabled && (nowMs - lastUsbPoll >= 1000)) {
+    if (appState.usbAudio.enabled && (nowMs - lastUsbPoll >= 1000)) {
       usb_audio_poll_connection();
       lastUsbPoll = nowMs;
     }
@@ -1273,7 +1275,7 @@ void loop() {
     static unsigned long lastUsbVuBroadcast = 0;
     unsigned long nowMs = millis();
     if (appState.isUsbAudioVuDirty()
-        && (nowMs - lastUsbVuBroadcast >= (unsigned long)appState.audioUpdateRate)) {
+        && (nowMs - lastUsbVuBroadcast >= (unsigned long)appState.audio.updateRate)) {
       sendUsbAudioState();
       appState.clearUsbAudioVuDirty();
       lastUsbVuBroadcast = nowMs;
@@ -1315,7 +1317,7 @@ void loop() {
 
   // Task monitor snapshot (every 5 seconds, independent of HW stats broadcast)
   static unsigned long lastTaskMonUpdate = 0;
-  if (appState.debugMode && appState.debugTaskMonitor) {
+  if (appState.debug.debugMode && appState.debug.taskMonitor) {
     if (millis() - lastTaskMonUpdate >= 5000) {
       lastTaskMonUpdate = millis();
       task_monitor_update();
@@ -1347,12 +1349,12 @@ void loop() {
     if (millis() - lastClipCheck >= 5000) {
       lastClipCheck = millis();
       for (uint8_t lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
-        if (appState.audioAdc[lane].clipRate > 0.01f) {
+        if (appState.audio.adc[lane].clipRate > 0.01f) {
           clipHighCount[lane]++;
           if (clipHighCount[lane] > 5 && !clipEmitted[lane]) {
             clipEmitted[lane] = true;
             char msg[24];
-            snprintf(msg, sizeof(msg), "ADC%u clip %.1f%%", lane, appState.audioAdc[lane].clipRate * 100.0f);
+            snprintf(msg, sizeof(msg), "ADC%u clip %.1f%%", lane, appState.audio.adc[lane].clipRate * 100.0f);
             diag_emit(DIAG_AUDIO_CLIPPING, DIAG_SEV_WARN,
                       0xFF, "Audio", msg);
           }
@@ -1387,10 +1389,10 @@ void loop() {
   if (millis() - lastHeapCheck >= 30000) {
     lastHeapCheck = millis();
     uint32_t maxBlock = ESP.getMaxAllocHeap();
-    bool wasCritical = appState.heapCritical;
-    appState.heapCritical = (maxBlock < 40000);
-    if (appState.heapCritical != wasCritical) {
-      if (appState.heapCritical) {
+    bool wasCritical = appState.debug.heapCritical;
+    appState.debug.heapCritical = (maxBlock < 40000);
+    if (appState.debug.heapCritical != wasCritical) {
+      if (appState.debug.heapCritical) {
         LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB)", (unsigned long)maxBlock);
         diag_emit(DIAG_SYS_HEAP_CRITICAL, DIAG_SEV_WARN,
                   0xFF, "System", "heap critical");
@@ -1407,9 +1409,9 @@ void loop() {
   // Stagger with audio data to avoid back-to-back large WebSocket sends
   static unsigned long lastHardwareStatsBroadcast = 0;
   bool hwStatsJustSent = false;
-  if (millis() - lastHardwareStatsBroadcast >= appState.hardwareStatsInterval) {
+  if (millis() - lastHardwareStatsBroadcast >= appState.debug.hardwareStatsInterval) {
     lastHardwareStatsBroadcast = millis();
-    if (appState.debugMode) {
+    if (appState.debug.debugMode) {
       sendHardwareStats();
       hwStatsJustSent = true;
     }
@@ -1418,7 +1420,7 @@ void loop() {
   // Send audio waveform/spectrum data to subscribed WebSocket clients
   // Skip this iteration if hwStats just sent — prevents WiFi TX burst that starves I2S DMA
   static unsigned long lastAudioSend = 0;
-  if (!hwStatsJustSent && millis() - lastAudioSend >= appState.audioUpdateRate) {
+  if (!hwStatsJustSent && millis() - lastAudioSend >= appState.audio.updateRate) {
     lastAudioSend = millis();
     sendAudioData();
   }

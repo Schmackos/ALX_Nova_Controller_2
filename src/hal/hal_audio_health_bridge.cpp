@@ -99,17 +99,17 @@ static float _get_dc_offset(uint8_t lane) {
 
 static int _get_adc_health(uint8_t lane) {
     if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return (int)AUDIO_OK;
-    return (int)appState.audioAdc[lane].healthStatus;
+    return (int)appState.audio.adc[lane].healthStatus;
 }
 
 static uint32_t _get_i2s_recoveries(uint8_t lane) {
     if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return 0;
-    return appState.audioAdc[lane].i2sRecoveries;
+    return appState.audio.adc[lane].i2sRecoveries;
 }
 
 static float _get_dc_offset(uint8_t lane) {
     if (lane >= AUDIO_PIPELINE_MAX_INPUTS) return 0.0f;
-    return appState.audioAdc[lane].dcOffset;
+    return appState.audio.adc[lane].dcOffset;
 }
 
 #endif // NATIVE_TEST

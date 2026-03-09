@@ -560,7 +560,7 @@ static bool _adc1_src_isActive(void) {
 }
 
 static uint32_t _adc1_src_getSampleRate(void) {
-    return AppState::getInstance().audioSampleRate;
+    return AppState::getInstance().audio.sampleRate;
 }
 
 static uint32_t _adc2_src_read(int32_t *dst, uint32_t requestedFrames) {
@@ -577,7 +577,7 @@ static bool _adc2_src_isActive(void) {
 }
 
 static uint32_t _adc2_src_getSampleRate(void) {
-    return AppState::getInstance().audioSampleRate;
+    return AppState::getInstance().audio.sampleRate;
 }
 
 static void _register_adc_sources() {
@@ -605,7 +605,7 @@ static void _register_adc_sources() {
 // I2S0 outputs BCK/WS/MCLK; I2S1 has data_in only (GPIO9).
 // Init order: ADC2 first, then ADC1 (clock source). See i2s_configure_adc2().
 void i2s_audio_init() {
-    _currentSampleRate = AppState::getInstance().audioSampleRate;
+    _currentSampleRate = AppState::getInstance().audio.sampleRate;
     if (!audio_validate_sample_rate(_currentSampleRate)) {
         _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
     }
@@ -650,7 +650,7 @@ void i2s_audio_init() {
               heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0 ? "PSRAM" : "internal");
     }
 
-    _wfTargetFrames = _currentSampleRate * AppState::getInstance().audioUpdateRate / 1000;
+    _wfTargetFrames = _currentSampleRate * AppState::getInstance().audio.updateRate / 1000;
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
         _wfFramesSeen[a] = 0;
@@ -664,7 +664,7 @@ void i2s_audio_init() {
     // Initialize ESP-DSP Radix-4 FFT tables and window
     if (!_fftInitialized) {
         dsps_fft4r_init_fc32(NULL, FFT_SIZE);
-        i2s_audio_apply_window(AppState::getInstance().fftWindowType);
+        i2s_audio_apply_window(AppState::getInstance().audio.fftWindowType);
         _fftInitialized = true;
     }
 
@@ -806,7 +806,7 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     LOG_I("[Audio] Changing sample rate: %lu -> %lu Hz", _currentSampleRate, rate);
 
     // Pause audio task during channel teardown/recreate
-    AppState::getInstance().audioPaused = true;
+    AppState::getInstance().audio.paused = true;
     vTaskDelay(pdMS_TO_TICKS(60));
 
     // Teardown all channels (configure functions handle this, but be explicit)
@@ -815,7 +815,7 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     if (_rx_handle_adc2) { i2s_channel_disable(_rx_handle_adc2); i2s_del_channel(_rx_handle_adc2); _rx_handle_adc2 = NULL; }
 
     _currentSampleRate = rate;
-    _wfTargetFrames = rate * AppState::getInstance().audioUpdateRate / 1000;
+    _wfTargetFrames = rate * AppState::getInstance().audio.updateRate / 1000;
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
         _wfFramesSeen[a] = 0;
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
@@ -824,7 +824,7 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     if (_adc2InitOk) _adc2InitOk = i2s_audio_configure_adc(1, nullptr);
     i2s_audio_configure_adc(0, nullptr);
 
-    AppState::getInstance().audioPaused = false;
+    AppState::getInstance().audio.paused = false;
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
     return true;
 }
@@ -953,7 +953,7 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
     LOG_I("[Audio] Enabling I2S TX full-duplex on I2S0, data_out=GPIO%d", (int)_txDataPin);
 
     // Pause audio task during channel reinit
-    AppState::getInstance().audioPaused = true;
+    AppState::getInstance().audio.paused = true;
     vTaskDelay(pdMS_TO_TICKS(60));
 
     // Teardown existing RX-only channel
@@ -973,7 +973,7 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
     if (err != ESP_OK) {
         LOG_E("[Audio] Full-duplex channel alloc failed: %d", err);
         _tx_handle_adc1 = NULL; _rx_handle_adc1 = NULL;
-        AppState::getInstance().audioPaused = false;
+        AppState::getInstance().audio.paused = false;
         return false;
     }
 
@@ -996,7 +996,7 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
         LOG_E("[Audio] Full-duplex TX init failed: %d", err);
         i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL;
         i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL;
-        AppState::getInstance().audioPaused = false;
+        AppState::getInstance().audio.paused = false;
         return false;
     }
     err = i2s_channel_init_std_mode(_rx_handle_adc1, &std_cfg);
@@ -1005,14 +1005,14 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
         i2s_channel_disable(_tx_handle_adc1);
         i2s_del_channel(_rx_handle_adc1); _rx_handle_adc1 = NULL;
         i2s_del_channel(_tx_handle_adc1); _tx_handle_adc1 = NULL;
-        AppState::getInstance().audioPaused = false;
+        AppState::getInstance().audio.paused = false;
         return false;
     }
 
     i2s_channel_enable(_tx_handle_adc1);
     i2s_channel_enable(_rx_handle_adc1);
 
-    AppState::getInstance().audioPaused = false;
+    AppState::getInstance().audio.paused = false;
     LOG_I("[Audio] I2S TX full-duplex enabled: rate=%luHz data_out=GPIO%d MCLK=%luHz DMA=%dx%d",
           (unsigned long)sample_rate, (int)_txDataPin,
           (unsigned long)(sample_rate * 256),

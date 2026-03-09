@@ -13,7 +13,7 @@
 // JSON keys (without "appState." prefix) as expected by the frontend.
 //
 // Bug that this test prevents:
-// Previously, the backend sent "appState.timerDuration" but the frontend
+// Previously, the backend sent "appState.audio.timerDuration" but the frontend
 // expected "timerDuration", causing the timer display to show "-- min"
 // instead of the actual timer value.
 
@@ -27,10 +27,10 @@ void test_smart_sensing_websocket_message_keys() {
 
     // CRITICAL: These keys must NOT have the "appState." prefix
     // Frontend expects: timerDuration, timerRemaining, timerActive, amplifierState
-    doc["timerDuration"] = 15;      // NOT "appState.timerDuration"
-    doc["timerRemaining"] = 900;    // NOT "appState.timerRemaining"
+    doc["timerDuration"] = 15;      // NOT "appState.audio.timerDuration"
+    doc["timerRemaining"] = 900;    // NOT "appState.audio.timerRemaining"
     doc["timerActive"] = true;      // Correct (never had prefix)
-    doc["amplifierState"] = true;   // NOT "appState.amplifierState"
+    doc["amplifierState"] = true;   // NOT "appState.audio.amplifierState"
     doc["audioThreshold"] = -40.0f;
     doc["audioLevel"] = -50.0f;
     doc["signalDetected"] = true;
@@ -48,9 +48,9 @@ void test_smart_sensing_websocket_message_keys() {
     TEST_ASSERT_TRUE(doc["amplifierState"].as<bool>());
 
     // Verify the WRONG keys do NOT exist (regression check)
-    TEST_ASSERT_FALSE(doc["appState.timerDuration"].is<int>());
-    TEST_ASSERT_FALSE(doc["appState.timerRemaining"].is<int>());
-    TEST_ASSERT_FALSE(doc["appState.amplifierState"].is<bool>());
+    TEST_ASSERT_FALSE(doc["appState.audio.timerDuration"].is<int>());
+    TEST_ASSERT_FALSE(doc["appState.audio.timerRemaining"].is<int>());
+    TEST_ASSERT_FALSE(doc["appState.audio.amplifierState"].is<bool>());
 }
 
 void test_websocket_message_consistency() {

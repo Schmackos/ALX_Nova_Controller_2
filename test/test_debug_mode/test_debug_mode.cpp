@@ -43,19 +43,23 @@ inline void applyDebugSerialLevel(bool masterEnabled, int level) {
 
 // ===== Minimal AppState mock =====
 
-struct MockAppState {
+struct DebugState {
     bool debugMode = true;
     int debugSerialLevel = 2;
-    bool debugHwStats = true;
-    bool debugI2sMetrics = true;
-    bool debugTaskMonitor = true;
+    bool hwStats = true;
+    bool i2sMetrics = true;
+    bool taskMonitor = true;
+};
+
+struct MockAppState {
+    DebugState debug;
 
     void reset() {
-        debugMode = true;
-        debugSerialLevel = 2;
-        debugHwStats = true;
-        debugI2sMetrics = true;
-        debugTaskMonitor = true;
+        debug.debugMode = true;
+        debug.debugSerialLevel = 2;
+        debug.hwStats = true;
+        debug.i2sMetrics = true;
+        debug.taskMonitor = true;
     }
 };
 
@@ -74,27 +78,27 @@ void tearDown(void) {}
 
 void test_default_debugMode_is_true(void) {
     MockAppState fresh;
-    TEST_ASSERT_TRUE(fresh.debugMode);
+    TEST_ASSERT_TRUE(fresh.debug.debugMode);
 }
 
 void test_default_debugSerialLevel_is_2(void) {
     MockAppState fresh;
-    TEST_ASSERT_EQUAL_INT(2, fresh.debugSerialLevel);
+    TEST_ASSERT_EQUAL_INT(2, fresh.debug.debugSerialLevel);
 }
 
 void test_default_debugHwStats_is_true(void) {
     MockAppState fresh;
-    TEST_ASSERT_TRUE(fresh.debugHwStats);
+    TEST_ASSERT_TRUE(fresh.debug.hwStats);
 }
 
 void test_default_debugI2sMetrics_is_true(void) {
     MockAppState fresh;
-    TEST_ASSERT_TRUE(fresh.debugI2sMetrics);
+    TEST_ASSERT_TRUE(fresh.debug.i2sMetrics);
 }
 
 void test_default_debugTaskMonitor_is_true(void) {
     MockAppState fresh;
-    TEST_ASSERT_TRUE(fresh.debugTaskMonitor);
+    TEST_ASSERT_TRUE(fresh.debug.taskMonitor);
 }
 
 // ===== Master Gate Override Tests =====
@@ -154,54 +158,54 @@ void test_serial_level_negative_defaults_to_LOG_INFO(void) {
 // ===== Feature Guard Logic Tests =====
 
 void test_hwstats_enabled_when_both_on(void) {
-    appState.debugMode = true;
-    appState.debugHwStats = true;
-    TEST_ASSERT_TRUE(appState.debugMode && appState.debugHwStats);
+    appState.debug.debugMode = true;
+    appState.debug.hwStats = true;
+    TEST_ASSERT_TRUE(appState.debug.debugMode && appState.debug.hwStats);
 }
 
 void test_hwstats_disabled_when_master_off(void) {
-    appState.debugMode = false;
-    appState.debugHwStats = true;
-    TEST_ASSERT_FALSE(appState.debugMode && appState.debugHwStats);
+    appState.debug.debugMode = false;
+    appState.debug.hwStats = true;
+    TEST_ASSERT_FALSE(appState.debug.debugMode && appState.debug.hwStats);
 }
 
 void test_hwstats_disabled_when_feature_off(void) {
-    appState.debugMode = true;
-    appState.debugHwStats = false;
-    TEST_ASSERT_FALSE(appState.debugMode && appState.debugHwStats);
+    appState.debug.debugMode = true;
+    appState.debug.hwStats = false;
+    TEST_ASSERT_FALSE(appState.debug.debugMode && appState.debug.hwStats);
 }
 
 void test_i2s_metrics_disabled_when_master_off(void) {
-    appState.debugMode = false;
-    appState.debugI2sMetrics = true;
-    TEST_ASSERT_FALSE(appState.debugMode && appState.debugI2sMetrics);
+    appState.debug.debugMode = false;
+    appState.debug.i2sMetrics = true;
+    TEST_ASSERT_FALSE(appState.debug.debugMode && appState.debug.i2sMetrics);
 }
 
 void test_task_monitor_disabled_when_master_off(void) {
-    appState.debugMode = false;
-    appState.debugTaskMonitor = true;
-    TEST_ASSERT_FALSE(appState.debugMode && appState.debugTaskMonitor);
+    appState.debug.debugMode = false;
+    appState.debug.taskMonitor = true;
+    TEST_ASSERT_FALSE(appState.debug.debugMode && appState.debug.taskMonitor);
 }
 
 void test_all_features_disabled_when_master_off(void) {
-    appState.debugMode = false;
-    appState.debugHwStats = true;
-    appState.debugI2sMetrics = true;
-    appState.debugTaskMonitor = true;
-    TEST_ASSERT_FALSE(appState.debugMode && appState.debugHwStats);
-    TEST_ASSERT_FALSE(appState.debugMode && appState.debugI2sMetrics);
-    TEST_ASSERT_FALSE(appState.debugMode && appState.debugTaskMonitor);
+    appState.debug.debugMode = false;
+    appState.debug.hwStats = true;
+    appState.debug.i2sMetrics = true;
+    appState.debug.taskMonitor = true;
+    TEST_ASSERT_FALSE(appState.debug.debugMode && appState.debug.hwStats);
+    TEST_ASSERT_FALSE(appState.debug.debugMode && appState.debug.i2sMetrics);
+    TEST_ASSERT_FALSE(appState.debug.debugMode && appState.debug.taskMonitor);
 }
 
 void test_individual_toggles_preserved_when_master_off(void) {
-    appState.debugMode = false;
-    appState.debugHwStats = true;
-    appState.debugI2sMetrics = false;
-    appState.debugTaskMonitor = true;
+    appState.debug.debugMode = false;
+    appState.debug.hwStats = true;
+    appState.debug.i2sMetrics = false;
+    appState.debug.taskMonitor = true;
     // Individual values preserved even though master is off
-    TEST_ASSERT_TRUE(appState.debugHwStats);
-    TEST_ASSERT_FALSE(appState.debugI2sMetrics);
-    TEST_ASSERT_TRUE(appState.debugTaskMonitor);
+    TEST_ASSERT_TRUE(appState.debug.hwStats);
+    TEST_ASSERT_FALSE(appState.debug.i2sMetrics);
+    TEST_ASSERT_TRUE(appState.debug.taskMonitor);
 }
 
 // ===== LOG_NONE Enum Tests =====

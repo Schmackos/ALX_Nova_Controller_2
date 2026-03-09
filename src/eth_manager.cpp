@@ -20,15 +20,15 @@ static void eth_event_handler(arduino_event_id_t event) {
         case ARDUINO_EVENT_ETH_CONNECTED:
             LOG_I("[ETH] Link up (%dMbps %s)", ETH.linkSpeed(),
                   ETH.fullDuplex() ? "Full Duplex" : "Half Duplex");
-            appState.ethLinkUp = true;
+            appState.ethernet.linkUp = true;
             appState.markEthernetDirty();
             app_events_signal(EVT_ETHERNET);
             break;
         case ARDUINO_EVENT_ETH_GOT_IP:
             LOG_I("[ETH] Got IP: %s", ETH.localIP().toString().c_str());
-            appState.ethConnected = true;
-            appState.ethIP = ETH.localIP().toString();
-            appState.activeInterface = NET_ETHERNET;
+            appState.ethernet.connected = true;
+            appState.ethernet.ip = ETH.localIP().toString();
+            appState.ethernet.activeInterface = NET_ETHERNET;
             appState.markEthernetDirty();
             app_events_signal(EVT_ETHERNET);
             // Make Ethernet the default route when it gets IP
@@ -36,21 +36,21 @@ static void eth_event_handler(arduino_event_id_t event) {
             break;
         case ARDUINO_EVENT_ETH_LOST_IP:
             LOG_W("[ETH] Lost IP");
-            appState.ethConnected = false;
-            appState.ethIP = "";
-            if (appState.activeInterface == NET_ETHERNET) {
-                appState.activeInterface = appState.wifiConnectSuccess ? NET_WIFI : NET_NONE;
+            appState.ethernet.connected = false;
+            appState.ethernet.ip = "";
+            if (appState.ethernet.activeInterface == NET_ETHERNET) {
+                appState.ethernet.activeInterface = appState.wifi.connectSuccess ? NET_WIFI : NET_NONE;
             }
             appState.markEthernetDirty();
             app_events_signal(EVT_ETHERNET);
             break;
         case ARDUINO_EVENT_ETH_DISCONNECTED:
             LOG_W("[ETH] Link down");
-            appState.ethLinkUp = false;
-            appState.ethConnected = false;
-            appState.ethIP = "";
-            if (appState.activeInterface == NET_ETHERNET) {
-                appState.activeInterface = appState.wifiConnectSuccess ? NET_WIFI : NET_NONE;
+            appState.ethernet.linkUp = false;
+            appState.ethernet.connected = false;
+            appState.ethernet.ip = "";
+            if (appState.ethernet.activeInterface == NET_ETHERNET) {
+                appState.ethernet.activeInterface = appState.wifi.connectSuccess ? NET_WIFI : NET_NONE;
             }
             appState.markEthernetDirty();
             app_events_signal(EVT_ETHERNET);
@@ -58,9 +58,9 @@ static void eth_event_handler(arduino_event_id_t event) {
         case ARDUINO_EVENT_ETH_STOP:
             LOG_I("[ETH] Stopped");
             _ethStarted = false;
-            appState.ethLinkUp = false;
-            appState.ethConnected = false;
-            appState.ethIP = "";
+            appState.ethernet.linkUp = false;
+            appState.ethernet.connected = false;
+            appState.ethernet.ip = "";
             break;
         default:
             break;
@@ -78,15 +78,15 @@ void eth_manager_init() {
 }
 
 bool eth_manager_is_connected() {
-    return appState.ethConnected;
+    return appState.ethernet.connected;
 }
 
 bool eth_manager_link_up() {
-    return appState.ethLinkUp;
+    return appState.ethernet.linkUp;
 }
 
 String eth_manager_get_ip() {
-    return appState.ethIP;
+    return appState.ethernet.ip;
 }
 
 void eth_manager_set_default_route() {

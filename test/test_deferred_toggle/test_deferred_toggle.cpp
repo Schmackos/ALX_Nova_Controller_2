@@ -26,22 +26,26 @@
 // requestDacToggle() / requestEs8311Toggle() setters from src/app_state.h
 // without pulling in WiFi, PubSubClient, WebServer, or DSP dependencies.
 
-struct MockAppState {
-    volatile int8_t _pendingDacToggle = 0;
-    volatile int8_t _pendingEs8311Toggle = 0;
+struct MockDacState {
+    volatile int8_t pendingDacToggle = 0;
+    volatile int8_t pendingEs8311Toggle = 0;
 
-    // Validated setters — identical to AppState implementation
+    // Validated setters — identical to DacState implementation in src/state/dac_state.h
     void requestDacToggle(int8_t action) {
-        if (action >= -1 && action <= 1) _pendingDacToggle = action;
+        if (action >= -1 && action <= 1) pendingDacToggle = action;
     }
 
     void requestEs8311Toggle(int8_t action) {
-        if (action >= -1 && action <= 1) _pendingEs8311Toggle = action;
+        if (action >= -1 && action <= 1) pendingEs8311Toggle = action;
     }
+};
+
+struct MockAppState {
+    MockDacState dac;
 
     void reset() {
-        _pendingDacToggle = 0;
-        _pendingEs8311Toggle = 0;
+        dac.pendingDacToggle = 0;
+        dac.pendingEs8311Toggle = 0;
     }
 };
 
@@ -58,33 +62,33 @@ void tearDown(void) {}
 // ===== requestDacToggle — valid values =====
 
 void test_requestDacToggle_enable_sets_flag_to_1(void) {
-    appState.requestDacToggle(1);
-    TEST_ASSERT_EQUAL_INT8(1, appState._pendingDacToggle);
+    appState.dac.requestDacToggle(1);
+    TEST_ASSERT_EQUAL_INT8(1, appState.dac.pendingDacToggle);
 }
 
 void test_requestDacToggle_disable_sets_flag_to_minus1(void) {
-    appState.requestDacToggle(-1);
-    TEST_ASSERT_EQUAL_INT8(-1, appState._pendingDacToggle);
+    appState.dac.requestDacToggle(-1);
+    TEST_ASSERT_EQUAL_INT8(-1, appState.dac.pendingDacToggle);
 }
 
 void test_requestDacToggle_clear_sets_flag_to_0(void) {
     // Pre-set to non-zero so we can confirm it gets written to 0
-    appState._pendingDacToggle = 1;
-    appState.requestDacToggle(0);
-    TEST_ASSERT_EQUAL_INT8(0, appState._pendingDacToggle);
+    appState.dac.pendingDacToggle = 1;
+    appState.dac.requestDacToggle(0);
+    TEST_ASSERT_EQUAL_INT8(0, appState.dac.pendingDacToggle);
 }
 
 // ===== requestDacToggle — invalid values rejected =====
 
 void test_requestDacToggle_rejects_invalid_values(void) {
     // Set a known baseline so we can verify it stays unchanged
-    appState._pendingDacToggle = 1;
+    appState.dac.pendingDacToggle = 1;
 
     // Each invalid value must leave the field unchanged
     int8_t invalid[] = {2, -2, 127, -128, 3, -3, 10, -10};
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
-        appState.requestDacToggle(invalid[i]);
-        TEST_ASSERT_EQUAL_INT8_MESSAGE(1, appState._pendingDacToggle,
+        appState.dac.requestDacToggle(invalid[i]);
+        TEST_ASSERT_EQUAL_INT8_MESSAGE(1, appState.dac.pendingDacToggle,
                                        "Invalid value should not modify flag");
     }
 }
@@ -92,39 +96,39 @@ void test_requestDacToggle_rejects_invalid_values(void) {
 // ===== requestEs8311Toggle — valid values =====
 
 void test_requestEs8311Toggle_enable_sets_flag_to_1(void) {
-    appState.requestEs8311Toggle(1);
-    TEST_ASSERT_EQUAL_INT8(1, appState._pendingEs8311Toggle);
+    appState.dac.requestEs8311Toggle(1);
+    TEST_ASSERT_EQUAL_INT8(1, appState.dac.pendingEs8311Toggle);
 }
 
 void test_requestEs8311Toggle_disable_sets_flag_to_minus1(void) {
-    appState.requestEs8311Toggle(-1);
-    TEST_ASSERT_EQUAL_INT8(-1, appState._pendingEs8311Toggle);
+    appState.dac.requestEs8311Toggle(-1);
+    TEST_ASSERT_EQUAL_INT8(-1, appState.dac.pendingEs8311Toggle);
 }
 
 // ===== Double-toggle: last writer wins =====
 
 void test_double_toggle_last_value_wins(void) {
     // Simulate two rapid requests before main loop processes
-    appState.requestDacToggle(1);
-    TEST_ASSERT_EQUAL_INT8(1, appState._pendingDacToggle);
+    appState.dac.requestDacToggle(1);
+    TEST_ASSERT_EQUAL_INT8(1, appState.dac.pendingDacToggle);
 
-    appState.requestDacToggle(-1);
-    TEST_ASSERT_EQUAL_INT8(-1, appState._pendingDacToggle);
+    appState.dac.requestDacToggle(-1);
+    TEST_ASSERT_EQUAL_INT8(-1, appState.dac.pendingDacToggle);
 }
 
 // ===== Flag cleared after processing =====
 
 void test_flag_cleared_after_processing(void) {
     // Simulate: request toggle, main loop reads and acts, then clears
-    appState.requestDacToggle(1);
-    TEST_ASSERT_EQUAL_INT8(1, appState._pendingDacToggle);
+    appState.dac.requestDacToggle(1);
+    TEST_ASSERT_EQUAL_INT8(1, appState.dac.pendingDacToggle);
 
     // Main loop would read the value, perform the action, then clear:
-    int8_t action = appState._pendingDacToggle;
-    appState._pendingDacToggle = 0;
+    int8_t action = appState.dac.pendingDacToggle;
+    appState.dac.pendingDacToggle = 0;
 
     TEST_ASSERT_EQUAL_INT8(1, action);
-    TEST_ASSERT_EQUAL_INT8(0, appState._pendingDacToggle);
+    TEST_ASSERT_EQUAL_INT8(0, appState.dac.pendingDacToggle);
 }
 
 // ===== Test Runner =====

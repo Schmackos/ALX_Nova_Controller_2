@@ -6,12 +6,10 @@
 #include "audio_output_sink.h"
 #include "output_dsp.h"
 #include "debug_serial.h"
+#include "globals.h"
 #include "config.h"
-#include <WebServer.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
-
-extern WebServer server;
 
 // Deferred matrix save: 2 seconds after last cell change
 static unsigned long _matrixSavePending = 0;

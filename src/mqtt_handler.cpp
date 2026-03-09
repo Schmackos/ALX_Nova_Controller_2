@@ -1,5 +1,7 @@
 #include "mqtt_handler.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "buzzer_handler.h"
 #include "config.h"
 #include "debug_serial.h"
@@ -65,38 +67,38 @@ bool loadMqttSettings() {
   line7.trim();
 
   if (line1.length() > 0) {
-    appState.mqttEnabled = (line1.toInt() != 0);
+    appState.mqtt.enabled = (line1.toInt() != 0);
   }
 
   if (line2.length() > 0) {
-    appState.mqttBroker = line2;
+    appState.mqtt.broker = line2;
   }
 
   if (line3.length() > 0) {
     int port = line3.toInt();
     if (port > 0 && port <= 65535) {
-      appState.mqttPort = port;
+      appState.mqtt.port = port;
     }
   }
 
   if (line4.length() > 0) {
-    appState.mqttUsername = line4;
+    appState.mqtt.username = line4;
   }
 
   if (line5.length() > 0) {
-    appState.mqttPassword = line5;
+    appState.mqtt.password = line5;
   }
 
   if (line6.length() > 0) {
-    appState.mqttBaseTopic = line6;
+    appState.mqtt.baseTopic = line6;
   }
 
   if (line7.length() > 0) {
-    appState.mqttHADiscovery = (line7.toInt() != 0);
+    appState.mqtt.haDiscovery = (line7.toInt() != 0);
   }
 
-  LOG_I("[MQTT] Settings loaded - Enabled: %s, Broker: %s:%d", appState.mqttEnabled ? "true" : "false", appState.mqttBroker.c_str(), appState.mqttPort);
-  LOG_I("[MQTT] Base Topic: %s, HA Discovery: %s", appState.mqttBaseTopic.c_str(), appState.mqttHADiscovery ? "true" : "false");
+  LOG_I("[MQTT] Settings loaded - Enabled: %s, Broker: %s:%d", appState.mqtt.enabled ? "true" : "false", appState.mqtt.broker.c_str(), appState.mqtt.port);
+  LOG_I("[MQTT] Base Topic: %s, HA Discovery: %s", appState.mqtt.baseTopic.c_str(), appState.mqtt.haDiscovery ? "true" : "false");
 
   return true;
 }
@@ -109,13 +111,13 @@ void saveMqttSettings() {
     return;
   }
 
-  file.println(appState.mqttEnabled ? "1" : "0");
-  file.println(appState.mqttBroker);
-  file.println(String(appState.mqttPort));
-  file.println(appState.mqttUsername);
-  file.println(appState.mqttPassword);
-  file.println(appState.mqttBaseTopic);
-  file.println(appState.mqttHADiscovery ? "1" : "0");
+  file.println(appState.mqtt.enabled ? "1" : "0");
+  file.println(appState.mqtt.broker);
+  file.println(String(appState.mqtt.port));
+  file.println(appState.mqtt.username);
+  file.println(appState.mqtt.password);
+  file.println(appState.mqtt.baseTopic);
+  file.println(appState.mqtt.haDiscovery ? "1" : "0");
   file.close();
 
   LOG_I("[MQTT] Settings saved to LittleFS");
@@ -133,11 +135,11 @@ String getMqttDeviceId() {
 // Get effective MQTT base topic (falls back to ALX/{serialNumber} if not
 // configured)
 String getEffectiveMqttBaseTopic() {
-  if (appState.mqttBaseTopic.length() > 0) {
-    return appState.mqttBaseTopic;
+  if (appState.mqtt.baseTopic.length() > 0) {
+    return appState.mqtt.baseTopic;
   }
-  // Default: ALX/{appState.deviceSerialNumber}
-  return String("ALX/") + appState.deviceSerialNumber;
+  // Default: ALX/{appState.general.deviceSerialNumber}
+  return String("ALX/") + appState.general.deviceSerialNumber;
 }
 
 // ===== MQTT Core Functions =====
@@ -235,7 +237,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   if (topicStr == "homeassistant/status") {
     if (message == "online") {
       LOG_I("[MQTT] Home Assistant restarted, re-publishing discovery");
-      if (appState.mqttHADiscovery) publishHADiscovery();
+      if (appState.mqtt.haDiscovery) publishHADiscovery();
       publishMqttSystemStatusStatic();
       publishMqttHardwareStatsStatic();
       publishMqttCrashDiagnosticsStatic();
@@ -260,12 +262,12 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
       LOG_W("[MQTT] Invalid mode: %s", message.c_str());
     }
 
-    if (validMode && appState.currentMode != newMode) {
-      appState.currentMode = newMode;
+    if (validMode && appState.audio.currentMode != newMode) {
+      appState.audio.currentMode = newMode;
       LOG_I("[MQTT] Mode set to %s", message.c_str());
 
-      if (appState.currentMode == SMART_AUTO) {
-        appState.timerRemaining = appState.timerDuration * 60;
+      if (appState.audio.currentMode == SMART_AUTO) {
+        appState.audio.timerRemaining = appState.audio.timerDuration * 60;
       }
 
       saveSmartSensingSettingsDeferred();
@@ -277,12 +279,12 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     bool newState = (message == "ON" || message == "1" || message == "true");
     setAmplifierState(newState);
 
-    if (appState.currentMode == SMART_AUTO) {
+    if (appState.audio.currentMode == SMART_AUTO) {
       if (newState) {
-        appState.timerRemaining = appState.timerDuration * 60;
-        appState.lastTimerUpdate = millis();
+        appState.audio.timerRemaining = appState.audio.timerDuration * 60;
+        appState.audio.lastTimerUpdate = millis();
       } else {
-        appState.timerRemaining = 0;
+        appState.audio.timerRemaining = 0;
       }
     }
     publishMqttSmartSensingState();
@@ -291,12 +293,12 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/smartsensing/timer_duration/set") {
     int duration = message.toInt();
     if (duration >= 1 && duration <= 60) {
-      appState.timerDuration = duration;
+      appState.audio.timerDuration = duration;
 
-      if (appState.currentMode == SMART_AUTO) {
-        appState.timerRemaining = appState.timerDuration * 60;
-        if (appState.amplifierState) {
-          appState.lastTimerUpdate = millis();
+      if (appState.audio.currentMode == SMART_AUTO) {
+        appState.audio.timerRemaining = appState.audio.timerDuration * 60;
+        if (appState.audio.amplifierState) {
+          appState.audio.lastTimerUpdate = millis();
         }
       }
 
@@ -309,7 +311,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/smartsensing/audio_threshold/set") {
     float threshold = message.toFloat();
     if (threshold >= -96.0 && threshold <= 0.0) {
-      appState.audioThreshold_dBFS = threshold;
+      appState.audio.threshold_dBFS = threshold;
       saveSmartSensingSettingsDeferred();
       LOG_I("[MQTT] Audio threshold set to %+.0f dBFS", threshold);
     }
@@ -318,7 +320,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle AP toggle
   else if (topicStr == base + "/ap/enabled/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
-    appState.apEnabled = enabled;
+    appState.wifi.apEnabled = enabled;
     // WiFi mode changes are unsafe from mqtt_task — defer to main loop
     appState._pendingApToggle = enabled ? 1 : -1;
     LOG_I("[MQTT] AP toggle requested: %s (deferred to main loop)", enabled ? "enable" : "disable");
@@ -328,8 +330,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle auto-update setting
   else if (topicStr == base + "/settings/auto_update/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
-    if (appState.autoUpdateEnabled != enabled) {
-      appState.autoUpdateEnabled = enabled;
+    if (appState.ota.autoUpdateEnabled != enabled) {
+      appState.ota.autoUpdateEnabled = enabled;
       saveSettingsDeferred();
       LOG_I("[MQTT] Auto-update set to %s", enabled ? "ON" : "OFF");
       appState.markSettingsDirty();
@@ -340,8 +342,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/settings/ota_channel/set") {
     uint8_t newCh = 0;
     if (message == "beta" || message == "1") newCh = 1;
-    if (newCh != appState.otaChannel) {
-      appState.otaChannel = newCh;
+    if (newCh != appState.ota.channel) {
+      appState.ota.channel = newCh;
       saveSettingsDeferred();
       LOG_I("[MQTT] OTA channel set to %s", newCh == 0 ? "stable" : "beta");
       appState.markSettingsDirty();
@@ -352,8 +354,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle night mode setting
   else if (topicStr == base + "/settings/dark_mode/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
-    if (appState.darkMode != enabled) {
-      appState.darkMode = enabled;
+    if (appState.general.darkMode != enabled) {
+      appState.general.darkMode = enabled;
       saveSettingsDeferred();
       LOG_I("[MQTT] Dark mode set to %s", enabled ? "ON" : "OFF");
       appState.markSettingsDirty();
@@ -363,8 +365,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle certificate validation setting
   else if (topicStr == base + "/settings/cert_validation/set") {
     bool enabled = (message == "ON" || message == "1" || message == "true");
-    if (appState.enableCertValidation != enabled) {
-      appState.enableCertValidation = enabled;
+    if (appState.general.enableCertValidation != enabled) {
+      appState.general.enableCertValidation = enabled;
       saveSettingsDeferred();
       LOG_I("[MQTT] Certificate validation set to %s", enabled ? "ON" : "OFF");
       appState.markSettingsDirty();
@@ -462,7 +464,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/settings/audio_update_rate/set") {
     int rate = message.toInt();
     if (rate == 20 || rate == 33 || rate == 50 || rate == 100) {
-      appState.audioUpdateRate = (uint16_t)rate;
+      appState.audio.updateRate = (uint16_t)rate;
       saveSettingsDeferred();
       LOG_I("[MQTT] Audio update rate set to %d ms", rate);
       publishMqttDisplayState();
@@ -471,7 +473,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle signal generator enable/disable
   else if (topicStr == base + "/signalgenerator/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.sigGenEnabled = newState;
+    appState.sigGen.enabled = newState;
     siggen_apply_params();
     LOG_I("[MQTT] Signal generator %s", newState ? "enabled" : "disabled");
     publishMqttSignalGenState();
@@ -485,7 +487,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     else if (message == "white_noise") wf = 2;
     else if (message == "sweep") wf = 3;
     if (wf >= 0) {
-      appState.sigGenWaveform = wf;
+      appState.sigGen.waveform = wf;
       siggen_apply_params();
       saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator waveform set to %s", message.c_str());
@@ -497,7 +499,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/signalgenerator/frequency/set") {
     float freq = message.toFloat();
     if (freq >= 1.0f && freq <= 22000.0f) {
-      appState.sigGenFrequency = freq;
+      appState.sigGen.frequency = freq;
       siggen_apply_params();
       saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator frequency set to %.0f Hz", freq);
@@ -509,7 +511,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/signalgenerator/amplitude/set") {
     float amp = message.toFloat();
     if (amp >= -96.0f && amp <= 0.0f) {
-      appState.sigGenAmplitude = amp;
+      appState.sigGen.amplitude = amp;
       siggen_apply_params();
       saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator amplitude set to %.0f dBFS", amp);
@@ -524,7 +526,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     else if (message == "ch2") ch = 1;
     else if (message == "both") ch = 2;
     if (ch >= 0) {
-      appState.sigGenChannel = ch;
+      appState.sigGen.channel = ch;
       siggen_apply_params();
       saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator channel set to %s", message.c_str());
@@ -538,7 +540,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     if (message == "software") mode = 0;
     else if (message == "pwm") mode = 1;
     if (mode >= 0) {
-      appState.sigGenOutputMode = mode;
+      appState.sigGen.outputMode = mode;
       siggen_apply_params();
       saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator output mode set to %s", message.c_str());
@@ -550,7 +552,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/settings/adc_vref/set") {
     float vref = message.toFloat();
     if (vref >= 1.0f && vref <= 5.0f) {
-      appState.adcVref = vref;
+      appState.audio.adcVref = vref;
       saveSmartSensingSettingsDeferred();
       LOG_I("[MQTT] ADC VREF set to %.2f V", vref);
       publishMqttAudioDiagnostics();
@@ -559,14 +561,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle per-ADC enable/disable
   else if (topicStr == base + "/audio/input1/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.adcEnabled[0] = newState;
+    appState.audio.adcEnabled[0] = newState;
     saveSettingsDeferred();
     appState.markAdcEnabledDirty();
     LOG_I("[MQTT] ADC1 set to %s", newState ? "ON" : "OFF");
   }
   else if (topicStr == base + "/audio/input2/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.adcEnabled[1] = newState;
+    appState.audio.adcEnabled[1] = newState;
     saveSettingsDeferred();
     appState.markAdcEnabledDirty();
     LOG_I("[MQTT] ADC2 set to %s", newState ? "ON" : "OFF");
@@ -574,7 +576,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle VU meter toggle
   else if (topicStr == base + "/audio/vu_meter/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.vuMeterEnabled = newState;
+    appState.audio.vuMeterEnabled = newState;
     saveSettingsDeferred();
     appState.markSettingsDirty();
     publishMqttAudioGraphState();
@@ -583,7 +585,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle waveform toggle
   else if (topicStr == base + "/audio/waveform/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.waveformEnabled = newState;
+    appState.audio.waveformEnabled = newState;
     saveSettingsDeferred();
     appState.markSettingsDirty();
     publishMqttAudioGraphState();
@@ -592,7 +594,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle spectrum toggle
   else if (topicStr == base + "/audio/spectrum/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.spectrumEnabled = newState;
+    appState.audio.spectrumEnabled = newState;
     saveSettingsDeferred();
     appState.markSettingsDirty();
     publishMqttAudioGraphState();
@@ -607,7 +609,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     else if (message == "blackman_nuttall") wt = FFT_WINDOW_BLACKMAN_NUTTALL;
     else if (message == "nuttall") wt = FFT_WINDOW_NUTTALL;
     else if (message == "flat_top") wt = FFT_WINDOW_FLAT_TOP;
-    appState.fftWindowType = wt;
+    appState.audio.fftWindowType = wt;
     saveSettingsDeferred();
     appState.markSettingsDirty();
     publishMqttAudioGraphState();
@@ -616,8 +618,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle debug mode toggle
   else if (topicStr == base + "/debug/mode/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.debugMode = newState;
-    applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+    appState.debug.debugMode = newState;
+    applyDebugSerialLevel(appState.debug.debugMode, appState.debug.serialLevel);
     saveSettingsDeferred();
     appState.markSettingsDirty();
     publishMqttDebugState();
@@ -627,8 +629,8 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/debug/serial_level/set") {
     int level = message.toInt();
     if (level >= 0 && level <= 3) {
-      appState.debugSerialLevel = level;
-      applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+      appState.debug.serialLevel = level;
+      applyDebugSerialLevel(appState.debug.debugMode, appState.debug.serialLevel);
       saveSettingsDeferred();
       appState.markSettingsDirty();
       publishMqttDebugState();
@@ -638,7 +640,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle debug HW stats toggle
   else if (topicStr == base + "/debug/hw_stats/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.debugHwStats = newState;
+    appState.debug.hwStats = newState;
     saveSettingsDeferred();
     appState.markSettingsDirty();
     publishMqttDebugState();
@@ -647,7 +649,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle debug I2S metrics toggle
   else if (topicStr == base + "/debug/i2s_metrics/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.debugI2sMetrics = newState;
+    appState.debug.i2sMetrics = newState;
     saveSettingsDeferred();
     appState.markSettingsDirty();
     publishMqttDebugState();
@@ -656,7 +658,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle debug task monitor toggle
   else if (topicStr == base + "/debug/task_monitor/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.debugTaskMonitor = newState;
+    appState.debug.taskMonitor = newState;
     saveSettingsDeferred();
     appState.markSettingsDirty();
     publishMqttDebugState();
@@ -666,7 +668,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/settings/timezone_offset/set") {
     int offset = message.toInt();
     if (offset >= -12 && offset <= 14) {
-      appState.timezoneOffset = offset;
+      appState.general.timezoneOffset = offset;
       saveSettingsDeferred();
       LOG_I("[MQTT] Timezone offset set to %d", offset);
       publishMqttSystemStatus();
@@ -676,7 +678,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/signalgenerator/sweep_speed/set") {
     float speed = message.toFloat();
     if (speed >= 0.1f && speed <= 10.0f) {
-      appState.sigGenSweepSpeed = speed;
+      appState.sigGen.sweepSpeed = speed;
       siggen_apply_params();
       saveSignalGenSettingsDeferred();
       LOG_I("[MQTT] Signal generator sweep speed set to %.1f Hz/s", speed);
@@ -714,7 +716,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle DSP enable/disable
   else if (topicStr == base + "/dsp/enabled/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.dspEnabled = newState;
+    appState.dsp.enabled = newState;
     saveDspSettingsDebounced();
     appState.markDspConfigDirty();
     LOG_I("[MQTT] DSP set to %s", newState ? "ON" : "OFF");
@@ -722,7 +724,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   // Handle DSP global bypass
   else if (topicStr == base + "/dsp/bypass/set") {
     bool newState = (message == "ON" || message == "1" || message == "true");
-    appState.dspBypass = newState;
+    appState.dsp.bypass = newState;
     dsp_copy_active_to_inactive();
     DspState *cfg = dsp_get_inactive_config();
     cfg->globalBypass = newState;
@@ -833,7 +835,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   else if (topicStr == base + "/system/update/command") {
     if (message == "install") {
       LOG_I("[MQTT] Firmware install command received from Home Assistant");
-      if (appState.updateAvailable && appState.cachedFirmwareUrl.length() > 0) {
+      if (appState.ota.updateAvailable && appState.ota.cachedFirmwareUrl.length() > 0) {
         startOTADownloadTask();  // Non-blocking FreeRTOS task
       } else {
         LOG_W("[MQTT] No update available or firmware URL missing");
@@ -844,17 +846,17 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 
 // Setup MQTT client
 void setupMqtt() {
-  if (!appState.mqttEnabled || appState.mqttBroker.length() == 0) {
+  if (!appState.mqtt.enabled || appState.mqtt.broker.length() == 0) {
     LOG_I("[MQTT] Disabled or no broker configured");
     return;
   }
 
   LOG_I("[MQTT] Setting up...");
-  LOG_I("[MQTT] Broker: %s:%d", appState.mqttBroker.c_str(), appState.mqttPort);
-  LOG_I("[MQTT] Base Topic: %s", appState.mqttBaseTopic.c_str());
-  LOG_I("[MQTT] HA Discovery: %s", appState.mqttHADiscovery ? "enabled" : "disabled");
+  LOG_I("[MQTT] Broker: %s:%d", appState.mqtt.broker.c_str(), appState.mqtt.port);
+  LOG_I("[MQTT] Base Topic: %s", appState.mqtt.baseTopic.c_str());
+  LOG_I("[MQTT] HA Discovery: %s", appState.mqtt.haDiscovery ? "enabled" : "disabled");
 
-  mqttClient.setServer(appState.mqttBroker.c_str(), appState.mqttPort);
+  mqttClient.setServer(appState.mqtt.broker.c_str(), appState.mqtt.port);
   mqttClient.setCallback(mqttCallback);
   mqttClient.setBufferSize(1024); // Increase buffer for HA discovery payloads
 
@@ -864,7 +866,7 @@ void setupMqtt() {
 
 // Reconnect to MQTT broker with exponential backoff
 void mqttReconnect() {
-  if (!appState.mqttEnabled || appState.mqttBroker.length() == 0) {
+  if (!appState.mqtt.enabled || appState.mqtt.broker.length() == 0) {
     return;
   }
 
@@ -874,10 +876,10 @@ void mqttReconnect() {
 
   // Respect backoff interval (exponential backoff on failures)
   unsigned long currentMillis = millis();
-  if (currentMillis - appState.lastMqttReconnect < appState.mqttBackoffDelay) {
+  if (currentMillis - appState.mqtt.lastReconnect < appState.mqttBackoffDelay) {
     return;
   }
-  appState.lastMqttReconnect = currentMillis;
+  appState.mqtt.lastReconnect = currentMillis;
 
   LOG_I("[MQTT] Connecting to broker (backoff: %lums)...", appState.mqttBackoffDelay);
 
@@ -885,9 +887,9 @@ void mqttReconnect() {
   // If the broker is unreachable this limits the main loop block to ~1s.
   // PubSubClient.connect() will reuse the existing TCP connection.
   if (!mqttWifiClient.connected()) {
-    if (!mqttWifiClient.connect(appState.mqttBroker.c_str(), appState.mqttPort, 1000)) {
-      LOG_W("[MQTT] TCP connect timeout (1s) to %s:%d", appState.mqttBroker.c_str(), appState.mqttPort);
-      appState.mqttConnected = false;
+    if (!mqttWifiClient.connect(appState.mqtt.broker.c_str(), appState.mqtt.port, 1000)) {
+      LOG_W("[MQTT] TCP connect timeout (1s) to %s:%d", appState.mqtt.broker.c_str(), appState.mqtt.port);
+      appState.mqtt.connected = false;
       appState.increaseMqttBackoff();
       LOG_W("[MQTT] Next retry in %lums", appState.mqttBackoffDelay);
       return;
@@ -899,9 +901,9 @@ void mqttReconnect() {
 
   bool connected = false;
 
-  if (appState.mqttUsername.length() > 0) {
-    connected = mqttClient.connect(clientId.c_str(), appState.mqttUsername.c_str(),
-                                   appState.mqttPassword.c_str(), lwt.c_str(), 0, true,
+  if (appState.mqtt.username.length() > 0) {
+    connected = mqttClient.connect(clientId.c_str(), appState.mqtt.username.c_str(),
+                                   appState.mqtt.password.c_str(), lwt.c_str(), 0, true,
                                    "offline");
   } else {
     connected =
@@ -909,8 +911,8 @@ void mqttReconnect() {
   }
 
   if (connected) {
-    LOG_I("[MQTT] Connected to %s:%d", appState.mqttBroker.c_str(), appState.mqttPort);
-    appState.mqttConnected = true;
+    LOG_I("[MQTT] Connected to %s:%d", appState.mqtt.broker.c_str(), appState.mqtt.port);
+    appState.mqtt.connected = true;
     appState.resetMqttBackoff(); // Reset backoff on successful connection
 
     // Publish online status
@@ -920,7 +922,7 @@ void mqttReconnect() {
     subscribeToMqttTopics();
 
     // Publish Home Assistant discovery configs if enabled
-    if (appState.mqttHADiscovery) {
+    if (appState.mqtt.haDiscovery) {
       publishHADiscovery();
       LOG_I("[MQTT] Home Assistant discovery published");
     }
@@ -934,7 +936,7 @@ void mqttReconnect() {
     publishMqttState();
   } else {
     LOG_W("[MQTT] Connection failed (rc=%d)", mqttClient.state());
-    appState.mqttConnected = false;
+    appState.mqtt.connected = false;
     appState.increaseMqttBackoff(); // Increase backoff on failure
     LOG_W("[MQTT] Next retry in %lums", appState.mqttBackoffDelay);
   }
@@ -942,7 +944,7 @@ void mqttReconnect() {
 
 // MQTT loop - call from main loop()
 void mqttLoop() {
-  if (!appState.mqttEnabled || appState.mqttBroker.length() == 0) {
+  if (!appState.mqtt.enabled || appState.mqtt.broker.length() == 0) {
     return;
   }
 
@@ -951,7 +953,7 @@ void mqttLoop() {
   }
 
   if (!mqttClient.connected()) {
-    appState.mqttConnected = false;
+    appState.mqtt.connected = false;
     mqttReconnect();
   }
 
@@ -969,19 +971,19 @@ void handleMqttGet() {
   doc["success"] = true;
 
   // Settings
-  doc["enabled"] = appState.mqttEnabled;
-  doc["broker"] = appState.mqttBroker;
-  doc["port"] = appState.mqttPort;
-  doc["username"] = appState.mqttUsername;
+  doc["enabled"] = appState.mqtt.enabled;
+  doc["broker"] = appState.mqtt.broker;
+  doc["port"] = appState.mqtt.port;
+  doc["username"] = appState.mqtt.username;
   // Don't send password for security, just indicate if set
-  doc["hasPassword"] = (appState.mqttPassword.length() > 0);
-  doc["baseTopic"] = appState.mqttBaseTopic;
+  doc["hasPassword"] = (appState.mqtt.password.length() > 0);
+  doc["baseTopic"] = appState.mqtt.baseTopic;
   doc["effectiveBaseTopic"] = getEffectiveMqttBaseTopic();
-  doc["defaultBaseTopic"] = String("ALX/") + appState.deviceSerialNumber;
-  doc["haDiscovery"] = appState.mqttHADiscovery;
+  doc["defaultBaseTopic"] = String("ALX/") + appState.general.deviceSerialNumber;
+  doc["haDiscovery"] = appState.mqtt.haDiscovery;
 
   // Status
-  doc["connected"] = appState.mqttConnected;
+  doc["connected"] = appState.mqtt.connected;
   doc["deviceId"] = getMqttDeviceId();
 
   String json;
@@ -1008,23 +1010,23 @@ void handleMqttUpdate() {
 
   bool settingsChanged = false;
   bool needReconnect = false;
-  bool prevHADiscovery = appState.mqttHADiscovery;
+  bool prevHADiscovery = appState.mqtt.haDiscovery;
 
   // Update enabled state
   if (doc["enabled"].is<bool>()) {
     bool newEnabled = doc["enabled"].as<bool>();
-    if (appState.mqttEnabled != newEnabled) {
-      appState.mqttEnabled = newEnabled;
+    if (appState.mqtt.enabled != newEnabled) {
+      appState.mqtt.enabled = newEnabled;
       settingsChanged = true;
       needReconnect = true;
 
-      if (!appState.mqttEnabled && mqttClient.connected()) {
+      if (!appState.mqtt.enabled && mqttClient.connected()) {
         // Remove HA discovery before disconnecting
-        if (appState.mqttHADiscovery) {
+        if (appState.mqtt.haDiscovery) {
           removeHADiscovery();
         }
         mqttClient.disconnect();
-        appState.mqttConnected = false;
+        appState.mqtt.connected = false;
       }
     }
   }
@@ -1032,8 +1034,8 @@ void handleMqttUpdate() {
   // Update broker
   if (doc["broker"].is<String>()) {
     String newBroker = doc["broker"].as<String>();
-    if (appState.mqttBroker != newBroker) {
-      appState.mqttBroker = newBroker;
+    if (appState.mqtt.broker != newBroker) {
+      appState.mqtt.broker = newBroker;
       settingsChanged = true;
       needReconnect = true;
     }
@@ -1042,8 +1044,8 @@ void handleMqttUpdate() {
   // Update port
   if (doc["port"].is<int>()) {
     int newPort = doc["port"].as<int>();
-    if (newPort > 0 && newPort <= 65535 && appState.mqttPort != newPort) {
-      appState.mqttPort = newPort;
+    if (newPort > 0 && newPort <= 65535 && appState.mqtt.port != newPort) {
+      appState.mqtt.port = newPort;
       settingsChanged = true;
       needReconnect = true;
     }
@@ -1052,8 +1054,8 @@ void handleMqttUpdate() {
   // Update username
   if (doc["username"].is<String>()) {
     String newUsername = doc["username"].as<String>();
-    if (appState.mqttUsername != newUsername) {
-      appState.mqttUsername = newUsername;
+    if (appState.mqtt.username != newUsername) {
+      appState.mqtt.username = newUsername;
       settingsChanged = true;
       needReconnect = true;
     }
@@ -1062,8 +1064,8 @@ void handleMqttUpdate() {
   // Update password (empty string keeps existing, like WiFi pattern)
   if (!doc["password"].isNull()) {
     String newPassword = doc["password"].as<String>();
-    if (newPassword.length() > 0 && appState.mqttPassword != newPassword) {
-      appState.mqttPassword = newPassword;
+    if (newPassword.length() > 0 && appState.mqtt.password != newPassword) {
+      appState.mqtt.password = newPassword;
       settingsChanged = true;
       needReconnect = true;
     }
@@ -1072,12 +1074,12 @@ void handleMqttUpdate() {
   // Update base topic (empty string uses default ALX/{serial})
   if (!doc["baseTopic"].isNull()) {
     String newBaseTopic = doc["baseTopic"].as<String>();
-    if (appState.mqttBaseTopic != newBaseTopic) {
+    if (appState.mqtt.baseTopic != newBaseTopic) {
       // Remove old HA discovery before changing topic
-      if (appState.mqttHADiscovery && mqttClient.connected()) {
+      if (appState.mqtt.haDiscovery && mqttClient.connected()) {
         removeHADiscovery();
       }
-      appState.mqttBaseTopic = newBaseTopic;
+      appState.mqtt.baseTopic = newBaseTopic;
       settingsChanged = true;
       needReconnect = true;
       LOG_I("[MQTT] Base topic changed to: %s", newBaseTopic.length() > 0 ? newBaseTopic.c_str() : "(default)");
@@ -1087,12 +1089,12 @@ void handleMqttUpdate() {
   // Update HA Discovery
   if (doc["haDiscovery"].is<bool>()) {
     bool newHADiscovery = doc["haDiscovery"].as<bool>();
-    if (appState.mqttHADiscovery != newHADiscovery) {
+    if (appState.mqtt.haDiscovery != newHADiscovery) {
       // If disabling HA discovery, remove existing configs
       if (!newHADiscovery && mqttClient.connected()) {
         removeHADiscovery();
       }
-      appState.mqttHADiscovery = newHADiscovery;
+      appState.mqtt.haDiscovery = newHADiscovery;
       settingsChanged = true;
 
       // If enabling HA discovery and connected, publish configs
@@ -1109,16 +1111,16 @@ void handleMqttUpdate() {
   }
 
   // Reconnect if needed — signal mqtt_task to handle reconnection
-  if (needReconnect && appState.mqttEnabled && appState.mqttBroker.length() > 0) {
-    appState.mqttConnected = false;
-    appState.lastMqttReconnect = 0; // Force immediate reconnect attempt
+  if (needReconnect && appState.mqtt.enabled && appState.mqtt.broker.length() > 0) {
+    appState.mqtt.connected = false;
+    appState.mqtt.lastReconnect = 0; // Force immediate reconnect attempt
     appState._mqttReconfigPending = true;
   }
 
   // Send response
   JsonDocument resp;
   resp["success"] = true;
-  resp["connected"] = appState.mqttConnected;
+  resp["connected"] = appState.mqtt.connected;
   resp["message"] = settingsChanged ? "Settings updated" : "No changes";
 
   String json;

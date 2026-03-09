@@ -251,7 +251,7 @@ void scr_debug_refresh(void) {
         static const char *status_names[] = {"OK", "NO DATA", "NOISE", "CLIP", "I2S ERR", "HW FAULT"};
         for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
             if (!lbl_audio_adc[a]) continue;
-            const AppState::AdcState &adc = appState.audioAdc[a];
+            const AdcState &adc = appState.audio.adc[a];
             const char *st2 = status_names[adc.healthStatus < 6 ? adc.healthStatus : 0];
             unsigned long age = 0;
             if (adc.lastNonZeroMs > 0) age = (millis() - adc.lastNonZeroMs) / 1000;
@@ -259,7 +259,7 @@ void scr_debug_refresh(void) {
                      a + 1, st2, adc.dBFS,
                      (adc.vrms1 > adc.vrms2) ? adc.vrms1 : adc.vrms2,
                      adc.noiseFloorDbfs,
-                     appState.audioSnrDb[a], appState.audioSfdrDb[a],
+                     appState.audio.snrDb[a], appState.audio.sfdrDb[a],
                      (unsigned long)adc.clippedSamples,
                      (unsigned long)adc.i2sErrors, age);
             lv_label_set_text(lbl_audio_adc[a], buf);
@@ -270,20 +270,20 @@ void scr_debug_refresh(void) {
 #ifdef DAC_ENABLED
     if (lbl_dac) {
         DacDriver* drv = dac_get_driver();
-        const char* model = appState.dacModelName;
-        const char* statusStr = appState.dacReady ? "Ready" : (appState.dacEnabled ? "Not Ready" : "Off");
+        const char* model = appState.dac.modelName;
+        const char* statusStr = appState.dac.ready ? "Ready" : (appState.dac.enabled ? "Not Ready" : "Off");
         snprintf(buf, sizeof(buf), "%s  %s\nVol:%u%% %s %s\nCh:%u Det:%s\nTX Underruns:%lu",
                  model, statusStr,
-                 (unsigned)appState.dacVolume,
-                 appState.dacMute ? "MUTE" : "",
-                 appState.dacEnabled ? "ON" : "OFF",
-                 (unsigned)appState.dacOutputChannels,
-                 appState.dacDetected ? "EEPROM" : "Manual",
-                 (unsigned long)appState.dacTxUnderruns);
+                 (unsigned)appState.dac.volume,
+                 appState.dac.mute ? "MUTE" : "",
+                 appState.dac.enabled ? "ON" : "OFF",
+                 (unsigned)appState.dac.outputChannels,
+                 appState.dac.detected ? "EEPROM" : "Manual",
+                 (unsigned long)appState.dac.txUnderruns);
         lv_label_set_text(lbl_dac, buf);
     }
     if (lbl_eeprom) {
-        const AppState::EepromDiag& ed = appState.eepromDiag;
+        const EepromDiag& ed = appState.dac.eepromDiag;
         if (!ed.scanned) {
             lv_label_set_text(lbl_eeprom, "Not scanned");
         } else if (!ed.found) {
@@ -306,11 +306,11 @@ void scr_debug_refresh(void) {
 
     /* I2S Configuration */
     if (lbl_i2s) {
-        if (!(appState.debugMode && appState.debugI2sMetrics)) {
+        if (!(appState.debug.debugMode && appState.debug.i2sMetrics)) {
             lv_label_set_text(lbl_i2s, "Disabled");
         } else {
             I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
-            const auto &m = appState.i2sMetrics;
+            const auto &m = appState.audio.i2sMetrics;
             snprintf(buf, sizeof(buf),
                      "Rate:%lukHz 32b(24) DMA:%dx%d\n"
                      "PLL: M=%s S=%s\n"
@@ -331,7 +331,7 @@ void scr_debug_refresh(void) {
 
     /* Tasks */
     if (lbl_tasks) {
-        if (!(appState.debugMode && appState.debugTaskMonitor)) {
+        if (!(appState.debug.debugMode && appState.debug.taskMonitor)) {
             lv_label_set_text(lbl_tasks, "Disabled");
         } else {
             const TaskMonitorData& tm = task_monitor_get_data();

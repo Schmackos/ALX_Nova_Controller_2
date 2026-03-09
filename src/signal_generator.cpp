@@ -252,17 +252,17 @@ void siggen_apply_params() {
     AppState &st = AppState::getInstance();
 
     SigGenParams p;
-    p.waveform = st.sigGenWaveform;
-    p.frequency = st.sigGenFrequency;
-    p.amplitude_linear = siggen_dbfs_to_linear(st.sigGenAmplitude);
-    p.channel = st.sigGenChannel;
-    p.outputMode = st.sigGenOutputMode;
-    p.sweepSpeed = st.sigGenSweepSpeed;
+    p.waveform = st.sigGen.waveform;
+    p.frequency = st.sigGen.frequency;
+    p.amplitude_linear = siggen_dbfs_to_linear(st.sigGen.amplitude);
+    p.channel = st.sigGen.channel;
+    p.outputMode = st.sigGen.outputMode;
+    p.sweepSpeed = st.sigGen.sweepSpeed;
     p.sweepMin = 20.0f;
-    p.sweepMax = st.sigGenFrequency; // Sweep up to set frequency
+    p.sweepMax = st.sigGen.frequency; // Sweep up to set frequency
 
     bool wasActive = _siggenActive;
-    bool shouldBeActive = st.sigGenEnabled;
+    bool shouldBeActive = st.sigGen.enabled;
 
     portENTER_CRITICAL(&_siggenSpinlock);
     _params = p;
@@ -292,13 +292,13 @@ void siggen_apply_params() {
         _sweepFreq = p.sweepMin;
         _noiseSeed = (uint32_t)millis();
         LOG_I("[SigGen] Started: waveform=%d, freq=%.0f Hz, amp=%.1f dBFS, mode=%s",
-              p.waveform, p.frequency, st.sigGenAmplitude,
+              p.waveform, p.frequency, st.sigGen.amplitude,
               p.outputMode == SIGOUT_SOFTWARE ? "software" : "PWM");
     }
 
     if (shouldBeActive && wasActive) {
         LOG_I("[SigGen] Params: waveform=%d, freq=%.0f Hz, amp=%.1f dBFS, ch=%d",
-              p.waveform, p.frequency, st.sigGenAmplitude, p.channel);
+              p.waveform, p.frequency, st.sigGen.amplitude, p.channel);
     }
 }
 

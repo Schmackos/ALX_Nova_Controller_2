@@ -25,7 +25,7 @@ static uint32_t _siggen_read(int32_t *dst, uint32_t frames) {
         return frames;
     }
 #ifndef NATIVE_TEST
-    siggen_fill_buffer(dst, (int)frames, AppState::getInstance().audioSampleRate);
+    siggen_fill_buffer(dst, (int)frames, AppState::getInstance().audio.sampleRate);
 #else
     siggen_fill_buffer(dst, (int)frames, 48000);
 #endif
@@ -38,7 +38,7 @@ static bool _siggen_isActive(void) {
 
 static uint32_t _siggen_getSampleRate(void) {
 #ifndef NATIVE_TEST
-    return AppState::getInstance().audioSampleRate;
+    return AppState::getInstance().audio.sampleRate;
 #else
     return 48000;
 #endif

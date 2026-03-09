@@ -10,6 +10,7 @@
 #include "hal_custom_device.h"
 #include "../debug_serial.h"
 #include "../app_state.h"
+#include "../globals.h"
 #include "../settings_manager.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -269,10 +270,10 @@ void registerHalApiEndpoints(WebServer& server) {
         const HalDeviceDescriptor& delDesc = dev->getDescriptor();
         if (delDesc.capabilities & HAL_CAP_DAC_PATH) {
             if (delDesc.type == HAL_DEV_DAC) {
-                appState.dacEnabled = false;
-                appState.requestDacToggle(-1);
+                appState.dac.enabled = false;
+                appState.dac.requestDacToggle(-1);
             } else if (delDesc.type == HAL_DEV_CODEC) {
-                appState.requestEs8311Toggle(-1);
+                appState.dac.requestEs8311Toggle(-1);
             }
         }
 

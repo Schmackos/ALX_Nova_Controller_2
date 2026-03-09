@@ -94,7 +94,7 @@ static void on_brightness_confirm(int int_val, float, int) {
 }
 
 static void on_dark_mode_confirm(int int_val, float, int) {
-    AppState::getInstance().darkMode = (int_val != 0);
+    AppState::getInstance().general.darkMode = (int_val != 0);
     gui_theme_set_dark(int_val != 0);
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
@@ -102,14 +102,14 @@ static void on_dark_mode_confirm(int int_val, float, int) {
 }
 
 static void on_auto_update_confirm(int int_val, float, int) {
-    AppState::getInstance().autoUpdateEnabled = (int_val != 0);
+    AppState::getInstance().ota.autoUpdateEnabled = (int_val != 0);
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] Auto update %s", int_val ? "enabled" : "disabled");
 }
 
 static void on_ssl_confirm(int int_val, float, int) {
-    AppState::getInstance().enableCertValidation = (int_val != 0);
+    AppState::getInstance().general.enableCertValidation = (int_val != 0);
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] SSL validation %s", int_val ? "enabled" : "disabled");
@@ -122,7 +122,7 @@ static const CycleOption ota_channel_options[] = {
 };
 
 static void on_ota_channel_confirm(int int_val, float, int) {
-    AppState::getInstance().otaChannel = (uint8_t)int_val;
+    AppState::getInstance().ota.channel = (uint8_t)int_val;
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     AppState::getInstance().markOTADirty();
@@ -157,7 +157,7 @@ static const CycleOption audio_rate_options[] = {
 };
 
 static void on_audio_rate_confirm(int int_val, float, int) {
-    AppState::getInstance().audioUpdateRate = (uint16_t)int_val;
+    AppState::getInstance().audio.updateRate = (uint16_t)int_val;
     saveSettingsDeferred();
     LOG_I("[GUI] Audio update rate set to %d ms", int_val);
 }
@@ -171,16 +171,16 @@ static const CycleOption debug_level_options[] = {
 };
 
 static void on_debug_mode_confirm(int int_val, float, int) {
-    AppState::getInstance().debugMode = (int_val != 0);
-    applyDebugSerialLevel(AppState::getInstance().debugMode, AppState::getInstance().debugSerialLevel);
+    AppState::getInstance().debug.debugMode = (int_val != 0);
+    applyDebugSerialLevel(AppState::getInstance().debug.debugMode, AppState::getInstance().debug.serialLevel);
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] Debug mode %s", int_val ? "ON" : "OFF");
 }
 
 static void on_debug_level_confirm(int int_val, float, int) {
-    AppState::getInstance().debugSerialLevel = int_val;
-    applyDebugSerialLevel(AppState::getInstance().debugMode, int_val);
+    AppState::getInstance().debug.serialLevel = int_val;
+    applyDebugSerialLevel(AppState::getInstance().debug.debugMode, int_val);
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] Debug serial level set to %d", int_val);
@@ -248,7 +248,7 @@ static void edit_screen_timeout(void) {
     AppState &st = AppState::getInstance();
     int cur = 1; /* default: 1 min */
     for (int i = 0; i < 5; i++) {
-        if ((unsigned long)timeout_options[i].value == st.screenTimeout) { cur = i; break; }
+        if ((unsigned long)timeout_options[i].value == st.display.screenTimeout) { cur = i; break; }
     }
     ValueEditConfig cfg = {};
     cfg.title = "Screen Timeout";
@@ -264,7 +264,7 @@ static void edit_dim_enabled(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Dim Display";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().dimEnabled;
+    cfg.toggle_val = AppState::getInstance().display.dimEnabled;
     cfg.on_confirm = on_dim_enabled_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -273,7 +273,7 @@ static void edit_dim_timeout(void) {
     AppState &st = AppState::getInstance();
     int cur = 1; /* default: 10 sec */
     for (int i = 0; i < 5; i++) {
-        if ((unsigned long)dim_timeout_options[i].value == st.dimTimeout) { cur = i; break; }
+        if ((unsigned long)dim_timeout_options[i].value == st.display.dimTimeout) { cur = i; break; }
     }
     ValueEditConfig cfg = {};
     cfg.title = "Dim Timeout";
@@ -286,7 +286,7 @@ static void edit_dim_timeout(void) {
 }
 
 static void edit_dim_brightness(void) {
-    uint8_t cur_val = AppState::getInstance().dimBrightness;
+    uint8_t cur_val = AppState::getInstance().display.dimBrightness;
     int cur = 0; /* default: 10% */
     for (int i = 0; i < 4; i++) {
         if (dim_brightness_options[i].value == (int)cur_val) { cur = i; break; }
@@ -305,13 +305,13 @@ static void edit_backlight(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Backlight";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().backlightOn;
+    cfg.toggle_val = AppState::getInstance().display.backlightOn;
     cfg.on_confirm = on_backlight_confirm;
     scr_value_edit_open(&cfg);
 }
 
 static void edit_brightness(void) {
-    uint8_t cur_val = AppState::getInstance().backlightBrightness;
+    uint8_t cur_val = AppState::getInstance().display.backlightBrightness;
     int cur = 4; /* default: 100% */
     for (int i = 0; i < 5; i++) {
         if (brightness_options[i].value == (int)cur_val) { cur = i; break; }
@@ -330,7 +330,7 @@ static void edit_dark_mode(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Dark Mode";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().darkMode;
+    cfg.toggle_val = AppState::getInstance().general.darkMode;
     cfg.on_confirm = on_dark_mode_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -339,7 +339,7 @@ static void edit_auto_update(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Auto Update";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().autoUpdateEnabled;
+    cfg.toggle_val = AppState::getInstance().ota.autoUpdateEnabled;
     cfg.on_confirm = on_auto_update_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -348,13 +348,13 @@ static void edit_ssl_validation(void) {
     ValueEditConfig cfg = {};
     cfg.title = "SSL Validation";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().enableCertValidation;
+    cfg.toggle_val = AppState::getInstance().general.enableCertValidation;
     cfg.on_confirm = on_ssl_confirm;
     scr_value_edit_open(&cfg);
 }
 
 static void edit_ota_channel(void) {
-    int cur = (int)AppState::getInstance().otaChannel;
+    int cur = (int)AppState::getInstance().ota.channel;
     if (cur < 0 || cur > 1) cur = 0;
     ValueEditConfig cfg = {};
     cfg.title = "Update Channel";
@@ -370,13 +370,13 @@ static void edit_buzzer_enable(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Buzzer";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().buzzerEnabled;
+    cfg.toggle_val = AppState::getInstance().buzzer.enabled;
     cfg.on_confirm = on_buzzer_enable_confirm;
     scr_value_edit_open(&cfg);
 }
 
 static void edit_buzzer_volume(void) {
-    int cur = AppState::getInstance().buzzerVolume;
+    int cur = AppState::getInstance().buzzer.volume;
     if (cur < 0 || cur > 2) cur = 1;
     ValueEditConfig cfg = {};
     cfg.title = "Buzzer Volume";
@@ -389,7 +389,7 @@ static void edit_buzzer_volume(void) {
 }
 
 static void edit_audio_rate(void) {
-    uint16_t cur_val = AppState::getInstance().audioUpdateRate;
+    uint16_t cur_val = AppState::getInstance().audio.updateRate;
     int cur = 1; /* default: 50 ms */
     for (int i = 0; i < 4; i++) {
         if (audio_rate_options[i].value == (int)cur_val) { cur = i; break; }
@@ -426,13 +426,13 @@ static void edit_debug_mode(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Debug Mode";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().debugMode;
+    cfg.toggle_val = AppState::getInstance().debug.debugMode;
     cfg.on_confirm = on_debug_mode_confirm;
     scr_value_edit_open(&cfg);
 }
 
 static void edit_debug_level(void) {
-    int cur = AppState::getInstance().debugSerialLevel;
+    int cur = AppState::getInstance().debug.serialLevel;
     if (cur < 0 || cur > 3) cur = 2;
     ValueEditConfig cfg = {};
     cfg.title = "Serial Level";
@@ -454,7 +454,7 @@ static void build_settings_menu(void) {
     static char timeout_str[12];
     const char *t = "Custom";
     for (int i = 0; i < 5; i++) {
-        if ((unsigned long)timeout_options[i].value == st.screenTimeout) {
+        if ((unsigned long)timeout_options[i].value == st.display.screenTimeout) {
             t = timeout_options[i].label;
             break;
         }
@@ -462,12 +462,12 @@ static void build_settings_menu(void) {
     snprintf(timeout_str, sizeof(timeout_str), "%s", t);
 
     static char dim_enabled_str[8];
-    snprintf(dim_enabled_str, sizeof(dim_enabled_str), "%s", st.dimEnabled ? "ON" : "OFF");
+    snprintf(dim_enabled_str, sizeof(dim_enabled_str), "%s", st.display.dimEnabled ? "ON" : "OFF");
 
     static char dim_str[12];
     const char *d = "10 sec";
     for (int i = 0; i < 5; i++) {
-        if ((unsigned long)dim_timeout_options[i].value == st.dimTimeout) {
+        if ((unsigned long)dim_timeout_options[i].value == st.display.dimTimeout) {
             d = dim_timeout_options[i].label;
             break;
         }
@@ -477,7 +477,7 @@ static void build_settings_menu(void) {
     static char dim_bright_str[8];
     const char *db = "10%";
     for (int i = 0; i < 4; i++) {
-        if (dim_brightness_options[i].value == (int)st.dimBrightness) {
+        if (dim_brightness_options[i].value == (int)st.display.dimBrightness) {
             db = dim_brightness_options[i].label;
             break;
         }
@@ -485,12 +485,12 @@ static void build_settings_menu(void) {
     snprintf(dim_bright_str, sizeof(dim_bright_str), "%s", db);
 
     static char backlight_str[8];
-    snprintf(backlight_str, sizeof(backlight_str), "%s", st.backlightOn ? "ON" : "OFF");
+    snprintf(backlight_str, sizeof(backlight_str), "%s", st.display.backlightOn ? "ON" : "OFF");
 
     static char brightness_str[8];
     const char *br = "100%";
     for (int i = 0; i < 5; i++) {
-        if (brightness_options[i].value == (int)st.backlightBrightness) {
+        if (brightness_options[i].value == (int)st.display.backlightBrightness) {
             br = brightness_options[i].label;
             break;
         }
@@ -498,7 +498,7 @@ static void build_settings_menu(void) {
     snprintf(brightness_str, sizeof(brightness_str), "%s", br);
 
     static char dark_str[8];
-    snprintf(dark_str, sizeof(dark_str), "%s", st.darkMode ? "ON" : "OFF");
+    snprintf(dark_str, sizeof(dark_str), "%s", st.general.darkMode ? "ON" : "OFF");
 
     static char boot_anim_str[14];
     if (!st.bootAnimEnabled) {
@@ -515,44 +515,44 @@ static void build_settings_menu(void) {
     }
 
     static char update_str[8];
-    snprintf(update_str, sizeof(update_str), "%s", st.autoUpdateEnabled ? "ON" : "OFF");
+    snprintf(update_str, sizeof(update_str), "%s", st.ota.autoUpdateEnabled ? "ON" : "OFF");
 
     static char ssl_str[8];
-    snprintf(ssl_str, sizeof(ssl_str), "%s", st.enableCertValidation ? "ON" : "OFF");
+    snprintf(ssl_str, sizeof(ssl_str), "%s", st.general.enableCertValidation ? "ON" : "OFF");
 
     static char ota_channel_str[8];
     snprintf(ota_channel_str, sizeof(ota_channel_str), "%s",
-             st.otaChannel == 0 ? "Stable" : "Beta");
+             st.ota.channel == 0 ? "Stable" : "Beta");
 
     static char debug_str[8];
-    snprintf(debug_str, sizeof(debug_str), "%s", st.debugMode ? "ON" : "OFF");
+    snprintf(debug_str, sizeof(debug_str), "%s", st.debug.debugMode ? "ON" : "OFF");
 
     static char debug_lvl_str[8];
     const char *lvl_names[] = {"Off", "Errors", "Info", "Debug"};
-    int dl = st.debugSerialLevel;
+    int dl = st.debug.serialLevel;
     if (dl < 0 || dl > 3) dl = 2;
     snprintf(debug_lvl_str, sizeof(debug_lvl_str), "%s", lvl_names[dl]);
 
     static char fw_str[24];
-    if (st.updateAvailable) {
-        snprintf(fw_str, sizeof(fw_str), "%s -> %s", FIRMWARE_VERSION, st.cachedLatestVersion.c_str());
+    if (st.ota.updateAvailable) {
+        snprintf(fw_str, sizeof(fw_str), "%s -> %s", FIRMWARE_VERSION, st.ota.cachedLatestVersion.c_str());
     } else {
         snprintf(fw_str, sizeof(fw_str), "%s", FIRMWARE_VERSION);
     }
 
     static char buzzer_str[8];
-    snprintf(buzzer_str, sizeof(buzzer_str), "%s", st.buzzerEnabled ? "ON" : "OFF");
+    snprintf(buzzer_str, sizeof(buzzer_str), "%s", st.buzzer.enabled ? "ON" : "OFF");
 
     static char buzzer_vol_str[8];
     const char *vol_names[] = {"Low", "Medium", "High"};
-    int bv = st.buzzerVolume;
+    int bv = st.buzzer.volume;
     if (bv < 0 || bv > 2) bv = 1;
     snprintf(buzzer_vol_str, sizeof(buzzer_vol_str), "%s", vol_names[bv]);
 
     static char audio_rate_str[8];
     const char *ar = "50 ms";
     for (int i = 0; i < 4; i++) {
-        if (audio_rate_options[i].value == (int)st.audioUpdateRate) {
+        if (audio_rate_options[i].value == (int)st.audio.updateRate) {
             ar = audio_rate_options[i].label;
             break;
         }
@@ -594,7 +594,7 @@ void scr_settings_refresh(void) {
     static char timeout_buf[12];
     const char *t = "Custom";
     for (int i = 0; i < 5; i++) {
-        if ((unsigned long)timeout_options[i].value == st.screenTimeout) {
+        if ((unsigned long)timeout_options[i].value == st.display.screenTimeout) {
             t = timeout_options[i].label;
             break;
         }
@@ -602,12 +602,12 @@ void scr_settings_refresh(void) {
     snprintf(timeout_buf, sizeof(timeout_buf), "%s", t);
     scr_menu_set_item_value(1, timeout_buf);
 
-    scr_menu_set_item_value(2, st.dimEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(2, st.display.dimEnabled ? "ON" : "OFF");
 
     static char dim_buf[12];
     const char *dt_label = "10 sec";
     for (int i = 0; i < 5; i++) {
-        if ((unsigned long)dim_timeout_options[i].value == st.dimTimeout) {
+        if ((unsigned long)dim_timeout_options[i].value == st.display.dimTimeout) {
             dt_label = dim_timeout_options[i].label;
             break;
         }
@@ -618,7 +618,7 @@ void scr_settings_refresh(void) {
     static char dim_bright_buf[8];
     const char *db_label = "10%";
     for (int i = 0; i < 4; i++) {
-        if (dim_brightness_options[i].value == (int)st.dimBrightness) {
+        if (dim_brightness_options[i].value == (int)st.display.dimBrightness) {
             db_label = dim_brightness_options[i].label;
             break;
         }
@@ -626,12 +626,12 @@ void scr_settings_refresh(void) {
     snprintf(dim_bright_buf, sizeof(dim_bright_buf), "%s", db_label);
     scr_menu_set_item_value(4, dim_bright_buf);
 
-    scr_menu_set_item_value(5, st.backlightOn ? "ON" : "OFF");
+    scr_menu_set_item_value(5, st.display.backlightOn ? "ON" : "OFF");
 
     static char bright_buf[8];
     const char *br_label = "100%";
     for (int i = 0; i < 5; i++) {
-        if (brightness_options[i].value == (int)st.backlightBrightness) {
+        if (brightness_options[i].value == (int)st.display.backlightBrightness) {
             br_label = brightness_options[i].label;
             break;
         }
@@ -639,7 +639,7 @@ void scr_settings_refresh(void) {
     snprintf(bright_buf, sizeof(bright_buf), "%s", br_label);
     scr_menu_set_item_value(6, bright_buf);
 
-    scr_menu_set_item_value(7, st.darkMode ? "ON" : "OFF");
+    scr_menu_set_item_value(7, st.general.darkMode ? "ON" : "OFF");
 
     static char boot_anim_buf[14];
     if (!st.bootAnimEnabled) {
@@ -656,11 +656,11 @@ void scr_settings_refresh(void) {
     }
     scr_menu_set_item_value(8, boot_anim_buf);
 
-    scr_menu_set_item_value(9, st.buzzerEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(9, st.buzzer.enabled ? "ON" : "OFF");
 
     static char bvol_buf[8];
     const char *vol_names[] = {"Low", "Medium", "High"};
-    int bv = st.buzzerVolume;
+    int bv = st.buzzer.volume;
     if (bv < 0 || bv > 2) bv = 1;
     snprintf(bvol_buf, sizeof(bvol_buf), "%s", vol_names[bv]);
     scr_menu_set_item_value(10, bvol_buf);
@@ -668,7 +668,7 @@ void scr_settings_refresh(void) {
     static char arate_buf[8];
     const char *ar_label = "50 ms";
     for (int i = 0; i < 4; i++) {
-        if (audio_rate_options[i].value == (int)st.audioUpdateRate) {
+        if (audio_rate_options[i].value == (int)st.audio.updateRate) {
             ar_label = audio_rate_options[i].label;
             break;
         }
@@ -676,24 +676,24 @@ void scr_settings_refresh(void) {
     snprintf(arate_buf, sizeof(arate_buf), "%s", ar_label);
     scr_menu_set_item_value(11, arate_buf);
 
-    scr_menu_set_item_value(12, st.autoUpdateEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(12, st.ota.autoUpdateEnabled ? "ON" : "OFF");
 
-    scr_menu_set_item_value(13, st.enableCertValidation ? "ON" : "OFF");
+    scr_menu_set_item_value(13, st.general.enableCertValidation ? "ON" : "OFF");
 
-    scr_menu_set_item_value(14, st.otaChannel == 0 ? "Stable" : "Beta");
+    scr_menu_set_item_value(14, st.ota.channel == 0 ? "Stable" : "Beta");
 
-    scr_menu_set_item_value(15, st.debugMode ? "ON" : "OFF");
+    scr_menu_set_item_value(15, st.debug.debugMode ? "ON" : "OFF");
 
     static char dlvl_buf[8];
     const char *dlvl_names[] = {"Off", "Errors", "Info", "Debug"};
-    int dlvl = st.debugSerialLevel;
+    int dlvl = st.debug.serialLevel;
     if (dlvl < 0 || dlvl > 3) dlvl = 2;
     snprintf(dlvl_buf, sizeof(dlvl_buf), "%s", dlvl_names[dlvl]);
     scr_menu_set_item_value(16, dlvl_buf);
 
     static char fw_buf[24];
-    if (st.updateAvailable) {
-        snprintf(fw_buf, sizeof(fw_buf), "%s -> %s", FIRMWARE_VERSION, st.cachedLatestVersion.c_str());
+    if (st.ota.updateAvailable) {
+        snprintf(fw_buf, sizeof(fw_buf), "%s -> %s", FIRMWARE_VERSION, st.ota.cachedLatestVersion.c_str());
     } else {
         snprintf(fw_buf, sizeof(fw_buf), "%s", FIRMWARE_VERSION);
     }

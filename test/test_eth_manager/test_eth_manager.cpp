@@ -16,12 +16,20 @@
 
 enum NetIfType { NET_NONE, NET_ETHERNET, NET_WIFI };
 
-struct MockAppState {
-    bool ethLinkUp = false;
-    bool ethConnected = false;
-    String ethIP = "";
+struct MockEthernetState {
+    bool linkUp = false;
+    bool connected = false;
+    String ip = "";
     NetIfType activeInterface = NET_NONE;
-    bool wifiConnectSuccess = false;
+};
+
+struct MockWifiState {
+    bool connectSuccess = false;
+};
+
+struct MockAppState {
+    MockEthernetState ethernet;
+    MockWifiState wifi;
 
     // Dirty flag
     bool _ethernetDirty = false;
@@ -31,11 +39,11 @@ struct MockAppState {
     void clearEthernetDirty() { _ethernetDirty = false; }
 
     void reset() {
-        ethLinkUp = false;
-        ethConnected = false;
-        ethIP = "";
-        activeInterface = NET_NONE;
-        wifiConnectSuccess = false;
+        ethernet.linkUp = false;
+        ethernet.connected = false;
+        ethernet.ip = "";
+        ethernet.activeInterface = NET_NONE;
+        wifi.connectSuccess = false;
         _ethernetDirty = false;
     }
 };
@@ -50,15 +58,15 @@ static MockAppState appState;
 void eth_manager_init() {}
 
 bool eth_manager_is_connected() {
-    return appState.ethConnected;
+    return appState.ethernet.connected;
 }
 
 bool eth_manager_link_up() {
-    return appState.ethLinkUp;
+    return appState.ethernet.linkUp;
 }
 
 String eth_manager_get_ip() {
-    return appState.ethIP;
+    return appState.ethernet.ip;
 }
 
 void eth_manager_set_default_route() {
@@ -82,19 +90,19 @@ void tearDown(void) {}
 // ===== Default State Tests =====
 
 void test_default_ethConnected_is_false(void) {
-    TEST_ASSERT_FALSE(appState.ethConnected);
+    TEST_ASSERT_FALSE(appState.ethernet.connected);
 }
 
 void test_default_ethLinkUp_is_false(void) {
-    TEST_ASSERT_FALSE(appState.ethLinkUp);
+    TEST_ASSERT_FALSE(appState.ethernet.linkUp);
 }
 
 void test_default_ethIP_is_empty(void) {
-    TEST_ASSERT_EQUAL_STRING("", appState.ethIP.c_str());
+    TEST_ASSERT_EQUAL_STRING("", appState.ethernet.ip.c_str());
 }
 
 void test_default_activeInterface_is_NET_NONE(void) {
-    TEST_ASSERT_EQUAL_INT(NET_NONE, appState.activeInterface);
+    TEST_ASSERT_EQUAL_INT(NET_NONE, appState.ethernet.activeInterface);
 }
 
 // ===== NetIfType Enum Values =====
@@ -156,70 +164,70 @@ void test_EVT_ETHERNET_does_not_overlap_other_events(void) {
 // ===== ActiveInterface Transitions =====
 
 void test_activeInterface_transitions_none_to_ethernet(void) {
-    TEST_ASSERT_EQUAL_INT(NET_NONE, appState.activeInterface);
-    appState.ethConnected = true;
-    appState.ethIP = "192.168.1.100";
-    appState.activeInterface = NET_ETHERNET;
+    TEST_ASSERT_EQUAL_INT(NET_NONE, appState.ethernet.activeInterface);
+    appState.ethernet.connected = true;
+    appState.ethernet.ip = "192.168.1.100";
+    appState.ethernet.activeInterface = NET_ETHERNET;
     appState.markEthernetDirty();
 
-    TEST_ASSERT_EQUAL_INT(NET_ETHERNET, appState.activeInterface);
+    TEST_ASSERT_EQUAL_INT(NET_ETHERNET, appState.ethernet.activeInterface);
     TEST_ASSERT_TRUE(appState.isEthernetDirty());
 }
 
 void test_activeInterface_transitions_ethernet_to_wifi_on_lost_ip(void) {
     // Simulate ETH_GOT_IP path
-    appState.ethConnected = true;
-    appState.ethIP = "192.168.1.100";
-    appState.activeInterface = NET_ETHERNET;
-    appState.wifiConnectSuccess = true;
+    appState.ethernet.connected = true;
+    appState.ethernet.ip = "192.168.1.100";
+    appState.ethernet.activeInterface = NET_ETHERNET;
+    appState.wifi.connectSuccess = true;
 
     // Simulate ETH_LOST_IP handler logic
-    appState.ethConnected = false;
-    appState.ethIP = "";
-    if (appState.activeInterface == NET_ETHERNET) {
-        appState.activeInterface = appState.wifiConnectSuccess ? NET_WIFI : NET_NONE;
+    appState.ethernet.connected = false;
+    appState.ethernet.ip = "";
+    if (appState.ethernet.activeInterface == NET_ETHERNET) {
+        appState.ethernet.activeInterface = appState.wifi.connectSuccess ? NET_WIFI : NET_NONE;
     }
     appState.markEthernetDirty();
 
-    TEST_ASSERT_EQUAL_INT(NET_WIFI, appState.activeInterface);
-    TEST_ASSERT_FALSE(appState.ethConnected);
-    TEST_ASSERT_EQUAL_STRING("", appState.ethIP.c_str());
+    TEST_ASSERT_EQUAL_INT(NET_WIFI, appState.ethernet.activeInterface);
+    TEST_ASSERT_FALSE(appState.ethernet.connected);
+    TEST_ASSERT_EQUAL_STRING("", appState.ethernet.ip.c_str());
 }
 
 void test_activeInterface_transitions_ethernet_to_none_when_no_wifi(void) {
     // Simulate ETH_GOT_IP path
-    appState.ethConnected = true;
-    appState.ethIP = "192.168.1.100";
-    appState.activeInterface = NET_ETHERNET;
-    appState.wifiConnectSuccess = false;
+    appState.ethernet.connected = true;
+    appState.ethernet.ip = "192.168.1.100";
+    appState.ethernet.activeInterface = NET_ETHERNET;
+    appState.wifi.connectSuccess = false;
 
     // Simulate ETH_DISCONNECTED handler logic
-    appState.ethLinkUp = false;
-    appState.ethConnected = false;
-    appState.ethIP = "";
-    if (appState.activeInterface == NET_ETHERNET) {
-        appState.activeInterface = appState.wifiConnectSuccess ? NET_WIFI : NET_NONE;
+    appState.ethernet.linkUp = false;
+    appState.ethernet.connected = false;
+    appState.ethernet.ip = "";
+    if (appState.ethernet.activeInterface == NET_ETHERNET) {
+        appState.ethernet.activeInterface = appState.wifi.connectSuccess ? NET_WIFI : NET_NONE;
     }
     appState.markEthernetDirty();
 
-    TEST_ASSERT_EQUAL_INT(NET_NONE, appState.activeInterface);
-    TEST_ASSERT_FALSE(appState.ethLinkUp);
+    TEST_ASSERT_EQUAL_INT(NET_NONE, appState.ethernet.activeInterface);
+    TEST_ASSERT_FALSE(appState.ethernet.linkUp);
 }
 
 void test_activeInterface_not_changed_when_already_wifi(void) {
     // If activeInterface is already NET_WIFI, ETH_LOST_IP should not overwrite it
-    appState.activeInterface = NET_WIFI;
-    appState.ethConnected = true;
+    appState.ethernet.activeInterface = NET_WIFI;
+    appState.ethernet.connected = true;
 
     // Simulate ETH_LOST_IP handler logic (only changes interface if it was ETH)
-    appState.ethConnected = false;
-    appState.ethIP = "";
-    if (appState.activeInterface == NET_ETHERNET) {
-        appState.activeInterface = appState.wifiConnectSuccess ? NET_WIFI : NET_NONE;
+    appState.ethernet.connected = false;
+    appState.ethernet.ip = "";
+    if (appState.ethernet.activeInterface == NET_ETHERNET) {
+        appState.ethernet.activeInterface = appState.wifi.connectSuccess ? NET_WIFI : NET_NONE;
     }
 
     // Should still be NET_WIFI — the guard prevented overwrite
-    TEST_ASSERT_EQUAL_INT(NET_WIFI, appState.activeInterface);
+    TEST_ASSERT_EQUAL_INT(NET_WIFI, appState.ethernet.activeInterface);
 }
 
 // ===== Stub Function Smoke Tests =====
@@ -231,26 +239,26 @@ void test_eth_manager_init_compiles_and_runs(void) {
 }
 
 void test_eth_manager_is_connected_returns_appstate_ethConnected(void) {
-    appState.ethConnected = false;
+    appState.ethernet.connected = false;
     TEST_ASSERT_FALSE(eth_manager_is_connected());
 
-    appState.ethConnected = true;
+    appState.ethernet.connected = true;
     TEST_ASSERT_TRUE(eth_manager_is_connected());
 }
 
 void test_eth_manager_link_up_returns_appstate_ethLinkUp(void) {
-    appState.ethLinkUp = false;
+    appState.ethernet.linkUp = false;
     TEST_ASSERT_FALSE(eth_manager_link_up());
 
-    appState.ethLinkUp = true;
+    appState.ethernet.linkUp = true;
     TEST_ASSERT_TRUE(eth_manager_link_up());
 }
 
 void test_eth_manager_get_ip_returns_appstate_ethIP(void) {
-    appState.ethIP = "";
+    appState.ethernet.ip = "";
     TEST_ASSERT_EQUAL_STRING("", eth_manager_get_ip().c_str());
 
-    appState.ethIP = "10.0.0.50";
+    appState.ethernet.ip = "10.0.0.50";
     TEST_ASSERT_EQUAL_STRING("10.0.0.50", eth_manager_get_ip().c_str());
 }
 

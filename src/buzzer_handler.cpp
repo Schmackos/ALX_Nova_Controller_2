@@ -204,7 +204,7 @@ static void start_pattern(const ToneStep *pat) {
   // Start first step — NO ledcAttach() here; buzzer_set_tone() handles attach
   // via ledcWriteTone() which picks the optimal resolution for each frequency
   if (pat[0].duration_ms > 0) {
-    int vol = AppState::getInstance().buzzerVolume;
+    int vol = AppState::getInstance().buzzer.volume;
     if (vol < 0) vol = 0;
     if (vol > 2) vol = 2;
     if (pat[0].freq_hz > 0) {
@@ -251,7 +251,7 @@ void buzzer_update() {
       } else {
         // Start next step
         step_start_ms = millis();
-        int vol = AppState::getInstance().buzzerVolume;
+        int vol = AppState::getInstance().buzzer.volume;
         if (vol < 0) vol = 0;
         if (vol > 2) vol = 2;
         if (current_pattern[current_step].freq_hz > 0) {
@@ -269,13 +269,13 @@ void buzzer_update() {
   // Check ISR-safe tick/click flags (after sequencing, so finished patterns don't block)
   if (_buzzer_tick_pending) {
     _buzzer_tick_pending = false;
-    if (AppState::getInstance().buzzerEnabled && !playing) {
+    if (AppState::getInstance().buzzer.enabled && !playing) {
       start_pattern(pat_tick);
     }
   }
   if (_buzzer_click_pending) {
     _buzzer_click_pending = false;
-    if (AppState::getInstance().buzzerEnabled && !playing) {
+    if (AppState::getInstance().buzzer.enabled && !playing) {
       start_pattern(pat_click);
     }
   }
@@ -284,7 +284,7 @@ void buzzer_update() {
   BuzzerPattern req = pending_pattern;
   if (req != BUZZ_NONE) {
     pending_pattern = BUZZ_NONE;
-    if (AppState::getInstance().buzzerEnabled) {
+    if (AppState::getInstance().buzzer.enabled) {
       const ToneStep *pat = get_pattern(req);
       if (pat) {
         start_pattern(pat);

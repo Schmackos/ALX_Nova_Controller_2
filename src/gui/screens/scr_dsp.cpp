@@ -40,8 +40,8 @@ static void build_dsp_menu(void) {
     DspState *cfg = dsp_get_active_config();
     DspMetrics m = dsp_get_metrics();
 
-    snprintf(en_str, sizeof(en_str), "%s", st.dspEnabled ? "ON" : "OFF");
-    snprintf(bypass_str, sizeof(bypass_str), "%s", st.dspBypass ? "ON" : "OFF");
+    snprintf(en_str, sizeof(en_str), "%s", st.dsp.enabled ? "ON" : "OFF");
+    snprintf(bypass_str, sizeof(bypass_str), "%s", st.dsp.bypass ? "ON" : "OFF");
     snprintf(cpu_str, sizeof(cpu_str), "%.1f%%", m.cpuLoadPercent);
 
     for (int ch = 0; ch < DSP_MAX_CHANNELS; ch++) {
@@ -57,8 +57,8 @@ static void build_dsp_menu(void) {
     }
 
     // Preset string
-    if (st.dspPresetIndex >= 0 && st.dspPresetIndex < DSP_PRESET_MAX_SLOTS && st.dspPresetNames[st.dspPresetIndex][0]) {
-        snprintf(preset_str, sizeof(preset_str), "%s", st.dspPresetNames[st.dspPresetIndex]);
+    if (st.dsp.presetIndex >= 0 && st.dsp.presetIndex < DSP_PRESET_MAX_SLOTS && st.dsp.presetNames[st.dsp.presetIndex][0]) {
+        snprintf(preset_str, sizeof(preset_str), "%s", st.dsp.presetNames[st.dsp.presetIndex]);
     } else {
         snprintf(preset_str, sizeof(preset_str), "Custom");
     }
@@ -86,7 +86,7 @@ static void build_dsp_menu(void) {
 /* Toggle DSP enabled */
 static void on_enabled_confirm(int val, float, int) {
     AppState &st = AppState::getInstance();
-    st.dspEnabled = (val == 1);
+    st.dsp.enabled = (val == 1);
     saveDspSettingsDebounced();
     st.markDspConfigDirty();
 }
@@ -96,7 +96,7 @@ static void edit_enabled(void) {
     ValueEditConfig cfg = {};
     cfg.title = "DSP Enabled";
     cfg.type = VE_TOGGLE;
-    cfg.int_val = st.dspEnabled ? 1 : 0;
+    cfg.int_val = st.dsp.enabled ? 1 : 0;
     cfg.on_confirm = on_enabled_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -104,10 +104,10 @@ static void edit_enabled(void) {
 /* Toggle DSP bypass */
 static void on_bypass_confirm(int val, float, int) {
     AppState &st = AppState::getInstance();
-    st.dspBypass = (val == 1);
+    st.dsp.bypass = (val == 1);
     dsp_copy_active_to_inactive();
     DspState *cfg = dsp_get_inactive_config();
-    cfg->globalBypass = st.dspBypass;
+    cfg->globalBypass = st.dsp.bypass;
     if (!dsp_swap_config()) { dsp_log_swap_failure("GUI"); }
     saveDspSettingsDebounced();
     st.markDspConfigDirty();
@@ -118,7 +118,7 @@ static void edit_bypass(void) {
     ValueEditConfig cfg = {};
     cfg.title = "DSP Bypass";
     cfg.type = VE_TOGGLE;
-    cfg.int_val = st.dspBypass ? 1 : 0;
+    cfg.int_val = st.dsp.bypass ? 1 : 0;
     cfg.on_confirm = on_bypass_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -126,7 +126,7 @@ static void edit_bypass(void) {
 /* Cycle through presets (next existing slot, wrap around) */
 static void cycle_preset(void) {
     AppState &st = AppState::getInstance();
-    int current = st.dspPresetIndex;
+    int current = st.dsp.presetIndex;
     for (int i = 1; i <= DSP_PRESET_MAX_SLOTS; i++) {
         int slot = (current + i) % DSP_PRESET_MAX_SLOTS;
         if (dsp_preset_exists(slot)) {
@@ -161,14 +161,14 @@ void scr_dsp_refresh(void) {
     DspState *cfg = dsp_get_active_config();
     DspMetrics m = dsp_get_metrics();
 
-    snprintf(en_str, sizeof(en_str), "%s", st.dspEnabled ? "ON" : "OFF");
+    snprintf(en_str, sizeof(en_str), "%s", st.dsp.enabled ? "ON" : "OFF");
     scr_menu_set_item_value(1, en_str);
 
-    snprintf(bypass_str, sizeof(bypass_str), "%s", st.dspBypass ? "ON" : "OFF");
+    snprintf(bypass_str, sizeof(bypass_str), "%s", st.dsp.bypass ? "ON" : "OFF");
     scr_menu_set_item_value(2, bypass_str);
 
-    if (st.dspPresetIndex >= 0 && st.dspPresetIndex < DSP_PRESET_MAX_SLOTS && st.dspPresetNames[st.dspPresetIndex][0]) {
-        snprintf(preset_str, sizeof(preset_str), "%s", st.dspPresetNames[st.dspPresetIndex]);
+    if (st.dsp.presetIndex >= 0 && st.dsp.presetIndex < DSP_PRESET_MAX_SLOTS && st.dsp.presetNames[st.dsp.presetIndex][0]) {
+        snprintf(preset_str, sizeof(preset_str), "%s", st.dsp.presetNames[st.dsp.presetIndex]);
     } else {
         snprintf(preset_str, sizeof(preset_str), "Custom");
     }

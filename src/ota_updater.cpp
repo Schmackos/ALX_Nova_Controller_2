@@ -1,6 +1,8 @@
 #include "ota_updater.h"
 #include "config.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "debug_serial.h"
 #include "utils.h"
 #include "buzzer_handler.h"
@@ -115,9 +117,9 @@ unsigned long getOTAEffectiveInterval() {
 
 // ===== OTA Progress Helper (thread-safe via dirty flag) =====
 static void setOTAProgress(const char* status, const char* message, int progress) {
-  appState.otaStatus = status;
-  appState.otaStatusMessage = message;
-  appState.otaProgress = progress;
+  appState.ota.status = status;
+  appState.ota.statusMessage = message;
+  appState.ota.progress = progress;
   appState.markOTADirty();
 }
 
@@ -125,24 +127,24 @@ static void setOTAProgress(const char* status, const char* message, int progress
 void broadcastUpdateStatus() {
   JsonDocument doc;
   doc["type"] = "updateStatus";
-  doc["status"] = appState.otaStatus;
-  doc["progress"] = appState.otaProgress;
-  doc["message"] = appState.otaStatusMessage;
-  doc["appState.updateAvailable"] = appState.updateAvailable;
+  doc["status"] = appState.ota.status;
+  doc["progress"] = appState.ota.progress;
+  doc["message"] = appState.ota.statusMessage;
+  doc["appState.updateAvailable"] = appState.ota.updateAvailable;
   doc["currentVersion"] = firmwareVer;
-  doc["latestVersion"] = appState.cachedLatestVersion;
-  doc["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
-  doc["amplifierInUse"] = appState.amplifierState;
-  doc["otaChannel"] = appState.otaChannel;
+  doc["latestVersion"] = appState.ota.cachedLatestVersion;
+  doc["appState.autoUpdateEnabled"] = appState.ota.autoUpdateEnabled;
+  doc["amplifierInUse"] = appState.audio.amplifierState;
+  doc["otaChannel"] = appState.ota.channel;
   
-  if (appState.otaTotalBytes > 0) {
-    doc["bytesDownloaded"] = appState.otaProgressBytes;
-    doc["totalBytes"] = appState.otaTotalBytes;
+  if (appState.ota.totalBytes > 0) {
+    doc["bytesDownloaded"] = appState.ota.progressBytes;
+    doc["totalBytes"] = appState.ota.totalBytes;
   }
   
   // Show countdown when auto-update enabled, update available, amplifier is off, and countdown active
-  if (appState.autoUpdateEnabled && appState.updateAvailable && !appState.amplifierState && appState.updateDiscoveredTime > 0) {
-    unsigned long elapsed = millis() - appState.updateDiscoveredTime;
+  if (appState.ota.autoUpdateEnabled && appState.ota.updateAvailable && !appState.audio.amplifierState && appState.ota.updateDiscoveredTime > 0) {
+    unsigned long elapsed = millis() - appState.ota.updateDiscoveredTime;
     unsigned long remaining = (elapsed < AUTO_UPDATE_COUNTDOWN) 
                               ? (AUTO_UPDATE_COUNTDOWN - elapsed) / 1000 
                               : 0;
@@ -180,8 +182,8 @@ void handleCheckUpdate() {
   doc["success"] = true;
   doc["message"] = "Checking for updates...";
   doc["currentVersion"] = firmwareVer;
-  doc["latestVersion"] = appState.cachedLatestVersion.length() > 0 ? appState.cachedLatestVersion : "Checking...";
-  doc["appState.updateAvailable"] = appState.updateAvailable;
+  doc["latestVersion"] = appState.ota.cachedLatestVersion.length() > 0 ? appState.ota.cachedLatestVersion : "Checking...";
+  doc["appState.updateAvailable"] = appState.ota.updateAvailable;
 
   String json;
   serializeJson(doc, json);
@@ -189,7 +191,7 @@ void handleCheckUpdate() {
 }
 
 void handleStartUpdate() {
-  if (appState.otaInProgress || isOTATaskRunning()) {
+  if (appState.ota.inProgress || isOTATaskRunning()) {
     server.send(200, "application/json", "{\"success\": false, \"message\": \"OTA update already in progress\"}");
     return;
   }
@@ -199,7 +201,7 @@ void handleStartUpdate() {
     return;
   }
 
-  if (!appState.updateAvailable || appState.cachedLatestVersion.length() == 0 || appState.cachedFirmwareUrl.length() == 0) {
+  if (!appState.ota.updateAvailable || appState.ota.cachedLatestVersion.length() == 0 || appState.ota.cachedFirmwareUrl.length() == 0) {
     server.send(200, "application/json", "{\"success\": false, \"message\": \"No update available\"}");
     return;
   }
@@ -215,23 +217,23 @@ void handleStartUpdate() {
 
 void handleUpdateStatus() {
   JsonDocument doc;
-  doc["status"] = appState.otaStatus;
-  doc["progress"] = appState.otaProgress;
-  doc["message"] = appState.otaStatusMessage;
-  doc["appState.updateAvailable"] = appState.updateAvailable;
+  doc["status"] = appState.ota.status;
+  doc["progress"] = appState.ota.progress;
+  doc["message"] = appState.ota.statusMessage;
+  doc["appState.updateAvailable"] = appState.ota.updateAvailable;
   doc["currentVersion"] = firmwareVer;
-  doc["latestVersion"] = appState.cachedLatestVersion.length() > 0 ? appState.cachedLatestVersion : "Unknown";
-  doc["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
-  doc["amplifierInUse"] = appState.amplifierState;
+  doc["latestVersion"] = appState.ota.cachedLatestVersion.length() > 0 ? appState.ota.cachedLatestVersion : "Unknown";
+  doc["appState.autoUpdateEnabled"] = appState.ota.autoUpdateEnabled;
+  doc["amplifierInUse"] = appState.audio.amplifierState;
   
-  if (appState.otaTotalBytes > 0) {
-    doc["bytesDownloaded"] = appState.otaProgressBytes;
-    doc["totalBytes"] = appState.otaTotalBytes;
+  if (appState.ota.totalBytes > 0) {
+    doc["bytesDownloaded"] = appState.ota.progressBytes;
+    doc["totalBytes"] = appState.ota.totalBytes;
   }
   
   // Include countdown if auto-update is active
-  if (appState.autoUpdateEnabled && appState.updateAvailable && !appState.amplifierState && appState.updateDiscoveredTime > 0) {
-    unsigned long elapsed = millis() - appState.updateDiscoveredTime;
+  if (appState.ota.autoUpdateEnabled && appState.ota.updateAvailable && !appState.audio.amplifierState && appState.ota.updateDiscoveredTime > 0) {
+    unsigned long elapsed = millis() - appState.ota.updateDiscoveredTime;
     unsigned long remaining = (elapsed < AUTO_UPDATE_COUNTDOWN) 
                               ? (AUTO_UPDATE_COUNTDOWN - elapsed) / 1000 
                               : 0;
@@ -277,7 +279,7 @@ void handleGetReleaseNotes() {
   if (maxBlock < 50000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
-  } else if (appState.enableCertValidation) {
+  } else if (appState.general.enableCertValidation) {
     client.setCACert(GITHUB_ROOT_CA);
   } else {
     client.setInsecure();
@@ -331,7 +333,7 @@ void handleGetReleaseNotes() {
 // ===== OTA Core Functions =====
 
 void checkForFirmwareUpdate() {
-  if (appState.otaInProgress) {
+  if (appState.ota.inProgress) {
     return;
   }
   
@@ -361,20 +363,20 @@ void checkForFirmwareUpdate() {
   LOG_I("[OTA] Latest firmware version available: %s", latestVersion.c_str());
   
   // Always update cached version info
-  appState.cachedLatestVersion = latestVersion;
-  appState.cachedFirmwareUrl = firmwareUrl;
-  appState.cachedChecksum = checksum;
+  appState.ota.cachedLatestVersion = latestVersion;
+  appState.ota.cachedFirmwareUrl = firmwareUrl;
+  appState.ota.cachedChecksum = checksum;
   
   int cmp = compareVersions(latestVersion, String(firmwareVer));
   
   if (cmp > 0) {
     // Update available
-    bool isNewUpdate = !appState.updateAvailable;  // Track if this is a newly discovered update
-    appState.updateAvailable = true;
+    bool isNewUpdate = !appState.ota.updateAvailable;  // Track if this is a newly discovered update
+    appState.ota.updateAvailable = true;
     
-    if (isNewUpdate || appState.updateDiscoveredTime == 0) {
+    if (isNewUpdate || appState.ota.updateDiscoveredTime == 0) {
       // Start countdown timer for new update or if timer was reset
-      appState.updateDiscoveredTime = millis();
+      appState.ota.updateDiscoveredTime = millis();
       LOG_I("[OTA] New version available: %s", latestVersion.c_str());
       if (checksum.length() > 0) {
         LOG_I("[OTA] SHA256 checksum: %s", checksum.c_str());
@@ -384,8 +386,8 @@ void checkForFirmwareUpdate() {
     }
   } else {
     // Up to date or downgrade
-    appState.updateAvailable = false;
-    appState.updateDiscoveredTime = 0;
+    appState.ota.updateAvailable = false;
+    appState.ota.updateDiscoveredTime = 0;
     if (cmp == 0) {
       LOG_I("[OTA] Firmware is up to date");
     } else {
@@ -400,12 +402,12 @@ void checkForFirmwareUpdate() {
 // Get latest release information from GitHub API
 bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum) {
   // Beta channel: use /releases list, pick newest overall (including prereleases)
-  if (appState.otaChannel == 1) {
+  if (appState.ota.channel == 1) {
     if (!fetchReleaseList(1)) return false;
-    if (appState.cachedReleaseListCount == 0) return false;
-    version = appState.cachedReleaseList[0].version;
-    firmwareUrl = appState.cachedReleaseList[0].firmwareUrl;
-    checksum = appState.cachedReleaseList[0].checksum;
+    if (appState.ota.cachedReleaseListCount == 0) return false;
+    version = appState.ota.cachedReleaseList[0].version;
+    firmwareUrl = appState.ota.cachedReleaseList[0].firmwareUrl;
+    checksum = appState.ota.cachedReleaseList[0].checksum;
     return true;
   }
   // Stable channel: existing /releases/latest path below
@@ -423,7 +425,7 @@ bool getLatestReleaseInfo(String& version, String& firmwareUrl, String& checksum
   if (maxBlock < 65000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
-  } else if (appState.enableCertValidation) {
+  } else if (appState.general.enableCertValidation) {
     LOG_I("[OTA] Certificate validation enabled");
     client.setCACert(GITHUB_ROOT_CA);
   } else {
@@ -565,7 +567,7 @@ static String extractChecksumFromBody(const String& body) {
 }
 
 // Fetch a list of recent releases from GitHub, filtered by channel.
-// Stores qualifying entries in appState.cachedReleaseList[] up to maxCount.
+// Stores qualifying entries in appState.ota.cachedReleaseList[] up to maxCount.
 // Returns true on success.
 bool fetchReleaseList(int maxCount) {
   uint32_t maxBlock = ESP.getMaxAllocHeap();
@@ -590,7 +592,7 @@ bool fetchReleaseList(int maxCount) {
     if (maxBlock < 65000) {
       LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
       client.setInsecure();
-    } else if (appState.enableCertValidation) {
+    } else if (appState.general.enableCertValidation) {
       client.setCACert(GITHUB_ROOT_CA);
     } else {
       client.setInsecure();
@@ -658,7 +660,7 @@ bool fetchReleaseList(int maxCount) {
 
     // Array received — parse releases
     int count = 0;
-    int limit = maxCount < AppState::OTA_MAX_RELEASES ? maxCount : AppState::OTA_MAX_RELEASES;
+    int limit = maxCount < OTA_MAX_RELEASES ? maxCount : OTA_MAX_RELEASES;
 
     for (JsonObject rel : doc.as<JsonArray>()) {
       if (count >= limit) break;
@@ -666,7 +668,7 @@ bool fetchReleaseList(int maxCount) {
       bool isPrerelease = rel["prerelease"] | false;
 
       // Channel filter: stable (0) skips prereleases; beta (1) includes all
-      if (appState.otaChannel == 0 && isPrerelease) continue;
+      if (appState.ota.channel == 0 && isPrerelease) continue;
 
       String tagName = rel["tag_name"] | "";
       if (tagName.length() == 0) continue;
@@ -691,16 +693,16 @@ bool fetchReleaseList(int maxCount) {
       String publishedAt = rel["published_at"] | "";
       if (publishedAt.length() > 10) publishedAt = publishedAt.substring(0, 10);
 
-      appState.cachedReleaseList[count].version = tagName;
-      appState.cachedReleaseList[count].firmwareUrl = fwUrl;
-      appState.cachedReleaseList[count].checksum = cs;
-      appState.cachedReleaseList[count].isPrerelease = isPrerelease;
-      appState.cachedReleaseList[count].publishedAt = publishedAt;
+      appState.ota.cachedReleaseList[count].version = tagName;
+      appState.ota.cachedReleaseList[count].firmwareUrl = fwUrl;
+      appState.ota.cachedReleaseList[count].checksum = cs;
+      appState.ota.cachedReleaseList[count].isPrerelease = isPrerelease;
+      appState.ota.cachedReleaseList[count].publishedAt = publishedAt;
       count++;
     }
 
-    appState.cachedReleaseListCount = count;
-    LOG_I("[OTA] fetchReleaseList: found %d qualifying release(s) (channel=%d)", count, appState.otaChannel);
+    appState.ota.cachedReleaseListCount = count;
+    LOG_I("[OTA] fetchReleaseList: found %d qualifying release(s) (channel=%d)", count, appState.ota.channel);
     return true;
   }
 
@@ -714,23 +716,23 @@ void handleGetReleaseList() {
     server.send(200, "application/json", "{\"success\":false,\"message\":\"Not connected to WiFi\"}");
     return;
   }
-  if (appState.otaInProgress) {
+  if (appState.ota.inProgress) {
     server.send(200, "application/json", "{\"success\":false,\"message\":\"OTA in progress\"}");
     return;
   }
 
-  bool ok = fetchReleaseList(AppState::OTA_MAX_RELEASES);
+  bool ok = fetchReleaseList(OTA_MAX_RELEASES);
 
   JsonDocument doc;
   doc["success"] = ok;
   if (ok) {
     JsonArray arr = doc["releases"].to<JsonArray>();
-    for (int i = 0; i < appState.cachedReleaseListCount; i++) {
+    for (int i = 0; i < appState.ota.cachedReleaseListCount; i++) {
       JsonObject rel = arr.add<JsonObject>();
-      rel["version"] = appState.cachedReleaseList[i].version;
-      rel["isPrerelease"] = appState.cachedReleaseList[i].isPrerelease;
-      rel["publishedAt"] = appState.cachedReleaseList[i].publishedAt;
-      rel["hasChecksum"] = appState.cachedReleaseList[i].checksum.length() == 64;
+      rel["version"] = appState.ota.cachedReleaseList[i].version;
+      rel["isPrerelease"] = appState.ota.cachedReleaseList[i].isPrerelease;
+      rel["publishedAt"] = appState.ota.cachedReleaseList[i].publishedAt;
+      rel["hasChecksum"] = appState.ota.cachedReleaseList[i].checksum.length() == 64;
     }
   } else {
     doc["message"] = "Failed to fetch release list";
@@ -761,11 +763,11 @@ void handleInstallRelease() {
 
   // Find version in cached release list
   bool found = false;
-  for (int i = 0; i < appState.cachedReleaseListCount; i++) {
-    if (appState.cachedReleaseList[i].version == targetVersion) {
-      appState.cachedFirmwareUrl = appState.cachedReleaseList[i].firmwareUrl;
-      appState.cachedChecksum = appState.cachedReleaseList[i].checksum;
-      appState.cachedLatestVersion = targetVersion;
+  for (int i = 0; i < appState.ota.cachedReleaseListCount; i++) {
+    if (appState.ota.cachedReleaseList[i].version == targetVersion) {
+      appState.ota.cachedFirmwareUrl = appState.ota.cachedReleaseList[i].firmwareUrl;
+      appState.ota.cachedChecksum = appState.ota.cachedReleaseList[i].checksum;
+      appState.ota.cachedLatestVersion = targetVersion;
       found = true;
       break;
     }
@@ -776,12 +778,12 @@ void handleInstallRelease() {
     return;
   }
 
-  if (appState.otaInProgress) {
+  if (appState.ota.inProgress) {
     server.send(409, "application/json", "{\"success\":false,\"message\":\"OTA already in progress\"}");
     return;
   }
 
-  appState.updateAvailable = true;
+  appState.ota.updateAvailable = true;
   LOG_I("[OTA] User selected release %s for install", targetVersion.c_str());
 
   startOTADownloadTask();
@@ -815,7 +817,7 @@ String calculateSHA256(uint8_t* data, size_t len) {
 }
 
 bool performOTAUpdate(String firmwareUrl) {
-  appState.otaInProgress = true;
+  appState.ota.inProgress = true;
   setOTAProgress("preparing", "Preparing for update...", 0);
 
   LOG_I("[OTA] Starting OTA update");
@@ -827,7 +829,7 @@ bool performOTAUpdate(String firmwareUrl) {
   if (maxBlock < 50000) {
     LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<50KB)", (unsigned long)maxBlock);
     setOTAProgress("error", "Insufficient memory for secure download", 0);
-    appState.otaInProgress = false;
+    appState.ota.inProgress = false;
     return false;
   }
 
@@ -836,7 +838,7 @@ bool performOTAUpdate(String firmwareUrl) {
   if (maxBlock < 65000) {
     LOG_W("[OTA] Heap low (%lu bytes), using insecure TLS (no cert validation)", (unsigned long)maxBlock);
     client.setInsecure();
-  } else if (appState.enableCertValidation) {
+  } else if (appState.general.enableCertValidation) {
     LOG_I("[OTA] Certificate validation enabled");
     client.setCACert(GITHUB_ROOT_CA);
   } else {
@@ -850,7 +852,7 @@ bool performOTAUpdate(String firmwareUrl) {
   if (!https.begin(client, firmwareUrl)) {
     LOG_E("[OTA] Failed to initialize HTTPS connection");
     setOTAProgress("error", "Failed to initialize secure connection", 0);
-    appState.otaInProgress = false;
+    appState.ota.inProgress = false;
     return false;
   }
 
@@ -865,19 +867,19 @@ bool performOTAUpdate(String firmwareUrl) {
     LOG_E("[OTA] Failed to download firmware, HTTP code: %d", httpCode);
     https.end();
     setOTAProgress("error", "Failed to connect to server", 0);
-    appState.otaInProgress = false;
+    appState.ota.inProgress = false;
     return false;
   }
 
   int contentLength = https.getSize();
-  appState.otaTotalBytes = contentLength;
+  appState.ota.totalBytes = contentLength;
   LOG_I("[OTA] Firmware size: %d bytes (%.2f KB)", contentLength, contentLength / 1024.0);
 
   if (contentLength <= 0) {
     LOG_E("[OTA] Invalid firmware size");
     https.end();
     setOTAProgress("error", "Invalid firmware file", 0);
-    appState.otaInProgress = false;
+    appState.ota.inProgress = false;
     return false;
   }
 
@@ -887,7 +889,7 @@ bool performOTAUpdate(String firmwareUrl) {
     LOG_E("[OTA] Not enough space, need: %d, available: %d", contentLength, freeSpace);
     https.end();
     setOTAProgress("error", "Not enough storage space", 0);
-    appState.otaInProgress = false;
+    appState.ota.inProgress = false;
     return false;
   }
 
@@ -899,11 +901,11 @@ bool performOTAUpdate(String firmwareUrl) {
     LOG_E("[OTA] Failed to begin OTA, free space: %d", ESP.getFreeSketchSpace());
     https.end();
     setOTAProgress("error", "Failed to initialize update", 0);
-    appState.otaInProgress = false;
+    appState.ota.inProgress = false;
     return false;
   }
 
-  appState.otaProgressBytes = 0;
+  appState.ota.progressBytes = 0;
   setOTAProgress("downloading", "Downloading firmware...", 0);
 
   LOG_I("[OTA] Download started, writing to flash");
@@ -917,7 +919,7 @@ bool performOTAUpdate(String firmwareUrl) {
   // For checksum calculation
   mbedtls_md_context_t ctx;
   mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
-  bool calculatingChecksum = (appState.cachedChecksum.length() == 64);
+  bool calculatingChecksum = (appState.ota.cachedChecksum.length() == 64);
 
   if (calculatingChecksum) {
     mbedtls_md_init(&ctx);
@@ -944,19 +946,19 @@ bool performOTAUpdate(String firmwareUrl) {
         }
         https.end();
         setOTAProgress("error", "Write error during download", 0);
-        appState.otaInProgress = false;
+        appState.ota.inProgress = false;
         return false;
       }
 
       written += bytesRead;
-      appState.otaProgressBytes = written;
+      appState.ota.progressBytes = written;
 
       // Update progress every 1% change or every 2 seconds
       int newProgress = (written * 100) / contentLength;
       unsigned long now = millis();
-      if (newProgress != appState.otaProgress || (now - lastProgressUpdate) >= 2000) {
-        appState.otaProgress = newProgress;
-        appState.otaStatusMessage = String("Downloading: ") + String(written / 1024) + " / " + String(contentLength / 1024) + " KB";
+      if (newProgress != appState.ota.progress || (now - lastProgressUpdate) >= 2000) {
+        appState.ota.progress = newProgress;
+        appState.ota.statusMessage = String("Downloading: ") + String(written / 1024) + " / " + String(contentLength / 1024) + " KB";
         appState.markOTADirty();
         lastProgressUpdate = now;
         LOG_D("[OTA] Progress: %d%% (%d KB / %d KB)", newProgress, written / 1024, contentLength / 1024);
@@ -981,16 +983,16 @@ bool performOTAUpdate(String firmwareUrl) {
       calculatedChecksum += str;
     }
 
-    LOG_I("[OTA] Expected checksum:   %s", appState.cachedChecksum.c_str());
+    LOG_I("[OTA] Expected checksum:   %s", appState.ota.cachedChecksum.c_str());
     LOG_I("[OTA] Calculated checksum: %s", calculatedChecksum.c_str());
 
-    if (calculatedChecksum.equalsIgnoreCase(appState.cachedChecksum)) {
+    if (calculatedChecksum.equalsIgnoreCase(appState.ota.cachedChecksum)) {
       LOG_I("[OTA] Checksum verification passed");
     } else {
       LOG_E("[OTA] Checksum verification failed");
       Update.abort();
       setOTAProgress("error", "Checksum verification failed - firmware corrupted", 0);
-      appState.otaInProgress = false;
+      appState.ota.inProgress = false;
       return false;
     }
   } else {
@@ -1010,17 +1012,17 @@ bool performOTAUpdate(String firmwareUrl) {
       LOG_E("[OTA] Update did not finish correctly");
       Update.abort();
       setOTAProgress("error", "Update verification failed", 0);
-      appState.otaInProgress = false;
+      appState.ota.inProgress = false;
       return false;
     }
   } else {
     LOG_E("[OTA] Update error: %s", Update.errorString());
     Update.abort();
-    appState.otaStatus = "error";
-    appState.otaStatusMessage = String("Update error: ") + Update.errorString();
-    appState.otaProgress = 0;
+    appState.ota.status = "error";
+    appState.ota.statusMessage = String("Update error: ") + Update.errorString();
+    appState.ota.progress = 0;
     appState.markOTADirty();
-    appState.otaInProgress = false;
+    appState.ota.inProgress = false;
     return false;
   }
 }
@@ -1057,23 +1059,23 @@ bool checkAndClearOTASuccessFlag(String& previousVersion) {
 
 // Broadcast "just updated" message to all WebSocket clients
 void broadcastJustUpdated() {
-  if (!appState.justUpdated) return;
+  if (!appState.ota.justUpdated) return;
   
   JsonDocument doc;
   doc["type"] = "appState.justUpdated";
-  doc["previousVersion"] = appState.previousFirmwareVersion;
+  doc["previousVersion"] = appState.ota.previousFirmwareVersion;
   doc["currentVersion"] = firmwareVer;
-  doc["message"] = String("Firmware successfully updated from ") + appState.previousFirmwareVersion + " to " + firmwareVer;
+  doc["message"] = String("Firmware successfully updated from ") + appState.ota.previousFirmwareVersion + " to " + firmwareVer;
   
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
   
-  LOG_I("[OTA] Broadcast: Firmware updated from %s to %s", appState.previousFirmwareVersion.c_str(), firmwareVer);
+  LOG_I("[OTA] Broadcast: Firmware updated from %s to %s", appState.ota.previousFirmwareVersion.c_str(), firmwareVer);
   
   // Clear the flag after broadcasting
-  appState.justUpdated = false;
-  appState.previousFirmwareVersion = "";
+  appState.ota.justUpdated = false;
+  appState.ota.previousFirmwareVersion = "";
 }
 
 // ===== Manual Firmware Upload Handlers =====
@@ -1095,7 +1097,7 @@ void handleFirmwareUploadChunk() {
     LOG_I("[OTA] Filename: %s", upload.filename.c_str());
     
     // Check if already in progress
-    if (appState.otaInProgress) {
+    if (appState.ota.inProgress) {
       LOG_E("[OTA] Another update is already in progress");
       uploadError = true;
       uploadErrorMessage = "Another update is already in progress";
@@ -1110,12 +1112,12 @@ void handleFirmwareUploadChunk() {
       return;
     }
     
-    appState.otaInProgress = true;
-    appState.otaStatus = "uploading";
-    appState.otaProgress = 0;
-    appState.otaProgressBytes = 0;
-    appState.otaTotalBytes = 0;  // Unknown until upload completes
-    appState.otaStatusMessage = "Receiving firmware file...";
+    appState.ota.inProgress = true;
+    appState.ota.status = "uploading";
+    appState.ota.progress = 0;
+    appState.ota.progressBytes = 0;
+    appState.ota.totalBytes = 0;  // Unknown until upload completes
+    appState.ota.statusMessage = "Receiving firmware file...";
     appState.markOTADirty();
     
     // Play OTA update melody before flashing begins
@@ -1126,9 +1128,9 @@ void handleFirmwareUploadChunk() {
       LOG_E("[OTA] Failed to begin update: %s", Update.errorString());
       uploadError = true;
       uploadErrorMessage = String("Failed to begin update: ") + Update.errorString();
-      appState.otaStatus = "error";
-      appState.otaStatusMessage = uploadErrorMessage;
-      appState.otaInProgress = false;
+      appState.ota.status = "error";
+      appState.ota.statusMessage = uploadErrorMessage;
+      appState.ota.inProgress = false;
       appState.markOTADirty();
       return;
     }
@@ -1147,26 +1149,26 @@ void handleFirmwareUploadChunk() {
       uploadError = true;
       uploadErrorMessage = String("Write error: ") + Update.errorString();
       Update.abort();
-      appState.otaStatus = "error";
-      appState.otaStatusMessage = uploadErrorMessage;
-      appState.otaInProgress = false;
+      appState.ota.status = "error";
+      appState.ota.statusMessage = uploadErrorMessage;
+      appState.ota.inProgress = false;
       appState.markOTADirty();
       return;
     }
 
-    appState.otaProgressBytes += upload.currentSize;
+    appState.ota.progressBytes += upload.currentSize;
 
     // Signal progress periodically (every ~10KB or every 2 seconds)
     static unsigned long lastBroadcast = 0;
     static size_t lastBroadcastBytes = 0;
     unsigned long now = millis();
 
-    if ((appState.otaProgressBytes - lastBroadcastBytes) >= 10240 || (now - lastBroadcast) >= 2000) {
-      appState.otaStatusMessage = String("Uploading: ") + String(appState.otaProgressBytes / 1024) + " KB received...";
+    if ((appState.ota.progressBytes - lastBroadcastBytes) >= 10240 || (now - lastBroadcast) >= 2000) {
+      appState.ota.statusMessage = String("Uploading: ") + String(appState.ota.progressBytes / 1024) + " KB received...";
       appState.markOTADirty();
       lastBroadcast = now;
-      lastBroadcastBytes = appState.otaProgressBytes;
-      LOG_D("[OTA] Received: %d KB", appState.otaProgressBytes / 1024);
+      lastBroadcastBytes = appState.ota.progressBytes;
+      LOG_D("[OTA] Received: %d KB", appState.ota.progressBytes / 1024);
     }
 
   } else if (upload.status == UPLOAD_FILE_END) {
@@ -1175,37 +1177,37 @@ void handleFirmwareUploadChunk() {
       return;
     }
 
-    appState.otaTotalBytes = upload.totalSize;
+    appState.ota.totalBytes = upload.totalSize;
     LOG_I("[OTA] Upload complete: %d bytes (%.2f KB)", upload.totalSize, upload.totalSize / 1024.0);
 
-    appState.otaStatusMessage = "Verifying firmware...";
-    appState.otaProgress = 100;
+    appState.ota.statusMessage = "Verifying firmware...";
+    appState.ota.progress = 100;
     appState.markOTADirty();
 
     // Finalize update
     if (Update.end(true)) {
       if (Update.isFinished()) {
         LOG_I("[OTA] Firmware upload and verification successful");
-        appState.otaStatus = "complete";
-        appState.otaStatusMessage = "Upload complete! Rebooting...";
+        appState.ota.status = "complete";
+        appState.ota.statusMessage = "Upload complete! Rebooting...";
         appState.markOTADirty();
         // Note: Response and reboot handled in handleFirmwareUploadComplete
       } else {
         LOG_E("[OTA] Update did not finish correctly");
         uploadError = true;
         uploadErrorMessage = "Update verification failed";
-        appState.otaStatus = "error";
-        appState.otaStatusMessage = uploadErrorMessage;
-        appState.otaInProgress = false;
+        appState.ota.status = "error";
+        appState.ota.statusMessage = uploadErrorMessage;
+        appState.ota.inProgress = false;
         appState.markOTADirty();
       }
     } else {
       LOG_E("[OTA] Update finalization error: %s", Update.errorString());
       uploadError = true;
       uploadErrorMessage = String("Update error: ") + Update.errorString();
-      appState.otaStatus = "error";
-      appState.otaStatusMessage = uploadErrorMessage;
-      appState.otaInProgress = false;
+      appState.ota.status = "error";
+      appState.ota.statusMessage = uploadErrorMessage;
+      appState.ota.inProgress = false;
       appState.markOTADirty();
     }
 
@@ -1214,9 +1216,9 @@ void handleFirmwareUploadChunk() {
     Update.abort();
     uploadError = true;
     uploadErrorMessage = "Upload aborted";
-    appState.otaStatus = "error";
-    appState.otaStatusMessage = "Upload aborted";
-    appState.otaInProgress = false;
+    appState.ota.status = "error";
+    appState.ota.statusMessage = "Upload aborted";
+    appState.ota.inProgress = false;
     appState.markOTADirty();
   }
 }
@@ -1240,10 +1242,10 @@ void handleFirmwareUploadComplete() {
   }
   
   // Check if update was successful
-  if (appState.otaStatus == "complete") {
+  if (appState.ota.status == "complete") {
     doc["success"] = true;
     doc["message"] = "Firmware uploaded successfully! Rebooting...";
-    doc["bytesReceived"] = appState.otaTotalBytes;
+    doc["bytesReceived"] = appState.ota.totalBytes;
     
     String json;
     serializeJson(doc, json);
@@ -1256,7 +1258,7 @@ void handleFirmwareUploadComplete() {
     ESP.restart();
   } else {
     doc["success"] = false;
-    doc["message"] = appState.otaStatusMessage.length() > 0 ? appState.otaStatusMessage : "Upload failed";
+    doc["message"] = appState.ota.statusMessage.length() > 0 ? appState.ota.statusMessage : "Upload failed";
     
     String json;
     serializeJson(doc, json);
@@ -1264,14 +1266,14 @@ void handleFirmwareUploadComplete() {
   }
   
   // Reset OTA state
-  appState.otaInProgress = false;
+  appState.ota.inProgress = false;
 }
 
 // ===== Non-Blocking OTA FreeRTOS Tasks =====
 
 // OTA download task — runs performOTAUpdate() on a separate core
 static void otaDownloadTask(void* param) {
-  String firmwareUrl = appState.cachedFirmwareUrl;
+  String firmwareUrl = appState.ota.cachedFirmwareUrl;
   bool success = performOTAUpdate(firmwareUrl);
 
   if (success) {
@@ -1281,9 +1283,9 @@ static void otaDownloadTask(void* param) {
     ESP.restart();
   } else {
     LOG_W("[OTA] Update failed");
-    appState.audioPaused = false;  // Resume audio capture
-    appState.otaInProgress = false;
-    appState.updateDiscoveredTime = 0;
+    appState.audio.paused = false;  // Resume audio capture
+    appState.ota.inProgress = false;
+    appState.ota.updateDiscoveredTime = 0;
     appState.setFSMState(STATE_IDLE);
     appState.markOTADirty();
   }
@@ -1293,20 +1295,20 @@ static void otaDownloadTask(void* param) {
 }
 
 void startOTADownloadTask() {
-  if (otaDownloadTaskHandle != NULL || appState.otaInProgress) {
+  if (otaDownloadTaskHandle != NULL || appState.ota.inProgress) {
     LOG_W("[OTA] Download task already running or OTA in progress");
     return;
   }
 
-  appState.otaInProgress = true;
-  appState.otaStatus = "preparing";
-  appState.otaStatusMessage = "Preparing for update...";
-  appState.otaProgress = 0;
+  appState.ota.inProgress = true;
+  appState.ota.status = "preparing";
+  appState.ota.statusMessage = "Preparing for update...";
+  appState.ota.progress = 0;
   appState.setFSMState(STATE_OTA_UPDATE);
   appState.markOTADirty();
 
   // Pause audio capture to prevent I2S driver conflicts during OTA
-  appState.audioPaused = true;
+  appState.audio.paused = true;
   vTaskDelay(pdMS_TO_TICKS(50));  // Ensure audio task exits i2s_read()
 
   BaseType_t result = xTaskCreatePinnedToCore(
@@ -1316,8 +1318,8 @@ void startOTADownloadTask() {
 
   if (result != pdPASS) {
     LOG_E("[OTA] Failed to create download task");
-    appState.audioPaused = false;  // Resume audio if task creation failed
-    appState.otaInProgress = false;
+    appState.audio.paused = false;  // Resume audio if task creation failed
+    appState.ota.inProgress = false;
     setOTAProgress("error", "Failed to start update task", 0);
     appState.setFSMState(STATE_IDLE);
   }
@@ -1348,7 +1350,7 @@ static void otaCheckTaskFunc(void* param) {
 }
 
 void startOTACheckTask() {
-  if (otaCheckTaskHandle != NULL || appState.otaInProgress) {
+  if (otaCheckTaskHandle != NULL || appState.ota.inProgress) {
     LOG_D("[OTA] Check task already running or OTA in progress, skipping");
     return;
   }

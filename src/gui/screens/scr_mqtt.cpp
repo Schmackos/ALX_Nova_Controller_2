@@ -14,7 +14,7 @@
 /* ===== Value editor confirmations ===== */
 
 static void on_mqtt_enable_confirm(int int_val, float, int) {
-    AppState::getInstance().appState.mqttEnabled = (int_val != 0);
+    AppState::getInstance().appState.mqtt.enabled = (int_val != 0);
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     if (int_val) {
@@ -24,17 +24,17 @@ static void on_mqtt_enable_confirm(int int_val, float, int) {
 }
 
 static void on_mqtt_port_confirm(int int_val, float, int) {
-    AppState::getInstance().appState.mqttPort = int_val;
+    AppState::getInstance().appState.mqtt.port = int_val;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT port set to %d", int_val);
 }
 
 static void on_mqtt_ha_confirm(int int_val, float, int) {
-    AppState::getInstance().appState.mqttHADiscovery = (int_val != 0);
+    AppState::getInstance().appState.mqtt.haDiscovery = (int_val != 0);
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
-    if (int_val && AppState::getInstance().appState.mqttConnected) {
+    if (int_val && AppState::getInstance().appState.mqtt.connected) {
         publishHADiscovery();
     }
     LOG_I("[GUI] HA Discovery %s", int_val ? "enabled" : "disabled");
@@ -43,28 +43,28 @@ static void on_mqtt_ha_confirm(int int_val, float, int) {
 /* ===== Keyboard callbacks ===== */
 
 static void on_broker_done(const char *text) {
-    AppState::getInstance().appState.mqttBroker = text;
+    AppState::getInstance().appState.mqtt.broker = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT broker set to %s", text);
 }
 
 static void on_username_done(const char *text) {
-    AppState::getInstance().appState.mqttUsername = text;
+    AppState::getInstance().appState.mqtt.username = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT username set");
 }
 
 static void on_password_done(const char *text) {
-    AppState::getInstance().appState.mqttPassword = text;
+    AppState::getInstance().appState.mqtt.password = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT password set");
 }
 
 static void on_topic_done(const char *text) {
-    AppState::getInstance().appState.mqttBaseTopic = text;
+    AppState::getInstance().appState.mqtt.baseTopic = text;
     saveMqttSettings();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] MQTT base topic set to %s", text);
@@ -76,7 +76,7 @@ static void edit_mqtt_enable(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Enable MQTT";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().appState.mqttEnabled;
+    cfg.toggle_val = AppState::getInstance().appState.mqtt.enabled;
     cfg.on_confirm = on_mqtt_enable_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -84,7 +84,7 @@ static void edit_mqtt_enable(void) {
 static void edit_mqtt_broker(void) {
     KeyboardConfig cfg = {};
     cfg.title = "MQTT Broker";
-    cfg.initial_text = AppState::getInstance().mqttBroker.c_str();
+    cfg.initial_text = AppState::getInstance().mqtt.broker.c_str();
     cfg.password_mode = false;
     cfg.on_done = on_broker_done;
     scr_keyboard_open(&cfg);
@@ -94,7 +94,7 @@ static void edit_mqtt_port(void) {
     ValueEditConfig cfg = {};
     cfg.title = "MQTT Port";
     cfg.type = VE_NUMERIC;
-    cfg.int_val = AppState::getInstance().appState.mqttPort;
+    cfg.int_val = AppState::getInstance().appState.mqtt.port;
     cfg.int_min = 1;
     cfg.int_max = 65535;
     cfg.int_step = 1;
@@ -105,7 +105,7 @@ static void edit_mqtt_port(void) {
 static void edit_mqtt_username(void) {
     KeyboardConfig cfg = {};
     cfg.title = "MQTT Username";
-    cfg.initial_text = AppState::getInstance().mqttUsername.c_str();
+    cfg.initial_text = AppState::getInstance().mqtt.username.c_str();
     cfg.password_mode = false;
     cfg.on_done = on_username_done;
     scr_keyboard_open(&cfg);
@@ -114,7 +114,7 @@ static void edit_mqtt_username(void) {
 static void edit_mqtt_password(void) {
     KeyboardConfig cfg = {};
     cfg.title = "MQTT Password";
-    cfg.initial_text = AppState::getInstance().mqttPassword.c_str();
+    cfg.initial_text = AppState::getInstance().mqtt.password.c_str();
     cfg.password_mode = true;
     cfg.on_done = on_password_done;
     scr_keyboard_open(&cfg);
@@ -123,7 +123,7 @@ static void edit_mqtt_password(void) {
 static void edit_mqtt_topic(void) {
     KeyboardConfig cfg = {};
     cfg.title = "Base Topic";
-    cfg.initial_text = AppState::getInstance().mqttBaseTopic.c_str();
+    cfg.initial_text = AppState::getInstance().mqtt.baseTopic.c_str();
     cfg.password_mode = false;
     cfg.on_done = on_topic_done;
     scr_keyboard_open(&cfg);
@@ -133,7 +133,7 @@ static void edit_mqtt_ha(void) {
     ValueEditConfig cfg = {};
     cfg.title = "HA Discovery";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().appState.mqttHADiscovery;
+    cfg.toggle_val = AppState::getInstance().appState.mqtt.haDiscovery;
     cfg.on_confirm = on_mqtt_ha_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -145,36 +145,36 @@ static void build_mqtt_menu(void) {
     AppState &st = AppState::getInstance();
 
     static char enable_str[8];
-    snprintf(enable_str, sizeof(enable_str), "%s", st.appState.mqttEnabled ? "ON" : "OFF");
+    snprintf(enable_str, sizeof(enable_str), "%s", st.appState.mqtt.enabled ? "ON" : "OFF");
 
     static char status_str[24];
-    if (!st.appState.mqttEnabled) {
+    if (!st.appState.mqtt.enabled) {
         snprintf(status_str, sizeof(status_str), "Disabled");
-    } else if (st.appState.mqttConnected) {
+    } else if (st.appState.mqtt.connected) {
         snprintf(status_str, sizeof(status_str), "Connected");
     } else {
         snprintf(status_str, sizeof(status_str), "Disconnected");
     }
 
     static char broker_str[24];
-    if (st.mqttBroker.length() > 0) {
-        snprintf(broker_str, sizeof(broker_str), "%.20s", st.mqttBroker.c_str());
+    if (st.mqtt.broker.length() > 0) {
+        snprintf(broker_str, sizeof(broker_str), "%.20s", st.mqtt.broker.c_str());
     } else {
         snprintf(broker_str, sizeof(broker_str), "(not set)");
     }
 
     static char port_str[8];
-    snprintf(port_str, sizeof(port_str), "%d", st.appState.mqttPort);
+    snprintf(port_str, sizeof(port_str), "%d", st.appState.mqtt.port);
 
     static char user_str[16];
-    if (st.mqttUsername.length() > 0) {
-        snprintf(user_str, sizeof(user_str), "%.12s", st.mqttUsername.c_str());
+    if (st.mqtt.username.length() > 0) {
+        snprintf(user_str, sizeof(user_str), "%.12s", st.mqtt.username.c_str());
     } else {
         snprintf(user_str, sizeof(user_str), "(none)");
     }
 
     static char ha_str[8];
-    snprintf(ha_str, sizeof(ha_str), "%s", st.appState.mqttHADiscovery ? "ON" : "OFF");
+    snprintf(ha_str, sizeof(ha_str), "%s", st.appState.mqtt.haDiscovery ? "ON" : "OFF");
 
     mqtt_menu.title = "MQTT";
     mqtt_menu.item_count = 9;
@@ -198,38 +198,38 @@ void scr_mqtt_refresh(void) {
     AppState &st = AppState::getInstance();
 
     static char status_buf[24];
-    if (!st.appState.mqttEnabled) {
+    if (!st.appState.mqtt.enabled) {
         snprintf(status_buf, sizeof(status_buf), "Disabled");
-    } else if (st.appState.mqttConnected) {
+    } else if (st.appState.mqtt.connected) {
         snprintf(status_buf, sizeof(status_buf), "Connected");
     } else {
         snprintf(status_buf, sizeof(status_buf), "Disconnected");
     }
     scr_menu_set_item_value(1, status_buf);
 
-    scr_menu_set_item_value(2, st.appState.mqttEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(2, st.appState.mqtt.enabled ? "ON" : "OFF");
 
     static char broker_buf[24];
-    if (st.mqttBroker.length() > 0) {
-        snprintf(broker_buf, sizeof(broker_buf), "%.20s", st.mqttBroker.c_str());
+    if (st.mqtt.broker.length() > 0) {
+        snprintf(broker_buf, sizeof(broker_buf), "%.20s", st.mqtt.broker.c_str());
     } else {
         snprintf(broker_buf, sizeof(broker_buf), "(not set)");
     }
     scr_menu_set_item_value(3, broker_buf);
 
     static char port_buf[8];
-    snprintf(port_buf, sizeof(port_buf), "%d", st.appState.mqttPort);
+    snprintf(port_buf, sizeof(port_buf), "%d", st.appState.mqtt.port);
     scr_menu_set_item_value(4, port_buf);
 
     static char user_buf[16];
-    if (st.mqttUsername.length() > 0) {
-        snprintf(user_buf, sizeof(user_buf), "%.12s", st.mqttUsername.c_str());
+    if (st.mqtt.username.length() > 0) {
+        snprintf(user_buf, sizeof(user_buf), "%.12s", st.mqtt.username.c_str());
     } else {
         snprintf(user_buf, sizeof(user_buf), "(none)");
     }
     scr_menu_set_item_value(5, user_buf);
 
-    scr_menu_set_item_value(8, st.appState.mqttHADiscovery ? "ON" : "OFF");
+    scr_menu_set_item_value(8, st.appState.mqtt.haDiscovery ? "ON" : "OFF");
 }
 
 #endif /* GUI_ENABLED */

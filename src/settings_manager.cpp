@@ -1,5 +1,7 @@
 #include "settings_manager.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "buzzer_handler.h"
 #include "config.h"
 #include "crash_log.h"
@@ -29,13 +31,13 @@ static void loadNvsSettings() {
   {
     Preferences wifiPrefs;
     wifiPrefs.begin("wifi-list", true);
-    appState.wifiMinSecurity = wifiPrefs.getUChar("wifiMinSec", 0);
+    appState.wifi.minSecurity = wifiPrefs.getUChar("wifiMinSec", 0);
     wifiPrefs.end();
   }
   {
     Preferences otaPrefs;
     otaPrefs.begin("ota-prefs", true);
-    appState.otaChannel = otaPrefs.getUChar("otaChannel", 0);
+    appState.ota.channel = otaPrefs.getUChar("otaChannel", 0);
     otaPrefs.end();
   }
   {
@@ -48,20 +50,20 @@ static void loadNvsSettings() {
 
 // Apply settings from a parsed JSON document
 static void applySettingsFromJson(const JsonDocument &doc) {
-  if (doc["autoUpdate"].is<bool>()) appState.autoUpdateEnabled = doc["autoUpdate"].as<bool>();
-  if (doc["timezone"].is<int>()) appState.timezoneOffset = doc["timezone"].as<int>();
-  if (doc["dst"].is<int>()) appState.dstOffset = doc["dst"].as<int>();
-  if (doc["darkMode"].is<bool>()) appState.darkMode = doc["darkMode"].as<bool>();
-  if (doc["certValidation"].is<bool>()) appState.enableCertValidation = doc["certValidation"].as<bool>();
+  if (doc["autoUpdate"].is<bool>()) appState.ota.autoUpdateEnabled = doc["autoUpdate"].as<bool>();
+  if (doc["timezone"].is<int>()) appState.general.timezoneOffset = doc["timezone"].as<int>();
+  if (doc["dst"].is<int>()) appState.general.dstOffset = doc["dst"].as<int>();
+  if (doc["darkMode"].is<bool>()) appState.general.darkMode = doc["darkMode"].as<bool>();
+  if (doc["certValidation"].is<bool>()) appState.general.enableCertValidation = doc["certValidation"].as<bool>();
 
   if (doc["hwStatsInterval"].is<unsigned long>()) {
     unsigned long interval = doc["hwStatsInterval"].as<unsigned long>();
     if (interval == 1000 || interval == 2000 || interval == 3000 ||
         interval == 5000 || interval == 10000)
-      appState.hardwareStatsInterval = interval;
+      appState.debug.hardwareStatsInterval = interval;
   }
 
-  if (doc["autoAP"].is<bool>()) appState.autoAPEnabled = doc["autoAP"].as<bool>();
+  if (doc["autoAP"].is<bool>()) appState.wifi.autoAPEnabled = doc["autoAP"].as<bool>();
 
 #ifdef GUI_ENABLED
   if (doc["bootAnim"].is<bool>()) appState.bootAnimEnabled = doc["bootAnim"].as<bool>();
@@ -75,64 +77,64 @@ static void applySettingsFromJson(const JsonDocument &doc) {
     unsigned long timeout = doc["screenTimeout"].as<unsigned long>();
     if (timeout == 0 || timeout == 30000 || timeout == 60000 ||
         timeout == 300000 || timeout == 600000)
-      appState.screenTimeout = timeout;
+      appState.display.screenTimeout = timeout;
   }
 
-  if (doc["buzzer"].is<bool>()) appState.buzzerEnabled = doc["buzzer"].as<bool>();
+  if (doc["buzzer"].is<bool>()) appState.buzzer.enabled = doc["buzzer"].as<bool>();
   if (doc["buzzerVol"].is<int>()) {
     int vol = doc["buzzerVol"].as<int>();
-    if (vol >= 0 && vol <= 2) appState.buzzerVolume = vol;
+    if (vol >= 0 && vol <= 2) appState.buzzer.volume = vol;
   }
 
   if (doc["backlight"].is<int>()) {
     int bright = doc["backlight"].as<int>();
-    if (bright >= 1 && bright <= 255) appState.backlightBrightness = (uint8_t)bright;
+    if (bright >= 1 && bright <= 255) appState.display.backlightBrightness = (uint8_t)bright;
   }
 
   if (doc["dimTimeout"].is<unsigned long>()) {
     unsigned long dimVal = doc["dimTimeout"].as<unsigned long>();
     if (dimVal == 5000 || dimVal == 10000 || dimVal == 15000 ||
         dimVal == 30000 || dimVal == 60000)
-      appState.dimTimeout = dimVal;
+      appState.display.dimTimeout = dimVal;
   }
   if (doc["dimBright"].is<int>()) {
     int dimBright = doc["dimBright"].as<int>();
     if (dimBright == 26 || dimBright == 64 || dimBright == 128 || dimBright == 191)
-      appState.dimBrightness = (uint8_t)dimBright;
+      appState.display.dimBrightness = (uint8_t)dimBright;
   }
-  if (doc["dimEnabled"].is<bool>()) appState.dimEnabled = doc["dimEnabled"].as<bool>();
+  if (doc["dimEnabled"].is<bool>()) appState.display.dimEnabled = doc["dimEnabled"].as<bool>();
 
   if (doc["audioRate"].is<int>()) {
     int rate = doc["audioRate"].as<int>();
-    if (rate == 33 || rate == 50 || rate == 100) appState.audioUpdateRate = (uint16_t)rate;
+    if (rate == 33 || rate == 50 || rate == 100) appState.audio.updateRate = (uint16_t)rate;
   }
 
-  if (doc["vuMeter"].is<bool>()) appState.vuMeterEnabled = doc["vuMeter"].as<bool>();
-  if (doc["waveform"].is<bool>()) appState.waveformEnabled = doc["waveform"].as<bool>();
-  if (doc["spectrum"].is<bool>()) appState.spectrumEnabled = doc["spectrum"].as<bool>();
+  if (doc["vuMeter"].is<bool>()) appState.audio.vuMeterEnabled = doc["vuMeter"].as<bool>();
+  if (doc["waveform"].is<bool>()) appState.audio.waveformEnabled = doc["waveform"].as<bool>();
+  if (doc["spectrum"].is<bool>()) appState.audio.spectrumEnabled = doc["spectrum"].as<bool>();
 
-  if (doc["debugMode"].is<bool>()) appState.debugMode = doc["debugMode"].as<bool>();
+  if (doc["debugMode"].is<bool>()) appState.debug.debugMode = doc["debugMode"].as<bool>();
   if (doc["debugSerial"].is<int>()) {
     int level = doc["debugSerial"].as<int>();
-    if (level >= 0 && level <= 3) appState.debugSerialLevel = level;
+    if (level >= 0 && level <= 3) appState.debug.serialLevel = level;
   }
-  if (doc["debugHwStats"].is<bool>()) appState.debugHwStats = doc["debugHwStats"].as<bool>();
-  if (doc["debugI2s"].is<bool>()) appState.debugI2sMetrics = doc["debugI2s"].as<bool>();
-  if (doc["debugTasks"].is<bool>()) appState.debugTaskMonitor = doc["debugTasks"].as<bool>();
+  if (doc["debugHwStats"].is<bool>()) appState.debug.hwStats = doc["debugHwStats"].as<bool>();
+  if (doc["debugI2s"].is<bool>()) appState.debug.i2sMetrics = doc["debugI2s"].as<bool>();
+  if (doc["debugTasks"].is<bool>()) appState.debug.taskMonitor = doc["debugTasks"].as<bool>();
 
   if (doc["fftWindow"].is<int>()) {
     int wt = doc["fftWindow"].as<int>();
-    if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.fftWindowType = (FftWindowType)wt;
+    if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.audio.fftWindowType = (FftWindowType)wt;
   }
 
   if (doc["adcEnabled"].is<JsonArrayConst>()) {
     JsonArrayConst arr = doc["adcEnabled"].as<JsonArrayConst>();
     for (size_t i = 0; i < arr.size() && i < AUDIO_PIPELINE_MAX_INPUTS; i++)
-      appState.adcEnabled[i] = arr[i].as<bool>();
+      appState.audio.adcEnabled[i] = arr[i].as<bool>();
   }
 
 #ifdef USB_AUDIO_ENABLED
-  if (doc["usbAudio"].is<bool>()) appState.usbAudioEnabled = doc["usbAudio"].as<bool>();
+  if (doc["usbAudio"].is<bool>()) appState.usbAudio.enabled = doc["usbAudio"].as<bool>();
 #endif
 }
 
@@ -147,13 +149,13 @@ bool settingsMqttLoadedFromJson() { return _mqttLoadedFromJson; }
 static void applyMqttFromJson(const JsonDocument &doc) {
   if (!doc["mqtt"].is<JsonObjectConst>()) return;
   JsonObjectConst m = doc["mqtt"].as<JsonObjectConst>();
-  if (m["enabled"].is<bool>())        appState.mqttEnabled     = m["enabled"].as<bool>();
-  if (m["broker"].is<const char*>())  appState.mqttBroker      = m["broker"].as<const char*>();
-  if (m["port"].is<int>())            appState.mqttPort        = m["port"].as<int>();
-  if (m["username"].is<const char*>()) appState.mqttUsername   = m["username"].as<const char*>();
-  if (m["password"].is<const char*>()) appState.mqttPassword   = m["password"].as<const char*>();
-  if (m["baseTopic"].is<const char*>()) appState.mqttBaseTopic = m["baseTopic"].as<const char*>();
-  if (m["haDiscovery"].is<bool>())    appState.mqttHADiscovery = m["haDiscovery"].as<bool>();
+  if (m["enabled"].is<bool>())        appState.mqtt.enabled     = m["enabled"].as<bool>();
+  if (m["broker"].is<const char*>())  appState.mqtt.broker      = m["broker"].as<const char*>();
+  if (m["port"].is<int>())            appState.mqtt.port        = m["port"].as<int>();
+  if (m["username"].is<const char*>()) appState.mqtt.username   = m["username"].as<const char*>();
+  if (m["password"].is<const char*>()) appState.mqtt.password   = m["password"].as<const char*>();
+  if (m["baseTopic"].is<const char*>()) appState.mqtt.baseTopic = m["baseTopic"].as<const char*>();
+  if (m["haDiscovery"].is<bool>())    appState.mqtt.haDiscovery = m["haDiscovery"].as<bool>();
 }
 
 // Try loading settings from /config.json
@@ -218,23 +220,23 @@ static bool loadSettingsLegacy() {
 
   if (lines[dataStart].length() == 0) return false;
 
-  appState.autoUpdateEnabled = (lines[dataStart + 0].toInt() != 0);
-  if (lines[dataStart + 1].length() > 0) appState.timezoneOffset = lines[dataStart + 1].toInt();
-  if (lines[dataStart + 2].length() > 0) appState.dstOffset = lines[dataStart + 2].toInt();
-  if (lines[dataStart + 3].length() > 0) appState.darkMode = (lines[dataStart + 3].toInt() != 0);
-  if (lines[dataStart + 4].length() > 0) appState.enableCertValidation = (lines[dataStart + 4].toInt() != 0);
+  appState.ota.autoUpdateEnabled = (lines[dataStart + 0].toInt() != 0);
+  if (lines[dataStart + 1].length() > 0) appState.general.timezoneOffset = lines[dataStart + 1].toInt();
+  if (lines[dataStart + 2].length() > 0) appState.general.dstOffset = lines[dataStart + 2].toInt();
+  if (lines[dataStart + 3].length() > 0) appState.general.darkMode = (lines[dataStart + 3].toInt() != 0);
+  if (lines[dataStart + 4].length() > 0) appState.general.enableCertValidation = (lines[dataStart + 4].toInt() != 0);
 
   if (lines[dataStart + 5].length() > 0) {
     unsigned long interval = lines[dataStart + 5].toInt();
     if (interval == 1000 || interval == 2000 || interval == 3000 ||
         interval == 5000 || interval == 10000)
-      appState.hardwareStatsInterval = interval;
+      appState.debug.hardwareStatsInterval = interval;
   }
 
   if (lines[dataStart + 6].length() > 0) {
-    appState.autoAPEnabled = (lines[dataStart + 6].toInt() != 0);
+    appState.wifi.autoAPEnabled = (lines[dataStart + 6].toInt() != 0);
   } else {
-    appState.autoAPEnabled = true;
+    appState.wifi.autoAPEnabled = true;
   }
 
 #ifdef GUI_ENABLED
@@ -249,17 +251,17 @@ static bool loadSettingsLegacy() {
     unsigned long timeout = lines[dataStart + 9].toInt();
     if (timeout == 0 || timeout == 30000 || timeout == 60000 ||
         timeout == 300000 || timeout == 600000)
-      appState.screenTimeout = timeout;
+      appState.display.screenTimeout = timeout;
   }
 
-  if (lines[dataStart + 10].length() > 0) appState.buzzerEnabled = (lines[dataStart + 10].toInt() != 0);
+  if (lines[dataStart + 10].length() > 0) appState.buzzer.enabled = (lines[dataStart + 10].toInt() != 0);
   if (lines[dataStart + 11].length() > 0) {
     int vol = lines[dataStart + 11].toInt();
-    if (vol >= 0 && vol <= 2) appState.buzzerVolume = vol;
+    if (vol >= 0 && vol <= 2) appState.buzzer.volume = vol;
   }
   if (lines[dataStart + 12].length() > 0) {
     int bright = lines[dataStart + 12].toInt();
-    if (bright >= 1 && bright <= 255) appState.backlightBrightness = (uint8_t)bright;
+    if (bright >= 1 && bright <= 255) appState.display.backlightBrightness = (uint8_t)bright;
   }
 
   if (lines[dataStart + 13].length() > 0) {
@@ -268,53 +270,53 @@ static bool loadSettingsLegacy() {
       // Legacy "disabled" value
     } else if (dimVal == 5000 || dimVal == 10000 || dimVal == 15000 ||
                dimVal == 30000 || dimVal == 60000) {
-      appState.dimTimeout = dimVal;
+      appState.display.dimTimeout = dimVal;
     }
   }
   if (lines[dataStart + 14].length() > 0) {
     int dimBright = lines[dataStart + 14].toInt();
     if (dimBright == 26 || dimBright == 64 || dimBright == 128 || dimBright == 191)
-      appState.dimBrightness = (uint8_t)dimBright;
+      appState.display.dimBrightness = (uint8_t)dimBright;
   }
-  if (lines[dataStart + 15].length() > 0) appState.dimEnabled = (lines[dataStart + 15] == "1");
+  if (lines[dataStart + 15].length() > 0) appState.display.dimEnabled = (lines[dataStart + 15] == "1");
 
   if (lines[dataStart + 16].length() > 0) {
     int rate = lines[dataStart + 16].toInt();
-    if (rate == 33 || rate == 50 || rate == 100) appState.audioUpdateRate = (uint16_t)rate;
+    if (rate == 33 || rate == 50 || rate == 100) appState.audio.updateRate = (uint16_t)rate;
   }
 
-  if (lines[dataStart + 17].length() > 0) appState.vuMeterEnabled = (lines[dataStart + 17].toInt() != 0);
-  if (lines[dataStart + 18].length() > 0) appState.waveformEnabled = (lines[dataStart + 18].toInt() != 0);
-  if (lines[dataStart + 19].length() > 0) appState.spectrumEnabled = (lines[dataStart + 19].toInt() != 0);
+  if (lines[dataStart + 17].length() > 0) appState.audio.vuMeterEnabled = (lines[dataStart + 17].toInt() != 0);
+  if (lines[dataStart + 18].length() > 0) appState.audio.waveformEnabled = (lines[dataStart + 18].toInt() != 0);
+  if (lines[dataStart + 19].length() > 0) appState.audio.spectrumEnabled = (lines[dataStart + 19].toInt() != 0);
 
-  if (lines[dataStart + 20].length() > 0) appState.debugMode = (lines[dataStart + 20].toInt() != 0);
+  if (lines[dataStart + 20].length() > 0) appState.debug.debugMode = (lines[dataStart + 20].toInt() != 0);
   if (lines[dataStart + 21].length() > 0) {
     int level = lines[dataStart + 21].toInt();
-    if (level >= 0 && level <= 3) appState.debugSerialLevel = level;
+    if (level >= 0 && level <= 3) appState.debug.serialLevel = level;
   }
-  if (lines[dataStart + 22].length() > 0) appState.debugHwStats = (lines[dataStart + 22].toInt() != 0);
-  if (lines[dataStart + 23].length() > 0) appState.debugI2sMetrics = (lines[dataStart + 23].toInt() != 0);
-  if (lines[dataStart + 24].length() > 0) appState.debugTaskMonitor = (lines[dataStart + 24].toInt() != 0);
+  if (lines[dataStart + 22].length() > 0) appState.debug.hwStats = (lines[dataStart + 22].toInt() != 0);
+  if (lines[dataStart + 23].length() > 0) appState.debug.i2sMetrics = (lines[dataStart + 23].toInt() != 0);
+  if (lines[dataStart + 24].length() > 0) appState.debug.taskMonitor = (lines[dataStart + 24].toInt() != 0);
   if (lines[dataStart + 25].length() > 0) {
     int wt = lines[dataStart + 25].toInt();
-    if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.fftWindowType = (FftWindowType)wt;
+    if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.audio.fftWindowType = (FftWindowType)wt;
   }
 
   if (lines[dataStart + 26].length() > 0) {
     int commaIdx = lines[dataStart + 26].indexOf(',');
     if (commaIdx > 0) {
-      appState.adcEnabled[0] = (lines[dataStart + 26].substring(0, commaIdx).toInt() != 0);
-      appState.adcEnabled[1] = (lines[dataStart + 26].substring(commaIdx + 1).toInt() != 0);
+      appState.audio.adcEnabled[0] = (lines[dataStart + 26].substring(0, commaIdx).toInt() != 0);
+      appState.audio.adcEnabled[1] = (lines[dataStart + 26].substring(commaIdx + 1).toInt() != 0);
     } else {
       bool val = (lines[dataStart + 26].toInt() != 0);
-      appState.adcEnabled[0] = val;
-      appState.adcEnabled[1] = val;
+      appState.audio.adcEnabled[0] = val;
+      appState.audio.adcEnabled[1] = val;
     }
   }
 
 #ifdef USB_AUDIO_ENABLED
   if (lines[dataStart + 27].length() > 0)
-    appState.usbAudioEnabled = (lines[dataStart + 27].toInt() != 0);
+    appState.usbAudio.enabled = (lines[dataStart + 27].toInt() != 0);
 #endif
 
   return true;
@@ -366,13 +368,13 @@ void checkDeferredSettingsSave() {
 void saveSettings() {
   JsonDocument doc;
   doc["version"] = 1;
-  doc["autoUpdate"] = appState.autoUpdateEnabled;
-  doc["timezone"] = appState.timezoneOffset;
-  doc["dst"] = appState.dstOffset;
-  doc["darkMode"] = appState.darkMode;
-  doc["certValidation"] = appState.enableCertValidation;
-  doc["hwStatsInterval"] = appState.hardwareStatsInterval;
-  doc["autoAP"] = appState.autoAPEnabled;
+  doc["autoUpdate"] = appState.ota.autoUpdateEnabled;
+  doc["timezone"] = appState.general.timezoneOffset;
+  doc["dst"] = appState.general.dstOffset;
+  doc["darkMode"] = appState.general.darkMode;
+  doc["certValidation"] = appState.general.enableCertValidation;
+  doc["hwStatsInterval"] = appState.debug.hardwareStatsInterval;
+  doc["autoAP"] = appState.wifi.autoAPEnabled;
 #ifdef GUI_ENABLED
   doc["bootAnim"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -380,29 +382,29 @@ void saveSettings() {
   doc["bootAnim"] = true;
   doc["bootAnimStyle"] = 0;
 #endif
-  doc["screenTimeout"] = appState.screenTimeout;
-  doc["buzzer"] = appState.buzzerEnabled;
-  doc["buzzerVol"] = appState.buzzerVolume;
-  doc["backlight"] = appState.backlightBrightness;
-  doc["dimTimeout"] = appState.dimTimeout;
-  doc["dimBright"] = appState.dimBrightness;
-  doc["dimEnabled"] = appState.dimEnabled;
-  doc["audioRate"] = appState.audioUpdateRate;
-  doc["vuMeter"] = appState.vuMeterEnabled;
-  doc["waveform"] = appState.waveformEnabled;
-  doc["spectrum"] = appState.spectrumEnabled;
-  doc["debugMode"] = appState.debugMode;
-  doc["debugSerial"] = appState.debugSerialLevel;
-  doc["debugHwStats"] = appState.debugHwStats;
-  doc["debugI2s"] = appState.debugI2sMetrics;
-  doc["debugTasks"] = appState.debugTaskMonitor;
-  doc["fftWindow"] = (int)appState.fftWindowType;
+  doc["screenTimeout"] = appState.display.screenTimeout;
+  doc["buzzer"] = appState.buzzer.enabled;
+  doc["buzzerVol"] = appState.buzzer.volume;
+  doc["backlight"] = appState.display.backlightBrightness;
+  doc["dimTimeout"] = appState.display.dimTimeout;
+  doc["dimBright"] = appState.display.dimBrightness;
+  doc["dimEnabled"] = appState.display.dimEnabled;
+  doc["audioRate"] = appState.audio.updateRate;
+  doc["vuMeter"] = appState.audio.vuMeterEnabled;
+  doc["waveform"] = appState.audio.waveformEnabled;
+  doc["spectrum"] = appState.audio.spectrumEnabled;
+  doc["debugMode"] = appState.debug.debugMode;
+  doc["debugSerial"] = appState.debug.serialLevel;
+  doc["debugHwStats"] = appState.debug.hwStats;
+  doc["debugI2s"] = appState.debug.i2sMetrics;
+  doc["debugTasks"] = appState.debug.taskMonitor;
+  doc["fftWindow"] = (int)appState.audio.fftWindowType;
   {
     JsonArray adcArr = doc["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.audio.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
-  doc["usbAudio"] = appState.usbAudioEnabled;
+  doc["usbAudio"] = appState.usbAudio.enabled;
 #else
   doc["usbAudio"] = false;
 #endif
@@ -425,13 +427,13 @@ void saveSettings() {
   {
     Preferences wifiPrefs;
     wifiPrefs.begin("wifi-list", false);
-    wifiPrefs.putUChar("wifiMinSec", appState.wifiMinSecurity);
+    wifiPrefs.putUChar("wifiMinSec", appState.wifi.minSecurity);
     wifiPrefs.end();
   }
   {
     Preferences otaPrefs;
     otaPrefs.begin("ota-prefs", false);
-    otaPrefs.putUChar("otaChannel", appState.otaChannel);
+    otaPrefs.putUChar("otaChannel", appState.ota.channel);
     otaPrefs.end();
   }
   {
@@ -469,31 +471,31 @@ bool loadSignalGenSettings() {
 
   if (line1.length() > 0) {
     int wf = line1.toInt();
-    if (wf >= 0 && wf <= 3) appState.sigGenWaveform = wf;
+    if (wf >= 0 && wf <= 3) appState.sigGen.waveform = wf;
   }
   if (line2.length() > 0) {
     float freq = line2.toFloat();
-    if (freq >= 1.0f && freq <= 22000.0f) appState.sigGenFrequency = freq;
+    if (freq >= 1.0f && freq <= 22000.0f) appState.sigGen.frequency = freq;
   }
   if (line3.length() > 0) {
     float amp = line3.toFloat();
-    if (amp >= -96.0f && amp <= 0.0f) appState.sigGenAmplitude = amp;
+    if (amp >= -96.0f && amp <= 0.0f) appState.sigGen.amplitude = amp;
   }
   if (line4.length() > 0) {
     int ch = line4.toInt();
-    if (ch >= 0 && ch <= 2) appState.sigGenChannel = ch;
+    if (ch >= 0 && ch <= 2) appState.sigGen.channel = ch;
   }
   if (line5.length() > 0) {
     int mode = line5.toInt();
-    if (mode >= 0 && mode <= 1) appState.sigGenOutputMode = mode;
+    if (mode >= 0 && mode <= 1) appState.sigGen.outputMode = mode;
   }
   if (line6.length() > 0) {
     float speed = line6.toFloat();
-    if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
+    if (speed >= 1.0f && speed <= 22000.0f) appState.sigGen.sweepSpeed = speed;
   }
 
   // Always boot disabled regardless of saved state
-  appState.sigGenEnabled = false;
+  appState.sigGen.enabled = false;
 
   LOG_I("[Settings] Signal generator settings loaded");
   return true;
@@ -506,12 +508,12 @@ void saveSignalGenSettings() {
     return;
   }
 
-  file.println(appState.sigGenWaveform);
-  file.println(String(appState.sigGenFrequency, 1));
-  file.println(String(appState.sigGenAmplitude, 1));
-  file.println(appState.sigGenChannel);
-  file.println(appState.sigGenOutputMode);
-  file.println(String(appState.sigGenSweepSpeed, 1));
+  file.println(appState.sigGen.waveform);
+  file.println(String(appState.sigGen.frequency, 1));
+  file.println(String(appState.sigGen.amplitude, 1));
+  file.println(appState.sigGen.channel);
+  file.println(appState.sigGen.outputMode);
+  file.println(String(appState.sigGen.sweepSpeed, 1));
   file.close();
   LOG_I("[Settings] Signal generator settings saved");
 }
@@ -549,7 +551,7 @@ bool loadInputNames() {
       file.close();
     // Set defaults
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-      appState.inputNames[i] = INPUT_NAME_DEFAULTS[i];
+      appState.audio.inputNames[i] = INPUT_NAME_DEFAULTS[i];
     }
     return false;
   }
@@ -557,7 +559,7 @@ bool loadInputNames() {
   for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     String line = file.readStringUntil('\n');
     line.trim();
-    appState.inputNames[i] =
+    appState.audio.inputNames[i] =
         (line.length() > 0) ? line : String(INPUT_NAME_DEFAULTS[i]);
   }
   file.close();
@@ -573,7 +575,7 @@ void saveInputNames() {
   }
 
   for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-    file.println(appState.inputNames[i]);
+    file.println(appState.audio.inputNames[i]);
   }
   file.close();
   LOG_I("[Settings] Input names saved");
@@ -583,7 +585,7 @@ void saveInputNames() {
 
 void performFactoryReset() {
   LOG_W("[Settings] Factory reset initiated");
-  appState.factoryResetInProgress = true;
+  appState.general.factoryResetInProgress = true;
 
   // Visual feedback: solid LED
   digitalWrite(LED_PIN, HIGH);
@@ -615,8 +617,8 @@ void performFactoryReset() {
   LittleFS.end();
 
   // 4. Force AP Mode defaults for next boot
-  appState.apEnabled = true;
-  appState.isAPMode = true;
+  appState.wifi.apEnabled = true;
+  appState.wifi.isAPMode = true;
 
   LOG_W("[Settings] Factory reset complete");
 
@@ -654,41 +656,41 @@ void performFactoryReset() {
 void handleSettingsGet() {
   JsonDocument doc;
   doc["success"] = true;
-  doc["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
-  doc["appState.timezoneOffset"] = appState.timezoneOffset;
-  doc["appState.dstOffset"] = appState.dstOffset;
-  doc["appState.darkMode"] = appState.darkMode;
-  doc["appState.enableCertValidation"] = appState.enableCertValidation;
-  doc["appState.autoAPEnabled"] = appState.autoAPEnabled;
-  doc["appState.hardwareStatsInterval"] =
-      appState.hardwareStatsInterval / 1000; // Send as seconds
-  doc["audioUpdateRate"] = appState.audioUpdateRate;
-  doc["screenTimeout"] = appState.screenTimeout / 1000; // Send as seconds
-  doc["backlightOn"] = appState.backlightOn;
-  doc["buzzerEnabled"] = appState.buzzerEnabled;
-  doc["buzzerVolume"] = appState.buzzerVolume;
-  doc["backlightBrightness"] = appState.backlightBrightness;
-  doc["dimEnabled"] = appState.dimEnabled;
-  doc["dimTimeout"] = appState.dimTimeout / 1000;
-  doc["dimBrightness"] = appState.dimBrightness;
-  doc["debugMode"] = appState.debugMode;
-  doc["debugSerialLevel"] = appState.debugSerialLevel;
-  doc["debugHwStats"] = appState.debugHwStats;
-  doc["debugI2sMetrics"] = appState.debugI2sMetrics;
-  doc["debugTaskMonitor"] = appState.debugTaskMonitor;
-  doc["fftWindowType"] = (int)appState.fftWindowType;
+  doc["appState.autoUpdateEnabled"] = appState.ota.autoUpdateEnabled;
+  doc["appState.timezoneOffset"] = appState.general.timezoneOffset;
+  doc["appState.dstOffset"] = appState.general.dstOffset;
+  doc["appState.darkMode"] = appState.general.darkMode;
+  doc["appState.enableCertValidation"] = appState.general.enableCertValidation;
+  doc["appState.autoAPEnabled"] = appState.wifi.autoAPEnabled;
+  doc["appState.debug.hardwareStatsInterval"] =
+      appState.debug.hardwareStatsInterval / 1000; // Send as seconds
+  doc["audioUpdateRate"] = appState.audio.updateRate;
+  doc["screenTimeout"] = appState.display.screenTimeout / 1000; // Send as seconds
+  doc["backlightOn"] = appState.display.backlightOn;
+  doc["buzzerEnabled"] = appState.buzzer.enabled;
+  doc["buzzerVolume"] = appState.buzzer.volume;
+  doc["backlightBrightness"] = appState.display.backlightBrightness;
+  doc["dimEnabled"] = appState.display.dimEnabled;
+  doc["dimTimeout"] = appState.display.dimTimeout / 1000;
+  doc["dimBrightness"] = appState.display.dimBrightness;
+  doc["debugMode"] = appState.debug.debugMode;
+  doc["debugSerialLevel"] = appState.debug.serialLevel;
+  doc["debugHwStats"] = appState.debug.hwStats;
+  doc["debugI2sMetrics"] = appState.debug.i2sMetrics;
+  doc["debugTaskMonitor"] = appState.debug.taskMonitor;
+  doc["fftWindowType"] = (int)appState.audio.fftWindowType;
   {
     JsonArray adcArr = doc["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.audio.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
-  doc["usbAudioEnabled"] = appState.usbAudioEnabled;
+  doc["usbAudioEnabled"] = appState.usbAudio.enabled;
 #endif
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
 #endif
-  doc["otaChannel"] = appState.otaChannel;
+  doc["otaChannel"] = appState.ota.channel;
 
   String json;
   serializeJson(doc, json);
@@ -714,7 +716,7 @@ void handleSettingsUpdate() {
   bool settingsChanged = false;
 
   if (doc["appState.autoUpdateEnabled"].is<bool>()) {
-    appState.autoUpdateEnabled = doc["appState.autoUpdateEnabled"].as<bool>();
+    appState.ota.autoUpdateEnabled = doc["appState.autoUpdateEnabled"].as<bool>();
     settingsChanged = true;
   }
 
@@ -722,8 +724,8 @@ void handleSettingsUpdate() {
 
   if (doc["appState.timezoneOffset"].is<int>()) {
     int newOffset = doc["appState.timezoneOffset"].as<int>();
-    if (newOffset != appState.timezoneOffset) {
-      appState.timezoneOffset = newOffset;
+    if (newOffset != appState.general.timezoneOffset) {
+      appState.general.timezoneOffset = newOffset;
       settingsChanged = true;
       timezoneChanged = true;
     }
@@ -731,8 +733,8 @@ void handleSettingsUpdate() {
 
   if (doc["appState.dstOffset"].is<int>()) {
     int newDstOffset = doc["appState.dstOffset"].as<int>();
-    if (newDstOffset != appState.dstOffset) {
-      appState.dstOffset = newDstOffset;
+    if (newDstOffset != appState.general.dstOffset) {
+      appState.general.dstOffset = newDstOffset;
       settingsChanged = true;
       timezoneChanged = true;
     }
@@ -745,30 +747,30 @@ void handleSettingsUpdate() {
 
   if (doc["appState.darkMode"].is<bool>()) {
     bool newDarkMode = doc["appState.darkMode"].as<bool>();
-    if (newDarkMode != appState.darkMode) {
-      appState.darkMode = newDarkMode;
+    if (newDarkMode != appState.general.darkMode) {
+      appState.general.darkMode = newDarkMode;
       settingsChanged = true;
     }
   }
 
   if (doc["appState.enableCertValidation"].is<bool>()) {
     bool newCertValidation = doc["appState.enableCertValidation"].as<bool>();
-    if (newCertValidation != appState.enableCertValidation) {
-      appState.enableCertValidation = newCertValidation;
+    if (newCertValidation != appState.general.enableCertValidation) {
+      appState.general.enableCertValidation = newCertValidation;
       settingsChanged = true;
       LOG_I("[Settings] Certificate validation %s",
-            appState.enableCertValidation ? "ENABLED" : "DISABLED");
+            appState.general.enableCertValidation ? "ENABLED" : "DISABLED");
     }
   }
 
-  if (doc["appState.hardwareStatsInterval"].is<int>()) {
-    int newInterval = doc["appState.hardwareStatsInterval"].as<int>();
+  if (doc["appState.debug.hardwareStatsInterval"].is<int>()) {
+    int newInterval = doc["appState.debug.hardwareStatsInterval"].as<int>();
     // Validate: only allow 1, 2, 3, 5, or 10 seconds
     if (newInterval == 1 || newInterval == 2 || newInterval == 3 ||
         newInterval == 5 || newInterval == 10) {
       unsigned long newIntervalMs = newInterval * 1000UL;
-      if (newIntervalMs != appState.hardwareStatsInterval) {
-        appState.hardwareStatsInterval = newIntervalMs;
+      if (newIntervalMs != appState.debug.hardwareStatsInterval) {
+        appState.debug.hardwareStatsInterval = newIntervalMs;
         settingsChanged = true;
         LOG_I("[Settings] Hardware stats interval set to %d seconds",
               newInterval);
@@ -779,8 +781,8 @@ void handleSettingsUpdate() {
   if (doc["audioUpdateRate"].is<int>()) {
     int newRate = doc["audioUpdateRate"].as<int>();
     if (newRate == 33 || newRate == 50 || newRate == 100) {
-      if ((uint16_t)newRate != appState.audioUpdateRate) {
-        appState.audioUpdateRate = (uint16_t)newRate;
+      if ((uint16_t)newRate != appState.audio.updateRate) {
+        appState.audio.updateRate = (uint16_t)newRate;
         settingsChanged = true;
         LOG_I("[Settings] Audio update rate set to %d ms", newRate);
       }
@@ -789,10 +791,10 @@ void handleSettingsUpdate() {
 
   if (doc["appState.autoAPEnabled"].is<bool>()) {
     bool newAutoAP = doc["appState.autoAPEnabled"].as<bool>();
-    if (newAutoAP != appState.autoAPEnabled) {
-      appState.autoAPEnabled = newAutoAP;
+    if (newAutoAP != appState.wifi.autoAPEnabled) {
+      appState.wifi.autoAPEnabled = newAutoAP;
       settingsChanged = true;
-      LOG_I("[Settings] Auto AP %s", appState.autoAPEnabled ? "enabled" : "disabled");
+      LOG_I("[Settings] Auto AP %s", appState.wifi.autoAPEnabled ? "enabled" : "disabled");
     }
   }
 
@@ -802,7 +804,7 @@ void handleSettingsUpdate() {
     unsigned long newTimeoutMs = (unsigned long)newTimeoutSec * 1000UL;
     if (newTimeoutMs == 0 || newTimeoutMs == 30000 || newTimeoutMs == 60000 ||
         newTimeoutMs == 300000 || newTimeoutMs == 600000) {
-      if (newTimeoutMs != appState.screenTimeout) {
+      if (newTimeoutMs != appState.display.screenTimeout) {
         appState.setScreenTimeout(newTimeoutMs);
         settingsChanged = true;
         LOG_I("[Settings] Screen timeout set to %d seconds", newTimeoutSec);
@@ -812,7 +814,7 @@ void handleSettingsUpdate() {
 
   if (doc["backlightOn"].is<bool>()) {
     bool newBacklight = doc["backlightOn"].as<bool>();
-    if (newBacklight != appState.backlightOn) {
+    if (newBacklight != appState.display.backlightOn) {
       appState.setBacklightOn(newBacklight);
       LOG_I("[Settings] Backlight set to %s", newBacklight ? "ON" : "OFF");
     }
@@ -821,7 +823,7 @@ void handleSettingsUpdate() {
 
   if (doc["buzzerEnabled"].is<bool>()) {
     bool newBuzzer = doc["buzzerEnabled"].as<bool>();
-    if (newBuzzer != appState.buzzerEnabled) {
+    if (newBuzzer != appState.buzzer.enabled) {
       appState.setBuzzerEnabled(newBuzzer);
       settingsChanged = true;
       LOG_I("[Settings] Buzzer %s", newBuzzer ? "enabled" : "disabled");
@@ -830,7 +832,7 @@ void handleSettingsUpdate() {
 
   if (doc["buzzerVolume"].is<int>()) {
     int newVol = doc["buzzerVolume"].as<int>();
-    if (newVol >= 0 && newVol <= 2 && newVol != appState.buzzerVolume) {
+    if (newVol >= 0 && newVol <= 2 && newVol != appState.buzzer.volume) {
       appState.setBuzzerVolume(newVol);
       settingsChanged = true;
       LOG_I("[Settings] Buzzer volume set to %d", newVol);
@@ -840,7 +842,7 @@ void handleSettingsUpdate() {
   if (doc["backlightBrightness"].is<int>()) {
     int newBright = doc["backlightBrightness"].as<int>();
     if (newBright >= 1 && newBright <= 255 &&
-        (uint8_t)newBright != appState.backlightBrightness) {
+        (uint8_t)newBright != appState.display.backlightBrightness) {
       appState.setBacklightBrightness((uint8_t)newBright);
       settingsChanged = true;
       LOG_I("[Settings] Backlight brightness set to %d", newBright);
@@ -849,7 +851,7 @@ void handleSettingsUpdate() {
 
   if (doc["dimEnabled"].is<bool>()) {
     bool newDimEnabled = doc["dimEnabled"].as<bool>();
-    if (newDimEnabled != appState.dimEnabled) {
+    if (newDimEnabled != appState.display.dimEnabled) {
       appState.setDimEnabled(newDimEnabled);
       settingsChanged = true;
       LOG_I("[Settings] Dim %s", newDimEnabled ? "enabled" : "disabled");
@@ -861,7 +863,7 @@ void handleSettingsUpdate() {
     unsigned long newDimMs = (unsigned long)newDimSec * 1000UL;
     if (newDimMs == 5000 || newDimMs == 10000 ||
         newDimMs == 15000 || newDimMs == 30000 || newDimMs == 60000) {
-      if (newDimMs != appState.dimTimeout) {
+      if (newDimMs != appState.display.dimTimeout) {
         appState.setDimTimeout(newDimMs);
         settingsChanged = true;
       }
@@ -872,7 +874,7 @@ void handleSettingsUpdate() {
     int newDimBright = doc["dimBrightness"].as<int>();
     if ((newDimBright == 26 || newDimBright == 64 || newDimBright == 128 ||
          newDimBright == 191) &&
-        (uint8_t)newDimBright != appState.dimBrightness) {
+        (uint8_t)newDimBright != appState.display.dimBrightness) {
       appState.setDimBrightness((uint8_t)newDimBright);
       settingsChanged = true;
       LOG_I("[Settings] Dim brightness set to %d", newDimBright);
@@ -881,45 +883,45 @@ void handleSettingsUpdate() {
 
   if (doc["debugMode"].is<bool>()) {
     bool newVal = doc["debugMode"].as<bool>();
-    if (newVal != appState.debugMode) {
-      appState.debugMode = newVal;
-      applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+    if (newVal != appState.debug.debugMode) {
+      appState.debug.debugMode = newVal;
+      applyDebugSerialLevel(appState.debug.debugMode, appState.debug.serialLevel);
       settingsChanged = true;
     }
   }
   if (doc["debugSerialLevel"].is<int>()) {
     int newLevel = doc["debugSerialLevel"].as<int>();
-    if (newLevel >= 0 && newLevel <= 3 && newLevel != appState.debugSerialLevel) {
-      appState.debugSerialLevel = newLevel;
-      applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+    if (newLevel >= 0 && newLevel <= 3 && newLevel != appState.debug.serialLevel) {
+      appState.debug.serialLevel = newLevel;
+      applyDebugSerialLevel(appState.debug.debugMode, appState.debug.serialLevel);
       settingsChanged = true;
     }
   }
   if (doc["debugHwStats"].is<bool>()) {
     bool newVal = doc["debugHwStats"].as<bool>();
-    if (newVal != appState.debugHwStats) {
-      appState.debugHwStats = newVal;
+    if (newVal != appState.debug.hwStats) {
+      appState.debug.hwStats = newVal;
       settingsChanged = true;
     }
   }
   if (doc["debugI2sMetrics"].is<bool>()) {
     bool newVal = doc["debugI2sMetrics"].as<bool>();
-    if (newVal != appState.debugI2sMetrics) {
-      appState.debugI2sMetrics = newVal;
+    if (newVal != appState.debug.i2sMetrics) {
+      appState.debug.i2sMetrics = newVal;
       settingsChanged = true;
     }
   }
   if (doc["debugTaskMonitor"].is<bool>()) {
     bool newVal = doc["debugTaskMonitor"].as<bool>();
-    if (newVal != appState.debugTaskMonitor) {
-      appState.debugTaskMonitor = newVal;
+    if (newVal != appState.debug.taskMonitor) {
+      appState.debug.taskMonitor = newVal;
       settingsChanged = true;
     }
   }
   if (doc["fftWindowType"].is<int>()) {
     int newWt = doc["fftWindowType"].as<int>();
-    if (newWt >= 0 && newWt < FFT_WINDOW_COUNT && newWt != (int)appState.fftWindowType) {
-      appState.fftWindowType = (FftWindowType)newWt;
+    if (newWt >= 0 && newWt < FFT_WINDOW_COUNT && newWt != (int)appState.audio.fftWindowType) {
+      appState.audio.fftWindowType = (FftWindowType)newWt;
       settingsChanged = true;
     }
   }
@@ -928,8 +930,8 @@ void handleSettingsUpdate() {
     JsonArray arr = doc["adcEnabled"].as<JsonArray>();
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS && i < (int)arr.size(); i++) {
       bool newVal = arr[i].as<bool>();
-      if (newVal != appState.adcEnabled[i]) {
-        appState.adcEnabled[i] = newVal;
+      if (newVal != appState.audio.adcEnabled[i]) {
+        appState.audio.adcEnabled[i] = newVal;
         settingsChanged = true;
         LOG_I("[Settings] ADC%d %s", i + 1, newVal ? "enabled" : "disabled");
       }
@@ -938,8 +940,8 @@ void handleSettingsUpdate() {
     // Legacy single bool — apply to both
     bool newVal = doc["adcEnabled"].as<bool>();
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-      if (newVal != appState.adcEnabled[i]) {
-        appState.adcEnabled[i] = newVal;
+      if (newVal != appState.audio.adcEnabled[i]) {
+        appState.audio.adcEnabled[i] = newVal;
         settingsChanged = true;
       }
     }
@@ -948,8 +950,8 @@ void handleSettingsUpdate() {
 #ifdef USB_AUDIO_ENABLED
   if (doc["usbAudioEnabled"].is<bool>()) {
     bool newVal = doc["usbAudioEnabled"].as<bool>();
-    if (newVal != appState.usbAudioEnabled) {
-      appState.usbAudioEnabled = newVal;
+    if (newVal != appState.usbAudio.enabled) {
+      appState.usbAudio.enabled = newVal;
       settingsChanged = true;
       LOG_I("[Settings] USB Audio %s", newVal ? "enabled" : "disabled");
     }
@@ -981,8 +983,8 @@ void handleSettingsUpdate() {
 
   if (doc["otaChannel"].is<int>()) {
     uint8_t newChannel = (uint8_t)doc["otaChannel"].as<int>();
-    if (newChannel <= 1 && newChannel != appState.otaChannel) {
-      appState.otaChannel = newChannel;
+    if (newChannel <= 1 && newChannel != appState.ota.channel) {
+      appState.ota.channel = newChannel;
       settingsChanged = true;
       LOG_I("[Settings] OTA channel set to %s", newChannel == 0 ? "stable" : "beta");
     }
@@ -994,40 +996,40 @@ void handleSettingsUpdate() {
 
   JsonDocument resp;
   resp["success"] = true;
-  resp["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
-  resp["appState.timezoneOffset"] = appState.timezoneOffset;
-  resp["appState.dstOffset"] = appState.dstOffset;
-  resp["appState.darkMode"] = appState.darkMode;
-  resp["appState.enableCertValidation"] = appState.enableCertValidation;
-  resp["appState.autoAPEnabled"] = appState.autoAPEnabled;
-  resp["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval / 1000;
-  resp["audioUpdateRate"] = appState.audioUpdateRate;
-  resp["screenTimeout"] = appState.screenTimeout / 1000;
-  resp["backlightOn"] = appState.backlightOn;
-  resp["buzzerEnabled"] = appState.buzzerEnabled;
-  resp["buzzerVolume"] = appState.buzzerVolume;
-  resp["backlightBrightness"] = appState.backlightBrightness;
-  resp["dimEnabled"] = appState.dimEnabled;
-  resp["dimTimeout"] = appState.dimTimeout / 1000;
-  resp["dimBrightness"] = appState.dimBrightness;
-  resp["debugMode"] = appState.debugMode;
-  resp["debugSerialLevel"] = appState.debugSerialLevel;
-  resp["debugHwStats"] = appState.debugHwStats;
-  resp["debugI2sMetrics"] = appState.debugI2sMetrics;
-  resp["debugTaskMonitor"] = appState.debugTaskMonitor;
-  resp["fftWindowType"] = (int)appState.fftWindowType;
+  resp["appState.autoUpdateEnabled"] = appState.ota.autoUpdateEnabled;
+  resp["appState.timezoneOffset"] = appState.general.timezoneOffset;
+  resp["appState.dstOffset"] = appState.general.dstOffset;
+  resp["appState.darkMode"] = appState.general.darkMode;
+  resp["appState.enableCertValidation"] = appState.general.enableCertValidation;
+  resp["appState.autoAPEnabled"] = appState.wifi.autoAPEnabled;
+  resp["appState.debug.hardwareStatsInterval"] = appState.debug.hardwareStatsInterval / 1000;
+  resp["audioUpdateRate"] = appState.audio.updateRate;
+  resp["screenTimeout"] = appState.display.screenTimeout / 1000;
+  resp["backlightOn"] = appState.display.backlightOn;
+  resp["buzzerEnabled"] = appState.buzzer.enabled;
+  resp["buzzerVolume"] = appState.buzzer.volume;
+  resp["backlightBrightness"] = appState.display.backlightBrightness;
+  resp["dimEnabled"] = appState.display.dimEnabled;
+  resp["dimTimeout"] = appState.display.dimTimeout / 1000;
+  resp["dimBrightness"] = appState.display.dimBrightness;
+  resp["debugMode"] = appState.debug.debugMode;
+  resp["debugSerialLevel"] = appState.debug.serialLevel;
+  resp["debugHwStats"] = appState.debug.hwStats;
+  resp["debugI2sMetrics"] = appState.debug.i2sMetrics;
+  resp["debugTaskMonitor"] = appState.debug.taskMonitor;
+  resp["fftWindowType"] = (int)appState.audio.fftWindowType;
   {
     JsonArray adcArr = resp["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.audio.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
-  resp["usbAudioEnabled"] = appState.usbAudioEnabled;
+  resp["usbAudioEnabled"] = appState.usbAudio.enabled;
 #endif
 #ifdef GUI_ENABLED
   resp["bootAnimEnabled"] = appState.bootAnimEnabled;
   resp["bootAnimStyle"] = appState.bootAnimStyle;
 #endif
-  resp["otaChannel"] = appState.otaChannel;
+  resp["otaChannel"] = appState.ota.channel;
   String json;
   serializeJson(resp, json);
   server.send(200, "application/json", json);
@@ -1041,62 +1043,62 @@ void handleSettingsExport() {
   // Device info
   doc["deviceInfo"]["manufacturer"] = MANUFACTURER_NAME;
   doc["deviceInfo"]["model"] = MANUFACTURER_MODEL;
-  doc["deviceInfo"]["serialNumber"] = appState.deviceSerialNumber;
+  doc["deviceInfo"]["serialNumber"] = appState.general.deviceSerialNumber;
   doc["deviceInfo"]["firmwareVersion"] = firmwareVer;
   doc["deviceInfo"]["mac"] = WiFi.macAddress();
   doc["deviceInfo"]["chipId"] =
       String((uint32_t)(ESP.getEfuseMac() & 0xFFFFFFFF), HEX);
 
   // WiFi settings
-  doc["wifi"]["ssid"] = appState.wifiSSID;
-  doc["wifi"]["password"] = appState.wifiPassword;
+  doc["wifi"]["ssid"] = appState.wifi.ssid;
+  doc["wifi"]["password"] = appState.wifi.password;
 
   // AP settings
-  doc["accessPoint"]["enabled"] = appState.apEnabled;
-  doc["accessPoint"]["ssid"] = appState.apSSID;
-  doc["accessPoint"]["password"] = appState.apPassword;
-  doc["accessPoint"]["appState.autoAPEnabled"] = appState.autoAPEnabled;
+  doc["accessPoint"]["enabled"] = appState.wifi.apEnabled;
+  doc["accessPoint"]["ssid"] = appState.wifi.apSSID;
+  doc["accessPoint"]["password"] = appState.wifi.apPassword;
+  doc["accessPoint"]["appState.autoAPEnabled"] = appState.wifi.autoAPEnabled;
 
   // General settings
-  doc["settings"]["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
-  doc["settings"]["appState.timezoneOffset"] = appState.timezoneOffset;
-  doc["settings"]["appState.dstOffset"] = appState.dstOffset;
-  doc["settings"]["appState.darkMode"] = appState.darkMode;
-  doc["settings"]["appState.enableCertValidation"] = appState.enableCertValidation;
-  doc["settings"]["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval / 1000;
-  doc["settings"]["audioUpdateRate"] = appState.audioUpdateRate;
-  doc["settings"]["screenTimeout"] = appState.screenTimeout / 1000;
-  doc["settings"]["buzzerEnabled"] = appState.buzzerEnabled;
-  doc["settings"]["buzzerVolume"] = appState.buzzerVolume;
-  doc["settings"]["backlightBrightness"] = appState.backlightBrightness;
-  doc["settings"]["dimEnabled"] = appState.dimEnabled;
-  doc["settings"]["dimTimeout"] = appState.dimTimeout / 1000;
-  doc["settings"]["dimBrightness"] = appState.dimBrightness;
-  doc["settings"]["vuMeterEnabled"] = appState.vuMeterEnabled;
-  doc["settings"]["waveformEnabled"] = appState.waveformEnabled;
-  doc["settings"]["spectrumEnabled"] = appState.spectrumEnabled;
-  doc["settings"]["debugMode"] = appState.debugMode;
-  doc["settings"]["debugSerialLevel"] = appState.debugSerialLevel;
-  doc["settings"]["debugHwStats"] = appState.debugHwStats;
-  doc["settings"]["debugI2sMetrics"] = appState.debugI2sMetrics;
-  doc["settings"]["debugTaskMonitor"] = appState.debugTaskMonitor;
-  doc["settings"]["fftWindowType"] = (int)appState.fftWindowType;
+  doc["settings"]["appState.autoUpdateEnabled"] = appState.ota.autoUpdateEnabled;
+  doc["settings"]["appState.timezoneOffset"] = appState.general.timezoneOffset;
+  doc["settings"]["appState.dstOffset"] = appState.general.dstOffset;
+  doc["settings"]["appState.darkMode"] = appState.general.darkMode;
+  doc["settings"]["appState.enableCertValidation"] = appState.general.enableCertValidation;
+  doc["settings"]["appState.debug.hardwareStatsInterval"] = appState.debug.hardwareStatsInterval / 1000;
+  doc["settings"]["audioUpdateRate"] = appState.audio.updateRate;
+  doc["settings"]["screenTimeout"] = appState.display.screenTimeout / 1000;
+  doc["settings"]["buzzerEnabled"] = appState.buzzer.enabled;
+  doc["settings"]["buzzerVolume"] = appState.buzzer.volume;
+  doc["settings"]["backlightBrightness"] = appState.display.backlightBrightness;
+  doc["settings"]["dimEnabled"] = appState.display.dimEnabled;
+  doc["settings"]["dimTimeout"] = appState.display.dimTimeout / 1000;
+  doc["settings"]["dimBrightness"] = appState.display.dimBrightness;
+  doc["settings"]["vuMeterEnabled"] = appState.audio.vuMeterEnabled;
+  doc["settings"]["waveformEnabled"] = appState.audio.waveformEnabled;
+  doc["settings"]["spectrumEnabled"] = appState.audio.spectrumEnabled;
+  doc["settings"]["debugMode"] = appState.debug.debugMode;
+  doc["settings"]["debugSerialLevel"] = appState.debug.serialLevel;
+  doc["settings"]["debugHwStats"] = appState.debug.hwStats;
+  doc["settings"]["debugI2sMetrics"] = appState.debug.i2sMetrics;
+  doc["settings"]["debugTaskMonitor"] = appState.debug.taskMonitor;
+  doc["settings"]["fftWindowType"] = (int)appState.audio.fftWindowType;
   {
     JsonArray adcArr = doc["settings"]["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.audio.adcEnabled[i]);
   }
 #ifdef USB_AUDIO_ENABLED
-  doc["settings"]["usbAudioEnabled"] = appState.usbAudioEnabled;
+  doc["settings"]["usbAudioEnabled"] = appState.usbAudio.enabled;
 #endif
 #ifdef GUI_ENABLED
   doc["settings"]["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["settings"]["bootAnimStyle"] = appState.bootAnimStyle;
 #endif
-  doc["settings"]["otaChannel"] = appState.otaChannel;
+  doc["settings"]["otaChannel"] = appState.ota.channel;
 
   // Smart Sensing settings
   String modeStr;
-  switch (appState.currentMode) {
+  switch (appState.audio.currentMode) {
   case ALWAYS_ON:
     modeStr = "always_on";
     break;
@@ -1108,44 +1110,44 @@ void handleSettingsExport() {
     break;
   }
   doc["smartSensing"]["mode"] = modeStr;
-  doc["smartSensing"]["appState.timerDuration"] = appState.timerDuration;
-  doc["smartSensing"]["audioThreshold"] = appState.audioThreshold_dBFS;
-  doc["smartSensing"]["adcVref"] = appState.adcVref;
+  doc["smartSensing"]["appState.timerDuration"] = appState.audio.timerDuration;
+  doc["smartSensing"]["audioThreshold"] = appState.audio.threshold_dBFS;
+  doc["smartSensing"]["adcVref"] = appState.audio.adcVref;
 
   // Signal Generator settings
-  doc["signalGenerator"]["waveform"] = appState.sigGenWaveform;
-  doc["signalGenerator"]["frequency"] = appState.sigGenFrequency;
-  doc["signalGenerator"]["amplitude"] = appState.sigGenAmplitude;
-  doc["signalGenerator"]["channel"] = appState.sigGenChannel;
-  doc["signalGenerator"]["outputMode"] = appState.sigGenOutputMode;
-  doc["signalGenerator"]["sweepSpeed"] = appState.sigGenSweepSpeed;
+  doc["signalGenerator"]["waveform"] = appState.sigGen.waveform;
+  doc["signalGenerator"]["frequency"] = appState.sigGen.frequency;
+  doc["signalGenerator"]["amplitude"] = appState.sigGen.amplitude;
+  doc["signalGenerator"]["channel"] = appState.sigGen.channel;
+  doc["signalGenerator"]["outputMode"] = appState.sigGen.outputMode;
+  doc["signalGenerator"]["sweepSpeed"] = appState.sigGen.sweepSpeed;
 
 #ifdef DAC_ENABLED
   // DAC Output settings
-  doc["dacOutput"]["enabled"] = appState.dacEnabled;
-  doc["dacOutput"]["volume"] = appState.dacVolume;
-  doc["dacOutput"]["mute"] = appState.dacMute;
-  doc["dacOutput"]["deviceId"] = appState.dacDeviceId;
-  doc["dacOutput"]["modelName"] = appState.dacModelName;
-  doc["dacOutput"]["filterMode"] = appState.dacFilterMode;
-  doc["dacOutput"]["es8311Enabled"] = appState.es8311Enabled;
-  doc["dacOutput"]["es8311Volume"] = appState.es8311Volume;
-  doc["dacOutput"]["es8311Mute"] = appState.es8311Mute;
+  doc["dacOutput"]["enabled"] = appState.dac.enabled;
+  doc["dacOutput"]["volume"] = appState.dac.volume;
+  doc["dacOutput"]["mute"] = appState.dac.mute;
+  doc["dacOutput"]["deviceId"] = appState.dac.deviceId;
+  doc["dacOutput"]["modelName"] = appState.dac.modelName;
+  doc["dacOutput"]["filterMode"] = appState.dac.filterMode;
+  doc["dacOutput"]["es8311Enabled"] = appState.dac.es8311Enabled;
+  doc["dacOutput"]["es8311Volume"] = appState.dac.es8311Volume;
+  doc["dacOutput"]["es8311Mute"] = appState.dac.es8311Mute;
 #endif
 
   // Input channel names
   JsonArray names = doc["inputNames"].to<JsonArray>();
   for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-    names.add(appState.inputNames[i]);
+    names.add(appState.audio.inputNames[i]);
   }
 
   // MQTT settings (password excluded for security)
-  doc["mqtt"]["enabled"] = appState.mqttEnabled;
-  doc["mqtt"]["broker"] = appState.mqttBroker;
-  doc["mqtt"]["port"] = appState.mqttPort;
-  doc["mqtt"]["username"] = appState.mqttUsername;
-  doc["mqtt"]["baseTopic"] = appState.mqttBaseTopic;
-  doc["mqtt"]["haDiscovery"] = appState.mqttHADiscovery;
+  doc["mqtt"]["enabled"] = appState.mqtt.enabled;
+  doc["mqtt"]["broker"] = appState.mqtt.broker;
+  doc["mqtt"]["port"] = appState.mqtt.port;
+  doc["mqtt"]["username"] = appState.mqtt.username;
+  doc["mqtt"]["baseTopic"] = appState.mqtt.baseTopic;
+  doc["mqtt"]["haDiscovery"] = appState.mqtt.haDiscovery;
   // Note: Password is intentionally excluded from export for security
 
   // Note: Certificate management removed - now using Mozilla certificate bundle
@@ -1207,75 +1209,75 @@ void handleSettingsImport() {
   // Import WiFi settings
   if (!doc["wifi"].isNull()) {
     if (doc["wifi"]["ssid"].is<String>()) {
-      appState.wifiSSID = doc["wifi"]["ssid"].as<String>();
-      LOG_D("[Settings] WiFi SSID: %s", appState.wifiSSID.c_str());
+      appState.wifi.ssid = doc["wifi"]["ssid"].as<String>();
+      LOG_D("[Settings] WiFi SSID: %s", appState.wifi.ssid.c_str());
     }
     if (doc["wifi"]["password"].is<String>()) {
-      appState.wifiPassword = doc["wifi"]["password"].as<String>();
+      appState.wifi.password = doc["wifi"]["password"].as<String>();
       LOG_D("[Settings] WiFi password imported");
     }
     // Save WiFi credentials to multi-WiFi list
-    if (appState.wifiSSID.length() > 0) {
-      saveWiFiNetwork(appState.wifiSSID.c_str(), appState.wifiPassword.c_str());
+    if (appState.wifi.ssid.length() > 0) {
+      saveWiFiNetwork(appState.wifi.ssid.c_str(), appState.wifi.password.c_str());
     }
   }
 
   // Import AP settings
   if (!doc["accessPoint"].isNull()) {
     if (doc["accessPoint"]["enabled"].is<bool>()) {
-      appState.apEnabled = doc["accessPoint"]["enabled"].as<bool>();
-      LOG_D("[Settings] AP Enabled: %s", appState.apEnabled ? "true" : "false");
+      appState.wifi.apEnabled = doc["accessPoint"]["enabled"].as<bool>();
+      LOG_D("[Settings] AP Enabled: %s", appState.wifi.apEnabled ? "true" : "false");
     }
     if (doc["accessPoint"]["ssid"].is<String>()) {
-      appState.apSSID = doc["accessPoint"]["ssid"].as<String>();
-      LOG_D("[Settings] AP SSID: %s", appState.apSSID.c_str());
+      appState.wifi.apSSID = doc["accessPoint"]["ssid"].as<String>();
+      LOG_D("[Settings] AP SSID: %s", appState.wifi.apSSID.c_str());
     }
     if (doc["accessPoint"]["password"].is<String>()) {
-      appState.apPassword = doc["accessPoint"]["password"].as<String>();
+      appState.wifi.apPassword = doc["accessPoint"]["password"].as<String>();
       LOG_D("[Settings] AP password imported");
     }
     if (doc["accessPoint"]["appState.autoAPEnabled"].is<bool>()) {
-      appState.autoAPEnabled = doc["accessPoint"]["appState.autoAPEnabled"].as<bool>();
-      LOG_D("[Settings] Auto AP: %s", appState.autoAPEnabled ? "enabled" : "disabled");
+      appState.wifi.autoAPEnabled = doc["accessPoint"]["appState.autoAPEnabled"].as<bool>();
+      LOG_D("[Settings] Auto AP: %s", appState.wifi.autoAPEnabled ? "enabled" : "disabled");
     }
   }
 
   // Import general settings
   if (!doc["settings"].isNull()) {
     if (doc["settings"]["appState.autoUpdateEnabled"].is<bool>()) {
-      appState.autoUpdateEnabled = doc["settings"]["appState.autoUpdateEnabled"].as<bool>();
+      appState.ota.autoUpdateEnabled = doc["settings"]["appState.autoUpdateEnabled"].as<bool>();
       LOG_D("[Settings] Auto Update: %s",
-            appState.autoUpdateEnabled ? "enabled" : "disabled");
+            appState.ota.autoUpdateEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["appState.timezoneOffset"].is<int>()) {
-      appState.timezoneOffset = doc["settings"]["appState.timezoneOffset"].as<int>();
-      LOG_D("[Settings] Timezone Offset: %d", appState.timezoneOffset);
+      appState.general.timezoneOffset = doc["settings"]["appState.timezoneOffset"].as<int>();
+      LOG_D("[Settings] Timezone Offset: %d", appState.general.timezoneOffset);
     }
     if (doc["settings"]["appState.dstOffset"].is<int>()) {
-      appState.dstOffset = doc["settings"]["appState.dstOffset"].as<int>();
-      LOG_D("[Settings] DST Offset: %d", appState.dstOffset);
+      appState.general.dstOffset = doc["settings"]["appState.dstOffset"].as<int>();
+      LOG_D("[Settings] DST Offset: %d", appState.general.dstOffset);
     }
     if (doc["settings"]["appState.darkMode"].is<bool>()) {
-      appState.darkMode = doc["settings"]["appState.darkMode"].as<bool>();
-      LOG_D("[Settings] Dark Mode: %s", appState.darkMode ? "enabled" : "disabled");
+      appState.general.darkMode = doc["settings"]["appState.darkMode"].as<bool>();
+      LOG_D("[Settings] Dark Mode: %s", appState.general.darkMode ? "enabled" : "disabled");
     }
     if (doc["settings"]["appState.enableCertValidation"].is<bool>()) {
-      appState.enableCertValidation = doc["settings"]["appState.enableCertValidation"].as<bool>();
+      appState.general.enableCertValidation = doc["settings"]["appState.enableCertValidation"].as<bool>();
       LOG_D("[Settings] Cert Validation: %s",
-            appState.enableCertValidation ? "enabled" : "disabled");
+            appState.general.enableCertValidation ? "enabled" : "disabled");
     }
-    if (doc["settings"]["appState.hardwareStatsInterval"].is<int>()) {
-      int interval = doc["settings"]["appState.hardwareStatsInterval"].as<int>();
+    if (doc["settings"]["appState.debug.hardwareStatsInterval"].is<int>()) {
+      int interval = doc["settings"]["appState.debug.hardwareStatsInterval"].as<int>();
       if (interval == 1 || interval == 2 || interval == 3 || interval == 5 ||
           interval == 10) {
-        appState.hardwareStatsInterval = interval * 1000UL;
+        appState.debug.hardwareStatsInterval = interval * 1000UL;
         LOG_D("[Settings] Hardware Stats Interval: %d seconds", interval);
       }
     }
     if (doc["settings"]["audioUpdateRate"].is<int>()) {
       int rate = doc["settings"]["audioUpdateRate"].as<int>();
       if (rate == 33 || rate == 50 || rate == 100) {
-        appState.audioUpdateRate = (uint16_t)rate;
+        appState.audio.updateRate = (uint16_t)rate;
         LOG_D("[Settings] Audio Update Rate: %d ms", rate);
       }
     }
@@ -1284,39 +1286,39 @@ void handleSettingsImport() {
       unsigned long timeoutMs = (unsigned long)timeoutSec * 1000UL;
       if (timeoutMs == 0 || timeoutMs == 30000 || timeoutMs == 60000 ||
           timeoutMs == 300000 || timeoutMs == 600000) {
-        appState.screenTimeout = timeoutMs;
+        appState.display.screenTimeout = timeoutMs;
         LOG_D("[Settings] Screen Timeout: %d seconds", timeoutSec);
       }
     }
     if (doc["settings"]["buzzerEnabled"].is<bool>()) {
-      appState.buzzerEnabled = doc["settings"]["buzzerEnabled"].as<bool>();
+      appState.buzzer.enabled = doc["settings"]["buzzerEnabled"].as<bool>();
       LOG_D("[Settings] Buzzer: %s",
-            appState.buzzerEnabled ? "enabled" : "disabled");
+            appState.buzzer.enabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["buzzerVolume"].is<int>()) {
       int vol = doc["settings"]["buzzerVolume"].as<int>();
       if (vol >= 0 && vol <= 2) {
-        appState.buzzerVolume = vol;
+        appState.buzzer.volume = vol;
         LOG_D("[Settings] Buzzer Volume: %d", vol);
       }
     }
     if (doc["settings"]["backlightBrightness"].is<int>()) {
       int bright = doc["settings"]["backlightBrightness"].as<int>();
       if (bright >= 1 && bright <= 255) {
-        appState.backlightBrightness = (uint8_t)bright;
+        appState.display.backlightBrightness = (uint8_t)bright;
         LOG_D("[Settings] Backlight Brightness: %d", bright);
       }
     }
     if (doc["settings"]["dimEnabled"].is<bool>()) {
-      appState.dimEnabled = doc["settings"]["dimEnabled"].as<bool>();
-      LOG_D("[Settings] Dim: %s", appState.dimEnabled ? "enabled" : "disabled");
+      appState.display.dimEnabled = doc["settings"]["dimEnabled"].as<bool>();
+      LOG_D("[Settings] Dim: %s", appState.display.dimEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["dimTimeout"].is<int>()) {
       int dimSec = doc["settings"]["dimTimeout"].as<int>();
       unsigned long dimMs = (unsigned long)dimSec * 1000UL;
       if (dimMs == 5000 || dimMs == 10000 || dimMs == 15000 ||
           dimMs == 30000 || dimMs == 60000) {
-        appState.dimTimeout = dimMs;
+        appState.display.dimTimeout = dimMs;
         LOG_D("[Settings] Dim Timeout: %d seconds", dimSec);
       }
     }
@@ -1324,57 +1326,57 @@ void handleSettingsImport() {
       int dimBright = doc["settings"]["dimBrightness"].as<int>();
       if (dimBright == 26 || dimBright == 64 || dimBright == 128 ||
           dimBright == 191) {
-        appState.dimBrightness = (uint8_t)dimBright;
+        appState.display.dimBrightness = (uint8_t)dimBright;
         LOG_D("[Settings] Dim Brightness: %d", dimBright);
       }
     }
     if (doc["settings"]["vuMeterEnabled"].is<bool>()) {
-      appState.vuMeterEnabled = doc["settings"]["vuMeterEnabled"].as<bool>();
-      LOG_D("[Settings] VU Meter: %s", appState.vuMeterEnabled ? "enabled" : "disabled");
+      appState.audio.vuMeterEnabled = doc["settings"]["vuMeterEnabled"].as<bool>();
+      LOG_D("[Settings] VU Meter: %s", appState.audio.vuMeterEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["waveformEnabled"].is<bool>()) {
-      appState.waveformEnabled = doc["settings"]["waveformEnabled"].as<bool>();
-      LOG_D("[Settings] Waveform: %s", appState.waveformEnabled ? "enabled" : "disabled");
+      appState.audio.waveformEnabled = doc["settings"]["waveformEnabled"].as<bool>();
+      LOG_D("[Settings] Waveform: %s", appState.audio.waveformEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["spectrumEnabled"].is<bool>()) {
-      appState.spectrumEnabled = doc["settings"]["spectrumEnabled"].as<bool>();
-      LOG_D("[Settings] Spectrum: %s", appState.spectrumEnabled ? "enabled" : "disabled");
+      appState.audio.spectrumEnabled = doc["settings"]["spectrumEnabled"].as<bool>();
+      LOG_D("[Settings] Spectrum: %s", appState.audio.spectrumEnabled ? "enabled" : "disabled");
     }
     if (doc["settings"]["debugMode"].is<bool>()) {
-      appState.debugMode = doc["settings"]["debugMode"].as<bool>();
+      appState.debug.debugMode = doc["settings"]["debugMode"].as<bool>();
     }
     if (doc["settings"]["debugSerialLevel"].is<int>()) {
       int level = doc["settings"]["debugSerialLevel"].as<int>();
-      if (level >= 0 && level <= 3) appState.debugSerialLevel = level;
+      if (level >= 0 && level <= 3) appState.debug.serialLevel = level;
     }
     if (doc["settings"]["debugHwStats"].is<bool>()) {
-      appState.debugHwStats = doc["settings"]["debugHwStats"].as<bool>();
+      appState.debug.hwStats = doc["settings"]["debugHwStats"].as<bool>();
     }
     if (doc["settings"]["debugI2sMetrics"].is<bool>()) {
-      appState.debugI2sMetrics = doc["settings"]["debugI2sMetrics"].as<bool>();
+      appState.debug.i2sMetrics = doc["settings"]["debugI2sMetrics"].as<bool>();
     }
     if (doc["settings"]["debugTaskMonitor"].is<bool>()) {
-      appState.debugTaskMonitor = doc["settings"]["debugTaskMonitor"].as<bool>();
+      appState.debug.taskMonitor = doc["settings"]["debugTaskMonitor"].as<bool>();
     }
     if (doc["settings"]["fftWindowType"].is<int>()) {
       int wt = doc["settings"]["fftWindowType"].as<int>();
-      if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.fftWindowType = (FftWindowType)wt;
+      if (wt >= 0 && wt < FFT_WINDOW_COUNT) appState.audio.fftWindowType = (FftWindowType)wt;
     }
     if (doc["settings"]["adcEnabled"].is<JsonArray>()) {
       JsonArray arr = doc["settings"]["adcEnabled"].as<JsonArray>();
       for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS && i < (int)arr.size(); i++) {
-        appState.adcEnabled[i] = arr[i].as<bool>();
-        LOG_D("[Settings] ADC%d: %s", i + 1, appState.adcEnabled[i] ? "enabled" : "disabled");
+        appState.audio.adcEnabled[i] = arr[i].as<bool>();
+        LOG_D("[Settings] ADC%d: %s", i + 1, appState.audio.adcEnabled[i] ? "enabled" : "disabled");
       }
     } else if (doc["settings"]["adcEnabled"].is<bool>()) {
       bool val = doc["settings"]["adcEnabled"].as<bool>();
-      for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) appState.adcEnabled[i] = val;
+      for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) appState.audio.adcEnabled[i] = val;
       LOG_D("[Settings] ADC: %s", val ? "enabled" : "disabled");
     }
 #ifdef USB_AUDIO_ENABLED
     if (doc["settings"]["usbAudioEnabled"].is<bool>()) {
-      appState.usbAudioEnabled = doc["settings"]["usbAudioEnabled"].as<bool>();
-      LOG_D("[Settings] USB Audio: %s", appState.usbAudioEnabled ? "enabled" : "disabled");
+      appState.usbAudio.enabled = doc["settings"]["usbAudioEnabled"].as<bool>();
+      LOG_D("[Settings] USB Audio: %s", appState.usbAudio.enabled ? "enabled" : "disabled");
     }
 #endif
 #ifdef GUI_ENABLED
@@ -1393,7 +1395,7 @@ void handleSettingsImport() {
 #endif
     if (doc["settings"]["otaChannel"].is<int>()) {
       uint8_t ch = (uint8_t)doc["settings"]["otaChannel"].as<int>();
-      if (ch <= 1) appState.otaChannel = ch;
+      if (ch <= 1) appState.ota.channel = ch;
     }
     // Save general settings
     saveSettings();
@@ -1404,27 +1406,27 @@ void handleSettingsImport() {
     if (doc["smartSensing"]["mode"].is<String>()) {
       String modeStr = doc["smartSensing"]["mode"].as<String>();
       if (modeStr == "always_on") {
-        appState.currentMode = ALWAYS_ON;
+        appState.audio.currentMode = ALWAYS_ON;
       } else if (modeStr == "always_off") {
-        appState.currentMode = ALWAYS_OFF;
+        appState.audio.currentMode = ALWAYS_OFF;
       } else if (modeStr == "smart_auto") {
-        appState.currentMode = SMART_AUTO;
+        appState.audio.currentMode = SMART_AUTO;
       }
       LOG_D("[Settings] Smart Sensing Mode: %s", modeStr.c_str());
     }
     if (doc["smartSensing"]["appState.timerDuration"].is<int>() ||
         doc["smartSensing"]["appState.timerDuration"].is<unsigned long>()) {
-      appState.timerDuration = doc["smartSensing"]["appState.timerDuration"].as<unsigned long>();
-      LOG_D("[Settings] Timer Duration: %lu minutes", appState.timerDuration);
+      appState.audio.timerDuration = doc["smartSensing"]["appState.timerDuration"].as<unsigned long>();
+      LOG_D("[Settings] Timer Duration: %lu minutes", appState.audio.timerDuration);
     }
     if (doc["smartSensing"]["audioThreshold"].is<float>()) {
-      appState.audioThreshold_dBFS = doc["smartSensing"]["audioThreshold"].as<float>();
-      LOG_D("[Settings] Audio Threshold: %+.0f dBFS", appState.audioThreshold_dBFS);
+      appState.audio.threshold_dBFS = doc["smartSensing"]["audioThreshold"].as<float>();
+      LOG_D("[Settings] Audio Threshold: %+.0f dBFS", appState.audio.threshold_dBFS);
     }
     if (doc["smartSensing"]["adcVref"].is<float>()) {
       float vref = doc["smartSensing"]["adcVref"].as<float>();
       if (vref >= 1.0f && vref <= 5.0f) {
-        appState.adcVref = vref;
+        appState.audio.adcVref = vref;
         LOG_D("[Settings] ADC VREF: %.2f V", vref);
       }
     }
@@ -1435,29 +1437,29 @@ void handleSettingsImport() {
   // Import MQTT settings
   if (!doc["mqtt"].isNull()) {
     if (doc["mqtt"]["enabled"].is<bool>()) {
-      appState.mqttEnabled = doc["mqtt"]["enabled"].as<bool>();
-      LOG_D("[Settings] MQTT Enabled: %s", appState.mqttEnabled ? "true" : "false");
+      appState.mqtt.enabled = doc["mqtt"]["enabled"].as<bool>();
+      LOG_D("[Settings] MQTT Enabled: %s", appState.mqtt.enabled ? "true" : "false");
     }
     if (doc["mqtt"]["broker"].is<String>()) {
-      appState.mqttBroker = doc["mqtt"]["broker"].as<String>();
-      LOG_D("[Settings] MQTT Broker: %s", appState.mqttBroker.c_str());
+      appState.mqtt.broker = doc["mqtt"]["broker"].as<String>();
+      LOG_D("[Settings] MQTT Broker: %s", appState.mqtt.broker.c_str());
     }
     if (doc["mqtt"]["port"].is<int>()) {
-      appState.mqttPort = doc["mqtt"]["port"].as<int>();
-      LOG_D("[Settings] MQTT Port: %d", appState.mqttPort);
+      appState.mqtt.port = doc["mqtt"]["port"].as<int>();
+      LOG_D("[Settings] MQTT Port: %d", appState.mqtt.port);
     }
     if (doc["mqtt"]["username"].is<String>()) {
-      appState.mqttUsername = doc["mqtt"]["username"].as<String>();
+      appState.mqtt.username = doc["mqtt"]["username"].as<String>();
       LOG_D("[Settings] MQTT username imported");
     }
     if (doc["mqtt"]["baseTopic"].is<String>()) {
-      appState.mqttBaseTopic = doc["mqtt"]["baseTopic"].as<String>();
-      LOG_D("[Settings] MQTT Base Topic: %s", appState.mqttBaseTopic.c_str());
+      appState.mqtt.baseTopic = doc["mqtt"]["baseTopic"].as<String>();
+      LOG_D("[Settings] MQTT Base Topic: %s", appState.mqtt.baseTopic.c_str());
     }
     if (doc["mqtt"]["haDiscovery"].is<bool>()) {
-      appState.mqttHADiscovery = doc["mqtt"]["haDiscovery"].as<bool>();
+      appState.mqtt.haDiscovery = doc["mqtt"]["haDiscovery"].as<bool>();
       LOG_D("[Settings] MQTT HA Discovery: %s",
-            appState.mqttHADiscovery ? "enabled" : "disabled");
+            appState.mqtt.haDiscovery ? "enabled" : "disabled");
     }
     // Note: Password is not imported for security - user needs to re-enter it
     // Save MQTT settings
@@ -1468,29 +1470,29 @@ void handleSettingsImport() {
   if (!doc["signalGenerator"].isNull()) {
     if (doc["signalGenerator"]["waveform"].is<int>()) {
       int wf = doc["signalGenerator"]["waveform"].as<int>();
-      if (wf >= 0 && wf <= 3) appState.sigGenWaveform = wf;
+      if (wf >= 0 && wf <= 3) appState.sigGen.waveform = wf;
     }
     if (doc["signalGenerator"]["frequency"].is<float>()) {
       float freq = doc["signalGenerator"]["frequency"].as<float>();
-      if (freq >= 1.0f && freq <= 22000.0f) appState.sigGenFrequency = freq;
+      if (freq >= 1.0f && freq <= 22000.0f) appState.sigGen.frequency = freq;
     }
     if (doc["signalGenerator"]["amplitude"].is<float>()) {
       float amp = doc["signalGenerator"]["amplitude"].as<float>();
-      if (amp >= -96.0f && amp <= 0.0f) appState.sigGenAmplitude = amp;
+      if (amp >= -96.0f && amp <= 0.0f) appState.sigGen.amplitude = amp;
     }
     if (doc["signalGenerator"]["channel"].is<int>()) {
       int ch = doc["signalGenerator"]["channel"].as<int>();
-      if (ch >= 0 && ch <= 2) appState.sigGenChannel = ch;
+      if (ch >= 0 && ch <= 2) appState.sigGen.channel = ch;
     }
     if (doc["signalGenerator"]["outputMode"].is<int>()) {
       int mode = doc["signalGenerator"]["outputMode"].as<int>();
-      if (mode >= 0 && mode <= 1) appState.sigGenOutputMode = mode;
+      if (mode >= 0 && mode <= 1) appState.sigGen.outputMode = mode;
     }
     if (doc["signalGenerator"]["sweepSpeed"].is<float>()) {
       float speed = doc["signalGenerator"]["sweepSpeed"].as<float>();
-      if (speed >= 1.0f && speed <= 22000.0f) appState.sigGenSweepSpeed = speed;
+      if (speed >= 1.0f && speed <= 22000.0f) appState.sigGen.sweepSpeed = speed;
     }
-    appState.sigGenEnabled = false; // Always boot disabled
+    appState.sigGen.enabled = false; // Always boot disabled
     saveSignalGenSettings();
   }
 
@@ -1498,35 +1500,35 @@ void handleSettingsImport() {
   // Import DAC Output settings
   if (!doc["dacOutput"].isNull()) {
     if (doc["dacOutput"]["enabled"].is<bool>()) {
-      appState.dacEnabled = doc["dacOutput"]["enabled"].as<bool>();
+      appState.dac.enabled = doc["dacOutput"]["enabled"].as<bool>();
     }
     if (doc["dacOutput"]["volume"].is<int>()) {
       int v = doc["dacOutput"]["volume"].as<int>();
-      if (v >= 0 && v <= 100) appState.dacVolume = (uint8_t)v;
+      if (v >= 0 && v <= 100) appState.dac.volume = (uint8_t)v;
     }
     if (doc["dacOutput"]["mute"].is<bool>()) {
-      appState.dacMute = doc["dacOutput"]["mute"].as<bool>();
+      appState.dac.mute = doc["dacOutput"]["mute"].as<bool>();
     }
     if (doc["dacOutput"]["deviceId"].is<int>()) {
-      appState.dacDeviceId = (uint16_t)doc["dacOutput"]["deviceId"].as<int>();
+      appState.dac.deviceId = (uint16_t)doc["dacOutput"]["deviceId"].as<int>();
     }
     if (doc["dacOutput"]["modelName"].is<const char*>()) {
-      strncpy(appState.dacModelName, doc["dacOutput"]["modelName"].as<const char*>(),
-              sizeof(appState.dacModelName) - 1);
-      appState.dacModelName[sizeof(appState.dacModelName) - 1] = '\0';
+      strncpy(appState.dac.modelName, doc["dacOutput"]["modelName"].as<const char*>(),
+              sizeof(appState.dac.modelName) - 1);
+      appState.dac.modelName[sizeof(appState.dac.modelName) - 1] = '\0';
     }
     if (doc["dacOutput"]["filterMode"].is<int>()) {
-      appState.dacFilterMode = (uint8_t)doc["dacOutput"]["filterMode"].as<int>();
+      appState.dac.filterMode = (uint8_t)doc["dacOutput"]["filterMode"].as<int>();
     }
     if (doc["dacOutput"]["es8311Enabled"].is<bool>()) {
-      appState.es8311Enabled = doc["dacOutput"]["es8311Enabled"].as<bool>();
+      appState.dac.es8311Enabled = doc["dacOutput"]["es8311Enabled"].as<bool>();
     }
     if (doc["dacOutput"]["es8311Volume"].is<int>()) {
       int v = doc["dacOutput"]["es8311Volume"].as<int>();
-      if (v >= 0 && v <= 100) appState.es8311Volume = (uint8_t)v;
+      if (v >= 0 && v <= 100) appState.dac.es8311Volume = (uint8_t)v;
     }
     if (doc["dacOutput"]["es8311Mute"].is<bool>()) {
-      appState.es8311Mute = doc["dacOutput"]["es8311Mute"].as<bool>();
+      appState.dac.es8311Mute = doc["dacOutput"]["es8311Mute"].as<bool>();
     }
     dac_save_settings();
     LOG_I("[Settings] DAC output settings imported");
@@ -1538,7 +1540,7 @@ void handleSettingsImport() {
     JsonArray names = doc["inputNames"].as<JsonArray>();
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
       String name = names[i].as<String>();
-      if (name.length() > 0) appState.inputNames[i] = name;
+      if (name.length() > 0) appState.audio.inputNames[i] = name;
     }
     saveInputNames();
   }
@@ -1608,7 +1610,7 @@ void handleDiagnostics() {
   JsonObject device = doc["device"].to<JsonObject>();
   device["manufacturer"] = MANUFACTURER_NAME;
   device["model"] = MANUFACTURER_MODEL;
-  device["serialNumber"] = appState.deviceSerialNumber;
+  device["serialNumber"] = appState.general.deviceSerialNumber;
   device["firmwareVersion"] = firmwareVer;
   device["mac"] = WiFi.macAddress();
   device["chipId"] = String((uint32_t)(ESP.getEfuseMac() & 0xFFFFFFFF), HEX);
@@ -1622,7 +1624,7 @@ void handleDiagnostics() {
   system["uptimeSeconds"] = millis() / 1000;
   system["resetReason"] = getResetReasonString();
   system["wasCrash"] = crashlog_last_was_crash();
-  system["heapCritical"] = appState.heapCritical;
+  system["heapCritical"] = appState.debug.heapCritical;
   system["sdkVersion"] = ESP.getSdkVersion();
   system["freeHeap"] = ESP.getFreeHeap();
   system["heapSize"] = ESP.getHeapSize();
@@ -1652,7 +1654,7 @@ void handleDiagnostics() {
   // ===== WiFi Status =====
   JsonObject wifi = doc["wifi"].to<JsonObject>();
   wifi["connected"] = (WiFi.status() == WL_CONNECTED);
-  wifi["mode"] = appState.isAPMode ? "ap" : "sta";
+  wifi["mode"] = appState.wifi.isAPMode ? "ap" : "sta";
   wifi["ssid"] = WiFi.SSID();
   wifi["rssi"] = WiFi.RSSI();
   wifi["localIP"] = WiFi.localIP().toString();
@@ -1660,8 +1662,8 @@ void handleDiagnostics() {
   wifi["subnetMask"] = WiFi.subnetMask().toString();
   wifi["dnsIP"] = WiFi.dnsIP().toString();
   wifi["hostname"] = WiFi.getHostname();
-  wifi["appState.apEnabled"] = appState.apEnabled;
-  wifi["appState.apSSID"] = appState.apSSID;
+  wifi["appState.apEnabled"] = appState.wifi.apEnabled;
+  wifi["appState.apSSID"] = appState.wifi.apSSID;
   wifi["apIP"] = WiFi.softAPIP().toString();
   wifi["apClients"] = WiFi.softAPgetStationNum();
 
@@ -1670,45 +1672,45 @@ void handleDiagnostics() {
 
   // ===== Settings =====
   JsonObject settings = doc["settings"].to<JsonObject>();
-  settings["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
-  settings["appState.timezoneOffset"] = appState.timezoneOffset;
-  settings["appState.dstOffset"] = appState.dstOffset;
-  settings["appState.darkMode"] = appState.darkMode;
-  settings["appState.enableCertValidation"] = appState.enableCertValidation;
-  settings["appState.hardwareStatsInterval"] = appState.hardwareStatsInterval;
-  settings["audioUpdateRate"] = appState.audioUpdateRate;
-  settings["screenTimeout"] = appState.screenTimeout;
-  settings["backlightOn"] = appState.backlightOn;
-  settings["backlightBrightness"] = appState.backlightBrightness;
-  settings["dimEnabled"] = appState.dimEnabled;
-  settings["dimTimeout"] = appState.dimTimeout;
-  settings["dimBrightness"] = appState.dimBrightness;
-  settings["buzzerEnabled"] = appState.buzzerEnabled;
-  settings["buzzerVolume"] = appState.buzzerVolume;
-  settings["vuMeterEnabled"] = appState.vuMeterEnabled;
-  settings["waveformEnabled"] = appState.waveformEnabled;
-  settings["spectrumEnabled"] = appState.spectrumEnabled;
-  settings["debugMode"] = appState.debugMode;
-  settings["debugSerialLevel"] = appState.debugSerialLevel;
-  settings["debugHwStats"] = appState.debugHwStats;
-  settings["debugI2sMetrics"] = appState.debugI2sMetrics;
-  settings["debugTaskMonitor"] = appState.debugTaskMonitor;
-  settings["fftWindowType"] = (int)appState.fftWindowType;
+  settings["appState.autoUpdateEnabled"] = appState.ota.autoUpdateEnabled;
+  settings["appState.timezoneOffset"] = appState.general.timezoneOffset;
+  settings["appState.dstOffset"] = appState.general.dstOffset;
+  settings["appState.darkMode"] = appState.general.darkMode;
+  settings["appState.enableCertValidation"] = appState.general.enableCertValidation;
+  settings["appState.debug.hardwareStatsInterval"] = appState.debug.hardwareStatsInterval;
+  settings["audioUpdateRate"] = appState.audio.updateRate;
+  settings["screenTimeout"] = appState.display.screenTimeout;
+  settings["backlightOn"] = appState.display.backlightOn;
+  settings["backlightBrightness"] = appState.display.backlightBrightness;
+  settings["dimEnabled"] = appState.display.dimEnabled;
+  settings["dimTimeout"] = appState.display.dimTimeout;
+  settings["dimBrightness"] = appState.display.dimBrightness;
+  settings["buzzerEnabled"] = appState.buzzer.enabled;
+  settings["buzzerVolume"] = appState.buzzer.volume;
+  settings["vuMeterEnabled"] = appState.audio.vuMeterEnabled;
+  settings["waveformEnabled"] = appState.audio.waveformEnabled;
+  settings["spectrumEnabled"] = appState.audio.spectrumEnabled;
+  settings["debugMode"] = appState.debug.debugMode;
+  settings["debugSerialLevel"] = appState.debug.serialLevel;
+  settings["debugHwStats"] = appState.debug.hwStats;
+  settings["debugI2sMetrics"] = appState.debug.i2sMetrics;
+  settings["debugTaskMonitor"] = appState.debug.taskMonitor;
+  settings["fftWindowType"] = (int)appState.audio.fftWindowType;
   {
     JsonArray adcArr = settings["adcEnabled"].to<JsonArray>();
-    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.adcEnabled[i]);
+    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) adcArr.add(appState.audio.adcEnabled[i]);
   }
 #ifdef DSP_ENABLED
   // dcBlockEnabled removed (now a DSP preset)
 #endif
 #ifdef USB_AUDIO_ENABLED
-  settings["usbAudioEnabled"] = appState.usbAudioEnabled;
+  settings["usbAudioEnabled"] = appState.usbAudio.enabled;
 #endif
 
   // ===== Smart Sensing =====
   JsonObject sensing = doc["smartSensing"].to<JsonObject>();
   String modeStr;
-  switch (appState.currentMode) {
+  switch (appState.audio.currentMode) {
   case ALWAYS_ON:
     modeStr = "always_on";
     break;
@@ -1720,23 +1722,23 @@ void handleDiagnostics() {
     break;
   }
   sensing["mode"] = modeStr;
-  sensing["appState.amplifierState"] = appState.amplifierState;
-  sensing["appState.timerDuration"] = appState.timerDuration;
-  sensing["appState.timerRemaining"] = appState.timerRemaining;
-  sensing["audioThreshold"] = appState.audioThreshold_dBFS;
-  sensing["audioLevel"] = appState.audioLevel_dBFS;
-  sensing["appState.lastSignalDetection"] = appState.lastSignalDetection;
+  sensing["appState.amplifierState"] = appState.audio.amplifierState;
+  sensing["appState.timerDuration"] = appState.audio.timerDuration;
+  sensing["appState.timerRemaining"] = appState.audio.timerRemaining;
+  sensing["audioThreshold"] = appState.audio.threshold_dBFS;
+  sensing["audioLevel"] = appState.audio.level_dBFS;
+  sensing["appState.lastSignalDetection"] = appState.audio.lastSignalDetection;
 
   // ===== Audio ADC Diagnostics =====
   {
     JsonObject audioAdcObj = doc["audioAdc"].to<JsonObject>();
-    audioAdcObj["numAdcsDetected"] = appState.numAdcsDetected;
-    audioAdcObj["sampleRate"] = appState.audioSampleRate;
-    audioAdcObj["adcVref"] = appState.adcVref;
+    audioAdcObj["numAdcsDetected"] = appState.audio.numAdcsDetected;
+    audioAdcObj["sampleRate"] = appState.audio.sampleRate;
+    audioAdcObj["adcVref"] = appState.audio.adcVref;
     JsonArray adcArr = audioAdcObj["adcs"].to<JsonArray>();
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       JsonObject adcObj = adcArr.add<JsonObject>();
-      const AppState::AdcState &adc = appState.audioAdc[a];
+      const AdcState &adc = appState.audio.adc[a];
       const char *statusStr = "OK";
       switch (adc.healthStatus) {
         case 1: statusStr = "NO_DATA"; break;
@@ -1757,13 +1759,13 @@ void handleDiagnostics() {
       adcObj["totalBuffersRead"] = adc.totalBuffers;
       adcObj["vrms"] = adc.vrmsCombined;
       adcObj["dcOffset"] = adc.dcOffset;
-      adcObj["snrDb"] = appState.audioSnrDb[a];
-      adcObj["sfdrDb"] = appState.audioSfdrDb[a];
+      adcObj["snrDb"] = appState.audio.snrDb[a];
+      adcObj["sfdrDb"] = appState.audio.sfdrDb[a];
     }
     // Input names
     JsonArray names = audioAdcObj["inputNames"].to<JsonArray>();
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-      names.add(appState.inputNames[i]);
+      names.add(appState.audio.inputNames[i]);
     }
 
     // I2S Configuration
@@ -1783,31 +1785,31 @@ void handleDiagnostics() {
       c["commFormat"] = i2sCfg.adc[a].commFormat;
     }
     JsonObject i2sRt = i2sObj["runtime"].to<JsonObject>();
-    i2sRt["audioTaskStackFree"] = appState.i2sMetrics.audioTaskStackFree;
+    i2sRt["audioTaskStackFree"] = appState.audio.i2sMetrics.audioTaskStackFree;
     JsonArray bpsArr = i2sRt["buffersPerSec"].to<JsonArray>();
     JsonArray latArr = i2sRt["avgReadLatencyUs"].to<JsonArray>();
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
-      bpsArr.add(appState.i2sMetrics.buffersPerSec[a]);
-      latArr.add(appState.i2sMetrics.avgReadLatencyUs[a]);
+      bpsArr.add(appState.audio.i2sMetrics.buffersPerSec[a]);
+      latArr.add(appState.audio.i2sMetrics.avgReadLatencyUs[a]);
     }
   }
 
   // ===== MQTT Settings (password excluded) =====
   JsonObject mqtt = doc["mqtt"].to<JsonObject>();
-  mqtt["enabled"] = appState.mqttEnabled;
-  mqtt["broker"] = appState.mqttBroker;
-  mqtt["port"] = appState.mqttPort;
-  mqtt["username"] = appState.mqttUsername;
-  mqtt["baseTopic"] = appState.mqttBaseTopic;
-  mqtt["haDiscovery"] = appState.mqttHADiscovery;
-  mqtt["connected"] = appState.mqttConnected;
+  mqtt["enabled"] = appState.mqtt.enabled;
+  mqtt["broker"] = appState.mqtt.broker;
+  mqtt["port"] = appState.mqtt.port;
+  mqtt["username"] = appState.mqtt.username;
+  mqtt["baseTopic"] = appState.mqtt.baseTopic;
+  mqtt["haDiscovery"] = appState.mqtt.haDiscovery;
+  mqtt["connected"] = appState.mqtt.connected;
 
   // ===== OTA Status =====
   JsonObject ota = doc["ota"].to<JsonObject>();
-  ota["appState.updateAvailable"] = appState.updateAvailable;
-  ota["latestVersion"] = appState.cachedLatestVersion;
-  ota["inProgress"] = appState.otaInProgress;
-  ota["status"] = appState.otaStatus;
+  ota["appState.updateAvailable"] = appState.ota.updateAvailable;
+  ota["latestVersion"] = appState.ota.cachedLatestVersion;
+  ota["inProgress"] = appState.ota.inProgress;
+  ota["status"] = appState.ota.status;
 
   // ===== FSM State =====
   String fsmStateStr;
@@ -1857,6 +1859,6 @@ void handleDiagnostics() {
 }
 
 // Note: Certificate HTTP API handlers removed - now using Mozilla certificate
-// bundle The appState.enableCertValidation setting still works to toggle between:
+// bundle The appState.general.enableCertValidation setting still works to toggle between:
 // - ENABLED: Uses Mozilla certificate bundle for validation
 // - DISABLED: Insecure mode (no certificate validation)

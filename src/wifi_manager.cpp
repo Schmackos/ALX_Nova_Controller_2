@@ -1,5 +1,7 @@
 #include "wifi_manager.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "mqtt_handler.h"
@@ -215,16 +217,16 @@ void initializeNetworkServices() {
 
 // Ensure AP mode is running alongside STA mode
 void ensureAPModeWithSTA() {
-  if (appState.apEnabled && !appState.isAPMode) {
+  if (appState.wifi.apEnabled && !appState.wifi.isAPMode) {
     WiFi.mode(WIFI_AP_STA);
     wifi_ensure_ps_none();
-    WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+    WiFi.softAP(appState.wifi.apSSID.c_str(), appState.wifi.apPassword);
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-    appState.isAPMode = true;
+    appState.wifi.isAPMode = true;
     LOG_I("[WiFi] Access Point also running at: %s", WiFi.softAPIP().toString().c_str());
-  } else if (!appState.apEnabled && appState.isAPMode) {
+  } else if (!appState.wifi.apEnabled && appState.wifi.isAPMode) {
     dnsServer.stop();
-    appState.isAPMode = false;
+    appState.wifi.isAPMode = false;
   }
 }
 
@@ -236,9 +238,9 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     String reasonStr = getWiFiDisconnectReason(reason);
 
     // Always print when actively connecting, otherwise throttle
-    if (appState.wifiConnecting) {
+    if (appState.wifi.connecting) {
       LOG_W("[WiFi] Connection failed: %s (reason %d)", reasonStr.c_str(), reason);
-      appState.wifiConnectError = reasonStr;
+      appState.wifi.connectError = reasonStr;
     } else if (millis() - lastDisconnectWarning > WARNING_THROTTLE_MS) {
       LOG_W("[WiFi] Disconnected: %s (reason %d)", reasonStr.c_str(), reason);
       lastDisconnectWarning = millis();
@@ -260,7 +262,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
   case ARDUINO_EVENT_WIFI_STA_CONNECTED:
     LOG_I("[WiFi] Connected to access point");
     wifiDisconnected = false;
-    appState.wifiConnectError = "";            // Clear any previous error
+    appState.wifi.connectError = "";            // Clear any previous error
     wifiRetryInProgress = false;      // Clear retry flag on success
     currentRetryCount = 0;            // Reset retry counter
     lastFailedSSID = "";              // Clear failed SSID
@@ -270,7 +272,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
   case ARDUINO_EVENT_WIFI_STA_GOT_IP:
     LOG_I("[WiFi] IP address: %s", WiFi.localIP().toString().c_str());
     wifiDisconnected = false;
-    appState.wifiConnectError = "";            // Clear any previous error
+    appState.wifi.connectError = "";            // Clear any previous error
     wifiRetryInProgress = false;      // Clear retry flag on success
     currentRetryCount = 0;            // Reset retry counter
     lastFailedSSID = "";              // Clear failed SSID
@@ -302,7 +304,7 @@ void checkWiFiConnection() {
   }
 
   // Handle immediate retry when network not found (error 201)
-  if (wifiRetryInProgress && !appState.wifiConnecting && WiFi.getMode() != WIFI_AP) {
+  if (wifiRetryInProgress && !appState.wifi.connecting && WiFi.getMode() != WIFI_AP) {
     LOG_W("[WiFi] Network '%s' not found - trying other saved networks", lastFailedSSID.c_str());
 
     if (connectToStoredNetworks()) {
@@ -321,7 +323,7 @@ void checkWiFiConnection() {
   }
 
   // Handle periodic retry of full network list
-  if (wifiDisconnected && WiFi.getMode() != WIFI_AP && !appState.wifiConnecting) {
+  if (wifiDisconnected && WiFi.getMode() != WIFI_AP && !appState.wifi.connecting) {
     unsigned long timeSinceLastRetry = millis() - lastFullRetryAttempt;
 
     // Retry full list at interval if disconnected
@@ -341,7 +343,7 @@ void checkWiFiConnection() {
         currentRetryCount = 0;
       } else {
         // If no networks are available and we're not already in AP mode
-        if (!appState.isAPMode && appState.autoAPEnabled) {
+        if (!appState.wifi.isAPMode && appState.wifi.autoAPEnabled) {
           LOG_W("[WiFi] No saved networks available, starting AP mode");
           startAccessPoint();
           sendWiFiStatus();
@@ -362,7 +364,7 @@ void checkWiFiConnection() {
       if (connectToStoredNetworks()) {
         LOG_I("[WiFi] Reconnection successful");
         wifiDisconnected = false;
-      } else if (!appState.isAPMode && appState.autoAPEnabled) {
+      } else if (!appState.wifi.isAPMode && appState.wifi.autoAPEnabled) {
         LOG_W("[WiFi] No saved networks available, starting AP mode");
         startAccessPoint();
         sendWiFiStatus();
@@ -374,17 +376,17 @@ void checkWiFiConnection() {
 // ===== WiFi Core Functions =====
 
 void startAccessPoint() {
-  appState.isAPMode = true;
-  appState.apEnabled = true;
+  appState.wifi.isAPMode = true;
+  appState.wifi.apEnabled = true;
 
   WiFi.mode(WIFI_AP);
   wifi_ensure_ps_none();
-  WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+  WiFi.softAP(appState.wifi.apSSID.c_str(), appState.wifi.apPassword);
 
   IPAddress apIP = WiFi.softAPIP();
   LOG_I("[WiFi] Access Point started");
-  LOG_I("[WiFi] SSID: %s", appState.apSSID.c_str());
-  LOG_D("[WiFi] Password: %s", appState.apPassword);
+  LOG_I("[WiFi] SSID: %s", appState.wifi.apSSID.c_str());
+  LOG_D("[WiFi] Password: %s", appState.wifi.apPassword);
   LOG_I("[WiFi] AP IP address: %s", apIP.toString().c_str());
 
   // Start the DNS server for Captive Portal
@@ -398,10 +400,10 @@ void startAccessPoint() {
 }
 
 void stopAccessPoint() {
-  if (appState.isAPMode) {
+  if (appState.wifi.isAPMode) {
     dnsServer.stop();
     WiFi.softAPdisconnect(true);
-    appState.isAPMode = false;
+    appState.wifi.isAPMode = false;
     LOG_I("[WiFi] Access Point and DNS server stopped");
   }
 }
@@ -469,9 +471,9 @@ void connectToWiFi(const WiFiNetworkConfig &config) {
   }
 
   // Apply minimum security requirement (IDF5 WPA3-SAE support)
-  if (appState.wifiMinSecurity == 2)
+  if (appState.wifi.minSecurity == 2)
     WiFi.setMinSecurity(WIFI_AUTH_WPA3_PSK);
-  else if (appState.wifiMinSecurity == 1)
+  else if (appState.wifi.minSecurity == 1)
     WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
   // else 0: accept any auth mode (default, backward compatible)
 
@@ -732,7 +734,7 @@ bool connectToStoredNetworks() {
   if (count == 0) {
     prefs.end();
     LOG_W("[WiFi] No saved WiFi networks");
-    if (appState.autoAPEnabled) {
+    if (appState.wifi.autoAPEnabled) {
       LOG_I("[WiFi] Auto AP enabled, starting AP mode");
       startAccessPoint();
     } else {
@@ -744,9 +746,9 @@ bool connectToStoredNetworks() {
   LOG_I("[WiFi] Trying %d saved network(s)", count);
 
   // Apply minimum security requirement (IDF5 WPA3-SAE support)
-  if (appState.wifiMinSecurity == 2)
+  if (appState.wifi.minSecurity == 2)
     WiFi.setMinSecurity(WIFI_AUTH_WPA3_PSK);
-  else if (appState.wifiMinSecurity == 1)
+  else if (appState.wifi.minSecurity == 1)
     WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
   // else 0: accept any auth mode (default, backward compatible)
 
@@ -825,7 +827,7 @@ bool connectToStoredNetworks() {
 
   prefs.end();
   LOG_W("[WiFi] All networks failed");
-  if (appState.autoAPEnabled) {
+  if (appState.wifi.autoAPEnabled) {
     LOG_I("[WiFi] Auto AP enabled, starting AP mode");
     startAccessPoint();
   } else {
@@ -838,19 +840,19 @@ bool connectToStoredNetworks() {
 
 void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   doc["connected"] = (WiFi.status() == WL_CONNECTED);
-  doc["mode"] = appState.isAPMode ? "ap" : "sta";
-  doc["appState.apEnabled"] = appState.apEnabled;
-  doc["appState.autoUpdateEnabled"] = appState.autoUpdateEnabled;
-  doc["appState.timezoneOffset"] = appState.timezoneOffset;
-  doc["appState.dstOffset"] = appState.dstOffset;
-  doc["appState.darkMode"] = appState.darkMode;
-  doc["appState.enableCertValidation"] = appState.enableCertValidation;
-  doc["appState.hardwareStatsInterval"] =
-      appState.hardwareStatsInterval / 1000; // Send as seconds
-  doc["audioUpdateRate"] = appState.audioUpdateRate;
-  doc["screenTimeout"] = appState.screenTimeout / 1000; // Send as seconds
-  doc["backlightOn"] = appState.backlightOn;
-  doc["appState.autoAPEnabled"] = appState.autoAPEnabled;
+  doc["mode"] = appState.wifi.isAPMode ? "ap" : "sta";
+  doc["appState.apEnabled"] = appState.wifi.apEnabled;
+  doc["appState.autoUpdateEnabled"] = appState.ota.autoUpdateEnabled;
+  doc["appState.timezoneOffset"] = appState.general.timezoneOffset;
+  doc["appState.dstOffset"] = appState.general.dstOffset;
+  doc["appState.darkMode"] = appState.general.darkMode;
+  doc["appState.enableCertValidation"] = appState.general.enableCertValidation;
+  doc["appState.debug.hardwareStatsInterval"] =
+      appState.debug.hardwareStatsInterval / 1000; // Send as seconds
+  doc["audioUpdateRate"] = appState.audio.updateRate;
+  doc["screenTimeout"] = appState.display.screenTimeout / 1000; // Send as seconds
+  doc["backlightOn"] = appState.display.backlightOn;
+  doc["appState.autoAPEnabled"] = appState.wifi.autoAPEnabled;
 #ifdef GUI_ENABLED
   doc["bootAnimEnabled"] = appState.bootAnimEnabled;
   doc["bootAnimStyle"] = appState.bootAnimStyle;
@@ -861,12 +863,12 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   // Device information
   doc["manufacturer"] = MANUFACTURER_NAME;
   doc["model"] = MANUFACTURER_MODEL;
-  doc["serialNumber"] = appState.deviceSerialNumber;
+  doc["serialNumber"] = appState.general.deviceSerialNumber;
 
   // Include latest version info if available
-  if (appState.cachedLatestVersion.length() > 0) {
-    doc["latestVersion"] = appState.cachedLatestVersion;
-    doc["appState.updateAvailable"] = appState.updateAvailable;
+  if (appState.ota.cachedLatestVersion.length() > 0) {
+    doc["latestVersion"] = appState.ota.cachedLatestVersion;
+    doc["appState.updateAvailable"] = appState.ota.updateAvailable;
   } else if (fetchVersionIfMissing) {
     // Try to fetch version info (for HTTP requests)
     String latestVersion = "";
@@ -874,13 +876,13 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
     String checksum = "";
     if (getLatestReleaseInfo(latestVersion, firmwareUrl, checksum)) {
       latestVersion.trim();
-      appState.cachedLatestVersion = latestVersion;
-      appState.cachedFirmwareUrl = firmwareUrl;
-      appState.cachedChecksum = checksum;
+      appState.ota.cachedLatestVersion = latestVersion;
+      appState.ota.cachedFirmwareUrl = firmwareUrl;
+      appState.ota.cachedChecksum = checksum;
       int cmp = compareVersions(latestVersion, String(firmwareVer));
-      appState.updateAvailable = (cmp > 0);
+      appState.ota.updateAvailable = (cmp > 0);
       doc["latestVersion"] = latestVersion;
-      doc["appState.updateAvailable"] = appState.updateAvailable;
+      doc["appState.updateAvailable"] = appState.ota.updateAvailable;
     } else {
       doc["latestVersion"] = "Unknown";
       doc["appState.updateAvailable"] = false;
@@ -892,10 +894,10 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   }
 
   // Always include AP SSID for pre-filling config
-  doc["appState.apSSID"] = appState.apSSID;
+  doc["appState.apSSID"] = appState.wifi.apSSID;
 
   // Populate AP details if enabled
-  if (appState.isAPMode) {
+  if (appState.wifi.isAPMode) {
     doc["apIP"] = WiFi.softAPIP().toString();
     doc["apClients"] = WiFi.softAPgetStationNum();
   }
@@ -926,30 +928,30 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
 
     doc["usingStaticIP"] = isUsingStaticIP;
   } else {
-    doc["ip"] = appState.isAPMode ? WiFi.softAPIP().toString() : "";
+    doc["ip"] = appState.wifi.isAPMode ? WiFi.softAPIP().toString() : "";
     doc["usingStaticIP"] = false;
   }
 
   // Add saved networks count
   doc["networkCount"] = getWiFiNetworkCount();
-  doc["minSecurity"] = appState.wifiMinSecurity;
+  doc["minSecurity"] = appState.wifi.minSecurity;
 
   // Add async connection status
-  doc["appState.wifiConnecting"] = appState.wifiConnecting;
-  doc["appState.wifiConnectSuccess"] = appState.wifiConnectSuccess;
-  doc["appState.wifiNewIP"] = appState.wifiNewIP;
+  doc["appState.wifi.connecting"] = appState.wifi.connecting;
+  doc["appState.wifi.connectSuccess"] = appState.wifi.connectSuccess;
+  doc["appState.wifi.newIP"] = appState.wifi.newIP;
 
   // Add error message if connection failed
-  if (!appState.wifiConnecting && !appState.wifiConnectSuccess && appState.wifiConnectError.length() > 0) {
-    doc["message"] = appState.wifiConnectError;
+  if (!appState.wifi.connecting && !appState.wifi.connectSuccess && appState.wifi.connectError.length() > 0) {
+    doc["message"] = appState.wifi.connectError;
   }
 
   // Ethernet state (P4 has onboard Ethernet; always present in JSON, false on S3)
-  doc["ethLinkUp"] = appState.ethLinkUp;
-  doc["ethConnected"] = appState.ethConnected;
-  doc["ethIP"] = appState.ethIP;
+  doc["ethLinkUp"] = appState.ethernet.linkUp;
+  doc["ethConnected"] = appState.ethernet.connected;
+  doc["ethIP"] = appState.ethernet.ip;
   const char* ifNames[] = {"none", "ethernet", "wifi"};
-  doc["activeInterface"] = ifNames[appState.activeInterface];
+  doc["activeInterface"] = ifNames[appState.ethernet.activeInterface];
 }
 
 void sendWiFiStatus() {
@@ -994,12 +996,12 @@ void handleAPConfig() {
   saveWiFiNetwork(config);
 
   // Start asynchronous connection
-  appState.wifiSSID = ssid;
-  appState.wifiPassword = password;
-  appState.wifiConnecting = true;
-  appState.wifiConnectSuccess = false;
-  appState.wifiNewIP = "";
-  appState.wifiConnectError = "";
+  appState.wifi.ssid = ssid;
+  appState.wifi.password = password;
+  appState.wifi.connecting = true;
+  appState.wifi.connectSuccess = false;
+  appState.wifi.newIP = "";
+  appState.wifi.connectError = "";
 
   WiFi.mode(WIFI_AP_STA);
   wifi_ensure_ps_none();
@@ -1026,13 +1028,13 @@ void handleAPConfigUpdate() {
   }
 
   // Update AP SSID
-  appState.apSSID = newSSID;
+  appState.wifi.apSSID = newSSID;
 
   // Only update password if provided (otherwise keep existing)
   if (doc["password"].is<String>()) {
     String newPassword = doc["password"].as<String>();
     if (newPassword.length() >= 8) {
-      appState.apPassword = newPassword;
+      appState.wifi.apPassword = newPassword;
       LOG_D("[WiFi] AP password updated");
     } else if (newPassword.length() > 0) {
       server.send(400, "application/json",
@@ -1043,10 +1045,10 @@ void handleAPConfigUpdate() {
     // If password is empty string, keep existing password
   }
 
-  LOG_I("[WiFi] AP configuration updated: SSID=%s", appState.apSSID.c_str());
+  LOG_I("[WiFi] AP configuration updated: SSID=%s", appState.wifi.apSSID.c_str());
 
   // If AP is currently running, restart it with new credentials
-  if (appState.isAPMode) {
+  if (appState.wifi.isAPMode) {
     LOG_I("[WiFi] Restarting AP with new configuration");
     WiFi.softAPdisconnect(true); // Disconnect all clients
     delay(100);
@@ -1060,8 +1062,8 @@ void handleAPConfigUpdate() {
     }
     wifi_ensure_ps_none();
 
-    WiFi.softAP(appState.apSSID.c_str(), appState.apPassword.c_str());
-    LOG_I("[WiFi] AP restarted with new SSID: %s", appState.apSSID.c_str());
+    WiFi.softAP(appState.wifi.apSSID.c_str(), appState.wifi.apPassword.c_str());
+    LOG_I("[WiFi] AP restarted with new SSID: %s", appState.wifi.apSSID.c_str());
     LOG_I("[WiFi] AP IP: %s", WiFi.softAPIP().toString().c_str());
   }
 
@@ -1076,24 +1078,24 @@ void handleAPToggle() {
   }
 
   bool enabled = doc["enabled"].as<bool>();
-  appState.apEnabled = enabled;
+  appState.wifi.apEnabled = enabled;
 
   if (enabled) {
-    if (!appState.isAPMode) {
+    if (!appState.wifi.isAPMode) {
       // Start AP mode (can run alongside STA mode)
       WiFi.mode(WIFI_AP_STA);
       wifi_ensure_ps_none();
-      WiFi.softAP(appState.apSSID, appState.apPassword);
+      WiFi.softAP(appState.wifi.apSSID, appState.wifi.apPassword);
 
       // Start DNS server for AP mode
       dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-      appState.isAPMode = true;
+      appState.wifi.isAPMode = true;
 
       LOG_I("[WiFi] Access Point enabled");
       LOG_I("[WiFi] AP IP: %s", WiFi.softAPIP().toString().c_str());
     }
   } else {
-    if (appState.isAPMode) {
+    if (appState.wifi.isAPMode) {
       // Always stop DNS server before disabling AP mode
       dnsServer.stop();
 
@@ -1108,7 +1110,7 @@ void handleAPToggle() {
         WiFi.mode(WIFI_STA);
         wifi_ensure_ps_none();
       }
-      appState.isAPMode = false;
+      appState.wifi.isAPMode = false;
       LOG_I("[WiFi] Access Point disabled");
     }
   }
@@ -1135,7 +1137,7 @@ void handleWiFiConfig() {
   // Apply minimum security setting if provided
   if (doc["minSecurity"].is<int>()) {
     int val = doc["minSecurity"] | 0;
-    appState.wifiMinSecurity = constrain(val, 0, 2);
+    appState.wifi.minSecurity = constrain(val, 0, 2);
   }
 
   // If password is empty, fetch the stored password for this SSID
@@ -1171,10 +1173,10 @@ void handleWiFiConfig() {
   pendingConnection.config.password = connectionPassword;
 
   // Reset status flags for UI polling
-  appState.wifiConnecting = true;
-  appState.wifiConnectSuccess = false;
-  appState.wifiNewIP = "";
-  appState.wifiConnectError = "";
+  appState.wifi.connecting = true;
+  appState.wifi.connectSuccess = false;
+  appState.wifi.newIP = "";
+  appState.wifi.connectError = "";
 
   server.send(200, "application/json",
               "{\"success\": true, \"message\": \"Connection initiated\"}");
@@ -1391,10 +1393,10 @@ void handleWiFiRemove() {
       WiFi.disconnect();
 
       // Stop AP if it was running in STA+AP mode
-      if (appState.isAPMode && WiFi.status() != WL_CONNECTED) {
+      if (appState.wifi.isAPMode && WiFi.status() != WL_CONNECTED) {
         dnsServer.stop();
         WiFi.softAPdisconnect(true);
-        appState.isAPMode = false;
+        appState.wifi.isAPMode = false;
       }
 
       // Try to connect to other saved networks, or start AP if none available
@@ -1430,20 +1432,20 @@ void updateWiFiConnection() {
     pendingConnection.requested = false;
 
     // Set global connection variables for status reporting
-    appState.wifiSSID = pendingConnection.config.ssid;
-    appState.wifiPassword = pendingConnection.config.password;
+    appState.wifi.ssid = pendingConnection.config.ssid;
+    appState.wifi.password = pendingConnection.config.password;
 
     // IMPORTANT: Maintain AP mode if enabled so frontend doesn't lose
     // connection. This allows the UI to poll for status (success/failure)
-    if (appState.apEnabled || appState.isAPMode) {
+    if (appState.wifi.apEnabled || appState.wifi.isAPMode) {
       LOG_D("[WiFi] Maintaining AP mode during connection attempt");
       WiFi.mode(WIFI_AP_STA);
       wifi_ensure_ps_none();
       // Ensure AP is up if it wasn't
-      if (!appState.isAPMode) {
-        WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+      if (!appState.wifi.isAPMode) {
+        WiFi.softAP(appState.wifi.apSSID.c_str(), appState.wifi.apPassword);
         dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-        appState.isAPMode = true;
+        appState.wifi.isAPMode = true;
       }
     } else {
       WiFi.mode(WIFI_STA);
@@ -1463,9 +1465,9 @@ void updateWiFiConnection() {
                              cfg.gateway.c_str(), cfg.dns1.c_str(),
                              cfg.dns2.c_str())) {
         LOG_E("[WiFi] Failed to configure static IP");
-        appState.wifiConnectSuccess = false;
-        appState.wifiConnectError = "Invalid Static IP Configuration";
-        appState.wifiConnecting = false;
+        appState.wifi.connectSuccess = false;
+        appState.wifi.connectError = "Invalid Static IP Configuration";
+        appState.wifi.connecting = false;
         pendingConnection.config.clear();
         return;
       }
@@ -1476,16 +1478,16 @@ void updateWiFiConnection() {
     LOG_I("[WiFi] Initiating connection to: %s", cfg.ssid.c_str());
 
     // Apply minimum security requirement (IDF5 WPA3-SAE support)
-    if (appState.wifiMinSecurity == 2)
+    if (appState.wifi.minSecurity == 2)
       WiFi.setMinSecurity(WIFI_AUTH_WPA3_PSK);
-    else if (appState.wifiMinSecurity == 1)
+    else if (appState.wifi.minSecurity == 1)
       WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
     // else 0: accept any auth mode (default, backward compatible)
 
     WiFi.begin(cfg.ssid.c_str(), cfg.password.c_str());
   }
 
-  if (!appState.wifiConnecting)
+  if (!appState.wifi.connecting)
     return;
 
   static unsigned long connectionStarted = 0;
@@ -1494,15 +1496,15 @@ void updateWiFiConnection() {
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    appState.wifiConnectSuccess = true;
-    appState.wifiConnecting = false;
-    appState.wifiNewIP = WiFi.localIP().toString();
-    appState.wifiConnectError = "";
+    appState.wifi.connectSuccess = true;
+    appState.wifi.connecting = false;
+    appState.wifi.newIP = WiFi.localIP().toString();
+    appState.wifi.connectError = "";
     connectionStarted = 0;
     pendingConnection.config.clear();
 
     LOG_I("[WiFi] Connected in background");
-    LOG_I("[WiFi] IP address: %s", appState.wifiNewIP.c_str());
+    LOG_I("[WiFi] IP address: %s", appState.wifi.newIP.c_str());
 
     // Sync time and setup services
     syncTimeWithNTP();
@@ -1511,25 +1513,25 @@ void updateWiFiConnection() {
     // Broadcast success to WebSocket clients
     sendWiFiStatus();
   } else if (millis() - connectionStarted > WIFI_CONNECT_TIMEOUT_MS) {
-    appState.wifiConnectSuccess = false;
-    appState.wifiConnecting = false;
+    appState.wifi.connectSuccess = false;
+    appState.wifi.connecting = false;
     connectionStarted = 0;
     pendingConnection.config.clear();
 
     // Set timeout error if no specific disconnect reason was captured
-    if (appState.wifiConnectError.length() == 0) {
-      appState.wifiConnectError = "Connection timed out - check password and signal";
+    if (appState.wifi.connectError.length() == 0) {
+      appState.wifi.connectError = "Connection timed out - check password and signal";
     }
-    LOG_W("[WiFi] Connection failed: %s", appState.wifiConnectError.c_str());
+    LOG_W("[WiFi] Connection failed: %s", appState.wifi.connectError.c_str());
 
     // Restore AP mode if it was enabled
-    if (appState.apEnabled && !appState.isAPMode) {
+    if (appState.wifi.apEnabled && !appState.wifi.isAPMode) {
       LOG_I("[WiFi] Restoring AP mode after failed connection");
       WiFi.mode(WIFI_AP_STA);
       wifi_ensure_ps_none();
-      WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
+      WiFi.softAP(appState.wifi.apSSID.c_str(), appState.wifi.apPassword);
       dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-      appState.isAPMode = true;
+      appState.wifi.isAPMode = true;
       LOG_I("[WiFi] AP restored at: %s", WiFi.softAPIP().toString().c_str());
     }
 

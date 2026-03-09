@@ -82,10 +82,10 @@ static void get_card_summary(int idx, char *buf, size_t len) {
 
     switch (idx) {
         case 1: { /* Control */
-            const char *mode = (st.appState.currentMode == ALWAYS_ON) ? "Always On" :
-                               (st.appState.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
+            const char *mode = (st.appState.audio.currentMode == ALWAYS_ON) ? "Always On" :
+                               (st.appState.audio.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
             snprintf(buf, len, "%s\nAmp: %s\n%+.0f dBFS",
-                     mode, st.appState.amplifierState ? "ON" : "OFF", st.appState.audioLevel_dBFS);
+                     mode, st.appState.audio.amplifierState ? "ON" : "OFF", st.appState.audio.level_dBFS);
             break;
         }
         case 2: { /* WiFi */
@@ -94,27 +94,27 @@ static void get_card_summary(int idx, char *buf, size_t len) {
                          WiFi.SSID().c_str(),
                          WiFi.localIP().toString().c_str(),
                          WiFi.RSSI());
-            } else if (st.appState.isAPMode) {
-                snprintf(buf, len, "AP Mode\n%s", st.apSSID.c_str());
+            } else if (st.appState.wifi.isAPMode) {
+                snprintf(buf, len, "AP Mode\n%s", st.wifi.apSSID.c_str());
             } else {
                 snprintf(buf, len, "Disconnected");
             }
             break;
         }
         case 3: { /* MQTT */
-            if (!st.appState.mqttEnabled) {
+            if (!st.appState.mqtt.enabled) {
                 snprintf(buf, len, "Disabled");
-            } else if (st.appState.mqttConnected) {
-                snprintf(buf, len, "Connected\n%s:%d", st.mqttBroker.c_str(), st.appState.mqttPort);
+            } else if (st.appState.mqtt.connected) {
+                snprintf(buf, len, "Connected\n%s:%d", st.mqtt.broker.c_str(), st.appState.mqtt.port);
             } else {
-                snprintf(buf, len, "Disconnected\n%s", st.mqttBroker.c_str());
+                snprintf(buf, len, "Disconnected\n%s", st.mqtt.broker.c_str());
             }
             break;
         }
         case 4: { /* Settings */
             snprintf(buf, len, "FW %s\n%s mode",
                      FIRMWARE_VERSION,
-                     st.appState.darkMode ? "Dark" : "Light");
+                     st.appState.general.darkMode ? "Dark" : "Light");
             break;
         }
         case 5: { /* Support */
@@ -131,8 +131,8 @@ static void get_card_summary(int idx, char *buf, size_t len) {
         case 7: { /* DSP */
             DspMetrics m = dsp_get_metrics();
             snprintf(buf, len, "%s%s\nCPU: %.0f%%",
-                     st.dspEnabled ? "Enabled" : "Disabled",
-                     st.dspBypass ? " (BYP)" : "",
+                     st.dsp.enabled ? "Enabled" : "Disabled",
+                     st.dsp.bypass ? " (BYP)" : "",
                      m.cpuLoadPercent);
             break;
         }
@@ -289,17 +289,17 @@ static void refresh_dashboard(void) {
 
     if (dash_update_icon) {
         lv_obj_set_style_text_color(dash_update_icon,
-            st.appState.updateAvailable ? COLOR_PRIMARY : COLOR_TEXT_DIM, LV_PART_MAIN);
+            st.ota.updateAvailable ? COLOR_PRIMARY : COLOR_TEXT_DIM, LV_PART_MAIN);
     }
 
     if (dash_amp_value) {
-        lv_label_set_text(dash_amp_value, st.appState.amplifierState ? "ON" : "OFF");
+        lv_label_set_text(dash_amp_value, st.appState.audio.amplifierState ? "ON" : "OFF");
     }
-    set_dash_dot(dash_amp_dot, st.appState.amplifierState ? COLOR_SUCCESS : COLOR_ERROR);
+    set_dash_dot(dash_amp_dot, st.appState.audio.amplifierState ? COLOR_SUCCESS : COLOR_ERROR);
 
     if (dash_sig_value) {
-        bool detected = st.appState.audioLevel_dBFS >= st.appState.audioThreshold_dBFS;
-        snprintf(buf, sizeof(buf), "%+.0f dBFS", st.appState.audioLevel_dBFS);
+        bool detected = st.appState.audio.level_dBFS >= st.appState.audio.threshold_dBFS;
+        snprintf(buf, sizeof(buf), "%+.0f dBFS", st.appState.audio.level_dBFS);
         lv_label_set_text(dash_sig_value, buf);
         set_dash_dot(dash_sig_dot, detected ? COLOR_SUCCESS : COLOR_TEXT_DIM);
     }
@@ -308,7 +308,7 @@ static void refresh_dashboard(void) {
         if (WiFi.status() == WL_CONNECTED) {
             lv_label_set_text(dash_wifi_value, "Connected");
             set_dash_dot(dash_wifi_dot, COLOR_SUCCESS);
-        } else if (st.appState.isAPMode) {
+        } else if (st.appState.wifi.isAPMode) {
             lv_label_set_text(dash_wifi_value, "AP Mode");
             set_dash_dot(dash_wifi_dot, COLOR_PRIMARY);
         } else {
@@ -318,10 +318,10 @@ static void refresh_dashboard(void) {
     }
 
     if (dash_mqtt_value) {
-        if (!st.appState.mqttEnabled) {
+        if (!st.appState.mqtt.enabled) {
             lv_label_set_text(dash_mqtt_value, "Disabled");
             set_dash_dot(dash_mqtt_dot, COLOR_TEXT_DIM);
-        } else if (st.appState.mqttConnected) {
+        } else if (st.appState.mqtt.connected) {
             lv_label_set_text(dash_mqtt_value, "Connected");
             set_dash_dot(dash_mqtt_dot, COLOR_SUCCESS);
         } else {
@@ -331,25 +331,25 @@ static void refresh_dashboard(void) {
     }
 
     if (dash_mode_value) {
-        if (st.appState.currentMode == SMART_AUTO && st.appState.timerRemaining > 0 &&
+        if (st.appState.audio.currentMode == SMART_AUTO && st.appState.audio.timerRemaining > 0 &&
             (millis() / 3000) % 2 == 1) {
-            unsigned long mins = st.appState.timerRemaining / 60;
-            unsigned long secs = st.appState.timerRemaining % 60;
+            unsigned long mins = st.appState.audio.timerRemaining / 60;
+            unsigned long secs = st.appState.audio.timerRemaining % 60;
             snprintf(buf, sizeof(buf), "%02lu:%02lu", mins, secs);
             lv_label_set_text(dash_mode_value, buf);
         } else {
-            const char *mode = (st.appState.currentMode == ALWAYS_ON) ? "Always On" :
-                               (st.appState.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
+            const char *mode = (st.appState.audio.currentMode == ALWAYS_ON) ? "Always On" :
+                               (st.appState.audio.currentMode == ALWAYS_OFF) ? "Always Off" : "Smart Auto";
             lv_label_set_text(dash_mode_value, mode);
         }
     }
 
     if (dash_level_bar) {
-        int vu = (int)st.audioAdc[0].vuCombined;
+        int vu = (int)st.audio.adc[0].vuCombined;
         if (vu < -96) vu = -96;
         if (vu > 0) vu = 0;
         lv_bar_set_value(dash_level_bar, vu, LV_ANIM_ON);
-        bool detected = st.appState.audioLevel_dBFS >= st.appState.audioThreshold_dBFS;
+        bool detected = st.appState.audio.level_dBFS >= st.appState.audio.threshold_dBFS;
         lv_obj_set_style_bg_color(dash_level_bar,
             detected ? COLOR_SUCCESS : COLOR_TEXT_DIM, LV_PART_INDICATOR);
     }

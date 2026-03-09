@@ -413,8 +413,8 @@ bool dsp_swap_config() {
 #ifndef NATIVE_TEST
     if (_swapMutex && xSemaphoreTake(_swapMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
         LOG_W("[DSP] Swap failed: mutex busy");
-        AppState::getInstance().dspSwapFailures++;
-        AppState::getInstance().lastDspSwapFailure = millis();
+        AppState::getInstance().dsp.swapFailures++;
+        AppState::getInstance().dsp.lastSwapFailure = millis();
         return false;
     }
 #endif
@@ -445,8 +445,8 @@ bool dsp_swap_config() {
 #ifndef NATIVE_TEST
         if (_swapMutex) xSemaphoreGive(_swapMutex);
 #endif
-        AppState::getInstance().dspSwapFailures++;
-        AppState::getInstance().lastDspSwapFailure = millis();
+        AppState::getInstance().dsp.swapFailures++;
+        AppState::getInstance().dsp.lastSwapFailure = millis();
         return false;
     }
 
@@ -544,7 +544,7 @@ bool dsp_swap_config() {
 #endif
 
     // Update success counter
-    AppState::getInstance().dspSwapSuccesses++;
+    AppState::getInstance().dsp.swapSuccesses++;
 
     LOG_I("[DSP] Config swapped (active=%d)", newActive);
     return true;
@@ -1352,7 +1352,7 @@ static void dsp_multiband_comp_process(DspMultibandCompParams &mb, float *buf, i
 int dsp_add_stage(int channel, DspStageType type, int position) {
     if (channel < 0 || channel >= DSP_MAX_CHANNELS) return -1;
 #ifndef NATIVE_TEST
-    if (AppState::getInstance().heapCritical) {
+    if (AppState::getInstance().debug.heapCritical) {
         LOG_W("[DSP] Heap critical — refusing to add stage");
         return -1;
     }

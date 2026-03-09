@@ -153,7 +153,7 @@ static void pipeline_sync_flags() {
     AppState &s = AppState::getInstance();
     // All lanes: adcEnabled (set by HAL bridge) AND internal bypass flag
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-        _inputBypass[i] = !s.adcEnabled[i] || s.pipelineInputBypass[i];
+        _inputBypass[i] = !s.audio.adcEnabled[i] || s.pipelineInputBypass[i];
         _dspBypass[i] = s.pipelineDspBypass[i];
     }
     _matrixBypass = s.pipelineMatrixBypass;
@@ -388,7 +388,7 @@ static void pipeline_write_output() {
                 }
                 float sinkRmsL = sqrtf(sinkSumSqL / FRAMES);
                 float sinkRmsR = sqrtf(sinkSumSqR / FRAMES);
-                float sinkDt = (float)FRAMES * 1000.0f / (float)AppState::getInstance().audioSampleRate;
+                float sinkDt = (float)FRAMES * 1000.0f / (float)AppState::getInstance().audio.sampleRate;
                 sink->_vuSmoothedL = audio_vu_update(sink->_vuSmoothedL, sinkRmsL, sinkDt);
                 sink->_vuSmoothedR = audio_vu_update(sink->_vuSmoothedR, sinkRmsR, sinkDt);
                 sink->vuL = (sink->_vuSmoothedL > 1e-9f) ? 20.0f * log10f(sink->_vuSmoothedL) : -90.0f;
@@ -430,7 +430,7 @@ static void pipeline_update_metering() {
     float rmsCombined = sqrtf((sumSqL + sumSqR) / (FRAMES * 2));
     float dbfs = (rmsCombined > 1e-9f) ? 20.0f * log10f(rmsCombined) : -96.0f;
 
-    float dt_ms = (float)FRAMES * 1000.0f / (float)AppState::getInstance().audioSampleRate;
+    float dt_ms = (float)FRAMES * 1000.0f / (float)AppState::getInstance().audio.sampleRate;
     _meterState.vu1        = audio_vu_update(_meterState.vu1, rms1, dt_ms);
     _meterState.vu2        = audio_vu_update(_meterState.vu2, rms2, dt_ms);
     _meterState.vuCombined = audio_vu_update(_meterState.vuCombined, rmsCombined, dt_ms);
@@ -473,7 +473,7 @@ static void pipeline_update_metering() {
         }
         float srcRmsL = sqrtf(srcSumSqL / FRAMES);
         float srcRmsR = sqrtf(srcSumSqR / FRAMES);
-        float srcDt = (float)FRAMES * 1000.0f / (float)AppState::getInstance().audioSampleRate;
+        float srcDt = (float)FRAMES * 1000.0f / (float)AppState::getInstance().audio.sampleRate;
         _sources[lane]._vuSmoothedL = audio_vu_update(_sources[lane]._vuSmoothedL, srcRmsL, srcDt);
         _sources[lane]._vuSmoothedR = audio_vu_update(_sources[lane]._vuSmoothedR, srcRmsR, srcDt);
         _sources[lane].vuL = (_sources[lane]._vuSmoothedL > 1e-9f)
@@ -487,8 +487,8 @@ static void pipeline_update_metering() {
     for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS; lane++) {
         if (_sources[lane].name && strcmp(_sources[lane].name, "USB Audio") == 0) {
             AppState &asUsb = AppState::getInstance();
-            asUsb.usbAudioVuL = _sources[lane].vuL;
-            asUsb.usbAudioVuR = _sources[lane].vuR;
+            asUsb.usbAudio.vuL = _sources[lane].vuL;
+            asUsb.usbAudio.vuR = _sources[lane].vuR;
             asUsb.markUsbAudioVuDirty();
             break;
         }
@@ -511,10 +511,10 @@ static void audio_pipeline_task_fn(void * /*param*/) {
     while (true) {
         esp_task_wdt_reset();
 
-        if (AppState::getInstance().audioPaused) {
+        if (AppState::getInstance().audio.paused) {
 #ifndef NATIVE_TEST
-            if (AppState::getInstance().audioTaskPausedAck) {
-                xSemaphoreGive(AppState::getInstance().audioTaskPausedAck);
+            if (AppState::getInstance().audio.taskPausedAck) {
+                xSemaphoreGive(AppState::getInstance().audio.taskPausedAck);
             }
 #endif
             vTaskDelay(pdMS_TO_TICKS(10));
@@ -658,7 +658,7 @@ void audio_pipeline_init() {
     _outputBypass = s.pipelineOutputBypass;
 
 #ifndef NATIVE_TEST
-    AppState::getInstance().audioTaskPausedAck = xSemaphoreCreateBinary();
+    AppState::getInstance().audio.taskPausedAck = xSemaphoreCreateBinary();
     xTaskCreatePinnedToCore(
         audio_pipeline_task_fn,
         "audio_cap",
@@ -838,7 +838,7 @@ void audio_pipeline_register_sink(const AudioOutputSink *sink) {
 }
 
 void audio_pipeline_clear_sinks() {
-    // Caller must set appState.audioPaused=true and take audioTaskPausedAck before calling.
+    // Caller must set appState.audio.paused=true and take audioTaskPausedAck before calling.
     // The audio task gives the semaphore as soon as it sees audioPaused=true, guaranteeing
     // it is yielding by the time this runs. A single volatile write is atomic on RISC-V.
     _sinkCount = 0;

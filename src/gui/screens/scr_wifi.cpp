@@ -137,13 +137,13 @@ static void edit_ap_toggle(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Enable AP";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().apEnabled;
+    cfg.toggle_val = AppState::getInstance().wifi.apEnabled;
     cfg.on_confirm = on_ap_toggle_confirm;
     scr_value_edit_open(&cfg);
 }
 
 static void on_auto_ap_confirm(int val, float, int) {
-    AppState::getInstance().autoAPEnabled = (val != 0);
+    AppState::getInstance().wifi.autoAPEnabled = (val != 0);
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
 }
@@ -152,13 +152,13 @@ static void edit_auto_ap(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Auto AP";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().autoAPEnabled;
+    cfg.toggle_val = AppState::getInstance().wifi.autoAPEnabled;
     cfg.on_confirm = on_auto_ap_confirm;
     scr_value_edit_open(&cfg);
 }
 
 static void on_ap_ssid_done(const char *text) {
-    AppState::getInstance().apSSID = String(text);
+    AppState::getInstance().wifi.apSSID = String(text);
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] AP SSID set to: %s", text);
@@ -167,14 +167,14 @@ static void on_ap_ssid_done(const char *text) {
 static void edit_ap_ssid(void) {
     KeyboardConfig kb = {};
     kb.title = "AP SSID";
-    kb.initial_text = AppState::getInstance().apSSID.c_str();
+    kb.initial_text = AppState::getInstance().wifi.apSSID.c_str();
     kb.password_mode = false;
     kb.on_done = on_ap_ssid_done;
     scr_keyboard_open(&kb);
 }
 
 static void on_ap_password_done(const char *text) {
-    AppState::getInstance().apPassword = String(text);
+    AppState::getInstance().wifi.apPassword = String(text);
     saveSettingsDeferred();
     AppState::getInstance().markSettingsDirty();
     LOG_I("[GUI] AP password changed");
@@ -193,8 +193,8 @@ lv_obj_t *scr_wifi_ap_create(void) {
     AppState &st = AppState::getInstance();
 
     static char ap_str[8], auto_ap_str[8];
-    snprintf(ap_str, sizeof(ap_str), "%s", st.apEnabled ? "ON" : "OFF");
-    snprintf(auto_ap_str, sizeof(auto_ap_str), "%s", st.autoAPEnabled ? "ON" : "OFF");
+    snprintf(ap_str, sizeof(ap_str), "%s", st.wifi.apEnabled ? "ON" : "OFF");
+    snprintf(auto_ap_str, sizeof(auto_ap_str), "%s", st.wifi.autoAPEnabled ? "ON" : "OFF");
 
     static MenuConfig cfg;
     cfg.title = "Access Point";
@@ -202,7 +202,7 @@ lv_obj_t *scr_wifi_ap_create(void) {
     cfg.items[0] = {ICON_BACK " Back", nullptr, nullptr, MENU_BACK, nullptr};
     cfg.items[1] = {"Enable AP", ap_str, nullptr, MENU_ACTION, edit_ap_toggle};
     cfg.items[2] = {"Auto AP", auto_ap_str, nullptr, MENU_ACTION, edit_auto_ap};
-    cfg.items[3] = {"AP SSID", st.apSSID.c_str(), ICON_EDIT, MENU_ACTION, edit_ap_ssid};
+    cfg.items[3] = {"AP SSID", st.wifi.apSSID.c_str(), ICON_EDIT, MENU_ACTION, edit_ap_ssid};
     cfg.items[4] = {"AP Password", "****", ICON_EDIT, MENU_ACTION, edit_ap_password};
 
     return scr_menu_create(&cfg);
@@ -236,7 +236,7 @@ lv_obj_t *scr_wifi_create(void) {
     static char status_str[24];
     if (WiFi.status() == WL_CONNECTED) {
         snprintf(status_str, sizeof(status_str), "Connected");
-    } else if (AppState::getInstance().isAPMode) {
+    } else if (AppState::getInstance().wifi.isAPMode) {
         snprintf(status_str, sizeof(status_str), "AP Mode");
     } else {
         snprintf(status_str, sizeof(status_str), "Disconnected");
@@ -257,7 +257,7 @@ void scr_wifi_refresh(void) {
     static char status_buf[24];
     if (WiFi.status() == WL_CONNECTED) {
         snprintf(status_buf, sizeof(status_buf), "Connected");
-    } else if (AppState::getInstance().isAPMode) {
+    } else if (AppState::getInstance().wifi.isAPMode) {
         snprintf(status_buf, sizeof(status_buf), "AP Mode");
     } else {
         snprintf(status_buf, sizeof(status_buf), "Disconnected");
@@ -267,9 +267,9 @@ void scr_wifi_refresh(void) {
 
 void scr_wifi_ap_refresh(void) {
     AppState &st = AppState::getInstance();
-    scr_menu_set_item_value(1, st.apEnabled ? "ON" : "OFF");
-    scr_menu_set_item_value(2, st.autoAPEnabled ? "ON" : "OFF");
-    scr_menu_set_item_value(3, st.apSSID.c_str());
+    scr_menu_set_item_value(1, st.wifi.apEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(2, st.wifi.autoAPEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(3, st.wifi.apSSID.c_str());
 }
 
 #endif /* GUI_ENABLED */

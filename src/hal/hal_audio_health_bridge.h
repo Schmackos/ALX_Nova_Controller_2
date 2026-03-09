@@ -10,7 +10,7 @@
 //   >2 AVAIL↔UNAVAIL in 30s           → ERROR + DIAG_HAL_DEVICE_FLAPPING
 //
 // Flap guard: tracks per-device transition timestamps in a rolling 30s window.
-// On firmware: reads appState.audioAdc[lane].healthStatus.
+// On firmware: reads appState.audio.adc[lane].healthStatus.
 // On native test: reads _mockAdcHealth[lane] set via hal_audio_health_bridge_set_mock_status().
 
 #ifdef DAC_ENABLED

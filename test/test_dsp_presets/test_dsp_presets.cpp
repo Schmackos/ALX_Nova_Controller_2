@@ -12,10 +12,12 @@
 static bool mock_preset_exists[DSP_PRESET_MAX_SLOTS];
 static char mock_preset_names[DSP_PRESET_MAX_SLOTS][21];
 
-// Mock AppState
+// Mock AppState with dsp sub-struct matching decomposed AppState
 struct MockAppState {
-    char dspPresetNames[DSP_PRESET_MAX_SLOTS][21];
-    int8_t dspPresetIndex;
+    struct {
+        char presetNames[DSP_PRESET_MAX_SLOTS][21];
+        int8_t presetIndex;
+    } dsp;
 } appState;
 
 void setUp(void) {
@@ -23,7 +25,7 @@ void setUp(void) {
     memset(mock_preset_exists, 0, sizeof(mock_preset_exists));
     memset(mock_preset_names, 0, sizeof(mock_preset_names));
     memset(&appState, 0, sizeof(appState));
-    appState.dspPresetIndex = -1;
+    appState.dsp.presetIndex = -1;
 }
 
 void tearDown(void) {}
@@ -33,7 +35,7 @@ void tearDown(void) {}
 // Simulates the auto-assign logic from dsp_preset_save when slot=-1
 int dsp_find_free_slot(void) {
     for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
-        if (!mock_preset_exists[i] || appState.dspPresetNames[i][0] == '\0') {
+        if (!mock_preset_exists[i] || appState.dsp.presetNames[i][0] == '\0') {
             return i;
         }
     }
@@ -51,7 +53,7 @@ void test_preset_auto_assign_empty_list(void) {
 void test_preset_auto_assign_first_occupied(void) {
     // Slot 0 occupied, should return slot 1
     mock_preset_exists[0] = true;
-    strncpy(appState.dspPresetNames[0], "First", 20);
+    strncpy(appState.dsp.presetNames[0], "First", 20);
 
     int slot = dsp_find_free_slot();
     TEST_ASSERT_EQUAL_INT(1, slot);
@@ -62,9 +64,9 @@ void test_preset_auto_assign_gaps(void) {
     mock_preset_exists[0] = true;
     mock_preset_exists[2] = true;
     mock_preset_exists[4] = true;
-    strncpy(appState.dspPresetNames[0], "First", 20);
-    strncpy(appState.dspPresetNames[2], "Third", 20);
-    strncpy(appState.dspPresetNames[4], "Fifth", 20);
+    strncpy(appState.dsp.presetNames[0], "First", 20);
+    strncpy(appState.dsp.presetNames[2], "Third", 20);
+    strncpy(appState.dsp.presetNames[4], "Fifth", 20);
 
     int slot = dsp_find_free_slot();
     TEST_ASSERT_EQUAL_INT(1, slot);
@@ -74,7 +76,7 @@ void test_preset_auto_assign_all_full(void) {
     // Fill all slots
     for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
         mock_preset_exists[i] = true;
-        snprintf(appState.dspPresetNames[i], 21, "Preset%d", i);
+        snprintf(appState.dsp.presetNames[i], 21, "Preset%d", i);
     }
 
     int slot = dsp_find_free_slot();
@@ -86,9 +88,9 @@ void test_preset_auto_assign_deleted_slot(void) {
     mock_preset_exists[0] = true;
     mock_preset_exists[1] = false; // Deleted
     mock_preset_exists[2] = true;
-    strncpy(appState.dspPresetNames[0], "First", 20);
-    appState.dspPresetNames[1][0] = '\0'; // Empty name
-    strncpy(appState.dspPresetNames[2], "Third", 20);
+    strncpy(appState.dsp.presetNames[0], "First", 20);
+    appState.dsp.presetNames[1][0] = '\0'; // Empty name
+    strncpy(appState.dsp.presetNames[2], "Third", 20);
 
     int slot = dsp_find_free_slot();
     TEST_ASSERT_EQUAL_INT(1, slot); // Should reuse deleted slot
@@ -98,7 +100,7 @@ void test_preset_auto_assign_empty_name_slot(void) {
     // Slot exists but name is empty (edge case)
     mock_preset_exists[0] = true;
     mock_preset_exists[1] = true;
-    appState.dspPresetNames[0][0] = '\0'; // Empty name despite exists=true
+    appState.dsp.presetNames[0][0] = '\0'; // Empty name despite exists=true
 
     int slot = dsp_find_free_slot();
     TEST_ASSERT_EQUAL_INT(0, slot); // Should still return slot 0
@@ -108,7 +110,7 @@ void test_preset_auto_assign_last_slot(void) {
     // Fill all but last slot
     for (int i = 0; i < DSP_PRESET_MAX_SLOTS - 1; i++) {
         mock_preset_exists[i] = true;
-        snprintf(appState.dspPresetNames[i], 21, "Preset%d", i);
+        snprintf(appState.dsp.presetNames[i], 21, "Preset%d", i);
     }
 
     int slot = dsp_find_free_slot();
@@ -120,7 +122,7 @@ void test_preset_auto_assign_middle_gap(void) {
     for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
         if (i != 15) {
             mock_preset_exists[i] = true;
-            snprintf(appState.dspPresetNames[i], 21, "Preset%d", i);
+            snprintf(appState.dsp.presetNames[i], 21, "Preset%d", i);
         }
     }
 

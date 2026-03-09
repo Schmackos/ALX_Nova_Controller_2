@@ -1,5 +1,7 @@
 #include "auth_handler.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "config.h"
 #include "debug_serial.h"
 #include <Arduino.h>
@@ -259,8 +261,8 @@ void initAuth() {
   authPrefs.begin("auth", false);
 
   if (authPrefs.isKey("pwd_hash")) {
-    appState.webPassword = authPrefs.getString("pwd_hash", "");
-    if (appState.webPassword.startsWith("p1:")) {
+    appState.wifi.webPassword = authPrefs.getString("pwd_hash", "");
+    if (appState.wifi.webPassword.startsWith("p1:")) {
       LOG_I("[Auth] Loaded PBKDF2 password hash from NVS");
     } else {
       // Legacy bare SHA256 — flag for migration on next successful login
@@ -274,18 +276,18 @@ void initAuth() {
       String hashed = hashPasswordPbkdf2(plaintext);
       authPrefs.putString("pwd_hash", hashed);
       authPrefs.remove("web_pwd");
-      appState.webPassword = hashed;
+      appState.wifi.webPassword = hashed;
       LOG_I("[Auth] Migrated plaintext password to PBKDF2 hash");
     } else {
-      appState.webPassword = hashPasswordPbkdf2(appState.apPassword);
-      authPrefs.putString("pwd_hash", appState.webPassword);
+      appState.wifi.webPassword = hashPasswordPbkdf2(appState.wifi.apPassword);
+      authPrefs.putString("pwd_hash", appState.wifi.webPassword);
       LOG_I("[Auth] Using default password (AP password, PBKDF2)");
     }
   } else {
     // First boot — generate unique per-device password
     String defaultPwd = generateDefaultPassword();
-    appState.webPassword = hashPasswordPbkdf2(defaultPwd);
-    authPrefs.putString("pwd_hash", appState.webPassword);
+    appState.wifi.webPassword = hashPasswordPbkdf2(defaultPwd);
+    authPrefs.putString("pwd_hash", appState.wifi.webPassword);
     authPrefs.putString("default_pwd", defaultPwd);  // plaintext for display
     LOG_I("[Auth] Generated default password: %s", defaultPwd.c_str());
   }
@@ -485,7 +487,7 @@ bool requireAuth() {
 }
 
 // Get web password
-String getWebPassword() { return appState.webPassword; }
+String getWebPassword() { return appState.wifi.webPassword; }
 
 // Get stored default password (for TFT display on boot screen)
 String getDefaultPassword() {
@@ -499,7 +501,7 @@ String getDefaultPassword() {
 // Set web password and save to NVS (PBKDF2 hash, deletes legacy key)
 void setWebPassword(String newPassword) {
   String hashed = hashPasswordPbkdf2(newPassword);
-  appState.webPassword = hashed;
+  appState.wifi.webPassword = hashed;
 
   authPrefs.begin("auth", false);
   authPrefs.putString("pwd_hash", hashed);
@@ -520,13 +522,13 @@ bool isDefaultPassword() {
     String defPwd = authPrefs.getString("default_pwd", "");
     authPrefs.end();
     if (defPwd.length() > 0) {
-      return verifyPassword(defPwd, appState.webPassword);
+      return verifyPassword(defPwd, appState.wifi.webPassword);
     }
     return false;
   }
   authPrefs.end();
   // Legacy fallback: AP password was the old default
-  return verifyPassword(appState.apPassword, appState.webPassword);
+  return verifyPassword(appState.wifi.apPassword, appState.wifi.webPassword);
 }
 
 // Handler: Login
@@ -580,7 +582,7 @@ void handleLogin() {
   }
 
   // Validate password (supports PBKDF2 and legacy SHA256)
-  if (!verifyPassword(password, appState.webPassword)) {
+  if (!verifyPassword(password, appState.wifi.webPassword)) {
     // Progressive rate limiting (non-blocking)
     _loginFailCount++;
     _lastFailTime = (uint64_t)esp_timer_get_time();
@@ -621,7 +623,7 @@ void handleLogin() {
   // Migrate legacy SHA256 hash to PBKDF2 on successful login
   if (_passwordNeedsMigration) {
     String newHash = hashPasswordPbkdf2(password);
-    appState.webPassword = newHash;
+    appState.wifi.webPassword = newHash;
     authPrefs.begin("auth", false);
     authPrefs.putString("pwd_hash", newHash);
     authPrefs.end();

@@ -4,6 +4,8 @@
 
 #include "mqtt_handler.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "diag_journal.h"
@@ -91,49 +93,49 @@ void mqttPublishPendingState() {
   if (!mqttClient.connected()) return;
 
   unsigned long currentMillis = millis();
-  if (currentMillis - appState.lastMqttPublish < MQTT_PUBLISH_INTERVAL) return;
-  appState.lastMqttPublish = currentMillis;
+  if (currentMillis - appState.mqtt.lastPublish < MQTT_PUBLISH_INTERVAL) return;
+  appState.mqtt.lastPublish = currentMillis;
 
   // Per-category change detection
   bool audioLevelChanged =
-      (fabs(appState.audioLevel_dBFS - prevMqttAudioLevel) > 0.5f);
+      (fabs(appState.audio.level_dBFS - prevMqttAudioLevel) > 0.5f);
   bool sensingChanged =
-      (appState.amplifierState != prevMqttAmplifierState) ||
-      (appState.currentMode != prevMqttSensingMode) ||
-      (appState.timerRemaining != prevMqttTimerRemaining);
+      (appState.audio.amplifierState != prevMqttAmplifierState) ||
+      (appState.audio.currentMode != prevMqttSensingMode) ||
+      (appState.audio.timerRemaining != prevMqttTimerRemaining);
   bool displayChanged =
-      (appState.backlightOn != prevMqttBacklightOn) ||
-      (appState.screenTimeout != prevMqttScreenTimeout) ||
-      (appState.backlightBrightness != prevMqttBrightness) ||
-      (appState.dimEnabled != prevMqttDimEnabled) ||
-      (appState.dimTimeout != prevMqttDimTimeout) ||
-      (appState.dimBrightness != prevMqttDimBrightness);
+      (appState.display.backlightOn != prevMqttBacklightOn) ||
+      (appState.display.screenTimeout != prevMqttScreenTimeout) ||
+      (appState.display.backlightBrightness != prevMqttBrightness) ||
+      (appState.display.dimEnabled != prevMqttDimEnabled) ||
+      (appState.display.dimTimeout != prevMqttDimTimeout) ||
+      (appState.display.dimBrightness != prevMqttDimBrightness);
   bool settingsChanged =
-      (appState.darkMode != prevMqttDarkMode) ||
-      (appState.autoUpdateEnabled != prevMqttAutoUpdate) ||
-      (appState.enableCertValidation != prevMqttCertValidation) ||
-      (appState.otaChannel != prevMqttOtaChannel);
+      (appState.general.darkMode != prevMqttDarkMode) ||
+      (appState.ota.autoUpdateEnabled != prevMqttAutoUpdate) ||
+      (appState.general.enableCertValidation != prevMqttCertValidation) ||
+      (appState.ota.channel != prevMqttOtaChannel);
   bool buzzerChanged =
-      (appState.buzzerEnabled != prevMqttBuzzerEnabled) ||
-      (appState.buzzerVolume != prevMqttBuzzerVolume);
+      (appState.buzzer.enabled != prevMqttBuzzerEnabled) ||
+      (appState.buzzer.volume != prevMqttBuzzerVolume);
   bool siggenChanged =
-      (appState.sigGenEnabled != prevMqttSigGenEnabled) ||
-      (appState.sigGenWaveform != prevMqttSigGenWaveform) ||
-      (fabs(appState.sigGenFrequency - prevMqttSigGenFrequency) > 0.5f) ||
-      (fabs(appState.sigGenAmplitude - prevMqttSigGenAmplitude) > 0.5f) ||
-      (appState.sigGenOutputMode != prevMqttSigGenOutputMode) ||
-      (fabs(appState.sigGenSweepSpeed - prevMqttSigGenSweepSpeed) > 0.05f);
+      (appState.sigGen.enabled != prevMqttSigGenEnabled) ||
+      (appState.sigGen.waveform != prevMqttSigGenWaveform) ||
+      (fabs(appState.sigGen.frequency - prevMqttSigGenFrequency) > 0.5f) ||
+      (fabs(appState.sigGen.amplitude - prevMqttSigGenAmplitude) > 0.5f) ||
+      (appState.sigGen.outputMode != prevMqttSigGenOutputMode) ||
+      (fabs(appState.sigGen.sweepSpeed - prevMqttSigGenSweepSpeed) > 0.05f);
   bool audioGraphChanged =
-      (appState.vuMeterEnabled != prevMqttVuMeterEnabled) ||
-      (appState.waveformEnabled != prevMqttWaveformEnabled) ||
-      (appState.spectrumEnabled != prevMqttSpectrumEnabled) ||
-      (appState.fftWindowType != prevMqttFftWindowType);
+      (appState.audio.vuMeterEnabled != prevMqttVuMeterEnabled) ||
+      (appState.audio.waveformEnabled != prevMqttWaveformEnabled) ||
+      (appState.audio.spectrumEnabled != prevMqttSpectrumEnabled) ||
+      (appState.audio.fftWindowType != prevMqttFftWindowType);
   bool debugChanged =
-      (appState.debugMode != prevMqttDebugMode) ||
-      (appState.debugSerialLevel != prevMqttDebugSerialLevel) ||
-      (appState.debugHwStats != prevMqttDebugHwStats) ||
-      (appState.debugI2sMetrics != prevMqttDebugI2sMetrics) ||
-      (appState.debugTaskMonitor != prevMqttDebugTaskMonitor);
+      (appState.debug.debugMode != prevMqttDebugMode) ||
+      (appState.debug.serialLevel != prevMqttDebugSerialLevel) ||
+      (appState.debug.hwStats != prevMqttDebugHwStats) ||
+      (appState.debug.i2sMetrics != prevMqttDebugI2sMetrics) ||
+      (appState.debug.taskMonitor != prevMqttDebugTaskMonitor);
 
   // Selective dispatch — only publish categories that actually changed
   // Smart sensing + audio level (combined to avoid double-publishing)
@@ -141,50 +143,50 @@ void mqttPublishPendingState() {
     publishMqttSmartSensingState();
     if (audioLevelChanged) {
       publishMqttAudioDiagnostics();
-      prevMqttAudioLevel = appState.audioLevel_dBFS;
+      prevMqttAudioLevel = appState.audio.level_dBFS;
     }
     if (sensingChanged) {
-      prevMqttAmplifierState = appState.amplifierState;
-      prevMqttSensingMode = appState.currentMode;
-      prevMqttTimerRemaining = appState.timerRemaining;
+      prevMqttAmplifierState = appState.audio.amplifierState;
+      prevMqttSensingMode = appState.audio.currentMode;
+      prevMqttTimerRemaining = appState.audio.timerRemaining;
     }
   }
   if (displayChanged) {
     publishMqttDisplayState();
-    prevMqttBacklightOn = appState.backlightOn;
-    prevMqttScreenTimeout = appState.screenTimeout;
-    prevMqttBrightness = appState.backlightBrightness;
-    prevMqttDimEnabled = appState.dimEnabled;
-    prevMqttDimTimeout = appState.dimTimeout;
-    prevMqttDimBrightness = appState.dimBrightness;
+    prevMqttBacklightOn = appState.display.backlightOn;
+    prevMqttScreenTimeout = appState.display.screenTimeout;
+    prevMqttBrightness = appState.display.backlightBrightness;
+    prevMqttDimEnabled = appState.display.dimEnabled;
+    prevMqttDimTimeout = appState.display.dimTimeout;
+    prevMqttDimBrightness = appState.display.dimBrightness;
   }
   if (settingsChanged) {
     publishMqttSystemStatus();
-    prevMqttDarkMode = appState.darkMode;
-    prevMqttAutoUpdate = appState.autoUpdateEnabled;
-    prevMqttCertValidation = appState.enableCertValidation;
-    prevMqttOtaChannel = appState.otaChannel;
+    prevMqttDarkMode = appState.general.darkMode;
+    prevMqttAutoUpdate = appState.ota.autoUpdateEnabled;
+    prevMqttCertValidation = appState.general.enableCertValidation;
+    prevMqttOtaChannel = appState.ota.channel;
   }
   if (buzzerChanged) {
     publishMqttBuzzerState();
-    prevMqttBuzzerEnabled = appState.buzzerEnabled;
-    prevMqttBuzzerVolume = appState.buzzerVolume;
+    prevMqttBuzzerEnabled = appState.buzzer.enabled;
+    prevMqttBuzzerVolume = appState.buzzer.volume;
   }
   if (siggenChanged) {
     publishMqttSignalGenState();
-    prevMqttSigGenEnabled = appState.sigGenEnabled;
-    prevMqttSigGenWaveform = appState.sigGenWaveform;
-    prevMqttSigGenFrequency = appState.sigGenFrequency;
-    prevMqttSigGenAmplitude = appState.sigGenAmplitude;
-    prevMqttSigGenOutputMode = appState.sigGenOutputMode;
-    prevMqttSigGenSweepSpeed = appState.sigGenSweepSpeed;
+    prevMqttSigGenEnabled = appState.sigGen.enabled;
+    prevMqttSigGenWaveform = appState.sigGen.waveform;
+    prevMqttSigGenFrequency = appState.sigGen.frequency;
+    prevMqttSigGenAmplitude = appState.sigGen.amplitude;
+    prevMqttSigGenOutputMode = appState.sigGen.outputMode;
+    prevMqttSigGenSweepSpeed = appState.sigGen.sweepSpeed;
   }
   if (audioGraphChanged) {
     publishMqttAudioGraphState();
-    prevMqttVuMeterEnabled = appState.vuMeterEnabled;
-    prevMqttWaveformEnabled = appState.waveformEnabled;
-    prevMqttSpectrumEnabled = appState.spectrumEnabled;
-    prevMqttFftWindowType = appState.fftWindowType;
+    prevMqttVuMeterEnabled = appState.audio.vuMeterEnabled;
+    prevMqttWaveformEnabled = appState.audio.waveformEnabled;
+    prevMqttSpectrumEnabled = appState.audio.spectrumEnabled;
+    prevMqttFftWindowType = appState.audio.fftWindowType;
   }
   if (appState.isAdcEnabledDirty()) {
     publishMqttAdcEnabledState();
@@ -198,11 +200,11 @@ void mqttPublishPendingState() {
 #endif
   if (debugChanged) {
     publishMqttDebugState();
-    prevMqttDebugMode = appState.debugMode;
-    prevMqttDebugSerialLevel = appState.debugSerialLevel;
-    prevMqttDebugHwStats = appState.debugHwStats;
-    prevMqttDebugI2sMetrics = appState.debugI2sMetrics;
-    prevMqttDebugTaskMonitor = appState.debugTaskMonitor;
+    prevMqttDebugMode = appState.debug.debugMode;
+    prevMqttDebugSerialLevel = appState.debug.serialLevel;
+    prevMqttDebugHwStats = appState.debug.hwStats;
+    prevMqttDebugI2sMetrics = appState.debug.i2sMetrics;
+    prevMqttDebugTaskMonitor = appState.debug.taskMonitor;
   }
 #ifdef GUI_ENABLED
   if ((appState.bootAnimEnabled != prevMqttBootAnimEnabled) ||
@@ -213,13 +215,13 @@ void mqttPublishPendingState() {
   }
 #endif
 #ifdef DSP_ENABLED
-  if ((appState.dspEnabled != prevMqttDspEnabled) ||
-      (appState.dspBypass != prevMqttDspBypass) ||
-      (appState.dspPresetIndex != prevMqttDspPresetIndex)) {
+  if ((appState.dsp.enabled != prevMqttDspEnabled) ||
+      (appState.dsp.bypass != prevMqttDspBypass) ||
+      (appState.dsp.presetIndex != prevMqttDspPresetIndex)) {
     publishMqttDspState();
-    prevMqttDspEnabled = appState.dspEnabled;
-    prevMqttDspBypass = appState.dspBypass;
-    prevMqttDspPresetIndex = appState.dspPresetIndex;
+    prevMqttDspEnabled = appState.dsp.enabled;
+    prevMqttDspBypass = appState.dsp.bypass;
+    prevMqttDspPresetIndex = appState.dsp.presetIndex;
   }
 #endif
 }
@@ -254,7 +256,7 @@ void publishMqttSmartSensingState() {
 
   // Convert mode enum to string
   String modeStr;
-  switch (appState.currentMode) {
+  switch (appState.audio.currentMode) {
   case ALWAYS_ON:
     modeStr = "always_on";
     break;
@@ -269,22 +271,22 @@ void publishMqttSmartSensingState() {
   mqttClient.publish((base + "/smartsensing/mode").c_str(), modeStr.c_str(),
                      true);
   mqttClient.publish((base + "/smartsensing/amplifier").c_str(),
-                     appState.amplifierState ? "ON" : "OFF", true);
+                     appState.audio.amplifierState ? "ON" : "OFF", true);
   mqttClient.publish((base + "/smartsensing/timer_duration").c_str(),
-                     String(appState.timerDuration).c_str(), true);
+                     String(appState.audio.timerDuration).c_str(), true);
   mqttClient.publish((base + "/smartsensing/timer_remaining").c_str(),
-                     String(appState.timerRemaining).c_str(), true);
+                     String(appState.audio.timerRemaining).c_str(), true);
   mqttClient.publish((base + "/smartsensing/audio_level").c_str(),
-                     String(appState.audioLevel_dBFS, 1).c_str(), true);
+                     String(appState.audio.level_dBFS, 1).c_str(), true);
   mqttClient.publish((base + "/smartsensing/audio_threshold").c_str(),
-                     String(appState.audioThreshold_dBFS, 1).c_str(), true);
+                     String(appState.audio.threshold_dBFS, 1).c_str(), true);
   mqttClient.publish((base + "/smartsensing/signal_detected").c_str(),
-                     (appState.audioLevel_dBFS >= appState.audioThreshold_dBFS) ? "ON" : "OFF",
+                     (appState.audio.level_dBFS >= appState.audio.threshold_dBFS) ? "ON" : "OFF",
                      true);
 
   // Last signal detection timestamp (seconds since boot, 0 if never detected)
   unsigned long lastDetectionSecs =
-      appState.lastSignalDetection > 0 ? appState.lastSignalDetection / 1000 : 0;
+      appState.audio.lastSignalDetection > 0 ? appState.audio.lastSignalDetection / 1000 : 0;
   mqttClient.publish((base + "/smartsensing/last_detection_time").c_str(),
                      String(lastDetectionSecs).c_str(), true);
 }
@@ -312,13 +314,13 @@ void publishMqttWifiStatus() {
                        true);
   }
 
-  mqttClient.publish((base + "/ap/enabled").c_str(), appState.apEnabled ? "ON" : "OFF",
+  mqttClient.publish((base + "/ap/enabled").c_str(), appState.wifi.apEnabled ? "ON" : "OFF",
                      true);
 
-  if (appState.isAPMode) {
+  if (appState.wifi.isAPMode) {
     mqttClient.publish((base + "/ap/ip").c_str(),
                        WiFi.softAPIP().toString().c_str(), true);
-    mqttClient.publish((base + "/ap/ssid").c_str(), appState.apSSID.c_str(), true);
+    mqttClient.publish((base + "/ap/ssid").c_str(), appState.wifi.apSSID.c_str(), true);
   }
 }
 
@@ -334,7 +336,7 @@ void publishMqttSystemStatusStatic() {
   mqttClient.publish((base + "/system/model").c_str(), MANUFACTURER_MODEL,
                      true);
   mqttClient.publish((base + "/system/serial_number").c_str(),
-                     appState.deviceSerialNumber.c_str(), true);
+                     appState.general.deviceSerialNumber.c_str(), true);
   mqttClient.publish((base + "/system/firmware").c_str(), firmwareVer, true);
   mqttClient.publish((base + "/system/mac").c_str(), WiFi.macAddress().c_str(),
                      true);
@@ -350,21 +352,21 @@ void publishMqttSystemStatus() {
   String base = getEffectiveMqttBaseTopic();
 
   mqttClient.publish((base + "/system/update_available").c_str(),
-                     appState.updateAvailable ? "ON" : "OFF", true);
-  if (appState.cachedLatestVersion.length() > 0) {
+                     appState.ota.updateAvailable ? "ON" : "OFF", true);
+  if (appState.ota.cachedLatestVersion.length() > 0) {
     mqttClient.publish((base + "/system/latest_version").c_str(),
-                       appState.cachedLatestVersion.c_str(), true);
+                       appState.ota.cachedLatestVersion.c_str(), true);
   }
   mqttClient.publish((base + "/settings/auto_update").c_str(),
-                     appState.autoUpdateEnabled ? "ON" : "OFF", true);
+                     appState.ota.autoUpdateEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/settings/ota_channel").c_str(),
-                     appState.otaChannel == 0 ? "stable" : "beta", true);
+                     appState.ota.channel == 0 ? "stable" : "beta", true);
   mqttClient.publish((base + "/settings/timezone_offset").c_str(),
-                     String(appState.timezoneOffset).c_str(), true);
+                     String(appState.general.timezoneOffset).c_str(), true);
   mqttClient.publish((base + "/settings/dark_mode").c_str(),
-                     appState.darkMode ? "ON" : "OFF", true);
+                     appState.general.darkMode ? "ON" : "OFF", true);
   mqttClient.publish((base + "/settings/cert_validation").c_str(),
-                     appState.enableCertValidation ? "ON" : "OFF", true);
+                     appState.general.enableCertValidation ? "ON" : "OFF", true);
 }
 
 // Publish update state for Home Assistant Update entity
@@ -378,21 +380,21 @@ void publishMqttUpdateState() {
   JsonDocument doc;
   doc["installed_version"] = firmwareVer;
   doc["latest_version"] =
-      appState.cachedLatestVersion.length() > 0 ? appState.cachedLatestVersion : firmwareVer;
+      appState.ota.cachedLatestVersion.length() > 0 ? appState.ota.cachedLatestVersion : firmwareVer;
   doc["title"] = String(MANUFACTURER_MODEL) + " Firmware";
   doc["release_url"] = String("https://github.com/") + GITHUB_REPO_OWNER + "/" +
                        GITHUB_REPO_NAME + "/releases";
-  doc["in_progress"] = appState.otaInProgress;
-  if (appState.otaInProgress) {
-    doc["update_percentage"] = appState.otaProgress;
+  doc["in_progress"] = appState.ota.inProgress;
+  if (appState.ota.inProgress) {
+    doc["update_percentage"] = appState.ota.progress;
   } else {
     doc["update_percentage"] = (char*)nullptr; // JSON null
   }
 
   // Add release summary if update available
-  if (appState.updateAvailable && appState.cachedLatestVersion.length() > 0) {
+  if (appState.ota.updateAvailable && appState.ota.cachedLatestVersion.length() > 0) {
     doc["release_summary"] =
-        "New firmware version " + appState.cachedLatestVersion + " is available";
+        "New firmware version " + appState.ota.cachedLatestVersion + " is available";
   }
 
   String json;
@@ -402,22 +404,22 @@ void publishMqttUpdateState() {
 
   // Publish separate OTA progress topics for easier monitoring
   mqttClient.publish((base + "/system/update/in_progress").c_str(),
-                     appState.otaInProgress ? "ON" : "OFF", true);
+                     appState.ota.inProgress ? "ON" : "OFF", true);
   mqttClient.publish((base + "/system/update/progress").c_str(),
-                     String(appState.otaProgress).c_str(), true);
+                     String(appState.ota.progress).c_str(), true);
   mqttClient.publish((base + "/system/update/status").c_str(),
-                     appState.otaStatus.c_str(), true);
+                     appState.ota.status.c_str(), true);
 
-  if (appState.otaStatusMessage.length() > 0) {
+  if (appState.ota.statusMessage.length() > 0) {
     mqttClient.publish((base + "/system/update/message").c_str(),
-                       appState.otaStatusMessage.c_str(), true);
+                       appState.ota.statusMessage.c_str(), true);
   }
 
-  if (appState.otaTotalBytes > 0) {
+  if (appState.ota.totalBytes > 0) {
     mqttClient.publish((base + "/system/update/bytes_downloaded").c_str(),
-                       String(appState.otaProgressBytes).c_str(), true);
+                       String(appState.ota.progressBytes).c_str(), true);
     mqttClient.publish((base + "/system/update/bytes_total").c_str(),
-                       String(appState.otaTotalBytes).c_str(), true);
+                       String(appState.ota.totalBytes).c_str(), true);
   }
 }
 
@@ -455,7 +457,7 @@ void publishMqttHardwareStatsStatic() {
 void publishMqttHardwareStats() {
   if (!mqttClient.connected())
     return;
-  if (!appState.debugMode || !appState.debugHwStats)
+  if (!appState.debug.debugMode || !appState.debug.hwStats)
     return;
 
   updateCpuUsage();
@@ -530,9 +532,9 @@ void publishMqttBuzzerState() {
   String base = getEffectiveMqttBaseTopic();
 
   mqttClient.publish((base + "/settings/buzzer").c_str(),
-                     appState.buzzerEnabled ? "ON" : "OFF", true);
+                     appState.buzzer.enabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/settings/buzzer_volume").c_str(),
-                     String(appState.buzzerVolume).c_str(), true);
+                     String(appState.buzzer.volume).c_str(), true);
 }
 
 // Publish display state (backlight + screen timeout)
@@ -543,31 +545,31 @@ void publishMqttDisplayState() {
   String base = getEffectiveMqttBaseTopic();
 
   mqttClient.publish((base + "/display/backlight").c_str(),
-                     appState.backlightOn ? "ON" : "OFF", true);
+                     appState.display.backlightOn ? "ON" : "OFF", true);
   mqttClient.publish((base + "/settings/screen_timeout").c_str(),
-                     String(appState.screenTimeout / 1000).c_str(), true);
+                     String(appState.display.screenTimeout / 1000).c_str(), true);
 
   // Publish brightness as percentage (0-100)
-  int brightPct = (int)appState.backlightBrightness * 100 / 255;
+  int brightPct = (int)appState.display.backlightBrightness * 100 / 255;
   mqttClient.publish((base + "/display/brightness").c_str(),
                      String(brightPct).c_str(), true);
 
   mqttClient.publish((base + "/display/dim_enabled").c_str(),
-                     appState.dimEnabled ? "ON" : "OFF", true);
+                     appState.display.dimEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/settings/dim_timeout").c_str(),
-                     String(appState.dimTimeout / 1000).c_str(), true);
+                     String(appState.display.dimTimeout / 1000).c_str(), true);
 
   // Publish dim brightness as percentage
   int dimPct = 10;
-  if (appState.dimBrightness >= 191) dimPct = 75;
-  else if (appState.dimBrightness >= 128) dimPct = 50;
-  else if (appState.dimBrightness >= 64) dimPct = 25;
+  if (appState.display.dimBrightness >= 191) dimPct = 75;
+  else if (appState.display.dimBrightness >= 128) dimPct = 50;
+  else if (appState.display.dimBrightness >= 64) dimPct = 25;
   else dimPct = 10;
   mqttClient.publish((base + "/display/dim_brightness").c_str(),
                      String(dimPct).c_str(), true);
 
   mqttClient.publish((base + "/settings/audio_update_rate").c_str(),
-                     String(appState.audioUpdateRate).c_str(), true);
+                     String(appState.audio.updateRate).c_str(), true);
 }
 
 // Publish signal generator state
@@ -578,25 +580,25 @@ void publishMqttSignalGenState() {
   String base = getEffectiveMqttBaseTopic();
 
   mqttClient.publish((base + "/signalgenerator/enabled").c_str(),
-                     appState.sigGenEnabled ? "ON" : "OFF", true);
+                     appState.sigGen.enabled ? "ON" : "OFF", true);
 
   const char *waveNames[] = {"sine", "square", "white_noise", "sweep"};
   mqttClient.publish((base + "/signalgenerator/waveform").c_str(),
-                     waveNames[appState.sigGenWaveform % 4], true);
+                     waveNames[appState.sigGen.waveform % 4], true);
   mqttClient.publish((base + "/signalgenerator/frequency").c_str(),
-                     String(appState.sigGenFrequency, 0).c_str(), true);
+                     String(appState.sigGen.frequency, 0).c_str(), true);
   mqttClient.publish((base + "/signalgenerator/amplitude").c_str(),
-                     String(appState.sigGenAmplitude, 0).c_str(), true);
+                     String(appState.sigGen.amplitude, 0).c_str(), true);
 
   const char *chanNames[] = {"ch1", "ch2", "both"};
   mqttClient.publish((base + "/signalgenerator/channel").c_str(),
-                     chanNames[appState.sigGenChannel % 3], true);
+                     chanNames[appState.sigGen.channel % 3], true);
 
   mqttClient.publish((base + "/signalgenerator/output_mode").c_str(),
-                     appState.sigGenOutputMode == 0 ? "software" : "pwm", true);
+                     appState.sigGen.outputMode == 0 ? "software" : "pwm", true);
 
   mqttClient.publish((base + "/signalgenerator/sweep_speed").c_str(),
-                     String(appState.sigGenSweepSpeed, 0).c_str(), true);
+                     String(appState.sigGen.sweepSpeed, 0).c_str(), true);
 }
 
 void publishMqttAudioDiagnostics() {
@@ -606,11 +608,11 @@ void publishMqttAudioDiagnostics() {
   String base = getEffectiveMqttBaseTopic();
 
   // Per-ADC diagnostics — iterate all active inputs dynamically.
-  int adcCount = appState.activeInputCount;
-  if (adcCount <= 0) adcCount = appState.numAdcsDetected;
+  int adcCount = appState.audio.activeInputCount;
+  if (adcCount <= 0) adcCount = appState.audio.numAdcsDetected;
   if (adcCount > AUDIO_PIPELINE_MAX_INPUTS) adcCount = AUDIO_PIPELINE_MAX_INPUTS;
   for (int a = 0; a < adcCount; a++) {
-    const AppState::AdcState &adc = appState.audioAdc[a];
+    const AdcState &adc = appState.audio.adc[a];
     const char *statusStr = "OK";
     switch (adc.healthStatus) {
       case 1: statusStr = "NO_DATA"; break;
@@ -629,11 +631,11 @@ void publishMqttAudioDiagnostics() {
                        String(adc.vrmsCombined, 3).c_str(), true);
     mqttClient.publish((prefix + "/level").c_str(),
                        String(adc.dBFS, 1).c_str(), true);
-    if (appState.debugMode) {
+    if (appState.debug.debugMode) {
       mqttClient.publish((prefix + "/snr").c_str(),
-                         String(appState.audioSnrDb[a], 1).c_str(), true);
+                         String(appState.audio.snrDb[a], 1).c_str(), true);
       mqttClient.publish((prefix + "/sfdr").c_str(),
-                         String(appState.audioSfdrDb[a], 1).c_str(), true);
+                         String(appState.audio.sfdrDb[a], 1).c_str(), true);
     }
   }
 
@@ -641,14 +643,14 @@ void publishMqttAudioDiagnostics() {
   // C1: worst health status (highest enum value = most severe).
   // C2: worst noise floor (highest dBFS = most noise), highest vrms (loudest input).
   int worstHealth = 0;
-  float worstNoise = appState.audioAdc[0].noiseFloorDbfs;
-  float maxVrms = appState.audioAdc[0].vrmsCombined;
+  float worstNoise = appState.audio.adc[0].noiseFloorDbfs;
+  float maxVrms = appState.audio.adc[0].vrmsCombined;
   {
-    int laneCount = appState.activeInputCount;
+    int laneCount = appState.audio.activeInputCount;
     if (laneCount <= 0) laneCount = adcCount; // fall back to per-ADC loop bound
     if (laneCount > AUDIO_PIPELINE_MAX_INPUTS) laneCount = AUDIO_PIPELINE_MAX_INPUTS;
     for (int a = 0; a < laneCount; a++) {
-      const AppState::AdcState &lane = appState.audioAdc[a];
+      const AdcState &lane = appState.audio.adc[a];
       if (lane.healthStatus > worstHealth) worstHealth = lane.healthStatus;
       if (lane.noiseFloorDbfs > worstNoise) worstNoise = lane.noiseFloorDbfs;
       if (lane.vrmsCombined > maxVrms) maxVrms = lane.vrmsCombined;
@@ -668,7 +670,7 @@ void publishMqttAudioDiagnostics() {
   mqttClient.publish((base + "/audio/input_vrms").c_str(),
                      String(maxVrms, 3).c_str(), true);
   mqttClient.publish((base + "/settings/adc_vref").c_str(),
-                     String(appState.adcVref, 2).c_str(), true);
+                     String(appState.audio.adcVref, 2).c_str(), true);
 }
 
 // Publish audio graph toggle state
@@ -679,13 +681,13 @@ void publishMqttAudioGraphState() {
   String base = getEffectiveMqttBaseTopic();
 
   mqttClient.publish((base + "/audio/vu_meter").c_str(),
-                     appState.vuMeterEnabled ? "ON" : "OFF", true);
+                     appState.audio.vuMeterEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/audio/waveform").c_str(),
-                     appState.waveformEnabled ? "ON" : "OFF", true);
+                     appState.audio.waveformEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/audio/spectrum").c_str(),
-                     appState.spectrumEnabled ? "ON" : "OFF", true);
+                     appState.audio.spectrumEnabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/audio/fft_window").c_str(),
-                     fftWindowName(appState.fftWindowType), true);
+                     fftWindowName(appState.audio.fftWindowType), true);
 }
 
 // Publish per-ADC enabled state
@@ -695,9 +697,9 @@ void publishMqttAdcEnabledState() {
 
   String base = getEffectiveMqttBaseTopic();
   mqttClient.publish((base + "/audio/input1/enabled").c_str(),
-                     appState.adcEnabled[0] ? "ON" : "OFF", true);
+                     appState.audio.adcEnabled[0] ? "ON" : "OFF", true);
   mqttClient.publish((base + "/audio/input2/enabled").c_str(),
-                     appState.adcEnabled[1] ? "ON" : "OFF", true);
+                     appState.audio.adcEnabled[1] ? "ON" : "OFF", true);
 }
 
 #ifdef USB_AUDIO_ENABLED
@@ -707,19 +709,19 @@ void publishMqttUsbAudioState() {
     String base = getEffectiveMqttBaseTopic();
 
     mqttClient.publish((base + "/" + MQTT_TOPIC_USB_CONNECTED).c_str(),
-                       appState.usbAudioConnected ? "true" : "false", true);
+                       appState.usbAudio.connected ? "true" : "false", true);
 
     mqttClient.publish((base + "/" + MQTT_TOPIC_USB_STREAMING).c_str(),
-                       appState.usbAudioStreaming ? "true" : "false", true);
+                       appState.usbAudio.streaming ? "true" : "false", true);
 
     mqttClient.publish((base + "/" + MQTT_TOPIC_USB_ENABLED).c_str(),
-                       appState.usbAudioEnabled ? "true" : "false", true);
+                       appState.usbAudio.enabled ? "true" : "false", true);
 
     char val[16];
-    snprintf(val, sizeof(val), "%u", (unsigned)appState.usbAudioSampleRate);
+    snprintf(val, sizeof(val), "%u", (unsigned)appState.usbAudio.sampleRate);
     mqttClient.publish((base + "/" + MQTT_TOPIC_USB_RATE).c_str(), val, true);
 
-    snprintf(val, sizeof(val), "%.1f", (float)appState.usbAudioVolume / 256.0f);
+    snprintf(val, sizeof(val), "%.1f", (float)appState.usbAudio.volume / 256.0f);
     mqttClient.publish((base + "/" + MQTT_TOPIC_USB_VOLUME).c_str(), val, true);
 
     snprintf(val, sizeof(val), "%u", (unsigned)usb_audio_get_overruns());
@@ -738,15 +740,15 @@ void publishMqttDebugState() {
   String base = getEffectiveMqttBaseTopic();
 
   mqttClient.publish((base + "/debug/mode").c_str(),
-                     appState.debugMode ? "ON" : "OFF", true);
+                     appState.debug.debugMode ? "ON" : "OFF", true);
   mqttClient.publish((base + "/debug/serial_level").c_str(),
-                     String(appState.debugSerialLevel).c_str(), true);
+                     String(appState.debug.serialLevel).c_str(), true);
   mqttClient.publish((base + "/debug/hw_stats").c_str(),
-                     appState.debugHwStats ? "ON" : "OFF", true);
+                     appState.debug.hwStats ? "ON" : "OFF", true);
   mqttClient.publish((base + "/debug/i2s_metrics").c_str(),
-                     appState.debugI2sMetrics ? "ON" : "OFF", true);
+                     appState.debug.i2sMetrics ? "ON" : "OFF", true);
   mqttClient.publish((base + "/debug/task_monitor").c_str(),
-                     appState.debugTaskMonitor ? "ON" : "OFF", true);
+                     appState.debug.taskMonitor ? "ON" : "OFF", true);
 }
 
 // ===== Diagnostic Event Publishing =====
@@ -793,14 +795,14 @@ void publishMqttDspState() {
   String base = getEffectiveMqttBaseTopic();
 
   mqttClient.publish((base + "/dsp/enabled").c_str(),
-                     appState.dspEnabled ? "ON" : "OFF", true);
+                     appState.dsp.enabled ? "ON" : "OFF", true);
   mqttClient.publish((base + "/dsp/bypass").c_str(),
-                     appState.dspBypass ? "ON" : "OFF", true);
+                     appState.dsp.bypass ? "ON" : "OFF", true);
 
   // Preset state
-  if (appState.dspPresetIndex >= 0 && appState.dspPresetIndex < DSP_PRESET_MAX_SLOTS) {
+  if (appState.dsp.presetIndex >= 0 && appState.dsp.presetIndex < DSP_PRESET_MAX_SLOTS) {
     mqttClient.publish((base + "/dsp/preset").c_str(),
-                       appState.dspPresetNames[appState.dspPresetIndex], true);
+                       appState.dsp.presetNames[appState.dsp.presetIndex], true);
   } else {
     mqttClient.publish((base + "/dsp/preset").c_str(), "Custom", true);
   }
@@ -862,19 +864,19 @@ void publishMqttCrashDiagnostics() {
   mqttClient.publish((base + "/diagnostics/heap_max_block").c_str(),
                      String(ESP.getMaxAllocHeap()).c_str(), true);
   mqttClient.publish((base + "/diagnostics/heap_critical").c_str(),
-                     appState.heapCritical ? "ON" : "OFF", true);
+                     appState.debug.heapCritical ? "ON" : "OFF", true);
 
   // Per-ADC I2S recovery counts — iterate all active inputs dynamically (C3).
   {
-    int adcCount = appState.activeInputCount;
-    if (adcCount <= 0) adcCount = appState.numAdcsDetected;
+    int adcCount = appState.audio.activeInputCount;
+    if (adcCount <= 0) adcCount = appState.audio.numAdcsDetected;
     if (adcCount > AUDIO_PIPELINE_MAX_INPUTS) adcCount = AUDIO_PIPELINE_MAX_INPUTS;
     for (int a = 0; a < adcCount; a++) {
       char topic[80];
       // Topic uses 1-based index to match legacy adc1/adc2 naming convention.
       snprintf(topic, sizeof(topic), "%s/diagnostics/i2s_recoveries_adc%d",
                base.c_str(), a + 1);
-      mqttClient.publish(topic, String(appState.audioAdc[a].i2sRecoveries).c_str(), true);
+      mqttClient.publish(topic, String(appState.audio.adc[a].i2sRecoveries).c_str(), true);
     }
   }
 }
@@ -893,7 +895,7 @@ void publishMqttInputNames() {
       "input7_name_l", "input7_name_r", "input8_name_l", "input8_name_r"};
   for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
     mqttClient.publish((base + "/audio/" + labels[i]).c_str(),
-                       appState.inputNames[i].c_str(), true);
+                       appState.audio.inputNames[i].c_str(), true);
   }
 }
 

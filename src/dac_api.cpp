@@ -5,12 +5,11 @@
 #include "dac_registry.h"
 #include "dac_eeprom.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
 #include <ArduinoJson.h>
-#include <WebServer.h>
-
-extern WebServer server;
 extern bool requireAuth();
 
 void registerDacApiEndpoints() {
@@ -20,16 +19,16 @@ void registerDacApiEndpoints() {
 
         JsonDocument doc;
         doc["success"] = true;
-        doc["enabled"] = appState.dacEnabled;
-        doc["volume"] = appState.dacVolume;
-        doc["mute"] = appState.dacMute;
-        doc["deviceId"] = appState.dacDeviceId;
-        doc["modelName"] = appState.dacModelName;
-        doc["outputChannels"] = appState.dacOutputChannels;
-        doc["detected"] = appState.dacDetected;
-        doc["ready"] = appState.dacReady;
-        doc["filterMode"] = appState.dacFilterMode;
-        doc["txUnderruns"] = appState.dacTxUnderruns;
+        doc["enabled"] = appState.dac.enabled;
+        doc["volume"] = appState.dac.volume;
+        doc["mute"] = appState.dac.mute;
+        doc["deviceId"] = appState.dac.deviceId;
+        doc["modelName"] = appState.dac.modelName;
+        doc["outputChannels"] = appState.dac.outputChannels;
+        doc["detected"] = appState.dac.detected;
+        doc["ready"] = appState.dac.ready;
+        doc["filterMode"] = appState.dac.filterMode;
+        doc["txUnderruns"] = appState.dac.txUnderruns;
 
         // Capabilities from current driver
         DacDriver* drv = dac_get_driver();
@@ -83,15 +82,15 @@ void registerDacApiEndpoints() {
 
         if (doc["enabled"].is<bool>()) {
             bool en = doc["enabled"].as<bool>();
-            if (en != appState.dacEnabled) {
-                LOG_I("[DAC] API: enabled %s -> %s (deferred)", appState.dacEnabled ? "ON" : "OFF", en ? "ON" : "OFF");
-                bool was = appState.dacEnabled;
-                appState.dacEnabled = en;
+            if (en != appState.dac.enabled) {
+                LOG_I("[DAC] API: enabled %s -> %s (deferred)", appState.dac.enabled ? "ON" : "OFF", en ? "ON" : "OFF");
+                bool was = appState.dac.enabled;
+                appState.dac.enabled = en;
                 // Defer init/deinit to main loop — I2C scan blocks SDIO
-                if (en && !was && !appState.dacReady) {
-                    appState.requestDacToggle(1);
+                if (en && !was && !appState.dac.ready) {
+                    appState.dac.requestDacToggle(1);
                 } else if (!en && was) {
-                    appState.requestDacToggle(-1);
+                    appState.dac.requestDacToggle(-1);
                 }
                 changed = true;
             }
@@ -100,26 +99,26 @@ void registerDacApiEndpoints() {
         if (doc["volume"].is<int>()) {
             int v = doc["volume"].as<int>();
             if (v >= 0 && v <= 100) {
-                appState.dacVolume = (uint8_t)v;
-                dac_update_volume(appState.dacVolume);
+                appState.dac.volume = (uint8_t)v;
+                dac_update_volume(appState.dac.volume);
                 changed = true;
             }
         }
 
         if (doc["mute"].is<bool>()) {
-            bool prev = appState.dacMute;
-            appState.dacMute = doc["mute"].as<bool>();
+            bool prev = appState.dac.mute;
+            appState.dac.mute = doc["mute"].as<bool>();
             DacDriver* drv = dac_get_driver();
-            if (drv) drv->setMute(appState.dacMute);
-            if (prev != appState.dacMute) {
-                LOG_I("[DAC] API: mute %s -> %s", prev ? "ON" : "OFF", appState.dacMute ? "ON" : "OFF");
+            if (drv) drv->setMute(appState.dac.mute);
+            if (prev != appState.dac.mute) {
+                LOG_I("[DAC] API: mute %s -> %s", prev ? "ON" : "OFF", appState.dac.mute ? "ON" : "OFF");
             }
             changed = true;
         }
 
         if (doc["deviceId"].is<int>()) {
             uint16_t id = (uint16_t)doc["deviceId"].as<int>();
-            if (id != appState.dacDeviceId) {
+            if (id != appState.dac.deviceId) {
                 if (dac_select_driver(id)) {
                     changed = true;
                 } else {
@@ -131,9 +130,9 @@ void registerDacApiEndpoints() {
         }
 
         if (doc["filterMode"].is<int>()) {
-            appState.dacFilterMode = (uint8_t)doc["filterMode"].as<int>();
+            appState.dac.filterMode = (uint8_t)doc["filterMode"].as<int>();
             DacDriver* drv = dac_get_driver();
-            if (drv) drv->setFilterMode(appState.dacFilterMode);
+            if (drv) drv->setFilterMode(appState.dac.filterMode);
             changed = true;
         }
 
@@ -188,7 +187,7 @@ void registerDacApiEndpoints() {
 
         JsonDocument doc;
         doc["success"] = true;
-        const AppState::EepromDiag& ed = appState.eepromDiag;
+        const EepromDiag& ed = appState.dac.eepromDiag;
         doc["scanned"] = ed.scanned;
         doc["found"] = ed.found;
         doc["eepromAddr"] = ed.eepromAddr;
@@ -231,7 +230,7 @@ void registerDacApiEndpoints() {
                 doc["rawHex"] = hexStr;
             } else {
                 doc["rawHex"] = (const char*)nullptr;
-                appState.eepromDiag.readErrors++;
+                appState.dac.eepromDiag.readErrors++;
             }
         }
 #endif
@@ -317,7 +316,7 @@ void registerDacApiEndpoints() {
 
         // Write + verify
         if (!dac_eeprom_write(targetAddr, buf, serialized)) {
-            appState.eepromDiag.writeErrors++;
+            appState.dac.eepromDiag.writeErrors++;
             appState.markEepromDirty();
             server.send(500, "application/json",
                         "{\"success\":false,\"message\":\"Write/verify failed\"}");
@@ -326,7 +325,7 @@ void registerDacApiEndpoints() {
 
         // Re-scan to update diagnostics (use cached mask from prior scan)
         DacEepromData scanned;
-        AppState::EepromDiag& ed = appState.eepromDiag;
+        EepromDiag& ed = appState.dac.eepromDiag;
         if (dac_eeprom_scan(&scanned, ed.i2cDevicesMask)) {
             ed.found = true;
             ed.eepromAddr = scanned.i2cAddress;
@@ -356,7 +355,7 @@ void registerDacApiEndpoints() {
         if (!requireAuth()) return;
 
         // Get target address from body or use stored address
-        uint8_t targetAddr = appState.eepromDiag.eepromAddr;
+        uint8_t targetAddr = appState.dac.eepromDiag.eepromAddr;
         if (server.hasArg("plain")) {
             JsonDocument doc;
             if (!deserializeJson(doc, server.arg("plain"))) {
@@ -373,7 +372,7 @@ void registerDacApiEndpoints() {
 
 #ifndef NATIVE_TEST
         if (!dac_eeprom_erase(targetAddr)) {
-            appState.eepromDiag.writeErrors++;
+            appState.dac.eepromDiag.writeErrors++;
             appState.markEepromDirty();
             server.send(500, "application/json",
                         "{\"success\":false,\"message\":\"Erase failed\"}");
@@ -381,7 +380,7 @@ void registerDacApiEndpoints() {
         }
 
         // Update diagnostics
-        AppState::EepromDiag& ed = appState.eepromDiag;
+        EepromDiag& ed = appState.dac.eepromDiag;
         ed.found = false;
         ed.eepromAddr = 0;
         memset(ed.deviceName, 0, sizeof(ed.deviceName));
@@ -407,7 +406,7 @@ void registerDacApiEndpoints() {
         LOG_I("[DAC] API: Re-scan I2C bus + EEPROM");
 
 #ifndef NATIVE_TEST
-        AppState::EepromDiag& ed = appState.eepromDiag;
+        EepromDiag& ed = appState.dac.eepromDiag;
         uint8_t eepMask = 0;
         ed.i2cTotalDevices = dac_i2c_scan(&eepMask);
         ed.i2cDevicesMask = eepMask;
@@ -444,15 +443,15 @@ void registerDacApiEndpoints() {
         // Return current state
         JsonDocument doc;
         doc["success"] = true;
-        doc["scanned"] = appState.eepromDiag.scanned;
-        doc["found"] = appState.eepromDiag.found;
-        doc["eepromAddr"] = appState.eepromDiag.eepromAddr;
-        doc["i2cTotalDevices"] = appState.eepromDiag.i2cTotalDevices;
-        doc["i2cDevicesMask"] = appState.eepromDiag.i2cDevicesMask;
-        if (appState.eepromDiag.found) {
-            doc["deviceName"] = appState.eepromDiag.deviceName;
-            doc["manufacturer"] = appState.eepromDiag.manufacturer;
-            doc["deviceId"] = appState.eepromDiag.deviceId;
+        doc["scanned"] = appState.dac.eepromDiag.scanned;
+        doc["found"] = appState.dac.eepromDiag.found;
+        doc["eepromAddr"] = appState.dac.eepromDiag.eepromAddr;
+        doc["i2cTotalDevices"] = appState.dac.eepromDiag.i2cTotalDevices;
+        doc["i2cDevicesMask"] = appState.dac.eepromDiag.i2cDevicesMask;
+        if (appState.dac.eepromDiag.found) {
+            doc["deviceName"] = appState.dac.eepromDiag.deviceName;
+            doc["manufacturer"] = appState.dac.eepromDiag.manufacturer;
+            doc["deviceId"] = appState.dac.eepromDiag.deviceId;
         }
         String json;
         serializeJson(doc, json);

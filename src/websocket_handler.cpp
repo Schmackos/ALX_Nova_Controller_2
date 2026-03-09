@@ -2,6 +2,8 @@
 #include "auth_handler.h"
 #include "config.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "diag_journal.h"
 #include "diag_event.h"
 #include "crash_log.h"
@@ -212,21 +214,21 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
         if (doc["type"] == "toggleAP") {
           bool enabled = doc["enabled"].as<bool>();
-          appState.apEnabled = enabled;
+          appState.wifi.apEnabled = enabled;
           
           if (enabled) {
-            if (!appState.isAPMode) {
+            if (!appState.wifi.isAPMode) {
               WiFi.mode(WIFI_AP_STA);
-              WiFi.softAP(appState.apSSID.c_str(), appState.apPassword);
-              appState.isAPMode = true;
+              WiFi.softAP(appState.wifi.apSSID.c_str(), appState.wifi.apPassword);
+              appState.wifi.isAPMode = true;
               LOG_I("[WebSocket] Access Point enabled");
               LOG_I("[WebSocket] AP IP: %s", WiFi.softAPIP().toString().c_str());
             }
           } else {
-            if (appState.isAPMode && WiFi.status() == WL_CONNECTED) {
+            if (appState.wifi.isAPMode && WiFi.status() == WL_CONNECTED) {
               WiFi.softAPdisconnect(true);
               WiFi.mode(WIFI_STA);
-              appState.isAPMode = false;
+              appState.wifi.isAPMode = false;
               LOG_I("[WebSocket] Access Point disabled");
             }
           }
@@ -303,29 +305,29 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (msgType == "setAudioUpdateRate") {
           int rate = doc["value"].as<int>();
           if (rate == 33 || rate == 50 || rate == 100) {
-            appState.audioUpdateRate = (uint16_t)rate;
+            appState.audio.updateRate = (uint16_t)rate;
             saveSettingsDeferred();
             LOG_I("[WebSocket] Audio update rate set to %d ms", rate);
           }
         } else if (msgType == "setVuMeterEnabled") {
-          appState.vuMeterEnabled = doc["enabled"].as<bool>();
+          appState.audio.vuMeterEnabled = doc["enabled"].as<bool>();
           saveSettingsDeferred();
           sendAudioGraphState();
-          LOG_I("[WebSocket] VU meter %s", appState.vuMeterEnabled ? "enabled" : "disabled");
+          LOG_I("[WebSocket] VU meter %s", appState.audio.vuMeterEnabled ? "enabled" : "disabled");
         } else if (msgType == "setWaveformEnabled") {
-          appState.waveformEnabled = doc["enabled"].as<bool>();
+          appState.audio.waveformEnabled = doc["enabled"].as<bool>();
           saveSettingsDeferred();
           sendAudioGraphState();
-          LOG_I("[WebSocket] Waveform %s", appState.waveformEnabled ? "enabled" : "disabled");
+          LOG_I("[WebSocket] Waveform %s", appState.audio.waveformEnabled ? "enabled" : "disabled");
         } else if (msgType == "setSpectrumEnabled") {
-          appState.spectrumEnabled = doc["enabled"].as<bool>();
+          appState.audio.spectrumEnabled = doc["enabled"].as<bool>();
           saveSettingsDeferred();
           sendAudioGraphState();
-          LOG_I("[WebSocket] Spectrum %s", appState.spectrumEnabled ? "enabled" : "disabled");
+          LOG_I("[WebSocket] Spectrum %s", appState.audio.spectrumEnabled ? "enabled" : "disabled");
         } else if (msgType == "setFftWindowType") {
           int wt = doc["value"].as<int>();
           if (wt >= 0 && wt < FFT_WINDOW_COUNT) {
-            appState.fftWindowType = (FftWindowType)wt;
+            appState.audio.fftWindowType = (FftWindowType)wt;
             saveSettingsDeferred();
             sendAudioGraphState();
             LOG_I("[WebSocket] FFT window type: %d", wt);
@@ -333,32 +335,32 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (msgType == "setSignalGen") {
           bool changed = false;
           if (doc["enabled"].is<bool>()) {
-            appState.sigGenEnabled = doc["enabled"].as<bool>();
+            appState.sigGen.enabled = doc["enabled"].as<bool>();
             changed = true;
           }
           if (doc["waveform"].is<int>()) {
             int w = doc["waveform"].as<int>();
-            if (w >= 0 && w <= 3) { appState.sigGenWaveform = w; changed = true; }
+            if (w >= 0 && w <= 3) { appState.sigGen.waveform = w; changed = true; }
           }
           if (doc["frequency"].is<float>()) {
             float f = doc["frequency"].as<float>();
-            if (f >= 1.0f && f <= 22000.0f) { appState.sigGenFrequency = f; changed = true; }
+            if (f >= 1.0f && f <= 22000.0f) { appState.sigGen.frequency = f; changed = true; }
           }
           if (doc["amplitude"].is<float>()) {
             float a = doc["amplitude"].as<float>();
-            if (a >= -96.0f && a <= 0.0f) { appState.sigGenAmplitude = a; changed = true; }
+            if (a >= -96.0f && a <= 0.0f) { appState.sigGen.amplitude = a; changed = true; }
           }
           if (doc["channel"].is<int>()) {
             int c = doc["channel"].as<int>();
-            if (c >= 0 && c <= 2) { appState.sigGenChannel = c; changed = true; }
+            if (c >= 0 && c <= 2) { appState.sigGen.channel = c; changed = true; }
           }
           if (doc["outputMode"].is<int>()) {
             int m = doc["outputMode"].as<int>();
-            if (m >= 0 && m <= 1) { appState.sigGenOutputMode = m; changed = true; }
+            if (m >= 0 && m <= 1) { appState.sigGen.outputMode = m; changed = true; }
           }
           if (doc["sweepSpeed"].is<float>()) {
             float s = doc["sweepSpeed"].as<float>();
-            if (s >= 1.0f && s <= 22000.0f) { appState.sigGenSweepSpeed = s; changed = true; }
+            if (s >= 1.0f && s <= 22000.0f) { appState.sigGen.sweepSpeed = s; changed = true; }
           }
           if (changed) {
             siggen_apply_params();
@@ -371,7 +373,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             JsonArray names = doc["names"].as<JsonArray>();
             for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2 && i < (int)names.size(); i++) {
               String name = names[i].as<String>();
-              if (name.length() > 0) appState.inputNames[i] = name;
+              if (name.length() > 0) appState.audio.inputNames[i] = name;
             }
             saveInputNames();
             // Broadcast updated names
@@ -379,7 +381,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             resp["type"] = "inputNames";
             JsonArray outNames = resp["names"].to<JsonArray>();
             for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-              outNames.add(appState.inputNames[i]);
+              outNames.add(appState.audio.inputNames[i]);
             }
             String json;
             serializeJson(resp, json);
@@ -387,54 +389,54 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             LOG_I("[WebSocket] Input names updated by client [%u]", num);
           }
         } else if (msgType == "setDebugMode") {
-          appState.debugMode = doc["enabled"].as<bool>();
-          applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+          appState.debug.debugMode = doc["enabled"].as<bool>();
+          applyDebugSerialLevel(appState.debug.debugMode, appState.debug.serialLevel);
           saveSettingsDeferred();
           sendDebugState();
-          LOG_I("[WebSocket] Debug mode %s", appState.debugMode ? "enabled" : "disabled");
+          LOG_I("[WebSocket] Debug mode %s", appState.debug.debugMode ? "enabled" : "disabled");
         } else if (msgType == "setDebugSerialLevel") {
           int level = doc["level"].as<int>();
           if (level >= 0 && level <= 3) {
-            appState.debugSerialLevel = level;
-            applyDebugSerialLevel(appState.debugMode, appState.debugSerialLevel);
+            appState.debug.serialLevel = level;
+            applyDebugSerialLevel(appState.debug.debugMode, appState.debug.serialLevel);
             saveSettingsDeferred();
             sendDebugState();
             LOG_I("[WebSocket] Debug serial level set to %d", level);
           }
         } else if (msgType == "setDebugHwStats") {
-          appState.debugHwStats = doc["enabled"].as<bool>();
+          appState.debug.hwStats = doc["enabled"].as<bool>();
           saveSettingsDeferred();
           sendDebugState();
-          LOG_I("[WebSocket] Debug HW stats %s", appState.debugHwStats ? "enabled" : "disabled");
+          LOG_I("[WebSocket] Debug HW stats %s", appState.debug.hwStats ? "enabled" : "disabled");
         } else if (msgType == "setDebugI2sMetrics") {
-          appState.debugI2sMetrics = doc["enabled"].as<bool>();
+          appState.debug.i2sMetrics = doc["enabled"].as<bool>();
           saveSettingsDeferred();
           sendDebugState();
-          LOG_I("[WebSocket] Debug I2S metrics %s", appState.debugI2sMetrics ? "enabled" : "disabled");
+          LOG_I("[WebSocket] Debug I2S metrics %s", appState.debug.i2sMetrics ? "enabled" : "disabled");
         } else if (msgType == "setDebugTaskMonitor") {
-          appState.debugTaskMonitor = doc["enabled"].as<bool>();
+          appState.debug.taskMonitor = doc["enabled"].as<bool>();
           saveSettingsDeferred();
           sendDebugState();
-          LOG_I("[WebSocket] Debug task monitor %s", appState.debugTaskMonitor ? "enabled" : "disabled");
+          LOG_I("[WebSocket] Debug task monitor %s", appState.debug.taskMonitor ? "enabled" : "disabled");
         }
 #ifdef DSP_ENABLED
         else if (msgType == "setDspBypass") {
           if (doc["enabled"].is<bool>()) {
-            appState.dspEnabled = doc["enabled"].as<bool>();
+            appState.dsp.enabled = doc["enabled"].as<bool>();
             // Wire enable to pipeline-level lane bypass: disabled → skip DSP entirely for ADC1+ADC2
-            audio_pipeline_bypass_dsp(0, !appState.dspEnabled);
-            audio_pipeline_bypass_dsp(1, !appState.dspEnabled);
+            audio_pipeline_bypass_dsp(0, !appState.dsp.enabled);
+            audio_pipeline_bypass_dsp(1, !appState.dsp.enabled);
           }
-          if (doc["bypass"].is<bool>()) appState.dspBypass = doc["bypass"].as<bool>();
+          if (doc["bypass"].is<bool>()) appState.dsp.bypass = doc["bypass"].as<bool>();
           // Sync global bypass to DSP config (in-DSP bypass, independent of lane enable)
           dsp_copy_active_to_inactive();
           DspState *cfg = dsp_get_inactive_config();
-          cfg->globalBypass = appState.dspBypass;
+          cfg->globalBypass = appState.dsp.bypass;
           if (!dsp_swap_config()) { dsp_log_swap_failure("WebSocket"); }
           extern void saveDspSettingsDebounced();
           saveDspSettingsDebounced();
           appState.markDspConfigDirty();
-          LOG_I("[WebSocket] DSP enabled=%d bypass=%d", appState.dspEnabled, appState.dspBypass);
+          LOG_I("[WebSocket] DSP enabled=%d bypass=%d", appState.dsp.enabled, appState.dsp.bypass);
         }
         else if (msgType == "addDspStage") {
           int ch = doc["ch"] | -1;
@@ -937,82 +939,82 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 #endif
 #ifdef DAC_ENABLED
         else if (msgType == "setDacEnabled") {
-          bool was = appState.dacEnabled;
-          appState.dacEnabled = doc["enabled"].as<bool>();
+          bool was = appState.dac.enabled;
+          appState.dac.enabled = doc["enabled"].as<bool>();
           dac_save_settings_deferred();
           // Defer init/deinit to main loop — I2C EEPROM scan + I2S driver
           // setup is too heavy for the WebSocket handler context (blocks SDIO)
-          if (appState.dacEnabled && !was && !appState.dacReady) {
-            appState.requestDacToggle(1);   // main loop calls dac_output_init()
-          } else if (!appState.dacEnabled && was) {
-            appState.requestDacToggle(-1);  // main loop calls dac_output_deinit()
+          if (appState.dac.enabled && !was && !appState.dac.ready) {
+            appState.dac.requestDacToggle(1);   // main loop calls dac_output_init()
+          } else if (!appState.dac.enabled && was) {
+            appState.dac.requestDacToggle(-1);  // main loop calls dac_output_deinit()
           }
           appState.markDacDirty();
-          LOG_I("[WebSocket] DAC %s (deferred)", appState.dacEnabled ? "enabled" : "disabled");
+          LOG_I("[WebSocket] DAC %s (deferred)", appState.dac.enabled ? "enabled" : "disabled");
         }
         else if (msgType == "setDacVolume") {
           int v = doc["volume"].as<int>();
           if (v >= 0 && v <= 100) {
-            appState.dacVolume = (uint8_t)v;
-            dac_update_volume(appState.dacVolume);
+            appState.dac.volume = (uint8_t)v;
+            dac_update_volume(appState.dac.volume);
             dac_save_settings_deferred();
             appState.markDacDirty();
           }
         }
         else if (msgType == "setDacMute") {
-          bool wasMuted = appState.dacMute;
-          appState.dacMute = doc["mute"].as<bool>();
+          bool wasMuted = appState.dac.mute;
+          appState.dac.mute = doc["mute"].as<bool>();
           DacDriver *drv = dac_get_driver();
-          if (drv) drv->setMute(appState.dacMute);
+          if (drv) drv->setMute(appState.dac.mute);
           dac_save_settings_deferred();
           appState.markDacDirty();
-          if (wasMuted != appState.dacMute) {
-            LOG_I("[DAC] (%s) mute: %s", appState.dacModelName, appState.dacMute ? "ON" : "OFF");
+          if (wasMuted != appState.dac.mute) {
+            LOG_I("[DAC] (%s) mute: %s", appState.dac.modelName, appState.dac.mute ? "ON" : "OFF");
           }
         }
         else if (msgType == "setDacFilter") {
-          uint8_t prevFilter = appState.dacFilterMode;
+          uint8_t prevFilter = appState.dac.filterMode;
           int fm = doc["filterMode"].as<int>();
-          appState.dacFilterMode = (uint8_t)fm;
+          appState.dac.filterMode = (uint8_t)fm;
           DacDriver *drv = dac_get_driver();
-          if (drv) drv->setFilterMode(appState.dacFilterMode);
+          if (drv) drv->setFilterMode(appState.dac.filterMode);
           dac_save_settings_deferred();
           appState.markDacDirty();
-          LOG_I("[DAC] Filter mode: %d -> %d", prevFilter, appState.dacFilterMode);
+          LOG_I("[DAC] Filter mode: %d -> %d", prevFilter, appState.dac.filterMode);
         }
         else if (msgType == "setEs8311Enabled") {
-          bool was = appState.es8311Enabled;
-          appState.es8311Enabled = doc["enabled"].as<bool>();
+          bool was = appState.dac.es8311Enabled;
+          appState.dac.es8311Enabled = doc["enabled"].as<bool>();
           // Defer init/deinit to main loop — ES8311 I2C + I2S2 setup is too heavy
           // for the WebSocket handler context (blocks SDIO → WiFi crash)
-          if (appState.es8311Enabled && !was) {
-            appState.requestEs8311Toggle(1);   // main loop calls dac_secondary_init()
-          } else if (!appState.es8311Enabled && was) {
-            appState.requestEs8311Toggle(-1);  // main loop calls dac_secondary_deinit()
+          if (appState.dac.es8311Enabled && !was) {
+            appState.dac.requestEs8311Toggle(1);   // main loop calls dac_secondary_init()
+          } else if (!appState.dac.es8311Enabled && was) {
+            appState.dac.requestEs8311Toggle(-1);  // main loop calls dac_secondary_deinit()
           }
           dac_save_settings_deferred();
           appState.markDacDirty();
-          LOG_I("[WebSocket] ES8311 %s (deferred)", appState.es8311Enabled ? "enabled" : "disabled");
+          LOG_I("[WebSocket] ES8311 %s (deferred)", appState.dac.es8311Enabled ? "enabled" : "disabled");
         }
         else if (msgType == "setEs8311Volume") {
           int v = doc["volume"].as<int>();
           if (v >= 0 && v <= 100) {
-            appState.es8311Volume = (uint8_t)v;
-            dac_secondary_set_volume(appState.es8311Volume);
+            appState.dac.es8311Volume = (uint8_t)v;
+            dac_secondary_set_volume(appState.dac.es8311Volume);
             dac_save_settings_deferred();
             appState.markDacDirty();
           }
         }
         else if (msgType == "setEs8311Mute") {
-          appState.es8311Mute = doc["mute"].as<bool>();
-          dac_secondary_set_mute(appState.es8311Mute);
+          appState.dac.es8311Mute = doc["mute"].as<bool>();
+          dac_secondary_set_mute(appState.dac.es8311Mute);
           dac_save_settings_deferred();
           appState.markDacDirty();
-          LOG_I("[DAC] (ES8311) mute: %s", appState.es8311Mute ? "ON" : "OFF");
+          LOG_I("[DAC] (ES8311) mute: %s", appState.dac.es8311Mute ? "ON" : "OFF");
         }
         else if (msgType == "eepromScan") {
           LOG_I("[WebSocket] EEPROM scan requested");
-          AppState::EepromDiag& ed = appState.eepromDiag;
+          EepromDiag& ed = appState.dac.eepromDiag;
           uint8_t eepMask = 0;
           ed.i2cTotalDevices = dac_i2c_scan(&eepMask);
           ed.i2cDevicesMask = eepMask;
@@ -1077,11 +1079,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           uint8_t buf[DAC_EEPROM_DATA_SIZE];
           int sz = dac_eeprom_serialize(&eepData, buf, sizeof(buf));
           bool ok = (sz > 0) && dac_eeprom_write(tAddr, buf, sz);
-          if (!ok) appState.eepromDiag.writeErrors++;
+          if (!ok) appState.dac.eepromDiag.writeErrors++;
 
           // Re-scan (use cached mask from prior scan)
           DacEepromData scanned;
-          AppState::EepromDiag& ed = appState.eepromDiag;
+          EepromDiag& ed = appState.dac.eepromDiag;
           if (dac_eeprom_scan(&scanned, ed.i2cDevicesMask)) {
             ed.found = true;
             ed.eepromAddr = scanned.i2cAddress;
@@ -1111,14 +1113,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         }
         else if (msgType == "eepromErase") {
           LOG_I("[WebSocket] EEPROM erase requested");
-          uint8_t tAddr = appState.eepromDiag.eepromAddr;
+          uint8_t tAddr = appState.dac.eepromDiag.eepromAddr;
           if (doc["address"].is<int>()) tAddr = (uint8_t)doc["address"].as<int>();
           if (tAddr < DAC_EEPROM_ADDR_START || tAddr > DAC_EEPROM_ADDR_END) tAddr = DAC_EEPROM_ADDR_START;
 
           bool ok = dac_eeprom_erase(tAddr);
-          if (!ok) appState.eepromDiag.writeErrors++;
+          if (!ok) appState.dac.eepromDiag.writeErrors++;
 
-          AppState::EepromDiag& ed = appState.eepromDiag;
+          EepromDiag& ed = appState.dac.eepromDiag;
           ed.found = false;
           ed.eepromAddr = 0;
           memset(ed.deviceName, 0, sizeof(ed.deviceName));
@@ -1145,15 +1147,15 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "setAdcEnabled") {
           int adc = doc["adc"] | -1;
           bool newVal = doc["enabled"].as<bool>();
-          if (adc >= 0 && adc < AUDIO_PIPELINE_MAX_INPUTS && newVal != appState.adcEnabled[adc]) {
-            appState.adcEnabled[adc] = newVal;
+          if (adc >= 0 && adc < AUDIO_PIPELINE_MAX_INPUTS && newVal != appState.audio.adcEnabled[adc]) {
+            appState.audio.adcEnabled[adc] = newVal;
             appState.markAdcEnabledDirty();
             saveSettingsDeferred();
             // Broadcast new state to all clients
             JsonDocument resp;
             resp["type"] = "adcState";
             JsonArray arr = resp["enabled"].to<JsonArray>();
-            for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) arr.add(appState.adcEnabled[i]);
+            for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) arr.add(appState.audio.adcEnabled[i]);
             String rJson;
             serializeJson(resp, rJson);
             webSocket.broadcastTXT((uint8_t*)rJson.c_str(), rJson.length());
@@ -1164,8 +1166,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         // ===== USB Audio Enable/Disable =====
         else if (msgType == "setUsbAudioEnabled") {
           bool newVal = doc["enabled"].as<bool>();
-          if (newVal != appState.usbAudioEnabled) {
-            appState.usbAudioEnabled = newVal;
+          if (newVal != appState.usbAudio.enabled) {
+            appState.usbAudio.enabled = newVal;
             saveSettingsDeferred();
             if (newVal) {
               usb_audio_init();
@@ -1305,12 +1307,12 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 void sendDisplayState() {
   JsonDocument doc;
   doc["type"] = "displayState";
-  doc["backlightOn"] = AppState::getInstance().backlightOn;
-  doc["screenTimeout"] = AppState::getInstance().screenTimeout / 1000; // Send as seconds
-  doc["backlightBrightness"] = AppState::getInstance().backlightBrightness;
-  doc["dimEnabled"] = AppState::getInstance().dimEnabled;
-  doc["dimTimeout"] = AppState::getInstance().dimTimeout / 1000;
-  doc["dimBrightness"] = AppState::getInstance().dimBrightness;
+  doc["backlightOn"] = AppState::getInstance().display.backlightOn;
+  doc["screenTimeout"] = AppState::getInstance().display.screenTimeout / 1000; // Send as seconds
+  doc["backlightBrightness"] = AppState::getInstance().display.backlightBrightness;
+  doc["dimEnabled"] = AppState::getInstance().display.dimEnabled;
+  doc["dimTimeout"] = AppState::getInstance().display.dimTimeout / 1000;
+  doc["dimBrightness"] = AppState::getInstance().display.dimBrightness;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1343,8 +1345,8 @@ void sendRebootProgress(unsigned long secondsHeld, bool rebootTriggered) {
 void sendBuzzerState() {
   JsonDocument doc;
   doc["type"] = "buzzerState";
-  doc["enabled"] = AppState::getInstance().buzzerEnabled;
-  doc["volume"] = AppState::getInstance().buzzerVolume;
+  doc["enabled"] = AppState::getInstance().buzzer.enabled;
+  doc["volume"] = AppState::getInstance().buzzer.volume;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1353,13 +1355,13 @@ void sendBuzzerState() {
 void sendSignalGenState() {
   JsonDocument doc;
   doc["type"] = "signalGenerator";
-  doc["enabled"] = appState.sigGenEnabled;
-  doc["waveform"] = appState.sigGenWaveform;
-  doc["frequency"] = appState.sigGenFrequency;
-  doc["amplitude"] = appState.sigGenAmplitude;
-  doc["channel"] = appState.sigGenChannel;
-  doc["outputMode"] = appState.sigGenOutputMode;
-  doc["sweepSpeed"] = appState.sigGenSweepSpeed;
+  doc["enabled"] = appState.sigGen.enabled;
+  doc["waveform"] = appState.sigGen.waveform;
+  doc["frequency"] = appState.sigGen.frequency;
+  doc["amplitude"] = appState.sigGen.amplitude;
+  doc["channel"] = appState.sigGen.channel;
+  doc["outputMode"] = appState.sigGen.outputMode;
+  doc["sweepSpeed"] = appState.sigGen.sweepSpeed;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1368,10 +1370,10 @@ void sendSignalGenState() {
 void sendAudioGraphState() {
   JsonDocument doc;
   doc["type"] = "audioGraphState";
-  doc["vuMeterEnabled"] = appState.vuMeterEnabled;
-  doc["waveformEnabled"] = appState.waveformEnabled;
-  doc["spectrumEnabled"] = appState.spectrumEnabled;
-  doc["fftWindowType"] = (int)appState.fftWindowType;
+  doc["vuMeterEnabled"] = appState.audio.vuMeterEnabled;
+  doc["waveformEnabled"] = appState.audio.waveformEnabled;
+  doc["spectrumEnabled"] = appState.audio.spectrumEnabled;
+  doc["fftWindowType"] = (int)appState.audio.fftWindowType;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1380,11 +1382,11 @@ void sendAudioGraphState() {
 void sendDebugState() {
   JsonDocument doc;
   doc["type"] = "debugState";
-  doc["debugMode"] = appState.debugMode;
-  doc["debugSerialLevel"] = appState.debugSerialLevel;
-  doc["debugHwStats"] = appState.debugHwStats;
-  doc["debugI2sMetrics"] = appState.debugI2sMetrics;
-  doc["debugTaskMonitor"] = appState.debugTaskMonitor;
+  doc["debugMode"] = appState.debug.debugMode;
+  doc["debugSerialLevel"] = appState.debug.serialLevel;
+  doc["debugHwStats"] = appState.debug.hwStats;
+  doc["debugI2sMetrics"] = appState.debug.i2sMetrics;
+  doc["debugTaskMonitor"] = appState.debug.taskMonitor;
   // Pin configuration — static board info, always sent once on connect
   {
     JsonArray pins = doc["pins"].to<JsonArray>();
@@ -1466,9 +1468,9 @@ void sendDspState() {
   if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "dspState";
-  doc["dspEnabled"] = appState.dspEnabled;
-  doc["dspBypass"] = appState.dspBypass;
-  doc["presetIndex"] = appState.dspPresetIndex;
+  doc["dspEnabled"] = appState.dsp.enabled;
+  doc["dspBypass"] = appState.dsp.bypass;
+  doc["presetIndex"] = appState.dsp.presetIndex;
 
   // Send preset list (index, name, exists)
   JsonArray presets = doc["presets"].to<JsonArray>();
@@ -1476,7 +1478,7 @@ void sendDspState() {
   for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
     JsonObject preset = presets.add<JsonObject>();
     preset["index"] = i;
-    preset["name"] = appState.dspPresetNames[i];
+    preset["name"] = appState.dsp.presetNames[i];
     preset["exists"] = dsp_preset_exists(i);
   }
 
@@ -1593,21 +1595,21 @@ void sendDacState() {
   if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "dacState";
-  doc["enabled"] = appState.dacEnabled;
-  doc["volume"] = appState.dacVolume;
-  doc["mute"] = appState.dacMute;
-  doc["deviceId"] = appState.dacDeviceId;
-  doc["modelName"] = appState.dacModelName;
-  doc["outputChannels"] = appState.dacOutputChannels;
-  doc["detected"] = appState.dacDetected;
-  doc["ready"] = appState.dacReady;
-  doc["filterMode"] = appState.dacFilterMode;
-  doc["txUnderruns"] = appState.dacTxUnderruns;
+  doc["enabled"] = appState.dac.enabled;
+  doc["volume"] = appState.dac.volume;
+  doc["mute"] = appState.dac.mute;
+  doc["deviceId"] = appState.dac.deviceId;
+  doc["modelName"] = appState.dac.modelName;
+  doc["outputChannels"] = appState.dac.outputChannels;
+  doc["detected"] = appState.dac.detected;
+  doc["ready"] = appState.dac.ready;
+  doc["filterMode"] = appState.dac.filterMode;
+  doc["txUnderruns"] = appState.dac.txUnderruns;
   // ES8311 secondary DAC state
-  doc["es8311Enabled"] = appState.es8311Enabled;
-  doc["es8311Volume"] = appState.es8311Volume;
-  doc["es8311Mute"] = appState.es8311Mute;
-  doc["es8311Ready"] = appState.es8311Ready;
+  doc["es8311Enabled"] = appState.dac.es8311Enabled;
+  doc["es8311Volume"] = appState.dac.es8311Volume;
+  doc["es8311Mute"] = appState.dac.es8311Mute;
+  doc["es8311Ready"] = appState.dac.es8311Ready;
   // TX diagnostics snapshot
   {
     DacTxDiag txd = dac_get_tx_diagnostics();
@@ -1640,7 +1642,7 @@ void sendDacState() {
   }
   // EEPROM diagnostics
   {
-    const AppState::EepromDiag& ed = appState.eepromDiag;
+    const EepromDiag& ed = appState.dac.eepromDiag;
     JsonObject eep = doc["eeprom"].to<JsonObject>();
     eep["scanned"] = ed.scanned;
     eep["found"] = ed.found;
@@ -1822,21 +1824,21 @@ void sendUsbAudioState() {
   if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "usbAudioState";
-  doc["enabled"] = appState.usbAudioEnabled;
-  doc["connected"] = appState.usbAudioConnected;
-  doc["streaming"] = appState.usbAudioStreaming;
-  doc["sampleRate"] = appState.usbAudioSampleRate;
-  doc["bitDepth"] = appState.usbAudioBitDepth;
-  doc["channels"] = appState.usbAudioChannels;
-  doc["volume"] = appState.usbAudioVolume;
+  doc["enabled"] = appState.usbAudio.enabled;
+  doc["connected"] = appState.usbAudio.connected;
+  doc["streaming"] = appState.usbAudio.streaming;
+  doc["sampleRate"] = appState.usbAudio.sampleRate;
+  doc["bitDepth"] = appState.usbAudio.bitDepth;
+  doc["channels"] = appState.usbAudio.channels;
+  doc["volume"] = appState.usbAudio.volume;
   doc["volumeLinear"] = usb_audio_get_volume_linear();
-  doc["mute"] = appState.usbAudioMute;
+  doc["mute"] = appState.usbAudio.mute;
   doc["overruns"]  = usb_audio_get_overruns();
   doc["underruns"] = usb_audio_get_underruns();
-  doc["vuL"]             = appState.usbAudioVuL;
-  doc["vuR"]             = appState.usbAudioVuR;
-  doc["negotiatedRate"]  = appState.usbAudioNegotiatedRate;
-  doc["negotiatedDepth"] = appState.usbAudioNegotiatedDepth;
+  doc["vuL"]             = appState.usbAudio.vuL;
+  doc["vuR"]             = appState.usbAudio.vuR;
+  doc["negotiatedRate"]  = appState.usbAudio.negotiatedRate;
+  doc["negotiatedDepth"] = appState.usbAudio.negotiatedDepth;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
@@ -1847,14 +1849,14 @@ void sendMqttSettingsState() {
   if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "mqttSettings";
-  doc["enabled"] = appState.mqttEnabled;
-  doc["broker"] = appState.mqttBroker;
-  doc["port"] = appState.mqttPort;
-  doc["username"] = appState.mqttUsername;
-  doc["hasPassword"] = (appState.mqttPassword.length() > 0);
-  doc["baseTopic"] = appState.mqttBaseTopic;
-  doc["haDiscovery"] = appState.mqttHADiscovery;
-  doc["connected"] = appState.mqttConnected;
+  doc["enabled"] = appState.mqtt.enabled;
+  doc["broker"] = appState.mqtt.broker;
+  doc["port"] = appState.mqtt.port;
+  doc["username"] = appState.mqtt.username;
+  doc["hasPassword"] = (appState.mqtt.password.length() > 0);
+  doc["baseTopic"] = appState.mqtt.baseTopic;
+  doc["haDiscovery"] = appState.mqtt.haDiscovery;
+  doc["connected"] = appState.mqtt.connected;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t *)json.c_str(), json.length());
@@ -1949,7 +1951,7 @@ float getCpuUsageCore1() {
 
 void sendHardwareStats() {
   // Master debug gate — if debug mode is off, deregister hooks and send nothing
-  if (!appState.debugMode) {
+  if (!appState.debug.debugMode) {
     if (cpuHooksInstalled) deinitCpuUsageMonitoring();
     return;
   }
@@ -1983,7 +1985,7 @@ void sendHardwareStats() {
   }
 
   // === Hardware Stats sections (gated by debugHwStats) ===
-  if (appState.debugHwStats) {
+  if (appState.debug.hwStats) {
     // Memory - Internal Heap
     doc["memory"]["heapTotal"] = ESP.getHeapSize();
     doc["memory"]["heapFree"] = ESP.getFreeHeap();
@@ -2010,13 +2012,13 @@ void sendHardwareStats() {
     doc["wifi"]["connected"] = (WiFi.status() == WL_CONNECTED);
 
     // Audio ADC diagnostics (per-ADC)
-    doc["audio"]["sampleRate"] = appState.audioSampleRate;
-    doc["audio"]["adcVref"] = appState.adcVref;
-    doc["audio"]["numAdcsDetected"] = appState.numAdcsDetected;
+    doc["audio"]["sampleRate"] = appState.audio.sampleRate;
+    doc["audio"]["adcVref"] = appState.audio.adcVref;
+    doc["audio"]["numAdcsDetected"] = appState.audio.numAdcsDetected;
     JsonArray adcArr = doc["audio"]["adcs"].to<JsonArray>();
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
       JsonObject adcObj = adcArr.add<JsonObject>();
-      const AppState::AdcState &adc = appState.audioAdc[a];
+      const AdcState &adc = appState.audio.adc[a];
       const char *statusStr = "OK";
       switch (adc.healthStatus) {
         case 1: statusStr = "NO_DATA"; break;
@@ -2031,14 +2033,14 @@ void sendHardwareStats() {
       adcObj["consecutiveZeros"] = adc.consecutiveZeros;
       adcObj["totalBuffers"] = adc.totalBuffers;
       adcObj["vrms"] = adc.vrmsCombined;
-      adcObj["snrDb"] = appState.audioSnrDb[a];
-      adcObj["sfdrDb"] = appState.audioSfdrDb[a];
+      adcObj["snrDb"] = appState.audio.snrDb[a];
+      adcObj["sfdrDb"] = appState.audio.sfdrDb[a];
     }
-    doc["audio"]["fftWindowType"] = (int)appState.fftWindowType;
+    doc["audio"]["fftWindowType"] = (int)appState.audio.fftWindowType;
     // DEPRECATED v1.14: flat fields — use audio.adcs[] array. Kept for backward compat.
     doc["audio"]["adcStatus"] = adcArr[0]["status"];
-    doc["audio"]["noiseFloorDbfs"] = appState.audioAdc[0].noiseFloorDbfs;
-    doc["audio"]["vrms"] = appState.audioAdc[0].vrmsCombined;
+    doc["audio"]["noiseFloorDbfs"] = appState.audio.adc[0].noiseFloorDbfs;
+    doc["audio"]["vrms"] = appState.audio.adc[0].vrmsCombined;
 
     // Uptime (milliseconds since boot)
     doc["uptime"] = millis();
@@ -2047,7 +2049,7 @@ void sendHardwareStats() {
     doc["resetReason"] = getResetReasonString();
 
     // Heap health
-    doc["heapCritical"] = appState.heapCritical;
+    doc["heapCritical"] = appState.debug.heapCritical;
 
     // Crash history (ring buffer, most recent first)
     const CrashLogData &clog = crashlog_get();
@@ -2067,23 +2069,23 @@ void sendHardwareStats() {
 
     // Per-ADC I2S recovery counts
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
-      doc["audio"]["adcs"][a]["i2sRecoveries"] = appState.audioAdc[a].i2sRecoveries;
+      doc["audio"]["adcs"][a]["i2sRecoveries"] = appState.audio.adc[a].i2sRecoveries;
     }
 
 #ifdef DAC_ENABLED
     // DAC Output diagnostics
     {
       JsonObject dac = doc["dac"].to<JsonObject>();
-      dac["enabled"] = appState.dacEnabled;
-      dac["ready"] = appState.dacReady;
-      dac["detected"] = appState.dacDetected;
-      dac["model"] = appState.dacModelName;
-      dac["deviceId"] = appState.dacDeviceId;
-      dac["volume"] = appState.dacVolume;
-      dac["mute"] = appState.dacMute;
-      dac["filterMode"] = appState.dacFilterMode;
-      dac["outputChannels"] = appState.dacOutputChannels;
-      dac["txUnderruns"] = appState.dacTxUnderruns;
+      dac["enabled"] = appState.dac.enabled;
+      dac["ready"] = appState.dac.ready;
+      dac["detected"] = appState.dac.detected;
+      dac["model"] = appState.dac.modelName;
+      dac["deviceId"] = appState.dac.deviceId;
+      dac["volume"] = appState.dac.volume;
+      dac["mute"] = appState.dac.mute;
+      dac["filterMode"] = appState.dac.filterMode;
+      dac["outputChannels"] = appState.dac.outputChannels;
+      dac["txUnderruns"] = appState.dac.txUnderruns;
       DacDriver* drv = dac_get_driver();
       if (drv) {
         const DacCapabilities& caps = drv->getCapabilities();
@@ -2106,7 +2108,7 @@ void sendHardwareStats() {
         tx["zeroFrames"] = txd.zeroFrames;
       }
       // EEPROM diagnostics
-      const AppState::EepromDiag& ed = appState.eepromDiag;
+      const EepromDiag& ed = appState.dac.eepromDiag;
       JsonObject eep = dac["eeprom"].to<JsonObject>();
       eep["scanned"] = ed.scanned;
       eep["found"] = ed.found;
@@ -2164,16 +2166,16 @@ void sendHardwareStats() {
     // DSP diagnostics
     {
       JsonObject dsp = doc["dsp"].to<JsonObject>();
-      dsp["swapFailures"] = appState.dspSwapFailures;
-      dsp["swapSuccesses"] = appState.dspSwapSuccesses;
-      unsigned long timeSinceFailure = appState.lastDspSwapFailure > 0 ? (millis() - appState.lastDspSwapFailure) : 0;
+      dsp["swapFailures"] = appState.dsp.swapFailures;
+      dsp["swapSuccesses"] = appState.dsp.swapSuccesses;
+      unsigned long timeSinceFailure = appState.dsp.lastSwapFailure > 0 ? (millis() - appState.dsp.lastSwapFailure) : 0;
       dsp["lastSwapFailureAgo"] = timeSinceFailure;
     }
 #endif
   }
 
   // === I2S Metrics sections (gated by debugI2sMetrics) ===
-  if (appState.debugI2sMetrics) {
+  if (appState.debug.i2sMetrics) {
     // I2S Static Config
     I2sStaticConfig i2sCfg = i2s_audio_get_static_config();
     JsonArray i2sCfgArr = doc["audio"]["i2sConfig"].to<JsonArray>();
@@ -2192,18 +2194,18 @@ void sendHardwareStats() {
 
     // I2S Runtime Metrics
     JsonObject i2sRt = doc["audio"]["i2sRuntime"].to<JsonObject>();
-    i2sRt["stackFree"] = appState.i2sMetrics.audioTaskStackFree;
+    i2sRt["stackFree"] = appState.audio.i2sMetrics.audioTaskStackFree;
     JsonArray bpsArr = i2sRt["buffersPerSec"].to<JsonArray>();
     JsonArray latArr = i2sRt["avgReadLatencyUs"].to<JsonArray>();
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
-      bpsArr.add(serialized(String(appState.i2sMetrics.buffersPerSec[a], 1)));
-      latArr.add(serialized(String(appState.i2sMetrics.avgReadLatencyUs[a], 0)));
+      bpsArr.add(serialized(String(appState.audio.i2sMetrics.buffersPerSec[a], 1)));
+      latArr.add(serialized(String(appState.audio.i2sMetrics.avgReadLatencyUs[a], 0)));
     }
   }
 
   // === Task Monitor section (gated by debugTaskMonitor) ===
   // Note: task_monitor_update() runs on its own 5s timer in main loop
-  if (appState.debugTaskMonitor) {
+  if (appState.debug.taskMonitor) {
     const TaskMonitorData& tm = task_monitor_get_data();
     doc["tasks"]["count"] = tm.taskCount;
     doc["tasks"]["loopUs"] = tm.loopTimeUs;
@@ -2250,7 +2252,7 @@ void drainPendingInitState() {
             JsonDocument adcDoc;
             adcDoc["type"] = "adcState";
             JsonArray arr = adcDoc["enabled"].to<JsonArray>();
-            for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) arr.add(appState.adcEnabled[i]);
+            for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) arr.add(appState.audio.adcEnabled[i]);
             String adcJson;
             serializeJson(adcDoc, adcJson);
             webSocket.sendTXT(c, adcJson.c_str());
@@ -2277,7 +2279,7 @@ void drainPendingInitState() {
         pending &= ~INIT_USB_AUDIO;
 #endif
         if (sent < MAX_PER_ITER && (pending & INIT_UPDATED)) {
-            if (appState.justUpdated) broadcastJustUpdated();
+            if (appState.ota.justUpdated) broadcastJustUpdated();
             pending &= ~INIT_UPDATED;
             sent++;
         }
@@ -2304,15 +2306,15 @@ void sendAudioData() {
   {
     JsonDocument doc;
     doc["type"] = "audioLevels";
-    doc["audioLevel"] = appState.audioLevel_dBFS;
-    doc["signalDetected"] = (appState.audioLevel_dBFS >= appState.audioThreshold_dBFS);
-    doc["numAdcsDetected"] = appState.numAdcsDetected;
+    doc["audioLevel"] = appState.audio.level_dBFS;
+    doc["signalDetected"] = (appState.audio.level_dBFS >= appState.audio.threshold_dBFS);
+    doc["numAdcsDetected"] = appState.audio.numAdcsDetected;
     // Per-ADC data array
     JsonArray adcArr = doc["adc"].to<JsonArray>();
     JsonArray adcStatusArr = doc["adcStatus"].to<JsonArray>();
     JsonArray adcNoiseArr = doc["adcNoiseFloor"].to<JsonArray>();
     for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
-      const AppState::AdcState &adc = appState.audioAdc[a];
+      const AdcState &adc = appState.audio.adc[a];
       JsonObject adcObj = adcArr.add<JsonObject>();
       adcObj["vu1"] = adc.vu1;
       adcObj["vu2"] = adc.vu2;
@@ -2335,16 +2337,16 @@ void sendAudioData() {
       adcNoiseArr.add(adc.noiseFloorDbfs);
     }
     // DEPRECATED v1.14: flat fields — use adcs[] array. Kept for backward compat.
-    doc["audioRms1"] = appState.audioAdc[0].rms1;
-    doc["audioRms2"] = appState.audioAdc[0].rms2;
-    doc["audioVu1"] = appState.audioAdc[0].vu1;
-    doc["audioVu2"] = appState.audioAdc[0].vu2;
-    doc["audioPeak1"] = appState.audioAdc[0].peak1;
-    doc["audioPeak2"] = appState.audioAdc[0].peak2;
-    doc["audioPeak"] = appState.audioAdc[0].peakCombined;
-    doc["audioVrms1"] = appState.audioAdc[0].vrms1;
-    doc["audioVrms2"] = appState.audioAdc[0].vrms2;
-    doc["audioVrms"] = appState.audioAdc[0].vrmsCombined;
+    doc["audioRms1"] = appState.audio.adc[0].rms1;
+    doc["audioRms2"] = appState.audio.adc[0].rms2;
+    doc["audioVu1"] = appState.audio.adc[0].vu1;
+    doc["audioVu2"] = appState.audio.adc[0].vu2;
+    doc["audioPeak1"] = appState.audio.adc[0].peak1;
+    doc["audioPeak2"] = appState.audio.adc[0].peak2;
+    doc["audioPeak"] = appState.audio.adc[0].peakCombined;
+    doc["audioVrms1"] = appState.audio.adc[0].vrms1;
+    doc["audioVrms2"] = appState.audio.adc[0].vrms2;
+    doc["audioVrms"] = appState.audio.adc[0].vrmsCombined;
     // Output sink VU data
     JsonArray sinkArr = doc["sinks"].to<JsonArray>();
     int sinkCnt = audio_pipeline_get_sink_count();
@@ -2372,10 +2374,10 @@ void sendAudioData() {
 
   if (_sendWaveformNext) {
     // --- Waveform data (per-ADC) — binary: [type:1][adc:1][samples:256] ---
-    if (appState.waveformEnabled && !appState.heapCritical) {
+    if (appState.audio.waveformEnabled && !appState.debug.heapCritical) {
       uint8_t wfBin[2 + WAVEFORM_BUFFER_SIZE]; // 258 bytes
       wfBin[0] = WS_BIN_WAVEFORM;
-      for (int a = 0; a < appState.numAdcsDetected; a++) {
+      for (int a = 0; a < appState.audio.numAdcsDetected; a++) {
         if (i2s_audio_get_waveform(wfBin + 2, a)) {
           wfBin[1] = (uint8_t)a;
           for (int i = 0; i < MAX_WS_CLIENTS; i++) {
@@ -2388,12 +2390,12 @@ void sendAudioData() {
     }
   } else {
     // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:Nxf32LE] ---
-    if (appState.spectrumEnabled && !appState.heapCritical) {
+    if (appState.audio.spectrumEnabled && !appState.debug.heapCritical) {
       uint8_t spBin[2 + sizeof(float) + SPECTRUM_BANDS * sizeof(float)]; // 70 bytes
       spBin[0] = WS_BIN_SPECTRUM;
       float bands[SPECTRUM_BANDS];
       float freq = 0.0f;
-      for (int a = 0; a < appState.numAdcsDetected; a++) {
+      for (int a = 0; a < appState.audio.numAdcsDetected; a++) {
         if (i2s_audio_get_spectrum(bands, &freq, a)) {
           spBin[1] = (uint8_t)a;
           memcpy(spBin + 2, &freq, sizeof(float));

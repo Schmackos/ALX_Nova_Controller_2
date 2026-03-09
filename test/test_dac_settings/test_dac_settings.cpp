@@ -36,19 +36,19 @@ static void resetDacFields() {
     AppState& as = AppState::getInstance();
 
     // Primary DAC fields
-    as.dacEnabled    = false;
-    as.dacVolume     = 80;
-    as.dacMute       = false;
-    as.dacDeviceId   = 0x0001;   // DAC_ID_PCM5102A
-    strncpy(as.dacModelName, "PCM5102A", sizeof(as.dacModelName) - 1);
-    as.dacModelName[sizeof(as.dacModelName) - 1] = '\0';
-    as.dacFilterMode = 0;
+    as.dac.enabled    = false;
+    as.dac.volume     = 80;
+    as.dac.mute       = false;
+    as.dac.deviceId   = 0x0001;   // DAC_ID_PCM5102A
+    strncpy(as.dac.modelName, "PCM5102A", sizeof(as.dac.modelName) - 1);
+    as.dac.modelName[sizeof(as.dac.modelName) - 1] = '\0';
+    as.dac.filterMode = 0;
 
     // ES8311 secondary DAC fields
-    as.es8311Enabled = false;
-    as.es8311Volume  = 80;
-    as.es8311Mute    = false;
-    as.es8311Ready   = false;
+    as.dac.es8311Enabled = false;
+    as.dac.es8311Volume  = 80;
+    as.dac.es8311Mute    = false;
+    as.dac.es8311Ready   = false;
 
     // Dirty flags
     as.clearDacDirty();
@@ -76,18 +76,18 @@ void test_es8311_settings_default(void) {
     // Act — read the values as-is (no load has occurred).
 
     // Assert
-    TEST_ASSERT_FALSE(as.es8311Enabled);
-    TEST_ASSERT_EQUAL_UINT8(80, as.es8311Volume);
-    TEST_ASSERT_FALSE(as.es8311Mute);
+    TEST_ASSERT_FALSE(as.dac.es8311Enabled);
+    TEST_ASSERT_EQUAL_UINT8(80, as.dac.es8311Volume);
+    TEST_ASSERT_FALSE(as.dac.es8311Mute);
 }
 
 // ---------------------------------------------------------------------------
 // Test 2: Loading a JSON that has no ES8311 fields preserves defaults
 //
 // Mirrors the guard logic in dac_load_settings():
-//   if (doc["es8311Enabled"].is<bool>())  as.es8311Enabled = ...
-//   if (doc["es8311Volume"].is<int>())    as.es8311Volume  = ...
-//   if (doc["es8311Mute"].is<bool>())     as.es8311Mute    = ...
+//   if (doc["es8311Enabled"].is<bool>())  as.dac.es8311Enabled = ...
+//   if (doc["es8311Volume"].is<int>())    as.dac.es8311Volume  = ...
+//   if (doc["es8311Mute"].is<bool>())     as.dac.es8311Mute    = ...
 // When the keys are absent the is<T>() check returns false and no assignment
 // is made — fields stay at their defaults.
 // ---------------------------------------------------------------------------
@@ -105,71 +105,71 @@ void test_es8311_settings_missing_fields(void) {
     AppState& as = AppState::getInstance();
 
     // Act — apply the same guarded-assignment logic used by dac_load_settings().
-    if (doc["enabled"].is<bool>())    as.dacEnabled    = doc["enabled"].as<bool>();
+    if (doc["enabled"].is<bool>())    as.dac.enabled    = doc["enabled"].as<bool>();
     if (doc["volume"].is<int>()) {
         int v = doc["volume"].as<int>();
-        if (v >= 0 && v <= 100) as.dacVolume = (uint8_t)v;
+        if (v >= 0 && v <= 100) as.dac.volume = (uint8_t)v;
     }
-    if (doc["mute"].is<bool>())       as.dacMute       = doc["mute"].as<bool>();
-    if (doc["deviceId"].is<int>())    as.dacDeviceId   = (uint16_t)doc["deviceId"].as<int>();
-    if (doc["filterMode"].is<int>())  as.dacFilterMode = (uint8_t)doc["filterMode"].as<int>();
+    if (doc["mute"].is<bool>())       as.dac.mute       = doc["mute"].as<bool>();
+    if (doc["deviceId"].is<int>())    as.dac.deviceId   = (uint16_t)doc["deviceId"].as<int>();
+    if (doc["filterMode"].is<int>())  as.dac.filterMode = (uint8_t)doc["filterMode"].as<int>();
 
     // ES8311 keys deliberately absent — should NOT touch the fields.
-    if (doc["es8311Enabled"].is<bool>()) as.es8311Enabled = doc["es8311Enabled"].as<bool>();
+    if (doc["es8311Enabled"].is<bool>()) as.dac.es8311Enabled = doc["es8311Enabled"].as<bool>();
     if (doc["es8311Volume"].is<int>()) {
         int v = doc["es8311Volume"].as<int>();
-        if (v >= 0 && v <= 100) as.es8311Volume = (uint8_t)v;
+        if (v >= 0 && v <= 100) as.dac.es8311Volume = (uint8_t)v;
     }
-    if (doc["es8311Mute"].is<bool>()) as.es8311Mute = doc["es8311Mute"].as<bool>();
+    if (doc["es8311Mute"].is<bool>()) as.dac.es8311Mute = doc["es8311Mute"].as<bool>();
 
     // Assert — primary fields were updated from JSON.
-    TEST_ASSERT_TRUE(as.dacEnabled);
-    TEST_ASSERT_EQUAL_UINT8(75, as.dacVolume);
-    TEST_ASSERT_FALSE(as.dacMute);
+    TEST_ASSERT_TRUE(as.dac.enabled);
+    TEST_ASSERT_EQUAL_UINT8(75, as.dac.volume);
+    TEST_ASSERT_FALSE(as.dac.mute);
 
     // Assert — ES8311 fields kept their compile-time defaults.
-    TEST_ASSERT_FALSE(as.es8311Enabled);
-    TEST_ASSERT_EQUAL_UINT8(80, as.es8311Volume);
-    TEST_ASSERT_FALSE(as.es8311Mute);
+    TEST_ASSERT_FALSE(as.dac.es8311Enabled);
+    TEST_ASSERT_EQUAL_UINT8(80, as.dac.es8311Volume);
+    TEST_ASSERT_FALSE(as.dac.es8311Mute);
 }
 
 // ---------------------------------------------------------------------------
 // Test 3: The JSON document built for saving includes all three ES8311 keys
 //
 // Mirrors the serialization block in dac_save_settings():
-//   doc["es8311Enabled"] = as.es8311Enabled;
-//   doc["es8311Volume"]  = as.es8311Volume;
-//   doc["es8311Mute"]    = as.es8311Mute;
+//   doc["es8311Enabled"] = as.dac.es8311Enabled;
+//   doc["es8311Volume"]  = as.dac.es8311Volume;
+//   doc["es8311Mute"]    = as.dac.es8311Mute;
 // We set non-default values first so we can also verify the round-trip values.
 // ---------------------------------------------------------------------------
 
 void test_dac_settings_json_contains_es8311_fields(void) {
     // Arrange — set non-default ES8311 values so round-trip is meaningful.
     AppState& as = AppState::getInstance();
-    as.es8311Enabled = true;
-    as.es8311Volume  = 65;
-    as.es8311Mute    = true;
+    as.dac.es8311Enabled = true;
+    as.dac.es8311Volume  = 65;
+    as.dac.es8311Mute    = true;
 
     // Also set primary DAC fields to something deterministic.
-    as.dacEnabled    = true;
-    as.dacVolume     = 90;
-    as.dacMute       = false;
-    as.dacDeviceId   = 0x0001;
-    strncpy(as.dacModelName, "PCM5102A", sizeof(as.dacModelName) - 1);
-    as.dacModelName[sizeof(as.dacModelName) - 1] = '\0';
-    as.dacFilterMode = 0;
+    as.dac.enabled    = true;
+    as.dac.volume     = 90;
+    as.dac.mute       = false;
+    as.dac.deviceId   = 0x0001;
+    strncpy(as.dac.modelName, "PCM5102A", sizeof(as.dac.modelName) - 1);
+    as.dac.modelName[sizeof(as.dac.modelName) - 1] = '\0';
+    as.dac.filterMode = 0;
 
     // Act — build the JSON doc exactly as dac_save_settings() does.
     JsonDocument doc;
-    doc["enabled"]      = as.dacEnabled;
-    doc["volume"]       = as.dacVolume;
-    doc["mute"]         = as.dacMute;
-    doc["deviceId"]     = as.dacDeviceId;
-    doc["modelName"]    = as.dacModelName;
-    doc["filterMode"]   = as.dacFilterMode;
-    doc["es8311Enabled"] = as.es8311Enabled;
-    doc["es8311Volume"]  = as.es8311Volume;
-    doc["es8311Mute"]    = as.es8311Mute;
+    doc["enabled"]      = as.dac.enabled;
+    doc["volume"]       = as.dac.volume;
+    doc["mute"]         = as.dac.mute;
+    doc["deviceId"]     = as.dac.deviceId;
+    doc["modelName"]    = as.dac.modelName;
+    doc["filterMode"]   = as.dac.filterMode;
+    doc["es8311Enabled"] = as.dac.es8311Enabled;
+    doc["es8311Volume"]  = as.dac.es8311Volume;
+    doc["es8311Mute"]    = as.dac.es8311Mute;
 
     // Assert — all three ES8311 keys are present in the document.
     TEST_ASSERT_TRUE(doc["es8311Enabled"].is<bool>());
@@ -210,12 +210,12 @@ void test_es8311_volume_out_of_range_rejected(void) {
     // Act — apply ES8311 volume with the same range guard used in production.
     if (doc["es8311Volume"].is<int>()) {
         int v = doc["es8311Volume"].as<int>();
-        if (v >= 0 && v <= 100) as.es8311Volume = (uint8_t)v;
+        if (v >= 0 && v <= 100) as.dac.es8311Volume = (uint8_t)v;
         // else: silently ignored, default stays
     }
 
     // Assert — default volume (80) is preserved because 255 > 100.
-    TEST_ASSERT_EQUAL_UINT8(80, as.es8311Volume);
+    TEST_ASSERT_EQUAL_UINT8(80, as.dac.es8311Volume);
 }
 
 // ---------------------------------------------------------------------------
@@ -225,39 +225,39 @@ void test_es8311_volume_out_of_range_rejected(void) {
 void test_es8311_json_roundtrip(void) {
     // Arrange — write non-default values into AppState.
     AppState& as = AppState::getInstance();
-    as.es8311Enabled = true;
-    as.es8311Volume  = 42;
-    as.es8311Mute    = true;
+    as.dac.es8311Enabled = true;
+    as.dac.es8311Volume  = 42;
+    as.dac.es8311Mute    = true;
 
     // Act — serialize (save).
     JsonDocument saveDoc;
-    saveDoc["es8311Enabled"] = as.es8311Enabled;
-    saveDoc["es8311Volume"]  = as.es8311Volume;
-    saveDoc["es8311Mute"]    = as.es8311Mute;
+    saveDoc["es8311Enabled"] = as.dac.es8311Enabled;
+    saveDoc["es8311Volume"]  = as.dac.es8311Volume;
+    saveDoc["es8311Mute"]    = as.dac.es8311Mute;
 
     char buf[128];
     serializeJson(saveDoc, buf, sizeof(buf));
 
     // Reset to defaults (simulates device restart).
-    as.es8311Enabled = false;
-    as.es8311Volume  = 80;
-    as.es8311Mute    = false;
+    as.dac.es8311Enabled = false;
+    as.dac.es8311Volume  = 80;
+    as.dac.es8311Mute    = false;
 
     // Act — deserialize (load).
     JsonDocument loadDoc;
     deserializeJson(loadDoc, buf);
 
-    if (loadDoc["es8311Enabled"].is<bool>()) as.es8311Enabled = loadDoc["es8311Enabled"].as<bool>();
+    if (loadDoc["es8311Enabled"].is<bool>()) as.dac.es8311Enabled = loadDoc["es8311Enabled"].as<bool>();
     if (loadDoc["es8311Volume"].is<int>()) {
         int v = loadDoc["es8311Volume"].as<int>();
-        if (v >= 0 && v <= 100) as.es8311Volume = (uint8_t)v;
+        if (v >= 0 && v <= 100) as.dac.es8311Volume = (uint8_t)v;
     }
-    if (loadDoc["es8311Mute"].is<bool>()) as.es8311Mute = loadDoc["es8311Mute"].as<bool>();
+    if (loadDoc["es8311Mute"].is<bool>()) as.dac.es8311Mute = loadDoc["es8311Mute"].as<bool>();
 
     // Assert — fields restored from JSON.
-    TEST_ASSERT_TRUE(as.es8311Enabled);
-    TEST_ASSERT_EQUAL_UINT8(42, as.es8311Volume);
-    TEST_ASSERT_TRUE(as.es8311Mute);
+    TEST_ASSERT_TRUE(as.dac.es8311Enabled);
+    TEST_ASSERT_EQUAL_UINT8(42, as.dac.es8311Volume);
+    TEST_ASSERT_TRUE(as.dac.es8311Mute);
 }
 
 // ---------------------------------------------------------------------------

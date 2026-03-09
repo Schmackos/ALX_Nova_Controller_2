@@ -34,14 +34,14 @@ static const CycleOption output_opts[] = {
 
 /* Confirmation callbacks */
 static void on_enabled_confirm(int int_val, float, int) {
-    AppState::getInstance().sigGenEnabled = (int_val != 0);
+    AppState::getInstance().sigGen.enabled = (int_val != 0);
     siggen_apply_params();
     AppState::getInstance().markSignalGenDirty();
     LOG_I("[GUI] Signal generator %s", int_val ? "ON" : "OFF");
 }
 
 static void on_waveform_confirm(int int_val, float, int) {
-    AppState::getInstance().sigGenWaveform = int_val;
+    AppState::getInstance().sigGen.waveform = int_val;
     siggen_apply_params();
     saveSignalGenSettings();
     AppState::getInstance().markSignalGenDirty();
@@ -49,7 +49,7 @@ static void on_waveform_confirm(int int_val, float, int) {
 }
 
 static void on_frequency_confirm(int int_val, float, int) {
-    AppState::getInstance().sigGenFrequency = (float)int_val;
+    AppState::getInstance().sigGen.frequency = (float)int_val;
     siggen_apply_params();
     saveSignalGenSettings();
     AppState::getInstance().markSignalGenDirty();
@@ -57,7 +57,7 @@ static void on_frequency_confirm(int int_val, float, int) {
 }
 
 static void on_amplitude_confirm(int, float float_val, int) {
-    AppState::getInstance().sigGenAmplitude = float_val;
+    AppState::getInstance().sigGen.amplitude = float_val;
     siggen_apply_params();
     saveSignalGenSettings();
     AppState::getInstance().markSignalGenDirty();
@@ -65,7 +65,7 @@ static void on_amplitude_confirm(int, float float_val, int) {
 }
 
 static void on_channel_confirm(int int_val, float, int) {
-    AppState::getInstance().sigGenChannel = int_val;
+    AppState::getInstance().sigGen.channel = int_val;
     siggen_apply_params();
     saveSignalGenSettings();
     AppState::getInstance().markSignalGenDirty();
@@ -73,7 +73,7 @@ static void on_channel_confirm(int int_val, float, int) {
 }
 
 static void on_output_confirm(int int_val, float, int) {
-    AppState::getInstance().sigGenOutputMode = int_val;
+    AppState::getInstance().sigGen.outputMode = int_val;
     siggen_apply_params();
     saveSignalGenSettings();
     AppState::getInstance().markSignalGenDirty();
@@ -85,7 +85,7 @@ static void edit_enabled(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Signal Gen";
     cfg.type = VE_TOGGLE;
-    cfg.toggle_val = AppState::getInstance().sigGenEnabled;
+    cfg.toggle_val = AppState::getInstance().sigGen.enabled;
     cfg.on_confirm = on_enabled_confirm;
     scr_value_edit_open(&cfg);
 }
@@ -94,7 +94,7 @@ static void edit_waveform(void) {
     AppState &st = AppState::getInstance();
     int cur = 0;
     for (int i = 0; i < 4; i++) {
-        if (waveform_opts[i].value == st.sigGenWaveform) { cur = i; break; }
+        if (waveform_opts[i].value == st.sigGen.waveform) { cur = i; break; }
     }
     ValueEditConfig cfg = {};
     cfg.title = "Waveform";
@@ -110,7 +110,7 @@ static void edit_frequency(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Frequency";
     cfg.type = VE_NUMERIC;
-    cfg.int_val = (int)AppState::getInstance().sigGenFrequency;
+    cfg.int_val = (int)AppState::getInstance().sigGen.frequency;
     cfg.int_min = 1;
     cfg.int_max = 22000;
     cfg.int_step = 10;
@@ -123,7 +123,7 @@ static void edit_amplitude(void) {
     ValueEditConfig cfg = {};
     cfg.title = "Amplitude";
     cfg.type = VE_FLOAT;
-    cfg.float_val = AppState::getInstance().sigGenAmplitude;
+    cfg.float_val = AppState::getInstance().sigGen.amplitude;
     cfg.float_min = -96.0f;
     cfg.float_max = 0.0f;
     cfg.float_step = 1.0f;
@@ -137,7 +137,7 @@ static void edit_channel(void) {
     AppState &st = AppState::getInstance();
     int cur = 0;
     for (int i = 0; i < 3; i++) {
-        if (channel_opts[i].value == st.sigGenChannel) { cur = i; break; }
+        if (channel_opts[i].value == st.sigGen.channel) { cur = i; break; }
     }
     ValueEditConfig cfg = {};
     cfg.title = "Channel";
@@ -153,7 +153,7 @@ static void edit_output(void) {
     AppState &st = AppState::getInstance();
     int cur = 0;
     for (int i = 0; i < 2; i++) {
-        if (output_opts[i].value == st.sigGenOutputMode) { cur = i; break; }
+        if (output_opts[i].value == st.sigGen.outputMode) { cur = i; break; }
     }
     ValueEditConfig cfg = {};
     cfg.title = "Output";
@@ -172,21 +172,21 @@ static void build_siggen_menu(void) {
     AppState &st = AppState::getInstance();
 
     static char en_str[8];
-    snprintf(en_str, sizeof(en_str), "%s", st.sigGenEnabled ? "ON" : "OFF");
+    snprintf(en_str, sizeof(en_str), "%s", st.sigGen.enabled ? "ON" : "OFF");
 
     const char *wave_names[] = {"Sine", "Square", "Noise", "Sweep"};
-    const char *wave_str = wave_names[st.sigGenWaveform % 4];
+    const char *wave_str = wave_names[st.sigGen.waveform % 4];
 
     static char freq_str[12];
-    snprintf(freq_str, sizeof(freq_str), "%d Hz", (int)st.sigGenFrequency);
+    snprintf(freq_str, sizeof(freq_str), "%d Hz", (int)st.sigGen.frequency);
 
     static char amp_str[12];
-    snprintf(amp_str, sizeof(amp_str), "%+.0f dBFS", st.sigGenAmplitude);
+    snprintf(amp_str, sizeof(amp_str), "%+.0f dBFS", st.sigGen.amplitude);
 
     const char *chan_names[] = {"Ch 1", "Ch 2", "Both"};
-    const char *chan_str = chan_names[st.sigGenChannel % 3];
+    const char *chan_str = chan_names[st.sigGen.channel % 3];
 
-    const char *out_str = st.sigGenOutputMode == 0 ? "Software" : "PWM";
+    const char *out_str = st.sigGen.outputMode == 0 ? "Software" : "PWM";
 
     siggen_menu.title = "Signal Gen";
     int idx = 0;
@@ -208,23 +208,23 @@ lv_obj_t *scr_siggen_create(void) {
 void scr_siggen_refresh(void) {
     AppState &st = AppState::getInstance();
 
-    scr_menu_set_item_value(1, st.sigGenEnabled ? "ON" : "OFF");
+    scr_menu_set_item_value(1, st.sigGen.enabled ? "ON" : "OFF");
 
     const char *wave_names[] = {"Sine", "Square", "Noise", "Sweep"};
-    scr_menu_set_item_value(2, wave_names[st.sigGenWaveform % 4]);
+    scr_menu_set_item_value(2, wave_names[st.sigGen.waveform % 4]);
 
     static char freq_buf[12];
-    snprintf(freq_buf, sizeof(freq_buf), "%d Hz", (int)st.sigGenFrequency);
+    snprintf(freq_buf, sizeof(freq_buf), "%d Hz", (int)st.sigGen.frequency);
     scr_menu_set_item_value(3, freq_buf);
 
     static char amp_buf[12];
-    snprintf(amp_buf, sizeof(amp_buf), "%+.0f dBFS", st.sigGenAmplitude);
+    snprintf(amp_buf, sizeof(amp_buf), "%+.0f dBFS", st.sigGen.amplitude);
     scr_menu_set_item_value(4, amp_buf);
 
     const char *chan_names[] = {"Ch 1", "Ch 2", "Both"};
-    scr_menu_set_item_value(5, chan_names[st.sigGenChannel % 3]);
+    scr_menu_set_item_value(5, chan_names[st.sigGen.channel % 3]);
 
-    scr_menu_set_item_value(6, st.sigGenOutputMode == 0 ? "Software" : "PWM");
+    scr_menu_set_item_value(6, st.sigGen.outputMode == 0 ? "Software" : "PWM");
 }
 
 #endif /* GUI_ENABLED */

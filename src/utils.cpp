@@ -100,11 +100,11 @@ String getResetReasonString() {
 void syncTimeWithNTP() {
   LOG_I("[NTP] === Synchronizing Time with NTP ===");
   LOG_I("[NTP] Timezone offset: %d seconds (%.1f hours)",
-        appState.timezoneOffset, appState.timezoneOffset / 3600.0);
+        appState.general.timezoneOffset, appState.general.timezoneOffset / 3600.0);
   LOG_I("[NTP] DST offset: %d seconds (%.1f hours)",
-        appState.dstOffset, appState.dstOffset / 3600.0);
+        appState.general.dstOffset, appState.general.dstOffset / 3600.0);
 
-  configTime(appState.timezoneOffset, appState.dstOffset, "pool.ntp.org", "time.nist.gov");
+  configTime(appState.general.timezoneOffset, appState.general.dstOffset, "pool.ntp.org", "time.nist.gov");
 
   LOG_I("[NTP] Waiting for NTP time sync...");
   time_t now = time(nullptr);

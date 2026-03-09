@@ -7,15 +7,14 @@
 #include "dsp_crossover.h"
 #include "thd_measurement.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
 #include <ArduinoJson.h>
-#include <WebServer.h>
 #include <LittleFS.h>
 #include <sys/stat.h>
 #include <esp_heap_caps.h>
-
-extern WebServer server;
 
 // Static JSON document pool for all DSP API handlers (safe: single-threaded Core 0 HTTP server)
 static JsonDocument _dspApiDoc;
@@ -48,14 +47,14 @@ void loadDspSettings() {
                 DspState *cfg = dsp_get_inactive_config();
                 if (doc["globalBypass"].is<bool>()) cfg->globalBypass = doc["globalBypass"].as<bool>();
                 if (doc["sampleRate"].is<unsigned int>()) cfg->sampleRate = doc["sampleRate"].as<uint32_t>();
-                if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
-                if (doc["presetIndex"].is<int>()) appState.dspPresetIndex = doc["presetIndex"].as<int8_t>();
+                if (doc["dspEnabled"].is<bool>()) appState.dsp.enabled = doc["dspEnabled"].as<bool>();
+                if (doc["presetIndex"].is<int>()) appState.dsp.presetIndex = doc["presetIndex"].as<int8_t>();
                 if (doc["presetNames"].is<JsonArray>()) {
                     JsonArray names = doc["presetNames"].as<JsonArray>();
                     for (int i = 0; i < 4 && i < (int)names.size(); i++) {
                         const char *n = names[i] | "";
-                        strncpy(appState.dspPresetNames[i], n, 20);
-                        appState.dspPresetNames[i][20] = '\0';
+                        strncpy(appState.dsp.presetNames[i], n, 20);
+                        appState.dsp.presetNames[i][20] = '\0';
                     }
                 }
             }
@@ -124,10 +123,10 @@ void saveDspSettings() {
     DspState *cfg = dsp_get_active_config();
     globalDoc["globalBypass"] = cfg->globalBypass;
     globalDoc["sampleRate"] = cfg->sampleRate;
-    globalDoc["dspEnabled"] = appState.dspEnabled;
-    globalDoc["presetIndex"] = appState.dspPresetIndex;
+    globalDoc["dspEnabled"] = appState.dsp.enabled;
+    globalDoc["presetIndex"] = appState.dsp.presetIndex;
     JsonArray names = globalDoc["presetNames"].to<JsonArray>();
-    for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) names.add(appState.dspPresetNames[i]);
+    for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) names.add(appState.dsp.presetNames[i]);
 
     String globalJson;
     serializeJson(globalDoc, globalJson);
@@ -198,7 +197,7 @@ bool dsp_preset_save(int slot, const char *name) {
     if (slot == -1) {
         bool found = false;
         for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
-            if (!dsp_preset_exists(i) || appState.dspPresetNames[i][0] == '\0') {
+            if (!dsp_preset_exists(i) || appState.dsp.presetNames[i][0] == '\0') {
                 slot = i;
                 found = true;
                 break;
@@ -227,7 +226,7 @@ bool dsp_preset_save(int slot, const char *name) {
     if (deserializeJson(doc, configBuf)) { free(configBuf); return false; }
 
     doc["name"] = name ? name : "";
-    doc["dspEnabled"] = appState.dspEnabled;
+    doc["dspEnabled"] = appState.dsp.enabled;
 
     // Write to file
     char path[24];
@@ -242,10 +241,10 @@ bool dsp_preset_save(int slot, const char *name) {
 
     // Update AppState
     if (name) {
-        strncpy(appState.dspPresetNames[slot], name, 20);
-        appState.dspPresetNames[slot][20] = '\0';
+        strncpy(appState.dsp.presetNames[slot], name, 20);
+        appState.dsp.presetNames[slot][20] = '\0';
     }
-    appState.dspPresetIndex = slot;
+    appState.dsp.presetIndex = slot;
     appState.markDspConfigDirty();
 
     // Persist preset index in global settings (debounced to avoid stacking another 4KB alloc)
@@ -276,7 +275,7 @@ bool dsp_preset_load(int slot) {
     dsp_import_full_config_json(json.c_str());
 
     // Load dspEnabled
-    if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
+    if (doc["dspEnabled"].is<bool>()) appState.dsp.enabled = doc["dspEnabled"].as<bool>();
 
     // Recompute all coefficients
     DspState *cfg = dsp_get_inactive_config();
@@ -292,9 +291,9 @@ bool dsp_preset_load(int slot) {
 
     // Update AppState — set preset index AFTER markDspConfigDirty (which resets to -1)
     const char *name = doc["name"] | "";
-    strncpy(appState.dspPresetNames[slot], name, 20);
-    appState.dspPresetNames[slot][20] = '\0';
-    appState.dspPresetIndex = slot;
+    strncpy(appState.dsp.presetNames[slot], name, 20);
+    appState.dsp.presetNames[slot][20] = '\0';
+    appState.dsp.presetIndex = slot;
     appState.markDspConfigDirty();
 
     // Save as active config + persist preset index
@@ -313,9 +312,9 @@ bool dsp_preset_delete(int slot) {
         LittleFS.remove(path);
     }
 
-    appState.dspPresetNames[slot][0] = '\0';
-    if (appState.dspPresetIndex == slot) {
-        appState.dspPresetIndex = -1;
+    appState.dsp.presetNames[slot][0] = '\0';
+    if (appState.dsp.presetIndex == slot) {
+        appState.dsp.presetIndex = -1;
     }
     appState.markDspConfigDirty();
 
@@ -353,8 +352,8 @@ bool dsp_preset_rename(int slot, const char *newName) {
     f.close();
 
     // Update AppState
-    strncpy(appState.dspPresetNames[slot], newName, 20);
-    appState.dspPresetNames[slot][20] = '\0';
+    strncpy(appState.dsp.presetNames[slot], newName, 20);
+    appState.dsp.presetNames[slot][20] = '\0';
     appState.markDspConfigDirty();
 
     // Persist to global settings
@@ -444,7 +443,7 @@ void registerDspApiEndpoints() {
         _dspApiDoc.clear();
     JsonDocument &doc = _dspApiDoc;
         deserializeJson(doc, buf);
-        doc["dspEnabled"] = appState.dspEnabled;
+        doc["dspEnabled"] = appState.dsp.enabled;
         free(buf);
 
         String json;
@@ -462,7 +461,7 @@ void registerDspApiEndpoints() {
         _dspApiDoc.clear();
     JsonDocument &doc = _dspApiDoc;
         if (!deserializeJson(doc, server.arg("plain"))) {
-            if (doc["dspEnabled"].is<bool>()) appState.dspEnabled = doc["dspEnabled"].as<bool>();
+            if (doc["dspEnabled"].is<bool>()) appState.dsp.enabled = doc["dspEnabled"].as<bool>();
         }
 
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
@@ -482,7 +481,7 @@ void registerDspApiEndpoints() {
     JsonDocument &doc = _dspApiDoc;
             if (!deserializeJson(doc, server.arg("plain"))) {
                 if (doc["bypass"].is<bool>()) cfg->globalBypass = doc["bypass"].as<bool>();
-                if (doc["enabled"].is<bool>()) appState.dspEnabled = doc["enabled"].as<bool>();
+                if (doc["enabled"].is<bool>()) appState.dsp.enabled = doc["enabled"].as<bool>();
             }
         } else {
             cfg->globalBypass = !cfg->globalBypass;
@@ -1310,12 +1309,12 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         _dspApiDoc.clear();
     JsonDocument &doc = _dspApiDoc;
-        doc["activeIndex"] = appState.dspPresetIndex;
+        doc["activeIndex"] = appState.dsp.presetIndex;
         JsonArray slots = doc["slots"].to<JsonArray>();
         for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
             JsonObject slot = slots.add<JsonObject>();
             slot["index"] = i;
-            slot["name"] = appState.dspPresetNames[i];
+            slot["name"] = appState.dsp.presetNames[i];
             slot["exists"] = dsp_preset_exists(i);
         }
         String json;

@@ -10,6 +10,8 @@
 
 #include "mqtt_handler.h"
 #include "app_state.h"
+#include "globals.h"
+#include "globals.h"
 #include "config.h"
 #include "debug_serial.h"
 #include <Arduino.h>
@@ -33,7 +35,7 @@ static void addHADeviceInfo(JsonDocument &doc) {
   device["name"] = String(MANUFACTURER_MODEL) + " " + idBuf;
   device["model"] = MANUFACTURER_MODEL;
   device["manufacturer"] = MANUFACTURER_NAME;
-  device["serial_number"] = appState.deviceSerialNumber;
+  device["serial_number"] = appState.general.deviceSerialNumber;
   device["sw_version"] = firmwareVer;
   device["configuration_url"] = "http://" + WiFi.localIP().toString();
 
@@ -48,7 +50,7 @@ static void addHADeviceInfo(JsonDocument &doc) {
 
 // Publish Home Assistant auto-discovery configuration
 void publishHADiscovery() {
-  if (!mqttClient.connected() || !appState.mqttHADiscovery)
+  if (!mqttClient.connected() || !appState.mqtt.haDiscovery)
     return;
 
   LOG_I("[MQTT] Publishing Home Assistant discovery configs...");
@@ -907,8 +909,8 @@ void publishHADiscovery() {
   // ===== Per-ADC Audio Diagnostic Entities (only active inputs) =====
   // Topic labels are generated dynamically to support up to AUDIO_PIPELINE_MAX_INPUTS lanes.
   {
-    int adcCount = appState.activeInputCount;
-    if (adcCount <= 0) adcCount = appState.numAdcsDetected;
+    int adcCount = appState.audio.activeInputCount;
+    if (adcCount <= 0) adcCount = appState.audio.numAdcsDetected;
     if (adcCount > AUDIO_PIPELINE_MAX_INPUTS) adcCount = AUDIO_PIPELINE_MAX_INPUTS;
     for (int a = 0; a < adcCount; a++) {
       char labelBuf[8];
@@ -1498,8 +1500,8 @@ void publishHADiscovery() {
     opts.add("Custom");
     extern bool dsp_preset_exists(int);
     for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
-      if (appState.dspPresetNames[i][0] && dsp_preset_exists(i)) {
-        opts.add(appState.dspPresetNames[i]);
+      if (appState.dsp.presetNames[i][0] && dsp_preset_exists(i)) {
+        opts.add(appState.dsp.presetNames[i]);
       }
     }
     addHADeviceInfo(doc);

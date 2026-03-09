@@ -24,9 +24,9 @@ void setUp(void) {
     dsp_init();
 
     // Reset swap diagnostics
-    appState.dspSwapFailures = 0;
-    appState.dspSwapSuccesses = 0;
-    appState.lastDspSwapFailure = 0;
+    appState.dsp.swapFailures = 0;
+    appState.dsp.swapSuccesses = 0;
+    appState.dsp.lastSwapFailure = 0;
 }
 
 void tearDown(void) {
@@ -41,8 +41,8 @@ void test_swap_returns_true_on_success() {
     bool result = dsp_swap_config();
 
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL_UINT32(1, appState.dspSwapSuccesses);
-    TEST_ASSERT_EQUAL_UINT32(0, appState.dspSwapFailures);
+    TEST_ASSERT_EQUAL_UINT32(1, appState.dsp.swapSuccesses);
+    TEST_ASSERT_EQUAL_UINT32(0, appState.dsp.swapFailures);
 }
 
 // Test 2: Swap returns false on timeout (simulated busy state)
@@ -55,13 +55,13 @@ void test_swap_returns_false_on_timeout() {
 
 // Test 3: Success counter increments correctly
 void test_success_counter_increments() {
-    uint32_t initial = appState.dspSwapSuccesses;
+    uint32_t initial = appState.dsp.swapSuccesses;
 
     TEST_ASSERT_TRUE(dsp_swap_config());
-    TEST_ASSERT_EQUAL_UINT32(initial + 1, appState.dspSwapSuccesses);
+    TEST_ASSERT_EQUAL_UINT32(initial + 1, appState.dsp.swapSuccesses);
 
     TEST_ASSERT_TRUE(dsp_swap_config());
-    TEST_ASSERT_EQUAL_UINT32(initial + 2, appState.dspSwapSuccesses);
+    TEST_ASSERT_EQUAL_UINT32(initial + 2, appState.dsp.swapSuccesses);
 }
 
 // Test 4: Multiple consecutive swaps succeed
@@ -71,8 +71,8 @@ void test_multiple_swaps_succeed() {
         TEST_ASSERT_TRUE(result);
     }
 
-    TEST_ASSERT_EQUAL_UINT32(10, appState.dspSwapSuccesses);
-    TEST_ASSERT_EQUAL_UINT32(0, appState.dspSwapFailures);
+    TEST_ASSERT_EQUAL_UINT32(10, appState.dsp.swapSuccesses);
+    TEST_ASSERT_EQUAL_UINT32(0, appState.dsp.swapFailures);
 }
 
 // Test 5: Delay line state preserved across swap
@@ -189,26 +189,26 @@ void test_compressor_state_preserved() {
 
 // Test 10: Successful swap does not increment failure counter
 void test_swap_success_does_not_increment_failures() {
-    appState.dspSwapFailures = 0;
-    appState.dspSwapSuccesses = 0;
+    appState.dsp.swapFailures = 0;
+    appState.dsp.swapSuccesses = 0;
 
     dsp_swap_config();
     dsp_swap_config();
     dsp_swap_config();
 
-    TEST_ASSERT_EQUAL_UINT32(3, appState.dspSwapSuccesses);
-    TEST_ASSERT_EQUAL_UINT32(0, appState.dspSwapFailures);
+    TEST_ASSERT_EQUAL_UINT32(3, appState.dsp.swapSuccesses);
+    TEST_ASSERT_EQUAL_UINT32(0, appState.dsp.swapFailures);
 }
 
 // Test 11: dsp_log_swap_failure helper does not touch counters
 void test_log_swap_failure_does_not_increment_counter() {
-    appState.dspSwapFailures = 0;
-    appState.lastDspSwapFailure = 0;
+    appState.dsp.swapFailures = 0;
+    appState.dsp.lastSwapFailure = 0;
 
     dsp_log_swap_failure("Test");
 
-    TEST_ASSERT_EQUAL_UINT32(0, appState.dspSwapFailures);
-    TEST_ASSERT_EQUAL_UINT32(0, appState.lastDspSwapFailure);
+    TEST_ASSERT_EQUAL_UINT32(0, appState.dsp.swapFailures);
+    TEST_ASSERT_EQUAL_UINT32(0, appState.dsp.lastSwapFailure);
 }
 
 int main(int argc, char **argv) {
