@@ -208,7 +208,7 @@ static bool _gateOpen[AUDIO_PIPELINE_MAX_INPUTS] = {};  // Gate state per ADC la
 
 static void pipeline_to_float() {
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-        if (!_laneL[i] || !_laneR[i]) continue;
+        if (!_rawBuf[i] || !_laneL[i] || !_laneR[i]) continue;
         to_float(_rawBuf[i], _laneL[i], _laneR[i], FRAMES);
 
         // Noise gate: hardware ADC lanes only (siggen/USB are always clean)
