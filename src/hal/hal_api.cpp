@@ -178,7 +178,7 @@ void registerHalApiEndpoints(WebServer& server) {
         if (slot < 0) { delete dev; server.send(500, "application/json", "{\"error\":\"No free slots\"}"); return; }
 
         dev->_state = HAL_STATE_CONFIGURING;
-        bool ok = dev->probe() && dev->init();
+        bool ok = dev->probe() && dev->init().success;
         dev->_state = ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR;
         dev->_ready = ok;
 
@@ -325,7 +325,7 @@ void registerHalApiEndpoints(WebServer& server) {
         dev->_ready = false;
         appState.markHalDeviceDirty();
 
-        bool ok = dev->probe() && dev->init();
+        bool ok = dev->probe() && dev->init().success;
         if (ok) {
             dev->_state = HAL_STATE_AVAILABLE;
             dev->_ready = true;
