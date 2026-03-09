@@ -14,6 +14,7 @@
 #include "hal/hal_pipeline_bridge.h"
 #include "hal/hal_device.h"
 #include "hal/hal_types.h"
+#include "drivers/es8311_regs.h"
 
 #ifndef NATIVE_TEST
 #include "i2s_audio.h"
@@ -48,6 +49,16 @@ static bool _i2sTxEnabledFor[3] = {};
 #define _driver        _driverForSlot[0]
 #define _i2sTxEnabled  _i2sTxEnabledFor[0]
 #define _volumeGain    _volumeGainForSlot[0]
+
+// Dynamic ES8311 sink slot lookup — replaces the removed AUDIO_SINK_SLOT_ES8311 constant.
+// The ES8311 uses I2S port 2; scan the slot arrays to find which pipeline sink slot
+// was assigned to it.  Returns -1 if no ES8311 is currently active.
+static int8_t _es8311SinkSlot() {
+    for (uint8_t s = 0; s < AUDIO_OUT_MAX_SINKS; s++) {
+        if (_writePortForSlot[s] == 2 && _driverForSlot[s] != nullptr) return (int8_t)s;
+    }
+    return -1;
+}
 
 // Mute ramp: prevents abrupt silence→audio or audio→silence transitions.
 // Steps by 0.5f per buffer call (256 frames @ 48kHz ≈ 5.33ms each → ~10ms full ramp).
@@ -627,7 +638,7 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot) {
 #ifndef NATIVE_TEST
         if (cfg) initVolume = cfg->volume;
         else if (sinkSlot == 0) initVolume = as.dac.volume;
-        else if (sinkSlot == AUDIO_SINK_SLOT_ES8311) initVolume = as.dac.es8311Volume;
+        else if (port == 2) initVolume = as.dac.es8311Volume;
 #endif
         _volumeGainForSlot[sinkSlot] = dac_volume_to_linear(initVolume);
         if (_driverForSlot[sinkSlot]->getCapabilities().hasHardwareVolume) {
@@ -639,7 +650,7 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot) {
 #ifndef NATIVE_TEST
         if (cfg) initMute = cfg->mute;
         else if (sinkSlot == 0) initMute = as.dac.mute;
-        else if (sinkSlot == AUDIO_SINK_SLOT_ES8311) initMute = as.dac.es8311Mute;
+        else if (port == 2) initMute = as.dac.es8311Mute;
 #endif
         _driverForSlot[sinkSlot]->setMute(initMute);
 
@@ -653,40 +664,39 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot) {
             _txBytesWritten = 0;
             _txBytesExpected = 0;
             _lastDacDumpMs = millis();
-        } else if (sinkSlot == AUDIO_SINK_SLOT_ES8311) {
+        } else if (port == 2) {
             as.dac.es8311Ready = true;
         }
 
-        // Register with HAL Device Manager (create HalDacAdapter if needed)
-        HalDacAdapter* adapter = dynamic_cast<HalDacAdapter*>(dev);
-        if (!adapter) {
-            // Not yet an adapter — create one and (re-)register
-            if (!_adapterForSlot[sinkSlot]) {
-                HalDeviceDescriptor adapterDesc = desc;
-                if (sinkSlot == 0 && !adapterDesc.capabilities) {
-                    // Ensure DAC_PATH capability is set
-                    adapterDesc.capabilities |= HAL_CAP_DAC_PATH;
-                }
-                adapter = new HalDacAdapter(_driverForSlot[sinkSlot], adapterDesc, true);
-                int regSlot = HalDeviceManager::instance().registerDevice(adapter, HAL_DISC_MANUAL);
-                if (regSlot >= 0) {
-                    LOG_I("[HAL] DAC (slot %u) registered in HAL slot %d", sinkSlot, regSlot);
-                }
-                _adapterForSlot[sinkSlot] = adapter;
-            } else {
-                // Re-enable existing adapter
-                _adapterForSlot[sinkSlot]->_ready = true;
-                HalDeviceState oldState = _adapterForSlot[sinkSlot]->_state;
-                _adapterForSlot[sinkSlot]->_state = HAL_STATE_AVAILABLE;
-                hal_pipeline_state_change(dev->getSlot(), oldState, HAL_STATE_AVAILABLE);
-            }
-        } else {
+        // Register with HAL Device Manager (create HalDacAdapter if needed).
+        // Check if the passed device is the existing adapter for this slot
+        // (pointer comparison replaces dynamic_cast since RTTI is disabled).
+        HalDacAdapter* existingAdapter = _adapterForSlot[sinkSlot];
+        if (existingAdapter && static_cast<HalDevice*>(existingAdapter) == dev) {
             // Already a HalDacAdapter — re-enable
-            _adapterForSlot[sinkSlot] = adapter;
-            adapter->_ready = true;
-            HalDeviceState oldState = adapter->_state;
-            adapter->_state = HAL_STATE_AVAILABLE;
+            existingAdapter->_ready = true;
+            HalDeviceState oldState = existingAdapter->_state;
+            existingAdapter->_state = HAL_STATE_AVAILABLE;
             hal_pipeline_state_change(dev->getSlot(), oldState, HAL_STATE_AVAILABLE);
+        } else if (existingAdapter) {
+            // Re-enable existing adapter (dev is a different HalDevice)
+            existingAdapter->_ready = true;
+            HalDeviceState oldState = existingAdapter->_state;
+            existingAdapter->_state = HAL_STATE_AVAILABLE;
+            hal_pipeline_state_change(dev->getSlot(), oldState, HAL_STATE_AVAILABLE);
+        } else {
+            // No adapter for this slot yet — create one and register
+            HalDeviceDescriptor adapterDesc = desc;
+            if (sinkSlot == 0 && !adapterDesc.capabilities) {
+                // Ensure DAC_PATH capability is set
+                adapterDesc.capabilities |= HAL_CAP_DAC_PATH;
+            }
+            HalDacAdapter* adapter = new HalDacAdapter(_driverForSlot[sinkSlot], adapterDesc, true);
+            int regSlot = HalDeviceManager::instance().registerDevice(adapter, HAL_DISC_MANUAL);
+            if (regSlot >= 0) {
+                LOG_I("[HAL] DAC (slot %u) registered in HAL slot %d", sinkSlot, regSlot);
+            }
+            _adapterForSlot[sinkSlot] = adapter;
         }
 
         LOG_I("[DAC] Activated: '%s' at slot %u, port %u, gain=%.4f",
@@ -764,7 +774,7 @@ void dac_deactivate_for_hal(HalDevice* dev) {
     // Update AppState ready flags
     if (sinkSlot == 0) {
         as.dac.ready = false;
-    } else if (sinkSlot == AUDIO_SINK_SLOT_ES8311) {
+    } else if (port == 2) {
         as.dac.es8311Ready = false;
     }
 
@@ -886,13 +896,23 @@ void dac_output_write(const int32_t* buffer, int stereo_frames) {
 // ===== Secondary DAC (ES8311 on P4) =====
 #if CONFIG_IDF_TARGET_ESP32P4
 #include "drivers/dac_es8311.h"
-#include "drivers/es8311_regs.h"
-// _secondaryDriver is now _driverForSlot[AUDIO_SINK_SLOT_ES8311]
-// These aliases keep legacy code within this file compiling without changes.
-#define _secondaryDriver _driverForSlot[AUDIO_SINK_SLOT_ES8311]
+// Dynamic ES8311 sink slot aliases (Phase 4).
+// _es8311SinkSlot() returns -1 when no ES8311 is active; the _secondaryXxx
+// macros degrade gracefully (null driver / slot-0 fallback for gain array).
+static inline DacDriver*& _secondaryDriverRef() {
+    int8_t s = _es8311SinkSlot();
+    static DacDriver* _nullDriver = nullptr;
+    return (s >= 0) ? _driverForSlot[s] : _nullDriver;
+}
+static inline float& _secondaryVolumeGainRef() {
+    int8_t s = _es8311SinkSlot();
+    static float _dummyGain = 1.0f;
+    return (s >= 0) ? _volumeGainForSlot[s] : _dummyGain;
+}
+#define _secondaryDriver       _secondaryDriverRef()
 #define _secondaryI2sTxEnabled _i2sTxEnabledFor[2]
-#define _secondaryVolumeGain _volumeGainForSlot[AUDIO_SINK_SLOT_ES8311]
-#define _halSecondaryAdapter _adapterForSlot[AUDIO_SINK_SLOT_ES8311]
+#define _secondaryVolumeGain   _secondaryVolumeGainRef()
+#define _halSecondaryAdapter   (_es8311SinkSlot() >= 0 ? _adapterForSlot[_es8311SinkSlot()] : (HalDacAdapter*)nullptr)
 #endif
 
 // Legacy sink thunks (kept so existing _primary_sink_write / _secondary_sink_write
