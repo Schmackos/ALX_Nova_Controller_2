@@ -386,8 +386,8 @@ static void _audio_driver_reset(uint8_t rhport) {
     usb_rb_reset(&_ringBuffer);
 
     AppState &as = AppState::getInstance();
-    as.usbAudioConnected = false;
-    as.usbAudioStreaming = false;
+    as.usbAudio.connected = false;
+    as.usbAudio.streaming = false;
     as.markUsbAudioDirty();
 }
 
@@ -413,7 +413,7 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
         }
 
         _usbState = USB_AUDIO_CONNECTED;
-        AppState::getInstance().usbAudioConnected = true;
+        AppState::getInstance().usbAudio.connected = true;
         AppState::getInstance().markUsbAudioDirty();
         LOG_I("[USB Audio] AC interface opened, connected");
 
@@ -443,7 +443,7 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
             if (_usbState == USB_AUDIO_STREAMING) {
                 _usbState = USB_AUDIO_CONNECTED;
                 _altSetting = 0;
-                AppState::getInstance().usbAudioStreaming = false;
+                AppState::getInstance().usbAudio.streaming = false;
                 AppState::getInstance().markUsbAudioDirty();
                 LOG_I("[USB Audio] Streaming stopped (alt 0)");
             }
@@ -473,11 +473,11 @@ static uint16_t _audio_driver_open(uint8_t rhport, tusb_desc_interface_t const *
             // Start streaming — Alt 1 only (PCM16; Alt 2 / 24-bit removed)
             _altSetting = desc_intf->bAlternateSetting;
             _negotiatedDepth = 16;  // PCM16 only; Alt 2 (24-bit) no longer advertised
-            AppState::getInstance().usbAudioNegotiatedDepth = _negotiatedDepth;
-            AppState::getInstance().usbAudioBitDepth = _negotiatedDepth;
+            AppState::getInstance().usbAudio.negotiatedDepth = _negotiatedDepth;
+            AppState::getInstance().usbAudio.bitDepth = _negotiatedDepth;
             _usbState = USB_AUDIO_STREAMING;
             usb_rb_reset(&_ringBuffer);
-            AppState::getInstance().usbAudioStreaming = true;
+            AppState::getInstance().usbAudio.streaming = true;
             AppState::getInstance().markUsbAudioDirty();
             LOG_I("[USB Audio] Alt setting %d selected (%u-bit)", _altSetting, _negotiatedDepth);
             LOG_I("[USB Audio] Streaming started (alt %d)", desc_intf->bAlternateSetting);
@@ -660,8 +660,8 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
                     return false; // STALL
                 }
                 _negotiatedRate = requested_rate;
-                AppState::getInstance().usbAudioNegotiatedRate = requested_rate;
-                AppState::getInstance().usbAudioSampleRate = requested_rate;
+                AppState::getInstance().usbAudio.negotiatedRate = requested_rate;
+                AppState::getInstance().usbAudio.sampleRate = requested_rate;
                 AppState::getInstance().markUsbAudioDirty();
                 LOG_I("[USB Audio] Host set clock rate: %u Hz", requested_rate);
                 LOG_I("[USB Audio] Host negotiated rate: %u Hz", _negotiatedRate);
@@ -673,12 +673,12 @@ static bool _audio_driver_control_xfer(uint8_t rhport, uint8_t stage, tusb_contr
             uint8_t control_sel = TU_U16_HIGH(request->wValue);
             if (control_sel == AUDIO20_FU_CTRL_MUTE) {
                 _hostMute = (_ctrlBuf[0] != 0);
-                AppState::getInstance().usbAudioMute = _hostMute;
+                AppState::getInstance().usbAudio.mute = _hostMute;
                 AppState::getInstance().markUsbAudioDirty();
                 LOG_I("[USB Audio] Host mute: %s", _hostMute ? "ON" : "OFF");
             } else if (control_sel == AUDIO20_FU_CTRL_VOLUME) {
                 memcpy(&_hostVolume, _ctrlBuf, 2);
-                AppState::getInstance().usbAudioVolume = _hostVolume;
+                AppState::getInstance().usbAudio.volume = _hostVolume;
                 AppState::getInstance().markUsbAudioDirty();
                 LOG_I("[USB Audio] Host volume: %d (%.1f dB)",
                       _hostVolume, (float)_hostVolume / 256.0f);
@@ -872,11 +872,11 @@ void usb_audio_init(void) {
 
     // Set initial AppState
     AppState &as = AppState::getInstance();
-    as.usbAudioSampleRate = _negotiatedRate;
-    as.usbAudioBitDepth = _negotiatedDepth;
-    as.usbAudioChannels = USB_AUDIO_CHANNELS;
-    as.usbAudioConnected = (_usbState >= USB_AUDIO_CONNECTED);
-    as.usbAudioStreaming = (_usbState == USB_AUDIO_STREAMING);
+    as.usbAudio.sampleRate = _negotiatedRate;
+    as.usbAudio.bitDepth = _negotiatedDepth;
+    as.usbAudio.channels = USB_AUDIO_CHANNELS;
+    as.usbAudio.connected = (_usbState >= USB_AUDIO_CONNECTED);
+    as.usbAudio.streaming = (_usbState == USB_AUDIO_STREAMING);
     as.markUsbAudioDirty();
 }
 
@@ -886,8 +886,8 @@ void usb_audio_deinit(void) {
     // _tinyusbHwReady is NOT cleared so re-enable skips hardware init.
     _usbState = USB_AUDIO_DISCONNECTED;
     AppState &as = AppState::getInstance();
-    as.usbAudioConnected = false;
-    as.usbAudioStreaming = false;
+    as.usbAudio.connected = false;
+    as.usbAudio.streaming = false;
     as.markUsbAudioDirty();
     LOG_I("[USB Audio] Disabled (USB device still enumerated)");
 }
@@ -975,8 +975,8 @@ void usb_audio_poll_connection(void) {
         // Host is connected but our state says disconnected — sync up.
         // Happens after re-enable (deinit→init) while cable stays plugged in.
         _usbState = USB_AUDIO_CONNECTED;
-        as.usbAudioConnected = true;
-        as.usbAudioStreaming = false;
+        as.usbAudio.connected = true;
+        as.usbAudio.streaming = false;
         as.markUsbAudioDirty();
         LOG_I("[USB Audio] Connection detected (mounted)");
     } else if (!mounted && _usbState >= USB_AUDIO_CONNECTED) {
@@ -985,8 +985,8 @@ void usb_audio_poll_connection(void) {
         _usbState = USB_AUDIO_DISCONNECTED;
         _altSetting = 0;
         usb_rb_reset(&_ringBuffer);
-        as.usbAudioConnected = false;
-        as.usbAudioStreaming = false;
+        as.usbAudio.connected = false;
+        as.usbAudio.streaming = false;
         as.markUsbAudioDirty();
         LOG_I("[USB Audio] Disconnection detected (unmounted)");
     }
