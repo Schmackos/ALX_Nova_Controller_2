@@ -56,11 +56,10 @@
 - Fix approach: Iterate only `ch = 0..AUDIO_OUT_MAX_SINKS-1` (8 channels), since output DSP is post-matrix and keyed to sink slots.
 - Source: `docs-internal/architecture/disconnect-analysis.md` D9
 
-**`HAL_MAX_PINS = 24` is too small for ESP32-P4's 54 GPIOs:**
-- Issue: `src/hal/hal_types.h:10` defines `HAL_MAX_PINS = 24`. The pin claim/release system iterates `_pins[HAL_MAX_PINS]` and silently refuses to track any GPIO with index ≥ 24. Current onboard assignments use GPIO 48 and GPIO 54 — at or beyond this limit.
-- Files: `src/hal/hal_types.h:10`, `src/hal/hal_device_manager.h:76`, `src/hal/hal_device_manager.cpp:43,277,282,295,305,368`
-- Impact: Pin conflict detection fails silently for high-numbered GPIOs. Two devices can both attempt to claim GPIO 48 or 54 without the manager detecting the conflict.
-- Fix approach: Increase `HAL_MAX_PINS` to 56. `HalPinAlloc` struct is 3 bytes/entry; total additional RAM = 96 bytes.
+**FIXED — `HAL_MAX_PINS` increased to 56 with GPIO upper-bound validation:**
+- Resolution: `HAL_MAX_PINS` increased from 24 to 56 in `src/hal/hal_types.h`. Added `HAL_GPIO_MAX = 54` constant. `claimPin()` now rejects GPIO > 54 with `LOG_W` and logs when pin table is full. `isPinClaimed()` has early-return guard for out-of-range values. 3 new unit tests cover high GPIO, bounds validation, and table exhaustion.
+- Files: `src/hal/hal_types.h:10-11`, `src/hal/hal_device_manager.cpp:273-297,308-313`, `test/test_hal_core/test_hal_core.cpp`
+- RAM impact: +128 bytes (56×4 vs 24×4). Negligible on ESP32-P4.
 
 **Settings export includes WiFi and AP passwords in plaintext:**
 - Issue: `src/settings_manager.cpp:1056,1061` unconditionally writes `appState.wifi.password` and `appState.wifi.apPassword` into the JSON export body. MQTT password is correctly excluded (line 1137/1144) but WiFi credentials are not.

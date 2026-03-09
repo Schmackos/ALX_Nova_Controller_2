@@ -424,6 +424,62 @@ void test_remove_and_reregister_reclaims_slot() {
     TEST_ASSERT_EQUAL_PTR(&dev3, mgr->getDevice(slot3));
 }
 
+// ===== Test 18: High GPIO numbers (53, 54) claim and conflict =====
+void test_pin_claim_high_gpio() {
+    TEST_ASSERT_TRUE(mgr->claimPin(53, HAL_BUS_GPIO, 0, 0));
+    TEST_ASSERT_TRUE(mgr->isPinClaimed(53));
+    TEST_ASSERT_TRUE(mgr->claimPin(54, HAL_BUS_I2C, 0, 1));
+    TEST_ASSERT_TRUE(mgr->isPinClaimed(54));
+
+    // Conflict detection works at high GPIO numbers
+    TEST_ASSERT_FALSE(mgr->claimPin(53, HAL_BUS_GPIO, 0, 2));
+    TEST_ASSERT_FALSE(mgr->claimPin(54, HAL_BUS_I2C, 0, 3));
+
+    // Release and verify
+    TEST_ASSERT_TRUE(mgr->releasePin(53));
+    TEST_ASSERT_FALSE(mgr->isPinClaimed(53));
+    TEST_ASSERT_TRUE(mgr->releasePin(54));
+    TEST_ASSERT_FALSE(mgr->isPinClaimed(54));
+}
+
+// ===== Test 19: GPIO upper-bound validation rejects invalid values =====
+void test_pin_claim_rejects_out_of_range() {
+    // GPIO > HAL_GPIO_MAX (54) should be rejected
+    TEST_ASSERT_FALSE(mgr->claimPin(55, HAL_BUS_GPIO, 0, 0));
+    TEST_ASSERT_FALSE(mgr->claimPin(100, HAL_BUS_GPIO, 0, 0));
+    TEST_ASSERT_FALSE(mgr->claimPin(127, HAL_BUS_GPIO, 0, 0));
+
+    // Rejected pins are not tracked
+    TEST_ASSERT_FALSE(mgr->isPinClaimed(55));
+    TEST_ASSERT_FALSE(mgr->isPinClaimed(100));
+
+    // Negative GPIO still rejected
+    TEST_ASSERT_FALSE(mgr->claimPin(-1, HAL_BUS_GPIO, 0, 0));
+    TEST_ASSERT_FALSE(mgr->claimPin(-128, HAL_BUS_GPIO, 0, 0));
+}
+
+// ===== Test 20: Fill all valid GPIOs (0-54) and verify tracking =====
+void test_pin_table_exhaustion() {
+    // Claim all 55 valid GPIOs (0-54)
+    for (int i = 0; i <= HAL_GPIO_MAX; i++) {
+        TEST_ASSERT_TRUE_MESSAGE(
+            mgr->claimPin(static_cast<int8_t>(i), HAL_BUS_GPIO, 0, 0),
+            "Should claim all valid GPIOs 0-54"
+        );
+    }
+
+    // Verify all 55 are tracked
+    for (int i = 0; i <= HAL_GPIO_MAX; i++) {
+        TEST_ASSERT_TRUE(mgr->isPinClaimed(static_cast<int8_t>(i)));
+    }
+
+    // Release one and verify reuse
+    TEST_ASSERT_TRUE(mgr->releasePin(0));
+    TEST_ASSERT_FALSE(mgr->isPinClaimed(0));
+    TEST_ASSERT_TRUE(mgr->claimPin(0, HAL_BUS_GPIO, 0, 1));
+    TEST_ASSERT_TRUE(mgr->isPinClaimed(0));
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
@@ -447,6 +503,11 @@ int main(int argc, char** argv) {
     RUN_TEST(test_register_20_devices);
     RUN_TEST(test_register_25_exceeds_max);
     RUN_TEST(test_remove_and_reregister_reclaims_slot);
+
+    // Pin tracking — high GPIO, bounds, exhaustion
+    RUN_TEST(test_pin_claim_high_gpio);
+    RUN_TEST(test_pin_claim_rejects_out_of_range);
+    RUN_TEST(test_pin_table_exhaustion);
 
     return UNITY_END();
 }

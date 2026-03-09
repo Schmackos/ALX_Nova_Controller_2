@@ -157,7 +157,7 @@ if (!HalDeviceManager::instance().claimPin(myGpio, HAL_BUS_GPIO, 0, _slot)) {
 HalDeviceManager::instance().releasePin(myGpio);
 ```
 
-The pin table tracks up to `HAL_MAX_PINS` (24) simultaneous claims.
+The pin table tracks up to `HAL_MAX_PINS` (56) simultaneous claims, covering all ESP32-P4 GPIOs (0–54). GPIO numbers outside this range are rejected with a warning log.
 
 ### Priority-Sorted Initialisation
 

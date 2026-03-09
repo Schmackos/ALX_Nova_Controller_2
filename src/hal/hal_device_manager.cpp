@@ -272,6 +272,10 @@ void HalDeviceManager::forEach(HalDeviceCallback cb, void* ctx) {
 // ===== Pin Claim Tracking =====
 bool HalDeviceManager::claimPin(int8_t gpio, HalBusType bus, uint8_t busIndex, uint8_t slot) {
     if (gpio < 0) return false;
+    if (gpio > HAL_GPIO_MAX) {
+        LOG_W("[HAL] claimPin: GPIO%d exceeds max (%d)", gpio, HAL_GPIO_MAX);
+        return false;
+    }
 
     // Check not already claimed
     for (int i = 0; i < HAL_MAX_PINS; i++) {
@@ -288,6 +292,7 @@ bool HalDeviceManager::claimPin(int8_t gpio, HalBusType bus, uint8_t busIndex, u
             return true;
         }
     }
+    LOG_W("[HAL] claimPin: pin table full (%d slots), GPIO%d not tracked", HAL_MAX_PINS, gpio);
     return false;  // Pin table full
 }
 
@@ -302,6 +307,7 @@ bool HalDeviceManager::releasePin(int8_t gpio) {
 }
 
 bool HalDeviceManager::isPinClaimed(int8_t gpio) const {
+    if (gpio < 0 || gpio > HAL_GPIO_MAX) return false;
     for (int i = 0; i < HAL_MAX_PINS; i++) {
         if (_pins[i].gpio == gpio) return true;
     }

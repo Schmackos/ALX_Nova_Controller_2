@@ -7,7 +7,8 @@
 
 // ===== Limits =====
 #define HAL_MAX_DEVICES  24
-#define HAL_MAX_PINS     24
+#define HAL_MAX_PINS     56
+#define HAL_GPIO_MAX     54   // ESP32-P4 highest valid GPIO (0-54)
 #define HAL_MAX_DRIVERS  16
 
 // ===== Device Types =====

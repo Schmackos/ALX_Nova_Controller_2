@@ -14,7 +14,7 @@ graph TB
             direction LR
             DM["HalDeviceManager<br/>registerDevice()<br/>initAll() priority-sorted<br/>healthCheckAll() 30s<br/>forEach() iterator"]
             DR["HalDriverRegistry<br/>compatible → factory<br/>legacy DAC_ID → factory<br/>max 16 entries"]
-            PC["Pin Claim Tracker<br/>claimPin() / releasePin()<br/>HAL_MAX_PINS=24"]
+            PC["Pin Claim Tracker<br/>claimPin() / releasePin()<br/>HAL_MAX_PINS=56"]
         end
 
         subgraph BUSES["Bus Abstraction (HalBusRef)"]

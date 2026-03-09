@@ -28,7 +28,7 @@ graph TB
             direction LR
             DM["HalDeviceManager<br/>registerDevice()<br/>initAll() priority-sorted<br/>healthCheckAll() 30s<br/>forEach() iterator"]
             DR["HalDriverRegistry<br/>compatible → factory<br/>legacy DAC_ID → factory<br/>max 16 entries"]
-            PC["Pin Claim Tracker<br/>claimPin() / releasePin()<br/>HAL_MAX_PINS=24"]
+            PC["Pin Claim Tracker<br/>claimPin() / releasePin()<br/>HAL_MAX_PINS=56"]
         end
 
         subgraph BUSES["Bus Abstraction (HalBusRef)"]
@@ -515,7 +515,7 @@ _Purely additive — zero existing files modified_
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/hal/hal_types.h` | 90 | All enums: `HalDeviceType` (NONE/DAC/ADC/CODEC/AMP/DSP), `HalDeviceState`, `HalDiscovery` (BUILTIN/EEPROM/GPIO_ID/MANUAL/ONLINE), `HalBusType`, `HalInitPriority`. Structs: `HalBusRef`, `HalPinAlloc`, `HalDeviceDescriptor`. Constants: `HAL_MAX_DEVICES=8`, `HAL_MAX_PINS=24`. |
+| `src/hal/hal_types.h` | 90 | All enums: `HalDeviceType` (NONE/DAC/ADC/CODEC/AMP/DSP), `HalDeviceState`, `HalDiscovery` (BUILTIN/EEPROM/GPIO_ID/MANUAL/ONLINE), `HalBusType`, `HalInitPriority`. Structs: `HalBusRef`, `HalPinAlloc`, `HalDeviceDescriptor`. Constants: `HAL_MAX_DEVICES=8`, `HAL_MAX_PINS=56`. |
 | `src/hal/hal_device.h` | 70 | Abstract `HalDevice` with `probe()`, `init()`, `deinit()`, `dumpConfig()`, `healthCheck()`. **Public** `volatile bool _ready` and `volatile HalDeviceState _state` for lock-free hot-path reads. Accessors: `getDescriptor()`, `getType()`, `getSlot()`, `getInitPriority()`. |
 | `src/hal/hal_audio_device.h` | 45 | `HalAudioDevice : HalDevice` — adds `configure(sampleRate, bitDepth)`, `setVolume(0-100)`, `setMute(bool)`, `setFilterMode(uint8_t)`, `getLegacyCapabilities()`. Audio-specific only, inheritable by codec/amp/DSP drivers. |
 | `src/hal/hal_device_manager.h` | 55 | Singleton (Meyers singleton, thread-safe on C++11): `registerDevice(HalDevice*, HalDiscovery)` → returns slot index or -1. `getDevice(slot)`, `findByCompatible(str)`, `findByType(type, nth)`, `getCount()`, `initAll()` (priority-sorted), `healthCheckAll()`, `forEach(cb, ctx)`. Pin: `claimPin(gpio, bus, busIdx, slot)`, `releasePin(gpio)`, `isPinClaimed(gpio)`. |
