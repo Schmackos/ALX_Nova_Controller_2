@@ -1,0 +1,30 @@
+/* AUTO-GENERATED from src/design_tokens.h — do not edit manually */
+/* Run: node tools/extract_tokens.js */
+
+:root {
+  --accent: #FF9800;
+  --accent-light: #FFB74D;
+  --accent-dark: #E68900;
+  --bg-primary: #F5F5F5;
+  --bg-surface: #FFFFFF;
+  --bg-card: #EEEEEE;
+  --bg-input: #E0E0E0;
+  --border: #E0E0E0;
+  --text-primary: #212121;
+  --text-secondary: #757575;
+  --success: #4CAF50;
+  --warning: #FFC107;
+  --error: #F44336;
+  --info: #2196F3;
+}
+
+body.night-mode {
+  --bg-primary: #121212;
+  --bg-surface: #1E1E1E;
+  --bg-card: #252525;
+  --bg-input: #2C2C2C;
+  --border: #333333;
+  --text-primary: #FFFFFF;
+  --text-secondary: #B0B0B0;
+  --text-disabled: #666666;
+}

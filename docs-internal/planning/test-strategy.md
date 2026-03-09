@@ -2,7 +2,7 @@
 
 ## Architecture Diagrams
 
-See `docs/architecture/` for visual references:
+See `docs-internal/architecture/` for visual references:
 - [test-infrastructure.mmd](../architecture/test-infrastructure.mmd) — E2E test stack (Playwright + Express mock + real frontend)
 - [ci-quality-gates.mmd](../architecture/ci-quality-gates.mmd) — CI/CD pipeline with 4 parallel quality gates
 - [e2e-test-flow.mmd](../architecture/e2e-test-flow.mmd) — Single test lifecycle sequence (auth + WS mock + DOM assertions)

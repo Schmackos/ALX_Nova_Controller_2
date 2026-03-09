@@ -4,7 +4,7 @@ This document describes the ALX Nova Controller 2 testing infrastructure, how th
 
 ## Architecture Diagrams
 
-All diagrams are in `docs/architecture/` as Mermaid `.mmd` files:
+All diagrams are in `docs-internal/architecture/` as Mermaid `.mmd` files:
 
 | Diagram | File | Shows |
 |---------|------|-------|

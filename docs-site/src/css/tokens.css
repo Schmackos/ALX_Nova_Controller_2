@@ -1,0 +1,42 @@
+/* AUTO-GENERATED from src/design_tokens.h — do not edit manually */
+/* Run: node tools/extract_tokens.js */
+
+:root {
+  --dt-accent: #FF9800;
+  --ifm-color-primary: #FF9800;
+  --dt-accent-light: #FFB74D;
+  --ifm-color-primary-light: #FFB74D;
+  --ifm-color-primary-lighter: #FFB74D;
+  --dt-accent-dark: #E68900;
+  --ifm-color-primary-dark: #E68900;
+  --ifm-color-primary-darker: #E68900;
+  --dt-bg-primary: #F5F5F5;
+  --dt-bg-surface: #FFFFFF;
+  --dt-bg-card: #EEEEEE;
+  --dt-bg-input: #E0E0E0;
+  --dt-border: #E0E0E0;
+  --dt-text-primary: #212121;
+  --dt-text-secondary: #757575;
+  --dt-success: #4CAF50;
+  --dt-warning: #FFC107;
+  --dt-error: #F44336;
+  --dt-info: #2196F3;
+}
+
+[data-theme='dark'] {
+  --dt-bg-primary: #121212;
+  --dt-bg-surface: #1E1E1E;
+  --dt-bg-card: #252525;
+  --dt-bg-input: #2C2C2C;
+  --dt-border: #333333;
+  --dt-text-primary: #FFFFFF;
+  --dt-text-secondary: #B0B0B0;
+  --dt-text-disabled: #666666;
+
+  /* IFM primary colour overrides for dark mode */
+  --ifm-color-primary: #FF9800;
+  --ifm-color-primary-light: #FFB74D;
+  --ifm-color-primary-lighter: #FFB74D;
+  --ifm-color-primary-dark: #E68900;
+  --ifm-color-primary-darker: #E68900;
+}

@@ -1,0 +1,74 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docs-internal/**'
+      - 'CLAUDE.md'
+      - '.planning/codebase/**'
+      - 'docs-site/**'
+      - 'tools/generate_docs.js'
+      - 'tools/extract_api.js'
+      - 'tools/detect_doc_changes.js'
+      - 'tools/doc-mapping.json'
+      - 'tools/prompts/**'
+  workflow_dispatch:
+    inputs:
+      regen_all:
+        description: 'Regenerate all documentation sections'
+        type: boolean
+        default: false
+
+jobs:
+  generate-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install generation dependencies
+        run: npm install @anthropic-ai/sdk
+
+      - name: Detect changed documentation sections
+        id: detect
+        run: |
+          SECTIONS=$(node tools/detect_doc_changes.js HEAD~1 HEAD)
+          echo "sections=$SECTIONS" >> $GITHUB_OUTPUT
+          echo "Sections to regenerate: $SECTIONS"
+
+      - name: Generate docs (incremental)
+        if: steps.detect.outputs.sections != '[]' && !inputs.regen_all
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node tools/generate_docs.js --sections '${{ steps.detect.outputs.sections }}'
+
+      - name: Generate docs (full regeneration)
+        if: inputs.regen_all
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node tools/generate_docs.js --all
+
+      - name: Install Docusaurus dependencies
+        working-directory: docs-site
+        run: npm ci
+
+      - name: Build Docusaurus site
+        working-directory: docs-site
+        run: npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs-site/build
+          publish_branch: gh-pages
