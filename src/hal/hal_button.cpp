@@ -2,12 +2,13 @@
 
 #include "hal_button.h"
 #include "hal_device_manager.h"
+#include "../config.h"
 #include <string.h>
 
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
 #else
-#define LOG_I(tag, ...) ((void)0)
+#define LOG_I(fmt, ...) ((void)0)
 #endif
 
 HalButton::HalButton(int pin)
@@ -21,34 +22,39 @@ HalButton::HalButton(int pin)
     _descriptor.bus.type = HAL_BUS_GPIO;
     _descriptor.bus.index = 0;
     _descriptor.bus.pinA = pin;
-    _descriptor.channelCount = 1;
-    _initPriority = HAL_PRIORITY_LATE;
+    _descriptor.channelCount = 0;
+    _initPriority = HAL_PRIORITY_IO;  // 900
 }
 
 bool HalButton::probe()
 {
     _state = HAL_STATE_DETECTED;
-    LOG_I("[HAL:Button] probe OK — Reset Button (GPIO%d)", _pin);
     return true;
 }
 
 HalInitResult HalButton::init()
 {
-    HalDeviceManager& mgr = HalDeviceManager::instance();
-    mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
+    // Read config override for GPIO pin
+    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
+    if (cfg && cfg->valid && cfg->gpioA >= 0) {
+        _pin = cfg->gpioA;
+    }
+    _descriptor.bus.pinA = _pin;
+
+    HalDeviceManager::instance().claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
+
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL:Button] init — Reset Button ready on GPIO%d", _pin);
+    LOG_I("[HAL:Button] init — GPIO%d", _pin);
     return hal_init_ok();
 }
 
 void HalButton::deinit()
 {
-    HalDeviceManager& mgr = HalDeviceManager::instance();
-    mgr.releasePin(_pin);
+    HalDeviceManager::instance().releasePin(_pin);
     _ready = false;
     _state = HAL_STATE_REMOVED;
-    LOG_I("[HAL:Button] deinit — Reset Button removed");
+    LOG_I("[HAL:Button] deinit");
 }
 
 void HalButton::dumpConfig()

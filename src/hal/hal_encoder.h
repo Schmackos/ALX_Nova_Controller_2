@@ -13,6 +13,10 @@ public:
     void dumpConfig() override;
     bool healthCheck() override;
 
+    int getPinA() const { return _pinA; }
+    int getPinB() const { return _pinB; }
+    int getPinSw() const { return _pinSw; }
+
 private:
     int _pinA, _pinB, _pinSw;
 };

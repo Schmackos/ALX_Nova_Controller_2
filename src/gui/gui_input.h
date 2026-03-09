@@ -5,8 +5,15 @@
 
 #include <lvgl.h>
 
-/* Initialize encoder and button hardware, register LVGL indev drivers */
+/* Initialize encoder and button hardware, register LVGL indev drivers.
+ * Queries HAL encoder device for resolved pins, falls back to config.h defaults. */
 void gui_input_init(void);
+
+/* Initialize with explicit pin assignments (used by HAL reinit path) */
+void gui_input_init_pins(int pinA, int pinB, int pinSw);
+
+/* Deinitialize: detach ISRs, reset volatile state */
+void gui_input_deinit(void);
 
 /* Get the LVGL encoder input device (for group assignment) */
 lv_indev_t *gui_get_encoder_indev(void);

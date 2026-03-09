@@ -21,7 +21,8 @@ enum BuzzerPattern {
 };
 
 // ===== Public API =====
-void buzzer_init();
+void buzzer_init(int pin = -1);  // -1 = use BUZZER_PIN default
+void buzzer_deinit();
 void buzzer_play(BuzzerPattern pattern);
 void buzzer_update();  // Call from main loop — non-blocking sequencer
 void buzzer_play_blocking(BuzzerPattern pattern, uint16_t timeout_ms);

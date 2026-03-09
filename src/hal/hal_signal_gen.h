@@ -12,6 +12,7 @@ public:
     void deinit() override;
     void dumpConfig() override;
     bool healthCheck() override;
+    int getPin() const;
 
 private:
     int _pin;

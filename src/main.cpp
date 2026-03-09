@@ -198,7 +198,7 @@ void setup() {
 
   // Configure factory reset button with enhanced detection
   resetButton.begin();
-  buzzer_init();
+  // buzzer_init() removed — HalBuzzer::init() handles this via HAL lifecycle
   LOG_I("[Main] Factory reset button configured: GPIO%d", RESET_BUTTON_PIN);
   LOG_D("[Main] Button: short=status, double=AP, long=restart, vlong=reboot");
 
@@ -323,6 +323,8 @@ void setup() {
   // Register NS4150B amplifier with HAL (ES8311 PA pin)
   _halNs4150b = new HalNs4150b(ES8311_PA_PIN);
   HalDeviceManager::instance().registerDevice(_halNs4150b, HAL_DISC_BUILTIN);
+  _halNs4150b->probe();
+  _halNs4150b->init();  // Reads gpioA config override, starts disabled (DAC readiness gates enable)
 
   // Register ESP32-P4 internal temperature sensor
 #if CONFIG_IDF_TARGET_ESP32P4
@@ -338,17 +340,28 @@ void setup() {
     mgr.registerDevice(_halDisplay, HAL_DISC_BUILTIN);
     _halEncoder = new HalEncoder(ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN);
     mgr.registerDevice(_halEncoder, HAL_DISC_BUILTIN);
+    _halEncoder->probe();
+    _halEncoder->init();  // Reads gpioA/B/C config overrides, claims pins
 #endif
     _halBuzzer = new HalBuzzer(BUZZER_PIN);
     mgr.registerDevice(_halBuzzer, HAL_DISC_BUILTIN);
+    _halBuzzer->probe();
+    _halBuzzer->init();  // Calls buzzer_init(pin) via HAL lifecycle
     _halLed = new HalLed(LED_PIN);
     mgr.registerDevice(_halLed, HAL_DISC_BUILTIN);
     _halRelay = new HalRelay(AMPLIFIER_PIN);
     mgr.registerDevice(_halRelay, HAL_DISC_BUILTIN);
     _halButton = new HalButton(RESET_BUTTON_PIN);
     mgr.registerDevice(_halButton, HAL_DISC_BUILTIN);
+    _halButton->probe();
+    _halButton->init();  // Reads gpioA config override, claims pin
+    // Update resetButton with resolved pin from HAL config
+    resetButton.pin = _halButton->getPin();
+    resetButton.begin();
     _halSignalGen = new HalSignalGen(SIGGEN_PWM_PIN);
     mgr.registerDevice(_halSignalGen, HAL_DISC_BUILTIN);
+    _halSignalGen->probe();
+    _halSignalGen->init();  // Reads gpioA config override, calls siggen_init(pin)
   }
 #endif
 
@@ -366,9 +379,6 @@ void setup() {
   if (!loadInputNames()) {
     LOG_I("[Main] No input names found, using defaults");
   }
-
-  // Initialize Signal Generator PWM
-  siggen_init();
 
   // Initialize authentication system
   initAuth();

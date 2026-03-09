@@ -4,8 +4,15 @@
 #include "gui_config.h"
 #include "../buzzer_handler.h"
 #include "../debug_serial.h"
+#include "../hal/hal_device_manager.h"
+#include "../hal/hal_encoder.h"
 #include <Arduino.h>
 #include <lvgl.h>
+
+/* File-static pin tracking (DRAM-safe for ISR access) */
+static int _enc_pinA  = ENCODER_A_PIN;
+static int _enc_pinB  = ENCODER_B_PIN;
+static int _enc_pinSw = ENCODER_SW_PIN;
 
 /* Volatile state shared with ISRs */
 static volatile int32_t encoder_diff = 0;
@@ -32,8 +39,8 @@ static volatile int32_t raw_diff = 0;
  * to the detent position (both pins HIGH = state 0b11 with pullups).
  * This ensures one physical click = one logical step. */
 static void IRAM_ATTR encoder_isr() {
-    uint8_t a = digitalRead(ENCODER_A_PIN);
-    uint8_t b = digitalRead(ENCODER_B_PIN);
+    uint8_t a = digitalRead(_enc_pinA);
+    uint8_t b = digitalRead(_enc_pinB);
     uint8_t state = (a << 1) | b;
 
     static const int8_t transitions[] = {
@@ -69,7 +76,7 @@ static void IRAM_ATTR encoder_isr() {
 static void IRAM_ATTR encoder_sw_isr() {
     unsigned long now = millis();
     if (now - last_sw_time > ENCODER_DEBOUNCE_MS) {
-        bool pressed = (digitalRead(ENCODER_SW_PIN) == LOW);
+        bool pressed = (digitalRead(_enc_pinSw) == LOW);
         encoder_pressed = pressed;
         input_activity_flag = true;
         if (pressed) {
@@ -101,7 +108,7 @@ static void encoder_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
 
     /* Button state: verify against physical pin to avoid stuck press state.
      * The ISR handles buzzer feedback; LVGL gets the authoritative pin reading. */
-    bool pressed_now = (digitalRead(ENCODER_SW_PIN) == LOW);
+    bool pressed_now = (digitalRead(_enc_pinSw) == LOW);
     data->state = pressed_now ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 
     /* Serial debug: rotation */
@@ -118,29 +125,79 @@ static void encoder_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
     prev_pressed = pressed_now;
 }
 
-void gui_input_init(void) {
+void gui_input_init_pins(int pinA, int pinB, int pinSw) {
+    /* Store resolved pins */
+    _enc_pinA  = pinA;
+    _enc_pinB  = pinB;
+    _enc_pinSw = pinSw;
+
+    /* Reset volatile ISR state */
+    encoder_diff = 0;
+    encoder_pressed = false;
+    input_activity_flag = false;
+    press_activity_flag = false;
+    encoder_last_state = 0;
+    enc_sub_count = 0;
+    last_sw_time = 0;
+    raw_mode = false;
+    raw_diff = 0;
+    prev_pressed = false;
+
     /* Configure encoder pins with pullups */
-    pinMode(ENCODER_A_PIN, INPUT_PULLUP);
-    pinMode(ENCODER_B_PIN, INPUT_PULLUP);
-    pinMode(ENCODER_SW_PIN, INPUT_PULLUP);
+    pinMode(_enc_pinA, INPUT_PULLUP);
+    pinMode(_enc_pinB, INPUT_PULLUP);
+    pinMode(_enc_pinSw, INPUT_PULLUP);
 
     /* Read initial encoder state */
-    encoder_last_state = (digitalRead(ENCODER_A_PIN) << 1) | digitalRead(ENCODER_B_PIN);
+    encoder_last_state = (digitalRead(_enc_pinA) << 1) | digitalRead(_enc_pinB);
 
     /* Attach interrupts for encoder rotation */
-    attachInterrupt(digitalPinToInterrupt(ENCODER_A_PIN), encoder_isr, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_B_PIN), encoder_isr, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(_enc_pinA), encoder_isr, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(_enc_pinB), encoder_isr, CHANGE);
 
     /* Attach interrupt for encoder button */
-    attachInterrupt(digitalPinToInterrupt(ENCODER_SW_PIN), encoder_sw_isr, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(_enc_pinSw), encoder_sw_isr, CHANGE);
 
-    /* Register LVGL encoder input device */
-    encoder_indev = lv_indev_create();
-    lv_indev_set_type(encoder_indev, LV_INDEV_TYPE_ENCODER);
-    lv_indev_set_read_cb(encoder_indev, encoder_read_cb);
-    lv_indev_set_mode(encoder_indev, LV_INDEV_MODE_TIMER);
+    /* Register LVGL encoder input device (only once) */
+    if (!encoder_indev) {
+        encoder_indev = lv_indev_create();
+        lv_indev_set_type(encoder_indev, LV_INDEV_TYPE_ENCODER);
+        lv_indev_set_read_cb(encoder_indev, encoder_read_cb);
+        lv_indev_set_mode(encoder_indev, LV_INDEV_MODE_TIMER);
+    }
 
-    LOG_I("[GUI Input] Encoder + button initialized");
+    LOG_I("[GUI Input] Encoder + button initialized (A=%d, B=%d, SW=%d)", _enc_pinA, _enc_pinB, _enc_pinSw);
+}
+
+void gui_input_deinit(void) {
+    detachInterrupt(digitalPinToInterrupt(_enc_pinA));
+    detachInterrupt(digitalPinToInterrupt(_enc_pinB));
+    detachInterrupt(digitalPinToInterrupt(_enc_pinSw));
+
+    encoder_diff = 0;
+    encoder_pressed = false;
+    enc_sub_count = 0;
+    raw_diff = 0;
+    LOG_I("[GUI Input] Encoder ISRs detached");
+}
+
+void gui_input_init(void) {
+    /* Query HAL encoder device for resolved pins (may differ from compile-time defaults) */
+    int pinA = ENCODER_A_PIN, pinB = ENCODER_B_PIN, pinSw = ENCODER_SW_PIN;
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+        HalDevice* dev = mgr.getDevice(i);
+        if (!dev) continue;
+        if (dev->getType() == HAL_DEV_INPUT &&
+            strcmp(dev->getDescriptor().compatible, "alps,ec11") == 0) {
+            HalEncoder* enc = static_cast<HalEncoder*>(dev);
+            pinA  = enc->getPinA();
+            pinB  = enc->getPinB();
+            pinSw = enc->getPinSw();
+            break;
+        }
+    }
+    gui_input_init_pins(pinA, pinB, pinSw);
 }
 
 lv_indev_t *gui_get_encoder_indev(void) {

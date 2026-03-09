@@ -79,6 +79,16 @@ bool HalUsbAudio::probe() {
 }
 
 HalInitResult HalUsbAudio::init() {
+#ifndef NATIVE_TEST
+    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
+    uint16_t pid = 0;  // 0 = use default (0x4004)
+    if (cfg && cfg->valid && cfg->usbPid != 0) {
+        pid = cfg->usbPid;
+    }
+    // TinyUSB is one-shot — PID applied only on first init
+    usb_audio_init();
+    (void)pid;  // Future: pass to TinyUSB descriptor config
+#endif
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL:USB Audio] Initialized (instance %u, priority %u)",
@@ -87,6 +97,9 @@ HalInitResult HalUsbAudio::init() {
 }
 
 void HalUsbAudio::deinit() {
+#ifndef NATIVE_TEST
+    usb_audio_deinit();
+#endif
     _ready = false;
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:USB Audio] Deinitialized");

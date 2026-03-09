@@ -36,12 +36,20 @@ bool HalEncoder::probe()
 HalInitResult HalEncoder::init()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
+    HalDeviceConfig* cfg = mgr.getConfig(_slot);
+    if (cfg && cfg->valid) {
+        if (cfg->gpioA >= 0) _pinA = cfg->gpioA;
+        if (cfg->gpioB >= 0) _pinB = cfg->gpioB;
+        if (cfg->gpioC >= 0) _pinSw = cfg->gpioC;
+    }
+    _descriptor.bus.pinA = _pinA;
+    _descriptor.bus.pinB = _pinB;
     mgr.claimPin(_pinA,  HAL_BUS_GPIO, 0, _slot);
     mgr.claimPin(_pinB,  HAL_BUS_GPIO, 0, _slot);
     mgr.claimPin(_pinSw, HAL_BUS_GPIO, 0, _slot);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL:Encoder] init — Rotary Encoder ready");
+    LOG_I("[HAL:Encoder] init — Rotary Encoder ready (A=%d, B=%d, SW=%d)", _pinA, _pinB, _pinSw);
     return hal_init_ok();
 }
 

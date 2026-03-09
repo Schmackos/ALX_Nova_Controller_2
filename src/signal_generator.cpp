@@ -79,6 +79,7 @@ static mcpwm_timer_handle_t _mcpwm_timer = NULL;
 static mcpwm_oper_handle_t  _mcpwm_oper  = NULL;
 static mcpwm_cmpr_handle_t  _mcpwm_cmpr  = NULL;
 static mcpwm_gen_handle_t   _mcpwm_gen   = NULL;
+static int _siggen_pwm_pin = -1;
 #endif
 
 // ===== Pure testable functions =====
@@ -198,7 +199,9 @@ void siggen_fill_buffer(int32_t *buf, int stereo_frames, uint32_t sample_rate) {
 // ===== Hardware-dependent code (ESP32 only) =====
 #ifndef NATIVE_TEST
 
-void siggen_init() {
+void siggen_init(int pwm_gpio) {
+    _siggen_pwm_pin = (pwm_gpio >= 0) ? pwm_gpio : SIGGEN_PWM_PIN;
+
     // Setup MCPWM peripheral for signal generator PWM output
     // Timer: 160 MHz clock, up-count, default period = 1 kHz
     mcpwm_timer_config_t timer_cfg = {};
@@ -218,7 +221,7 @@ void siggen_init() {
     mcpwm_new_comparator(_mcpwm_oper, &cmpr_cfg, &_mcpwm_cmpr);
 
     mcpwm_generator_config_t gen_cfg = {};
-    gen_cfg.gen_gpio_num = SIGGEN_PWM_PIN;
+    gen_cfg.gen_gpio_num = _siggen_pwm_pin;
     mcpwm_new_generator(_mcpwm_oper, &gen_cfg, &_mcpwm_gen);
 
     // GPIO HIGH at timer zero, LOW at comparator match — standard PWM
@@ -237,7 +240,26 @@ void siggen_init() {
     mcpwm_timer_enable(_mcpwm_timer);
     mcpwm_timer_start_stop(_mcpwm_timer, MCPWM_TIMER_START_NO_STOP);
 
-    LOG_I("[SigGen] Initialized MCPWM on GPIO %d", SIGGEN_PWM_PIN);
+    LOG_I("[SigGen] Initialized MCPWM on GPIO %d", _siggen_pwm_pin);
+}
+
+void siggen_deinit() {
+    // Tear down MCPWM resources in reverse order
+    if (_mcpwm_gen) { mcpwm_del_generator(_mcpwm_gen); _mcpwm_gen = NULL; }
+    if (_mcpwm_cmpr) { mcpwm_del_comparator(_mcpwm_cmpr); _mcpwm_cmpr = NULL; }
+    if (_mcpwm_oper) { mcpwm_del_operator(_mcpwm_oper); _mcpwm_oper = NULL; }
+    if (_mcpwm_timer) {
+        mcpwm_timer_start_stop(_mcpwm_timer, MCPWM_TIMER_STOP_FULL);
+        mcpwm_timer_disable(_mcpwm_timer);
+        mcpwm_del_timer(_mcpwm_timer);
+        _mcpwm_timer = NULL;
+    }
+    if (_siggen_pwm_pin >= 0) {
+        gpio_reset_pin((gpio_num_t)_siggen_pwm_pin);
+    }
+    _siggenActive = false;
+    _siggen_pwm_pin = -1;
+    LOG_I("[SigGen] MCPWM deinitialized");
 }
 
 bool siggen_is_active() {
@@ -304,7 +326,8 @@ void siggen_apply_params() {
 
 #else
 // Native test stubs
-void siggen_init() {}
+void siggen_init(int) {}
+void siggen_deinit() {}
 bool siggen_is_active() { return _siggenActive; }
 bool siggen_is_software_mode() { return _params.outputMode == SIGOUT_SOFTWARE; }
 void siggen_apply_params() {}

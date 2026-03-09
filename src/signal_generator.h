@@ -9,7 +9,8 @@ enum SignalOutputMode { SIGOUT_SOFTWARE = 0, SIGOUT_PWM };
 enum SignalChannel   { SIGCHAN_CH1 = 0, SIGCHAN_CH2, SIGCHAN_BOTH };
 
 // ===== Public API =====
-void siggen_init();
+void siggen_init(int pwm_gpio = -1);  // -1 = use SIGGEN_PWM_PIN default
+void siggen_deinit();
 bool siggen_is_active();
 bool siggen_is_software_mode();
 void siggen_apply_params();

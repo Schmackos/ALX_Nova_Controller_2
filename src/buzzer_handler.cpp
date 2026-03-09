@@ -10,6 +10,9 @@
 volatile bool _buzzer_tick_pending = false;
 volatile bool _buzzer_click_pending = false;
 
+// ===== Runtime pin (set by buzzer_init, used throughout) =====
+static int _buzzer_active_pin = -1;
+
 // ===== Tone step definition =====
 struct ToneStep {
   uint16_t freq_hz;      // 0 = silence gap
@@ -150,13 +153,13 @@ static const uint8_t volume_pct[] = {20, 50, 100};
 // Do NOT use ledcRead() to get halfDuty — on P4 it returns 0, causing
 // ledcWrite(0) which auto-deregisters the pin and silences the buzzer.
 static void buzzer_set_tone(uint16_t freq_hz, int vol) {
-  if (ledc_attached) ledcDetach(BUZZER_PIN);    // detach only if previously attached (suppresses first-call warning)
-  ledcWriteTone(BUZZER_PIN, freq_hz);           // attaches fresh + sets 50% duty (10-bit = 512)
+  if (ledc_attached) ledcDetach(_buzzer_active_pin);    // detach only if previously attached (suppresses first-call warning)
+  ledcWriteTone(_buzzer_active_pin, freq_hz);           // attaches fresh + sets 50% duty (10-bit = 512)
   ledc_attached = true;
   // Hardcode 10-bit half-duty instead of ledcRead() which returns 0 on P4.
   static const uint32_t LEDC_TONE_HALF_DUTY = 512u;  // 50% of 10-bit max (1023)
   uint32_t duty = LEDC_TONE_HALF_DUTY * volume_pct[vol] / 100;
-  ledcWrite(BUZZER_PIN, duty);
+  ledcWrite(_buzzer_active_pin, duty);
 }
 
 // ===== Sequencer state =====
@@ -170,14 +173,28 @@ static volatile BuzzerPattern pending_pattern = BUZZ_NONE;
 
 static SemaphoreHandle_t buzzer_mutex = nullptr;
 
-void buzzer_init() {
+void buzzer_init(int pin) {
+  _buzzer_active_pin = (pin >= 0) ? pin : BUZZER_PIN;
   // Start with pin as OUTPUT LOW — attach to LEDC only during active playback
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
+  pinMode(_buzzer_active_pin, OUTPUT);
+  digitalWrite(_buzzer_active_pin, LOW);
   if (buzzer_mutex == nullptr) {
     buzzer_mutex = xSemaphoreCreateMutex();
   }
-  LOG_I("[Buzzer] Initialized on GPIO %d", BUZZER_PIN);
+  LOG_I("[Buzzer] Initialized on GPIO %d", _buzzer_active_pin);
+}
+
+void buzzer_deinit() {
+  // Stop any active pattern and silence the buzzer
+  if (playing) stop_buzzer();
+  if (ledc_attached) {
+    ledcDetach(_buzzer_active_pin);
+    ledc_attached = false;
+  }
+  pinMode(_buzzer_active_pin, OUTPUT);
+  digitalWrite(_buzzer_active_pin, LOW);
+  _buzzer_active_pin = -1;
+  LOG_I("[Buzzer] Deinitialized");
 }
 
 void buzzer_play(BuzzerPattern pattern) {
@@ -212,9 +229,9 @@ static void start_pattern(const ToneStep *pat) {
     } else {
       // Silence gap as first step — drive pin LOW via GPIO (no LEDC needed).
       // Avoids ledcWrite(0) which auto-deregisters the pin on P4.
-      if (ledc_attached) { ledcDetach(BUZZER_PIN); ledc_attached = false; }
-      pinMode(BUZZER_PIN, OUTPUT);
-      digitalWrite(BUZZER_PIN, LOW);
+      if (ledc_attached) { ledcDetach(_buzzer_active_pin); ledc_attached = false; }
+      pinMode(_buzzer_active_pin, OUTPUT);
+      digitalWrite(_buzzer_active_pin, LOW);
     }
   }
 }
@@ -225,11 +242,11 @@ static void stop_buzzer() {
   // manager, so ledcDetach() after it always fails ("pin not attached").
   // Silence via GPIO override instead — sufficient to drive the pin low.
   if (ledc_attached) {
-    ledcWrite(BUZZER_PIN, 0);
+    ledcWrite(_buzzer_active_pin, 0);
     ledc_attached = false;
   }
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW);
+  pinMode(_buzzer_active_pin, OUTPUT);
+  digitalWrite(_buzzer_active_pin, LOW);
   playing = false;
   current_pattern = nullptr;
 }
@@ -259,7 +276,7 @@ void buzzer_update() {
         } else {
           // Silence gap — on P4, ledcWrite(0) auto-deregisters the pin,
           // so mark as detached so buzzer_set_tone() won't try to ledcDetach() next.
-          ledcWrite(BUZZER_PIN, 0);
+          ledcWrite(_buzzer_active_pin, 0);
           ledc_attached = false;
         }
       }

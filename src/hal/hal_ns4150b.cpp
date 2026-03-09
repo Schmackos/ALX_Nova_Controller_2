@@ -1,12 +1,17 @@
 #ifdef DAC_ENABLED
 
 #include "hal_ns4150b.h"
-#include "../debug_serial.h"
-#include "../config.h"
+#include "hal_device_manager.h"
 #include <string.h>
 
 #ifndef NATIVE_TEST
 #include <Arduino.h>
+#include "../debug_serial.h"
+#include "../config.h"
+#else
+#ifndef LOG_I
+#define LOG_I(fmt, ...) ((void)0)
+#endif
 #endif
 
 // ES8311_PA_PIN (GPIO 53) is defined in drivers/es8311_regs.h for the
@@ -42,13 +47,22 @@ bool HalNs4150b::probe()
 
 HalInitResult HalNs4150b::init()
 {
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    HalDeviceConfig* cfg = mgr.getConfig(_slot);
+    if (cfg && cfg->valid && cfg->gpioA >= 0) {
+        mgr.releasePin(_paPin);
+        _paPin = cfg->gpioA;
+    }
+    _descriptor.bus.pinA = _paPin;
+    mgr.claimPin(_paPin, HAL_BUS_GPIO, 0, _slot);
 #ifndef NATIVE_TEST
-    digitalWrite(_paPin, HIGH);  // Enable amplifier
+    pinMode(_paPin, OUTPUT);
+    digitalWrite(_paPin, LOW);  // Start disabled — DAC readiness gates enable
 #endif
-    _enabled = true;
+    _enabled = false;
     _ready = true;
     _state = HAL_STATE_AVAILABLE;
-    LOG_I("[HAL:NS4150B] init — amplifier enabled on GPIO%d", _paPin);
+    LOG_I("[HAL:NS4150B] init — amplifier ready on GPIO%d (disabled, awaiting DAC)", _paPin);
     return hal_init_ok();
 }
 
@@ -60,6 +74,7 @@ void HalNs4150b::deinit()
     _enabled = false;
     _ready = false;
     _state = HAL_STATE_REMOVED;
+    HalDeviceManager::instance().releasePin(_paPin);
     LOG_I("[HAL:NS4150B] deinit — amplifier disabled on GPIO%d", _paPin);
 }
 

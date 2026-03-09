@@ -144,6 +144,19 @@ struct HalDeviceConfig {
     // false = this device receives clocks only (I2S master data-only, BCK/WS/MCLK = UNUSED)
     // Default (false): only the port-0 device outputs clocks (legacy dual-master design)
     bool     isI2sClockMaster;
+
+    // Generic GPIO pin overrides (non-I2S, non-I2C devices)
+    // Devices interpret these based on their type:
+    //   Encoder: gpioA=pin A, gpioB=pin B, gpioC=switch pin
+    //   Buzzer/SigGen/NS4150B: gpioA=primary GPIO pin
+    //   Button: gpioA=button input pin
+    int8_t   gpioA;    // -1 = use compile-time default
+    int8_t   gpioB;    // -1 = use compile-time default
+    int8_t   gpioC;    // -1 = use compile-time default
+    int8_t   gpioD;    // -1 = reserved for future use
+
+    // USB Audio config (USB OTG pins are hardware-fixed; only identifiers configurable)
+    uint16_t usbPid;   // USB Product ID (0 = use default 0x4004)
 };
 
 // Sample rate mask helpers

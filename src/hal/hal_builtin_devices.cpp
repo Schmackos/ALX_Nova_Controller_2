@@ -9,6 +9,12 @@
 #include "hal_dsp_bridge.h"
 #include "hal_mcp4725.h"
 #include "hal_siggen.h"
+#include "hal_buzzer.h"
+#include "hal_button.h"
+#include "hal_encoder.h"
+#include "hal_ns4150b.h"
+#include "../config.h"
+#include "../drivers/es8311_regs.h"
 #ifdef USB_AUDIO_ENABLED
 #include "hal_usb_audio.h"
 #endif
@@ -21,6 +27,10 @@ static HalDevice* factory_pcm1808()  { return new HalPcm1808(); }
 static HalDevice* factory_dsp()      { return new HalDspBridge(); }
 static HalDevice* factory_mcp4725()  { return new HalMcp4725(); }
 static HalDevice* factory_siggen()   { return new HalSigGen(); }
+static HalDevice* factory_buzzer()   { return new HalBuzzer(BUZZER_PIN); }
+static HalDevice* factory_button()   { return new HalButton(RESET_BUTTON_PIN); }
+static HalDevice* factory_encoder()  { return new HalEncoder(ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN); }
+static HalDevice* factory_ns4150b()  { return new HalNs4150b(ES8311_PA_PIN); }
 #ifdef USB_AUDIO_ENABLED
 static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 #endif
@@ -107,7 +117,7 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_NS4150B, 31);
         e.type = HAL_DEV_AMP;
         e.legacyId = 0;
-        e.factory = nullptr;
+        e.factory = factory_ns4150b;
         hal_registry_register(e);
     }
 
@@ -138,7 +148,7 @@ void hal_register_builtins() {
         memset(&e, 0, sizeof(e));
         strncpy(e.compatible, COMPAT_EC11, 31);
         e.type = HAL_DEV_INPUT;
-        e.factory = nullptr;
+        e.factory = factory_encoder;
         hal_registry_register(e);
     }
 
@@ -148,7 +158,7 @@ void hal_register_builtins() {
         memset(&e, 0, sizeof(e));
         strncpy(e.compatible, COMPAT_BUZZER, 31);
         e.type = HAL_DEV_GPIO;
-        e.factory = nullptr;
+        e.factory = factory_buzzer;
         hal_registry_register(e);
     }
 
@@ -178,7 +188,7 @@ void hal_register_builtins() {
         memset(&e, 0, sizeof(e));
         strncpy(e.compatible, COMPAT_BUTTON, 31);
         e.type = HAL_DEV_INPUT;
-        e.factory = nullptr;
+        e.factory = factory_button;
         hal_registry_register(e);
     }
 

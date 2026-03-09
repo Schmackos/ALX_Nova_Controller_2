@@ -225,6 +225,15 @@ inline long random(long min, long max) {
   return (max > min) ? (min + (rand() % (max - min))) : min;
 }
 
+// Mock ISR functions
+#define CHANGE 1
+#define RISING 2
+#define FALLING 3
+
+inline int digitalPinToInterrupt(int pin) { return pin; }
+inline void attachInterrupt(int, void(*)(), int) {}
+inline void detachInterrupt(int) {}
+
 // Mock LEDC functions for buzzer tests
 namespace ArduinoMock {
 static uint32_t ledcLastChannel = 0;

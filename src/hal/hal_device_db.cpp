@@ -404,6 +404,11 @@ void hal_load_device_configs() {
         cfg.pinMclk = obj["pinMclk"] | -1;
         cfg.pinData = obj["pinData"] | -1;
         cfg.i2sPort = obj["i2sPort"] | 255;
+        cfg.gpioA = obj["gpioA"] | (int)-1;
+        cfg.gpioB = obj["gpioB"] | (int)-1;
+        cfg.gpioC = obj["gpioC"] | (int)-1;
+        cfg.gpioD = obj["gpioD"] | (int)-1;
+        cfg.usbPid = obj["usbPid"] | (int)0;
         cfg.sampleRate = obj["sampleRate"] | 0;
         cfg.bitDepth = obj["bitDepth"] | 0;
         cfg.volume = obj["volume"] | 100;
@@ -446,6 +451,11 @@ bool hal_save_device_config(uint8_t slot) {
         obj["mute"] = cfg->mute;
         obj["enabled"] = cfg->enabled;
         if (cfg->userLabel[0]) obj["label"] = cfg->userLabel;
+        if (cfg->gpioA >= 0) obj["gpioA"] = cfg->gpioA;
+        if (cfg->gpioB >= 0) obj["gpioB"] = cfg->gpioB;
+        if (cfg->gpioC >= 0) obj["gpioC"] = cfg->gpioC;
+        if (cfg->gpioD >= 0) obj["gpioD"] = cfg->gpioD;
+        if (cfg->usbPid != 0) obj["usbPid"] = cfg->usbPid;
     }
 
     File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");

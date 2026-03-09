@@ -17,6 +17,7 @@ public:
 
     void setEnable(bool enabled);
     bool isEnabled() const { return _enabled; }
+    int getPin() const { return _paPin; }
 
 private:
     int _paPin;

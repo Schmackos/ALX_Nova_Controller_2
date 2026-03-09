@@ -6,8 +6,11 @@
 
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
+#include "../signal_generator.h"
 #else
 #define LOG_I(tag, ...) ((void)0)
+inline void siggen_init(int) {}
+inline void siggen_deinit() {}
 #endif
 
 HalSignalGen::HalSignalGen(int pin)
@@ -35,7 +38,14 @@ bool HalSignalGen::probe()
 HalInitResult HalSignalGen::init()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
+    HalDeviceConfig* cfg = mgr.getConfig(_slot);
+    if (cfg && cfg->valid && cfg->gpioA >= 0) {
+        mgr.releasePin(_pin);
+        _pin = cfg->gpioA;
+    }
+    _descriptor.bus.pinA = _pin;
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
+    siggen_init(_pin);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL:SigGen] init — Signal Generator ready on GPIO%d", _pin);
@@ -44,6 +54,7 @@ HalInitResult HalSignalGen::init()
 
 void HalSignalGen::deinit()
 {
+    siggen_deinit();
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.releasePin(_pin);
     _ready = false;
@@ -61,6 +72,11 @@ void HalSignalGen::dumpConfig()
 bool HalSignalGen::healthCheck()
 {
     return _ready;
+}
+
+int HalSignalGen::getPin() const
+{
+    return _pin;
 }
 
 #endif // DAC_ENABLED

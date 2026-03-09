@@ -32,19 +32,10 @@
 
 /*====================
    EC11 ROTARY ENCODER PINS
+   Defined in config.h — single source of truth for all pin defaults.
+   platformio.ini build flags override both via #ifndef guards.
  *====================*/
-
-#ifndef ENCODER_A_PIN
-#define ENCODER_A_PIN 6
-#endif
-
-#ifndef ENCODER_B_PIN
-#define ENCODER_B_PIN 5
-#endif
-
-#ifndef ENCODER_SW_PIN
-#define ENCODER_SW_PIN 7
-#endif
+#include "../config.h"
 
 /*====================
    DISPLAY CONFIGURATION

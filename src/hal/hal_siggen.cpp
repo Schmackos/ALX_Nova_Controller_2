@@ -12,6 +12,8 @@
 #define LOG_W(fmt, ...) ((void)0)
 #define LOG_E(fmt, ...) ((void)0)
 // Stubs for native test
+inline void siggen_init(int) {}
+inline void siggen_deinit() {}
 inline bool siggen_is_active() { return false; }
 inline bool siggen_is_software_mode() { return false; }
 inline void siggen_fill_buffer(int32_t*, int, uint32_t) {}
@@ -81,14 +83,22 @@ bool HalSigGen::probe() {
 }
 
 HalInitResult HalSigGen::init() {
+    int pwmPin = -1;  // -1 = use SIGGEN_PWM_PIN default
+    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
+    if (cfg && cfg->valid && cfg->gpioA >= 0) {
+        pwmPin = cfg->gpioA;
+        _descriptor.bus.pinA = pwmPin;
+    }
+    siggen_init(pwmPin);
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
-    LOG_I("[HAL:SigGen] Initialized (instance %u, priority %u)",
-          _descriptor.instanceId, _initPriority);
+    LOG_I("[HAL:SigGen] Initialized (instance %u, priority %u, pwm=%d)",
+          _descriptor.instanceId, _initPriority, pwmPin);
     return hal_init_ok();
 }
 
 void HalSigGen::deinit() {
+    siggen_deinit();
     _ready = false;
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:SigGen] Deinitialized");

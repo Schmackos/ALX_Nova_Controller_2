@@ -3,6 +3,7 @@
 #include "hal_pipeline_bridge.h"
 #include "hal_device_manager.h"
 #include "hal_device.h"
+#include "hal_ns4150b.h"
 #include "hal_types.h"
 
 #ifndef NATIVE_TEST
@@ -121,6 +122,37 @@ static void _updateActiveCounts() {
 }
 
 // ---------------------------------------------------------------------------
+// Amp auto-enable/disable gated by DAC availability
+// ---------------------------------------------------------------------------
+
+// Returns true if at least one DAC-path device has a registered sink slot
+static bool _anyDacSinkActive() {
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        if (_halSlotToSinkSlot[i] >= 0) return true;
+    }
+    return false;
+}
+
+// Enable/disable all AMP-type devices based on DAC availability
+static void _updateAmpGating() {
+    bool dacActive = _anyDacSinkActive();
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+        HalDevice* d = mgr.getDevice(i);
+        if (!d || d->getType() != HAL_DEV_AMP) continue;
+        if (d->_state != HAL_STATE_AVAILABLE) continue;
+        HalNs4150b* amp = static_cast<HalNs4150b*>(d);
+        if (dacActive && !amp->isEnabled()) {
+            amp->setEnable(true);
+            LOG_I("[HAL:Bridge] Amp auto-enabled: DAC sink active");
+        } else if (!dacActive && amp->isEnabled()) {
+            amp->setEnable(false);
+            LOG_I("[HAL:Bridge] Amp auto-disabled: no DAC sinks active");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // on_device_available — called when a device reaches HAL_STATE_AVAILABLE
 // ---------------------------------------------------------------------------
 void hal_pipeline_on_device_available(uint8_t slot) {
@@ -180,6 +212,11 @@ void hal_pipeline_on_device_available(uint8_t slot) {
     }
 
     _updateActiveCounts();
+
+    // Auto-enable amps if a DAC sink just became available
+    if (sinkSlot >= 0) {
+        _updateAmpGating();
+    }
 
     // Broadcast device list and audio channel map to all web clients
 #ifndef NATIVE_TEST
@@ -259,6 +296,9 @@ void hal_pipeline_on_device_removed(uint8_t slot) {
     }
 
     _updateActiveCounts();
+
+    // Auto-disable amps if no DAC sinks remain
+    _updateAmpGating();
 
     // Broadcast updated state
 #ifndef NATIVE_TEST

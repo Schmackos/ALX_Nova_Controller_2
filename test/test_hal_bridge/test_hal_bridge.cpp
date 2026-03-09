@@ -34,6 +34,7 @@
 #include "../../src/diag_journal.cpp"
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
+#include "../../src/hal/hal_ns4150b.cpp"
 #include "../../src/hal/hal_pipeline_bridge.cpp"
 #include "../../src/hal/hal_settings.cpp"
 

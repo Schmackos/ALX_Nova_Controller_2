@@ -57,6 +57,11 @@ static void deviceToJson(JsonObject& obj, HalDevice* dev) {
         obj["cfgPinBck"]       = cfg->pinBck;
         obj["cfgPinLrc"]       = cfg->pinLrc;
         obj["cfgPinFmt"]       = cfg->pinFmt;
+        obj["cfgGpioA"]        = cfg->gpioA;
+        obj["cfgGpioB"]        = cfg->gpioB;
+        obj["cfgGpioC"]        = cfg->gpioC;
+        obj["cfgGpioD"]        = cfg->gpioD;
+        obj["cfgUsbPid"]       = cfg->usbPid;
     }
 }
 
@@ -213,6 +218,8 @@ void registerHalApiEndpoints(WebServer& server) {
             newCfg.pinSda = -1; newCfg.pinScl = -1; newCfg.pinMclk = -1; newCfg.pinData = -1;
             newCfg.pinBck = -1; newCfg.pinLrc = -1; newCfg.pinFmt = -1;
             newCfg.paControlPin = -1;
+            newCfg.gpioA = -1; newCfg.gpioB = -1; newCfg.gpioC = -1; newCfg.gpioD = -1;
+            newCfg.usbPid = 0;
             newCfg.i2sPort = 255; newCfg.enabled = true;
         }
 
@@ -243,6 +250,11 @@ void registerHalApiEndpoints(WebServer& server) {
         if (doc.containsKey("pinBck"))          newCfg.pinBck       = doc["pinBck"].as<int8_t>();
         if (doc.containsKey("pinLrc"))          newCfg.pinLrc       = doc["pinLrc"].as<int8_t>();
         if (doc.containsKey("pinFmt"))          newCfg.pinFmt       = doc["pinFmt"].as<int8_t>();
+        if (doc.containsKey("gpioA"))           newCfg.gpioA        = doc["gpioA"].as<int8_t>();
+        if (doc.containsKey("gpioB"))           newCfg.gpioB        = doc["gpioB"].as<int8_t>();
+        if (doc.containsKey("gpioC"))           newCfg.gpioC        = doc["gpioC"].as<int8_t>();
+        if (doc.containsKey("gpioD"))           newCfg.gpioD        = doc["gpioD"].as<int8_t>();
+        if (doc.containsKey("usbPid"))          newCfg.usbPid       = doc["usbPid"].as<uint16_t>();
         newCfg.valid = true;
 
         mgr.setConfig(slot, newCfg);

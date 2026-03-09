@@ -34,6 +34,11 @@ HalDeviceManager::HalDeviceManager() : _count(0) {
         _configs[i].pinData = -1;
         _configs[i].i2sPort = 255;
         _configs[i].enabled = true;
+        _configs[i].gpioA = -1;
+        _configs[i].gpioB = -1;
+        _configs[i].gpioC = -1;
+        _configs[i].gpioD = -1;
+        _configs[i].usbPid = 0;
     }
     for (int i = 0; i < HAL_MAX_PINS; i++) {
         _pins[i].gpio = -1;
@@ -354,6 +359,11 @@ void HalDeviceManager::reset() {
         _configs[i].pinData = -1;
         _configs[i].i2sPort = 255;
         _configs[i].enabled = true;
+        _configs[i].gpioA = -1;
+        _configs[i].gpioB = -1;
+        _configs[i].gpioC = -1;
+        _configs[i].gpioD = -1;
+        _configs[i].usbPid = 0;
     }
     for (int i = 0; i < HAL_MAX_PINS; i++) {
         _pins[i].gpio = -1;
