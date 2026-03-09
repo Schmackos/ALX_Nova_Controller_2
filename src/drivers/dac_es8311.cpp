@@ -185,20 +185,23 @@ const DacCapabilities& DacEs8311::getCapabilities() const {
 }
 
 bool DacEs8311::init(const DacPinConfig& pins) {
-    (void)pins;  // ES8311 uses dedicated onboard I2C, not the configurable DAC I2C pins
+    // Resolve pins: DacPinConfig > compile-time defines
+    _sdaPin = (pins.i2cSda  > 0) ? (int8_t)pins.i2cSda   : ES8311_I2C_SDA_PIN;
+    _sclPin = (pins.i2cScl  > 0) ? (int8_t)pins.i2cScl   : ES8311_I2C_SCL_PIN;
+    _paPin  = (pins.paControl > 0) ? (int8_t)pins.paControl : ES8311_PA_PIN;
 
     LOG_I("[ES8311] Initializing ES8311 DAC driver (I2C addr=0x%02X, SDA=%d, SCL=%d, PA=%d)",
-          ES8311_I2C_ADDR, ES8311_I2C_SDA_PIN, ES8311_I2C_SCL_PIN, ES8311_PA_PIN);
+          ES8311_I2C_ADDR, _sdaPin, _sclPin, _paPin);
 
     // Configure PA control pin (NS4150B class-D amplifier)
-    pinMode(ES8311_PA_PIN, OUTPUT);
-    digitalWrite(ES8311_PA_PIN, LOW);  // Keep amp disabled during init
+    pinMode(_paPin, OUTPUT);
+    digitalWrite(_paPin, LOW);  // Keep amp disabled during init
 
-    // Initialize I2C on the onboard bus (GPIO 7=SDA, GPIO 8=SCL)
+    // Initialize I2C on the onboard bus (GPIO 7=SDA, GPIO 8=SCL by default)
     // Use Wire (not Wire1 — Wire1 is reserved for external DAC I2C on GPIO 48/54)
-    Wire.begin(ES8311_I2C_SDA_PIN, ES8311_I2C_SCL_PIN, 100000);
+    Wire.begin(_sdaPin, _sclPin, 100000);
     LOG_I("[ES8311] I2C bus initialized on Wire (SDA=%d, SCL=%d, 100kHz)",
-          ES8311_I2C_SDA_PIN, ES8311_I2C_SCL_PIN);
+          _sdaPin, _sclPin);
 
     // I2C noise immunity: write to GPIO config register twice (ES8311 datasheet recommendation)
     writeReg(ES8311_REG_GPIO_CFG, 0x08);
@@ -256,7 +259,7 @@ bool DacEs8311::init(const DacPinConfig& pins) {
     delay(20);
 
     // Enable PA (NS4150B class-D amplifier)
-    digitalWrite(ES8311_PA_PIN, HIGH);
+    digitalWrite(_paPin, HIGH);
     _muted = false;
 
     _initialized = true;
@@ -274,7 +277,7 @@ void DacEs8311::deinit() {
     delay(20);
 
     // Disable PA before powering down codec
-    digitalWrite(ES8311_PA_PIN, LOW);
+    digitalWrite(_paPin, LOW);
 
     // Power down DAC and analog blocks
     powerDown();
@@ -362,10 +365,10 @@ bool DacEs8311::setMute(bool mute) {
         writeReg(ES8311_REG_DAC_CTRL, dacCtrl);
         delay(10);  // Wait for soft mute ramp down
         // Disable PA (NS4150B) to save power and eliminate noise
-        digitalWrite(ES8311_PA_PIN, LOW);
+        digitalWrite(_paPin, LOW);
     } else {
         // Unmute: enable PA first, then unmute DAC
-        digitalWrite(ES8311_PA_PIN, HIGH);
+        digitalWrite(_paPin, HIGH);
         delay(10);  // Let PA settle
         // Clear mute bits
         dacCtrl &= ~(ES8311_DAC_SOFT_MUTE | ES8311_DAC_MUTE);

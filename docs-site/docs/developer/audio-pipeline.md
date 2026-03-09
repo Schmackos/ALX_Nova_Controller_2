@@ -91,16 +91,19 @@ The `isHardwareAdc` flag is the correct way to determine whether noise gating ap
 
 ### Registering a Source
 
-Sources are registered by the HAL pipeline bridge when a HAL device transitions to `AVAILABLE`. Direct registration by drivers is discouraged; use the bridge lifecycle instead.
+Sources are registered exclusively by the HAL pipeline bridge (`hal_pipeline_bridge`) when a HAL device transitions to `AVAILABLE`. **No driver or subsystem outside the bridge may call `audio_pipeline_set_source()` directly.** Lane assignment is performed by capability-based ordinal counting in the bridge; never hard-code lane indices.
 
 ```cpp
 // Atomically place a source at a lane index (wraps vTaskSuspendAll)
+// Called by hal_pipeline_bridge only.
 audio_pipeline_set_source(int lane, const AudioInputSource *src);
 
 // Atomically clear a lane
+// Called by hal_pipeline_bridge only.
 audio_pipeline_remove_source(int lane);
 
 // Read-only accessor — returns NULL if lane has no source
+// Safe to call from the main loop; used by sendAudioChannelMap().
 const AudioInputSource* audio_pipeline_get_source(int lane);
 ```
 
@@ -142,13 +145,13 @@ typedef struct AudioOutputSink {
 
 ### Slot-Indexed Sink API
 
-Sinks occupy named slots (0 through `AUDIO_OUT_MAX_SINKS - 1`, currently 8). The slot index is stable across HAL device lifecycle transitions:
+Sinks occupy named slots (0 through `AUDIO_OUT_MAX_SINKS - 1`, currently 8). The slot index is stable across HAL device lifecycle transitions. **HAL is the sole system that binds DAC devices to pipeline slots.** The only correct way to attach or detach a DAC device is through the HAL pipeline bridge lifecycle, which internally calls `dac_activate_for_hal()` and `dac_deactivate_for_hal()` for DAC-path devices before registering the sink:
 
 ```cpp
-// Place a sink at a fixed slot (called by hal_pipeline_bridge on AVAILABLE)
+// Called by hal_pipeline_bridge on AVAILABLE — after dac_activate_for_hal()
 audio_pipeline_set_sink(int slot, const AudioOutputSink *sink);
 
-// Clear a slot (called by hal_pipeline_bridge on MANUAL/ERROR/REMOVED)
+// Called by hal_pipeline_bridge on MANUAL/ERROR/REMOVED — after dac_deactivate_for_hal()
 audio_pipeline_remove_sink(int slot);
 
 // Legacy — iterates up to _sinkCount, kept for backwards compatibility

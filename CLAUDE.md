@@ -32,7 +32,7 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (1614 tests across 70 modules). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_adapter`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_eth_manager`, `test_es8311`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (1618 tests across 70 modules). Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_adapter`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_eth_manager`, `test_es8311`.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ Application state is decomposed across 15 lightweight domain-specific headers un
 - `src/state/general_state.h` — `GeneralState` (timezoneOffset, dstOffset, darkMode, enableCertValidation, deviceSerialNumber)
 - `src/state/ota_state.h` — `OtaState` + `ReleaseInfo` struct
 - `src/state/audio_state.h` — `AudioState` with `AdcState[]`, `I2sRuntimeMetrics`, **volatile `bool audioPaused`** (cross-core), sensing fields, pipeline bypass arrays
-- `src/state/dac_state.h` — `DacState` with primary DAC, ES8311 fields, `EepromDiag` nested struct, validated setters `requestDacToggle()` / `requestEs8311Toggle()`
+- `src/state/dac_state.h` — `DacState` with cross-cutting fields only: `filterMode`, `txUnderruns`, `PendingDeviceToggle pendingToggle`, `requestDeviceToggle()`, `EepromDiag`. Device-specific fields (enabled, volume, mute) removed in DEBT-5 — now live in `HalDeviceConfig` via HAL manager
 - `src/state/dsp_state.h` — `DspSettingsState` (enabled, bypass, presets, swap diagnostics)
 - `src/state/display_state.h` — `DisplayState`
 - `src/state/buzzer_state.h` — `BuzzerState`
@@ -56,7 +56,7 @@ Application state is decomposed across 15 lightweight domain-specific headers un
 - `src/state/debug_state.h` — `DebugState` (debug mode, serial level, hw stats, heapCritical)
 - `src/state/hal_coord_state.h` — Reserved (future HAL coordination)
 
-**Usage pattern**: Access domain state via nested composition: `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.dac.es8311Enabled`, `appState.general.darkMode`, `appState.dsp.enabled`, etc. Dirty flags and event signaling remain in AppState shell for backward compat.
+**Usage pattern**: Access domain state via nested composition: `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.dac.filterMode`, `appState.general.darkMode`, `appState.dsp.enabled`, etc. DAC device state (enabled, volume, mute) lives in `HalDeviceConfig` via HAL manager — not in DacState. Dirty flags and event signaling remain in AppState shell for backward compat.
 
 **Cross-domain coordination**: AppState retains `volatile bool _mqttReconfigPending`, `volatile int8_t _pendingApToggle`, and backoff delays — inherently cross-cutting concerns unrelated to a single domain.
 
@@ -64,7 +64,7 @@ AppState uses **dirty flags** (e.g., `isBuzzerDirty()`, `isDisplayDirty()`, `isO
 
 Legacy code uses `#define` macros (e.g., `#define wifiSSID appState.wifiSSID`) to alias global variable names to AppState members. New code should use `appState.fieldName` directly; domain lookups use `appState.domain.fieldName` (e.g., `appState.wifi.ssid`).
 
-Change-detection shadow fields (`prevMqtt*`) have been extracted from AppState into file-local statics in `mqtt_publish.cpp`. Similarly, `prevBroadcast*` sensing fields live in `smart_sensing.cpp`. DAC/ES8311 deferred toggles use validated setters: `appState.dac.requestDacToggle(int8_t)` and `appState.dac.requestEs8311Toggle(int8_t)` — only accept -1, 0, 1; direct writes to `_pendingDacToggle` / `_pendingEs8311Toggle` are unsafe.
+Change-detection shadow fields (`prevMqtt*`) have been extracted from AppState into file-local statics in `mqtt_publish.cpp`. Similarly, `prevBroadcast*` sensing fields live in `smart_sensing.cpp`. DAC device toggles use a single generic setter: `appState.dac.requestDeviceToggle(halSlot, action)` — accepts HAL slot + action (-1=disable, 1=enable). The main loop consumes `pendingToggle` and calls `dac_activate_for_hal()` / `dac_deactivate_for_hal()`. Legacy `requestDacToggle()` / `requestEs8311Toggle()` removed in DEBT-5.
 
 ### FSM States
 The application uses a finite state machine (`AppFSMState` in `app_state.h`): `STATE_IDLE`, `STATE_SIGNAL_DETECTED`, `STATE_AUTO_OFF_TIMER`, `STATE_WEB_CONFIG`, `STATE_OTA_UPDATE`, `STATE_ERROR`.

@@ -30,9 +30,11 @@ The routing matrix is a 2D array of `AUDIO_PIPELINE_MATRIX_SIZE × AUDIO_PIPELIN
 - A value of `1.0` is unity gain (0 dB). A value of `0.0` is silence (−∞ dB).
 - The typical passthrough configuration has `1.0` on the diagonal.
 
-### Input channel assignments (default)
+### Input channel assignments (default layout)
 
-| Index | Name |
+The tables below show the default channel layout for a standard two-ADC build. **The actual layout is dynamic** — HAL assigns input lanes and output slots at runtime based on which devices are discovered and available. Always consult the `audioChannelMap` WebSocket broadcast for the live channel map; do not hard-code these indices.
+
+| Index | Default name |
 |-------|------|
 | 0 | ADC1 L |
 | 1 | ADC1 R |
@@ -42,21 +44,21 @@ The routing matrix is a 2D array of `AUDIO_PIPELINE_MATRIX_SIZE × AUDIO_PIPELIN
 | 5 | SigGen R |
 | 6 | USB L |
 | 7 | USB R |
-| 8–15 | Reserved / expansion |
+| 8–15 | Populated dynamically by HAL at runtime |
 
-### Output channel assignments (default)
+### Output channel assignments (default layout)
 
-| Index | Name |
+| Index | Default name |
 |-------|------|
 | 0 | Out 0 (L) |
 | 1 | Out 1 (R) |
 | 2 | Out 2 |
 | 3 | Out 3 |
 | 4–7 | Out 4–7 |
-| 8–15 | Reserved / expansion |
+| 8–15 | Populated dynamically by HAL at runtime |
 
-:::note
-The actual channel names returned by the API reflect the current state when the firmware was built. Channels beyond index 7 are populated by expansion HAL devices registered at runtime.
+:::note Live channel map via WebSocket
+The `audioChannelMap` broadcast is the authoritative source for currently active input lanes and output sinks, including HAL device metadata (`compatible`, `manufacturer`, `capabilities`, `ready`). Use `GET /api/pipeline/matrix` for the stored gain values and `audioChannelMap` for what those indices actually map to.
 :::
 
 ### Backward compatibility: 8×8 to 16×16 migration

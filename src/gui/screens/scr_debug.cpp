@@ -12,6 +12,7 @@
 #include "../../task_monitor.h"
 #ifdef DAC_ENABLED
 #include "../../dac_hal.h"
+#include "../../hal/hal_device_manager.h"
 #endif
 #include <Arduino.h>
 #include <WiFi.h>
@@ -269,16 +270,20 @@ void scr_debug_refresh(void) {
     /* Audio DAC */
 #ifdef DAC_ENABLED
     if (lbl_dac) {
-        DacDriver* drv = dac_get_driver();
-        const char* model = appState.dac.modelName;
-        const char* statusStr = appState.dac.ready ? "Ready" : (appState.dac.enabled ? "Not Ready" : "Off");
+        // Find first DAC-capable device via capability, not hardcoded compatible string
+        HalDevice* dacDev = HalDeviceManager::instance().findByType(HAL_DEV_DAC);
+        if (!dacDev) dacDev = HalDeviceManager::instance().findByType(HAL_DEV_CODEC);
+        HalDeviceConfig* dacCfg = dacDev ? HalDeviceManager::instance().getConfig(dacDev->getSlot()) : nullptr;
+        const char* model = dacDev ? dacDev->getDescriptor().name : "No DAC";
+        const char* statusStr = (dacDev && dacDev->isReady()) ? "Ready" :
+                                (dacCfg && dacCfg->enabled) ? "Not Ready" : "Off";
         snprintf(buf, sizeof(buf), "%s  %s\nVol:%u%% %s %s\nCh:%u Det:%s\nTX Underruns:%lu",
                  model, statusStr,
-                 (unsigned)appState.dac.volume,
-                 appState.dac.mute ? "MUTE" : "",
-                 appState.dac.enabled ? "ON" : "OFF",
-                 (unsigned)appState.dac.outputChannels,
-                 appState.dac.detected ? "EEPROM" : "Manual",
+                 dacCfg ? (unsigned)dacCfg->volume : 80u,
+                 (dacCfg && dacCfg->mute) ? "MUTE" : "",
+                 (dacCfg && dacCfg->enabled) ? "ON" : "OFF",
+                 dacDev ? (unsigned)dacDev->getDescriptor().channelCount : 2u,
+                 (dacDev != nullptr) ? "EEPROM" : "Manual",
                  (unsigned long)appState.dac.txUnderruns);
         lv_label_set_text(lbl_dac, buf);
     }
@@ -397,8 +402,7 @@ lv_obj_t *scr_debug_create(void) {
     lbl_storage = nullptr;
     lbl_network = nullptr;
     lbl_system = nullptr;
-    lbl_audio_adc[0] = nullptr;
-    lbl_audio_adc[1] = nullptr;
+    memset(lbl_audio_adc, 0, sizeof(lbl_audio_adc));
     lbl_i2s = nullptr;
 #ifdef DAC_ENABLED
     lbl_dac = nullptr;

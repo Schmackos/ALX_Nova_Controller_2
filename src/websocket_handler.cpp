@@ -32,6 +32,7 @@
 #include "dac_eeprom.h"
 #include "hal/hal_device_manager.h"
 #include "hal/hal_pipeline_bridge.h"
+#include "hal/hal_settings.h"
 #include "hal/hal_types.h"
 #include "hal/hal_temp_sensor.h"
 #endif
@@ -126,6 +127,15 @@ static bool idleHookCore1() {
   idleEntryUs1 = now;
   return false;
 }
+
+// ===== HAL Device Lookup Helper =====
+// Find HAL slot for a device by compatible string. Returns 0xFF if not found.
+#ifdef DAC_ENABLED
+static uint8_t _halSlotForCompatible(const char* compat) {
+    HalDevice* dev = HalDeviceManager::instance().findByCompatible(compat);
+    return dev ? dev->getSlot() : 0xFF;
+}
+#endif
 
 // ===== WebSocket Event Handler =====
 
@@ -939,78 +949,134 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 #endif
 #ifdef DAC_ENABLED
         else if (msgType == "setDacEnabled") {
-          bool was = appState.dac.enabled;
-          appState.dac.enabled = doc["enabled"].as<bool>();
-          dac_save_settings_deferred();
-          // Defer init/deinit to main loop — I2C EEPROM scan + I2S driver
-          // setup is too heavy for the WebSocket handler context (blocks SDIO)
-          if (appState.dac.enabled && !was && !appState.dac.ready) {
-            appState.dac.requestDacToggle(1);   // main loop calls dac_output_init()
-          } else if (!appState.dac.enabled && was) {
-            appState.dac.requestDacToggle(-1);  // main loop calls dac_output_deinit()
+          LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
+          uint8_t halSlot = _halSlotForCompatible("ti,pcm5102a");
+          if (halSlot == 0xFF) {
+            LOG_W("[WebSocket] setDacEnabled: PCM5102A not found in HAL");
+          } else {
+            HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
+            bool was = cfg ? cfg->enabled : false;
+            bool en = doc["enabled"].as<bool>();
+            if (cfg) cfg->enabled = en;
+            // Defer init/deinit to main loop — I2C EEPROM scan + I2S driver
+            // setup is too heavy for the WebSocket handler context (blocks SDIO)
+            HalDevice* dev = HalDeviceManager::instance().getDevice(halSlot);
+            if (en && !was && dev && !dev->isReady()) {
+              appState.dac.requestDeviceToggle(halSlot, 1);   // main loop activates
+            } else if (!en && was) {
+              appState.dac.requestDeviceToggle(halSlot, -1);  // main loop deactivates
+            }
+            hal_save_device_config_deferred(halSlot);
+            appState.markDacDirty();
+            LOG_I("[WebSocket] DAC %s (deferred)", en ? "enabled" : "disabled");
           }
-          appState.markDacDirty();
-          LOG_I("[WebSocket] DAC %s (deferred)", appState.dac.enabled ? "enabled" : "disabled");
         }
         else if (msgType == "setDacVolume") {
+          LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
+          uint8_t halSlot = _halSlotForCompatible("ti,pcm5102a");
           int v = doc["volume"].as<int>();
           if (v >= 0 && v <= 100) {
-            appState.dac.volume = (uint8_t)v;
-            dac_update_volume(appState.dac.volume);
-            dac_save_settings_deferred();
+            if (halSlot != 0xFF) {
+              HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
+              if (cfg) cfg->volume = (uint8_t)v;
+              int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
+              if (sinkSlot >= 0) dac_update_volume_for_slot((uint8_t)sinkSlot, (uint8_t)v);
+              hal_save_device_config_deferred(halSlot);
+            } else {
+              LOG_W("[WebSocket] setDacVolume: PCM5102A not found in HAL");
+            }
             appState.markDacDirty();
           }
         }
         else if (msgType == "setDacMute") {
-          bool wasMuted = appState.dac.mute;
-          appState.dac.mute = doc["mute"].as<bool>();
-          DacDriver *drv = dac_get_driver();
-          if (drv) drv->setMute(appState.dac.mute);
-          dac_save_settings_deferred();
-          appState.markDacDirty();
-          if (wasMuted != appState.dac.mute) {
-            LOG_I("[DAC] (%s) mute: %s", appState.dac.modelName, appState.dac.mute ? "ON" : "OFF");
+          LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
+          uint8_t halSlot = _halSlotForCompatible("ti,pcm5102a");
+          bool newMute = doc["mute"].as<bool>();
+          // Apply software mute via slot-indexed API
+          if (halSlot != 0xFF) {
+            int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
+            if (sinkSlot >= 0) dac_set_mute_for_slot((uint8_t)sinkSlot, newMute);
+            HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
+            if (cfg) cfg->mute = newMute;
+            hal_save_device_config_deferred(halSlot);
+          } else {
+              // PCM5102A not in HAL — mute request ignored (device not registered)
+            LOG_W("[WebSocket] setDacMute: PCM5102A not found in HAL");
           }
+          appState.markDacDirty();
+          LOG_I("[DAC] (PCM5102A) mute: %s", newMute ? "ON" : "OFF");
         }
         else if (msgType == "setDacFilter") {
+          LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
+          uint8_t halSlot = _halSlotForCompatible("ti,pcm5102a");
           uint8_t prevFilter = appState.dac.filterMode;
           int fm = doc["filterMode"].as<int>();
-          appState.dac.filterMode = (uint8_t)fm;
-          DacDriver *drv = dac_get_driver();
+          appState.dac.filterMode = (uint8_t)fm;    // filterMode has no HAL equivalent yet — stays in AppState
+          DacDriver *drv = dac_get_driver_for_slot(0);
           if (drv) drv->setFilterMode(appState.dac.filterMode);
-          dac_save_settings_deferred();
+          if (halSlot != 0xFF) {
+            hal_save_device_config_deferred(halSlot);
+          } else {
+            LOG_W("[WebSocket] setDacFilter: PCM5102A not found in HAL");
+          }
           appState.markDacDirty();
           LOG_I("[DAC] Filter mode: %d -> %d", prevFilter, appState.dac.filterMode);
         }
         else if (msgType == "setEs8311Enabled") {
-          bool was = appState.dac.es8311Enabled;
-          appState.dac.es8311Enabled = doc["enabled"].as<bool>();
-          // Defer init/deinit to main loop — ES8311 I2C + I2S2 setup is too heavy
-          // for the WebSocket handler context (blocks SDIO → WiFi crash)
-          if (appState.dac.es8311Enabled && !was) {
-            appState.dac.requestEs8311Toggle(1);   // main loop calls dac_secondary_init()
-          } else if (!appState.dac.es8311Enabled && was) {
-            appState.dac.requestEs8311Toggle(-1);  // main loop calls dac_secondary_deinit()
+          LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
+          uint8_t halSlot = _halSlotForCompatible("everest-semi,es8311");
+          if (halSlot == 0xFF) {
+            LOG_W("[WebSocket] setEs8311Enabled: ES8311 not found in HAL");
+          } else {
+            HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
+            bool was = cfg ? cfg->enabled : false;
+            bool en = doc["enabled"].as<bool>();
+            if (cfg) cfg->enabled = en;
+            // Defer init/deinit to main loop — ES8311 I2C + I2S2 setup is too heavy
+            // for the WebSocket handler context (blocks SDIO -> WiFi crash)
+            if (en && !was) {
+              appState.dac.requestDeviceToggle(halSlot, 1);   // main loop activates
+            } else if (!en && was) {
+              appState.dac.requestDeviceToggle(halSlot, -1);  // main loop deactivates
+            }
+            hal_save_device_config_deferred(halSlot);
+            appState.markDacDirty();
+            LOG_I("[WebSocket] ES8311 %s (deferred)", en ? "enabled" : "disabled");
           }
-          dac_save_settings_deferred();
-          appState.markDacDirty();
-          LOG_I("[WebSocket] ES8311 %s (deferred)", appState.dac.es8311Enabled ? "enabled" : "disabled");
         }
         else if (msgType == "setEs8311Volume") {
+          LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
+          uint8_t halSlot = _halSlotForCompatible("everest-semi,es8311");
           int v = doc["volume"].as<int>();
           if (v >= 0 && v <= 100) {
-            appState.dac.es8311Volume = (uint8_t)v;
-            dac_secondary_set_volume(appState.dac.es8311Volume);
-            dac_save_settings_deferred();
+            if (halSlot != 0xFF) {
+              HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
+              if (cfg) cfg->volume = (uint8_t)v;
+              int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
+              if (sinkSlot >= 0) dac_update_volume_for_slot((uint8_t)sinkSlot, (uint8_t)v);
+              hal_save_device_config_deferred(halSlot);
+            } else {
+              LOG_W("[WebSocket] setEs8311Volume: ES8311 not found in HAL");
+            }
             appState.markDacDirty();
           }
         }
         else if (msgType == "setEs8311Mute") {
-          appState.dac.es8311Mute = doc["mute"].as<bool>();
-          dac_secondary_set_mute(appState.dac.es8311Mute);
-          dac_save_settings_deferred();
+          LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
+          uint8_t halSlot = _halSlotForCompatible("everest-semi,es8311");
+          bool newMute = doc["mute"].as<bool>();
+          if (halSlot != 0xFF) {
+            int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
+            if (sinkSlot >= 0) dac_set_mute_for_slot((uint8_t)sinkSlot, newMute);
+            HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
+            if (cfg) cfg->mute = newMute;
+            hal_save_device_config_deferred(halSlot);
+          } else {
+            // ES8311 not in HAL — mute request ignored (device not registered)
+            LOG_W("[WebSocket] setEs8311Mute: ES8311 not found in HAL");
+          }
           appState.markDacDirty();
-          LOG_I("[DAC] (ES8311) mute: %s", appState.dac.es8311Mute ? "ON" : "OFF");
+          LOG_I("[DAC] (ES8311) mute: %s", newMute ? "ON" : "OFF");
         }
         else if (msgType == "eepromScan") {
           LOG_I("[WebSocket] EEPROM scan requested");
@@ -1595,21 +1661,32 @@ void sendDacState() {
   if (!_wsAnyAuth()) return;
   JsonDocument doc;
   doc["type"] = "dacState";
-  doc["enabled"] = appState.dac.enabled;
-  doc["volume"] = appState.dac.volume;
-  doc["mute"] = appState.dac.mute;
-  doc["deviceId"] = appState.dac.deviceId;
-  doc["modelName"] = appState.dac.modelName;
-  doc["outputChannels"] = appState.dac.outputChannels;
-  doc["detected"] = appState.dac.detected;
-  doc["ready"] = appState.dac.ready;
-  doc["filterMode"] = appState.dac.filterMode;
-  doc["txUnderruns"] = appState.dac.txUnderruns;
-  // ES8311 secondary DAC state
-  doc["es8311Enabled"] = appState.dac.es8311Enabled;
-  doc["es8311Volume"] = appState.dac.es8311Volume;
-  doc["es8311Mute"] = appState.dac.es8311Mute;
-  doc["es8311Ready"] = appState.dac.es8311Ready;
+
+  // Query primary DAC (PCM5102A) via HAL
+  {
+    HalDevice* dev = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
+    HalDeviceConfig* cfg = dev ? HalDeviceManager::instance().getConfig(dev->getSlot()) : nullptr;
+    doc["enabled"] = cfg ? cfg->enabled : false;
+    doc["volume"] = cfg ? cfg->volume : 80;
+    doc["mute"] = cfg ? cfg->mute : false;
+    doc["deviceId"] = dev ? dev->getDescriptor().legacyId : 0x0001;
+    doc["modelName"] = dev ? dev->getDescriptor().name : "PCM5102A";
+    doc["outputChannels"] = dev ? dev->getDescriptor().channelCount : 2;
+    doc["detected"] = (dev != nullptr);
+    doc["ready"] = dev ? dev->isReady() : false;
+    doc["filterMode"] = appState.dac.filterMode;   // filterMode has no HAL equivalent yet
+    doc["txUnderruns"] = appState.dac.txUnderruns;  // Diagnostic counter stays in AppState
+  }
+
+  // Query ES8311 via HAL
+  {
+    HalDevice* esDev = HalDeviceManager::instance().findByCompatible("everest-semi,es8311");
+    HalDeviceConfig* esCfg = esDev ? HalDeviceManager::instance().getConfig(esDev->getSlot()) : nullptr;
+    doc["es8311Enabled"] = esCfg ? esCfg->enabled : false;
+    doc["es8311Volume"] = esCfg ? esCfg->volume : 80;
+    doc["es8311Mute"] = esCfg ? esCfg->mute : false;
+    doc["es8311Ready"] = esDev ? esDev->isReady() : false;
+  }
   // TX diagnostics snapshot
   {
     DacTxDiag txd = dac_get_tx_diagnostics();
@@ -1632,7 +1709,7 @@ void sendDacState() {
     drv["name"] = entries[i].name;
   }
   // Filter modes from current driver
-  DacDriver* drv = dac_get_driver();
+  DacDriver* drv = dac_get_driver_for_slot(0);
   if (drv && drv->getCapabilities().hasFilterModes) {
     JsonArray filters = doc["filterModes"].to<JsonArray>();
     for (uint8_t f = 0; f < drv->getCapabilities().numFilterModes; f++) {
@@ -2073,20 +2150,22 @@ void sendHardwareStats() {
     }
 
 #ifdef DAC_ENABLED
-    // DAC Output diagnostics
+    // DAC Output diagnostics (query HAL)
     {
       JsonObject dac = doc["dac"].to<JsonObject>();
-      dac["enabled"] = appState.dac.enabled;
-      dac["ready"] = appState.dac.ready;
-      dac["detected"] = appState.dac.detected;
-      dac["model"] = appState.dac.modelName;
-      dac["deviceId"] = appState.dac.deviceId;
-      dac["volume"] = appState.dac.volume;
-      dac["mute"] = appState.dac.mute;
+      HalDevice* pcmDev = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
+      HalDeviceConfig* pcmCfg = pcmDev ? HalDeviceManager::instance().getConfig(pcmDev->getSlot()) : nullptr;
+      dac["enabled"] = pcmCfg ? pcmCfg->enabled : false;
+      dac["ready"] = pcmDev ? pcmDev->isReady() : false;
+      dac["detected"] = (pcmDev != nullptr);
+      dac["model"] = pcmDev ? pcmDev->getDescriptor().name : "PCM5102A";
+      dac["deviceId"] = pcmDev ? pcmDev->getDescriptor().legacyId : 0x0001;
+      dac["volume"] = pcmCfg ? pcmCfg->volume : 80;
+      dac["mute"] = pcmCfg ? pcmCfg->mute : false;
       dac["filterMode"] = appState.dac.filterMode;
-      dac["outputChannels"] = appState.dac.outputChannels;
+      dac["outputChannels"] = pcmDev ? pcmDev->getDescriptor().channelCount : 2;
       dac["txUnderruns"] = appState.dac.txUnderruns;
-      DacDriver* drv = dac_get_driver();
+      DacDriver* drv = dac_get_driver_for_slot(0);
       if (drv) {
         const DacCapabilities& caps = drv->getCapabilities();
         dac["manufacturer"] = caps.manufacturer;

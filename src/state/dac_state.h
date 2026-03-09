@@ -32,33 +32,14 @@ struct PendingDeviceToggle {
 };
 
 // DAC output state (guarded by DAC_ENABLED at the AppState level)
+// Device-specific fields (enabled, volume, mute, etc.) live in HalDeviceConfig
+// via the HAL device manager. DacState retains only cross-cutting concerns.
 struct DacState {
-  // Primary DAC
-  bool enabled = false;
-  uint8_t volume = 80;            // 0-100 percent
-  bool mute = false;
-  uint16_t deviceId = 0x0001;     // DAC_ID_PCM5102A default
-  char modelName[33] = "PCM5102A";
-  uint8_t outputChannels = 2;     // From driver capabilities
-  bool detected = false;          // EEPROM or manual selection made
-  bool ready = false;             // Driver init + I2S TX active
-  uint8_t filterMode = 0;         // Digital filter mode (DAC-specific)
-  uint32_t txUnderruns = 0;       // TX DMA full count
-
-  // ES8311 secondary DAC (P4 onboard codec + NS4150B speaker amp)
-  bool es8311Enabled = false;
-  uint8_t es8311Volume = 80;      // 0-100 (hardware volume via I2C)
-  bool es8311Mute = false;
-  bool es8311Ready = false;
+  uint8_t filterMode = 0;         // Digital filter mode (DAC-specific, no HAL equivalent yet)
+  uint32_t txUnderruns = 0;       // TX DMA full count (diagnostic counter)
 
   // Generic deferred toggle — main loop executes actual activation/deactivation
-  // via dac_activate_for_hal() / dac_deactivate_for_hal() with HAL device pointer
   volatile PendingDeviceToggle pendingToggle = {};
-
-  // Deferred toggle flags (DEPRECATED — for backward compatibility during Phase 3)
-  // New code should use pendingToggle + requestDeviceToggle(halSlot, action)
-  volatile int8_t pendingEs8311Toggle = 0;  // 0=none, 1=init, -1=deinit
-  volatile int8_t pendingDacToggle = 0;     // 0=none, 1=init, -1=deinit
 
   // Generic validated setter — routes through HAL slot, zero device-type knowledge
   // Direct dev->deinit() is unsafe (audio task race), so all toggle requests use this
@@ -67,14 +48,6 @@ struct DacState {
       pendingToggle.halSlot = halSlot;
       pendingToggle.action = action;
     }
-  }
-
-  // Legacy validated setters (DEPRECATED — for backward compatibility only)
-  void requestDacToggle(int8_t action) {
-    if (action >= -1 && action <= 1) pendingDacToggle = action;
-  }
-  void requestEs8311Toggle(int8_t action) {
-    if (action >= -1 && action <= 1) pendingEs8311Toggle = action;
   }
 
   // EEPROM diagnostics

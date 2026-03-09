@@ -14,6 +14,8 @@
 #include "wifi_manager.h"
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
+#include "hal/hal_device_manager.h"
+#include "hal/hal_device_db.h"
 #endif
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -1123,16 +1125,7 @@ void handleSettingsExport() {
   doc["signalGenerator"]["sweepSpeed"] = appState.sigGen.sweepSpeed;
 
 #ifdef DAC_ENABLED
-  // DAC Output settings
-  doc["dacOutput"]["enabled"] = appState.dac.enabled;
-  doc["dacOutput"]["volume"] = appState.dac.volume;
-  doc["dacOutput"]["mute"] = appState.dac.mute;
-  doc["dacOutput"]["deviceId"] = appState.dac.deviceId;
-  doc["dacOutput"]["modelName"] = appState.dac.modelName;
-  doc["dacOutput"]["filterMode"] = appState.dac.filterMode;
-  doc["dacOutput"]["es8311Enabled"] = appState.dac.es8311Enabled;
-  doc["dacOutput"]["es8311Volume"] = appState.dac.es8311Volume;
-  doc["dacOutput"]["es8311Mute"] = appState.dac.es8311Mute;
+  // DAC settings are persisted in /hal_config.json — no longer in /config.json
 #endif
 
   // Input channel names
@@ -1497,41 +1490,41 @@ void handleSettingsImport() {
   }
 
 #ifdef DAC_ENABLED
-  // Import DAC Output settings
+  // Import legacy DAC Output settings → HAL config migration
   if (!doc["dacOutput"].isNull()) {
-    if (doc["dacOutput"]["enabled"].is<bool>()) {
-      appState.dac.enabled = doc["dacOutput"]["enabled"].as<bool>();
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+
+    // Migrate PCM5102A fields
+    HalDevice* pcm = mgr.findByCompatible("ti,pcm5102a");
+    if (pcm) {
+      HalDeviceConfig* cfg = mgr.getConfig(pcm->getSlot());
+      if (cfg) {
+        if (doc["dacOutput"]["enabled"].is<bool>()) cfg->enabled = doc["dacOutput"]["enabled"].as<bool>();
+        if (doc["dacOutput"]["volume"].is<int>()) {
+          int v = doc["dacOutput"]["volume"].as<int>();
+          if (v >= 0 && v <= 100) cfg->volume = (uint8_t)v;
+        }
+        if (doc["dacOutput"]["mute"].is<bool>()) cfg->mute = doc["dacOutput"]["mute"].as<bool>();
+        hal_save_device_config(pcm->getSlot());
+      }
     }
-    if (doc["dacOutput"]["volume"].is<int>()) {
-      int v = doc["dacOutput"]["volume"].as<int>();
-      if (v >= 0 && v <= 100) appState.dac.volume = (uint8_t)v;
+
+    // Migrate ES8311 fields
+    HalDevice* es = mgr.findByCompatible("everest-semi,es8311");
+    if (es) {
+      HalDeviceConfig* cfg = mgr.getConfig(es->getSlot());
+      if (cfg) {
+        if (doc["dacOutput"]["es8311Enabled"].is<bool>()) cfg->enabled = doc["dacOutput"]["es8311Enabled"].as<bool>();
+        if (doc["dacOutput"]["es8311Volume"].is<int>()) {
+          int v = doc["dacOutput"]["es8311Volume"].as<int>();
+          if (v >= 0 && v <= 100) cfg->volume = (uint8_t)v;
+        }
+        if (doc["dacOutput"]["es8311Mute"].is<bool>()) cfg->mute = doc["dacOutput"]["es8311Mute"].as<bool>();
+        hal_save_device_config(es->getSlot());
+      }
     }
-    if (doc["dacOutput"]["mute"].is<bool>()) {
-      appState.dac.mute = doc["dacOutput"]["mute"].as<bool>();
-    }
-    if (doc["dacOutput"]["deviceId"].is<int>()) {
-      appState.dac.deviceId = (uint16_t)doc["dacOutput"]["deviceId"].as<int>();
-    }
-    if (doc["dacOutput"]["modelName"].is<const char*>()) {
-      strncpy(appState.dac.modelName, doc["dacOutput"]["modelName"].as<const char*>(),
-              sizeof(appState.dac.modelName) - 1);
-      appState.dac.modelName[sizeof(appState.dac.modelName) - 1] = '\0';
-    }
-    if (doc["dacOutput"]["filterMode"].is<int>()) {
-      appState.dac.filterMode = (uint8_t)doc["dacOutput"]["filterMode"].as<int>();
-    }
-    if (doc["dacOutput"]["es8311Enabled"].is<bool>()) {
-      appState.dac.es8311Enabled = doc["dacOutput"]["es8311Enabled"].as<bool>();
-    }
-    if (doc["dacOutput"]["es8311Volume"].is<int>()) {
-      int v = doc["dacOutput"]["es8311Volume"].as<int>();
-      if (v >= 0 && v <= 100) appState.dac.es8311Volume = (uint8_t)v;
-    }
-    if (doc["dacOutput"]["es8311Mute"].is<bool>()) {
-      appState.dac.es8311Mute = doc["dacOutput"]["es8311Mute"].as<bool>();
-    }
-    dac_save_settings();
-    LOG_I("[Settings] DAC output settings imported");
+
+    LOG_I("[Settings] Legacy dacOutput settings migrated to HAL config");
   }
 #endif
 

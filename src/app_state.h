@@ -145,10 +145,6 @@ public:
   bool isDacDirty() const { return _dacDirty; }
   void clearDacDirty() { _dacDirty = false; }
 
-  void markEs8311Dirty() { _es8311Dirty = true; app_events_signal(EVT_DAC); }
-  bool isEs8311Dirty() const { return _es8311Dirty; }
-  void clearEs8311Dirty() { _es8311Dirty = false; }
-
   void markEepromDirty() { _eepromDirty = true; app_events_signal(EVT_EEPROM); }
   bool isEepromDirty() const { return _eepromDirty; }
   void clearEepromDirty() { _eepromDirty = false; }
@@ -234,7 +230,6 @@ private:
 #ifdef DAC_ENABLED
   bool _dacDirty = false;
   bool _eepromDirty = false;
-  bool _es8311Dirty = false;
   bool _halDeviceDirty = false;
   bool _channelMapDirty = false;
 #endif

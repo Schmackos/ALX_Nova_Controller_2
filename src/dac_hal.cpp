@@ -19,6 +19,7 @@
 #ifndef NATIVE_TEST
 #include "i2s_audio.h"
 #include "hal/hal_settings.h"
+#include "hal/hal_device_db.h"
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #ifdef BOARD_HAS_PSRAM
@@ -30,6 +31,9 @@ extern "C" {
 }
 #endif
 
+// Forward declaration — defined later in this file, called from dac_boot_prepare()
+static void dac_load_settings();
+
 // ===== Module State — Phase 1 Slot-Indexed Arrays =====
 // Each index corresponds to an AUDIO_OUT_MAX_SINKS pipeline sink slot.
 static DacDriver*    _driverForSlot[AUDIO_OUT_MAX_SINKS]  = {};  // Driver instance per slot
@@ -40,25 +44,12 @@ static float         _volumeGainForSlot[AUDIO_OUT_MAX_SINKS] = {
 // Which I2S write port each slot uses: 0 = i2s_audio_write (primary), 2 = i2s_audio_write_es8311
 static uint8_t       _writePortForSlot[AUDIO_OUT_MAX_SINKS] = {};
 
+// Per-slot software mute state (lock-free read from audio task)
+static bool _muteForSlot[AUDIO_OUT_MAX_SINKS] = {};
+
 // I2S TX enable state per port index (0 = primary RX+TX, 2 = ES8311 I2S2)
 // Port 1 is ADC2 RX-only — never TX. Index 0/2 map to the two TX-capable ports.
 static bool _i2sTxEnabledFor[3] = {};
-
-// ===== Backward-compat module-level aliases (Phase 4 will remove these) =====
-// _driver and _i2sTxEnabled reference slot 0 so legacy code paths still compile.
-#define _driver        _driverForSlot[0]
-#define _i2sTxEnabled  _i2sTxEnabledFor[0]
-#define _volumeGain    _volumeGainForSlot[0]
-
-// Dynamic ES8311 sink slot lookup — replaces the removed AUDIO_SINK_SLOT_ES8311 constant.
-// The ES8311 uses I2S port 2; scan the slot arrays to find which pipeline sink slot
-// was assigned to it.  Returns -1 if no ES8311 is currently active.
-static int8_t _es8311SinkSlot() {
-    for (uint8_t s = 0; s < AUDIO_OUT_MAX_SINKS; s++) {
-        if (_writePortForSlot[s] == 2 && _driverForSlot[s] != nullptr) return (int8_t)s;
-    }
-    return -1;
-}
 
 // Mute ramp: prevents abrupt silence→audio or audio→silence transitions.
 // Steps by 0.5f per buffer call (256 frames @ 48kHz ≈ 5.33ms each → ~10ms full ramp).
@@ -111,22 +102,6 @@ void dac_apply_software_volume(float* buffer, int samples, float gain) {
 #endif
 }
 
-// ===== Volume Update (with logging) — slot 0 / primary DAC =====
-void dac_update_volume(uint8_t percent) {
-    float oldGain = _volumeGain;
-    _volumeGain = dac_volume_to_linear(percent);
-    if (_driver && _driver->getCapabilities().hasHardwareVolume) {
-        _driver->setVolume(percent);
-    }
-#ifndef NATIVE_TEST
-    LOG_I("[DAC] Volume: %d%% gain=%.4f (was %.4f)%s",
-          percent, _volumeGain, oldGain,
-          _driver && _driver->getCapabilities().hasHardwareVolume ? " [HW]" : " [SW]");
-#else
-    (void)oldGain;
-#endif
-}
-
 // ===== Volume Update — slot-indexed =====
 void dac_update_volume_for_slot(uint8_t slot, uint8_t percent) {
     if (slot >= AUDIO_OUT_MAX_SINKS) return;
@@ -142,6 +117,13 @@ void dac_update_volume_for_slot(uint8_t slot, uint8_t percent) {
 #endif
 }
 
+void dac_set_mute_for_slot(uint8_t slot, bool mute) {
+    if (slot >= AUDIO_OUT_MAX_SINKS) return;
+    _muteForSlot[slot] = mute;
+    DacDriver* drv = _driverForSlot[slot];
+    if (drv) drv->setMute(mute);
+}
+
 // ===== Periodic DAC Runtime Dump =====
 // Called from audio task alongside ADC periodic dump (every 5s)
 void dac_periodic_log() {
@@ -151,18 +133,16 @@ void dac_periodic_log() {
     if (now - _lastDacDumpMs < 5000) return;
     _lastDacDumpMs = now;
 
-    // Only log if DAC is enabled (avoid noise when disabled)
-    if (!as.dac.enabled) return;
+    // Only log if a primary DAC driver is active
+    if (!_driverForSlot[0]) return;  // No active primary DAC
 
     uint32_t newUnderruns = as.dac.txUnderruns - _prevTxUnderruns;
     _prevTxUnderruns = as.dac.txUnderruns;
 
-    LOG_I("[DAC] %s ready=%d vol=%d%%%s gain=%.4f wr=%lu ur=%lu(+%lu)",
-          as.dac.modelName,
-          as.dac.ready,
-          as.dac.volume,
-          as.dac.mute ? " MUTE" : "",
-          _volumeGain,
+    LOG_I("[DAC] slot0 ready=%d gain=%.4f%s wr=%lu ur=%lu(+%lu)",
+          (_driverForSlot[0] && _driverForSlot[0]->isReady()) ? 1 : 0,
+          _volumeGainForSlot[0],
+          _muteForSlot[0] ? " MUTE" : "",
           (unsigned long)_txWriteCount,
           (unsigned long)as.dac.txUnderruns,
           (unsigned long)newUnderruns);
@@ -190,10 +170,10 @@ void dac_periodic_log() {
 #ifndef NATIVE_TEST
 
 bool dac_enable_i2s_tx(uint32_t sampleRate) {
-    if (_i2sTxEnabled) return true;
+    if (_i2sTxEnabledFor[0]) return true;
     bool ok = i2s_audio_enable_tx(sampleRate);
     if (ok) {
-        _i2sTxEnabled = true;
+        _i2sTxEnabledFor[0] = true;
         LOG_I("[DAC] I2S TX full-duplex enabled via bridge");
     } else {
         LOG_E("[DAC] I2S TX enable failed");
@@ -202,16 +182,16 @@ bool dac_enable_i2s_tx(uint32_t sampleRate) {
 }
 
 void dac_disable_i2s_tx() {
-    if (!_i2sTxEnabled) return;
+    if (!_i2sTxEnabledFor[0]) return;
     i2s_audio_disable_tx();
-    _i2sTxEnabled = false;
+    _i2sTxEnabledFor[0] = false;
     LOG_I("[DAC] I2S TX disabled via bridge");
 }
 
 #else
 // Native test stubs
-bool dac_enable_i2s_tx(uint32_t sampleRate) { (void)sampleRate; _i2sTxEnabled = true; return true; }
-void dac_disable_i2s_tx() { _i2sTxEnabled = false; }
+bool dac_enable_i2s_tx(uint32_t sampleRate) { (void)sampleRate; _i2sTxEnabledFor[0] = true; return true; }
+void dac_disable_i2s_tx() { _i2sTxEnabledFor[0] = false; }
 #endif
 
 // ===== Helper: Resolve Pin Priority (Override > Descriptor > Default) =====
@@ -310,8 +290,7 @@ static void _dac_write_for_slot(uint8_t slot, const int32_t* buffer, int stereo_
     // For slot 0 only: apply shared mute ramp (maintains existing behavior)
     float effectiveMuteGain = 1.0f;
     if (slot == 0) {
-        AppState& as = AppState::getInstance();
-        bool muteNow = as.dac.mute || (volGain == 0.0f);
+        bool muteNow = _muteForSlot[slot] || (volGain == 0.0f);
         if (muteNow != _prevDacMute) {
             _prevDacMute = muteNow;
             if (!muteNow) _muteGain = 0.0f;
@@ -425,8 +404,7 @@ static void _slot6_write(const int32_t *b, int f) { _dac_write_for_slot(6, b, f)
 static void _slot7_write(const int32_t *b, int f) { _dac_write_for_slot(7, b, f); }
 
 static bool _slot0_ready() {
-    return _i2sTxEnabledFor[_writePortForSlot[0]] && _driverForSlot[0] && _driverForSlot[0]->isReady()
-           && AppState::getInstance().dac.enabled;
+    return _i2sTxEnabledFor[_writePortForSlot[0]] && _driverForSlot[0] && _driverForSlot[0]->isReady();
 }
 static bool _slot1_ready() {
     return _i2sTxEnabledFor[_writePortForSlot[1]] && _driverForSlot[1] && _driverForSlot[1]->isReady();
@@ -476,11 +454,17 @@ void dac_boot_prepare() {
         dac_load_settings();
     }
 
-    AppState& as = AppState::getInstance();
+    // Pre-compute slot 0 volume gain from HAL config
+    uint8_t bootVolume = 80;  // default
+#ifndef NATIVE_TEST
+    HalDevice* pcmBoot = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
+    HalDeviceConfig* pcmBootCfg = pcmBoot ? HalDeviceManager::instance().getConfig(pcmBoot->getSlot()) : nullptr;
+    if (pcmBootCfg) bootVolume = pcmBootCfg->volume;
+#endif
+    _volumeGainForSlot[0] = dac_volume_to_linear(bootVolume);
+    LOG_I("[DAC] Volume gain: %d%% -> %.4f linear", bootVolume, _volumeGainForSlot[0]);
 
-    // Update primary slot volume gain from loaded settings
-    _volumeGain = dac_volume_to_linear(as.dac.volume);
-    LOG_I("[DAC] Volume gain: %d%% -> %.4f linear", as.dac.volume, _volumeGain);
+    AppState& as = AppState::getInstance();
 
 #ifndef NATIVE_TEST
     // Scan I2C bus and look for EEPROM — only on first boot.
@@ -514,11 +498,9 @@ void dac_boot_prepare() {
                 ed.sampleRates[i] = eepData.sampleRates[i];
             }
 
-            // Override saved device ID with EEPROM device ID
-            if (eepData.deviceId != 0 && eepData.deviceId != as.dac.deviceId) {
-                LOG_I("[DAC] EEPROM auto-select: device 0x%04X -> 0x%04X",
-                      as.dac.deviceId, eepData.deviceId);
-                as.dac.deviceId = eepData.deviceId;
+            // EEPROM device ID is stored in ed.deviceId (set above)
+            if (eepData.deviceId != 0) {
+                LOG_I("[DAC] EEPROM: device ID 0x%04X detected", eepData.deviceId);
             }
         } else {
             ed.found = false;
@@ -605,7 +587,8 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot) {
                              (port == 2) ? ES8311_I2C_SDA_PIN : DAC_I2C_SDA_PIN),
             _dac_resolve_pin(cfg ? cfg->pinScl : -1, -1,
                              (port == 2) ? ES8311_I2C_SCL_PIN : DAC_I2C_SCL_PIN),
-            0  // Shared MCLK with ADC
+            0,   // Shared MCLK with ADC
+            (cfg && cfg->paControlPin > 0) ? (int)cfg->paControlPin : -1  // PA enable GPIO
         };
 
         if (!_driverForSlot[sinkSlot]->init(pins)) {
@@ -634,38 +617,24 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot) {
         }
 
         // Apply initial volume from settings
-        uint8_t initVolume = 100;
-#ifndef NATIVE_TEST
-        if (cfg) initVolume = cfg->volume;
-        else if (sinkSlot == 0) initVolume = as.dac.volume;
-        else if (port == 2) initVolume = as.dac.es8311Volume;
-#endif
+        uint8_t initVolume = (cfg) ? cfg->volume : 100;
         _volumeGainForSlot[sinkSlot] = dac_volume_to_linear(initVolume);
         if (_driverForSlot[sinkSlot]->getCapabilities().hasHardwareVolume) {
             _driverForSlot[sinkSlot]->setVolume(100);  // Keep HW at 0 dB; use SW curve
         }
 
         // Apply initial mute from settings
-        bool initMute = false;
-#ifndef NATIVE_TEST
-        if (cfg) initMute = cfg->mute;
-        else if (sinkSlot == 0) initMute = as.dac.mute;
-        else if (port == 2) initMute = as.dac.es8311Mute;
-#endif
+        bool initMute = (cfg) ? cfg->mute : false;
+        _muteForSlot[sinkSlot] = initMute;
         _driverForSlot[sinkSlot]->setMute(initMute);
 
-        // Update AppState for slot 0 (primary DAC backward compat)
+        // Reset per-slot diagnostic counters
         if (sinkSlot == 0) {
-            as.dac.detected = true;
-            as.dac.ready = true;
-            as.dac.txUnderruns = 0;
             _prevTxUnderruns = 0;
             _txWriteCount = 0;
             _txBytesWritten = 0;
             _txBytesExpected = 0;
             _lastDacDumpMs = millis();
-        } else if (port == 2) {
-            as.dac.es8311Ready = true;
         }
 
         // Register with HAL Device Manager (create HalDacAdapter if needed).
@@ -771,17 +740,11 @@ void dac_deactivate_for_hal(HalDevice* dev) {
         _dac_disable_i2s_tx_for_port(port);
     }
 
-    // Update AppState ready flags
-    if (sinkSlot == 0) {
-        as.dac.ready = false;
-    } else if (port == 2) {
-        as.dac.es8311Ready = false;
-    }
-
     // Clear slot state
     _adapterForSlot[sinkSlot]  = nullptr;
     _volumeGainForSlot[sinkSlot] = 1.0f;
     _writePortForSlot[sinkSlot]  = 0;
+    _muteForSlot[sinkSlot] = false;
 
 #ifndef NATIVE_TEST
     as.audio.paused = false;
@@ -789,232 +752,11 @@ void dac_deactivate_for_hal(HalDevice* dev) {
     LOG_I("[DAC] Deactivated slot %u ('%s')", sinkSlot, dev->getDescriptor().name);
 }
 
-// ===== DAC Output Write (Legacy — dispatches via slot 0 thunk) =====
-void dac_output_write(const int32_t* buffer, int stereo_frames) {
-    if (!_i2sTxEnabled || !buffer || stereo_frames <= 0) return;
-
-    AppState& as = AppState::getInstance();
-    int total_samples = stereo_frames * 2;
-
-    // Apply software volume if the driver has no hardware volume
-    bool needSoftwareVolume = true;
-    if (_driver && _driver->getCapabilities().hasHardwareVolume) {
-        needSoftwareVolume = false;
-    }
-
-    // Mute ramp: fade out/in over ~10ms instead of hard cut (prevents click)
-    bool muteNow = as.dac.mute || (_volumeGain == 0.0f);
-    if (muteNow != _prevDacMute) {
-        _prevDacMute = muteNow;
-        // On mute disengage: start from silence (prevents click if signal level jumped)
-        if (!muteNow) _muteGain = 0.0f;
-    }
-    if (muteNow) {
-        _muteGain -= MUTE_RAMP_STEP;
-        if (_muteGain <= 0.0f) {
-            _muteGain = 0.0f;
-            return;  // Fully muted — let tx_desc_auto_clear fill DMA with zeros
-        }
-    } else {
-        if (_muteGain < 1.0f) {
-            _muteGain += MUTE_RAMP_STEP;
-            if (_muteGain > 1.0f) _muteGain = 1.0f;
-        }
-    }
-
-#ifndef NATIVE_TEST
-    _txWriteCount++;
-    size_t totalExpected = (size_t)total_samples * sizeof(int32_t);
-    _txBytesExpected += totalExpected;
-
-    // Track peak sample and zero frames for diagnostics
-    {
-        bool allZero = true;
-        for (int i = 0; i < total_samples && i < 64; i++) {  // Check first 32 stereo frames
-            int32_t absVal = buffer[i] < 0 ? -buffer[i] : buffer[i];
-            if (absVal > _txPeakSample) _txPeakSample = absVal;
-            if (buffer[i] != 0) allZero = false;
-        }
-        if (allZero) _txZeroFrames++;
-    }
-
-    // Effective gain = volume × mute ramp (both applied via software volume path)
-    float effectiveGain = _volumeGain * _muteGain;
-    if (needSoftwareVolume && effectiveGain < 1.0f) {
-        // Convert int32 → float, apply volume, convert back
-        // Buffers allocated in PSRAM to save ~4KB internal SRAM
-        static float *fBuf = nullptr;     // 512 floats = 256 stereo frames
-        static int32_t *txBuf = nullptr;  // 512 int32s for I2S TX
-        if (!fBuf) {
-            fBuf = (float *)heap_caps_calloc(512, sizeof(float), MALLOC_CAP_SPIRAM);
-            if (!fBuf) fBuf = (float *)calloc(512, sizeof(float));
-        }
-        if (!txBuf) {
-            txBuf = (int32_t *)heap_caps_calloc(512, sizeof(int32_t), MALLOC_CAP_SPIRAM);
-            if (!txBuf) txBuf = (int32_t *)calloc(512, sizeof(int32_t));
-        }
-        if (!fBuf || !txBuf) return;  // Allocation failed
-
-        const int32_t* src = buffer;
-        int remaining = total_samples;
-
-        while (remaining > 0) {
-            int chunk = (remaining > 512) ? 512 : remaining;
-            // Convert int32 to float normalized
-            for (int i = 0; i < chunk; i++) {
-                fBuf[i] = (float)src[i] / 2147483647.0f;
-            }
-            dac_apply_software_volume(fBuf, chunk, effectiveGain);
-            // Convert back to int32
-            for (int i = 0; i < chunk; i++) {
-                txBuf[i] = (int32_t)(fBuf[i] * 2147483647.0f);
-            }
-            size_t bytes_written = 0;
-            i2s_audio_write(txBuf, (size_t)chunk * sizeof(int32_t), &bytes_written, 20);
-            _txBytesWritten += bytes_written;
-            if (bytes_written < (size_t)(chunk * sizeof(int32_t))) {
-                as.dac.txUnderruns++;
-            }
-            src += chunk;
-            remaining -= chunk;
-        }
-    } else {
-        // Unity gain — write buffer directly
-        size_t bytes_written = 0;
-        i2s_audio_write(buffer, (size_t)total_samples * sizeof(int32_t), &bytes_written, 20);
-        _txBytesWritten += bytes_written;
-        if (bytes_written < (size_t)(total_samples * sizeof(int32_t))) {
-            as.dac.txUnderruns++;
-        }
-    }
-#else
-    (void)total_samples;
-    (void)needSoftwareVolume;
-#endif
-}
-
-// ===== Secondary DAC (ES8311 on P4) =====
-#if CONFIG_IDF_TARGET_ESP32P4
-#include "drivers/dac_es8311.h"
-// Dynamic ES8311 sink slot aliases (Phase 4).
-// _es8311SinkSlot() returns -1 when no ES8311 is active; the _secondaryXxx
-// macros degrade gracefully (null driver / slot-0 fallback for gain array).
-static inline DacDriver*& _secondaryDriverRef() {
-    int8_t s = _es8311SinkSlot();
-    static DacDriver* _nullDriver = nullptr;
-    return (s >= 0) ? _driverForSlot[s] : _nullDriver;
-}
-static inline float& _secondaryVolumeGainRef() {
-    int8_t s = _es8311SinkSlot();
-    static float _dummyGain = 1.0f;
-    return (s >= 0) ? _volumeGainForSlot[s] : _dummyGain;
-}
-#define _secondaryDriver       _secondaryDriverRef()
-#define _secondaryI2sTxEnabled _i2sTxEnabledFor[2]
-#define _secondaryVolumeGain   _secondaryVolumeGainRef()
-#define _halSecondaryAdapter   (_es8311SinkSlot() >= 0 ? _adapterForSlot[_es8311SinkSlot()] : (HalDacAdapter*)nullptr)
-#endif
-
-// Legacy sink thunks (kept so existing _primary_sink_write / _secondary_sink_write
-// callers inside this file still compile — they are referenced in dac_output_init()
-// and dac_secondary_init() below).
-static void _primary_sink_write(const int32_t *buf, int stereoFrames) {
-    dac_output_write(buf, stereoFrames);
-}
-static bool _primary_sink_ready() {
-    return dac_output_is_ready();
-}
-static void _secondary_sink_write(const int32_t *buf, int stereoFrames) {
-    dac_secondary_write(buf, stereoFrames);
-}
-static bool _secondary_sink_ready() {
-    return dac_secondary_is_ready();
-}
-
-bool dac_secondary_is_ready() {
-#if CONFIG_IDF_TARGET_ESP32P4
-    return _secondaryI2sTxEnabled && _secondaryDriver && _secondaryDriver->isReady() &&
-           AppState::getInstance().dac.es8311Enabled;
-#else
-    return false;
-#endif
-}
-
-void dac_secondary_write(const int32_t* buffer, int stereo_frames) {
-#if CONFIG_IDF_TARGET_ESP32P4
-    if (!_secondaryI2sTxEnabled || !buffer || stereo_frames <= 0) return;
-    if (!_secondaryDriver || !_secondaryDriver->isReady()) return;
-
-    AppState& as = AppState::getInstance();
-    int total_samples = stereo_frames * 2;
-
-    // Mute: skip write entirely (DMA auto-clear fills zeros)
-    if (as.dac.es8311Mute || _secondaryVolumeGain == 0.0f) return;
-
-    // Apply software volume (same perceptual curve as primary DAC)
-    size_t bytes_written = 0;
-    if (_secondaryVolumeGain < 1.0f) {
-        static float *fBuf = nullptr;
-        static int32_t *txBuf = nullptr;
-        if (!fBuf) {
-            fBuf = (float *)heap_caps_calloc(512, sizeof(float), MALLOC_CAP_SPIRAM);
-            if (!fBuf) fBuf = (float *)calloc(512, sizeof(float));
-        }
-        if (!txBuf) {
-            txBuf = (int32_t *)heap_caps_calloc(512, sizeof(int32_t), MALLOC_CAP_SPIRAM);
-            if (!txBuf) txBuf = (int32_t *)calloc(512, sizeof(int32_t));
-        }
-        if (!fBuf || !txBuf) return;
-
-        const int32_t* src = buffer;
-        int remaining = total_samples;
-        while (remaining > 0) {
-            int chunk = (remaining > 512) ? 512 : remaining;
-            for (int i = 0; i < chunk; i++) {
-                fBuf[i] = (float)src[i] / 2147483647.0f;
-            }
-            dac_apply_software_volume(fBuf, chunk, _secondaryVolumeGain);
-            for (int i = 0; i < chunk; i++) {
-                txBuf[i] = (int32_t)(fBuf[i] * 2147483647.0f);
-            }
-            size_t bw = 0;
-            i2s_audio_write_es8311(txBuf, (size_t)chunk * sizeof(int32_t), &bw, 20);
-            bytes_written += bw;
-            src += chunk;
-            remaining -= chunk;
-        }
-    } else {
-        // Unity gain — write buffer directly
-        size_t total_bytes = (size_t)total_samples * sizeof(int32_t);
-        i2s_audio_write_es8311(buffer, total_bytes, &bytes_written, 20);
-    }
-#endif
-}
-
-void dac_secondary_set_volume(uint8_t percent) {
-#if CONFIG_IDF_TARGET_ESP32P4
-    if (_secondaryDriver) {
-        // Software volume only — ES8311 hardware stays at 0 dB for consistent
-        // perceptual curve matching the primary DAC
-        _secondaryVolumeGain = dac_volume_to_linear(percent);
-        LOG_I("[DAC] (ES8311) volume: %d%% (SW gain=%.4f)", percent, _secondaryVolumeGain);
-    }
-#endif
-}
-
-void dac_secondary_set_mute(bool mute) {
-#if CONFIG_IDF_TARGET_ESP32P4
-    if (_secondaryDriver) {
-        _secondaryDriver->setMute(mute);
-    }
-#endif
-}
-
 // ===== TX Diagnostics Snapshot =====
 DacTxDiag dac_get_tx_diagnostics() {
     DacTxDiag d = {};
-    d.i2sTxEnabled = _i2sTxEnabled;
-    d.volumeGain = _volumeGain;
+    d.i2sTxEnabled = _i2sTxEnabledFor[0];
+    d.volumeGain = _volumeGainForSlot[0];
     d.writeCount = _txWriteCount;
     d.bytesWritten = _txBytesWritten;
     d.bytesExpected = _txBytesExpected;
@@ -1025,155 +767,77 @@ DacTxDiag dac_get_tx_diagnostics() {
 }
 
 // ===== Settings Persistence =====
-void dac_load_settings() {
+// One-time migration: /dac_config.json → /hal_config.json
+// If the legacy file exists, read it, map fields to HAL device configs,
+// save HAL config, and delete the legacy file. Subsequent boots skip this.
+static void dac_load_settings() {
 #ifndef NATIVE_TEST
-    AppState& as = AppState::getInstance();
+    if (!LittleFS.exists("/dac_config.json")) return;
 
     File f = LittleFS.open("/dac_config.json", "r");
-    if (!f) {
-        LOG_I("[DAC] No settings file, using defaults");
-        return;
-    }
+    if (!f) return;
 
     JsonDocument doc;
     if (deserializeJson(doc, f)) {
-        LOG_W("[DAC] Settings parse error, using defaults");
+        LOG_W("[DAC] Legacy settings parse error, skipping migration");
         f.close();
         return;
     }
     f.close();
 
-    if (doc["enabled"].is<bool>()) as.dac.enabled = doc["enabled"].as<bool>();
-    if (doc["volume"].is<int>()) {
-        int v = doc["volume"].as<int>();
-        if (v >= 0 && v <= 100) as.dac.volume = (uint8_t)v;
-    }
-    if (doc["mute"].is<bool>()) as.dac.mute = doc["mute"].as<bool>();
-    if (doc["deviceId"].is<int>()) as.dac.deviceId = (uint16_t)doc["deviceId"].as<int>();
-    if (doc["modelName"].is<const char*>()) {
-        strncpy(as.dac.modelName, doc["modelName"].as<const char*>(), sizeof(as.dac.modelName) - 1);
-        as.dac.modelName[sizeof(as.dac.modelName) - 1] = '\0';
-    }
-    if (doc["filterMode"].is<int>()) as.dac.filterMode = (uint8_t)doc["filterMode"].as<int>();
+    HalDeviceManager& mgr = HalDeviceManager::instance();
 
-    // ES8311 secondary DAC settings (P4 onboard codec)
-    if (doc["es8311Enabled"].is<bool>()) as.dac.es8311Enabled = doc["es8311Enabled"].as<bool>();
-    if (doc["es8311Volume"].is<int>()) {
-        int v = doc["es8311Volume"].as<int>();
-        if (v >= 0 && v <= 100) as.dac.es8311Volume = (uint8_t)v;
+    // Migrate PCM5102A settings
+    HalDevice* pcm = mgr.findByCompatible("ti,pcm5102a");
+    if (pcm) {
+        HalDeviceConfig* cfg = mgr.getConfig(pcm->getSlot());
+        if (cfg) {
+            if (doc["enabled"].is<bool>()) cfg->enabled = doc["enabled"].as<bool>();
+            if (doc["volume"].is<int>()) {
+                int v = doc["volume"].as<int>();
+                if (v >= 0 && v <= 100) cfg->volume = (uint8_t)v;
+            }
+            if (doc["mute"].is<bool>()) cfg->mute = doc["mute"].as<bool>();
+            hal_save_device_config(pcm->getSlot());
+            LOG_I("[DAC] Migrated PCM5102A: en=%d vol=%d mute=%d",
+                  cfg->enabled, cfg->volume, cfg->mute);
+        }
     }
-    if (doc["es8311Mute"].is<bool>()) as.dac.es8311Mute = doc["es8311Mute"].as<bool>();
 
-    _volumeGain = dac_volume_to_linear(as.dac.volume);
-    LOG_I("[DAC] Settings loaded: enabled=%d vol=%d mute=%d device=0x%04X (%s) es8311=%d/%d%%/%s",
-          as.dac.enabled, as.dac.volume, as.dac.mute, as.dac.deviceId, as.dac.modelName,
-          as.dac.es8311Enabled, as.dac.es8311Volume, as.dac.es8311Mute ? "muted" : "unmuted");
+    // Migrate ES8311 settings
+    HalDevice* es = mgr.findByCompatible("everest-semi,es8311");
+    if (es) {
+        HalDeviceConfig* cfg = mgr.getConfig(es->getSlot());
+        if (cfg) {
+            if (doc["es8311Enabled"].is<bool>()) cfg->enabled = doc["es8311Enabled"].as<bool>();
+            if (doc["es8311Volume"].is<int>()) {
+                int v = doc["es8311Volume"].as<int>();
+                if (v >= 0 && v <= 100) cfg->volume = (uint8_t)v;
+            }
+            if (doc["es8311Mute"].is<bool>()) cfg->mute = doc["es8311Mute"].as<bool>();
+            hal_save_device_config(es->getSlot());
+            LOG_I("[DAC] Migrated ES8311: en=%d vol=%d mute=%d",
+                  cfg->enabled, cfg->volume, cfg->mute);
+        }
+    }
+
+    // Delete legacy file
+    LittleFS.remove("/dac_config.json");
+    LOG_I("[DAC] Migration complete: /dac_config.json → /hal_config.json (legacy deleted)");
 #endif
 }
 
-// ===== Deferred DAC Save =====
-static bool _dacSavePending = false;
-static unsigned long _lastDacSaveRequest = 0;
-static const unsigned long DAC_SAVE_DEBOUNCE_MS = 2000;
+// DAC settings are now persisted in /hal_config.json via hal_save_device_config().
+// The legacy /dac_config.json is migrated on first boot via dac_load_settings() above.
 
-void dac_save_settings_deferred() {
-    _dacSavePending = true;
-    _lastDacSaveRequest = millis();
-}
-
-void dac_check_deferred_save() {
-    if (_dacSavePending && (millis() - _lastDacSaveRequest >= DAC_SAVE_DEBOUNCE_MS)) {
-        dac_save_settings();
-        _dacSavePending = false;
-    }
-}
-
-void dac_save_settings() {
-#ifndef NATIVE_TEST
-    AppState& as = AppState::getInstance();
-
-    JsonDocument doc;
-    doc["enabled"] = as.dac.enabled;
-    doc["volume"] = as.dac.volume;
-    doc["mute"] = as.dac.mute;
-    doc["deviceId"] = as.dac.deviceId;
-    doc["modelName"] = as.dac.modelName;
-    doc["filterMode"] = as.dac.filterMode;
-
-    // ES8311 secondary DAC settings (P4 onboard codec)
-    doc["es8311Enabled"] = as.dac.es8311Enabled;
-    doc["es8311Volume"] = as.dac.es8311Volume;
-    doc["es8311Mute"] = as.dac.es8311Mute;
-
-    File f = LittleFS.open("/dac_config.json", "w");
-    if (!f) {
-        LOG_E("[DAC] Failed to open settings file for writing");
-        return;
-    }
-    serializeJson(doc, f);
-    f.close();
-    LOG_I("[DAC] Settings saved");
-#endif
-}
-
-// ===== Driver Management =====
-bool dac_select_driver(uint16_t deviceId) {
-    // Destroy existing driver
-    if (_driver) {
-        _driver->deinit();
-        delete _driver;
-        _driver = nullptr;
-    }
-
-    const DacRegistryEntry* entry = dac_registry_find_by_id(deviceId);
-    if (!entry) {
-        LOG_W("[DAC] No driver found for device ID 0x%04X", deviceId);
-        AppState::getInstance().dac.ready = false;
-        return false;
-    }
-
-    _driver = entry->factory();
-    if (!_driver) {
-        LOG_E("[DAC] Factory returned null for %s", entry->name);
-        AppState::getInstance().dac.ready = false;
-        return false;
-    }
-
-    AppState& as = AppState::getInstance();
-    as.dac.deviceId = deviceId;
-    strncpy(as.dac.modelName, entry->name, sizeof(as.dac.modelName) - 1);
-    as.dac.modelName[sizeof(as.dac.modelName) - 1] = '\0';
-    as.dac.outputChannels = _driver->getCapabilities().maxChannels;
-
-    LOG_I("[DAC] Driver selected: %s (0x%04X)", entry->name, deviceId);
-    return true;
-}
-
-DacDriver* dac_get_driver() {
-    return _driver;
+// ===== Slot-Indexed Driver Accessor =====
+DacDriver* dac_get_driver_for_slot(uint8_t slot) {
+    if (slot >= AUDIO_OUT_MAX_SINKS) return nullptr;
+    return _driverForSlot[slot];
 }
 
 bool dac_output_is_ready() {
-    return _i2sTxEnabled && _driver && _driver->isReady() &&
-           AppState::getInstance().dac.enabled;
+    return _i2sTxEnabledFor[0] && _driverForSlot[0] && _driverForSlot[0]->isReady();
 }
-
-// ===== Legacy dac_output_init() / dac_output_deinit() =====
-// Deprecated but preserved for backward compatibility until Phase 4.
-// The _halPrimaryAdapter variable that used to live here is now _adapterForSlot[0].
-// We use the local alias _halPrimaryAdapter defined via the macro below.
-#define _halPrimaryAdapter _adapterForSlot[0]
-
-// Undefine local macros so they don't escape this compilation unit
-#undef _halPrimaryAdapter
-#undef _driver
-#undef _i2sTxEnabled
-#undef _volumeGain
-#if CONFIG_IDF_TARGET_ESP32P4
-#undef _secondaryDriver
-#undef _secondaryI2sTxEnabled
-#undef _secondaryVolumeGain
-#undef _halSecondaryAdapter
-#endif
 
 #endif // DAC_ENABLED

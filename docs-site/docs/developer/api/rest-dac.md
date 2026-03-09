@@ -4,15 +4,15 @@ sidebar_position: 5
 description: DAC and audio output REST API endpoints.
 ---
 
-The DAC API controls the primary digital audio output hardware: device state, volume, mute, filter mode, and driver selection. It also provides direct access to the I2C EEPROM used for board identification. All endpoints require authentication and the `DAC_ENABLED` build flag.
+The DAC API provides access to DAC-related state and EEPROM board identification. As of DEBT-5, **HAL is the sole system managing all DAC devices** — there are no static device patterns. Enable/disable, volume, and mute for individual DAC devices (PCM5102A, ES8311, etc.) are now managed through `PUT /api/hal/devices`. The `/api/dac` endpoints remain available for backward compatibility but query HAL state internally. Runtime DAC model switching (`dac_select_driver()`) has been removed — driver selection happens exclusively through HAL device discovery and configuration. All endpoints require authentication and the `DAC_ENABLED` build flag.
 
 ## Endpoint summary
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/dac` | Yes | Get full DAC state and driver capabilities |
-| POST | `/api/dac` | Yes | Update DAC settings |
-| GET | `/api/dac/drivers` | Yes | List all registered DAC drivers |
+| GET | `/api/dac` | Yes | Get DAC state (queries HAL internally) |
+| POST | `/api/dac` | Yes | Update DAC settings (deprecated — use `PUT /api/hal/devices`) |
+| GET | `/api/dac/drivers` | Yes | List registered DAC drivers (deprecated — use `GET /api/hal/db/presets`) |
 | GET | `/api/dac/eeprom` | Yes | Read EEPROM state and raw hex dump |
 | POST | `/api/dac/eeprom` | Yes | Program EEPROM with device descriptor |
 | POST | `/api/dac/eeprom/erase` | Yes | Erase EEPROM at target I2C address |
@@ -107,7 +107,11 @@ Returns the complete DAC state including enabled/ready flags, volume, mute, devi
 
 ## POST /api/dac
 
-Updates one or more DAC settings. All fields are optional; only fields present in the body are applied. Settings are persisted via `dac_save_settings()` when any field changes. Changes that require hardware interaction (volume, mute, filter mode) are applied immediately through the active driver. Enable/disable transitions use the deferred toggle mechanism.
+:::warning Deprecated
+`POST /api/dac` is retained for backward compatibility. New integrations should use `PUT /api/hal/devices` to manage DAC device state. Runtime driver switching via `deviceId` has been removed — `dac_select_driver()` no longer exists. Use HAL device configuration and EEPROM programming to select drivers at discovery time.
+:::
+
+Updates one or more DAC settings. All fields are optional; only fields present in the body are applied. Settings are persisted via `dac_save_settings()` when any field changes. Changes that require hardware interaction (volume, mute, filter mode) are applied immediately through the HAL-managed driver. Enable/disable transitions use the deferred toggle mechanism.
 
 **Request**
 
@@ -116,18 +120,16 @@ Updates one or more DAC settings. All fields are optional; only fields present i
   "enabled": true,
   "volume": 85,
   "mute": false,
-  "filterMode": 1,
-  "deviceId": 2
+  "filterMode": 1
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `enabled` | boolean | Enable or disable the DAC (deferred — see note above) |
-| `volume` | integer | Output volume 0–100; applied immediately via driver |
+| `volume` | integer | Output volume 0–100; applied immediately via HAL driver |
 | `mute` | boolean | Hardware mute state; applied immediately |
-| `filterMode` | integer | Filter mode index; applied immediately via driver |
-| `deviceId` | integer | Switch to a different registered driver |
+| `filterMode` | integer | Filter mode index; applied immediately via HAL driver |
 
 **Response**
 
@@ -150,6 +152,10 @@ Updates one or more DAC settings. All fields are optional; only fields present i
 ---
 
 ## GET /api/dac/drivers
+
+:::warning Deprecated
+`GET /api/dac/drivers` is retained for backward compatibility. Use `GET /api/hal/db/presets` instead to list all registered device drivers and their capabilities.
+:::
 
 Lists all DAC drivers registered in the driver registry. Each entry includes capabilities queried from a temporary driver instance.
 
@@ -194,7 +200,7 @@ Lists all DAC drivers registered in the driver registry. Each entry includes cap
 
 ## EEPROM endpoints
 
-The ALX Nova uses a small I2C EEPROM (AT24C02 or compatible, address range 0x50–0x57) to store a board-identity descriptor. This descriptor is read at boot by `dac_eeprom_scan()` to automatically select the correct DAC driver without user configuration.
+The ALX Nova uses a small I2C EEPROM (AT24C02 or compatible, address range 0x50–0x57) to store a board-identity descriptor. This descriptor is read during HAL discovery (`hal_discovery`) to automatically identify and bind the correct HAL driver to the hardware device, without user configuration. The EEPROM endpoints remain the correct way to program or erase board identity descriptors.
 
 ### EEPROM v3 data fields
 

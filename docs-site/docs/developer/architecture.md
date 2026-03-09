@@ -172,12 +172,14 @@ volatile bool _mqttReconfigPending;   // Web UI broker change → mqtt_task reco
 volatile int8_t _pendingApToggle;     // MQTT command → main loop executes WiFi mode change
 ```
 
-DAC/ES8311 enable/disable use validated setters to prevent invalid values:
+DAC device enable/disable transitions use validated setters to prevent invalid values. The `DacState` domain struct retains only the fields needed after DEBT-5: `filterMode`, `txUnderruns`, `eepromDiag`, and the pending toggle flags. Per-device enabled/volume/mute state is authoritative in the HAL device configuration.
 
 ```cpp
 appState.dac.requestDacToggle(1);    // accepts only -1, 0, or 1
 appState.dac.requestEs8311Toggle(-1);
 // Direct writes to _pendingDacToggle are unsafe — use the validated setters
+// These toggle paths are retained for the deferred handshake; HAL cfgEnabled
+// is the source of truth for the intended enable state of each device.
 ```
 
 ---
@@ -225,8 +227,8 @@ const char* ssid = appState.wifi.ssid;
 // Read per-lane ADC enabled state
 bool lane0Active = appState.audio.adcEnabled[0];
 
-// Read ES8311 enable state
-bool codecOn = appState.dac.es8311Enabled;
+// Read DAC filter mode (one of the fields retained in DacState after DEBT-5)
+int filt = appState.dac.filterMode;
 
 // Read dark mode setting
 bool dark = appState.general.darkMode;
@@ -238,7 +240,7 @@ Legacy code uses `#define` macros (e.g., `#define wifiSSID appState.wifiSSID`) t
 
 ## HAL Framework and Device Lifecycle
 
-The HAL is the **only** system that directly touches hardware drivers. The audio pipeline sees only abstract `AudioInputSource` and `AudioOutputSink` C structs with function pointers.
+**HAL is the sole system managing all hardware devices — there are no static device patterns.** This applies equally to DAC outputs (PCM5102A, ES8311), ADC inputs (PCM1808), amplifiers (NS4150B), and all other peripherals. The audio pipeline sees only abstract `AudioInputSource` and `AudioOutputSink` C structs with function pointers; it has no knowledge of specific device models.
 
 ### HAL Device Lifecycle
 

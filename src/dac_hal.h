@@ -45,6 +45,7 @@ struct DacPinConfig {
     int i2cSda;        // I2C SDA (0 = unused)
     int i2cScl;        // I2C SCL (0 = unused)
     int mclk;          // MCLK pin (0 = shared with ADC)
+    int paControl;     // PA enable GPIO (-1 = none/use default)
 };
 
 // ===== Abstract DAC Driver =====
@@ -100,33 +101,18 @@ void dac_deactivate_for_hal(HalDevice* dev);
 // If the driver for that slot has hardware volume support it is applied directly.
 void dac_update_volume_for_slot(uint8_t slot, uint8_t percent);
 
-// Removed in Phase 4: dac_output_init() and dac_output_deinit() — use dac_boot_prepare() + dac_activate_for_hal() instead
+// Set software mute state for a specific sink slot (called by WS/REST handlers)
+void dac_set_mute_for_slot(uint8_t slot, bool mute);
 
 bool dac_output_is_ready();
-
-// Write processed audio to I2S TX (called from audio task, non-blocking)
-// buffer = interleaved 32-bit stereo I2S frames, stereo_frames = frame count
-void dac_output_write(const int32_t* buffer, int stereo_frames);
-
-// Settings persistence
-void dac_load_settings();
-void dac_save_settings();
-void dac_save_settings_deferred();
-void dac_check_deferred_save();
-
-// Volume update with gain recalculation + logging (operates on slot 0 / primary DAC)
-void dac_update_volume(uint8_t percent);
 
 // Periodic runtime dump (call from audio task, 5s interval)
 void dac_periodic_log();
 
-// Select a driver by device ID (returns false if not found in registry)
-bool dac_select_driver(uint16_t deviceId);
+// Get driver for a specific sink slot (nullptr if none active)
+DacDriver* dac_get_driver_for_slot(uint8_t slot);
 
-// Get current driver for slot 0 (nullptr if none)
-DacDriver* dac_get_driver();
-
-// I2S TX full-duplex control (called by dac_output_init)
+// I2S TX full-duplex control (slot 0 / primary port)
 bool dac_enable_i2s_tx(uint32_t sampleRate);
 void dac_disable_i2s_tx();
 
@@ -142,22 +128,6 @@ struct DacTxDiag {
     uint32_t underruns;         // Cumulative TX underruns (from AppState)
 };
 DacTxDiag dac_get_tx_diagnostics();
-
-// ===== Secondary DAC Output (ES8311 on P4) =====
-// Independent output path — receives same audio as primary DAC
-// but with its own hardware volume/mute control
-// Removed in Phase 4: dac_secondary_init() and dac_secondary_deinit() — use dac_activate_for_hal() instead
-
-bool dac_secondary_is_ready();
-
-[[deprecated("dispatched via slot thunk — no direct replacement needed")]]
-void dac_secondary_write(const int32_t* buffer, int stereo_frames);
-
-[[deprecated("use dac_update_volume_for_slot()")]]
-void dac_secondary_set_volume(uint8_t percent);
-
-[[deprecated("set mute via HalAudioDevice::setMute() on the ES8311 HalDevice")]]
-void dac_secondary_set_mute(bool mute);
 
 #endif // DAC_ENABLED
 #endif // DAC_HAL_H

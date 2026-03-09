@@ -1206,7 +1206,6 @@ void loop() {
   checkDeferredSmartSensingSave();
   checkDeferredSignalGenSave();
 #ifdef DAC_ENABLED
-  dac_check_deferred_save();
   hal_check_deferred_save();
   pipeline_api_check_deferred_save();
 #endif

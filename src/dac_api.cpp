@@ -6,32 +6,39 @@
 #include "dac_eeprom.h"
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
+#include "hal/hal_device_manager.h"
+#include "hal/hal_pipeline_bridge.h"
+#include "hal/hal_settings.h"
 #include <ArduinoJson.h>
 extern bool requireAuth();
 
 void registerDacApiEndpoints() {
-    // GET /api/dac — Full DAC state + capabilities
+    // GET /api/dac — Full DAC state + capabilities (queries HAL)
     server.on("/api/dac", HTTP_GET, []() {
         if (!requireAuth()) return;
 
         JsonDocument doc;
         doc["success"] = true;
-        doc["enabled"] = appState.dac.enabled;
-        doc["volume"] = appState.dac.volume;
-        doc["mute"] = appState.dac.mute;
-        doc["deviceId"] = appState.dac.deviceId;
-        doc["modelName"] = appState.dac.modelName;
-        doc["outputChannels"] = appState.dac.outputChannels;
-        doc["detected"] = appState.dac.detected;
-        doc["ready"] = appState.dac.ready;
+
+        HalDeviceManager& mgr = HalDeviceManager::instance();
+        HalDevice* dev = mgr.findByCompatible("ti,pcm5102a");
+        HalDeviceConfig* cfg = dev ? mgr.getConfig(dev->getSlot()) : nullptr;
+
+        doc["enabled"] = cfg ? cfg->enabled : false;
+        doc["volume"] = cfg ? cfg->volume : 80;
+        doc["mute"] = cfg ? cfg->mute : false;
+        doc["deviceId"] = dev ? dev->getDescriptor().legacyId : 0x0001;
+        doc["modelName"] = dev ? dev->getDescriptor().name : "PCM5102A";
+        doc["outputChannels"] = dev ? dev->getDescriptor().channelCount : 2;
+        doc["detected"] = (dev != nullptr);
+        doc["ready"] = dev ? dev->isReady() : false;
         doc["filterMode"] = appState.dac.filterMode;
         doc["txUnderruns"] = appState.dac.txUnderruns;
 
-        // Capabilities from current driver
-        DacDriver* drv = dac_get_driver();
+        // Capabilities from driver via slot lookup
+        DacDriver* drv = dac_get_driver_for_slot(0);
         if (drv) {
             const DacCapabilities& caps = drv->getCapabilities();
             JsonObject capsObj = doc["capabilities"].to<JsonObject>();
@@ -80,17 +87,25 @@ void registerDacApiEndpoints() {
 
         bool changed = false;
 
+        // HAL device lookup for PCM5102A
+        HalDevice* dev = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
+        uint8_t halSlot = dev ? dev->getSlot() : 0xFF;
+        HalDeviceConfig* cfg = (halSlot < 0xFF) ? HalDeviceManager::instance().getConfig(halSlot) : nullptr;
+
         if (doc["enabled"].is<bool>()) {
             bool en = doc["enabled"].as<bool>();
-            if (en != appState.dac.enabled) {
-                LOG_I("[DAC] API: enabled %s -> %s (deferred)", appState.dac.enabled ? "ON" : "OFF", en ? "ON" : "OFF");
-                bool was = appState.dac.enabled;
-                appState.dac.enabled = en;
-                // Defer init/deinit to main loop — I2C scan blocks SDIO
-                if (en && !was && !appState.dac.ready) {
-                    appState.dac.requestDacToggle(1);
-                } else if (!en && was) {
-                    appState.dac.requestDacToggle(-1);
+            bool was = cfg ? cfg->enabled : false;
+            if (en != was) {
+                LOG_I("[DAC] API: enabled %s -> %s (deferred)", was ? "ON" : "OFF", en ? "ON" : "OFF");
+                if (cfg) cfg->enabled = en;
+                if (halSlot < 0xFF) {
+                    if (en && !was) {
+                        appState.dac.requestDeviceToggle(halSlot, 1);
+                    } else if (!en && was) {
+                        appState.dac.requestDeviceToggle(halSlot, -1);
+                    }
+                } else {
+                    LOG_W("[DAC] API: enabled toggle requested but no HAL device found (halSlot=0xFF)");
                 }
                 changed = true;
             }
@@ -99,45 +114,48 @@ void registerDacApiEndpoints() {
         if (doc["volume"].is<int>()) {
             int v = doc["volume"].as<int>();
             if (v >= 0 && v <= 100) {
-                appState.dac.volume = (uint8_t)v;
-                dac_update_volume(appState.dac.volume);
+                if (cfg) cfg->volume = (uint8_t)v;
+                int8_t sinkSlot = (halSlot < 0xFF) ? hal_pipeline_get_sink_slot(halSlot) : -1;
+                if (sinkSlot >= 0) {
+                    dac_update_volume_for_slot((uint8_t)sinkSlot, (uint8_t)v);
+                }
                 changed = true;
             }
         }
 
         if (doc["mute"].is<bool>()) {
-            bool prev = appState.dac.mute;
-            appState.dac.mute = doc["mute"].as<bool>();
-            DacDriver* drv = dac_get_driver();
-            if (drv) drv->setMute(appState.dac.mute);
-            if (prev != appState.dac.mute) {
-                LOG_I("[DAC] API: mute %s -> %s", prev ? "ON" : "OFF", appState.dac.mute ? "ON" : "OFF");
+            bool newMute = doc["mute"].as<bool>();
+            bool prev = cfg ? cfg->mute : false;
+            if (cfg) cfg->mute = newMute;
+            int8_t sinkSlot = (halSlot < 0xFF) ? hal_pipeline_get_sink_slot(halSlot) : -1;
+            if (sinkSlot >= 0) {
+                dac_set_mute_for_slot((uint8_t)sinkSlot, newMute);
+            }
+            if (prev != newMute) {
+                LOG_I("[DAC] API: mute %s -> %s", prev ? "ON" : "OFF", newMute ? "ON" : "OFF");
             }
             changed = true;
         }
 
         if (doc["deviceId"].is<int>()) {
             uint16_t id = (uint16_t)doc["deviceId"].as<int>();
-            if (id != appState.dac.deviceId) {
-                if (dac_select_driver(id)) {
-                    changed = true;
-                } else {
-                    server.send(400, "application/json",
-                                "{\"success\":false,\"message\":\"Unknown device ID\"}");
-                    return;
-                }
-            }
+            // Runtime DAC model switching is not supported via HAL — device type is fixed at boot
+            LOG_W("[DAC] API: deviceId change (0x%04X) ignored — use HAL device config", id);
         }
 
         if (doc["filterMode"].is<int>()) {
             appState.dac.filterMode = (uint8_t)doc["filterMode"].as<int>();
-            DacDriver* drv = dac_get_driver();
+            DacDriver* drv = dac_get_driver_for_slot(0);
             if (drv) drv->setFilterMode(appState.dac.filterMode);
             changed = true;
         }
 
         if (changed) {
-            dac_save_settings();
+            if (halSlot < 0xFF) {
+                hal_save_device_config_deferred(halSlot);
+            } else {
+                LOG_W("[DAC API] No HAL device for POST /api/dac — settings not persisted");
+            }
             appState.markDacDirty();
         }
 

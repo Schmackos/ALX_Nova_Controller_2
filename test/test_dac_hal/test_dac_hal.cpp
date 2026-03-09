@@ -8,6 +8,9 @@
 #include <Arduino.h>
 #endif
 
+// Include real DacPinConfig struct (DAC_ENABLED is defined in native build flags)
+#include "../../src/dac_hal.h"
+
 // ===== Inline re-implementations for native testing =====
 // Tests don't compile src/ directly (test_build_src = no)
 
@@ -89,8 +92,13 @@ static bool pcm5102_setMute(bool mute) { (void)mute; return true; }
 static bool pcm5102_isReady() { return pcm5102_initialized && pcm5102_configured; }
 
 // --- Registry simulation ---
+// DAC_ID_PCM5102A and DAC_ID_ES9038Q2M already defined via dac_hal.h
+#ifndef DAC_ID_PCM5102A
 #define DAC_ID_PCM5102A   0x0001
+#endif
+#ifndef DAC_ID_ES9038Q2M
 #define DAC_ID_ES9038Q2M  0x0002
+#endif
 #define DAC_ID_UNKNOWN    0xFFFF
 
 struct TestRegistryEntry {
@@ -297,6 +305,40 @@ void test_sw_volume_zero_samples_safe(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.0001f, 1.0f, buf[0]); // Unchanged
 }
 
+// ===== DacPinConfig paControl Field Tests =====
+
+void test_dac_pin_config_paControl_default(void) {
+    // Zero-initialized DacPinConfig should have paControl == 0
+    // (backward compat: 0 is treated as "use default" by drivers)
+    DacPinConfig pins = {};
+    TEST_ASSERT_EQUAL_INT(0, pins.dataOut);
+    TEST_ASSERT_EQUAL_INT(0, pins.i2cSda);
+    TEST_ASSERT_EQUAL_INT(0, pins.i2cScl);
+    TEST_ASSERT_EQUAL_INT(0, pins.mclk);
+    TEST_ASSERT_EQUAL_INT(0, pins.paControl);
+}
+
+void test_dac_pin_config_paControl_field_present(void) {
+    // Construct with all 5 fields including paControl
+    DacPinConfig pins = {24, 7, 8, 22, 53};
+    TEST_ASSERT_EQUAL_INT(24, pins.dataOut);
+    TEST_ASSERT_EQUAL_INT(7, pins.i2cSda);
+    TEST_ASSERT_EQUAL_INT(8, pins.i2cScl);
+    TEST_ASSERT_EQUAL_INT(22, pins.mclk);
+    TEST_ASSERT_EQUAL_INT(53, pins.paControl);
+}
+
+void test_dac_pin_config_aggregate_init_backward_compat(void) {
+    // Existing 4-element aggregate initializers must still compile.
+    // C++ zero-initializes missing aggregate members, so paControl == 0.
+    DacPinConfig pins = {24, 48, 54, 22};
+    TEST_ASSERT_EQUAL_INT(24, pins.dataOut);
+    TEST_ASSERT_EQUAL_INT(48, pins.i2cSda);
+    TEST_ASSERT_EQUAL_INT(54, pins.i2cScl);
+    TEST_ASSERT_EQUAL_INT(22, pins.mclk);
+    TEST_ASSERT_EQUAL_INT(0, pins.paControl);
+}
+
 // ===== Main =====
 int main(int argc, char **argv) {
     (void)argc;
@@ -335,6 +377,11 @@ int main(int argc, char **argv) {
     RUN_TEST(test_sw_volume_zero_silence);
     RUN_TEST(test_sw_volume_null_buffer_safe);
     RUN_TEST(test_sw_volume_zero_samples_safe);
+
+    // DacPinConfig paControl field tests
+    RUN_TEST(test_dac_pin_config_paControl_default);
+    RUN_TEST(test_dac_pin_config_paControl_field_present);
+    RUN_TEST(test_dac_pin_config_aggregate_init_backward_compat);
 
     return UNITY_END();
 }

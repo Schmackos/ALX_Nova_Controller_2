@@ -26,6 +26,11 @@ private:
     uint8_t _bitDepth = 0;
     bool _muted = false;
 
+    // Resolved at init() from DacPinConfig (fall back to compile-time defines)
+    int8_t _paPin  = -1;  // PA control GPIO
+    int8_t _sdaPin = -1;  // I2C SDA GPIO
+    int8_t _sclPin = -1;  // I2C SCL GPIO
+
     // I2C helpers
     bool writeReg(uint8_t reg, uint8_t val);
     uint8_t readReg(uint8_t reg);

@@ -20,6 +20,9 @@
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
 #endif
+#ifdef DAC_ENABLED
+#include "hal/hal_device_manager.h"
+#endif
 #include <LittleFS.h>
 #include <WiFi.h>
 #include <cmath>
@@ -77,9 +80,10 @@ static float prevMqttSigGenSweepSpeed = 1000.0f;
 static bool prevMqttDspEnabled = false;
 static bool prevMqttDspBypass = false;
 static bool prevMqttDspChBypass[DSP_MAX_CHANNELS] = {};
-static bool prevMqttDacEnabled = false;
-static uint8_t prevMqttDacVolume = 80;
-static bool prevMqttDacMute = false;
+// DAC shadow fields — now unused (DAC state change detection was never
+// wired into mqttPublishPendingState; DAC publishes via dirty flags).
+// Kept as dead statics to avoid any linker surprises; will be fully
+// removed when MQTT DAC publishing is HAL-routed in a future phase.
 static uint8_t prevMqttOtaChannel = 0;
 static bool prevMqttBootAnimEnabled = true;
 static int prevMqttBootAnimStyle = 0;

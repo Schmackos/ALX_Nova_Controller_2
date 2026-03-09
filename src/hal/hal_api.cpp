@@ -278,15 +278,15 @@ void registerHalApiEndpoints(WebServer& server) {
         HalDevice* dev = mgr.getDevice(slot);
         if (!dev) { server.send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
 
-        // DAC-path devices: trigger proper legacy teardown before removal
+        // DAC-path devices: trigger deferred deactivation before removal
         const HalDeviceDescriptor& delDesc = dev->getDescriptor();
         if (delDesc.capabilities & HAL_CAP_DAC_PATH) {
-            if (delDesc.type == HAL_DEV_DAC) {
-                appState.dac.enabled = false;
-                appState.dac.requestDacToggle(-1);
-            } else if (delDesc.type == HAL_DEV_CODEC) {
-                appState.dac.requestEs8311Toggle(-1);
-            }
+            // Generic deferred deactivation — device-type agnostic
+            appState.dac.requestDeviceToggle(slot, -1);
+            // Update HalDeviceConfig (authoritative source)
+            HalDeviceConfig* cfg = mgr.getConfig(slot);
+            if (cfg) cfg->enabled = false;
+            appState.markDacDirty();
         }
 
         // Deinit and remove
