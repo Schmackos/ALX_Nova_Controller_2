@@ -279,7 +279,7 @@ Agent 2 (test-engineer): "Run cd e2e && npx playwright test and fix any failures
 
 ### Quality Gates (CI/CD)
 All 4 gates must pass before firmware build proceeds (parallel execution):
-1. `cpp-tests` — `pio test -e native -v` (1,614 Unity tests across 70 modules)
+1. `cpp-tests` — `pio test -e native -v` (1,618 Unity tests across 70 modules)
 2. `cpp-lint` — cppcheck on `src/`
 3. `js-lint` — find_dups + check_missing_fns + ESLint
 4. `e2e-tests` — Playwright browser tests (26 tests across 19 specs)
