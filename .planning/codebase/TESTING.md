@@ -1,64 +1,103 @@
-# Testing Patterns
+# Testing Infrastructure
 
 **Analysis Date:** 2026-03-09
 
-## Test Framework Overview
-
-Two independent test layers exist — neither requires hardware.
-
-| Layer | Framework | Count | Location |
-|-------|-----------|-------|----------|
-| C++ Unit Tests | Unity (PlatformIO native) | 1614 tests, 70 modules | `test/` |
-| Browser E2E Tests | Playwright + Chromium | 26 tests, 19 specs | `e2e/` |
-
 ---
 
-## C++ Unit Tests (Unity / Native Platform)
+## C++ Unit Tests (Unity + Native Platform)
 
-### Runner
+### Overview
 
-- **Framework:** Unity (bundled with PlatformIO)
-- **Platform:** `native` (compiles and runs on host with gcc/MinGW — no hardware)
-- **Config:** `platformio.ini` `[env:native]`
-- **Build flags:** `-D UNIT_TEST -D NATIVE_TEST`
-- **`test_build_src = no`** — tests never compile `src/` automatically; each test file directly `#include`s the `.cpp` files it needs
+- **Framework**: Unity (via PlatformIO `test_framework = unity`)
+- **Platform**: `native` — runs on host machine with MinGW/gcc, no hardware required
+- **Count**: 1,630 test functions across 70 test modules (counted by `grep "^void test_"` across all `test/test_*/`)
+- **CLAUDE.md reported count**: 1,614 tests (slight discrepancy may reflect additions since last update)
+- **Config**: `[env:native]` in `platformio.ini`
 
-**Run Commands:**
+### Run Commands
+
 ```bash
-pio test -e native              # Run all 70 modules
-pio test -e native -v           # Verbose output (show pass/fail per test)
-pio test -e native -f test_wifi # Run a single module
-pio test -e native -f test_hal_core
+pio test -e native            # Run all test modules
+pio test -e native -v         # Verbose output (shows each test name + PASS/FAIL)
+pio test -e native -f test_wifi       # Run a single module
+pio test -e native -f test_hal_core   # Run HAL core tests
+pio test -e native -f test_mqtt       # Run MQTT tests
 ```
 
-### Test File Organization
+### Environment Configuration (`platformio.ini` `[env:native]`)
 
-- Location: `test/test_<module>/test_<module>.cpp` (one `.cpp` per directory)
-- Naming: `test_<module_name>` directory, `test_<module_name>.cpp` file inside
-- Each directory maps to exactly one test binary — no duplicate `main()`/`setUp()`/`tearDown()` symbols
+```ini
+platform = native
+test_framework = unity
+build_flags =
+    -std=c++11
+    -D UNIT_TEST
+    -D NATIVE_TEST
+    -D DSP_ENABLED
+    -D DSP_MAX_STAGES=24
+    -D DSP_PEQ_BANDS=10
+    -D DSP_MAX_FIR_TAPS=256
+    -D DAC_ENABLED
+    -D USB_AUDIO_ENABLED
+lib_deps =
+    bblanchon/ArduinoJson@^7.4.2
+    kosme/arduinoFFT@^2.0
+lib_compat_mode = off
+lib_ignore = WebSockets
+test_ignore = test_mocks        # test_mocks/ is not a test module
+test_build_src = no             # CRITICAL: src/ is NOT compiled; tests inline .cpp files directly
+```
+
+The `test_build_src = no` setting means tests cannot link against `src/` object files. Each test file directly `#include`s the `.cpp` implementation files it needs.
+
+### Test File Layout
 
 ```
 test/
-├── test_wifi/
-│   └── test_wifi_manager.cpp     # All WiFi tests
-├── test_hal_core/
-│   └── test_hal_core.cpp         # HAL device manager tests
-├── test_hal_bridge/
-│   └── test_hal_bridge.cpp       # HAL pipeline bridge tests
-├── test_mocks/
-│   ├── Arduino.h                 # millis(), digitalWrite(), LEDC, etc.
-│   ├── WiFi.h                    # WiFiClass with mock scan/connect
-│   ├── Preferences.h             # NVS mock (std::map namespace storage)
-│   ├── LittleFS.h                # Filesystem mock
-│   ├── Wire.h                    # I2C mock
-│   ├── PubSubClient.h            # MQTT client mock
-│   ├── IPAddress.h               # IP address parsing mock
-│   └── i2s_std_mock.h            # I2S driver mock
+├── test_mocks/              # Mock headers — excluded from test runs (test_ignore = test_mocks)
+├── test_<module>/
+│   └── test_<module>.cpp   # Exactly ONE .cpp per directory
+└── (hardware-only dirs)
+    ├── idf4_pcm1808_test/
+    ├── idf5_dac_test/
+    ├── idf5_pcm1808_test/
+    └── p4_hosted_update/
 ```
 
-### Test Structure
+**One test file per directory** is mandatory. Multiple `.cpp` files in one directory cause duplicate `main()`/`setUp()`/`tearDown()` link errors.
 
-**Suite file structure:**
+### Test Module List (70 modules)
+
+```
+test_api                test_audio_diagnostics    test_audio_health_bridge
+test_audio_pipeline     test_auth                 test_button
+test_buzzer             test_crash_log            test_dac_eeprom
+test_dac_hal            test_dac_settings         test_debug_mode
+test_deferred_toggle    test_diag_journal         test_dim_timeout
+test_dsp                test_dsp_presets          test_dsp_rew
+test_dsp_swap           test_es8311               test_esp_dsp
+test_eth_manager        test_evt_any              test_fft
+test_gui_home           test_gui_input            test_gui_navigation
+test_hal_adapter        test_hal_bridge           test_hal_button
+test_hal_buzzer         test_hal_core             test_hal_custom_device
+test_hal_discovery      test_hal_dsp_bridge       test_hal_eeprom_v3
+test_hal_encoder        test_hal_es8311           test_hal_integration
+test_hal_mcp4725        test_hal_multi_instance   test_hal_ns4150b
+test_hal_pcm1808        test_hal_pcm5102a         test_hal_retry
+test_hal_siggen         test_hal_state_callback   test_hal_usb_audio
+test_hal_wire_mock      test_i2s_audio            test_mqtt
+test_ota                test_ota_task             test_output_dsp
+test_peq                test_pinout               test_pipeline_bounds
+test_pipeline_output    test_settings             test_signal_generator
+test_sink_slot_api      test_smart_sensing        test_task_monitor
+test_usb_audio          test_utils                test_vrms
+test_websocket          test_websocket_messages   test_wifi
+```
+
+### Test Structure Pattern
+
+Every test file follows Arrange-Act-Assert with Unity assertions:
+
 ```cpp
 #include <unity.h>
 #include <cstring>
@@ -66,420 +105,535 @@ test/
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
 #include "../test_mocks/Preferences.h"
-// ... other mocks
 #else
 #include <Arduino.h>
+#include <Preferences.h>
 #endif
 
-// Inline .cpp source files being tested (test_build_src = no)
+// Inline implementation .cpp files directly (test_build_src = no)
 #include "../../src/hal/hal_device_manager.cpp"
 #include "../../src/hal/hal_driver_registry.cpp"
 
-// Optional: concrete test device
-class TestDevice : public HalDevice { /* ... */ };
-
+// ===== Test Fixtures =====
 static HalDeviceManager* mgr;
 
-void setUp(void) {
-    // Arrange: reset all state before each test
+void setUp() {
+    // Reset all mock state before every test
     mgr = &HalDeviceManager::instance();
     mgr->reset();
     hal_registry_reset();
-    ArduinoMock::reset();
 }
 
-void tearDown(void) {}
+void tearDown() {}   // Must be present; typically empty
 
-// Individual test — Arrange-Act-Assert pattern
+// ===== One concern per test function =====
 void test_register_and_get_device() {
-    TestDevice dev("ti,pcm5102a", HAL_DEV_DAC);        // Arrange
-    int slot = mgr->registerDevice(&dev, HAL_DISC_BUILTIN);  // Act
+    // Arrange
+    TestDevice dev("ti,pcm5102a", HAL_DEV_DAC);
 
-    TEST_ASSERT_GREATER_OR_EQUAL(0, slot);             // Assert
+    // Act
+    int slot = mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+
+    // Assert
+    TEST_ASSERT_GREATER_OR_EQUAL(0, slot);
     TEST_ASSERT_EQUAL_PTR(&dev, mgr->getDevice(slot));
     TEST_ASSERT_EQUAL(1, mgr->getCount());
+    TEST_ASSERT_EQUAL(HAL_DISC_BUILTIN, dev.getDiscovery());
 }
 
-// Test runner — called from main()
+// ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
     RUN_TEST(test_register_and_get_device);
     RUN_TEST(test_find_by_compatible);
-    // ...
+    // ... all test functions listed here
     return UNITY_END();
 }
 ```
 
-**For Arduino-compatible tests (e.g. `test_wifi`):**
+**Structural rules:**
+- `setUp()` resets all module state before every test — mocks expose `::reset()` static methods
+- `tearDown()` is typically empty but must be declared
+- Test functions named `test_<what_is_being_verified>`
+- Every test function registered with `RUN_TEST()` in `main()`
+- Section dividers use `// ===== Section Name =====` style
+
+### Unity Assertion Reference
+
 ```cpp
-int runUnityTests(void) {
-    UNITY_BEGIN();
-    RUN_TEST(test_save_single_network);
-    // ...
-    return UNITY_END();
-}
-
-#ifdef NATIVE_TEST
-int main(void) { return runUnityTests(); }
-#endif
-
-#ifndef NATIVE_TEST
-void setup() { delay(2000); runUnityTests(); }
-void loop()  {}
-#endif
+TEST_ASSERT_TRUE(condition)
+TEST_ASSERT_FALSE(condition)
+TEST_ASSERT_EQUAL(expected, actual)
+TEST_ASSERT_NOT_EQUAL(a, b)
+TEST_ASSERT_EQUAL_PTR(expected, actual)
+TEST_ASSERT_NULL(ptr)
+TEST_ASSERT_NOT_NULL(ptr)
+TEST_ASSERT_GREATER_OR_EQUAL(threshold, actual)
+TEST_ASSERT_GREATER_OR_EQUAL_MESSAGE(threshold, actual, "failure message")
+TEST_ASSERT_EQUAL_STRING(expected, actual)
+TEST_ASSERT_FLOAT_WITHIN(delta, expected, actual)
 ```
 
-### Mocking
+### Mock System (`test/test_mocks/`)
 
-**Mock headers** live in `test/test_mocks/` and are header-only (no `.cpp` — included directly).
+Mock headers implement the same API as real Arduino/ESP32 libraries using standard C++ (`std::map`, `std::string`, `std::vector`). They are `#include`d directly under `#ifdef NATIVE_TEST`.
 
-**ArduinoMock namespace** provides controllable state:
+**Available mock headers:**
+
+| File | Simulates |
+|---|---|
+| `Arduino.h` | `millis()`, `analogRead()`, `digitalWrite()`, `pinMode()`, `delay()`, `ESP` class, LEDC functions, ISR attach/detach, `ps_calloc()`, `random()` |
+| `WiFi.h` | `WiFiClass` — scan, connect, AP mode, static IP, RSSI, MAC. `addMockNetwork()` injects scan results. |
+| `PubSubClient.h` | MQTT connect/publish/subscribe; `publishedMessages` map for assertion |
+| `Preferences.h` | NVS backed by `std::map<string,map<string,string>>`; namespaced get/put for all supported types |
+| `LittleFS.h` | In-memory filesystem backed by `std::map<string,string>`; read/write/append/rename/remove; `injectFile()` and `getFile()` test helpers; `_mountShouldFail` flag |
+| `i2s_std_mock.h` | IDF5 `<driver/i2s_std.h>` type stubs (handles, error codes, enums) |
+| `Wire.h` | I2C bus mock |
+| `esp_random.h` | `esp_random()`, `esp_fill_random()` |
+| `esp_timer.h` | `esp_timer_get_time()` returning `mockMicros * 1000` |
+| `mbedtls/md.h` | mbedTLS HMAC/hash stubs |
+| `mbedtls/pkcs5.h` | PBKDF2 stubs (for auth handler tests) |
+
+**Mock state reset pattern** — `setUp()` resets all mocks used by the module under test:
+
 ```cpp
-// Advance simulated time
-ArduinoMock::mockMillis += 15000;  // simulate 15 second elapsed
+void setUp() {
+    ArduinoMock::reset();          // millis=0, digitalPins cleared, LEDC counters zeroed
+    WiFiClass::reset();            // scan results cleared, disconnected state
+    PubSubClient::reset();         // published messages and subscriptions cleared
+    MockFS::reset();               // LittleFS files cleared, unmounted
+    Preferences::storage.clear(); // NVS namespaces cleared
+}
+```
 
-// Simulate GPIO readings
-ArduinoMock::mockAnalogValue = 512;
-ArduinoMock::mockDigitalPins[5] = HIGH;
+**Arduino mock controllable state:**
 
-// Check LEDC calls
+```cpp
+// Control time
+ArduinoMock::mockMillis = 5000;
+
+// Control analog read result
+ArduinoMock::mockAnalogValue = 2048;
+
+// Control digital pin state
+ArduinoMock::mockDigitalPins[32] = HIGH;
+
+// Verify LEDC was called
 TEST_ASSERT_EQUAL(1, ArduinoMock::ledcWriteToneCount);
-TEST_ASSERT_EQUAL_FLOAT(440.0, ArduinoMock::ledcLastFreq);
-
-// Reset all mock state in setUp()
-ArduinoMock::reset();
-ArduinoMock::resetLedc();
+TEST_ASSERT_EQUAL(1000.0, ArduinoMock::ledcLastFreq);
 ```
 
-**WiFi mock** — controllable connection state:
+**WiFi mock helpers:**
+
 ```cpp
-WiFiClass::addMockNetwork("NetworkA", -50);   // Add scan result
-WiFiClass::reset();                            // Reset in setUp()
-WiFi.begin("MySSID", "pass");
-TEST_ASSERT_EQUAL(WiFiClass::WL_CONNECTED, WiFi.status());
+WiFiClass::addMockNetwork("MySSID", -65, 6, true);  // ssid, rssi, channel, encrypted
+WiFiClass::lastStatusCode = WiFiClass::WL_CONNECTED;
+WiFiClass::connectedSSID = "MySSID";
 ```
 
-**Preferences mock** — in-memory namespace storage (`std::map<string, map<string,string>>`):
+**MQTT mock assertions:**
+
 ```cpp
-Preferences prefs;
-prefs.begin("wifi-list", false);
-prefs.putString("s0", "TestSSID");
-prefs.end();
-// ... reset between tests
-Preferences::reset();
+TEST_ASSERT_TRUE(PubSubClient::wasMessagePublished("alx/status"));
+TEST_ASSERT_EQUAL_STRING("online", PubSubClient::getPublishedMessage("alx/status").c_str());
+TEST_ASSERT_TRUE(PubSubClient::wasTopicSubscribed("alx/cmd/#"));
 ```
 
-**Native-test guards for hardware calls inside source files:**
+**LittleFS mock helpers:**
+
 ```cpp
-#ifndef NATIVE_TEST
-#include <Arduino.h>
-#include "../debug_serial.h"
-#else
-#define LOG_I(fmt, ...) ((void)0)
-#define LOG_W(fmt, ...) ((void)0)
-#define LOG_E(fmt, ...) ((void)0)
-#ifndef OUTPUT
-#define OUTPUT 1
-static void pinMode(int, int) {}
-static void digitalWrite(int, int) {}
-#endif
-#endif
+MockFS::injectFile("/config.json", R"({"version":1,"settings":{}})");
+std::string content = MockFS::getFile("/config.json");
+MockFS::_mountShouldFail = true;    // Test mount failure path
 ```
 
-**What to mock:**
-- All Arduino hardware functions (`millis()`, `analogRead()`, `digitalWrite()`, LEDC, I2C, I2S)
-- WiFi, MQTT (PubSubClient), NVS (Preferences), LittleFS
-- ESP-specific: `esp_random.h`, `esp_timer.h`
+### Inline .cpp Testing Pattern for HAL Drivers
 
-**What NOT to mock:**
-- `ArduinoJson` (used directly — full library included)
-- Math functions (`cmath`, `cstring`, `stdlib.h`)
-- The module under test itself
+HAL driver tests define a `TestDevice` stub that overrides lifecycle methods with controllable state:
 
-### Test Device Pattern (HAL tests)
-
-HAL tests create minimal `TestDevice` subclasses that track call counts and return configurable results:
 ```cpp
 class TestDevice : public HalDevice {
 public:
     bool probeResult = true;
-    bool initResult  = true;
+    bool initResult = true;
+    bool healthResult = true;
     int  initCallCount = 0;
+    int  probeCallCount = 0;
+    int  healthCallCount = 0;
+    int  deinitCallCount = 0;
 
-    TestDevice(const char* compatible, HalDeviceType type,
-               uint16_t priority = HAL_PRIORITY_HARDWARE) {
-        strncpy(_descriptor.compatible, compatible, 31);
-        _descriptor.type = type;
-        _initPriority = priority;
-    }
-
-    bool probe() override { return probeResult; }
+    bool probe() override { probeCallCount++; return probeResult; }
     HalInitResult init() override {
         initCallCount++;
         return initResult ? hal_init_ok() : hal_init_fail(DIAG_HAL_INIT_FAILED, "test fail");
     }
-    void deinit() override {}
+    void deinit() override { deinitCallCount++; }
     void dumpConfig() override {}
-    bool healthCheck() override { return true; }
+    bool healthCheck() override { healthCallCount++; return healthResult; }
 };
-```
-
-### DSP Test Pattern (inline C source files)
-
-DSP tests include the esp_dsp_lite ANSI C fallback sources directly:
-```cpp
-#include "../../lib/esp_dsp_lite/src/dsps_biquad_f32_ansi.c"
-#include "../../lib/esp_dsp_lite/src/dsps_fir_f32_ansi.c"
-#include "../../src/dsp_biquad_gen.c"
-#include "../../src/dsp_pipeline.h"
-#include "../../src/dsp_pipeline.cpp"
 ```
 
 ### Coverage
 
-**Requirements:** No numeric coverage threshold enforced by tooling, but:
-- Every new module must have a test file in `test/test_<module>/`
-- Changed function signatures must update affected tests
-- Every HAL driver has a corresponding `test_hal_<device>` module
-
-**View test output:**
-```bash
-pio test -e native -v   # Shows PASS/FAIL per test with file:line on failure
-```
+No minimum coverage percentage is enforced by tooling. All 70 production modules have corresponding test modules. The CI `cpp-tests` gate validates by running all tests — any failure blocks the firmware `build` job.
 
 ---
 
-## Browser / E2E Tests (Playwright)
+## Browser E2E Tests (Playwright)
 
-### Runner
+### Overview
 
-- **Framework:** Playwright v1.x (Chromium only)
-- **Config:** `e2e/playwright.config.js`
-- **Base URL:** `http://localhost:3000` (mock Express server)
-- **Timeout per test:** 30 seconds
-- **CI workers:** 1 (sequential); local: parallel (default)
-- **CI retries:** 1; local: 0
+- **Framework**: Playwright `@playwright/test@^1.50.0`
+- **Browser**: Chromium only (single project in `e2e/playwright.config.js`)
+- **Count**: 26 tests across 19 spec files in `e2e/tests/`
+- **No hardware required** — Express mock server + Playwright `routeWebSocket()` interception at browser level
 
-**Run Commands:**
+### Run Commands
+
 ```bash
 cd e2e
-npm install                                        # First time
-npx playwright install --with-deps chromium        # First time
+npm install                                          # First time only
+npx playwright install --with-deps chromium          # First time only
 
-npx playwright test                                # Run all 26 tests
-npx playwright test tests/auth.spec.js             # Single spec
-npx playwright test --headed                       # Visible browser
-npx playwright test --debug                        # Inspector mode
+npx playwright test                                  # Run all 26 tests
+npx playwright test tests/auth.spec.js               # Run single spec
+npx playwright test --headed                         # Run with visible browser window
+npx playwright test --debug                          # Debug mode with Playwright inspector
+npx playwright test --ui                             # Interactive UI mode
 ```
 
-### Test Infrastructure
+### Playwright Config (`e2e/playwright.config.js`)
 
-The mock server at `e2e/mock-server/server.js` (Express, port 3000) replaces the real firmware:
-- Serves the real frontend HTML assembled from `web_src/` via `assembler.js`
-- Provides 12 route files matching the firmware REST API exactly (`e2e/mock-server/routes/*.js`)
-- `GET /api/__test__/reset` endpoint resets mock server state between tests
-- WebSocket connections to `*:81` are intercepted at browser level by Playwright's `routeWebSocket()` — no real WS server
-
-### connectedPage Fixture
-
-Most tests use the `connectedPage` custom fixture from `e2e/helpers/fixtures.js`:
-
-```javascript
-const { test, expect } = require('../helpers/fixtures');
-
-test('my test', async ({ connectedPage: page }) => {
-    // page already has: session cookie, WS intercepted + auth completed,
-    // all initial state fixtures broadcast, status shows "Connected"
-
-    // Inject additional WS messages
-    page.wsRoute.send({ type: 'hardwareStats', cpuPercent: 45 });
-
-    // Test against DOM
-    await expect(page.locator('#cpuTotal')).toContainText('45');
-});
-```
-
-The fixture performs:
-1. POST `/api/auth/login` to acquire a real session cookie from mock server
-2. Sets the session cookie in the browser context
-3. Installs `routeWebSocket(/.*:81/, handler)` — intercepts all WS connections
-4. Navigates to `/`
-5. Handles the WS auth handshake (`authRequired` → `auth` → `authSuccess`)
-6. Broadcasts all initial state from `buildInitialState()` (10 fixture files)
-7. Waits for `#wsConnectionStatus` to show "Connected"
-
-### WS Message Interception Pattern
-
-```javascript
-await page.routeWebSocket(/.*:81/, (ws) => {
-    ws.onMessage((msg) => {         // Capital M — messages from browser → mock
-        const data = JSON.parse(msg);
-        if (data.type === 'auth') {
-            ws.send(JSON.stringify({ type: 'authSuccess' }));
-            // send initial state...
-        }
-    });
-    ws.onClose(() => {});           // Capital C
-    ws.send(JSON.stringify({ type: 'authRequired' }));
-});
-```
-
-### Test Structure (E2E)
-
-```javascript
-/**
- * Module description and key constraints as JSDoc block.
- */
-const { test, expect } = require('../helpers/fixtures');
-
-test('descriptive test name', async ({ connectedPage: page }) => {
-    // Navigate to tab
-    await page.locator('.sidebar-item[data-tab="settings"]').click();
-    // OR use JS call to avoid scroll issues:
-    await page.evaluate((tabId) => switchTab(tabId), 'debug');
-
-    // Assert DOM state from WS fixture
-    await expect(page.locator('#buzzerToggle')).toBeChecked({ timeout: 3000 });
-
-    // Intercept REST call
-    let apiCalled = false;
-    await page.route('/api/hal/scan', async (route) => {
-        apiCalled = true;
-        await route.fulfill({ status: 200, body: JSON.stringify({ status: 'ok' }) });
-    });
-    await page.locator('#hal-rescan-btn').click();
-    expect(apiCalled).toBe(true);
-});
-```
-
-### Fixtures
-
-**WS fixtures** (`e2e/fixtures/ws-messages/*.json`) — 15 files representing server broadcast messages:
-- `wifi-status.json`, `smart-sensing.json`, `display-state.json`, `buzzer-state.json`
-- `mqtt-settings.json`, `hal-device-state.json`, `audio-channel-map.json`
-- `audio-graph-state.json`, `signal-generator.json`, `debug-state.json`
-- `auth-required.json`, `auth-success.json`, `audio-levels.json`, `debug-log.json`, `hardware-stats.json`
-
-**API fixtures** (`e2e/fixtures/api-responses/*.json`) — 14 files for REST responses:
-- `hal-devices.json`, `hal-presets.json`, `wifi-list.json`, `wifi-scan.json`, `wifi-status.json`
-- `settings.json`, `mqtt-config.json`, `ota/check-update.json`, `releases.json`
-- `signal-generator.json`, `smart-sensing.json`, `pipeline-matrix.json`, `auth-status.json`, `diagnostics.json`
-
-**Loading fixtures:**
-```javascript
-// ws-helpers.js pattern
-function loadFixture(name) {
-    return JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, `${name}.json`), 'utf8'));
+```js
+{
+  testDir: './tests',
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,      // Fail on test.only() in CI
+  retries: process.env.CI ? 1 : 0,  // 1 retry in CI only
+  workers: process.env.CI ? 1 : undefined,  // Single worker in CI
+  timeout: 30000,
+  use: {
+    baseURL: 'http://localhost:3000',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+  },
+  webServer: {
+    command: 'node mock-server/server.js',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,  // Fresh server each CI run
+    timeout: 10000,
+  }
 }
 ```
 
-### Selectors
+### Spec Files (19 files)
 
-All reusable selectors are in `e2e/helpers/selectors.js` — keyed by semantic name:
-```javascript
-const SELECTORS = {
-    sidebarTab:     (name) => `.sidebar-item[data-tab="${name}"]`,
-    panel:          (name) => `#${name}`,
-    wsConnectionStatus: '#wsConnectionStatus',
-    halDeviceList:  '#hal-device-list',
-    buzzerToggle:   '#buzzerToggle',
-    // ...
-};
+```
+e2e/tests/
+├── audio-inputs.spec.js      # Audio tab sub-nav, input channel strips from audioChannelMap WS
+├── audio-matrix.spec.js      # 16x16 routing matrix UI
+├── audio-outputs.spec.js     # Output channel strips
+├── audio-siggen.spec.js      # Signal generator enable/waveform/frequency controls
+├── auth-password.spec.js     # Password change modal flow
+├── auth.spec.js              # Login page render, correct password redirect, invalid session
+├── control-tab.spec.js       # Smart sensing state, amp on/off, manual override
+├── dark-mode.spec.js         # Theme toggle, persistence
+├── debug-console.spec.js     # Log entries, module filter chips, search highlight
+├── hal-devices.spec.js       # HAL device cards render, rescan, enable/disable
+├── hardware-stats.spec.js    # CPU/memory/PSRAM stats display from WS broadcast
+├── mqtt.spec.js              # MQTT settings form, enable/disable toggle
+├── navigation.spec.js        # Sidebar tab switching, panel activation
+├── ota.spec.js               # Firmware version display, check-for-update flow
+├── peq-overlay.spec.js       # PEQ/crossover/compressor/limiter overlays
+├── responsive.spec.js        # Mobile/desktop responsive breakpoints
+├── settings.spec.js          # Dark mode, backlight, buzzer, screen timeout controls
+├── support.spec.js           # Support tab, manual link, QR code element
+└── wifi.spec.js              # WiFi tab, network select, AP toggle
 ```
 
-When element IDs change in `web_src/index.html`, update `e2e/helpers/selectors.js` and all affected specs.
+### Mock Server Architecture (`e2e/mock-server/`)
+
+Express server (port 3000) serves the real frontend HTML assembled from `web_src/` by `assembler.js` and provides mock REST API endpoints matching the firmware's REST API.
+
+```
+e2e/mock-server/
+├── server.js        # Express app, route mounting, POST /api/__test__/reset
+├── assembler.js     # Replicates tools/build_web_assets.js HTML assembly from web_src/
+├── ws-state.js      # Deterministic mock state singleton; resetState() for inter-test isolation
+└── routes/
+    ├── auth.js      # POST /api/auth/login, GET /api/auth/status
+    ├── hal.js       # /api/hal/devices, /api/hal/scan, /api/hal/db/presets
+    ├── wifi.js      # WiFi list, scan, config, AP mode
+    ├── mqtt.js      # MQTT config save/test
+    ├── settings.js  # GET/POST /api/settings, export, import, factory reset
+    ├── ota.js       # /api/ota/check-update, releases list
+    ├── pipeline.js  # /api/pipeline/matrix
+    ├── dsp.js       # DSP config endpoints
+    ├── sensing.js   # Smart sensing config
+    ├── siggen.js    # Signal generator
+    ├── diagnostics.js  # Diagnostic journal
+    └── system.js    # /api/system/reboot
+```
+
+**WS token endpoint** — mock server provides `/api/ws-token` (returns `{ success: true, token: "ws-token-<timestamp>" }` for any authenticated session):
+
+```js
+app.get('/api/ws-token', (req, res) => {
+    const cookieId = req.cookies && req.cookies['sessionId'];
+    if (!cookieId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    res.json({ success: true, token: `ws-token-${Date.now()}` });
+});
+```
+
+**Test reset endpoint** — resets server-side mock state between test suites:
+
+```js
+app.post('/api/__test__/reset', (req, res) => {
+    resetState();
+    res.json({ success: true });
+});
+```
+
+### connectedPage Fixture (`e2e/helpers/fixtures.js`)
+
+The primary test fixture — provides a fully connected browser page. Import it instead of `@playwright/test`:
+
+```js
+const { test, expect } = require('../helpers/fixtures');
+
+test('my test', async ({ connectedPage: page }) => {
+    // page: valid session cookie + intercepted WS + initial state broadcast + "Connected" status
+    // page.wsRoute.send(obj)          — inject additional WS message (JSON serialized)
+    // page.wsRoute.sendBinary(buf)    — inject binary frame (Buffer)
+});
+```
+
+**What the fixture does in order:**
+1. `POST /api/auth/login` with `testpass` → obtains `sessionId` cookie
+2. Sets cookie on the browser context before navigation
+3. `page.routeWebSocket(/.*:81/)` — intercepts ALL connections to port 81
+4. On connection: server-side sends `{ type: 'authRequired' }` immediately
+5. Frontend fetches `/api/ws-token`, sends `{ type: 'auth', token: '...' }`
+6. Fixture responds `{ type: 'authSuccess' }` then broadcasts all 10 initial-state messages
+7. Navigates to `/`, waits until `#wsConnectionStatus` shows "Connected"
+
+Tests that don't need WS (e.g. login page tests) use `require('@playwright/test')` directly without this fixture.
+
+### WS Helper Functions (`e2e/helpers/ws-helpers.js`)
+
+```js
+buildInitialState()
+// Returns ordered array of 10 WS fixture messages broadcast after authSuccess:
+// wifi-status, smart-sensing, display-state, buzzer-state, mqtt-settings,
+// hal-device-state, audio-channel-map, audio-graph-state, signal-generator, debug-state
+
+handleCommand(type, data)
+// Routes inbound frontend WS commands, returns array of response objects.
+// Handles: subscribeAudio, setDebugHwStats, setDebugMode, manualOverride, eepromScan, etc.
+
+buildWaveformFrame(adc, samples)
+// Binary 0x01 frame: [type:u8][adc:u8][256 samples:u8] = 258 bytes total
+
+buildSpectrumFrame(adc, freq, bands)
+// Binary 0x02 frame: [type:u8][adc:u8][dominantFreq:f32LE][16 bands:f32LE] = 70 bytes total
+```
+
+### WS Fixtures (`e2e/fixtures/ws-messages/`)
+
+17 hand-crafted JSON files — server-to-browser WS broadcast messages:
+
+```
+audio-channel-map.json   audio-graph-state.json   audio-levels.json
+auth-required.json       auth-success.json         buzzer-state.json
+debug-log.json           debug-state.json          display-state.json
+hal-device-state.json    hardware-stats.json       mqtt-settings.json
+signal-generator.json    smart-sensing.json        wifi-status.json
+```
+
+### API Response Fixtures (`e2e/fixtures/api-responses/`)
+
+14 JSON files for deterministic REST API responses:
+
+```
+auth-status.json   check-update.json    diagnostics.json     hal-devices.json
+hal-presets.json   mqtt-config.json     pipeline-matrix.json releases.json
+settings.json      signal-generator.json  smart-sensing.json wifi-list.json
+wifi-scan.json     wifi-status.json
+```
+
+### Selectors (`e2e/helpers/selectors.js`)
+
+Centralized DOM selectors keyed to `web_src/index.html` element IDs. Use `SELECTORS.*` rather than inline strings to avoid drift when HTML changes.
+
+Key selectors:
+
+```js
+SELECTORS.wsConnectionStatus         // '#wsConnectionStatus'
+SELECTORS.halDeviceList              // '#hal-device-list'
+SELECTORS.audioSubNavBtn(view)       // `.audio-subnav-btn[data-view="${view}"]`
+SELECTORS.sidebarTab(tabName)        // `.sidebar-item[data-tab="${tabName}"]`
+SELECTORS.mqttEnabledToggle          // '#appState\\.mqttEnabled'
+SELECTORS.panel(tabName)             // `#${tabName}`
+SELECTORS.siggenEnable               // '#siggenEnable'
+```
 
 ### Key Playwright Patterns
 
-**Tab navigation** — use `page.evaluate()` to avoid scroll issues with sidebar clicks:
-```javascript
-await page.evaluate((tab) => switchTab(tab), 'debug');
+**Tab navigation** — use `page.evaluate` to avoid scroll/visibility issues with sidebar clicks in narrow viewports:
+
+```js
+await page.evaluate(() => switchTab('tabName'));
+// or direct click when viewport is wide enough:
+await page.locator('.sidebar-item[data-tab="audio"]').click();
 ```
 
-**CSS-hidden toggles** — use `toBeChecked()`, not `toBeVisible()`:
-```javascript
-// Toggle inputs are opacity:0 inside label.switch — never use toBeVisible()
-await expect(page.locator('#buzzerToggle')).toBeChecked();
+**CSS-hidden checkbox toggles** — use `toBeChecked()` not `toBeVisible()` for inputs styled with `label.switch`:
+
+```js
+await expect(page.locator('#darkModeToggle')).toBeChecked();
 await expect(page.locator('#darkModeToggle')).not.toBeChecked();
 ```
 
-**Strict mode disambiguation** — use `.first()` when selector matches multiple elements:
-```javascript
-const disableBtn = deviceList.locator('button').filter({ hasText: /Disable/i }).first();
+**Injecting WS messages mid-test:**
+
+```js
+page.wsRoute.send({ type: 'smartSensing', ampOn: true, signalDetected: true, audioLevel: -20.0 });
+page.wsRoute.send({ type: 'hardwareStats', cpuPercent: 45, heapFree: 180000 });
+page.wsRoute.sendBinary(buildWaveformFrame(0, new Array(256).fill(128)));
 ```
 
-**Binary WS frames** — use `buildWaveformFrame()` / `buildSpectrumFrame()` helpers:
-```javascript
-const { buildWaveformFrame, buildSpectrumFrame } = require('../helpers/ws-helpers');
-page.wsRoute.sendBinary(buildWaveformFrame(0, Array(256).fill(128)));
-page.wsRoute.sendBinary(buildSpectrumFrame(0, 1000, Array(16).fill(0.1)));
+**Strict mode — disambiguate multi-match selectors:**
+
+```js
+await deviceList.locator('.hal-device-header').first().click();
+const btn = deviceList.locator('.hal-device-card.expanded button').filter({ hasText: /Disable/i }).first();
 ```
 
-**Graceful optional elements** — skip instead of fail when a feature may not be rendered:
-```javascript
-const count = await dspBtn.count();
-if (count === 0) { return; }  // feature not available in this fixture state
+**REST API interception:**
+
+```js
+let scanCalled = false;
+await page.route('/api/hal/scan', async (route) => {
+    scanCalled = true;
+    await route.fulfill({ status: 200, body: JSON.stringify({ status: 'ok', devicesFound: 6 }) });
+});
+await page.locator('#hal-rescan-btn').click();
+await page.waitForTimeout(500);
+expect(scanCalled).toBe(true);
+```
+
+**WS event handler spelling** — Playwright uses capital M/C for WS events:
+
+```js
+ws.onMessage((msg) => { /* ... */ })  // NOT onmessage
+ws.onClose(() => {})                  // NOT onclose
 ```
 
 ---
 
-## Static Analysis Tools
+## CI Quality Gates (4 Parallel Jobs)
 
-**Pre-commit hooks** (`.githooks/pre-commit` — activate with `git config core.hooksPath .githooks`):
-1. `node tools/find_dups.js` — detect duplicate JS `let`/`const` across concatenated files
-2. `node tools/check_missing_fns.js` — detect undefined function references
-3. ESLint on `web_src/js/` — `cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json`
+Defined in `.github/workflows/tests.yml`. All 4 jobs must pass before the `build` job runs (`needs: [cpp-tests, cpp-lint, js-lint, e2e-tests]`).
 
-**cppcheck** (CI only — `cpp-lint` job):
+**Trigger**: push or pull_request to `main` or `develop` branches.
+
+### Gate 1: cpp-tests
+
 ```bash
-cppcheck --enable=warning,performance \
-         --suppress=missingInclude \
-         --suppress=unusedFunction \
-         --suppress=badBitmaskCheck \
-         --std=c++11 --error-exitcode=1 \
-         -i src/gui/ src/
+pio test -e native -v
 ```
 
+Runs all 1,630 C++ Unity tests on ubuntu-latest. Uses PlatformIO cache keyed on `platformio.ini` hash. Python 3.11 + latest PlatformIO.
+
+### Gate 2: cpp-lint
+
+```bash
+cppcheck \
+  --enable=warning,performance \
+  --suppress=missingInclude \
+  --suppress=unusedFunction \
+  --suppress=badBitmaskCheck \
+  --std=c++11 \
+  --error-exitcode=1 \
+  -i src/gui/ \
+  src/
+```
+
+`src/gui/` is excluded (LVGL generates many false positives). Runs on ubuntu-latest with system cppcheck.
+
+### Gate 3: js-lint
+
+Three sequential Node.js checks on ubuntu-latest (Node 20, `npm ci` from `e2e/package-lock.json`):
+
+```bash
+node tools/find_dups.js
+node tools/check_missing_fns.js
+cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json
+```
+
+### Gate 4: e2e-tests
+
+```bash
+cd e2e && npx playwright install --with-deps chromium
+cd e2e && npx playwright test
+```
+
+CI uses `workers: 1` and 1 retry on failure. On failure, HTML report is uploaded as artifact `playwright-report-<sha>` (14-day retention).
+
+### Build Job (Post-Gates)
+
+```bash
+pio run -e esp32-p4
+```
+
+Produces `firmware.bin`, uploaded as artifact `firmware-<sha>` (30-day retention).
+
 ---
 
-## CI Quality Gates
+## Pre-Commit Hook
 
-All 4 gates run in parallel; the `build` job has `needs: [cpp-tests, cpp-lint, js-lint, e2e-tests]`. Firmware binary is only produced after all 4 pass.
+Location: `.githooks/pre-commit`. Activate: `git config core.hooksPath .githooks`.
 
-| Gate | Job name | What it runs |
-|------|----------|-------------|
-| C++ unit tests | `cpp-tests` | `pio test -e native -v` |
-| C++ static analysis | `cpp-lint` | cppcheck on `src/` |
-| JS static analysis | `js-lint` | find_dups + check_missing_fns + ESLint |
-| Browser E2E | `e2e-tests` | `npx playwright test` (Chromium) |
+Runs 3 fast JS checks before every commit (`set -e`):
 
-**CI config:** `.github/workflows/tests.yml` — triggers on push/PR to `main` and `develop` branches.
+```bash
+node tools/find_dups.js
+node tools/check_missing_fns.js
+cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json
+```
 
-**Playwright report on failure:** uploaded as artifact `playwright-report-<sha>`, retained 14 days.
+C++ Unity tests and Playwright E2E tests are NOT run pre-commit (too slow). They run only in CI.
 
 ---
 
-## Mandatory Test Coverage Rules
+## Mandatory Coverage Rules
 
-1. **C++ firmware changes** (`src/`):
-   - New module → create `test/test_<module>/test_<module>.cpp`
-   - Changed function signature → update all affected test files
-   - New HAL driver → create `test/test_hal_<device>/test_hal_<device>.cpp`
+Every code change must keep tests green. Required actions by change type:
 
-2. **Web UI changes** (`web_src/`):
-   - New toggle/button → add E2E test verifying it sends the correct WS command
-   - New WS broadcast type → add fixture JSON + test verifying DOM updates
-   - New top-level JS declaration → add to `web_src/.eslintrc.json` globals
-   - Changed element IDs → update `e2e/helpers/selectors.js` + affected specs
+| Change | Required Action |
+|---|---|
+| New C++ module in `src/` | Create `test/test_<module>/test_<module>.cpp` with setUp, tearDown, test functions, main() |
+| Changed C++ function signature | Update all affected test modules |
+| New WS message type | Add fixture JSON to `e2e/fixtures/ws-messages/`, update `buildInitialState()` and `handleCommand()` in `e2e/helpers/ws-helpers.js`, add Playwright test |
+| New REST endpoint | Add route in `e2e/mock-server/routes/*.js`, add response fixture in `e2e/fixtures/api-responses/`, add Playwright test if UI depends on it |
+| New HTML toggle/button/dropdown | Add Playwright test verifying it sends the correct WS command |
+| New tab or section | Add navigation test + element presence test |
+| Changed element ID in HTML | Update `e2e/helpers/selectors.js` + all affected specs |
+| New top-level JS `let`/`const`/function | Add to `web_src/.eslintrc.json` globals |
+| Removed feature | Remove corresponding tests + fixture JSON files |
 
-3. **WebSocket protocol changes** (`src/websocket_handler.cpp`):
-   - Update `e2e/fixtures/ws-messages/` with new/changed fixture JSON
-   - Update `e2e/helpers/ws-helpers.js` `buildInitialState()` and `handleCommand()`
-   - Update `e2e/mock-server/ws-state.js` for new state fields
+---
 
-4. **REST API changes** (`src/main.cpp`, `src/hal/hal_api.cpp`):
-   - Update matching route in `e2e/mock-server/routes/*.js`
-   - Update `e2e/fixtures/api-responses/` with new/changed response fixture
+## Hardware-Only Test Directories (Not in CI)
+
+These directories require physical hardware and are excluded from the native environment:
+
+```
+test/idf4_pcm1808_test/    # PCM1808 I2S ADC validation on IDF4
+test/idf5_dac_test/        # DAC hardware test on IDF5
+test/idf5_pcm1808_test/    # PCM1808 hardware test on IDF5
+test/p4_hosted_update/     # OTA firmware update smoke test (requires COM8 device)
+```
 
 ---
 
