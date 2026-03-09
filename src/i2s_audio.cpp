@@ -543,6 +543,56 @@ static void i2s_log_params(uint32_t sample_rate) {
 }
 
 
+// ===== Port-indexed read/active callbacks for AudioInputSource (Phase 1 ADC componentization) =====
+// Pre-baked thunks: HalPcm1808::init() assigns the appropriate one based on i2sPort
+
+uint32_t i2s_audio_port0_read(int32_t* dst, uint32_t frames) {
+    size_t bytes_read = 0;
+    size_t size = frames * 2 * sizeof(int32_t);
+    bool ok = i2s_audio_read_adc1(dst, size, &bytes_read, 500);
+    if (!ok || bytes_read == 0) return 0;
+    return (uint32_t)(bytes_read / (2 * sizeof(int32_t)));
+}
+
+uint32_t i2s_audio_port1_read(int32_t* dst, uint32_t frames) {
+    if (!i2s_audio_adc2_ok()) return 0;
+    size_t bytes_read = 0;
+    size_t size = frames * 2 * sizeof(int32_t);
+    bool ok = i2s_audio_read_adc2(dst, size, &bytes_read, 5);
+    if (!ok || bytes_read == 0) return 0;
+    return (uint32_t)(bytes_read / (2 * sizeof(int32_t)));
+}
+
+bool i2s_audio_port0_active(void) {
+    return true;  // ADC1 always available when initialized
+}
+
+bool i2s_audio_port1_active(void) {
+    return i2s_audio_adc2_ok();
+}
+
+uint32_t i2s_audio_get_sample_rate(void) {
+#ifndef NATIVE_TEST
+    return AppState::getInstance().audio.sampleRate;
+#else
+    return 48000;
+#endif
+}
+
+// Generic port-indexed dispatch
+uint32_t i2s_audio_read_port(int port, int32_t *dst, uint32_t frames) {
+    if (port == 0) return i2s_audio_port0_read(dst, frames);
+    if (port == 1) return i2s_audio_port1_read(dst, frames);
+    return 0;
+}
+
+bool i2s_audio_is_port_active(int port) {
+    if (port == 0) return i2s_audio_port0_active();
+    if (port == 1) return i2s_audio_port1_active();
+    return false;
+}
+
+
 // ===== ADC AudioInputSource wrappers (Phase 3) =====
 // These wrap i2s_audio_read_adc1/2 into the generic AudioInputSource interface
 // so the pipeline can read all inputs through a uniform loop.

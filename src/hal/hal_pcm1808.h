@@ -9,6 +9,7 @@
 #include "hal_audio_interfaces.h"
 #include "hal_i2s_bridge.h"
 #include "hal_types.h"
+#include "../audio_input_source.h"
 
 class HalPcm1808 : public HalAudioDevice, public HalAudioAdcInterface {
 public:
@@ -33,9 +34,15 @@ public:
     bool adcSetSampleRate(uint32_t hz) override;
     uint32_t adcGetSampleRate() const override { return _sampleRate; }
 
+    // Audio input source (ADC-indexed callbacks set during init())
+    const AudioInputSource* getInputSource() const override;
+
 private:
     uint32_t _sampleRate = 48000;
     uint8_t  _bitDepth   = 32;
     void*    _rxHandle   = nullptr;
+
+    AudioInputSource _inputSrc = {};
+    bool _inputSrcReady = false;
 };
 #endif // DAC_ENABLED

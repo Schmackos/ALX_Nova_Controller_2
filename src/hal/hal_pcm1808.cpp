@@ -6,6 +6,7 @@
 
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
+#include "../i2s_audio.h"
 #include <Arduino.h>
 #else
 #define LOG_I(fmt, ...) ((void)0)
@@ -65,6 +66,23 @@ HalInitResult HalPcm1808::init() {
     // (audio_pipeline_task). HalPcm1808 provides device config for pin/port overrides;
     // the bridge registers the AudioInputSource when this device transitions to AVAILABLE.
 
+    // Initialize AudioInputSource with port-indexed callbacks
+    memset(&_inputSrc, 0, sizeof(_inputSrc));
+    _inputSrc.name          = _descriptor.name;   // from HAL descriptor
+    _inputSrc.isHardwareAdc = true;
+    _inputSrc.gainLinear    = 1.0f;
+    _inputSrc.vuL           = -90.0f;
+    _inputSrc.vuR           = -90.0f;
+
+    uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 0;
+#ifndef NATIVE_TEST
+    // Port-indexed thunks will be defined in i2s_audio.h/cpp
+    _inputSrc.read          = (port == 0) ? i2s_audio_port0_read : i2s_audio_port1_read;
+    _inputSrc.isActive      = (port == 0) ? i2s_audio_port0_active : i2s_audio_port1_active;
+    _inputSrc.getSampleRate = i2s_audio_get_sample_rate;
+#endif
+    _inputSrcReady = true;
+
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
 
@@ -118,6 +136,10 @@ bool HalPcm1808::adcSetHpfEnabled(bool en) {
 
 bool HalPcm1808::adcSetSampleRate(uint32_t hz) {
     return configure(hz, _bitDepth);
+}
+
+const AudioInputSource* HalPcm1808::getInputSource() const {
+    return _inputSrcReady ? &_inputSrc : nullptr;
 }
 
 #endif // DAC_ENABLED

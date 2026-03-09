@@ -30,6 +30,7 @@
 #include "../../src/hal/hal_types.h"
 #include "../../src/hal/hal_device.h"
 #include "../../src/hal/hal_audio_device.h"
+#include "../../src/audio_input_source.h"
 
 // ===== Inline capability flags not yet in hal_types.h =====
 #ifndef HAL_CAP_PGA_CONTROL
@@ -48,6 +49,8 @@ public:
     bool     _hpfEnabled = true;   // HPF defaults on at power-up
     uint32_t _sampleRate = 48000;
     uint8_t  _bitDepth   = 24;
+    AudioInputSource _inputSrc = {};
+    bool     _inputSrcReady = false;
 
     HalPcm1808Mock() {
         strncpy(_descriptor.compatible, "ti,pcm1808", 31);
@@ -66,17 +69,32 @@ public:
     HalInitResult init() override {
         _state = HAL_STATE_AVAILABLE;
         _ready = true;
+
+        // Populate AudioInputSource for Phase 1 ADC componentization
+        memset(&_inputSrc, 0, sizeof(_inputSrc));
+        _inputSrc.name = _descriptor.name;
+        _inputSrc.isHardwareAdc = true;
+        _inputSrc.gainLinear = 1.0f;
+        _inputSrc.vuL = -90.0f;
+        _inputSrc.vuR = -90.0f;
+        _inputSrcReady = true;
+
         return hal_init_ok();
     }
 
     void deinit() override {
         _ready = false;
         _state = HAL_STATE_REMOVED;
+        _inputSrcReady = false;
     }
 
     void dumpConfig() override {}
 
     bool healthCheck() override { return true; }
+
+    const AudioInputSource* getInputSource() const override {
+        return _inputSrcReady ? &_inputSrc : nullptr;
+    }
 
     bool configure(uint32_t rate, uint8_t bits) override {
         if (rate != 48000 && rate != 96000) return false;
@@ -228,6 +246,61 @@ void test_sequential_reconfigure_updates_rate(void) {
     TEST_ASSERT_EQUAL(32,     adc->_bitDepth);
 }
 
+// ===== 15-20. Phase 1 ADC Componentization: getInputSource() tests =====
+
+void test_hal_pcm1808_getInputSource_returns_nullptr_before_init(void) {
+    HalPcm1808Mock pcm;
+    const AudioInputSource* src = pcm.getInputSource();
+    TEST_ASSERT_NULL(src);
+}
+
+void test_hal_pcm1808_getInputSource_returns_non_null_after_init(void) {
+    HalPcm1808Mock pcm;
+    HalInitResult res = pcm.init();
+    TEST_ASSERT_TRUE(res.success);
+
+    const AudioInputSource* src = pcm.getInputSource();
+    TEST_ASSERT_NOT_NULL(src);
+}
+
+void test_hal_pcm1808_getInputSource_isHardwareAdc_true(void) {
+    HalPcm1808Mock pcm;
+    pcm.init();
+
+    const AudioInputSource* src = pcm.getInputSource();
+    TEST_ASSERT_NOT_NULL(src);
+    TEST_ASSERT_TRUE(src->isHardwareAdc);
+}
+
+void test_hal_pcm1808_getInputSource_name_not_null(void) {
+    HalPcm1808Mock pcm;
+    pcm.init();
+
+    const AudioInputSource* src = pcm.getInputSource();
+    TEST_ASSERT_NOT_NULL(src);
+    TEST_ASSERT_NOT_NULL(src->name);
+    TEST_ASSERT(strlen(src->name) > 0);
+}
+
+void test_hal_pcm1808_getInputSource_gainLinear_unity(void) {
+    HalPcm1808Mock pcm;
+    pcm.init();
+
+    const AudioInputSource* src = pcm.getInputSource();
+    TEST_ASSERT_NOT_NULL(src);
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, src->gainLinear);
+}
+
+void test_hal_pcm1808_getInputSource_vu_initial_minus90(void) {
+    HalPcm1808Mock pcm;
+    pcm.init();
+
+    const AudioInputSource* src = pcm.getInputSource();
+    TEST_ASSERT_NOT_NULL(src);
+    TEST_ASSERT_EQUAL_FLOAT(-90.0f, src->vuL);
+    TEST_ASSERT_EQUAL_FLOAT(-90.0f, src->vuR);
+}
+
 // ===== Main =====
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
@@ -247,6 +320,12 @@ int main(int argc, char** argv) {
     RUN_TEST(test_health_check_always_true);
     RUN_TEST(test_capability_adc_path_set);
     RUN_TEST(test_sequential_reconfigure_updates_rate);
+    RUN_TEST(test_hal_pcm1808_getInputSource_returns_nullptr_before_init);
+    RUN_TEST(test_hal_pcm1808_getInputSource_returns_non_null_after_init);
+    RUN_TEST(test_hal_pcm1808_getInputSource_isHardwareAdc_true);
+    RUN_TEST(test_hal_pcm1808_getInputSource_name_not_null);
+    RUN_TEST(test_hal_pcm1808_getInputSource_gainLinear_unity);
+    RUN_TEST(test_hal_pcm1808_getInputSource_vu_initial_minus90);
 
     return UNITY_END();
 }

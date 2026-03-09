@@ -183,6 +183,29 @@ inline void i2s_audio_update_analysis_metering(const AdcAnalysis &) {}
 inline void i2s_audio_push_waveform_fft(const int32_t *, int, int) {}
 #endif
 
+// ===== Port-indexed read/active callbacks for AudioInputSource (Phase 1 ADC componentization) =====
+// These are pre-baked thunks: port is encoded in function identity, not parameter.
+// HalPcm1808::init() selects the appropriate thunk based on i2sPort config.
+#ifdef NATIVE_TEST
+// Stub implementations for native tests (no actual I2S reads)
+inline uint32_t i2s_audio_port0_read(int32_t* dst, uint32_t frames) { return 0; }
+inline uint32_t i2s_audio_port1_read(int32_t* dst, uint32_t frames) { return 0; }
+inline bool i2s_audio_port0_active(void) { return false; }
+inline bool i2s_audio_port1_active(void) { return false; }
+inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
+#else
+// Real implementations in i2s_audio.cpp
+uint32_t i2s_audio_port0_read(int32_t* dst, uint32_t frames);
+uint32_t i2s_audio_port1_read(int32_t* dst, uint32_t frames);
+bool i2s_audio_port0_active(void);
+bool i2s_audio_port1_active(void);
+uint32_t i2s_audio_get_sample_rate(void);
+#endif
+
+// Generic port-indexed dispatch (not used by Phase 1, but useful for future multi-ADC)
+uint32_t i2s_audio_read_port(int port, int32_t *dst, uint32_t frames);
+bool     i2s_audio_is_port_active(int port);
+
 // ===== Generic ADC I2S Configuration =====
 // Configure an I2S ADC lane with optional HAL device config for pin/port overrides.
 // Lane 0: full-duplex (primary ADC + DAC TX), outputs MCLK/BCK/WS clocks.
