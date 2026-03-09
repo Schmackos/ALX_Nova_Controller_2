@@ -1,220 +1,223 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-03-08
+**Analysis Date:** 2026-03-09
 
 ## Naming Patterns
 
 **Files:**
-- Source files: `snake_case.cpp` / `snake_case.h` (e.g., `smart_sensing.cpp`, `wifi_manager.h`)
-- HAL files: same pattern under `src/hal/` subdirectory (e.g., `hal_device_manager.cpp`)
-- Test files: `test_<module_name>.cpp` in `test/test_<module_name>/` directory
-- Web source: `NN-purpose.js` / `NN-NN-purpose.css` with 2-digit load-order prefix (e.g., `01-core.js`, `02-ws-router.js`)
-- Mock headers: `<LibraryName>.h` mirroring the real library name (e.g., `Arduino.h`, `Preferences.h`)
+- C++ source: `snake_case.cpp` / `snake_case.h` (e.g. `audio_pipeline.cpp`, `hal_device_manager.h`)
+- HAL drivers: `hal_<device>.cpp` / `hal_<device>.h` (e.g. `hal_pcm5102a.cpp`, `hal_es8311.h`)
+- Test files: `test_<module>.cpp` inside `test/test_<module>/` — one file per module directory
+- Web JS: `<NN>-<kebab-name>.js` (numeric prefix controls concat order, e.g. `01-core.js`, `05-audio-tab.js`)
+- Web CSS: `<NN>-<kebab-name>.css` (e.g. `00-tokens.css`, `03-components.css`)
+- E2E specs: `<kebab-name>.spec.js` (e.g. `hal-devices.spec.js`, `audio-inputs.spec.js`)
+- Fixtures: `<kebab-name>.json` in `e2e/fixtures/ws-messages/` and `e2e/fixtures/api-responses/`
 
-**Functions (C++):**
-- Public module API: `camelCase` (e.g., `detectSignal()`, `handleSmartSensingGet()`, `loadMqttSettings()`)
-- Private/static helpers: `camelCase` or `_camelCase` with underscore prefix for private statics (e.g., `_smoothedAudioLevel`)
-- HAL virtual methods: `camelCase` matching ESPHome lifecycle pattern (`probe()`, `init()`, `deinit()`, `dumpConfig()`, `healthCheck()`)
-- HTTP handlers: `handle<Feature><Verb>()` (e.g., `handleSmartSensingGet()`, `handleSmartSensingPost()`)
+**C++ functions:**
+- Free functions: `snake_case` (e.g. `audio_pipeline_set_sink()`, `hal_registry_find()`)
+- Class methods: `camelCase` (e.g. `registerDevice()`, `findByCompatible()`, `healthCheck()`)
+- HAL lifecycle virtuals: `probe()`, `init()`, `deinit()`, `dumpConfig()`, `healthCheck()`, `getInputSource()`
+- Test functions: `test_<what_it_tests>` (e.g. `test_register_and_get_device()`, `test_max_devices_limit()`)
 
-**Variables:**
-- Local variables: `camelCase` (e.g., `modeStr`, `currentTime`)
-- File-local statics: `camelCase` or `_camelCase` with leading underscore for module-private state (e.g., `_smoothedAudioLevel`, `_loginFailCount`, `_wsAuthCount`)
-- Mock state namespaced in test files: `Namespace::memberName` (e.g., `ArduinoMock::mockMillis`, `TestAuthState::reset()`)
-- AppState members: `camelCase` accessed via `appState.memberName`
-- Coordination flags: `volatile` qualifier + descriptive name (e.g., `volatile bool _mqttReconfigPending`)
+**C++ variables:**
+- Local variables: `camelCase` or `snake_case` (both used; prefer `camelCase` for new code)
+- Private/protected class members: `_prefixedCamelCase` (e.g. `_ready`, `_state`, `_slot`, `_descriptor`)
+- Static file-local variables: `_prefixedCamelCase` (e.g. `_smoothedAudioLevel`, `_wsTokens`)
+- Constants / `#define`: `SCREAMING_SNAKE_CASE` (e.g. `HAL_MAX_DEVICES`, `BUZZER_PIN`, `LOG_NONE`)
+- Enum values: `SCREAMING_SNAKE_CASE` (e.g. `HAL_STATE_AVAILABLE`, `HAL_DEV_DAC`, `HAL_DISC_BUILTIN`)
 
-**Types / Enums:**
-- Enum types: `PascalCase` (e.g., `AppFSMState`, `SensingMode`, `ButtonPressType`, `HalDeviceType`)
-- Enum values: `UPPER_SNAKE_CASE` (e.g., `STATE_IDLE`, `ALWAYS_ON`, `HAL_DEV_DAC`, `LOG_DEBUG`)
-- Structs: `PascalCase` (e.g., `HalDeviceDescriptor`, `HalDeviceConfig`, `HalBusRef`)
-- Classes: `PascalCase` (e.g., `AppState`, `HalDevice`, `DebugSerial`)
+**JavaScript:**
+- Functions: `camelCase` (e.g. `apiFetch()`, `buildInitialState()`, `renderHalDevices()`)
+- Variables: `camelCase` (e.g. `currentWifiConnected`, `audioChannelMap`, `halDevices`)
+- Constants: `SCREAMING_SNAKE_CASE` (e.g. `WS_MIN_RECONNECT_DELAY`, `HAL_CAP_HW_VOLUME`)
+- All top-level JS declarations must be listed in `web_src/.eslintrc.json` globals (380 entries)
 
-**Constants / Defines:**
-- Build-time defines: `UPPER_SNAKE_CASE` (e.g., `HAL_MAX_DEVICES`, `DSP_MAX_STAGES`, `LOG_PIN`)
-- `const` values in `.h`: `UPPER_SNAKE_CASE` (e.g., `WEB_SERVER_PORT`, `BTN_DEBOUNCE_TIME`)
-- Capability bit flags: `HAL_CAP_<FEATURE>` pattern (e.g., `HAL_CAP_HW_VOLUME`, `HAL_CAP_DAC_PATH`)
-
-**JavaScript (web_src):**
-- Functions: `camelCase` (e.g., `switchTab()`, `buildInitialState()`, `handleCommand()`)
-- Variables: `camelCase`, declared at module scope (single concatenated JS scope)
-- Constants: `UPPER_SNAKE_CASE` for true constants (e.g., `WS_MIN_RECONNECT_DELAY`, `DEBUG_MAX_LINES`)
-- All globals must be declared in `web_src/.eslintrc.json` globals section
+**Types:**
+- C++ enums: `PascalCase` type name, `SCREAMING_SNAKE_CASE` values
+- C++ structs: `PascalCase` (e.g. `HalDeviceDescriptor`, `AudioInputSource`, `WsToken`)
+- C++ classes: `PascalCase` (e.g. `HalDevice`, `HalPcm5102a`, `DebugSerial`)
 
 ## Code Style
 
 **Formatting:**
-- No `.clangformat` or `.editorconfig` detected; style is enforced by convention
-- 2-space indentation in C++ source files
-- 4-space indentation in HAL files (e.g., `src/hal/hal_types.h`)
-- Braces on same line for functions and control flow in module files
-- HAL class files use same-line opening brace for methods
+- C++: No enforced formatter (cppcheck for static analysis only). Indentation: 4 spaces. Braces on same line for functions, new line accepted too.
+- JavaScript: ESLint enforced via `web_src/.eslintrc.json`. ES2020 syntax, `sourceType: "script"` (not module — all files concatenated into one `<script>` block).
+- No trailing whitespace rule enforced; no line-length limit enforced.
 
 **Linting (C++):**
-- Tool: `cppcheck` — CI-enforced on `src/` (excluding `src/gui/`)
-- Flags: `--enable=warning,style,performance --suppress=missingInclude --suppress=unusedFunction --std=c++11 --error-exitcode=1 -i src/gui/`
-- Run: `cppcheck --enable=warning,style,performance --suppress=missingInclude --suppress=unusedFunction --std=c++11 --error-exitcode=1 -i src/gui/ src/`
+- `cppcheck --enable=warning,performance --suppress=missingInclude --suppress=unusedFunction --suppress=badBitmaskCheck --std=c++11 --error-exitcode=1 -i src/gui/ src/`
+- `src/gui/` is excluded from cppcheck (LVGL complexity)
+- Run in CI (`cpp-lint` job) — not pre-commit
 
 **Linting (JavaScript):**
-- Tool: ESLint with config at `web_src/.eslintrc.json`
-- Rules enforced: `no-undef` (error), `no-redeclare` (error), `eqeqeq` (smart)
-- All JS files concatenated at build time — no module system, shared global scope
-- Run: `cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json`
+- ESLint rules enforced: `no-undef` (error), `no-redeclare` (error), `eqeqeq` (smart)
+- Run pre-commit and in CI (`js-lint` job)
+- Duplicate global declarations checked by `node tools/find_dups.js`
+- Undefined function references checked by `node tools/check_missing_fns.js`
 
-**Duplicate/reference checks (JavaScript):**
-- `node tools/find_dups.js` — detects duplicate `let`/`const` declarations across all JS files
-- `node tools/check_missing_fns.js` — detects undefined function references
-- Both run in pre-commit hook and CI `js-lint` job
+## Conditional Compilation Guards
 
-## Import / Include Organization
+Every HAL driver `.cpp` file wraps its entire body in `#ifdef DAC_ENABLED`. Within those files, hardware-specific includes are further wrapped in `#ifndef NATIVE_TEST`. The standard pattern:
 
-**C++ Header Order (observed pattern):**
-1. Module's own header (e.g., `#include "smart_sensing.h"`)
-2. Internal project headers in alphabetical order (e.g., `#include "app_state.h"`, `#include "config.h"`)
-3. Arduino/framework headers (e.g., `#include <Arduino.h>`, `#include <ArduinoJson.h>`)
-4. System/POSIX headers (e.g., `#include <cmath>`, `#include <string>`)
-
-**Native test includes (inside `#ifdef NATIVE_TEST` guard):**
 ```cpp
+#ifdef DAC_ENABLED
+// HalFoo driver
+
+#include "hal_foo.h"
+#include "hal_device_manager.h"
+
+#ifndef NATIVE_TEST
+#include <Arduino.h>
+#include "../debug_serial.h"
+#else
+#define LOG_I(fmt, ...) ((void)0)
+#define LOG_W(fmt, ...) ((void)0)
+#define LOG_E(fmt, ...) ((void)0)
+#ifndef OUTPUT
+#define OUTPUT 1
+#define LOW    0
+#define HIGH   1
+static void pinMode(int, int) {}
+static void digitalWrite(int, int) {}
+#endif
+#endif
+
+// ... driver implementation ...
+
+#endif // DAC_ENABLED
+```
+
+Build flags controlling features: `DAC_ENABLED`, `DSP_ENABLED`, `GUI_ENABLED`, `USB_AUDIO_ENABLED`.
+Native test flags: `UNIT_TEST`, `NATIVE_TEST` (set by `[env:native]` in `platformio.ini`).
+
+## Import Organization
+
+**C++ headers — typical order:**
+1. Module's own header (e.g. `#include "smart_sensing.h"`)
+2. Application state (`#include "app_state.h"`, `#include "globals.h"`)
+3. Application utilities (`#include "debug_serial.h"`, `#include "config.h"`)
+4. Sibling modules (`#include "i2s_audio.h"`, `#include "websocket_handler.h"`)
+5. Third-party (`#include <ArduinoJson.h>`, `#include <LittleFS.h>`)
+6. Standard library (`#include <cmath>`, `#include <cstring>`)
+
+**Test file header pattern:**
+```cpp
+#include <unity.h>
+#include <cstring>
+
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
 #include "../test_mocks/Preferences.h"
-// ... other mocks
+#include "../test_mocks/WiFi.h"
 #else
 #include <Arduino.h>
 #include <Preferences.h>
+#include <WiFi.h>
 #endif
+
+// Inline .cpp files directly (test_build_src = no)
+#include "../../src/hal/hal_device_manager.cpp"
 ```
 
-**HAL header style:** Use `#pragma once` (not `#ifndef` guards) in all `src/hal/` headers.
+## AppState Access Pattern
 
-**JavaScript:** No `import`/`require` in `web_src/` — files are concatenated by `tools/build_web_assets.js` and load-ordered by filename prefix (`01-`, `02-`, etc.).
+All application state is accessed through the `appState` singleton using domain-qualified paths:
+- `appState.wifi.ssid`, `appState.wifi.enabled`
+- `appState.audio.adcEnabled[i]`, `appState.audio.amplifierState`
+- `appState.dac.es8311Enabled`, `appState.dac.requestDacToggle(1)`
+- `appState.general.darkMode`, `appState.general.deviceSerialNumber`
+- `appState.dsp.enabled`, `appState.dsp.swapFailures`
+- `appState.mqtt.broker`, `appState.mqtt.port`
 
-## Compile-Time Feature Guards
-
-Feature-conditional code is wrapped with guards defined as build flags:
-```cpp
-#ifdef DSP_ENABLED
-// DSP-specific code
-#endif
-
-#ifdef DAC_ENABLED
-// DAC/HAL-specific code
-#endif
-
-#ifdef USB_AUDIO_ENABLED
-// TinyUSB UAC2 code
-#endif
-
-#ifdef GUI_ENABLED
-// LVGL/TFT code
-#endif
-
-#ifdef NATIVE_TEST
-// Native test overrides (mock includes, stub statics)
-#endif
-```
-
-Native test builds compile with `-D UNIT_TEST -D NATIVE_TEST` (both flags set).
+Legacy macro aliases (e.g. `#define wifiSSID appState.wifiSSID`) exist for backward compat. New code uses `appState.domain.fieldName` directly.
 
 ## Error Handling
 
-**HAL devices:** Return `HalInitResult` from `init()` — use `hal_init_ok()` on success, `hal_init_fail(DIAG_HAL_INIT_FAILED, "reason")` on failure. Never return raw bool from `init()`.
+**C++:**
+- Functions that can fail return `bool` (true=success) or `HalInitResult` (HAL drivers)
+- `HalInitResult` wraps success/failure with an error code (`diag_error_codes.h`) and reason string
+- Use `hal_init_ok()` / `hal_init_fail(DIAG_CODE, "reason")` factory functions
+- HTTP handlers: return JSON `{ "success": false, "error": "message" }` with appropriate HTTP status
+- HTTP 503 returned when DSP swap fails (15 endpoints guarded)
+- HTTP 429 with `Retry-After` header for login rate limit violations
+- Never silently swallow errors; use `LOG_E` before returning false
 
-**JSON API handlers:** Set `doc["success"] = false` and include an error field when returning HTTP error responses.
-
-**Preferences/NVS:** Always call `prefs.end()` after `prefs.begin()` — use scoped blocks or early returns before `end()` only when no writes remain.
-
-**File I/O (LittleFS):** Check `!file || file.size() == 0` after `open()`. Close with `file.close()` before return. Use atomic write pattern for critical config: write to `.tmp` then rename.
-
-**Cross-core flags:** Use `volatile` for all flags read/written from multiple FreeRTOS tasks (e.g., `volatile bool _mqttReconfigPending`, `volatile int8_t _pendingDacToggle`). Deferred toggle setters use validated accessors (`requestDacToggle(int8_t)` only accepts -1, 0, 1).
-
-**AppState dirty flags:** Every state setter must call both the dirty flag setter AND `app_events_signal(EVT_XXX)`:
-```cpp
-appState.setSomeDirty();
-app_events_signal(EVT_DISPLAY);
-```
+**JavaScript:**
+- `apiFetch()` wrapper handles 401 by redirecting to `/login`
+- Async errors in `try/catch` blocks; `console.error` for unexpected exceptions
+- WS reconnect with exponential backoff: `WS_MIN_RECONNECT_DELAY=2000ms` → `WS_MAX_RECONNECT_DELAY=30000ms`
 
 ## Logging
 
-**Framework:** `DebugSerial` class with `LOG_D` / `LOG_I` / `LOG_W` / `LOG_E` macros defined in `src/debug_serial.h`.
+**Framework:** `debug_serial.h` macros (`LOG_D`, `LOG_I`, `LOG_W`, `LOG_E`)
 
-**Log levels:**
-- `LOG_D(fmt, ...)` — DEBUG: high-frequency operational detail, rate-limited state snapshots
-- `LOG_I(fmt, ...)` — INFO: state transitions, connect/disconnect events, significant lifecycle events
-- `LOG_W(fmt, ...)` — WARN: unexpected conditions that don't stop operation
-- `LOG_E(fmt, ...)` — ERROR: failures that degrade functionality
+**Log level semantics:**
+- `LOG_I(fmt, ...)`: State transitions, significant events (connect/disconnect, start/stop, health changes)
+- `LOG_D(fmt, ...)`: High-frequency operational details (pattern steps, param snapshots)
+- `LOG_W(fmt, ...)`: Recoverable abnormal conditions (config fallback, unsupported value)
+- `LOG_E(fmt, ...)`: Errors requiring attention (init failure, write failure, assertion fail)
 
-**Module prefix convention (always include in first argument):**
-```cpp
-LOG_I("[MQTT] Connected to broker");
-LOG_D("[Sensing] Smoothed level: %.1f dBFS", level);
-LOG_W("[WiFi] Scan skipped — Bus 0 SDIO conflict");
-LOG_E("[HAL] init() failed for %s", compat);
-```
+**Mandatory prefix format — every log call includes `[ModuleName]`:**
 
-**Module prefix table:**
-| Module | Prefix |
-|--------|--------|
-| `smart_sensing` | `[Sensing]` |
-| `i2s_audio` | `[Audio]` |
-| `signal_generator` | `[SigGen]` |
-| `buzzer_handler` | `[Buzzer]` |
-| `wifi_manager` | `[WiFi]` |
-| `mqtt_handler` / `mqtt_publish` | `[MQTT]` |
-| `ota_updater` | `[OTA]` |
-| `settings_manager` | `[Settings]` |
-| `usb_audio` | `[USB Audio]` |
-| `hal_*` | `[HAL]`, `[HAL Discovery]`, `[HAL DB]`, `[HAL API]` |
-| `output_dsp` | `[OutputDSP]` |
-| `gui_*` | `[GUI]` |
+| Module | Log Prefix | File |
+|--------|-----------|------|
+| MQTT handler | `[MQTT]` | `src/mqtt_handler.cpp`, `src/mqtt_publish.cpp` |
+| Smart sensing | `[Sensing]` | `src/smart_sensing.cpp` |
+| HAL device manager | `[HAL]` | `src/hal/hal_device_manager.cpp` |
+| HAL discovery | `[HAL Discovery]` | `src/hal/hal_discovery.cpp` |
+| HAL device DB | `[HAL DB]` | `src/hal/hal_device_db.cpp` |
+| HAL API | `[HAL API]` | `src/hal/hal_api.cpp` |
+| HAL PCM5102A | `[HAL:PCM5102A]` | `src/hal/hal_pcm5102a.cpp` |
+| Audio / I2S | `[Audio]` | `src/i2s_audio.cpp` |
+| WiFi | `[WiFi]` | `src/wifi_manager.cpp` |
+| OTA | `[OTA]` | `src/ota_updater.cpp` |
+| Settings | `[Settings]` | `src/settings_manager.cpp` |
+| USB Audio | `[USB Audio]` | `src/usb_audio.cpp` |
+| Signal generator | `[SigGen]` | `src/signal_generator.cpp` |
+| Buzzer | `[Buzzer]` | `src/buzzer_handler.cpp` |
+| GUI | `[GUI]` | `src/gui/gui_manager.cpp` etc. |
 
-**Never log in ISR or real-time audio task paths.** Use dirty-flag pattern: task sets flag, main loop calls `audio_periodic_dump()` for Serial/WS output.
+**ISR and audio task logging is FORBIDDEN.** The `audio_pipeline_task` (Core 1) must never call `LOG_*` or `Serial.print`. Use the dirty-flag pattern: task sets a flag, main loop calls `audio_periodic_dump()` for actual output.
 
-**Transition logging:** Use file-local `static prev` variables to detect state changes; log transitions not repeated state:
-```cpp
-static SensingMode prevMode = ALWAYS_ON;
-if (appState.currentMode != prevMode) {
-    LOG_I("[Sensing] Mode changed: %d -> %d", prevMode, appState.currentMode);
-    prevMode = appState.currentMode;
-}
-```
+**Log transitions, not steady state.** Use a `static prev` variable to detect changes and log only when state differs.
 
 ## Comments
 
-**Section banners:** Use `// ===== Section Name =====` for logical groupings within files.
+**When to comment:**
+- Non-obvious hardware interactions: clock topology, DMA constraints, ISR safety, I2C bus conflicts
+- Cross-module contracts (e.g. `// NOTE: I2S TX channel is owned by i2s_audio.cpp`)
+- Safety invariants (e.g. `// Never call i2s_configure_adc1() in the task loop`)
+- Section dividers use `// ===== Section Name =====` style
 
-**Function comments:** Use `//` line comments directly above the function for a single-line summary. No JSDoc/Doxygen on firmware functions.
-
-**Complex logic:** Inline `//` comments on the same line or above the statement. Multi-line explanatory blocks use `//` prefix on each line.
-
-**HAL headers:** Brief doc comment on each virtual method explaining the contract:
-```cpp
-// probe(): Non-destructive check — I2C ACK + chip ID verify
-virtual bool probe() = 0;
-```
-
-**TODO/FIXME:** Acceptable for deferred work items. Run `grep -rn "TODO\|FIXME"` to audit.
+**JSDoc / TSDoc:**
+- Not used for internal functions. Header comment blocks at top of spec files describe test intent.
+- E2E test files start with a `/** ... */` JSDoc block naming the spec and key constraints.
 
 ## Function Design
 
-**Size:** Modules follow handler pattern — functions handle one HTTP verb or one subsystem responsibility. Large modules (e.g., `mqtt_handler.cpp` ~1120 lines) split across multiple `.cpp` files (`mqtt_handler.cpp`, `mqtt_publish.cpp`, `mqtt_ha_discovery.cpp`).
+**Size:** Handlers and lifecycle methods are allowed to be long (MQTT handler ~1120 lines split across 3 files). New code should prefer extracting helpers.
 
-**Parameters:** Prefer passing by `const String &` for string parameters. Use value types for primitives.
+**Parameters:** C-style `(const char* name, int value)` over references for POD types in C; references for objects. HAL `init()` reads config from `HalDeviceManager::instance().getConfig(_slot)` rather than taking parameters.
 
-**Return Values:** Pure computation functions return values. Side-effect functions return `bool` for success/failure. HAL `init()` returns `HalInitResult` (not raw bool).
+**Return values:**
+- Void for fire-and-forget operations
+- `bool` for fallible operations without detail needed
+- `HalInitResult` for HAL driver `init()` (structured error with code + reason)
+- `int` slot index (returns -1 on failure) for registration functions
 
 ## Module Design
 
-**Exports:** Declare public API in `.h` with function prototypes. Implement in `.cpp`. No inline implementations in headers except simple getters.
+**C++ modules** follow a header + implementation split:
+- Header declares public API with `#pragma once` or `#ifndef` guard
+- HAL headers wrap content in `#ifdef DAC_ENABLED`
+- Implementation files start with `#ifdef DAC_ENABLED` for HAL drivers
 
-**File-local state:** Use `static` keyword for module-private variables at file scope. Group them near the top of `.cpp` below includes with a `// ===== Section =====` banner.
+**JavaScript modules** are concatenated scripts, not ES modules:
+- Variables declared with `let` / `const` at the top of the file contribute to shared scope
+- No `export`/`import` — all declarations must be in `web_src/.eslintrc.json` globals
+- Numeric filename prefix `NN-` controls load order strictly
 
-**AppState access:** Use `appState.memberName` directly (not legacy `#define` aliases). Singleton via `AppState::getInstance()` or the `appState` macro.
-
-**Barrel files:** Not used. Headers included directly as needed.
-
-## Commit Message Convention
+## Commit Convention
 
 ```
 feat: Add new feature
@@ -225,8 +228,8 @@ test: Add/update tests
 chore: Maintenance tasks
 ```
 
-Do not add `Co-Authored-By` trailers to any commit message.
+**IMPORTANT:** Never add `Co-Authored-By` trailers to commits. No AI attribution lines.
 
 ---
 
-*Convention analysis: 2026-03-08*
+*Convention analysis: 2026-03-09*
