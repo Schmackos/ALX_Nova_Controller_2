@@ -36,12 +36,35 @@ Tests run on the `native` environment (host machine with gcc/MinGW) using the Un
 
 ## Architecture
 
-### State Management — AppState Singleton
-All application state lives in `src/app_state.h` as a singleton accessed via `AppState::getInstance()` or the `appState` macro. It uses **dirty flags** (e.g., `isBuzzerDirty()`, `isDisplayDirty()`, `isOTADirty()`) to detect changes and minimize unnecessary WebSocket broadcasts and MQTT publishes. Every dirty-flag setter also calls `app_events_signal(EVT_XXX)` (defined in `src/app_events.h`) so the main loop can replace `delay(5)` with `app_events_wait(5)` — waking immediately on any state change and falling back to a 5 ms tick when idle. The event group uses 24 usable bits (`EVT_ANY = 0x00FFFFFF`; bits 24-31 are reserved by FreeRTOS). Currently 16 event bits are assigned (bits 0-15) with 8 spare.
+### State Management — AppState Singleton (DEBT-4 Decomposed, 2026-03-09)
+Application state is decomposed across 15 lightweight domain-specific headers under `src/state/`, composed into a thin `AppState` singleton (reduced from 553 to ~80 lines). Access via `AppState::getInstance()` or the `appState` macro. All state lives in `appState` — domain modules include only the headers they need.
 
-Legacy code uses `#define` macros (e.g., `#define wifiSSID appState.wifiSSID`) to alias global variable names to AppState members. New code should use `appState.memberName` directly.
+**Domain State Headers** (15 total):
+- `src/state/enums.h` — `AppFSMState`, `FftWindowType`, `NetIfType` (shared enums)
+- `src/state/general_state.h` — `GeneralState` (timezoneOffset, dstOffset, darkMode, enableCertValidation, deviceSerialNumber)
+- `src/state/ota_state.h` — `OtaState` + `ReleaseInfo` struct
+- `src/state/audio_state.h` — `AudioState` with `AdcState[]`, `I2sRuntimeMetrics`, **volatile `bool audioPaused`** (cross-core), sensing fields, pipeline bypass arrays
+- `src/state/dac_state.h` — `DacState` with primary DAC, ES8311 fields, `EepromDiag` nested struct, validated setters `requestDacToggle()` / `requestEs8311Toggle()`
+- `src/state/dsp_state.h` — `DspSettingsState` (enabled, bypass, presets, swap diagnostics)
+- `src/state/display_state.h` — `DisplayState`
+- `src/state/buzzer_state.h` — `BuzzerState`
+- `src/state/signal_gen_state.h` — `SignalGenState`
+- `src/state/usb_audio_state.h` — `UsbAudioState` (guarded by `USB_AUDIO_ENABLED`)
+- `src/state/wifi_state.h` — `WifiState` (SSID, password, AP mode, connection)
+- `src/state/mqtt_state.h` — `MqttState` (broker config, connection state)
+- `src/state/ethernet_state.h` — `EthernetState`
+- `src/state/debug_state.h` — `DebugState` (debug mode, serial level, hw stats, heapCritical)
+- `src/state/hal_coord_state.h` — Reserved (future HAL coordination)
 
-Change-detection shadow fields (`prevMqtt*`) have been extracted from AppState into file-local statics in `mqtt_publish.cpp`. Similarly, `prevBroadcast*` sensing fields live in `smart_sensing.cpp`. DAC/ES8311 deferred toggles use validated setters: `appState.requestDacToggle(int8_t)` and `appState.requestEs8311Toggle(int8_t)` — only accept -1, 0, 1; direct writes to `_pendingDacToggle` / `_pendingEs8311Toggle` are unsafe.
+**Usage pattern**: Access domain state via nested composition: `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.dac.es8311Enabled`, `appState.general.darkMode`, `appState.dsp.enabled`, etc. Dirty flags and event signaling remain in AppState shell for backward compat.
+
+**Cross-domain coordination**: AppState retains `volatile bool _mqttReconfigPending`, `volatile int8_t _pendingApToggle`, and backoff delays — inherently cross-cutting concerns unrelated to a single domain.
+
+AppState uses **dirty flags** (e.g., `isBuzzerDirty()`, `isDisplayDirty()`, `isOTADirty()`) to detect changes and minimize unnecessary WebSocket broadcasts and MQTT publishes. Every dirty-flag setter also calls `app_events_signal(EVT_XXX)` (defined in `src/app_events.h`) so the main loop can replace `delay(5)` with `app_events_wait(5)` — waking immediately on any state change and falling back to a 5 ms tick when idle. The event group uses 24 usable bits (`EVT_ANY = 0x00FFFFFF`; bits 24-31 are reserved by FreeRTOS). Currently 16 event bits are assigned (bits 0-15) with 8 spare.
+
+Legacy code uses `#define` macros (e.g., `#define wifiSSID appState.wifiSSID`) to alias global variable names to AppState members. New code should use `appState.fieldName` directly; domain lookups use `appState.domain.fieldName` (e.g., `appState.wifi.ssid`).
+
+Change-detection shadow fields (`prevMqtt*`) have been extracted from AppState into file-local statics in `mqtt_publish.cpp`. Similarly, `prevBroadcast*` sensing fields live in `smart_sensing.cpp`. DAC/ES8311 deferred toggles use validated setters: `appState.dac.requestDacToggle(int8_t)` and `appState.dac.requestEs8311Toggle(int8_t)` — only accept -1, 0, 1; direct writes to `_pendingDacToggle` / `_pendingEs8311Toggle` are unsafe.
 
 ### FSM States
 The application uses a finite state machine (`AppFSMState` in `app_state.h`): `STATE_IDLE`, `STATE_SIGNAL_DETECTED`, `STATE_AUTO_OFF_TIMER`, `STATE_WEB_CONFIG`, `STATE_OTA_UPDATE`, `STATE_ERROR`.

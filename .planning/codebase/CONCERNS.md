@@ -106,12 +106,9 @@ These issues were identified by cppcheck in the 2026-03-08 CI run and currently 
 - Impact: Two parallel code paths manage DAC initialization (HAL lifecycle and direct call). State divergence is possible if both paths run, though static guards currently prevent double-init. New contributors are likely to miss this and break the invariant.
 - Fix approach: Deferred from v3. Route all DAC init through the HAL manager; remove direct `dac_output_init()` calls.
 
-### DEBT-4: `AppState` Is a 553-Line God Object
+### ~~DEBT-4: `AppState` Is a 553-Line God Object~~ RESOLVED (2026-03-09)
 
-- Issue: `src/app_state.h` is 553 lines and holds WiFi credentials, audio state, OTA state, DSP state, GUI state, HAL coordination flags, backoff timers, and dirty flags in a single class. All modules take a global dependency on it.
-- Files: `src/app_state.h`
-- Impact: Any change to `AppState` requires full firmware rebuild. Testing individual modules requires instantiating the entire singleton. New state is added here by default rather than being co-located with the module that owns it.
-- Fix approach: Deferred. Extract cohesive subsets (OTA state, audio state, WiFi state) into smaller structs owned by their modules, with `AppState` referencing them.
+- **Fixed**: All 10 phases complete. AppState decomposed into 15 domain-specific state headers in `src/state/` (enums, general, ota, audio, dac, dsp, display, buzzer, siggen, usb_audio, wifi, mqtt, ethernet, debug, hal_coord). AppState reduced to ~80 lines (thin composition shell). All 1,947 references across 30 source files mechanically updated via multi-pass sed. Cross-core volatile semantics preserved on sub-struct field. All 1579 C++ tests + 26 E2E tests passing. Commit: `7d0f072`. Usage pattern: `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.dac.es8311Enabled`, etc. Dirty flags + event signaling unchanged in AppState. Cross-task coordination flags (`_mqttReconfigPending`, `_pendingApToggle`) remain in AppState (inherently cross-cutting).
 
 ### DEBT-5: `websocket_handler.cpp` Is 2411 Lines
 
@@ -267,4 +264,4 @@ These issues were identified by cppcheck in the 2026-03-08 CI run and currently 
 
 ---
 
-*Concerns audit: 2026-03-08*
+*Concerns audit: 2026-03-08 | DEBT-4 resolved: 2026-03-09*
