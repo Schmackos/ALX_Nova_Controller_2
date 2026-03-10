@@ -1211,28 +1211,22 @@ void loop() {
 #endif
 
 #ifdef DAC_ENABLED
-  // Process generic deferred device toggle (Phase 3 — device-independent)
-  // Replaces pendingDacToggle and pendingEs8311Toggle with HAL-aware mechanism
+  // Process generic deferred device toggle — bridge owns activation lifecycle
   if (appState.dac.pendingToggle.halSlot < 0xFF) {
-    HalDevice* dev = HalDeviceManager::instance().getDevice(appState.dac.pendingToggle.halSlot);
-    if (dev) {
-      if (appState.dac.pendingToggle.action > 0) {
-        // Enable: find sink slot for this device via bridge mapping
-        int8_t sinkSlot = hal_pipeline_get_sink_slot(appState.dac.pendingToggle.halSlot);
-        if (sinkSlot < 0) sinkSlot = 0;  // Fallback to primary sink if not yet mapped
-        LOG_I("[DAC] Deferred device activation for HAL slot %u → sink slot %d",
-              appState.dac.pendingToggle.halSlot, (int)sinkSlot);
-        if (dac_activate_for_hal(dev, (uint8_t)sinkSlot)) {
-          appState.markDacDirty();
-        }
-      } else if (appState.dac.pendingToggle.action < 0) {
-        LOG_I("[DAC] Deferred device deactivation for HAL slot %u", appState.dac.pendingToggle.halSlot);
-        dac_deactivate_for_hal(dev);
-        appState.markDacDirty();
-      }
-    }
+    uint8_t halSlot = appState.dac.pendingToggle.halSlot;
+    int8_t  action  = appState.dac.pendingToggle.action;
     appState.dac.pendingToggle.halSlot = 0xFF;
     appState.dac.pendingToggle.action = 0;
+
+    if (action > 0) {
+      LOG_I("[DAC] Deferred device activation for HAL slot %u", halSlot);
+      hal_pipeline_activate_device(halSlot);
+      appState.markDacDirty();
+    } else if (action < 0) {
+      LOG_I("[DAC] Deferred device deactivation for HAL slot %u", halSlot);
+      hal_pipeline_deactivate_device(halSlot);
+      appState.markDacDirty();
+    }
   }
 
   // Broadcast DAC state changes (WS/API/MQTT -> all clients)
