@@ -30,6 +30,7 @@
 #include "dac_hal.h"
 #include "dac_eeprom.h"
 #include "hal/hal_device_manager.h"
+#include "hal/hal_audio_device.h"
 #include "hal/hal_pipeline_bridge.h"
 #include "hal/hal_settings.h"
 #include "hal/hal_types.h"

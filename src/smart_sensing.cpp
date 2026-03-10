@@ -339,13 +339,13 @@ void setAmplifierState(bool state) {
     appState.audio.amplifierState = state;
 #ifdef DAC_ENABLED
     HalDevice* relayDev = HalDeviceManager::instance().findByCompatible("generic,relay-amp");
-    if (relayDev && relayDev->isReady()) {
+    if (relayDev && relayDev->_ready) {
       static_cast<HalRelay*>(relayDev)->setEnabled(state);
     } else {
       digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
     }
     LOG_I("[Sensing] Amplifier %s (via %s)", state ? "ON" : "OFF",
-          (relayDev && relayDev->isReady()) ? "HAL" : "GPIO");
+          (relayDev && relayDev->_ready) ? "HAL" : "GPIO");
 #else
     digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
     LOG_I("[Sensing] Amplifier %s", state ? "ON" : "OFF");
