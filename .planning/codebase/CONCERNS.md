@@ -162,11 +162,9 @@
 - Safe modification: Space requests ≥ 1 main-loop cycle (~5ms) apart from automations.
 - Test coverage: No test for concurrent toggle overwrite.
 
-**I2S MCLK pin hardcoded in `i2s_configure_adc1()` despite HAL config:**
-- Files: `src/i2s_audio.cpp:387,395,401`, `src/config.h:53`
-- Why fragile: Both `tx_cfg.gpio_cfg.mclk` and `rx_cfg.gpio_cfg.mclk` are set to `(gpio_num_t)I2S_MCLK_PIN` (compile-time constant) inside the deprecated `i2s_configure_adc1()`. The new `i2s_audio_configure_adc()` path reads MCLK from HAL config. Any code still calling the old path uses the hardcoded pin and ignores `HalDeviceConfig.pinMclk`.
-- Safe modification: Route all ADC init through `i2s_audio_configure_adc()`. Do not call `i2s_configure_adc1/2()` from new code.
-- Test coverage: Only the HAL path is covered by `test_hal_pcm1808`. Deprecated path has no test.
+**FIXED — I2S MCLK/BCK/LRC pins hardcoded in `i2s_configure_adc1()` and `hal_i2s_bridge.cpp` despite HAL config:**
+- Files: `src/i2s_audio.cpp`, `src/hal/hal_i2s_bridge.cpp`
+- Resolution: Added `_cachedAdcCfg[2]` / `_cachedAdcCfgValid[2]` file-scope statics in `i2s_audio.cpp`. `i2s_audio_configure_adc()` populates the cache on init. `_resolveI2sPin()` helper reads `HalDeviceConfig` fields with compile-time fallback (`> 0` guard, consistent with existing `pinData` pattern). Fixed 4 callsites: `i2s_configure_adc1()` (MCLK/BCK/LRC), `i2s_audio_enable_tx()` (MCLK/BCK/LRC/DIN), `i2s_audio_set_sample_rate()` (passes cached config instead of `nullptr` — prevents pin loss on sample rate change), `i2s_log_params()` (boot log shows actual resolved GPIO numbers). `hal_i2s_bridge.cpp` BCK/LRC now resolved from `cfg->pinBck`/`cfg->pinLrc`. 8 new tests in `test_i2s_config_cache`. Branch: `fix/i2s-pin-hal-config`.
 
 **`DSP_MULTIBAND_MAX_SLOTS = 1` limits multiband compressor to one global instance:**
 - Files: `src/dsp_pipeline.cpp:69`
@@ -174,11 +172,10 @@
 - Safe modification: Check `dsp_mb_alloc_slot()` return value in `dsp_add_stage()` and fail gracefully with a swap rollback, like FIR stages do.
 - Test coverage: `test_multiband_slot_alloc_and_free` covers alloc/free; the overflow case (alloc beyond 1) is not tested.
 
-**WS authentication count `_wsAuthCount` can underflow on unexpected disconnect order:**
+**MITIGATED — WS authentication count `_wsAuthCount` can underflow on unexpected disconnect order:**
 - Files: `src/websocket_handler.cpp` (`_wsAuthCount` decrement path)
-- Why fragile: The counter decrements on WS disconnect for authenticated clients. An underflow guard exists, but the count can become stale if a client disconnects before auth completes or if the auth flag is set inconsistently.
-- Safe modification: Always check `wsAuthStatus[num]` before decrementing; ensure auth status is cleared atomically with the decrement.
-- Test coverage: 5 tests cover the counter; disconnect-before-auth edge case has a guard but relies on flag coherence.
+- Mitigation: Dual guard `if (wsAuthStatus[num] && _wsAuthCount > 0) _wsAuthCount--` prevents underflow regardless of disconnect ordering. All WS operations run exclusively on Core 1 (single-core access — confirmed in `docs-site/docs/developer/websocket.md:771`), eliminating data-race risk without requiring a mutex. 5 dedicated tests cover all counter paths including disconnect-before-auth.
+- No code change needed; flag coherence is guaranteed by the single-core access constraint.
 
 **`_outCh` lazy allocation — NULL-pointer write risk if guard is missed:**
 - Files: `src/audio_pipeline.cpp:266,274,298,337`

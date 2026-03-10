@@ -206,6 +206,14 @@ uint32_t i2s_audio_get_sample_rate(void);
 uint32_t i2s_audio_read_port(int port, int32_t *dst, uint32_t frames);
 bool     i2s_audio_is_port_active(int port);
 
+#ifdef NATIVE_TEST
+// Test hooks: expose per-lane config cache internals for native unit tests
+void _test_i2s_cache_set(int lane, const struct HalDeviceConfig* cfg);
+const struct HalDeviceConfig* _test_i2s_cache_get(int lane);
+bool _test_i2s_cache_valid(int lane);
+void _test_i2s_cache_reset();
+#endif
+
 // ===== Generic ADC I2S Configuration =====
 // Configure an I2S ADC lane with optional HAL device config for pin/port overrides.
 // Lane 0: full-duplex (primary ADC + DAC TX), outputs MCLK/BCK/WS clocks.

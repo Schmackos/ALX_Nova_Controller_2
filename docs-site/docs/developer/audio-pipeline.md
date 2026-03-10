@@ -293,3 +293,37 @@ Override these via build flags in `platformio.ini` if you need more lanes or sin
 | `AUDIO_PIPELINE_MAX_OUTPUTS` | 8 | Number of output channels |
 | `AUDIO_PIPELINE_MATRIX_SIZE` | 16 | Matrix dimension (inputs and outputs share this) |
 | `AUDIO_OUT_MAX_SINKS` | 8 | Maximum number of registered output sinks |
+
+## I2S GPIO Pin Assignment
+
+All I2S clock and data pin assignments are resolved from `HalDeviceConfig` at init time, with compile-time constants from `src/config.h` as fallback. Expansion modules can override the default pin mapping via HAL device configuration without recompiling firmware.
+
+### Pin Resolution Rules
+
+| Field | Default (`config.h`) | Override condition |
+|---|---|---|
+| `pinMclk` | `I2S_MCLK_PIN` (GPIO 22) | `cfg->pinMclk > 0` |
+| `pinBck` | `I2S_BCK_PIN` (GPIO 20) | `cfg->pinBck > 0` |
+| `pinLrc` | `I2S_LRC_PIN` (GPIO 21) | `cfg->pinLrc > 0` |
+| `pinData` (RX) | `I2S_DOUT_PIN` (GPIO 23) | `cfg->pinData > 0` |
+
+The guard condition is `> 0` (not `>= 0`) because GPIO 0 is a strapping pin on ESP32-P4 and is never a valid I2S pin.
+
+### Config Cache
+
+`i2s_audio.cpp` maintains a two-lane config cache (`_cachedAdcCfg[2]`) that is written when `i2s_audio_configure_adc()` is called during HAL device init and read on every subsequent call — including sample rate changes. This guarantees that pin overrides from `/hal_config.json` survive a sample rate reconfiguration without requiring the HAL to reinitialise the device.
+
+```cpp
+// Cache is populated automatically inside i2s_audio_configure_adc()
+// when cfg != nullptr && cfg->valid == true.
+// Sample rate changes read from cache:
+i2s_audio_configure_adc(0, _cachedAdcCfgValid[0] ? &_cachedAdcCfg[0] : nullptr);
+```
+
+### ADC2 Clock Pins
+
+ADC2 (`I2S_NUM_1`) uses `I2S_GPIO_UNUSED` for MCLK, BCK, and WS. It derives its clock from ADC1's output on the GPIO matrix — both ports run from the same 160 MHz `D2CLK` with identical divider chains, giving frequency-locked BCK. Do not assign clock pins to ADC2's `HalDeviceConfig`.
+
+:::info MCLK drive strength
+MCLK is driven at `GPIO_DRIVE_CAP_3` (~40 mA) to guarantee PCM1808 PLL lock at 12.288 MHz. This drive strength is applied to the resolved pin, not the compile-time constant.
+:::

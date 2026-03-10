@@ -28,6 +28,7 @@
 #endif
 #include <cmath>
 #include <cstring>
+#include "hal/hal_types.h"  // HalDeviceConfig — plain struct, no platform dependencies
 
 #ifndef NATIVE_TEST
 #include <driver/i2s_std.h>
@@ -37,7 +38,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "hal/hal_settings.h"
-#include "hal/hal_types.h"
 #include "hal/hal_device_manager.h"
 #endif
 
@@ -59,6 +59,11 @@ static AudioDiagnostics _diagnostics = {};
 // Periodic dump: audio task sets flag, main loop does the actual LOG calls
 // (Serial.print at 9600-115200 baud blocks for tens-hundreds of ms, starving I2S DMA)
 static volatile bool _dumpReady = false;
+
+// Per-lane HAL config cache — populated by i2s_audio_configure_adc(), used by
+// i2s_audio_set_sample_rate() and i2s_audio_enable_tx() to survive re-init with correct pins.
+static HalDeviceConfig _cachedAdcCfg[2] = {};
+static bool _cachedAdcCfgValid[2] = {false, false};
 
 // ===== Pure computation functions (testable without hardware) =====
 
@@ -343,6 +348,12 @@ static void i2s_audio_apply_window(FftWindowType type) {
     _currentWindowType = type;
 }
 
+// Resolve an I2S GPIO pin: use config value if > 0, otherwise use compile-time fallback.
+// Convention: HAL config stores -1 for "use board default"; 0 is a strapping pin (never I2S).
+static inline gpio_num_t _resolveI2sPin(int8_t cfgValue, int fallback) {
+    return (cfgValue > 0) ? (gpio_num_t)cfgValue : (gpio_num_t)fallback;
+}
+
 // DEPRECATED: use i2s_audio_configure_adc(0, cfg) for new code.
 static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg = nullptr) {
     // Teardown any existing handles (recovery path or full-duplex toggle)
@@ -379,28 +390,35 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     gpio_num_t _rxDataPin = (_adcHalCfg && _adcHalCfg->pinData > 0)
         ? (gpio_num_t)_adcHalCfg->pinData : (gpio_num_t)I2S_DOUT_PIN;
 
+    // Resolve clock pins from HAL config (pinMclk/pinBck/pinLrc > 0 means HAL override;
+    // -1 or 0 means use board default from config.h). The > 0 convention matches all
+    // existing I2S pin checks in this file and hal_i2s_bridge.cpp.
+    gpio_num_t mclkPin = _resolveI2sPin((_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->pinMclk : -1, I2S_MCLK_PIN);
+    gpio_num_t bckPin  = _resolveI2sPin((_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->pinBck  : -1, I2S_BCK_PIN);
+    gpio_num_t lrcPin  = _resolveI2sPin((_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->pinLrc  : -1, I2S_LRC_PIN);
+
     // TX config: full clock master — MCLK/BCK/WS output, DOUT to DAC.
     // TX is initialized FIRST so clocks are live before the RX DMA starts.
     i2s_std_config_t tx_cfg = {};
     tx_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
     tx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
-    tx_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;   // MCLK OUTPUT to PCM1808 (GPIO3)
-    tx_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
-    tx_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
+    tx_cfg.gpio_cfg.mclk = mclkPin;
+    tx_cfg.gpio_cfg.bclk = bckPin;
+    tx_cfg.gpio_cfg.ws   = lrcPin;
     tx_cfg.gpio_cfg.dout = _txDataPin;                   // DAC data out (HAL-overridable)
     tx_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
     tx_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     tx_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     tx_cfg.gpio_cfg.invert_flags.ws_inv   = false;
 
-    // RX config: MCLK=GPIO3 (same as TX). Both configs pointing to the same GPIO causes the
-    // IDF5 GPIO matrix to re-route GPIO3 to the same I2S MCLK output — no clearing occurs.
-    // Setting MCLK=I2S_GPIO_UNUSED in the second init call clears GPIO3's routing, removing
+    // RX config: mclkPin (same as TX). Both configs pointing to the same GPIO causes the
+    // IDF5 GPIO matrix to re-route that pin to the same I2S MCLK output — no clearing occurs.
+    // Setting MCLK=I2S_GPIO_UNUSED in the second init call clears the pin's routing, removing
     // MCLK from the PCM1808 SCKI → PLL never locks → noise floor only (~-68 dBFS).
     i2s_std_config_t rx_cfg = tx_cfg;
-    rx_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;   // Same as TX — re-routes to same signal
-    rx_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;     // Keep — RX DMA needs BCK sync
-    rx_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;     // Keep — RX DMA needs WS sync
+    rx_cfg.gpio_cfg.mclk = mclkPin;   // Same as TX — re-routes to same signal
+    rx_cfg.gpio_cfg.bclk = bckPin;    // Keep — RX DMA needs BCK sync
+    rx_cfg.gpio_cfg.ws   = lrcPin;    // Keep — RX DMA needs WS sync
     rx_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
     rx_cfg.gpio_cfg.din  = _rxDataPin;                   // ADC1 data in (HAL-overridable)
 
@@ -425,7 +443,7 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     // Boost MCLK drive strength to GPIO_DRIVE_CAP_3 (~40 mA).
     // IDF5 I2S driver leaves GPIO drive at the default (CAP_2, ~10 mA).
     // At 12.288 MHz, marginally driven signals can cause PCM1808 SCKI PLL instability.
-    gpio_set_drive_capability((gpio_num_t)I2S_MCLK_PIN, GPIO_DRIVE_CAP_3);
+    gpio_set_drive_capability(mclkPin, GPIO_DRIVE_CAP_3);
 
     // Enable TX then RX — no delay between enables required.
     // PCM1808 PLL stabilisation (2048 LRCK cycles = ~43 ms) completes during the
@@ -433,7 +451,7 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     i2s_channel_enable(_tx_handle_adc1);
     i2s_channel_enable(_rx_handle_adc1);
     LOG_I("[Audio] ADC1 TX+RX enabled — MCLK=GPIO%d @%lu Hz, drive=CAP_3",
-          I2S_MCLK_PIN, _currentSampleRate * 256UL);
+          (int)mclkPin, _currentSampleRate * 256UL);
 }
 
 // ADC2 uses I2S_NUM_1 configured as MASTER (not slave) to bypass ESP32-S3
@@ -505,6 +523,13 @@ static bool i2s_configure_adc2(uint32_t sample_rate, const HalDeviceConfig* cfg 
 // Public generic ADC configuration — dispatches to primary (full-duplex) or
 // secondary (RX-only) based on lane index. Config provides pin/port overrides.
 bool i2s_audio_configure_adc(int lane, const HalDeviceConfig* cfg) {
+    // Cache the config per-lane so set_sample_rate() and enable_tx() can re-init
+    // with the correct HAL pin assignments (they previously passed nullptr, losing overrides).
+    if (cfg && cfg->valid && lane >= 0 && lane < 2) {
+        _cachedAdcCfg[lane] = *cfg;
+        _cachedAdcCfgValid[lane] = true;
+    }
+
     // Intentional: ESP32-P4 has exactly 2 I2S RX ports (I2S0 for ADC1, I2S1 for ADC2).
     // Software sources (SigGen, USB) don't use I2S and are not configured here.
     if (lane == 0) {
@@ -542,8 +567,13 @@ static void i2s_log_params(uint32_t sample_rate) {
           DMA_BUF_COUNT, DMA_BUF_LEN,
           (unsigned long)((uint64_t)DMA_BUF_COUNT * DMA_BUF_LEN * 1000 / sample_rate));
     LOG_I("[Audio]   Clock src   : DEFAULT (PLL_F160M on S3, APLL on P4)");
+    const int gpioMclk = (_cachedAdcCfgValid[0] && _cachedAdcCfg[0].pinMclk > 0) ? (int)_cachedAdcCfg[0].pinMclk : I2S_MCLK_PIN;
+    const int gpioBck  = (_cachedAdcCfgValid[0] && _cachedAdcCfg[0].pinBck  > 0) ? (int)_cachedAdcCfg[0].pinBck  : I2S_BCK_PIN;
+    const int gpioLrc  = (_cachedAdcCfgValid[0] && _cachedAdcCfg[0].pinLrc  > 0) ? (int)_cachedAdcCfg[0].pinLrc  : I2S_LRC_PIN;
+    const int gpioDin1 = (_cachedAdcCfgValid[0] && _cachedAdcCfg[0].pinData > 0) ? (int)_cachedAdcCfg[0].pinData : I2S_DOUT_PIN;
+    const int gpioDin2 = (_cachedAdcCfgValid[1] && _cachedAdcCfg[1].pinData > 0) ? (int)_cachedAdcCfg[1].pinData : I2S_DOUT2_PIN;
     LOG_I("[Audio]   GPIO        : MCLK=%d BCK=%d LRC=%d DIN1=%d DIN2=%d DOUT=%d",
-          I2S_MCLK_PIN, I2S_BCK_PIN, I2S_LRC_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN, I2S_TX_DATA_PIN);
+          gpioMclk, gpioBck, gpioLrc, gpioDin1, gpioDin2, I2S_TX_DATA_PIN);
     LOG_I("[Audio] ----------------------------");
 }
 
@@ -844,8 +874,10 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
     }
 
-    if (_adc2InitOk) _adc2InitOk = i2s_audio_configure_adc(1, nullptr);
-    i2s_audio_configure_adc(0, nullptr);
+    if (_adc2InitOk) _adc2InitOk = i2s_audio_configure_adc(1,
+        _cachedAdcCfgValid[1] ? &_cachedAdcCfg[1] : nullptr);
+    i2s_audio_configure_adc(0,
+        _cachedAdcCfgValid[0] ? &_cachedAdcCfg[0] : nullptr);
 
     AppState::getInstance().audio.paused = false;
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
@@ -1000,15 +1032,24 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
         return false;
     }
 
+    // Resolve ADC1 clock and data-in pins from the lane-0 HAL config cache.
+    // The cache was populated at boot by i2s_audio_configure_adc(0, cfg); falling back
+    // to board defaults ensures this function works even if called before the cache is set.
+    const HalDeviceConfig* adcCfg = _cachedAdcCfgValid[0] ? &_cachedAdcCfg[0] : nullptr;
+    gpio_num_t mclkPin = _resolveI2sPin((adcCfg && adcCfg->valid) ? adcCfg->pinMclk : -1, I2S_MCLK_PIN);
+    gpio_num_t bckPin  = _resolveI2sPin((adcCfg && adcCfg->valid) ? adcCfg->pinBck  : -1, I2S_BCK_PIN);
+    gpio_num_t lrcPin  = _resolveI2sPin((adcCfg && adcCfg->valid) ? adcCfg->pinLrc  : -1, I2S_LRC_PIN);
+    gpio_num_t dinPin  = _resolveI2sPin((adcCfg && adcCfg->valid) ? adcCfg->pinData : -1, I2S_DOUT_PIN);
+
     // IDF5 full-duplex: BOTH handles must be initialized with the same config
     i2s_std_config_t std_cfg = {};
     std_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
     std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
-    std_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;
-    std_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
-    std_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
+    std_cfg.gpio_cfg.mclk = mclkPin;
+    std_cfg.gpio_cfg.bclk = bckPin;
+    std_cfg.gpio_cfg.ws   = lrcPin;
     std_cfg.gpio_cfg.dout = _txDataPin;
-    std_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT_PIN;
+    std_cfg.gpio_cfg.din  = dinPin;
     std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
@@ -1184,5 +1225,22 @@ I2sStaticConfig i2s_audio_get_static_config() {
     cfg.adc[1].mclkHz = 48000 * 256;
     cfg.adc[1].commFormat = "Standard I2S";
     return cfg;
+}
+
+// Test hooks: expose cache internals for native unit tests
+void _test_i2s_cache_set(int lane, const HalDeviceConfig* cfg) {
+    if (lane >= 0 && lane < 2 && cfg) {
+        _cachedAdcCfg[lane] = *cfg;
+        _cachedAdcCfgValid[lane] = true;
+    }
+}
+const HalDeviceConfig* _test_i2s_cache_get(int lane) {
+    return (lane >= 0 && lane < 2 && _cachedAdcCfgValid[lane]) ? &_cachedAdcCfg[lane] : nullptr;
+}
+bool _test_i2s_cache_valid(int lane) {
+    return (lane >= 0 && lane < 2) && _cachedAdcCfgValid[lane];
+}
+void _test_i2s_cache_reset() {
+    _cachedAdcCfgValid[0] = _cachedAdcCfgValid[1] = false;
 }
 #endif // NATIVE_TEST

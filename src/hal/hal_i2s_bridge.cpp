@@ -25,14 +25,16 @@ bool hal_i2s_tx_init(void** txHandle, const HalDeviceConfig* cfg) {
     uint8_t  bits    = (cfg && cfg->bitDepth > 0)   ? cfg->bitDepth   : 16;
     int      dataPin = (cfg && cfg->pinData > 0)    ? cfg->pinData    : I2S_TX_DATA_PIN;
     int      mclkPin = (cfg && cfg->pinMclk > 0)    ? cfg->pinMclk    : I2S_MCLK_PIN;
+    int      bckPin  = (cfg && cfg->pinBck > 0)     ? cfg->pinBck     : I2S_BCK_PIN;
+    int      lrcPin  = (cfg && cfg->pinLrc > 0)     ? cfg->pinLrc     : I2S_LRC_PIN;
 
     i2s_std_config_t stdCfg = {
         .clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(rate),
         .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG((i2s_data_bit_width_t)bits, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
             .mclk = (gpio_num_t)mclkPin,
-            .bclk = (gpio_num_t)I2S_BCK_PIN,
-            .ws   = (gpio_num_t)I2S_LRC_PIN,
+            .bclk = (gpio_num_t)bckPin,
+            .ws   = (gpio_num_t)lrcPin,
             .dout = (gpio_num_t)dataPin,
             .din  = I2S_GPIO_UNUSED,
             .invert_flags = { 0, 0, 0 }
