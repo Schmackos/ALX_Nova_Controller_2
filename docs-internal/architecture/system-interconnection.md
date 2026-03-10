@@ -6,8 +6,7 @@ Architecture reference for the ESP32-P4 amplifier controller. Diagrams render in
 
 ## 1. System Architecture
 
-Solid lines = working connections. Dashed lines = broken/missing connections.
-Dotted boxes = legacy code scheduled for removal or unification.
+All functional data paths shown. HAL Bridge is sole sink lifecycle owner.
 
 ```mermaid
 graph TB
@@ -24,27 +23,23 @@ graph TB
     end
 
     subgraph HAL["HAL Framework (src/hal/)"]
-        HM["HalDeviceManager<br/>singleton, 8 slots, 24-pin tracking"]
+        HM["HalDeviceManager<br/>singleton, 24 slots, 56-pin tracking"]
         HD["HalDiscovery<br/>I2C scan / EEPROM / manual"]
         HDB["HalDeviceDB<br/>builtin + LittleFS presets"]
         HR["HalDriverRegistry<br/>compatible string -> factory"]
-        HPB["HalPipelineBridge<br/>(metadata-only stub)"]
+        HPB["HalPipelineBridge<br/>(state change callback)"]
     end
 
     subgraph AudioPipeline["Audio Pipeline"]
-        INP["4-Lane Input<br/>ADC1 | ADC2 | SigGen | USB"]
+        INP["8-Lane Input<br/>ADC1 | ADC2 | SigGen | USB | ..."]
         DSP["Per-Input DSP<br/>biquad, FIR, limiter"]
-        MTX["8x8 Routing Matrix"]
+        MTX["16x16 Routing Matrix"]
         ODSP["Per-Output DSP<br/>biquad, gain, compressor"]
         SINKS["AudioOutputSink dispatch<br/>write() per registered sink"]
     end
 
-    subgraph LegacyDAC["Legacy DAC Layer (to unify)"]
-        style LegacyDAC stroke-dasharray: 5 5
-        DR["DacRegistry<br/>deviceId -> factory"]
-        DH["dac_hal.cpp<br/>DacDriver, I2S TX"]
-        HDA["HalDacAdapter<br/>DacDriver -> HalAudioDevice"]
-        DE["dac_eeprom<br/>legacy EEPROM probe"]
+    subgraph DacUtil["DAC Utility (Bus Management)"]
+        DH["dac_hal.cpp<br/>I2S TX mgmt, volume curves,<br/>periodic logging"]
     end
 
     subgraph WebGUI["Web Interface"]
@@ -55,35 +50,32 @@ graph TB
 
     AS["AppState Singleton<br/>dirty flags + event group"]
 
-    %% Working connections (solid)
+    %% HAL discovery & device registration
     HM -->|"registerDevice()"| HR
     HD -->|"probe results"| HM
     HDB -->|"preset lookup"| HD
+
+    %% Audio pipeline core flow
     AP --> INP --> DSP --> MTX --> ODSP --> SINKS
+
+    %% Bridge owns sink registration
+    HM -->|"state changes"| HPB
+    HPB -->|"register/remove sink"| SINKS
+
+    %% DAC utilities (bus layer)
     SINKS -->|"write(L,R,frames)"| DH
-    DH -->|"wraps as HalAudioDevice"| HDA
-    HDA -->|"registered in slot"| HM
+
+    %% State & main loop
     AS -->|"dirty flags + EVT_XXX"| ML
     ML -->|"dispatches"| WS
     MQTT -->|"poll 20Hz, independent"| AS
     GUI -->|"reads state"| AS
-    USB -->|"ring buffer -> lane 3"| INP
+    USB -->|"ring buffer -> lane"| INP
     WEB -->|"WS frames"| WS
     HTTP -->|"/api/hal/*"| HM
-
-    %% BROKEN connections (dashed)
-    HPB -.->|"BROKEN: metadata only,<br/>never calls register_sink()"| SINKS
-    HM -.->|"BROKEN: HAL disable<br/>does not stop I2S reads"| INP
-    DH -.->|"BROKEN: clear_sinks()<br/>kills ALL sinks"| SINKS
 ```
 
-**Key broken paths:**
-
-| Issue | What happens today |
-|---|---|
-| `hal_pipeline_bridge.cpp` is metadata-only | Tracks slot booleans, never calls `audio_pipeline_register_sink()`. Sinks are registered by `dac_hal.cpp` directly. |
-| HAL disable does not stop ADC I2S reads | `pipeline_read_inputs()` checks `adcEnabled[]` flag, not HAL device state. Disabling a PCM1808 in HAL has no effect on audio capture. |
-| `dac_output_deinit()` calls `audio_pipeline_clear_sinks()` | Clears ALL registered sinks (sets `_sinkCount=0`), including the secondary ES8311 sink. |
+**All paths are functional** (post DEBT-6 completion).
 
 ---
 
@@ -184,9 +176,9 @@ sequenceDiagram
 
 ---
 
-## 4. Target Architecture
+## 4. HAL Pipeline Bridge Detail (Current Architecture)
 
-The intended data flow once `hal_pipeline_bridge.cpp` is fully implemented:
+The data flow after DEBT-6 completion. Bridge is sole sink lifecycle owner.
 
 ```mermaid
 graph LR
@@ -217,13 +209,11 @@ graph LR
     UNREG --> SINKS
 ```
 
-**What must change to reach this target:**
-
-1. `hal_pipeline_on_device_available()` must construct an `AudioOutputSink` and call `audio_pipeline_register_sink()`
-2. `hal_pipeline_on_device_removed()` must call a new `audio_pipeline_remove_sink(slot)` (per-sink removal, not `clear_sinks()`)
-3. `dac_hal.cpp` stops calling `audio_pipeline_register_sink()` directly -- bridge owns all sink lifecycle
-4. `HalDacAdapter` becomes unnecessary once bridge handles the mapping
-5. `DacRegistry` merges into `HalDriverRegistry`
+**Implementation completed in DEBT-6:**
+- Bridge owns all sink lifecycle via state change callbacks
+- `dac_hal.cpp` reduced to I2S TX management and volume curves
+- DacRegistry and HalDacAdapter deleted
+- Per-sink removal via `audio_pipeline_remove_sink(slot)` replaces `clear_sinks()`
 
 ---
 
@@ -256,7 +246,7 @@ sequenceDiagram
     Loop->>AS: clearXxxDirty()
 ```
 
-**Active event bits (14 assigned, 10 spare):**
+**Active event bits (16 assigned, 8 spare):**
 
 | Bit | Define | Dirty flag | WebSocket dispatch |
 |---|---|---|---|
@@ -272,8 +262,9 @@ sequenceDiagram
 | 9 | `EVT_SETTINGS` | `_settingsDirty` | `sendSettings()` |
 | 10 | `EVT_ADC_ENABLED` | `_adcEnabledDirty` | `sendAdcEnabled()` |
 | 11 | `EVT_ETHERNET` | `_ethernetDirty` | `sendWiFiStatus()` |
-| 13 | `EVT_DAC_SETTINGS` | `_dacSettingsDirty` | `sendDacSettings()` |
-| 14 | `EVT_HAL_DEVICE` | `_halDeviceDirty` | `sendHalDeviceState()` + `sendAudioChannelMap()` |
+| 12 | `EVT_DAC_SETTINGS` | `_dacSettingsDirty` | `sendDacSettings()` |
+| 13 | `EVT_HAL_DEVICE` | `_halDeviceDirty` | `sendHalDeviceState()` + `sendAudioChannelMap()` |
+| 14 | `EVT_AUDIO_UPDATE` | `_audioUpdateDirty` | `sendAudioUpdate()` |
 | 15 | `EVT_CHANNEL_MAP` | `_channelMapDirty` | `sendAudioChannelMap()` |
 
 **MQTT runs independently:** The `mqtt_task` on Core 0 polls at 20 Hz (50ms `vTaskDelay`). It does NOT consume from the event group -- it reads dirty flags directly and publishes independently of the main loop's WebSocket dispatch.

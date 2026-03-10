@@ -20,28 +20,32 @@ Status as of 2026-03-07. Items marked ✅ have been addressed.
 | `halSyncAudioTabVisibility()` no-op stub | `web_src/js/15-hal-devices.js` | ✅ Removed |
 | `src/Testfile.h` stale artifact | `src/` | ✅ Deleted |
 
-## Legacy Code — Active but Scheduled for Unification
+## Completed Removals (DEBT-6)
 
-| File(s) | Purpose | Migration Target | Status |
-|---------|---------|-----------------|--------|
-| `src/hal/hal_pipeline_bridge.cpp` | Metadata-only pipeline sync | Functional bridge (Phase 3.4) | 🔄 In progress |
-| `src/hal/hal_dac_adapter.h/.cpp` | Wraps DacDriver → HalAudioDevice | Remove after bridge owns sinks | ⏳ Pending |
-| `src/dac_registry.h/.cpp` | Parallel device registry | Unify into HalDriverRegistry | ⏳ Pending |
-| `src/dac_eeprom.h/.cpp` | Legacy EEPROM detection | Migrate to hal_discovery | ⏳ Pending |
+DEBT-6 (Registry Unification & Bridge Sink Ownership) is now complete. The following legacy components have been removed or refactored:
 
-## Duplicate Registries
+| Component | Role | Status |
+|-----------|------|--------|
+| `DacRegistry` | Legacy DAC-specific device registry | ✅ Deleted |
+| `HalDacAdapter` | Wrapper converting DacDriver → HalAudioDevice | ✅ Deleted |
+| `dac_output_init()` / `dac_secondary_init()` | Direct sink registration | ✅ Refactored (bridge now owns) |
+| Dual-registry architecture | HalDriverRegistry + DacRegistry parallel systems | ✅ Unified under HAL |
 
-The project has two parallel device registries:
-1. **HalDriverRegistry** (`src/hal/hal_driver_registry.h/.cpp`) — HAL framework's factory (compatible string → constructor)
-2. **DacRegistry** (`src/dac_registry.h/.cpp`) — Legacy DAC-specific registry
+## Current Architecture (post DEBT-6)
 
-Plan: Unify all device registration under HalDriverRegistry. DacRegistry to be removed after all DAC drivers are HAL-native.
+`dac_hal.cpp` is now **bus-utility only**:
+- I2S TX management (BCK/DOUT clock configuration)
+- Volume curve computation (dB → linear scaling)
+- Periodic device logging (loops all active sinks via `audio_pipeline_get_sink()`)
 
-## Legacy DAC Init Path
+**Sink lifecycle is owned solely by HAL-Pipeline Bridge:**
+- Bridge registers/removes sinks on `HalStateChangeCb` state transitions
+- No legacy `DacRegistry` or `HalDacAdapter` wrappers
+- `audio_pipeline_register_sink()` called only from `hal_pipeline_bridge.cpp`
 
-`dac_hal.cpp` currently:
-1. Creates `DacDriver` via `DacRegistry`
-2. Wraps it in `HalDacAdapter` for HAL integration
-3. Registers sinks directly via `audio_pipeline_register_sink()`
+## Remaining Known Gaps
 
-Target: Bridge registers sinks via state change callback. `dac_hal.cpp` reduced to I2S driver management only.
+| Component | Purpose | Deferred Until | Notes |
+|-----------|---------|----------------|-------|
+| `src/dac_eeprom.h/.cpp` | Legacy EEPROM v2 I2C detection | Future discovery phase | Low priority; HAL discovery v3 handles modern EEPROM |
+| TLS cert verification | Secure OTA downloads | Post-v1.13 | Pre-authorized GitHub releases used as workaround |

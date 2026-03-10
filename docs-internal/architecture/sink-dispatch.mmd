@@ -31,9 +31,9 @@ flowchart LR
     end
 
     subgraph sinks["Sink Slots (AudioOutputSink[8])"]
-        S0["Slot 0: PCM5102A\nfirstChannel=0, chCount=2\nhalSlot=N"]
-        S1["Slot 1: ES8311\nfirstChannel=2, chCount=2\nhalSlot=N"]
-        S2["Slot 2..7: (dynamic)\nassigned by HAL bridge\nordinal counting"]
+        S0["Slot 0: DAC output\nfirstChannel=0, chCount=2\nhalSlot=N\n(e.g. PCM5102A by default)"]
+        S1["Slot 1: DAC output\nfirstChannel=2, chCount=2\nhalSlot=N\n(e.g. ES8311 by default)"]
+        S2["Slot 2..7: additional outputs\nassigned by HAL bridge\nordinal counting (HAL_CAP_DAC_PATH)"]
     end
 
     subgraph hw["Hardware"]

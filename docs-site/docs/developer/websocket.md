@@ -435,18 +435,19 @@ Sent periodically when `debugI2sMetrics` is enabled.
 
 ### `dacState`
 
-:::note Reduced scope since DEBT-5
-`DacState` no longer carries per-device enabled/volume/mute fields for all DAC devices. The retained fields are `filterMode`, `txUnderruns`, pending toggle state, and `eepromDiag`. For the authoritative enable/volume/mute state of each DAC device, use the `halDeviceState` broadcast (`cfgEnabled`, `cfgVolume`, `cfgMute` fields per device slot).
+:::note Backward-compatibility broadcast only
+`DacState` now carries only `txUnderruns` and `eepromFound`/`eepromAddr` fields. Legacy fields `enabled`, `volume`, `mute`, `modelName`, `es8311Enabled`, `es8311Volume`, `es8311Mute` are broadcast for backward compatibility only. **For authoritative per-device state, use the `halDeviceState` broadcast** (`cfgEnabled`, `cfgVolume`, `cfgMute` fields per device slot).
 :::
 
 ```json
 {
   "type": "dacState",
+  "txUnderruns": 0,
+  "eepromFound": true,
+  "eepromAddr": 80,
   "enabled": true,
   "volume": 75,
   "mute": false,
-  "filterMode": 0,
-  "ready": true,
   "modelName": "PCM5102A",
   "es8311Enabled": true,
   "es8311Volume": 80,
@@ -454,7 +455,7 @@ Sent periodically when `debugI2sMetrics` is enabled.
 }
 ```
 
-The `enabled`, `volume`, `mute`, `modelName`, `es8311Enabled`, `es8311Volume`, and `es8311Mute` fields are broadcast for backward compatibility. Authoritative per-device state is available in `halDeviceState`.
+The legacy `enabled`, `volume`, `mute`, `modelName`, and `es8311*` fields are included only for backward compatibility with older clients. New integrations should use `halDeviceState` for authoritative per-device state.
 
 ### `halDeviceState`
 
