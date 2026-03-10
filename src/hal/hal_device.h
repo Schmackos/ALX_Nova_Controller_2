@@ -4,7 +4,8 @@
 #include "hal_types.h"
 #include "hal_init_result.h"
 
-struct AudioInputSource;  // Forward declaration for getInputSource()
+struct AudioInputSource;   // Forward declaration for getInputSource()
+struct AudioOutputSink;    // Forward declaration for buildSink()
 
 class HalDevice {
 public:
@@ -31,6 +32,15 @@ public:
     // Returns nullptr for non-input devices. The bridge copies the struct
     // and sets lane/halSlot before registering with audio_pipeline_set_source().
     virtual const AudioInputSource* getInputSource() const { return nullptr; }
+
+    // Audio output sink builder — override in DAC/output devices.
+    // Populates an AudioOutputSink with device-specific write/isReady callbacks.
+    // Returns true if the sink was populated successfully.
+    // Default returns false (non-output devices). No dynamic_cast needed.
+    virtual bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
+        (void)sinkSlot; (void)out;
+        return false;
+    }
 
     // ----- Descriptor -----
     const HalDeviceDescriptor& getDescriptor() const { return _descriptor; }

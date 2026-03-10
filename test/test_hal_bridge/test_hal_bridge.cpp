@@ -73,6 +73,60 @@ public:
     bool healthCheck() override { return healthResult; }
 };
 
+// ===== Test Device with buildSink() support (DEBT-6 Phase 1.4) =====
+// Extends TestAudioDevice but overrides buildSink() to simulate a
+// HalAudioDevice that can populate its own AudioOutputSink.
+class TestBuildSinkDevice : public HalDevice {
+public:
+    bool probeResult;
+    bool initResult;
+    bool healthResult;
+    bool buildSinkResult;
+    int  initCount;
+    int  deinitCount;
+    int  buildSinkCount;
+
+    TestBuildSinkDevice(const char* compat, HalDeviceType type,
+                        uint16_t priority = HAL_PRIORITY_HARDWARE) {
+        strncpy(_descriptor.compatible, compat, 31);
+        _descriptor.compatible[31] = '\0';
+        strncpy(_descriptor.name, compat, 32);
+        _descriptor.name[32] = '\0';
+        _descriptor.type = type;
+        _descriptor.channelCount = 2;
+        _descriptor.capabilities = HAL_CAP_DAC_PATH;
+        _initPriority = priority;
+        probeResult     = true;
+        initResult      = true;
+        healthResult    = true;
+        buildSinkResult = true;
+        initCount       = 0;
+        deinitCount     = 0;
+        buildSinkCount  = 0;
+    }
+
+    bool probe() override { return probeResult; }
+    HalInitResult init() override {
+        initCount++;
+        return initResult ? hal_init_ok() : hal_init_fail(DIAG_HAL_INIT_FAILED, "test fail");
+    }
+    void deinit() override { deinitCount++; }
+    void dumpConfig() override {}
+    bool healthCheck() override { return healthResult; }
+
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override {
+        buildSinkCount++;
+        if (!buildSinkResult) return false;
+        // Populate a minimal valid sink
+        *out = AUDIO_OUTPUT_SINK_INIT;
+        out->name = _descriptor.name;
+        out->firstChannel = (uint8_t)(sinkSlot * 2);
+        out->channelCount = 2;
+        out->halSlot = _slot;
+        return true;
+    }
+};
+
 // ===== Fixtures =====
 
 static HalDeviceManager* mgr;
@@ -82,6 +136,7 @@ void setUp() {
     mgr->reset();
     hal_registry_reset();
     hal_pipeline_reset();
+    hal_pipeline_reset_mock_counters();
 }
 
 void tearDown() {}
@@ -994,6 +1049,217 @@ void test_forward_lookup_after_remove() {
     TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(slot));
 }
 
+// =====================================================================
+// Group 9: Bridge sink ownership — activate/deactivate (DEBT-6 Phase 1.4)
+// =====================================================================
+
+// 9a: activate_device calls buildSink and audio_pipeline_set_sink
+void test_bridge_activate_calls_buildSink_and_set_sink() {
+    TestBuildSinkDevice dac("test,dac-bs", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_activate_device(slot);
+
+    // buildSink should have been called once
+    TEST_ASSERT_EQUAL(1, dac.buildSinkCount);
+    // audio_pipeline_set_sink should have been called once
+    TEST_ASSERT_EQUAL(1, _mock_set_sink_count);
+    // Mapping should be set
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));
+    // Legacy dac_activate_for_hal should NOT have been called (buildSink succeeded)
+    TEST_ASSERT_EQUAL(0, _mock_dac_activate_count);
+}
+
+// 9b: activate_device falls back to dac_activate_for_hal when buildSink returns false
+void test_bridge_activate_fallback_to_legacy() {
+    // TestAudioDevice does NOT override buildSink (inherits HalDevice::buildSink → false)
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_activate_device(slot);
+
+    // audio_pipeline_set_sink should NOT have been called (buildSink returned false)
+    TEST_ASSERT_EQUAL(0, _mock_set_sink_count);
+    // Legacy dac_activate_for_hal should have been called as fallback
+    TEST_ASSERT_EQUAL(1, _mock_dac_activate_count);
+    // Mapping should still be set (legacy path succeeded)
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));
+}
+
+// 9c: deactivate_device removes sink and clears mapping
+void test_bridge_deactivate_removes_sink() {
+    TestBuildSinkDevice dac("test,dac-bs", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_activate_device(slot);
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+
+    // Reset counters after activate
+    _mock_remove_sink_count = 0;
+
+    hal_pipeline_deactivate_device(slot);
+
+    // audio_pipeline_remove_sink should have been called
+    TEST_ASSERT_EQUAL(1, _mock_remove_sink_count);
+    // Mapping should be cleared
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(slot));
+    TEST_ASSERT_EQUAL(0, hal_pipeline_output_count());
+}
+
+// 9d: deactivate_device calls device deinit (HC-3: device owns TX teardown)
+void test_bridge_deactivate_calls_deinit() {
+    TestBuildSinkDevice dac("test,dac-bs", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_activate_device(slot);
+    TEST_ASSERT_EQUAL(0, dac.deinitCount);
+
+    hal_pipeline_deactivate_device(slot);
+    TEST_ASSERT_EQUAL(1, dac.deinitCount);
+}
+
+// 9e: activate_device is idempotent (HC-5: same slot on repeated calls)
+void test_bridge_activate_idempotent() {
+    TestBuildSinkDevice dac("test,dac-bs", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_activate_device(slot);
+    int8_t firstSinkSlot = hal_pipeline_get_sink_slot(slot);
+    TEST_ASSERT_EQUAL(0, firstSinkSlot);
+    TEST_ASSERT_EQUAL(1, dac.buildSinkCount);
+
+    // Reset set_sink counter
+    _mock_set_sink_count = 0;
+
+    // Second activate — should get same sink slot (idempotent mapping)
+    hal_pipeline_activate_device(slot);
+    int8_t secondSinkSlot = hal_pipeline_get_sink_slot(slot);
+    TEST_ASSERT_EQUAL(firstSinkSlot, secondSinkSlot);
+    // buildSink called again (re-register is allowed, same slot)
+    TEST_ASSERT_EQUAL(2, dac.buildSinkCount);
+    // set_sink called for the re-register
+    TEST_ASSERT_EQUAL(1, _mock_set_sink_count);
+    // Output count stays 1
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+}
+
+// 9f: activate_device ignores non-DAC-path devices
+void test_bridge_activate_ignores_non_dac() {
+    TestAudioDevice adc("ti,pcm1808", HAL_DEV_ADC);
+    int slot = mgr->registerDevice(&adc, HAL_DISC_BUILTIN);
+    adc._state = HAL_STATE_AVAILABLE;
+    adc._ready = true;
+
+    hal_pipeline_activate_device(slot);
+
+    // No sink registration should occur for ADC device
+    TEST_ASSERT_EQUAL(0, _mock_set_sink_count);
+    TEST_ASSERT_EQUAL(0, _mock_dac_activate_count);
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(slot));
+}
+
+// 9g: deactivate_device is safe on unmapped slot
+void test_bridge_deactivate_unmapped_slot_safe() {
+    TestAudioDevice dac("ti,pcm5102a", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+
+    // No activate — slot is unmapped
+    hal_pipeline_deactivate_device(slot);
+
+    // Should be a no-op (no crash, no remove_sink call)
+    TEST_ASSERT_EQUAL(0, _mock_remove_sink_count);
+    TEST_ASSERT_EQUAL(0, hal_pipeline_output_count());
+}
+
+// 9h: activate then deactivate then activate restores mapping
+void test_bridge_activate_deactivate_reactivate() {
+    TestBuildSinkDevice dac("test,dac-bs", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_activate_device(slot);
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));
+
+    hal_pipeline_deactivate_device(slot);
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(slot));
+
+    // Re-activate — should get a slot again (slot 0 is now free)
+    hal_pipeline_activate_device(slot);
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+}
+
+// 9i: on_device_available uses activate path (integration)
+void test_on_device_available_uses_activate_path() {
+    TestBuildSinkDevice dac("test,dac-bs", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_on_device_available(slot);
+
+    // buildSink should have been called via the activate path
+    TEST_ASSERT_EQUAL(1, dac.buildSinkCount);
+    // audio_pipeline_set_sink should have been called
+    TEST_ASSERT_EQUAL(1, _mock_set_sink_count);
+    // Mapping should be set
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+}
+
+// 9j: on_device_removed uses deactivate path (integration)
+void test_on_device_removed_uses_deactivate_path() {
+    TestBuildSinkDevice dac("test,dac-bs", HAL_DEV_DAC);
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_on_device_available(slot);
+    TEST_ASSERT_EQUAL(1, hal_pipeline_output_count());
+
+    _mock_remove_sink_count = 0;
+    hal_pipeline_on_device_removed(slot);
+
+    // audio_pipeline_remove_sink should have been called via deactivate
+    TEST_ASSERT_EQUAL(1, _mock_remove_sink_count);
+    // deinit should have been called
+    TEST_ASSERT_EQUAL(1, dac.deinitCount);
+    // Mapping should be cleared
+    TEST_ASSERT_EQUAL(-1, hal_pipeline_get_sink_slot(slot));
+    TEST_ASSERT_EQUAL(0, hal_pipeline_output_count());
+}
+
+// 9k: buildSink failure clears mapping and falls through to legacy
+void test_bridge_activate_buildSink_failure_falls_to_legacy() {
+    TestBuildSinkDevice dac("test,dac-bs", HAL_DEV_DAC);
+    dac.buildSinkResult = false;  // buildSink will fail
+    int slot = mgr->registerDevice(&dac, HAL_DISC_BUILTIN);
+    dac._state = HAL_STATE_AVAILABLE;
+    dac._ready = true;
+
+    hal_pipeline_activate_device(slot);
+
+    // buildSink was called but returned false
+    TEST_ASSERT_EQUAL(1, dac.buildSinkCount);
+    // audio_pipeline_set_sink should NOT have been called
+    TEST_ASSERT_EQUAL(0, _mock_set_sink_count);
+    // Legacy fallback should have been called
+    TEST_ASSERT_EQUAL(1, _mock_dac_activate_count);
+    // Mapping should be set (legacy path succeeded)
+    TEST_ASSERT_EQUAL(0, hal_pipeline_get_sink_slot(slot));
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     (void)argc;
@@ -1070,6 +1336,19 @@ int main(int argc, char** argv) {
     RUN_TEST(test_forward_lookup_input_lane);
     RUN_TEST(test_forward_lookup_oob);
     RUN_TEST(test_forward_lookup_after_remove);
+
+    // Group 9: Bridge sink ownership — activate/deactivate (DEBT-6 Phase 1.4)
+    RUN_TEST(test_bridge_activate_calls_buildSink_and_set_sink);
+    RUN_TEST(test_bridge_activate_fallback_to_legacy);
+    RUN_TEST(test_bridge_deactivate_removes_sink);
+    RUN_TEST(test_bridge_deactivate_calls_deinit);
+    RUN_TEST(test_bridge_activate_idempotent);
+    RUN_TEST(test_bridge_activate_ignores_non_dac);
+    RUN_TEST(test_bridge_deactivate_unmapped_slot_safe);
+    RUN_TEST(test_bridge_activate_deactivate_reactivate);
+    RUN_TEST(test_on_device_available_uses_activate_path);
+    RUN_TEST(test_on_device_removed_uses_deactivate_path);
+    RUN_TEST(test_bridge_activate_buildSink_failure_falls_to_legacy);
 
     return UNITY_END();
 }

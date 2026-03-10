@@ -61,6 +61,16 @@ uint16_t hal_pipeline_begin_correlation();
 void     hal_pipeline_end_correlation();
 uint16_t hal_pipeline_active_corr_id();
 
+// Activate a DAC-path device: call dev->buildSink() then audio_pipeline_set_sink().
+// Falls back to dac_activate_for_hal() for devices whose buildSink() returns false.
+// HC-5: halSlot→sinkSlot mapping is idempotent across state cycles.
+void hal_pipeline_activate_device(uint8_t halSlot);
+
+// Deactivate a DAC-path device: remove sink, deinit device.
+// HC-2: audioPaused semaphore taken exactly once per deinit batch.
+// HC-3: device deinit never touches RX channel / MCLK (device responsibility).
+void hal_pipeline_deactivate_device(uint8_t halSlot);
+
 // Reset all bridge state — for unit tests only.
 // Clears the HAL-slot→sink-slot and HAL-slot→ADC-lane mapping tables.
 void hal_pipeline_reset();

@@ -22,7 +22,8 @@ public:
     // Any device with HAL_CAP_DAC_PATH should override this.
     // Populates an AudioOutputSink with device-specific write/isReady callbacks.
     // Returns true if sink was populated successfully.
-    virtual bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
+    // Overrides HalDevice::buildSink() base method.
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override {
         (void)sinkSlot; (void)out;
         return false;
     }
