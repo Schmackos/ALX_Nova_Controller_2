@@ -1,13 +1,8 @@
 #pragma once
-// HAL Audio Device — extends HalDevice with audio-specific methods
-// Phase 0: Purely additive
+// HAL Audio Device -- extends HalDevice with audio-specific methods
 
 #include "hal_device.h"
 #include "../audio_output_sink.h"
-
-#ifdef DAC_ENABLED
-#include "../dac_hal.h"
-#endif
 
 class HalAudioDevice : public HalDevice {
 public:
@@ -28,10 +23,8 @@ public:
         return false;
     }
 
-#ifdef DAC_ENABLED
-    // Bridge to legacy DacCapabilities for backward compat
-    virtual const DacCapabilities* getLegacyCapabilities() const { return nullptr; }
-#endif
+    // Query whether this device has hardware volume control
+    virtual bool hasHardwareVolume() const { return false; }
 
 protected:
     HalAudioDevice() : HalDevice() {}

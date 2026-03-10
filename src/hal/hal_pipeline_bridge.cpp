@@ -13,14 +13,11 @@
 #include "../audio_pipeline.h"
 #include "../audio_input_source.h"
 #include "../audio_output_sink.h"
-#include "../dac_hal.h"
 #else
 #define LOG_I(...)
 #define LOG_W(...)
 #define LOG_D(...)
 #define LOG_E(...)
-// Removed in Phase 4: fallback sink slot defines (replaced by dynamic assignment)
-// Native tests now use hal_pipeline_get_sink_slot() for dynamic mapping
 #ifndef AUDIO_OUT_MAX_SINKS
 #define AUDIO_OUT_MAX_SINKS 8
 #endif
@@ -31,7 +28,7 @@
 struct AudioInputSource;
 inline void audio_pipeline_set_source(int, const AudioInputSource*) {}
 inline void audio_pipeline_remove_source(int) {}
-// Mock stubs for pipeline sink API — counters allow tests to verify calls
+// Mock stubs for pipeline sink API -- counters allow tests to verify calls
 static int _mock_set_sink_count = 0;
 static int _mock_remove_sink_count = 0;
 static int _mock_last_set_sink_slot = -1;
@@ -44,24 +41,12 @@ inline void audio_pipeline_remove_sink(int slot) {
     _mock_remove_sink_count++;
     _mock_last_remove_sink_slot = slot;
 }
-// Mock stub for dac_activate_for_hal (legacy fallback path, counted for verification)
-static int _mock_dac_activate_count = 0;
-inline bool dac_activate_for_hal(HalDevice*, uint8_t) {
-    _mock_dac_activate_count++;
-    return true;
-}
-static int _mock_dac_deactivate_count = 0;
-inline void dac_deactivate_for_hal(HalDevice*) {
-    _mock_dac_deactivate_count++;
-}
-// Reset all mock counters — called from test setUp()
+// Reset all mock counters -- called from test setUp()
 inline void hal_pipeline_reset_mock_counters() {
     _mock_set_sink_count = 0;
     _mock_remove_sink_count = 0;
     _mock_last_set_sink_slot = -1;
     _mock_last_remove_sink_slot = -1;
-    _mock_dac_activate_count = 0;
-    _mock_dac_deactivate_count = 0;
 }
 #endif
 
@@ -187,15 +172,14 @@ static void _updateAmpGating() {
 }
 
 // ---------------------------------------------------------------------------
-// hal_pipeline_activate_device — bridge owns sink registration (DEBT-6 Phase 1.4)
+// hal_pipeline_activate_device -- bridge owns sink registration
 //
 // For any device with HAL_CAP_DAC_PATH:
 //   1. Get or allocate a sink slot (HC-5: idempotent mapping)
-//   2. Try dev->buildSink() — if the device is a HalAudioDevice
+//   2. Call dev->buildSink() -- device populates the AudioOutputSink struct
 //   3. Call audio_pipeline_set_sink() with the populated sink struct
-//   4. Fall back to dac_activate_for_hal() for legacy devices
 //
-// HC-1: No calloc under vTaskSuspendAll — buildSink runs outside scheduler suspend
+// HC-1: No calloc under vTaskSuspendAll -- buildSink runs outside scheduler suspend
 // ---------------------------------------------------------------------------
 void hal_pipeline_activate_device(uint8_t halSlot) {
     if (halSlot >= HAL_MAX_DEVICES) return;
@@ -207,7 +191,7 @@ void hal_pipeline_activate_device(uint8_t halSlot) {
     uint8_t caps = _effectiveCaps(dev);
     if (!(caps & HAL_CAP_DAC_PATH)) return;
 
-    // HC-5: Get or allocate a sink slot — idempotent (returns existing mapping)
+    // HC-5: Get or allocate a sink slot -- idempotent (returns existing mapping)
     int8_t sinkSlot = _sinkSlotForDevice(dev);
     if (sinkSlot < 0) {
         LOG_W("[HAL:Bridge] No free sink slot for device at HAL slot %u", halSlot);
@@ -219,27 +203,18 @@ void hal_pipeline_activate_device(uint8_t halSlot) {
 
     const char* name = dev->getDescriptor().name;
 
-    // Try buildSink() — devices with DAC path override this virtual method.
-    // No dynamic_cast needed: buildSink() is virtual on HalDevice base class
-    // (returns false by default for non-audio devices).
+    // Call buildSink() -- devices with DAC path override this virtual method.
+    // buildSink() is virtual on HalDevice base class (returns false by default).
     AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
     if (dev->buildSink((uint8_t)sinkSlot, &sink)) {
-        // buildSink succeeded — bridge registers the sink with the pipeline
+        // buildSink succeeded -- bridge registers the sink with the pipeline
         sink.halSlot = halSlot;
         audio_pipeline_set_sink((int)sinkSlot, &sink);
         LOG_I("[HAL:Bridge] Activated via buildSink: %s (HAL slot %u) -> sink slot %d",
               name, halSlot, (int)sinkSlot);
-        return;
-    }
-
-    // Fallback: delegate to legacy dac_activate_for_hal() for devices that
-    // don't implement buildSink() (e.g., DacDriver-based devices wrapped in HalDacAdapter).
-    // This path will be removed in Task 1.7 when DacRegistry is deleted.
-    if (dac_activate_for_hal(dev, (uint8_t)sinkSlot)) {
-        LOG_I("[HAL:Bridge] Activated via legacy DAC path: %s (HAL slot %u) -> sink slot %d",
-              name, halSlot, (int)sinkSlot);
     } else {
-        LOG_W("[HAL:Bridge] Activation failed for %s (HAL slot %u)", name, halSlot);
+        LOG_W("[HAL:Bridge] Activation failed for %s (HAL slot %u) -- buildSink returned false",
+              name, halSlot);
         // Clear the mapping on failure so the slot can be reused
         _halSlotToSinkSlot[halSlot] = -1;
     }

@@ -5,7 +5,7 @@
 #include "hal_device_db.h"
 #include "hal_driver_registry.h"
 #include "hal_eeprom_v3.h"
-#include "hal_dac_adapter.h"
+// HalDacAdapter removed -- EEPROM-discovered devices use HalDriverRegistry factories
 
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
@@ -71,22 +71,21 @@ int hal_discover_devices() {
                     }
 
                     if (!alreadyRegistered) {
-                        // Create HalDacAdapter for DAC-type devices
-                        if (desc.type == HAL_DEV_DAC) {
-                            HalDevice* dev = new HalDacAdapter(nullptr, desc);
-                            if (dev) {
-                                int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM);
-                                if (appState.halAutoDiscovery) {
-                                    dev->_state = HAL_STATE_AVAILABLE;
-                                    LOG_I("[HAL:Discovery]", "Device auto-registered: %s (slot %d)", desc.name, slot);
-                                } else {
-                                    dev->_state = HAL_STATE_CONFIGURING;
-                                    LOG_I("[HAL:Discovery]", "Device registered, awaiting init: %s (slot %d)", desc.name, slot);
-                                }
-                                newDevices++;
+                        // Use HalDriverRegistry factory to create the device
+                        HalDevice* dev = entry->factory ? entry->factory() : nullptr;
+                        if (dev) {
+                            int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM);
+                            if (appState.halAutoDiscovery) {
+                                dev->_state = HAL_STATE_AVAILABLE;
+                                LOG_I("[HAL:Discovery]", "Device auto-registered: %s (slot %d)", desc.name, slot);
+                            } else {
+                                dev->_state = HAL_STATE_CONFIGURING;
+                                LOG_I("[HAL:Discovery]", "Device registered, awaiting init: %s (slot %d)", desc.name, slot);
                             }
+                            newDevices++;
+                        } else {
+                            LOG_W("[HAL:Discovery]", "Factory returned null for %s", desc.compatible);
                         }
-                        // Future: add ADC, CODEC, GPIO device creation here
                     } else {
                         LOG_I("[HAL:Discovery]", "Device already registered: %s", desc.compatible);
                     }

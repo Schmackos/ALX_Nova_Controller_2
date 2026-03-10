@@ -8,7 +8,7 @@
 // Waveshare ESP32-P4-WiFi6-DEV-Kit has CE=LOW
 #define ES8311_I2C_ADDR       0x18
 
-// ===== DAC Device ID (for DacDriver registry) =====
+// ===== DAC Device ID (for EEPROM identification) =====
 #define DAC_ID_ES8311         0x0004
 
 // ===== ES8311 PA Control Pin (NS4150B class-D amp on Waveshare board) =====

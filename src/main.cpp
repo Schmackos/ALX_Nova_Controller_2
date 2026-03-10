@@ -26,7 +26,6 @@
 #endif
 #ifdef DAC_ENABLED
 #include "dac_hal.h"
-#include "dac_registry.h"
 #include "dac_api.h"
 #include "hal/hal_builtin_devices.h"
 #include "hal/hal_device_db.h"

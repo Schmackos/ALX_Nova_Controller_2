@@ -415,6 +415,14 @@ void test_reverse_lookup_sink_slot() {
         void deinit() override {}
         void dumpConfig() override {}
         bool healthCheck() override { return true; }
+        bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override {
+            *out = AUDIO_OUTPUT_SINK_INIT;
+            out->name = _descriptor.name;
+            out->firstChannel = (uint8_t)(sinkSlot * 2);
+            out->channelCount = 2;
+            out->halSlot = _slot;
+            return true;
+        }
     };
 
     TestDacDevice dac;

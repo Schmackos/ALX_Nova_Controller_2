@@ -16,53 +16,12 @@
 #define DAC_I2C_SCL_PIN 42
 #endif
 
-// ===== DAC Device IDs =====
+// ===== DAC Device IDs (EEPROM identification) =====
 #define DAC_ID_NONE       0x0000
 #define DAC_ID_PCM5102A   0x0001
 #define DAC_ID_ES9038Q2M  0x0002
 #define DAC_ID_ES9842     0x0003
 #define DAC_ID_ES8311     0x0004
-
-// ===== DAC Capabilities =====
-struct DacCapabilities {
-    const char* name;              // "PCM5102A"
-    const char* manufacturer;      // "Texas Instruments"
-    uint16_t deviceId;             // DAC_ID_PCM5102A, etc.
-    uint8_t maxChannels;           // 1-8
-    bool hasHardwareVolume;
-    bool hasI2cControl;
-    bool needsIndependentClock;
-    uint8_t i2cAddress;            // 0x00 = no I2C
-    const uint32_t* supportedRates;
-    uint8_t numSupportedRates;
-    bool hasFilterModes;
-    uint8_t numFilterModes;
-};
-
-// ===== Pin Config Passed to Driver =====
-struct DacPinConfig {
-    int dataOut;       // I2S TX data pin
-    int i2cSda;        // I2C SDA (0 = unused)
-    int i2cScl;        // I2C SCL (0 = unused)
-    int mclk;          // MCLK pin (0 = shared with ADC)
-    int paControl;     // PA enable GPIO (-1 = none/use default)
-};
-
-// ===== Abstract DAC Driver =====
-class DacDriver {
-public:
-    virtual ~DacDriver() {}
-    virtual const DacCapabilities& getCapabilities() const = 0;
-    virtual bool init(const DacPinConfig& pins) = 0;
-    virtual void deinit() = 0;
-    virtual bool configure(uint32_t sampleRate, uint8_t bitDepth) = 0;
-    virtual bool setVolume(uint8_t volume) = 0;  // 0-100
-    virtual bool setMute(bool mute) = 0;
-    virtual bool isReady() const = 0;
-    // Optional — override for DACs with digital filter selection
-    virtual bool setFilterMode(uint8_t mode) { (void)mode; return false; }
-    virtual const char* getFilterModeName(uint8_t mode) { (void)mode; return nullptr; }
-};
 
 // ===== Volume Curve (log-perceptual) =====
 // Maps 0-100 percent to 0.0-1.0 linear gain
@@ -74,42 +33,27 @@ void dac_apply_software_volume(float* buffer, int samples, float gain);
 
 // ===== DAC Output Manager Public API =====
 
-// Phase 1 — New HAL-driven API
-// Forward declaration so dac_hal.h does not drag in all of hal_device.h
-class HalDevice;
-struct HalDeviceConfig;
-
 // dac_boot_prepare(): one-shot boot-time init extracted from dac_output_init().
 // Initialises the EEPROM mutex, loads persisted settings, computes volume gain,
 // and scans the I2C bus / EEPROM for the installed DAC module.
 // Safe to call multiple times (all operations are guarded by static-once flags).
 void dac_boot_prepare();
 
-// dac_activate_for_hal(): bind a HAL device to a pipeline sink slot.
-// Creates the driver (from device descriptor legacyId), inits hardware,
-// enables the correct I2S TX port, and registers the AudioOutputSink.
-// Idempotent: calling with an already-bound device is a safe no-op.
-// Returns true on success, false if driver init or I2S enable fails.
-bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot);
-
-// dac_deactivate_for_hal(): remove the sink and tear down hardware for a device.
-// Pauses the audio task, deinits the driver, disables I2S TX, and removes
-// the AudioOutputSink from the pipeline. Idempotent.
-void dac_deactivate_for_hal(HalDevice* dev);
-
-bool dac_output_is_ready();
-
 // Periodic runtime dump (call from audio task, 5s interval)
 void dac_periodic_log();
-
-// Get driver for a specific sink slot (nullptr if none active)
-DacDriver* dac_get_driver_for_slot(uint8_t slot);
 
 // I2S TX full-duplex control (slot 0 / primary port)
 bool dac_enable_i2s_tx(uint32_t sampleRate);
 void dac_disable_i2s_tx();
 
-// Mute ramp state accessors (for testing — HC-6 verification)
+// I2S TX for a specific port (0 = primary, 2 = ES8311 I2S2)
+bool dac_enable_i2s_tx_for_port(uint8_t port, uint32_t sampleRate);
+void dac_disable_i2s_tx_for_port(uint8_t port);
+
+// Query whether a given I2S TX port is currently enabled
+bool dac_is_tx_enabled_for_port(uint8_t port);
+
+// Mute ramp state accessors (for testing -- HC-6 verification)
 float dac_get_mute_gain();
 bool  dac_get_prev_mute();
 

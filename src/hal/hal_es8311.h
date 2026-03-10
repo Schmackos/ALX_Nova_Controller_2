@@ -26,6 +26,7 @@ public:
     bool setVolume(uint8_t percent) override;
     bool setMute(bool mute) override;
     bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override;
+    bool hasHardwareVolume() const override { return true; }
 
     // HalAudioDacInterface
     bool dacSetVolume(uint8_t pct) override { return setVolume(pct); }

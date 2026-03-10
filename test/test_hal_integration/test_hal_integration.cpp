@@ -22,47 +22,6 @@
 #include "../../src/hal/hal_pipeline_bridge.cpp"
 #include "../../src/hal/hal_settings.cpp"
 
-// ===== Mock DacDriver for adapter tests =====
-#ifdef DAC_ENABLED
-
-// Minimal DacDriver mock
-static uint32_t mockSupportedRates[] = {44100, 48000, 96000};
-static DacCapabilities mockDacCaps = {
-    "MockDAC",             // name
-    "MockManufacturer",    // manufacturer
-    0x0001,                // deviceId
-    2,                     // maxChannels
-    false,                 // hasHardwareVolume
-    false,                 // hasI2cControl
-    false,                 // needsIndependentClock
-    0x00,                  // i2cAddress
-    mockSupportedRates,    // supportedRates
-    3,                     // numSupportedRates
-    false,                 // hasFilterModes
-    0                      // numFilterModes
-};
-
-class MockDacDriver : public DacDriver {
-public:
-    bool initCalled = false;
-    bool deinitCalled = false;
-    bool readyState = true;
-    uint8_t lastVolume = 0;
-    bool lastMute = false;
-
-    const DacCapabilities& getCapabilities() const override { return mockDacCaps; }
-    bool init(const DacPinConfig& pins) override { initCalled = true; return true; }
-    void deinit() override { deinitCalled = true; }
-    bool configure(uint32_t sampleRate, uint8_t bitDepth) override { return true; }
-    bool setVolume(uint8_t volume) override { lastVolume = volume; return true; }
-    bool setMute(bool mute) override { lastMute = mute; return true; }
-    bool isReady() const override { return readyState; }
-};
-
-#include "../../src/hal/hal_dac_adapter.cpp"
-
-#endif // DAC_ENABLED
-
 // ===== Test Audio Device (non-DAC test device with audio interface) =====
 class TestAudioDevice : public HalAudioDevice {
 public:
@@ -89,6 +48,18 @@ public:
     bool configure(uint32_t, uint8_t) override { return true; }
     bool setVolume(uint8_t) override { return true; }
     bool setMute(bool) override { return true; }
+
+    // buildSink — required for bridge activation (DEBT-6: bridge is sole sink owner)
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override {
+        if (_descriptor.type != HAL_DEV_DAC && _descriptor.type != HAL_DEV_CODEC)
+            return false;
+        *out = AUDIO_OUTPUT_SINK_INIT;
+        out->name = _descriptor.compatible;
+        out->firstChannel = (uint8_t)(sinkSlot * 2);
+        out->channelCount = 2;
+        out->halSlot = _slot;
+        return true;
+    }
 };
 
 // ===== Test Fixtures =====
@@ -117,9 +88,8 @@ void test_pipeline_sync_registers_available_outputs(void) {
 
     hal_pipeline_sync();
 
-    // DAC → AUDIO_SINK_SLOT_PRIMARY (0), CODEC → AUDIO_SINK_SLOT_ES8311 (1): 2 unique sink slots
+    // DAC -> sink slot 0, CODEC -> sink slot 1: 2 unique sink slots
     TEST_ASSERT_EQUAL(2, hal_pipeline_output_count());
-    // CODEC ADC path is managed by the codec driver, not the adcEnabled[] array.
     // Only HAL_DEV_ADC devices contribute to input_count().
     TEST_ASSERT_EQUAL(0, hal_pipeline_input_count());
 }
@@ -188,9 +158,6 @@ void test_pipeline_adc_counts_as_input(void) {
 void test_pipeline_multiple_dacs_separate_slots(void) {
     HalDeviceManager& mgr = HalDeviceManager::instance();
 
-    // Two DAC devices share AUDIO_SINK_SLOT_PRIMARY; one CODEC gets AUDIO_SINK_SLOT_ES8311.
-    // All three occupy distinct HAL slots but the two DACs map to the same sink slot,
-    // so output_count() reflects unique sink slots in use, not number of HAL DAC devices.
     TestAudioDevice dac1("ti,pcm5102a", HAL_DEV_DAC);
     TestAudioDevice dac2("ti,pcm5102a", HAL_DEV_DAC);
     TestAudioDevice codec("evergrande,es8311", HAL_DEV_CODEC);
@@ -208,76 +175,10 @@ void test_pipeline_multiple_dacs_separate_slots(void) {
     codec._state = HAL_STATE_AVAILABLE; codec._ready = true;
 
     hal_pipeline_sync();
-    // output_count() counts HAL slots that have an active sink mapping, not unique sink slot values.
+    // output_count() counts HAL slots that have an active sink mapping.
     // All three devices (2 DAC + 1 CODEC) are mapped, so count is 3.
     TEST_ASSERT_EQUAL(3, hal_pipeline_output_count());
 }
-
-#ifdef DAC_ENABLED
-
-void test_dac_adapter_wraps_driver(void) {
-    MockDacDriver driver;
-
-    HalDeviceDescriptor desc;
-    memset(&desc, 0, sizeof(desc));
-    strncpy(desc.compatible, "ti,pcm5102a", 31);
-    strncpy(desc.name, "PCM5102A", 32);
-    desc.type = HAL_DEV_DAC;
-    desc.legacyId = 0x0001;
-    desc.channelCount = 2;
-
-    HalDacAdapter adapter(&driver, desc, true);
-
-    TEST_ASSERT_TRUE(adapter._ready);
-    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, adapter._state);
-    TEST_ASSERT_EQUAL_STRING("ti,pcm5102a", adapter.getDescriptor().compatible);
-    TEST_ASSERT_EQUAL(HAL_DEV_DAC, adapter.getType());
-}
-
-void test_dac_adapter_health_delegates(void) {
-    MockDacDriver driver;
-    HalDeviceDescriptor desc;
-    memset(&desc, 0, sizeof(desc));
-    strncpy(desc.compatible, "mock,dac", 31);
-    desc.type = HAL_DEV_DAC;
-
-    HalDacAdapter adapter(&driver, desc, true);
-
-    driver.readyState = true;
-    TEST_ASSERT_TRUE(adapter.healthCheck());
-
-    driver.readyState = false;
-    TEST_ASSERT_FALSE(adapter.healthCheck());
-}
-
-void test_dac_adapter_legacy_capabilities(void) {
-    MockDacDriver driver;
-    HalDeviceDescriptor desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.type = HAL_DEV_DAC;
-
-    HalDacAdapter adapter(&driver, desc, true);
-
-    const DacCapabilities* caps = adapter.getLegacyCapabilities();
-    TEST_ASSERT_NOT_NULL(caps);
-    TEST_ASSERT_EQUAL_STRING("MockDAC", caps->name);
-    TEST_ASSERT_EQUAL(2, caps->maxChannels);
-}
-
-void test_dac_adapter_init_already_initialized(void) {
-    MockDacDriver driver;
-    HalDeviceDescriptor desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.type = HAL_DEV_DAC;
-
-    HalDacAdapter adapter(&driver, desc, true);
-
-    // init() should succeed immediately since already initialized
-    TEST_ASSERT_TRUE(adapter.init().success);
-    TEST_ASSERT_TRUE(adapter._ready);
-}
-
-#endif // DAC_ENABLED
 
 // ===== Main =====
 
@@ -293,13 +194,6 @@ int main(int argc, char **argv) {
     RUN_TEST(test_pipeline_on_device_removed);
     RUN_TEST(test_pipeline_adc_counts_as_input);
     RUN_TEST(test_pipeline_multiple_dacs_separate_slots);
-
-#ifdef DAC_ENABLED
-    RUN_TEST(test_dac_adapter_wraps_driver);
-    RUN_TEST(test_dac_adapter_health_delegates);
-    RUN_TEST(test_dac_adapter_legacy_capabilities);
-    RUN_TEST(test_dac_adapter_init_already_initialized);
-#endif
 
     return UNITY_END();
 }

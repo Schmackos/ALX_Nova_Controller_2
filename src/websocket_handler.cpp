@@ -28,7 +28,6 @@
 #ifdef DAC_ENABLED
 #include "output_dsp.h"
 #include "dac_hal.h"
-#include "dac_registry.h"
 #include "dac_eeprom.h"
 #include "hal/hal_device_manager.h"
 #include "hal/hal_pipeline_bridge.h"
@@ -128,12 +127,22 @@ static bool idleHookCore1() {
   return false;
 }
 
-// ===== HAL Device Lookup Helper =====
-// Find HAL slot for a device by compatible string. Returns 0xFF if not found.
+// ===== HAL Device Lookup Helpers =====
 #ifdef DAC_ENABLED
+// Find HAL slot for a device by compatible string. Returns 0xFF if not found.
 static uint8_t _halSlotForCompatible(const char* compat) {
     HalDevice* dev = HalDeviceManager::instance().findByCompatible(compat);
     return dev ? dev->getSlot() : 0xFF;
+}
+// Get HalAudioDevice* for a given pipeline sink slot (nullptr if not found or not audio device)
+static HalAudioDevice* _audioDeviceForSinkSlot(uint8_t sinkSlot) {
+    int8_t halSlot = hal_pipeline_get_slot_for_sink(sinkSlot);
+    if (halSlot < 0) return nullptr;
+    HalDevice* dev = HalDeviceManager::instance().getDevice((uint8_t)halSlot);
+    if (!dev) return nullptr;
+    // Only DAC/CODEC types are audio devices
+    if (dev->getType() != HAL_DEV_DAC && dev->getType() != HAL_DEV_CODEC) return nullptr;
+    return static_cast<HalAudioDevice*>(dev);
 }
 #endif
 
@@ -982,8 +991,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
               if (sinkSlot >= 0) {
                 audio_pipeline_set_sink_volume((uint8_t)sinkSlot, dac_volume_to_linear((uint8_t)v));
-                DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
-                if (drv && drv->getCapabilities().hasHardwareVolume) drv->setVolume((uint8_t)v);
+                HalAudioDevice* audioDev = _audioDeviceForSinkSlot((uint8_t)sinkSlot);
+                if (audioDev && audioDev->hasHardwareVolume()) audioDev->setVolume((uint8_t)v);
               }
               hal_save_device_config_deferred(halSlot);
             } else {
@@ -1001,8 +1010,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
             if (sinkSlot >= 0) {
               audio_pipeline_set_sink_muted((uint8_t)sinkSlot, newMute);
-              DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
-              if (drv) drv->setMute(newMute);
+              HalAudioDevice* audioDev = _audioDeviceForSinkSlot((uint8_t)sinkSlot);
+              if (audioDev) audioDev->setMute(newMute);
             }
             HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
             if (cfg) cfg->mute = newMute;
@@ -1020,8 +1029,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           uint8_t prevFilter = appState.dac.filterMode;
           int fm = doc["filterMode"].as<int>();
           appState.dac.filterMode = (uint8_t)fm;    // filterMode has no HAL equivalent yet — stays in AppState
-          DacDriver *drv = dac_get_driver_for_slot(0);
-          if (drv) drv->setFilterMode(appState.dac.filterMode);
+          HalAudioDevice* audioDev = _audioDeviceForSinkSlot(0);
+          if (audioDev) audioDev->setFilterMode(appState.dac.filterMode);
           if (halSlot != 0xFF) {
             hal_save_device_config_deferred(halSlot);
           } else {
@@ -1063,8 +1072,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
               if (sinkSlot >= 0) {
                 audio_pipeline_set_sink_volume((uint8_t)sinkSlot, dac_volume_to_linear((uint8_t)v));
-                DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
-                if (drv && drv->getCapabilities().hasHardwareVolume) drv->setVolume((uint8_t)v);
+                HalAudioDevice* audioDev = _audioDeviceForSinkSlot((uint8_t)sinkSlot);
+                if (audioDev && audioDev->hasHardwareVolume()) audioDev->setVolume((uint8_t)v);
               }
               hal_save_device_config_deferred(halSlot);
             } else {
@@ -1081,8 +1090,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
             if (sinkSlot >= 0) {
               audio_pipeline_set_sink_muted((uint8_t)sinkSlot, newMute);
-              DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
-              if (drv) drv->setMute(newMute);
+              HalAudioDevice* audioDev = _audioDeviceForSinkSlot((uint8_t)sinkSlot);
+              if (audioDev) audioDev->setMute(newMute);
             }
             HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
             if (cfg) cfg->mute = newMute;
@@ -1715,23 +1724,17 @@ void sendDacState() {
     tx["peakSample"] = txd.peakSample;
     tx["zeroFrames"] = txd.zeroFrames;
   }
-  // Include available drivers
-  JsonArray drivers = doc["drivers"].to<JsonArray>();
-  const DacRegistryEntry* entries = dac_registry_get_entries();
-  int count = dac_registry_get_count();
-  for (int i = 0; i < count; i++) {
-    JsonObject drv = drivers.add<JsonObject>();
-    drv["id"] = entries[i].deviceId;
-    drv["name"] = entries[i].name;
-  }
-  // Filter modes from current driver
-  DacDriver* drv = dac_get_driver_for_slot(0);
-  if (drv && drv->getCapabilities().hasFilterModes) {
-    JsonArray filters = doc["filterModes"].to<JsonArray>();
-    for (uint8_t f = 0; f < drv->getCapabilities().numFilterModes; f++) {
-      const char* name = drv->getFilterModeName(f);
-      filters.add(name ? name : "Unknown");
-    }
+  // Include available DAC-path devices from HAL
+  {
+    JsonArray drivers = doc["drivers"].to<JsonArray>();
+    HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
+        JsonArray* a = static_cast<JsonArray*>(ctx);
+        if (dev->getDescriptor().capabilities & HAL_CAP_DAC_PATH) {
+            JsonObject drv = a->add<JsonObject>();
+            drv["id"] = dev->getDescriptor().legacyId;
+            drv["name"] = dev->getDescriptor().name;
+        }
+    }, (void*)&drivers);
   }
   // EEPROM diagnostics
   {
@@ -2181,14 +2184,15 @@ void sendHardwareStats() {
       dac["filterMode"] = appState.dac.filterMode;
       dac["outputChannels"] = pcmDev ? pcmDev->getDescriptor().channelCount : 2;
       dac["txUnderruns"] = appState.dac.txUnderruns;
-      DacDriver* drv = dac_get_driver_for_slot(0);
-      if (drv) {
-        const DacCapabilities& caps = drv->getCapabilities();
-        dac["manufacturer"] = caps.manufacturer;
-        dac["hwVolume"] = caps.hasHardwareVolume;
-        dac["i2cControl"] = caps.hasI2cControl;
-        dac["independentClock"] = caps.needsIndependentClock;
-        dac["hasFilters"] = caps.hasFilterModes;
+      // Device capabilities from HAL descriptor
+      if (pcmDev) {
+        const HalDeviceDescriptor& desc = pcmDev->getDescriptor();
+        dac["manufacturer"] = desc.manufacturer;
+        HalAudioDevice* audioDev = _audioDeviceForSinkSlot(0);
+        dac["hwVolume"] = audioDev ? audioDev->hasHardwareVolume() : false;
+        dac["i2cControl"] = (desc.i2cAddr != 0);
+        dac["independentClock"] = false;
+        dac["hasFilters"] = false;
       }
       // TX diagnostics snapshot
       {

@@ -2,7 +2,6 @@
 
 #include "dac_api.h"
 #include "dac_hal.h"
-#include "dac_registry.h"
 #include "dac_eeprom.h"
 #include "audio_pipeline.h"
 #include "app_state.h"
@@ -11,9 +10,20 @@
 #include "debug_serial.h"
 #include "hal/hal_device_manager.h"
 #include "hal/hal_pipeline_bridge.h"
+#include "hal/hal_audio_device.h"
 #include "hal/hal_settings.h"
 #include <ArduinoJson.h>
 extern bool requireAuth();
+
+// Get HalAudioDevice* for a given pipeline sink slot (nullptr if not found)
+static HalAudioDevice* _dacApiAudioDeviceForSlot(uint8_t sinkSlot) {
+    int8_t halSlot = hal_pipeline_get_slot_for_sink(sinkSlot);
+    if (halSlot < 0) return nullptr;
+    HalDevice* dev = HalDeviceManager::instance().getDevice((uint8_t)halSlot);
+    if (!dev) return nullptr;
+    if (dev->getType() != HAL_DEV_DAC && dev->getType() != HAL_DEV_CODEC) return nullptr;
+    return static_cast<HalAudioDevice*>(dev);
+}
 
 void registerDacApiEndpoints() {
     // GET /api/dac — Full DAC state + capabilities (queries HAL)
@@ -38,30 +48,19 @@ void registerDacApiEndpoints() {
         doc["filterMode"] = appState.dac.filterMode;
         doc["txUnderruns"] = appState.dac.txUnderruns;
 
-        // Capabilities from driver via slot lookup
-        DacDriver* drv = dac_get_driver_for_slot(0);
-        if (drv) {
-            const DacCapabilities& caps = drv->getCapabilities();
+        // Capabilities from HAL device descriptor
+        if (dev) {
+            const HalDeviceDescriptor& desc = dev->getDescriptor();
+            HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot(0);
             JsonObject capsObj = doc["capabilities"].to<JsonObject>();
-            capsObj["name"] = caps.name;
-            capsObj["manufacturer"] = caps.manufacturer;
-            capsObj["maxChannels"] = caps.maxChannels;
-            capsObj["hasHardwareVolume"] = caps.hasHardwareVolume;
-            capsObj["hasI2cControl"] = caps.hasI2cControl;
-            capsObj["needsIndependentClock"] = caps.needsIndependentClock;
-            capsObj["hasFilterModes"] = caps.hasFilterModes;
-            capsObj["numFilterModes"] = caps.numFilterModes;
-            if (caps.hasFilterModes) {
-                JsonArray filters = capsObj["filterModes"].to<JsonArray>();
-                for (uint8_t f = 0; f < caps.numFilterModes; f++) {
-                    const char* name = drv->getFilterModeName(f);
-                    filters.add(name ? name : "Unknown");
-                }
-            }
-            JsonArray rates = capsObj["supportedRates"].to<JsonArray>();
-            for (uint8_t i = 0; i < caps.numSupportedRates; i++) {
-                rates.add(caps.supportedRates[i]);
-            }
+            capsObj["name"] = desc.name;
+            capsObj["manufacturer"] = desc.manufacturer;
+            capsObj["maxChannels"] = desc.channelCount;
+            capsObj["hasHardwareVolume"] = audioDev ? audioDev->hasHardwareVolume() : false;
+            capsObj["hasI2cControl"] = (desc.i2cAddr != 0);
+            capsObj["needsIndependentClock"] = false;
+            capsObj["hasFilterModes"] = false;
+            capsObj["numFilterModes"] = 0;
         }
 
         String json;
@@ -119,9 +118,9 @@ void registerDacApiEndpoints() {
                 int8_t sinkSlot = (halSlot < 0xFF) ? hal_pipeline_get_sink_slot(halSlot) : -1;
                 if (sinkSlot >= 0) {
                     audio_pipeline_set_sink_volume((uint8_t)sinkSlot, dac_volume_to_linear((uint8_t)v));
-                    DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
-                    if (drv && drv->getCapabilities().hasHardwareVolume) {
-                        drv->setVolume((uint8_t)v);
+                    HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot((uint8_t)sinkSlot);
+                    if (audioDev && audioDev->hasHardwareVolume()) {
+                        audioDev->setVolume((uint8_t)v);
                     }
                 }
                 changed = true;
@@ -135,8 +134,8 @@ void registerDacApiEndpoints() {
             int8_t sinkSlot = (halSlot < 0xFF) ? hal_pipeline_get_sink_slot(halSlot) : -1;
             if (sinkSlot >= 0) {
                 audio_pipeline_set_sink_muted((uint8_t)sinkSlot, newMute);
-                DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
-                if (drv) drv->setMute(newMute);
+                HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot((uint8_t)sinkSlot);
+                if (audioDev) audioDev->setMute(newMute);
             }
             if (prev != newMute) {
                 LOG_I("[DAC] API: mute %s -> %s", prev ? "ON" : "OFF", newMute ? "ON" : "OFF");
@@ -152,8 +151,8 @@ void registerDacApiEndpoints() {
 
         if (doc["filterMode"].is<int>()) {
             appState.dac.filterMode = (uint8_t)doc["filterMode"].as<int>();
-            DacDriver* drv = dac_get_driver_for_slot(0);
-            if (drv) drv->setFilterMode(appState.dac.filterMode);
+            HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot(0);
+            if (audioDev) audioDev->setFilterMode(appState.dac.filterMode);
             changed = true;
         }
 
@@ -169,7 +168,7 @@ void registerDacApiEndpoints() {
         server.send(200, "application/json", "{\"success\":true}");
     });
 
-    // GET /api/dac/drivers — List all registered drivers
+    // GET /api/dac/drivers -- List all DAC-path devices from HAL
     server.on("/api/dac/drivers", HTTP_GET, []() {
         if (!requireAuth()) return;
 
@@ -177,27 +176,21 @@ void registerDacApiEndpoints() {
         doc["success"] = true;
         JsonArray drivers = doc["drivers"].to<JsonArray>();
 
-        const DacRegistryEntry* entries = dac_registry_get_entries();
-        int count = dac_registry_get_count();
-
-        for (int i = 0; i < count; i++) {
-            JsonObject drv = drivers.add<JsonObject>();
-            drv["id"] = entries[i].deviceId;
-            drv["name"] = entries[i].name;
-
-            // Create a temporary driver to get capabilities
-            DacDriver* tmpDrv = entries[i].factory();
-            if (tmpDrv) {
-                const DacCapabilities& caps = tmpDrv->getCapabilities();
-                drv["manufacturer"] = caps.manufacturer;
-                drv["maxChannels"] = caps.maxChannels;
-                drv["hasHardwareVolume"] = caps.hasHardwareVolume;
-                drv["hasI2cControl"] = caps.hasI2cControl;
-                drv["needsIndependentClock"] = caps.needsIndependentClock;
-                drv["hasFilterModes"] = caps.hasFilterModes;
-                delete tmpDrv;
+        HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
+            JsonArray* a = static_cast<JsonArray*>(ctx);
+            const HalDeviceDescriptor& desc = dev->getDescriptor();
+            if (desc.capabilities & HAL_CAP_DAC_PATH) {
+                JsonObject drv = a->add<JsonObject>();
+                drv["id"] = desc.legacyId;
+                drv["name"] = desc.name;
+                drv["manufacturer"] = desc.manufacturer;
+                drv["maxChannels"] = desc.channelCount;
+                drv["hasHardwareVolume"] = (desc.i2cAddr != 0);
+                drv["hasI2cControl"] = (desc.i2cAddr != 0);
+                drv["needsIndependentClock"] = false;
+                drv["hasFilterModes"] = false;
             }
-        }
+        }, (void*)&drivers);
 
         String json;
         serializeJson(doc, json);
@@ -483,7 +476,7 @@ void registerDacApiEndpoints() {
         server.send(200, "application/json", json);
     });
 
-    // GET /api/dac/eeprom/presets — Pre-fill data from driver registry
+    // GET /api/dac/eeprom/presets -- Pre-fill data from HAL device DB
     server.on("/api/dac/eeprom/presets", HTTP_GET, []() {
         if (!requireAuth()) return;
 
@@ -491,32 +484,32 @@ void registerDacApiEndpoints() {
         doc["success"] = true;
         JsonArray presets = doc["presets"].to<JsonArray>();
 
-        const DacRegistryEntry* entries = dac_registry_get_entries();
-        int count = dac_registry_get_count();
-
-        for (int i = 0; i < count; i++) {
-            DacDriver* tmpDrv = entries[i].factory();
-            if (!tmpDrv) continue;
-
-            const DacCapabilities& caps = tmpDrv->getCapabilities();
-            JsonObject preset = presets.add<JsonObject>();
-            preset["deviceId"] = entries[i].deviceId;
-            preset["deviceName"] = caps.name;
-            preset["manufacturer"] = caps.manufacturer;
-            preset["maxChannels"] = caps.maxChannels;
-            preset["dacI2cAddress"] = caps.i2cAddress;
-            uint8_t flags = 0;
-            if (caps.needsIndependentClock) flags |= DAC_FLAG_INDEPENDENT_CLOCK;
-            if (caps.hasHardwareVolume) flags |= DAC_FLAG_HW_VOLUME;
-            if (caps.hasFilterModes) flags |= DAC_FLAG_FILTERS;
-            preset["flags"] = flags;
-            JsonArray rates = preset["sampleRates"].to<JsonArray>();
-            for (uint8_t r = 0; r < caps.numSupportedRates; r++) {
-                rates.add(caps.supportedRates[r]);
+        // Enumerate all DAC-path devices in HAL
+        HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
+            JsonArray* a = static_cast<JsonArray*>(ctx);
+            const HalDeviceDescriptor& desc = dev->getDescriptor();
+            if (desc.capabilities & HAL_CAP_DAC_PATH) {
+                JsonObject preset = a->add<JsonObject>();
+                preset["deviceId"] = desc.legacyId;
+                preset["deviceName"] = desc.name;
+                preset["manufacturer"] = desc.manufacturer;
+                preset["maxChannels"] = desc.channelCount;
+                preset["dacI2cAddress"] = desc.i2cAddr;
+                uint8_t flags = 0;
+                if (desc.i2cAddr != 0) flags |= DAC_FLAG_HW_VOLUME;
+                preset["flags"] = flags;
+                // Sample rates from descriptor mask (simplified)
+                JsonArray rates = preset["sampleRates"].to<JsonArray>();
+                if (desc.sampleRatesMask & 0x01) rates.add(8000);
+                if (desc.sampleRatesMask & 0x02) rates.add(16000);
+                if (desc.sampleRatesMask & 0x04) rates.add(32000);
+                if (desc.sampleRatesMask & 0x08) rates.add(44100);
+                if (desc.sampleRatesMask & 0x10) rates.add(48000);
+                if (desc.sampleRatesMask & 0x20) rates.add(88200);
+                if (desc.sampleRatesMask & 0x40) rates.add(96000);
+                if (desc.sampleRatesMask & 0x80) rates.add(192000);
             }
-
-            delete tmpDrv;
-        }
+        }, (void*)&presets);
 
         String json;
         serializeJson(doc, json);

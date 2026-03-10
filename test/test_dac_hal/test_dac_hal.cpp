@@ -364,39 +364,8 @@ void test_deactivate_nonzero_slot_preserves_mute_ramp(void) {
     TEST_ASSERT_TRUE(sim_prevDacMute);
 }
 
-// ===== DacPinConfig paControl Field Tests =====
-
-void test_dac_pin_config_paControl_default(void) {
-    // Zero-initialized DacPinConfig should have paControl == 0
-    // (backward compat: 0 is treated as "use default" by drivers)
-    DacPinConfig pins = {};
-    TEST_ASSERT_EQUAL_INT(0, pins.dataOut);
-    TEST_ASSERT_EQUAL_INT(0, pins.i2cSda);
-    TEST_ASSERT_EQUAL_INT(0, pins.i2cScl);
-    TEST_ASSERT_EQUAL_INT(0, pins.mclk);
-    TEST_ASSERT_EQUAL_INT(0, pins.paControl);
-}
-
-void test_dac_pin_config_paControl_field_present(void) {
-    // Construct with all 5 fields including paControl
-    DacPinConfig pins = {24, 7, 8, 22, 53};
-    TEST_ASSERT_EQUAL_INT(24, pins.dataOut);
-    TEST_ASSERT_EQUAL_INT(7, pins.i2cSda);
-    TEST_ASSERT_EQUAL_INT(8, pins.i2cScl);
-    TEST_ASSERT_EQUAL_INT(22, pins.mclk);
-    TEST_ASSERT_EQUAL_INT(53, pins.paControl);
-}
-
-void test_dac_pin_config_aggregate_init_backward_compat(void) {
-    // Existing 4-element aggregate initializers must still compile.
-    // C++ zero-initializes missing aggregate members, so paControl == 0.
-    DacPinConfig pins = {24, 48, 54, 22};
-    TEST_ASSERT_EQUAL_INT(24, pins.dataOut);
-    TEST_ASSERT_EQUAL_INT(48, pins.i2cSda);
-    TEST_ASSERT_EQUAL_INT(54, pins.i2cScl);
-    TEST_ASSERT_EQUAL_INT(22, pins.mclk);
-    TEST_ASSERT_EQUAL_INT(0, pins.paControl);
-}
+// DacPinConfig tests removed — struct deleted in DEBT-6 Phase 1.7
+// Pin configuration now lives in HalDeviceConfig (gpioA/B/C/D fields)
 
 // ===== Main =====
 int main(int argc, char **argv) {
@@ -442,10 +411,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_deactivate_slot0_resets_fully_muted);
     RUN_TEST(test_deactivate_nonzero_slot_preserves_mute_ramp);
 
-    // DacPinConfig paControl field tests
-    RUN_TEST(test_dac_pin_config_paControl_default);
-    RUN_TEST(test_dac_pin_config_paControl_field_present);
-    RUN_TEST(test_dac_pin_config_aggregate_init_backward_compat);
+    // DacPinConfig tests removed — struct deleted in DEBT-6 Phase 1.7
 
     return UNITY_END();
 }
