@@ -6,29 +6,28 @@
 
 ## Tech Debt
 
-**Dual device registries — `DacRegistry` and `HalDriverRegistry` both active:**
+**PLANNED — Dual device registries — `DacRegistry` and `HalDriverRegistry` both active:**
 - Issue: Two parallel device registries coexist. `src/dac_registry.h/.cpp` maps `uint16_t deviceId → DacFactoryFn` (legacy) and is actively used in `src/dac_hal.cpp:565` and `src/dac_api.cpp:173,487`. `src/hal/hal_driver_registry.h/.cpp` maps compatible strings → HAL factory functions. `HalDacAdapter` (`src/hal/hal_dac_adapter.h/.cpp`) bridges between them using the `legacyId` field on `HalDeviceDescriptor`.
 - Files: `src/dac_registry.cpp`, `src/dac_registry.h`, `src/hal/hal_driver_registry.h`, `src/hal/hal_dac_adapter.h/.cpp`, `src/dac_hal.cpp:565`, `src/dac_api.cpp:173,487`, `src/websocket_handler.cpp:31`
 - Impact: New DAC drivers must be registered in both systems. `dac_api.cpp` enumerates drivers from `DacRegistryEntry` — not from `HalDeviceManager` — so the API driver list diverges from the HAL device list.
 - Fix approach: Once all DAC drivers are HAL-native (compatible string registered), enumerate from `HalDeviceManager` in `dac_api.cpp`. Remove `DacRegistry`, `DacFactoryFn`, `legacyId`. Remove `HalDacAdapter` once `dac_hal.cpp` is fully bridge-driven.
+- Plan: `docs-internal/planning/debt-registry-unification.md` (DEBT-6, Phases 1-3)
 - Source: `docs-internal/architecture/legacy-inventory.md`, `docs-internal/architecture/disconnect-analysis.md` D10
 
-**Bridge is metadata-only — sinks registered directly from `dac_hal.cpp`:**
+**PLANNED — Bridge is metadata-only — sinks registered directly from `dac_hal.cpp`:**
 - Issue: `hal_pipeline_bridge.cpp` `on_device_available()` tracks ordinal counts and fires dirty flags, but the actual `audio_pipeline_set_sink()` call is made from `src/dac_hal.cpp` (~line 640–680), bypassing the bridge entirely. The bridge's `_halSlotToSinkSlot[]` mapping table is accurate for forward-lookup but sink registration is split across two files.
 - Files: `src/hal/hal_pipeline_bridge.cpp`, `src/dac_hal.cpp:640–680`
 - Impact: Future HAL devices that expect the bridge to register their sink will silently produce no audio output.
-- Fix approach: Move all `audio_pipeline_set_sink()` calls into `hal_pipeline_bridge.cpp` `on_device_available()`. `dac_hal.cpp` becomes I2S driver management only.
+- Fix approach: Move all `audio_pipeline_set_sink()` calls into `hal_pipeline_bridge.cpp` `on_device_available()`. `dac_hal.cpp` becomes bus-utility module only.
+- Plan: `docs-internal/planning/debt-registry-unification.md` (DEBT-6, Phase 1)
 - Source: `docs-internal/architecture/disconnect-analysis.md` D1
 
-**Deprecated WS message handlers still active (7 paths):**
-- Issue: 7 WS message types (`setDacEnabled`, `setDacVolume`, `setDacMute`, `setDacFilter`, `setEs8311Enabled`, `setEs8311Volume`, `setEs8311Mute`) dispatch at `src/websocket_handler.cpp:952–1065`. Each logs `LOG_W(...DEPRECATED: '%s' — use PUT /api/hal/devices...)` but still executes.
-- Files: `src/websocket_handler.cpp:952–1065`
-- Impact: Dead compatibility shims that must be maintained. A future HAL refactor that removes the underlying path would break any old client sending these.
-- Fix approach: Confirm no callers remain in `web_src/` and `e2e/`, then delete the handler blocks.
+**FIXED — Deprecated WS message handlers removed (7 paths):**
+- Resolution: All 7 deprecated handlers (`setDacEnabled`, `setDacVolume`, `setDacMute`, `setDacFilter`, `setEs8311Enabled`, `setEs8311Volume`, `setEs8311Mute`) and `_halSlotForCompatible()` helper removed from `src/websocket_handler.cpp`. Zero callers in frontend, E2E, tests, or MQTT. `PUT /api/hal/devices` is the sole replacement. Documentation updated in `docs-site/docs/developer/websocket.md`.
 
 **`filterMode` field has no HAL equivalent:**
-- Issue: `appState.dac.filterMode` (`src/state/dac_state.h:38`) is set via deprecated WS handler `setDacFilter` using slot-0 hard-coding (`dac_get_driver_for_slot(0)`). No `filterMode` field exists in `HalDeviceConfig`. Only PCM5102A supports this; it is never applicable to ES8311 or future DACs.
-- Files: `src/state/dac_state.h:38`, `src/websocket_handler.cpp:1009–1024`
+- Issue: `appState.dac.filterMode` (`src/state/dac_state.h:38`) is PCM5102A-specific with no `HalDeviceConfig` field. The deprecated WS handler `setDacFilter` was removed — only `POST /api/dac` (`src/dac_api.cpp:146`) remains as a write path, also deprecated.
+- Files: `src/state/dac_state.h:38`, `src/dac_api.cpp:146–150`
 - Impact: `filterMode` never persists across reboots via HAL config; would silently fail on any non-slot-0 device.
 - Fix approach: Add `filterMode` field to `HalDeviceConfig`, remove from `DacState`, wire through `PUT /api/hal/devices`.
 

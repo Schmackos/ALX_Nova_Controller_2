@@ -159,27 +159,12 @@ All commands are JSON text frames. The `type` field is required and case-sensiti
 
 ### DAC / Hardware
 
-:::warning Device-specific DAC commands deprecated
-The commands `setDacEnabled`, `setDacVolume`, `setDacMute`, `setDacFilter`, `setEs8311Enabled`, `setEs8311Volume`, and `setEs8311Mute` are deprecated as of DEBT-5. They emit a `LOG_W` warning when received. HAL is the sole system managing all DAC hardware — use `PUT /api/hal/devices` with the appropriate HAL slot to enable/disable or reconfigure a DAC device. The `halDeviceState` broadcast reflects the authoritative device state.
-:::
-
 | Type | Key Fields | Description |
 |------|-----------|-------------|
-| `setDacEnabled` | `enabled: bool` | **Deprecated.** Enable or disable the primary DAC (deferred to main loop). Use `PUT /api/hal/devices` instead. |
-| `setDacVolume` | `volume: int` (0-100) | **Deprecated.** Set primary DAC volume. Use `PUT /api/hal/devices` with `cfgVolume` instead. |
-| `setDacMute` | `mute: bool` | **Deprecated.** Mute or unmute the primary DAC. Use `PUT /api/hal/devices` with `cfgMute` instead. |
-| `setDacFilter` | `filterMode: int` | **Deprecated.** Set DAC digital filter mode. Retained for backward compatibility only. |
-| `setEs8311Enabled` | `enabled: bool` | **Deprecated.** Enable or disable ES8311 codec (deferred to main loop). Use `PUT /api/hal/devices` instead. |
-| `setEs8311Volume` | `volume: int` (0-100) | **Deprecated.** Set ES8311 output volume. Use `PUT /api/hal/devices` with `cfgVolume` instead. |
-| `setEs8311Mute` | `mute: bool` | **Deprecated.** Mute or unmute the ES8311. Use `PUT /api/hal/devices` with `cfgMute` instead. |
 | `setUsbAudioEnabled` | `enabled: bool` | Enable or disable USB Audio input |
 | `eepromScan` | _(none)_ | Scan I2C bus for AT24C02 EEPROM |
 | `eepromProgram` | `deviceId, hwRevision, deviceName, manufacturer, ...` | Write device identity to EEPROM |
 | `eepromErase` | `address: int` | Erase an EEPROM at the given I2C address |
-
-:::warning DAC enable/disable is deferred
-When the deprecated `setDacEnabled` and `setEs8311Enabled` commands are still used, they set `_pendingDacToggle` / `_pendingEs8311Toggle` flags that the main loop processes in the next iteration. This prevents the WebSocket handler from blocking the SDIO interface during I2S driver reinstallation. The equivalent HAL path via `PUT /api/hal/devices` uses the same deferred mechanism internally.
-:::
 
 ### Signal Generator
 

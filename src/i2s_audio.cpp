@@ -763,24 +763,16 @@ void audio_periodic_dump() {
     // zb high + az=0 + tot=0 → DMA timeout, slave not clocking
     // zb low  + az high      → Slave clocking OK, no audio
     // errs > 0               → I2S driver error (bus fault, DMA overflow)
-    LOG_I("[Audio] ADC1=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu adcs=%d",
-          _analysis.adc[0].dBFS, _diagnostics.adc[0].noiseFloorDbfs,
-          _diagnostics.adc[0].status,
-          _diagnostics.adc[0].i2sReadErrors,
-          _diagnostics.adc[0].zeroByteReads,
-          _diagnostics.adc[0].allZeroBuffers,
-          _diagnostics.adc[0].consecutiveZeros,
-          _diagnostics.adc[0].totalBuffersRead,
-          _numAdcsDetected);
-    if (_adc2InitOk) {
-        LOG_I("[Audio] ADC2=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu",
-              _analysis.adc[1].dBFS, _diagnostics.adc[1].noiseFloorDbfs,
-              _diagnostics.adc[1].status,
-              _diagnostics.adc[1].i2sReadErrors,
-              _diagnostics.adc[1].zeroByteReads,
-              _diagnostics.adc[1].allZeroBuffers,
-              _diagnostics.adc[1].consecutiveZeros,
-              _diagnostics.adc[1].totalBuffersRead);
+    LOG_I("[Audio] --- adcs=%d ---", _numAdcsDetected);
+    for (int i = 0; i < _numAdcsDetected; i++) {
+        LOG_I("[Audio] ADC[%d]=%.1fdB flr=%.1f st=%d errs=%lu zb=%lu az=%lu cz=%lu tot=%lu",
+              i, _analysis.adc[i].dBFS, _diagnostics.adc[i].noiseFloorDbfs,
+              _diagnostics.adc[i].status,
+              _diagnostics.adc[i].i2sReadErrors,
+              _diagnostics.adc[i].zeroByteReads,
+              _diagnostics.adc[i].allZeroBuffers,
+              _diagnostics.adc[i].consecutiveZeros,
+              _diagnostics.adc[i].totalBuffersRead);
     }
 #ifdef DAC_ENABLED
     dac_periodic_log();

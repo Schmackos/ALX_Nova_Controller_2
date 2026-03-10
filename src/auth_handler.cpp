@@ -126,7 +126,7 @@ String hashPasswordPbkdf2(const String &password) {
 
 // Verify password against stored hash (supports both legacy SHA256 and PBKDF2)
 bool verifyPassword(const String &inputPassword, const String &storedHash) {
-  if (storedHash.startsWith("p1:") && storedHash.length() == 101) {
+  if (storedHash.startsWith("p1:") && storedHash.length() == 100) {
     // PBKDF2 format: "p1:<32-char salt>:<64-char key>"
     uint8_t salt[16];
     if (!hexToBytes(storedHash.c_str() + 3, salt, 16)) return false;

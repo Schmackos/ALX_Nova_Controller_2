@@ -9,6 +9,10 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <cmath>
+#ifdef DAC_ENABLED
+#include "hal/hal_device_manager.h"
+#include "hal/hal_relay.h"
+#endif
 
 // Smoothed audio level for stable signal detection (EMA, α=0.15, τ≈308ms)
 static float _smoothedAudioLevel = -96.0f;
@@ -333,8 +337,19 @@ bool detectSignal() {
 void setAmplifierState(bool state) {
   if (appState.audio.amplifierState != state) {
     appState.audio.amplifierState = state;
+#ifdef DAC_ENABLED
+    HalDevice* relayDev = HalDeviceManager::instance().findByCompatible("generic,relay-amp");
+    if (relayDev && relayDev->isReady()) {
+      static_cast<HalRelay*>(relayDev)->setEnabled(state);
+    } else {
+      digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
+    }
+    LOG_I("[Sensing] Amplifier %s (via %s)", state ? "ON" : "OFF",
+          (relayDev && relayDev->isReady()) ? "HAL" : "GPIO");
+#else
     digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
     LOG_I("[Sensing] Amplifier %s", state ? "ON" : "OFF");
+#endif
   }
 }
 

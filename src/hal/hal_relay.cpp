@@ -36,10 +36,24 @@ HalInitResult HalRelay::init()
 {
     HalDeviceManager& mgr = HalDeviceManager::instance();
     mgr.claimPin(_pin, HAL_BUS_GPIO, 0, _slot);
+#ifndef NATIVE_TEST
+    pinMode(_pin, OUTPUT);
+    digitalWrite(_pin, LOW);
+#endif
+    _enabled = false;
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
     LOG_I("[HAL:Relay] init — Amplifier Relay ready on GPIO%d", _pin);
     return hal_init_ok();
+}
+
+void HalRelay::setEnabled(bool state)
+{
+#ifndef NATIVE_TEST
+    digitalWrite(_pin, state ? HIGH : LOW);
+#endif
+    _enabled = state;
+    LOG_I("[HAL:Relay] setEnabled=%d (GPIO%d)", state ? 1 : 0, _pin);
 }
 
 void HalRelay::deinit()

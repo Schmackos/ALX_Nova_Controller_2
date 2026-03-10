@@ -90,35 +90,40 @@ void dac_apply_software_volume(float* buffer, int samples, float gain) {
 // Called from audio task alongside ADC periodic dump (every 5s)
 void dac_periodic_log() {
 #ifndef NATIVE_TEST
-    AppState& as = AppState::getInstance();
     unsigned long now = millis();
     if (now - _lastDacDumpMs < 5000) return;
     _lastDacDumpMs = now;
 
-    // Only log if any output sink is active
-    if (audio_pipeline_get_sink_count() == 0) return;
+    int sinkCount = audio_pipeline_get_sink_count();
+    if (sinkCount == 0) return;
 
+    AppState& as = AppState::getInstance();
     uint32_t newUnderruns = as.dac.txUnderruns - _prevTxUnderruns;
     _prevTxUnderruns = as.dac.txUnderruns;
 
-    LOG_I("[DAC] sink0 gain=%.4f%s wr=%lu ur=%lu(+%lu)",
-          audio_pipeline_get_sink_volume(0),
-          audio_pipeline_is_sink_muted(0) ? " MUTE" : "",
-          (unsigned long)_txWriteCount,
-          (unsigned long)as.dac.txUnderruns,
-          (unsigned long)newUnderruns);
-
-    if (_txWriteCount > 0) {
-        LOG_D("[DAC] TX: %lu writes, %luKB written / %luKB expected",
-              (unsigned long)_txWriteCount,
-              (unsigned long)(_txBytesWritten / 1024),
-              (unsigned long)(_txBytesExpected / 1024));
-        LOG_I("[DAC] TX peak=0x%08lX (%ld) zeroFrames=%lu/%lu",
-              (unsigned long)_txPeakSample, (long)_txPeakSample,
-              (unsigned long)_txZeroFrames, (unsigned long)_txWriteCount);
+    for (int slot = 0; slot < sinkCount; slot++) {
+        const AudioOutputSink* sink = audio_pipeline_get_sink(slot);
+        if (!sink || !sink->write) continue;
+        const char* name = (sink->name && sink->name[0]) ? sink->name : "DAC";
+        LOG_I("[DAC] sink%d (%s) gain=%.4f%s wr=%lu ur=%lu(+%lu)",
+              slot, name,
+              audio_pipeline_get_sink_volume(slot),
+              audio_pipeline_is_sink_muted(slot) ? " MUTE" : "",
+              (unsigned long)(slot == 0 ? _txWriteCount : 0),
+              (unsigned long)(slot == 0 ? as.dac.txUnderruns : 0),
+              (unsigned long)(slot == 0 ? newUnderruns : 0));
+        if (slot == 0 && _txWriteCount > 0) {
+            LOG_D("[DAC] TX: %lu writes, %luKB written / %luKB expected",
+                  (unsigned long)_txWriteCount,
+                  (unsigned long)(_txBytesWritten / 1024),
+                  (unsigned long)(_txBytesExpected / 1024));
+            LOG_I("[DAC] TX peak=0x%08lX (%ld) zeroFrames=%lu/%lu",
+                  (unsigned long)_txPeakSample, (long)_txPeakSample,
+                  (unsigned long)_txZeroFrames, (unsigned long)_txWriteCount);
+        }
     }
 
-    // Reset per-interval counters
+    // Reset per-interval counters (slot 0 / primary I2S TX)
     _txWriteCount = 0;
     _txBytesWritten = 0;
     _txBytesExpected = 0;
@@ -328,7 +333,7 @@ static void dac_load_settings() {
             }
             if (doc["mute"].is<bool>()) cfg->mute = doc["mute"].as<bool>();
             hal_save_device_config(pcm->getSlot());
-            LOG_I("[DAC] Migrated PCM5102A: en=%d vol=%d mute=%d",
+            LOG_I("[DAC] Migrated primary DAC settings: en=%d vol=%d mute=%d",
                   cfg->enabled, cfg->volume, cfg->mute);
         }
     }
@@ -345,7 +350,7 @@ static void dac_load_settings() {
             }
             if (doc["es8311Mute"].is<bool>()) cfg->mute = doc["es8311Mute"].as<bool>();
             hal_save_device_config(es->getSlot());
-            LOG_I("[DAC] Migrated ES8311: en=%d vol=%d mute=%d",
+            LOG_I("[DAC] Migrated secondary DAC settings: en=%d vol=%d mute=%d",
                   cfg->enabled, cfg->volume, cfg->mute);
         }
     }

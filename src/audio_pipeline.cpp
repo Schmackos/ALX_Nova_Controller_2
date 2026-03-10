@@ -791,7 +791,8 @@ void audio_pipeline_dump_raw_diag() {
     // DC offset: all values biased, minVal and maxVal both far from 0
     // No signal: maxAbs very small (<= 0x00010000) AND nonZero count low
 
-    LOG_I("[Audio] === ADC1 Raw Diagnostic ===");
+    const char* lane0Name = (_sources[0].read && _sources[0].name) ? _sources[0].name : "Lane 0";
+    LOG_I("[Audio] === Raw Diagnostic: %s ===", lane0Name);
     LOG_I("[Audio]   raw[0..7] hex: %08lX %08lX %08lX %08lX  %08lX %08lX %08lX %08lX",
           (unsigned long)_adcDiag.raw[0], (unsigned long)_adcDiag.raw[1],
           (unsigned long)_adcDiag.raw[2], (unsigned long)_adcDiag.raw[3],

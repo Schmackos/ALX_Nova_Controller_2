@@ -46,11 +46,11 @@ struct PinEntry {
 };
 
 static const PinEntry all_pins[] = {
-    {"PCM1808 ADC 1&2", "BCK",   I2S_BCK_PIN},
-    {"PCM1808 ADC 1",   "DOUT",  I2S_DOUT_PIN},
-    {"PCM1808 ADC 2",   "DOUT2", I2S_DOUT2_PIN},
-    {"PCM1808 ADC 1&2", "LRC",   I2S_LRC_PIN},
-    {"PCM1808 ADC 1&2", "MCLK",  I2S_MCLK_PIN},
+    {"I2S ADC (shared)", "BCK",   I2S_BCK_PIN},
+    {"I2S ADC Lane 0",   "DOUT",  I2S_DOUT_PIN},
+    {"I2S ADC Lane 1",   "DOUT2", I2S_DOUT2_PIN},
+    {"I2S ADC (shared)", "LRC",   I2S_LRC_PIN},
+    {"I2S ADC (shared)", "MCLK",  I2S_MCLK_PIN},
 #ifdef DAC_ENABLED
     {"DAC Output",   "DOUT", I2S_TX_DATA_PIN},
     {"DAC I2C",      "SDA",  DAC_I2C_SDA_PIN},
@@ -62,10 +62,10 @@ static const PinEntry all_pins[] = {
     {"ST7735S TFT",  "DC",   TFT_DC_PIN},
     {"ST7735S TFT",  "RST",  TFT_RST_PIN},
     {"ST7735S TFT",  "BL",   TFT_BL_PIN},
-    {"EC11 Encoder", "A",    ENCODER_A_PIN},
-    {"EC11 Encoder", "B",    ENCODER_B_PIN},
-    {"EC11 Encoder", "SW",   ENCODER_SW_PIN},
-    {"HW-508 Buzz",  "IO",   BUZZER_PIN},
+    {"Encoder", "A",  ENCODER_A_PIN},
+    {"Encoder", "B",  ENCODER_B_PIN},
+    {"Encoder", "SW", ENCODER_SW_PIN},
+    {"Buzzer",  "IO", BUZZER_PIN},
     {"Core",         "LED",  LED_PIN},
     {"Core",         "Amp",  AMPLIFIER_PIN},
     {"Core",         "Btn",  RESET_BUTTON_PIN},
@@ -111,7 +111,7 @@ static void update_pins_label(void) {
     if (pin_sort_mode == SORT_BY_DEVICE) {
         /* Group by device — original layout */
         pos = snprintf(buf, sizeof(buf),
-                 "PCM1808 ADC 1&2\n"
+                 "I2S ADC\n"
                  "  BCK=%d DOUT=%d DOUT2=%d\n"
                  "  LRC=%d MCLK=%d\n",
                  I2S_BCK_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN,
@@ -126,9 +126,9 @@ static void update_pins_label(void) {
                  "ST7735S TFT 1.8\"\n"
                  "  CS=%d MOSI=%d CLK=%d\n"
                  "  DC=%d RST=%d BL=%d\n"
-                 "EC11 Encoder\n"
+                 "Encoder\n"
                  "  A=%d B=%d SW=%d\n"
-                 "HW-508 Buzzer\n"
+                 "Buzzer\n"
                  "  IO=%d\n"
                  "Core\n"
                  "  LED=%d Amp=%d Btn=%d\n"

@@ -1483,11 +1483,11 @@ void sendDebugState() {
   {
     JsonArray pins = doc["pins"].to<JsonArray>();
     struct { const char *d; const char *f; int g; const char *c; } pm[] = {
-      {"PCM1808 ADC 1&2", "BCK",   I2S_BCK_PIN,      "audio"},
-      {"PCM1808 ADC 1",   "DOUT",  I2S_DOUT_PIN,     "audio"},
-      {"PCM1808 ADC 2",   "DOUT2", I2S_DOUT2_PIN,    "audio"},
-      {"PCM1808 ADC 1&2", "LRC",   I2S_LRC_PIN,      "audio"},
-      {"PCM1808 ADC 1&2", "MCLK",  I2S_MCLK_PIN,     "audio"},
+      {"I2S ADC (shared)", "BCK",   I2S_BCK_PIN,      "audio"},
+      {"I2S ADC Lane 0",   "DOUT",  I2S_DOUT_PIN,     "audio"},
+      {"I2S ADC Lane 1",   "DOUT2", I2S_DOUT2_PIN,    "audio"},
+      {"I2S ADC (shared)", "LRC",   I2S_LRC_PIN,      "audio"},
+      {"I2S ADC (shared)", "MCLK",  I2S_MCLK_PIN,     "audio"},
 #ifdef DAC_ENABLED
       {"DAC Output",      "DOUT",  I2S_TX_DATA_PIN,   "audio"},
       {"DAC I2C",         "SDA",   DAC_I2C_SDA_PIN,   "audio"},
