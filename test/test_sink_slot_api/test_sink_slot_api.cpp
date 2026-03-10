@@ -35,6 +35,7 @@ typedef struct AudioOutputSink {
     void (*write)(const int32_t *buf, int stereoFrames);
     bool (*isReady)(void);
     float gainLinear;
+    float volumeGain;
     bool muted;
     float vuL, vuR;
     float _vuSmoothedL, _vuSmoothedR;
@@ -48,6 +49,7 @@ typedef struct AudioOutputSink {
     NULL,   /* write */          \
     NULL,   /* isReady */        \
     1.0f,   /* gainLinear */     \
+    1.0f,   /* volumeGain */     \
     false,  /* muted */          \
     -90.0f, /* vuL */            \
     -90.0f, /* vuR */            \
@@ -87,6 +89,7 @@ static void audio_pipeline_remove_sink(int slot) {
     if (!_sinks[slot].write) return;  // Already empty
     memset(&_sinks[slot], 0, sizeof(AudioOutputSink));
     _sinks[slot].gainLinear = 1.0f;
+    _sinks[slot].volumeGain = 1.0f;
     _sinks[slot].vuL = -90.0f;
     _sinks[slot].vuR = -90.0f;
     _sinks[slot].halSlot = 0xFF;
@@ -106,6 +109,16 @@ static void audio_pipeline_set_sink_muted(uint8_t slot, bool muted) {
 static bool audio_pipeline_is_sink_muted(uint8_t slot) {
     if (slot >= MAX_SINKS) return false;
     return _sinks[slot].muted;
+}
+
+static void audio_pipeline_set_sink_volume(uint8_t slot, float gain) {
+    if (slot >= MAX_SINKS) return;
+    _sinks[slot].volumeGain = gain;
+}
+
+static float audio_pipeline_get_sink_volume(uint8_t slot) {
+    if (slot >= MAX_SINKS) return 0.0f;
+    return _sinks[slot].volumeGain;
 }
 
 static int audio_pipeline_get_sink_count() {
@@ -672,6 +685,47 @@ void test_unmuted_by_default() {
     TEST_ASSERT_FALSE(audio_pipeline_is_sink_muted(0));
 }
 
+// ==========================================================================
+// Group 8: Sink volume API (4 tests)
+// ==========================================================================
+
+// 36. set_sink_volume updates gain, get_sink_volume reflects it
+void test_set_sink_volume_updates_gain() {
+    AudioOutputSink s = make_sink("DAC0", 0, 0, 2);
+    audio_pipeline_set_sink(0, &s);
+
+    audio_pipeline_set_sink_volume(0, 0.75f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.75f, audio_pipeline_get_sink_volume(0));
+}
+
+// 37. Newly registered sink has volumeGain = 1.0 (unity) by default
+void test_sink_volume_default_unity() {
+    AudioOutputSink s = make_sink("DAC0", 0, 0, 2);
+    audio_pipeline_set_sink(0, &s);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, audio_pipeline_get_sink_volume(0));
+}
+
+// 38. set_sink_volume ignores invalid slot indices without crashing
+void test_set_sink_volume_ignores_invalid_slot() {
+    audio_pipeline_set_sink_volume(MAX_SINKS, 0.5f);
+    audio_pipeline_set_sink_volume(255, 0.5f);
+    // get_sink_volume returns 0.0f for invalid slots
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, audio_pipeline_get_sink_volume(MAX_SINKS));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, audio_pipeline_get_sink_volume(255));
+}
+
+// 39. volumeGain is reset to 1.0 after remove_sink
+void test_volume_reset_on_remove() {
+    AudioOutputSink s = make_sink("DAC0", 0, 0, 2);
+    audio_pipeline_set_sink(0, &s);
+
+    audio_pipeline_set_sink_volume(0, 0.3f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.3f, audio_pipeline_get_sink_volume(0));
+
+    audio_pipeline_remove_sink(0);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, audio_pipeline_get_sink_volume(0));
+}
+
 // ===== Main =====
 
 int main() {
@@ -725,6 +779,12 @@ int main() {
     RUN_TEST(test_set_sink_muted_updates_sink_struct);
     RUN_TEST(test_set_sink_muted_ignores_invalid_slot);
     RUN_TEST(test_unmuted_by_default);
+
+    // Group 8: Sink volume API
+    RUN_TEST(test_set_sink_volume_updates_gain);
+    RUN_TEST(test_sink_volume_default_unity);
+    RUN_TEST(test_set_sink_volume_ignores_invalid_slot);
+    RUN_TEST(test_volume_reset_on_remove);
 
     return UNITY_END();
 }

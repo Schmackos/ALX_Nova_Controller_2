@@ -906,6 +906,16 @@ bool audio_pipeline_is_sink_muted(uint8_t slot) {
     return _sinks[slot].muted;
 }
 
+void audio_pipeline_set_sink_volume(uint8_t slot, float gain) {
+    if (slot >= AUDIO_OUT_MAX_SINKS) return;
+    _sinks[slot].volumeGain = gain;  // Single float write — atomic on ESP32-P4 RISC-V
+}
+
+float audio_pipeline_get_sink_volume(uint8_t slot) {
+    if (slot >= AUDIO_OUT_MAX_SINKS) return 0.0f;
+    return _sinks[slot].volumeGain;
+}
+
 void audio_pipeline_remove_sink(int slot) {
     if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS) return;
     if (!_sinks[slot].write) return;  // Already empty
@@ -915,6 +925,7 @@ void audio_pipeline_remove_sink(int slot) {
 #endif
     memset(&_sinks[slot], 0, sizeof(AudioOutputSink));
     _sinks[slot].gainLinear = 1.0f;
+    _sinks[slot].volumeGain = 1.0f;
     _sinks[slot].vuL = -90.0f;
     _sinks[slot].vuR = -90.0f;
     _sinks[slot].halSlot = 0xFF;

@@ -38,9 +38,6 @@ static void dac_load_settings();
 // Each index corresponds to an AUDIO_OUT_MAX_SINKS pipeline sink slot.
 static DacDriver*    _driverForSlot[AUDIO_OUT_MAX_SINKS]  = {};  // Driver instance per slot
 static HalDacAdapter* _adapterForSlot[AUDIO_OUT_MAX_SINKS] = {};  // HAL adapter per slot
-static float         _volumeGainForSlot[AUDIO_OUT_MAX_SINKS] = {
-    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f
-};
 // Which I2S write port each slot uses: 0 = i2s_audio_write (primary), 2 = i2s_audio_write_es8311
 static uint8_t       _writePortForSlot[AUDIO_OUT_MAX_SINKS] = {};
 
@@ -99,21 +96,6 @@ void dac_apply_software_volume(float* buffer, int samples, float gain) {
 #endif
 }
 
-// ===== Volume Update — slot-indexed =====
-void dac_update_volume_for_slot(uint8_t slot, uint8_t percent) {
-    if (slot >= AUDIO_OUT_MAX_SINKS) return;
-    _volumeGainForSlot[slot] = dac_volume_to_linear(percent);
-    DacDriver* drv = _driverForSlot[slot];
-    if (drv && drv->getCapabilities().hasHardwareVolume) {
-        drv->setVolume(percent);
-    }
-#ifndef NATIVE_TEST
-    LOG_I("[DAC] Slot %u volume: %d%% gain=%.4f%s",
-          slot, percent, _volumeGainForSlot[slot],
-          drv && drv->getCapabilities().hasHardwareVolume ? " [HW]" : " [SW]");
-#endif
-}
-
 // ===== Periodic DAC Runtime Dump =====
 // Called from audio task alongside ADC periodic dump (every 5s)
 void dac_periodic_log() {
@@ -131,7 +113,7 @@ void dac_periodic_log() {
 
     LOG_I("[DAC] slot0 ready=%d gain=%.4f%s wr=%lu ur=%lu(+%lu)",
           (_driverForSlot[0] && _driverForSlot[0]->isReady()) ? 1 : 0,
-          _volumeGainForSlot[0],
+          audio_pipeline_get_sink_volume(0),
           audio_pipeline_is_sink_muted(0) ? " MUTE" : "",
           (unsigned long)_txWriteCount,
           (unsigned long)as.dac.txUnderruns,
@@ -268,7 +250,7 @@ static void _dac_write_for_slot(uint8_t slot, const int32_t* buffer, int stereo_
     if (!_i2sTxEnabledFor[port]) return;
 
     DacDriver* drv = _driverForSlot[slot];
-    float volGain   = _volumeGainForSlot[slot];
+    float volGain   = audio_pipeline_get_sink_volume(slot);
     int total_samples = stereo_frames * 2;
 
     // Decide whether software volume is needed
@@ -451,8 +433,8 @@ void dac_boot_prepare() {
     HalDeviceConfig* pcmBootCfg = pcmBoot ? HalDeviceManager::instance().getConfig(pcmBoot->getSlot()) : nullptr;
     if (pcmBootCfg) bootVolume = pcmBootCfg->volume;
 #endif
-    _volumeGainForSlot[0] = dac_volume_to_linear(bootVolume);
-    LOG_I("[DAC] Volume gain: %d%% -> %.4f linear", bootVolume, _volumeGainForSlot[0]);
+    audio_pipeline_set_sink_volume(0, dac_volume_to_linear(bootVolume));
+    LOG_I("[DAC] Volume gain: %d%% -> %.4f linear", bootVolume, audio_pipeline_get_sink_volume(0));
 
     AppState& as = AppState::getInstance();
 
@@ -608,7 +590,7 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot) {
 
         // Apply initial volume from settings
         uint8_t initVolume = (cfg) ? cfg->volume : 100;
-        _volumeGainForSlot[sinkSlot] = dac_volume_to_linear(initVolume);
+        audio_pipeline_set_sink_volume(sinkSlot, dac_volume_to_linear(initVolume));
         if (_driverForSlot[sinkSlot]->getCapabilities().hasHardwareVolume) {
             _driverForSlot[sinkSlot]->setVolume(100);  // Keep HW at 0 dB; use SW curve
         }
@@ -659,7 +641,7 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot) {
         }
 
         LOG_I("[DAC] Activated: '%s' at slot %u, port %u, gain=%.4f",
-              desc.name, sinkSlot, port, _volumeGainForSlot[sinkSlot]);
+              desc.name, sinkSlot, port, audio_pipeline_get_sink_volume(sinkSlot));
     }
 
     {
@@ -732,7 +714,7 @@ void dac_deactivate_for_hal(HalDevice* dev) {
 
     // Clear slot state
     _adapterForSlot[sinkSlot]  = nullptr;
-    _volumeGainForSlot[sinkSlot] = 1.0f;
+    audio_pipeline_set_sink_volume(sinkSlot, 1.0f);
     _writePortForSlot[sinkSlot]  = 0;
     audio_pipeline_set_sink_muted(sinkSlot, false);
 
@@ -746,7 +728,7 @@ void dac_deactivate_for_hal(HalDevice* dev) {
 DacTxDiag dac_get_tx_diagnostics() {
     DacTxDiag d = {};
     d.i2sTxEnabled = _i2sTxEnabledFor[0];
-    d.volumeGain = _volumeGainForSlot[0];
+    d.volumeGain = audio_pipeline_get_sink_volume(0);
     d.writeCount = _txWriteCount;
     d.bytesWritten = _txBytesWritten;
     d.bytesExpected = _txBytesExpected;

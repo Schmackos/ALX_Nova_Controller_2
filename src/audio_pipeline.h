@@ -83,6 +83,12 @@ void audio_pipeline_remove_sink(int slot);
 void audio_pipeline_set_sink_muted(uint8_t slot, bool muted);
 bool audio_pipeline_is_sink_muted(uint8_t slot);
 
+// Software volume gain on sink structs (0.0-1.0, log-perceptual curve).
+// Single aligned float write — atomic on ESP32-P4 RISC-V, no scheduler suspend needed.
+// Bounds-checked: slots >= AUDIO_OUT_MAX_SINKS are ignored silently.
+void  audio_pipeline_set_sink_volume(uint8_t slot, float gain);
+float audio_pipeline_get_sink_volume(uint8_t slot);
+
 // Matrix persistence
 void audio_pipeline_save_matrix();
 void audio_pipeline_load_matrix();

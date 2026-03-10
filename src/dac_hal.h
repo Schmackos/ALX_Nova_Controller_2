@@ -97,10 +97,6 @@ bool dac_activate_for_hal(HalDevice* dev, uint8_t sinkSlot);
 // the AudioOutputSink from the pipeline. Idempotent.
 void dac_deactivate_for_hal(HalDevice* dev);
 
-// dac_update_volume_for_slot(): update volume gain for a specific sink slot.
-// If the driver for that slot has hardware volume support it is applied directly.
-void dac_update_volume_for_slot(uint8_t slot, uint8_t percent);
-
 bool dac_output_is_ready();
 
 // Periodic runtime dump (call from audio task, 5s interval)

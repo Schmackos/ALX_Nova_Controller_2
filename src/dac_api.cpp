@@ -118,7 +118,11 @@ void registerDacApiEndpoints() {
                 if (cfg) cfg->volume = (uint8_t)v;
                 int8_t sinkSlot = (halSlot < 0xFF) ? hal_pipeline_get_sink_slot(halSlot) : -1;
                 if (sinkSlot >= 0) {
-                    dac_update_volume_for_slot((uint8_t)sinkSlot, (uint8_t)v);
+                    audio_pipeline_set_sink_volume((uint8_t)sinkSlot, dac_volume_to_linear((uint8_t)v));
+                    DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
+                    if (drv && drv->getCapabilities().hasHardwareVolume) {
+                        drv->setVolume((uint8_t)v);
+                    }
                 }
                 changed = true;
             }

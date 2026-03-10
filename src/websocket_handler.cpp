@@ -980,7 +980,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
               if (cfg) cfg->volume = (uint8_t)v;
               int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
-              if (sinkSlot >= 0) dac_update_volume_for_slot((uint8_t)sinkSlot, (uint8_t)v);
+              if (sinkSlot >= 0) {
+                audio_pipeline_set_sink_volume((uint8_t)sinkSlot, dac_volume_to_linear((uint8_t)v));
+                DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
+                if (drv && drv->getCapabilities().hasHardwareVolume) drv->setVolume((uint8_t)v);
+              }
               hal_save_device_config_deferred(halSlot);
             } else {
               LOG_W("[WebSocket] setDacVolume: PCM5102A not found in HAL");
@@ -1057,7 +1061,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
               HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(halSlot);
               if (cfg) cfg->volume = (uint8_t)v;
               int8_t sinkSlot = hal_pipeline_get_sink_slot(halSlot);
-              if (sinkSlot >= 0) dac_update_volume_for_slot((uint8_t)sinkSlot, (uint8_t)v);
+              if (sinkSlot >= 0) {
+                audio_pipeline_set_sink_volume((uint8_t)sinkSlot, dac_volume_to_linear((uint8_t)v));
+                DacDriver* drv = dac_get_driver_for_slot((uint8_t)sinkSlot);
+                if (drv && drv->getCapabilities().hasHardwareVolume) drv->setVolume((uint8_t)v);
+              }
               hal_save_device_config_deferred(halSlot);
             } else {
               LOG_W("[WebSocket] setEs8311Volume: ES8311 not found in HAL");

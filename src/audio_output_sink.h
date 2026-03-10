@@ -34,6 +34,10 @@ typedef struct AudioOutputSink {
     // Post-matrix gain trim (1.0 = unity). Separate from HW volume in the driver.
     float gainLinear;
 
+    // Software volume gain (0.0–1.0, log-perceptual curve). Applied by the DAC
+    // write path. Set via audio_pipeline_set_sink_volume(). Default 1.0 = unity.
+    float volumeGain;
+
     // Mute flag — sink skipped when true (mute ramp handled inside write callback)
     bool muted;
 
@@ -57,6 +61,7 @@ typedef struct AudioOutputSink {
     NULL,   /* write */          \
     NULL,   /* isReady */        \
     1.0f,   /* gainLinear */     \
+    1.0f,   /* volumeGain */     \
     false,  /* muted */          \
     -90.0f, /* vuL */            \
     -90.0f, /* vuR */            \
