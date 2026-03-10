@@ -255,7 +255,7 @@ Update runtime configuration for a device. All fields are optional — only fiel
 | 404 | No device in the specified slot |
 
 :::warning
-For DAC-path devices (`HAL_CAP_DAC_PATH`), changing `enabled` to `false` must use the deferred toggle mechanism (`requestDacToggle` / `requestEs8311Toggle`) rather than direct I2S driver manipulation. The `hal_apply_config()` function handles this automatically when `enabled` changes through this endpoint.
+For DAC-path devices, changing `enabled` to `false` uses the `HalCoordState` deferred toggle queue (`appState.halCoord.requestDeviceToggle(halSlot, -1)`). `hal_apply_config()` handles this automatically.
 :::
 
 ---
@@ -264,9 +264,7 @@ For DAC-path devices (`HAL_CAP_DAC_PATH`), changing `enabled` to `false` must us
 
 Remove a device from a slot. Calls `deinit()` on the device, clears the slot configuration, and triggers a WebSocket broadcast.
 
-For DAC-path devices, this endpoint automatically triggers the appropriate deferred teardown before removal:
-- `HAL_DEV_DAC` devices: sets `appState.dac.enabled = false` and calls `requestDacToggle(-1)`
-- `HAL_DEV_CODEC` devices: calls `requestEs8311Toggle(-1)`
+For DAC-path devices, this endpoint enqueues deferred teardown via `appState.halCoord.requestDeviceToggle(halSlot, -1)`. Device-type-agnostic — works for `HAL_DEV_DAC`, `HAL_DEV_CODEC`, etc.
 
 **Request**
 

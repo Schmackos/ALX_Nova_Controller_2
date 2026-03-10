@@ -23,7 +23,7 @@ graph TB
     end
 
     subgraph HAL["HAL Framework (src/hal/)"]
-        HM["HalDeviceManager\nsingleton, 16 slots, 24-pin tracking"]
+        HM["HalDeviceManager\nsingleton, 24 slots, 56-pin tracking\n(HAL_MAX_DEVICES=24, HAL_GPIO_MAX=54)"]
         HD["HalDiscovery\nI2C scan / EEPROM / manual"]
         HDB["HalDeviceDB\nbuiltin + LittleFS presets"]
         HR["HalDriverRegistry\ncompatible string -> factory"]
@@ -39,11 +39,6 @@ graph TB
         SINKS["Slot-Indexed Sink Dispatch\nset_sink(slot) / remove_sink(slot)\n8 output slots, halSlot O(1) lookup"]
     end
 
-    subgraph LegacyDAC["DAC Layer (dac_hal.cpp)"]
-        style LegacyDAC stroke-dasharray: 5 5
-        DH["dac_hal.cpp\nI2S TX driver, HalDacAdapter"]
-        DR["DacRegistry\n(parallel to HalDriverRegistry)"]
-    end
 
     subgraph WebGUI["Web Interface"]
         WS["WebSocket Server\nport 81, binary + JSON"]
@@ -68,9 +63,6 @@ graph TB
     %% Audio pipeline flow
     AP --> INP --> DSP --> MTX --> ODSP --> SINKS
 
-    %% DAC layer creates sinks, bridge manages lifecycle
-    DH -->|"creates AudioOutputSink\nwith halSlot field"| SINKS
-    DH -->|"wraps as\nHalDacAdapter"| HM
 
     %% State management
     AS -->|"dirty flags +\nEVT_XXX bits"| ML
@@ -88,12 +80,11 @@ graph TB
     WS -->|"halSlot O(1)\ndevice lookup"| HM
 
     %% Semaphore for safe I2S teardown
-    DH -.->|"audioPaused +\nbinary semaphore"| AP
+    HPB -.->|"I2S reinit: audioPaused +\nbinary semaphore handshake"| AP
 
     class AP,ML core1
     class MQTT,GUI,USB,OTA core0
     class HM,HD,HDB,HR,HPB,HS hal
     class INP,DSP,MTX,ODSP,SINKS pipeline
-    class DH,DR legacy
     class WS,HTTP,WEB web
     class AS state

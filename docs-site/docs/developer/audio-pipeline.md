@@ -13,10 +13,10 @@ Source files: `src/audio_pipeline.h`, `src/audio_pipeline.cpp`, `src/audio_input
 ```mermaid
 flowchart LR
     subgraph Inputs ["Input Lanes (0–7)"]
-        ADC1["PCM1808 ADC1\nlane 0"]
-        ADC2["PCM1808 ADC2\nlane 1"]
-        SIG["Signal Gen\nlane N"]
-        USB["USB Audio\nlane M"]
+        ADC1["ADC lane 0\n(e.g. PCM1808)"]
+        ADC2["ADC lane 1\n(e.g. PCM1808)"]
+        SIG["Software source\n(e.g. SigGen)"]
+        USB["Software source\n(e.g. USB Audio)"]
     end
 
     subgraph INDSP ["Per-Input DSP"]
@@ -36,9 +36,9 @@ flowchart LR
     end
 
     subgraph Sinks ["Output Sinks (slots 0–7)"]
-        PCM["PCM5102A\nslot 0"]
-        ES["ES8311\nslot 1"]
-        SN["sink N\nslot N"]
+        PCM["DAC slot 0\n(e.g. PCM5102A)"]
+        ES["DAC slot 1\n(e.g. ES8311)"]
+        SN["DAC slot N\n(HAL-assigned)"]
     end
 
     ADC1 --> D0 --> Matrix
@@ -51,6 +51,10 @@ flowchart LR
 ```
 
 Audio flows left to right each DMA interrupt. The pipeline task on Core 1 never blocks; it reads from sources, applies DSP, applies the matrix, applies output DSP, and writes to sinks in a single pass every ~5.33 ms (256 frames at 48 kHz).
+
+:::note HAL-assigned lanes and slots
+All input lanes and output slots are assigned dynamically by the HAL pipeline bridge based on device discovery and capabilities. Never hard-code lane or slot indices in application code — use the accessor functions to query active sources and sinks at runtime.
+:::
 
 :::warning Core 1 exclusivity
 Only `loopTask` (the Arduino main loop, priority 1) and `audio_pipeline_task` (priority 3) may run on Core 1. Never create a new task pinned to Core 1. The audio task preempts the main loop during DMA processing and yields 2 ticks when idle.

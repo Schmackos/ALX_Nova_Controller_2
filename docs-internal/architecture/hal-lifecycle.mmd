@@ -14,7 +14,7 @@ stateDiagram-v2
     UNAVAILABLE --> ERROR: 3 consecutive fails\n[bridge: remove_sink(slot)]
 
     AVAILABLE --> MANUAL: user disable via Web UI\n[bridge: remove_sink(slot)]
-    MANUAL --> CONFIGURING: user re-enable\n[deferred via _pendingDacToggle]
+    MANUAL --> CONFIGURING: user re-enable\n[deferred via halCoord.requestDeviceToggle()]
 
     AVAILABLE --> ERROR: fatal I2C/driver error\n[bridge: remove_sink(slot)]
     ERROR --> CONFIGURING: reinit requested\n[POST /api/hal/devices/reinit]
@@ -43,7 +43,7 @@ stateDiagram-v2
         Explicit teardown:
         - remove_sink(slot) called
         - DAC: deferred I2S deinit
-          via _pendingDacToggle
+          via appState.halCoord.requestDeviceToggle()<br/>(8-slot queue, same-slot dedup)
         - ADC: adcEnabled[lane]=false
         - Config persisted to LittleFS
     end note
