@@ -1025,15 +1025,24 @@ bool i2s_audio_enable_tx(uint32_t sample_rate) {
         return false;
     }
 
+    // Resolve ADC1 clock and data-in pins from the lane-0 HAL config cache.
+    // The cache was populated at boot by i2s_audio_configure_adc(0, cfg); falling back
+    // to board defaults ensures this function works even if called before the cache is set.
+    const HalDeviceConfig* adcCfg = _cachedAdcCfgValid[0] ? &_cachedAdcCfg[0] : nullptr;
+    gpio_num_t mclkPin = _resolveI2sPin((adcCfg && adcCfg->valid) ? adcCfg->pinMclk : -1, I2S_MCLK_PIN);
+    gpio_num_t bckPin  = _resolveI2sPin((adcCfg && adcCfg->valid) ? adcCfg->pinBck  : -1, I2S_BCK_PIN);
+    gpio_num_t lrcPin  = _resolveI2sPin((adcCfg && adcCfg->valid) ? adcCfg->pinLrc  : -1, I2S_LRC_PIN);
+    gpio_num_t dinPin  = _resolveI2sPin((adcCfg && adcCfg->valid) ? adcCfg->pinData : -1, I2S_DOUT_PIN);
+
     // IDF5 full-duplex: BOTH handles must be initialized with the same config
     i2s_std_config_t std_cfg = {};
     std_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
     std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
-    std_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;
-    std_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
-    std_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
+    std_cfg.gpio_cfg.mclk = mclkPin;
+    std_cfg.gpio_cfg.bclk = bckPin;
+    std_cfg.gpio_cfg.ws   = lrcPin;
     std_cfg.gpio_cfg.dout = _txDataPin;
-    std_cfg.gpio_cfg.din  = (gpio_num_t)I2S_DOUT_PIN;
+    std_cfg.gpio_cfg.din  = dinPin;
     std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     std_cfg.gpio_cfg.invert_flags.ws_inv   = false;
