@@ -28,6 +28,7 @@
 #endif
 #include <cmath>
 #include <cstring>
+#include "hal/hal_types.h"  // HalDeviceConfig — plain struct, no platform dependencies
 
 #ifndef NATIVE_TEST
 #include <driver/i2s_std.h>
@@ -37,7 +38,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "hal/hal_settings.h"
-#include "hal/hal_types.h"
 #include "hal/hal_device_manager.h"
 #endif
 
@@ -59,6 +59,11 @@ static AudioDiagnostics _diagnostics = {};
 // Periodic dump: audio task sets flag, main loop does the actual LOG calls
 // (Serial.print at 9600-115200 baud blocks for tens-hundreds of ms, starving I2S DMA)
 static volatile bool _dumpReady = false;
+
+// Per-lane HAL config cache — populated by i2s_audio_configure_adc(), used by
+// i2s_audio_set_sample_rate() and i2s_audio_enable_tx() to survive re-init with correct pins.
+static HalDeviceConfig _cachedAdcCfg[2] = {};
+static bool _cachedAdcCfgValid[2] = {false, false};
 
 // ===== Pure computation functions (testable without hardware) =====
 
@@ -343,6 +348,12 @@ static void i2s_audio_apply_window(FftWindowType type) {
     _currentWindowType = type;
 }
 
+// Resolve an I2S GPIO pin: use config value if > 0, otherwise use compile-time fallback.
+// Convention: HAL config stores -1 for "use board default"; 0 is a strapping pin (never I2S).
+static inline gpio_num_t _resolveI2sPin(int8_t cfgValue, int fallback) {
+    return (cfgValue > 0) ? (gpio_num_t)cfgValue : (gpio_num_t)fallback;
+}
+
 // DEPRECATED: use i2s_audio_configure_adc(0, cfg) for new code.
 static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg = nullptr) {
     // Teardown any existing handles (recovery path or full-duplex toggle)
@@ -505,6 +516,13 @@ static bool i2s_configure_adc2(uint32_t sample_rate, const HalDeviceConfig* cfg 
 // Public generic ADC configuration — dispatches to primary (full-duplex) or
 // secondary (RX-only) based on lane index. Config provides pin/port overrides.
 bool i2s_audio_configure_adc(int lane, const HalDeviceConfig* cfg) {
+    // Cache the config per-lane so set_sample_rate() and enable_tx() can re-init
+    // with the correct HAL pin assignments (they previously passed nullptr, losing overrides).
+    if (cfg && cfg->valid && lane >= 0 && lane < 2) {
+        _cachedAdcCfg[lane] = *cfg;
+        _cachedAdcCfgValid[lane] = true;
+    }
+
     // Intentional: ESP32-P4 has exactly 2 I2S RX ports (I2S0 for ADC1, I2S1 for ADC2).
     // Software sources (SigGen, USB) don't use I2S and are not configured here.
     if (lane == 0) {
@@ -1184,5 +1202,22 @@ I2sStaticConfig i2s_audio_get_static_config() {
     cfg.adc[1].mclkHz = 48000 * 256;
     cfg.adc[1].commFormat = "Standard I2S";
     return cfg;
+}
+
+// Test hooks: expose cache internals for native unit tests
+void _test_i2s_cache_set(int lane, const HalDeviceConfig* cfg) {
+    if (lane >= 0 && lane < 2 && cfg) {
+        _cachedAdcCfg[lane] = *cfg;
+        _cachedAdcCfgValid[lane] = true;
+    }
+}
+const HalDeviceConfig* _test_i2s_cache_get(int lane) {
+    return (lane >= 0 && lane < 2 && _cachedAdcCfgValid[lane]) ? &_cachedAdcCfg[lane] : nullptr;
+}
+bool _test_i2s_cache_valid(int lane) {
+    return (lane >= 0 && lane < 2) && _cachedAdcCfgValid[lane];
+}
+void _test_i2s_cache_reset() {
+    _cachedAdcCfgValid[0] = _cachedAdcCfgValid[1] = false;
 }
 #endif // NATIVE_TEST
