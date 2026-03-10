@@ -90,7 +90,7 @@ graph TB
     class MQTT,GUI,USB,OTA core0
     class HM,HD,HDB,HR,HPB,HS hal
     class INP,DSP,MTX,ODSP,SINKS pipeline
-    class DH,DR legacy
+    class DH pipeline
     class WS,HTTP,WEB web
     class AS state
 ```
@@ -300,7 +300,7 @@ sequenceDiagram
     participant WS as WebSocket<br/>Server (port 81)
     participant MQTT as mqtt_task<br/>(Core 0, 20Hz)
 
-    Note over EG: EVT_ANY = 0x00FFFFFF<br/>16 bits assigned, 8 spare<br/>Bits 24-31 reserved by FreeRTOS
+    Note over EG: EVT_ANY = 0x00FFFFFF<br/>16 bits assigned (bits 0–15), 8 spare<br/>Bits 24-31 reserved by FreeRTOS
 
     Producer->>AS: appState.markXxxDirty()
     AS->>AS: _xxxDirty = true (volatile)
@@ -460,7 +460,7 @@ graph LR
 
     subgraph Gates["Quality Gates (parallel)"]
         direction TB
-        CPP["cpp-tests\npio test -e native -v\n1,561 Unity tests"]
+        CPP["cpp-tests\npio test -e native -v\n~1,669 Unity tests (72 modules)"]
         CPPL["cpp-lint\ncppcheck src/\nwarning + style + performance"]
         JSL["js-lint\nfind_dups.js\ncheck_missing_fns.js\nESLint web_src/js/"]
         E2E["e2e-tests\nnpm ci\nplaywright install chromium\nplaywright test\n26 browser tests"]
@@ -555,11 +555,11 @@ graph TB
     classDef untested fill:#5c1a1a,stroke:#F44336,color:#fff
     classDef schema fill:#3a3a3a,stroke:#9E9E9E,color:#fff
 
-    subgraph UnitTests["C++ Unit Tests (1,561 tests)"]
-        UT_HAL["HAL Framework\n14 test modules\nlifecycle, bridge, drivers"]
-        UT_PIPE["Audio Pipeline\n8 test modules\nsink dispatch, DSP, metering"]
+    subgraph UnitTests["C++ Unit Tests (~1,669 tests, 72 modules)"]
+        UT_HAL["HAL Framework\n~20 test modules\nlifecycle, bridge, drivers"]
+        UT_PIPE["Audio Pipeline\n~10 test modules\nsink dispatch, DSP, metering"]
         UT_NET["Networking\n5 test modules\nWiFi, MQTT, OTA, ETH"]
-        UT_CORE["Core Handlers\n13 test modules\nauth, button, buzzer, settings"]
+        UT_CORE["Core Handlers\n~14 test modules\nauth, button, buzzer, settings"]
         UT_GUI["GUI\n3 test modules\nhome, input, navigation"]
     end
 
