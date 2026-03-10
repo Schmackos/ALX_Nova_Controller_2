@@ -264,9 +264,7 @@ For DAC-path devices, changing `enabled` to `false` uses the `HalCoordState` def
 
 Remove a device from a slot. Calls `deinit()` on the device, clears the slot configuration, and triggers a WebSocket broadcast.
 
-For DAC-path devices, this endpoint automatically triggers the appropriate deferred teardown before removal:
-- `HAL_DEV_DAC` devices: sets `appState.dac.enabled = false` and calls `requestDacToggle(-1)`
-- `HAL_DEV_CODEC` devices: calls `requestEs8311Toggle(-1)`
+For DAC-path devices, this endpoint enqueues deferred teardown via `appState.halCoord.requestDeviceToggle(halSlot, -1)`. Device-type-agnostic — works for `HAL_DEV_DAC`, `HAL_DEV_CODEC`, etc.
 
 **Request**
 

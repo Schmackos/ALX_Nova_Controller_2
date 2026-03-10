@@ -29,7 +29,7 @@ graph TB
     end
 
     subgraph HAL["HAL Framework (src/hal/)"]
-        HM["HalDeviceManager\nsingleton, 16 slots, 24-pin tracking"]
+        HM["HalDeviceManager\nsingleton, 24 slots, 56-pin tracking"]
         HD["HalDiscovery\nI2C scan / EEPROM / manual"]
         HDB["HalDeviceDB\nbuiltin + LittleFS presets"]
         HR["HalDriverRegistry\ncompatible string -> factory"]
@@ -45,10 +45,8 @@ graph TB
         SINKS["Slot-Indexed Sink Dispatch\nset_sink(slot) / remove_sink(slot)\nhalSlot for O(1) HAL lookup"]
     end
 
-    subgraph LegacyDAC["DAC Layer (dac_hal.cpp)"]
-        style LegacyDAC stroke-dasharray: 5 5
-        DH["dac_hal.cpp\nI2S TX driver, HalDacAdapter"]
-        DR["DacRegistry\n(parallel to HalDriverRegistry)"]
+    subgraph DacUtil["DAC Utility (dac_hal.cpp)"]
+        DH["dac_hal.cpp\nI2S TX mgmt, volume curves,\nperiodic logging"]
     end
 
     subgraph WebGUI["Web Interface"]
@@ -71,8 +69,8 @@ graph TB
 
     AP --> INP --> DSP --> MTX --> ODSP --> SINKS
 
-    DH -->|"creates AudioOutputSink\nwith halSlot field"| SINKS
-    DH -->|"wraps as\nHalDacAdapter"| HM
+    HPB -->|"AVAILABLE:\nset_sink(slot, sink)"| SINKS
+    HPB -->|"MANUAL/ERROR/REMOVED:\nremove_sink(slot)"| SINKS
 
     AS -->|"dirty flags +\nEVT_XXX bits"| ML
     ML -->|"dispatch:\nsendHalDeviceState()\nsendAudioChannelMap()"| WS

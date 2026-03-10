@@ -306,7 +306,7 @@ dsp_export_minidsp(channel, buf, sizeof(buf));
 
 ## ESP-DSP Backend
 
-The firmware uses the **pre-built `libespressif__esp-dsp.a`** on ESP32 targets. This library contains Xtensa S3 assembly-optimised biquad IIR (`dsps_biquad_f32`), FIR convolution, Radix-4 FFT, and vector math routines.
+The firmware uses the **pre-built `libespressif__esp-dsp.a`** on ESP32 targets. This library contains optimised biquad IIR (`dsps_biquad_f32`), FIR convolution, Radix-4 FFT, and vector math routines. (On ESP32-P4 (RISC-V), the library provides optimised routines. On Xtensa-based targets such as ESP32-S3, the same library uses S3 assembly optimisations; on RISC-V targets like P4 it uses equivalent RISC-V optimised paths.)
 
 Native unit tests use `lib/esp_dsp_lite/` — a portable ANSI C fallback that implements the same API without assembly optimisation. This library is `lib_ignore`d on ESP32 environments to avoid duplicate symbol conflicts.
 
