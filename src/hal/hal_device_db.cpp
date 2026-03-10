@@ -409,6 +409,7 @@ void hal_load_device_configs() {
         cfg.gpioC = obj["gpioC"] | (int)-1;
         cfg.gpioD = obj["gpioD"] | (int)-1;
         cfg.usbPid = obj["usbPid"] | (int)0;
+        cfg.filterMode = obj["filterMode"] | 0;
         cfg.sampleRate = obj["sampleRate"] | 0;
         cfg.bitDepth = obj["bitDepth"] | 0;
         cfg.volume = obj["volume"] | 100;
@@ -456,6 +457,7 @@ bool hal_save_device_config(uint8_t slot) {
         if (cfg->gpioC >= 0) obj["gpioC"] = cfg->gpioC;
         if (cfg->gpioD >= 0) obj["gpioD"] = cfg->gpioD;
         if (cfg->usbPid != 0) obj["usbPid"] = cfg->usbPid;
+        if (cfg->filterMode != 0) obj["filterMode"] = cfg->filterMode;
     }
 
     File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");

@@ -3,8 +3,8 @@
 //
 // DacState no longer holds device-specific fields (enabled, volume, mute, etc.)
 // — those live in HalDeviceConfig via the HAL device manager.
-// DacState retains: filterMode, txUnderruns, pendingToggle, requestDeviceToggle(),
-// and eepromDiag.
+// DacState retains: txUnderruns, pendingToggle, requestDeviceToggle(),
+// and eepromDiag. filterMode moved to HalDeviceConfig (DEBT-6 Phase 2).
 
 #include <unity.h>
 #include <cstring>
@@ -16,6 +16,7 @@
 #endif
 
 #include "../../src/app_state.h"
+#include "../../src/hal/hal_types.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,7 +24,6 @@
 
 static void resetDacFields() {
     AppState& as = AppState::getInstance();
-    as.dac.filterMode = 0;
     as.dac.txUnderruns = 0;
     as.dac.pendingToggle.halSlot = 0xFF;
     as.dac.pendingToggle.action = 0;
@@ -47,20 +47,23 @@ void tearDown(void) {}
 
 void test_dac_state_defaults(void) {
     AppState& as = AppState::getInstance();
-    TEST_ASSERT_EQUAL_UINT8(0, as.dac.filterMode);
     TEST_ASSERT_EQUAL_UINT32(0, as.dac.txUnderruns);
     TEST_ASSERT_EQUAL_UINT8(0xFF, as.dac.pendingToggle.halSlot);
     TEST_ASSERT_EQUAL_INT8(0, as.dac.pendingToggle.action);
 }
 
 // ---------------------------------------------------------------------------
-// Test: filterMode can be set and read back
+// Test: filterMode lives in HalDeviceConfig (moved from DacState in DEBT-6)
 // ---------------------------------------------------------------------------
 
-void test_dac_state_filter_mode(void) {
-    AppState& as = AppState::getInstance();
-    as.dac.filterMode = 3;
-    TEST_ASSERT_EQUAL_UINT8(3, as.dac.filterMode);
+void test_filter_mode_in_hal_device_config(void) {
+    HalDeviceConfig cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    TEST_ASSERT_EQUAL_UINT8(0, cfg.filterMode);
+    cfg.filterMode = 3;
+    TEST_ASSERT_EQUAL_UINT8(3, cfg.filterMode);
+    cfg.filterMode = 0;
+    TEST_ASSERT_EQUAL_UINT8(0, cfg.filterMode);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +157,7 @@ int main(int argc, char** argv) {
     UNITY_BEGIN();
 
     RUN_TEST(test_dac_state_defaults);
-    RUN_TEST(test_dac_state_filter_mode);
+    RUN_TEST(test_filter_mode_in_hal_device_config);
     RUN_TEST(test_dac_state_tx_underruns);
     RUN_TEST(test_dac_state_generic_toggle_only);
     RUN_TEST(test_pending_device_toggle_rejects_invalid);

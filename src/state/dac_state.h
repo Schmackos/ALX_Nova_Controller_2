@@ -35,7 +35,6 @@ struct PendingDeviceToggle {
 // Device-specific fields (enabled, volume, mute, etc.) live in HalDeviceConfig
 // via the HAL device manager. DacState retains only cross-cutting concerns.
 struct DacState {
-  uint8_t filterMode = 0;         // Digital filter mode (DAC-specific, no HAL equivalent yet)
   uint32_t txUnderruns = 0;       // TX DMA full count (diagnostic counter)
 
   // Generic deferred toggle — main loop executes actual activation/deactivation

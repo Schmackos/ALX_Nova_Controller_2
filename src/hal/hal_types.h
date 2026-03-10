@@ -158,6 +158,9 @@ struct HalDeviceConfig {
 
     // USB Audio config (USB OTG pins are hardware-fixed; only identifiers configurable)
     uint16_t usbPid;   // USB Product ID (0 = use default 0x4004)
+
+    // Device-specific filter mode (e.g., PCM5102A sharp/slow roll-off)
+    uint8_t filterMode; // 0 = default
 };
 
 // Sample rate mask helpers

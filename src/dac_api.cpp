@@ -45,7 +45,7 @@ void registerDacApiEndpoints() {
         doc["outputChannels"] = dev ? dev->getDescriptor().channelCount : 2;
         doc["detected"] = (dev != nullptr);
         doc["ready"] = dev ? dev->_ready : false;
-        doc["filterMode"] = appState.dac.filterMode;
+        doc["filterMode"] = cfg ? cfg->filterMode : 0;
         doc["txUnderruns"] = appState.dac.txUnderruns;
 
         // Capabilities from HAL device descriptor
@@ -150,9 +150,10 @@ void registerDacApiEndpoints() {
         }
 
         if (doc["filterMode"].is<int>()) {
-            appState.dac.filterMode = (uint8_t)doc["filterMode"].as<int>();
+            uint8_t fm = (uint8_t)doc["filterMode"].as<int>();
+            if (cfg) cfg->filterMode = fm;
             HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot(0);
-            if (audioDev) audioDev->setFilterMode(appState.dac.filterMode);
+            if (audioDev) audioDev->setFilterMode(fm);
             changed = true;
         }
 

@@ -1026,18 +1026,19 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         else if (msgType == "setDacFilter") {
           LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
           uint8_t halSlot = _halSlotForCompatible("ti,pcm5102a");
-          uint8_t prevFilter = appState.dac.filterMode;
+          HalDeviceConfig* fCfg = (halSlot != 0xFF) ? HalDeviceManager::instance().getConfig(halSlot) : nullptr;
+          uint8_t prevFilter = fCfg ? fCfg->filterMode : 0;
           int fm = doc["filterMode"].as<int>();
-          appState.dac.filterMode = (uint8_t)fm;    // filterMode has no HAL equivalent yet — stays in AppState
+          if (fCfg) fCfg->filterMode = (uint8_t)fm;
           HalAudioDevice* audioDev = _audioDeviceForSinkSlot(0);
-          if (audioDev) audioDev->setFilterMode(appState.dac.filterMode);
+          if (audioDev) audioDev->setFilterMode((uint8_t)fm);
           if (halSlot != 0xFF) {
             hal_save_device_config_deferred(halSlot);
           } else {
             LOG_W("[WebSocket] setDacFilter: PCM5102A not found in HAL");
           }
           appState.markDacDirty();
-          LOG_I("[DAC] Filter mode: %d -> %d", prevFilter, appState.dac.filterMode);
+          LOG_I("[DAC] Filter mode: %d -> %d", prevFilter, (uint8_t)fm);
         }
         else if (msgType == "setEs8311Enabled") {
           LOG_W("[WebSocket] DEPRECATED: '%s' — use PUT /api/hal/devices", msgType.c_str());
@@ -1699,7 +1700,7 @@ void sendDacState() {
     doc["outputChannels"] = dev ? dev->getDescriptor().channelCount : 2;
     doc["detected"] = (dev != nullptr);
     doc["ready"] = dev ? dev->_ready : false;
-    doc["filterMode"] = appState.dac.filterMode;   // filterMode has no HAL equivalent yet
+    doc["filterMode"] = cfg ? cfg->filterMode : 0;
     doc["txUnderruns"] = appState.dac.txUnderruns;  // Diagnostic counter stays in AppState
   }
 
@@ -2196,7 +2197,7 @@ void sendHardwareStats() {
       dac["deviceId"] = pcmDev ? pcmDev->getDescriptor().legacyId : 0x0001;
       dac["volume"] = pcmCfg ? pcmCfg->volume : 80;
       dac["mute"] = pcmCfg ? pcmCfg->mute : false;
-      dac["filterMode"] = appState.dac.filterMode;
+      dac["filterMode"] = pcmCfg ? pcmCfg->filterMode : 0;
       dac["outputChannels"] = pcmDev ? pcmDev->getDescriptor().channelCount : 2;
       dac["txUnderruns"] = appState.dac.txUnderruns;
       // Device capabilities from HAL descriptor

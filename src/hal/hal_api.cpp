@@ -62,6 +62,7 @@ static void deviceToJson(JsonObject& obj, HalDevice* dev) {
         obj["cfgGpioC"]        = cfg->gpioC;
         obj["cfgGpioD"]        = cfg->gpioD;
         obj["cfgUsbPid"]       = cfg->usbPid;
+        obj["cfgFilterMode"]   = cfg->filterMode;
     }
 }
 
@@ -255,6 +256,7 @@ void registerHalApiEndpoints(WebServer& server) {
         if (doc.containsKey("gpioC"))           newCfg.gpioC        = doc["gpioC"].as<int8_t>();
         if (doc.containsKey("gpioD"))           newCfg.gpioD        = doc["gpioD"].as<int8_t>();
         if (doc.containsKey("usbPid"))          newCfg.usbPid       = doc["usbPid"].as<uint16_t>();
+        if (doc.containsKey("filterMode"))     newCfg.filterMode   = doc["filterMode"].as<uint8_t>();
         newCfg.valid = true;
 
         mgr.setConfig(slot, newCfg);
