@@ -20,6 +20,8 @@ struct HalDriverEntry {
 void                   hal_registry_init();
 bool                   hal_registry_register(const HalDriverEntry& entry);
 const HalDriverEntry*  hal_registry_find(const char* compatible);
+// Discovery-only: used for EEPROM v1/v2 backward compatibility lookup.
+// Do not call outside of hal_discovery.cpp.
 const HalDriverEntry*  hal_registry_find_by_legacy_id(uint16_t legacyId);
 int                    hal_registry_count();
 void                   hal_registry_reset();  // For testing

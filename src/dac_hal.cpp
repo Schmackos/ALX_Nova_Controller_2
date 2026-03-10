@@ -9,7 +9,6 @@
 #include "audio_pipeline.h"
 #include "audio_output_sink.h"
 #include "hal/hal_device_manager.h"
-#include "hal/hal_pipeline_bridge.h"
 #include "hal/hal_device.h"
 #include "hal/hal_types.h"
 #include "drivers/es8311_regs.h"
@@ -97,7 +96,7 @@ void dac_periodic_log() {
     _lastDacDumpMs = now;
 
     // Only log if any output sink is active
-    if (hal_pipeline_output_count() == 0) return;
+    if (audio_pipeline_get_sink_count() == 0) return;
 
     uint32_t newUnderruns = as.dac.txUnderruns - _prevTxUnderruns;
     _prevTxUnderruns = as.dac.txUnderruns;
