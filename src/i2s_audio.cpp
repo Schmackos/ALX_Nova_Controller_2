@@ -869,8 +869,10 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
         if (_wfAccum[a]) memset(_wfAccum[a], 0, WAVEFORM_BUFFER_SIZE * sizeof(float));
     }
 
-    if (_adc2InitOk) _adc2InitOk = i2s_audio_configure_adc(1, nullptr);
-    i2s_audio_configure_adc(0, nullptr);
+    if (_adc2InitOk) _adc2InitOk = i2s_audio_configure_adc(1,
+        _cachedAdcCfgValid[1] ? &_cachedAdcCfg[1] : nullptr);
+    i2s_audio_configure_adc(0,
+        _cachedAdcCfgValid[0] ? &_cachedAdcCfg[0] : nullptr);
 
     AppState::getInstance().audio.paused = false;
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
