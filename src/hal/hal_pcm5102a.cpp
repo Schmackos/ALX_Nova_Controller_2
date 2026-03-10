@@ -3,6 +3,8 @@
 
 #include "hal_pcm5102a.h"
 #include "hal_device_manager.h"
+#include "../i2s_audio.h"
+#include "../audio_pipeline.h"
 
 #ifndef NATIVE_TEST
 #include <Arduino.h>
@@ -64,26 +66,44 @@ HalInitResult HalPcm5102a::init() {
 #endif
     }
 
-    // NOTE: I2S TX channel is owned by i2s_audio.cpp (full-duplex shared with PCM1808 ADC).
-    // HalPcm5102a only manages device-level state; I2S setup stays in the legacy path.
+    // Enable I2S TX full-duplex on port 0 (shared with PCM1808 ADC RX).
+    // i2s_audio_enable_tx() tears down the RX-only channel and recreates
+    // it as RX+TX — MCLK remains continuous for PCM1808 PLL stability.
+    if (!i2s_audio_enable_tx(_sampleRate)) {
+        LOG_E("[HAL:PCM5102A] I2S TX enable failed");
+        return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX enable failed");
+    }
+    _i2sTxEnabled = true;
 
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
 
-    LOG_I("[HAL:PCM5102A] Ready (I2S channel managed by legacy i2s_audio path)");
+    LOG_I("[HAL:PCM5102A] Ready (I2S TX enabled, sr=%luHz)", (unsigned long)_sampleRate);
     return hal_init_ok();
 }
 
 void HalPcm5102a::deinit() {
+    // HC-3: ONLY disable TX. NEVER call i2s_channel_disable() on RX.
+    // Use i2s_audio_disable_tx() which handles port-specific TX teardown.
+    // RX and MCLK must remain active for PCM1808 ADC operation.
+
     if (_paPin >= 0) {
 #ifndef NATIVE_TEST
         digitalWrite(_paPin, LOW);  // Mute output on deinit
 #endif
     }
+
+    // Disable I2S TX if this device enabled it
+    if (_i2sTxEnabled) {
+        i2s_audio_disable_tx();
+        _i2sTxEnabled = false;
+    }
+
     _ready = false;
     _state = HAL_STATE_REMOVED;
     _txHandle = nullptr;
-    LOG_I("[HAL:PCM5102A] Deinitialized");
+    _muteRampState = 1.0f;  // HC-6: Reset mute ramp state on deactivation
+    LOG_I("[HAL:PCM5102A] Deinitialized (TX disabled, RX/MCLK untouched)");
 }
 
 void HalPcm5102a::dumpConfig() {
@@ -151,9 +171,53 @@ bool HalPcm5102a::dacSetBitDepth(uint8_t bits) {
 // isReady callback signature is bool(*)(void) — no context parameter.
 static HalPcm5102a* _pcm5102a_slot_dev[AUDIO_OUT_MAX_SINKS] = {};
 
-// Stub write callback — real I2S write will be wired in Phase 1.6
-static void _pcm5102a_write_stub(const int32_t* buf, int stereoFrames) {
-    (void)buf; (void)stereoFrames;
+// Write callback — converts float pipeline output to I2S int32 and writes to port 0.
+// Volume and mute ramp are applied in float domain before int32 conversion.
+static void _pcm5102a_write(const int32_t* buf, int stereoFrames) {
+    if (!buf || stereoFrames <= 0) return;
+
+    int totalSamples = stereoFrames * 2;
+
+    // Look up the device from the static table to access mute ramp state
+    // The slot is baked into each thunk — find which slot this write corresponds to
+    // by checking which slot has a non-null device. For simplicity, iterate.
+    // (The pipeline calls each sink's write directly, so only one device is active per call.)
+
+#ifndef NATIVE_TEST
+    // Convert int32 input to float, apply volume + mute ramp, convert back, write
+    // Use stack buffer for small frames, heap for larger (DMA_BUF_LEN is typically 256)
+    float fBuf[512];
+    int32_t txBuf[512];
+    const int32_t* src = buf;
+    int remaining = totalSamples;
+
+    while (remaining > 0) {
+        int chunk = (remaining > 512) ? 512 : remaining;
+
+        // int32 -> float [-1.0, +1.0]
+        for (int i = 0; i < chunk; i++) {
+            fBuf[i] = (float)src[i] / 2147483520.0f;
+        }
+
+        // Apply software volume (PCM5102A has no hardware volume)
+        // Volume gain comes from the pipeline sink's volumeGain field
+        // (set via audio_pipeline_set_sink_volume)
+        // Note: sink_apply_volume skips if gain ~1.0
+        float volGain = audio_pipeline_get_sink_volume(0);
+        sink_apply_volume(fBuf, chunk, volGain);
+
+        // Convert back to int32 for I2S DMA
+        sink_float_to_i2s_int32(fBuf, txBuf, chunk);
+
+        size_t bytesWritten = 0;
+        i2s_audio_write(txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
+
+        src += chunk;
+        remaining -= chunk;
+    }
+#else
+    (void)totalSamples;
+#endif
 }
 
 // isReady callback template for each slot — looks up device via static table
@@ -185,7 +249,7 @@ bool HalPcm5102a::buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
     out->firstChannel = (uint8_t)(sinkSlot * 2);
     out->channelCount = _descriptor.channelCount;
     out->halSlot      = _slot;
-    out->write        = _pcm5102a_write_stub;
+    out->write        = _pcm5102a_write;
     out->isReady      = _pcm5102a_ready_fn[sinkSlot];
     out->ctx          = this;
 

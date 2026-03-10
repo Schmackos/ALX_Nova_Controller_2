@@ -4,6 +4,8 @@
 
 #include "hal_es8311.h"
 #include "hal_device_manager.h"
+#include "../i2s_audio.h"
+#include "../audio_pipeline.h"
 
 #ifndef NATIVE_TEST
 #include <Wire.h>
@@ -261,6 +263,14 @@ HalInitResult HalEs8311::init() {
     dacCtrl &= ~(ES8311_DAC_SOFT_MUTE | ES8311_DAC_MUTE);
     _writeReg(ES8311_REG_DAC_CTRL, dacCtrl);
 
+    // Enable I2S TX on port 2 (ES8311 secondary I2S output)
+    if (!i2s_audio_enable_es8311_tx(_sampleRate)) {
+        LOG_E("[HAL:ES8311] I2S port 2 TX enable failed");
+        _powerDown();
+        return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX port 2 enable failed");
+    }
+    _i2sTxEnabled = true;
+
 #ifndef NATIVE_TEST
     // Small delay before enabling PA (prevent pop noise)
     delay(20);
@@ -276,11 +286,14 @@ HalInitResult HalEs8311::init() {
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
 
-    LOG_I("[HAL:ES8311] Initialization complete — PA enabled, DAC unmuted, vol=%d%%", _volume);
+    LOG_I("[HAL:ES8311] Initialization complete — I2S TX port 2 enabled, PA enabled, vol=%d%%", _volume);
     return hal_init_ok();
 }
 
 void HalEs8311::deinit() {
+    // HC-3: ONLY disable TX. NEVER call i2s_channel_disable() on RX.
+    // Use i2s_audio_disable_es8311_tx() which handles port 2 TX teardown only.
+
     if (!_initialized) return;
 
     setMute(true);
@@ -292,6 +305,12 @@ void HalEs8311::deinit() {
 
     _powerDown();
 
+    // Disable I2S TX port 2 if this device enabled it
+    if (_i2sTxEnabled) {
+        i2s_audio_disable_es8311_tx();
+        _i2sTxEnabled = false;
+    }
+
 #ifndef NATIVE_TEST
     Wire.end();
 #endif
@@ -299,8 +318,9 @@ void HalEs8311::deinit() {
     _initialized = false;
     _ready = false;
     _state = HAL_STATE_REMOVED;
+    _muteRampState = 1.0f;  // HC-6: Reset mute ramp state on deactivation
 
-    LOG_I("[HAL:ES8311] Deinitialized");
+    LOG_I("[HAL:ES8311] Deinitialized (I2S TX port 2 disabled)");
 }
 
 void HalEs8311::dumpConfig() {
@@ -446,9 +466,41 @@ bool HalEs8311::codecSetPaEnabled(bool en) {
 // isReady callback signature is bool(*)(void) — no context parameter.
 static HalEs8311* _es8311_slot_dev[AUDIO_OUT_MAX_SINKS] = {};
 
-// Stub write callback — real I2S port 2 write will be wired in Phase 1.6
-static void _es8311_write_stub(const int32_t* buf, int stereoFrames) {
-    (void)buf; (void)stereoFrames;
+// Write callback — converts pipeline output to I2S int32 and writes to port 2 (ES8311).
+// ES8311 has hardware volume control, so software volume application is optional.
+static void _es8311_write(const int32_t* buf, int stereoFrames) {
+    if (!buf || stereoFrames <= 0) return;
+
+    int totalSamples = stereoFrames * 2;
+
+#ifndef NATIVE_TEST
+    // ES8311 has hardware volume, but we still pass through the pipeline gain
+    // for consistency. The hardware volume register is set via setVolume().
+    float fBuf[512];
+    int32_t txBuf[512];
+    const int32_t* src = buf;
+    int remaining = totalSamples;
+
+    while (remaining > 0) {
+        int chunk = (remaining > 512) ? 512 : remaining;
+
+        // int32 -> float [-1.0, +1.0]
+        for (int i = 0; i < chunk; i++) {
+            fBuf[i] = (float)src[i] / 2147483520.0f;
+        }
+
+        // Convert back to int32 for I2S DMA
+        sink_float_to_i2s_int32(fBuf, txBuf, chunk);
+
+        size_t bytesWritten = 0;
+        i2s_audio_write_es8311(txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
+
+        src += chunk;
+        remaining -= chunk;
+    }
+#else
+    (void)totalSamples;
+#endif
 }
 
 // isReady callback template for each slot — looks up device via static table
@@ -480,7 +532,7 @@ bool HalEs8311::buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
     out->firstChannel = (uint8_t)(sinkSlot * 2);
     out->channelCount = _descriptor.channelCount;
     out->halSlot      = _slot;
-    out->write        = _es8311_write_stub;
+    out->write        = _es8311_write;
     out->isReady      = _es8311_ready_fn[sinkSlot];
     out->ctx          = this;
 

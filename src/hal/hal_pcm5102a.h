@@ -9,6 +9,7 @@
 #include "hal_audio_interfaces.h"
 #include "hal_i2s_bridge.h"
 #include "hal_types.h"
+#include "../sink_write_utils.h"
 
 class HalPcm5102a : public HalAudioDevice, public HalAudioDacInterface {
 public:
@@ -44,5 +45,7 @@ private:
     uint8_t  _bitDepth   = 32;
     int8_t   _paPin      = -1;  // XSMT / mute pin (-1 = not used)
     void*    _txHandle   = nullptr;
+    bool     _i2sTxEnabled = false;  // tracks whether I2S TX has been enabled by this device
+    float    _muteRampState = 1.0f;  // mute ramp envelope [0.0 .. 1.0]
 };
 #endif // DAC_ENABLED

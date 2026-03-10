@@ -7,6 +7,7 @@
 #include "hal_audio_device.h"
 #include "hal_audio_interfaces.h"
 #include "hal_types.h"
+#include "../sink_write_utils.h"
 
 class HalEs8311 : public HalAudioDevice, public HalAudioCodecInterface {
 public:
@@ -64,5 +65,7 @@ private:
     int8_t   _sclPin     = 8;
     int8_t   _paPin      = 53;
     bool     _initialized = false;
+    bool     _i2sTxEnabled = false;  // tracks whether I2S TX port 2 has been enabled
+    float    _muteRampState = 1.0f;  // mute ramp envelope [0.0 .. 1.0]
 };
 #endif // DAC_ENABLED
