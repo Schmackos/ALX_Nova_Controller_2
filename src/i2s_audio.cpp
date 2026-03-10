@@ -390,28 +390,35 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     gpio_num_t _rxDataPin = (_adcHalCfg && _adcHalCfg->pinData > 0)
         ? (gpio_num_t)_adcHalCfg->pinData : (gpio_num_t)I2S_DOUT_PIN;
 
+    // Resolve clock pins from HAL config (pinMclk/pinBck/pinLrc > 0 means HAL override;
+    // -1 or 0 means use board default from config.h). The > 0 convention matches all
+    // existing I2S pin checks in this file and hal_i2s_bridge.cpp.
+    gpio_num_t mclkPin = _resolveI2sPin((_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->pinMclk : -1, I2S_MCLK_PIN);
+    gpio_num_t bckPin  = _resolveI2sPin((_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->pinBck  : -1, I2S_BCK_PIN);
+    gpio_num_t lrcPin  = _resolveI2sPin((_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->pinLrc  : -1, I2S_LRC_PIN);
+
     // TX config: full clock master — MCLK/BCK/WS output, DOUT to DAC.
     // TX is initialized FIRST so clocks are live before the RX DMA starts.
     i2s_std_config_t tx_cfg = {};
     tx_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
     tx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
-    tx_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;   // MCLK OUTPUT to PCM1808 (GPIO3)
-    tx_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;
-    tx_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;
+    tx_cfg.gpio_cfg.mclk = mclkPin;
+    tx_cfg.gpio_cfg.bclk = bckPin;
+    tx_cfg.gpio_cfg.ws   = lrcPin;
     tx_cfg.gpio_cfg.dout = _txDataPin;                   // DAC data out (HAL-overridable)
     tx_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
     tx_cfg.gpio_cfg.invert_flags.mclk_inv = false;
     tx_cfg.gpio_cfg.invert_flags.bclk_inv = false;
     tx_cfg.gpio_cfg.invert_flags.ws_inv   = false;
 
-    // RX config: MCLK=GPIO3 (same as TX). Both configs pointing to the same GPIO causes the
-    // IDF5 GPIO matrix to re-route GPIO3 to the same I2S MCLK output — no clearing occurs.
-    // Setting MCLK=I2S_GPIO_UNUSED in the second init call clears GPIO3's routing, removing
+    // RX config: mclkPin (same as TX). Both configs pointing to the same GPIO causes the
+    // IDF5 GPIO matrix to re-route that pin to the same I2S MCLK output — no clearing occurs.
+    // Setting MCLK=I2S_GPIO_UNUSED in the second init call clears the pin's routing, removing
     // MCLK from the PCM1808 SCKI → PLL never locks → noise floor only (~-68 dBFS).
     i2s_std_config_t rx_cfg = tx_cfg;
-    rx_cfg.gpio_cfg.mclk = (gpio_num_t)I2S_MCLK_PIN;   // Same as TX — re-routes to same signal
-    rx_cfg.gpio_cfg.bclk = (gpio_num_t)I2S_BCK_PIN;     // Keep — RX DMA needs BCK sync
-    rx_cfg.gpio_cfg.ws   = (gpio_num_t)I2S_LRC_PIN;     // Keep — RX DMA needs WS sync
+    rx_cfg.gpio_cfg.mclk = mclkPin;   // Same as TX — re-routes to same signal
+    rx_cfg.gpio_cfg.bclk = bckPin;    // Keep — RX DMA needs BCK sync
+    rx_cfg.gpio_cfg.ws   = lrcPin;    // Keep — RX DMA needs WS sync
     rx_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
     rx_cfg.gpio_cfg.din  = _rxDataPin;                   // ADC1 data in (HAL-overridable)
 
@@ -436,7 +443,7 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     // Boost MCLK drive strength to GPIO_DRIVE_CAP_3 (~40 mA).
     // IDF5 I2S driver leaves GPIO drive at the default (CAP_2, ~10 mA).
     // At 12.288 MHz, marginally driven signals can cause PCM1808 SCKI PLL instability.
-    gpio_set_drive_capability((gpio_num_t)I2S_MCLK_PIN, GPIO_DRIVE_CAP_3);
+    gpio_set_drive_capability(mclkPin, GPIO_DRIVE_CAP_3);
 
     // Enable TX then RX — no delay between enables required.
     // PCM1808 PLL stabilisation (2048 LRCK cycles = ~43 ms) completes during the
@@ -444,7 +451,7 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     i2s_channel_enable(_tx_handle_adc1);
     i2s_channel_enable(_rx_handle_adc1);
     LOG_I("[Audio] ADC1 TX+RX enabled — MCLK=GPIO%d @%lu Hz, drive=CAP_3",
-          I2S_MCLK_PIN, _currentSampleRate * 256UL);
+          (int)mclkPin, _currentSampleRate * 256UL);
 }
 
 // ADC2 uses I2S_NUM_1 configured as MASTER (not slave) to bypass ESP32-S3
