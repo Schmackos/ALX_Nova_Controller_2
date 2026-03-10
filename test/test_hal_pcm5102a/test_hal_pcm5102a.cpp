@@ -30,6 +30,18 @@
 #define HAL_CAP_CODEC        (1 << 7)
 #endif
 
+// ===== buildSink() test helpers =====
+// Static device pointer for mock isReady callback (mirrors real static-table pattern)
+static HalAudioDevice* _mockSinkDev = nullptr;
+
+static void _mock_write_stub(const int32_t* buf, int stereoFrames) {
+    (void)buf; (void)stereoFrames;
+}
+
+static bool _mock_ready_cb(void) {
+    return _mockSinkDev && _mockSinkDev->_ready;
+}
+
 // ===== Mock PCM5102A device =====
 class HalPcm5102aMock : public HalAudioDevice {
 public:
@@ -80,6 +92,24 @@ public:
 
     // No hardware mute (would require PA control pin — not wired in this mock)
     bool setMute(bool) override { return false; }
+
+    // buildSink() — populates AudioOutputSink with callbacks
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override {
+        if (!out) return false;
+        if (sinkSlot >= AUDIO_OUT_MAX_SINKS) return false;
+
+        *out = AUDIO_OUTPUT_SINK_INIT;
+        out->name         = _descriptor.name;
+        out->firstChannel = (uint8_t)(sinkSlot * 2);
+        out->channelCount = _descriptor.channelCount;
+        out->halSlot      = _slot;
+        out->write        = _mock_write_stub;
+        out->isReady      = _mock_ready_cb;
+        out->ctx          = this;
+
+        _mockSinkDev = this;
+        return true;
+    }
 };
 
 // ===== Fixtures =====
@@ -173,6 +203,84 @@ void test_capabilities_dac_path_only(void) {
     TEST_ASSERT_FALSE(caps & HAL_CAP_ADC_PATH);
 }
 
+// ----- 13. buildSink() populates struct with valid callbacks -----
+void test_pcm5102a_buildSink_populates_struct(void) {
+    dac->_state = HAL_STATE_AVAILABLE;
+    dac->_ready = true;
+
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    bool ok = dac->buildSink(0, &sink);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_NOT_NULL(sink.write);
+    TEST_ASSERT_NOT_NULL(sink.isReady);
+    TEST_ASSERT_EQUAL(dac->getSlot(), sink.halSlot);
+    TEST_ASSERT_EQUAL_STRING("PCM5102A", sink.name);
+    TEST_ASSERT_EQUAL(0, sink.firstChannel);
+    TEST_ASSERT_EQUAL(2, sink.channelCount);
+    TEST_ASSERT_EQUAL_PTR(dac, sink.ctx);
+}
+
+// ----- 14. buildSink() with null output returns false -----
+void test_pcm5102a_buildSink_null_returns_false(void) {
+    TEST_ASSERT_FALSE(dac->buildSink(0, nullptr));
+}
+
+// ----- 15. buildSink() isReady callback reflects device _ready flag -----
+void test_pcm5102a_buildSink_ready_callback(void) {
+    dac->_ready = true;
+
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    dac->buildSink(0, &sink);
+
+    // isReady should return true when device is ready
+    TEST_ASSERT_TRUE(sink.isReady());
+
+    dac->_ready = false;
+    TEST_ASSERT_FALSE(sink.isReady());
+}
+
+// ----- 16. buildSink() with out-of-range slot returns false -----
+void test_pcm5102a_buildSink_invalid_slot_returns_false(void) {
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    TEST_ASSERT_FALSE(dac->buildSink(AUDIO_OUT_MAX_SINKS, &sink));
+    TEST_ASSERT_FALSE(dac->buildSink(255, &sink));
+}
+
+// ----- 17. buildSink() firstChannel maps correctly for different slots -----
+void test_pcm5102a_buildSink_channel_mapping(void) {
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+
+    dac->buildSink(0, &sink);
+    TEST_ASSERT_EQUAL(0, sink.firstChannel);
+
+    dac->buildSink(1, &sink);
+    TEST_ASSERT_EQUAL(2, sink.firstChannel);
+
+    dac->buildSink(3, &sink);
+    TEST_ASSERT_EQUAL(6, sink.firstChannel);
+}
+
+// ----- 18. base class buildSink() returns false (not overridden) -----
+void test_base_class_buildSink_returns_false(void) {
+    // Create a minimal non-DAC device that doesn't override buildSink
+    class MinimalDevice : public HalAudioDevice {
+    public:
+        bool probe() override { return true; }
+        HalInitResult init() override { return hal_init_ok(); }
+        void deinit() override {}
+        void dumpConfig() override {}
+        bool healthCheck() override { return true; }
+        bool configure(uint32_t, uint8_t) override { return false; }
+        bool setVolume(uint8_t) override { return false; }
+        bool setMute(bool) override { return false; }
+    };
+
+    MinimalDevice dev;
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    TEST_ASSERT_FALSE(dev.buildSink(0, &sink));
+}
+
 // ===== Main =====
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
@@ -190,6 +298,12 @@ int main(int argc, char** argv) {
     RUN_TEST(test_descriptor_type_is_dac);
     RUN_TEST(test_channel_count_is_stereo);
     RUN_TEST(test_capabilities_dac_path_only);
+    RUN_TEST(test_pcm5102a_buildSink_populates_struct);
+    RUN_TEST(test_pcm5102a_buildSink_null_returns_false);
+    RUN_TEST(test_pcm5102a_buildSink_ready_callback);
+    RUN_TEST(test_pcm5102a_buildSink_invalid_slot_returns_false);
+    RUN_TEST(test_pcm5102a_buildSink_channel_mapping);
+    RUN_TEST(test_base_class_buildSink_returns_false);
 
     return UNITY_END();
 }

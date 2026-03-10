@@ -51,6 +51,11 @@ typedef struct AudioOutputSink {
 
     // HAL device slot index that owns this sink. 0xFF = not bound to any HAL device.
     uint8_t halSlot;
+
+    // Opaque context pointer — used by buildSink() to associate the sink with
+    // its owning HalDevice*. Current write/isReady callbacks don't take ctx
+    // (legacy dispatch tables), but bridge/driver code can read it for lookups.
+    void *ctx;
 } AudioOutputSink;
 
 // Default initializer
@@ -67,7 +72,8 @@ typedef struct AudioOutputSink {
     -90.0f, /* vuR */            \
     0.0f,   /* _vuSmoothedL */   \
     0.0f,   /* _vuSmoothedR */   \
-    0xFF    /* halSlot */        \
+    0xFF,   /* halSlot */        \
+    NULL    /* ctx */            \
 }
 
 #ifdef __cplusplus

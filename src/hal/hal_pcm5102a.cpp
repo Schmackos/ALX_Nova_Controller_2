@@ -146,4 +146,53 @@ bool HalPcm5102a::dacSetBitDepth(uint8_t bits) {
     return configure(_sampleRate, bits);
 }
 
+// ===== buildSink() — populate AudioOutputSink for pipeline registration =====
+// Static device-pointer table indexed by sink slot. Required because the
+// isReady callback signature is bool(*)(void) — no context parameter.
+static HalPcm5102a* _pcm5102a_slot_dev[AUDIO_OUT_MAX_SINKS] = {};
+
+// Stub write callback — real I2S write will be wired in Phase 1.6
+static void _pcm5102a_write_stub(const int32_t* buf, int stereoFrames) {
+    (void)buf; (void)stereoFrames;
+}
+
+// isReady callback template for each slot — looks up device via static table
+#define PCM5102A_READY_FN(N) \
+    static bool _pcm5102a_ready_##N(void) { \
+        return _pcm5102a_slot_dev[N] && _pcm5102a_slot_dev[N]->_ready; \
+    }
+
+PCM5102A_READY_FN(0)
+PCM5102A_READY_FN(1)
+PCM5102A_READY_FN(2)
+PCM5102A_READY_FN(3)
+PCM5102A_READY_FN(4)
+PCM5102A_READY_FN(5)
+PCM5102A_READY_FN(6)
+PCM5102A_READY_FN(7)
+
+static bool (*const _pcm5102a_ready_fn[AUDIO_OUT_MAX_SINKS])(void) = {
+    _pcm5102a_ready_0, _pcm5102a_ready_1, _pcm5102a_ready_2, _pcm5102a_ready_3,
+    _pcm5102a_ready_4, _pcm5102a_ready_5, _pcm5102a_ready_6, _pcm5102a_ready_7,
+};
+
+bool HalPcm5102a::buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
+    if (!out) return false;
+    if (sinkSlot >= AUDIO_OUT_MAX_SINKS) return false;
+
+    *out = AUDIO_OUTPUT_SINK_INIT;
+    out->name         = _descriptor.name;
+    out->firstChannel = (uint8_t)(sinkSlot * 2);
+    out->channelCount = _descriptor.channelCount;
+    out->halSlot      = _slot;
+    out->write        = _pcm5102a_write_stub;
+    out->isReady      = _pcm5102a_ready_fn[sinkSlot];
+    out->ctx          = this;
+
+    // Register in static table for isReady callback lookup
+    _pcm5102a_slot_dev[sinkSlot] = this;
+
+    return true;
+}
+
 #endif // DAC_ENABLED
