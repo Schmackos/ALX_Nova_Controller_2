@@ -33,6 +33,18 @@
 #define HAL_CAP_HPF_CONTROL  (1 << 6)
 #endif
 
+// ===== buildSink() test helpers =====
+// Static device pointer for mock isReady callback (mirrors real static-table pattern)
+static HalAudioDevice* _mockEs8311SinkDev = nullptr;
+
+static void _mock_es8311_write_stub(const int32_t* buf, int stereoFrames) {
+    (void)buf; (void)stereoFrames;
+}
+
+static bool _mock_es8311_ready_cb(void) {
+    return _mockEs8311SinkDev && _mockEs8311SinkDev->_ready;
+}
+
 // ===== Mock ES8311 — implements HalAudioDevice over the Wire mock =====
 //
 // Register map used (subset of real ES8311):
@@ -118,6 +130,24 @@ public:
         Wire.write((uint8_t)0x31);
         Wire.write(mute ? (uint8_t)0x08 : (uint8_t)0x00);
         Wire.endTransmission();
+        return true;
+    }
+
+    // buildSink() — populates AudioOutputSink with callbacks
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override {
+        if (!out) return false;
+        if (sinkSlot >= AUDIO_OUT_MAX_SINKS) return false;
+
+        *out = AUDIO_OUTPUT_SINK_INIT;
+        out->name         = _descriptor.name;
+        out->firstChannel = (uint8_t)(sinkSlot * 2);
+        out->channelCount = _descriptor.channelCount;
+        out->halSlot      = _slot;
+        out->write        = _mock_es8311_write_stub;
+        out->isReady      = _mock_es8311_ready_cb;
+        out->ctx          = this;
+
+        _mockEs8311SinkDev = this;
         return true;
     }
 
@@ -266,6 +296,50 @@ void test_deinit_removes_device(void) {
     TEST_ASSERT_FALSE(codec->_ready);
 }
 
+// ----- 19. buildSink() populates struct with valid callbacks -----
+void test_es8311_buildSink_populates_struct(void) {
+    codec->_state = HAL_STATE_AVAILABLE;
+    codec->_ready = true;
+
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    bool ok = codec->buildSink(0, &sink);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_NOT_NULL(sink.write);
+    TEST_ASSERT_NOT_NULL(sink.isReady);
+    TEST_ASSERT_EQUAL(codec->getSlot(), sink.halSlot);
+    TEST_ASSERT_EQUAL_STRING("ES8311 Codec", sink.name);
+    TEST_ASSERT_EQUAL(0, sink.firstChannel);
+    TEST_ASSERT_EQUAL(1, sink.channelCount);
+    TEST_ASSERT_EQUAL_PTR(codec, sink.ctx);
+}
+
+// ----- 20. buildSink() with null output returns false -----
+void test_es8311_buildSink_null_returns_false(void) {
+    TEST_ASSERT_FALSE(codec->buildSink(0, nullptr));
+}
+
+// ----- 21. buildSink() isReady callback reflects device _ready flag -----
+void test_es8311_buildSink_ready_callback(void) {
+    codec->_ready = true;
+
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    codec->buildSink(0, &sink);
+
+    // isReady should return true when device is ready
+    TEST_ASSERT_TRUE(sink.isReady());
+
+    codec->_ready = false;
+    TEST_ASSERT_FALSE(sink.isReady());
+}
+
+// ----- 22. buildSink() with out-of-range slot returns false -----
+void test_es8311_buildSink_invalid_slot_returns_false(void) {
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    TEST_ASSERT_FALSE(codec->buildSink(AUDIO_OUT_MAX_SINKS, &sink));
+    TEST_ASSERT_FALSE(codec->buildSink(255, &sink));
+}
+
 // ===== Main =====
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
@@ -289,6 +363,10 @@ int main(int argc, char** argv) {
     RUN_TEST(test_descriptor_type_is_codec);
     RUN_TEST(test_capabilities_include_volume_mute);
     RUN_TEST(test_deinit_removes_device);
+    RUN_TEST(test_es8311_buildSink_populates_struct);
+    RUN_TEST(test_es8311_buildSink_null_returns_false);
+    RUN_TEST(test_es8311_buildSink_ready_callback);
+    RUN_TEST(test_es8311_buildSink_invalid_slot_returns_false);
 
     return UNITY_END();
 }

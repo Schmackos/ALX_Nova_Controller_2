@@ -24,6 +24,7 @@ public:
     bool configure(uint32_t sampleRate, uint8_t bitDepth) override;
     bool setVolume(uint8_t percent) override;
     bool setMute(bool mute) override;
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override;
 
     // HalAudioDacInterface
     bool dacSetVolume(uint8_t pct) override { return setVolume(pct); }

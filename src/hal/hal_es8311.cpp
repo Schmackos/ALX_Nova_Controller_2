@@ -441,4 +441,53 @@ bool HalEs8311::codecSetPaEnabled(bool en) {
     return true;
 }
 
+// ===== buildSink() — populate AudioOutputSink for pipeline registration =====
+// Static device-pointer table indexed by sink slot. Required because the
+// isReady callback signature is bool(*)(void) — no context parameter.
+static HalEs8311* _es8311_slot_dev[AUDIO_OUT_MAX_SINKS] = {};
+
+// Stub write callback — real I2S port 2 write will be wired in Phase 1.6
+static void _es8311_write_stub(const int32_t* buf, int stereoFrames) {
+    (void)buf; (void)stereoFrames;
+}
+
+// isReady callback template for each slot — looks up device via static table
+#define ES8311_READY_FN(N) \
+    static bool _es8311_ready_##N(void) { \
+        return _es8311_slot_dev[N] && _es8311_slot_dev[N]->_ready; \
+    }
+
+ES8311_READY_FN(0)
+ES8311_READY_FN(1)
+ES8311_READY_FN(2)
+ES8311_READY_FN(3)
+ES8311_READY_FN(4)
+ES8311_READY_FN(5)
+ES8311_READY_FN(6)
+ES8311_READY_FN(7)
+
+static bool (*const _es8311_ready_fn[AUDIO_OUT_MAX_SINKS])(void) = {
+    _es8311_ready_0, _es8311_ready_1, _es8311_ready_2, _es8311_ready_3,
+    _es8311_ready_4, _es8311_ready_5, _es8311_ready_6, _es8311_ready_7,
+};
+
+bool HalEs8311::buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
+    if (!out) return false;
+    if (sinkSlot >= AUDIO_OUT_MAX_SINKS) return false;
+
+    *out = AUDIO_OUTPUT_SINK_INIT;
+    out->name         = _descriptor.name;
+    out->firstChannel = (uint8_t)(sinkSlot * 2);
+    out->channelCount = _descriptor.channelCount;
+    out->halSlot      = _slot;
+    out->write        = _es8311_write_stub;
+    out->isReady      = _es8311_ready_fn[sinkSlot];
+    out->ctx          = this;
+
+    // Register in static table for isReady callback lookup
+    _es8311_slot_dev[sinkSlot] = this;
+
+    return true;
+}
+
 #endif // DAC_ENABLED

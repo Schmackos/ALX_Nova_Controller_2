@@ -24,16 +24,30 @@
 
 #include "../../src/hal/hal_types.h"
 #include "../../src/hal/hal_device.h"
+#include "../../src/hal/hal_audio_device.h"
+
+// ===== buildSink() test helpers =====
+// Static device pointer for mock isReady callback (mirrors real static-table pattern)
+static HalAudioDevice* _mockMcp4725SinkDev = nullptr;
+
+static void _mock_mcp4725_write_stub(const int32_t* buf, int stereoFrames) {
+    (void)buf; (void)stereoFrames;
+}
+
+static bool _mock_mcp4725_ready_cb(void) {
+    return _mockMcp4725SinkDev && _mockMcp4725SinkDev->_ready;
+}
 
 // ===== Mock MCP4725 device (no hardware I/O) =====
-class HalMcp4725Mock : public HalDevice {
+class HalMcp4725Mock : public HalAudioDevice {
 public:
     uint8_t  _i2cAddr;
     uint8_t  _busIndex;
     uint16_t _code;
+    bool     _muted;
 
     explicit HalMcp4725Mock(uint8_t addr = 0x60, uint8_t bus = 2)
-        : _i2cAddr(addr), _busIndex(bus), _code(0)
+        : _i2cAddr(addr), _busIndex(bus), _code(0), _muted(false)
     {
         memset(&_descriptor, 0, sizeof(_descriptor));
         strncpy(_descriptor.compatible, "microchip,mcp4725", 31);
@@ -44,7 +58,7 @@ public:
         _descriptor.bus.index    = bus;
         _descriptor.i2cAddr      = addr;
         _descriptor.channelCount = 1;
-        _descriptor.capabilities = HAL_CAP_HW_VOLUME;
+        _descriptor.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME;
         _initPriority = HAL_PRIORITY_HARDWARE;
         _discovery    = HAL_DISC_MANUAL;
     }
@@ -73,10 +87,42 @@ public:
         return _ready;
     }
 
-    bool setVolume(uint8_t percent) {
+    bool configure(uint32_t sampleRate, uint8_t bitDepth) override {
+        // Voltage-output DAC — sample rate / bit depth not applicable
+        (void)sampleRate; (void)bitDepth;
+        return true;
+    }
+
+    bool setVolume(uint8_t percent) override {
         if (percent > 100) percent = 100;
         uint16_t code = (uint16_t)((percent * 4095UL) / 100UL);
         return setVoltageCode(code);
+    }
+
+    bool setMute(bool mute) override {
+        _muted = mute;
+        if (mute) {
+            return setVoltageCode(0);
+        }
+        return true;
+    }
+
+    // buildSink() — populates AudioOutputSink with callbacks
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override {
+        if (!out) return false;
+        if (sinkSlot >= AUDIO_OUT_MAX_SINKS) return false;
+
+        *out = AUDIO_OUTPUT_SINK_INIT;
+        out->name         = _descriptor.name;
+        out->firstChannel = (uint8_t)(sinkSlot * 2);
+        out->channelCount = _descriptor.channelCount;
+        out->halSlot      = _slot;
+        out->write        = _mock_mcp4725_write_stub;
+        out->isReady      = _mock_mcp4725_ready_cb;
+        out->ctx          = this;
+
+        _mockMcp4725SinkDev = this;
+        return true;
     }
 
     bool setVoltageCode(uint16_t code) {
@@ -239,6 +285,52 @@ void test_descriptor_bus_index_expansion(void) {
     TEST_ASSERT_EQUAL(2, dev->getDescriptor().bus.index);
 }
 
+void test_descriptor_has_dac_path_capability(void) {
+    TEST_ASSERT_TRUE(dev->getDescriptor().capabilities & HAL_CAP_DAC_PATH);
+}
+
+// ----- buildSink -----
+
+void test_mcp4725_buildSink_populates_struct(void) {
+    dev->_state = HAL_STATE_AVAILABLE;
+    dev->_ready = true;
+
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    bool ok = dev->buildSink(0, &sink);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_NOT_NULL(sink.write);
+    TEST_ASSERT_NOT_NULL(sink.isReady);
+    TEST_ASSERT_EQUAL(dev->getSlot(), sink.halSlot);
+    TEST_ASSERT_EQUAL_STRING("MCP4725", sink.name);
+    TEST_ASSERT_EQUAL(0, sink.firstChannel);
+    TEST_ASSERT_EQUAL(1, sink.channelCount);
+    TEST_ASSERT_EQUAL_PTR(dev, sink.ctx);
+}
+
+void test_mcp4725_buildSink_null_returns_false(void) {
+    TEST_ASSERT_FALSE(dev->buildSink(0, nullptr));
+}
+
+void test_mcp4725_buildSink_ready_callback(void) {
+    dev->_ready = true;
+
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    dev->buildSink(0, &sink);
+
+    // isReady should return true when device is ready
+    TEST_ASSERT_TRUE(sink.isReady());
+
+    dev->_ready = false;
+    TEST_ASSERT_FALSE(sink.isReady());
+}
+
+void test_mcp4725_buildSink_invalid_slot_returns_false(void) {
+    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+    TEST_ASSERT_FALSE(dev->buildSink(AUDIO_OUT_MAX_SINKS, &sink));
+    TEST_ASSERT_FALSE(dev->buildSink(255, &sink));
+}
+
 // ===== Main =====
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
@@ -268,6 +360,11 @@ int main(int argc, char** argv) {
     RUN_TEST(test_descriptor_alternate_address);
     RUN_TEST(test_descriptor_bus_type_i2c);
     RUN_TEST(test_descriptor_bus_index_expansion);
+    RUN_TEST(test_descriptor_has_dac_path_capability);
+    RUN_TEST(test_mcp4725_buildSink_populates_struct);
+    RUN_TEST(test_mcp4725_buildSink_null_returns_false);
+    RUN_TEST(test_mcp4725_buildSink_ready_callback);
+    RUN_TEST(test_mcp4725_buildSink_invalid_slot_returns_false);
 
     return UNITY_END();
 }

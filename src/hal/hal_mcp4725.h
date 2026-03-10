@@ -3,13 +3,13 @@
 
 #ifdef DAC_ENABLED
 
-#include "hal_device.h"
+#include "hal_audio_device.h"
 
 // MCP4725 — Microchip 12-bit single-channel I2C DAC
 // Outputs a voltage (0–VCC) proportional to a 12-bit code (0–4095).
 // This is a voltage output DAC, not an audio streaming device.
 // Default I2C address: 0x60 (ADDR pin low), 0x61 (ADDR pin high).
-class HalMcp4725 : public HalDevice {
+class HalMcp4725 : public HalAudioDevice {
 public:
     explicit HalMcp4725(uint8_t i2cAddr = 0x60, uint8_t busIndex = 2);
 
@@ -20,8 +20,11 @@ public:
     void dumpConfig() override;
     bool healthCheck() override;
 
-    // Volume: maps 0–100% to DAC codes 0–4095
-    bool setVolume(uint8_t percent);
+    // HalAudioDevice
+    bool configure(uint32_t sampleRate, uint8_t bitDepth) override;
+    bool setVolume(uint8_t percent) override;
+    bool setMute(bool mute) override;
+    bool buildSink(uint8_t sinkSlot, AudioOutputSink* out) override;
 
     // Raw 12-bit DAC output (0–4095); clamped to 4095 if larger
     bool setVoltageCode(uint16_t code);
@@ -32,6 +35,7 @@ private:
     uint8_t  _i2cAddr;
     uint8_t  _busIndex;
     uint16_t _code;   // Current DAC code (0–4095)
+    bool     _muted = false;
 };
 
 #endif // DAC_ENABLED
