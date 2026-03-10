@@ -182,7 +182,8 @@ Application state is decomposed across 15 lightweight domain structs in `src/sta
 // Access pattern examples
 appState.wifi.ssid           // WifiState
 appState.audio.adcEnabled[i] // AudioState
-appState.dac.es8311Enabled   // DacState
+appState.dac.txUnderruns         // DacState (minimal: underruns + EEPROM diag)
+appState.halCoord.requestDeviceToggle(slot, 1)  // HalCoordState (device toggle queue)
 appState.dsp.enabled         // DspSettingsState
 appState.general.darkMode    // GeneralState
 appState.mqtt.brokerHost     // MqttState

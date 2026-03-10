@@ -172,14 +172,14 @@ volatile bool _mqttReconfigPending;   // Web UI broker change → mqtt_task reco
 volatile int8_t _pendingApToggle;     // MQTT command → main loop executes WiFi mode change
 ```
 
-DAC device enable/disable transitions use validated setters to prevent invalid values. The `DacState` domain struct retains only the fields needed after DEBT-5: `filterMode`, `txUnderruns`, `eepromDiag`, and the pending toggle flags. Per-device enabled/volume/mute state is authoritative in the HAL device configuration.
+DAC and all HAL device enable/disable transitions use the `HalCoordState` deferred toggle queue. The `DacState` domain struct is now minimal, retaining only `txUnderruns` and `eepromDiag`. Per-device enabled/volume/mute state is authoritative in `HalDeviceConfig` via the HAL device manager.
 
 ```cpp
-appState.dac.requestDacToggle(1);    // accepts only -1, 0, or 1
-appState.dac.requestEs8311Toggle(-1);
-// Direct writes to _pendingDacToggle are unsafe — use the validated setters
-// These toggle paths are retained for the deferred handshake; HAL cfgEnabled
-// is the source of truth for the intended enable state of each device.
+// Enqueue a deferred toggle for any HAL device (DAC, ADC, codec, etc.)
+appState.halCoord.requestDeviceToggle(halSlot, 1);   // 1 = enable
+appState.halCoord.requestDeviceToggle(halSlot, -1);  // -1 = disable
+// Queue capacity: 8 slots with same-slot dedup. Main loop drains via:
+// hasPendingToggles() → pendingToggleAt(i) → clearPendingToggles()
 ```
 
 ---
@@ -196,6 +196,7 @@ classDiagram
         +MqttState mqtt
         +AudioState audio
         +DacState dac
+        +HalCoordState halCoord
         +DspSettingsState dsp
         +DisplayState display
         +BuzzerState buzzer
@@ -210,10 +211,21 @@ classDiagram
         +isDirty() bool
         +getInstance() AppState&
     }
+    class DacState {
+        +uint32_t txUnderruns
+        +EepromDiag eepromDiag
+    }
+    class HalCoordState {
+        +requestDeviceToggle(halSlot, action) bool
+        +hasPendingToggles() bool
+        +pendingToggleAt(index) PendingDeviceToggle*
+        +clearPendingToggles() void
+    }
     AppState --> GeneralState
     AppState --> WifiState
     AppState --> AudioState
     AppState --> DacState
+    AppState --> HalCoordState
     AppState --> DspSettingsState
     AppState --> MqttState
 ```
@@ -227,8 +239,9 @@ const char* ssid = appState.wifi.ssid;
 // Read per-lane ADC enabled state
 bool lane0Active = appState.audio.adcEnabled[0];
 
-// Read DAC filter mode (one of the fields retained in DacState after DEBT-5)
-int filt = appState.dac.filterMode;
+// filterMode is now in HalDeviceConfig, not DacState — query via HAL manager:
+// HalDeviceConfig* cfg = HalDeviceManager::getInstance().getConfig(halSlot);
+// int filt = cfg ? cfg->filterMode : 0;
 
 // Read dark mode setting
 bool dark = appState.general.darkMode;
@@ -304,10 +317,10 @@ The **hybrid transient policy** distinguishes recoverable from permanent failure
 ```mermaid
 flowchart LR
     subgraph Input["Input Layer (Core 1)"]
-        ADC1["PCM1808 ADC1\n(I2S DMA)"]
-        ADC2["PCM1808 ADC2\n(I2S DMA)"]
-        SIG["Signal Generator\n(software)"]
-        USB["USB Audio\n(TinyUSB ring)"]
+        ADC1["I2S ADC Lane 0\n(e.g. PCM1808 ADC1)"]
+        ADC2["I2S ADC Lane 1\n(e.g. PCM1808 ADC2)"]
+        SIG["Software ADC Lane N\n(e.g. Signal Generator)"]
+        USB["Software ADC Lane N\n(e.g. USB Audio)"]
     end
 
     subgraph DSP1["Per-Input DSP"]
@@ -326,9 +339,9 @@ flowchart LR
         ON["Slot N DSP"]
     end
 
-    subgraph Output["Output Sinks"]
-        PCM["PCM5102A\n(I2S)"]
-        ES["ES8311\n(I2S2)"]
+    subgraph Output["Output Sinks (HAL-assigned)"]
+        DAC1["Sink Slot 0\n(e.g. PCM5102A)"]
+        DAC2["Sink Slot 1\n(e.g. ES8311)"]
     end
 
     ADC1 --> D1
@@ -345,10 +358,12 @@ flowchart LR
     Matrix --> O2
     Matrix --> ON
 
-    O1 --> PCM
-    O2 --> ES
-    ON --> PCM
+    O1 --> DAC1
+    O2 --> DAC2
+    ON --> DAC1
 ```
+
+**Note:** Input lanes and output slots are assigned dynamically by the `hal_pipeline_bridge` based on HAL device discovery and capability matching. Specific device models (PCM1808, PCM5102A, ES8311, etc.) are determined at runtime; the pipeline sees only abstract `AudioInputSource` and `AudioOutputSink` interfaces.
 
 Key implementation details:
 - All internal audio is **float32 in the range [-1.0, +1.0]**. int32 ↔ float conversion happens only at the DMA edge.
