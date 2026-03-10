@@ -8,9 +8,9 @@ graph TB
     classDef untested fill:#5c1a1a,stroke:#F44336,color:#fff
     classDef schema fill:#3a3a3a,stroke:#9E9E9E,color:#fff
 
-    subgraph UnitTests["C++ Unit Tests (1,430 tests)"]
-        UT_HAL["HAL Framework\n16 test modules\nlifecycle, bridge, drivers,\nmulti-instance, discovery"]
-        UT_PIPE["Audio Pipeline\n9 test modules\nsink dispatch, DSP, metering,\nhealth bridge edges"]
+    subgraph UnitTests["C++ Unit Tests (~1,669 tests, 72 modules)"]
+        UT_HAL["HAL Framework\n~20 test modules\nlifecycle, bridge, drivers,\nmulti-instance, discovery"]
+        UT_PIPE["Audio Pipeline\n~10 test modules\nsink dispatch, DSP, metering,\nhealth bridge edges"]
         UT_NET["Networking\n5 test modules\nWiFi, MQTT, OTA, ETH"]
         UT_CORE["Core Handlers\n14 test modules\nauth, button, buzzer, settings,\ndeferred toggle, rate limiting"]
         UT_GUI["GUI\n3 test modules\nhome, input, navigation"]

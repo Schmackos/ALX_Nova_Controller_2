@@ -23,23 +23,23 @@ The DAC API provides access to DAC-related state and EEPROM board identification
 
 ## Deferred toggle pattern
 
-Enabling or disabling a DAC involves stopping I2S DMA, uninstalling the I2S driver, and freeing resources — all of which must not happen while the audio pipeline task on Core 1 is reading I2S buffers. To prevent crashes, the `POST /api/dac` endpoint never calls hardware init/deinit directly.
+Enabling or disabling a DAC-path device involves stopping I2S DMA, uninstalling the I2S driver, and freeing resources — all of which must not happen while the audio pipeline task on Core 1 is reading I2S buffers. To prevent crashes, the API endpoint never calls hardware init/deinit directly.
 
-Instead, it sets `appState.dac.requestDacToggle(1)` (to enable) or `requestDacToggle(-1)` (to disable). The main loop observes the pending toggle flag and performs the actual hardware operation between audio frames using a binary semaphore handshake (`audioTaskPausedAck`).
+Instead, it enqueues a deferred toggle request via `appState.halCoord.requestDeviceToggle(halSlot, action)`, where `action` is `1` for enable or `-1` for disable. The queue holds up to 8 pending requests; requests for the same device slot are deduplicated (later request overwrites earlier). The main loop drains the queue between audio frames, performing actual hardware operations with a binary semaphore handshake (`audioTaskPausedAck`).
 
-The same pattern applies to the ES8311 codec: `requestEs8311Toggle(1)` / `requestEs8311Toggle(-1)`.
+This mechanism works for **any HAL device type** (`HAL_DEV_DAC`, `HAL_DEV_CODEC`, `HAL_DEV_ADC`, etc.), not just DACs. HAL-routed drivers call `dac_activate_for_hal(halSlot)` / `dac_deactivate_for_hal(halSlot)` based on the deferred action.
 
 :::warning
-The toggle values accepted by `requestDacToggle()` and `requestEs8311Toggle()` are validated: only `−1`, `0`, and `1` are accepted. Direct writes to `_pendingDacToggle` or `_pendingEs8311Toggle` in AppState bypass this validation and are unsafe.
+Direct writes to internal AppState toggle fields bypass the queue and are unsafe. Always use `appState.halCoord.requestDeviceToggle(halSlot, action)` for device enable/disable.
 :::
 
 ```
 Client               Firmware HTTP handler        Main loop
   |                         |                        |
-  |-- POST /api/dac -------->|                        |
-  |   { "enabled": true }   |                        |
-  |                         |-- requestDacToggle(1) ->|
-  |<-- 200 { "success" } ---|                        |
+  |-- PUT /api/hal/dev ----->|                        |
+  | { "slot": 0, "enabled": true }|                  |
+  |                         |-- halCoord.request() -->|
+  |<-- 200 { "status" } ----|                        |
   |                         |              (5ms tick) |
   |                         |            audioPaused=true
   |                         |        audioTaskPausedAck taken
