@@ -25,29 +25,12 @@ struct EepromDiag {
   uint32_t sampleRates[4] = {};
 };
 
-// Generic device toggle request — device-independent, works with any HAL device
-struct PendingDeviceToggle {
-  uint8_t halSlot = 0xFF;  // 0xFF = none/invalid
-  int8_t action = 0;       // 1=enable, -1=disable, 0=none
-};
-
 // DAC output state (guarded by DAC_ENABLED at the AppState level)
 // Device-specific fields (enabled, volume, mute, etc.) live in HalDeviceConfig
-// via the HAL device manager. DacState retains only cross-cutting concerns.
+// via the HAL device manager. DacState retains only DAC-specific concerns.
+// Device toggle queue moved to HalCoordState (src/state/hal_coord_state.h).
 struct DacState {
   uint32_t txUnderruns = 0;       // TX DMA full count (diagnostic counter)
-
-  // Generic deferred toggle — main loop executes actual activation/deactivation
-  volatile PendingDeviceToggle pendingToggle = {};
-
-  // Generic validated setter — routes through HAL slot, zero device-type knowledge
-  // Direct dev->deinit() is unsafe (audio task race), so all toggle requests use this
-  void requestDeviceToggle(uint8_t halSlot, int8_t action) {
-    if (halSlot < 0xFF && action >= -1 && action <= 1) {
-      pendingToggle.halSlot = halSlot;
-      pendingToggle.action = action;
-    }
-  }
 
   // EEPROM diagnostics
   EepromDiag eepromDiag;

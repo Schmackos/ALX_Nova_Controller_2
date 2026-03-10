@@ -971,9 +971,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             // setup is too heavy for the WebSocket handler context (blocks SDIO)
             HalDevice* dev = HalDeviceManager::instance().getDevice(halSlot);
             if (en && !was && dev && !dev->_ready) {
-              appState.dac.requestDeviceToggle(halSlot, 1);   // main loop activates
+              appState.halCoord.requestDeviceToggle(halSlot, 1);   // main loop activates
             } else if (!en && was) {
-              appState.dac.requestDeviceToggle(halSlot, -1);  // main loop deactivates
+              appState.halCoord.requestDeviceToggle(halSlot, -1);  // main loop deactivates
             }
             hal_save_device_config_deferred(halSlot);
             appState.markDacDirty();
@@ -1053,9 +1053,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             // Defer init/deinit to main loop — ES8311 I2C + I2S2 setup is too heavy
             // for the WebSocket handler context (blocks SDIO -> WiFi crash)
             if (en && !was) {
-              appState.dac.requestDeviceToggle(halSlot, 1);   // main loop activates
+              appState.halCoord.requestDeviceToggle(halSlot, 1);   // main loop activates
             } else if (!en && was) {
-              appState.dac.requestDeviceToggle(halSlot, -1);  // main loop deactivates
+              appState.halCoord.requestDeviceToggle(halSlot, -1);  // main loop deactivates
             }
             hal_save_device_config_deferred(halSlot);
             appState.markDacDirty();

@@ -100,9 +100,9 @@ void registerDacApiEndpoints() {
                 if (cfg) cfg->enabled = en;
                 if (halSlot < 0xFF) {
                     if (en && !was) {
-                        appState.dac.requestDeviceToggle(halSlot, 1);
+                        appState.halCoord.requestDeviceToggle(halSlot, 1);
                     } else if (!en && was) {
-                        appState.dac.requestDeviceToggle(halSlot, -1);
+                        appState.halCoord.requestDeviceToggle(halSlot, -1);
                     }
                 } else {
                     LOG_W("[DAC] API: enabled toggle requested but no HAL device found (halSlot=0xFF)");

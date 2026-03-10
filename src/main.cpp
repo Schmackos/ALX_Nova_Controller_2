@@ -1210,22 +1210,26 @@ void loop() {
 #endif
 
 #ifdef DAC_ENABLED
-  // Process generic deferred device toggle — bridge owns activation lifecycle
-  if (appState.dac.pendingToggle.halSlot < 0xFF) {
-    uint8_t halSlot = appState.dac.pendingToggle.halSlot;
-    int8_t  action  = appState.dac.pendingToggle.action;
-    appState.dac.pendingToggle.halSlot = 0xFF;
-    appState.dac.pendingToggle.action = 0;
+  // Process deferred device toggles — drain all pending entries per tick.
+  // Toggle queue in HalCoordState supports multiple concurrent requests
+  // with same-slot deduplication (replaces single-slot DacState.pendingToggle).
+  if (appState.halCoord.hasPendingToggles()) {
+    uint8_t count = appState.halCoord.pendingToggleCount();
+    for (uint8_t i = 0; i < count; i++) {
+      PendingDeviceToggle t = appState.halCoord.pendingToggleAt(i);
+      if (t.halSlot >= 0xFF) continue;
 
-    if (action > 0) {
-      LOG_I("[DAC] Deferred device activation for HAL slot %u", halSlot);
-      hal_pipeline_activate_device(halSlot);
-      appState.markDacDirty();
-    } else if (action < 0) {
-      LOG_I("[DAC] Deferred device deactivation for HAL slot %u", halSlot);
-      hal_pipeline_deactivate_device(halSlot);
-      appState.markDacDirty();
+      if (t.action > 0) {
+        LOG_I("[HAL] Deferred device activation for HAL slot %u", t.halSlot);
+        hal_pipeline_activate_device(t.halSlot);
+        appState.markDacDirty();
+      } else if (t.action < 0) {
+        LOG_I("[HAL] Deferred device deactivation for HAL slot %u", t.halSlot);
+        hal_pipeline_deactivate_device(t.halSlot);
+        appState.markDacDirty();
+      }
     }
+    appState.halCoord.clearPendingToggles();
   }
 
   // Broadcast DAC state changes (WS/API/MQTT -> all clients)

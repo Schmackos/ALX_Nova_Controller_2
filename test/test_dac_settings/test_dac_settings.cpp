@@ -1,10 +1,9 @@
 // test_dac_settings.cpp
-// Tests for DacState after DEBT-5 Phase 6 cleanup.
+// Tests for DacState after toggle queue moved to HalCoordState.
 //
-// DacState no longer holds device-specific fields (enabled, volume, mute, etc.)
-// — those live in HalDeviceConfig via the HAL device manager.
-// DacState retains: txUnderruns, pendingToggle, requestDeviceToggle(),
-// and eepromDiag. filterMode moved to HalDeviceConfig (DEBT-6 Phase 2).
+// DacState retains only DAC-specific concerns: txUnderruns and eepromDiag.
+// Device toggle queue lives in HalCoordState (tested in test_hal_coord).
+// filterMode moved to HalDeviceConfig (DEBT-6 Phase 2).
 
 #include <unity.h>
 #include <cstring>
@@ -25,8 +24,6 @@
 static void resetDacFields() {
     AppState& as = AppState::getInstance();
     as.dac.txUnderruns = 0;
-    as.dac.pendingToggle.halSlot = 0xFF;
-    as.dac.pendingToggle.action = 0;
     memset(&as.dac.eepromDiag, 0, sizeof(as.dac.eepromDiag));
     as.clearDacDirty();
 }
@@ -48,8 +45,6 @@ void tearDown(void) {}
 void test_dac_state_defaults(void) {
     AppState& as = AppState::getInstance();
     TEST_ASSERT_EQUAL_UINT32(0, as.dac.txUnderruns);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, as.dac.pendingToggle.halSlot);
-    TEST_ASSERT_EQUAL_INT8(0, as.dac.pendingToggle.action);
 }
 
 // ---------------------------------------------------------------------------
@@ -75,42 +70,6 @@ void test_dac_state_tx_underruns(void) {
     as.dac.txUnderruns++;
     as.dac.txUnderruns++;
     TEST_ASSERT_EQUAL_UINT32(2, as.dac.txUnderruns);
-}
-
-// ---------------------------------------------------------------------------
-// Test: DacState has generic requestDeviceToggle but NOT legacy methods
-// ---------------------------------------------------------------------------
-
-void test_dac_state_generic_toggle_only(void) {
-    DacState ds = {};
-    // Generic toggle should work
-    ds.requestDeviceToggle(0, 1);
-    TEST_ASSERT_EQUAL_UINT8(0, ds.pendingToggle.halSlot);
-    TEST_ASSERT_EQUAL_INT8(1, ds.pendingToggle.action);
-    // Legacy requestDacToggle and requestEs8311Toggle should NOT compile
-    // (compile-time verification -- if this file compiles, legacy is gone)
-}
-
-// ---------------------------------------------------------------------------
-// Test: PendingDeviceToggle rejects invalid values
-// ---------------------------------------------------------------------------
-
-void test_pending_device_toggle_rejects_invalid(void) {
-    DacState ds = {};
-    // Invalid slot (0xFF) -- should be rejected
-    ds.requestDeviceToggle(0xFF, 1);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, ds.pendingToggle.halSlot);  // unchanged (still default 0xFF)
-    TEST_ASSERT_EQUAL_INT8(0, ds.pendingToggle.action);        // unchanged
-
-    // Invalid action (2) -- should be rejected
-    ds.requestDeviceToggle(0, 2);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, ds.pendingToggle.halSlot);  // unchanged
-    TEST_ASSERT_EQUAL_INT8(0, ds.pendingToggle.action);        // unchanged
-
-    // Valid request
-    ds.requestDeviceToggle(3, -1);
-    TEST_ASSERT_EQUAL_UINT8(3, ds.pendingToggle.halSlot);
-    TEST_ASSERT_EQUAL_INT8(-1, ds.pendingToggle.action);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,8 +118,6 @@ int main(int argc, char** argv) {
     RUN_TEST(test_dac_state_defaults);
     RUN_TEST(test_filter_mode_in_hal_device_config);
     RUN_TEST(test_dac_state_tx_underruns);
-    RUN_TEST(test_dac_state_generic_toggle_only);
-    RUN_TEST(test_pending_device_toggle_rejects_invalid);
     RUN_TEST(test_eeprom_diag_fields);
     RUN_TEST(test_dac_dirty_flag_lifecycle);
 

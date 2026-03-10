@@ -17,6 +17,7 @@
 #include "state/wifi_state.h"
 #include "state/mqtt_state.h"
 #include "state/debug_state.h"
+#include "state/hal_coord_state.h"
 
 // ===== AppState Singleton Class =====
 class AppState {
@@ -54,6 +55,9 @@ public:
 
   // ===== Debug + Hardware Stats =====
   DebugState debug;
+
+  // ===== HAL Coordination State (deferred device toggles) =====
+  HalCoordState halCoord;
 
   // ===== Cross-task Coordination Flags =====
   volatile bool _mqttReconfigPending = false;  // set by HTTP handler; mqtt_task reconnects
