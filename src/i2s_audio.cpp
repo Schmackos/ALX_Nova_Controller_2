@@ -567,8 +567,13 @@ static void i2s_log_params(uint32_t sample_rate) {
           DMA_BUF_COUNT, DMA_BUF_LEN,
           (unsigned long)((uint64_t)DMA_BUF_COUNT * DMA_BUF_LEN * 1000 / sample_rate));
     LOG_I("[Audio]   Clock src   : DEFAULT (PLL_F160M on S3, APLL on P4)");
+    const int gpioMclk = (_cachedAdcCfgValid[0] && _cachedAdcCfg[0].pinMclk > 0) ? (int)_cachedAdcCfg[0].pinMclk : I2S_MCLK_PIN;
+    const int gpioBck  = (_cachedAdcCfgValid[0] && _cachedAdcCfg[0].pinBck  > 0) ? (int)_cachedAdcCfg[0].pinBck  : I2S_BCK_PIN;
+    const int gpioLrc  = (_cachedAdcCfgValid[0] && _cachedAdcCfg[0].pinLrc  > 0) ? (int)_cachedAdcCfg[0].pinLrc  : I2S_LRC_PIN;
+    const int gpioDin1 = (_cachedAdcCfgValid[0] && _cachedAdcCfg[0].pinData > 0) ? (int)_cachedAdcCfg[0].pinData : I2S_DOUT_PIN;
+    const int gpioDin2 = (_cachedAdcCfgValid[1] && _cachedAdcCfg[1].pinData > 0) ? (int)_cachedAdcCfg[1].pinData : I2S_DOUT2_PIN;
     LOG_I("[Audio]   GPIO        : MCLK=%d BCK=%d LRC=%d DIN1=%d DIN2=%d DOUT=%d",
-          I2S_MCLK_PIN, I2S_BCK_PIN, I2S_LRC_PIN, I2S_DOUT_PIN, I2S_DOUT2_PIN, I2S_TX_DATA_PIN);
+          gpioMclk, gpioBck, gpioLrc, gpioDin1, gpioDin2, I2S_TX_DATA_PIN);
     LOG_I("[Audio] ----------------------------");
 }
 
