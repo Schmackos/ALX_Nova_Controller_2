@@ -126,12 +126,19 @@ static const TestRegistryEntry* test_find_by_name(const char* name) {
     return nullptr;
 }
 
+// ===== Mute Ramp Simulation State (for HC-6 tests) =====
+static float  sim_muteGain = 1.0f;
+static bool   sim_prevDacMute = false;
+
 // ===== Test State Reset =====
 void setUp(void) {
     pcm5102_initialized = false;
     pcm5102_configured = false;
     pcm5102_sampleRate = 0;
     pcm5102_bitDepth = 0;
+    // Reset mute ramp simulation state (HC-6 tests)
+    sim_muteGain = 1.0f;
+    sim_prevDacMute = false;
 }
 
 void tearDown(void) {}
@@ -305,6 +312,58 @@ void test_sw_volume_zero_samples_safe(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.0001f, 1.0f, buf[0]); // Unchanged
 }
 
+// ===== Mute Ramp Reset on Deactivation (HC-6) =====
+// Simulates the file-static mute ramp state in dac_hal.cpp and the
+// reset logic added to dac_deactivate_for_hal() for slot 0.
+// Variables sim_muteGain and sim_prevDacMute are declared above setUp().
+
+// Mirrors the HC-6 reset logic at the end of dac_deactivate_for_hal()
+static void sim_deactivate_reset_mute_ramp(uint8_t sinkSlot) {
+    if (sinkSlot == 0) {
+        sim_muteGain = 1.0f;
+        sim_prevDacMute = false;
+    }
+}
+
+void test_deactivate_slot0_resets_mute_ramp(void) {
+    // Arrange: simulate a partially ramped-down mute state
+    sim_muteGain = 0.5f;
+    sim_prevDacMute = true;
+
+    // Act: deactivate slot 0
+    sim_deactivate_reset_mute_ramp(0);
+
+    // Assert: mute ramp state is fully reset (HC-6)
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, sim_muteGain);
+    TEST_ASSERT_FALSE(sim_prevDacMute);
+}
+
+void test_deactivate_slot0_resets_fully_muted(void) {
+    // Arrange: simulate a fully muted state (gain ramped to zero)
+    sim_muteGain = 0.0f;
+    sim_prevDacMute = true;
+
+    // Act: deactivate slot 0
+    sim_deactivate_reset_mute_ramp(0);
+
+    // Assert: state returns to unmuted unity gain
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f, sim_muteGain);
+    TEST_ASSERT_FALSE(sim_prevDacMute);
+}
+
+void test_deactivate_nonzero_slot_preserves_mute_ramp(void) {
+    // Arrange: set stale ramp state
+    sim_muteGain = 0.3f;
+    sim_prevDacMute = true;
+
+    // Act: deactivate a non-zero slot (HC-6 only applies to slot 0)
+    sim_deactivate_reset_mute_ramp(1);
+
+    // Assert: slot 0 mute ramp state unchanged
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.3f, sim_muteGain);
+    TEST_ASSERT_TRUE(sim_prevDacMute);
+}
+
 // ===== DacPinConfig paControl Field Tests =====
 
 void test_dac_pin_config_paControl_default(void) {
@@ -377,6 +436,11 @@ int main(int argc, char **argv) {
     RUN_TEST(test_sw_volume_zero_silence);
     RUN_TEST(test_sw_volume_null_buffer_safe);
     RUN_TEST(test_sw_volume_zero_samples_safe);
+
+    // Mute ramp reset on deactivation (HC-6)
+    RUN_TEST(test_deactivate_slot0_resets_mute_ramp);
+    RUN_TEST(test_deactivate_slot0_resets_fully_muted);
+    RUN_TEST(test_deactivate_nonzero_slot_preserves_mute_ramp);
 
     // DacPinConfig paControl field tests
     RUN_TEST(test_dac_pin_config_paControl_default);

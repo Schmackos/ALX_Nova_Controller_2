@@ -109,6 +109,10 @@ DacDriver* dac_get_driver_for_slot(uint8_t slot);
 bool dac_enable_i2s_tx(uint32_t sampleRate);
 void dac_disable_i2s_tx();
 
+// Mute ramp state accessors (for testing — HC-6 verification)
+float dac_get_mute_gain();
+bool  dac_get_prev_mute();
+
 // ===== TX Diagnostics (snapshot of interval counters) =====
 struct DacTxDiag {
     bool i2sTxEnabled;          // I2S TX full-duplex active

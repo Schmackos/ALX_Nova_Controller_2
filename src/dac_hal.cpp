@@ -718,6 +718,12 @@ void dac_deactivate_for_hal(HalDevice* dev) {
     _writePortForSlot[sinkSlot]  = 0;
     audio_pipeline_set_sink_muted(sinkSlot, false);
 
+    // HC-6: Reset mute ramp state to prevent stale gain on re-enable
+    if (sinkSlot == 0) {
+        _muteGain = 1.0f;
+        _prevDacMute = false;
+    }
+
 #ifndef NATIVE_TEST
     as.audio.paused = false;
 #endif
@@ -811,5 +817,9 @@ DacDriver* dac_get_driver_for_slot(uint8_t slot) {
 bool dac_output_is_ready() {
     return _i2sTxEnabledFor[0] && _driverForSlot[0] && _driverForSlot[0]->isReady();
 }
+
+// Mute ramp state accessors (for testing — HC-6 verification)
+float dac_get_mute_gain()  { return _muteGain; }
+bool  dac_get_prev_mute()  { return _prevDacMute; }
 
 #endif // DAC_ENABLED
