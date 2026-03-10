@@ -1724,17 +1724,32 @@ void sendDacState() {
     tx["peakSample"] = txd.peakSample;
     tx["zeroFrames"] = txd.zeroFrames;
   }
-  // Include available DAC-path devices from HAL
+  // Include available DAC-path devices from HAL with pipeline sink state
   {
     JsonArray drivers = doc["drivers"].to<JsonArray>();
-    HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
-        JsonArray* a = static_cast<JsonArray*>(ctx);
-        if (dev->getDescriptor().capabilities & HAL_CAP_DAC_PATH) {
-            JsonObject drv = a->add<JsonObject>();
-            drv["id"] = dev->getDescriptor().legacyId;
-            drv["name"] = dev->getDescriptor().name;
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    for (uint8_t s = 0; s < HAL_MAX_DEVICES; s++) {
+        HalDevice* dev = mgr.getDevice(s);
+        if (!dev) continue;
+        if (!(dev->getDescriptor().capabilities & HAL_CAP_DAC_PATH)) continue;
+        const HalDeviceDescriptor& desc = dev->getDescriptor();
+        JsonObject drv = drivers.add<JsonObject>();
+        drv["compatible"] = desc.compatible;
+        drv["name"] = desc.name;
+        drv["halSlot"] = s;
+        drv["ready"] = dev->_ready;
+        // Add enabled/volume/mute state from pipeline sink
+        int8_t sinkSlot = hal_pipeline_get_sink_slot(s);
+        if (sinkSlot >= 0) {
+            drv["enabled"] = true;
+            drv["volume"] = (int)(audio_pipeline_get_sink_volume(sinkSlot) * 100);
+            drv["muted"] = audio_pipeline_is_sink_muted(sinkSlot);
+        } else {
+            drv["enabled"] = false;
+            drv["volume"] = 0;
+            drv["muted"] = false;
         }
-    }, (void*)&drivers);
+    }
   }
   // EEPROM diagnostics
   {
