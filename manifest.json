@@ -1,0 +1,17 @@
+{
+  "name": "ALX Nova Documentation",
+  "short_name": "ALX Nova Docs",
+  "description": "Open-source modular audio platform documentation",
+  "theme_color": "#FF9800",
+  "background_color": "#0d0d0d",
+  "display": "standalone",
+  "scope": "/ALX_Nova_Controller_2/",
+  "start_url": "/ALX_Nova_Controller_2/",
+  "icons": [
+    {
+      "src": "img/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
