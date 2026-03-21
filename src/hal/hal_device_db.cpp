@@ -125,6 +125,40 @@ static void hal_db_add_builtins() {
         d.capabilities = HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL;
         hal_db_add(&d);
     }
+    // ES9826 — expansion 2-channel ADC, I2C control, PGA 0-30dB, no HPF register
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9826", 31);
+        strncpy(d.name, "ES9826", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_ADC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x40;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K;
+        d.capabilities = HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL;
+        hal_db_add(&d);
+    }
+    // ES9821 — expansion 2-channel ADC, I2C control, no PGA, no HPF register
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9821", 31);
+        strncpy(d.name, "ES9821", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_ADC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x40;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K;
+        d.capabilities = HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME;
+        hal_db_add(&d);
+    }
     // NS4150B
     {
         HalDeviceDescriptor d;

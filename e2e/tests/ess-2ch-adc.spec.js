@@ -156,6 +156,78 @@ test.describe('ESS 2-channel ADC — Device Card Rendering', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ES9826 — device card rendering (driver implemented)
+// ---------------------------------------------------------------------------
+
+test.describe('ES9826 rendering', () => {
+
+  test('renders ES9826 device card with correct name', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9826', 'ES9826', 7);
+    await openDevicesTabWithDevice(page, device);
+    const deviceList = page.locator('#hal-device-list');
+    await expect(deviceList).toContainText('ES9826');
+  });
+
+  test('ES9826 card shows ADC type badge', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9826', 'ES9826', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9826' });
+    await expect(card.locator('.hal-device-info')).toContainText('ADC');
+  });
+
+  test('ES9826 card shows EEPROM discovery badge', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9826', 'ES9826', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9826' });
+    await expect(card.locator('.hal-device-info')).toContainText('EEPROM');
+  });
+
+  test('ES9826 card shows manufacturer ESS Technology', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9826', 'ES9826', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9826' });
+    await expect(card).toContainText('ESS Technology');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// ES9821 — device card rendering (driver implemented)
+// ---------------------------------------------------------------------------
+
+test.describe('ES9821 rendering', () => {
+
+  test('renders ES9821 device card with correct name', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9821', 'ES9821', 7);
+    await openDevicesTabWithDevice(page, device);
+    const deviceList = page.locator('#hal-device-list');
+    await expect(deviceList).toContainText('ES9821');
+  });
+
+  test('ES9821 card shows ADC type badge', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9821', 'ES9821', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9821' });
+    await expect(card.locator('.hal-device-info')).toContainText('ADC');
+  });
+
+  test('ES9821 card shows EEPROM discovery badge', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9821', 'ES9821', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9821' });
+    await expect(card.locator('.hal-device-info')).toContainText('EEPROM');
+  });
+
+  test('ES9821 card shows manufacturer ESS Technology', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9821', 'ES9821', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9821' });
+    await expect(card).toContainText('ESS Technology');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
 // Scaffold: config persistence
 // Full PUT-request body verification is deferred to per-device phases once
 // each driver is wired to the firmware REST handler. Placeholder tests

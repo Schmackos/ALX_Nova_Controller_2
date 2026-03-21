@@ -15,6 +15,8 @@
 #include "hal_ns4150b.h"
 #include "hal_es9822pro.h"
 #include "hal_es9843pro.h"
+#include "hal_es9826.h"
+#include "hal_es9821.h"
 #include "../config.h"
 #include "../debug_serial.h"
 #include "../drivers/es8311_regs.h"
@@ -36,6 +38,8 @@ static HalDevice* factory_encoder()  { return new HalEncoder(ENCODER_A_PIN, ENCO
 static HalDevice* factory_ns4150b()  { return new HalNs4150b(ES8311_PA_PIN); }
 static HalDevice* factory_es9822pro() { return new HalEs9822pro(); }
 static HalDevice* factory_es9843pro() { return new HalEs9843pro(); }
+static HalDevice* factory_es9826()    { return new HalEs9826(); }
+static HalDevice* factory_es9821()    { return new HalEs9821(); }
 #ifdef USB_AUDIO_ENABLED
 static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 #endif
@@ -58,6 +62,8 @@ static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 #define COMPAT_MCP4725     "microchip,mcp4725"
 #define COMPAT_ES9822PRO   "ess,es9822pro"
 #define COMPAT_ES9843PRO   "ess,es9843pro"
+#define COMPAT_ES9826      "ess,es9826"
+#define COMPAT_ES9821      "ess,es9821"
 
 void hal_register_builtins() {
     hal_registry_init();
@@ -125,6 +131,28 @@ void hal_register_builtins() {
         e.type = HAL_DEV_ADC;
         e.legacyId = 0;
         e.factory = factory_es9843pro;
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
+    }
+
+    // ES9826 — expansion 2-channel ADC, I2C control + I2S data, PGA 0-30dB
+    {
+        HalDriverEntry e;
+        memset(&e, 0, sizeof(e));
+        strncpy(e.compatible, COMPAT_ES9826, 31);
+        e.type = HAL_DEV_ADC;
+        e.legacyId = 0;
+        e.factory = factory_es9826;
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
+    }
+
+    // ES9821 — expansion 2-channel ADC, I2C control + I2S data, no PGA
+    {
+        HalDriverEntry e;
+        memset(&e, 0, sizeof(e));
+        strncpy(e.compatible, COMPAT_ES9821, 31);
+        e.type = HAL_DEV_ADC;
+        e.legacyId = 0;
+        e.factory = factory_es9821;
         if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
