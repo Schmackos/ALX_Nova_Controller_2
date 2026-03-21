@@ -183,3 +183,103 @@ test.describe('HAL ADC Device Controls', () => {
   });
 
 });
+
+// ---------------------------------------------------------------------------
+// Gap 2+3: Invalid PGA gain and filter mode rejected by mock server PUT
+// Gap 4: Volume out of range rejected by mock server PUT
+// Gap acceptance: valid values return HTTP 200
+//
+// These tests exercise the validation added to PUT /api/hal/devices.
+// They use the Playwright `request` fixture (direct HTTP) rather than the
+// browser page so they run without a WS session.
+//
+// The mock server halDevices state contains a slot-7 ES9822PRO entry (id: 7)
+// so the device-lookup succeeds and validation runs.
+// ---------------------------------------------------------------------------
+
+test.describe('ADC config validation — PUT /api/hal/devices', () => {
+
+  test('rejects invalid PGA gain value (50 is not a valid step)', async ({ request }) => {
+    const res = await request.put('http://localhost:3000/api/hal/devices', {
+      data: { slot: 7, cfgPgaGain: 50 },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/cfgPgaGain/);
+  });
+
+  test('rejects non-numeric PGA gain value', async ({ request }) => {
+    const res = await request.put('http://localhost:3000/api/hal/devices', {
+      data: { slot: 7, cfgPgaGain: 'bad' },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test('accepts valid PGA gain value (12 dB)', async ({ request }) => {
+    const res = await request.put('http://localhost:3000/api/hal/devices', {
+      data: { slot: 7, cfgPgaGain: 12 },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test('accepts all valid PGA gain steps (0-42 in 6dB increments)', async ({ request }) => {
+    const validSteps = [0, 6, 12, 18, 24, 30, 36, 42];
+    for (const gain of validSteps) {
+      const res = await request.put('http://localhost:3000/api/hal/devices', {
+        data: { slot: 7, cfgPgaGain: gain },
+      });
+      expect(res.status()).toBe(200);
+    }
+  });
+
+  test('rejects out-of-range filter mode (8 exceeds max of 7)', async ({ request }) => {
+    const res = await request.put('http://localhost:3000/api/hal/devices', {
+      data: { slot: 7, cfgFilterMode: 8 },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/cfgFilterMode/);
+  });
+
+  test('rejects negative filter mode (-1)', async ({ request }) => {
+    const res = await request.put('http://localhost:3000/api/hal/devices', {
+      data: { slot: 7, cfgFilterMode: -1 },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test('accepts valid filter mode at boundary values (0 and 7)', async ({ request }) => {
+    for (const mode of [0, 7]) {
+      const res = await request.put('http://localhost:3000/api/hal/devices', {
+        data: { slot: 7, cfgFilterMode: mode },
+      });
+      expect(res.status()).toBe(200);
+    }
+  });
+
+  test('rejects volume above 100', async ({ request }) => {
+    const res = await request.put('http://localhost:3000/api/hal/devices', {
+      data: { slot: 7, cfgVolume: 150 },
+    });
+    expect(res.status()).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/cfgVolume/);
+  });
+
+  test('rejects negative volume (-1)', async ({ request }) => {
+    const res = await request.put('http://localhost:3000/api/hal/devices', {
+      data: { slot: 7, cfgVolume: -1 },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test('accepts volume at boundary values (0 and 100)', async ({ request }) => {
+    for (const vol of [0, 100]) {
+      const res = await request.put('http://localhost:3000/api/hal/devices', {
+        data: { slot: 7, cfgVolume: vol },
+      });
+      expect(res.status()).toBe(200);
+    }
+  });
+
+});

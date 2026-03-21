@@ -47,6 +47,9 @@ router.post('/scan', (req, res) => {
   res.json({ status: 'ok', devicesFound: state.halDevices.length, partialScan: false });
 });
 
+// Valid ADC config ranges (mirrors firmware hal_api.cpp validation)
+const VALID_PGA_GAIN_STEPS = [0, 6, 12, 18, 24, 30, 36, 42];
+
 // PUT /devices — update device config by slot
 router.put('/devices', (req, res) => {
   const state = getState();
@@ -58,6 +61,26 @@ router.put('/devices', (req, res) => {
   if (!device) {
     return res.status(404).json({ error: 'No device in slot' });
   }
+
+  // Validate ADC-specific config fields before applying any changes
+  if (req.body.cfgPgaGain !== undefined) {
+    if (!VALID_PGA_GAIN_STEPS.includes(Number(req.body.cfgPgaGain))) {
+      return res.status(400).json({ error: `Invalid cfgPgaGain: must be one of ${VALID_PGA_GAIN_STEPS.join(',')}` });
+    }
+  }
+  if (req.body.cfgFilterMode !== undefined) {
+    const fm = Number(req.body.cfgFilterMode);
+    if (isNaN(fm) || fm < 0 || fm > 7) {
+      return res.status(400).json({ error: 'Invalid cfgFilterMode: must be 0-7' });
+    }
+  }
+  if (req.body.cfgVolume !== undefined) {
+    const vol = Number(req.body.cfgVolume);
+    if (isNaN(vol) || vol < 0 || vol > 100) {
+      return res.status(400).json({ error: 'Invalid cfgVolume: must be 0-100' });
+    }
+  }
+
   // Apply supported config fields from request body
   const fields = ['enabled', 'label', 'volume', 'mute', 'filterMode'];
   for (const field of fields) {
