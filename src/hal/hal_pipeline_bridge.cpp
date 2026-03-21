@@ -13,11 +13,14 @@
 #include "../audio_pipeline.h"
 #include "../audio_input_source.h"
 #include "../audio_output_sink.h"
+#include "../diag_journal.h"
+#include "../diag_error_codes.h"
 #else
 #define LOG_I(...)
 #define LOG_W(...)
 #define LOG_D(...)
 #define LOG_E(...)
+#define diag_emit(...) ((void)0)
 #ifndef AUDIO_OUT_MAX_SINKS
 #define AUDIO_OUT_MAX_SINKS 8
 #endif
@@ -195,6 +198,7 @@ void hal_pipeline_activate_device(uint8_t halSlot) {
     int8_t sinkSlot = _sinkSlotForDevice(dev);
     if (sinkSlot < 0) {
         LOG_W("[HAL:Bridge] No free sink slot for device at HAL slot %u", halSlot);
+        diag_emit(DIAG_HAL_SLOT_FULL, DIAG_SEV_WARN, halSlot, dev->getDescriptor().name, "sink slots full");
         return;
     }
 
@@ -322,6 +326,9 @@ void hal_pipeline_on_device_available(uint8_t slot) {
                   regSrc.name ? regSrc.name : "?", (int)adcLane);
         }
 #endif
+    } else if (caps & HAL_CAP_ADC_PATH) {
+        LOG_W("[HAL:Bridge] No free input lane for device at HAL slot %u", slot);
+        diag_emit(DIAG_HAL_SLOT_FULL, DIAG_SEV_WARN, slot, dev->getDescriptor().name, "input lanes full");
     }
 
     _updateActiveCounts();
@@ -552,5 +559,15 @@ void hal_pipeline_reset() {
     _globalCorrCounter = 0;
     _activeCorrId      = 0;
 }
+
+// Clean up NATIVE_TEST no-op macros so they do not leak into subsequent files
+// when this .cpp is inline-included in test translation units.
+#ifdef NATIVE_TEST
+#undef diag_emit
+#undef LOG_I
+#undef LOG_W
+#undef LOG_D
+#undef LOG_E
+#endif
 
 #endif // DAC_ENABLED

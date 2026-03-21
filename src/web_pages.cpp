@@ -11,7 +11,38 @@ const char htmlPage[] PROGMEM = R"rawliteral(
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>ALX Audio Controller</title>
-    <style>/* ===== 01-variables.css ===== */
+    <style>/* AUTO-GENERATED from src/design_tokens.h — do not edit manually */
+/* Run: node tools/extract_tokens.js */
+
+:root {
+  --accent: #FF9800;
+  --accent-light: #FFB74D;
+  --accent-dark: #E68900;
+  --bg-primary: #F5F5F5;
+  --bg-surface: #FFFFFF;
+  --bg-card: #EEEEEE;
+  --bg-input: #E0E0E0;
+  --border: #E0E0E0;
+  --text-primary: #212121;
+  --text-secondary: #757575;
+  --success: #4CAF50;
+  --warning: #FFC107;
+  --error: #F44336;
+  --info: #2196F3;
+}
+
+body.night-mode {
+  --bg-primary: #121212;
+  --bg-surface: #1E1E1E;
+  --bg-card: #252525;
+  --bg-input: #2C2C2C;
+  --border: #333333;
+  --text-primary: #FFFFFF;
+  --text-secondary: #B0B0B0;
+  --text-disabled: #666666;
+}
+
+/* ===== 01-variables.css ===== */
 
         /* ===== CSS Variables - Light Theme (Day Mode) ===== */
         :root {
@@ -2162,6 +2193,10 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         .output-dsp-stage .stage-params { font-size: 11px; color: var(--text-secondary); }
         .output-dsp-bypass { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
         .output-dsp-add-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+        /* ===== HAL Capacity Indicator ===== */
+        .hal-capacity { font-size: 11px; opacity: 0.6; padding: 4px 0; letter-spacing: 0.3px; }
+        .hal-capacity-warn { color: var(--warning, #ff9800); opacity: 1; font-weight: 500; }
 
         /* ===== HAL Device Cards ===== */
         .hal-device-card { margin-bottom: 8px; }
@@ -4915,6 +4950,7 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     <label class="switch"><input type="checkbox" id="halAutoDiscovery" onchange="setHalAutoDiscovery(this.checked)"><span class="slider round"></span></label>
                 </div>
             </div>
+            <div id="hal-capacity-indicator" class="hal-capacity"></div>
             <div id="hal-device-list"></div>
             <div id="hal-unknown-list"></div>
 
@@ -7695,10 +7731,18 @@ const char htmlPage[] PROGMEM = R"rawliteral(
         var halScanning = false;
         var halExpandedSlot = -1;
         var halEditingSlot = -1;
+        var halDeviceCount = 0;
+        var halDeviceMax = 24;
+        var halDriverCount = 0;
+        var halDriverMax = 24;
 
         function handleHalDeviceState(data) {
             halScanning = data.scanning || false;
             halDevices = data.devices || [];
+            if (data.deviceCount !== undefined) halDeviceCount = data.deviceCount;
+            if (data.deviceMax !== undefined) halDeviceMax = data.deviceMax;
+            if (data.driverCount !== undefined) halDriverCount = data.driverCount;
+            if (data.driverMax !== undefined) halDriverMax = data.driverMax;
             renderHalDevices();
         }
 
@@ -7710,6 +7754,17 @@ const char htmlPage[] PROGMEM = R"rawliteral(
             if (scanBtn) {
                 scanBtn.disabled = halScanning;
                 scanBtn.textContent = halScanning ? 'Scanning...' : 'Rescan Devices';
+            }
+
+            // Update capacity indicator
+            var capEl = document.getElementById('hal-capacity-indicator');
+            if (capEl) {
+                var devPct = halDeviceMax > 0 ? (halDeviceCount / halDeviceMax * 100) : 0;
+                var drvPct = halDriverMax > 0 ? (halDriverCount / halDriverMax * 100) : 0;
+                var warnClass = (devPct >= 80 || drvPct >= 80) ? ' hal-capacity-warn' : '';
+                capEl.className = 'hal-capacity' + warnClass;
+                capEl.textContent = 'Devices: ' + halDeviceCount + '/' + halDeviceMax +
+                    '  Drivers: ' + halDriverCount + '/' + halDriverMax;
             }
 
             if (halDevices.length === 0) {
@@ -8239,7 +8294,11 @@ const char htmlPage[] PROGMEM = R"rawliteral(
                     return r.json();
                 })
                 .then(function(data) {
-                    if (data) showToast('Scan complete: ' + (data.devicesFound || 0) + ' devices found');
+                    if (data) {
+                        var msg = 'Scan complete: ' + (data.devicesFound || 0) + ' devices found';
+                        if (data.partialScan) msg += ' (Bus 0 skipped — WiFi SDIO conflict)';
+                        showToast(msg, data.partialScan);
+                    }
                 })
                 .catch(function(err) {
                     showToast('Scan failed: ' + err.message, true);

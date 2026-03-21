@@ -6,7 +6,7 @@
 
 #include "hal_types.h"
 
-#define HAL_DB_MAX_ENTRIES 16
+#define HAL_DB_MAX_ENTRIES 24
 #define HAL_DB_FILE_PATH "/hal_devices.json"
 #define HAL_CONFIG_FILE_PATH "/hal_config.json"
 
@@ -28,6 +28,9 @@ bool hal_db_save();
 
 // Get the number of entries in the database
 int hal_db_count();
+
+// Get the maximum number of entries
+int hal_db_max();
 
 // Get entry by index (for iteration)
 const HalDeviceDescriptor* hal_db_get(int index);

@@ -14,6 +14,7 @@
 #include "hal_encoder.h"
 #include "hal_ns4150b.h"
 #include "../config.h"
+#include "../debug_serial.h"
 #include "../drivers/es8311_regs.h"
 #ifdef USB_AUDIO_ENABLED
 #include "hal_usb_audio.h"
@@ -63,7 +64,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_DAC;
         e.legacyId = 0x0001;  // DAC_ID_PCM5102A
         e.factory = factory_pcm5102a;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // ES8311 — onboard codec (I2C + I2S2, P4 only)
@@ -74,7 +75,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_CODEC;
         e.legacyId = 0x0004;  // DAC_ID_ES8311
         e.factory = factory_es8311;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // ES8311 legacy compatible alias (evergrande vs everest-semi)
@@ -85,7 +86,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_CODEC;
         e.legacyId = 0x0004;
         e.factory = factory_es8311;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // PCM1808 ADC — I2S-only (no I2C control)
@@ -96,7 +97,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_ADC;
         e.legacyId = 0;  // No legacy DAC_ID for ADC
         e.factory = factory_pcm1808;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // DSP Pipeline bridge
@@ -107,7 +108,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_DSP;
         e.legacyId = 0;
         e.factory = factory_dsp;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // NS4150B — onboard mono amplifier (GPIO PA control)
@@ -118,7 +119,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_AMP;
         e.legacyId = 0;
         e.factory = factory_ns4150b;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // ESP32-P4 internal temperature sensor
@@ -129,7 +130,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_SENSOR;
         e.legacyId = 0;
         e.factory = nullptr;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // ST7735S TFT Display
@@ -139,7 +140,7 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_ST7735S, 31);
         e.type = HAL_DEV_DISPLAY;
         e.factory = nullptr;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // Rotary Encoder
@@ -149,7 +150,7 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_EC11, 31);
         e.type = HAL_DEV_INPUT;
         e.factory = factory_encoder;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // Piezo Buzzer
@@ -159,7 +160,7 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_BUZZER, 31);
         e.type = HAL_DEV_GPIO;
         e.factory = factory_buzzer;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // Status LED
@@ -169,7 +170,7 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_LED, 31);
         e.type = HAL_DEV_GPIO;
         e.factory = nullptr;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // Amplifier Relay
@@ -179,7 +180,7 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_RELAY, 31);
         e.type = HAL_DEV_AMP;
         e.factory = nullptr;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // Reset Button
@@ -189,7 +190,7 @@ void hal_register_builtins() {
         strncpy(e.compatible, COMPAT_BUTTON, 31);
         e.type = HAL_DEV_INPUT;
         e.factory = factory_button;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // Signal Generator — software audio source (HAL_DEV_ADC for pipeline input lane)
@@ -200,7 +201,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_ADC;
         e.legacyId = 0;
         e.factory = factory_siggen;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
     // USB Audio — software audio source (HAL_DEV_ADC for pipeline input lane)
@@ -212,7 +213,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_ADC;
         e.legacyId = 0;
         e.factory = factory_usb_audio;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 #endif
 
@@ -224,7 +225,7 @@ void hal_register_builtins() {
         e.type = HAL_DEV_DAC;
         e.legacyId = 0;
         e.factory = factory_mcp4725;
-        hal_registry_register(e);
+        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 }
 

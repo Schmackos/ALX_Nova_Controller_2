@@ -1,6 +1,10 @@
 {
   "type": "halDeviceState",
   "scanning": false,
+  "deviceCount": 14,
+  "deviceMax": 24,
+  "driverCount": 16,
+  "driverMax": 24,
   "devices": [
     {
       "slot": 0,

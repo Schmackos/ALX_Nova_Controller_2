@@ -18,7 +18,7 @@
 #include "../../src/hal/hal_driver_registry.cpp"
 
 // Device DB needs to be inline too — but skip LittleFS parts
-#define HAL_DB_MAX_ENTRIES 16
+#define HAL_DB_MAX_ENTRIES 24
 #define HAL_DB_FILE_PATH "/hal_devices.json"
 #define HAL_CONFIG_FILE_PATH "/hal_config.json"
 
@@ -64,6 +64,7 @@ bool hal_db_remove(const char* c) {
     return false;
 }
 bool hal_db_save() { return true; }
+int hal_db_max() { return HAL_DB_MAX_ENTRIES; }
 
 // ===== YAML parser (inline from hal_online_fetch.cpp) =====
 static bool yaml_get_value(const char* line, const char* key, char* out, int maxLen) {
@@ -564,6 +565,109 @@ void test_wifi_sdio_active_combinations() {
     }
 }
 
+// ===== Capacity Accessor Tests =====
+
+void test_db_max_returns_correct_value() {
+    // hal_db_max() should return HAL_DB_MAX_ENTRIES (24)
+    TEST_ASSERT_EQUAL(HAL_DB_MAX_ENTRIES, hal_db_max());
+    TEST_ASSERT_EQUAL(24, hal_db_max());
+}
+
+void test_registry_max_returns_correct_value() {
+    // hal_registry_max() should return HAL_MAX_DRIVERS (24)
+    TEST_ASSERT_EQUAL(HAL_MAX_DRIVERS, hal_registry_max());
+    TEST_ASSERT_EQUAL(24, hal_registry_max());
+}
+
+void test_db_overflow_at_new_limit() {
+    // Fill DB to exactly HAL_DB_MAX_ENTRIES (24)
+    for (int i = 0; i < HAL_DB_MAX_ENTRIES; i++) {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        snprintf(d.compatible, 31, "cap,device%d", i);
+        snprintf(d.name, 32, "Device %d", i);
+        d.type = HAL_DEV_DAC;
+        TEST_ASSERT_TRUE_MESSAGE(hal_db_add(&d),
+            "Should add up to HAL_DB_MAX_ENTRIES entries");
+    }
+    TEST_ASSERT_EQUAL(HAL_DB_MAX_ENTRIES, hal_db_count());
+
+    // The 25th entry should be rejected
+    HalDeviceDescriptor overflow;
+    memset(&overflow, 0, sizeof(overflow));
+    strncpy(overflow.compatible, "cap,overflow", 31);
+    overflow.type = HAL_DEV_CODEC;
+    TEST_ASSERT_FALSE(hal_db_add(&overflow));
+
+    // Count unchanged
+    TEST_ASSERT_EQUAL(HAL_DB_MAX_ENTRIES, hal_db_count());
+
+    // Previously added entries still accessible
+    HalDeviceDescriptor result;
+    TEST_ASSERT_TRUE(hal_db_lookup("cap,device0", &result));
+    TEST_ASSERT_TRUE(hal_db_lookup("cap,device23", &result));
+    TEST_ASSERT_FALSE(hal_db_lookup("cap,overflow", nullptr));
+}
+
+void test_db_remove_then_add_after_full() {
+    // Fill DB to max
+    for (int i = 0; i < HAL_DB_MAX_ENTRIES; i++) {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        snprintf(d.compatible, 31, "rmv,dev%d", i);
+        d.type = HAL_DEV_ADC;
+        hal_db_add(&d);
+    }
+    TEST_ASSERT_EQUAL(HAL_DB_MAX_ENTRIES, hal_db_count());
+
+    // Overflow rejected
+    HalDeviceDescriptor extra;
+    memset(&extra, 0, sizeof(extra));
+    strncpy(extra.compatible, "rmv,extra", 31);
+    extra.type = HAL_DEV_CODEC;
+    TEST_ASSERT_FALSE(hal_db_add(&extra));
+
+    // Remove one entry
+    TEST_ASSERT_TRUE(hal_db_remove("rmv,dev5"));
+    TEST_ASSERT_EQUAL(HAL_DB_MAX_ENTRIES - 1, hal_db_count());
+
+    // Now adding should succeed again
+    TEST_ASSERT_TRUE(hal_db_add(&extra));
+    TEST_ASSERT_EQUAL(HAL_DB_MAX_ENTRIES, hal_db_count());
+
+    // Verify the new entry is findable
+    TEST_ASSERT_TRUE(hal_db_lookup("rmv,extra", nullptr));
+}
+
+void test_registry_overflow_at_max_drivers() {
+    // Fill registry to HAL_MAX_DRIVERS (24)
+    for (int i = 0; i < HAL_MAX_DRIVERS; i++) {
+        HalDriverEntry entry;
+        memset(&entry, 0, sizeof(entry));
+        snprintf(entry.compatible, 31, "reg,driver%d", i);
+        entry.type = HAL_DEV_DAC;
+        entry.legacyId = static_cast<uint16_t>(i + 100);
+        TEST_ASSERT_TRUE_MESSAGE(hal_registry_register(entry),
+            "Should register up to HAL_MAX_DRIVERS entries");
+    }
+    TEST_ASSERT_EQUAL(HAL_MAX_DRIVERS, hal_registry_count());
+
+    // The 25th registration should fail
+    HalDriverEntry overflow;
+    memset(&overflow, 0, sizeof(overflow));
+    strncpy(overflow.compatible, "reg,overflow", 31);
+    overflow.type = HAL_DEV_CODEC;
+    TEST_ASSERT_FALSE(hal_registry_register(overflow));
+
+    // Count stays at max
+    TEST_ASSERT_EQUAL(HAL_MAX_DRIVERS, hal_registry_count());
+
+    // Previously registered entries still findable
+    TEST_ASSERT_NOT_NULL(hal_registry_find("reg,driver0"));
+    TEST_ASSERT_NOT_NULL(hal_registry_find("reg,driver23"));
+    TEST_ASSERT_NULL(hal_registry_find("reg,overflow"));
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
@@ -601,6 +705,13 @@ int main(int argc, char** argv) {
     RUN_TEST(test_wifi_sdio_active_when_activeInterface_wifi);
     RUN_TEST(test_wifi_sdio_inactive_when_fully_disconnected);
     RUN_TEST(test_wifi_sdio_active_combinations);
+
+    // Capacity accessor and overflow tests
+    RUN_TEST(test_db_max_returns_correct_value);
+    RUN_TEST(test_registry_max_returns_correct_value);
+    RUN_TEST(test_db_overflow_at_new_limit);
+    RUN_TEST(test_db_remove_then_add_after_full);
+    RUN_TEST(test_registry_overflow_at_max_drivers);
 
     return UNITY_END();
 }

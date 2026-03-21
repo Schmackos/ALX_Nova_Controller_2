@@ -35,6 +35,8 @@
 #include "hal/hal_settings.h"
 #include "hal/hal_types.h"
 #include "hal/hal_temp_sensor.h"
+#include "hal/hal_driver_registry.h"
+#include "hal/hal_device_db.h"
 #endif
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
@@ -1796,6 +1798,10 @@ void sendHalDeviceState() {
     JsonDocument doc;
     doc["type"] = "halDeviceState";
     doc["scanning"] = appState._halScanInProgress;
+    doc["deviceCount"] = HalDeviceManager::instance().getCount();
+    doc["deviceMax"] = HAL_MAX_DEVICES;
+    doc["driverCount"] = hal_registry_count();
+    doc["driverMax"] = hal_registry_max();
 
     JsonArray arr = doc["devices"].to<JsonArray>();
     HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
