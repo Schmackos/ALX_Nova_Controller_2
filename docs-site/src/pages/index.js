@@ -5,10 +5,30 @@ import Layout from '@theme/Layout';
 import styles from './index.module.css';
 
 // ---------------------------------------------------------------------------
+// Animated waveform visual
+// ---------------------------------------------------------------------------
+
+const WAVEFORM_HEIGHTS = [35, 65, 45, 80, 55, 40, 70, 30, 75, 50, 85, 45, 60, 35, 90, 55, 40, 70, 45, 80, 30, 65, 50, 85, 40, 60, 75, 35, 55, 70, 45, 80];
+
+function AnimatedWaveform() {
+  return (
+    <div className={styles.waveformVisual} aria-hidden="true">
+      {WAVEFORM_HEIGHTS.map((h, i) => (
+        <div
+          key={i}
+          className={styles.waveformBar}
+          style={{ '--delay': `${(i * 0.09) % 1.5}s`, '--bar-height': `${h}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Inline SVG icons (Material Design Icons, viewBox 0 0 24 24)
 // ---------------------------------------------------------------------------
 
-function IconWaveform() {
+function IconOpenLock() {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -17,8 +37,8 @@ function IconWaveform() {
       fill="currentColor"
       aria-hidden="true"
     >
-      {/* mdi-waveform */}
-      <path d="M17,12H15V8H13V16H11V10H9V14H7V12H2V14H6.27C6.64,15.16 7.72,16 9,16A3,3 0 0,0 12,13.27V12H13V16A1,1 0 0,0 14,17H16A1,1 0 0,0 17,16V14H22V12H17Z" />
+      {/* mdi-lock-open-variant-outline */}
+      <path d="M18 1C16.34 1 15 2.34 15 4V9H4C2.9 9 2 9.9 2 11V20C2 21.1 2.9 22 4 22H16C17.1 22 18 21.1 18 20V11C18 10.63 17.9 10.29 17.72 10H18C19.1 10 20 9.1 20 8V4C20 2.34 18.66 1 18 1M10 18C8.9 18 8 17.1 8 16C8 14.9 8.9 14 10 14C11.1 14 12 14.9 12 16C12 17.1 11.1 18 10 18M18 8H17V4C17 3.45 17.45 3 18 3C18.55 3 19 3.45 19 4V8H18Z" />
     </svg>
   );
 }
@@ -34,6 +54,21 @@ function IconChip() {
     >
       {/* mdi-chip */}
       <path d="M6,6H18V18H6V6M14,8H10V10H8V14H10V16H14V14H16V10H14V8M10,10H14V14H10V10M2,8V10H4V14H2V16H4V17A1,1 0 0,0 5,18H6V20H8V18H10V20H14V18H16V20H18V18H19A1,1 0 0,0 20,17V16H22V14H20V10H22V8H20V7A1,1 0 0,0 19,6H18V4H16V6H14V4H10V6H8V4H6V6H5A1,1 0 0,0 4,7V8H2Z" />
+    </svg>
+  );
+}
+
+function IconRocket() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="36"
+      height="36"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      {/* mdi-rocket-launch-outline */}
+      <path d="M13.13 22.19L11.5 18.36C13.07 17.78 14.54 17 15.9 16.09L13.13 22.19M5.64 12.5L1.81 10.87L7.91 8.1C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39C21.61 2.39 16.66 .269 11 5.93C8.81 8.12 7.5 10.53 6.65 12.64C6.37 13.39 6.56 14.21 7.11 14.77L9.24 16.89C9.79 17.45 10.61 17.63 11.36 17.35C13.5 16.53 15.88 15.19 18.07 13C23.73 7.34 21.61 2.39 21.61 2.39M14.54 9.46C13.76 8.68 13.76 7.41 14.54 6.63S16.59 5.85 17.37 6.63C18.14 7.41 18.15 8.68 17.37 9.46C16.59 10.24 15.32 10.24 14.54 9.46M8.88 16.53L7.47 15.12L8.88 16.53M6.24 22L9.88 18.36C9.54 18.27 9.21 18.12 8.91 17.91L4.83 22H6.24M2 22H3.41L8.18 17.24L6.76 15.83L2 20.59V22M2 19.17L6.09 15.09C5.88 14.79 5.73 14.46 5.64 14.12L2 17.76V19.17Z" />
     </svg>
   );
 }
@@ -74,22 +109,22 @@ function IconWifi() {
 
 const features = [
   {
-    title: 'Smart Auto-Sensing',
+    title: 'No Vendor Lock-in',
     description:
-      'Automatic signal detection with configurable voltage thresholds, auto-off timers, and amplifier relay control.',
-    Icon: IconWaveform,
+      'Mix and match certified hardware modules from any manufacturer. Replace components without rewriting code — the HAL keeps everything compatible.',
+    Icon: IconOpenLock,
   },
   {
-    title: 'HAL Device Framework',
+    title: 'Modular by Design',
     description:
-      'Plug-and-play hardware abstraction with I2C discovery, EEPROM identification, and hot-swap device lifecycle management.',
+      'Hot-pluggable ADC, DSP, DAC, and amplifier components with I2C auto-discovery. Build the exact stack you need — nothing more.',
     Icon: IconChip,
   },
   {
-    title: 'Multi-Channel DSP',
+    title: 'Prototype to Production',
     description:
-      '4-channel parametric EQ, crossovers, limiters, and compressors with double-buffered glitch-free config swap.',
-    Icon: IconEqualizer,
+      'Start on the ESP32-P4 dev kit, ship on a custom board. The same firmware scales from tinkerer bench to commercial audio product.',
+    Icon: IconRocket,
   },
   {
     title: 'Web + MQTT Control',
@@ -118,22 +153,36 @@ function FeatureCard({ title, description, Icon }) {
 function HeroSection() {
   return (
     <section className={styles.hero}>
+      <AnimatedWaveform />
       <div className={styles.heroInner}>
-        <h1 className={styles.heroTitle}>ALX Nova</h1>
-        <p className={styles.heroTagline}>
-          Intelligent Amplifier Control for ESP32-P4
-        </p>
+        <div className={styles.heroBadge}>
+          ALX Nova &mdash; Open Source &middot; ESP32-P4 &middot; Community-Driven
+        </div>
+        <h1 className={styles.heroTitle}>
+          Build exceptional audio products.
+          <br />
+          <span className={styles.heroTitleAccent}>Together, without vendor lock-in.</span>
+        </h1>
         <p className={styles.heroDescription}>
-          Open-source smart amplifier controller with auto-sensing, multi-channel
-          DSP, HAL device management, and seamless Home Assistant integration.
+          A modular platform for audio control, DSP, and playback devices. Prototype freely,
+          scale to production &mdash; combine certified hardware modules with a flexible software stack.
         </p>
         <div className={styles.heroCta}>
           <Link className={styles.ctaPrimary} to="/docs/user/getting-started">
-            Get Started
+            Start Building
           </Link>
           <Link className={styles.ctaSecondary} to="/docs/developer/overview">
-            Developer Guide
+            Explore the Ecosystem
           </Link>
+        </div>
+        <div className={styles.heroStats}>
+          <span>Hardware Abstraction Layer</span>
+          <span aria-hidden="true">&middot;</span>
+          <span>Multi-Channel DSP</span>
+          <span aria-hidden="true">&middot;</span>
+          <span>Home Assistant</span>
+          <span aria-hidden="true">&middot;</span>
+          <span>Open Source</span>
         </div>
       </div>
     </section>
@@ -143,6 +192,7 @@ function HeroSection() {
 function FeaturesSection() {
   return (
     <section className={styles.features}>
+      <p className={styles.featuresHeading}>What the platform gives you</p>
       <div className={styles.featuresGrid}>
         {features.map((f) => (
           <FeatureCard key={f.title} {...f} />

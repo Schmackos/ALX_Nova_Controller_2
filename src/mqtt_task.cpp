@@ -2,7 +2,6 @@
 #include "mqtt_handler.h"
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "config.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>

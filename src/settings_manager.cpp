@@ -1,7 +1,6 @@
 #include "settings_manager.h"
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "buzzer_handler.h"
 #include "config.h"
 #include "crash_log.h"

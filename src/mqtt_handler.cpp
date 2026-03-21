@@ -1,7 +1,6 @@
 #include "mqtt_handler.h"
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "buzzer_handler.h"
 #include "config.h"
 #include "debug_serial.h"

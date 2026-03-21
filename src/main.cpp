@@ -1,6 +1,5 @@
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "auth_handler.h"
 #include "diag_journal.h"
 #include "diag_event.h"

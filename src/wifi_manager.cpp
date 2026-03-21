@@ -1,7 +1,6 @@
 #include "wifi_manager.h"
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "config.h"
 #include "debug_serial.h"
 #include "mqtt_handler.h"

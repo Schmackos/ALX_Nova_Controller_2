@@ -8,7 +8,6 @@
 #include "thd_measurement.h"
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
 #include <ArduinoJson.h>

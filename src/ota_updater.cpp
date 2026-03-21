@@ -2,7 +2,6 @@
 #include "config.h"
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "debug_serial.h"
 #include "utils.h"
 #include "buzzer_handler.h"

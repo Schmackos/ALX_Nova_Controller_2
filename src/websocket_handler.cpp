@@ -3,7 +3,6 @@
 #include "config.h"
 #include "app_state.h"
 #include "globals.h"
-#include "globals.h"
 #include "diag_journal.h"
 #include "diag_event.h"
 #include "crash_log.h"
