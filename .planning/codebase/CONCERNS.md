@@ -60,11 +60,11 @@
 
 ## Known Bugs
 
-**HalCoordState Toggle Queue Has No Atomicity:**
-- Symptoms: Under concurrent WS + MQTT toggle requests, `requestDeviceToggle()` reads and writes `_pendingToggleCount` and `_pendingToggles[]` without any lock. The `volatile` keyword on an array of structs does not provide atomicity for the read-modify-write sequence.
-- Files: `src/state/hal_coord_state.h` (lines 29-41)
-- Trigger: Two tasks calling `requestDeviceToggle()` simultaneously (e.g., WS handler on Core 1 main loop + MQTT callback setting `_pendingApToggle`). Race window is narrow but exists.
-- Workaround: In practice, WS handlers and MQTT callbacks both run on Core 0 or the main loop, serializing access. But this is fragile -- any future multi-core access would break.
+**HalCoordState Toggle Queue Has No Atomicity:** FIXED
+- Fix: Added `portMUX_TYPE` spinlock via `HAL_COORD_ENTER_CRITICAL()` / `HAL_COORD_EXIT_CRITICAL()` macros in `hal_coord_state.h`, backed by file-static spinlock in new `src/state/hal_coord_state.cpp`. Follows `diag_journal.cpp` pattern. Under `NATIVE_TEST`, macros are no-ops. `volatile` retained on data members for compiler barrier correctness.
+- Files: `src/state/hal_coord_state.h` (macros + wrapped mutation methods), `src/state/hal_coord_state.cpp` (portMUX spinlock)
+- Scope: `requestDeviceToggle()` and `clearPendingToggles()` are now atomic. Read-only accessors remain lock-free (single-task consumer on Core 1).
+- Note: All 9 producer call sites currently run on Core 1 (loopTask), so no real race existed. The spinlock future-proofs against adding a Core 0 producer (e.g., mqtt_task).
 
 **Default AP Password Used as Web Password on First Boot:**
 - Symptoms: `WifiState::webPassword` is initialized to `DEFAULT_AP_PASSWORD` (a compile-time constant). On first boot, `initAuth()` generates a random password and stores it in NVS, but any code path that reads `appState.wifi.webPassword` before `initAuth()` completes sees the default.
