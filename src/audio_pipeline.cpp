@@ -3,6 +3,8 @@
 #include "app_state.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "heap_budget.h"
+#include "diag_journal.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "output_dsp.h"
@@ -56,11 +58,11 @@ static float *_laneL[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static float *_laneR[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static float *_outCh[AUDIO_PIPELINE_MATRIX_SIZE] = {};
 
-// Noise gate fade-out: last open-gate frame per ADC lane (PSRAM, 4 KB total)
+// Noise gate fade-out: last open-gate frame per ADC lane (PSRAM, 16 KB total (8 lanes x 2 x 1024B))
 static float *_gatePrevL[AUDIO_PIPELINE_MAX_INPUTS] = {};
 static float *_gatePrevR[AUDIO_PIPELINE_MAX_INPUTS] = {};
 
-// DSP swap hold: last good pipeline output frame (PSRAM, 2 KB total)
+// DSP swap hold: last good pipeline output frame (PSRAM, 16 KB total (16 ch x 1024B))
 static float *_swapHoldCh[AUDIO_PIPELINE_MATRIX_SIZE] = {};
 
 #ifdef NATIVE_TEST
@@ -295,7 +297,9 @@ static void pipeline_mix_matrix() {
     static float *_matrixTemp = nullptr;
     if (!_matrixTemp) {
         _matrixTemp = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+        bool matTemp_psram = (_matrixTemp != nullptr);
         if (!_matrixTemp) _matrixTemp = (float *)calloc(FRAMES, sizeof(float));
+        if (_matrixTemp) heap_budget_record("pipeline_matrixTemp", FRAMES * sizeof(float), matTemp_psram);
     }
     if (!_matrixTemp) return;
 
@@ -626,27 +630,78 @@ void audio_pipeline_init() {
         _swapHoldCh[i] = _swapHoldCh_buf[i];
     }
 #else
-    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-        _laneL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-        _laneR[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-        if (!_laneL[i]) _laneL[i] = (float *)calloc(FRAMES, sizeof(float));
-        if (!_laneR[i]) _laneR[i] = (float *)calloc(FRAMES, sizeof(float));
+    int psramFallbackCount = 0;
+    {
+        bool lanes_psram = false;
+        for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
+            _laneL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+            bool laneL_psram = (_laneL[i] != nullptr);
+            _laneR[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+            if (!_laneL[i]) {
+                _laneL[i] = (float *)calloc(FRAMES, sizeof(float));
+                if (_laneL[i]) { psramFallbackCount++; }
+            }
+            if (!_laneR[i]) {
+                _laneR[i] = (float *)calloc(FRAMES, sizeof(float));
+                if (_laneR[i]) { psramFallbackCount++; }
+            }
+            if (i == 0) lanes_psram = laneL_psram;
+        }
+        heap_budget_record("pipeline_lanes",
+            AUDIO_PIPELINE_MAX_INPUTS * 2 * FRAMES * sizeof(float), lanes_psram);
     }
-    for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
-        _outCh[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-        if (!_outCh[i]) _outCh[i] = (float *)calloc(FRAMES, sizeof(float));
+    {
+        bool outCh_psram = false;
+        for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+            _outCh[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+            if (i == 0) outCh_psram = (_outCh[i] != nullptr);
+            if (!_outCh[i]) {
+                _outCh[i] = (float *)calloc(FRAMES, sizeof(float));
+                if (_outCh[i]) { psramFallbackCount++; }
+            }
+        }
+        heap_budget_record("pipeline_outCh",
+            AUDIO_PIPELINE_MATRIX_SIZE * FRAMES * sizeof(float), outCh_psram);
     }
     // Noise gate fade-out: PSRAM prev-frame buffers
-    for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-        _gatePrevL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-        _gatePrevR[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-        if (!_gatePrevL[i]) _gatePrevL[i] = (float *)calloc(FRAMES, sizeof(float));
-        if (!_gatePrevR[i]) _gatePrevR[i] = (float *)calloc(FRAMES, sizeof(float));
+    {
+        bool gate_psram = false;
+        for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
+            _gatePrevL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+            if (i == 0) gate_psram = (_gatePrevL[i] != nullptr);
+            _gatePrevR[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+            if (!_gatePrevL[i]) {
+                _gatePrevL[i] = (float *)calloc(FRAMES, sizeof(float));
+                if (_gatePrevL[i]) { psramFallbackCount++; }
+            }
+            if (!_gatePrevR[i]) {
+                _gatePrevR[i] = (float *)calloc(FRAMES, sizeof(float));
+                if (_gatePrevR[i]) { psramFallbackCount++; }
+            }
+        }
+        heap_budget_record("pipeline_gate",
+            AUDIO_PIPELINE_MAX_INPUTS * 2 * FRAMES * sizeof(float), gate_psram);
     }
     // DSP swap hold: PSRAM last-good-output buffer
-    for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
-        _swapHoldCh[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-        if (!_swapHoldCh[i]) _swapHoldCh[i] = (float *)calloc(FRAMES, sizeof(float));
+    {
+        bool swap_psram = false;
+        for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
+            _swapHoldCh[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
+            if (i == 0) swap_psram = (_swapHoldCh[i] != nullptr);
+            if (!_swapHoldCh[i]) {
+                _swapHoldCh[i] = (float *)calloc(FRAMES, sizeof(float));
+                if (_swapHoldCh[i]) { psramFallbackCount++; }
+            }
+        }
+        heap_budget_record("pipeline_swapHold",
+            AUDIO_PIPELINE_MATRIX_SIZE * FRAMES * sizeof(float), swap_psram);
+    }
+    if (psramFallbackCount > 0) {
+        LOG_W("[Audio] %d PSRAM allocations fell back to internal SRAM", psramFallbackCount);
+        char msg[24];
+        snprintf(msg, sizeof(msg), "%d buf->SRAM", psramFallbackCount);
+        diag_emit(DIAG_SYS_PSRAM_ALLOC_FAIL, DIAG_SEV_WARN,
+                  0xFF, "Audio", msg);
     }
 #endif
 
@@ -735,13 +790,22 @@ void audio_pipeline_set_source(int lane, const AudioInputSource *src) {
     // Lazy-allocate DMA raw buffer for this lane on first source registration.
     // Must be in internal SRAM — DMA cannot access PSRAM.
     if (!_rawBuf[lane]) {
+        if (AppState::getInstance().debug.heapCritical) {
+            LOG_W("[Audio] Heap critical — refusing rawBuf alloc for lane %d", lane);
+            diag_emit(DIAG_SYS_HEAP_CRITICAL, DIAG_SEV_WARN,
+                      (uint8_t)lane, "Audio", "rawBuf refused");
+            return;
+        }
         _rawBuf[lane] = (int32_t *)calloc(RAW_SAMPLES, sizeof(int32_t));
         if (!_rawBuf[lane]) {
             LOG_E("[Audio] Failed to allocate rawBuf for lane %d", lane);
+            diag_emit(DIAG_SYS_HEAP_CRITICAL, DIAG_SEV_ERROR,
+                      (uint8_t)lane, "Audio", "rawBuf alloc fail");
             return;
         }
         LOG_D("[Audio] Allocated rawBuf[%d] (%u bytes internal SRAM)", lane,
               (unsigned)(RAW_SAMPLES * sizeof(int32_t)));
+        heap_budget_record("pipeline_rawBuf", RAW_SAMPLES * sizeof(int32_t), false);
     }
     vTaskSuspendAll();
 #endif
@@ -868,13 +932,22 @@ void audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
     // Lazy-allocate DMA output buffer for this sink slot on first registration.
     // Must be in internal SRAM — DMA cannot access PSRAM.
     if (!_sinkBuf[slot]) {
+        if (AppState::getInstance().debug.heapCritical) {
+            LOG_W("[Audio] Heap critical — refusing sinkBuf alloc for slot %d", slot);
+            diag_emit(DIAG_SYS_HEAP_CRITICAL, DIAG_SEV_WARN,
+                      (uint8_t)slot, "Audio", "sinkBuf refused");
+            return;
+        }
         _sinkBuf[slot] = (int32_t *)calloc(RAW_SAMPLES, sizeof(int32_t));
         if (!_sinkBuf[slot]) {
             LOG_E("[Audio] Failed to allocate sinkBuf for slot %d", slot);
+            diag_emit(DIAG_SYS_HEAP_CRITICAL, DIAG_SEV_ERROR,
+                      (uint8_t)slot, "Audio", "sinkBuf alloc fail");
             return;
         }
         LOG_D("[Audio] Allocated sinkBuf[%d] (%u bytes internal SRAM)", slot,
               (unsigned)(RAW_SAMPLES * sizeof(int32_t)));
+        heap_budget_record("pipeline_sinkBuf", RAW_SAMPLES * sizeof(int32_t), false);
     }
     // Reset the no-sink warning so it fires again if all sinks are later removed
     _noSinkWarned = false;

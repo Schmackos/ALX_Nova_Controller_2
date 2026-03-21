@@ -19,6 +19,7 @@
 #include "audio_pipeline.h"
 #include "audio_input_source.h"
 #include "audio_output_sink.h"
+#include "heap_budget.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
@@ -2171,6 +2172,22 @@ void sendHardwareStats() {
 
     // Heap health
     doc["heapCritical"] = appState.debug.heapCritical;
+    doc["heapWarning"] = appState.debug.heapWarning;
+
+    // Heap budget breakdown
+    {
+      JsonArray budget = doc["heapBudget"].to<JsonArray>();
+      for (int i = 0; i < heap_budget_count(); i++) {
+          const HeapBudgetEntry* e = heap_budget_entry(i);
+          if (!e) continue;
+          JsonObject entry = budget.add<JsonObject>();
+          entry["label"] = e->label;
+          entry["bytes"] = e->bytes;
+          entry["psram"] = e->isPsram;
+      }
+      doc["heapBudgetPsram"] = heap_budget_total_psram();
+      doc["heapBudgetSram"]  = heap_budget_total_sram();
+    }
 
     // Crash history (ring buffer, most recent first)
     const CrashLogData &clog = crashlog_get();
@@ -2496,9 +2513,15 @@ void sendAudioData() {
   // One call sends waveform, the next sends spectrum (audio levels always sent).
   static bool _sendWaveformNext = true;
 
+  // Graduated heap pressure: warning = halve binary rate, critical = suppress entirely
+  static bool _heapSkipBinaryFrame = false;
+  if (appState.debug.heapWarning) { _heapSkipBinaryFrame = !_heapSkipBinaryFrame; }
+  else { _heapSkipBinaryFrame = false; }
+  const bool heapAllowBinary = !appState.debug.heapCritical && !_heapSkipBinaryFrame;
+
   if (_sendWaveformNext) {
     // --- Waveform data (per-ADC) — binary: [type:1][adc:1][samples:256] ---
-    if (appState.audio.waveformEnabled && !appState.debug.heapCritical) {
+    if (appState.audio.waveformEnabled && heapAllowBinary) {
       uint8_t wfBin[2 + WAVEFORM_BUFFER_SIZE]; // 258 bytes
       wfBin[0] = WS_BIN_WAVEFORM;
       for (int a = 0; a < appState.audio.numAdcsDetected; a++) {
@@ -2514,7 +2537,7 @@ void sendAudioData() {
     }
   } else {
     // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:Nxf32LE] ---
-    if (appState.audio.spectrumEnabled && !appState.debug.heapCritical) {
+    if (appState.audio.spectrumEnabled && heapAllowBinary) {
       uint8_t spBin[2 + sizeof(float) + SPECTRUM_BANDS * sizeof(float)]; // 70 bytes
       spBin[0] = WS_BIN_SPECTRUM;
       float bands[SPECTRUM_BANDS];

@@ -11,7 +11,8 @@ struct DebugState {
   bool i2sMetrics = true;          // I2S runtime metrics in audio task
   bool taskMonitor = false;        // Task monitor update & serial print (opt-in)
   unsigned long hardwareStatsInterval = HARDWARE_STATS_INTERVAL;
-  bool heapCritical = false;       // True when largest free block < 40KB
+  bool heapCritical = false;       // True when largest free block < HEAP_CRITICAL_THRESHOLD
+  bool heapWarning = false;        // True when largest free block < HEAP_WARNING_THRESHOLD but >= HEAP_CRITICAL_THRESHOLD
 };
 
 #endif // STATE_DEBUG_STATE_H

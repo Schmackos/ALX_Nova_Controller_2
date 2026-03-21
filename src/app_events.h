@@ -15,7 +15,7 @@ void app_events_signal(EventBits_t bits);
 EventBits_t app_events_wait(uint32_t timeout_ms);
 #endif
 
-// Event bit definitions — one per live dirty flag (14 total, bits 0-15 assigned)
+// Event bit definitions — one per live dirty flag (bits 0-16 assigned, 17-23 spare)
 #define EVT_OTA          (1UL <<  0)
 #define EVT_DISPLAY      (1UL <<  1)
 #define EVT_BUZZER       (1UL <<  2)
@@ -28,10 +28,10 @@ EventBits_t app_events_wait(uint32_t timeout_ms);
 #define EVT_SETTINGS     (1UL <<  9)
 #define EVT_ADC_ENABLED  (1UL << 10)
 #define EVT_DIAG         (1UL << 12)
-// Bits 16-23 are spare (8 unused bits in the 24-bit FreeRTOS event group)
 #define EVT_ETHERNET     (1UL << 11)
 #define EVT_DAC_SETTINGS (1UL << 13)
 #define EVT_HAL_DEVICE   (1UL << 14)
 #define EVT_CHANNEL_MAP  (1UL << 15)
+#define EVT_HEAP_PRESSURE (1UL << 16)
 // EVT_ANY covers all 24 usable FreeRTOS event group bits (bits 24-31 reserved by FreeRTOS)
 #define EVT_ANY          (0x00FFFFFFUL)
