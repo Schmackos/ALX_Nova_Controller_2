@@ -75,13 +75,9 @@ These issues were identified and **completely fixed** in recent development phas
 
 ### Heap & Memory Management
 
-**PSRAM Allocation Fallback to SRAM**
-- **Risk**: When PSRAM allocation fails (exhausted), falls back to internal SRAM (~120KB available after WiFi/BLE). If SRAM exhausted, `ps_calloc()` returns null
-- **Files**: `src/audio_pipeline.cpp` (line 782-788 for float buffers), `src/dsp_pipeline.cpp` (lines 236-270 for delay lines), `src/usb_audio.cpp` (line 53 for ring buffer)
-- **Current mitigation**: All allocation sites check for `nullptr` and log error. No crash. Audio degrades gracefully (null buffers = no audio output)
-- **Impact**: Silent audio failure. No UI warning unless you dig into logs
-- **Test coverage**: `test_heap_budget` tests PSRAM exhaustion logic. No integration test for audio pipeline with full PSRAM
-- **Recommendation**: Add explicit PSRAM allocation failure diagnostic (`DIAG_SYS_PSRAM_ALLOC_FAIL` exists but may not be fired in all paths). Monitor PSRAM usage in web UI. Priority: LOW (512KB PSRAM is sufficient for all current features; would require user to load 10+ DSP presets + multi-DAC simultaneously)
+**PSRAM Allocation Fallback to SRAM** (FIXED: 2026-03-21)
+- **Was**: ~10 PSRAM allocation sites silently fell back to SRAM with no diagnostic emission (only `audio_pipeline.cpp` emitted `DIAG_SYS_PSRAM_ALLOC_FAIL`). No per-subsystem budget tracking. No PSRAM-specific pressure thresholds. Web UI showed aggregate PSRAM % but no allocation breakdown or failure warnings
+- **Now**: Unified `psram_alloc()` wrapper (`src/psram_alloc.h/.cpp`) centralizes PSRAM-preferred allocation with SRAM fallback, automatic `heap_budget` recording, and `DIAG_SYS_PSRAM_ALLOC_FAIL` emission. All 9 allocation sites migrated. Graduated PSRAM pressure thresholds (`PSRAM_WARNING_THRESHOLD` 1MB, `PSRAM_CRITICAL_THRESHOLD` 512KB) with `DIAG_SYS_PSRAM_WARNING` / `DIAG_SYS_PSRAM_WARNING_CLEARED` diagnostics. Feature shedding: DSP delay/convolution allocations refused at PSRAM critical. `GET /api/psram/status` REST endpoint for monitoring integration. Web UI: PSRAM budget breakdown table, fallback count badge, health dashboard warning banner, toast on new fallbacks. WebSocket `hardwareStats` includes `psramFallbackCount`, `psramWarning`, `psramCritical`. Tests: 10 new `test_psram_alloc` + 4 new `test_heap_budget` remove tests + E2E coverage
 
 ### DSP Pipeline
 

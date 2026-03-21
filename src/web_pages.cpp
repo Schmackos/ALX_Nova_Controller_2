@@ -773,6 +773,46 @@ body.night-mode {
         .badge-blue { background: rgba(33,150,243,0.15); color: #2196f3; }
         .badge-grey { background: rgba(102,102,102,0.15); color: #999; }
 
+        /* PSRAM Budget Table */
+        .budget-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+            padding: 0 16px;
+        }
+        .budget-table th,
+        .budget-table td {
+            padding: 4px 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color, #333);
+        }
+        .budget-table th {
+            font-weight: 600;
+            opacity: 0.7;
+            font-size: 0.9em;
+        }
+
+        /* Health Banner */
+        .health-banner {
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        .health-banner-amber {
+            background: rgba(255, 152, 0, 0.15);
+            border: 1px solid rgba(255, 152, 0, 0.3);
+            color: #ffb74d;
+        }
+        .health-banner-red {
+            background: rgba(244, 67, 54, 0.15);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+            color: #ef5350;
+        }
+
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -4607,6 +4647,27 @@ body.night-mode {
                         <span class="info-label">PSRAM Total</span>
                         <span class="info-value" id="psramTotal">--</span>
                     </div>
+                    <div class="info-row" id="psramFallbackRow" style="display:none">
+                        <span class="info-label" style="color:var(--warning)">PSRAM Fallbacks</span>
+                        <span class="info-value" id="psramFallbackCount" style="color:var(--warning)">0</span>
+                    </div>
+                </div>
+                <!-- PSRAM Budget Breakdown -->
+                <div class="collapsible-header" onclick="togglePsramBudget()" id="psramBudgetHeader" style="display:none;padding:0 16px;">
+                    <span style="font-size:0.9em;color:var(--text-secondary);">PSRAM Budget</span>
+                    <span style="display:flex;align-items:center;gap:6px;">
+                        <span id="psramPressureBadge" class="badge" style="display:none"></span>
+                        <span id="psramFallbackBadge" class="badge badge-amber" style="display:none"></span>
+                        <svg viewBox="0 0 24 24" id="psramBudgetChevron"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </span>
+                </div>
+                <div class="collapsible-content" id="psramBudgetContent">
+                    <table class="budget-table" id="psramBudgetTable">
+                        <thead>
+                            <tr><th>Subsystem</th><th>Bytes</th><th>Type</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
 
@@ -10717,6 +10778,73 @@ function initFirmwareDragDrop() {
                 document.getElementById('psramTotal').textContent = psramTotal > 0 ? formatBytes(psramTotal) : 'N/A';
             }
 
+            // PSRAM allocation tracking
+            if (data.psramFallbackCount !== undefined) {
+                var fbRow = document.getElementById('psramFallbackRow');
+                if (fbRow) {
+                    fbRow.style.display = data.psramFallbackCount > 0 ? '' : 'none';
+                    var fbVal = document.getElementById('psramFallbackCount');
+                    if (fbVal) fbVal.textContent = data.psramFallbackCount;
+                }
+                var fbBadge = document.getElementById('psramFallbackBadge');
+                if (fbBadge) {
+                    if (data.psramFallbackCount > 0) {
+                        fbBadge.textContent = data.psramFallbackCount + ' fallback' + (data.psramFallbackCount > 1 ? 's' : '');
+                        fbBadge.style.display = '';
+                    } else {
+                        fbBadge.style.display = 'none';
+                    }
+                }
+                // Toast on new fallback
+                if (typeof window._prevPsramFallbackCount === 'undefined') {
+                    window._prevPsramFallbackCount = 0;
+                }
+                if (data.psramFallbackCount > window._prevPsramFallbackCount) {
+                    showToast('PSRAM allocation fallback detected', 'warning');
+                }
+                window._prevPsramFallbackCount = data.psramFallbackCount;
+            }
+
+            // PSRAM pressure badge
+            if (data.psramCritical !== undefined || data.psramWarning !== undefined) {
+                var prBadge = document.getElementById('psramPressureBadge');
+                if (prBadge) {
+                    if (data.psramCritical) {
+                        prBadge.textContent = 'CRITICAL';
+                        prBadge.className = 'badge badge-red';
+                        prBadge.style.display = '';
+                    } else if (data.psramWarning) {
+                        prBadge.textContent = 'WARNING';
+                        prBadge.className = 'badge badge-amber';
+                        prBadge.style.display = '';
+                    } else {
+                        prBadge.style.display = 'none';
+                    }
+                }
+            }
+
+            // PSRAM budget table
+            if (data.heapBudget && Array.isArray(data.heapBudget)) {
+                var budgetHeader = document.getElementById('psramBudgetHeader');
+                if (budgetHeader && data.heapBudget.length > 0) budgetHeader.style.display = '';
+                var budgetTbody = document.querySelector('#psramBudgetTable tbody');
+                if (budgetTbody) {
+                    budgetTbody.innerHTML = '';
+                    for (var bi = 0; bi < data.heapBudget.length; bi++) {
+                        var entry = data.heapBudget[bi];
+                        if (entry.label && entry.bytes > 0) {
+                            var bRow = document.createElement('tr');
+                            var typeClass = entry.psram ? 'badge-green' : 'badge-amber';
+                            var typeText = entry.psram ? 'PSRAM' : 'SRAM';
+                            bRow.innerHTML = '<td>' + escapeHtml(entry.label) + '</td>' +
+                                '<td>' + formatBytes(entry.bytes) + '</td>' +
+                                '<td><span class="badge ' + typeClass + '">' + typeText + '</span></td>';
+                            budgetTbody.appendChild(bRow);
+                        }
+                    }
+                }
+            }
+
             // Storage Stats
             if (data.storage) {
                 document.getElementById('flashSize').textContent = formatBytes(data.storage.flashSize || 0);
@@ -11005,6 +11133,22 @@ function initFirmwareDragDrop() {
                     ptb.innerHTML = html;
                 }
             }
+
+            // Update PSRAM health banner on Health Dashboard
+            if (data.psramFallbackCount !== undefined || data.psramWarning !== undefined || data.psramCritical !== undefined) {
+                updatePsramHealthBanner(data);
+            }
+        }
+
+        var psramBudgetOpen = false;
+        function togglePsramBudget() {
+            psramBudgetOpen = !psramBudgetOpen;
+            var content = document.getElementById('psramBudgetContent');
+            var chevron = document.getElementById('psramBudgetChevron');
+            var header = document.getElementById('psramBudgetHeader');
+            if (content) content.classList.toggle('open', psramBudgetOpen);
+            if (chevron) chevron.parentElement.parentElement.classList.toggle('open', psramBudgetOpen);
+            if (header) header.classList.toggle('open', psramBudgetOpen);
         }
 
         function formatBytes(bytes) {
@@ -12305,6 +12449,40 @@ function initFirmwareDragDrop() {
             }).catch(function(err) {
                 showToast('Clear failed: ' + err.message, 'error');
             });
+        }
+
+        // ----- PSRAM Health Banner -----
+        function updatePsramHealthBanner(data) {
+            var banner = document.getElementById('psramHealthBanner');
+            if (!banner) {
+                var container = document.getElementById('healthDeviceGrid');
+                if (!container || !container.parentElement) return;
+                banner = document.createElement('div');
+                banner.id = 'psramHealthBanner';
+                banner.className = 'health-banner';
+                banner.style.display = 'none';
+                container.parentElement.insertBefore(banner, container.parentElement.firstChild.nextSibling);
+            }
+
+            var alertIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z"/></svg> ';
+            var infoIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg> ';
+            var fbCount = data.psramFallbackCount || 0;
+
+            if (data.psramCritical) {
+                banner.className = 'health-banner health-banner-red';
+                banner.innerHTML = alertIcon + 'PSRAM Critical — ' + fbCount + ' allocation(s) fell back to SRAM';
+                banner.style.display = '';
+            } else if (data.psramWarning) {
+                banner.className = 'health-banner health-banner-amber';
+                banner.innerHTML = alertIcon + 'PSRAM Warning — ' + fbCount + ' allocation(s) fell back to SRAM';
+                banner.style.display = '';
+            } else if (fbCount > 0) {
+                banner.className = 'health-banner health-banner-amber';
+                banner.innerHTML = infoIcon + fbCount + ' PSRAM allocation(s) fell back to SRAM';
+                banner.style.display = '';
+            } else {
+                banner.style.display = 'none';
+            }
         }
 
         // ----- Tab init (called from switchTab) -----

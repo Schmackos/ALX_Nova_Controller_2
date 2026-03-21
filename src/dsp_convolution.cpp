@@ -1,11 +1,13 @@
 #ifdef DSP_ENABLED
 
 #include "dsp_convolution.h"
+#include "psram_alloc.h"
 #include <string.h>
 #include <stdlib.h>
 
 #ifndef NATIVE_TEST
 #include "debug_serial.h"
+#include "app_state.h"
 #include <esp_heap_caps.h>
 #else
 #define LOG_I(...)
@@ -15,20 +17,16 @@
 
 static ConvState _convSlots[CONV_MAX_IR_SLOTS];
 
-// Allocate memory (PSRAM preferred on ESP32, heap on native)
-static float* dsp_conv_alloc(int count) {
-#ifndef NATIVE_TEST
-    float *p = (float *)heap_caps_calloc(count, sizeof(float), MALLOC_CAP_SPIRAM);
-    if (!p) p = (float *)calloc(count, sizeof(float));
-    return p;
-#else
-    return (float *)calloc(count, sizeof(float));
-#endif
-}
-
 int dsp_conv_init_slot(int slot, const float *ir, int irLength) {
     if (slot < 0 || slot >= CONV_MAX_IR_SLOTS || !ir || irLength <= 0)
         return -1;
+
+#ifndef NATIVE_TEST
+    if (AppState::getInstance().debug.psramCritical) {
+        LOG_W("[Conv] PSRAM critical — refusing IR alloc for slot %d", slot);
+        return -1;
+    }
+#endif
 
     // Free existing slot if active
     dsp_conv_free_slot(slot);
@@ -42,7 +40,7 @@ int dsp_conv_init_slot(int slot, const float *ir, int irLength) {
     }
     s.irLength = irLength;
 
-    // Allocate partition pointer array
+    // Allocate partition pointer array (plain calloc — pointer array, not audio data)
     s.irPartitions = (float **)calloc(s.numPartitions, sizeof(float *));
     if (!s.irPartitions) {
         LOG_E("[Conv] Failed to allocate partition array");
@@ -51,7 +49,7 @@ int dsp_conv_init_slot(int slot, const float *ir, int irLength) {
 
     // Allocate and copy each partition
     for (int p = 0; p < s.numPartitions; p++) {
-        s.irPartitions[p] = dsp_conv_alloc(CONV_PARTITION_SIZE);
+        s.irPartitions[p] = (float *)psram_alloc(CONV_PARTITION_SIZE, sizeof(float), "conv_ir");
         if (!s.irPartitions[p]) {
             LOG_E("[Conv] Failed to allocate partition %d", p);
             dsp_conv_free_slot(slot);
@@ -66,7 +64,7 @@ int dsp_conv_init_slot(int slot, const float *ir, int irLength) {
     }
 
     // Allocate overlap buffer
-    s.overlapBuf = dsp_conv_alloc(CONV_PARTITION_SIZE);
+    s.overlapBuf = (float *)psram_alloc(CONV_PARTITION_SIZE, sizeof(float), "conv_ir");
     if (!s.overlapBuf) {
         LOG_E("[Conv] Failed to allocate overlap buffer");
         dsp_conv_free_slot(slot);
@@ -84,12 +82,12 @@ void dsp_conv_free_slot(int slot) {
 
     if (s.irPartitions) {
         for (int p = 0; p < s.numPartitions; p++) {
-            free(s.irPartitions[p]);
+            psram_free(s.irPartitions[p], "conv_ir");
         }
-        free(s.irPartitions);
+        free(s.irPartitions);  // pointer array was plain calloc
         s.irPartitions = nullptr;
     }
-    free(s.overlapBuf);
+    psram_free(s.overlapBuf, "conv_ir");
     s.overlapBuf = nullptr;
     s.numPartitions = 0;
     s.irLength = 0;

@@ -23,6 +23,10 @@ struct HeapBudgetEntry {
 // Returns false if label is null or capacity exceeded (and label is new).
 bool     heap_budget_record(const char* label, uint32_t bytes, bool isPsram);
 
+// Remove an allocation entry by label.
+// Returns true if found and removed, false if not found or label is null.
+bool     heap_budget_remove(const char* label);
+
 // Reset all entries and totals.
 void     heap_budget_reset(void);
 

@@ -263,6 +263,90 @@ void test_capacity_refill_after_reset(void) {
 }
 
 // ---------------------------------------------------------------------------
+// Test 16: Remove existing entry decrements count
+// ---------------------------------------------------------------------------
+
+void test_remove_existing_entry(void) {
+    heap_budget_record("to_remove", 4096, true);
+    TEST_ASSERT_EQUAL_UINT8(1, heap_budget_count());
+
+    TEST_ASSERT_TRUE(heap_budget_remove("to_remove"));
+    TEST_ASSERT_EQUAL_UINT8(0, heap_budget_count());
+    TEST_ASSERT_NULL(heap_budget_entry(0));
+}
+
+// ---------------------------------------------------------------------------
+// Test 17: Remove nonexistent label returns false
+// ---------------------------------------------------------------------------
+
+void test_remove_nonexistent_returns_false(void) {
+    heap_budget_record("exists", 100, false);
+    TEST_ASSERT_FALSE(heap_budget_remove("doesnt_exist"));
+    TEST_ASSERT_EQUAL_UINT8(1, heap_budget_count());
+
+    // nullptr label also returns false
+    TEST_ASSERT_FALSE(heap_budget_remove(nullptr));
+}
+
+// ---------------------------------------------------------------------------
+// Test 18: Remove updates totals correctly
+// ---------------------------------------------------------------------------
+
+void test_remove_updates_totals(void) {
+    heap_budget_record("psram_entry", 5000, true);
+    heap_budget_record("sram_entry",  3000, false);
+
+    TEST_ASSERT_EQUAL_UINT32(5000, heap_budget_total_psram());
+    TEST_ASSERT_EQUAL_UINT32(3000, heap_budget_total_sram());
+
+    // Remove the PSRAM entry
+    TEST_ASSERT_TRUE(heap_budget_remove("psram_entry"));
+
+    TEST_ASSERT_EQUAL_UINT32(0,    heap_budget_total_psram());
+    TEST_ASSERT_EQUAL_UINT32(3000, heap_budget_total_sram());
+    TEST_ASSERT_EQUAL_UINT8(1, heap_budget_count());
+}
+
+// ---------------------------------------------------------------------------
+// Test 19: Remove then add reuses slot (capacity not wasted)
+// ---------------------------------------------------------------------------
+
+void test_remove_then_add_reuses_slot(void) {
+    char label[HEAP_BUDGET_LABEL_MAX];
+
+    // Fill to capacity
+    for (int i = 0; i < HEAP_BUDGET_MAX_ENTRIES; i++) {
+        snprintf(label, sizeof(label), "slot_%d", i);
+        TEST_ASSERT_TRUE(heap_budget_record(label, 64, false));
+    }
+    TEST_ASSERT_EQUAL_UINT8(HEAP_BUDGET_MAX_ENTRIES, heap_budget_count());
+
+    // Cannot add one more
+    TEST_ASSERT_FALSE(heap_budget_record("overflow", 64, false));
+
+    // Remove one entry
+    TEST_ASSERT_TRUE(heap_budget_remove("slot_5"));
+    TEST_ASSERT_EQUAL_UINT8(HEAP_BUDGET_MAX_ENTRIES - 1, heap_budget_count());
+
+    // Now we can add a new entry
+    TEST_ASSERT_TRUE(heap_budget_record("new_entry", 128, true));
+    TEST_ASSERT_EQUAL_UINT8(HEAP_BUDGET_MAX_ENTRIES, heap_budget_count());
+
+    // Verify the new entry exists
+    bool found = false;
+    for (int i = 0; i < heap_budget_count(); i++) {
+        const HeapBudgetEntry* e = heap_budget_entry(i);
+        if (e && strncmp(e->label, "new_entry", HEAP_BUDGET_LABEL_MAX) == 0) {
+            TEST_ASSERT_EQUAL_UINT32(128, e->bytes);
+            TEST_ASSERT_TRUE(e->isPsram);
+            found = true;
+            break;
+        }
+    }
+    TEST_ASSERT_TRUE(found);
+}
+
+// ---------------------------------------------------------------------------
 // Test runner
 // ---------------------------------------------------------------------------
 
@@ -287,6 +371,10 @@ int main(int argc, char** argv) {
     RUN_TEST(test_label_truncation);
     RUN_TEST(test_reset_then_rerecord);
     RUN_TEST(test_capacity_refill_after_reset);
+    RUN_TEST(test_remove_existing_entry);
+    RUN_TEST(test_remove_nonexistent_returns_false);
+    RUN_TEST(test_remove_updates_totals);
+    RUN_TEST(test_remove_then_add_reuses_slot);
 
     return UNITY_END();
 }

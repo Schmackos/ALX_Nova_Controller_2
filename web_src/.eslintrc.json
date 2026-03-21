@@ -412,6 +412,9 @@
     "healthSnapshot": "readonly",
     "healthDownloadJournal": "readonly",
     "healthClearJournal": "readonly",
-    "initHealthDashboard": "readonly"
+    "initHealthDashboard": "readonly",
+    "psramBudgetOpen": "writable",
+    "togglePsramBudget": "readonly",
+    "updatePsramHealthBanner": "readonly"
   }
 }

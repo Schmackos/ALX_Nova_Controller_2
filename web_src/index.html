@@ -1393,6 +1393,27 @@
                         <span class="info-label">PSRAM Total</span>
                         <span class="info-value" id="psramTotal">--</span>
                     </div>
+                    <div class="info-row" id="psramFallbackRow" style="display:none">
+                        <span class="info-label" style="color:var(--warning)">PSRAM Fallbacks</span>
+                        <span class="info-value" id="psramFallbackCount" style="color:var(--warning)">0</span>
+                    </div>
+                </div>
+                <!-- PSRAM Budget Breakdown -->
+                <div class="collapsible-header" onclick="togglePsramBudget()" id="psramBudgetHeader" style="display:none;padding:0 16px;">
+                    <span style="font-size:0.9em;color:var(--text-secondary);">PSRAM Budget</span>
+                    <span style="display:flex;align-items:center;gap:6px;">
+                        <span id="psramPressureBadge" class="badge" style="display:none"></span>
+                        <span id="psramFallbackBadge" class="badge badge-amber" style="display:none"></span>
+                        <svg viewBox="0 0 24 24" id="psramBudgetChevron"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                    </span>
+                </div>
+                <div class="collapsible-content" id="psramBudgetContent">
+                    <table class="budget-table" id="psramBudgetTable">
+                        <thead>
+                            <tr><th>Subsystem</th><th>Bytes</th><th>Type</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
 

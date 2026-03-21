@@ -57,7 +57,9 @@ const char* stage_type_name(DspStageType t) {
     }
 }
 
-// Module under test
+// Module under test — psram_alloc/heap_budget needed since output_dsp uses psram_alloc()
+#include "../../src/heap_budget.cpp"
+#include "../../src/psram_alloc.cpp"
 #include "../../src/output_dsp.cpp"
 
 // ===== Helpers =====

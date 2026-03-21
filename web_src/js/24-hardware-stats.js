@@ -142,6 +142,73 @@
                 document.getElementById('psramTotal').textContent = psramTotal > 0 ? formatBytes(psramTotal) : 'N/A';
             }
 
+            // PSRAM allocation tracking
+            if (data.psramFallbackCount !== undefined) {
+                var fbRow = document.getElementById('psramFallbackRow');
+                if (fbRow) {
+                    fbRow.style.display = data.psramFallbackCount > 0 ? '' : 'none';
+                    var fbVal = document.getElementById('psramFallbackCount');
+                    if (fbVal) fbVal.textContent = data.psramFallbackCount;
+                }
+                var fbBadge = document.getElementById('psramFallbackBadge');
+                if (fbBadge) {
+                    if (data.psramFallbackCount > 0) {
+                        fbBadge.textContent = data.psramFallbackCount + ' fallback' + (data.psramFallbackCount > 1 ? 's' : '');
+                        fbBadge.style.display = '';
+                    } else {
+                        fbBadge.style.display = 'none';
+                    }
+                }
+                // Toast on new fallback
+                if (typeof window._prevPsramFallbackCount === 'undefined') {
+                    window._prevPsramFallbackCount = 0;
+                }
+                if (data.psramFallbackCount > window._prevPsramFallbackCount) {
+                    showToast('PSRAM allocation fallback detected', 'warning');
+                }
+                window._prevPsramFallbackCount = data.psramFallbackCount;
+            }
+
+            // PSRAM pressure badge
+            if (data.psramCritical !== undefined || data.psramWarning !== undefined) {
+                var prBadge = document.getElementById('psramPressureBadge');
+                if (prBadge) {
+                    if (data.psramCritical) {
+                        prBadge.textContent = 'CRITICAL';
+                        prBadge.className = 'badge badge-red';
+                        prBadge.style.display = '';
+                    } else if (data.psramWarning) {
+                        prBadge.textContent = 'WARNING';
+                        prBadge.className = 'badge badge-amber';
+                        prBadge.style.display = '';
+                    } else {
+                        prBadge.style.display = 'none';
+                    }
+                }
+            }
+
+            // PSRAM budget table
+            if (data.heapBudget && Array.isArray(data.heapBudget)) {
+                var budgetHeader = document.getElementById('psramBudgetHeader');
+                if (budgetHeader && data.heapBudget.length > 0) budgetHeader.style.display = '';
+                var budgetTbody = document.querySelector('#psramBudgetTable tbody');
+                if (budgetTbody) {
+                    budgetTbody.innerHTML = '';
+                    for (var bi = 0; bi < data.heapBudget.length; bi++) {
+                        var entry = data.heapBudget[bi];
+                        if (entry.label && entry.bytes > 0) {
+                            var bRow = document.createElement('tr');
+                            var typeClass = entry.psram ? 'badge-green' : 'badge-amber';
+                            var typeText = entry.psram ? 'PSRAM' : 'SRAM';
+                            bRow.innerHTML = '<td>' + escapeHtml(entry.label) + '</td>' +
+                                '<td>' + formatBytes(entry.bytes) + '</td>' +
+                                '<td><span class="badge ' + typeClass + '">' + typeText + '</span></td>';
+                            budgetTbody.appendChild(bRow);
+                        }
+                    }
+                }
+            }
+
             // Storage Stats
             if (data.storage) {
                 document.getElementById('flashSize').textContent = formatBytes(data.storage.flashSize || 0);
@@ -430,6 +497,22 @@
                     ptb.innerHTML = html;
                 }
             }
+
+            // Update PSRAM health banner on Health Dashboard
+            if (data.psramFallbackCount !== undefined || data.psramWarning !== undefined || data.psramCritical !== undefined) {
+                updatePsramHealthBanner(data);
+            }
+        }
+
+        var psramBudgetOpen = false;
+        function togglePsramBudget() {
+            psramBudgetOpen = !psramBudgetOpen;
+            var content = document.getElementById('psramBudgetContent');
+            var chevron = document.getElementById('psramBudgetChevron');
+            var header = document.getElementById('psramBudgetHeader');
+            if (content) content.classList.toggle('open', psramBudgetOpen);
+            if (chevron) chevron.parentElement.parentElement.classList.toggle('open', psramBudgetOpen);
+            if (header) header.classList.toggle('open', psramBudgetOpen);
         }
 
         function formatBytes(bytes) {

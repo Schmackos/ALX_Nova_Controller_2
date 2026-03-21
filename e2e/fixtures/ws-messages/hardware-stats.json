@@ -68,6 +68,12 @@
   "resetReason": "PowerOn",
   "heapCritical": false,
   "dmaAllocFailed": false,
+  "psramFallbackCount": 0,
+  "psramFailedCount": 0,
+  "psramAllocPsram": 155000,
+  "psramAllocSram": 0,
+  "psramWarning": false,
+  "psramCritical": false,
   "crashHistory": [],
   "tasks": {
     "count": 6,

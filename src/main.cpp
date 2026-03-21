@@ -51,6 +51,7 @@
 #endif
 #include "smart_sensing.h"
 #include "heap_budget.h"
+#include "psram_api.h"
 #include "utils.h"
 #include "web_pages.h"
 #include "websocket_handler.h"
@@ -924,6 +925,9 @@ void setup() {
 
 #endif
 
+  // Register PSRAM health API endpoint
+  registerPsramApiEndpoints(server);
+
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
 
@@ -1493,6 +1497,45 @@ void loop() {
       }
       appState.markHeapDirty();
     }
+  }
+
+  // PSRAM pressure monitoring (every 30s, same cadence as heap check)
+  static unsigned long lastPsramCheck = 0;
+  if (millis() - lastPsramCheck >= 30000) {
+    lastPsramCheck = millis();
+#ifndef NATIVE_TEST
+    {
+      uint32_t psramFree = ESP.getFreePsram();
+      bool wasPsramCrit = appState.debug.psramCritical;
+      bool wasPsramWarn = appState.debug.psramWarning;
+
+      appState.debug.psramCritical = (psramFree < PSRAM_CRITICAL_THRESHOLD);
+      appState.debug.psramWarning  = !appState.debug.psramCritical &&
+                                      (psramFree < PSRAM_WARNING_THRESHOLD);
+
+      if (appState.debug.psramCritical && !wasPsramCrit) {
+        LOG_W("[System] PSRAM critical: %lu bytes free", (unsigned long)psramFree);
+        diag_emit(DIAG_SYS_PSRAM_WARNING, DIAG_SEV_ERROR,
+                  0xFF, "System", "PSRAM critical");
+        app_events_signal(EVT_HEAP_PRESSURE);
+      } else if (!appState.debug.psramCritical && wasPsramCrit) {
+        LOG_I("[System] PSRAM recovered from critical");
+        diag_emit(DIAG_SYS_PSRAM_WARNING_CLEARED, DIAG_SEV_INFO,
+                  0xFF, "System", "PSRAM recovered");
+      }
+
+      if (appState.debug.psramWarning && !wasPsramWarn) {
+        LOG_W("[System] PSRAM warning: %lu bytes free", (unsigned long)psramFree);
+        diag_emit(DIAG_SYS_PSRAM_WARNING, DIAG_SEV_WARN,
+                  0xFF, "System", "PSRAM warning");
+        app_events_signal(EVT_HEAP_PRESSURE);
+      } else if (!appState.debug.psramWarning && wasPsramWarn && !appState.debug.psramCritical) {
+        LOG_I("[System] PSRAM warning cleared");
+        diag_emit(DIAG_SYS_PSRAM_WARNING_CLEARED, DIAG_SEV_INFO,
+                  0xFF, "System", "PSRAM warning cleared");
+      }
+    }
+#endif
   }
 
   // Broadcast Hardware Stats periodically (user-configurable interval)

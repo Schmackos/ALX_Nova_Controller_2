@@ -32,6 +32,7 @@
 #include <LittleFS.h>
 #include <Preferences.h>
 #include "debug_serial.h"
+#include "psram_alloc.h"
 
 static portMUX_TYPE _diagMux = portMUX_INITIALIZER_UNLOCKED;
 #define DIAG_ENTER_CRITICAL()   portENTER_CRITICAL(&_diagMux)
@@ -143,13 +144,12 @@ void diag_journal_init() {
     if (_hotRing) free(_hotRing);
     _hotRing = static_cast<DiagEvent*>(calloc(DIAG_JOURNAL_HOT_ENTRIES, sizeof(DiagEvent)));
 #else
-    if (_hotRing) heap_caps_free(_hotRing);
-    _hotRing = static_cast<DiagEvent*>(
-        heap_caps_calloc(DIAG_JOURNAL_HOT_ENTRIES, sizeof(DiagEvent), MALLOC_CAP_SPIRAM));
-    if (!_hotRing) {
-        LOG_W("[DIAG] PSRAM unavailable — using internal heap");
-        _hotRing = static_cast<DiagEvent*>(calloc(DIAG_JOURNAL_HOT_ENTRIES, sizeof(DiagEvent)));
+    if (_hotRing) {
+        psram_free(_hotRing, "diag_ring");
+        _hotRing = nullptr;
     }
+    _hotRing = static_cast<DiagEvent*>(
+        psram_alloc(DIAG_JOURNAL_HOT_ENTRIES, sizeof(DiagEvent), "diag_ring"));
 #endif
 
     if (!_hotRing) {
