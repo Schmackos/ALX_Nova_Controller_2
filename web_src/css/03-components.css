@@ -1736,6 +1736,10 @@
         .output-dsp-bypass { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
         .output-dsp-add-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 
+        /* ===== HAL Capacity Indicator ===== */
+        .hal-capacity { font-size: 11px; opacity: 0.6; padding: 4px 0; letter-spacing: 0.3px; }
+        .hal-capacity-warn { color: var(--warning, #ff9800); opacity: 1; font-weight: 500; }
+
         /* ===== HAL Device Cards ===== */
         .hal-device-card { margin-bottom: 8px; }
         .hal-device-card.expanded { border-color: var(--accent); }

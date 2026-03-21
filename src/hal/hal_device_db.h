@@ -29,6 +29,9 @@ bool hal_db_save();
 // Get the number of entries in the database
 int hal_db_count();
 
+// Get the maximum number of entries
+int hal_db_max();
+
 // Get entry by index (for iteration)
 const HalDeviceDescriptor* hal_db_get(int index);
 

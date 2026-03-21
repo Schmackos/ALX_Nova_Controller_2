@@ -24,4 +24,5 @@ const HalDriverEntry*  hal_registry_find(const char* compatible);
 // Do not call outside of hal_discovery.cpp.
 const HalDriverEntry*  hal_registry_find_by_legacy_id(uint16_t legacyId);
 int                    hal_registry_count();
+int                    hal_registry_max();
 void                   hal_registry_reset();  // For testing

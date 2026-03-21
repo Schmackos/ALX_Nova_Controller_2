@@ -61,6 +61,10 @@ int hal_registry_count() {
     return _entryCount;
 }
 
+int hal_registry_max() {
+    return HAL_MAX_DRIVERS;
+}
+
 void hal_registry_reset() {
     hal_registry_init();
 }

@@ -374,6 +374,8 @@ bool hal_db_save() {
 
 int hal_db_count() { return _dbCount; }
 
+int hal_db_max() { return HAL_DB_MAX_ENTRIES; }
+
 const HalDeviceDescriptor* hal_db_get(int index) {
     if (index < 0 || index >= _dbCount) return nullptr;
     return &_db[index];

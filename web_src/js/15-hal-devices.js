@@ -15,10 +15,18 @@
         var halScanning = false;
         var halExpandedSlot = -1;
         var halEditingSlot = -1;
+        var halDeviceCount = 0;
+        var halDeviceMax = 24;
+        var halDriverCount = 0;
+        var halDriverMax = 24;
 
         function handleHalDeviceState(data) {
             halScanning = data.scanning || false;
             halDevices = data.devices || [];
+            if (data.deviceCount !== undefined) halDeviceCount = data.deviceCount;
+            if (data.deviceMax !== undefined) halDeviceMax = data.deviceMax;
+            if (data.driverCount !== undefined) halDriverCount = data.driverCount;
+            if (data.driverMax !== undefined) halDriverMax = data.driverMax;
             renderHalDevices();
         }
 
@@ -30,6 +38,17 @@
             if (scanBtn) {
                 scanBtn.disabled = halScanning;
                 scanBtn.textContent = halScanning ? 'Scanning...' : 'Rescan Devices';
+            }
+
+            // Update capacity indicator
+            var capEl = document.getElementById('hal-capacity-indicator');
+            if (capEl) {
+                var devPct = halDeviceMax > 0 ? (halDeviceCount / halDeviceMax * 100) : 0;
+                var drvPct = halDriverMax > 0 ? (halDriverCount / halDriverMax * 100) : 0;
+                var warnClass = (devPct >= 80 || drvPct >= 80) ? ' hal-capacity-warn' : '';
+                capEl.className = 'hal-capacity' + warnClass;
+                capEl.textContent = 'Devices: ' + halDeviceCount + '/' + halDeviceMax +
+                    '  Drivers: ' + halDriverCount + '/' + halDriverMax;
             }
 
             if (halDevices.length === 0) {
