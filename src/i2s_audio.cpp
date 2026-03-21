@@ -32,6 +32,7 @@
 
 #ifndef NATIVE_TEST
 #include <driver/i2s_std.h>
+#include <driver/i2s_tdm.h>
 #include <driver/gpio.h>
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
@@ -1229,8 +1230,8 @@ static bool _i2s2_alloc_full_duplex(uint32_t sample_rate, gpio_num_t rx_din_pin)
     tx_cfg.gpio_cfg.dout = (gpio_num_t)ES8311_I2S_DSDIN_PIN;
     tx_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
     tx_cfg.gpio_cfg.invert_flags.mclk_inv = false;
-    tx_cfg.gpio_cfg.bclk_inv = false;
-    tx_cfg.gpio_cfg.ws_inv   = false;
+    tx_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    tx_cfg.gpio_cfg.invert_flags.ws_inv   = false;
     tx_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 
     // TX init first — activates MCLK output
