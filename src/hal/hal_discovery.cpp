@@ -14,6 +14,7 @@
 #include "../diag_journal.h"
 #include <Wire.h>
 #include <sdkconfig.h>
+#include "hal_ess_sabre_adc_base.h"  // for extern TwoWire Wire2
 #else
 #define LOG_I(tag, ...) ((void)0)
 #define LOG_W(tag, ...) ((void)0)
@@ -166,8 +167,7 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
             bus = &Wire;
             break;
         case HAL_I2C_BUS_EXP: {
-            // Bus 2: GPIO 28/29 — expansion bus
-            static TwoWire Wire2(2);
+            // Bus 2: GPIO 28/29 — expansion bus (Wire2 defined in hal_ess_sabre_adc_base.cpp)
             if (!Wire2.begin(28, 29, 100000)) {
                 LOG_W("[HAL:Discovery]", "Wire2.begin(28,29) failed — bus EXP unavailable");
                 return 0;

@@ -9,6 +9,7 @@
 
 #ifndef NATIVE_TEST
 #include <Wire.h>
+#include "hal_ess_sabre_adc_base.h"  // for extern TwoWire Wire2
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../i2s_audio.h"

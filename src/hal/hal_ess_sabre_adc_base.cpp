@@ -9,6 +9,9 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include "../debug_serial.h"
+// Wire2 is not predefined in the ESP32-P4 Arduino framework — declare it here
+// as a global so all ESS SABRE ADC drivers can use it.
+TwoWire Wire2(2);
 #else
 // ===== Native test stubs -- no hardware access =====
 #define LOG_I(fmt, ...) ((void)0)

@@ -13,6 +13,10 @@
 #include "hal_types.h"
 #include "../audio_input_source.h"
 
+#ifndef NATIVE_TEST
+class TwoWire;  // Forward declaration — defined in Wire.h (Arduino)
+#endif
+
 class HalEs9823pro : public HalAudioDevice, public HalAudioAdcInterface {
 public:
     HalEs9823pro();

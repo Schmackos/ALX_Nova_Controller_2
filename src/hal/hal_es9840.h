@@ -24,6 +24,10 @@
 #include "hal_tdm_deinterleaver.h"
 #include "../audio_input_source.h"
 
+#ifndef NATIVE_TEST
+class TwoWire;  // Forward declaration — defined in Wire.h (Arduino)
+#endif
+
 class HalEs9840 : public HalAudioDevice, public HalAudioAdcInterface {
 public:
     HalEs9840();

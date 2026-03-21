@@ -23,6 +23,8 @@
 
 #ifndef NATIVE_TEST
 #include <Wire.h>
+// Wire2 is not predefined in ESP32-P4 Arduino — defined in hal_ess_sabre_adc_base.cpp
+extern TwoWire Wire2;
 #endif
 
 class HalEssSabreAdcBase : public HalAudioDevice, public HalAudioAdcInterface {
