@@ -99,10 +99,17 @@ void registerDacApiEndpoints() {
                 LOG_I("[DAC] API: enabled %s -> %s (deferred)", was ? "ON" : "OFF", en ? "ON" : "OFF");
                 if (cfg) cfg->enabled = en;
                 if (halSlot < 0xFF) {
+                    bool ok = true;
                     if (en && !was) {
-                        appState.halCoord.requestDeviceToggle(halSlot, 1);
+                        ok = appState.halCoord.requestDeviceToggle(halSlot, 1);
                     } else if (!en && was) {
-                        appState.halCoord.requestDeviceToggle(halSlot, -1);
+                        ok = appState.halCoord.requestDeviceToggle(halSlot, -1);
+                    }
+                    if (!ok) {
+                        LOG_W("[DAC] API: toggle queue full for slot %u", halSlot);
+                        server.send(503, "application/json",
+                                    "{\"success\":false,\"message\":\"Device busy, retry shortly\"}");
+                        return;
                     }
                 } else {
                     LOG_W("[DAC] API: enabled toggle requested but no HAL device found (halSlot=0xFF)");

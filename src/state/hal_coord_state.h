@@ -32,14 +32,23 @@ static constexpr uint8_t PENDING_TOGGLE_CAPACITY = 8;
 // Not tied to any specific component type (DAC, ADC, DSP), board, or platform.
 // Devices are registered via EEPROM discovery, GPIO resistor ID, or manual config.
 //
-// Thread safety: requestDeviceToggle() and clearPendingToggles() are guarded
-// by a portMUX spinlock (firmware) for safe cross-core / cross-task access.
-// Read-only accessors are safe without locking when consumed from a single task.
+// Thread safety: requestDeviceToggle(), clearPendingToggles(), and
+// consumeOverflowFlag() are guarded by a portMUX spinlock (firmware) for safe
+// cross-core / cross-task access. Read-only accessors are safe without locking
+// when consumed from a single task.
+//
+// Overflow telemetry: _overflowCount is a lifetime counter of dropped requests.
+// _overflowFlag is a one-shot flag consumed by the main loop to emit a
+// diagnostic event (DIAG_HAL_TOGGLE_OVERFLOW) on first overflow per drain cycle.
 struct HalCoordState {
   // Deferred toggle queue — replaces single pendingToggle in DacState
   // that silently dropped concurrent requests. With same-slot dedup.
   volatile PendingDeviceToggle _pendingToggles[PENDING_TOGGLE_CAPACITY] = {};
   volatile uint8_t _pendingToggleCount = 0;
+
+  // Overflow telemetry — lifetime counter + one-shot flag for diagnostic emission
+  volatile uint32_t _overflowCount = 0;
+  volatile bool _overflowFlag = false;
 
   // Enqueue a deferred device toggle for any component type (DAC, ADC, DSP, etc.).
   // Returns false on overflow or invalid args.
@@ -57,6 +66,8 @@ struct HalCoordState {
       }
     }
     if (_pendingToggleCount >= PENDING_TOGGLE_CAPACITY) {
+      _overflowCount++;
+      _overflowFlag = true;
       HAL_COORD_EXIT_CRITICAL();
       return false;
     }
@@ -77,6 +88,19 @@ struct HalCoordState {
     return result;
   }
   bool hasPendingToggles() const { return _pendingToggleCount > 0; }
+
+  // Overflow telemetry accessors
+  uint32_t overflowCount() const { return _overflowCount; }
+
+  // Atomically read and clear the one-shot overflow flag.
+  // Thread-safe: guarded by portMUX spinlock on firmware builds.
+  bool consumeOverflowFlag() {
+    HAL_COORD_ENTER_CRITICAL();
+    bool was = _overflowFlag;
+    _overflowFlag = false;
+    HAL_COORD_EXIT_CRITICAL();
+    return was;
+  }
 
   // Thread-safe: guarded by portMUX spinlock on firmware builds.
   void clearPendingToggles() {

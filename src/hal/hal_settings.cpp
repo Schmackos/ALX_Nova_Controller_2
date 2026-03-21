@@ -146,7 +146,9 @@ void hal_apply_config(uint8_t slot) {
             // then the deferred deinit tears down the I2S driver safely.
             hal_pipeline_state_change(slot, oldState, HAL_STATE_MANUAL);
             // Use generic HAL-aware toggle — no device-type checking
-            appState.halCoord.requestDeviceToggle(slot, -1);  // -1 = disable
+            if (!appState.halCoord.requestDeviceToggle(slot, -1)) {
+                LOG_W("[HAL:Settings] Toggle queue full for slot %u (disable)", slot);
+            }
             LOG_I("[HAL:Settings] DAC-path device slot %u disable deferred", slot);
             appState.markHalDeviceDirty();
             return;
@@ -171,7 +173,9 @@ void hal_apply_config(uint8_t slot) {
         // DAC-path devices: deferred HAL-aware re-init via main loop (device-independent)
         if (desc.capabilities & HAL_CAP_DAC_PATH) {
             // Use generic HAL-aware toggle — no device-type checking
-            appState.halCoord.requestDeviceToggle(slot, 1);  // 1 = enable
+            if (!appState.halCoord.requestDeviceToggle(slot, 1)) {
+                LOG_W("[HAL:Settings] Toggle queue full for slot %u (enable)", slot);
+            }
             LOG_I("[HAL:Settings] DAC-path device slot %u re-enable deferred", slot);
             appState.markHalDeviceDirty();
             return;

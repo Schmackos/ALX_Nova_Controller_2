@@ -76,7 +76,7 @@ Application state is decomposed across 15 lightweight domain-specific headers un
 - `src/state/mqtt_state.h` — `MqttState` (broker config, connection state)
 - `src/state/ethernet_state.h` — `EthernetState`
 - `src/state/debug_state.h` — `DebugState` (debug mode, serial level, hw stats, heapCritical)
-- `src/state/hal_coord_state.h` — `HalCoordState`: deferred device toggle queue (capacity 8, same-slot dedup). `requestDeviceToggle(halSlot, action)` enqueues enable/disable for ANY device type. Main loop consumes via `hasPendingToggles()` / `pendingToggleAt(i)` / `clearPendingToggles()`
+- `src/state/hal_coord_state.h` — `HalCoordState`: deferred device toggle queue (capacity 8, same-slot dedup). `requestDeviceToggle(halSlot, action)` enqueues enable/disable for ANY device type. Main loop consumes via `hasPendingToggles()` / `pendingToggleAt(i)` / `clearPendingToggles()`. Overflow telemetry: `_overflowCount` (lifetime counter) + `consumeOverflowFlag()` (one-shot, triggers `DIAG_HAL_TOGGLE_OVERFLOW` diagnostic). All 6 callers check return value and LOG_W on failure; REST endpoints return HTTP 503
 
 **Usage pattern**: Access domain state via nested composition: `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.general.darkMode`, `appState.dsp.enabled`, `appState.halCoord.requestDeviceToggle()`, etc. DAC device state (enabled, volume, mute, filterMode) lives in `HalDeviceConfig` via HAL manager — not in DacState. Dirty flags and event signaling remain in AppState shell for backward compat.
 
