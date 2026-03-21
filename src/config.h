@@ -120,6 +120,14 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define DIAG_FLUSH_INTERVAL_MS   60000    // Persist WARN+ entries every 60s
 #define DIAG_JOURNAL_FILE "/diag_journal.bin"
 
+// ===== Heap Health Thresholds =====
+#ifndef HEAP_WARNING_THRESHOLD
+#define HEAP_WARNING_THRESHOLD  50000   // 50KB — early warning (logging + rate reduction)
+#endif
+#ifndef HEAP_CRITICAL_THRESHOLD
+#define HEAP_CRITICAL_THRESHOLD 40000   // 40KB — critical (allocation refused, features shed)
+#endif
+
 // ===== Server Ports =====
 const int WEB_SERVER_PORT = 80;
 const int WEBSOCKET_PORT = 81;

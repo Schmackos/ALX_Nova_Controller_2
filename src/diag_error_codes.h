@@ -15,6 +15,8 @@ enum DiagErrorCode : uint16_t {
     DIAG_SYS_TASK_STACK_LOW             = 0x0104,  // Task stack watermark < 512 bytes
     DIAG_SYS_LOOP_TIME_SPIKE            = 0x0105,  // Main loop > 50ms
     DIAG_SYS_BOOT_LOOP                  = 0x0106,  // 3 consecutive crash boots
+    DIAG_SYS_HEAP_WARNING               = 0x0107,  // Free heap < 50KB (early warning)
+    DIAG_SYS_HEAP_WARNING_CLEARED       = 0x0108,  // Heap above warning threshold again
 
     // ===== 0x10xx: HAL — General =====
     DIAG_HAL_INIT_FAILED                = 0x1001,  // Device init() returned false

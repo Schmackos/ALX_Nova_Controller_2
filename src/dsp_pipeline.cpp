@@ -11,6 +11,7 @@
 #include "dsp_convolution.h"
 #include "audio_pipeline.h"
 #include "app_state.h"
+#include "heap_budget.h"
 #include <math.h>
 #include <string.h>
 
@@ -233,7 +234,7 @@ int dsp_delay_alloc_slot() {
     if (ESP.getPsramSize() == 0) {
         uint32_t needed = DSP_MAX_DELAY_SAMPLES * sizeof(float) * 2; // Both state pools
         uint32_t available = ESP.getMaxAllocHeap();
-        if (available < needed + 40000) { // Keep 40KB reserve for WiFi/MQTT/HTTP
+        if (available < needed + HEAP_CRITICAL_THRESHOLD) { // Keep reserve for WiFi/MQTT/HTTP
             LOG_E("[DSP] Delay alloc blocked: need %lu + 40KB reserve, only %lu available",
                   (unsigned long)needed, (unsigned long)available);
             return -1;
@@ -243,12 +244,14 @@ int dsp_delay_alloc_slot() {
     for (int i = 0; i < DSP_MAX_DELAY_SLOTS; i++) {
         if (!_delaySlotUsed[i]) {
             // Dynamically allocate delay lines for both state pools
+            bool delay_psram = false;
             for (int s = 0; s < 2; s++) {
                 if (!_delayLine[s][i]) {
 #ifndef NATIVE_TEST
                     // Use PSRAM when available, fall back to internal heap
                     if (ESP.getPsramSize() > 0) {
                         _delayLine[s][i] = (float *)ps_calloc(DSP_MAX_DELAY_SAMPLES, sizeof(float));
+                        if (_delayLine[s][i] && s == 0) delay_psram = true;
                     } else {
                         _delayLine[s][i] = (float *)calloc(DSP_MAX_DELAY_SAMPLES, sizeof(float));
                     }
@@ -270,6 +273,9 @@ int dsp_delay_alloc_slot() {
                 }
             }
             _delaySlotUsed[i] = true;
+#ifndef NATIVE_TEST
+            heap_budget_record("dsp_delay", DSP_MAX_DELAY_SAMPLES * sizeof(float) * 2, delay_psram);
+#endif
             return i;
         }
     }
@@ -302,23 +308,30 @@ void dsp_init() {
     // Allocate large DSP buffers from PSRAM (one-time)
     if (!_states) {
         _states = (DspState *)heap_caps_calloc(2, sizeof(DspState), MALLOC_CAP_SPIRAM);
+        bool states_psram = (_states != nullptr);
         if (!_states) _states = (DspState *)calloc(2, sizeof(DspState));
+        if (_states) heap_budget_record("dsp_states", 2 * sizeof(DspState), states_psram);
     }
     if (!_firTapsPool) {
         size_t tapsSize = 2 * DSP_MAX_FIR_SLOTS * DSP_MAX_FIR_TAPS;
         size_t delaySize = 2 * DSP_MAX_FIR_SLOTS * (DSP_MAX_FIR_TAPS + 8);
         _firTapsPool  = (float *)heap_caps_calloc(tapsSize, sizeof(float), MALLOC_CAP_SPIRAM);
+        bool fir_psram = (_firTapsPool != nullptr);
         _firDelayPool = (float *)heap_caps_calloc(delaySize, sizeof(float), MALLOC_CAP_SPIRAM);
         if (!_firTapsPool)  _firTapsPool  = (float *)calloc(tapsSize, sizeof(float));
         if (!_firDelayPool) _firDelayPool = (float *)calloc(delaySize, sizeof(float));
+        if (_firTapsPool) heap_budget_record("dsp_fir_taps", tapsSize * sizeof(float), fir_psram);
+        if (_firDelayPool) heap_budget_record("dsp_fir_delay", delaySize * sizeof(float), fir_psram);
     }
     if (!_dspBufL) {
         _dspBufL = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
+        bool buf_psram = (_dspBufL != nullptr);
         _dspBufR = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
         _gainBuf = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
         if (!_dspBufL) _dspBufL = (float *)calloc(256, sizeof(float));
         if (!_dspBufR) _dspBufR = (float *)calloc(256, sizeof(float));
         if (!_gainBuf) _gainBuf = (float *)calloc(256, sizeof(float));
+        heap_budget_record("dsp_buffers", 3 * 256 * sizeof(float), buf_psram);
     }
 #endif
 
@@ -351,7 +364,9 @@ void dsp_init() {
 #ifndef NATIVE_TEST
     if (!_mbSlots) {
         _mbSlots = (DspMultibandSlot *)heap_caps_calloc(DSP_MULTIBAND_MAX_SLOTS, sizeof(DspMultibandSlot), MALLOC_CAP_SPIRAM);
+        bool mb_psram = (_mbSlots != nullptr);
         if (!_mbSlots) _mbSlots = (DspMultibandSlot *)calloc(DSP_MULTIBAND_MAX_SLOTS, sizeof(DspMultibandSlot));
+        if (_mbSlots) heap_budget_record("dsp_multiband", DSP_MULTIBAND_MAX_SLOTS * sizeof(DspMultibandSlot), mb_psram);
     }
 #endif
     memset(_mbSlotUsed, 0, sizeof(_mbSlotUsed));
@@ -1355,6 +1370,9 @@ int dsp_add_stage(int channel, DspStageType type, int position) {
     if (AppState::getInstance().debug.heapCritical) {
         LOG_W("[DSP] Heap critical — refusing to add stage");
         return -1;
+    }
+    if (AppState::getInstance().debug.heapWarning) {
+        LOG_W("[DSP] Heap warning — stage added but nearing limit");
     }
 #endif
     DspState *cfg = dsp_get_inactive_config();

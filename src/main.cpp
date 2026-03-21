@@ -51,6 +51,7 @@
 #include "usb_audio.h"
 #endif
 #include "smart_sensing.h"
+#include "heap_budget.h"
 #include "utils.h"
 #include "web_pages.h"
 #include "websocket_handler.h"
@@ -609,6 +610,8 @@ void setup() {
     doc["freeHeap"] = ESP.getFreeHeap();
     doc["freePsram"] = ESP.getFreePsram();
     doc["maxAllocHeap"] = ESP.getMaxAllocHeap();
+    doc["heapBudgetPsram"] = heap_budget_total_psram();
+    doc["heapBudgetSram"]  = heap_budget_total_sram();
     doc["fsmState"] = (int)appState.fsmState;
     // HAL devices
 #ifdef DAC_ENABLED
@@ -1397,24 +1400,50 @@ void loop() {
     }
   }
 
-  // Heap health monitor — detect fragmentation before OOM crash (every 30s)
+  // Heap health monitor — graduated pressure detection (every 30s)
   static unsigned long lastHeapCheck = 0;
   if (millis() - lastHeapCheck >= 30000) {
     lastHeapCheck = millis();
     uint32_t maxBlock = ESP.getMaxAllocHeap();
     bool wasCritical = appState.debug.heapCritical;
-    appState.debug.heapCritical = (maxBlock < 40000);
+    bool wasWarning  = appState.debug.heapWarning;
+
+    appState.debug.heapCritical = (maxBlock < HEAP_CRITICAL_THRESHOLD);
+    appState.debug.heapWarning  = !appState.debug.heapCritical && (maxBlock < HEAP_WARNING_THRESHOLD);
+
     if (appState.debug.heapCritical != wasCritical) {
       if (appState.debug.heapCritical) {
-        LOG_W("[Main] HEAP CRITICAL: largest free block=%lu bytes (<40KB)", (unsigned long)maxBlock);
+        LOG_W("[Main] HEAP CRITICAL: maxBlock=%lu freeHeap=%lu freePsram=%lu",
+              (unsigned long)maxBlock, (unsigned long)ESP.getFreeHeap(),
+              (unsigned long)ESP.getFreePsram());
+        char msg[24];
+        snprintf(msg, sizeof(msg), "maxBlock=%lu", (unsigned long)maxBlock);
         diag_emit(DIAG_SYS_HEAP_CRITICAL, DIAG_SEV_WARN,
-                  0xFF, "System", "heap critical");
+                  0xFF, "System", msg);
       } else {
-        LOG_I("[Main] Heap recovered: largest free block=%lu bytes", (unsigned long)maxBlock);
+        LOG_I("[Main] Heap recovered: maxBlock=%lu freeHeap=%lu freePsram=%lu",
+              (unsigned long)maxBlock, (unsigned long)ESP.getFreeHeap(),
+              (unsigned long)ESP.getFreePsram());
         diag_emit(DIAG_SYS_HEAP_RECOVERED, DIAG_SEV_INFO,
                   0xFF, "System", "heap recovered");
       }
-      // heapCritical is included in next sendHardwareStats() cycle
+      appState.markHeapDirty();
+    }
+    if (appState.debug.heapWarning != wasWarning) {
+      if (appState.debug.heapWarning) {
+        LOG_W("[Main] HEAP WARNING: maxBlock=%lu freeHeap=%lu freePsram=%lu",
+              (unsigned long)maxBlock, (unsigned long)ESP.getFreeHeap(),
+              (unsigned long)ESP.getFreePsram());
+        char msg[24];
+        snprintf(msg, sizeof(msg), "maxBlock=%lu", (unsigned long)maxBlock);
+        diag_emit(DIAG_SYS_HEAP_WARNING, DIAG_SEV_WARN,
+                  0xFF, "System", msg);
+      } else {
+        LOG_I("[Main] Heap warning cleared: maxBlock=%lu", (unsigned long)maxBlock);
+        diag_emit(DIAG_SYS_HEAP_WARNING_CLEARED, DIAG_SEV_INFO,
+                  0xFF, "System", "warning cleared");
+      }
+      appState.markHeapDirty();
     }
   }
 

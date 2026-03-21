@@ -169,6 +169,11 @@ public:
   bool isChannelMapDirty() const { return _channelMapDirty; }
   void clearChannelMapDirty() { _channelMapDirty = false; }
 
+  // ===== Heap Pressure Dirty Flag =====
+  void markHeapDirty() { _heapDirty = true; app_events_signal(EVT_HEAP_PRESSURE); }
+  bool isHeapDirty() const { return _heapDirty; }
+  void clearHeapDirty() { _heapDirty = false; }
+
   // ===== Diagnostic Journal Dirty Flag =====
   void markDiagJournalDirty() { _diagJournalDirty = true; app_events_signal(EVT_DIAG); }
   bool isDiagJournalDirty() const { return _diagJournalDirty; }
@@ -238,6 +243,7 @@ private:
   bool _channelMapDirty = false;
 #endif
   bool _diagJournalDirty = false;
+  bool _heapDirty = false;
 };
 
 // Convenience macro for accessing AppState

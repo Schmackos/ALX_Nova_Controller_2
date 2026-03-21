@@ -4,24 +4,17 @@
 
 ## Architecture & Design Issues
 
-### High Memory Pressure — Audio Pipeline Allocation Strategy
+### ~~High Memory Pressure — Audio Pipeline Allocation Strategy~~ — FIXED
 
-**Area:** Audio pipeline, heap management
-**Files:** `src/audio_pipeline.cpp`, `src/config.h`, `src/main.cpp`
-**Problem:** Pipeline allocates 8 stereo lanes + 8 output channels + multiple scratch buffers from PSRAM with heap fallback. Total footprint ~512KB when all channels active. PSRAM unavailable on some dev boards; heap fallback requires 40KB+ reserve (WiFi RX buffers compete for internal SRAM).
+**Status:** FIXED (March 2026). Actual worst-case footprint corrected from ~512KB to ~330KB PSRAM + 32KB internal SRAM.
 
-**Current Mitigation:**
-- `heap_caps_calloc()` with `MALLOC_CAP_SPIRAM` preferred; fallback to `calloc()` if unavailable
-- `heapCritical` flag monitored every 30s; WiFi RX drops silently when heap < 40KB
-- Pre-flight checks on DSP delay allocation
-
-**Risk:** Production devices may have tight memory margins. Audio underruns/packet loss occur without clear logging of heap state transitions.
-
-**Improvement Path:**
-1. Add heap saturation tracing: log transitions to/from heapCritical state with timestamp
-2. Implement early-warning threshold (50KB) separate from critical (40KB)
-3. Profile actual heap usage under worst-case: all audio lanes + all DSP stages + WiFi RX
-4. Consider dynamic lane/channel shedding (graceful degradation) if heap approaches critical
+**Resolution:** All 4 improvement items implemented:
+1. **Heap saturation tracing**: Every heap state transition (normal/warning/critical) emits `diag_emit()` with `maxBlock`, `freeHeap`, `freePsram` values. PSRAM→SRAM fallback emits `DIAG_SYS_PSRAM_ALLOC_FAIL`. DMA allocation failures emit diagnostic events.
+2. **Early-warning threshold**: `HEAP_WARNING_THRESHOLD` (50KB) / `HEAP_CRITICAL_THRESHOLD` (40KB) in `config.h`. `DebugState.heapWarning` flag + `EVT_HEAP_PRESSURE` event bit. Broadcast via WS/MQTT.
+3. **Heap profiling**: `heap_budget.h/.cpp` — per-subsystem allocation tracker. Exposed via WS `heapBudget` array and REST `/api/diag/snapshot`.
+4. **Graduated feature shedding**: Warning halves WS binary rate. Critical refuses DMA alloc, suppresses WS binary, refuses DSP stages.
+- Files: `src/config.h`, `src/state/debug_state.h`, `src/diag_error_codes.h`, `src/app_events.h`, `src/app_state.h`, `src/main.cpp`, `src/audio_pipeline.cpp`, `src/dsp_pipeline.cpp`, `src/websocket_handler.cpp`, `src/mqtt_publish.cpp`, `src/heap_budget.h`, `src/heap_budget.cpp`
+- Test coverage: 30 new tests in `test_heap_monitor` (15) + `test_heap_budget` (15). 1727 total tests passing.
 
 ---
 
@@ -544,7 +537,7 @@ bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
 3. **I2C Bus 0 contention**: Guard `/api/hal/scan` with WiFi state check (409 on conflict)
 
 **Medium Priority (next quarter):**
-1. **Audio pipeline allocation tracing**: Add heap saturation logging and early-warning threshold
+1. ~~**Audio pipeline allocation tracing**~~: FIXED — graduated heap pressure + heap budget tracker
 2. **WebSocket message ordering**: Add sequence numbers and client-side reordering
 3. **HAL state callback re-entrancy**: Make `forEach()` safe to iterate during state changes
 4. **DSP preset partial-failure**: Implement transactional import with rollback
