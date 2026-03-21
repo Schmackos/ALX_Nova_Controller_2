@@ -4595,6 +4595,10 @@ body.night-mode {
                         <span class="info-label" style="color:var(--danger)">Heap Critical</span>
                         <span class="info-value" id="heapCriticalValue" style="color:var(--danger)">YES</span>
                     </div>
+                    <div class="info-row" id="dmaAllocFailRow" style="display:none">
+                        <span class="info-label" style="color:var(--danger)">DMA Alloc Failed</span>
+                        <span class="info-value" id="dmaAllocFailValue" style="color:var(--danger)">&mdash;</span>
+                    </div>
                     <div class="info-row">
                         <span class="info-label">PSRAM Free</span>
                         <span class="info-value" id="psramFree">--</span>
@@ -8037,9 +8041,8 @@ body.night-mode {
                 if (d.capabilities & HAL_CAP_PGA_CONTROL) {
                     h += '<div class="hal-form-row"><label>PGA Gain:</label>';
                     h += '<select id="halCfgPgaGain">';
-                    var pgaOpts = [0, 6, 12, 18, 23];
-                    for (var pi = 0; pi < pgaOpts.length; pi++) {
-                        h += '<option value="' + pgaOpts[pi] + '"' + (d.cfgPgaGain === pgaOpts[pi] ? ' selected' : '') + '>' + pgaOpts[pi] + ' dB</option>';
+                    for (var pi = 0; pi <= 42; pi += 6) {
+                        h += '<option value="' + pi + '"' + (d.cfgPgaGain === pi ? ' selected' : '') + '>' + pi + ' dB</option>';
                     }
                     h += '</select></div>';
                 }
@@ -8048,6 +8051,25 @@ body.night-mode {
                     h += '<div class="hal-form-row"><label>High-Pass Filter:</label>';
                     h += '<label class="toggle-label"><input type="checkbox" id="halCfgHpfEnabled"' + (d.cfgHpfEnabled ? ' checked' : '') + '> <span>Enabled</span></label>';
                     h += '</div>';
+                }
+
+                if (d.type === 2) {
+                    var filterPresets = [
+                        'Minimum Phase',
+                        'Linear Apodizing Fast',
+                        'Linear Fast',
+                        'Linear Fast Low Ripple',
+                        'Linear Slow',
+                        'Minimum Fast',
+                        'Minimum Slow',
+                        'Minimum Slow Low Dispersion'
+                    ];
+                    h += '<div class="hal-form-row"><label>Filter Preset:</label>';
+                    h += '<select id="halCfgFilterPreset">';
+                    for (var fi = 0; fi < filterPresets.length; fi++) {
+                        h += '<option value="' + fi + '"' + (d.cfgFilterMode === fi ? ' selected' : '') + '>' + filterPresets[fi] + '</option>';
+                    }
+                    h += '</select></div>';
                 }
             }
 
@@ -8177,6 +8199,8 @@ body.night-mode {
             if (pgaEl) cfg.cfgPgaGain = parseInt(pgaEl.value) || 0;
             var hpfEl = document.getElementById('halCfgHpfEnabled');
             if (hpfEl) cfg.cfgHpfEnabled = hpfEl.checked;
+            var filterPresetEl = document.getElementById('halCfgFilterPreset');
+            if (filterPresetEl) cfg.filterMode = parseInt(filterPresetEl.value) || 0;
             var paEl = document.getElementById('halCfgPaControlPin');
             if (paEl) cfg.cfgPaControlPin = parseInt(paEl.value);
             // New I2S pin fields
@@ -10638,6 +10662,20 @@ function initFirmwareDragDrop() {
                 // Heap critical indicator
                 const critRow = document.getElementById('heapCriticalRow');
                 if (critRow) critRow.style.display = data.heapCritical ? '' : 'none';
+
+                // DMA allocation failure indicator
+                const dmaRow = document.getElementById('dmaAllocFailRow');
+                if (dmaRow) {
+                    dmaRow.style.display = data.dmaAllocFailed ? '' : 'none';
+                    const dmaVal = document.getElementById('dmaAllocFailValue');
+                    if (dmaVal && data.dmaAllocFailed) {
+                        const mask = data.dmaAllocFailMask || 0;
+                        const lanes = [];
+                        for (let i = 0; i < 8; i++) { if (mask & (1 << i)) lanes.push('Lane ' + i); }
+                        for (let i = 0; i < 8; i++) { if (mask & (1 << (i + 8))) lanes.push('Sink ' + i); }
+                        dmaVal.textContent = lanes.length ? lanes.join(', ') : 'YES';
+                    }
+                }
 
                 // PSRAM
                 const psramTotal = data.memory.psramTotal || 0;

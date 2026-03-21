@@ -56,6 +56,7 @@ enum DiagErrorCode : uint16_t {
     DIAG_AUDIO_SINK_NOT_READY           = 0x200B,  // Sink skipped (not ready)
     DIAG_AUDIO_DC_OFFSET_HIGH           = 0x200C,  // DC offset > 5% sustained
     DIAG_AUDIO_PIPELINE_STALL           = 0x200D,  // NO_DATA with HAL AVAILABLE
+    DIAG_AUDIO_DMA_ALLOC_FAIL           = 0x200E,  // DMA buffer allocation failed (internal SRAM)
 
     // ===== 0x30xx: DSP =====
     DIAG_DSP_SWAP_FAIL                  = 0x3001,  // Config swap mutex timeout

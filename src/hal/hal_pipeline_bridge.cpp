@@ -29,16 +29,17 @@
 #endif
 // Stubs for source registration in native test builds
 struct AudioInputSource;
-inline void audio_pipeline_set_source(int, const AudioInputSource*) {}
+inline bool audio_pipeline_set_source(int, const AudioInputSource*) { return true; }
 inline void audio_pipeline_remove_source(int) {}
 // Mock stubs for pipeline sink API -- counters allow tests to verify calls
 static int _mock_set_sink_count = 0;
 static int _mock_remove_sink_count = 0;
 static int _mock_last_set_sink_slot = -1;
 static int _mock_last_remove_sink_slot = -1;
-inline void audio_pipeline_set_sink(int slot, const AudioOutputSink*) {
+inline bool audio_pipeline_set_sink(int slot, const AudioOutputSink*) {
     _mock_set_sink_count++;
     _mock_last_set_sink_slot = slot;
+    return true;
 }
 inline void audio_pipeline_remove_sink(int slot) {
     _mock_remove_sink_count++;
@@ -237,7 +238,13 @@ void hal_pipeline_activate_device(uint8_t halSlot) {
     if (dev->buildSink((uint8_t)sinkSlot, &sink)) {
         // buildSink succeeded -- bridge registers the sink with the pipeline
         sink.halSlot = halSlot;
-        audio_pipeline_set_sink((int)sinkSlot, &sink);
+        if (!audio_pipeline_set_sink((int)sinkSlot, &sink)) {
+            LOG_E("[HAL:Bridge] DMA buffer alloc failed for sink slot %d (%s)", (int)sinkSlot, name);
+            diag_emit(DIAG_AUDIO_DMA_ALLOC_FAIL, DIAG_SEV_ERROR,
+                      halSlot, name, "sink reg fail");
+            _halSlotToSinkSlot[halSlot] = -1;
+            return;
+        }
         LOG_I("[HAL:Bridge] Activated via buildSink: %s (HAL slot %u) -> sink slot %d",
               name, halSlot, (int)sinkSlot);
     } else {
@@ -359,9 +366,15 @@ void hal_pipeline_on_device_available(uint8_t slot) {
                     AudioInputSource regSrc = *src;  // Value copy
                     regSrc.lane    = (uint8_t)lane;
                     regSrc.halSlot = slot;
-                    audio_pipeline_set_source(lane, &regSrc);
-                    LOG_I("[HAL:Bridge] Pipeline bridge: registered '%s' at lane %d",
-                          regSrc.name ? regSrc.name : "?", lane);
+                    if (!audio_pipeline_set_source(lane, &regSrc)) {
+                        LOG_E("[HAL:Bridge] DMA buffer alloc failed for input lane %d (%s)", lane,
+                              regSrc.name ? regSrc.name : "?");
+                        diag_emit(DIAG_AUDIO_DMA_ALLOC_FAIL, DIAG_SEV_ERROR,
+                                  slot, regSrc.name ? regSrc.name : "?", "source reg fail");
+                    } else {
+                        LOG_I("[HAL:Bridge] Pipeline bridge: registered '%s' at lane %d",
+                              regSrc.name ? regSrc.name : "?", lane);
+                    }
                 }
 #endif
             }

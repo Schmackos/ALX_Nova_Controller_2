@@ -2178,6 +2178,10 @@ void sendHardwareStats() {
     // Heap health
     doc["heapCritical"] = appState.debug.heapCritical;
     doc["heapWarning"] = appState.debug.heapWarning;
+    if (appState.audio.dmaAllocFailed) {
+        doc["dmaAllocFailed"] = true;
+        doc["dmaAllocFailMask"] = appState.audio.dmaAllocFailMask;
+    }
 
     // Heap budget breakdown
     {

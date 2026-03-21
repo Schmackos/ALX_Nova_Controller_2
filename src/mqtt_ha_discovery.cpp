@@ -1357,6 +1357,22 @@ void publishHADiscovery() {
     mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/heap_critical/config").c_str(), payload.c_str(), true);
   }
 
+  // ===== Audio DMA Alloc Failed (binary sensor) =====
+  {
+    JsonDocument doc;
+    doc["name"] = "Audio DMA Alloc Failed";
+    doc["unique_id"] = deviceId + "_dma_alloc_failed";
+    doc["state_topic"] = base + "/diagnostics/dma_alloc_failed";
+    doc["payload_on"] = "ON";
+    doc["payload_off"] = "OFF";
+    doc["device_class"] = "problem";
+    doc["entity_category"] = "diagnostic";
+    addHADeviceInfo(doc);
+    String payload;
+    serializeJson(doc, payload);
+    mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/dma_alloc_failed/config").c_str(), payload.c_str(), true);
+  }
+
   // ===== Heap Health — Max Alloc Block (diagnostic sensor) =====
   {
     JsonDocument doc;
@@ -1837,6 +1853,7 @@ void removeHADiscovery() {
       "homeassistant/sensor/%s/reset_reason/config",
       "homeassistant/binary_sensor/%s/was_crash/config",
       "homeassistant/binary_sensor/%s/heap_critical/config",
+      "homeassistant/binary_sensor/%s/dma_alloc_failed/config",
       "homeassistant/sensor/%s/heap_max_block/config",
       // Factory reset button
       "homeassistant/button/%s/factory_reset/config",

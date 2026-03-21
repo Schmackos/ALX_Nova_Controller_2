@@ -67,6 +67,7 @@
   "uptime": 10000,
   "resetReason": "PowerOn",
   "heapCritical": false,
+  "dmaAllocFailed": false,
   "crashHistory": [],
   "tasks": {
     "count": 6,

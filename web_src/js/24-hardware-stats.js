@@ -119,6 +119,20 @@
                 const critRow = document.getElementById('heapCriticalRow');
                 if (critRow) critRow.style.display = data.heapCritical ? '' : 'none';
 
+                // DMA allocation failure indicator
+                const dmaRow = document.getElementById('dmaAllocFailRow');
+                if (dmaRow) {
+                    dmaRow.style.display = data.dmaAllocFailed ? '' : 'none';
+                    const dmaVal = document.getElementById('dmaAllocFailValue');
+                    if (dmaVal && data.dmaAllocFailed) {
+                        const mask = data.dmaAllocFailMask || 0;
+                        const lanes = [];
+                        for (let i = 0; i < 8; i++) { if (mask & (1 << i)) lanes.push('Lane ' + i); }
+                        for (let i = 0; i < 8; i++) { if (mask & (1 << (i + 8))) lanes.push('Sink ' + i); }
+                        dmaVal.textContent = lanes.length ? lanes.join(', ') : 'YES';
+                    }
+                }
+
                 // PSRAM
                 const psramTotal = data.memory.psramTotal || 0;
                 const psramFree = data.memory.psramFree || 0;
