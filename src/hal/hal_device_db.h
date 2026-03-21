@@ -6,7 +6,7 @@
 
 #include "hal_types.h"
 
-#define HAL_DB_MAX_ENTRIES 24
+#define HAL_DB_MAX_ENTRIES 32
 #define HAL_DB_FILE_PATH "/hal_devices.json"
 #define HAL_CONFIG_FILE_PATH "/hal_config.json"
 
