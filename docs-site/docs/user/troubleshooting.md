@@ -96,6 +96,39 @@ This page collects the most common problems reported by users, grouped by catego
 
 ---
 
+## Performance and Memory Issues
+
+### WiFi disconnects, web UI becomes unresponsive, or DSP effects stop applying
+
+These symptoms often point to low memory conditions. The controller manages two memory pools: internal SRAM (shared with WiFi) and external PSRAM (used for audio processing and DSP).
+
+**Common symptoms:**
+- WiFi disconnects or ping stops responding while MQTT publishes still work
+- WebSocket updates slow down or stop arriving
+- Adding a DSP stage or delay line has no effect (stage refused silently)
+- OTA update check does not start
+
+**What to check:**
+
+1. Open the web interface and go to **System > Hardware Stats**. Look for any warning or critical indicators next to heap or PSRAM values.
+2. If **Free Heap** is below 40 KB, incoming WiFi packets are silently dropped. The controller may appear connected but the web UI cannot load. Reboot to recover.
+3. If the **PSRAM Budget Table** shows high usage or a warning flag, try reducing active DSP stages — especially delay lines and convolution (FIR) filters, which use large PSRAM allocations.
+4. The **DSP CPU Indicator** in Hardware Stats shows processing load. At 95% or above, the audio task cannot keep up with DMA and dropouts occur.
+
+**Steps to reduce memory pressure:**
+
+- Disable unused audio input lanes in **System > HAL Devices**.
+- Remove DSP stages you are not actively using, particularly delay and FIR convolution stages.
+- Reduce PEQ band counts — each active band adds CPU load.
+- Check `GET /api/psram/status` for a per-subsystem allocation breakdown if you need precise figures.
+- If heap is critically low, restart the controller via **System > Reboot**. Memory does not recover without a restart.
+
+:::tip
+If you consistently need more DSP resources than the device allows, export your current settings, perform a reboot, and reload — this ensures no allocation fragmentation is carrying over from extended uptime.
+:::
+
+---
+
 ## OTA Update Issues
 
 ### "Check for Updates" always shows "Up to date" even though I know there is a newer version

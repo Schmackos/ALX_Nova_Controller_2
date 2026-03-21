@@ -250,17 +250,61 @@ Audio task (Core 1):
 
 The 50 ms timeout in `xSemaphoreTake` ensures the main loop is not stuck waiting forever if the audio task has already exited due to a prior crash.
 
+## Deferred Device Toggle Queue
+
+`HalCoordState` (in `src/state/hal_coord_state.h`) provides a thread-safe fixed-size queue for deferring device enable/disable requests to the main loop:
+
+```cpp
+// Enqueue an enable or disable for any HAL device type (DAC, ADC, codec, etc.).
+// halSlot: the device slot index (0xFF = invalid).
+// action:  1 = enable, -1 = disable.
+// Returns false on overflow or invalid arguments — all 6 callers check this value.
+bool ok = appState.halCoord.requestDeviceToggle(halSlot, 1);
+
+// Main loop drains the queue after each app_events_wait() cycle:
+if (appState.halCoord.hasPendingToggles()) {
+    for (uint8_t i = 0; i < appState.halCoord.pendingToggleCount(); i++) {
+        auto t = appState.halCoord.pendingToggleAt(i);
+        // dispatch dac_activate_for_hal() or dac_deactivate_for_hal()
+    }
+    appState.halCoord.clearPendingToggles();
+}
+```
+
+**Same-slot deduplication**: if a request for the same `halSlot` is already in the queue, the new `action` overwrites it rather than adding a second entry. The queue capacity is 8, which is sufficient given this dedup behaviour.
+
+**Overflow telemetry**: when the queue is full, `requestDeviceToggle()` increments `_overflowCount` (a lifetime counter) and sets `_overflowFlag` (one-shot). The main loop calls `consumeOverflowFlag()` to atomically read-and-clear the flag and emits `DIAG_HAL_TOGGLE_OVERFLOW` (0x100E) on first overflow per drain cycle. REST API endpoints that enqueue toggles return HTTP 503 on `requestDeviceToggle()` failure; WebSocket and internal callers emit `LOG_W`.
+
+## Multi-Source Device Registration
+
+Some HAL devices expose more than one stereo audio input pair (e.g., ES9843PRO, which is a 4-channel TDM device). The pipeline bridge handles these via two virtual methods on `HalAudioDevice`:
+
+```cpp
+// Return number of AudioInputSource descriptors this device provides.
+// Returns 1 for all 2ch I2S devices; 2 for 4ch TDM devices (two stereo pairs).
+virtual uint8_t getInputSourceCount() const;
+
+// Return the AudioInputSource descriptor for the given index (0-based).
+virtual const AudioInputSource* getInputSourceAt(uint8_t idx) const;
+```
+
+The bridge tracks how many consecutive input lanes each HAL slot occupies using `_halSlotAdcLaneCount[]`. For a 4-channel TDM device like ES9843PRO, `getInputSourceCount()` returns 2, so the bridge allocates two consecutive lanes and populates both. `hal_pipeline_get_input_lane_count(halSlot)` returns this count; `hal_pipeline_get_input_lane(halSlot)` returns the base lane.
+
 ## Diagnostic Journal Integration
 
 Every significant lifecycle transition emits an event to the diagnostic journal via `diag_emit()`:
 
-| Event | Severity | Trigger |
-|---|---|---|
-| `DIAG_HAL_DEVICE_DETECTED` | INFO | `registerDevice()` |
-| `DIAG_HAL_HEALTH_FAIL` | WARN | `healthCheck()` returns false |
-| `DIAG_HAL_REINIT_OK` | INFO | Self-healing reinit succeeds |
-| `DIAG_HAL_REINIT_EXHAUSTED` | CRIT | 3 consecutive reinit failures |
-| `DIAG_HAL_DEVICE_REMOVED` | WARN | `removeDevice()` |
-| `DIAG_HAL_INIT_FAILED` | ERROR | `init()` returns failure |
+| Event | Code | Severity | Trigger |
+|---|---|---|---|
+| `DIAG_HAL_DEVICE_DETECTED` | 0x100D | INFO | `registerDevice()` |
+| `DIAG_HAL_HEALTH_FAIL` | 0x1005 | WARN | `healthCheck()` returns false |
+| `DIAG_HAL_REINIT_OK` | 0x1008 | INFO | Self-healing reinit succeeds |
+| `DIAG_HAL_REINIT_EXHAUSTED` | 0x1009 | CRIT | 3 consecutive reinit failures |
+| `DIAG_HAL_DEVICE_REMOVED` | 0x1007 | WARN | `removeDevice()` |
+| `DIAG_HAL_INIT_FAILED` | 0x1001 | ERROR | `init()` returns failure |
+| `DIAG_HAL_TOGGLE_OVERFLOW` | 0x100E | WARN | Toggle queue full (capacity 8) |
+| `DIAG_HAL_REGISTRY_FULL` | 0x100F | WARN | Driver registry at capacity |
+| `DIAG_HAL_DB_FULL` | 0x1010 | WARN | Device DB at capacity |
+| `DIAG_HAL_I2C_BUS_CONFLICT` | 0x1101 | WARN | Bus 0 scan skipped (WiFi SDIO active) |
 
 These events appear in the Health Dashboard in the web UI and are accessible via `GET /api/diag/events`.

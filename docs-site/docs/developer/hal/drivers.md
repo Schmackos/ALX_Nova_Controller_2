@@ -1,7 +1,7 @@
 ---
 title: Built-in Drivers
 sidebar_position: 4
-description: Reference for all built-in HAL drivers — PCM5102A, ES8311, PCM1808, NS4150B, MCP4725, and more.
+description: Reference for all built-in HAL drivers — PCM5102A, ES8311, PCM1808, NS4150B, MCP4725, ESS SABRE ADC expansion family, amplifier relay, and more.
 ---
 
 This page documents every driver registered by `hal_register_builtins()` in `src/hal/hal_builtin_devices.cpp`. Each entry covers the compatible string, device class, type, capabilities, bus requirements, and any runtime configuration options that affect behaviour.
@@ -18,6 +18,16 @@ This page documents every driver registered by `hal_register_builtins()` in `src
 | `alx,signal-gen` | `HalSigGen` | ADC | Internal | — | `ADC_PATH` |
 | `alx,usb-audio` | `HalUsbAudio` | ADC | USB OTG | — | `ADC_PATH` |
 | `microchip,mcp4725` | `HalMcp4725` | DAC | I2C | 0x60 | — |
+| `ess,es9822pro` | `HalEs9822pro` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `ess,es9843pro` | `HalEs9843pro` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `ess,es9826` | `HalEs9826` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `ess,es9823pro` | `HalEs9823pro` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `ess,es9821` | `HalEs9821` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `HPF_CONTROL` |
+| `ess,es9820` | `HalEs9820` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `ess,es9842pro` | `HalEs9842pro` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `ess,es9840` | `HalEs9840` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `ess,es9841` | `HalEs9841` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `generic,relay-amp` | `HalRelay` | AMP | GPIO | — | — |
 | `alx,dsp-pipeline` | `HalDspBridge` | DSP | Internal | — | — |
 | `generic,piezo-buzzer` | `HalBuzzer` | GPIO | GPIO | — | — |
 | `generic,tact-switch` | `HalButton` | INPUT | GPIO | — | — |
@@ -203,6 +213,321 @@ USB Audio requires `-D USB_AUDIO_ENABLED` in `platformio.ini` and `build_unflags
 
 ---
 
+## Expansion ADC Drivers (ESS SABRE Family)
+
+Nine ESS Technology SABRE ADC expansion drivers are registered in `hal_builtin_devices.cpp`. They connect to the carrier board via the mezzanine connector on I2C Bus 2 (GPIO 28/29) at I2C address 0x40 (default, ADDR1=LOW, ADDR2=LOW). Only one expansion ADC module is physically installed at a time — the HAL discovery layer reads the chip ID register (0xE1) via the AT24C02 EEPROM's compatible string to select the correct driver automatically.
+
+All nine drivers share a common base class `HalEssSabreAdcBase` (in `src/hal/hal_ess_sabre_adc_base.h`) that provides:
+
+- `_writeReg(reg, val)` / `_readReg(reg)` / `_writeReg16(regLsb, val)` — I2C register helpers
+- `_selectWire()` — Wire instance selection based on `_i2cBusIndex`
+- `_applyConfigOverrides()` — reads `HalDeviceConfig` into member fields at the start of `init()`
+- `_validateSampleRate(hz, supported[], count)` — validates against a device-specific rate table
+
+Shared constants across the family are defined in `src/drivers/ess_sabre_common.h`. Per-device register maps live in `src/drivers/es98xx_regs.h` files.
+
+All ESS SABRE ADC devices share the same 8 digital filter presets (ordinals 0–7):
+
+| Ordinal | Filter Shape |
+|---|---|
+| 0 | Minimum Phase |
+| 1 | Linear Apodizing Fast |
+| 2 | Linear Fast |
+| 3 | Linear Fast Low Ripple |
+| 4 | Linear Slow |
+| 5 | Minimum Fast |
+| 6 | Minimum Slow |
+| 7 | Minimum Slow Low Dispersion |
+
+---
+
+### Pattern A: 2-Channel I2S Devices
+
+These devices output stereo audio via standard I2S on the mezzanine DIN pin (pin 10 of the connector). Each registers one `AudioInputSource` via `getInputSource()`. The pipeline bridge assigns a single input lane when the device transitions to AVAILABLE.
+
+---
+
+#### ES9822PRO — `ess,es9822pro`
+
+**Class:** `HalEs9822pro`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX
+**I2C Address:** 0x40
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit SABRE ADC with I2C register control. Features per-channel 16-bit digital volume, programmable gain amplifier (0–18 dB in 6 dB steps), high-pass filter, and 8 digital filter presets.
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `pgaGain` | 0 | PGA gain in dB: 0, 6, 12, or 18 |
+| `hpfEnabled` | `true` | High-pass filter enable |
+| `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setChannelVolume(uint8_t ch, uint16_t vol16)` (per-channel 16-bit volume).
+
+**probe():** Reads chip ID register 0xE1 and verifies it matches the ES9822PRO chip ID.
+
+**healthCheck():** I2C ACK check. A NACK after init indicates the module has been disconnected.
+
+---
+
+#### ES9826 — `ess,es9826`
+
+**Class:** `HalEs9826`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX
+**I2C Address:** 0x40
+**Chip ID:** 0x8A (register 0xE1)
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel SABRE ADC with a wider PGA gain range than the ES9822PRO (0–30 dB in 3 dB steps). Gain is nibble-packed in a single register (CH2 bits\[7:4\], CH1 bits\[3:0\]). Per-channel 16-bit volume. 8 filter presets.
+
+Note: `adcSetHpfEnabled()` stores the flag for UI state but does not write a dedicated hardware register — the ES9826 does not expose a separate HPF control register.
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `pgaGain` | 0 | PGA gain in dB: 0–30 in 3 dB steps |
+| `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setChannelVolume(uint8_t ch, uint16_t vol16)`.
+
+---
+
+#### ES9823PRO / ES9823MPRO — `ess,es9823pro` / `ess,es9823mpro`
+
+**Class:** `HalEs9823pro`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX
+**I2C Address:** 0x40
+**Chip IDs:** 0x8D (ES9823PRO), 0x8C (ES9823MPRO)
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+Highest-specification 2-channel SABRE ADC, handling both the ES9823PRO and ES9823MPRO package variants in a single driver. The chip ID register (0xE1) is read during `init()` to identify which variant is present — `_isMonolithic = true` is set for the ES9823MPRO (chip ID 0x8C). Both variants share the same register interface.
+
+Features per-channel 16-bit digital volume, PGA gain 0–42 dB in 6 dB steps (3-bit register, values 0–7), and 8 digital filter presets. `adcSetHpfEnabled()` stores the state flag but does not write a separate HPF register on this device.
+
+Both compatible strings (`ess,es9823pro` and `ess,es9823mpro`) are registered in `hal_register_builtins()` pointing to the same `factory_es9823pro` factory function.
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `pgaGain` | 0 | PGA gain in dB: 0, 6, 12, 18, 24, 30, 36, or 42 |
+| `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setChannelVolume(uint8_t ch, uint16_t vol16)`.
+
+---
+
+#### ES9821 — `ess,es9821`
+
+**Class:** `HalEs9821`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX
+**I2C Address:** 0x40
+**Chip ID:** 0x88 (register 0xE1)
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel SABRE ADC with no hardware PGA. `adcSetGain(0)` is accepted; any non-zero gain value returns `false`. Per-channel 16-bit volume and 8 digital filter presets are supported. `adcSetHpfEnabled()` stores the state flag but is a no-op on hardware (no dedicated HPF register on this device).
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setChannelVolume(uint8_t ch, uint16_t vol16)`.
+
+---
+
+#### ES9820 — `ess,es9820`
+
+**Class:** `HalEs9820`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX
+**I2C Address:** 0x40
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+Entry-tier 2-channel SABRE ADC with per-channel 16-bit digital volume, 2-bit DATA_GAIN register (0–18 dB in 6 dB steps: 0, 6, 12, 18 dB), HPF enable, and 8 per-channel filter presets. The filter preset is applied simultaneously to both channels.
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `pgaGain` | 0 | PGA gain in dB: 0, 6, 12, or 18 |
+| `hpfEnabled` | `true` | High-pass filter enable |
+| `volume` | 100 | Master volume 0–100 (maps to 16-bit register) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to both channels), `setChannelVolume(uint8_t ch, uint16_t vol16)`.
+
+---
+
+### Pattern B: 4-Channel TDM Devices
+
+These devices output 4 audio channels time-multiplexed on a single I2S DATA line in TDM mode. Each frame consists of 4 consecutive 32-bit slots: \[SLOT0=CH1\]\[SLOT1=CH2\]\[SLOT2=CH3\]\[SLOT3=CH4\].
+
+Each TDM driver registers **two** `AudioInputSource` entries with the pipeline bridge:
+
+- Source index 0: CH1/CH2 (stereo pair from SLOT0+SLOT1)
+- Source index 1: CH3/CH4 (stereo pair from SLOT2+SLOT3)
+
+The bridge discovers both sources via `getInputSourceCount()` (returns 2 when initialized) and `getInputSourceAt(idx)`. Consecutive input lanes are allocated for the two stereo pairs.
+
+Frame splitting is handled by `HalTdmDeinterleaver` embedded in each driver — see the [TDM Deinterleaver](#tdm-deinterleaver) subsection below.
+
+---
+
+#### ES9843PRO — `ess,es9843pro`
+
+**Class:** `HalEs9843pro`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX (TDM)
+**I2C Address:** 0x40
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+4-channel SABRE ADC with per-channel 8-bit volume, PGA gain 0–42 dB in 6 dB steps (3-bit, gain register 0–7), HPF per-channel, and a single global digital filter preset (0–7). TDM output. The ASP2 DSP block is kept disabled in this driver.
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `pgaGain` | 0 | PGA gain in dB: 0, 6, 12, 18, 24, 30, 36, or 42 |
+| `hpfEnabled` | `true` | High-pass filter enable |
+| `volume` | 100 | Master volume 0–100 (maps to 8-bit per-channel register) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7 global), `setChannelVolume(uint8_t ch, uint8_t vol8)`.
+
+**Registered sources:** "ES9843PRO CH1/2" and "ES9843PRO CH3/4".
+
+---
+
+#### ES9842PRO — `ess,es9842pro`
+
+**Class:** `HalEs9842pro`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX (TDM)
+**I2C Address:** 0x40
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+4-channel SABRE ADC with per-channel 16-bit volume, 2-bit gain per channel (0–18 dB in 6 dB steps), per-channel HPF (DC blocking), per-channel filter preset (0–7), and TDM output.
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `pgaGain` | 0 | PGA gain in dB: 0, 6, 12, or 18 |
+| `hpfEnabled` | `true` | High-pass filter enable |
+| `volume` | 100 | Master volume 0–100 (maps to 16-bit per-channel register) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to all 4 channels), `setChannelVolume16(uint8_t ch, uint16_t vol)`.
+
+**Registered sources:** "ES9842PRO CH1/2" and "ES9842PRO CH3/4".
+
+---
+
+#### ES9841 — `ess,es9841`
+
+**Class:** `HalEs9841`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX (TDM)
+**I2C Address:** 0x40
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+4-channel SABRE ADC with per-channel 8-bit volume, 3-bit gain per channel packed two-per-register (0–42 dB in 6 dB steps, values 0–7), per-channel HPF (DC blocking at same register offsets as ES9842PRO), and a single global filter preset (0–7). TDM output.
+
+**Volume encoding difference vs ES9842PRO:** ES9842PRO uses 16-bit volume (0x7FFF = 0 dB, 0x0000 = mute). ES9841 uses 8-bit volume (0xFF = 0 dB, 0x00 = mute). `setVolume(percent)` maps 100% to 0xFF and 0% to 0x00 linearly.
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `pgaGain` | 0 | PGA gain in dB: 0, 6, 12, 18, 24, 30, 36, or 42 |
+| `hpfEnabled` | `true` | High-pass filter enable |
+| `volume` | 100 | Master volume 0–100 (maps to 8-bit per-channel register, 0xFF=0dB) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7 global), `setChannelVolume(uint8_t ch, uint8_t vol8)`.
+
+**Registered sources:** "ES9841 CH1/2" and "ES9841 CH3/4".
+
+---
+
+#### ES9840 — `ess,es9840`
+
+**Class:** `HalEs9840`
+**Type:** `HAL_DEV_ADC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave RX (TDM)
+**I2C Address:** 0x40
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+Entry-tier 4-channel SABRE ADC. Architecturally identical to the ES9842PRO — same register map, same driver pattern — with a lower DNR specification (116 dB vs 122 dB). Per-channel 16-bit volume, 2-bit gain per channel (0–18 dB in 6 dB steps), per-channel HPF, per-channel filter preset (0–7), TDM output.
+
+**Capabilities:** `HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `pgaGain` | 0 | PGA gain in dB: 0, 6, 12, or 18 |
+| `hpfEnabled` | `true` | High-pass filter enable |
+| `volume` | 100 | Master volume 0–100 (maps to 16-bit per-channel register) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7, applied to all 4 channels), `setChannelVolume16(uint8_t ch, uint16_t vol)`.
+
+**Registered sources:** "ES9840 CH1/2" and "ES9840 CH3/4".
+
+---
+
+### TDM Deinterleaver
+
+**Class:** `HalTdmDeinterleaver`
+**Header:** `src/hal/hal_tdm_deinterleaver.h`
+
+All four TDM expansion devices (ES9843PRO, ES9842PRO, ES9841, ES9840) embed a `HalTdmDeinterleaver` instance. It splits 4-slot TDM frames into two stereo pairs for the audio pipeline.
+
+**How it works:**
+
+1. Pair A's read callback is called first by the pipeline (lower lane index). It reads the full 4-slot TDM DMA buffer from I2S, deinterleaves CH1/CH2 into one ping-pong buffer side and CH3/CH4 into the other, then atomically swaps the write index.
+2. Pair B's read callback is called second. It reads from the side that pair A just finished writing — no DMA transaction needed.
+3. The ping-pong swap is a single `uint8_t` write, which is atomic on RISC-V. No mutex is required.
+
+**Buffer allocation:** Each ping-pong side stores `TDM_MAX_FRAMES_PER_BUF` (128) stereo int32\_t pairs per channel pair. Total: 4 × 128 × 2 × 4 = 4096 bytes, allocated from PSRAM when available.
+
+**Multi-instance support:** Up to 2 concurrent `HalTdmDeinterleaver` instances are supported, keyed by I2S port index. This allows two 4-channel TDM devices on separate I2S ports to operate simultaneously (though only one expansion ADC is physically installed at a time on the current hardware).
+
+**API used by drivers:**
+
+```cpp
+// In driver's init():
+if (!_tdm.init(i2sPort)) { return hal_init_fail(DIAG_ERR_ALLOC, "TDM buf alloc"); }
+_tdm.buildSources("ES9843PRO CH1/2", "ES9843PRO CH3/4", &_srcA, &_srcB);
+
+// In driver:
+int getInputSourceCount() const override { return _initialized ? 2 : 0; }
+const AudioInputSource* getInputSourceAt(int idx) const override;
+```
+
+---
+
 ## Amplifier Drivers
 
 ### NS4150B — `ns,ns4150b-amp`
@@ -231,6 +556,33 @@ if (amp) {
 :::caution Shared GPIO with ES8311
 GPIO 53 is the PA enable pin for both the NS4150B amplifier and the ES8311 codec's `codecSetPaEnabled()` method. Both drivers reference this pin. If you reconfigure one, check whether the other is also affected.
 :::
+
+---
+
+### Amplifier Relay — `generic,relay-amp`
+
+**Class:** `HalRelay`
+**Type:** `HAL_DEV_AMP`
+**Bus:** GPIO
+**Init Priority:** `HAL_PRIORITY_IO` (900)
+
+The relay driver controls a GPIO-connected amplifier relay. Smart sensing routes through this driver via `findByCompatible("generic,relay-amp")` when available, falling back to direct GPIO control of the amplifier pin if no relay device is registered in the HAL.
+
+**Capabilities:** None (GPIO control only)
+
+**Key API:**
+
+- `setEnabled(bool)` — Drive the relay GPIO high (on) or low (off)
+
+**Relevant config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `gpioA` | 27 | Relay control GPIO pin |
+
+**probe():** Returns `true` if the configured GPIO pin number is valid.
+
+**healthCheck():** Returns `true` unconditionally — GPIO state is always readable.
 
 ---
 

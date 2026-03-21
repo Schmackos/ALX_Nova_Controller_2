@@ -465,6 +465,10 @@ Full HAL device list. Sent at boot and after any device state change.
 {
   "type": "halDeviceState",
   "scanning": false,
+  "deviceCount": 14,
+  "deviceMax": 24,
+  "driverCount": 18,
+  "driverMax": 32,
   "devices": [
     {
       "slot": 0,
@@ -498,6 +502,13 @@ Full HAL device list. Sent at boot and after any device state change.
 ```
 
 HAL device states (`state` field): 0 = Unknown, 1 = Detected, 2 = Configuring, 3 = Available, 4 = Unavailable, 5 = Error, 6 = Manual, 7 = Removed.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deviceCount` | integer | Number of currently registered HAL devices |
+| `deviceMax` | integer | Maximum device slots (`HAL_MAX_DEVICES`, currently 24) |
+| `driverCount` | integer | Number of registered driver factory functions |
+| `driverMax` | integer | Maximum driver registry slots (currently 32) |
 
 `scanning: true` is set while a `POST /api/hal/scan` rescan is in progress. The `cfgXxx` fields are only present if a `HalDeviceConfig` record exists for that slot in `hal_config.json`. For temperature sensor devices (`type == HAL_DEV_SENSOR`), an additional `temperature` field (°C, float) is included.
 
@@ -639,11 +650,31 @@ Sent periodically while `debugMode` is `true`. Only the `cpu` block is always in
   "uptime": 3620000,
   "resetReason": "Power on",
   "heapCritical": false,
+  "psramFallbackCount": 0,
+  "psramWarning": false,
+  "psramCritical": false,
+  "heapBudget": [
+    {"label": "dsp_delay", "bytes": 524288, "psram": true},
+    {"label": "audio_dma", "bytes": 32768, "psram": false}
+  ],
+  "heapBudgetPsram": 524288,
+  "heapBudgetSram": 32768,
   "crashHistory": []
 }
 ```
 
 `cpu.usageCore0` and `cpu.usageCore1` are `-1` during a calibration window (~4 s) after debug mode is first enabled. The DSP section (`dsp.swapFailures`, `dsp.swapSuccesses`, `dsp.lastSwapFailureAgo`) is included when `DSP_ENABLED`.
+
+The following PSRAM and heap budget fields are included when `debugHwStats` is enabled:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `psramFallbackCount` | integer | Lifetime count of PSRAM-to-SRAM fallback allocations |
+| `psramWarning` | boolean | True when free PSRAM is below 1 MB |
+| `psramCritical` | boolean | True when free PSRAM is below 512 KB |
+| `heapBudget` | array | Per-subsystem allocation entries — each has `label` (string), `bytes` (integer), and `psram` (boolean) |
+| `heapBudgetPsram` | integer | Total tracked bytes currently in PSRAM across all budget entries |
+| `heapBudgetSram` | integer | Total tracked bytes currently in internal SRAM across all budget entries |
 
 ### `eepromProgramResult` / `eepromEraseResult`
 

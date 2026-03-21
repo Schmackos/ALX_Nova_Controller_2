@@ -104,6 +104,7 @@ Choose your base class:
 | `HalAudioDevice` | Audio output or input hardware that needs `configure()`, `setVolume()`, `setMute()` |
 | `HalAudioDevice` + `HalAudioDacInterface` | DAC-only output device (PCM5102A, MCP4725) |
 | `HalAudioDevice` + `HalAudioCodecInterface` | Combined codec with both DAC and ADC paths (ES8311) |
+| `HalEssSabreAdcBase` | ESS SABRE ADC expansion devices — provides shared I2C helpers, `_applyConfigOverrides()`, `_selectWire()`. Inherits `HalAudioDevice` + `HalAudioAdcInterface`. |
 
 ## Step-by-Step: Adding a New Driver
 
@@ -365,7 +366,7 @@ static HalDevice* factory_mydac() { return new HalMyDac(); }
 The `HalDriverEntry.compatible` field is the lookup key used during 3-tier discovery (I2C bus scan → EEPROM probe → manual config). It must match the string set in your constructor's `_descriptor.compatible` field exactly.
 
 :::caution Registry capacity
-`HAL_MAX_DRIVERS` is 16. There are currently 14 registered entries. If you add more than 2 new drivers without removing old ones, `hal_registry_register()` will silently drop the excess entries. Check the return value or increase the limit in `hal_types.h`.
+`HAL_MAX_DRIVERS` is 32. All callers of `hal_registry_register()` check the return value and emit `LOG_W` on failure. If the registry is full, the registration is silently dropped and the device will not be discoverable. Check `HAL_MAX_DRIVERS` in `src/hal/hal_types.h` if you need to increase the limit.
 :::
 
 ### Step 4 — Add an entry to the device database
@@ -688,6 +689,133 @@ The `halSlot` and `lane` fields in `AudioInputSource` are assigned by the pipeli
 
 Set `isHardwareAdc = true` only for physical I2S ADC devices (PCM1808 pattern). Software sources like the signal generator and USB audio use `isHardwareAdc = false` because they do not need noise gating.
 
+## Expansion ADC Driver Pattern (ESS SABRE Family)
+
+When adding a new ESS SABRE ADC expansion driver, inherit from `HalEssSabreAdcBase` instead of `HalAudioDevice` directly. The base class provides shared I2C helpers and config override reading that all family members use identically.
+
+### Base class helpers
+
+`HalEssSabreAdcBase` (in `src/hal/hal_ess_sabre_adc_base.h`) provides:
+
+- `_writeReg(reg, val)` — 8-bit register write via I2C
+- `_readReg(reg)` — 8-bit register read via I2C
+- `_writeReg16(regLsb, val)` — 16-bit write, LSB register first, MSB register latches both (used for volume)
+- `_selectWire()` — selects the correct `TwoWire` instance based on `_i2cBusIndex`
+- `_applyConfigOverrides()` — reads `HalDeviceConfig` into the common member fields (`_i2cAddr`, `_sdaPin`, `_sclPin`, `_i2cBusIndex`, `_sampleRate`, `_bitDepth`). Call this at the start of `init()` before any I2C transactions.
+- `_validateSampleRate(hz, supported[], count)` — returns `true` if `hz` appears in the device-specific supported rate array.
+
+Common member fields already declared in the base class: `_i2cAddr`, `_sdaPin`, `_sclPin`, `_i2cBusIndex`, `_sampleRate`, `_bitDepth`, `_gainDb`, `_filterPreset`, `_hpfEnabled`, `_initialized`.
+
+### Pattern A — 2-channel I2S device
+
+```cpp
+// Header
+class HalMyEssAdc : public HalEssSabreAdcBase {
+public:
+    HalMyEssAdc();
+    bool probe() override;
+    HalInitResult init() override;
+    void deinit() override;
+    void dumpConfig() override;
+    bool healthCheck() override;
+
+    bool configure(uint32_t sampleRate, uint8_t bitDepth) override;
+    bool setVolume(uint8_t percent) override;
+    bool setMute(bool mute) override;
+
+    bool adcSetGain(uint8_t gainDb) override;
+    bool adcSetHpfEnabled(bool en) override;
+    bool adcSetSampleRate(uint32_t hz) override;
+    uint32_t adcGetSampleRate() const override { return _sampleRate; }
+
+    const AudioInputSource* getInputSource() const override;
+
+private:
+    AudioInputSource _inputSrc      = {};
+    bool             _inputSrcReady = false;
+};
+```
+
+```cpp
+// Constructor — base class initializes all common fields
+HalMyEssAdc::HalMyEssAdc() : HalEssSabreAdcBase() {
+    strncpy(_descriptor.compatible, "ess,myessadc", 31);
+    _descriptor.type         = HAL_DEV_ADC;
+    _descriptor.channelCount = 2;
+    _descriptor.i2cAddr      = ESS_SABRE_I2C_ADDR_BASE;
+    _descriptor.capabilities = HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME
+                               | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL;
+    _initPriority = HAL_PRIORITY_HARDWARE;
+}
+
+HalInitResult HalMyEssAdc::init() {
+    _applyConfigOverrides();   // reads HalDeviceConfig into _i2cAddr, _sdaPin, etc.
+    _selectWire();             // sets _wire to Wire or Wire2 based on _i2cBusIndex
+    // ... I2C register init sequence ...
+    _state = HAL_STATE_AVAILABLE;
+    _ready = true;
+    return hal_init_ok();
+}
+```
+
+### Pattern B — 4-channel TDM device
+
+4-channel TDM devices embed a `HalTdmDeinterleaver` and register two `AudioInputSource` entries. Override `getInputSourceCount()` and `getInputSourceAt()` instead of (or in addition to) `getInputSource()`.
+
+```cpp
+// Header additions for TDM devices
+#include "hal_tdm_deinterleaver.h"
+
+class HalMyEssTdmAdc : public HalAudioDevice, public HalAudioAdcInterface {
+public:
+    // ... (same lifecycle methods as Pattern A) ...
+
+    int getInputSourceCount() const override { return _initialized ? 2 : 0; }
+    const AudioInputSource* getInputSourceAt(int idx) const override;
+    const AudioInputSource* getInputSource() const override { return getInputSourceAt(0); }
+
+private:
+    HalTdmDeinterleaver _tdm;
+    AudioInputSource _srcA = {};   // CH1/CH2
+    AudioInputSource _srcB = {};   // CH3/CH4
+    static constexpr const char* _NAME_A = "MyEssAdc CH1/2";
+    static constexpr const char* _NAME_B = "MyEssAdc CH3/4";
+};
+```
+
+```cpp
+// In init():
+if (!_tdm.init(i2sPort)) {
+    return hal_init_fail(DIAG_ERR_ALLOC, "TDM buffer alloc failed");
+}
+_tdm.buildSources(_NAME_A, _NAME_B, &_srcA, &_srcB);
+```
+
+The `hal_pipeline_bridge` calls `getInputSourceCount()` and registers each source at a consecutive pipeline lane. The `_tdm` instance handles all DMA reads and deinterleaving — the driver only needs to call `init()` and `buildSources()`.
+
+### Registering an ESS expansion driver
+
+The registration pattern in `hal_register_builtins()` is identical to any other driver. If the device has two package variants sharing one driver (as with ES9823PRO/ES9823MPRO), register both compatible strings pointing to the same factory:
+
+```cpp
+// In hal_builtin_devices.cpp:
+static HalDevice* factory_myessadc() { return new HalMyEssAdc(); }
+
+// In hal_register_builtins():
+{ HalDriverEntry e; memset(&e, 0, sizeof(e));
+  strncpy(e.compatible, "ess,myessadc", 31);
+  e.type = HAL_DEV_ADC; e.factory = factory_myessadc;
+  if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register: %s", e.compatible); } }
+
+// Second compatible string (same factory, different chip ID detected at init):
+{ HalDriverEntry e; memset(&e, 0, sizeof(e));
+  strncpy(e.compatible, "ess,myessadc-alt", 31);
+  e.type = HAL_DEV_ADC; e.factory = factory_myessadc;
+  if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register: %s", e.compatible); } }
+```
+
+Create the per-device register definitions in `src/drivers/esXXXX_regs.h` using the shared `ESS_SABRE_REG_CHIP_ID` (0xE1) and `ESS_SABRE_I2C_ADDR_BASE` (0x40) constants from `src/drivers/ess_sabre_common.h`.
+
 ## I2C Driver Pattern
 
 For devices with an I2C control interface (ES8311, MCP4725), `probe()` does a register read to verify the chip responds and returns the expected device ID. Keep probe fast — it runs during boot discovery and may be called on every rescan.
@@ -758,3 +886,4 @@ Before opening a pull request for a new driver, verify every item:
 - [ ] Test module created in `test/test_hal_<model>/`
 - [ ] `pio test -e native -f test_hal_<model>` passes
 - [ ] `pio test -e native` (full suite) passes — no regressions
+- [ ] Multi-source devices: `getInputSourceCount()` and `getInputSourceAt()` overridden; `HalTdmDeinterleaver` initialized in `init()` before `buildSources()` is called

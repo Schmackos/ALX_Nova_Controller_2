@@ -98,18 +98,21 @@ The `isHardwareAdc` flag is the correct way to determine whether noise gating ap
 Sources are registered exclusively by the HAL pipeline bridge (`hal_pipeline_bridge`) when a HAL device transitions to `AVAILABLE`. **No driver or subsystem outside the bridge may call `audio_pipeline_set_source()` directly.** Lane assignment is performed by capability-based ordinal counting in the bridge; never hard-code lane indices.
 
 ```cpp
-// Atomically place a source at a lane index (wraps vTaskSuspendAll)
+// Atomically place a source at a lane index (wraps vTaskSuspendAll).
+// Validates lane*2+1 < MATRIX_SIZE. Returns false on validation or allocation failure.
 // Called by hal_pipeline_bridge only.
-audio_pipeline_set_source(int lane, const AudioInputSource *src);
+bool audio_pipeline_set_source(int lane, const AudioInputSource *src);
 
 // Atomically clear a lane
 // Called by hal_pipeline_bridge only.
-audio_pipeline_remove_source(int lane);
+void audio_pipeline_remove_source(int lane);
 
 // Read-only accessor — returns NULL if lane has no source
 // Safe to call from the main loop; used by sendAudioChannelMap().
 const AudioInputSource* audio_pipeline_get_source(int lane);
 ```
+
+`hal_pipeline_bridge` checks the return value of `audio_pipeline_set_source()` and emits a `LOG_W` when registration fails.
 
 :::warning vTaskSuspendAll atomicity
 `audio_pipeline_set_source()` and `audio_pipeline_remove_source()` suspend all tasks on Core 1 for the duration of the pointer update. This is safe because both calls are short (pointer write only) and are never called from within the audio task itself. Calling them from the audio task will deadlock.
@@ -152,16 +155,19 @@ typedef struct AudioOutputSink {
 Sinks occupy named slots (0 through `AUDIO_OUT_MAX_SINKS - 1`, currently 8). The slot index is stable across HAL device lifecycle transitions. **HAL is the sole system that binds DAC devices to pipeline slots.** The only correct way to attach or detach a DAC device is through the HAL pipeline bridge lifecycle, which internally calls `dac_activate_for_hal()` and `dac_deactivate_for_hal()` for DAC-path devices before registering the sink:
 
 ```cpp
-// Called by hal_pipeline_bridge on AVAILABLE — after dac_activate_for_hal()
-audio_pipeline_set_sink(int slot, const AudioOutputSink *sink);
+// Called by hal_pipeline_bridge on AVAILABLE — after dac_activate_for_hal().
+// Validates firstChannel + channelCount <= MATRIX_SIZE. Returns false on failure.
+bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink);
 
 // Called by hal_pipeline_bridge on MANUAL/ERROR/REMOVED — after dac_deactivate_for_hal()
-audio_pipeline_remove_sink(int slot);
+void audio_pipeline_remove_sink(int slot);
 
 // Legacy — iterates up to _sinkCount, kept for backwards compatibility
 audio_pipeline_register_sink(const AudioOutputSink *sink);
 audio_pipeline_clear_sinks();   // Requires audioPaused=true before calling
 ```
+
+`hal_pipeline_bridge` checks the return value of `audio_pipeline_set_sink()` and emits a `LOG_W` when slot registration fails. HAL driver `buildSink()` methods (PCM5102A, ES8311, MCP4725) guard `firstChannel` overflow before constructing the sink descriptor.
 
 :::danger Do not call audio_pipeline_clear_sinks() from a HAL driver
 `audio_pipeline_clear_sinks()` removes all sinks globally and requires `appState.audioPaused = true` beforehand. HAL drivers must use `audio_pipeline_remove_sink(slot)` to remove only their own sink. Calling `clear_sinks()` from a device deinit path removes all other active sinks and causes audio dropouts on unrelated devices.
@@ -204,6 +210,26 @@ flowchart TD
     DONE -->|yes| YIELD["yield 2 ticks"]
 ```
 
+### Sink Write Utilities
+
+Shared float-buffer processing helpers live in `src/sink_write_utils.h/.cpp` and are used by all HAL sink drivers before passing audio to the I2S DMA:
+
+```cpp
+// Apply software volume gain in-place. Skips processing if gain == 1.0f (unity).
+void sink_apply_volume(float* buf, size_t len, float gain);
+
+// Apply click-free mute ramp in-place.
+// rampState tracks the current position in [0.0, 1.0].
+// muted=true ramps toward 0.0 (fade out); muted=false ramps toward 1.0 (fade in).
+void sink_apply_mute_ramp(float* buf, size_t len, float* rampState, bool muted);
+
+// Convert float [-1.0, +1.0] to int32 left-justified for I2S DMA output
+// (24-bit value in upper 24 bits of each 32-bit word).
+void sink_float_to_i2s_int32(const float* in, int32_t* out, size_t len);
+```
+
+The mute ramp uses a step size of `MUTE_RAMP_STEP` (0.02 per sample) which at 48 kHz produces a 2.5 ms fade — fast enough to feel immediate but slow enough to suppress click artifacts from abrupt transitions.
+
 ## 16x16 Routing Matrix
 
 The routing matrix maps input lanes to output channels with individual float32 gain values. The matrix is 16x16 but only the top-left `AUDIO_PIPELINE_MAX_INPUTS` x `AUDIO_PIPELINE_MAX_OUTPUTS` region is active in typical configurations.
@@ -221,6 +247,21 @@ float gain = audio_pipeline_get_matrix_gain(int out_ch, int in_ch);
 // Bypass the matrix entirely (identity passthrough for diagnostic use)
 audio_pipeline_bypass_matrix(bool bypass);
 ```
+
+### Matrix Bounds Validation
+
+Compile-time `static_assert` enforces the relationship between pipeline dimensions:
+
+```cpp
+static_assert(AUDIO_PIPELINE_MAX_INPUTS  * 2 <= AUDIO_PIPELINE_MATRIX_SIZE, ...);
+static_assert(AUDIO_PIPELINE_MAX_OUTPUTS * 2 <= AUDIO_PIPELINE_MATRIX_SIZE, ...);
+```
+
+This catches configuration errors where the number of lanes or sinks would exceed the matrix dimension at compile time, before hardware is involved.
+
+`pipeline_mix_matrix()` populates its input channel pointer array with a loop over all `MAX_INPUTS` lanes — not a hardcoded list. Prior to this fix, only lanes 0–3 were wired into `inCh[]`; lanes 4–7 audio was silently discarded. The loop-based approach ensures all 8 lanes contribute to the matrix regardless of the active lane count.
+
+`buildSink()` in each HAL DAC driver (PCM5102A, ES8311, MCP4725) validates `firstChannel` before constructing the `AudioOutputSink` descriptor. If `firstChannel` would overflow the matrix, the driver refuses to build the sink and logs a warning rather than writing out-of-bounds data.
 
 ### Matrix Persistence
 
@@ -250,13 +291,19 @@ audio_pipeline_bypass_output(bool bypass);            // Skip all output DSP
 
 ## DMA Buffers and Memory Allocation
 
-Raw DMA buffers and the float working buffers that hold the converted audio data use **lazy SRAM allocation**: they are allocated the first time `audio_pipeline_set_source()` or `audio_pipeline_set_sink()` is called, not at startup. This avoids wasting SRAM when a lane is unused.
+DMA raw buffers (16 × 2KB = 32KB) are **eagerly pre-allocated** in `audio_pipeline_init()` at boot, before WiFi connects, using `heap_caps_calloc(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)`. This guarantees all lanes and slots have their DMA buffers ready when expansion devices are discovered later.
 
-The allocation path uses `ps_malloc()` (PSRAM) when available and falls back to `heap_caps_malloc(MALLOC_CAP_INTERNAL)`. If internal SRAM is below the 40 KB reserve, allocation is refused and the source/sink is not registered.
+If any DMA buffer allocation fails:
+- `DIAG_AUDIO_DMA_ALLOC_FAIL` (0x200E) is emitted to the diagnostic journal.
+- `AudioState.dmaAllocFailed` is set to `true`.
+- `AudioState.dmaAllocFailMask` records which lanes/slots failed (bits 0–7: raw input lanes; bits 8–15: sink slots).
+- The web UI displays a DMA allocation failure indicator in the Hardware Stats section.
 
-:::info PSRAM vs SRAM for audio buffers
-Float working buffers (2 lanes × 2 KB = 4 KB per 5.33 ms) go through `pipeline_to_float()` as a `memcpy` from PSRAM-sourced DMA. At the ESP32-P4's PSRAM bandwidth of ~200 MB/s this is 0.4% utilisation — negligible. Delay lines for the DSP engine are the only allocations that meaningfully benefit from PSRAM placement.
+:::note DMA buffers must stay in internal SRAM
+DMA buffers are NOT allocated through the `psram_alloc()` wrapper. They require `MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA` and must never end up in PSRAM. Float working buffers (per-lane processing) use `psram_alloc()` and may live in PSRAM — only the raw DMA ring buffers have the internal SRAM constraint.
 :::
+
+Float working buffers are allocated via `psram_alloc()` (PSRAM preferred, SRAM fallback) when a source or sink is first registered. If internal SRAM is below the 40KB reserve when falling back to SRAM, the allocation is refused and the source or sink is not registered.
 
 ## Noise Gate
 
