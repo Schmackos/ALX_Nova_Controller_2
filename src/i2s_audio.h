@@ -234,6 +234,7 @@ inline bool i2s_audio_configure_adc(int, const HalDeviceConfig*) { return true; 
 // Enable I2S TX full-duplex: tears down RX-only channel, recreates as RX+TX.
 // Pauses audio task during reinit. Returns true on success.
 #ifndef NATIVE_TEST
+#include <hal/gpio_types.h>  // gpio_num_t
 bool i2s_audio_enable_tx(uint32_t sample_rate);
 void i2s_audio_disable_tx();
 void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
