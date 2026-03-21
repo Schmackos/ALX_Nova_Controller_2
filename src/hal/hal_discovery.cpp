@@ -91,14 +91,18 @@ int hal_discover_devices() {
                         HalDevice* dev = entry->factory ? entry->factory() : nullptr;
                         if (dev) {
                             int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM);
-                            if (appState.halAutoDiscovery) {
+                            if (slot < 0) {
+                                LOG_W("[HAL:Discovery]", "Device registration failed (slots full): %s", desc.name);
+                                delete dev;
+                            } else if (appState.halAutoDiscovery) {
                                 dev->_state = HAL_STATE_AVAILABLE;
                                 LOG_I("[HAL:Discovery]", "Device auto-registered: %s (slot %d)", desc.name, slot);
+                                newDevices++;
                             } else {
                                 dev->_state = HAL_STATE_CONFIGURING;
                                 LOG_I("[HAL:Discovery]", "Device registered, awaiting init: %s (slot %d)", desc.name, slot);
+                                newDevices++;
                             }
-                            newDevices++;
                         } else {
                             LOG_W("[HAL:Discovery]", "Factory returned null for %s", desc.compatible);
                         }

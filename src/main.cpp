@@ -321,14 +321,18 @@ void setup() {
 
   // Register NS4150B amplifier with HAL (ES8311 PA pin)
   _halNs4150b = new HalNs4150b(ES8311_PA_PIN);
-  HalDeviceManager::instance().registerDevice(_halNs4150b, HAL_DISC_BUILTIN);
+  if (HalDeviceManager::instance().registerDevice(_halNs4150b, HAL_DISC_BUILTIN) < 0) {
+    LOG_E("[HAL] Failed to register NS4150B amplifier — slots full");
+  }
   _halNs4150b->probe();
   _halNs4150b->init();  // Reads gpioA config override, starts disabled (DAC readiness gates enable)
 
   // Register ESP32-P4 internal temperature sensor
 #if CONFIG_IDF_TARGET_ESP32P4
   _halTempSensor = new HalTempSensor();
-  HalDeviceManager::instance().registerDevice(_halTempSensor, HAL_DISC_BUILTIN);
+  if (HalDeviceManager::instance().registerDevice(_halTempSensor, HAL_DISC_BUILTIN) < 0) {
+    LOG_E("[HAL] Failed to register temperature sensor — slots full");
+  }
 #endif
 
   // Register peripheral devices
@@ -336,29 +340,43 @@ void setup() {
     HalDeviceManager& mgr = HalDeviceManager::instance();
 #ifdef GUI_ENABLED
     _halDisplay = new HalDisplay(TFT_MOSI_PIN, TFT_SCLK_PIN, TFT_CS_PIN, TFT_DC_PIN, TFT_RST_PIN, TFT_BL_PIN);
-    mgr.registerDevice(_halDisplay, HAL_DISC_BUILTIN);
+    if (mgr.registerDevice(_halDisplay, HAL_DISC_BUILTIN) < 0) {
+      LOG_E("[HAL] Failed to register display — slots full");
+    }
     _halEncoder = new HalEncoder(ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN);
-    mgr.registerDevice(_halEncoder, HAL_DISC_BUILTIN);
+    if (mgr.registerDevice(_halEncoder, HAL_DISC_BUILTIN) < 0) {
+      LOG_E("[HAL] Failed to register encoder — slots full");
+    }
     _halEncoder->probe();
     _halEncoder->init();  // Reads gpioA/B/C config overrides, claims pins
 #endif
     _halBuzzer = new HalBuzzer(BUZZER_PIN);
-    mgr.registerDevice(_halBuzzer, HAL_DISC_BUILTIN);
+    if (mgr.registerDevice(_halBuzzer, HAL_DISC_BUILTIN) < 0) {
+      LOG_E("[HAL] Failed to register buzzer — slots full");
+    }
     _halBuzzer->probe();
     _halBuzzer->init();  // Calls buzzer_init(pin) via HAL lifecycle
     _halLed = new HalLed(LED_PIN);
-    mgr.registerDevice(_halLed, HAL_DISC_BUILTIN);
+    if (mgr.registerDevice(_halLed, HAL_DISC_BUILTIN) < 0) {
+      LOG_E("[HAL] Failed to register LED — slots full");
+    }
     _halRelay = new HalRelay(AMPLIFIER_PIN);
-    mgr.registerDevice(_halRelay, HAL_DISC_BUILTIN);
+    if (mgr.registerDevice(_halRelay, HAL_DISC_BUILTIN) < 0) {
+      LOG_E("[HAL] Failed to register relay — slots full");
+    }
     _halButton = new HalButton(RESET_BUTTON_PIN);
-    mgr.registerDevice(_halButton, HAL_DISC_BUILTIN);
+    if (mgr.registerDevice(_halButton, HAL_DISC_BUILTIN) < 0) {
+      LOG_E("[HAL] Failed to register button — slots full");
+    }
     _halButton->probe();
     _halButton->init();  // Reads gpioA config override, claims pin
     // Update resetButton with resolved pin from HAL config
     resetButton.pin = _halButton->getPin();
     resetButton.begin();
     _halSignalGen = new HalSignalGen(SIGGEN_PWM_PIN);
-    mgr.registerDevice(_halSignalGen, HAL_DISC_BUILTIN);
+    if (mgr.registerDevice(_halSignalGen, HAL_DISC_BUILTIN) < 0) {
+      LOG_E("[HAL] Failed to register signal generator — slots full");
+    }
     _halSignalGen->probe();
     _halSignalGen->init();  // Reads gpioA config override, calls siggen_init(pin)
   }
