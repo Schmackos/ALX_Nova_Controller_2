@@ -230,10 +230,18 @@ HalInitResult HalEs9822pro::init() {
     _inputSrc.vuL           = -90.0f;
     _inputSrc.vuR           = -90.0f;
 
-    uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 0;
+    uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2; // Default port 2 for expansion
 #ifndef NATIVE_TEST
-    _inputSrc.read          = (port == 0) ? i2s_audio_port0_read : i2s_audio_port1_read;
-    _inputSrc.isActive      = (port == 0) ? i2s_audio_port0_active : i2s_audio_port1_active;
+    if (port == 0) {
+        _inputSrc.read     = i2s_audio_port0_read;
+        _inputSrc.isActive = i2s_audio_port0_active;
+    } else if (port == 1) {
+        _inputSrc.read     = i2s_audio_port1_read;
+        _inputSrc.isActive = i2s_audio_port1_active;
+    } else {
+        _inputSrc.read     = i2s_audio_port2_read;
+        _inputSrc.isActive = i2s_audio_port2_active;
+    }
     _inputSrc.getSampleRate = i2s_audio_get_sample_rate;
 #endif
     _inputSrcReady = true;

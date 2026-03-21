@@ -62,8 +62,8 @@ static volatile bool _dumpReady = false;
 
 // Per-lane HAL config cache — populated by i2s_audio_configure_adc(), used by
 // i2s_audio_set_sample_rate() and i2s_audio_enable_tx() to survive re-init with correct pins.
-static HalDeviceConfig _cachedAdcCfg[2] = {};
-static bool _cachedAdcCfgValid[2] = {false, false};
+static HalDeviceConfig _cachedAdcCfg[3] = {};
+static bool _cachedAdcCfgValid[3] = {false, false, false};
 
 // ===== Pure computation functions (testable without hardware) =====
 
@@ -270,12 +270,14 @@ static i2s_chan_handle_t _tx_handle_adc1 = NULL;  // NULL when TX not active (us
 
 #if CONFIG_IDF_TARGET_ESP32P4
 static i2s_chan_handle_t _tx_handle_es8311 = NULL; // I2S2 TX for ES8311 onboard DAC (P4 only)
+static i2s_chan_handle_t _rx_handle_expansion = NULL; // I2S2 RX for expansion mezzanine ADC (P4 only)
 #endif
 
 static uint32_t _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 static int _numAdcsDetected = 1;
 static bool _adc2InitOk = false;
+static bool _expansionRxOk = false;
 
 // Per-ADC state arrays
 static const float MAX_24BIT_F = 8388607.0f;
@@ -525,12 +527,12 @@ static bool i2s_configure_adc2(uint32_t sample_rate, const HalDeviceConfig* cfg 
 bool i2s_audio_configure_adc(int lane, const HalDeviceConfig* cfg) {
     // Cache the config per-lane so set_sample_rate() and enable_tx() can re-init
     // with the correct HAL pin assignments (they previously passed nullptr, losing overrides).
-    if (cfg && cfg->valid && lane >= 0 && lane < 2) {
+    if (cfg && cfg->valid && lane >= 0 && lane < 3) {
         _cachedAdcCfg[lane] = *cfg;
         _cachedAdcCfgValid[lane] = true;
     }
 
-    // Intentional: ESP32-P4 has exactly 2 I2S RX ports (I2S0 for ADC1, I2S1 for ADC2).
+    // ESP32-P4 has 3 I2S peripherals: I2S0 (ADC1), I2S1 (ADC2), I2S2 (expansion mezzanine).
     // Software sources (SigGen, USB) don't use I2S and are not configured here.
     if (lane == 0) {
         i2s_configure_adc1(_currentSampleRate, cfg);
@@ -539,8 +541,24 @@ bool i2s_audio_configure_adc(int lane, const HalDeviceConfig* cfg) {
         bool ok = i2s_configure_adc2(_currentSampleRate, cfg);
         _adc2InitOk = ok;
         return ok;
+    } else if (lane == 2) {
+#if CONFIG_IDF_TARGET_ESP32P4
+        // Lane 2: Expansion mezzanine ADC on I2S2 RX
+        gpio_num_t dinPin = (cfg && cfg->valid && cfg->pinData >= 0)
+                          ? (gpio_num_t)cfg->pinData : (gpio_num_t)-1;
+        if (dinPin < 0) {
+            LOG_W("[Audio] Lane 2: no data pin configured for expansion ADC");
+            return false;
+        }
+        bool ok = i2s_audio_enable_expansion_rx(_currentSampleRate, dinPin);
+        _expansionRxOk = ok;
+        return ok;
+#else
+        LOG_W("[Audio] Lane 2 (expansion) only supported on ESP32-P4");
+        return false;
+#endif
     }
-    LOG_W("[Audio] i2s_audio_configure_adc: lane %d not supported (max 1)", lane);
+    LOG_W("[Audio] i2s_audio_configure_adc: lane %d not supported (max 2)", lane);
     return false;
 }
 
@@ -606,6 +624,24 @@ bool i2s_audio_port1_active(void) {
     return i2s_audio_adc2_ok();
 }
 
+uint32_t i2s_audio_port2_read(int32_t* dst, uint32_t frames) {
+#if CONFIG_IDF_TARGET_ESP32P4
+    if (!_rx_handle_expansion || !_expansionRxOk) return 0;
+    size_t bytes_read = 0;
+    size_t size = frames * 2 * sizeof(int32_t);
+    esp_err_t err = i2s_channel_read(_rx_handle_expansion, dst, size, &bytes_read, 5);
+    if (err != ESP_OK || bytes_read == 0) return 0;
+    return (uint32_t)(bytes_read / (2 * sizeof(int32_t)));
+#else
+    (void)dst; (void)frames;
+    return 0;
+#endif
+}
+
+bool i2s_audio_port2_active(void) {
+    return _expansionRxOk;
+}
+
 uint32_t i2s_audio_get_sample_rate(void) {
 #ifndef NATIVE_TEST
     return AppState::getInstance().audio.sampleRate;
@@ -618,12 +654,14 @@ uint32_t i2s_audio_get_sample_rate(void) {
 uint32_t i2s_audio_read_port(int port, int32_t *dst, uint32_t frames) {
     if (port == 0) return i2s_audio_port0_read(dst, frames);
     if (port == 1) return i2s_audio_port1_read(dst, frames);
+    if (port == 2) return i2s_audio_port2_read(dst, frames);
     return 0;
 }
 
 bool i2s_audio_is_port_active(int port) {
     if (port == 0) return i2s_audio_port0_active();
     if (port == 1) return i2s_audio_port1_active();
+    if (port == 2) return i2s_audio_port2_active();
     return false;
 }
 
@@ -1181,12 +1219,103 @@ void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written,
     i2s_channel_write(_tx_handle_es8311, src, size, bytes_written, timeout_ms);
 }
 
+// ===== Expansion Mezzanine ADC RX Bridge (I2S2, P4 only) =====
+// Allocates I2S2 RX channel for expansion mezzanine ADC input.
+// If ES8311 TX is already active on I2S2, both share BCK/WS (full-duplex).
+// If not, allocates I2S2 as RX-only.
+
+bool i2s_audio_enable_expansion_rx(uint32_t sample_rate, gpio_num_t din_pin) {
+    if (_rx_handle_expansion) {
+        LOG_I("[Audio] I2S2 expansion RX already enabled");
+        return true;
+    }
+
+    LOG_I("[Audio] Enabling I2S2 RX for expansion ADC, rate=%luHz DIN=GPIO%d",
+          (unsigned long)sample_rate, (int)din_pin);
+
+    // If ES8311 TX is not active, allocate I2S2 fresh as RX-only
+    // If ES8311 TX IS active, we need full-duplex — but IDF5 requires both handles
+    // allocated together. For now, allocate a separate RX-only channel.
+    // TODO: Phase 3C — refactor ES8311 TX to full-duplex when expansion RX is needed.
+
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_2, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num  = DMA_BUF_COUNT;
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;
+    chan_cfg.auto_clear    = true;
+
+    // If ES8311 TX already holds I2S_NUM_2, we cannot allocate RX separately.
+    // Log and fail gracefully — Phase 3C will add full-duplex support.
+    if (_tx_handle_es8311) {
+        LOG_W("[Audio] I2S2 expansion RX: ES8311 TX is active — full-duplex not yet implemented");
+        LOG_W("[Audio] Disable ES8311 or wait for full-duplex support (Phase 3C)");
+        return false;
+    }
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &_rx_handle_expansion);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] I2S2 expansion RX channel alloc failed: %d", err);
+        _rx_handle_expansion = NULL;
+        return false;
+    }
+
+    i2s_std_config_t std_cfg = {};
+    std_cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
+    std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;   // Expansion provides its own MCLK or uses APLL
+    std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;    // To be configured from HalDeviceConfig
+    std_cfg.gpio_cfg.ws   = I2S_GPIO_UNUSED;    // To be configured from HalDeviceConfig
+    std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;    // RX only — no data out
+    std_cfg.gpio_cfg.din  = din_pin;
+    std_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    std_cfg.gpio_cfg.bclk_inv = false;
+    std_cfg.gpio_cfg.ws_inv   = false;
+    std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+
+    err = i2s_channel_init_std_mode(_rx_handle_expansion, &std_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] I2S2 expansion RX init failed: %d", err);
+        i2s_del_channel(_rx_handle_expansion);
+        _rx_handle_expansion = NULL;
+        return false;
+    }
+
+    err = i2s_channel_enable(_rx_handle_expansion);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] I2S2 expansion RX enable failed: %d", err);
+        i2s_del_channel(_rx_handle_expansion);
+        _rx_handle_expansion = NULL;
+        return false;
+    }
+
+    _expansionRxOk = true;
+    LOG_I("[Audio] I2S2 expansion RX enabled: rate=%luHz DIN=GPIO%d DMA=%dx%d",
+          (unsigned long)sample_rate, (int)din_pin, DMA_BUF_COUNT, DMA_BUF_LEN);
+    return true;
+}
+
+void i2s_audio_disable_expansion_rx() {
+    if (_rx_handle_expansion) {
+        i2s_channel_disable(_rx_handle_expansion);
+        i2s_del_channel(_rx_handle_expansion);
+        _rx_handle_expansion = NULL;
+        _expansionRxOk = false;
+        LOG_I("[Audio] I2S2 expansion RX disabled");
+    }
+}
+
+bool i2s_audio_expansion_rx_ok() {
+    return _expansionRxOk;
+}
+
 #else // !CONFIG_IDF_TARGET_ESP32P4
 
-// Non-P4 targets: ES8311 functions are no-ops (I2S2 not available)
+// Non-P4 targets: ES8311 and expansion functions are no-ops (I2S2 not available)
 bool i2s_audio_enable_es8311_tx(uint32_t) { return false; }
 void i2s_audio_disable_es8311_tx() {}
 void i2s_audio_write_es8311(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+bool i2s_audio_enable_expansion_rx(uint32_t, gpio_num_t) { return false; }
+void i2s_audio_disable_expansion_rx() {}
+bool i2s_audio_expansion_rx_ok() { return false; }
 
 #endif // CONFIG_IDF_TARGET_ESP32P4
 

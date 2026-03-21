@@ -161,6 +161,10 @@ struct HalDeviceConfig {
 
     // Device-specific filter mode (e.g., PCM5102A sharp/slow roll-off)
     uint8_t filterMode; // 0 = default
+
+    // I2S mode for expansion mezzanine devices
+    uint8_t  i2sMode;    // 0=standard stereo, 1=TDM (255 = default/auto)
+    uint8_t  tdmSlots;   // TDM slot count when i2sMode=1 (2,4,8,16; 0=auto)
 };
 
 // Sample rate mask helpers
