@@ -182,6 +182,30 @@ appState.halCoord.requestDeviceToggle(halSlot, -1);  // -1 = disable
 // hasPendingToggles() → pendingToggleAt(i) → clearPendingToggles()
 ```
 
+### Event-Driven Main Loop
+
+The main loop wakes in under 1 µs when any dirty flag fires, falling back to a 5 ms tick when idle:
+
+```mermaid
+sequenceDiagram
+    participant P as Producer<br/>(any task)
+    participant A as AppState
+    participant E as EventGroup
+    participant M as Main Loop<br/>(Core 1)
+    participant W as WebSocket
+
+    P->>A: markXxxDirty()
+    A->>E: app_events_signal(EVT_XXX)
+    Note over M: app_events_wait(5ms) blocks
+    E-->>M: wake (<1 µs)
+    M->>A: isXxxDirty()?
+    A-->>M: true
+    M->>W: broadcastXxx()
+    M->>A: clearXxxDirty()
+```
+
+`mqtt_task` polls at 20 Hz with `vTaskDelay(50)` and does **not** wait on the event group, avoiding the fan-out race where two consumers each miss half the events.
+
 ---
 
 ## AppState Domain Decomposition

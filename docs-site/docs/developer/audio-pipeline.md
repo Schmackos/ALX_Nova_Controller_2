@@ -183,6 +183,27 @@ The HAL pipeline bridge applies different sink removal policies depending on the
 
 This prevents unnecessary slot churn when, for example, a USB audio host disconnects momentarily.
 
+### Sink Dispatch Loop
+
+Each DMA interrupt the pipeline iterates all 8 slots:
+
+```mermaid
+flowchart TD
+    START["slot = 0..7"] --> NULL{sink null?}
+    NULL -->|yes| NEXT["next slot"]
+    NULL -->|no| READY{_ready?}
+    READY -->|false| NEXT
+    READY -->|true| MUTED{muted?}
+    MUTED -->|yes| RAMP["sink_apply_mute_ramp()\nclick-free fade to zero"]
+    MUTED -->|no| GAIN["sink_apply_volume()\ngain × clamp ±1.0"]
+    RAMP --> CONV
+    GAIN --> CONV["sink_float_to_i2s_int32()\n24-bit left-justify in 32-bit word"]
+    CONV --> WRITE["i2s_channel_write() → DMA"]
+    WRITE --> NEXT --> DONE{all 8?}
+    DONE -->|no| START
+    DONE -->|yes| YIELD["yield 2 ticks"]
+```
+
 ## 16x16 Routing Matrix
 
 The routing matrix maps input lanes to output channels with individual float32 gain values. The matrix is 16x16 but only the top-left `AUDIO_PIPELINE_MAX_INPUTS` x `AUDIO_PIPELINE_MAX_OUTPUTS` region is active in typical configurations.
@@ -286,6 +307,31 @@ void audio_pipeline_init();
 ```
 
 After `audio_pipeline_init()` returns, the task is running and waiting for sources and sinks to be registered via the HAL pipeline bridge. No audio flows until at least one source and one sink are in a ready state.
+
+### Boot Initialization Order
+
+ADC2 must be initialized before ADC1 because ADC1 is the I2S clock master:
+
+```mermaid
+sequenceDiagram
+    participant B as hal_builtin_devices
+    participant D as hal_device_db
+    participant S as hal_settings
+    participant I as i2s_audio
+    participant P as hal_pipeline_bridge
+
+    B->>D: hal_register_builtins()
+    D->>D: hal_db_init()
+    S->>D: hal_load_device_configs()
+    Note over I: ADC2 first (clock follower — data_in only)
+    I->>I: i2s_configure_adc2()
+    Note over I: ADC1 second (clock master — BCK/MCLK outputs)
+    I->>I: i2s_configure_adc1()
+    P->>P: hal_pipeline_sync()
+    Note over P: stateChangeCb per AVAILABLE device
+    P->>P: ordinal count HAL_CAP_DAC_PATH → sink slot
+    P->>P: ordinal count HAL_CAP_ADC_PATH → input lane
+```
 
 ## Compile-Time Dimensions
 

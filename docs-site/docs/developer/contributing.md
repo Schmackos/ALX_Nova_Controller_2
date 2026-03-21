@@ -44,11 +44,13 @@ Do not add `Co-Authored-By:` trailers or any other AI attribution lines to commi
 
 ## Pre-commit Hooks
 
-The `.githooks/pre-commit` script runs automatically before every commit and checks three things:
+The `.githooks/pre-commit` script runs automatically before every commit and checks five things:
 
 1. `node tools/find_dups.js` — detects duplicate `let`/`const` declarations across the concatenated JS scope in `web_src/js/`
 2. `node tools/check_missing_fns.js` — detects undefined function references in `web_src/js/`
 3. ESLint on `web_src/js/` using `web_src/.eslintrc.json`
+4. `node tools/check_mapping_coverage.js` — verifies every `src/` file is mapped in `tools/doc-mapping.json`
+5. `node tools/diagram-validation.js` — verifies `@validate-symbols` identifiers in architecture diagrams exist in their source files
 
 If any check fails, the commit is blocked with an error message identifying the problem.
 
@@ -72,16 +74,17 @@ cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json
 
 ## CI Quality Gates
 
-GitHub Actions runs 4 parallel quality gates on every push and pull request to `main` and `develop`. All 4 must pass before the firmware build job runs.
+GitHub Actions runs 5 parallel quality gates on every push and pull request to `main` and `develop`. All 5 must pass before the firmware build job runs.
 
 ```mermaid
 flowchart TD
-    Push["Push / PR"] --> G1 & G2 & G3 & G4
-    G1["cpp-tests\npio test -e native -v\n1,614 Unity tests / 70 modules"]
+    Push["Push / PR"] --> G1 & G2 & G3 & G4 & G5
+    G1["cpp-tests\npio test -e native -v\n1,697 Unity tests / 71 modules"]
     G2["cpp-lint\ncppcheck on src/\n(excludes src/gui/)"]
-    G3["js-lint\nfind_dups + check_missing_fns\n+ ESLint"]
+    G3["js-lint\nfind_dups + check_missing_fns\n+ ESLint + diagram-validation"]
     G4["e2e-tests\nnpx playwright test\n26 tests / 19 specs"]
-    G1 & G2 & G3 & G4 --> Build["Firmware Build\n(blocked until all 4 pass)"]
+    G5["doc-coverage\nnode tools/check_mapping_coverage.js\n+ diagram-validation.js"]
+    G1 & G2 & G3 & G4 & G5 --> Build["Firmware Build\n(blocked until all 5 pass)"]
 ```
 
 | Gate | Tool | What it checks |
@@ -90,6 +93,7 @@ flowchart TD
 | `cpp-lint` | cppcheck | No new warnings or errors in `src/` |
 | `js-lint` | find_dups + check_missing_fns + ESLint | No duplicate declarations, no undefined references, no ESLint violations |
 | `e2e-tests` | Playwright + Chromium | All browser tests pass against the mock server |
+| `doc-coverage` | check_mapping_coverage.js + diagram-validation.js | All src/ files mapped; diagram symbols present in source |
 
 On E2E test failure, the Playwright HTML report is uploaded as a CI artifact with 14-day retention.
 
@@ -185,7 +189,7 @@ test/hal-dsp-bridge-lane-guards
 
 4. Push your branch and open a PR against `main` (or `develop` for larger features).
 
-5. Monitor the CI run — all 4 gates must go green.
+5. Monitor the CI run — all 5 gates must go green.
 
 ### PR Description
 
@@ -228,7 +232,7 @@ New code uses the domain path pattern:
 // Correct — domain path
 appState.wifi.ssid
 appState.audio.adcEnabled[lane]
-appState.dac.requestEs8311Toggle(1)  // validated setter
+appState.halCoord.requestDeviceToggle(halSlot, 1)  // HalCoordState toggle queue
 
 // Avoid — legacy flat macro aliases
 wifiSSID  // resolves to appState.wifiSSID via #define
