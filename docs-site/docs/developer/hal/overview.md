@@ -185,7 +185,7 @@ mgr.setStateChangeCallback(hal_pipeline_state_change);
 
 ## Driver Registry
 
-`HalDriverRegistry` (`src/hal/hal_driver_registry.h`) maps compatible strings to factory functions. It holds up to `HAL_MAX_DRIVERS` (16) entries.
+`HalDriverRegistry` (`src/hal/hal_driver_registry.h`) maps compatible strings to factory functions. It holds up to `HAL_MAX_DRIVERS` (32) entries.
 
 ```cpp
 struct HalDriverEntry {
@@ -239,8 +239,10 @@ The ESP32-P4 board has three I2C buses with distinct safety characteristics:
 | 2 | `HAL_I2C_BUS_EXP` | GPIO 28 | GPIO 29 | Always safe | Expansion modules |
 
 :::danger SDIO Conflict on Bus 0
-GPIO 48 and GPIO 54 are shared with the ESP32-C6 WiFi co-processor SDIO interface. Any I2C transaction on Bus 0 while WiFi is active causes `sdmmc_send_cmd` errors and triggers an MCU reset. The discovery routine automatically skips Bus 0 when `appState.ethernet.activeInterface == NET_WIFI`. Never scan Bus 0 without this guard.
+GPIO 48 and GPIO 54 are shared with the ESP32-C6 WiFi co-processor SDIO interface. Any I2C transaction on Bus 0 while WiFi is active causes `sdmmc_send_cmd` errors and triggers an MCU reset. The discovery routine automatically skips Bus 0 when `hal_wifi_sdio_active()` returns true. Never scan Bus 0 without this guard.
 :::
+
+The `hal_wifi_sdio_active()` helper function checks `connectSuccess || connecting || activeInterface == NET_WIFI`. `wifi_manager.cpp` sets `activeInterface = NET_WIFI` when a connection is established and clears it on disconnect. When Bus 0 is skipped, `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101) is emitted and `POST /api/hal/scan` returns a `partialScan: true` flag in its response body.
 
 Discovery scans Bus 1 (ONBOARD) only through the ES8311 driver's existing Wire instance. Buses 0 and 2 are initialised, scanned, then released in `hal_i2c_scan_bus()` to avoid holding GPIO pins unnecessarily.
 
@@ -262,6 +264,19 @@ All HAL management is exposed under `/api/hal/`:
 | `DELETE` | `/api/hal/devices` | Remove a device (sets state to REMOVED) |
 | `POST` | `/api/hal/devices/reinit` | Force reinitialise a specific device slot |
 | `GET` | `/api/hal/db/presets` | Return the full device DB preset list |
+
+## HAL Diagnostic Codes
+
+The HAL subsystem emits diagnostic events to the journal via `diag_emit()`. The codes relevant to capacity, discovery, and device management are:
+
+| Code | Name | Severity | Trigger |
+|---|---|---|---|
+| 0x100E | `DIAG_HAL_TOGGLE_OVERFLOW` | WARN | Toggle queue full (capacity 8); request dropped |
+| 0x100F | `DIAG_HAL_REGISTRY_FULL` | WARN | Driver registry at capacity (`HAL_MAX_DRIVERS = 32`) |
+| 0x1010 | `DIAG_HAL_DB_FULL` | WARN | Device DB at capacity (`HAL_DB_MAX_ENTRIES = 32`) |
+| 0x1101 | `DIAG_HAL_I2C_BUS_CONFLICT` | WARN | Bus 0 scan skipped due to active WiFi SDIO |
+
+For the full diagnostic code reference, see `src/diag_error_codes.h`.
 
 ## Pipeline Bridge
 

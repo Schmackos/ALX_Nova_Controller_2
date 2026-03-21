@@ -195,8 +195,14 @@ stage.delay.delaySamples = 96;  // 2 ms at 48 kHz
 ```
 
 :::tip PSRAM vs SRAM for delay lines
-Delay lines are allocated via `ps_calloc()` (PSRAM) when PSRAM is available. A heap pre-flight check blocks allocation if `ESP.getMaxAllocHeap() < 40 KB`. If you add many high-tap-count FIR filters, monitor free heap via `GET /api/system/status` — the `heapCritical` flag activates when the 40 KB reserve is approached.
+Delay lines are allocated via `psram_alloc()` (PSRAM preferred, SRAM fallback). A heap pre-flight check blocks SRAM fallback if `ESP.getMaxAllocHeap() < 40 KB`. If you add many high-tap-count FIR filters, monitor free heap via `GET /api/psram/status` — the `heapCritical` and `psramCritical` flags activate at their respective thresholds.
 :::
+
+### PSRAM Pressure and DSP Allocation Shedding
+
+DSP delay line and convolution allocations are refused when `psramCritical` is set (free PSRAM < 512KB). This prevents the DSP engine from consuming the remaining PSRAM when the system is already under pressure, at the cost of those specific processing stages being unavailable until PSRAM recovers.
+
+`dsp_add_stage()` emits a `LOG_W` when `heapWarning` is set (internal SRAM < 50KB), indicating that the stage was added but internal memory headroom is low. At `heapCritical` (< 40KB), `dsp_add_stage()` refuses the allocation entirely and rolls back.
 
 ## Convolution Engine
 

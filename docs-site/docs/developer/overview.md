@@ -31,8 +31,8 @@ The current firmware version is defined in `src/config.h` as `FIRMWARE_VERSION`.
 | Messaging | WebSocket (port 81) + MQTT | Real-time state; Home Assistant discovery |
 | Auth | PBKDF2-SHA256 (10,000 iter) | HttpOnly session cookie; WS token pool |
 | OTA | GitHub releases + SHA256 | Dual OTA partitions (4 MB each) |
-| Unit tests | Unity framework, native platform | 1,614 tests across 70 modules, no hardware needed |
-| E2E tests | Playwright + Express mock server | 26 browser tests across 19 specs |
+| Unit tests | Unity framework, native platform | 2,316 tests across 87 modules, no hardware needed |
+| E2E tests | Playwright + Express mock server | 107 browser tests across 22 specs |
 
 ---
 
@@ -111,11 +111,14 @@ Each subsystem is implemented as a pair of `.h`/`.cpp` files in `src/`. The tabl
 | `audio_pipeline` | `src/audio_pipeline.h/.cpp` | 8-lane input → 16×16 matrix → 8-slot output; Core 1 real-time task |
 | `i2s_audio` | `src/i2s_audio.h/.cpp` | Dual PCM1808 I2S ADC driver; FFT/waveform/RMS/VU analysis |
 | `dsp_pipeline` | `src/dsp_pipeline.h/.cpp` | Per-input biquad IIR/FIR/limiter/compressor chain; double-buffered swap |
-| `output_dsp` | `src/output_dsp.h/.cpp` | Per-output mono DSP engine applied post-matrix |
+| `output_dsp` | `src/output_dsp.h/.cpp` | Per-output mono DSP engine applied post-matrix, pre-sink |
 | `dsp_coefficients` | `src/dsp_biquad_gen.h` | RBJ Audio EQ Cookbook coefficient computation |
 | `dsp_crossover` | `src/dsp_crossover.h/.cpp` | LR2/LR4/LR8 and Butterworth crossover presets |
 | `dsp_rew_parser` | `src/dsp_rew_parser.h/.cpp` | Equalizer APO / miniDSP import, FIR WAV loading |
 | `dsp_api` | `src/dsp_api.h/.cpp` | REST CRUD for DSP config; LittleFS persistence |
+| `pipeline_api` | `src/pipeline_api.h/.cpp` | REST API for audio pipeline matrix CRUD and per-output DSP config |
+| `dac_api` | `src/dac_api.h/.cpp` | REST API for DAC state, capabilities, volume, and enable/disable |
+| `sink_write_utils` | `src/sink_write_utils.h/.cpp` | Shared float buffer utilities for all HAL sink drivers (volume, mute ramp, I2S conversion) |
 | `signal_generator` | `src/signal_generator.h/.cpp` | Sine/square/noise/sweep generator; HAL-assigned lane |
 | `usb_audio` | `src/usb_audio.h/.cpp` | TinyUSB UAC2 speaker device; SPSC ring buffer; guarded by `USB_AUDIO_ENABLED` |
 
@@ -133,12 +136,24 @@ Each subsystem is implemented as a pair of `.h`/`.cpp` files in `src/`. The tabl
 | `hal_pcm5102a` | `hal_pcm5102a.h/.cpp` | PCM5102A DAC driver (I2S) |
 | `hal_pcm1808` | `hal_pcm1808.h/.cpp` | PCM1808 ADC driver (dual I2S master) |
 | `hal_ns4150b` | `hal_ns4150b.h/.cpp` | NS4150B class-D amp enable/disable |
+| `hal_relay` | `hal_relay.h/.cpp` | GPIO relay control for amplifier; used by smart_sensing via `findByCompatible` |
 | `hal_siggen` | `hal_siggen.h/.cpp` | Signal generator as HAL ADC device (`alx,signal-gen`) |
 | `hal_usb_audio` | `hal_usb_audio.h/.cpp` | USB Audio as HAL ADC device (`alx,usb-audio`) |
 | `hal_mcp4725` | `hal_mcp4725.h/.cpp` | MCP4725 12-bit DAC (I2C) |
 | `hal_temp_sensor` | `hal_temp_sensor.h/.cpp` | ESP32-P4 internal temperature sensor (IDF5 driver) |
 | `hal_eeprom_v3` | `hal_eeprom_v3.h/.cpp` | EEPROM v3 device identity probe |
 | `hal_dsp_bridge` | `hal_dsp_bridge.h/.cpp` | HAL-side DSP metrics and VU level accessor |
+| `hal_ess_sabre_adc_base` | `hal_ess_sabre_adc_base.h/.cpp` | Abstract base class for ESS SABRE ADC family drivers (shared I2C helpers, config overrides) |
+| `hal_es9822pro` | `hal_es9822pro.h/.cpp` | ESS ES9822PRO 2-channel SABRE ADC (125 dB, PGA 0–18 dB, HPF) |
+| `hal_es9843pro` | `hal_es9843pro.h/.cpp` | ESS ES9843PRO 4-channel TDM SABRE ADC (125 dB, PGA 0–42 dB) |
+| `hal_es9826` | `hal_es9826.h/.cpp` | ESS ES9826 2-channel SABRE ADC (123 dB, PGA 0–30 dB in 3 dB steps) |
+| `hal_es9823pro` | `hal_es9823pro.h/.cpp` | ESS ES9823PRO / ES9823MPRO 2-channel SABRE ADC (128 dB, chip-ID variant detection) |
+| `hal_es9821` | `hal_es9821.h/.cpp` | ESS ES9821 2-channel SABRE ADC (120 dB, no PGA) |
+| `hal_es9820` | `hal_es9820.h/.cpp` | ESS ES9820 2-channel SABRE ADC (116 dB, PGA 0–18 dB) |
+| `hal_es9842pro` | `hal_es9842pro.h/.cpp` | ESS ES9842PRO 4-channel TDM SABRE ADC (122 dB, PGA 0–18 dB) |
+| `hal_es9840` | `hal_es9840.h/.cpp` | ESS ES9840 4-channel TDM SABRE ADC (116 dB, identical register map to ES9842PRO) |
+| `hal_es9841` | `hal_es9841.h/.cpp` | ESS ES9841 4-channel TDM SABRE ADC (122 dB, PGA 0–42 dB, 8-bit per-channel volume) |
+| `hal_tdm_deinterleaver` | `hal_tdm_deinterleaver.h/.cpp` | TDM frame splitter for 4-channel ADCs; ping-pong buffers, 2 concurrent instances |
 
 ### Networking & Communication
 
@@ -171,6 +186,14 @@ Each subsystem is implemented as a pair of `.h`/`.cpp` files in `src/`. The tabl
 | `diag_event` | `src/diag_event.h` | `DiagEvent` struct with severity, error code, correlation ID |
 | `diag_error_codes` | `src/diag_error_codes.h` | All `DIAG_*` error code constants |
 | `hal_audio_health_bridge` | `src/hal/hal_audio_health_bridge.h/.cpp` | Maps ADC health transitions to HAL state with flap guard |
+
+### Memory Management
+
+| Module | Files | Description |
+|---|---|---|
+| `psram_alloc` | `src/psram_alloc.h/.cpp` | Unified PSRAM allocation wrapper with SRAM fallback, diagnostic emission, and heap budget recording |
+| `psram_api` | `src/psram_api.h/.cpp` | REST endpoint `GET /api/psram/status` for PSRAM health and per-subsystem allocation breakdown |
+| `heap_budget` | `src/heap_budget.h/.cpp` | Per-subsystem allocation tracker (32 entries, label/bytes/isPsram); exposed via WS and REST |
 
 ---
 

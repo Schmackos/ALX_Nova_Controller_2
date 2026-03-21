@@ -12,8 +12,8 @@ Full testing architecture reference: `docs-internal/testing-architecture.md`
 
 | Layer | Tool | Count | What It Covers |
 |---|---|---|---|
-| C++ unit tests | Unity (PlatformIO native) | 1,697 tests / 71 modules | Firmware logic, HAL, DSP, audio pipeline, networking, auth |
-| E2E browser tests | Playwright + Express mock | 26 tests / 19 specs | Web UI, WS state sync, REST API contracts, responsive layout |
+| C++ unit tests | Unity (PlatformIO native) | 2,316 tests / 87 modules | Firmware logic, HAL, DSP, audio pipeline, networking, auth |
+| E2E browser tests | Playwright + Express mock | 107 tests / 22 specs | Web UI, WS state sync, REST API contracts, responsive layout |
 | Static analysis | ESLint, cppcheck, find_dups, check_missing_fns | — | JS correctness, C++ warnings, duplicate/missing declarations |
 
 ## Layer 1: C++ Unit Tests
@@ -21,7 +21,7 @@ Full testing architecture reference: `docs-internal/testing-architecture.md`
 Tests run on the **native platform** (host machine, gcc/MinGW) using the [Unity](https://github.com/ThrowTheSwitch/Unity) assertion framework, compiled and executed by PlatformIO.
 
 ```bash
-# Run all 1,697 tests across all 71 modules
+# Run all 2,316 tests across all 87 modules
 pio test -e native
 
 # Run with verbose output (show individual test names and pass/fail)
@@ -62,9 +62,9 @@ Key build flags for test compilation:
 Each module lives in its own directory under `test/` to avoid duplicate `main`, `setUp`, and `tearDown` symbols:
 
 <details>
-<summary>All 71 test modules</summary>
+<summary>All 87 test modules</summary>
 
-`test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`
+`test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_hal_es9822pro`, `test_hal_es9843pro`, `test_hal_tdm_deinterleaver`, `test_hal_es9826`, `test_hal_es9821`, `test_hal_es9823pro`, `test_hal_es9820`, `test_hal_es9842pro`, `test_hal_es9840`, `test_hal_es9841`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`, `test_heap_monitor`, `test_heap_budget`, `test_pipeline_dma_guard`, `test_psram_alloc`
 
 </details>
 
@@ -119,7 +119,7 @@ cd e2e
 npm install
 npx playwright install --with-deps chromium
 
-# Run all 26 tests
+# Run all 107 tests
 npx playwright test
 
 # Run a single spec
@@ -230,7 +230,10 @@ wsRoute.send(frame);  // Playwright accepts Buffer for binary frames
 | `audio-outputs.spec.js` | 1 | Output strips with HAL device names |
 | `audio-siggen.spec.js` | 1 | Signal generator enable toggle and parameters |
 | `peq-overlay.spec.js` | 1 | PEQ overlay opens with frequency response canvas |
-| `hal-devices.spec.js` | 2 | Device cards render, rescan/disable send correct API calls |
+| `hal-devices.spec.js` | 4 | Device cards render, rescan/disable, capacity indicators, HAL API calls |
+| `hal-adc-controls.spec.js` | 30 | ESS SABRE ADC card controls: PGA gain, HPF, filter preset, capability badges |
+| `ess-2ch-adc.spec.js` | 27 | 2-channel ESS SABRE ADC expansion devices (ES9826, ES9823PRO, ES9821, ES9820) |
+| `ess-4ch-tdm.spec.js` | 19 | 4-channel TDM ESS SABRE ADC expansion devices (ES9842PRO, ES9841, ES9840) |
 | `wifi.spec.js` | 1 | SSID/password form, scan, saved networks, static IP |
 | `mqtt.spec.js` | 1 | Enable toggle, config fields populated from WS |
 | `settings.spec.js` | 1 | Theme, buzzer, display controls populated from WS |
@@ -239,7 +242,7 @@ wsRoute.send(frame);  // Playwright accepts Buffer for binary frames
 | `dark-mode.spec.js` | 1 | Night-mode class toggle, localStorage persistence |
 | `auth-password.spec.js` | 1 | Password change modal validation and API submission |
 | `responsive.spec.js` | 1 | Mobile viewport: bottom bar visible, sidebar hidden |
-| `hardware-stats.spec.js` | 1 | CPU/heap/PSRAM/temp from WS `hardware_stats` |
+| `hardware-stats.spec.js` | 4 | CPU/heap/PSRAM budget table, warning indicators from WS `hardware_stats` |
 | `support.spec.js` | 1 | Support tab content renders |
 
 ### Fixtures
@@ -298,10 +301,10 @@ flowchart LR
     PUSH["Push / PR\nto main or develop"]
 
     subgraph Gates ["Parallel Quality Gates"]
-        CPP["cpp-tests\npio test -e native -v\n1,697 Unity tests"]
+        CPP["cpp-tests\npio test -e native -v\n2,316 Unity tests"]
         LINT["cpp-lint\ncppcheck src/"]
         JS["js-lint\nfind_dups + check_missing_fns\n+ ESLint + diagram-validation"]
-        E2E["e2e-tests\nnpx playwright test\n26 Playwright tests"]
+        E2E["e2e-tests\nnpx playwright test\n107 Playwright tests"]
         DOC["doc-coverage\ncheck_mapping_coverage.js\n+ diagram-validation.js"]
     end
 

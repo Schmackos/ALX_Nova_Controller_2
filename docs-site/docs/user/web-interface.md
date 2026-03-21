@@ -172,6 +172,8 @@ Refreshed every 2 seconds:
 - Free heap memory and PSRAM
 - Uptime
 - Internal chip temperature
+- **PSRAM Budget Table**: A per-subsystem breakdown of active PSRAM and SRAM allocations. Useful for diagnosing memory pressure when DSP features are refusing to allocate.
+- **DSP CPU Indicator**: Real-time DSP processing load percentage. A yellow warning appears at 80% load; red at 95%. Reduce active DSP stages if either threshold is reached.
 
 ### HAL Devices
 

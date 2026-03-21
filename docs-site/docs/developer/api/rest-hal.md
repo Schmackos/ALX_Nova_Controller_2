@@ -341,9 +341,23 @@ The scan runs synchronously on the HTTP request — the response is not sent unt
 ```json
 {
   "status": "ok",
-  "devicesFound": 3
+  "devicesFound": 3,
+  "partialScan": false
 }
 ```
+
+When Bus 0 is skipped due to an active WiFi connection, the response includes additional fields:
+
+```json
+{
+  "status": "ok",
+  "devicesFound": 3,
+  "partialScan": true,
+  "skippedBuses": "Bus 0 (WiFi SDIO conflict)"
+}
+```
+
+`partialScan` is `true` when Bus 0 (GPIO 48/54) was skipped because WiFi is active. Bus 0 shares SDIO lines with the ESP32-C6 WiFi co-processor — scanning while WiFi is connected causes `sdmmc_send_cmd` errors and MCU resets. A full scan covering all three buses is only possible when WiFi is fully disconnected. `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101) is emitted in the diagnostic journal whenever this skip occurs.
 
 **Error codes**
 
@@ -501,3 +515,53 @@ Removes a custom schema file. The schema is identified by the `name` query param
 | 200 | Schema removed |
 | 400 | Missing `name` query parameter |
 | 404 | Schema file not found |
+
+---
+
+## GET /api/psram/status
+
+Returns PSRAM health and per-subsystem allocation tracking. Requires authentication.
+
+**Response**
+
+```json
+{
+  "total": 33554432,
+  "free": 31457280,
+  "usagePercent": 6.25,
+  "fallbackCount": 0,
+  "failedCount": 0,
+  "allocPsram": 1048576,
+  "allocSram": 32768,
+  "warning": false,
+  "critical": false,
+  "budget": [
+    {"label": "dsp_delay", "bytes": 524288, "psram": true},
+    {"label": "audio_dma", "bytes": 32768, "psram": false}
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total` | integer | Total PSRAM size in bytes |
+| `free` | integer | Free PSRAM in bytes |
+| `usagePercent` | float | PSRAM usage percentage (0–100) |
+| `fallbackCount` | integer | Lifetime count of PSRAM-to-SRAM fallback allocations |
+| `failedCount` | integer | Lifetime count of total allocation failures |
+| `allocPsram` | integer | Total bytes currently tracked in PSRAM across all budget entries |
+| `allocSram` | integer | Total bytes currently tracked in SRAM across all budget entries |
+| `warning` | boolean | True when free PSRAM is below 1 MB (`PSRAM_WARNING_THRESHOLD`) |
+| `critical` | boolean | True when free PSRAM is below 512 KB (`PSRAM_CRITICAL_THRESHOLD`) |
+| `budget` | array | Per-subsystem allocation entries — each has `label` (string), `bytes` (integer), and `psram` (boolean) |
+
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success |
+| 401 | Authentication required |
+
+:::note
+`psramWarning` and `psramCritical` thresholds are defined in `src/config.h` as `PSRAM_WARNING_THRESHOLD` (1,048,576 bytes) and `PSRAM_CRITICAL_THRESHOLD` (524,288 bytes). When `critical` is true, DSP delay-line and convolution allocations are refused to preserve remaining PSRAM for essential subsystems.
+:::

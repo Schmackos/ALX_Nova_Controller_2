@@ -131,15 +131,31 @@ The carrier drives BCK and WS to the mezzanine in the default clock-master confi
 
 The following expansion ADC modules have registered HAL drivers and EEPROM images:
 
-| Device | Compatible | Channels | Volume Control | PGA Gain Range | I2C Address |
-|--------|-----------|----------|----------------|----------------|-------------|
-| ES9822PRO | `ess,es9822pro` | 2 | 16-bit digital | 0–18 dB | 0x40 |
-| ES9843PRO | `ess,es9843pro` | 4 | 8-bit digital | 0–42 dB | 0x40 |
+| Device | Compatible | Channels | Output Mode | Volume Control | PGA Gain Range | HPF | I2C Address |
+|--------|-----------|----------|-------------|----------------|----------------|-----|-------------|
+| ES9822PRO | `ess,es9822pro` | 2 | I2S | 16-bit per-ch | 0–18 dB (6 dB steps) | Yes | 0x40 |
+| ES9826 | `ess,es9826` | 2 | I2S | 16-bit per-ch | 0–30 dB (3 dB steps) | Flag only | 0x40 |
+| ES9823PRO | `ess,es9823pro` | 2 | I2S | 16-bit per-ch | 0–42 dB (6 dB steps) | Flag only | 0x40 |
+| ES9823MPRO | `ess,es9823mpro` | 2 | I2S | 16-bit per-ch | 0–42 dB (6 dB steps) | Flag only | 0x40 |
+| ES9821 | `ess,es9821` | 2 | I2S | 16-bit per-ch | None | Flag only | 0x40 |
+| ES9820 | `ess,es9820` | 2 | I2S | 16-bit per-ch | 0–18 dB (6 dB steps) | Yes | 0x40 |
+| ES9843PRO | `ess,es9843pro` | 4 | TDM | 8-bit per-ch | 0–42 dB (6 dB steps) | Yes | 0x40 |
+| ES9842PRO | `ess,es9842pro` | 4 | TDM | 16-bit per-ch | 0–18 dB (6 dB steps) | Yes | 0x40 |
+| ES9841 | `ess,es9841` | 4 | TDM | 8-bit per-ch | 0–42 dB (6 dB steps) | Yes | 0x40 |
+| ES9840 | `ess,es9840` | 4 | TDM | 16-bit per-ch | 0–18 dB (6 dB steps) | Yes | 0x40 |
 
-Both devices are registered in `hal_builtin_devices.cpp` and have preset entries in the device database (`GET /api/hal/db/presets`). Multi-channel modules (ES9843PRO) report `channelCount = 4` in their descriptor and are assigned four consecutive lanes in the audio pipeline input matrix when the pipeline bridge calls `audio_pipeline_set_source()`.
+All nine devices are registered in `hal_builtin_devices.cpp` and have preset entries in the device database (`GET /api/hal/db/presets`). Only one expansion ADC module is physically installed at a time on the mezzanine connector — the correct driver is selected automatically from the compatible string stored in the module's AT24C02 EEPROM.
+
+**I2S output mode (2-channel devices):** ES9822PRO, ES9826, ES9823PRO, ES9823MPRO, ES9821, and ES9820 output standard stereo I2S. The pipeline bridge registers each as a single `AudioInputSource` and assigns one input lane.
+
+**TDM output mode (4-channel devices):** ES9843PRO, ES9842PRO, ES9841, and ES9840 output all 4 channels time-multiplexed on the DIN line in TDM mode: \[SLOT0=CH1\]\[SLOT1=CH2\]\[SLOT2=CH3\]\[SLOT3=CH4\] per frame. The `HalTdmDeinterleaver` embedded in each TDM driver splits the stream into two stereo pairs. The pipeline bridge calls `getInputSourceCount()` (returns 2 when initialized) and registers each stereo pair as a separate `AudioInputSource` at consecutive input lanes. A 4-channel TDM device therefore occupies two input lanes in the routing matrix.
+
+**ES9823PRO / ES9823MPRO variants:** Both package variants share the `HalEs9823pro` driver class. `ess,es9823mpro` is registered as a second compatible string pointing to the same factory. The driver reads chip ID register 0xE1 at `init()` time to distinguish between the two (0x8D = PRO, 0x8C = MPRO) and sets an internal `_isMonolithic` flag.
+
+**HPF "Flag only" note:** On ES9826, ES9823PRO/MPRO, and ES9821, `adcSetHpfEnabled()` stores the HPF state for web UI display but does not write a dedicated hardware register — these devices do not expose a separate HPF control bit in their register maps.
 
 :::info Adding your own module
-If you are developing a new mezzanine module, follow the [Driver Guide](./driver-guide.md) to create the HAL driver class, register the factory, and write the unit tests. Use `"ess,es9822pro"` as a reference implementation for I2C ADC devices with PGA control.
+If you are developing a new mezzanine module, follow the [Driver Guide](./driver-guide.md) to create the HAL driver class, register the factory, and write the unit tests. Use `"ess,es9822pro"` as a reference implementation for 2-channel I2S ADC devices with PGA control, or `"ess,es9843pro"` as a reference for 4-channel TDM devices using `HalTdmDeinterleaver`.
 :::
 
 ## Design Guidelines for Mezzanine Makers

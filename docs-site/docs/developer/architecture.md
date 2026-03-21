@@ -135,27 +135,28 @@ This replaces `delay(5)` polling with event-driven wakeup. The idle case still t
 
 ### Event Bit Assignments
 
-All 16 assigned bits are defined in `src/app_events.h`. The FreeRTOS event group uses bits 0–23 (`EVT_ANY = 0x00FFFFFF`); bits 24–31 are reserved by FreeRTOS internally.
+17 bits are assigned (0–16) in `src/app_events.h`. Bits 17–23 are spare. The FreeRTOS event group uses bits 0–23 (`EVT_ANY = 0x00FFFFFF`); bits 24–31 are reserved by FreeRTOS internally.
 
 ```cpp
 // src/app_events.h (excerpt)
-#define EVT_OTA           (1 << 0)
-#define EVT_DISPLAY       (1 << 1)
-#define EVT_WIFI          (1 << 2)
-#define EVT_MQTT          (1 << 3)
-#define EVT_BUZZER        (1 << 4)
-#define EVT_SENSING       (1 << 5)
-#define EVT_DAC           (1 << 6)
-#define EVT_DSP           (1 << 7)
-#define EVT_SIGGEN        (1 << 8)
-#define EVT_USB_AUDIO     (1 << 9)
-#define EVT_DEBUG         (1 << 10)
-#define EVT_DIAG          (1 << 11)
-#define EVT_HAL           (1 << 12)
-#define EVT_ETH           (1 << 13)
-#define EVT_SETTINGS      (1 << 14)
-#define EVT_CHANNEL_MAP   (1 << 15)
-// bits 16-23: spare
+#define EVT_OTA           (1UL <<  0)
+#define EVT_DISPLAY       (1UL <<  1)
+#define EVT_BUZZER        (1UL <<  2)
+#define EVT_SIGGEN        (1UL <<  3)
+#define EVT_DSP_CONFIG    (1UL <<  4)
+#define EVT_DAC           (1UL <<  5)
+#define EVT_EEPROM        (1UL <<  6)
+#define EVT_USB_AUDIO     (1UL <<  7)
+#define EVT_USB_VU        (1UL <<  8)
+#define EVT_SETTINGS      (1UL <<  9)
+#define EVT_ADC_ENABLED   (1UL << 10)
+#define EVT_ETHERNET      (1UL << 11)
+#define EVT_DIAG          (1UL << 12)
+#define EVT_DAC_SETTINGS  (1UL << 13)
+#define EVT_HAL_DEVICE    (1UL << 14)
+#define EVT_CHANNEL_MAP   (1UL << 15)
+#define EVT_HEAP_PRESSURE (1UL << 16)
+// bits 17-23: spare (7 available)
 #define EVT_ANY           0x00FFFFFFu
 ```
 
@@ -176,11 +177,14 @@ DAC and all HAL device enable/disable transitions use the `HalCoordState` deferr
 
 ```cpp
 // Enqueue a deferred toggle for any HAL device (DAC, ADC, codec, etc.)
-appState.halCoord.requestDeviceToggle(halSlot, 1);   // 1 = enable
-appState.halCoord.requestDeviceToggle(halSlot, -1);  // -1 = disable
+// Returns false on overflow or invalid args — all 6 callers check the return value.
+bool ok = appState.halCoord.requestDeviceToggle(halSlot, 1);   // 1 = enable
+bool ok = appState.halCoord.requestDeviceToggle(halSlot, -1);  // -1 = disable
 // Queue capacity: 8 slots with same-slot dedup. Main loop drains via:
 // hasPendingToggles() → pendingToggleAt(i) → clearPendingToggles()
 ```
+
+**Overflow telemetry**: When the queue is full, `requestDeviceToggle()` increments `_overflowCount` (lifetime counter) and sets `_overflowFlag`. The main loop calls `consumeOverflowFlag()` (one-shot atomic clear) and emits `DIAG_HAL_TOGGLE_OVERFLOW` (0x100E) on the first overflow per drain cycle. REST endpoints that enqueue toggles return HTTP 503 on failure; WebSocket and internal callers log a `LOG_W`.
 
 ### Event-Driven Main Loop
 
@@ -205,6 +209,88 @@ sequenceDiagram
 ```
 
 `mqtt_task` polls at 20 Hz with `vTaskDelay(50)` and does **not** wait on the event group, avoiding the fan-out race where two consumers each miss half the events.
+
+---
+
+## Heap and PSRAM Pressure
+
+The firmware maintains graduated memory pressure states for both internal heap and PSRAM. These are evaluated every 30 seconds in the main loop and drive feature shedding to protect audio continuity.
+
+### Internal Heap Pressure
+
+Three states are defined using thresholds in `src/config.h`:
+
+| State | Condition | Behaviour |
+|---|---|---|
+| Normal | `maxAllocBlock >= 50KB` | All features active |
+| Warning (`heapWarning`) | `maxAllocBlock < 50KB` | WS binary frame rate halved; DSP `add_stage()` logs warning; `DIAG_SYS_HEAP_WARNING` (0x0107) fired |
+| Critical (`heapCritical`) | `maxAllocBlock < 40KB` | DMA buffer allocation refused; WS binary data suppressed; DSP stages refused; OTA checks skipped |
+
+Threshold constants: `HEAP_WARNING_THRESHOLD = 50000`, `HEAP_CRITICAL_THRESHOLD = 40000` (bytes). Each transition emits a diagnostic event and signals `EVT_HEAP_PRESSURE` (bit 16).
+
+:::caution WiFi RX 40KB reserve
+WiFi RX buffers are dynamically allocated from internal SRAM. If the free heap drops below approximately 40KB, incoming packets (ping, HTTP, WebSocket frames) are silently dropped while outgoing traffic (MQTT publish) still works. DMA buffers and DSP allocations must use PSRAM or be guarded by heap checks to maintain this reserve.
+:::
+
+### PSRAM Pressure
+
+Three states are defined for PSRAM:
+
+| State | Condition | Behaviour |
+|---|---|---|
+| Normal | `freePsram >= 1MB` | All features active |
+| Warning (`psramWarning`) | `freePsram < 1MB` | `DIAG_SYS_PSRAM_WARNING` (0x0109) fired; WebSocket and web UI show warning banner |
+| Critical (`psramCritical`) | `freePsram < 512KB` | DSP delay line and convolution allocations refused; `DIAG_SYS_PSRAM_WARNING` re-emitted at ERROR severity |
+
+Threshold constants: `PSRAM_WARNING_THRESHOLD = 1048576`, `PSRAM_CRITICAL_THRESHOLD = 524288` (bytes).
+
+### Unified PSRAM Allocator
+
+All PSRAM-preferred allocations use the `psram_alloc()` wrapper (`src/psram_alloc.h/.cpp`):
+
+```cpp
+// Attempt PSRAM; fall back to SRAM on failure.
+// Records automatically in heap_budget and emits DIAG_SYS_PSRAM_ALLOC_FAIL on fallback.
+void* ptr = psram_alloc(count, size, "dsp-delay");
+
+// Free and remove from budget tracking.
+psram_free(ptr, "dsp-delay");
+
+// Query lifetime fallback and failure counts.
+PsramAllocStats stats = psram_get_stats();
+// stats.fallbackCount   — allocations that landed on SRAM instead of PSRAM
+// stats.failedCount     — allocations that failed on both PSRAM and SRAM
+// stats.activePsramBytes, stats.activeSramBytes — current live totals
+```
+
+On PSRAM success the allocation is recorded as PSRAM in the heap budget. On PSRAM failure with SRAM success, `DIAG_SYS_PSRAM_ALLOC_FAIL` is emitted at WARN and the fallback count is incremented. On total failure, the same code fires at ERROR. The REST endpoint `GET /api/psram/status` and the WebSocket `hardwareStats` message expose these counts to the web UI.
+
+:::note DMA buffers are excluded from psram_alloc
+DMA buffers (`_rawBuf[]`, `_sinkBuf[]`) must stay in internal SRAM and are allocated directly with `heap_caps_calloc(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)`. They are NOT managed by `psram_alloc()`.
+:::
+
+### Heap Budget Tracker
+
+`heap_budget` (`src/heap_budget.h/.cpp`) tracks per-subsystem allocations without dynamic allocation of its own:
+
+```cpp
+// Record an allocation (label must have static lifetime).
+heap_budget_record("dsp-delay", bytes, /*isPsram=*/true);
+
+// Remove on free.
+heap_budget_remove("dsp-delay");
+
+// Query totals.
+uint32_t psramTotal = heap_budget_total_psram();
+uint32_t sramTotal  = heap_budget_total_sram();
+
+// Iterate entries (for REST/WS serialisation).
+uint8_t n = heap_budget_count();
+const HeapBudgetEntry* e = heap_budget_entry(i);
+// e->label, e->bytes, e->isPsram
+```
+
+The tracker holds up to 32 `HeapBudgetEntry` structs (label up to 24 characters, byte count, PSRAM flag). It is exposed via the WebSocket `hardwareStats` message (`heapBudget` array) and the REST endpoint `GET /api/diag/snapshot`.
 
 ---
 
@@ -391,7 +477,7 @@ flowchart LR
 
 Key implementation details:
 - All internal audio is **float32 in the range [-1.0, +1.0]**. int32 ↔ float conversion happens only at the DMA edge.
-- DMA raw buffers and float working buffers use **lazy SRAM allocation** — memory is allocated on `set_source` / `set_sink`, not statically at boot.
+- DMA raw buffers (16 × 2KB = 32KB internal SRAM) are **eagerly pre-allocated** in `audio_pipeline_init()` via `heap_caps_calloc(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)` before WiFi connects. `DIAG_AUDIO_DMA_ALLOC_FAIL` (0x200E) is emitted on failure.
 - The matrix is **16×16** with early-exit optimisation: NULL output channels, NULL input channels, and zero gains are skipped without computation.
 - DSP delay lines are allocated via `ps_calloc()` (PSRAM) when available, with a 40 KB heap pre-flight guard on fallback to SRAM.
 
