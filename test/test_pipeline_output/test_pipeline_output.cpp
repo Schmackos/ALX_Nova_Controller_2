@@ -21,8 +21,8 @@
 // ===== Inline definitions matching production code =====
 #define FRAMES 256
 #define RAW_SAMPLES 512
-#define MATRIX_SIZE 8
-#define MAX_SINKS 4
+#define MATRIX_SIZE 16
+#define MAX_SINKS 8
 #define MAX_24BIT_F 8388607.0f
 
 typedef struct AudioOutputSink {

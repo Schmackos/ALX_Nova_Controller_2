@@ -27,6 +27,12 @@
 #include "audio_input_source.h"
 #include "audio_output_sink.h"
 
+// ===== Compile-time dimension invariants =====
+static_assert(AUDIO_PIPELINE_MAX_INPUTS * 2 <= AUDIO_PIPELINE_MATRIX_SIZE,
+    "Matrix columns must accommodate all stereo input channels");
+static_assert(AUDIO_OUT_MAX_SINKS * 2 <= AUDIO_PIPELINE_MATRIX_SIZE,
+    "Matrix rows must accommodate all stereo output channels");
+
 // ===== Constants =====
 static const int FRAMES      = I2S_DMA_BUF_LEN;    // 256 stereo frames per DMA buffer
 static const int RAW_SAMPLES = FRAMES * 2;          // 512 int32_t per buffer (L+R interleaved)
@@ -278,13 +284,12 @@ static void pipeline_mix_matrix() {
     }
 
 #ifdef DSP_ENABLED
-    // Full 8×8 matrix: 8 input channels from 4 stereo lanes → 8 output channels
-    const float *inCh[AUDIO_PIPELINE_MATRIX_SIZE] = {
-        _laneL[0], _laneR[0],
-        _laneL[1], _laneR[1],
-        _laneL[2], _laneR[2],
-        _laneL[3], _laneR[3]
-    };
+    // Full matrix: all input lanes → output channels (loop-based, bounds-safe)
+    const float *inCh[AUDIO_PIPELINE_MATRIX_SIZE] = {};
+    for (int lane = 0; lane < AUDIO_PIPELINE_MAX_INPUTS && lane * 2 + 1 < AUDIO_PIPELINE_MATRIX_SIZE; lane++) {
+        inCh[lane * 2]     = _laneL[lane];
+        inCh[lane * 2 + 1] = _laneR[lane];
+    }
 
     // Lazy-allocate PSRAM scratch buffer for scaled copy
     static float *_matrixTemp = nullptr;
@@ -725,6 +730,7 @@ void audio_pipeline_notify_dsp_swap() {
 
 void audio_pipeline_set_source(int lane, const AudioInputSource *src) {
     if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS || !src) return;
+    if (lane * 2 + 1 >= AUDIO_PIPELINE_MATRIX_SIZE) return;
 #ifndef NATIVE_TEST
     // Lazy-allocate DMA raw buffer for this lane on first source registration.
     // Must be in internal SRAM — DMA cannot access PSRAM.
@@ -857,6 +863,7 @@ const AudioOutputSink* audio_pipeline_get_sink(int idx) {
 
 void audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
     if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS || !sink) return;
+    if (sink->firstChannel + sink->channelCount > AUDIO_PIPELINE_MATRIX_SIZE) return;
 #ifndef NATIVE_TEST
     // Lazy-allocate DMA output buffer for this sink slot on first registration.
     // Must be in internal SRAM — DMA cannot access PSRAM.

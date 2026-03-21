@@ -47,24 +47,10 @@
 
 ---
 
-### Matrix Routing Bounds & Validation Gaps
-
-**Area:** Audio pipeline, 16×16 routing matrix
-**Files:** `src/audio_pipeline.cpp`, `src/pipeline_api.h/.cpp`
-**Problem:** Matrix indices depend on HAL device discovery and ordinal slot/lane assignment. Pipeline allocates 8 output channels but matrix driver code assumes 16×16 (AUDIO_PIPELINE_MATRIX_SIZE=16). Bounds checking for user-supplied matrix gain values relies on index validation in REST API handler.
-
-**Current State:**
-- `_matrixGain[16][16]` hard-coded allocation (requires DSP_ENABLED)
-- API handler validates input indices before writing (`if (o < 0 || o >= 16 || i < 0 || i >= 16) return 400`)
-- No runtime guard if dynamic resizing of sinks/sources ever happens
-
-**Risk:** If source count grows beyond 8 or sink count beyond 8 without updating matrix size, out-of-bounds access in `pipeline_mix_matrix()`.
-
-**Improvement Path:**
-1. Replace hard-coded `AUDIO_PIPELINE_MATRIX_SIZE=16` with dynamic `_matrixRowCount` / `_matrixColCount` set at init
-2. Add assertion at pipeline start: `_sinkCount <= AUDIO_OUT_MAX_SINKS && _sourceCount <= AUDIO_PIPELINE_MAX_INPUTS`
-3. Guard matrix access in `pipeline_mix_matrix()`: `if (o >= _matrixRowCount || i >= _matrixColCount) continue;`
-4. Add test: create 4+ HAL sources and verify matrix bounds are respected
+**FIXED — Matrix Routing Bounds & Validation Gaps:**
+- Resolution: Multi-layer bounds hardening with compile-time and runtime guards. `static_assert` in `audio_pipeline.cpp` enforces `MAX_INPUTS*2 <= MATRIX_SIZE` and `MAX_SINKS*2 <= MATRIX_SIZE` at build time. `audio_input_source.h` fallback constant fixed from 4 to 8 (eliminates include-order fragility). `pipeline_mix_matrix()` `inCh[]` array population changed from hardcoded 4-lane initializer to bounds-safe loop covering all 8 lanes (fixes silent audio discard for lanes 4-7). `audio_pipeline_set_sink()` validates `firstChannel + channelCount <= MATRIX_SIZE`. `audio_pipeline_set_source()` validates `lane*2+1 < MATRIX_SIZE`. All 3 HAL drivers (`hal_pcm5102a.cpp`, `hal_es8311.cpp`, `hal_mcp4725.cpp`) validate `firstChannel + channelCount <= MATRIX_SIZE` in `buildSink()`, returning false on overflow. `test_pipeline_output.cpp` stale constants updated from `MATRIX_SIZE=8, MAX_SINKS=4` to `16, 8`.
+- Files: `src/audio_pipeline.cpp`, `src/audio_input_source.h`, `src/hal/hal_pcm5102a.cpp`, `src/hal/hal_es8311.cpp`, `src/hal/hal_mcp4725.cpp`, `test/test_matrix_bounds/`, `test/test_pipeline_output/`
+- Test coverage: 24 new tests in `test_matrix_bounds` (dimension invariants, gain bounds, firstChannel overflow, registration bounds, inCh population, sink channel validation). 1693 total tests passing.
 
 ---
 

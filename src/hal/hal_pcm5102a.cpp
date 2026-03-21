@@ -246,7 +246,9 @@ bool HalPcm5102a::buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
 
     *out = AUDIO_OUTPUT_SINK_INIT;
     out->name         = _descriptor.name;
-    out->firstChannel = (uint8_t)(sinkSlot * 2);
+    uint8_t fc = (uint8_t)(sinkSlot * 2);
+    if (fc + _descriptor.channelCount > AUDIO_PIPELINE_MATRIX_SIZE) return false;
+    out->firstChannel = fc;
     out->channelCount = _descriptor.channelCount;
     out->halSlot      = _slot;
     out->write        = _pcm5102a_write;
