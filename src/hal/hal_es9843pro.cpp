@@ -38,18 +38,15 @@
 #define ES9843PRO_REG_CHIP_ID             0xE1
 #define ES9843PRO_SOFT_RESET_CMD          0xA0
 #define ES9843PRO_OUTPUT_I2S              0x00
+#define ES9843PRO_TDM_FORMAT              0x04   // I2S TDM mode (reg 0x03 bits2:0 = 0b100)
 #define ES9843PRO_ENABLE_4CH              0x0F
 #define ES9843PRO_ASP_BYPASS_ALL          0x0F
 #define ES9843PRO_VOL_0DB                 0x00
 #define ES9843PRO_VOL_MUTE                0xFF
-// Stub I2S port callbacks under native test
-inline uint32_t i2s_audio_port0_read(int32_t*, uint32_t) { return 0; }
-inline uint32_t i2s_audio_port1_read(int32_t*, uint32_t) { return 0; }
-inline uint32_t i2s_audio_port2_read(int32_t*, uint32_t) { return 0; }
-inline bool     i2s_audio_port0_active(void) { return false; }
-inline bool     i2s_audio_port1_active(void) { return false; }
-inline bool     i2s_audio_port2_active(void) { return false; }
+// i2s_audio stubs — TDM functions covered by hal_tdm_deinterleaver native stubs
 inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
+inline bool i2s_audio_enable_expansion_tdm_rx(uint32_t, int, uint8_t) { return true; }
+inline void i2s_audio_disable_expansion_rx() {}
 #endif // NATIVE_TEST
 
 // ===== Constructor =====
@@ -172,8 +169,10 @@ HalInitResult HalEs9843pro::init() {
     // ---- 6. Enable all 4 ADC channels: reg 0x00 bits3:0 = 0x0F ----
     _writeReg(ES9843PRO_REG_SYS_CONFIG, ES9843PRO_ENABLE_4CH);
 
-    // ---- 7. Configure output format: reg 0x03 = 0x00 (I2S/Philips mode) ----
-    _writeReg(ES9843PRO_REG_OUTPUT_FORMAT, ES9843PRO_OUTPUT_I2S);
+    // ---- 7. Configure output format: TDM mode (reg 0x03 bits2:0 = 0b100) ----
+    // ES9843PRO_TDM_FORMAT enables 4-slot TDM output on a single data line.
+    // This replaces ES9843PRO_OUTPUT_I2S (0x00 = standard stereo I2S).
+    _writeReg(ES9843PRO_REG_OUTPUT_FORMAT, ES9843PRO_TDM_FORMAT);
 
     // ---- 8. Set all 4 channels to 0 dB volume: regs 0x51-0x54 = 0x00 ----
     _writeReg(ES9843PRO_REG_CH1_VOLUME, ES9843PRO_VOL_0DB);
@@ -208,37 +207,52 @@ HalInitResult HalEs9843pro::init() {
     _writeReg(ES9843PRO_REG_ASP_CONTROL, 0x00);
     _writeReg(ES9843PRO_REG_ASP_BYPASS,  ES9843PRO_ASP_BYPASS_ALL);
 
-    // ---- 13. Populate AudioInputSource (port-indexed I2S callbacks) ----
-    memset(&_inputSrc, 0, sizeof(_inputSrc));
-    _inputSrc.name          = _descriptor.name;
-    _inputSrc.isHardwareAdc = true;
-    _inputSrc.gainLinear    = 1.0f;
-    _inputSrc.vuL           = -90.0f;
-    _inputSrc.vuR           = -90.0f;
+    // ---- 13. Configure I2S2 in TDM mode and init the deinterleaver ----
+    // The i2sPort config field selects the I2S peripheral.  The ES9843PRO
+    // always uses port 2 (I2S2) as the expansion mezzanine ADC RX path.
+    uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2;
 
-    uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2; // Default port 2 for expansion
-#ifndef NATIVE_TEST
-    if (port == 0) {
-        _inputSrc.read     = i2s_audio_port0_read;
-        _inputSrc.isActive = i2s_audio_port0_active;
-    } else if (port == 1) {
-        _inputSrc.read     = i2s_audio_port1_read;
-        _inputSrc.isActive = i2s_audio_port1_active;
-    } else {
-        _inputSrc.read     = i2s_audio_port2_read;
-        _inputSrc.isActive = i2s_audio_port2_active;
+    // Resolve the DATA_IN pin: cfg->pinData if set, otherwise no default is
+    // available for the expansion bus — the user must configure it.
+    int8_t dinPinRaw = (cfg && cfg->valid && cfg->pinData > 0) ? cfg->pinData : -1;
+    if (dinPinRaw < 0) {
+        LOG_W("[HAL:ES9843PRO] No DATA_IN pin configured — set pinData in HAL config");
+        // Non-fatal: continue init so I2C registers are programmed.  TDM reads
+        // will return 0 frames until the user provides the correct pin and reinits.
+        dinPinRaw = 0;  // I2S_GPIO_UNUSED equivalent for log readability
     }
-    _inputSrc.getSampleRate = i2s_audio_get_sample_rate;
+
+#ifndef NATIVE_TEST
+    // Enable I2S2 in TDM mode with 4 slots (one per ES9843PRO output channel)
+    bool tdmOk = i2s_audio_enable_expansion_tdm_rx(
+        _sampleRate,
+        (gpio_num_t)dinPinRaw,
+        4   // 4 TDM slots: CH1/CH2/CH3/CH4
+    );
+    if (!tdmOk) {
+        LOG_E("[HAL:ES9843PRO] I2S2 TDM init failed — audio will be silent");
+        // Non-fatal: device still registers; operator can reinit via REST API.
+    }
 #endif
-    _inputSrcReady = true;
+
+    // Allocate deinterleaver ping-pong buffers (PSRAM preferred)
+    if (!_tdm.init((uint8_t)port)) {
+        LOG_E("[HAL:ES9843PRO] TDM deinterleaver init failed — out of memory");
+        return hal_init_fail(DIAG_HAL_INIT_FAILED, "TDM deinterleaver alloc failed");
+    }
+
+    // Build the two AudioInputSource structs from the deinterleaver
+    _tdm.buildSources(_NAME_A, _NAME_B, &_srcA, &_srcB);
 
     // ---- 14. Mark device ready ----
     _initialized = true;
     _state = HAL_STATE_AVAILABLE;
     _ready = true;
 
-    LOG_I("[HAL:ES9843PRO] Ready (i2s port=%u gain=%ddB hpf=%d filter=%u)",
-          port, _gainDb, (int)_hpfEnabled, _filterPreset);
+    LOG_I("[HAL:ES9843PRO] Ready — TDM mode, port=%u DIN=GPIO%d gain=%ddB hpf=%d filter=%u",
+          port, dinPinRaw, _gainDb, (int)_hpfEnabled, _filterPreset);
+    LOG_I("[HAL:ES9843PRO] Registered sources: '%s' (pair A) + '%s' (pair B)",
+          _NAME_A, _NAME_B);
     return hal_init_ok();
 }
 
@@ -250,13 +264,18 @@ void HalEs9843pro::deinit() {
 #ifndef NATIVE_TEST
     // Power down: disable all ADC channels (reg 0x00 = 0x00)
     _writeReg(ES9843PRO_REG_SYS_CONFIG, 0x00);
+
+    // Release I2S2 expansion TDM RX (decrements _i2s2.users bit 0x02)
+    i2s_audio_disable_expansion_rx();
 #endif
 
-    _initialized   = false;
-    _inputSrcReady = false;
-    _state = HAL_STATE_REMOVED;
+    // Release deinterleaver ping-pong buffers
+    _tdm.deinit();
 
-    LOG_I("[HAL:ES9843PRO] Deinitialized");
+    _initialized = false;
+    _state       = HAL_STATE_REMOVED;
+
+    LOG_I("[HAL:ES9843PRO] Deinitialized (TDM + I2S2 released)");
 }
 
 void HalEs9843pro::dumpConfig() {
@@ -399,10 +418,16 @@ bool HalEs9843pro::setChannelVolume(uint8_t ch, uint8_t vol8) {
     return ok;
 }
 
-// ===== AudioInputSource =====
+// ===== AudioInputSource — dual-source TDM accessor =====
 
-const AudioInputSource* HalEs9843pro::getInputSource() const {
-    return _inputSrcReady ? &_inputSrc : nullptr;
+const AudioInputSource* HalEs9843pro::getInputSourceAt(int idx) const {
+    // Sources are valid as soon as init() completes and buildSources() populated
+    // the structs — we do not require _tdm.isReady() (which needs a real DMA read)
+    // because the bridge registers sources immediately after init() returns.
+    if (!_initialized) return nullptr;
+    if (idx == 0) return &_srcA;
+    if (idx == 1) return &_srcB;
+    return nullptr;
 }
 
 #endif // DAC_ENABLED

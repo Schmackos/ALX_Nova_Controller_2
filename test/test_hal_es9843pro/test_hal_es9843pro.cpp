@@ -106,13 +106,24 @@ public:
         _state = HAL_STATE_AVAILABLE;
         _ready = true;
 
-        // Populate AudioInputSource
+        // Populate pair A AudioInputSource (CH1/CH2)
         memset(&_inputSrc, 0, sizeof(_inputSrc));
-        _inputSrc.name          = _descriptor.name;
+        _inputSrc.name          = "ES9843PRO CH1/2";
         _inputSrc.isHardwareAdc = true;
         _inputSrc.gainLinear    = 1.0f;
         _inputSrc.vuL           = -90.0f;
         _inputSrc.vuR           = -90.0f;
+        _inputSrc.halSlot       = 0xFF;
+
+        // Populate pair B AudioInputSource (CH3/CH4)
+        memset(&_inputSrcB, 0, sizeof(_inputSrcB));
+        _inputSrcB.name          = "ES9843PRO CH3/4";
+        _inputSrcB.isHardwareAdc = true;
+        _inputSrcB.gainLinear    = 1.0f;
+        _inputSrcB.vuL           = -90.0f;
+        _inputSrcB.vuR           = -90.0f;
+        _inputSrcB.halSlot       = 0xFF;
+
         _inputSrcReady = true;
 
         // Reset per-channel volumes to 0dB
@@ -131,8 +142,23 @@ public:
 
     bool healthCheck() override { return _ready; }
 
+    // Multi-source interface (mirrors the real ES9843PRO dual-source TDM design).
+    // The mock exposes two sources when initialized to match production behaviour.
+    AudioInputSource _inputSrcB = {};
+
     const AudioInputSource* getInputSource() const override {
-        return _inputSrcReady ? &_inputSrc : nullptr;
+        return getInputSourceAt(0);
+    }
+
+    int getInputSourceCount() const override {
+        return _inputSrcReady ? 2 : 0;
+    }
+
+    const AudioInputSource* getInputSourceAt(int idx) const override {
+        if (!_inputSrcReady) return nullptr;
+        if (idx == 0) return &_inputSrc;
+        if (idx == 1) return &_inputSrcB;
+        return nullptr;
     }
 
     // ----- HalAudioDevice -----
@@ -331,12 +357,37 @@ void test_input_source_is_hardware_adc(void) {
     TEST_ASSERT_TRUE(src->isHardwareAdc);
 }
 
-// ----- 16. input source name matches descriptor name "ES9843PRO" -----
+// ----- 16. source 0 name is "ES9843PRO CH1/2" (TDM pair A) -----
 void test_input_source_name_matches_descriptor(void) {
     adc->init();
     const AudioInputSource* src = adc->getInputSource();
     TEST_ASSERT_NOT_NULL(src);
-    TEST_ASSERT_EQUAL_STRING("ES9843PRO", src->name);
+    TEST_ASSERT_EQUAL_STRING("ES9843PRO CH1/2", src->name);
+}
+
+// ----- 16b. getInputSourceCount() returns 2 after init, 0 before -----
+void test_input_source_count(void) {
+    TEST_ASSERT_EQUAL_INT(0, adc->getInputSourceCount());
+    adc->init();
+    TEST_ASSERT_EQUAL_INT(2, adc->getInputSourceCount());
+}
+
+// ----- 16c. getInputSourceAt(1) returns pair B with correct name -----
+void test_input_source_at_1_is_pair_b(void) {
+    adc->init();
+    const AudioInputSource* srcB = adc->getInputSourceAt(1);
+    TEST_ASSERT_NOT_NULL(srcB);
+    TEST_ASSERT_EQUAL_STRING("ES9843PRO CH3/4", srcB->name);
+    TEST_ASSERT_TRUE(srcB->isHardwareAdc);
+    TEST_ASSERT_EQUAL_FLOAT(-90.0f, srcB->vuL);
+    TEST_ASSERT_EQUAL_FLOAT(-90.0f, srcB->vuR);
+}
+
+// ----- 16d. getInputSourceAt(2) returns nullptr (out of range) -----
+void test_input_source_at_out_of_range(void) {
+    adc->init();
+    TEST_ASSERT_NULL(adc->getInputSourceAt(2));
+    TEST_ASSERT_NULL(adc->getInputSourceAt(-1));
 }
 
 // ----- 17. input source initial VU is -90 dBFS -----
@@ -736,6 +787,9 @@ int main(int argc, char** argv) {
     RUN_TEST(test_get_input_source_before_init);
     RUN_TEST(test_input_source_is_hardware_adc);
     RUN_TEST(test_input_source_name_matches_descriptor);
+    RUN_TEST(test_input_source_count);
+    RUN_TEST(test_input_source_at_1_is_pair_b);
+    RUN_TEST(test_input_source_at_out_of_range);
     RUN_TEST(test_input_source_vu_initial_minus90);
     RUN_TEST(test_input_source_gain_linear_unity);
     RUN_TEST(test_get_input_source_after_deinit);

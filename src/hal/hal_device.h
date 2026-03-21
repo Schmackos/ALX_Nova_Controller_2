@@ -33,6 +33,17 @@ public:
     // and sets lane/halSlot before registering with audio_pipeline_set_source().
     virtual const AudioInputSource* getInputSource() const { return nullptr; }
 
+    // Multi-source extension for devices that expose more than one stereo pair
+    // (e.g. ES9843PRO in TDM mode: 4 channels → 2 stereo AudioInputSource entries).
+    // Default implementation wraps the legacy single-source getInputSource().
+    // Devices with multiple sources override both methods; bridge uses these.
+    virtual int getInputSourceCount() const {
+        return (getInputSource() != nullptr) ? 1 : 0;
+    }
+    virtual const AudioInputSource* getInputSourceAt(int idx) const {
+        return (idx == 0) ? getInputSource() : nullptr;
+    }
+
     // Audio output sink builder — override in DAC/output devices.
     // Populates an AudioOutputSink with device-specific write/isReady callbacks.
     // Returns true if the sink was populated successfully.

@@ -55,12 +55,15 @@ inline void hal_pipeline_reset_mock_counters() {
 
 // ---------------------------------------------------------------------------
 // Slot mapping tables
-//   _halSlotToSinkSlot[n] >= 0  : HAL slot n owns pipeline sink slot n_sink
-//   _halSlotToAdcLane[n]  >= 0  : HAL slot n owns ADC lane n_lane
-// Both are initialised to -1 (unmapped).
+//   _halSlotToSinkSlot[n]    >= 0 : HAL slot n owns pipeline sink slot n_sink
+//   _halSlotToAdcLane[n]     >= 0 : HAL slot n owns the FIRST ADC lane in its group
+//   _halSlotAdcLaneCount[n]  > 0  : number of consecutive lanes owned by HAL slot n
+//                                   (1 for all current devices except ES9843PRO = 2)
+// Both are initialised to -1 / 0 (unmapped).
 // ---------------------------------------------------------------------------
-static int8_t _halSlotToSinkSlot[HAL_MAX_DEVICES];
-static int8_t _halSlotToAdcLane[HAL_MAX_DEVICES];
+static int8_t  _halSlotToSinkSlot[HAL_MAX_DEVICES];
+static int8_t  _halSlotToAdcLane[HAL_MAX_DEVICES];
+static uint8_t _halSlotAdcLaneCount[HAL_MAX_DEVICES];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,8 +111,11 @@ static int8_t _sinkSlotForDevice(HalDevice* dev) {
 
 // Map a HAL device to an ADC lane index using ordinal counting.
 // Uses HAL_CAP_ADC_PATH capability — not device type.
-// Returns -1 if the device has no ADC path or all lanes are taken.
-static int8_t _adcLaneForDevice(HalDevice* dev) {
+// needCount: number of consecutive lanes required (1 for mono/stereo ADCs,
+//            2 for ES9843PRO 4-channel TDM which exposes 2 stereo pairs).
+// Returns the first free lane index if needCount consecutive free lanes exist,
+// or -1 if the device has no ADC path or insufficient lanes are available.
+static int8_t _adcLaneForDevice(HalDevice* dev, int needCount = 1) {
     uint8_t caps = _effectiveCaps(dev);
     if (!(caps & HAL_CAP_ADC_PATH)) return -1;
 
@@ -117,26 +123,44 @@ static int8_t _adcLaneForDevice(HalDevice* dev) {
     uint8_t halSlot = dev->getSlot();
     if (_halSlotToAdcLane[halSlot] >= 0) return _halSlotToAdcLane[halSlot];
 
-    // Find first free lane
+    if (needCount < 1) needCount = 1;
+
+    // Build a 'taken' bitmap of all currently claimed lanes
     bool taken[AUDIO_PIPELINE_MAX_INPUTS] = {};
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        if (_halSlotToAdcLane[i] >= 0 && _halSlotToAdcLane[i] < (int8_t)AUDIO_PIPELINE_MAX_INPUTS) {
-            taken[(int)_halSlotToAdcLane[i]] = true;
+        if (_halSlotToAdcLane[i] >= 0) {
+            int base  = (int)_halSlotToAdcLane[i];
+            int count = (int)_halSlotAdcLaneCount[i];
+            if (count < 1) count = 1;
+            for (int c = 0; c < count; c++) {
+                int lane = base + c;
+                if (lane < AUDIO_PIPELINE_MAX_INPUTS) taken[lane] = true;
+            }
         }
     }
-    for (int8_t l = 0; l < (int8_t)AUDIO_PIPELINE_MAX_INPUTS; l++) {
-        if (!taken[l]) return l;
+
+    // Find first run of needCount consecutive free lanes
+    for (int8_t l = 0; l <= (int8_t)(AUDIO_PIPELINE_MAX_INPUTS - needCount); l++) {
+        bool ok = true;
+        for (int c = 0; c < needCount; c++) {
+            if (taken[l + c]) { ok = false; break; }
+        }
+        if (ok) return l;
     }
-    return -1;  // All lanes taken
+    return -1;  // Insufficient consecutive lanes
 }
 
 // Recount active inputs/outputs and update appState (Phase 2).
+// For multi-source devices (ES9843PRO) each lane counts independently.
 static void _updateActiveCounts() {
 #ifndef NATIVE_TEST
     int outputs = 0, inputs = 0;
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         if (_halSlotToSinkSlot[i] >= 0) outputs++;
-        if (_halSlotToAdcLane[i]  >= 0) inputs++;
+        if (_halSlotToAdcLane[i]  >= 0) {
+            int count = (int)_halSlotAdcLaneCount[i];
+            inputs += (count > 0) ? count : 1;
+        }
     }
     appState.audio.activeOutputCount = outputs;
     appState.audio.activeInputCount  = inputs;
@@ -292,8 +316,8 @@ void hal_pipeline_on_device_available(uint8_t slot) {
     HalDevice* dev = mgr.getDevice(slot);
     if (!dev) return;
 
-    HalDeviceType type = dev->getType();
-    const char* name   = dev->getDescriptor().name;
+    (void)dev->getType();   // Type used only for logging; capability flags drive logic
+    const char* name = dev->getDescriptor().name;
 
     // --- Output sink (DAC / CODEC with DAC path) ---
     // Delegate to hal_pipeline_activate_device() which owns buildSink() + set_sink()
@@ -304,31 +328,51 @@ void hal_pipeline_on_device_available(uint8_t slot) {
     int8_t sinkSlot = _halSlotToSinkSlot[slot]; // Read back mapping (set by activate)
 
     // --- Input lane (ADC / CODEC with ADC path) ---
-    int8_t adcLane = _adcLaneForDevice(dev);
-    if (adcLane >= 0) {
-        _halSlotToAdcLane[slot] = adcLane;
-        LOG_I("[HAL:Bridge] Pipeline bridge: input %s (HAL slot %d) → ADC lane %d",
-              name, slot, (int)adcLane);
-#ifndef NATIVE_TEST
-        appState.audio.adcEnabled[adcLane] = true;
-        appState.markAdcEnabledDirty();
-#endif
+    // Multi-source devices (e.g. ES9843PRO in TDM mode) expose N stereo pairs.
+    // We query getInputSourceCount() and allocate N consecutive lanes.
+    if (caps & HAL_CAP_ADC_PATH) {
+        int srcCount = dev->getInputSourceCount();
+        if (srcCount < 1) srcCount = 1;  // Defensive: always try at least one lane
 
-        // Register AudioInputSource with the pipeline if the device provides one
+        int8_t firstLane = _adcLaneForDevice(dev, srcCount);
+        if (firstLane >= 0) {
+            _halSlotToAdcLane[slot]      = firstLane;
+            _halSlotAdcLaneCount[slot]   = (uint8_t)srcCount;
+
+            LOG_I("[HAL:Bridge] Pipeline bridge: input %s (HAL slot %d) → ADC lane%s %d..%d (%d source%s)",
+                  name, slot,
+                  (srcCount > 1) ? "s" : "",
+                  (int)firstLane, (int)(firstLane + srcCount - 1),
+                  srcCount, (srcCount > 1) ? "s" : "");
+
+            for (int si = 0; si < srcCount; si++) {
+                int lane = (int)firstLane + si;
 #ifndef NATIVE_TEST
-        const AudioInputSource* src = dev->getInputSource();
-        if (src) {
-            AudioInputSource regSrc = *src;  // Value copy
-            regSrc.lane = (uint8_t)adcLane;
-            regSrc.halSlot = slot;
-            audio_pipeline_set_source((int)adcLane, &regSrc);
-            LOG_I("[HAL:Bridge] Pipeline bridge: registered input source '%s' at lane %d",
-                  regSrc.name ? regSrc.name : "?", (int)adcLane);
-        }
+                if (lane < AUDIO_PIPELINE_MAX_INPUTS) {
+                    appState.audio.adcEnabled[lane] = true;
+                }
 #endif
-    } else if (caps & HAL_CAP_ADC_PATH) {
-        LOG_W("[HAL:Bridge] No free input lane for device at HAL slot %u", slot);
-        diag_emit(DIAG_HAL_SLOT_FULL, DIAG_SEV_WARN, slot, dev->getDescriptor().name, "input lanes full");
+                // Register AudioInputSource with the pipeline
+#ifndef NATIVE_TEST
+                const AudioInputSource* src = dev->getInputSourceAt(si);
+                if (src) {
+                    AudioInputSource regSrc = *src;  // Value copy
+                    regSrc.lane    = (uint8_t)lane;
+                    regSrc.halSlot = slot;
+                    audio_pipeline_set_source(lane, &regSrc);
+                    LOG_I("[HAL:Bridge] Pipeline bridge: registered '%s' at lane %d",
+                          regSrc.name ? regSrc.name : "?", lane);
+                }
+#endif
+            }
+#ifndef NATIVE_TEST
+            appState.markAdcEnabledDirty();
+#endif
+        } else {
+            LOG_W("[HAL:Bridge] No free input lane(s) for device at HAL slot %u (need %d)",
+                  slot, srcCount);
+            diag_emit(DIAG_HAL_SLOT_FULL, DIAG_SEV_WARN, slot, dev->getDescriptor().name, "input lanes full");
+        }
     }
 
     _updateActiveCounts();
@@ -391,18 +435,31 @@ void hal_pipeline_on_device_removed(uint8_t slot) {
         hal_pipeline_deactivate_device(slot);
     }
 
-    // --- Disable ADC lane ---
+    // --- Disable ADC lane(s) — may be more than one for multi-source devices ---
     if (_halSlotToAdcLane[slot] >= 0) {
-        int8_t lane = _halSlotToAdcLane[slot];
-        LOG_I("[HAL:Bridge] Pipeline bridge: disabling ADC lane %d (HAL slot %d, %s)",
-              (int)lane, slot, name);
-        // Remove AudioInputSource from pipeline
-        audio_pipeline_remove_source((int)lane);
+        int8_t  firstLane = _halSlotToAdcLane[slot];
+        uint8_t count     = _halSlotAdcLaneCount[slot];
+        if (count < 1) count = 1;
+
+        LOG_I("[HAL:Bridge] Pipeline bridge: disabling ADC lane%s %d..%d (HAL slot %d, %s)",
+              (count > 1) ? "s" : "",
+              (int)firstLane, (int)(firstLane + count - 1),
+              slot, name);
+
+        for (int c = 0; c < (int)count; c++) {
+            int lane = (int)firstLane + c;
+            audio_pipeline_remove_source(lane);
 #ifndef NATIVE_TEST
-        appState.audio.adcEnabled[lane] = false;
+            if (lane < AUDIO_PIPELINE_MAX_INPUTS) {
+                appState.audio.adcEnabled[lane] = false;
+            }
+#endif
+        }
+#ifndef NATIVE_TEST
         appState.markAdcEnabledDirty();
 #endif
-        _halSlotToAdcLane[slot] = -1;
+        _halSlotToAdcLane[slot]    = -1;
+        _halSlotAdcLaneCount[slot] = 0;
     }
 
     _updateActiveCounts();
@@ -446,8 +503,9 @@ void hal_pipeline_state_change(uint8_t slot, HalDeviceState oldState, HalDeviceS
 void hal_pipeline_sync() {
     // Initialise mapping tables
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        _halSlotToSinkSlot[i] = -1;
-        _halSlotToAdcLane[i]  = -1;
+        _halSlotToSinkSlot[i]   = -1;
+        _halSlotToAdcLane[i]    = -1;
+        _halSlotAdcLaneCount[i] = 0;
     }
 
     // Register the state-change callback so future transitions fire automatically
@@ -494,7 +552,10 @@ int hal_pipeline_output_count() {
 int hal_pipeline_input_count() {
     int count = 0;
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        if (_halSlotToAdcLane[i] >= 0) count++;
+        if (_halSlotToAdcLane[i] >= 0) {
+            int n = (int)_halSlotAdcLaneCount[i];
+            count += (n > 0) ? n : 1;
+        }
     }
     return count;
 }
@@ -529,6 +590,13 @@ int8_t hal_pipeline_get_input_lane(uint8_t halSlot) {
     return _halSlotToAdcLane[halSlot];
 }
 
+uint8_t hal_pipeline_get_input_lane_count(uint8_t halSlot) {
+    if (halSlot >= HAL_MAX_DEVICES) return 0;
+    if (_halSlotToAdcLane[halSlot] < 0) return 0;
+    uint8_t n = _halSlotAdcLaneCount[halSlot];
+    return (n > 0) ? n : 1;
+}
+
 // ---------------------------------------------------------------------------
 // Cascade correlation IDs
 // ---------------------------------------------------------------------------
@@ -553,8 +621,9 @@ uint16_t hal_pipeline_active_corr_id() {
 // ---------------------------------------------------------------------------
 void hal_pipeline_reset() {
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        _halSlotToSinkSlot[i] = -1;
-        _halSlotToAdcLane[i]  = -1;
+        _halSlotToSinkSlot[i]    = -1;
+        _halSlotToAdcLane[i]     = -1;
+        _halSlotAdcLaneCount[i]  = 0;
     }
     _globalCorrCounter = 0;
     _activeCorrId      = 0;

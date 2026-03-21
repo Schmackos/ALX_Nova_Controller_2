@@ -651,6 +651,38 @@ bool i2s_audio_port2_active(void) {
     return _expansionRxOk;
 }
 
+// ---------------------------------------------------------------------------
+// TDM 4-slot read (ES9843PRO via HalTdmDeinterleaver)
+//
+// The ES9843PRO outputs 4 channels as contiguous 32-bit slots in each TDM
+// frame.  IDF5 TDM mode packs N slots per "audio frame" — so a request for
+// F frames results in F × N × sizeof(int32_t) bytes transferred by DMA.
+//
+// With N=4 slots the byte count is: frames × 4 × 4 = frames × 16 bytes.
+// The caller (HalTdmDeinterleaver) pre-allocates dst for TDM_MAX_FRAMES_PER_BUF
+// × 4 × sizeof(int32_t) bytes.
+//
+// Returns the number of complete TDM frames placed in dst (0 on error).
+// ---------------------------------------------------------------------------
+uint32_t i2s_audio_port2_tdm_read(int32_t* dst, uint32_t frames) {
+#if CONFIG_IDF_TARGET_ESP32P4
+    if (!_i2s2.rx || !_expansionRxOk) return 0;
+    size_t bytes_read = 0;
+    // 4 slots per TDM frame, each slot is one int32_t
+    size_t size = (size_t)frames * 4 * sizeof(int32_t);
+    esp_err_t err = i2s_channel_read(_i2s2.rx, dst, size, &bytes_read, pdMS_TO_TICKS(5));
+    if (err != ESP_OK || bytes_read == 0) return 0;
+    return (uint32_t)(bytes_read / (4 * sizeof(int32_t)));
+#else
+    (void)dst; (void)frames;
+    return 0;
+#endif
+}
+
+bool i2s_audio_port2_tdm_active(void) {
+    return _expansionRxOk;
+}
+
 uint32_t i2s_audio_get_sample_rate(void) {
 #ifndef NATIVE_TEST
     return AppState::getInstance().audio.sampleRate;
@@ -925,6 +957,30 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
         _cachedAdcCfgValid[1] ? &_cachedAdcCfg[1] : nullptr);
     i2s_audio_configure_adc(0,
         _cachedAdcCfgValid[0] ? &_cachedAdcCfg[0] : nullptr);
+
+#if CONFIG_IDF_TARGET_ESP32P4
+    // Save I2S2 user state before teardown so we can restore at the new rate.
+    uint8_t savedI2s2Users = _i2s2.users;
+    gpio_num_t savedDin    = _i2s2.rxDinPin;
+
+    if (savedI2s2Users) {
+        if (_i2s2.rx) { i2s_channel_disable(_i2s2.rx); }
+        if (_i2s2.tx) { i2s_channel_disable(_i2s2.tx); }
+        if (_i2s2.rx) { i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL; }
+        if (_i2s2.tx) { i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL; }
+        _i2s2.users    = 0;
+        _expansionRxOk = false;
+    }
+
+    // Restore I2S2 users at the new sample rate.
+    // TX (ES8311) first so the clock is stable before RX is enabled.
+    if (savedI2s2Users & 0x01) {
+        i2s_audio_enable_es8311_tx(rate);
+    }
+    if (savedI2s2Users & 0x02) {
+        i2s_audio_enable_expansion_rx(rate, savedDin);
+    }
+#endif // CONFIG_IDF_TARGET_ESP32P4
 
     AppState::getInstance().audio.paused = false;
     LOG_I("[Audio] Sample rate changed to %lu Hz", rate);
@@ -1365,6 +1421,162 @@ void i2s_audio_disable_expansion_rx() {
 
 bool i2s_audio_expansion_rx_ok() {
     return _expansionRxOk;
+}
+
+// ---------------------------------------------------------------------------
+// i2s_audio_enable_expansion_tdm_rx() — TDM 4-slot mode for ES9843PRO
+//
+// The ES9843PRO outputs all 4 channels on a single DATA line as a TDM stream:
+//   [SLOT0=CH1][SLOT1=CH2][SLOT2=CH3][SLOT3=CH4] per frame, each 32-bit.
+//
+// IDF5 TDM channel init uses i2s_channel_init_tdm_mode() instead of
+// i2s_channel_init_std_mode().  The TX direction is still configured in
+// standard mode for ES8311 compatibility; only the RX side switches to TDM.
+//
+// This function follows the same user-bit protocol as i2s_audio_enable_expansion_rx():
+//   bit 0x02 = RX user active.
+// It is NOT compatible with the stereo expansion RX path — only one may be
+// active on I2S2 RX at a time.
+//
+// Parameters:
+//   sample_rate  : audio sample rate in Hz (must match I2S0/ES8311 if TX active)
+//   din_pin      : GPIO for TDM DATA_IN from ES9843PRO
+//   slot_count   : number of TDM slots (4 for ES9843PRO)
+//
+// Returns true on success; leaves _expansionRxOk=true so port2_tdm_read works.
+// ---------------------------------------------------------------------------
+bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
+                                        gpio_num_t din_pin,
+                                        uint8_t    slot_count) {
+    if (_i2s2.users & 0x02) {
+        LOG_I("[Audio] I2S2 expansion TDM RX already enabled");
+        return true;
+    }
+
+    if (slot_count < 2 || slot_count > 16) {
+        LOG_W("[Audio] TDM: invalid slot_count=%u (must be 2-16), defaulting to 4", slot_count);
+        slot_count = 4;
+    }
+
+    LOG_I("[Audio] Enabling I2S2 expansion TDM RX: rate=%luHz DIN=GPIO%d slots=%u",
+          (unsigned long)sample_rate, (int)din_pin, slot_count);
+
+    // --- Allocate or reallocate I2S2 channels ---
+    // Always tear down and rebuild because TDM RX and STD RX have different
+    // i2s_chan_config_t slot settings and cannot be reconfigured in place.
+    if (_i2s2.rx)  { i2s_channel_disable(_i2s2.rx);  i2s_del_channel(_i2s2.rx);  _i2s2.rx = NULL; }
+    if (_i2s2.tx)  { i2s_channel_disable(_i2s2.tx);  i2s_del_channel(_i2s2.tx);  _i2s2.tx = NULL; }
+
+    bool txWasActive = (_i2s2.users & 0x01) != 0;
+    _i2s2.users = 0;   // Cleared — will be restored below
+
+    // Allocate fresh full-duplex pair
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_2, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num  = DMA_BUF_COUNT;
+    // TDM frame = slot_count × 32-bit.  IDF5 counts frames in terms of slot groups.
+    // dma_frame_num = number of TDM frames per DMA buffer — same as stereo DMA_BUF_LEN.
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;
+    chan_cfg.auto_clear    = true;
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, &_i2s2.tx, &_i2s2.rx);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] I2S2 TDM channel alloc failed: %d", err);
+        _i2s2.tx = NULL; _i2s2.rx = NULL;
+        return false;
+    }
+
+    // TX: standard stereo mode (ES8311 DAC — unchanged from stereo path)
+    if (txWasActive) {
+        i2s_std_config_t tx_cfg = {};
+        tx_cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
+        tx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT,
+                                                               I2S_SLOT_MODE_STEREO);
+        tx_cfg.gpio_cfg.mclk = (gpio_num_t)ES8311_I2S_MCLK_PIN;
+        tx_cfg.gpio_cfg.bclk = (gpio_num_t)ES8311_I2S_SCLK_PIN;
+        tx_cfg.gpio_cfg.ws   = (gpio_num_t)ES8311_I2S_LRCK_PIN;
+        tx_cfg.gpio_cfg.dout = (gpio_num_t)ES8311_I2S_DSDIN_PIN;
+        tx_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
+        tx_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+
+        err = i2s_channel_init_std_mode(_i2s2.tx, &tx_cfg);
+        if (err != ESP_OK) {
+            LOG_E("[Audio] I2S2 TDM: TX (ES8311) reinit failed: %d", err);
+            i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
+            i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
+            return false;
+        }
+    }
+
+    // RX: TDM mode — 4 slots × 32-bit, left-justified PCM
+    // i2s_tdm_config_t slot_cfg masks: each active slot set in slot_mask.
+    i2s_tdm_config_t tdm_rx_cfg = {};
+
+    // Clock: MCLK on same pin as ES8311 so TDM ADC can derive its PLL clock.
+    tdm_rx_cfg.clk_cfg = I2S_TDM_CLK_DEFAULT_CONFIG(sample_rate);
+    tdm_rx_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+
+    // Slot: left-justified 32-bit, slot_count active slots.
+    // The slot_mask bit-field selects which slots carry data.  For the ES9843PRO
+    // with 4 active channels we enable slots 0-3 (0x0F).
+    uint32_t slotMask = (1u << slot_count) - 1u;  // e.g. slot_count=4 → 0x0F
+
+    // IDF5 TDM slot config: left-justified MSB-first, all active slots enabled
+    tdm_rx_cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(
+        I2S_DATA_BIT_WIDTH_32BIT,
+        I2S_SLOT_MODE_STEREO,   // Physical slot mode (even/odd pairs)
+        (i2s_tdm_slot_mask_t)slotMask
+    );
+    tdm_rx_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
+    tdm_rx_cfg.slot_cfg.msb_right      = false;  // CH1 in leftmost slot
+
+    // GPIO: RX shares MCLK/BCK/WS with TX (ES8311 is clock master)
+    tdm_rx_cfg.gpio_cfg.mclk = (gpio_num_t)ES8311_I2S_MCLK_PIN;
+    tdm_rx_cfg.gpio_cfg.bclk = (gpio_num_t)ES8311_I2S_SCLK_PIN;
+    tdm_rx_cfg.gpio_cfg.ws   = (gpio_num_t)ES8311_I2S_LRCK_PIN;
+    tdm_rx_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
+    tdm_rx_cfg.gpio_cfg.din  = din_pin;
+    tdm_rx_cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    tdm_rx_cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    tdm_rx_cfg.gpio_cfg.invert_flags.ws_inv   = false;
+
+    err = i2s_channel_init_tdm_mode(_i2s2.rx, &tdm_rx_cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] I2S2 TDM RX init failed: %d", err);
+        i2s_channel_disable(_i2s2.tx);
+        i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
+        i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
+        return false;
+    }
+
+    // Enable TX first (activates MCLK/BCK/WS for TDM ADC PLL lock)
+    if (txWasActive) {
+        err = i2s_channel_enable(_i2s2.tx);
+        if (err != ESP_OK) {
+            LOG_E("[Audio] I2S2 TDM: TX enable failed: %d", err);
+        } else {
+            _i2s2.users |= 0x01;
+        }
+    }
+
+    // Enable RX
+    err = i2s_channel_enable(_i2s2.rx);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] I2S2 TDM RX enable failed: %d", err);
+        if (txWasActive) i2s_channel_disable(_i2s2.tx);
+        i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
+        i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
+        _i2s2.users = 0;
+        return false;
+    }
+
+    _i2s2.users      |= 0x02;
+    _i2s2.sampleRate  = sample_rate;
+    _i2s2.rxDinPin    = din_pin;
+    _expansionRxOk    = true;
+
+    LOG_I("[Audio] I2S2 expansion TDM RX enabled: rate=%luHz DIN=GPIO%d slots=%u DMA=%dx%d",
+          (unsigned long)sample_rate, (int)din_pin, slot_count, DMA_BUF_COUNT, DMA_BUF_LEN);
+    return true;
 }
 
 #else // !CONFIG_IDF_TARGET_ESP32P4

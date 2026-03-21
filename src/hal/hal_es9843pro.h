@@ -7,10 +7,25 @@
 // to ESP32-P4 I2S master.
 // Default I2C bus: Bus 2 (expansion), GPIO28 SDA / GPIO29 SCL.
 // Compatible string: "ess,es9843pro"
+//
+// TDM deinterleaver
+// -----------------
+// The ES9843PRO outputs all 4 channels on a single I2S DATA line in TDM mode:
+//   [SLOT0=CH1][SLOT1=CH2][SLOT2=CH3][SLOT3=CH4] per frame, 32-bit per slot.
+//
+// This driver exposes TWO AudioInputSource entries to the bridge:
+//   source index 0 → "ES9843PRO CH1/2"  (SLOT0 + SLOT1)
+//   source index 1 → "ES9843PRO CH3/4"  (SLOT2 + SLOT3)
+//
+// The bridge discovers the dual-source nature via getInputSourceCount() /
+// getInputSourceAt(idx) and registers each at its own pipeline lane.
+// getInputSource() returns the first source for backward compatibility with
+// existing bridge code that calls it unconditionally.
 
 #include "hal_audio_device.h"
 #include "hal_audio_interfaces.h"
 #include "hal_types.h"
+#include "hal_tdm_deinterleaver.h"
 #include "../audio_input_source.h"
 
 class HalEs9843pro : public HalAudioDevice, public HalAudioAdcInterface {
@@ -36,8 +51,16 @@ public:
     bool     adcSetSampleRate(uint32_t hz) override;
     uint32_t adcGetSampleRate() const      override { return _sampleRate; }
 
-    // ADC input source (bridge-registered into audio pipeline)
-    const AudioInputSource* getInputSource() const override;
+    // Multi-source ADC interface — bridge queries count then each source by index.
+    // Returns 2 when initialized (CH1/2 and CH3/4 stereo pairs); 0 otherwise.
+    // Both sources are valid after init() regardless of whether a DMA read has occurred.
+    int getInputSourceCount() const override { return _initialized ? 2 : 0; }
+    const AudioInputSource* getInputSourceAt(int idx) const override;
+
+    // Backward-compat single-source accessor (returns source 0).
+    const AudioInputSource* getInputSource() const override {
+        return getInputSourceAt(0);
+    }
 
     // ES9843PRO-specific extensions
     bool setFilterPreset(uint8_t preset);                      // 0-7 global filter shapes
@@ -62,8 +85,16 @@ private:
     TwoWire* _wire = nullptr;
 #endif
 
-    AudioInputSource _inputSrc      = {};
-    bool             _inputSrcReady = false;
+    // TDM deinterleaver — owns the ping-pong DMA split and both AudioInputSource structs
+    HalTdmDeinterleaver _tdm;
+
+    // Source structs populated by _tdm.buildSources() during init()
+    AudioInputSource _srcA = {};   // CH1/CH2 — registered at pipeline lane N
+    AudioInputSource _srcB = {};   // CH3/CH4 — registered at pipeline lane N+1
+
+    // Human-readable names (stored here so pointers in AudioInputSource stay valid)
+    static constexpr const char* _NAME_A = "ES9843PRO CH1/2";
+    static constexpr const char* _NAME_B = "ES9843PRO CH3/4";
 };
 
 #endif // DAC_ENABLED

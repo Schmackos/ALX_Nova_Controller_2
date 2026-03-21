@@ -47,9 +47,16 @@ int8_t hal_pipeline_get_slot_for_sink(uint8_t sinkSlot);
 // Returns -1 when the HAL slot has no sink mapping.
 int8_t hal_pipeline_get_sink_slot(uint8_t halSlot);
 
-// Forward-lookup: return the input lane assigned to a HAL device.
+// Forward-lookup: return the FIRST input lane assigned to a HAL device.
 // Returns -1 when the HAL slot has no input lane mapping.
+// For multi-source devices (ES9843PRO) this returns the base lane;
+// lanes [base .. base+count-1] are all owned by this HAL slot.
 int8_t hal_pipeline_get_input_lane(uint8_t halSlot);
+
+// Forward-lookup: return how many consecutive input lanes a HAL device owns.
+// Returns 0 when the HAL slot has no input lane mapping.
+// 1 for all single-pair ADCs; 2 for ES9843PRO TDM (CH1/2 + CH3/4).
+uint8_t hal_pipeline_get_input_lane_count(uint8_t halSlot);
 
 // Cascade correlation ID support —————————————————————————————————————————
 // Call hal_pipeline_begin_correlation() before a multi-step operation that
