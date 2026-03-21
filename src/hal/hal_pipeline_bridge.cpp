@@ -560,4 +560,14 @@ void hal_pipeline_reset() {
     _activeCorrId      = 0;
 }
 
+// Clean up NATIVE_TEST no-op macros so they do not leak into subsequent files
+// when this .cpp is inline-included in test translation units.
+#ifdef NATIVE_TEST
+#undef diag_emit
+#undef LOG_I
+#undef LOG_W
+#undef LOG_D
+#undef LOG_E
+#endif
+
 #endif // DAC_ENABLED

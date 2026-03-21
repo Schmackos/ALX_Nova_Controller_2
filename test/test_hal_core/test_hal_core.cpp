@@ -458,7 +458,107 @@ void test_pin_claim_rejects_out_of_range() {
     TEST_ASSERT_FALSE(mgr->claimPin(-128, HAL_BUS_GPIO, 0, 0));
 }
 
-// ===== Test 20: Fill all valid GPIOs (0-54) and verify tracking =====
+// ===== Test 20: Register null device when slots full — no crash, returns -1 =====
+void test_register_null_device_returns_negative_one() {
+    // Null device should always return -1, regardless of slot availability
+    TEST_ASSERT_EQUAL(-1, mgr->registerDevice(nullptr, HAL_DISC_BUILTIN));
+    TEST_ASSERT_EQUAL(0, mgr->getCount());
+}
+
+// ===== Test 21: Slot full emits diagnostic and returns -1 =====
+void test_register_device_slot_full_returns_negative_one() {
+    // Fill all 24 slots
+    TestDevice devs[HAL_MAX_DEVICES];
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "fill%d", i);
+        devs[i] = TestDevice(name, HAL_DEV_DAC);
+        int slot = mgr->registerDevice(&devs[i], HAL_DISC_BUILTIN);
+        TEST_ASSERT_GREATER_OR_EQUAL_MESSAGE(0, slot, "All 24 slots should register");
+    }
+    TEST_ASSERT_EQUAL(HAL_MAX_DEVICES, mgr->getCount());
+
+    // Attempt to register one more non-null device — should fail with -1
+    // (registerDevice emits DIAG_HAL_SLOT_FULL internally when device != nullptr)
+    TestDevice overflow("overflow", HAL_DEV_CODEC);
+    int result = mgr->registerDevice(&overflow, HAL_DISC_BUILTIN);
+    TEST_ASSERT_EQUAL(-1, result);
+    TEST_ASSERT_EQUAL(HAL_MAX_DEVICES, mgr->getCount());
+
+    // The overflow device should NOT have its slot set
+    // (it was rejected, so it should still have default values)
+    TEST_ASSERT_EQUAL(HAL_STATE_UNKNOWN, overflow._state);
+    TEST_ASSERT_FALSE(overflow._ready);
+}
+
+// ===== Test 22: hal_registry_max() returns HAL_MAX_DRIVERS =====
+void test_registry_max_returns_correct_value() {
+    TEST_ASSERT_EQUAL(HAL_MAX_DRIVERS, hal_registry_max());
+    TEST_ASSERT_EQUAL(24, hal_registry_max());
+}
+
+// ===== Test 23: Registry overflow — fill to HAL_MAX_DRIVERS, 25th rejected =====
+void test_registry_overflow_at_max_drivers() {
+    // Fill the registry to its maximum capacity (24)
+    for (int i = 0; i < HAL_MAX_DRIVERS; i++) {
+        HalDriverEntry entry;
+        memset(&entry, 0, sizeof(entry));
+        snprintf(entry.compatible, 31, "test,driver%d", i);
+        entry.type = HAL_DEV_DAC;
+        entry.legacyId = static_cast<uint16_t>(i + 1);
+        TEST_ASSERT_TRUE_MESSAGE(hal_registry_register(entry),
+            "Should register up to HAL_MAX_DRIVERS entries");
+    }
+    TEST_ASSERT_EQUAL(HAL_MAX_DRIVERS, hal_registry_count());
+
+    // The next registration should fail (registry full)
+    // (hal_registry_register emits DIAG_HAL_REGISTRY_FULL internally)
+    HalDriverEntry overflow;
+    memset(&overflow, 0, sizeof(overflow));
+    strncpy(overflow.compatible, "test,overflow", 31);
+    overflow.type = HAL_DEV_CODEC;
+    TEST_ASSERT_FALSE(hal_registry_register(overflow));
+
+    // Count should remain at max
+    TEST_ASSERT_EQUAL(HAL_MAX_DRIVERS, hal_registry_count());
+
+    // Previously registered entries should still be findable
+    TEST_ASSERT_NOT_NULL(hal_registry_find("test,driver0"));
+    TEST_ASSERT_NOT_NULL(hal_registry_find("test,driver23"));
+
+    // The overflow entry should NOT be findable
+    TEST_ASSERT_NULL(hal_registry_find("test,overflow"));
+}
+
+// ===== Test 24: Remove device from full manager, then register succeeds =====
+void test_slot_full_then_remove_allows_new_registration() {
+    // Fill all 24 slots
+    TestDevice devs[HAL_MAX_DEVICES];
+    for (int i = 0; i < HAL_MAX_DEVICES; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "full%d", i);
+        devs[i] = TestDevice(name, HAL_DEV_DAC);
+        mgr->registerDevice(&devs[i], HAL_DISC_BUILTIN);
+    }
+    TEST_ASSERT_EQUAL(HAL_MAX_DEVICES, mgr->getCount());
+
+    // Overflow attempt fails
+    TestDevice extra("extra", HAL_DEV_ADC);
+    TEST_ASSERT_EQUAL(-1, mgr->registerDevice(&extra, HAL_DISC_BUILTIN));
+
+    // Remove one device to free a slot
+    mgr->removeDevice(10);
+    TEST_ASSERT_EQUAL(HAL_MAX_DEVICES - 1, mgr->getCount());
+
+    // Now registration should succeed again
+    TestDevice replacement("replacement", HAL_DEV_CODEC);
+    int slot = mgr->registerDevice(&replacement, HAL_DISC_BUILTIN);
+    TEST_ASSERT_GREATER_OR_EQUAL(0, slot);
+    TEST_ASSERT_EQUAL(HAL_MAX_DEVICES, mgr->getCount());
+    TEST_ASSERT_EQUAL_PTR(&replacement, mgr->getDevice(slot));
+}
+
+// ===== Test 25: Fill all valid GPIOs (0-54) and verify tracking =====
 void test_pin_table_exhaustion() {
     // Claim all 55 valid GPIOs (0-54)
     for (int i = 0; i <= HAL_GPIO_MAX; i++) {
@@ -508,6 +608,13 @@ int main(int argc, char** argv) {
     RUN_TEST(test_pin_claim_high_gpio);
     RUN_TEST(test_pin_claim_rejects_out_of_range);
     RUN_TEST(test_pin_table_exhaustion);
+
+    // Capacity exhaustion — diagnostic emission and recovery
+    RUN_TEST(test_register_null_device_returns_negative_one);
+    RUN_TEST(test_register_device_slot_full_returns_negative_one);
+    RUN_TEST(test_registry_max_returns_correct_value);
+    RUN_TEST(test_registry_overflow_at_max_drivers);
+    RUN_TEST(test_slot_full_then_remove_allows_new_registration);
 
     return UNITY_END();
 }
