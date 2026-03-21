@@ -47,7 +47,14 @@ if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
 const DRY_RUN        = args.includes('--dry-run');
 const GEN_ALL        = args.includes('--all');
 const sectionsIdx    = args.indexOf('--sections');
-const SECTION_LIST   = sectionsIdx !== -1 ? (args[sectionsIdx + 1] || '').split(',').filter(Boolean) : [];
+const SECTION_LIST   = sectionsIdx !== -1 ? (() => {
+    const arg = (args[sectionsIdx + 1] || '').trim();
+    // Accept either a JSON array (from detect_doc_changes.js) or a comma-separated string
+    if (arg.startsWith('[')) {
+        try { return JSON.parse(arg).filter(Boolean); } catch (e) { /* fall through */ }
+    }
+    return arg.split(',').filter(Boolean);
+})() : [];
 
 if (!GEN_ALL && SECTION_LIST.length === 0) {
     console.error('ERROR: Specify --all or --sections <comma-separated list>');
