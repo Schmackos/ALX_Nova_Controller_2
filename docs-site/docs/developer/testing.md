@@ -12,7 +12,7 @@ Full testing architecture reference: `docs-internal/testing-architecture.md`
 
 | Layer | Tool | Count | What It Covers |
 |---|---|---|---|
-| C++ unit tests | Unity (PlatformIO native) | 1,579 tests / 66 modules | Firmware logic, HAL, DSP, audio pipeline, networking, auth |
+| C++ unit tests | Unity (PlatformIO native) | 1,697 tests / 71 modules | Firmware logic, HAL, DSP, audio pipeline, networking, auth |
 | E2E browser tests | Playwright + Express mock | 26 tests / 19 specs | Web UI, WS state sync, REST API contracts, responsive layout |
 | Static analysis | ESLint, cppcheck, find_dups, check_missing_fns | — | JS correctness, C++ warnings, duplicate/missing declarations |
 
@@ -21,7 +21,7 @@ Full testing architecture reference: `docs-internal/testing-architecture.md`
 Tests run on the **native platform** (host machine, gcc/MinGW) using the [Unity](https://github.com/ThrowTheSwitch/Unity) assertion framework, compiled and executed by PlatformIO.
 
 ```bash
-# Run all 1,579 tests across all 66 modules
+# Run all 1,697 tests across all 71 modules
 pio test -e native
 
 # Run with verbose output (show individual test names and pass/fail)
@@ -62,9 +62,9 @@ Key build flags for test compilation:
 Each module lives in its own directory under `test/` to avoid duplicate `main`, `setUp`, and `tearDown` symbols:
 
 <details>
-<summary>All 66 test modules</summary>
+<summary>All 71 test modules</summary>
 
-`test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_adapter`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_eth_manager`, `test_es8311`
+`test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`
 
 </details>
 
@@ -291,27 +291,28 @@ These run in under a second and catch cross-file problems that ESLint cannot see
 
 ## CI Quality Gates
 
-Four parallel jobs gate the firmware build on every push and PR:
+Five parallel jobs gate the firmware build on every push and PR:
 
 ```mermaid
 flowchart LR
     PUSH["Push / PR\nto main or develop"]
 
     subgraph Gates ["Parallel Quality Gates"]
-        CPP["cpp-tests\npio test -e native -v\n1,579 Unity tests"]
+        CPP["cpp-tests\npio test -e native -v\n1,697 Unity tests"]
         LINT["cpp-lint\ncppcheck src/"]
-        JS["js-lint\nfind_dups + check_missing_fns\n+ ESLint"]
+        JS["js-lint\nfind_dups + check_missing_fns\n+ ESLint + diagram-validation"]
         E2E["e2e-tests\nnpx playwright test\n26 Playwright tests"]
+        DOC["doc-coverage\ncheck_mapping_coverage.js\n+ diagram-validation.js"]
     end
 
     BUILD["Firmware Build\npio run"]
     RELEASE["Release\n(release.yml)"]
 
-    PUSH --> CPP & LINT & JS & E2E
-    CPP & LINT & JS & E2E --> BUILD --> RELEASE
+    PUSH --> CPP & LINT & JS & E2E & DOC
+    CPP & LINT & JS & E2E & DOC --> BUILD --> RELEASE
 ```
 
-The firmware build runs only if all four gates are green. `release.yml` runs the same four gates again before publishing a release.
+The firmware build runs only if all five gates are green. `release.yml` runs the same five gates again before publishing a release.
 
 On E2E test failure, a Playwright HTML report is uploaded as a CI artifact with 14-day retention.
 
@@ -322,6 +323,8 @@ Fast local checks run before every commit via `.githooks/pre-commit`:
 1. `node tools/find_dups.js` — duplicate JS declarations
 2. `node tools/check_missing_fns.js` — undefined function references
 3. ESLint on `web_src/js/`
+4. `node tools/check_mapping_coverage.js` — every `src/` file mapped in `tools/doc-mapping.json`
+5. `node tools/diagram-validation.js` — `@validate-symbols` checks in architecture diagrams
 
 Activate once per local clone:
 
@@ -329,7 +332,7 @@ Activate once per local clone:
 git config core.hooksPath .githooks
 ```
 
-These three checks run in under 2 seconds total and catch the most common JS mistakes before they reach CI.
+These five checks run in under 3 seconds total and catch the most common JS mistakes and documentation drift before they reach CI.
 
 ## Mandatory Coverage Requirements
 

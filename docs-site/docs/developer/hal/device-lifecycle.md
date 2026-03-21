@@ -12,7 +12,10 @@ Every device managed by the HAL passes through a defined set of states from the 
 stateDiagram-v2
     [*] --> UNKNOWN : registerDevice()
 
-    UNKNOWN --> CONFIGURING : initAll() or healthCheckAll() retry
+    UNKNOWN --> DETECTED : I2C bus scan (ACK)\nor EEPROM record found
+    DETECTED --> CONFIGURING : driver matched
+
+    UNKNOWN --> CONFIGURING : builtin device\n(skips DETECTED)
     CONFIGURING --> AVAILABLE : init() returns success
     CONFIGURING --> ERROR : init() returns failure
 
