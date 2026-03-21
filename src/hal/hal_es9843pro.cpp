@@ -39,7 +39,7 @@
 #define ES9843PRO_REG_CHIP_ID             0xE1
 #define ES9843PRO_SOFT_RESET_CMD          0xA0
 #define ES9843PRO_OUTPUT_I2S              0x00
-#define ES9843PRO_TDM_FORMAT              0x10   // TDM output mode (reg 0x03 OUTPUT_SEL bits6:4 = 0b001)
+#define ES9843PRO_OUTPUT_TDM              0x10   // TDM output mode (reg 0x03 OUTPUT_SEL bits6:4 = 0b001)
 #define ES9843PRO_ENABLE_4CH              0x0F
 #define ES9843PRO_ASP_BYPASS_ALL          0x0F
 #define ES9843PRO_VOL_0DB                 0x00
@@ -170,10 +170,10 @@ HalInitResult HalEs9843pro::init() {
     // ---- 6. Enable all 4 ADC channels: reg 0x00 bits3:0 = 0x0F ----
     _writeReg(ES9843PRO_REG_SYS_CONFIG, ES9843PRO_ENABLE_4CH);
 
-    // ---- 7. Configure output format: TDM mode (reg 0x03 bits2:0 = 0b100) ----
-    // ES9843PRO_TDM_FORMAT enables 4-slot TDM output on a single data line.
+    // ---- 7. Configure output format: TDM mode (reg 0x03 bits6:4 = 0b001 = 0x10) ----
+    // ES9843PRO_OUTPUT_TDM enables 4-slot TDM output on a single data line.
     // This replaces ES9843PRO_OUTPUT_I2S (0x00 = standard stereo I2S).
-    _writeReg(ES9843PRO_REG_OUTPUT_FORMAT, ES9843PRO_TDM_FORMAT);
+    _writeReg(ES9843PRO_REG_OUTPUT_FORMAT, ES9843PRO_OUTPUT_TDM);
 
     // ---- 8. Set all 4 channels to 0 dB volume: regs 0x51-0x54 = 0x00 ----
     _writeReg(ES9843PRO_REG_CH1_VOLUME, ES9843PRO_VOL_0DB);
