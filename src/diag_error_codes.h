@@ -17,6 +17,8 @@ enum DiagErrorCode : uint16_t {
     DIAG_SYS_BOOT_LOOP                  = 0x0106,  // 3 consecutive crash boots
     DIAG_SYS_HEAP_WARNING               = 0x0107,  // Free heap < 50KB (early warning)
     DIAG_SYS_HEAP_WARNING_CLEARED       = 0x0108,  // Heap above warning threshold again
+    DIAG_SYS_PSRAM_WARNING              = 0x0109,  // Free PSRAM below warning threshold
+    DIAG_SYS_PSRAM_WARNING_CLEARED      = 0x010A,  // PSRAM above warning threshold again
 
     // ===== 0x10xx: HAL — General =====
     DIAG_HAL_INIT_FAILED                = 0x1001,  // Device init() returned false

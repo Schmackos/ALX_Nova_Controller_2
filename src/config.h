@@ -129,6 +129,14 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define HEAP_CRITICAL_THRESHOLD 40000   // 40KB — critical (allocation refused, features shed)
 #endif
 
+// ===== PSRAM Health Thresholds =====
+#ifndef PSRAM_WARNING_THRESHOLD
+#define PSRAM_WARNING_THRESHOLD   1048576   // 1MB free PSRAM — early warning
+#endif
+#ifndef PSRAM_CRITICAL_THRESHOLD
+#define PSRAM_CRITICAL_THRESHOLD   524288   // 512KB free PSRAM — critical
+#endif
+
 // ===== Server Ports =====
 const int WEB_SERVER_PORT = 80;
 const int WEBSOCKET_PORT = 81;

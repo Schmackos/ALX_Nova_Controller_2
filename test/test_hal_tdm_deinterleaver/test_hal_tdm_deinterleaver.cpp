@@ -54,6 +54,10 @@ inline uint32_t i2s_audio_port2_tdm_read(int32_t* dst, uint32_t frames) {
 inline bool     i2s_audio_port2_tdm_active(void) { return g_tdmFeedFrames > 0; }
 inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
 
+// psram_alloc/heap_budget required since hal_tdm_deinterleaver uses psram_alloc()
+#include "../../src/heap_budget.cpp"
+#include "../../src/psram_alloc.cpp"
+
 // Bring in the deinterleaver implementation directly (native test pattern)
 #include "../../src/hal/hal_tdm_deinterleaver.cpp"
 

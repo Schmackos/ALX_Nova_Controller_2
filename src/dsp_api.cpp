@@ -10,6 +10,7 @@
 #include "globals.h"
 #include "auth_handler.h"
 #include "debug_serial.h"
+#include "psram_alloc.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <sys/stat.h>
@@ -137,13 +138,12 @@ void saveDspSettings() {
         char path[24];
         snprintf(path, sizeof(path), "/dsp_ch%d.json", ch);
 
-        char *buf = (char *)heap_caps_malloc(4096, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!buf) buf = (char *)malloc(4096);
+        char *buf = (char *)psram_alloc(4096, 1, "dsp_save");
         if (!buf) continue;
         dsp_export_config_to_json(ch, buf, 4096);
         File cf = LittleFS.open(path, "w");
         if (cf) { cf.print(buf); cf.close(); }
-        free(buf);
+        psram_free(buf, "dsp_save");
 
         // Save FIR binary if channel has a FIR stage
         DspChannelConfig &chCfg = cfg->channels[ch];
@@ -211,8 +211,7 @@ bool dsp_preset_save(int slot, const char *name) {
     if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) return false;
 
     // Export full config from active state (heap-allocated to avoid stack overflow)
-    char *configBuf = (char *)heap_caps_malloc(8192, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!configBuf) configBuf = (char *)malloc(8192);
+    char *configBuf = (char *)psram_alloc(8192, 1, "dsp_export");
     if (!configBuf) {
         LOG_E("[DSP] Preset save: heap alloc failed");
         return false;
@@ -222,7 +221,7 @@ bool dsp_preset_save(int slot, const char *name) {
     // Parse and augment with name
     _dspApiDoc.clear();
     JsonDocument &doc = _dspApiDoc;
-    if (deserializeJson(doc, configBuf)) { free(configBuf); return false; }
+    if (deserializeJson(doc, configBuf)) { psram_free(configBuf, "dsp_export"); return false; }
 
     doc["name"] = name ? name : "";
     doc["dspEnabled"] = appState.dsp.enabled;
@@ -233,10 +232,10 @@ bool dsp_preset_save(int slot, const char *name) {
     String json;
     serializeJson(doc, json);
     File f = LittleFS.open(path, "w");
-    if (!f) { free(configBuf); return false; }
+    if (!f) { psram_free(configBuf, "dsp_export"); return false; }
     f.print(json);
     f.close();
-    free(configBuf);
+    psram_free(configBuf, "dsp_export");
 
     // Update AppState
     if (name) {
@@ -432,8 +431,7 @@ void registerDspApiEndpoints() {
     server.on("/api/dsp", HTTP_GET, []() {
         if (!requireAuth()) return;
         const int bufSize = 8192;
-        char *buf = (char *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!buf) buf = (char *)malloc(bufSize);
+        char *buf = (char *)psram_alloc(bufSize, 1, "dsp_api_get");
         if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
 
         dsp_export_full_config_json(buf, bufSize);
@@ -443,7 +441,7 @@ void registerDspApiEndpoints() {
     JsonDocument &doc = _dspApiDoc;
         deserializeJson(doc, buf);
         doc["dspEnabled"] = appState.dsp.enabled;
-        free(buf);
+        psram_free(buf, "dsp_api_get");
 
         String json;
         serializeJson(doc, json);
@@ -515,13 +513,12 @@ void registerDspApiEndpoints() {
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
 
         const int bufSize = 4096;
-        char *buf = (char *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!buf) buf = (char *)malloc(bufSize);
+        char *buf = (char *)psram_alloc(bufSize, 1, "dsp_api_ch");
         if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
 
         dsp_export_config_to_json(ch, buf, bufSize);
         server.send(200, "application/json", buf);
-        free(buf);
+        psram_free(buf, "dsp_api_ch");
     });
 
     // POST /api/dsp/channel/bypass?ch=N — toggle channel bypass
@@ -985,13 +982,12 @@ void registerDspApiEndpoints() {
     server.on("/api/dsp/export/json", HTTP_GET, []() {
         if (!requireAuth()) return;
         const int bufSize = 8192;
-        char *buf = (char *)heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (!buf) buf = (char *)malloc(bufSize);
+        char *buf = (char *)psram_alloc(bufSize, 1, "dsp_api_export");
         if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
 
         dsp_export_full_config_json(buf, bufSize);
         server.send(200, "application/json", buf);
-        free(buf);
+        psram_free(buf, "dsp_api_export");
     });
 
     // ===== Crossover & Bass Management Endpoints =====

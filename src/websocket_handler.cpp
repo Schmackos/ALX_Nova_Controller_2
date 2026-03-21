@@ -19,6 +19,7 @@
 #include "audio_input_source.h"
 #include "audio_output_sink.h"
 #include "heap_budget.h"
+#include "psram_alloc.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
@@ -2207,6 +2208,17 @@ void sendHardwareStats() {
       doc["heapBudgetPsram"] = heap_budget_total_psram();
       doc["heapBudgetSram"]  = heap_budget_total_sram();
     }
+
+    // PSRAM allocation tracker stats
+    {
+        PsramAllocStats ps = psram_get_stats();
+        doc["psramFallbackCount"] = ps.fallbackCount;
+        doc["psramFailedCount"]   = ps.failedCount;
+        doc["psramAllocPsram"]    = ps.activePsramBytes;
+        doc["psramAllocSram"]     = ps.activeSramBytes;
+    }
+    doc["psramWarning"]  = appState.debug.psramWarning;
+    doc["psramCritical"] = appState.debug.psramCritical;
 
     // Crash history (ring buffer, most recent first)
     const CrashLogData &clog = crashlog_get();

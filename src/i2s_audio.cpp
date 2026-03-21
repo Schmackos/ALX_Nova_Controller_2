@@ -40,6 +40,7 @@
 #include "hal/hal_settings.h"
 #include "hal/hal_device_manager.h"
 #endif
+#include "psram_alloc.h"
 
 // ===== Constants =====
 static const int DMA_BUF_COUNT = I2S_DMA_BUF_COUNT;
@@ -730,31 +731,20 @@ void i2s_audio_init() {
     }
     portEXIT_CRITICAL(&spinlock);
 
-    // Allocate FFT/waveform buffers from PSRAM (one-time, ~22.5KB off internal SRAM)
-    // Use heap_caps_calloc directly — ps_calloc requires psramFound() which may not
-    // be initialized on all board configs, but MALLOC_CAP_SPIRAM works via heap_caps.
+    // Allocate FFT/waveform buffers from PSRAM with SRAM fallback (one-time, ~22.5KB)
     if (!_fftData) {
-        _fftData    = (float *)heap_caps_calloc(FFT_SIZE * 2, sizeof(float), MALLOC_CAP_SPIRAM);
-        _fftWindow  = (float *)heap_caps_calloc(FFT_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
+        _fftData   = (float *)psram_alloc(FFT_SIZE * 2, sizeof(float), "fft_data");
+        _fftWindow = (float *)psram_alloc(FFT_SIZE, sizeof(float), "fft_window");
         for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
-            _fftRing[a]  = (float *)heap_caps_calloc(FFT_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
-            _wfAccum[a]  = (float *)heap_caps_calloc(WAVEFORM_BUFFER_SIZE, sizeof(float), MALLOC_CAP_SPIRAM);
-            _wfOutput[a] = (uint8_t *)heap_caps_calloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t), MALLOC_CAP_SPIRAM);
-        }
-        // Fallback to internal SRAM if PSRAM unavailable
-        if (!_fftData)   _fftData   = (float *)calloc(FFT_SIZE * 2, sizeof(float));
-        if (!_fftWindow) _fftWindow = (float *)calloc(FFT_SIZE, sizeof(float));
-        for (int a = 0; a < AUDIO_PIPELINE_MAX_INPUTS; a++) {
-            if (!_fftRing[a])  _fftRing[a]  = (float *)calloc(FFT_SIZE, sizeof(float));
-            if (!_wfAccum[a])  _wfAccum[a]  = (float *)calloc(WAVEFORM_BUFFER_SIZE, sizeof(float));
-            if (!_wfOutput[a]) _wfOutput[a] = (uint8_t *)calloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t));
+            _fftRing[a]  = (float *)psram_alloc(FFT_SIZE, sizeof(float), "fft_ring");
+            _wfAccum[a]  = (float *)psram_alloc(WAVEFORM_BUFFER_SIZE, sizeof(float), "wf_accum");
+            _wfOutput[a] = (uint8_t *)psram_alloc(WAVEFORM_BUFFER_SIZE, sizeof(uint8_t), "wf_output");
         }
         if (!_fftData || !_fftWindow) {
             LOG_E("[Audio] FATAL: FFT buffer allocation failed!");
             return;
         }
-        LOG_I("[Audio] FFT/waveform buffers allocated (%s)",
-              heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0 ? "PSRAM" : "internal");
+        LOG_I("[Audio] FFT/waveform buffers allocated");
     }
 
     _wfTargetFrames = _currentSampleRate * AppState::getInstance().audio.updateRate / 1000;

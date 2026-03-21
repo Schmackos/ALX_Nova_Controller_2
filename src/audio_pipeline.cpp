@@ -5,6 +5,7 @@
 #include "debug_serial.h"
 #include "heap_budget.h"
 #include "diag_journal.h"
+#include "psram_alloc.h"
 #ifdef DSP_ENABLED
 #include "dsp_pipeline.h"
 #include "output_dsp.h"
@@ -301,10 +302,7 @@ static void pipeline_mix_matrix() {
     // Lazy-allocate PSRAM scratch buffer for scaled copy
     static float *_matrixTemp = nullptr;
     if (!_matrixTemp) {
-        _matrixTemp = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-        bool matTemp_psram = (_matrixTemp != nullptr);
-        if (!_matrixTemp) _matrixTemp = (float *)calloc(FRAMES, sizeof(float));
-        if (_matrixTemp) heap_budget_record("pipeline_matrixTemp", FRAMES * sizeof(float), matTemp_psram);
+        _matrixTemp = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_matrix");
     }
     if (!_matrixTemp) return;
 
@@ -665,71 +663,29 @@ void audio_pipeline_init() {
         _swapHoldCh[i] = _swapHoldCh_buf[i];
     }
 #else
-    int psramFallbackCount = 0;
     {
-        bool lanes_psram = false;
         for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-            _laneL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-            bool laneL_psram = (_laneL[i] != nullptr);
-            _laneR[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-            if (!_laneL[i]) {
-                _laneL[i] = (float *)calloc(FRAMES, sizeof(float));
-                if (_laneL[i]) { psramFallbackCount++; }
-            }
-            if (!_laneR[i]) {
-                _laneR[i] = (float *)calloc(FRAMES, sizeof(float));
-                if (_laneR[i]) { psramFallbackCount++; }
-            }
-            if (i == 0) lanes_psram = laneL_psram;
+            _laneL[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_lanes");
+            _laneR[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_lanes");
         }
-        heap_budget_record("pipeline_lanes",
-            AUDIO_PIPELINE_MAX_INPUTS * 2 * FRAMES * sizeof(float), lanes_psram);
     }
     {
-        bool outCh_psram = false;
         for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
-            _outCh[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-            if (i == 0) outCh_psram = (_outCh[i] != nullptr);
-            if (!_outCh[i]) {
-                _outCh[i] = (float *)calloc(FRAMES, sizeof(float));
-                if (_outCh[i]) { psramFallbackCount++; }
-            }
+            _outCh[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_outCh");
         }
-        heap_budget_record("pipeline_outCh",
-            AUDIO_PIPELINE_MATRIX_SIZE * FRAMES * sizeof(float), outCh_psram);
     }
     // Noise gate fade-out: PSRAM prev-frame buffers
     {
-        bool gate_psram = false;
         for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-            _gatePrevL[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-            if (i == 0) gate_psram = (_gatePrevL[i] != nullptr);
-            _gatePrevR[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-            if (!_gatePrevL[i]) {
-                _gatePrevL[i] = (float *)calloc(FRAMES, sizeof(float));
-                if (_gatePrevL[i]) { psramFallbackCount++; }
-            }
-            if (!_gatePrevR[i]) {
-                _gatePrevR[i] = (float *)calloc(FRAMES, sizeof(float));
-                if (_gatePrevR[i]) { psramFallbackCount++; }
-            }
+            _gatePrevL[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_gate");
+            _gatePrevR[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_gate");
         }
-        heap_budget_record("pipeline_gate",
-            AUDIO_PIPELINE_MAX_INPUTS * 2 * FRAMES * sizeof(float), gate_psram);
     }
     // DSP swap hold: PSRAM last-good-output buffer
     {
-        bool swap_psram = false;
         for (int i = 0; i < AUDIO_PIPELINE_MATRIX_SIZE; i++) {
-            _swapHoldCh[i] = (float *)heap_caps_calloc(FRAMES, sizeof(float), MALLOC_CAP_SPIRAM);
-            if (i == 0) swap_psram = (_swapHoldCh[i] != nullptr);
-            if (!_swapHoldCh[i]) {
-                _swapHoldCh[i] = (float *)calloc(FRAMES, sizeof(float));
-                if (_swapHoldCh[i]) { psramFallbackCount++; }
-            }
+            _swapHoldCh[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_swap");
         }
-        heap_budget_record("pipeline_swapHold",
-            AUDIO_PIPELINE_MATRIX_SIZE * FRAMES * sizeof(float), swap_psram);
     }
     // ===== Eager DMA buffer pre-allocation (internal SRAM) =====
     // Pre-allocate all 16 DMA buffers at init rather than lazily in set_source/set_sink.
@@ -783,13 +739,6 @@ void audio_pipeline_init() {
             LOG_I("[Audio] Pre-allocated %d DMA buffers (%u bytes internal SRAM)",
                   dmaAllocCount, (unsigned)(totalRawBytes + totalSinkBytes));
         }
-    }
-    if (psramFallbackCount > 0) {
-        LOG_W("[Audio] %d PSRAM allocations fell back to internal SRAM", psramFallbackCount);
-        char msg[24];
-        snprintf(msg, sizeof(msg), "%d buf->SRAM", psramFallbackCount);
-        diag_emit(DIAG_SYS_PSRAM_ALLOC_FAIL, DIAG_SEV_WARN,
-                  0xFF, "Audio", msg);
     }
 #endif
 

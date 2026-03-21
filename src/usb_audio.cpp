@@ -126,6 +126,7 @@ float usb_volume_to_linear(int16_t volume_256db) {
 #include "app_state.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "psram_alloc.h"
 #include <esp_heap_caps.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -771,11 +772,7 @@ extern "C" uint8_t const *__wrap_tud_descriptor_bos_cb(void) {
 void usb_audio_init(void) {
     // Allocate ring buffer in PSRAM (once — persists across enable/disable toggles)
     if (!_ringBufStorage) {
-        _ringBufStorage = (int32_t *)heap_caps_calloc(
-            RING_BUF_CAPACITY * 2, sizeof(int32_t), MALLOC_CAP_SPIRAM);
-        if (!_ringBufStorage) {
-            _ringBufStorage = (int32_t *)calloc(RING_BUF_CAPACITY * 2, sizeof(int32_t));
-        }
+        _ringBufStorage = (int32_t *)psram_alloc(RING_BUF_CAPACITY * 2, sizeof(int32_t), "usb_ringbuf");
         if (!_ringBufStorage) {
             LOG_E("[USB Audio] Ring buffer allocation failed!");
             return;

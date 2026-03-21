@@ -15,6 +15,8 @@
 #include "../../src/app_state.h"
 
 // Include DSP implementation
+#include "../../src/heap_budget.cpp"
+#include "../../src/psram_alloc.cpp"
 #include "../../src/dsp_coefficients.cpp"
 #include "../../src/dsp_convolution.cpp"
 #include "../../src/dsp_pipeline.cpp"

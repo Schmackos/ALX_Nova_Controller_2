@@ -6,6 +6,7 @@
 // thunks.
 
 #include "hal_tdm_deinterleaver.h"
+#include "../psram_alloc.h"
 
 #ifndef NATIVE_TEST
 #include <esp_heap_caps.h>
@@ -104,12 +105,7 @@ bool HalTdmDeinterleaver::init(uint8_t i2sPort) {
     // Prefer PSRAM — TDM buffers are large and not latency-critical
     for (int s = 0; s < 2; s++) {
         for (int p = 0; p < TDM_PAIR_COUNT; p++) {
-            _pairBuf[s][p] = (int32_t*)heap_caps_calloc(stBufSamples, sizeof(int32_t),
-                                                         MALLOC_CAP_SPIRAM);
-            if (!_pairBuf[s][p]) {
-                // Fallback to internal heap
-                _pairBuf[s][p] = (int32_t*)calloc(stBufSamples, sizeof(int32_t));
-            }
+            _pairBuf[s][p] = (int32_t*)psram_alloc(stBufSamples, sizeof(int32_t), "tdm_pair");
             if (!_pairBuf[s][p]) {
                 LOG_E("[HAL:TDM] Buffer alloc failed: side=%d pair=%d (%u bytes)",
                       s, p, (unsigned)stBufBytes);
@@ -119,11 +115,7 @@ bool HalTdmDeinterleaver::init(uint8_t i2sPort) {
         }
     }
 
-    _rawBuf = (int32_t*)heap_caps_calloc(TDM_RAW_BUF_SAMPLES, sizeof(int32_t),
-                                          MALLOC_CAP_SPIRAM);
-    if (!_rawBuf) {
-        _rawBuf = (int32_t*)calloc(TDM_RAW_BUF_SAMPLES, sizeof(int32_t));
-    }
+    _rawBuf = (int32_t*)psram_alloc(TDM_RAW_BUF_SAMPLES, sizeof(int32_t), "tdm_raw");
     if (!_rawBuf) {
         LOG_E("[HAL:TDM] Raw scratch buffer alloc failed (%u bytes)",
               (unsigned)rawBufBytes);
@@ -148,11 +140,11 @@ bool HalTdmDeinterleaver::init(uint8_t i2sPort) {
 void HalTdmDeinterleaver::deinit() {
     for (int s = 0; s < 2; s++) {
         for (int p = 0; p < TDM_PAIR_COUNT; p++) {
-            free(_pairBuf[s][p]);
+            psram_free(_pairBuf[s][p], "tdm_pair");
             _pairBuf[s][p] = nullptr;
         }
     }
-    free(_rawBuf);
+    psram_free(_rawBuf, "tdm_raw");
     _rawBuf      = nullptr;
     _ready       = false;
     _initialized = false;

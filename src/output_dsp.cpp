@@ -13,7 +13,7 @@
 #ifndef NATIVE_TEST
 #include "debug_serial.h"
 #include "diag_journal.h"
-#include <esp_heap_caps.h>
+#include "psram_alloc.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #else
@@ -157,13 +157,11 @@ void output_dsp_init() {
 #ifndef NATIVE_TEST
     // Allocate double-buffered state from PSRAM
     if (!_states) {
-        _states = (OutputDspState *)heap_caps_calloc(2, sizeof(OutputDspState), MALLOC_CAP_SPIRAM);
-        if (!_states) _states = (OutputDspState *)calloc(2, sizeof(OutputDspState));
+        _states = (OutputDspState *)psram_alloc(2, sizeof(OutputDspState), "outdsp_states");
     }
     // Allocate gain buffer for 2-pass limiter/compressor
     if (!_outGainBuf) {
-        _outGainBuf = (float *)heap_caps_calloc(256, sizeof(float), MALLOC_CAP_SPIRAM);
-        if (!_outGainBuf) _outGainBuf = (float *)calloc(256, sizeof(float));
+        _outGainBuf = (float *)psram_alloc(256, sizeof(float), "outdsp_buf");
     }
 #endif
 

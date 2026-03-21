@@ -232,6 +232,40 @@
             });
         }
 
+        // ----- PSRAM Health Banner -----
+        function updatePsramHealthBanner(data) {
+            var banner = document.getElementById('psramHealthBanner');
+            if (!banner) {
+                var container = document.getElementById('healthDeviceGrid');
+                if (!container || !container.parentElement) return;
+                banner = document.createElement('div');
+                banner.id = 'psramHealthBanner';
+                banner.className = 'health-banner';
+                banner.style.display = 'none';
+                container.parentElement.insertBefore(banner, container.parentElement.firstChild.nextSibling);
+            }
+
+            var alertIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z"/></svg> ';
+            var infoIcon = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg> ';
+            var fbCount = data.psramFallbackCount || 0;
+
+            if (data.psramCritical) {
+                banner.className = 'health-banner health-banner-red';
+                banner.innerHTML = alertIcon + 'PSRAM Critical — ' + fbCount + ' allocation(s) fell back to SRAM';
+                banner.style.display = '';
+            } else if (data.psramWarning) {
+                banner.className = 'health-banner health-banner-amber';
+                banner.innerHTML = alertIcon + 'PSRAM Warning — ' + fbCount + ' allocation(s) fell back to SRAM';
+                banner.style.display = '';
+            } else if (fbCount > 0) {
+                banner.className = 'health-banner health-banner-amber';
+                banner.innerHTML = infoIcon + fbCount + ' PSRAM allocation(s) fell back to SRAM';
+                banner.style.display = '';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
         // ----- Tab init (called from switchTab) -----
         function initHealthDashboard() {
             if (healthInitialized) return;

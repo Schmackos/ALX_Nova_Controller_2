@@ -13,6 +13,8 @@ struct DebugState {
   unsigned long hardwareStatsInterval = HARDWARE_STATS_INTERVAL;
   bool heapCritical = false;       // True when largest free block < HEAP_CRITICAL_THRESHOLD
   bool heapWarning = false;        // True when largest free block < HEAP_WARNING_THRESHOLD but >= HEAP_CRITICAL_THRESHOLD
+  bool psramWarning  = false;      // True when free PSRAM < PSRAM_WARNING_THRESHOLD
+  bool psramCritical = false;      // True when free PSRAM < PSRAM_CRITICAL_THRESHOLD
 };
 
 #endif // STATE_DEBUG_STATE_H

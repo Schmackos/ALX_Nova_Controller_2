@@ -56,6 +56,22 @@ bool heap_budget_record(const char* label, uint32_t bytes, bool isPsram) {
     return true;
 }
 
+bool heap_budget_remove(const char* label) {
+    if (!label) return false;
+
+    int idx = _findByLabel(label);
+    if (idx < 0) return false;
+
+    // Swap with last entry to avoid gaps
+    if (idx < _count - 1) {
+        _entries[idx] = _entries[_count - 1];
+    }
+    memset(&_entries[_count - 1], 0, sizeof(HeapBudgetEntry));
+    _count--;
+    _recomputeTotals();
+    return true;
+}
+
 void heap_budget_reset(void) {
     _count      = 0;
     _totalPsram = 0;

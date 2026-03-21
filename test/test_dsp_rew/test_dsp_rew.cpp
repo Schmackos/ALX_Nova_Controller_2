@@ -8,14 +8,16 @@
 #include "../../lib/esp_dsp_lite/src/dsps_fir_init_f32.c"
 #include "../../lib/esp_dsp_lite/src/dsps_conv_f32_ansi.c"
 #include "../../src/dsp_biquad_gen.c"
-#include "../../src/dsp_convolution.cpp"
 
 #include "../../src/dsp_pipeline.h"
 #include "../../src/dsp_coefficients.h"
 #include "../../src/dsp_rew_parser.h"
 
 // Include sources
+#include "../../src/heap_budget.cpp"
+#include "../../src/psram_alloc.cpp"
 #include "../../src/dsp_coefficients.cpp"
+#include "../../src/dsp_convolution.cpp"
 #include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_rew_parser.cpp"
 

@@ -68,3 +68,106 @@ test('hardware stats elements are populated from hardware_stats WS message', asy
   // Uptime should be populated
   await expect(page.locator('#uptime')).not.toHaveText('', { timeout: 3000 });
 });
+
+test('PSRAM fields in hardware_stats message are accepted without error', async ({ connectedPage: page }) => {
+  await page.evaluate(() => switchTab('debug'));
+
+  // Send hardware_stats with the new PSRAM allocation tracking fields.
+  // These fields are present in the WS message even if the UI does not yet
+  // render dedicated elements for all of them. The test verifies that the
+  // frontend processes the message without throwing (no console errors).
+  const consoleErrors = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+
+  page.wsRoute.send({
+    type: 'hardware_stats',
+    cpu: { usageTotal: 40, usageCore0: 25, usageCore1: 15, temperature: 45.0, freqMHz: 360, model: 'ESP32-P4', revision: 1, cores: 2 },
+    memory: { heapTotal: 327680, heapFree: 182340, heapMinFree: 154880, heapMaxBlock: 131072, psramTotal: 8388608, psramFree: 7000000 },
+    storage: { flashSize: 16777216, sketchSize: 1245184, sketchFree: 2883584, LittleFSTotal: 1441792, LittleFSUsed: 32768 },
+    wifi: { rssi: -45, channel: 6, apClients: 0 },
+    uptime: 60000,
+    heapCritical: false,
+    dmaAllocFailed: false,
+    psramFallbackCount: 2,
+    psramFailedCount: 0,
+    psramAllocPsram: 155000,
+    psramAllocSram: 8192,
+    psramWarning: false,
+    psramCritical: false,
+  });
+
+  // PSRAM percentage should still be rendered correctly
+  await expect(page.locator('#psramPercent')).not.toHaveText('N/A', { timeout: 3000 });
+
+  // PSRAM free should be populated
+  await expect(page.locator('#psramFree')).not.toHaveText('--', { timeout: 3000 });
+
+  // No console errors from processing the new fields
+  // (small delay to let any async handlers run)
+  await page.waitForTimeout(500);
+  const psramRelatedErrors = consoleErrors.filter(e => e.toLowerCase().includes('psram'));
+  expect(psramRelatedErrors).toHaveLength(0);
+});
+
+test('heap critical row becomes visible when heapCritical is true', async ({ connectedPage: page }) => {
+  await page.evaluate(() => switchTab('debug'));
+
+  // Enable debug mode and hardware stats so the stats section is visible
+  page.wsRoute.send({ type: 'debugState', debugMode: true, debugHwStats: true, debugI2sMetrics: false, debugTaskMonitor: false, debugSerialLevel: 2 });
+  await page.waitForTimeout(300);
+
+  // Send hardware_stats with heapCritical = true
+  page.wsRoute.send({
+    type: 'hardware_stats',
+    cpu: { usageTotal: 90, usageCore0: 85, usageCore1: 95, temperature: 65.0, freqMHz: 360, model: 'ESP32-P4', revision: 1, cores: 2 },
+    memory: { heapTotal: 327680, heapFree: 30000, heapMinFree: 25000, heapMaxBlock: 20000, psramTotal: 8388608, psramFree: 2000000 },
+    storage: { flashSize: 16777216, sketchSize: 1245184, sketchFree: 2883584, LittleFSTotal: 1441792, LittleFSUsed: 32768 },
+    wifi: { rssi: -70, channel: 6, apClients: 0 },
+    uptime: 300000,
+    heapCritical: true,
+    dmaAllocFailed: false,
+    psramFallbackCount: 5,
+    psramFailedCount: 1,
+    psramAllocPsram: 200000,
+    psramAllocSram: 32768,
+    psramWarning: true,
+    psramCritical: false,
+  });
+
+  // The heapCritical row should become visible
+  await expect(page.locator('#heapCriticalRow')).toBeVisible({ timeout: 3000 });
+  await expect(page.locator('#heapCriticalValue')).toHaveText('YES');
+});
+
+test('DMA allocation failure row becomes visible with lane bitmask', async ({ connectedPage: page }) => {
+  await page.evaluate(() => switchTab('debug'));
+
+  // Enable debug mode and hardware stats so the stats section is visible
+  page.wsRoute.send({ type: 'debugState', debugMode: true, debugHwStats: true, debugI2sMetrics: false, debugTaskMonitor: false, debugSerialLevel: 2 });
+  await page.waitForTimeout(300);
+
+  page.wsRoute.send({
+    type: 'hardware_stats',
+    cpu: { usageTotal: 50, usageCore0: 30, usageCore1: 70, temperature: 55.0, freqMHz: 360, model: 'ESP32-P4', revision: 1, cores: 2 },
+    memory: { heapTotal: 327680, heapFree: 100000, heapMinFree: 80000, heapMaxBlock: 60000, psramTotal: 8388608, psramFree: 5000000 },
+    storage: { flashSize: 16777216, sketchSize: 1245184, sketchFree: 2883584, LittleFSTotal: 1441792, LittleFSUsed: 32768 },
+    wifi: { rssi: -55, channel: 6, apClients: 0 },
+    uptime: 200000,
+    heapCritical: false,
+    dmaAllocFailed: true,
+    dmaAllocFailMask: 0x0003,
+    psramFallbackCount: 0,
+    psramFailedCount: 0,
+    psramAllocPsram: 155000,
+    psramAllocSram: 0,
+    psramWarning: false,
+    psramCritical: false,
+  });
+
+  // DMA failure row should become visible with lane details
+  await expect(page.locator('#dmaAllocFailRow')).toBeVisible({ timeout: 3000 });
+  await expect(page.locator('#dmaAllocFailValue')).toHaveText(/Lane 0/);
+  await expect(page.locator('#dmaAllocFailValue')).toHaveText(/Lane 1/);
+});

@@ -23,6 +23,8 @@
 #include "../../src/dsp_coefficients.h"
 
 // Include DSP implementation source
+#include "../../src/heap_budget.cpp"
+#include "../../src/psram_alloc.cpp"
 #include "../../src/dsp_coefficients.cpp"
 #include "../../src/dsp_pipeline.cpp"
 #include "../../src/dsp_crossover.cpp"
