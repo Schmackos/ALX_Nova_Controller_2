@@ -15,7 +15,7 @@ extern "C" {
 
 // Maximum number of input sources (guarded so audio_pipeline.h can override)
 #ifndef AUDIO_PIPELINE_MAX_INPUTS
-#define AUDIO_PIPELINE_MAX_INPUTS 4
+#define AUDIO_PIPELINE_MAX_INPUTS 8
 #endif
 
 // Reusable input source interface.
