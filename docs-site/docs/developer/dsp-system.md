@@ -366,3 +366,38 @@ output_dsp_load_all();
 ```
 
 Configuration is saved to `/dsp_ch0.json` through `/dsp_ch3.json` and `/output_dsp_ch0.json` through `/output_dsp_ch7.json`. Loading calls `audio_pipeline_bypass_dsp()` to apply the loaded bypass state before the first audio frame processes.
+
+## CPU Load Monitoring
+
+The DSP pipeline monitors CPU load and applies graduated thresholds:
+
+| State | Threshold | Behaviour |
+|-------|-----------|-----------|
+| Normal | < 80% | All DSP stages active |
+| Warning | >= 80% | `DIAG_DSP_CPU_WARN` (0x3006) emitted, web UI indicator amber |
+| Critical | >= 95% | `DIAG_DSP_CPU_CRIT` (0x3007) emitted, FIR/convolution stages auto-bypassed, web UI indicator red |
+
+The web UI Hardware Stats section shows per-input DSP CPU %, pipeline total CPU %, and FIR bypass count when > 0.
+
+Pipeline timing metrics (`PipelineTimingMetrics`) measure total frame time, matrix mixing, and per-output DSP independently. Exposed via WebSocket `dspMetrics` broadcast.
+
+## FIR Convolution Limits
+
+The FIR convolution engine (`dsp_convolution.h/.cpp`) has these operational limits:
+
+- **Max IR length**: 24,576 samples (0.51s at 48kHz) across `CONV_MAX_PARTITIONS` partitions of `CONV_PARTITION_SIZE` samples each
+- **Concurrent slots**: `CONV_MAX_IR_SLOTS` (2)
+- **Memory**: PSRAM preferred, internal SRAM fallback
+- **Auto-bypass**: FIR and convolution stages are automatically skipped when CPU load exceeds 95% (`DSP_CPU_CRIT_PERCENT`), preventing audio dropouts
+
+## Coefficient Safety
+
+Biquad coefficient generators include multiple safety guards:
+
+1. **Generator return values**: All `dsp_gen_*_f32()` return values are checked — generator failure resets coefficients to passthrough (b0=1, rest=0)
+2. **Division guard**: `normalize()` rejects near-zero a0 values (`fabsf(a0) < 1e-10f`) to prevent Inf from 1/a0
+3. **NaN/Inf check**: Post-computation guard on all 5 coefficients
+4. **Stability check**: `|a2| >= 1.0` detects poles on or outside the unit circle
+5. **Diagnostic emission**: `DIAG_DSP_COEFF_INVALID` (0x3003) fired on any coefficient failure
+
+Both per-input DSP (`dsp_coefficients.cpp`) and per-output DSP (`output_dsp.cpp`) apply these guards.
