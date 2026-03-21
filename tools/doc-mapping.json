@@ -23,6 +23,12 @@
     "src/hal/hal_pcm1808.cpp": ["developer/hal/drivers"],
     "src/hal/hal_ns4150b.h": ["developer/hal/drivers"],
     "src/hal/hal_ns4150b.cpp": ["developer/hal/drivers"],
+    "src/hal/hal_es9822pro.h": ["developer/hal/drivers"],
+    "src/hal/hal_es9822pro.cpp": ["developer/hal/drivers"],
+    "src/hal/hal_es9843pro.h": ["developer/hal/drivers"],
+    "src/hal/hal_es9843pro.cpp": ["developer/hal/drivers"],
+    "src/hal/hal_tdm_deinterleaver.h": ["developer/hal/drivers", "developer/audio-pipeline"],
+    "src/hal/hal_tdm_deinterleaver.cpp": ["developer/hal/drivers", "developer/audio-pipeline"],
     "src/hal/hal_siggen.h": ["developer/hal/drivers"],
     "src/hal/hal_siggen.cpp": ["developer/hal/drivers"],
     "src/hal/hal_usb_audio.h": ["developer/hal/drivers"],
@@ -219,7 +225,9 @@
     "src/web_pages.cpp",
     "src/web_pages.h",
     "src/web_pages_gz.cpp",
-    "src/drivers/es8311_regs.h"
+    "src/drivers/es8311_regs.h",
+    "src/drivers/es9822pro_regs.h",
+    "src/drivers/es9843pro_regs.h"
   ],
   "sectionToPromptType": {
     "api/rest-main": "api-reference",
