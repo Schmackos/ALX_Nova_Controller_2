@@ -59,12 +59,16 @@ router.put('/devices', (req, res) => {
     return res.status(404).json({ error: 'No device in slot' });
   }
   // Apply supported config fields from request body
-  const fields = ['enabled', 'label', 'volume', 'mute'];
+  const fields = ['enabled', 'label', 'volume', 'mute', 'filterMode'];
   for (const field of fields) {
     if (req.body[field] !== undefined) {
       device[field] = req.body[field];
     }
   }
+  // ADC-specific config fields
+  if (req.body.cfgPgaGain !== undefined) device.cfgPgaGain = req.body.cfgPgaGain;
+  if (req.body.cfgHpfEnabled !== undefined) device.cfgHpfEnabled = req.body.cfgHpfEnabled;
+  if (req.body.filterMode !== undefined) device.cfgFilterMode = req.body.filterMode;
   res.json({ status: 'ok' });
 });
 

@@ -45,7 +45,9 @@ function createDefaultState() {
       { id: 2, name: 'PCM1808-1', compatible: 'ti,pcm1808', type: 'ADC', state: 'AVAILABLE', enabled: true, bus: 'I2S', address: '0x00' },
       { id: 3, name: 'PCM1808-2', compatible: 'ti,pcm1808', type: 'ADC', state: 'AVAILABLE', enabled: true, bus: 'I2S', address: '0x00' },
       { id: 4, name: 'NS4150B', compatible: 'ns,ns4150b', type: 'AMP', state: 'AVAILABLE', enabled: true, bus: 'GPIO', address: '53' },
-      { id: 5, name: 'Chip Temp', compatible: 'espressif,temp-sensor', type: 'SENSOR', state: 'AVAILABLE', enabled: true, bus: 'Internal', address: '' }
+      { id: 5, name: 'Chip Temp', compatible: 'espressif,temp-sensor', type: 'SENSOR', state: 'AVAILABLE', enabled: true, bus: 'Internal', address: '' },
+      { id: 7, name: 'ES9822PRO', compatible: 'ess,es9822pro', type: 'ADC', state: 'AVAILABLE', enabled: true, bus: 'I2C', address: '0x40', capabilities: 105, cfgPgaGain: 6, cfgHpfEnabled: true, cfgFilterMode: 2, cfgVolume: 80, channels: 2 },
+      { id: 8, name: 'ES9843PRO', compatible: 'ess,es9843pro', type: 'ADC', state: 'AVAILABLE', enabled: true, bus: 'I2C', address: '0x40', capabilities: 105, cfgPgaGain: 0, cfgHpfEnabled: false, cfgFilterMode: 0, cfgVolume: 100, channels: 4 }
     ],
     audioChannelMap: {
       inputs: [
