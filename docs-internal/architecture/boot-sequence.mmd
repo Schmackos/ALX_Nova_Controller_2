@@ -1,3 +1,9 @@
+%% @validate-symbols
+%% src/hal/hal_builtin_devices.h: hal_register_builtins
+%% src/hal/hal_device_db.h: hal_db_init, hal_load_device_configs
+%% src/hal/hal_pipeline_bridge.h: hal_pipeline_sync
+%% src/i2s_audio.h: i2s_audio_init
+%% @end-validate
 %% Boot Sequence — HAL + Audio Pipeline initialization order
 %% Critical: factories before devices, I2S before DAC, bridge sync after all registration
 
