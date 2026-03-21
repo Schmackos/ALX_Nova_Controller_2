@@ -36,9 +36,9 @@ void registerPsramApiEndpoints(WebServer &/*srv*/) {
         doc["allocSram"]     = ps.activeSramBytes;
 
         // Warning/critical flags
-        auto& appState = AppState::getInstance();
-        doc["warning"]  = appState.debug.psramWarning;
-        doc["critical"] = appState.debug.psramCritical;
+        auto& state = AppState::getInstance();
+        doc["warning"]  = state.debug.psramWarning;
+        doc["critical"] = state.debug.psramCritical;
 
         // Heap budget breakdown
         JsonArray budget = doc["budget"].to<JsonArray>();
