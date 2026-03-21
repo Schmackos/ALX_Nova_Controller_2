@@ -38,7 +38,7 @@
 #define ES9843PRO_REG_CHIP_ID             0xE1
 #define ES9843PRO_SOFT_RESET_CMD          0xA0
 #define ES9843PRO_OUTPUT_I2S              0x00
-#define ES9843PRO_TDM_FORMAT              0x04   // I2S TDM mode (reg 0x03 bits2:0 = 0b100)
+#define ES9843PRO_TDM_FORMAT              0x10   // TDM output mode (reg 0x03 OUTPUT_SEL bits6:4 = 0b001)
 #define ES9843PRO_ENABLE_4CH              0x0F
 #define ES9843PRO_ASP_BYPASS_ALL          0x0F
 #define ES9843PRO_VOL_0DB                 0x00
