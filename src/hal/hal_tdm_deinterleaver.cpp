@@ -50,12 +50,14 @@ inline bool     i2s_audio_port2_tdm_active(void) { return false; }
 #include <cstring>
 
 // ---------------------------------------------------------------------------
-// Module-level singleton pointer — set by buildSources() so that the static
-// thunks can reach the instance without capturing a lambda.
-// Only one HalTdmDeinterleaver instance is ever alive simultaneously (one
-// ES9843PRO device), so a single global pointer is sufficient.
+// Instance slot array — supports up to TDM_MAX_INSTANCES concurrent
+// HalTdmDeinterleaver objects.  Each instance claims one slot during
+// buildSources() and releases it in deinit().  Two dedicated thunk sets
+// (_0 / _1) route AudioInputSource callbacks to the correct instance without
+// capturing a lambda or using a single shared pointer.
 // ---------------------------------------------------------------------------
-static HalTdmDeinterleaver* _gInstance = nullptr;
+#define TDM_MAX_INSTANCES 2
+static HalTdmDeinterleaver* _gInstances[TDM_MAX_INSTANCES] = { nullptr, nullptr };
 
 // ---------------------------------------------------------------------------
 // Constructor / Destructor
@@ -67,7 +69,8 @@ HalTdmDeinterleaver::HalTdmDeinterleaver()
       _lastFrameCount(0),
       _i2sPort(2),
       _ready(false),
-      _initialized(false)
+      _initialized(false),
+      _instanceIdx(0xFF)
 {
     for (int s = 0; s < 2; s++) {
         for (int p = 0; p < TDM_PAIR_COUNT; p++) {
@@ -154,8 +157,11 @@ void HalTdmDeinterleaver::deinit() {
     _ready       = false;
     _initialized = false;
 
-    // Clear singleton if it was pointing to us
-    if (_gInstance == this) _gInstance = nullptr;
+    // Release the instance slot so another device may claim it
+    if (_instanceIdx < TDM_MAX_INSTANCES) {
+        _gInstances[_instanceIdx] = nullptr;
+        _instanceIdx = 0xFF;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -164,8 +170,31 @@ void HalTdmDeinterleaver::deinit() {
 
 void HalTdmDeinterleaver::buildSources(const char* name0, const char* name1,
                                         AudioInputSource* out0, AudioInputSource* out1) {
-    // Register singleton before assigning callbacks (thunks dereference it)
-    _gInstance = this;
+    // Find a free instance slot
+    uint8_t idx = 0xFF;
+    for (uint8_t i = 0; i < TDM_MAX_INSTANCES; i++) {
+        if (_gInstances[i] == nullptr) { idx = i; break; }
+    }
+    if (idx == 0xFF) {
+        LOG_E("[HAL:TDM] All %d instance slots full — cannot build sources", TDM_MAX_INSTANCES);
+        // Leave out0/out1 callbacks null so caller can detect the failure
+        return;
+    }
+    _instanceIdx      = idx;
+    _gInstances[idx]  = this;
+
+    // Select thunk set for this slot
+    typedef uint32_t (*ReadFn)(int32_t*, uint32_t);
+    typedef bool     (*ActiveFn)(void);
+    ReadFn   fnARead,   fnBRead;
+    ActiveFn fnAActive, fnBActive;
+    if (idx == 0) {
+        fnARead   = _pairARead_0;   fnBRead   = _pairBRead_0;
+        fnAActive = _pairAActive_0; fnBActive = _pairBActive_0;
+    } else {
+        fnARead   = _pairARead_1;   fnBRead   = _pairBRead_1;
+        fnAActive = _pairAActive_1; fnBActive = _pairBActive_1;
+    }
 
     // -- Pair A: CH1/CH2 (pipeline reads this first, triggers TDM DMA read) --
     memset(out0, 0, sizeof(AudioInputSource));
@@ -176,8 +205,8 @@ void HalTdmDeinterleaver::buildSources(const char* name0, const char* name1,
     out0->vuL           = -90.0f;
     out0->vuR           = -90.0f;
     out0->isHardwareAdc = true;
-    out0->read          = _pairARead;
-    out0->isActive      = _pairAActive;
+    out0->read          = fnARead;
+    out0->isActive      = fnAActive;
     out0->getSampleRate = _getSampleRate;
 
     // -- Pair B: CH3/CH4 (reads from the buffer pair A just filled) --
@@ -189,11 +218,12 @@ void HalTdmDeinterleaver::buildSources(const char* name0, const char* name1,
     out1->vuL           = -90.0f;
     out1->vuR           = -90.0f;
     out1->isHardwareAdc = true;
-    out1->read          = _pairBRead;
-    out1->isActive      = _pairBActive;
+    out1->read          = fnBRead;
+    out1->isActive      = fnBActive;
     out1->getSampleRate = _getSampleRate;
 
-    LOG_I("[HAL:TDM] Sources built: '%s' (pair A), '%s' (pair B)", name0, name1);
+    LOG_I("[HAL:TDM] Sources built (slot %u): '%s' (pair A), '%s' (pair B)",
+          idx, name0, name1);
 }
 
 // ---------------------------------------------------------------------------
@@ -291,28 +321,45 @@ uint32_t HalTdmDeinterleaver::_doPairBRead(int32_t* dst, uint32_t frames) {
 }
 
 // ---------------------------------------------------------------------------
-// Static thunks — delegate to the module-level singleton instance
+// Static thunks — two sets, one per instance slot.
+// Each set routes to _gInstances[N] independently so that two concurrent
+// HalTdmDeinterleaver objects never share a callback pointer.
 // ---------------------------------------------------------------------------
 
-uint32_t HalTdmDeinterleaver::_pairARead(int32_t* dst, uint32_t frames) {
-    if (!_gInstance) return 0;
-    return _gInstance->_doPairARead(dst, frames);
+// ---- Slot 0 thunks ----
+uint32_t HalTdmDeinterleaver::_pairARead_0(int32_t* dst, uint32_t frames) {
+    if (!_gInstances[0]) return 0;
+    return _gInstances[0]->_doPairARead(dst, frames);
 }
-
-uint32_t HalTdmDeinterleaver::_pairBRead(int32_t* dst, uint32_t frames) {
-    if (!_gInstance) return 0;
-    return _gInstance->_doPairBRead(dst, frames);
+uint32_t HalTdmDeinterleaver::_pairBRead_0(int32_t* dst, uint32_t frames) {
+    if (!_gInstances[0]) return 0;
+    return _gInstances[0]->_doPairBRead(dst, frames);
 }
-
-bool HalTdmDeinterleaver::_pairAActive(void) {
-    if (!_gInstance) return false;
+bool HalTdmDeinterleaver::_pairAActive_0(void) {
+    if (!_gInstances[0]) return false;
     return i2s_audio_port2_tdm_active();
 }
+bool HalTdmDeinterleaver::_pairBActive_0(void) {
+    if (!_gInstances[0]) return false;
+    return _gInstances[0]->_ready;
+}
 
-bool HalTdmDeinterleaver::_pairBActive(void) {
-    // Pair B is active whenever pair A produced at least one valid frame
-    if (!_gInstance) return false;
-    return _gInstance->_ready;
+// ---- Slot 1 thunks ----
+uint32_t HalTdmDeinterleaver::_pairARead_1(int32_t* dst, uint32_t frames) {
+    if (!_gInstances[1]) return 0;
+    return _gInstances[1]->_doPairARead(dst, frames);
+}
+uint32_t HalTdmDeinterleaver::_pairBRead_1(int32_t* dst, uint32_t frames) {
+    if (!_gInstances[1]) return 0;
+    return _gInstances[1]->_doPairBRead(dst, frames);
+}
+bool HalTdmDeinterleaver::_pairAActive_1(void) {
+    if (!_gInstances[1]) return false;
+    return i2s_audio_port2_tdm_active();
+}
+bool HalTdmDeinterleaver::_pairBActive_1(void) {
+    if (!_gInstances[1]) return false;
+    return _gInstances[1]->_ready;
 }
 
 uint32_t HalTdmDeinterleaver::_getSampleRate(void) {
