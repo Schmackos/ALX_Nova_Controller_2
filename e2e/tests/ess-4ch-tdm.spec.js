@@ -141,6 +141,93 @@ test.describe('ESS 4-channel TDM ADC — Device Card Rendering', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ES9842PRO — device card rendering (driver implemented)
+// ---------------------------------------------------------------------------
+
+test.describe('ES9842PRO rendering', () => {
+
+  test('renders ES9842PRO device card with correct name', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9842pro', 'ES9842PRO', 8);
+    await openDevicesTabWithDevice(page, device);
+    await expect(page.locator('#hal-device-list')).toContainText('ES9842PRO');
+  });
+
+  test('ES9842PRO card shows ADC type badge', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9842pro', 'ES9842PRO', 8);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9842PRO' });
+    await expect(card.locator('.hal-device-info')).toContainText('ADC');
+  });
+
+  test('ES9842PRO card shows manufacturer ESS Technology', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9842pro', 'ES9842PRO', 8);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9842PRO' });
+    await card.locator('.hal-device-header').click();
+    await expect(card.locator('.hal-device-details')).toContainText('ESS Technology');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// ES9841 — device card rendering (driver implemented)
+// ---------------------------------------------------------------------------
+
+test.describe('ES9841 rendering', () => {
+
+  test('renders ES9841 device card with correct name', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9841', 'ES9841', 8);
+    await openDevicesTabWithDevice(page, device);
+    await expect(page.locator('#hal-device-list')).toContainText('ES9841');
+  });
+
+  test('ES9841 card shows ADC type badge', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9841', 'ES9841', 8);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9841' });
+    await expect(card.locator('.hal-device-info')).toContainText('ADC');
+  });
+
+  test('ES9841 card shows manufacturer ESS Technology', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9841', 'ES9841', 8);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9841' });
+    await card.locator('.hal-device-header').click();
+    await expect(card.locator('.hal-device-details')).toContainText('ESS Technology');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// ES9840 — device card rendering (driver implemented)
+// ---------------------------------------------------------------------------
+
+test.describe('ES9840 rendering', () => {
+
+  test('renders ES9840 device card with correct name', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9840', 'ES9840', 8);
+    await openDevicesTabWithDevice(page, device);
+    await expect(page.locator('#hal-device-list')).toContainText('ES9840');
+  });
+
+  test('ES9840 card shows ADC type badge', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9840', 'ES9840', 8);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9840' });
+    await expect(card.locator('.hal-device-info')).toContainText('ADC');
+  });
+
+  test('ES9840 card shows manufacturer ESS Technology', async ({ connectedPage: page }) => {
+    const device = buildFourChAdcDevice('ess,es9840', 'ES9840', 8);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9840' });
+    await card.locator('.hal-device-header').click();
+    await expect(card.locator('.hal-device-details')).toContainText('ESS Technology');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
 // Gap 6 (real): ES9843PRO dual stereo source pairs in audioChannelMap
 //
 // The ES9843PRO registers 2 AudioInputSource entries via HalTdmDeinterleaver.

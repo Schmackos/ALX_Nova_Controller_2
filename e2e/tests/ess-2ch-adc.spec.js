@@ -186,7 +186,8 @@ test.describe('ES9826 rendering', () => {
     const device = buildTwoChAdcDevice('ess,es9826', 'ES9826', 7);
     await openDevicesTabWithDevice(page, device);
     const card = page.locator('.hal-device-card').filter({ hasText: 'ES9826' });
-    await expect(card).toContainText('ESS Technology');
+    await card.locator('.hal-device-header').click();
+    await expect(card.locator('.hal-device-details')).toContainText('ESS Technology');
   });
 
 });
@@ -222,7 +223,80 @@ test.describe('ES9821 rendering', () => {
     const device = buildTwoChAdcDevice('ess,es9821', 'ES9821', 7);
     await openDevicesTabWithDevice(page, device);
     const card = page.locator('.hal-device-card').filter({ hasText: 'ES9821' });
-    await expect(card).toContainText('ESS Technology');
+    await card.locator('.hal-device-header').click();
+    await expect(card.locator('.hal-device-details')).toContainText('ESS Technology');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// ES9823PRO — device card rendering (driver implemented)
+// ---------------------------------------------------------------------------
+
+test.describe('ES9823PRO rendering', () => {
+
+  test('renders ES9823PRO device card with correct name', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9823pro', 'ES9823PRO', 7);
+    await openDevicesTabWithDevice(page, device);
+    await expect(page.locator('#hal-device-list')).toContainText('ES9823PRO');
+  });
+
+  test('ES9823PRO card shows ADC type badge', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9823pro', 'ES9823PRO', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9823PRO' });
+    await expect(card.locator('.hal-device-info')).toContainText('ADC');
+  });
+
+  test('ES9823PRO card shows EEPROM discovery badge', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9823pro', 'ES9823PRO', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9823PRO' });
+    await expect(card.locator('.hal-device-info')).toContainText('EEPROM');
+  });
+
+  test('ES9823PRO card shows manufacturer ESS Technology', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9823pro', 'ES9823PRO', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9823PRO' });
+    await card.locator('.hal-device-header').click();
+    await expect(card.locator('.hal-device-details')).toContainText('ESS Technology');
+  });
+
+});
+
+// ---------------------------------------------------------------------------
+// ES9820 — device card rendering (driver implemented)
+// ---------------------------------------------------------------------------
+
+test.describe('ES9820 rendering', () => {
+
+  test('renders ES9820 device card with correct name', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9820', 'ES9820', 7);
+    await openDevicesTabWithDevice(page, device);
+    await expect(page.locator('#hal-device-list')).toContainText('ES9820');
+  });
+
+  test('ES9820 card shows ADC type badge', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9820', 'ES9820', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9820' });
+    await expect(card.locator('.hal-device-info')).toContainText('ADC');
+  });
+
+  test('ES9820 card shows EEPROM discovery badge', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9820', 'ES9820', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9820' });
+    await expect(card.locator('.hal-device-info')).toContainText('EEPROM');
+  });
+
+  test('ES9820 card shows manufacturer ESS Technology', async ({ connectedPage: page }) => {
+    const device = buildTwoChAdcDevice('ess,es9820', 'ES9820', 7);
+    await openDevicesTabWithDevice(page, device);
+    const card = page.locator('.hal-device-card').filter({ hasText: 'ES9820' });
+    await card.locator('.hal-device-header').click();
+    await expect(card.locator('.hal-device-details')).toContainText('ESS Technology');
   });
 
 });
