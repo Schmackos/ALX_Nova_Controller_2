@@ -54,6 +54,7 @@ const sidebars = {
         'developer/hal/device-lifecycle',
         'developer/hal/driver-guide',
         'developer/hal/drivers',
+        'developer/hal/mezzanine-connector',
       ],
     },
     'developer/audio-pipeline',
