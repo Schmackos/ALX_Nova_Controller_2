@@ -130,6 +130,8 @@
     "src/diag_journal.cpp": ["developer/diagnostics"],
     "src/diag_event.h": ["developer/diagnostics"],
     "src/diag_error_codes.h": ["developer/diagnostics"],
+    "src/heap_budget.h": ["developer/diagnostics"],
+    "src/heap_budget.cpp": ["developer/diagnostics"],
     "src/debug_serial.h": ["developer/overview"],
     "src/debug_serial.cpp": ["developer/overview"],
     "src/task_monitor.h": ["developer/overview"],
