@@ -1,0 +1,53 @@
+%% @validate-symbols
+%% src/hal/hal_discovery.h: hal_discover_devices, hal_wifi_sdio_active
+%% src/hal/hal_device_db.h: hal_db_init, hal_db_find_by_compatible
+%% src/hal/hal_builtin_devices.h: hal_register_builtins
+%% src/hal/hal_driver_registry.h: hal_registry_find
+%% src/hal/hal_pipeline_bridge.h: hal_pipeline_sync
+%% src/hal/hal_ess_sabre_adc_base.h: HalEssSabreAdcBase
+%% src/hal/hal_tdm_deinterleaver.h: HalTdmDeinterleaver
+%% src/diag_error_codes.h: DIAG_HAL_I2C_BUS_CONFLICT
+%% @end-validate
+%% ESS SABRE ADC Expansion Device Discovery and Driver Selection
+%% Triggered by boot scan or POST /api/hal/scan
+
+graph TD
+    SCAN["POST /api/hal/scan\nor boot discovery"] --> WIFICHECK{"hal_wifi_sdio_active()?\n(connectSuccess || connecting\n|| activeInterface == NET_WIFI)"}
+    WIFICHECK -->|"Bus 0 only — skip"| SKIP["Skip I2C Bus 0\nGPIO 48/54 (SDIO conflict)\nEmit DIAG_HAL_I2C_BUS_CONFLICT (0x1101)\nReturn partialScan: true"]
+    WIFICHECK -->|"Bus 2 always safe"| BUS2["Scan I2C Bus 2\nGPIO 28/29\n0x08–0x77"]
+
+    BUS2 --> EEPROM{"EEPROM ACK\nat 0x50–0x57?"}
+    EEPROM -->|"No EEPROM"| MANUAL["Module logged as UNKNOWN\nVisible in web UI\nManual config via REST API"]
+    EEPROM -->|"ACK at slot address"| READ["hal_eeprom_parse_v3()\nRead compatible string\nat offset 0x5E (32 bytes)\nValidate CRC-16/CCITT"]
+
+    READ --> CRCOK{"CRC valid?"}
+    CRCOK -->|"CRC fail"| LEGACY["Fallback: match by\nlegacy numeric deviceId\n(v1/v2 EEPROM fields)"]
+    CRCOK -->|"CRC ok"| MATCH{"hal_registry_find(compatible)\nMatch in driver registry?"}
+
+    MATCH -->|"No match"| MANUAL
+    MATCH -->|"Match found"| FAMILY{"ESS SABRE\ndevice family?"}
+
+    FAMILY -->|"2ch I2S device\nES9822PRO, ES9826\nES9823PRO/MPRO\nES9821, ES9820"| I2SDRV["Select I2S driver\ninherits HalEssSabreAdcBase\nRegisters 1 AudioInputSource\n1 input lane assigned"]
+
+    FAMILY -->|"4ch TDM device\nES9843PRO, ES9842PRO\nES9841, ES9840"| TDMDRV["Select TDM driver\ninherits HalEssSabreAdcBase\nHalTdmDeinterleaver embedded\nRegisters 2 AudioInputSources\n2 consecutive input lanes"]
+
+    I2SDRV --> PROBE["driver->probe()\nI2C address ACK check"]
+    TDMDRV --> PROBE
+
+    PROBE --> PROBEOK{"probe() success?"}
+    PROBEOK -->|"fail"| ERR["State: ERROR\nDIAG_HAL_INIT_FAILED\nDevice visible in UI"]
+    PROBEOK -->|"ok"| INIT["driver->init()\nRead HalDeviceConfig overrides\nConfigure I2C registers:\n- Volume, PGA gain\n- HPF, filter preset\n- TDM slot mask (4ch only)"]
+
+    INIT --> INITOK{"init() success?"}
+    INITOK -->|"fail (3 retries)"| ERR
+    INITOK -->|"ok"| AVAIL["State: AVAILABLE\n_ready = true"]
+
+    AVAIL --> BRIDGE["hal_pipeline_bridge\nHalStateChangeCb fires\nCapability check: HAL_CAP_ADC_PATH"]
+    BRIDGE --> LANECNT{"getInputSourceCount()?"}
+    LANECNT -->|"1 (I2S 2ch)"| LANE1["audio_pipeline_set_source(lane, src)\nSingle lane assigned\nAudioState.adcEnabled[lane] = true"]
+    LANECNT -->|"2 (TDM 4ch)"| LANE2["audio_pipeline_set_source(lane,   src0)\naudio_pipeline_set_source(lane+1, src1)\nTwo consecutive lanes assigned"]
+
+    LANE1 --> DONE["markChannelMapDirty()\nEVT_CHANNEL_MAP signals main loop\nWS audioChannelMap broadcast\nWeb UI shows new input lanes"]
+    LANE2 --> DONE
+
+    LEGACY --> MATCH

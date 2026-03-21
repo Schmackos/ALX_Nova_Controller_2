@@ -1,44 +1,47 @@
 graph LR
-    subgraph INPUTS["Input Sources (HAL-driven)"]
-        ADC1["PCM1808 #1<br/>L+R (I2S0)"]
-        ADC2["PCM1808 #2<br/>L+R (I2S1)"]
-        SIG["Signal Gen<br/>L+R (Software)"]
-        USB["USB Audio<br/>L+R (TinyUSB)"]
+    subgraph INPUTS["Input Sources (HAL-driven, up to 8 lanes)"]
+        ADC1["PCM1808 #1<br/>L+R (I2S0) — lanes 0-1"]
+        ADC2["PCM1808 #2<br/>L+R (I2S1) — lanes 2-3"]
+        ESS2["ESS Expansion ADC (2ch)<br/>I2S — lane dynamically assigned"]
+        ESS4["ESS Expansion ADC (4ch TDM)<br/>2x stereo via HalTdmDeinterleaver<br/>2 lanes dynamically assigned"]
+        SIG["Signal Gen<br/>L+R (Software) — lane dynamic"]
+        USB["USB Audio<br/>L+R (TinyUSB) — lane dynamic"]
     end
 
-    subgraph INPUT_DSP["Per-Input DSP"]
-        IDSP0["Gain | Mute | PEQ<br/>(6-band)"]
+    subgraph INPUT_DSP["Per-Input DSP (one instance per active lane)"]
+        IDSP0["Gain | Mute | PEQ<br/>(6-band biquad)"]
         IDSP1["Gain | Mute | PEQ"]
-        IDSP2["Gain | Mute | PEQ"]
-        IDSP3["Gain | Mute | PEQ"]
+        IDSPn["Gain | Mute | PEQ<br/>(lane N)"]
     end
 
-    subgraph MATRIX["8x8 Mono Routing Matrix"]
-        MTX["IN[0..7] x OUT[0..7]<br/>Per-crosspoint gain<br/>-72 to +12 dB"]
+    subgraph MATRIX["16x16 Mono Routing Matrix"]
+        MTX["IN[0..15] x OUT[0..15]<br/>Per-crosspoint float32 gain<br/>-72 to +12 dB<br/>Early-exit: skip NULL, skip zero gain"]
     end
 
     subgraph OUTPUT_DSP["Per-Output DSP (x8 mono)"]
         ODSP["PEQ (10-band)<br/>Crossover HP/LP<br/>Compressor<br/>Limiter<br/>Gain | Delay<br/>Polarity | Mute"]
     end
 
-    subgraph OUTPUTS["Output Sinks (HAL-driven)"]
-        DAC1["PCM5102A<br/>L+R (I2S0 TX)"]
-        DAC2["ES8311<br/>L+R (I2S2 TX)"]
-        AMP["NS4150B<br/>(GPIO 53)"]
-        MCP["MCP4725<br/>(I2C DAC)"]
+    subgraph OUTPUTS["Output Sinks (HAL-driven, up to 8 slots)"]
+        DAC1["PCM5102A<br/>L+R (I2S0 TX) — slot 0"]
+        DAC2["ES8311<br/>L+R (I2S2 TX) — slot 1"]
+        AMP["NS4150B<br/>(GPIO 53 PA enable)"]
+        MCP["MCP4725<br/>(I2C DAC) — slot N"]
     end
 
     ADC1 --> IDSP0
     ADC2 --> IDSP1
-    SIG --> IDSP2
-    USB --> IDSP3
+    ESS2 --> IDSPn
+    ESS4 --> IDSPn
+    SIG --> IDSPn
+    USB --> IDSPn
 
     IDSP0 -->|"ch 0,1"| MTX
     IDSP1 -->|"ch 2,3"| MTX
-    IDSP2 -->|"ch 4,5"| MTX
-    IDSP3 -->|"ch 6,7"| MTX
+    IDSPn -->|"ch N,N+1"| MTX
 
-    MTX -->|"out 0..7"| ODSP
+    MTX -->|"out 0..15 → sink slice"| ODSP
     ODSP -->|"ch 0,1"| DAC1
     ODSP -->|"ch 2,3"| DAC2
-    ODSP -->|"PA enable"| AMP
+    ODSP -->|"ch N,N+1"| MCP
+    DAC1 -->|"PA enable signal"| AMP

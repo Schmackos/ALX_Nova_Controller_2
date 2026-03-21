@@ -1,5 +1,5 @@
 %% @validate-symbols
-%% src/app_events.h: app_events_signal, app_events_wait, EVT_ANY, EVT_OTA, EVT_DISPLAY, EVT_BUZZER, EVT_SIGGEN, EVT_DSP_CONFIG, EVT_DAC, EVT_SETTINGS, EVT_CHANNEL_MAP
+%% src/app_events.h: app_events_signal, app_events_wait, EVT_ANY, EVT_OTA, EVT_DISPLAY, EVT_BUZZER, EVT_SIGGEN, EVT_DSP_CONFIG, EVT_DAC, EVT_EEPROM, EVT_USB_AUDIO, EVT_USB_VU, EVT_SETTINGS, EVT_ADC_ENABLED, EVT_ETHERNET, EVT_DIAG, EVT_DAC_SETTINGS, EVT_HAL_DEVICE, EVT_CHANNEL_MAP, EVT_HEAP_PRESSURE
 %% src/app_state.h: markHalDeviceDirty, isHalDeviceDirty
 %% @end-validate
 %% Event-Driven Architecture — Dirty Flags + FreeRTOS Event Group
@@ -13,7 +13,7 @@ sequenceDiagram
     participant WS as WebSocket<br/>Server (port 81)
     participant MQTT as mqtt_task<br/>(Core 0, 20Hz)
 
-    Note over EG: EVT_ANY = 0x00FFFFFF<br/>16 bits assigned (bits 0–15), 8 spare<br/>Bits 24-31 reserved by FreeRTOS
+    Note over EG: EVT_ANY = 0x00FFFFFF<br/>17 bits assigned (bits 0–16), 7 spare<br/>Bits 24-31 reserved by FreeRTOS
 
     Producer->>AS: appState.markXxxDirty()
     AS->>AS: _xxxDirty = true (volatile)

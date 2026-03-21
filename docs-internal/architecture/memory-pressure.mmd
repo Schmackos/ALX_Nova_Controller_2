@@ -1,0 +1,35 @@
+%% @validate-symbols
+%% src/config.h: HEAP_WARNING_THRESHOLD, HEAP_CRITICAL_THRESHOLD, PSRAM_WARNING_THRESHOLD, PSRAM_CRITICAL_THRESHOLD
+%% src/state/debug_state.h: heapWarning, heapCritical, psramWarning, psramCritical
+%% src/app_events.h: EVT_HEAP_PRESSURE
+%% src/diag_error_codes.h: DIAG_SYS_HEAP_WARNING, DIAG_SYS_PSRAM_WARNING, DIAG_SYS_PSRAM_ALLOC_FAIL
+%% src/psram_alloc.h: psram_alloc, psram_free, psram_get_stats
+%% src/heap_budget.h: heap_budget_record, heap_budget_remove
+%% @end-validate
+%% Graduated Memory Pressure States — evaluated every 30s in main loop
+%% Internal heap and PSRAM are tracked independently; both drive feature shedding.
+
+stateDiagram-v2
+    state "Internal Heap Pressure" as HeapFSM {
+        HeapNormal : Normal\nmaxAllocBlock >= 50 KB\nAll features active
+        HeapWarning : Warning (heapWarning)\nmaxAllocBlock < 50 KB\nWS binary rate halved\nDSP add_stage warns\nDIAG_SYS_HEAP_WARNING (0x0107)
+        HeapCritical : Critical (heapCritical)\nmaxAllocBlock < 40 KB\nDMA alloc refused\nWS binary suppressed\nDSP stages refused\nOTA checks skipped
+
+        [*] --> HeapNormal
+        HeapNormal --> HeapWarning : maxAllocBlock drops below 50 KB\nsignals EVT_HEAP_PRESSURE
+        HeapWarning --> HeapNormal : maxAllocBlock recovers >= 50 KB\nDIAG_SYS_HEAP_WARNING_CLEARED (0x0108)
+        HeapWarning --> HeapCritical : maxAllocBlock drops below 40 KB\nsignals EVT_HEAP_PRESSURE
+        HeapCritical --> HeapWarning : maxAllocBlock recovers >= 40 KB\nsignals EVT_HEAP_PRESSURE
+    }
+
+    state "PSRAM Pressure" as PsramFSM {
+        PsramNormal : Normal\nfreePsram >= 1 MB\nAll features active
+        PsramWarning : Warning (psramWarning)\nfreePsram < 1 MB\nDIAG_SYS_PSRAM_WARNING (0x0109)\nWS + Web UI show warning banner
+        PsramCritical : Critical (psramCritical)\nfreePsram < 512 KB\nDSP delay lines refused\nDSP convolution refused\nDIAG_SYS_PSRAM_WARNING re-emitted at ERROR
+
+        [*] --> PsramNormal
+        PsramNormal --> PsramWarning : freePsram drops below 1 MB
+        PsramWarning --> PsramNormal : freePsram recovers >= 1 MB\nDIAG_SYS_PSRAM_WARNING_CLEARED (0x010A)
+        PsramWarning --> PsramCritical : freePsram drops below 512 KB
+        PsramCritical --> PsramWarning : freePsram recovers >= 512 KB
+    }
