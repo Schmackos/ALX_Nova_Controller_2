@@ -55,15 +55,9 @@ These issues were identified and **completely fixed** in recent development phas
 
 ### FreeRTOS Task Watchdog
 
-**Task Watchdog Timer (TWDT) Starvation Risk**
-- **Risk**: TWDT configured at 30s timeout (line 176-177 in main.cpp). If any task doesn't call `esp_task_wdt_reset()` for 30s, MCU reboots
-- **Files**: `src/main.cpp` (line 974 feeds watchdog in main loop)
-- **Current task allocation**: Core 1 (audio_pipeline_task at priority 3, loopTask at priority 1), Core 0 (mqtt_task, gui_task, usb_audio_task, OTA tasks)
-- **Watchdog subscribers**: `loopTask`, `mqtt_task`, `audio_pipeline_task`, `gui_task`, `usb_audio_task`
-- **Current mitigation**: Main loop feeds watchdog at top of each iteration. MQTT task polls at 20 Hz (fine). GUI task updates ~30 Hz (fine). Audio task priority 3 doesn't starve loop at priority 1 because loop yields 2 ticks per iteration
-- **Known risks**: OTA download task (one-shot, low priority) doesn't feed watchdog — runs for ~30-90s but resets timeout via FreeRTOS yield. If OTA hangs mid-download (network stall), watchdog triggers at 30s. No timeout on HTTP connection itself
-- **Test coverage**: No explicit watchdog test. Implicit coverage via OTA tests (~5 OTA tests)
-- **Recommendation**: Add HTTP timeout to OTA download (20s connect, 5s per read). Add watchdog feed in OTA task loop if it ever becomes long-lived. Priority: MEDIUM (OTA hangs are infrequent but reboots user device)
+**Task Watchdog Timer (TWDT) Starvation Risk** (FIXED: 2026-03-21)
+- **Was**: OTA tasks (`otaDownloadTask`, `otaCheckTaskFunc`) not subscribed to TWDT and never fed watchdog. Download runs 30-90s — network stall caused MCU reboot via watchdog panic. HTTP timeout (30s) matched TWDT timeout, providing no safety margin
+- **Now**: Both OTA tasks subscribe (`esp_task_wdt_add`) at entry and unsubscribe (`esp_task_wdt_delete`) before task deletion. Download loop feeds watchdog every iteration. Network stall detection: `OTA_STALL_TIMEOUT_MS` (20s) aborts download if no data received. HTTP timeouts reduced: `OTA_CONNECT_TIMEOUT_MS` (20s), `OTA_READ_TIMEOUT_MS` (5s). `DIAG_OTA_NETWORK_STALL` (0x6006) diagnostic emitted on stall. 13 new tests (8 in test_ota, 5 in test_ota_task). All timeouts verified < 30s TWDT via compile-time test assertions
 
 ### WiFi & Networking
 
