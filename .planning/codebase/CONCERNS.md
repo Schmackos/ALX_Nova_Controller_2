@@ -60,11 +60,10 @@
 - Trigger: Any audio on lanes 4-7 (extended ADC count)
 - Fix: Loop-based `inCh[]` population, `static_assert` dimension invariants, runtime `set_sink()` validation (commit `04ff496`, 2026-03-21, 24 new tests)
 
-**HAL Slot Capacity Exhaustion (DETECTED)**
-- Symptoms: New HAL devices silently fail to register if table full (14/24 at boot)
-- Files: `src/hal/hal_device_manager.cpp`
-- Status: TABLE SIZE OK (24 slots = 14 builtin + 10 spare for EEPROM/custom devices)
-- Safeguard: `claimPin()` logs on table-full; `registerDevice()` returns false; tests added (commit `eb4d8b3`)
+**HAL Slot Capacity Exhaustion (FIXED)**
+- Symptoms: Driver registry (16/16) and device DB (16/16) at capacity — new drivers silently failed. `DIAG_HAL_SLOT_FULL` defined but never emitted. 23 registration calls ignored return values
+- Files: `src/hal/hal_device_manager.cpp`, `src/hal/hal_driver_registry.cpp`, `src/hal/hal_device_db.cpp`, `src/hal/hal_builtin_devices.cpp`, `src/main.cpp`, `src/hal/hal_pipeline_bridge.cpp`, `src/websocket_handler.cpp`
+- Fix: `HAL_MAX_DRIVERS` and `HAL_DB_MAX_ENTRIES` increased 16→24. All overflow paths emit diagnostics (`DIAG_HAL_SLOT_FULL`, `DIAG_HAL_REGISTRY_FULL` 0x100F, `DIAG_HAL_DB_FULL` 0x1010). All 23 callers check return values. WS capacity telemetry + web UI indicator with 80% warning. 10 new tests (commit `03ff439`, 2026-03-21)
 
 **HAL Toggle Queue Overflow (FIXED)**
 - Symptoms: Concurrent device enable/disable requests silently dropped (queue capacity 8)
@@ -195,9 +194,11 @@
 
 **HAL Device Slots: 24 (ADEQUATE)**
 - Current capacity: 14/24 slots at boot (PCM5102A, ES8311×2, PCM1808×2, NS4150B, TempSensor, SigGen, USB Audio, MCP4725, onboard devices)
-- Limit: 24 devices max (`HAL_MAX_DEVICES`)
-- Scaling path: Increase `HAL_MAX_DEVICES` in `src/hal/hal_types.h`; RAM impact ~50 bytes per slot
-- Recommendation: Current limit sufficient for 2-3 expansion boards; future multiboard requires protocol changes
+- Limit: 24 devices max (`HAL_MAX_DEVICES`), 24 drivers (`HAL_MAX_DRIVERS`), 24 DB entries (`HAL_DB_MAX_ENTRIES`)
+- Scaling path: Increase all three limits together in `hal_types.h` / `hal_device_db.h`; RAM impact ~205 bytes per device slot, ~72 bytes per driver, ~195 bytes per DB entry
+- Monitoring: WS `halDeviceState` broadcasts `deviceCount/deviceMax/driverCount/driverMax`; web UI shows capacity with 80% warning
+- Diagnostics: `DIAG_HAL_SLOT_FULL` (0x1004), `DIAG_HAL_REGISTRY_FULL` (0x100F), `DIAG_HAL_DB_FULL` (0x1010) emitted on overflow
+- Recommendation: Current limits sufficient for 2-3 expansion boards; all overflow paths now observable
 
 **I2S DMA Buffer Count: 4 (ADEQUATE)**
 - Current capacity: `I2S_DMA_BUF_COUNT=4` buffers × `I2S_DMA_BUF_LEN=1024` samples = 4KB @ 48kHz = 21.3ms latency
