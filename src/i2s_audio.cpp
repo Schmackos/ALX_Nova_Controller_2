@@ -1518,7 +1518,6 @@ bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
         (i2s_tdm_slot_mask_t)slotMask
     );
     tdm_rx_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    tdm_rx_cfg.slot_cfg.msb_right      = false;  // CH1 in leftmost slot
 
     // GPIO: RX shares MCLK/BCK/WS with TX (ES8311 is clock master)
     tdm_rx_cfg.gpio_cfg.mclk = (gpio_num_t)ES8311_I2S_MCLK_PIN;
