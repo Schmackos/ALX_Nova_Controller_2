@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0  # Required for showLastUpdateTime
 
       - uses: actions/setup-node@v4
         with:
@@ -38,6 +38,9 @@ jobs:
 
       - name: Install generation dependencies
         run: npm install @anthropic-ai/sdk
+
+      - name: Check doc mapping coverage
+        run: node tools/check_mapping_coverage.js
 
       - name: Detect changed documentation sections
         id: detect
@@ -74,8 +77,16 @@ jobs:
         working-directory: docs-site
         run: npm ci
 
+      - name: Get latest GitHub release
+        id: latest_release
+        run: |
+          VERSION=$(curl -s "https://api.github.com/repos/Schmackos/ALX_Nova_Controller_2/releases/latest" | jq -r '.tag_name // empty')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Build Docusaurus site
         working-directory: docs-site
+        env:
+          LATEST_RELEASE_VERSION: ${{ steps.latest_release.outputs.version }}
         run: npm run build
 
       - name: Deploy to GitHub Pages
