@@ -121,6 +121,7 @@
     "src/state/ethernet_state.h": ["developer/architecture"],
     "src/state/debug_state.h": ["developer/architecture"],
     "src/state/hal_coord_state.h": ["developer/architecture"],
+    "src/state/hal_coord_state.cpp": ["developer/architecture"],
     "src/eth_manager.h": ["developer/architecture"],
     "src/eth_manager.cpp": ["developer/architecture"],
     "src/crash_log.h": ["developer/diagnostics"],
@@ -204,7 +205,10 @@
     "docs-internal/user/quick-start.md": ["user/getting-started"],
     "docs-internal/testing-architecture.md": ["developer/testing"],
     "CLAUDE.md": ["developer/overview", "developer/hal/overview", "developer/architecture"],
-    ".planning/codebase/ARCHITECTURE.md": ["developer/architecture"]
+    ".planning/codebase/ARCHITECTURE.md": ["developer/architecture"],
+    ".github/workflows/docs.yml": ["developer/contributing"],
+    ".github/workflows/tests.yml": ["developer/testing", "developer/contributing"],
+    "platformio.ini": ["developer/testing", "developer/build-setup"]
   },
   "excludes": [
     "src/globals.h",
