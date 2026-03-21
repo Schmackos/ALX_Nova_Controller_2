@@ -1,176 +1,137 @@
 # Technology Stack
 
-**Analysis Date:** 2026-03-10
+**Analysis Date:** 2026-03-21
 
 ## Languages
 
 **Primary:**
-- C++ (C++11) - All firmware source code in `src/`, compiled for ESP32-P4 (RISC-V) and native (host gcc/MinGW for tests)
-- C - DSP coefficient computation (`src/dsp_biquad_gen.h/.c`), ESP-DSP lite fallback (`lib/esp_dsp_lite/`)
+- C++ (C++11 and later) — Firmware core, all `src/` modules
+- C — Hardware drivers, DSP component integration, HAL layer
+- JavaScript/HTML/CSS — Web UI in `web_src/` (concatenated into single `<script>` block during build)
 
 **Secondary:**
-- JavaScript (ES2020) - Web UI frontend (`web_src/js/`), build tooling (`tools/`), E2E test infrastructure (`e2e/`)
-- HTML/CSS - Web UI shell (`web_src/index.html`, `web_src/css/`)
-- Python - PlatformIO build scripts (`tools/fix_riscv_toolchain.py`)
-- YAML - GitHub Actions CI/CD (`.github/workflows/`)
+- Python — Build tools (`tools/fix_riscv_toolchain.py`), documentation generation (`tools/generate_docs.js` via Node.js), CI scripts
 
 ## Runtime
 
-**Firmware Environment:**
-- ESP-IDF v5.x (via Arduino framework on pioarduino ESP32 platform)
-- FreeRTOS - Core RTOS for task management, event groups, semaphores
-- Target: ESP32-P4 (RISC-V dual-core, Waveshare ESP32-P4-WiFi6-DEV-Kit)
-- Flash: 16MB with OTA dual-partition layout
-- PSRAM: Available (used for DSP delay lines, USB audio ring buffers, diagnostic journal)
-
-**Test Environment:**
-- Native platform (host machine gcc/MinGW) for C++ unit tests
-- Node.js >= 18.0 for E2E tests and build tooling
+**Environment:**
+- **Embedded:** ESP32-P4 (Waveshare ESP32-P4-WiFi6-DEV-Kit) with IDF5 (Espressif IoT Development Framework 5.x)
+- **Development/Testing:** Native platform (host machine GCC/MinGW) for unit tests
+- **Documentation:** Node.js 18+ for build tools and Docusaurus
 
 **Package Manager:**
-- PlatformIO (firmware dependencies via `lib_deps` in `platformio.ini`)
-- npm (E2E tests in `e2e/package.json`, docs site in `docs-site/package.json`)
-- Lockfile: `e2e/package-lock.json` present, PlatformIO manages its own lock
+- **Firmware:** PlatformIO (platform-espressif32 55.03.37)
+- **Web UI:** npm/Node.js (local tools)
+- **Docs:** npm (Docusaurus v3)
+- **E2E Tests:** npm (Playwright)
+
+**Lockfiles:**
+- `package-lock.json` — Present in `docs-site/`, `e2e/` directories
 
 ## Frameworks
 
 **Core:**
-- Arduino (ESP-IDF based) - Framework for ESP32-P4, provides WiFi, WebServer, I2S, I2C, SPI, LittleFS, Preferences APIs
-- pioarduino platform `55.03.37` - ESP32-P4 Arduino core (`platformio.ini` line 16)
-- FreeRTOS - Task scheduling, event groups (`app_events.h`), semaphores, mutexes
+- Arduino Framework — Abstraction layer for ESP32 peripherals
+- FreeRTOS — Dual-core task scheduling (Core 0: WiFi/MQTT/OTA, Core 1: Audio pipeline exclusively)
 
-**GUI:**
-- LVGL v9.4 - GUI framework for TFT display (guarded by `-D GUI_ENABLED`)
-- LovyanGFX v1.2.0 - TFT display driver for ST7735S 128x160 (landscape 160x128)
+**Web/GUI:**
+- LVGL v9.4 — TFT display GUI framework (ST7735S 160×128, landscape mode), guarded by `-D GUI_ENABLED`
+- LovyanGFX v1.2.0 — ST7735S display driver (replaced TFT_eSPI), synchronous SPI on ESP32-P4 (no DMA)
+- Docusaurus v3 — Static documentation site (React-based, MDX support, Mermaid diagrams, local search, dark mode)
 
 **Testing:**
-- Unity - C++ unit test framework (native platform, 1621 tests across 70 modules)
-- Playwright v1.50+ - Browser E2E tests (26 tests across 19 specs, Chromium only)
-- Express v4.21 - Mock HTTP server for E2E tests (`e2e/mock-server/server.js`)
+- Unity Framework — C++ unit test runner on native platform (~1620 tests across 70 modules)
+- Playwright v1.50.0 — Browser automation for E2E tests (26 tests across 19 specs, Express mock server)
 
-**Build/Dev:**
-- PlatformIO - Build system, dependency management, test runner, upload/monitor
-- Docusaurus v3 - Public documentation site (`docs-site/`)
-- cppcheck - C++ static analysis (CI-enforced)
-- ESLint v8.57 - JavaScript linting for `web_src/js/` (380+ globals for concatenated scope)
+**Real-Time Communication:**
+- WebSockets — WebSocketsServer library (vendored in `lib/WebSockets/`, port 81) for real-time state broadcasts to web clients
 
-**Documentation Site:**
-- Docusaurus v3.7 (`docs-site/`) with Mermaid diagrams, local search, MDX
-- React 18 + MDX + Prism syntax highlighting
-- KaTeX (math rendering via `rehype-katex` + `remark-math`)
+**MQTT/Messaging:**
+- PubSubClient v2.8 — MQTT 3.1.1 client for Home Assistant integration and device control
 
 ## Key Dependencies
 
 **Critical (firmware):**
-- `ArduinoJson@^7.4.2` - JSON parsing/serialization throughout codebase (REST API, WebSocket, settings, MQTT)
-- `WebSockets` - WebSocket server for real-time UI updates (vendored in `lib/WebSockets/`, NOT from registry)
-- `PubSubClient@^2.8` - MQTT client for Home Assistant integration
-- `lvgl@^9.4` - GUI framework for TFT display (guarded by `GUI_ENABLED`)
-- `LovyanGFX@^1.2.0` - TFT display driver (replaced TFT_eSPI)
+- ArduinoJson v7.4.2 — JSON parsing throughout (config, REST API, WebSocket messages)
+- PubSubClient v2.8 — MQTT client (Home Assistant discovery, device commands)
+- LovyanGFX v1.2.0 — TFT ST7735S driver (synchronous SPI, no DMA on P4)
+- lvgl v9.4 — GUI framework (guarded by `-D GUI_ENABLED`)
+- WebSockets (vendored) — WebSocket server on port 81
 
-**Audio/DSP (firmware):**
-- ESP-DSP pre-built library (`libespressif__esp-dsp.a`) - Assembly-optimized biquad IIR, FIR, Radix-4 FFT, window functions, vector math. Include paths via `-I` flags in `platformio.ini`. `lib/esp_dsp_lite/` provides ANSI C fallbacks for native tests only (`lib_ignore = esp_dsp_lite` on ESP32)
-- `arduinoFFT@^2.0` - FFT spectrum analysis (native tests only; ESP32 uses ESP-DSP FFT)
-- TinyUSB (bundled with IDF) - UAC2 USB Audio speaker device
+**Cryptography & Security:**
+- mbedtls — Crypto library included with IDF5 for PBKDF2-SHA256 (10k iterations, password hashing), SHA256 (firmware verification), TLS (WiFiClientSecure)
+- esp_task_wdt — Task watchdog timer (IDF5, configured for 30s timeout at boot)
 
-**Infrastructure (firmware):**
-- `LittleFS` (ESP-IDF built-in) - Filesystem for config, DSP presets, crash logs, diagnostic journal
-- `Preferences` (ESP-IDF built-in) - NVS key-value storage for WiFi credentials, persistent counters
-- `WiFiClientSecure` + mbedTLS (ESP-IDF built-in) - TLS for OTA downloads from GitHub
-- `WebServer` (ESP-IDF built-in) - HTTP server on port 80
-- `DNSServer` (ESP-IDF built-in) - Captive portal DNS in AP mode
-- `HTTPClient` (ESP-IDF built-in) - HTTP client for GitHub API (OTA checks)
-- `Update` (ESP-IDF built-in) - OTA firmware update mechanism
+**DSP & Audio:**
+- **Pre-built ESP-DSP library** (`libespressif__esp-dsp.a`) — S3 assembly-optimized biquad IIR, FIR convolution, Radix-4 FFT, window functions, vector math (mulc/mul/add), dot product, SNR/SFDR (ESP32 only; native tests use `lib/esp_dsp_lite/` ANSI C fallback via `lib_ignore`)
+- arduinoFFT v2.0 — FFT analysis (native tests only; ESP32 uses pre-built ESP-DSP)
 
-**E2E Testing (npm):**
-- `@playwright/test@^1.50.0` - Browser automation
-- `express@^4.21.0` - Mock server
-- `cookie-parser@^1.4.7` - Session cookie handling in mock server
-- `eslint@^8.57.0` - JavaScript linting
+**Platform/Hardware:**
+- TinyUSB 0.20.1 — USB UAC2 speaker device on native USB OTG (guarded by `-D USB_AUDIO_ENABLED`)
+- LittleFS — Filesystem for persistent JSON config (atomic write via tmp+rename pattern)
+- Preferences (NVS) — Non-volatile storage for WiFi credentials, auth hash, device serial, MQTT settings
 
-**Documentation Site (npm):**
-- `@docusaurus/core@^3.7.0` - Site framework
-- `@docusaurus/theme-mermaid@^3.7.0` - Mermaid diagram support
-- `@easyops-cn/docusaurus-search-local@^0.44.5` - Offline local search
-- `@docusaurus/plugin-pwa@^3.9.2` - Progressive Web App support
-- `@anthropic-ai/sdk` - Claude API for automated doc generation (CI only)
+**Web/Documentation:**
+- Express v4.21.0 — Mock HTTP server for E2E tests
+- cookie-parser v1.4.7 — HTTP cookie parsing in E2E mock server
+- ESLint v8.57.0 — JS linting on `web_src/js/` (380-file globals for concatenated scope)
+- @docusaurus/core v3.7.0 — Documentation site core
+- @docusaurus/theme-mermaid v3.7.0 — Mermaid diagram support in docs
+- @easyops-cn/docusaurus-search-local v0.44.5 — Full-text search plugin
 
 ## Configuration
 
-**Build Configuration:**
-- `platformio.ini` - Primary build config with 3 environments: `esp32-p4` (target), `p4_hosted_update` (minimal OTA test), `native` (host tests)
-- `partitions_ota.csv` - Flash partition layout: NVS (20KB), OTA data (8KB), app0 (4MB), app1 (4MB), SPIFFS/LittleFS (7.875MB), coredump (64KB)
-- Build flags control feature guards: `-D DSP_ENABLED`, `-D DAC_ENABLED`, `-D GUI_ENABLED`, `-D USB_AUDIO_ENABLED`
-- Optimization: `-Os` (size-optimized)
-- `tools/fix_riscv_toolchain.py` - Pre-build script for RISC-V toolchain path fixes
+**Environment:**
+- Firmware version: `1.12.1` (defined in `src/config.h` as `FIRMWARE_VERSION`)
+- GitHub repo: `Schmackos/ALX_Nova_Controller_2` (OTA release checking)
+- Board target: ESP32-P4 (`esp32-p4` in PlatformIO)
+- Build flags: 58 compile-time constants (pins, DSP config, feature gates) in `platformio.ini`
 
-**Compile-Time Feature Guards:**
-- `DSP_ENABLED` - DSP pipeline, biquad filters, FIR, crossover
-- `DAC_ENABLED` - HAL framework, DAC/ADC drivers, device discovery, pipeline bridge
-- `GUI_ENABLED` - LVGL TFT display, rotary encoder input, screen navigation
-- `USB_AUDIO_ENABLED` - TinyUSB UAC2 speaker device on USB OTG
-- `UNIT_TEST` + `NATIVE_TEST` - Native test environment (mock stubs)
+**Key Compile-Time Settings:**
+```
+-D DSP_ENABLED                      # Enable 24-stage audio DSP pipeline
+-D DAC_ENABLED                      # Enable DAC/HAL device framework
+-D USB_AUDIO_ENABLED                # Enable USB UAC2 speaker device
+-D GUI_ENABLED                      # Enable LVGL-based TFT GUI
+-D WEBSOCKETS_MAX_DATA_SIZE=4096    # WebSocket frame size
+```
 
-**Runtime Configuration (LittleFS):**
-- `/config.json` - Primary settings (JSON v1 format, atomic write via `.tmp` + rename)
-- `/hal_config.json` - Per-device HAL configuration (I2C addr, pins, volume, mute, enabled)
-- `/dsp_config.json` - DSP pipeline presets
-- `/diag_journal.bin` - Persistent diagnostic event ring buffer (800 entries, CRC32 per entry)
-- `/crashlog.bin` - Boot crash log ring buffer (10 entries)
+**Pin Configuration (from `src/config.h`):**
+- **Core:** LED=1, Amplifier=27, Reset Button=46, Buzzer=45
+- **TFT Display:** MOSI=2, SCLK=3, CS=4, DC=5, RST=6, BL=26
+- **Encoder:** A=32, B=33, SW=36
+- **I2S Audio ADC:** BCK=20, DOUT=23, DOUT2=25, LRC=21, MCLK=22
+- **I2S DAC TX:** GPIO 24
+- **DAC I2C Bus 0:** SDA=48, SCL=54 (shared with WiFi SDIO — scan disabled when WiFi active)
+- **Onboard ES8311 I2C Bus 1:** SDA=7, SCL=8 (dedicated, always safe)
+- **Expansion I2C Bus 2:** SDA=28, SCL=29 (always safe)
+- **Signal Generator PWM:** GPIO 47
 
-**Runtime Configuration (NVS/Preferences):**
-- WiFi credentials (survive LittleFS format)
-- Diagnostic journal sequence counter
-- Selected NVS settings
+**Build System:**
+- `platformio.ini` — Main build config with 3 environments: `esp32-p4` (firmware), `native` (unit tests), `p4_hosted_update` (OTA)
+- `src/idf_component.yml` — IDF component metadata
+- `tools/fix_riscv_toolchain.py` — Pre-build script (custom RISC-V toolchain path fix for ESP32-P4)
 
-**Pin Configuration:**
-- Pins defined as `-D` build flags in `platformio.ini` with fallback defaults in `src/config.h`
-- HAL devices can override pins at runtime via `HalDeviceConfig` (gpioA/B/C/D, pinSda, pinScl, pinBck, etc.)
-
-**Environment Variables (CI only):**
-- `ANTHROPIC_API_KEY` - Required for documentation auto-generation in CI (`docs.yml`)
-- Standard GitHub Actions secrets for release workflow
+**Web Build:**
+- `web_src/` — Source files (HTML, CSS modules, JS modules in load order)
+- `tools/build_web_assets.js` — Generates `src/web_pages.cpp` and `src/web_pages_gz.cpp` (gzip-compressed, embedded)
+- `web_src/.eslintrc.json` — ESLint config with 380 globals (concatenated JS scope)
+- Docusaurus: `docs-site/docusaurus.config.js`, `docs-site/sidebars.js`
 
 ## Platform Requirements
 
 **Development:**
-- PlatformIO CLI or IDE (VS Code extension recommended)
-- Python 3.11+ (PlatformIO dependency)
-- Node.js >= 18 (E2E tests, build tooling)
-- COM port access for upload/monitor (default: COM8)
-- Git with `.githooks/pre-commit` support (activate: `git config core.hooksPath .githooks`)
+- PlatformIO CLI (Python-based, handles compiler/IDF installation)
+- GCC/MinGW (native test compilation)
+- Node.js 18+ (build tools, Docusaurus, Playwright)
+- ESP32-P4 Dev Kit (Waveshare model) on USB COM8 (hardcoded in `platformio.ini`)
 
-**Production:**
-- Waveshare ESP32-P4-WiFi6-DEV-Kit (ESP32-P4 RISC-V with ESP32-C6 WiFi co-processor)
-- 16MB Flash, PSRAM
-- ST7735S 128x160 TFT display (optional, guarded by GUI_ENABLED)
-- USB OTG port (optional, for USB Audio)
-- 100Mbps Ethernet (optional, built-in EMAC + PHY)
-
-**CI/CD:**
-- GitHub Actions (Ubuntu latest runners)
-- 4 parallel quality gates: cpp-tests, cpp-lint, js-lint, e2e-tests
-- Firmware build only proceeds after all 4 gates pass
-- Release workflow: manual dispatch with version bump (patch/minor/major) and channel (stable/beta)
-- Documentation deployment to GitHub Pages (`gh-pages` branch)
-
-## Web UI Build Pipeline
-
-**Source:** `web_src/index.html`, `web_src/css/*.css`, `web_src/js/*.js`
-**Build:** `node tools/build_web_assets.js` concatenates and gzip-compresses into `src/web_pages.cpp` + `src/web_pages_gz.cpp`
-**Output:** Embedded HTTP responses served directly from ESP32 flash (gzip-compressed, self-contained, works offline)
-**Design Tokens:** `src/design_tokens.h` -> `tools/extract_tokens.js` -> CSS for web UI (`web_src/css/00-tokens.css`) AND docs site (`docs-site/src/css/tokens.css`)
-
-## Vendored Libraries
-
-**`lib/WebSockets/`:**
-- WebSocket server library (fork/vendored copy, not from PlatformIO registry)
-- `lib_ignore = WebSockets` in native env (not needed for tests)
-
-**`lib/esp_dsp_lite/`:**
-- ANSI C fallback implementations of ESP-DSP functions for native tests
-- `lib_ignore = esp_dsp_lite` in ESP32 env (uses pre-built `.a` instead)
+**Production/Device:**
+- Waveshare ESP32-P4-WiFi6-DEV-Kit with 16 MB flash, PSRAM
+- Partition table: `partitions_ota.csv` (OTA-capable: 2×8MB app partitions + spiffs)
+- WiFi + Ethernet 100Mbps (via onboard PHY)
+- I2S, I2C, GPIO, MCPWM, USB OTG, LEDC PWM peripherals
 
 ---
 
-*Stack analysis: 2026-03-10*
+*Stack analysis: 2026-03-21*

@@ -1,287 +1,512 @@
-# Testing
+# Testing Patterns
 
-_Last updated: 2026-03-21_
+**Analysis Date:** 2026-03-21
 
-## Overview
+## Test Framework
 
-Two separate test suites covering the full stack:
+**C++ Unit Tests:**
+- Runner: Unity (embedded test framework)
+- Platform: `native` environment (gcc/MinGW on host machine, not ESP32 hardware)
+- Compile flags: `-D UNIT_TEST -D NATIVE_TEST -D DSP_ENABLED` (and other domain flags)
+- Config file: `platformio.ini` `[env:native]` section with Unity test_framework
 
-1. **C++ Unit Tests** — Unity framework on the `native` platform (~1620+ tests, 70+ modules)
-2. **E2E Browser Tests** — Playwright against a mock Express server (26 tests, 19 specs)
+**JavaScript E2E Tests:**
+- Runner: Playwright (browser automation)
+- Browser: Chromium (installed via `npx playwright install --with-deps chromium`)
+- Mock server: Express.js on port 3000 (assembles HTML from `web_src/`, routes REST/WS)
+- Total coverage: 26 tests across 19 spec files (e.g., auth.spec.js, audio-inputs.spec.js)
 
-Both suites run in CI as parallel quality gates and must pass before firmware build proceeds.
+**Run Commands:**
 
----
+```bash
+# C++ Unit Tests
+pio test -e native -v              # Run all tests with verbose output
+pio test -e native -f test_wifi    # Run specific test module
+pio test -e native -f test_mqtt    # Run MQTT tests
+pio test -e native -f test_auth    # Run auth tests
 
-## C++ Unit Tests (Unity / PlatformIO native)
-
-### Framework & Configuration
-- **Framework**: [Unity](https://github.com/ThrowTheSwitch/Unity) via PlatformIO
-- **Platform**: `native` (host machine, gcc/MinGW — no ESP32 hardware needed)
-- **Config** (`platformio.ini`):
-  ```ini
-  [env:native]
-  platform = native
-  test_framework = unity
-  test_build_src = no     # Tests don't compile src/ directly — inline .cpp manually
-  build_flags = -D UNIT_TEST -D NATIVE_TEST
-  ```
-- **Run all**: `pio test -e native`
-- **Run single module**: `pio test -e native -f test_hal_core`
-- **Verbose output**: `pio test -e native -v`
-
-### Structure
-Each test module lives in its own directory to avoid symbol conflicts:
-
-```
-test/
-├── test_mocks/                 # Mock implementations for all external deps
-│   ├── Arduino.h               # millis(), delay(), digitalRead/Write, analogRead
-│   ├── WiFi.h                  # WiFi connection mocking
-│   ├── PubSubClient.h          # MQTT client mock
-│   ├── Preferences.h           # NVS persistence mock
-│   ├── LittleFS.h              # Filesystem mock
-│   ├── Wire.h                  # I2C mock
-│   ├── ETH.h                   # Ethernet mock
-│   ├── i2s_std_mock.h          # I2S driver mock
-│   └── mbedtls/                # TLS mock headers
-├── test_<module>/
-│   └── test_<module>.cpp       # One test file per module
-└── [hardware-specific dirs]    # idf4_pcm1808_test, idf5_dac_test, etc.
+# JavaScript E2E Tests
+cd e2e
+npm install                        # First time only
+npx playwright install --with-deps chromium  # First time only
+npx playwright test                # Run all 26 tests
+npx playwright test tests/auth.spec.js      # Run single spec
+npx playwright test --headed       # Show browser window
+npx playwright test --debug        # Debug mode with inspector
+npx playwright test --ui           # UI mode (interactive)
 ```
 
-### Test File Pattern
+## Test File Organization
+
+**C++ Location:**
+- Pattern: `test/test_module_name/test_*.cpp` (one test per directory)
+- Directory-per-test rule prevents duplicate `main()`, `setUp()`, `tearDown()` symbols
+- Example: `test/test_auth/test_auth_handler.cpp`, `test/test_mqtt/test_mqtt_handler.cpp`
+
+**C++ File Count:**
+- 70 test modules covering 1620+ Unity test cases
+- Examples: test_utils, test_auth, test_wifi, test_mqtt, test_settings, test_ota, test_button, test_websocket, test_api, test_smart_sensing, test_buzzer, test_gui_home, test_gui_input, test_gui_navigation, test_pinout, test_i2s_audio, test_fft, test_signal_generator, test_audio_diagnostics, test_audio_health_bridge, test_audio_pipeline, test_vrms, test_dim_timeout, test_debug_mode, test_dsp, test_dsp_rew, test_dsp_presets, test_dsp_swap, test_crash_log, test_task_monitor, test_esp_dsp, test_usb_audio, test_hal_core, test_hal_bridge, test_hal_coord, test_hal_dsp_bridge, test_hal_discovery, test_hal_integration, test_hal_eeprom_v3, test_hal_pcm5102a, test_hal_pcm1808, test_hal_es8311, test_hal_mcp4725, test_hal_siggen, test_hal_usb_audio, test_hal_custom_device, test_hal_multi_instance, test_hal_state_callback, test_hal_retry, test_hal_wire_mock, test_hal_buzzer, test_hal_button, test_hal_encoder, test_hal_ns4150b, test_output_dsp, test_dac_hal, test_dac_eeprom, test_dac_settings, test_diag_journal, test_peq, test_evt_any, test_sink_slot_api, test_sink_write_utils, test_deferred_toggle, test_pipeline_bounds, test_pipeline_output, test_eth_manager, test_es8311, test_i2s_config_cache
+
+**JavaScript Location:**
+- Pattern: `e2e/tests/feature-name.spec.js` (kebab-case)
+- Mock server: `e2e/mock-server/` (server.js, routes/*.js, ws-state.js, assembler.js)
+- Helpers: `e2e/helpers/` (fixtures.js, ws-helpers.js, selectors.js)
+- Fixtures: `e2e/fixtures/` (ws-messages/*.json, api-responses/*.json)
+
+**JavaScript File Count:**
+- 19 test specs (auth, auth-password, audio-inputs, audio-matrix, audio-outputs, audio-siggen, control-tab, dark-mode, debug-console, hal-devices, hardware-stats, mqtt, navigation, ota, peq-overlay, responsive, settings, support, wifi)
+
+## Test Structure
+
+**C++ Test Pattern:**
 
 ```cpp
 #include <unity.h>
+#include <cstring>
 
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
 #include "../test_mocks/Preferences.h"
+// ... other mock includes
 #else
 #include <Arduino.h>
+#include <Preferences.h>
+// ... real includes
 #endif
 
-// Include .cpp files directly (since test_build_src = no)
-#include "../../src/some_module.cpp"
+// Global test state (mutable across tests, reset in setUp)
+static TestState testState;
 
-void setUp() {
-    // Reset state before each test
+void setUp(void) {
+    // Reset all mutable state, clear mocks
+    testState.reset();
+    ArduinoMock::reset();
+    Preferences::reset();
 }
 
-void tearDown() {}
+void tearDown(void) {
+    // Cleanup if needed (often empty)
+}
 
-void test_feature_does_expected_thing() {
+// Test function using Arrange-Act-Assert pattern
+void test_module_feature_behavior(void) {
+    // Arrange: Set up initial state
+    testState.enabled = true;
+
+    // Act: Call the function under test
+    bool result = moduleFunction();
+
+    // Assert: Verify expected outcome
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_EQUAL_INT(42, testState.value);
+}
+
+void test_module_error_handling(void) {
     // Arrange
+    testState.enabled = false;
+
     // Act
+    bool result = moduleFunction();
+
     // Assert
-    TEST_ASSERT_EQUAL(expected, actual);
-}
-
-int main() {
-    UNITY_BEGIN();
-    RUN_TEST(test_feature_does_expected_thing);
-    return UNITY_END();
+    TEST_ASSERT_FALSE(result);
 }
 ```
 
-### Key Pattern: `.cpp` Inlining
-Because `test_build_src = no`, tests don't compile `src/` automatically. Each test file `#include`s the specific `.cpp` implementation files it needs, along with all their mock dependencies. This avoids pulling in the entire firmware but requires careful dependency management.
+Key macros:
+- `TEST_ASSERT_TRUE(condition)` — assert condition is true
+- `TEST_ASSERT_FALSE(condition)` — assert condition is false
+- `TEST_ASSERT_EQUAL_INT(expected, actual)` — integer equality
+- `TEST_ASSERT_EQUAL_STRING(expected, actual)` — string equality
+- `TEST_ASSERT_FLOAT_WITHIN(tolerance, expected, actual)` — float with epsilon tolerance
+- `TEST_IGNORE()` — skip test temporarily (leave marker in output)
 
-Example from `test_hal_core`:
-```cpp
-#include "../../src/diag_journal.cpp"
-#include "../../src/hal/hal_device_manager.cpp"
-#include "../../src/hal/hal_driver_registry.cpp"
-```
-
-### Mocking Approach
-- **ArduinoMock** namespace: `ArduinoMock::mockMillis`, `ArduinoMock::mockAnalogValue`, `ArduinoMock::mockDigitalPins[50]`
-- **I2C**: `Wire.h` mock with configurable `read()` return values
-- **Filesystem**: LittleFS mock with in-memory backing
-- **NVS**: Preferences mock with map-backed storage
-- **MQTT**: PubSubClient mock with callback simulation
-- **Compile guards**: Use `#ifdef NATIVE_TEST` / `#ifdef UNIT_TEST` for conditional compilation
-
-### Test Modules (70+ total)
-
-| Category | Modules |
-|----------|---------|
-| **Core utilities** | test_utils, test_settings, test_auth, test_pinout, test_crash_log, test_debug_mode |
-| **Network** | test_wifi, test_mqtt, test_ota, test_ota_task, test_eth_manager |
-| **Audio pipeline** | test_audio_pipeline, test_audio_diagnostics, test_audio_health_bridge, test_i2s_audio, test_i2s_config_cache, test_vrms, test_fft |
-| **DSP** | test_dsp, test_dsp_rew, test_dsp_presets, test_dsp_swap, test_esp_dsp, test_peq, test_output_dsp |
-| **HAL core** | test_hal_core, test_hal_bridge, test_hal_coord, test_hal_discovery, test_hal_integration, test_hal_eeprom_v3, test_hal_dsp_bridge |
-| **HAL drivers** | test_hal_pcm5102a, test_hal_pcm1808, test_hal_es8311, test_hal_mcp4725, test_hal_siggen, test_hal_usb_audio, test_hal_ns4150b, test_hal_custom_device, test_hal_multi_instance, test_hal_state_callback, test_hal_retry, test_hal_wire_mock |
-| **HAL I/O devices** | test_hal_buzzer, test_hal_button, test_hal_encoder |
-| **DAC subsystem** | test_dac_hal, test_dac_eeprom, test_dac_settings |
-| **Pipeline** | test_pipeline_bounds, test_pipeline_output, test_sink_slot_api, test_sink_write_utils, test_deferred_toggle |
-| **Signal/Gen** | test_signal_generator, test_hal_siggen |
-| **GUI** | test_gui_home, test_gui_input, test_gui_navigation |
-| **Web/WS** | test_websocket, test_websocket_messages, test_api |
-| **Other** | test_button, test_buzzer, test_smart_sensing, test_task_monitor, test_usb_audio, test_dim_timeout, test_diag_journal, test_evt_any, test_es8311 |
-
-### Coverage Rules
-- **New modules** → add `test/test_<module>/test_<module>.cpp`
-- **Changed function signatures** → update affected test includes
-- **New HAL drivers** → use `hal-driver-scaffold` agent (creates test module automatically)
-- Test count as of 2026-03-10: ~1620 tests passing
-
----
-
-## E2E Browser Tests (Playwright)
-
-### Framework & Configuration
-- **Framework**: [Playwright](https://playwright.dev/) with Chromium
-- **Test server**: Express (port 3000) assembling HTML from `web_src/`
-- **WS interception**: `page.routeWebSocket(/.*:81/, handler)` — no real firmware needed
-- **Config**: `e2e/playwright.config.js`
-
-### Commands
-```bash
-cd e2e
-npm install                                    # First time
-npx playwright install --with-deps chromium   # First time
-npx playwright test                            # All 26 tests
-npx playwright test tests/auth.spec.js         # Single spec
-npx playwright test --headed                   # Visible browser
-npx playwright test --debug                    # Inspector mode
-```
-
-### Structure
-
-```
-e2e/
-├── tests/                          # 19 spec files
-│   ├── auth.spec.js
-│   ├── auth-password.spec.js
-│   ├── navigation.spec.js
-│   ├── audio-inputs.spec.js
-│   ├── audio-matrix.spec.js
-│   ├── audio-outputs.spec.js
-│   ├── audio-siggen.spec.js
-│   ├── hal-devices.spec.js
-│   ├── peq-overlay.spec.js
-│   ├── control-tab.spec.js
-│   ├── wifi.spec.js
-│   ├── mqtt.spec.js
-│   ├── settings.spec.js
-│   ├── ota.spec.js
-│   ├── debug-console.spec.js
-│   ├── hardware-stats.spec.js
-│   ├── support.spec.js
-│   ├── dark-mode.spec.js
-│   └── responsive.spec.js
-├── helpers/
-│   ├── fixtures.js        # connectedPage: session cookie + WS auth + initial state
-│   ├── ws-helpers.js      # buildInitialState(), handleCommand(), binary frame builders
-│   └── selectors.js       # Reusable DOM selectors matching web_src/index.html IDs
-├── mock-server/
-│   ├── server.js          # Express server (port 3000)
-│   ├── assembler.js       # HTML assembly from web_src/ (mirrors build_web_assets.js)
-│   ├── ws-state.js        # Deterministic mock state singleton, reset between tests
-│   └── routes/            # 12 Express route files matching firmware REST API
-├── fixtures/
-│   ├── ws-messages/       # 15 hand-crafted WS broadcast fixtures (JSON)
-│   └── api-responses/     # 14 deterministic REST response fixtures (JSON)
-└── test-results/          # Playwright HTML reports (gitignored)
-```
-
-### Key Playwright Patterns
+**JavaScript Test Pattern (Playwright):**
 
 ```javascript
-// Import connectedPage fixture (session + WS auth already done)
-const { test, expect } = require('../helpers/fixtures');
+const { test, expect } = require('../helpers/fixtures');  // or @playwright/test
 
-// Tab navigation — use evaluate() to avoid scroll issues with sidebar clicks
-await page.evaluate(() => switchTab('settings'));
+test('feature renders and accepts input', async ({ connectedPage }) => {
+  // Arrange: Navigate and find elements
+  const inputField = connectedPage.locator('#inputId');
+  const submitBtn = connectedPage.locator('button[data-action="submit"]');
 
-// WS interception
-page.routeWebSocket(/.*:81/, (ws) => {
-  ws.onMessage((msg) => { /* handle outgoing WS from page */ });
-  ws.send(JSON.stringify({ type: 'stateUpdate', ... })); // inject WS message
+  // Act: Interact with page
+  await inputField.fill('test value');
+  await submitBtn.click();
+
+  // Assert: Verify expected outcome
+  await expect(connectedPage.locator('#result')).toContainText('Success');
 });
 
-// CSS-hidden checkboxes — use toBeChecked(), not toBeVisible()
-await expect(page.locator('#some-toggle')).toBeChecked();
+test('WebSocket command sends correct payload', async ({ connectedPage }) => {
+  // Arrange: Get WS route handle from fixture
+  const wsRoute = connectedPage.wsRoute;
 
-// Strict mode — use .first() when selector may match multiple elements
-await page.locator('.hal-device-card').first().click();
+  // Act: Trigger action that sends WS command
+  await connectedPage.locator('#toggleButton').click();
+
+  // Assert: Verify WS message was routed
+  // (Intercepted by mock server, recorded in ws-state.js)
+  const response = await connectedPage.request.get('/api/some-state');
+  const data = await response.json();
+  expect(data.stateField).toBe(true);
+});
 ```
 
-### Mock Infrastructure
-- **`ws-state.js`**: Singleton holding deterministic test state. Reset between tests via `beforeEach`.
-- **WS message flow**: `ws-helpers.js` `buildInitialState()` populates all WS fields; `handleCommand()` simulates firmware responses to WS commands.
-- **REST routes**: 12 Express route files in `e2e/mock-server/routes/` mirror every firmware endpoint.
-- **Fixtures**: JSON files in `e2e/fixtures/` provide consistent API/WS responses across tests.
+Key Playwright methods:
+- `page.locator(selector)` — find element by CSS/role/text
+- `page.goto(url)` — navigate to page
+- `page.request.get/post/put/delete(url)` — make REST request
+- `page.routeWebSocket(pattern, handler)` — intercept WS connections
+- `expect(element).toBeVisible()` — assertion on element visibility
+- `expect(element).toContainText(text)` — assertion on DOM text
+- `await element.click()`, `await element.fill(text)` — user interactions
 
-### Coverage Rules
-- New toggle/button → test verifies correct WS command sent
-- New WS broadcast type → add fixture JSON + DOM update test
-- New tab/section → navigation + element presence tests
-- Changed element IDs → update `e2e/helpers/selectors.js` + affected specs
-- New WS message type → update `ws-helpers.js` + `ws-state.js` + `e2e/fixtures/ws-messages/`
-- New REST endpoint → update matching route in `e2e/mock-server/routes/` + fixture JSON
-- Removed features → delete corresponding tests + fixtures
+## Mocking
 
----
+**C++ Mocks Location:**
+- Path: `test/test_mocks/` (11 mock headers)
+- Files: Arduino.h, Preferences.h, WiFi.h, PubSubClient.h, Wire.h, LittleFS.h, esp_random.h, esp_timer.h, ETH.h, IPAddress.h, i2s_std_mock.h
 
-## Static Analysis
+**Arduino.h Mock Pattern:**
+```cpp
+// test/test_mocks/Arduino.h
+#pragma once
 
-### JavaScript (ESLint)
+namespace ArduinoMock {
+  extern unsigned long _currentMillis;
+  extern uint32_t _randomValue;
+
+  void reset();
+  void advance_millis(unsigned long ms);
+}
+
+unsigned long millis() {
+  return ArduinoMock::_currentMillis;
+}
+
+uint32_t random(uint32_t max) {
+  return ArduinoMock::_randomValue % max;
+}
+```
+
+**Preferences.h Mock Pattern:**
+```cpp
+// test/test_mocks/Preferences.h — NVS key-value store simulation
+class Preferences {
+public:
+  bool begin(const char *ns, bool readonly = false);
+  void end();
+
+  String getString(const char *key, const String &defaultValue = "");
+  int32_t getInt(const char *key, int32_t defaultValue = 0);
+
+  void putString(const char *key, const String &value);
+  void putInt(const char *key, int32_t value);
+
+  static void reset();  // Clear all stored values (called in setUp)
+};
+```
+
+**What to Mock:**
+- Hardware (GPIO, I2C, SPI, UART) → Mock return values, verify call order
+- Timers (millis, micros) → Mock to advance time in tests, verify timeout logic
+- Network (WiFi, Preferences) → Stub responses, verify state transitions
+- Random (esp_random) → Control entropy, test both paths
+- Peripherals (MQTT, HTTP) → Stub responses, verify request format
+
+**What NOT to Mock:**
+- Pure computation (DSP biquad math, FFT) → Test real implementation
+- State management (AppState fields) → Use real AppState, test composition
+- Data structures (JsonDocument) → Use real ArduinoJson, verify JSON output
+
+## Fixtures and Factories
+
+**C++ Test Data Pattern:**
+
+```cpp
+// Global state reset in setUp()
+static MQTTSettings mqttSettings = {
+    .broker = "",
+    .port = 1883,
+    .username = "",
+    .password = "",
+    .baseTopic = "alx_nova",
+    .enabled = false
+};
+
+void setUp(void) {
+    // Reset to defaults before each test
+    mqttSettings.broker = "";
+    mqttSettings.port = 1883;
+    mqttSettings.username = "";
+    mqttSettings.password = "";
+    mqttSettings.baseTopic = "alx_nova";
+    mqttSettings.enabled = false;
+
+    Preferences::reset();  // Clear NVS mock storage
+}
+
+// Factory function for test data
+static void create_mqtt_config(const char *broker, uint16_t port) {
+    mqttSettings.broker = broker;
+    mqttSettings.port = port;
+    mqttSettings.enabled = true;
+}
+```
+
+**JavaScript Fixtures Location:**
+- Path: `e2e/fixtures/` (ws-messages/, api-responses/)
+- WS fixtures: JSON files matching `buildInitialState()` order in ws-helpers.js
+  - `audio-channel-map.json` — list of available input/output devices from HAL
+  - `wifi-status.json` — WiFi connection state, SSID, RSSI
+  - `smart-sensing.json` — Amplifier relay state, audio threshold, timer
+- API fixtures: JSON response templates for `e2e/mock-server/routes/*.js`
+  - `hal-devices.json` — HAL device list with states
+  - `auth-status.json` — Session authentication status
+
+**JavaScript Custom Fixture (connectedPage):**
+- Location: `e2e/helpers/fixtures.js`
+- Provides: `connectedPage` with session cookie + WS auth + initial state broadcasts
+- Session flow:
+  1. `POST /api/auth/login` with password
+  2. Receive session cookie (sessionId=...)
+  3. Navigate to main page
+  4. Intercept `new WebSocket(:81)` with mock handler
+  5. Send `{type:'auth', token:'<from /api/ws-token>'}` automatically
+  6. Receive `{type:'authSuccess'}` from mock
+  7. Receive all initial-state broadcasts (10 messages)
+  8. Test code runs with live mock connection
+- Usage: `async ({ connectedPage }) => { ... }` in test body
+
+## Coverage
+
+**C++ Requirements:**
+- Target: No enforced minimum (test-driven development)
+- Current: 1620+ tests across 70 modules (comprehensive)
+- Strategy: Critical modules (auth, HAL, pipeline, DSP) have dedicated test files
+- Pre-commit gate: All tests must pass before commit
+
+**JavaScript Requirements:**
+- Target: No enforced minimum
+- Current: 26 tests across 19 specs covering UI workflows
+- Strategy: Integration-focused (test full feature, not individual functions)
+- Pre-commit gate: All tests must pass before commit
+
+**View Coverage:**
+
 ```bash
-cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json
-```
-- Config: `web_src/.eslintrc.json`
-- 380 globals for concatenated scope
-- Rules: `no-undef`, `no-redeclare`, `eqeqeq`
-- New top-level JS declarations → add to globals section
+# C++ test summary (shown after pio test)
+pio test -e native -v 2>&1 | grep -E "^(test_|PASSED|FAILED|Test Summary)"
 
-### C++ (cppcheck)
-- Runs in CI on `src/` (excluding `src/gui/`)
-- Not run locally by default
-
-### Duplicate/missing checks
-```bash
-node tools/find_dups.js           # Duplicate JS global declarations
-node tools/check_missing_fns.js   # Undefined function references
+# JavaScript test summary
+cd e2e && npx playwright test --reporter=html
+# Open: playwright-report/index.html in browser
 ```
 
----
+## Test Types
+
+**C++ Unit Tests:**
+- Scope: Individual function or small component
+- Setup: Mock hardware, create test state
+- Execution: Call function under test with known inputs
+- Verification: Assert return value, state changes, or side effects
+- Example: `test_lpf_coefficients()` in test_dsp.cpp verifies RBJ EQ Cookbook computation
+- Speed: ~1-5ms per test, 1620 tests run in <10 seconds
+
+**C++ Integration Tests:**
+- Scope: Multiple modules interacting (e.g., HAL discovery + device registration)
+- Setup: Initialize dependent modules, configure mocks
+- Execution: Simulate real-world workflow
+- Verification: Assert final state across module boundaries
+- Example: `test_hal_discovery.cpp` verifies I2C scan → EEPROM detection → device registration
+- Note: Kept in single test files, not separate directory
+
+**JavaScript Integration Tests:**
+- Scope: Full user workflow end-to-end
+- Setup: Mock server running, browser page connected with WS
+- Execution: User clicks buttons, types input, navigates tabs
+- Verification: Assert DOM updates, WS commands sent, API responses received
+- Example: `test('PEQ overlay opens and applies boost')` in peq-overlay.spec.js
+- Speed: ~500-1000ms per test (browser overhead)
+
+**No E2E Hardware Tests:**
+- Firmware tests run on native (host), not on ESP32-P4 hardware
+- Browser tests use mock server, not real device
+- Device integration verified manually or via CI on real hardware (future)
+
+## Common Patterns
+
+**Async Testing (JavaScript):**
+
+```javascript
+test('API call succeeds with timeout', async ({ connectedPage }) => {
+  const response = await connectedPage.request.get('/api/hal/devices');
+  expect(response.status()).toBe(200);
+
+  const devices = await response.json();
+  expect(devices).toBeInstanceOf(Array);
+});
+
+test('WS message triggers DOM update', async ({ connectedPage }) => {
+  // Wait for specific element to appear
+  const meter = connectedPage.locator('#inputVuMeter');
+
+  // Trigger WS message from mock
+  connectedPage.wsRoute.send(JSON.stringify({
+    type: 'audioChannelMap',
+    lanes: [/* ... */]
+  }));
+
+  // Wait for DOM to update
+  await expect(meter).toBeVisible({ timeout: 5000 });
+});
+```
+
+**Error Testing (C++):**
+
+```cpp
+void test_authentication_rate_limit_blocks_login(void) {
+    // Arrange: Simulate multiple failed logins
+    for (int i = 0; i < 5; i++) {
+        authHandler_handleLoginAttempt("wrongpassword");
+    }
+
+    // Act: Try login during cooldown
+    bool result = authHandler_handleLoginAttempt("correctpassword");
+
+    // Assert: Blocked by rate limit
+    TEST_ASSERT_FALSE(result);  // Even correct password rejected
+}
+
+void test_recovery_after_rate_limit_timeout(void) {
+    // Arrange: Set up rate limit state
+    test_authentication_rate_limit_blocks_login();
+
+    // Advance time past cooldown
+    ArduinoMock::advance_millis(LOGIN_COOLDOWN_US / 1000 + 100);
+
+    // Act: Try login again
+    bool result = authHandler_handleLoginAttempt("correctpassword");
+
+    // Assert: Rate limit cleared
+    TEST_ASSERT_TRUE(result);
+}
+```
+
+**Error Testing (JavaScript):**
+
+```javascript
+test('invalid session redirects to login', async ({ page }) => {
+  // Set invalid session cookie
+  await page.context().addCookies([{
+    name: 'sessionId',
+    value: 'invalid-session-id',
+    domain: 'localhost',
+    path: '/',
+  }]);
+
+  // Navigate to protected page
+  await page.goto('/');
+
+  // Verify redirected to login
+  await expect(page).toHaveURL('/login');
+});
+
+test('network error shows connection warning', async ({ connectedPage }) => {
+  // Simulate network failure (mock server stops responding)
+  await connectedPage.context().setOffline(true);
+
+  // Verify connection status shows error
+  const status = connectedPage.locator('#wsConnectionStatus');
+  await expect(status).toContainText('Disconnected');
+
+  // Restore connectivity
+  await connectedPage.context().setOffline(false);
+
+  // Verify reconnection
+  await expect(status).toContainText('Connected');
+});
+```
+
+## Quality Gates (CI/CD)
+
+**4 Parallel Gates** (must all pass before firmware build):
+
+1. **cpp-tests** — `pio test -e native -v`
+   - Runs 1620 Unity tests
+   - Timeout: ~30 seconds
+   - Failure: Any test assertion fails
+
+2. **cpp-lint** — cppcheck on `src/`
+   - Static analysis (excluding `src/gui/`)
+   - Checks: memory leaks, uninitialized variables, logic errors
+   - Failure: Linting errors found
+
+3. **js-lint** — `tools/find_dups.js` + `tools/check_missing_fns.js` + ESLint
+   - Duplicate JS declarations
+   - Undefined function references
+   - ESLint rules (no-undef, no-redeclare, eqeqeq)
+   - Failure: Any linting error
+
+4. **e2e-tests** — `npx playwright test`
+   - Runs 26 browser tests
+   - Timeout: ~3-5 minutes
+   - Failure: Any test assertion fails
+   - HTML report uploaded to artifact (14-day retention)
+
+**File:** `.github/workflows/tests.yml` (trigger: push/PR to main/develop)
+**Pipeline:** Diagram in `docs-internal/architecture/ci-quality-gates.mmd`
 
 ## Pre-commit Hooks
 
-`.githooks/pre-commit` runs automatically before each commit:
-1. `node tools/find_dups.js`
-2. `node tools/check_missing_fns.js`
-3. ESLint on `web_src/js/`
+**Location:** `.githooks/pre-commit` (activate: `git config core.hooksPath .githooks`)
 
-Activate: `git config core.hooksPath .githooks`
+**Checks (fast, before each commit):**
+
+```bash
+# 1. Check for duplicate JS declarations
+node tools/find_dups.js
+
+# 2. Check for undefined function references
+node tools/check_missing_fns.js
+
+# 3. Lint web_src/js/
+cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json
+```
+
+**On failure:** Commit is prevented; fix linting errors and stage files again.
+
+## Test Maintenance Rules
+
+**Mandatory:** Every code change MUST keep tests green.
+
+**C++ Changes:**
+- New modules need test file in `test/test_module_name/`
+- Changed function signatures → update affected tests
+- New features → add test cases to verify behavior
+- Removed features → remove corresponding tests
+
+**Web UI Changes:**
+- New toggle/button/dropdown → add test verifying correct WS command
+- New WS broadcast type → add fixture JSON + test verifying DOM updates
+- New tab or section → add navigation + element presence tests
+- Changed element IDs → update `e2e/helpers/selectors.js` + affected specs
+- Removed features → remove corresponding tests + fixtures
+- New top-level JS declarations → add to `web_src/.eslintrc.json` globals
+
+**WebSocket Protocol Changes:**
+- Update `e2e/fixtures/ws-messages/` with new/changed message fixtures
+- Update `e2e/helpers/ws-helpers.js` `buildInitialState()` and `handleCommand()`
+- Update `e2e/mock-server/ws-state.js` if new state fields are added
+- Add Playwright test verifying frontend handles new message type
+
+**REST API Changes:**
+- Update matching route in `e2e/mock-server/routes/*.js`
+- Update `e2e/fixtures/api-responses/` with new/changed response fixtures
+- Add Playwright test if UI depends on new endpoint
 
 ---
 
-## CI/CD Quality Gates
-
-4 parallel gates must all pass before firmware build:
-
-| Gate | Command | What it checks |
-|------|---------|----------------|
-| `cpp-tests` | `pio test -e native -v` | ~1620 Unity tests |
-| `cpp-lint` | cppcheck | C++ static analysis |
-| `js-lint` | find_dups + check_missing_fns + ESLint | JS quality |
-| `e2e-tests` | `npx playwright test` | 26 browser tests |
-
-Playwright HTML report uploaded as artifact on failure (14-day retention).
-
----
-
-## Agent Workflow
-
-| Change Type | Agent(s) | Purpose |
-|-------------|----------|---------|
-| C++ firmware only | `firmware-test-runner` | `pio test -e native -v`, diagnoses failures |
-| Web UI only | `test-engineer` or `test-writer` | Playwright, fixes selectors, adds coverage |
-| Both firmware + UI | Both agents in parallel | Full coverage |
-| New HAL driver | `hal-driver-scaffold` → `firmware-test-runner` | Scaffold creates test module automatically |
-| New web feature | `web-feature-scaffold` → `test-engineer` | DOM scaffold then E2E tests |
-| Bug investigation | `debugger` or `debug` agent | Root cause with test reproduction |
+*Testing analysis: 2026-03-21*
