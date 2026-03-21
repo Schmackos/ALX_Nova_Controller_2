@@ -50,6 +50,8 @@ jobs:
       run: node tools/check_missing_fns.js
     - name: ESLint web_src/js/
       run: cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json
+    - name: Validate architecture diagrams
+      run: node tools/diagram-validation.js
 
   e2e-tests:
     runs-on: ubuntu-latest
