@@ -154,6 +154,155 @@ void test_allpass_unity_magnitude(void) {
     TEST_ASSERT_FLOAT_WITHIN(COEFF_TOL, p.coeffs[4], p.coeffs[0]);
 }
 
+// ===== Coefficient Edge-Case Validity Helper =====
+
+static bool coeffs_are_valid(const float *c) {
+    for (int i = 0; i < 5; i++) {
+        if (isnan(c[i]) || isinf(c[i])) return false;
+    }
+    return true;
+}
+
+// ===== Coefficient Edge-Case Tests =====
+
+void test_coeff_extreme_low_freq(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_LPF, 48000);
+
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+    TEST_ASSERT_TRUE(p.coeffs[0] > 0.0f);
+}
+
+void test_coeff_near_nyquist(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 23999.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_HPF, 48000);
+
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+}
+
+void test_coeff_extreme_low_q(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.Q = 0.001f;
+    p.gain = 6.0f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_PEQ, 48000);
+
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+}
+
+void test_coeff_extreme_high_q(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.Q = 1000.0f;
+    p.gain = 6.0f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_PEQ, 48000);
+
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+}
+
+void test_coeff_extreme_gain(void) {
+    DspBiquadParams p;
+
+    // Extreme positive gain
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.gain = 60.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_LOW_SHELF, 48000);
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+
+    // Extreme negative gain
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.gain = -60.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_LOW_SHELF, 48000);
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+}
+
+void test_coeff_nan_inf_guard(void) {
+    // Test all 8 basic biquad types with near-zero Q (near-zero alpha)
+    // to verify no NaN/Inf coefficients are produced
+    DspStageType types[] = {
+        DSP_BIQUAD_LPF, DSP_BIQUAD_HPF, DSP_BIQUAD_BPF, DSP_BIQUAD_NOTCH,
+        DSP_BIQUAD_PEQ, DSP_BIQUAD_LOW_SHELF, DSP_BIQUAD_HIGH_SHELF, DSP_BIQUAD_ALLPASS
+    };
+    const int numTypes = sizeof(types) / sizeof(types[0]);
+
+    for (int t = 0; t < numTypes; t++) {
+        DspBiquadParams p;
+        dsp_init_biquad_params(p);
+        p.frequency = 1000.0f;
+        p.Q = 0.001f;
+        p.gain = 6.0f;
+        dsp_compute_biquad_coeffs(p, types[t], 48000);
+
+        TEST_ASSERT_TRUE_MESSAGE(coeffs_are_valid(p.coeffs),
+            "NaN/Inf detected with Q=0.001 for a biquad type");
+    }
+}
+
+void test_coeff_stability_check(void) {
+    // Stability triangle for normalized biquad (a0=1):
+    //   |a2| < 1  AND  |a1| < 1 + a2
+    // This ensures both poles are inside the unit circle.
+    DspStageType types[] = {
+        DSP_BIQUAD_LPF, DSP_BIQUAD_HPF, DSP_BIQUAD_BPF, DSP_BIQUAD_NOTCH,
+        DSP_BIQUAD_PEQ, DSP_BIQUAD_LOW_SHELF, DSP_BIQUAD_HIGH_SHELF, DSP_BIQUAD_ALLPASS
+    };
+    const int numTypes = sizeof(types) / sizeof(types[0]);
+
+    for (int t = 0; t < numTypes; t++) {
+        DspBiquadParams p;
+        dsp_init_biquad_params(p);
+        p.frequency = 1000.0f;
+        p.Q = 0.707f;
+        p.gain = 0.0f;
+        dsp_compute_biquad_coeffs(p, types[t], 48000);
+
+        float a1 = p.coeffs[3];
+        float a2 = p.coeffs[4];
+        TEST_ASSERT_TRUE_MESSAGE(fabsf(a2) < 1.0f,
+            "Biquad stability: |a2| >= 1.0");
+        TEST_ASSERT_TRUE_MESSAGE(fabsf(a1) < 1.0f + a2,
+            "Biquad stability: |a1| >= 1 + a2");
+    }
+}
+
+void test_coeff_all_types_valid(void) {
+    // Loop through all biquad types (LPF through LINKWITZ) and verify
+    // none produce NaN/Inf with standard parameters
+    DspStageType types[] = {
+        DSP_BIQUAD_LPF, DSP_BIQUAD_HPF, DSP_BIQUAD_BPF, DSP_BIQUAD_NOTCH,
+        DSP_BIQUAD_PEQ, DSP_BIQUAD_LOW_SHELF, DSP_BIQUAD_HIGH_SHELF,
+        DSP_BIQUAD_ALLPASS, DSP_BIQUAD_ALLPASS_360, DSP_BIQUAD_ALLPASS_180,
+        DSP_BIQUAD_BPF_0DB, DSP_BIQUAD_LPF_1ST, DSP_BIQUAD_HPF_1ST,
+        DSP_BIQUAD_LINKWITZ
+    };
+    const int numTypes = sizeof(types) / sizeof(types[0]);
+
+    for (int t = 0; t < numTypes; t++) {
+        DspBiquadParams p;
+        dsp_init_biquad_params(p);
+        p.frequency = 1000.0f;
+        p.Q = 0.707f;
+        p.gain = 0.0f;
+        p.Q2 = 0.707f;
+        dsp_compute_biquad_coeffs(p, types[t], 48000);
+
+        TEST_ASSERT_TRUE_MESSAGE(coeffs_are_valid(p.coeffs),
+            "NaN/Inf detected for a biquad type with standard params");
+    }
+}
+
 // ===== Biquad Processing Tests =====
 
 void test_biquad_passthrough(void) {
@@ -2819,6 +2968,16 @@ int main(int argc, char **argv) {
     RUN_TEST(test_shelf_high_boost);
     RUN_TEST(test_custom_coefficients_load);
     RUN_TEST(test_allpass_unity_magnitude);
+
+    // Coefficient edge cases
+    RUN_TEST(test_coeff_extreme_low_freq);
+    RUN_TEST(test_coeff_near_nyquist);
+    RUN_TEST(test_coeff_extreme_low_q);
+    RUN_TEST(test_coeff_extreme_high_q);
+    RUN_TEST(test_coeff_extreme_gain);
+    RUN_TEST(test_coeff_nan_inf_guard);
+    RUN_TEST(test_coeff_stability_check);
+    RUN_TEST(test_coeff_all_types_valid);
 
     // Biquad processing
     RUN_TEST(test_biquad_passthrough);

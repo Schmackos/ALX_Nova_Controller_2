@@ -10,14 +10,20 @@
 #endif
 
 // Helper: normalize coefficients so a0 = 1.0
-static void normalize(float *coeffs, float a0)
+// Returns 0 on success, -1 if a0 is too small (would produce Inf).
+// Coefficients are NOT modified on failure.
+static int normalize(float *coeffs, float a0)
 {
+    if (fabsf(a0) < 1e-10f) {
+        return -1;
+    }
     float inv_a0 = 1.0f / a0;
     coeffs[0] *= inv_a0; // b0
     coeffs[1] *= inv_a0; // b1
     coeffs[2] *= inv_a0; // b2
     coeffs[3] *= inv_a0; // a1
     coeffs[4] *= inv_a0; // a2
+    return 0;
 }
 
 int dsp_gen_lpf_f32(float *coeffs, float freq, float qFactor)
@@ -37,7 +43,7 @@ int dsp_gen_lpf_f32(float *coeffs, float freq, float qFactor)
     coeffs[3] = -2.0f * cosW0;          // a1
     coeffs[4] = 1.0f - alpha;           // a2
 
-    normalize(coeffs, a0);
+    if (normalize(coeffs, a0) != 0) return -1;
     return 0;
 }
 
@@ -58,7 +64,7 @@ int dsp_gen_hpf_f32(float *coeffs, float freq, float qFactor)
     coeffs[3] = -2.0f * cosW0;           // a1
     coeffs[4] = 1.0f - alpha;            // a2
 
-    normalize(coeffs, a0);
+    if (normalize(coeffs, a0) != 0) return -1;
     return 0;
 }
 
@@ -79,7 +85,7 @@ int dsp_gen_bpf_f32(float *coeffs, float freq, float qFactor)
     coeffs[3] = -2.0f * cosW0;          // a1
     coeffs[4] = 1.0f - alpha;           // a2
 
-    normalize(coeffs, a0);
+    if (normalize(coeffs, a0) != 0) return -1;
     return 0;
 }
 
@@ -100,7 +106,7 @@ int dsp_gen_notch_f32(float *coeffs, float freq, float qFactor)
     coeffs[3] = -2.0f * cosW0;          // a1
     coeffs[4] = 1.0f - alpha;           // a2
 
-    normalize(coeffs, a0);
+    if (normalize(coeffs, a0) != 0) return -1;
     return 0;
 }
 
@@ -121,7 +127,7 @@ int dsp_gen_allpass_f32(float *coeffs, float freq, float qFactor)
     coeffs[3] = -2.0f * cosW0;          // a1
     coeffs[4] = 1.0f - alpha;           // a2
 
-    normalize(coeffs, a0);
+    if (normalize(coeffs, a0) != 0) return -1;
     return 0;
 }
 
@@ -174,7 +180,7 @@ int dsp_gen_peaking_eq_f32(float *coeffs, float freq, float gain, float qFactor)
     coeffs[3] = -2.0f * cosW0;          // a1
     coeffs[4] = 1.0f - alpha / A;       // a2
 
-    normalize(coeffs, a0);
+    if (normalize(coeffs, a0) != 0) return -1;
     return 0;
 }
 
@@ -197,7 +203,7 @@ int dsp_gen_low_shelf_f32(float *coeffs, float freq, float gain, float qFactor)
     coeffs[3] = -2.0f * ((A - 1.0f) + (A + 1.0f) * cosW0);              // a1
     coeffs[4] = (A + 1.0f) + (A - 1.0f) * cosW0 - twoSqrtAalpha;       // a2
 
-    normalize(coeffs, a0);
+    if (normalize(coeffs, a0) != 0) return -1;
     return 0;
 }
 
@@ -220,7 +226,7 @@ int dsp_gen_high_shelf_f32(float *coeffs, float freq, float gain, float qFactor)
     coeffs[3] = 2.0f * ((A - 1.0f) - (A + 1.0f) * cosW0);               // a1
     coeffs[4] = (A + 1.0f) - (A - 1.0f) * cosW0 - twoSqrtAalpha;       // a2
 
-    normalize(coeffs, a0);
+    if (normalize(coeffs, a0) != 0) return -1;
     return 0;
 }
 

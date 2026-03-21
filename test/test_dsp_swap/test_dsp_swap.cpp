@@ -30,7 +30,8 @@ void setUp(void) {
 }
 
 void tearDown(void) {
-    // Cleanup after each test
+    // Ensure _processingActive is cleared so a failed test cannot poison subsequent tests
+    _processingActive = false;
 }
 
 // Test 1: Swap returns true on success
@@ -47,10 +48,26 @@ void test_swap_returns_true_on_success() {
 
 // Test 2: Swap returns false on timeout (simulated busy state)
 void test_swap_returns_false_on_timeout() {
-    // This test is difficult to implement in native environment without FreeRTOS simulation
-    // In real hardware, this would be tested by holding _processingActive true
-    // For now, verify the success path works
-    TEST_ASSERT_TRUE(dsp_swap_config());
+    // Hold _processingActive true so the swap wait loop spins to timeout.
+    // In native builds, vTaskDelay is compiled out, so the 100-iteration loop
+    // completes instantly and hits the timeout path.
+    _processingActive = true;
+
+    // Set mock time so lastSwapFailure gets a non-zero timestamp
+    ArduinoMock::mockMillis = 5000;
+
+    uint32_t failuresBefore = appState.dsp.swapFailures;
+    uint32_t successesBefore = appState.dsp.swapSuccesses;
+
+    bool result = dsp_swap_config();
+
+    TEST_ASSERT_FALSE_MESSAGE(result, "swap should return false when processing is stuck active");
+    TEST_ASSERT_EQUAL_UINT32(failuresBefore + 1, appState.dsp.swapFailures);
+    TEST_ASSERT_EQUAL_UINT32(successesBefore, appState.dsp.swapSuccesses);
+    TEST_ASSERT_EQUAL_UINT32(5000, appState.dsp.lastSwapFailure);
+
+    // Cleanup: release the processing lock so subsequent tests are unaffected
+    _processingActive = false;
 }
 
 // Test 3: Success counter increments correctly
@@ -211,6 +228,66 @@ void test_log_swap_failure_does_not_increment_counter() {
     TEST_ASSERT_EQUAL_UINT32(0, appState.dsp.lastSwapFailure);
 }
 
+// Test 12: Coefficient morphing state is set when biquad coefficients change across swap
+void test_swap_coeff_morphing_state() {
+    // Use PEQ band 0 (already exists on both states after dsp_init) to test morphing.
+    // After dsp_init, both states have 10 PEQ bands with default coefficients [1,0,0,0,0].
+    // We set different coefficients on each state via direct assignment and verify
+    // that the swap detects the difference and initiates coefficient morphing.
+
+    const int band = 0; // PEQ band index
+
+    // Known coefficient sets (arbitrary but distinctly different)
+    const float coeffsA[5] = { 1.05f, -1.90f, 0.86f, -1.90f, 0.91f };
+    const float coeffsB[5] = { 1.12f, -1.75f, 0.70f, -1.75f, 0.82f };
+
+    // --- Step 1: Set coefficients A on the inactive config's band 0 ---
+    DspState *inactive1 = dsp_get_inactive_config();
+    for (int c = 0; c < 5; c++) {
+        inactive1->channels[0].stages[band].biquad.coeffs[c] = coeffsA[c];
+    }
+
+    // Swap: the swap compares old active (state 0, default [1,0,0,0,0]) vs
+    // new active (state 1, coeffsA). Coefficients differ -> morphing triggered.
+    TEST_ASSERT_TRUE(dsp_swap_config());
+    uint32_t swapCount1 = appState.dsp.swapSuccesses;
+
+    // After first swap: morphing should be active on the now-active config
+    DspState *activeAfterFirst = dsp_get_active_config();
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(
+        64, activeAfterFirst->channels[0].stages[band].biquad.morphRemaining,
+        "First swap should trigger morphing (default -> coeffsA)");
+
+    // The active coeffs should be the OLD default coefficients (morph starts from old)
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, activeAfterFirst->channels[0].stages[band].biquad.coeffs[0]);
+    // The target should be coeffsA
+    for (int c = 0; c < 5; c++) {
+        TEST_ASSERT_EQUAL_FLOAT(coeffsA[c], activeAfterFirst->channels[0].stages[band].biquad.targetCoeffs[c]);
+    }
+
+    // --- Step 2: Set coefficients B on the (new) inactive config's band 0 ---
+    DspState *inactive2 = dsp_get_inactive_config();
+    for (int c = 0; c < 5; c++) {
+        inactive2->channels[0].stages[band].biquad.coeffs[c] = coeffsB[c];
+    }
+
+    // Second swap: old active has coeffs starting as default [1,0,0,0,0] (morph was
+    // in progress but coeffs[] still holds the "from" values). New active has coeffsB.
+    TEST_ASSERT_TRUE(dsp_swap_config());
+    TEST_ASSERT_EQUAL_UINT32(swapCount1 + 1, appState.dsp.swapSuccesses);
+
+    // After second swap: morphing should be active (coeffsA-from-old -> coeffsB)
+    DspState *active = dsp_get_active_config();
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(
+        64, active->channels[0].stages[band].biquad.morphRemaining,
+        "Second swap should trigger morphing (old active coeffs -> coeffsB)");
+
+    // The target coefficients should be coeffsB
+    for (int c = 0; c < 5; c++) {
+        TEST_ASSERT_EQUAL_FLOAT(coeffsB[c], active->channels[0].stages[band].biquad.targetCoeffs[c]);
+    }
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
 
@@ -225,6 +302,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_compressor_state_preserved);
     RUN_TEST(test_swap_success_does_not_increment_failures);
     RUN_TEST(test_log_swap_failure_does_not_increment_counter);
+    RUN_TEST(test_swap_coeff_morphing_state);
 
     return UNITY_END();
 }
