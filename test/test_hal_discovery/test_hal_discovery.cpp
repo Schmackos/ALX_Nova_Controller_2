@@ -18,7 +18,7 @@
 #include "../../src/hal/hal_driver_registry.cpp"
 
 // Device DB needs to be inline too — but skip LittleFS parts
-#define HAL_DB_MAX_ENTRIES 16
+#define HAL_DB_MAX_ENTRIES 24
 #define HAL_DB_FILE_PATH "/hal_devices.json"
 #define HAL_CONFIG_FILE_PATH "/hal_config.json"
 

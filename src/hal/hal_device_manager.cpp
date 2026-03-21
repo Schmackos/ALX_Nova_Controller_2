@@ -47,7 +47,13 @@ HalDeviceManager::HalDeviceManager() : _count(0) {
 
 // ===== Registration =====
 int HalDeviceManager::registerDevice(HalDevice* device, HalDiscovery discovery) {
-    if (!device || _count >= HAL_MAX_DEVICES) return -1;
+    if (!device || _count >= HAL_MAX_DEVICES) {
+        if (device) {
+            LOG_W("[HAL] Device slots full (%d/%d): %s", _count, HAL_MAX_DEVICES, device->getDescriptor().name);
+            diag_emit(DIAG_HAL_SLOT_FULL, DIAG_SEV_ERROR, 0, device->getDescriptor().name, "slots full");
+        }
+        return -1;
+    }
 
     // Find first free slot
     int slot = -1;

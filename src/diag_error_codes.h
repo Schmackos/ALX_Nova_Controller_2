@@ -22,7 +22,7 @@ enum DiagErrorCode : uint16_t {
     DIAG_HAL_INIT_FAILED                = 0x1001,  // Device init() returned false
     DIAG_HAL_PROBE_FAILED               = 0x1002,  // Device probe() returned false
     DIAG_HAL_PIN_CONFLICT               = 0x1003,  // GPIO already claimed
-    DIAG_HAL_SLOT_FULL                  = 0x1004,  // All 16 device slots occupied
+    DIAG_HAL_SLOT_FULL                  = 0x1004,  // All device slots occupied (HAL_MAX_DEVICES)
     DIAG_HAL_HEALTH_FAIL                = 0x1005,  // healthCheck() returned false
     DIAG_HAL_HEALTH_RECOVERED           = 0x1006,  // healthCheck() passed after failure
     DIAG_HAL_DEVICE_REMOVED             = 0x1007,  // Device removed from registry
@@ -33,6 +33,8 @@ enum DiagErrorCode : uint16_t {
     DIAG_HAL_CONFIG_APPLIED             = 0x100C,  // Config changed
     DIAG_HAL_DEVICE_DETECTED            = 0x100D,  // New device found
     DIAG_HAL_TOGGLE_OVERFLOW            = 0x100E,  // Toggle queue full — request dropped
+    DIAG_HAL_REGISTRY_FULL              = 0x100F,  // Driver registry full (HAL_MAX_DRIVERS)
+    DIAG_HAL_DB_FULL                    = 0x1010,  // Device DB full (HAL_DB_MAX_ENTRIES)
 
     // ===== 0x11xx: HAL — Discovery =====
     DIAG_HAL_I2C_BUS_CONFLICT           = 0x1101,  // Bus 0 scan skipped (WiFi SDIO)

@@ -1,5 +1,14 @@
 #include "hal_driver_registry.h"
+#include "../diag_journal.h"
 #include <string.h>
+
+#ifndef NATIVE_TEST
+#include "../debug_serial.h"
+#else
+#ifndef LOG_W
+#define LOG_W(fmt, ...) ((void)0)
+#endif
+#endif
 
 // Static registry storage
 static HalDriverEntry _entries[HAL_MAX_DRIVERS];
@@ -11,7 +20,11 @@ void hal_registry_init() {
 }
 
 bool hal_registry_register(const HalDriverEntry& entry) {
-    if (_entryCount >= HAL_MAX_DRIVERS) return false;
+    if (_entryCount >= HAL_MAX_DRIVERS) {
+        LOG_W("[HAL] Driver registry full (%d/%d): %s", _entryCount, HAL_MAX_DRIVERS, entry.compatible);
+        diag_emit(DIAG_HAL_REGISTRY_FULL, DIAG_SEV_ERROR, 0, entry.compatible, "registry full");
+        return false;
+    }
     if (entry.compatible[0] == '\0') return false;
 
     // Reject duplicates

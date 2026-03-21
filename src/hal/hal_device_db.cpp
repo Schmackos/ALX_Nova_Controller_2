@@ -8,6 +8,7 @@
 
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
+#include "../diag_journal.h"
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #else
@@ -312,7 +313,13 @@ bool hal_db_add(const HalDeviceDescriptor* desc) {
         }
     }
 
-    if (_dbCount >= HAL_DB_MAX_ENTRIES) return false;
+    if (_dbCount >= HAL_DB_MAX_ENTRIES) {
+        LOG_W("[HAL DB] Device DB full (%d/%d): %s", _dbCount, HAL_DB_MAX_ENTRIES, desc->compatible);
+#ifndef NATIVE_TEST
+        diag_emit(DIAG_HAL_DB_FULL, DIAG_SEV_ERROR, 0, desc->compatible, "DB full");
+#endif
+        return false;
+    }
     _db[_dbCount] = *desc;
     _dbCount++;
     return true;
