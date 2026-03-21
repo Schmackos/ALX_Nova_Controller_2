@@ -249,7 +249,15 @@
     "src/web_pages_gz.cpp",
     "src/drivers/es8311_regs.h",
     "src/drivers/es9822pro_regs.h",
-    "src/drivers/es9843pro_regs.h"
+    "src/drivers/es9843pro_regs.h",
+    "src/drivers/ess_sabre_common.h",
+    "src/drivers/es9826_regs.h",
+    "src/drivers/es9821_regs.h",
+    "src/drivers/es9823pro_regs.h",
+    "src/drivers/es9820_regs.h",
+    "src/drivers/es9842pro_regs.h",
+    "src/drivers/es9840_regs.h",
+    "src/drivers/es9841_regs.h"
   ],
   "sectionToPromptType": {
     "api/rest-main": "api-reference",
