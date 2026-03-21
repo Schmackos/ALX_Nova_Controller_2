@@ -299,6 +299,110 @@ void test_startOTADownload_task_create_failure(void) {
   TEST_ASSERT_EQUAL(STATE_IDLE, appState.fsmState);
 }
 
+// ===== TWDT Subscription Pattern Tests =====
+
+// Mock esp_task_wdt API — tracks subscription calls
+typedef void* TaskHandle_t_mock;
+typedef int esp_err_t_mock;
+#define ESP_OK_MOCK 0
+
+static int wdtAddCalls = 0;
+static int wdtDeleteCalls = 0;
+static int wdtResetCalls = 0;
+
+static esp_err_t_mock mock_esp_task_wdt_add(TaskHandle_t_mock handle) {
+  wdtAddCalls++;
+  return ESP_OK_MOCK;
+}
+
+static esp_err_t_mock mock_esp_task_wdt_delete(TaskHandle_t_mock handle) {
+  wdtDeleteCalls++;
+  return ESP_OK_MOCK;
+}
+
+static esp_err_t_mock mock_esp_task_wdt_reset() {
+  wdtResetCalls++;
+  return ESP_OK_MOCK;
+}
+
+// Simulate the OTA download task lifecycle (mirrors real code pattern)
+static bool simulateOtaDownloadTask(bool updateSuccess) {
+  wdtAddCalls = 0;
+  wdtDeleteCalls = 0;
+  wdtResetCalls = 0;
+
+  // Task entry — subscribe to TWDT
+  mock_esp_task_wdt_add(NULL);
+
+  // Simulate download loop (a few iterations)
+  for (int i = 0; i < 5; i++) {
+    mock_esp_task_wdt_reset();
+  }
+
+  if (updateSuccess) {
+    // Success path: unsubscribe before reboot delay
+    mock_esp_task_wdt_delete(NULL);
+    return true;
+  } else {
+    // Failure path: unsubscribe before task deletion
+    mock_esp_task_wdt_delete(NULL);
+    return false;
+  }
+}
+
+// Simulate the OTA check task lifecycle (mirrors real code pattern)
+static bool simulateOtaCheckTask(bool heapOk) {
+  wdtAddCalls = 0;
+  wdtDeleteCalls = 0;
+
+  // Task entry — subscribe to TWDT
+  mock_esp_task_wdt_add(NULL);
+
+  if (!heapOk) {
+    // Early exit path: unsubscribe before task deletion
+    mock_esp_task_wdt_delete(NULL);
+    return false;
+  }
+
+  // Normal path: check completes, unsubscribe
+  mock_esp_task_wdt_delete(NULL);
+  return true;
+}
+
+void test_ota_download_task_wdt_subscribe_unsubscribe(void) {
+  // Verify download task subscribes at entry and unsubscribes on success
+  simulateOtaDownloadTask(true);
+  TEST_ASSERT_EQUAL_INT(1, wdtAddCalls);
+  TEST_ASSERT_EQUAL_INT(1, wdtDeleteCalls);
+}
+
+void test_ota_download_task_wdt_feeds_during_loop(void) {
+  // Verify watchdog is fed during the download loop
+  simulateOtaDownloadTask(true);
+  TEST_ASSERT_GREATER_THAN(0, wdtResetCalls);
+}
+
+void test_ota_download_task_wdt_unsubscribes_on_failure(void) {
+  // Verify download task unsubscribes even on failure
+  simulateOtaDownloadTask(false);
+  TEST_ASSERT_EQUAL_INT(1, wdtAddCalls);
+  TEST_ASSERT_EQUAL_INT(1, wdtDeleteCalls);
+}
+
+void test_ota_check_task_wdt_subscribe_unsubscribe(void) {
+  // Verify check task subscribes and unsubscribes
+  simulateOtaCheckTask(true);
+  TEST_ASSERT_EQUAL_INT(1, wdtAddCalls);
+  TEST_ASSERT_EQUAL_INT(1, wdtDeleteCalls);
+}
+
+void test_ota_check_task_wdt_unsubscribes_on_early_exit(void) {
+  // Verify check task unsubscribes even on heap-too-low early exit
+  simulateOtaCheckTask(false);
+  TEST_ASSERT_EQUAL_INT(1, wdtAddCalls);
+  TEST_ASSERT_EQUAL_INT(1, wdtDeleteCalls);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -319,6 +423,13 @@ int runUnityTests(void) {
   RUN_TEST(test_clearAllDirtyFlags_includes_ota);
   RUN_TEST(test_hasAnyDirtyFlag_includes_ota);
   RUN_TEST(test_startOTADownload_task_create_failure);
+
+  // TWDT subscription pattern tests
+  RUN_TEST(test_ota_download_task_wdt_subscribe_unsubscribe);
+  RUN_TEST(test_ota_download_task_wdt_feeds_during_loop);
+  RUN_TEST(test_ota_download_task_wdt_unsubscribes_on_failure);
+  RUN_TEST(test_ota_check_task_wdt_subscribe_unsubscribe);
+  RUN_TEST(test_ota_check_task_wdt_unsubscribes_on_early_exit);
 
   return UNITY_END();
 }

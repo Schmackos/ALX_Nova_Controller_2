@@ -16,6 +16,7 @@
 #include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "diag_journal.h"
 
 // Root CA certificates for GitHub (api.github.com, github.com, and objects.githubusercontent.com)
 // Sectigo migrated from USERTrust to R46/E46 roots in 2025 (mandatory from Jan 2026).
@@ -845,7 +846,7 @@ bool performOTAUpdate(String firmwareUrl) {
     client.setInsecure();
   }
 
-  client.setTimeout(30000);
+  client.setTimeout(OTA_CONNECT_TIMEOUT_MS);
 
   HTTPClient https;
   if (!https.begin(client, firmwareUrl)) {
@@ -856,7 +857,7 @@ bool performOTAUpdate(String firmwareUrl) {
   }
 
   https.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  https.setTimeout(30000);
+  https.setTimeout(OTA_READ_TIMEOUT_MS);
 
   setOTAProgress("preparing", "Connecting to server...", 0);
 
@@ -927,7 +928,9 @@ bool performOTAUpdate(String firmwareUrl) {
     LOG_I("[OTA] Checksum verification enabled");
   }
 
+  unsigned long lastBytesTime = millis();
   while (https.connected() && (written < contentLength)) {
+    esp_task_wdt_reset();  // Feed watchdog every iteration
     size_t available = stream->available();
     if (available) {
       int bytesRead = stream->readBytes(buffer, min(available, sizeof(buffer)));
@@ -951,6 +954,7 @@ bool performOTAUpdate(String firmwareUrl) {
 
       written += bytesRead;
       appState.ota.progressBytes = written;
+      lastBytesTime = millis();  // Reset stall timer on data received
 
       // Update progress every 1% change or every 2 seconds
       int newProgress = (written * 100) / contentLength;
@@ -962,11 +966,23 @@ bool performOTAUpdate(String firmwareUrl) {
         lastProgressUpdate = now;
         LOG_D("[OTA] Progress: %d%% (%d KB / %d KB)", newProgress, written / 1024, contentLength / 1024);
       }
+    } else if ((millis() - lastBytesTime) > OTA_STALL_TIMEOUT_MS) {
+      LOG_E("[OTA] Network stall: no data for %ds, aborting", OTA_STALL_TIMEOUT_MS / 1000);
+      diag_emit(DIAG_OTA_NETWORK_STALL, DIAG_SEV_ERROR, 0xFF, "OTA", "download stall timeout");
+      Update.abort();
+      if (calculatingChecksum) {
+        mbedtls_md_free(&ctx);
+      }
+      https.end();
+      setOTAProgress("error", "Network stall during download", 0);
+      appState.ota.inProgress = false;
+      return false;
     }
     delay(1);  // Yield to FreeRTOS scheduler
   }
 
   https.end();
+  esp_task_wdt_reset();  // Feed watchdog before checksum verification
 
   // Verify checksum if available
   if (calculatingChecksum) {
@@ -1272,12 +1288,15 @@ void handleFirmwareUploadComplete() {
 
 // OTA download task — runs performOTAUpdate() on a separate core
 static void otaDownloadTask(void* param) {
+  esp_task_wdt_add(NULL);  // Subscribe to TWDT (30s timeout)
+
   String firmwareUrl = appState.ota.cachedFirmwareUrl;
   bool success = performOTAUpdate(firmwareUrl);
 
   if (success) {
     LOG_I("[OTA] Update successful, rebooting in 3 seconds");
     saveOTASuccessFlag(firmwareVer);
+    esp_task_wdt_delete(NULL);  // Unsubscribe before reboot delay
     vTaskDelay(pdMS_TO_TICKS(3000));  // Let main loop broadcast final status
     ESP.restart();
   } else {
@@ -1289,6 +1308,7 @@ static void otaDownloadTask(void* param) {
     appState.markOTADirty();
   }
 
+  esp_task_wdt_delete(NULL);  // Unsubscribe before task deletion
   otaDownloadTaskHandle = NULL;
   vTaskDelete(NULL);
 }
@@ -1326,6 +1346,8 @@ void startOTADownloadTask() {
 
 // OTA check task — runs checkForFirmwareUpdate() on a separate core
 static void otaCheckTaskFunc(void* param) {
+  esp_task_wdt_add(NULL);  // Subscribe to TWDT (30s timeout)
+
   // Heap pre-flight: must match the inner TLS threshold (35KB) used by
   // getLatestReleaseInfo(). MbedTLS allocates two 16KB buffers (~33KB total).
   uint32_t maxBlock = ESP.getMaxAllocHeap();
@@ -1334,6 +1356,7 @@ static void otaCheckTaskFunc(void* param) {
     _otaConsecutiveFailures++;
     if (_otaConsecutiveFailures > 20) _otaConsecutiveFailures = 20;
     appState.markOTADirty();
+    esp_task_wdt_delete(NULL);
     otaCheckTaskHandle = NULL;
     vTaskDelete(NULL);
     return;
@@ -1344,6 +1367,7 @@ static void otaCheckTaskFunc(void* param) {
   // Also refresh WiFi status after check (needs dirty flag, not direct WS call)
   appState.markOTADirty();
 
+  esp_task_wdt_delete(NULL);  // Unsubscribe before task deletion
   otaCheckTaskHandle = NULL;
   vTaskDelete(NULL);
 }

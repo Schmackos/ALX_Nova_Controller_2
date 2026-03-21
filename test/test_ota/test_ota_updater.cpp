@@ -390,6 +390,47 @@ void test_ota_backoff_reset_on_success(void) {
     TEST_ASSERT_EQUAL(300000UL, testGetOTAEffectiveInterval());
 }
 
+// ===== TWDT Safety Tests =====
+
+// Include config.h for OTA timeout constants and diag_error_codes.h for diagnostic codes
+#include "../../src/config.h"
+#include "../../src/diag_error_codes.h"
+
+void test_ota_stall_timeout_defined(void) {
+    // OTA_STALL_TIMEOUT_MS must be defined and > 0
+    TEST_ASSERT_GREATER_THAN(0, OTA_STALL_TIMEOUT_MS);
+}
+
+void test_ota_connect_timeout_defined(void) {
+    TEST_ASSERT_GREATER_THAN(0, OTA_CONNECT_TIMEOUT_MS);
+}
+
+void test_ota_read_timeout_defined(void) {
+    TEST_ASSERT_GREATER_THAN(0, OTA_READ_TIMEOUT_MS);
+}
+
+void test_ota_stall_timeout_less_than_wdt(void) {
+    // TWDT is 30s (30000ms) — stall timeout must be strictly less
+    TEST_ASSERT_LESS_THAN(30000, OTA_STALL_TIMEOUT_MS);
+}
+
+void test_ota_connect_timeout_less_than_wdt(void) {
+    TEST_ASSERT_LESS_THAN(30000, OTA_CONNECT_TIMEOUT_MS);
+}
+
+void test_ota_read_timeout_less_than_wdt(void) {
+    TEST_ASSERT_LESS_THAN(30000, OTA_READ_TIMEOUT_MS);
+}
+
+void test_diag_ota_network_stall_code_exists(void) {
+    TEST_ASSERT_EQUAL_HEX16(0x6006, DIAG_OTA_NETWORK_STALL);
+}
+
+void test_diag_ota_network_stall_in_ota_subsystem(void) {
+    DiagSubsystem sub = diag_subsystem_from_code(DIAG_OTA_NETWORK_STALL);
+    TEST_ASSERT_EQUAL(DIAG_SUB_OTA, sub);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -425,6 +466,16 @@ int runUnityTests(void) {
     RUN_TEST(test_ota_backoff_counter_caps_at_20);
     RUN_TEST(test_ota_backoff_interval_progression);
     RUN_TEST(test_ota_backoff_reset_on_success);
+
+    // TWDT safety tests
+    RUN_TEST(test_ota_stall_timeout_defined);
+    RUN_TEST(test_ota_connect_timeout_defined);
+    RUN_TEST(test_ota_read_timeout_defined);
+    RUN_TEST(test_ota_stall_timeout_less_than_wdt);
+    RUN_TEST(test_ota_connect_timeout_less_than_wdt);
+    RUN_TEST(test_ota_read_timeout_less_than_wdt);
+    RUN_TEST(test_diag_ota_network_stall_code_exists);
+    RUN_TEST(test_diag_ota_network_stall_in_ota_subsystem);
 
     return UNITY_END();
 }

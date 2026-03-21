@@ -203,6 +203,12 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define TASK_PRIORITY_AUDIO 3   // Highest app priority (must not drop I2S samples)
 #define TASK_CORE_AUDIO     1   // Core 1 — isolates audio from WiFi system tasks on Core 0
 
+// ===== OTA Timeout Configuration =====
+// All timeouts must be shorter than TWDT timeout (30s) to prevent watchdog reboot
+#define OTA_STALL_TIMEOUT_MS   20000  // 20s without receiving data = network stall
+#define OTA_CONNECT_TIMEOUT_MS 20000  // 20s TCP+TLS connect timeout
+#define OTA_READ_TIMEOUT_MS     5000  // 5s per-read timeout on download stream
+
 // ===== I2S DMA Configuration =====
 #define I2S_DMA_BUF_COUNT 12    // 12 buffers x 256 frames = ~64ms runway at 48kHz
 #define I2S_DMA_BUF_LEN   256

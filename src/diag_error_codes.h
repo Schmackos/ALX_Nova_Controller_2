@@ -83,6 +83,7 @@ enum DiagErrorCode : uint16_t {
     DIAG_OTA_CHECKSUM_MISMATCH          = 0x6003,  // SHA256 verification failed
     DIAG_OTA_FLASH_FAIL                 = 0x6004,  // Update.begin() or write failed
     DIAG_OTA_CERT_FAIL                  = 0x6005,  // SSL certificate validation failed
+    DIAG_OTA_NETWORK_STALL              = 0x6006,  // No data received for OTA_STALL_TIMEOUT_MS
 
     // ===== 0x70xx: USB Audio =====
     DIAG_USB_INIT_FAIL                  = 0x7001,  // TinyUSB init failed
