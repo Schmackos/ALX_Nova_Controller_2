@@ -1,240 +1,334 @@
 # External Integrations
 
-**Analysis Date:** 2026-03-09
+**Analysis Date:** 2026-03-10
 
 ## APIs & External Services
 
-**GitHub Releases API:**
-- Service: GitHub REST API (`api.github.com`)
-- Purpose: OTA firmware update check, release list fetch, release notes retrieval
-- Endpoints called from firmware:
-  - `GET https://api.github.com/repos/{owner}/{repo}/releases/latest` — stable channel OTA check
-  - `GET https://api.github.com/repos/{owner}/{repo}/releases?per_page=5` — release list
-  - `GET https://api.github.com/repos/{owner}/{repo}/releases/tags/{version}` — release notes
-- Firmware download from: `objects.githubusercontent.com` (CDN)
-- Auth: None (public repo, unauthenticated requests)
-- TLS: `WiFiClientSecure` with hardcoded root CA bundle (Sectigo R46 RSA, Sectigo E46 ECC, DigiCert Global G2) embedded in `src/ota_updater.cpp`
-- Config: `GITHUB_REPO_OWNER` = `"Schmackos"`, `GITHUB_REPO_NAME` = `"ALX_Nova_Controller_2"` — defined in `src/config.h`
-- Checksum verification: SHA256 verified via `mbedtls/md.h` after download
-- SDK/Client: `WiFiClientSecure` + `HTTPClient` (Arduino ESP32 built-ins)
-- Trigger: Periodic check every 5 minutes (`OTA_CHECK_INTERVAL = 300000` ms), or manual via `POST /api/checkUpdate`
+**GitHub API (OTA Updates):**
+- Purpose: Check for firmware updates, download firmware binaries, fetch release notes/list
+- SDK/Client: `HTTPClient` + `WiFiClientSecure` (ESP-IDF built-in)
+- Auth: None required (public repo API, unauthenticated)
+- Endpoints used:
+  - `GET https://api.github.com/repos/{owner}/{repo}/releases/latest` - Version check
+  - `GET https://api.github.com/repos/{owner}/{repo}/releases` - Release list
+  - `GET https://objects.githubusercontent.com/...` - Firmware binary download
+- TLS: Root CA certificates embedded in `src/ota_updater.cpp` (Sectigo R46/E46 + DigiCert G2, valid 2038-2046)
+- Config: Repo owner/name defined in `src/config.h` as `GITHUB_REPO_OWNER` ("Schmackos") and `GITHUB_REPO_NAME` ("ALX_Nova_Controller_2")
+- Implementation: `src/ota_updater.h/.cpp`
+- SHA256 verification on downloaded firmware (`calculateSHA256()`, `mbedtls/md.h`)
 
-**Anthropic Claude API:**
-- Service: Anthropic API (`api.anthropic.com`)
-- Purpose: AI-assisted documentation generation — `tools/generate_docs.js` calls Claude to write Docusaurus pages from firmware source files
-- SDK: `@anthropic-ai/sdk` (installed in CI, not in repo)
-- Auth: `ANTHROPIC_API_KEY` environment variable (GitHub Actions secret)
-- Trigger: `docs.yml` workflow on push to `main` when source/docs files change, or `workflow_dispatch` with `regen_all` option
-- Used only in CI, not at device runtime
+**NTP Time Sync:**
+- Purpose: Set system clock for timestamps (crash logs, diagnostic journal, OTA)
+- Client: ESP-IDF `configTime()` / `getLocalTime()`
+- Servers: Standard NTP pool (system default)
+- Called from: `syncTimeWithNTP()` in `src/ota_updater.cpp`
+
+**Anthropic Claude API (CI/CD only):**
+- Purpose: Automated documentation generation from source code
+- SDK: `@anthropic-ai/sdk` (npm, installed at CI time)
+- Auth: `ANTHROPIC_API_KEY` GitHub Actions secret
+- Implementation: `tools/generate_docs.js`
+- Scope: Only runs in `.github/workflows/docs.yml`, never on device
+
+## MQTT Integration (Home Assistant)
+
+**MQTT Broker:**
+- Protocol: MQTT v3.1.1 via `PubSubClient@^2.8`
+- Client: `WiFiClient mqttWifiClient` + `PubSubClient mqttClient` (instantiated in `src/main.cpp`)
+- Connection: User-configurable broker address, port, username, password
+- Config persistence: `/config.json` (primary) or legacy `/mqtt_config.txt`
+- Default port: 1883 (defined in `src/config.h`)
+- Base topic: User-configurable (default derived from device ID)
+- Implementation: `src/mqtt_handler.h/.cpp` (core ~1120 lines), `src/mqtt_publish.cpp` (publish functions), `src/mqtt_ha_discovery.cpp` (HA discovery ~1880 lines)
+- Task: Dedicated FreeRTOS task on Core 0, priority 2 (`src/mqtt_task.h/.cpp`), polls at 20 Hz
+
+**Home Assistant Discovery:**
+- Full MQTT auto-discovery support with device registration
+- Publishes discovery messages for all device entities (sensors, switches, controls)
+- Subscribe/command topics for bidirectional control
+- Removable discovery via `removeHADiscovery()`
+- Device ID: `getMqttDeviceId()` based on ESP32 MAC address
+
+**MQTT Topics Published:**
+- `state` - Amplifier/FSM state
+- `smart_sensing/*` - Sensing mode, threshold, timer, signal status
+- `wifi/*` - Connection status, SSID, signal strength
+- `system/*` - Firmware version, uptime, heap stats
+- `audio/*` - ADC levels, diagnostics, DSP state, input names
+- `display/*` - Backlight, timeout, brightness
+- `buzzer/*` - Enabled, volume
+- `siggen/*` - Signal generator state
+- `debug/*` - Debug mode, serial level
+- `audio/usb/*` - USB audio connection, streaming, volume (guarded by `USB_AUDIO_ENABLED`)
+- `diag/*` - Diagnostic events
+
+**MQTT Topics Subscribed (Commands):**
+- `*/set` suffix topics for writable entities
+- Bidirectional control: sensing mode, amplifier, volume, mute, DSP bypass, etc.
+- AP toggle command: sets `appState._pendingApToggle` flag (main loop executes WiFi mode change)
 
 ## Data Storage
 
-**File System (LittleFS):**
-- Partition: `spiffs` (labeled spiffs subtype, used as LittleFS), 7.875 MB at offset `0x810000`
+**Filesystem (LittleFS):**
+- Partition: `spiffs` type, 7.875MB (offset 0x810000, size 0x7E0000) in `partitions_ota.csv`
+- Mounted at boot via `LittleFS.begin()`
 - Key files:
-  - `/config.json` — primary settings (JSON v1+ format: `{ "version": 1, "settings": {...}, "mqtt": {...} }`)
-  - `/hal_config.json` — HAL per-device config (pin overrides, I2C/I2S params)
-  - `/pipeline_matrix.json` — 16x16 audio routing matrix
-  - `/diag_journal.bin` — diagnostic event journal ring buffer (max 800 entries, 64KB)
-  - `/pipeline_*.json` — DSP preset configs
-  - `/crashlog.bin` — crash log with RTC timestamps
-  - `/siggen.json` — signal generator settings
-  - `/input_names.json` — custom input lane names
-  - `config.json.tmp` — atomic write staging file (renamed to `config.json` on success)
-- Legacy files (migration only, not created on new installs): `settings.txt`, `mqtt_config.txt`
-- Access: `LittleFS` Arduino library throughout `src/`
+  - `/config.json` - Primary settings (JSON v1, atomic write via `.tmp` rename)
+  - `/hal_config.json` - HAL device configuration (per-device I2C, pins, volume, mute)
+  - `/dsp_config.json` - DSP pipeline configuration and presets
+  - `/crashlog.bin` - Binary ring buffer (10 boot entries with reset reason, heap stats)
+  - `/diag_journal.bin` - Binary diagnostic event ring buffer (800 entries, CRC32 per entry, 64KB)
+  - `/siggen_config.json` - Signal generator settings
 
-**NVS (Non-Volatile Storage via ESP-IDF):**
-- Client: `Preferences` Arduino library
-- Namespaces used:
-  - `auth` — web password hash (PBKDF2-SHA256 format: `"p1:<saltHex>:<keyHex>"`)
-  - `wifi_n` (indexed 0-4) — up to 5 saved WiFi networks (SSID, password, static IP config)
-  - `hal` — HAL device fault counters
-  - `ota` — OTA success flag and previous version for post-update notification
-- Partition: `nvs` (20KB at offset `0x9000`)
+**NVS (Non-Volatile Storage via Preferences):**
+- Partition: `nvs` type, 20KB (offset 0x9000)
+- Survives LittleFS format / factory reset
+- Stores: WiFi credentials (multi-network, up to 5), diagnostic journal sequence counter, selected runtime settings
 
-**Caching:**
-- None (no Redis, Memcached, or similar)
+**EEPROM (I2C AT24C02, expansion modules):**
+- Purpose: Identify hardware expansion modules via unique EEPROM data
+- Format: v1 (92 bytes), v2 (94 bytes), v3 (128 bytes with compatible string + CRC-16)
+- Address range: 0x50-0x57 on I2C bus
+- Implementation: `src/dac_eeprom.h/.cpp`, `src/hal/hal_eeprom_v3.h/.cpp`
+
+**No External Database:**
+- All data stored locally on-device (LittleFS + NVS + expansion EEPROM)
 
 **File Storage:**
-- Local LittleFS filesystem only (no cloud storage)
+- Local filesystem only (LittleFS on ESP32 flash)
+- No cloud storage integration
+
+**Caching:**
+- In-memory state via `AppState` singleton (`src/app_state.h`)
+- Dirty-flag pattern avoids redundant broadcasts
+- DSP double-buffered configs for glitch-free swap
+- Diagnostic journal: 32-entry PSRAM hot ring buffer with periodic flush to LittleFS
 
 ## Authentication & Identity
 
-**Web UI Authentication:**
-- Type: Session-based with secure cookie
-- Password storage: PBKDF2-SHA256 (10,000 iterations, 16-byte random salt), stored in NVS under `auth` namespace
-- Legacy migration: SHA256 unsalted hashes auto-migrate to PBKDF2 on next successful login
-- Default password: 10-character random (alphanumeric, ~57-bit entropy), generated on first boot, displayed on TFT and serial, regenerated on factory reset
-- Cookie: `HttpOnly` flag set; `session=<token>` cookie
-- Session: 5 concurrent sessions, 1-hour TTL (`SESSION_TIMEOUT_US = 3600000000`)
-- Login rate limiting: Non-blocking; failed attempts set `_nextLoginAllowedMs`; excess returns HTTP 429 with `Retry-After` header
-- Implementation: `src/auth_handler.cpp`
+**Auth Provider: Custom (built-in)**
+- Implementation: `src/auth_handler.h/.cpp`
+- Password hashing: PBKDF2-SHA256 (10,000 iterations, random 16-byte salt)
+- Storage format: `"p1:<saltHex>:<keyHex>"` in NVS/settings
+- Legacy migration: Unsalted SHA256 hashes auto-migrate on next successful login
+- First-boot: Random 10-char password (~57-bit entropy), displayed on TFT and serial
+- Session management: 5 concurrent sessions, 1-hour timeout, `HttpOnly` cookie
+- Rate limiting: Non-blocking, HTTP 429 with `Retry-After` header on excessive failures
 
 **WebSocket Authentication:**
-- Flow: Client fetches `GET /api/ws-token` (returns short-lived token, 60s TTL), opens WebSocket to port 81, sends token in first auth message
-- Token pool: 16 slots, single-use (`src/auth_handler.cpp`)
+- Short-lived token from `GET /api/ws-token` (60s TTL, 16-slot pool, single-use)
+- Client sends token in first WebSocket message after connection
+- Server validates against token pool
 
-**OTA Downloads:**
-- TLS certificate validation via hardcoded root CA bundle in `src/ota_updater.cpp` (Sectigo R46/E46, DigiCert G2)
-- Integrity: SHA256 checksum verified post-download via `mbedtls`
+**No External Auth Provider:**
+- No OAuth, SAML, or external identity service
+- Self-contained authentication on the device
 
-## Network Protocols
+## Web Server & WebSocket
 
 **HTTP Server (port 80):**
-- Library: `WebServer` (Arduino ESP32 built-in)
-- Routes registered in `src/main.cpp`
-- Handles: REST API (`/api/*`), static web pages (gzip), captive portal, firmware upload
+- Framework: `WebServer` (ESP-IDF built-in), instantiated in `src/main.cpp`
+- Serves: Gzip-compressed HTML/CSS/JS from flash (`src/web_pages_gz.cpp`)
+- REST API: Registered endpoint handlers across modules
+- Captive portal: `DNSServer` in AP mode redirects to device IP
+
+**REST API Endpoints (organized by module):**
+- WiFi: `GET/POST /api/wifi*`, `GET/POST /api/wifisave`, `GET /api/wifilist`, `POST /api/wifiremove`
+- MQTT: `GET/POST /api/mqtt`
+- Settings: `GET/POST /api/settings`, `GET /api/settings/export`, `POST /api/settings/import`, `POST /api/factoryreset`, `POST /api/reboot`
+- OTA: `GET /api/checkupdate`, `POST /api/startupdate`, `GET /api/updatestatus`, `GET /api/releasenotes`, `GET /api/releases`, `POST /api/installrelease`, firmware upload
+- Smart Sensing: `GET/POST /api/smartsensing`
+- Auth: `POST /api/login`, `POST /api/logout`, `GET /api/auth/status`, `POST /api/password`, `GET /api/ws-token`
+- HAL: `GET /api/hal/devices`, `POST /api/hal/scan`, `PUT /api/hal/devices`, `DELETE /api/hal/devices`, `POST /api/hal/devices/reinit`, `GET /api/hal/db/presets`
+- DSP: CRUD for DSP config, presets (via `src/dsp_api.h/.cpp`)
+- DAC: Volume, mute, filter mode (via `src/dac_api.h/.cpp`)
+- Pipeline: Matrix routing config (via `src/pipeline_api.h/.cpp`)
+- Diagnostics: `GET /api/diagnostics`
 
 **WebSocket Server (port 81):**
-- Library: `WebSocketsServer` (vendored `lib/WebSockets/` v2.7.3)
-- Real-time bidirectional state updates between device and browser
-- Binary frames (`sendBIN`) for waveform (`WS_BIN_WAVEFORM = 0x01`) and spectrum (`WS_BIN_SPECTRUM = 0x02`) data
-- JSON frames for all other state broadcasts
-- Implementation: `src/websocket_handler.cpp`
+- Framework: `WebSocketsServer` (vendored in `lib/WebSockets/`)
+- Max clients: 10 (`MAX_WS_CLIENTS`)
+- Purpose: Real-time state broadcasting to web UI clients
+- Binary frames: Waveform (0x01) and spectrum (0x02) data for audio visualization
+- JSON frames: All other state updates (levels, settings, diagnostics)
+- Auth guard: `wsAnyClientAuthenticated()` skips serialization when no clients connected
+- Implementation: `src/websocket_handler.h/.cpp`
 
-**MQTT (configurable port, default 1883):**
-- Library: `PubSubClient@^2.8` (via `WiFiClient`)
-- Broker: User-configured (IP/hostname + port stored in `/config.json`)
-- Reconnect interval: 5 seconds; runs in dedicated FreeRTOS task `mqtt_task` on Core 0
-- TLS: Not used for MQTT (plain TCP)
-- Base topic: Configurable via web UI, defaults to device serial
-- Implementation split: `src/mqtt_handler.cpp` (core lifecycle), `src/mqtt_publish.cpp` (publish functions + change-detection statics), `src/mqtt_ha_discovery.cpp` (HA discovery payloads ~1880 lines)
+## I2C Bus Architecture (ESP32-P4)
 
-**DNS (Captive Portal):**
-- Library: `DNSServer` (Arduino ESP32 built-in, port 53)
-- Active in AP mode to redirect all DNS queries to device IP
+**Bus 0 (EXT):** GPIO 48 SDA / GPIO 54 SCL
+- Shares SDIO with ESP32-C6 WiFi co-processor
+- CRITICAL: I2C transactions while WiFi active cause `sdmmc_send_cmd` errors and MCU reset
+- HAL discovery skips this bus when WiFi is connected
+- Used for: External expansion modules (EEPROM 0x50-0x57, DAC I2C control)
 
-## Home Assistant Integration
+**Bus 1 (ONBOARD):** GPIO 7 SDA / GPIO 8 SCL
+- Dedicated to ES8311 codec (always safe)
+- Used for: ES8311 I2C control, PA pin (GPIO 53)
 
-**Protocol:** MQTT with Home Assistant discovery (`homeassistant/` topic prefix)
-- Discovery topics published under: `homeassistant/{entity_type}/{device_id}/{entity}/config`
-- Subscribes to: `homeassistant/status` (online/offline) to re-publish discovery on HA restart
-- Entity types published: `switch`, `select`, `number`, `sensor`, `binary_sensor`, `button`
-- Entities include: amplifier relay, AP mode, sensing mode, timer duration, audio threshold, audio level, WiFi RSSI, firmware version, DAC state, DSP state, USB audio state, crash diagnostics, debug mode
-- Retained discovery messages: `true` (MQTT retain flag)
-- Implementation: `src/mqtt_ha_discovery.cpp`
-- No direct HA API calls — all via MQTT broker
+**Bus 2 (EXPANSION):** GPIO 28 SDA / GPIO 29 SCL
+- Always safe, no SDIO conflict
+- Used for: Future expansion modules
+
+## I2S Audio Interface
+
+**I2S Port 0 (Primary RX/TX Full-Duplex):**
+- RX: PCM1808 ADC #1 (BCK=20, LRC=21, MCLK=22, DOUT=23)
+- TX: PCM5102A DAC (DOUT=24), full-duplex on same port
+- Sample rate: 48kHz, 32-bit
+- DMA: 12 buffers x 256 frames (~64ms runway)
+
+**I2S Port 1 (Secondary RX):**
+- RX: PCM1808 ADC #2 (DOUT2=25, shares BCK/LRC/MCLK with Port 0)
+- Both ports configured as master RX (coordinated init, frequency-locked BCK)
+- Init order: ADC2 first (no clock output), ADC1 second (all clock pins)
+
+**I2S Port 2 (ES8311 TX):**
+- TX: ES8311 onboard codec (DSDIN=9, LRCK=10, SCLK=12, MCLK=13)
+
+## USB Audio
+
+**TinyUSB UAC2 Speaker Device:**
+- Interface: Native USB OTG (GPIO 19/20 on ESP32-P4)
+- Protocol: USB Audio Class 2.0 (speaker device)
+- Format: PCM16/PCM24 stereo, 48kHz default
+- PID: 0x4004 (configurable via `HalDeviceConfig.usbPid`)
+- Buffer: SPSC lock-free ring buffer (1024 frames, PSRAM)
+- Task: FreeRTOS task on Core 0, adaptive poll rate (100ms idle / 1ms streaming)
+- Feature guard: `-D USB_AUDIO_ENABLED`
+- Custom audio class driver via `usbd_app_driver_get_cb()` weak function
+- Implementation: `src/usb_audio.h/.cpp`
+
+## Ethernet
+
+**100Mbps Ethernet:**
+- Interface: Built-in EMAC + PHY on ESP32-P4
+- Implementation: `src/eth_manager.h/.cpp`
+- Features: Link detection, IP assignment, default route management
+- Can be used alongside WiFi
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None (no Sentry, Rollbar, or similar external service)
-
-**Diagnostic Journal:**
-- In-memory ring buffer: 32 hot entries (PSRAM)
-- Persistent ring: 800 entries on LittleFS (`/diag_journal.bin`, flushed every 60s for WARN+ severity)
-- Correlation IDs, error codes (`src/diag_error_codes.h`), self-healing retry events
-- Accessible via REST: `GET /api/diagnostics` and WebSocket broadcast on new events
-- Implementation: `src/diag_journal.cpp`
-
-**Crash Log:**
-- Stored in LittleFS, includes RTC timestamp (backfilled after NTP sync)
-- Accessible via REST
-- Implementation: `src/crash_log.cpp`
+- Crash log: Binary ring buffer in `/crashlog.bin` (last 10 boots with reset reason, heap stats, NTP timestamp)
+- Diagnostic journal: 32-entry PSRAM hot buffer + 800-entry LittleFS persistence with CRC32, correlation IDs, error codes
+- Audio health bridge: Monitors ADC health status, drives HAL state transitions, flap guard
+- Implementation: `src/crash_log.h/.cpp`, `src/diag_journal.h/.cpp`, `src/hal/hal_audio_health_bridge.h/.cpp`
+- Error codes: Enumerated in `src/diag_error_codes.h`
 
 **Logs:**
-- Serial output at 115200 baud via `debug_serial.h` macros (`LOG_D/I/W/E`)
-- WebSocket log forwarding: `broadcastLine()` sends module-tagged log entries to browser
-- Log level controlled at runtime via `applyDebugSerialLevel()`
-- Build output, test reports saved to `logs/` directory
+- Serial output: Level-filtered (`LOG_D`/`LOG_I`/`LOG_W`/`LOG_E`/`LOG_NONE`) via `DebugSerial` class in `src/debug_serial.h/.cpp`
+- WebSocket forwarding: Log lines forwarded to connected web clients as JSON with module name field
+- Runtime level control: Adjustable via web UI and `applyDebugSerialLevel()`
+- Baud rate: 115200
 
-## Time Synchronization
+**Task Monitoring:**
+- FreeRTOS task enumeration via `xTaskGetNext` in `src/task_monitor.h/.cpp`
+- Stack watermark monitoring for known app tasks
+- Opt-in via `debugTaskMonitor` flag (default off)
+- 5-second polling interval
 
-**NTP:**
-- Servers: `pool.ntp.org` (primary), `time.nist.gov` (fallback)
-- Client: `configTime()` (Arduino ESP32 built-in)
-- Triggered: On WiFi connect (`src/wifi_manager.cpp`), on settings load (`src/settings_manager.cpp`)
-- Required for: SSL certificate validation (OTA), crash log timestamps
-- Timezone offset: `appState.general.timezoneOffset` + `appState.general.dstOffset` (seconds, configured in web UI)
-- Implementation: `syncTimeWithNTP()` in `src/utils.cpp`
+**Hardware Stats:**
+- Free heap, min free heap, PSRAM usage, CPU temperature (ESP32-P4 internal sensor)
+- CPU utilization tracking per core: `getCpuUsageCore0()`, `getCpuUsageCore1()`
+- Broadcast every 2 seconds to WebSocket clients
+- Heap critical flag: set when `ESP.getMaxAllocHeap() < 40KB`
 
 ## CI/CD & Deployment
 
-**CI Platform:**
-- GitHub Actions (`.github/workflows/tests.yml`, `release.yml`, `docs.yml`)
-- Runs on `ubuntu-latest`
+**Hosting:**
+- Firmware: Self-hosted on ESP32-P4 hardware (no cloud deployment)
+- Documentation: GitHub Pages (Docusaurus static site on `gh-pages` branch)
 
-**Quality Gates (`.github/workflows/tests.yml`):**
-- `cpp-tests`: `pio test -e native -v` (1614 Unity tests)
-- `cpp-lint`: `cppcheck` on `src/` (excludes `src/gui/`)
-- `js-lint`: `node tools/find_dups.js` + `node tools/check_missing_fns.js` + ESLint
-- `e2e-tests`: Playwright (26 tests, Chromium only)
-- `build`: `pio run -e esp32-p4` — firmware `.bin` uploaded as artifact (30-day retention)
-- All 4 gates must pass before build job runs
+**CI Pipeline (GitHub Actions):**
+- `.github/workflows/tests.yml` - Quality Gates (push/PR to main/develop):
+  1. `cpp-tests` - `pio test -e native -v` (1621 Unity tests, 70 modules)
+  2. `cpp-lint` - cppcheck on `src/` (excluding `src/gui/`)
+  3. `js-lint` - `find_dups.js` + `check_missing_fns.js` + ESLint
+  4. `e2e-tests` - Playwright browser tests (26 tests, Chromium)
+  5. `build` - PlatformIO firmware build (runs after all 4 gates pass)
+  - Artifacts: firmware binary (30-day retention), Playwright report on failure (14-day retention)
 
-**Release (`.github/workflows/release.yml`):**
-- Trigger: `workflow_dispatch` with `version_bump` (patch/minor/major) and `channel` (stable/beta)
-- Steps: Same 4 quality gates → version bump in `src/config.h` → firmware build → SHA256 checksum → generate release notes from `RELEASE_NOTES.md` + git log → GitHub Release with `firmware.bin` attachment
-- GitHub Release action: `softprops/action-gh-release@v2`
-- Auth: `secrets.GITHUB_TOKEN`
+- `.github/workflows/release.yml` - Release Firmware (manual dispatch):
+  - Same 4 quality gates + firmware build
+  - Version bump: patch/minor/major
+  - Channel: stable/beta
+  - Creates GitHub release with firmware binary
 
-**Documentation Deployment (`.github/workflows/docs.yml`):**
-- Trigger: Push to `main` when `src/**`, `docs-internal/**`, `docs-site/**`, or `tools/generate_docs.js` changes; also `workflow_dispatch`
-- Steps: Detect changed doc sections (`tools/detect_doc_changes.js`) → call Anthropic Claude API to regenerate affected sections → Docusaurus build → deploy to GitHub Pages (`gh-pages` branch)
-- Hosting: GitHub Pages at `https://schmackos.github.io/ALX_Nova_Controller_2/`
-- Auth: `secrets.ANTHROPIC_API_KEY` (optional; skips generation but still builds/deploys if absent)
-- Deploy action: `peaceiris/actions-gh-pages@v3`
+- `.github/workflows/docs.yml` - Documentation (push to main, path-filtered):
+  - Incremental change detection (`tools/detect_doc_changes.js`)
+  - Optional Claude API doc generation (`tools/generate_docs.js`)
+  - Docusaurus build and deploy to `gh-pages`
 
-**Pre-commit Hooks (`.githooks/pre-commit`):**
-- `node tools/find_dups.js` — duplicate JS declarations
-- `node tools/check_missing_fns.js` — undefined function references
-- ESLint on `web_src/js/`
-- Activate with: `git config core.hooksPath .githooks`
+**Pre-commit Hooks:**
+- `.githooks/pre-commit` - 3 fast checks:
+  1. Duplicate JS declarations (`node tools/find_dups.js`)
+  2. Missing function references (`node tools/check_missing_fns.js`)
+  3. ESLint on `web_src/js/`
+- Activate: `git config core.hooksPath .githooks`
 
-## Hardware Protocols (On-Device)
+## OTA Update Mechanism
 
-**I2S (audio):**
-- ESP-IDF `<driver/i2s_std.h>` (new API, IDF5)
-- Two instances: I2S_NUM_0 (PCM1808 ADC1, clock master, full-duplex with PCM5102A DAC TX), I2S_NUM_1 (PCM1808 ADC2, data-only)
-- ES8311 codec on separate I2S2 TX
+**Update Flow:**
+1. Device polls GitHub API for latest release (every 5 min, with exponential backoff)
+2. Compares remote version against `FIRMWARE_VERSION` in `src/config.h`
+3. Downloads firmware binary via HTTPS (WiFiClientSecure with pinned root CAs)
+4. SHA256 verification of downloaded binary
+5. Writes to inactive OTA partition via ESP-IDF `Update` library
+6. Reboots into new firmware
+7. Success flag persisted across reboot for "just updated" notification
 
-**I2C:**
-- Bus 0 (GPIO 48/54): External/EEPROM — shares SDIO with WiFi, not scanned when WiFi active
-- Bus 1 (GPIO 7/8): ES8311 onboard codec — always safe
-- Bus 2 (GPIO 28/29): Expansion — always safe
-- HAL discovery scans 0x08-0x77 address range
+**Manual Upload:**
+- HTTP endpoint for direct firmware upload (no GitHub required)
+- Handlers: `handleFirmwareUploadComplete()`, `handleFirmwareUploadChunk()`
 
-**USB (TinyUSB UAC2):**
-- ESP32-P4 native USB OTG (GPIO 19/20)
-- Presents as USB Audio Class 2 speaker device to host
-- PID configurable via HAL `HalDeviceConfig.usbPid`
-- Custom class driver registered via `usbd_app_driver_get_cb()` weak function
-- Implementation: `src/usb_audio.cpp`
-
-**EMAC (Ethernet):**
-- ESP32-P4 built-in Ethernet MAC
-- 100Mbps Full Duplex
-- Implementation: `src/eth_manager.cpp`
+**Non-Blocking:**
+- OTA check and download run on dedicated one-shot FreeRTOS tasks on Core 0
+- Main loop and audio pipeline are not blocked during OTA
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- None (no external webhook endpoints exposed)
+- MQTT subscription topics accept commands from Home Assistant / MQTT clients
+- REST API endpoints accept commands from web UI
+- WebSocket accepts commands from connected web clients
 
 **Outgoing:**
-- GitHub API polling (pull-based, not webhook)
-- MQTT publishes to broker (user-configured)
+- MQTT publish to configured broker (state updates, HA discovery)
+- No HTTP webhooks or callback URLs
 
-## Environment Configuration
+## HAL Device Discovery
 
-**Device runtime configuration (no .env files):**
-All runtime-configurable settings stored in LittleFS `/config.json` and NVS:
-- WiFi credentials (NVS, up to 5 networks)
-- MQTT broker IP/port/topic prefix (LittleFS `/config.json`)
-- Web password (NVS, PBKDF2 hash)
-- Timezone/DST offsets (LittleFS `/config.json`)
-- Audio thresholds, sensing mode, timer duration (LittleFS `/config.json`)
-- HAL device pin overrides (LittleFS `/hal_config.json`)
+**3-Tier Discovery (`src/hal/hal_discovery.h/.cpp`):**
+1. I2C bus scan (address range 0x08-0x77)
+2. EEPROM probe at 0x50-0x57 (AT24C02 with ALXD magic, v1/v2/v3 format)
+3. Manual configuration via web UI REST API
 
-**CI secrets (GitHub Actions):**
-- `GITHUB_TOKEN` — release creation, GitHub Pages deploy (auto-provided by Actions)
-- `ANTHROPIC_API_KEY` — doc generation via Claude API (optional; docs workflow degrades gracefully)
+**Device Database (`src/hal/hal_device_db.h/.cpp`):**
+- In-memory database with 7 builtin entries: PCM5102A, ES8311, PCM1808, NS4150B, TempSensor, SigGen, USB Audio
+- LittleFS JSON persistence for user-added devices
+- EEPROM v3 compatible string matching (e.g., "ti,pcm5102a", "evergrande,es8311")
 
-**Build-time constants:**
-- All build flags defined in `platformio.ini` `[env:esp32-p4]` `build_flags`
-- No `.env` files used; firmware has no `.env` dependency
+**Driver Registry (`src/hal/hal_builtin_devices.h/.cpp`):**
+- Compatible string to factory function mapping
+- Registered drivers: PCM5102A, ES8311, PCM1808, DSP bridge, NS4150B, TempSensor, SigGen, USB Audio, MCP4725
+
+## WiFi Integration
+
+**WiFi Client:**
+- Multi-network support (up to 5 saved networks)
+- Async connection with retry/backoff
+- Static IP configuration support
+- Connection via ESP32-C6 co-processor (SDIO interface)
+- Power save mode: forced `WIFI_PS_NONE` for low latency
+
+**Access Point Mode:**
+- Captive portal with DNS redirect
+- Default password: "12345678" (defined in `src/config.h`)
+- STA+AP concurrent mode supported
+
+**Implementation:** `src/wifi_manager.h/.cpp`
 
 ---
 
-*Integration audit: 2026-03-09*
+*Integration audit: 2026-03-10*
