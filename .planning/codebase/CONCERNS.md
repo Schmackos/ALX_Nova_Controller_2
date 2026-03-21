@@ -34,6 +34,10 @@ These issues were identified and **completely fixed** in recent development phas
 - **Was**: Binary heapCritical (40KB), no early warning, silent PSRAM→SRAM fallback, no allocation tracking
 - **Now**: Graduated 3-state pressure (normal/warning/critical). `HeapBudgetTracker` records per-subsystem allocation. WS binary rate halved at warning (50KB). DMA refused at critical (40KB). PSRAM allocation failures now emit `DIAG_SYS_PSRAM_ALLOC_FAIL`
 
+**DMA Buffer Allocation Under Heap Pressure** (FIXED: commit 9963667)
+- **Was**: DMA buffers (~32KB SRAM) lazily allocated on first source/sink registration. Plain `calloc()` could allocate from PSRAM. Expansion devices discovered after WiFi in heap danger zone. `set_source()`/`set_sink()` returned `void` — bridge could not detect failure. No UI indicator
+- **Now**: All 16 DMA buffers eagerly pre-allocated in `audio_pipeline_init()` before WiFi using `heap_caps_calloc(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA)`. `set_source()`/`set_sink()` return `bool` — bridge checks and emits `DIAG_AUDIO_DMA_ALLOC_FAIL` (0x200E). Web UI indicator + MQTT HA binary sensor. 9 new tests (2253 total, 86 modules)
+
 ## Active Risks (Outstanding, 0 Known Failures)
 
 ### Core Audio Pipeline
@@ -44,14 +48,6 @@ These issues were identified and **completely fixed** in recent development phas
 - **Current mitigation**: CLAUDE.md explicitly warns against calling `i2s_configure_adc1()` in task loop. Code follows pattern. No guard is needed because the abstraction is enforced at design level
 - **Test coverage**: Implicit via all audio pipeline tests (1600+ tests); no explicit test for clock continuity
 - **Recommendation**: Add integration test that monitors MCLK GPIO for continuous output during various state transitions. Priority: MEDIUM
-
-**Lazy DMA Buffer Allocation Under Heap Pressure**
-- **Risk**: DMA buffers (~32KB SRAM) are lazily allocated on first source/sink registration. If heap critical (40KB) before audio starts, allocation fails and audio is silent
-- **Files**: `src/audio_pipeline.cpp` (lines 790-810, 936-954)
-- **Current mitigation**: Heap critical threshold set to 40KB (WiFi RX needs ~40KB). Allocation gated on `heapCritical == false`. Falls back cleanly — no crash, just silence
-- **Impact**: User hears no audio but device remains stable. No error message in UI (state broadcasts continue, but audio buffers are null)
-- **Test coverage**: `test_heap_budget` verifies threshold logic, but no integration test for audio silence on critical heap
-- **Recommendation**: Add UI indicator when DMA allocation fails (set new diagnostic flag). Log should show which feature ran out of heap. Priority: LOW (graceful degrada)
 
 ### FreeRTOS Task Watchdog
 
