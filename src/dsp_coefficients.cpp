@@ -3,6 +3,9 @@
 #include "dsp_coefficients.h"
 #include "dsp_biquad_gen.h"
 #include <math.h>
+#ifndef NATIVE_TEST
+#include "diag_journal.h"
+#endif
 
 static float clamp_freq(float freq, uint32_t sampleRate) {
     float normalized = freq / (float)sampleRate;
@@ -16,52 +19,54 @@ void dsp_compute_biquad_coeffs(DspBiquadParams &params, DspStageType type, uint3
     float Q = params.Q;
     if (Q <= 0.0f) Q = DSP_DEFAULT_Q;
 
+    int rc = 0;
+
     switch (type) {
         case DSP_BIQUAD_LPF:
-            dsp_gen_lpf_f32(params.coeffs, freq, Q);
+            rc = dsp_gen_lpf_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_HPF:
-            dsp_gen_hpf_f32(params.coeffs, freq, Q);
+            rc = dsp_gen_hpf_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_BPF:
-            dsp_gen_bpf_f32(params.coeffs, freq, Q);
+            rc = dsp_gen_bpf_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_NOTCH:
-            dsp_gen_notch_f32(params.coeffs, freq, Q);
+            rc = dsp_gen_notch_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_PEQ:
-            dsp_gen_peaking_eq_f32(params.coeffs, freq, params.gain, Q);
+            rc = dsp_gen_peaking_eq_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_LOW_SHELF:
-            dsp_gen_low_shelf_f32(params.coeffs, freq, params.gain, Q);
+            rc = dsp_gen_low_shelf_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_HIGH_SHELF:
-            dsp_gen_high_shelf_f32(params.coeffs, freq, params.gain, Q);
+            rc = dsp_gen_high_shelf_f32(params.coeffs, freq, params.gain, Q);
             break;
         case DSP_BIQUAD_ALLPASS:
         case DSP_BIQUAD_ALLPASS_360:
-            dsp_gen_allpass360_f32(params.coeffs, freq, Q);
+            rc = dsp_gen_allpass360_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_ALLPASS_180:
-            dsp_gen_allpass180_f32(params.coeffs, freq, Q);
+            rc = dsp_gen_allpass180_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_BPF_0DB:
-            dsp_gen_bpf0db_f32(params.coeffs, freq, Q);
+            rc = dsp_gen_bpf0db_f32(params.coeffs, freq, Q);
             break;
         case DSP_BIQUAD_CUSTOM:
             // Custom coefficients already loaded — don't overwrite
             break;
         case DSP_BIQUAD_LPF_1ST:
-            dsp_gen_lpf1_f32(params.coeffs, freq);
+            rc = dsp_gen_lpf1_f32(params.coeffs, freq);
             break;
         case DSP_BIQUAD_HPF_1ST:
-            dsp_gen_hpf1_f32(params.coeffs, freq);
+            rc = dsp_gen_hpf1_f32(params.coeffs, freq);
             break;
         case DSP_BIQUAD_LINKWITZ: {
             float fp_norm = clamp_freq(params.gain, sampleRate); // gain field repurposed as Fp Hz
             float Q2 = params.Q2;
             if (Q2 <= 0.0f) Q2 = DSP_DEFAULT_Q;
-            dsp_gen_linkwitz_f32(params.coeffs, freq, Q, fp_norm, Q2);
+            rc = dsp_gen_linkwitz_f32(params.coeffs, freq, Q, fp_norm, Q2);
             break;
         }
         default:
@@ -72,6 +77,37 @@ void dsp_compute_biquad_coeffs(DspBiquadParams &params, DspStageType type, uint3
             params.coeffs[3] = 0.0f;
             params.coeffs[4] = 0.0f;
             break;
+    }
+
+    // Post-computation safety guards: generator failure, NaN/Inf, or unstable filter
+    bool invalid = (rc != 0);
+    if (!invalid) {
+        for (int i = 0; i < 5; i++) {
+            if (isnan(params.coeffs[i]) || isinf(params.coeffs[i])) {
+                invalid = true;
+                break;
+            }
+        }
+    }
+    if (!invalid) {
+        // IIR stability: |a2| >= 1.0 means poles on or outside the unit circle.
+        // This is a necessary condition — |a1|+|a2| is NOT sufficient as valid
+        // filters (HPF, allpass) routinely have |a1|+|a2| > 2.
+        if (fabsf(params.coeffs[4]) >= 1.0f) {
+            invalid = true;
+        }
+    }
+    if (invalid) {
+#ifndef NATIVE_TEST
+        diag_emit(DIAG_DSP_COEFF_INVALID, DIAG_SEV_WARN, 0, nullptr,
+                  "dsp_compute_biquad_coeffs: invalid coefficients, resetting to passthrough");
+#endif
+        // Reset to passthrough (unity gain, no filtering)
+        params.coeffs[0] = 1.0f;
+        params.coeffs[1] = 0.0f;
+        params.coeffs[2] = 0.0f;
+        params.coeffs[3] = 0.0f;
+        params.coeffs[4] = 0.0f;
     }
 }
 

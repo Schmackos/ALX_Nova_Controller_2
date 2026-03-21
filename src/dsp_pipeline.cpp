@@ -445,6 +445,7 @@ bool dsp_swap_config() {
     _swapRequested = true;
 
     // Wait for processing to finish (increased timeout: 100ms)
+    unsigned long swapWaitStart = (unsigned long)esp_timer_get_time();
     int waitCount = 0;
     while (_processingActive && waitCount < 100) {
 #ifndef NATIVE_TEST
@@ -452,6 +453,7 @@ bool dsp_swap_config() {
 #endif
         waitCount++;
     }
+    _metrics.swapLatencyUs = (uint32_t)((unsigned long)esp_timer_get_time() - swapWaitStart);
 
     // Check for timeout
     if (_processingActive) {
@@ -580,6 +582,26 @@ void dsp_clear_cpu_load() {
     _metrics.cpuLoadPercent = 0.0f;
 }
 
+#ifdef NATIVE_TEST
+// Test-only injection: sets cpuLoadPercent and runs threshold + dirty-flag logic immediately.
+// This allows unit tests to verify threshold behaviour without needing two-value timer mocks.
+void dsp_test_set_cpu_load(float loadPercent) {
+    _metrics.cpuLoadPercent = loadPercent;
+    static bool prevCpuWarning  = false;
+    static bool prevCpuCritical = false;
+    _metrics.cpuWarning  = (_metrics.cpuLoadPercent >= DSP_CPU_WARN_PERCENT);
+    _metrics.cpuCritical = (_metrics.cpuLoadPercent >= DSP_CPU_CRIT_PERCENT);
+    if (_metrics.cpuWarning != prevCpuWarning) {
+        AppState::getInstance().dsp.cpuWarnDirty = true;
+        prevCpuWarning = _metrics.cpuWarning;
+    }
+    if (_metrics.cpuCritical != prevCpuCritical) {
+        AppState::getInstance().dsp.cpuCritDirty = true;
+        prevCpuCritical = _metrics.cpuCritical;
+    }
+}
+#endif
+
 // ===== Main Processing Entry Point =====
 
 void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
@@ -620,6 +642,9 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
         _dspBufL[f] = (float)buffer[f * 2] / MAX_24BIT_F;
         _dspBufR[f] = (float)buffer[f * 2 + 1] / MAX_24BIT_F;
     }
+
+    // Reset per-frame FIR bypass counter before channel processing
+    _metrics.firBypassCount = 0;
 
     // Process each channel
     dsp_process_channel(_dspBufL, stereoFrames, cfg->channels[chL], stateIdx);
@@ -666,6 +691,23 @@ void dsp_process_buffer(int32_t *buffer, int stereoFrames, int adcIndex) {
     float bufferPeriodUs = (float)stereoFrames / (float)cfg->sampleRate * 1000000.0f;
     if (bufferPeriodUs > 0.0f) {
         _metrics.cpuLoadPercent = (float)elapsed / bufferPeriodUs * 100.0f;
+    }
+
+    // CPU threshold edge detection — set dirty flags for main loop to emit diagnostics.
+    // No logging here: this runs on Core 1 (audio task).
+    {
+        static bool prevCpuWarning  = false;
+        static bool prevCpuCritical = false;
+        _metrics.cpuWarning  = (_metrics.cpuLoadPercent >= DSP_CPU_WARN_PERCENT);
+        _metrics.cpuCritical = (_metrics.cpuLoadPercent >= DSP_CPU_CRIT_PERCENT);
+        if (_metrics.cpuWarning != prevCpuWarning) {
+            AppState::getInstance().dsp.cpuWarnDirty = true;
+            prevCpuWarning = _metrics.cpuWarning;
+        }
+        if (_metrics.cpuCritical != prevCpuCritical) {
+            AppState::getInstance().dsp.cpuCritDirty = true;
+            prevCpuCritical = _metrics.cpuCritical;
+        }
     }
 
     // Collect limiter/compressor/gate GR from active channels (worst = most reduction)
@@ -719,6 +761,9 @@ void dsp_process_buffer_float(float *left, float *right, int frames, int lane) {
         return;
     }
 
+    // Reset per-frame FIR bypass counter before channel processing
+    _metrics.firBypassCount = 0;
+
     // Process each channel directly on the caller's buffers
     dsp_process_channel(left, frames, cfg->channels[chL], stateIdx);
     dsp_process_channel(right, frames, cfg->channels[chR], stateIdx);
@@ -759,6 +804,23 @@ void dsp_process_buffer_float(float *left, float *right, int frames, int lane) {
     float bufferPeriodUs = (float)frames / (float)cfg->sampleRate * 1000000.0f;
     if (bufferPeriodUs > 0.0f) {
         _metrics.cpuLoadPercent = (float)elapsed / bufferPeriodUs * 100.0f;
+    }
+
+    // CPU threshold edge detection — set dirty flags for main loop to emit diagnostics.
+    // No logging here: this runs on Core 1 (audio task).
+    {
+        static bool prevCpuWarning  = false;
+        static bool prevCpuCritical = false;
+        _metrics.cpuWarning  = (_metrics.cpuLoadPercent >= DSP_CPU_WARN_PERCENT);
+        _metrics.cpuCritical = (_metrics.cpuLoadPercent >= DSP_CPU_CRIT_PERCENT);
+        if (_metrics.cpuWarning != prevCpuWarning) {
+            AppState::getInstance().dsp.cpuWarnDirty = true;
+            prevCpuWarning = _metrics.cpuWarning;
+        }
+        if (_metrics.cpuCritical != prevCpuCritical) {
+            AppState::getInstance().dsp.cpuCritDirty = true;
+            prevCpuCritical = _metrics.cpuCritical;
+        }
     }
 
     // Collect GR metrics
@@ -828,6 +890,14 @@ static int dsp_process_channel(float *buf, int len, DspChannelConfig &ch, int st
             } else {
                 dsps_biquad_f32(buf, buf, curLen, s.biquad.coeffs, s.biquad.delay);
             }
+            continue;
+        }
+
+        // Under critical CPU load, skip FIR/convolution stages (expensive).
+        // Count bypassed stages for telemetry; no logging — this runs on Core 1.
+        if (_metrics.cpuCritical &&
+            (s.type == DSP_FIR || s.type == DSP_CONVOLUTION)) {
+            if (_metrics.firBypassCount < 0xFF) _metrics.firBypassCount++;
             continue;
         }
 

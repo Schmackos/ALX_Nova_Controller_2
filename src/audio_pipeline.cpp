@@ -132,6 +132,11 @@ struct PipelineDiagSnapshot {
 };
 static volatile PipelineDiagSnapshot _adcDiag = {};
 
+// ===== Pipeline Timing Metrics =====
+// Written by audio_pipeline_task_fn (Core 1), read by main-loop via accessor.
+// Fields are independent aligned primitives — snap-read is safe on ESP32-P4 RISC-V.
+static PipelineTimingMetrics _timingMetrics = {};
+
 // ===== Helpers =====
 static inline float clampf(float x) {
     if (x >  1.0f) return  1.0f;
@@ -534,10 +539,40 @@ static void audio_pipeline_task_fn(void * /*param*/) {
         pipeline_read_inputs();
         pipeline_to_float();
         pipeline_run_dsp();
+
+        // --- Timing: matrix mix ---
+        uint32_t _tFrameStart  = micros();
+        uint32_t _tMatrixStart = _tFrameStart;
         pipeline_mix_matrix();
+        uint32_t _tMatrixEnd   = micros();
+
+        // --- Timing: output DSP ---
+        uint32_t _tOutDspStart = _tMatrixEnd;
         pipeline_run_output_dsp();
+        uint32_t _tOutDspEnd   = micros();
+
         pipeline_write_output();
         pipeline_update_metering();
+
+        // Commit timing snapshot — compute buffer period from DMA config constants.
+        // FRAMES is stereo frame count; at 48kHz one mono sample = 1/48000 s.
+        // Buffer period = FRAMES samples / 48000 Hz × 1e6 µs ≈ 2667 µs for FRAMES=128.
+        {
+            uint32_t _tFrameEnd   = micros();
+            uint32_t frameUs      = _tFrameEnd   - _tFrameStart;
+            uint32_t matrixUs     = _tMatrixEnd  - _tMatrixStart;
+            uint32_t outDspUs     = _tOutDspEnd  - _tOutDspStart;
+            // Buffer period in µs: FRAMES stereo pairs at 48 kHz (compile-time constant)
+            static const uint32_t BUF_PERIOD_US =
+                (uint32_t)((uint64_t)FRAMES * 1000000ULL / 48000ULL);
+            float cpuPct = (BUF_PERIOD_US > 0)
+                           ? (frameUs * 100.0f / (float)BUF_PERIOD_US)
+                           : 0.0f;
+            _timingMetrics.totalFrameUs   = frameUs;
+            _timingMetrics.matrixMixUs    = matrixUs;
+            _timingMetrics.outputDspUs    = outDspUs;
+            _timingMetrics.totalCpuPercent = cpuPct;
+        }
         // Feed raw ADC1 data into waveform/FFT accumulator for WebSocket graph display.
         // Uses pre-float int32 data; adcIndex 0 = ADC1.
         if (_rawBuf[0]) {
@@ -784,6 +819,10 @@ void audio_pipeline_init() {
 #endif
 
     LOG_I("[Audio] Pipeline initialized — sources registered via HAL bridge at device-available");
+}
+
+PipelineTimingMetrics audio_pipeline_get_timing() {
+    return _timingMetrics;  // Struct copy — snap-read is safe (independent aligned fields)
 }
 
 void audio_pipeline_bypass_input(int lane, bool bypass) {

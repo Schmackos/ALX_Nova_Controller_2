@@ -17,6 +17,10 @@ struct DspSettingsState {
   uint32_t swapFailures = 0;
   uint32_t swapSuccesses = 0;
   unsigned long lastSwapFailure = 0;
+
+  // CPU threshold dirty flags — set by audio task (Core 1), cleared by main loop (Core 0)
+  volatile bool cpuWarnDirty = false;  // Rising/falling edge on cpuWarning threshold
+  volatile bool cpuCritDirty = false;  // Rising/falling edge on cpuCritical threshold
 };
 
 #endif // STATE_DSP_STATE_H

@@ -1528,6 +1528,37 @@
                 </div>
             </div>
 
+            <!-- DSP CPU Load -->
+            <div class="card" id="dsp-cpu-section" style="display:none">
+                <div class="card-title">DSP CPU Load</div>
+                <div class="info-box-compact">
+                    <div class="info-row">
+                        <span class="info-label">Per-Input DSP</span>
+                        <span class="info-value" id="dsp-cpu-input">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pipeline Total</span>
+                        <span class="info-value" id="dsp-cpu-pipeline">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Frame Time</span>
+                        <span class="info-value" id="dsp-frame-us">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Matrix Mix</span>
+                        <span class="info-value" id="dsp-matrix-us">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Output DSP</span>
+                        <span class="info-value" id="dsp-output-us">—</span>
+                    </div>
+                    <div class="info-row" id="dsp-cpu-warn-row" style="display:none">
+                        <span class="info-label" style="color:var(--warning)">FIR Bypassed</span>
+                        <span class="info-value" id="dsp-fir-bypass" style="color:var(--warning)">0</span>
+                    </div>
+                </div>
+            </div>
+
             </div>
 
             <!-- Audio DAC Diagnostics -->

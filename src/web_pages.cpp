@@ -4742,6 +4742,37 @@ body.night-mode {
                 </div>
             </div>
 
+            <!-- DSP CPU Load -->
+            <div class="card" id="dsp-cpu-section" style="display:none">
+                <div class="card-title">DSP CPU Load</div>
+                <div class="info-box-compact">
+                    <div class="info-row">
+                        <span class="info-label">Per-Input DSP</span>
+                        <span class="info-value" id="dsp-cpu-input">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pipeline Total</span>
+                        <span class="info-value" id="dsp-cpu-pipeline">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Frame Time</span>
+                        <span class="info-value" id="dsp-frame-us">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Matrix Mix</span>
+                        <span class="info-value" id="dsp-matrix-us">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Output DSP</span>
+                        <span class="info-value" id="dsp-output-us">—</span>
+                    </div>
+                    <div class="info-row" id="dsp-cpu-warn-row" style="display:none">
+                        <span class="info-label" style="color:var(--warning)">FIR Bypassed</span>
+                        <span class="info-value" id="dsp-fir-bypass" style="color:var(--warning)">0</span>
+                    </div>
+                </div>
+            </div>
+
             </div>
 
             <!-- Audio DAC Diagnostics -->
@@ -10907,6 +10938,53 @@ function initFirmwareDragDrop() {
             // Reset Reason
             if (data.resetReason) {
                 document.getElementById('resetReason').textContent = formatResetReason(data.resetReason);
+            }
+
+            // DSP CPU Load
+            var hasDspData = (data.pipelineCpu !== undefined || data.cpuLoadPercent !== undefined);
+            var dspSection = document.getElementById('dsp-cpu-section');
+            if (hasDspData) {
+                if (dspSection) dspSection.style.display = '';
+
+                // Per-input DSP CPU (from dspMetrics cpuLoadPercent)
+                var dspInputEl = document.getElementById('dsp-cpu-input');
+                if (dspInputEl && data.cpuLoadPercent !== undefined) {
+                    dspInputEl.textContent = data.cpuLoadPercent.toFixed(1) + '%';
+                    dspInputEl.style.color = data.cpuLoadPercent >= 95 ? 'var(--error-color)' :
+                                             data.cpuLoadPercent >= 80 ? 'var(--warning-color)' : '';
+                }
+
+                // Pipeline total CPU
+                var dspPipelineEl = document.getElementById('dsp-cpu-pipeline');
+                if (dspPipelineEl && data.pipelineCpu !== undefined) {
+                    dspPipelineEl.textContent = data.pipelineCpu.toFixed(1) + '%';
+                    dspPipelineEl.style.color = data.pipelineCpu >= 95 ? 'var(--error-color)' :
+                                                data.pipelineCpu >= 80 ? 'var(--warning-color)' : '';
+                }
+
+                // Frame time breakdown
+                var dspFrameEl = document.getElementById('dsp-frame-us');
+                if (dspFrameEl && data.pipelineFrameUs !== undefined) {
+                    dspFrameEl.textContent = data.pipelineFrameUs + ' µs';
+                }
+
+                var dspMatrixEl = document.getElementById('dsp-matrix-us');
+                if (dspMatrixEl && data.matrixUs !== undefined) {
+                    dspMatrixEl.textContent = data.matrixUs + ' µs';
+                }
+
+                var dspOutputEl = document.getElementById('dsp-output-us');
+                if (dspOutputEl && data.outputDspUs !== undefined) {
+                    dspOutputEl.textContent = data.outputDspUs + ' µs';
+                }
+
+                // FIR bypass warning row
+                var dspWarnRow = document.getElementById('dsp-cpu-warn-row');
+                var dspFirEl = document.getElementById('dsp-fir-bypass');
+                if (dspWarnRow && data.firBypassCount !== undefined) {
+                    dspWarnRow.style.display = data.firBypassCount > 0 ? '' : 'none';
+                    if (dspFirEl) dspFirEl.textContent = data.firBypassCount;
+                }
             }
 
             // Add to history

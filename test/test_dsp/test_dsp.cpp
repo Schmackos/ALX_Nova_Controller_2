@@ -154,6 +154,155 @@ void test_allpass_unity_magnitude(void) {
     TEST_ASSERT_FLOAT_WITHIN(COEFF_TOL, p.coeffs[4], p.coeffs[0]);
 }
 
+// ===== Coefficient Edge-Case Validity Helper =====
+
+static bool coeffs_are_valid(const float *c) {
+    for (int i = 0; i < 5; i++) {
+        if (isnan(c[i]) || isinf(c[i])) return false;
+    }
+    return true;
+}
+
+// ===== Coefficient Edge-Case Tests =====
+
+void test_coeff_extreme_low_freq(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_LPF, 48000);
+
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+    TEST_ASSERT_TRUE(p.coeffs[0] > 0.0f);
+}
+
+void test_coeff_near_nyquist(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 23999.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_HPF, 48000);
+
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+}
+
+void test_coeff_extreme_low_q(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.Q = 0.001f;
+    p.gain = 6.0f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_PEQ, 48000);
+
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+}
+
+void test_coeff_extreme_high_q(void) {
+    DspBiquadParams p;
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.Q = 1000.0f;
+    p.gain = 6.0f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_PEQ, 48000);
+
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+}
+
+void test_coeff_extreme_gain(void) {
+    DspBiquadParams p;
+
+    // Extreme positive gain
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.gain = 60.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_LOW_SHELF, 48000);
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+
+    // Extreme negative gain
+    dsp_init_biquad_params(p);
+    p.frequency = 1000.0f;
+    p.gain = -60.0f;
+    p.Q = 0.707f;
+    dsp_compute_biquad_coeffs(p, DSP_BIQUAD_LOW_SHELF, 48000);
+    TEST_ASSERT_TRUE(coeffs_are_valid(p.coeffs));
+}
+
+void test_coeff_nan_inf_guard(void) {
+    // Test all 8 basic biquad types with near-zero Q (near-zero alpha)
+    // to verify no NaN/Inf coefficients are produced
+    DspStageType types[] = {
+        DSP_BIQUAD_LPF, DSP_BIQUAD_HPF, DSP_BIQUAD_BPF, DSP_BIQUAD_NOTCH,
+        DSP_BIQUAD_PEQ, DSP_BIQUAD_LOW_SHELF, DSP_BIQUAD_HIGH_SHELF, DSP_BIQUAD_ALLPASS
+    };
+    const int numTypes = sizeof(types) / sizeof(types[0]);
+
+    for (int t = 0; t < numTypes; t++) {
+        DspBiquadParams p;
+        dsp_init_biquad_params(p);
+        p.frequency = 1000.0f;
+        p.Q = 0.001f;
+        p.gain = 6.0f;
+        dsp_compute_biquad_coeffs(p, types[t], 48000);
+
+        TEST_ASSERT_TRUE_MESSAGE(coeffs_are_valid(p.coeffs),
+            "NaN/Inf detected with Q=0.001 for a biquad type");
+    }
+}
+
+void test_coeff_stability_check(void) {
+    // Stability triangle for normalized biquad (a0=1):
+    //   |a2| < 1  AND  |a1| < 1 + a2
+    // This ensures both poles are inside the unit circle.
+    DspStageType types[] = {
+        DSP_BIQUAD_LPF, DSP_BIQUAD_HPF, DSP_BIQUAD_BPF, DSP_BIQUAD_NOTCH,
+        DSP_BIQUAD_PEQ, DSP_BIQUAD_LOW_SHELF, DSP_BIQUAD_HIGH_SHELF, DSP_BIQUAD_ALLPASS
+    };
+    const int numTypes = sizeof(types) / sizeof(types[0]);
+
+    for (int t = 0; t < numTypes; t++) {
+        DspBiquadParams p;
+        dsp_init_biquad_params(p);
+        p.frequency = 1000.0f;
+        p.Q = 0.707f;
+        p.gain = 0.0f;
+        dsp_compute_biquad_coeffs(p, types[t], 48000);
+
+        float a1 = p.coeffs[3];
+        float a2 = p.coeffs[4];
+        TEST_ASSERT_TRUE_MESSAGE(fabsf(a2) < 1.0f,
+            "Biquad stability: |a2| >= 1.0");
+        TEST_ASSERT_TRUE_MESSAGE(fabsf(a1) < 1.0f + a2,
+            "Biquad stability: |a1| >= 1 + a2");
+    }
+}
+
+void test_coeff_all_types_valid(void) {
+    // Loop through all biquad types (LPF through LINKWITZ) and verify
+    // none produce NaN/Inf with standard parameters
+    DspStageType types[] = {
+        DSP_BIQUAD_LPF, DSP_BIQUAD_HPF, DSP_BIQUAD_BPF, DSP_BIQUAD_NOTCH,
+        DSP_BIQUAD_PEQ, DSP_BIQUAD_LOW_SHELF, DSP_BIQUAD_HIGH_SHELF,
+        DSP_BIQUAD_ALLPASS, DSP_BIQUAD_ALLPASS_360, DSP_BIQUAD_ALLPASS_180,
+        DSP_BIQUAD_BPF_0DB, DSP_BIQUAD_LPF_1ST, DSP_BIQUAD_HPF_1ST,
+        DSP_BIQUAD_LINKWITZ
+    };
+    const int numTypes = sizeof(types) / sizeof(types[0]);
+
+    for (int t = 0; t < numTypes; t++) {
+        DspBiquadParams p;
+        dsp_init_biquad_params(p);
+        p.frequency = 1000.0f;
+        p.Q = 0.707f;
+        p.gain = 0.0f;
+        p.Q2 = 0.707f;
+        dsp_compute_biquad_coeffs(p, types[t], 48000);
+
+        TEST_ASSERT_TRUE_MESSAGE(coeffs_are_valid(p.coeffs),
+            "NaN/Inf detected for a biquad type with standard params");
+    }
+}
+
 // ===== Biquad Processing Tests =====
 
 void test_biquad_passthrough(void) {
@@ -2804,6 +2953,189 @@ void test_time_coeff_helper(void) {
     TEST_ASSERT_FLOAT_WITHIN(0.00001f, expected, c);
 }
 
+// ===== CPU Load Threshold & FIR Auto-Bypass Tests =====
+//
+// dsp_test_set_cpu_load() is a NATIVE_TEST-only injection function defined in
+// dsp_pipeline.cpp. It sets _metrics.cpuLoadPercent and immediately runs the
+// threshold + dirty-flag logic. The native esp_timer mock returns a constant
+// (non-incrementing) value, so elapsed=0 and cpuLoadPercent=0 on every real
+// buffer call. The injection function lets us test threshold behaviour directly.
+//
+// NOTE: cpuWarning/cpuCritical in DspMetrics are OVERWRITTEN after each
+// dsp_process_buffer_float() call because elapsed=0 in native tests. Tests that
+// call dsp_process_buffer_float() must only check firBypassCount, not cpuCritical.
+
+void test_new_metrics_fields_initialized_to_zero(void) {
+    // After dsp_init() (called in setUp), new DspMetrics fields must be 0/false
+    DspMetrics m = dsp_get_metrics();
+    TEST_ASSERT_EQUAL_UINT32(0, m.swapLatencyUs);
+    TEST_ASSERT_FALSE(m.cpuWarning);
+    TEST_ASSERT_FALSE(m.cpuCritical);
+    TEST_ASSERT_EQUAL_UINT8(0, m.firBypassCount);
+}
+
+void test_metrics_new_fields_initial(void) {
+    // Same assertion via dsp_init_metrics
+    DspMetrics m;
+    dsp_init_metrics(m);
+    TEST_ASSERT_EQUAL_UINT32(0, m.swapLatencyUs);
+    TEST_ASSERT_FALSE(m.cpuWarning);
+    TEST_ASSERT_FALSE(m.cpuCritical);
+    TEST_ASSERT_EQUAL_UINT8(0, m.firBypassCount);
+}
+
+void test_cpu_warn_flag_below_threshold(void) {
+    dsp_test_set_cpu_load(DSP_CPU_WARN_PERCENT - 1.0f);
+    DspMetrics m = dsp_get_metrics();
+    TEST_ASSERT_FALSE(m.cpuWarning);
+    TEST_ASSERT_FALSE(m.cpuCritical);
+}
+
+void test_cpu_warn_flag_at_threshold(void) {
+    dsp_test_set_cpu_load(DSP_CPU_WARN_PERCENT);
+    DspMetrics m = dsp_get_metrics();
+    TEST_ASSERT_TRUE(m.cpuWarning);
+    TEST_ASSERT_FALSE(m.cpuCritical);
+}
+
+void test_cpu_crit_flag_at_threshold(void) {
+    dsp_test_set_cpu_load(DSP_CPU_CRIT_PERCENT);
+    DspMetrics m = dsp_get_metrics();
+    TEST_ASSERT_TRUE(m.cpuWarning);
+    TEST_ASSERT_TRUE(m.cpuCritical);
+}
+
+void test_cpu_warn_and_crit_flags_mutually_exclusive(void) {
+    // Below warn: both false
+    dsp_test_set_cpu_load(50.0f);
+    DspMetrics m = dsp_get_metrics();
+    TEST_ASSERT_FALSE(m.cpuWarning);
+    TEST_ASSERT_FALSE(m.cpuCritical);
+
+    // Between warn and crit: warn=true, crit=false
+    dsp_test_set_cpu_load(90.0f);
+    m = dsp_get_metrics();
+    TEST_ASSERT_TRUE(m.cpuWarning);
+    TEST_ASSERT_FALSE(m.cpuCritical);
+
+    // At crit: both true
+    dsp_test_set_cpu_load(99.0f);
+    m = dsp_get_metrics();
+    TEST_ASSERT_TRUE(m.cpuWarning);
+    TEST_ASSERT_TRUE(m.cpuCritical);
+}
+
+void test_cpu_crit_dirty_flag_set_on_rising_edge(void) {
+    // Start from cleared state
+    AppState::getInstance().dsp.cpuCritDirty = false;
+    dsp_test_set_cpu_load(50.0f);   // ensure cpuCritical was false previously
+    AppState::getInstance().dsp.cpuCritDirty = false;  // clear any residual
+
+    // Cross the critical threshold — dirty flag must be set
+    dsp_test_set_cpu_load(DSP_CPU_CRIT_PERCENT + 1.0f);
+    TEST_ASSERT_TRUE(AppState::getInstance().dsp.cpuCritDirty);
+}
+
+void test_cpu_warn_dirty_flag_cleared_after_falling_edge(void) {
+    // Bring into warning state to prime prevCpuWarning=true
+    AppState::getInstance().dsp.cpuWarnDirty = false;
+    dsp_test_set_cpu_load(DSP_CPU_WARN_PERCENT + 5.0f);
+    AppState::getInstance().dsp.cpuWarnDirty = false;  // clear rising edge
+
+    // Now fall below threshold — dirty should fire for the falling edge
+    dsp_test_set_cpu_load(DSP_CPU_WARN_PERCENT - 5.0f);
+    TEST_ASSERT_TRUE(AppState::getInstance().dsp.cpuWarnDirty);
+
+    // Metric should now reflect warning=false
+    DspMetrics m = dsp_get_metrics();
+    TEST_ASSERT_FALSE(m.cpuWarning);
+}
+
+void test_fir_auto_bypass_on_cpu_critical(void) {
+    // Add a FIR stage to channel 0
+    int idx = dsp_add_chain_stage(0, DSP_FIR);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    // Allocate a FIR slot and load a trivial 1-tap impulse
+    s.fir.firSlot = dsp_fir_alloc_slot();
+    TEST_ASSERT_TRUE(s.fir.firSlot >= 0);
+    s.fir.numTaps = 1;
+    s.fir.delayPos = 0;
+    float *taps = dsp_fir_get_taps(0, s.fir.firSlot);
+    if (taps) taps[0] = 1.0f;  // Identity impulse
+    dsp_swap_config();
+
+    // Set critical load — FIR stage should be skipped
+    dsp_test_set_cpu_load(DSP_CPU_CRIT_PERCENT + 1.0f);
+
+    // Process a buffer with non-zero signal
+    float left[32], right[32];
+    for (int i = 0; i < 32; i++) { left[i] = 0.5f; right[i] = 0.0f; }
+    dsp_process_buffer_float(left, right, 32, 0);
+
+    // cpuCritical will be false after the call because elapsed=0 in native tests.
+    // The bypass happened based on the flag set BEFORE the call — check the counter.
+    DspMetrics m = dsp_get_metrics();
+    // At least 1 FIR stage was bypassed (one per channel that has FIR, but we only added ch0)
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(1, m.firBypassCount);
+}
+
+void test_fir_bypass_count_zero_below_crit(void) {
+    // Add a FIR stage to channel 0
+    int idx = dsp_add_chain_stage(0, DSP_FIR);
+    TEST_ASSERT_TRUE(idx >= 0);
+    DspState *cfg = dsp_get_inactive_config();
+    DspStage &s = cfg->channels[0].stages[idx];
+    s.fir.firSlot = dsp_fir_alloc_slot();
+    s.fir.numTaps = 1;
+    s.fir.delayPos = 0;
+    float *taps = dsp_fir_get_taps(0, s.fir.firSlot);
+    if (taps) taps[0] = 1.0f;
+    dsp_swap_config();
+
+    // CPU load is below critical
+    dsp_test_set_cpu_load(50.0f);
+
+    float left[32], right[32];
+    for (int i = 0; i < 32; i++) { left[i] = 0.5f; right[i] = 0.0f; }
+    dsp_process_buffer_float(left, right, 32, 0);
+
+    DspMetrics m = dsp_get_metrics();
+    TEST_ASSERT_FALSE(m.cpuCritical);
+    TEST_ASSERT_EQUAL_UINT8(0, m.firBypassCount);
+}
+
+void test_fir_bypass_skips_convolution_too(void) {
+    // Add a convolution stage to channel 0 (slot -1 means no IR loaded — still should be counted)
+    int idx = dsp_add_chain_stage(0, DSP_CONVOLUTION);
+    TEST_ASSERT_TRUE(idx >= 0);
+    dsp_swap_config();
+
+    // Drive into critical load
+    dsp_test_set_cpu_load(DSP_CPU_CRIT_PERCENT + 1.0f);
+
+    float left[32], right[32];
+    for (int i = 0; i < 32; i++) { left[i] = 0.3f; right[i] = 0.0f; }
+    dsp_process_buffer_float(left, right, 32, 0);
+
+    // cpuCritical is recomputed from actual elapsed (0 in native) after channel processing.
+    // The bypass happened based on the flag set before the call — check the counter.
+    DspMetrics m = dsp_get_metrics();
+    // Convolution on ch0 (enabled, critical) — bypass counter must be >= 1
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(1, m.firBypassCount);
+}
+
+void test_swap_latency_recorded(void) {
+    // dsp_swap_config() records swap wait duration in _metrics.swapLatencyUs.
+    // On native with no vTaskDelay, the wait loop exits immediately (processingActive=false).
+    // swapLatencyUs should be 0 or a very small number (both esp_timer reads return _mockMicros=0).
+    dsp_swap_config();
+    DspMetrics m = dsp_get_metrics();
+    // Latency should be non-negative and not absurdly large (< 200ms)
+    TEST_ASSERT_TRUE(m.swapLatencyUs < 200000UL);
+}
+
 // ===== Runner =====
 
 int main(int argc, char **argv) {
@@ -2819,6 +3151,16 @@ int main(int argc, char **argv) {
     RUN_TEST(test_shelf_high_boost);
     RUN_TEST(test_custom_coefficients_load);
     RUN_TEST(test_allpass_unity_magnitude);
+
+    // Coefficient edge cases
+    RUN_TEST(test_coeff_extreme_low_freq);
+    RUN_TEST(test_coeff_near_nyquist);
+    RUN_TEST(test_coeff_extreme_low_q);
+    RUN_TEST(test_coeff_extreme_high_q);
+    RUN_TEST(test_coeff_extreme_gain);
+    RUN_TEST(test_coeff_nan_inf_guard);
+    RUN_TEST(test_coeff_stability_check);
+    RUN_TEST(test_coeff_all_types_valid);
 
     // Biquad processing
     RUN_TEST(test_biquad_passthrough);
@@ -3029,6 +3371,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_copy_chain_stages_with_labels);
     RUN_TEST(test_reset_max_metrics);
     RUN_TEST(test_clear_cpu_load);
+    RUN_TEST(test_metrics_new_fields_initial);
     RUN_TEST(test_is_peq_index_boundaries);
     RUN_TEST(test_chain_stage_count);
     RUN_TEST(test_has_peq_bands);
@@ -3036,6 +3379,19 @@ int main(int argc, char **argv) {
     RUN_TEST(test_delay_pool_exhaustion_rollback);
     RUN_TEST(test_db_to_linear_helper);
     RUN_TEST(test_time_coeff_helper);
+
+    // CPU load threshold tests
+    RUN_TEST(test_cpu_warn_flag_below_threshold);
+    RUN_TEST(test_cpu_warn_flag_at_threshold);
+    RUN_TEST(test_cpu_crit_flag_at_threshold);
+    RUN_TEST(test_cpu_warn_and_crit_flags_mutually_exclusive);
+    RUN_TEST(test_cpu_crit_dirty_flag_set_on_rising_edge);
+    RUN_TEST(test_cpu_warn_dirty_flag_cleared_after_falling_edge);
+    RUN_TEST(test_fir_auto_bypass_on_cpu_critical);
+    RUN_TEST(test_fir_bypass_count_zero_below_crit);
+    RUN_TEST(test_fir_bypass_skips_convolution_too);
+    RUN_TEST(test_new_metrics_fields_initialized_to_zero);
+    RUN_TEST(test_swap_latency_recorded);
 
     return UNITY_END();
 }

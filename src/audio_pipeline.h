@@ -42,6 +42,19 @@ inline void audio_pipeline_notify_dsp_swap() {}  // No-op in native test (single
 void audio_pipeline_notify_dsp_swap();
 #endif
 
+// ===== Pipeline Timing Metrics =====
+// Updated every frame by the audio pipeline task (Core 1).
+// Read from main-loop context via audio_pipeline_get_timing() — values are
+// snap-read uint32/float so no synchronisation primitive is needed on ESP32-P4.
+struct PipelineTimingMetrics {
+    uint32_t totalFrameUs;    // Total pipeline iteration time (us)
+    uint32_t matrixMixUs;     // Matrix mixing stage time (us)
+    uint32_t outputDspUs;     // Output DSP stage time (us)
+    float    totalCpuPercent; // Total pipeline CPU load (0-100 %)
+};
+
+PipelineTimingMetrics audio_pipeline_get_timing();
+
 // Diagnostic — call from main-loop context only (not from audio task)
 void audio_pipeline_dump_raw_diag();
 

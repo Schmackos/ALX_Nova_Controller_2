@@ -1200,6 +1200,37 @@ void loop() {
 
   // Check for debounced DSP settings save
   dsp_check_debounced_save();
+
+  // Emit DSP CPU threshold diagnostics — dirty flags set by audio task (Core 1).
+  // Read current values from metrics snapshot to include load percentage in message.
+  if (appState.dsp.cpuWarnDirty) {
+    appState.dsp.cpuWarnDirty = false;
+    DspMetrics _dspM = dsp_get_metrics();
+    if (_dspM.cpuWarning) {
+      char msg[28];
+      snprintf(msg, sizeof(msg), "DSP CPU %.0f%%", _dspM.cpuLoadPercent);
+      LOG_W("[DSP] CPU load warning: %.1f%% (>= %.0f%%)",
+            _dspM.cpuLoadPercent, (float)DSP_CPU_WARN_PERCENT);
+      diag_emit(DIAG_DSP_CPU_WARN, DIAG_SEV_WARN, 0xFF, "DSP", msg);
+    } else {
+      LOG_I("[DSP] CPU load warning cleared: %.1f%%", _dspM.cpuLoadPercent);
+      diag_emit(DIAG_DSP_CPU_WARN, DIAG_SEV_INFO, 0xFF, "DSP", "CPU load warn cleared");
+    }
+  }
+  if (appState.dsp.cpuCritDirty) {
+    appState.dsp.cpuCritDirty = false;
+    DspMetrics _dspM = dsp_get_metrics();
+    if (_dspM.cpuCritical) {
+      char msg[32];
+      snprintf(msg, sizeof(msg), "DSP CPU %.0f%% FIR bypass", _dspM.cpuLoadPercent);
+      LOG_W("[DSP] CPU load critical: %.1f%% (>= %.0f%%), FIR stages auto-bypassed",
+            _dspM.cpuLoadPercent, (float)DSP_CPU_CRIT_PERCENT);
+      diag_emit(DIAG_DSP_CPU_CRIT, DIAG_SEV_ERROR, 0xFF, "DSP", msg);
+    } else {
+      LOG_I("[DSP] CPU load critical cleared: %.1f%%", _dspM.cpuLoadPercent);
+      diag_emit(DIAG_DSP_CPU_CRIT, DIAG_SEV_INFO, 0xFF, "DSP", "CPU crit cleared");
+    }
+  }
 #endif
 
   // Execute pending AP toggle requested by mqttCallback()

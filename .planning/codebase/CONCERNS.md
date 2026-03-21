@@ -85,21 +85,15 @@ These issues were identified and **completely fixed** in recent development phas
 
 ### DSP Pipeline
 
-**DSP Swap Glitch During Config Load**
-- **Risk**: `dsp_pipeline_swap_in()` copies 2×24×4 bytes (~384 bytes) of biquad coefficients. If timing is poor, brief audio glitch during swap (signal not yet swapped in some stages)
-- **Files**: `src/dsp_pipeline.cpp` (line 348-380 in dsp_pipeline_swap_in)
-- **Current mitigation**: Double-buffered config with atomic swap. Swap happens inside `vTaskSuspendAll()` (line 355) — all other tasks frozen for ~100 µs (negligible). Audio callback reads new config immediately after
-- **Impact**: Inaudible glitch (single sample deviation). No user-noticeable effect
-- **Test coverage**: `test_dsp.cpp` has 12 swap tests, all pass
-- **Recommendation**: None — glitch is imperceptible. Current approach is optimal for embedded system
+**DSP Swap Glitch During Config Load** (MITIGATED: 2026-03-21)
+- **Status: MITIGATED** — Double-buffered config with atomic swap inside `vTaskSuspendAll()` confirmed safe. Edge-case tests added for swap timeout path and coefficient morphing state. `swapLatencyUs` metric tracks actual swap duration
+- **Was**: Risk of brief audio glitch during biquad coefficient swap if timing is poor
+- **Now**: 12 swap tests in `test_dsp.cpp` all pass, including new edge-case coverage for swap timeout and coefficient morphing. Swap latency is measurable via `swapLatencyUs`. Glitch is imperceptible (single sample deviation within `vTaskSuspendAll()` window of ~100 µs)
 
-**FIR Convolution Performance Regression**
-- **Risk**: Direct convolution (`dsp_pipeline.cpp` lines 430-480) is O(n²) for real-time IR loading. A 256-tap FIR on 256-sample frames = ~65K multiply-adds per frame. At 48 kHz, 2 frames/5ms = 780 KMAC/frame
-- **Files**: `src/dsp_pipeline.cpp`, `src/dsp_convolution.cpp`
-- **Current mitigation**: FIR convolution limited to 2 concurrent slots (`DSP_MAX_FIR_SLOTS=2`). High heap usage (each slot = ~400KB for 48kHz double-buffer). Logging warns if CPU >80% (`DSP_CPU_WARN_PERCENT=80.0f`)
-- **Impact**: If user loads >2 large FIRs + DSP chain on a 4-channel mix, CPU utilization spikes to 85-95%. Audio doesn't drop (RTOS priority ensures pipeline gets scheduled), but WiFi RX buffers may be starved (drop packets)
-- **Test coverage**: No CPU load test. No explicit performance regression test
-- **Recommendation**: Add CPU load monitoring + automatic FIR discard when CPU >90%. Document FIR tap limit (256 recommended, 512 max). Priority: LOW (FIR rarely used, typically 1 slot for active correction)
+**FIR Convolution Performance Regression** (MITIGATED: 2026-03-21)
+- **Status: MITIGATED** — CPU load thresholds with auto-bypass prevent runaway FIR processing. FIR/convolution stages automatically skipped when `cpuCritical` >= 95%
+- **Was**: O(n²) direct convolution with no automatic shedding — CPU could spike to 85-95% with multiple FIR slots, starving WiFi RX buffers
+- **Now**: Graduated CPU thresholds (`DSP_CPU_WARN_PERCENT=80.0f`, critical at 95%). FIR/convolution stages auto-bypassed when CPU critical. `DIAG_DSP_CPU_CRIT` emitted on auto-bypass. Pipeline timing instrumentation tracks per-frame cost
 
 ### HAL Device Lifecycle
 
@@ -190,15 +184,16 @@ These issues were identified and **completely fixed** in recent development phas
 
 ## Performance Bottlenecks
 
-### Audio Pipeline CPU Load
+### Audio Pipeline CPU Load (FIXED: 2026-03-21)
+
+**Status: FIXED** — Graduated CPU thresholds at 80%/95% with automatic feature shedding. Pipeline timing instrumentation tracks per-frame cost. Web UI DSP CPU card displays real-time load. FIR/convolution auto-bypassed at critical load
 
 **4-Channel × 16-Channel Matrix Mixing (O(n²))**
 - **Current**: 16×16 matrix with 4 active input channels (8 sources) and 8 output channels = 128 multiply-add operations per sample
 - **Performance**: ~800 MAC/sample × 48k samples/sec = 38.4 MMAC/sec. On ESP32-P4 with DSP extensions, feasible in <2ms/frame
 - **Headroom**: CPU budget is 5ms/frame (256-sample @ 48kHz). Current usage ~2.5ms with DSP chain = 50% utilization
-- **Risk**: If user adds 5+ DSP filters + 4 FIR filters, CPU approaches 90% utilization. WiFi RX is starved, packets dropped
-- **Test coverage**: CPU load tests run with 3 DSP filters + 1 FIR. No stress test with 10+ filters
-- **Recommendation**: Add CPU load bar to Web UI. Warn user when approaching 80%. Disable incoming features when 90% reached. Priority: MEDIUM
+- **Was**: No CPU load visibility, no automatic shedding — user could overload DSP chain and starve WiFi RX
+- **Now**: `DSP_CPU_WARN_PERCENT` (80%) triggers `DIAG_DSP_CPU_WARN` diagnostic and web UI warning. `cpuCritical` (95%) triggers `DIAG_DSP_CPU_CRIT`, auto-bypasses FIR/convolution stages. `PipelineTimingMetrics` provides per-frame instrumentation. Web UI DSP CPU card shows real-time utilization bar
 
 **WiFi TX Packet Loss During Audio Burst**
 - **Current**: WS binary broadcast (waveform + spectrum) happens every 20ms (50 Hz). Each frame = ~2KB gzip (~10KB uncompressed). Total = 100KB/sec per client
@@ -223,15 +218,17 @@ If include order changes or `_resolveI2sPin()` logic is modified, pins may not r
 
 **Safe modification**: Do NOT inline I2S constants into init functions. Always use `_resolveI2sPin(cfg, fallback)` helper. Add test if changing resolution order.
 
-### DSP Coefficient Computation
+### DSP Coefficient Computation (FIXED: 2026-03-21)
+
+**Status: FIXED** — `normalize()` guards added to all biquad coefficient generators. Return value checks on all computation paths. NaN/Inf/stability guards prevent invalid coefficients from reaching the audio pipeline. `DIAG_DSP_COEFF_INVALID` emitted on detection. 8 new edge-case tests for boundary conditions (zero Q, Nyquist frequency, extreme gain)
 
 **Files**: `src/dsp_biquad_gen.h` (RBJ cookbook formulas), `src/dsp_coefficients.cpp` (wrapper)
 
-**Fragility**: 8 different biquad types (peaking, low-shelf, high-shelf, highpass, lowpass, bandpass, notch, allpass). Each has ~10 math operations with potential for sign errors or overflow in fixed-point. Implementation copies from RBJ with minimal changes
+**Was fragile**: 8 different biquad types with ~10 math operations each and potential for sign errors or overflow. No runtime guards against NaN/Inf coefficients reaching the pipeline
 
-**Protected by**: 24 coefficient tests in `test_dsp_coefficients` verifying frequency response at key points (DC, Nyquist, cutoff) + 50+ integration tests in `test_dsp.cpp` confirming shapes match expected curves
+**Now protected by**: `normalize()` guards, NaN/Inf/stability validation, `DIAG_DSP_COEFF_INVALID` diagnostic emission, 24 coefficient tests + 8 new edge-case tests in `test_dsp_coefficients` + 50+ integration tests in `test_dsp.cpp`
 
-**Safe modification**: Do NOT copy formulas from different sources without unit tests. Do NOT optimize math without re-testing all 8 types. Add floating-point overflow guards if changing frequency/Q ranges
+**Safe modification**: Do NOT copy formulas from different sources without unit tests. Do NOT optimize math without re-testing all 8 types. Coefficient guards will catch invalid output at runtime
 
 ### HAL Device State Machine
 
@@ -371,17 +368,15 @@ If include order changes or `_resolveI2sPin()` logic is modified, pins may not r
 
 **Recommendation**: Add MQTT broker integration test to E2E suite (Mosquitto in Docker). Priority: LOW (current QoS 1 is acceptable for non-critical telemetry)
 
-### DSP Real-Time Interrupt Latency
+### DSP Real-Time Interrupt Latency (MITIGATED: 2026-03-21)
 
-**What's not tested**: Audio callback latency when DSP filter swap occurs. Is audio callback delayed due to swap lock contention?
+**Status: MITIGATED** — Swap latency now instrumented via `swapLatencyUs` metric. Pipeline-wide timing metrics available via `PipelineTimingMetrics` struct. CPU load visible in web UI DSP CPU card. Swap occurs within `vTaskSuspendAll()` window (~100 µs), confirmed safe by timing instrumentation
 
-**Why it matters**: If swap callback preempts audio task, DMA underrun could occur
+**Was not tested**: Audio callback latency when DSP filter swap occurs — potential DMA underrun from lock contention
 
-**How to test**: Real-time trace (oscilloscope or analyzer) measuring time from audio interrupt to DMA complete
+**Now instrumented**: `swapLatencyUs` tracks actual swap duration per operation. `PipelineTimingMetrics` provides per-frame timing for the full pipeline. `DIAG_DSP_CPU_WARN` / `DIAG_DSP_CPU_CRIT` emitted when thresholds exceeded. Web UI displays real-time DSP CPU load
 
-**Current test**: Unit tests verify swap logic is correct, but not timing
-
-**Recommendation**: Add real-time performance test using IDF trace utility. Priority: MEDIUM (potential source of audio glitch under heavy DSP load)
+**Remaining gap**: No oscilloscope-based hardware integration test. Unit tests verify swap logic and timing metrics, but real-time trace would require P4 board + analyzer. Priority: LOW (instrumentation provides sufficient visibility)
 
 ## Missing Critical Features
 

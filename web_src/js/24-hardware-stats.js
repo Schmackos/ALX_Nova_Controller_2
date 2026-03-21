@@ -365,6 +365,53 @@
                 document.getElementById('resetReason').textContent = formatResetReason(data.resetReason);
             }
 
+            // DSP CPU Load
+            var hasDspData = (data.pipelineCpu !== undefined || data.cpuLoadPercent !== undefined);
+            var dspSection = document.getElementById('dsp-cpu-section');
+            if (hasDspData) {
+                if (dspSection) dspSection.style.display = '';
+
+                // Per-input DSP CPU (from dspMetrics cpuLoadPercent)
+                var dspInputEl = document.getElementById('dsp-cpu-input');
+                if (dspInputEl && data.cpuLoadPercent !== undefined) {
+                    dspInputEl.textContent = data.cpuLoadPercent.toFixed(1) + '%';
+                    dspInputEl.style.color = data.cpuLoadPercent >= 95 ? 'var(--error-color)' :
+                                             data.cpuLoadPercent >= 80 ? 'var(--warning-color)' : '';
+                }
+
+                // Pipeline total CPU
+                var dspPipelineEl = document.getElementById('dsp-cpu-pipeline');
+                if (dspPipelineEl && data.pipelineCpu !== undefined) {
+                    dspPipelineEl.textContent = data.pipelineCpu.toFixed(1) + '%';
+                    dspPipelineEl.style.color = data.pipelineCpu >= 95 ? 'var(--error-color)' :
+                                                data.pipelineCpu >= 80 ? 'var(--warning-color)' : '';
+                }
+
+                // Frame time breakdown
+                var dspFrameEl = document.getElementById('dsp-frame-us');
+                if (dspFrameEl && data.pipelineFrameUs !== undefined) {
+                    dspFrameEl.textContent = data.pipelineFrameUs + ' µs';
+                }
+
+                var dspMatrixEl = document.getElementById('dsp-matrix-us');
+                if (dspMatrixEl && data.matrixUs !== undefined) {
+                    dspMatrixEl.textContent = data.matrixUs + ' µs';
+                }
+
+                var dspOutputEl = document.getElementById('dsp-output-us');
+                if (dspOutputEl && data.outputDspUs !== undefined) {
+                    dspOutputEl.textContent = data.outputDspUs + ' µs';
+                }
+
+                // FIR bypass warning row
+                var dspWarnRow = document.getElementById('dsp-cpu-warn-row');
+                var dspFirEl = document.getElementById('dsp-fir-bypass');
+                if (dspWarnRow && data.firBypassCount !== undefined) {
+                    dspWarnRow.style.display = data.firBypassCount > 0 ? '' : 'none';
+                    if (dspFirEl) dspFirEl.textContent = data.firBypassCount;
+                }
+            }
+
             // Add to history
             addHistoryDataPoint(data);
 

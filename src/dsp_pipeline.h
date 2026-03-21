@@ -248,6 +248,10 @@ struct DspMetrics {
     uint32_t maxProcessTimeUs;  // Peak processing time (us)
     float cpuLoadPercent;       // DSP CPU usage estimate (%)
     float limiterGrDb[DSP_MAX_CHANNELS]; // Per-channel limiter GR (dB)
+    uint32_t swapLatencyUs;     // Last swap wait duration (us)
+    bool cpuWarning;            // cpuLoad >= DSP_CPU_WARN_PERCENT
+    bool cpuCritical;           // cpuLoad >= DSP_CPU_CRIT_PERCENT
+    uint8_t firBypassCount;     // FIR/convolution stages auto-bypassed this frame
 };
 
 // ===== Global DSP State =====
@@ -520,6 +524,10 @@ inline void dsp_init_metrics(DspMetrics &m) {
     for (int i = 0; i < DSP_MAX_CHANNELS; i++) {
         m.limiterGrDb[i] = 0.0f;
     }
+    m.swapLatencyUs = 0;
+    m.cpuWarning = false;
+    m.cpuCritical = false;
+    m.firBypassCount = 0;
 }
 
 // ===== Conversion Helpers =====

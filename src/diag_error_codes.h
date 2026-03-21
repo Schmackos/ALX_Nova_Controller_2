@@ -64,6 +64,8 @@ enum DiagErrorCode : uint16_t {
     DIAG_DSP_COEFF_INVALID              = 0x3003,  // NaN or inf in coefficients
     DIAG_DSP_STAGE_ADD_FAIL             = 0x3004,  // add_stage() rollback
     DIAG_DSP_FILE_LOAD_FAIL             = 0x3005,  // JSON parse error on load
+    DIAG_DSP_CPU_WARN                   = 0x3006,  // CPU load exceeded 80%
+    DIAG_DSP_CPU_CRIT                   = 0x3007,  // CPU load exceeded 95%, FIR auto-bypassed
 
     // ===== 0x40xx: WiFi =====
     DIAG_WIFI_CONNECT_FAIL              = 0x4001,  // Connection attempt failed

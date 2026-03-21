@@ -92,6 +92,7 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define DSP_MAX_DELAY_SAMPLES 4800 // Max delay = 100ms @ 48kHz
 #define DSP_DEFAULT_Q        0.707f
 #define DSP_CPU_WARN_PERCENT 80.0f
+#define DSP_CPU_CRIT_PERCENT 95.0f
 #define DSP_PRESET_MAX_SLOTS 32    // Max number of config preset slots
 
 // ===== Output DSP Configuration (post-matrix per-channel DSP) =====
