@@ -494,7 +494,7 @@ void test_register_device_slot_full_returns_negative_one() {
 // ===== Test 22: hal_registry_max() returns HAL_MAX_DRIVERS =====
 void test_registry_max_returns_correct_value() {
     TEST_ASSERT_EQUAL(HAL_MAX_DRIVERS, hal_registry_max());
-    TEST_ASSERT_EQUAL(24, hal_registry_max());
+    TEST_ASSERT_EQUAL(32, hal_registry_max());
 }
 
 // ===== Test 23: Registry overflow — fill to HAL_MAX_DRIVERS, 25th rejected =====

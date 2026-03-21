@@ -402,6 +402,82 @@ void test_second_instance_after_first_deinit(void) {
 }
 
 // ---------------------------------------------------------------------------
+// Test 19: first instance gets slot 0 — callbacks are valid after buildSources
+// ---------------------------------------------------------------------------
+void test_tdm_deinterleaver_first_instance_gets_slot_0(void) {
+    AudioInputSource srcA = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcB = AUDIO_INPUT_SOURCE_INIT;
+    g_deint->init(2);
+    g_deint->buildSources("CH1/2", "CH3/4", &srcA, &srcB);
+    TEST_ASSERT_NOT_NULL(srcA.read);
+    TEST_ASSERT_NOT_NULL(srcB.read);
+    // deinit via tearDown — verify slot is freed by re-init
+    g_deint->deinit();
+    // Re-initialise and rebuild: slot should be free again
+    g_deint->init(2);
+    AudioInputSource srcA2 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcB2 = AUDIO_INPUT_SOURCE_INIT;
+    g_deint->buildSources("CH1/2", "CH3/4", &srcA2, &srcB2);
+    TEST_ASSERT_NOT_NULL(srcA2.read);
+    TEST_ASSERT_NOT_NULL(srcB2.read);
+}
+
+// ---------------------------------------------------------------------------
+// Test 20: two concurrent instances get different thunk pointers
+// ---------------------------------------------------------------------------
+void test_tdm_deinterleaver_second_instance_gets_different_thunks(void) {
+    HalTdmDeinterleaver tdm1;
+    AudioInputSource srcA0 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcB0 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcA1 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcB1 = AUDIO_INPUT_SOURCE_INIT;
+
+    g_deint->init(2);
+    g_deint->buildSources("A-CH1/2", "A-CH3/4", &srcA0, &srcB0);
+
+    tdm1.init(2);
+    tdm1.buildSources("B-CH1/2", "B-CH3/4", &srcA1, &srcB1);
+
+    // Both instances must have non-null callbacks
+    TEST_ASSERT_NOT_NULL(srcA0.read);
+    TEST_ASSERT_NOT_NULL(srcA1.read);
+    // The two instances must receive DIFFERENT read function pointers (slot 0 vs slot 1)
+    TEST_ASSERT_NOT_EQUAL((void*)srcA0.read, (void*)srcA1.read);
+    TEST_ASSERT_NOT_EQUAL((void*)srcB0.read, (void*)srcB1.read);
+
+    tdm1.deinit();
+}
+
+// ---------------------------------------------------------------------------
+// Test 21: buildSources() with all slots full returns gracefully (null callbacks)
+// ---------------------------------------------------------------------------
+void test_tdm_deinterleaver_slot_full_buildSources_returns_gracefully(void) {
+    HalTdmDeinterleaver tdm1, tdm2;
+    AudioInputSource srcA0 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcB0 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcA1 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcB1 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcA2 = AUDIO_INPUT_SOURCE_INIT;
+    AudioInputSource srcB2 = AUDIO_INPUT_SOURCE_INIT;
+
+    // Fill both slots
+    g_deint->init(2);
+    g_deint->buildSources("D0-A", "D0-B", &srcA0, &srcB0);
+    tdm1.init(2);
+    tdm1.buildSources("D1-A", "D1-B", &srcA1, &srcB1);
+
+    // Third instance: all slots full — buildSources must not crash and must leave
+    // callbacks null (indicating failure to the caller)
+    tdm2.init(2);
+    tdm2.buildSources("D2-A", "D2-B", &srcA2, &srcB2);
+    TEST_ASSERT_NULL(srcA2.read);
+    TEST_ASSERT_NULL(srcB2.read);
+
+    tdm1.deinit();
+    // tdm2 and g_deint cleaned up by tearDown / their destructors
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -426,6 +502,9 @@ int main(int /*argc*/, char** /*argv*/) {
     RUN_TEST(test_pair_a_returns_zero_on_empty_feed);
     RUN_TEST(test_pair_b_inactive_before_pair_a);
     RUN_TEST(test_second_instance_after_first_deinit);
+    RUN_TEST(test_tdm_deinterleaver_first_instance_gets_slot_0);
+    RUN_TEST(test_tdm_deinterleaver_second_instance_gets_different_thunks);
+    RUN_TEST(test_tdm_deinterleaver_slot_full_buildSources_returns_gracefully);
 
     return UNITY_END();
 }

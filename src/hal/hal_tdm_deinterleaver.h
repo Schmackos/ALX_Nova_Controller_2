@@ -96,12 +96,19 @@ public:
     bool isReady() const { return _ready; }
 
 private:
-    // Static thunks registered in AudioInputSource — take 'this' from a
-    // module-level singleton pointer set during buildSources().  See .cpp.
-    static uint32_t _pairARead(int32_t* dst, uint32_t frames);
-    static uint32_t _pairBRead(int32_t* dst, uint32_t frames);
-    static bool     _pairAActive(void);
-    static bool     _pairBActive(void);
+    // Static thunks registered in AudioInputSource — indexed by instance slot.
+    // Each slot (0 / 1) gets its own thunk set so two concurrent instances can
+    // coexist without sharing a single global pointer.  See .cpp.
+    static uint32_t _pairARead_0(int32_t* dst, uint32_t frames);
+    static uint32_t _pairBRead_0(int32_t* dst, uint32_t frames);
+    static bool     _pairAActive_0(void);
+    static bool     _pairBActive_0(void);
+
+    static uint32_t _pairARead_1(int32_t* dst, uint32_t frames);
+    static uint32_t _pairBRead_1(int32_t* dst, uint32_t frames);
+    static bool     _pairAActive_1(void);
+    static bool     _pairBActive_1(void);
+
     static uint32_t _getSampleRate(void);
 
     // Instance-level implementations called by the static thunks.
@@ -127,6 +134,7 @@ private:
     uint8_t _i2sPort;
     bool    _ready;
     bool    _initialized;
+    uint8_t _instanceIdx;  // Index into _gInstances[]; 0xFF = not registered
 };
 
 #endif // DAC_ENABLED
