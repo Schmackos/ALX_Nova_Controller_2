@@ -49,7 +49,7 @@ void audio_pipeline_dump_raw_diag();
 // audio_pipeline_set_source()    atomically places a source at a lane index.
 // audio_pipeline_remove_source() atomically clears a lane; no-ops if empty.
 struct AudioInputSource;  // Forward declaration
-void audio_pipeline_set_source(int lane, const AudioInputSource *src);
+bool audio_pipeline_set_source(int lane, const AudioInputSource *src);
 void audio_pipeline_remove_source(int lane);
 
 // DEPRECATED: alias for audio_pipeline_set_source() — use set_source for new code.
@@ -75,7 +75,7 @@ const AudioOutputSink* audio_pipeline_get_sink(int idx);
 // audio_pipeline_remove_sink() atomically clears a slot; no-ops if the slot is already empty.
 // _sinkCount is updated after each call to reflect the highest occupied slot + 1,
 // keeping backward compatibility with legacy _sinkCount-based iteration.
-void audio_pipeline_set_sink(int slot, const AudioOutputSink *sink);
+bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink);
 void audio_pipeline_remove_sink(int slot);
 
 // Atomic mute control on sink structs. Uses vTaskSuspendAll() for atomicity.

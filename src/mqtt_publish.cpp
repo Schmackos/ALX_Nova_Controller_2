@@ -870,6 +870,8 @@ void publishMqttCrashDiagnostics() {
                      appState.debug.heapCritical ? "ON" : "OFF", true);
   mqttClient.publish((base + "/diagnostics/heap_warning").c_str(),
                      appState.debug.heapWarning ? "ON" : "OFF", true);
+  mqttClient.publish((base + "/diagnostics/dma_alloc_failed").c_str(),
+                     appState.audio.dmaAllocFailed ? "ON" : "OFF", true);
 
   // Per-ADC I2S recovery counts — iterate all active inputs dynamically (C3).
   {

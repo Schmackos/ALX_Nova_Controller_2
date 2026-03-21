@@ -52,6 +52,10 @@ struct AudioState {
   int activeInputCount = 0;   // HAL-driven: number of audio input lanes currently mapped
   int activeOutputCount = 0;  // HAL-driven: number of audio output sinks currently mapped
 
+  // DMA buffer allocation tracking
+  bool dmaAllocFailed = false;        // True if any DMA buffer alloc failed
+  uint16_t dmaAllocFailMask = 0;      // Bits 0-7: rawBuf lanes, bits 8-15: sinkBuf slots
+
   // I2S metrics
   I2sRuntimeMetrics i2sMetrics;
 
