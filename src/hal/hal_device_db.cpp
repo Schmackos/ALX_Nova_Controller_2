@@ -108,6 +108,23 @@ static void hal_db_add_builtins() {
         d.capabilities = HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL;
         hal_db_add(&d);
     }
+    // ES9843PRO — expansion 4-channel ADC, I2C control
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9843pro", 31);
+        strncpy(d.name, "ES9843PRO", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_ADC;
+        d.legacyId = 0;
+        d.channelCount = 4;
+        d.i2cAddr = 0x40;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = 2;  // Expansion bus
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K;
+        d.capabilities = HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL;
+        hal_db_add(&d);
+    }
     // NS4150B
     {
         HalDeviceDescriptor d;
