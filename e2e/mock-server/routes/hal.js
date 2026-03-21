@@ -44,7 +44,7 @@ router.post('/scan', (req, res) => {
   // Simulate a quick scan returning no new devices
   state.scanning = true;
   setTimeout(() => { state.scanning = false; }, 500);
-  res.json({ status: 'ok', devicesFound: state.halDevices.length });
+  res.json({ status: 'ok', devicesFound: state.halDevices.length, partialScan: false });
 });
 
 // PUT /devices — update device config by slot

@@ -47,24 +47,20 @@
 
 ---
 
-### Shared I2C Bus Contention During Discovery
+### ~~Shared I2C Bus Contention During Discovery~~ — FIXED
 
-**Area:** HAL discovery, I2C bus management
-**Files:** `src/hal/hal_discovery.cpp`, `src/hal/hal_device_manager.cpp`
-**Problem:** HAL discovery scans I2C Bus 0 (GPIO 48/54) **only when WiFi is NOT connected**. However, ES8311 post-boot rescan via `POST /api/hal/scan` is not guarded — can run while WiFi active, causing silent I2C hangs (SDIO conflict) and potential MCU reset.
+**Status:** FIXED (March 2026)
 
-**Current Protections:**
-- `hal_discovery_scan()` checks WiFi state before Bus 0 scan
-- `/api/hal/scan` endpoint does NOT enforce the same check — direct user-facing endpoint
-- No mutex prevents concurrent scan + ES8311 driver transaction
+**Root cause:** WiFi SDIO guard was non-functional. `hal_discover_devices()` checked `appState.ethernet.activeInterface == NET_WIFI`, but `activeInterface` was never set to `NET_WIFI` during normal WiFi-only connection — only via the Ethernet failover path. Guard was a no-op in the common case.
 
-**Risk:** User triggers rescan while WiFi active → I2C hangs or MCU resets. Silent failure, no user feedback.
-
-**Improvement Path:**
-1. Add WiFi state check in `/api/hal/scan` HTTP handler: return 409 if `WiFi.isConnected()` and `Bus 0 requested`
-2. Add comment in HAL discovery: "Bus 0 SDIO shared — scan-guard required"
-3. Implement optional background rescan with exponential backoff (skip if WiFi just connected)
-4. Test: WiFi connect → immediate rescan → verify endpoint returns 409 or skips Bus 0
+**Resolution:**
+1. **`hal_wifi_sdio_active()` helper** (`hal_discovery.h/.cpp`): Checks `connectSuccess || connecting || activeInterface == NET_WIFI` — catches all states where WiFi SDIO pins are active, including the connecting handshake window
+2. **`wifi_manager.cpp` lifecycle fix**: Sets `activeInterface = NET_WIFI` on WiFi connect (when Ethernet not active), clears to `NET_NONE` on disconnect/timeout
+3. **Diagnostic telemetry**: `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101) emitted when Bus 0 or EEPROM scan is skipped
+4. **Scan API enrichment**: `POST /api/hal/scan` response includes `partialScan` boolean and `skippedBuses` when WiFi forces Bus 0 skip. Frontend shows warning toast
+5. **No mutex needed**: Arduino WebServer is single-threaded; `healthCheckAll()` and scan handlers cannot collide. EEPROM already has its own recursive mutex
+- Files: `src/hal/hal_discovery.h`, `src/hal/hal_discovery.cpp`, `src/wifi_manager.cpp`, `src/hal/hal_api.cpp`, `web_src/js/15-hal-devices.js`, `e2e/mock-server/routes/hal.js`
+- Test coverage: 5 new tests in `test_hal_discovery` (WiFi SDIO guard truth table). 1732 total tests passing
 
 ---
 

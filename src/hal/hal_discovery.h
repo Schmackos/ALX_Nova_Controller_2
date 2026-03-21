@@ -28,4 +28,9 @@ int hal_rescan();
 // busIndex: HAL_I2C_BUS_EXT, HAL_I2C_BUS_ONBOARD, or HAL_I2C_BUS_EXP
 uint8_t hal_i2c_scan_bus(uint8_t busIndex);
 
+// Returns true when WiFi SDIO pins (GPIO 48/54) are in use.
+// Checks connectSuccess, connecting state, AND activeInterface fallback.
+// Used by discovery to skip Bus 0 and by scan API to report partial results.
+bool hal_wifi_sdio_active();
+
 #endif // DAC_ENABLED

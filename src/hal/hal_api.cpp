@@ -91,12 +91,17 @@ void registerHalApiEndpoints(WebServer& server) {
         }
         appState._halScanInProgress = true;
         appState.markHalDeviceDirty();  // Broadcast scanning=true
+        bool partialScan = hal_wifi_sdio_active();
         int found = hal_rescan();
         appState._halScanInProgress = false;
         appState.markHalDeviceDirty();  // Broadcast scanning=false
         JsonDocument doc;
         doc["status"] = "ok";
         doc["devicesFound"] = found;
+        doc["partialScan"] = partialScan;
+        if (partialScan) {
+            doc["skippedBuses"] = "Bus 0 (WiFi SDIO conflict)";
+        }
         String json;
         serializeJson(doc, json);
         server.send(200, "application/json", json);

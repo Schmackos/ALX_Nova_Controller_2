@@ -175,11 +175,26 @@ static uint8_t test_i2c_scan_bus(uint8_t busIndex) {
     return found;
 }
 
-// --- Test-local WiFi-skip logic (mirrors hal_discover_devices bus selection)
+// --- Test-local WiFi SDIO detection (mirrors hal_wifi_sdio_active() logic)
+static bool _testWifiConnectSuccess = false;
+static bool _testWifiConnecting = false;
+static uint8_t _testActiveInterface = 0;  // 0=NET_NONE, 2=NET_WIFI
+
+// Mirrors production hal_wifi_sdio_active() — returns true when WiFi SDIO
+// pins (GPIO 48/54) are in use. Checks all three conditions.
+static bool test_wifi_sdio_active() {
+    return _testWifiConnectSuccess
+        || _testWifiConnecting
+        || _testActiveInterface == 2;  // NET_WIFI
+}
+
+// Legacy alias for backward compat with existing tests
 static bool _testWifiActive = false;
 
 static bool test_should_scan_bus(uint8_t busIndex) {
-    if (busIndex == HAL_I2C_BUS_EXT && _testWifiActive) return false;
+    // Use the new multi-flag check OR the legacy single flag
+    bool sdioActive = test_wifi_sdio_active() || _testWifiActive;
+    if (busIndex == HAL_I2C_BUS_EXT && sdioActive) return false;
     return true;  // ONBOARD and EXP always scanned
 }
 
@@ -193,6 +208,9 @@ void setUp() {
     hal_db_reset();
     WireMock::reset();
     _testWifiActive = false;
+    _testWifiConnectSuccess = false;
+    _testWifiConnecting = false;
+    _testActiveInterface = 0;
 }
 
 void tearDown() {}
@@ -490,6 +508,62 @@ void test_address_range_0x08_to_0x77() {
     TEST_ASSERT_EQUAL(3, count);
 }
 
+// ===== WiFi SDIO Guard Tests =====
+
+void test_wifi_sdio_active_when_connectSuccess() {
+    // WiFi connected — SDIO pins are in use, Bus 0 must be skipped
+    _testWifiConnectSuccess = true;
+    TEST_ASSERT_TRUE(test_wifi_sdio_active());
+    TEST_ASSERT_FALSE(test_should_scan_bus(HAL_I2C_BUS_EXT));
+    // Other buses unaffected
+    TEST_ASSERT_TRUE(test_should_scan_bus(HAL_I2C_BUS_ONBOARD));
+    TEST_ASSERT_TRUE(test_should_scan_bus(HAL_I2C_BUS_EXP));
+}
+
+void test_wifi_sdio_active_when_connecting() {
+    // WiFi is connecting — SDIO handshake in progress, pins active
+    _testWifiConnecting = true;
+    TEST_ASSERT_TRUE(test_wifi_sdio_active());
+    TEST_ASSERT_FALSE(test_should_scan_bus(HAL_I2C_BUS_EXT));
+}
+
+void test_wifi_sdio_active_when_activeInterface_wifi() {
+    // Ethernet failover path — activeInterface set to NET_WIFI
+    _testActiveInterface = 2;  // NET_WIFI
+    TEST_ASSERT_TRUE(test_wifi_sdio_active());
+    TEST_ASSERT_FALSE(test_should_scan_bus(HAL_I2C_BUS_EXT));
+}
+
+void test_wifi_sdio_inactive_when_fully_disconnected() {
+    // All flags false — WiFi fully disconnected, Bus 0 safe to scan
+    TEST_ASSERT_FALSE(test_wifi_sdio_active());
+    TEST_ASSERT_TRUE(test_should_scan_bus(HAL_I2C_BUS_EXT));
+    TEST_ASSERT_TRUE(test_should_scan_bus(HAL_I2C_BUS_ONBOARD));
+    TEST_ASSERT_TRUE(test_should_scan_bus(HAL_I2C_BUS_EXP));
+}
+
+void test_wifi_sdio_active_combinations() {
+    // Truth table: any single flag being true should activate the guard
+    struct { bool cs; bool cn; uint8_t ai; bool expected; } cases[] = {
+        { false, false, 0, false },  // All off → safe
+        { true,  false, 0, true  },  // Connected only
+        { false, true,  0, true  },  // Connecting only
+        { false, false, 2, true  },  // activeInterface only
+        { true,  true,  0, true  },  // Connected + connecting
+        { true,  false, 2, true  },  // Connected + activeInterface
+        { false, true,  2, true  },  // Connecting + activeInterface
+        { true,  true,  2, true  },  // All on
+    };
+
+    for (int i = 0; i < 8; i++) {
+        _testWifiConnectSuccess = cases[i].cs;
+        _testWifiConnecting = cases[i].cn;
+        _testActiveInterface = cases[i].ai;
+        TEST_ASSERT_EQUAL_MESSAGE(cases[i].expected, test_wifi_sdio_active(),
+            cases[i].expected ? "Expected SDIO active" : "Expected SDIO inactive");
+    }
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
@@ -520,6 +594,13 @@ int main(int argc, char** argv) {
     RUN_TEST(test_bus_onboard_always_scanned);
     RUN_TEST(test_empty_bus_returns_zero_devices);
     RUN_TEST(test_address_range_0x08_to_0x77);
+
+    // WiFi SDIO guard tests
+    RUN_TEST(test_wifi_sdio_active_when_connectSuccess);
+    RUN_TEST(test_wifi_sdio_active_when_connecting);
+    RUN_TEST(test_wifi_sdio_active_when_activeInterface_wifi);
+    RUN_TEST(test_wifi_sdio_inactive_when_fully_disconnected);
+    RUN_TEST(test_wifi_sdio_active_combinations);
 
     return UNITY_END();
 }

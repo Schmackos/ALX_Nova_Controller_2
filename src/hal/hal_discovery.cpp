@@ -11,6 +11,7 @@
 #include "../debug_serial.h"
 #include "../dac_eeprom.h"
 #include "../app_state.h"
+#include "../diag_journal.h"
 #include <Wire.h>
 #include <sdkconfig.h>
 #else
@@ -18,6 +19,20 @@
 #define LOG_W(tag, ...) ((void)0)
 #define LOG_E(tag, ...) ((void)0)
 #endif
+
+bool hal_wifi_sdio_active() {
+#ifndef NATIVE_TEST
+    // WiFi SDIO pins (GPIO 48/54) are in use when:
+    // 1. WiFi is connected (connectSuccess)
+    // 2. WiFi is in the process of connecting (SDIO active during handshake)
+    // 3. activeInterface is NET_WIFI (Ethernet failover path)
+    return appState.wifi.connectSuccess
+        || appState.wifi.connecting
+        || appState.ethernet.activeInterface == NET_WIFI;
+#else
+    return false;  // Native tests use test-local mock
+#endif
+}
 
 int hal_discover_devices() {
     int newDevices = 0;
@@ -29,13 +44,14 @@ int hal_discover_devices() {
 
     // Phase 1: I2C bus scan
     // Skip HAL_I2C_BUS_EXT (GPIO48/54) if WiFi is active (SDIO conflict)
-    bool wifiActive = (appState.ethernet.activeInterface == NET_WIFI);
+    bool wifiActive = hal_wifi_sdio_active();
 
     if (!wifiActive) {
         uint8_t extCount = hal_i2c_scan_bus(HAL_I2C_BUS_EXT);
         LOG_I("[HAL:Discovery]", "Bus EXT scan: %u device(s)", extCount);
     } else {
         LOG_I("[HAL:Discovery]", "Skipping Bus EXT (WiFi active, SDIO conflict)");
+        diag_emit(DIAG_HAL_I2C_BUS_CONFLICT, DIAG_SEV_INFO, 0, "Bus0", "WiFi SDIO active");
     }
 
     // HAL_I2C_BUS_EXP (GPIO28/29) — always safe to scan
@@ -98,6 +114,7 @@ int hal_discover_devices() {
         }
     } else {
         LOG_I("[HAL:Discovery]", "Skipping EEPROM scan (WiFi active, SDIO conflict)");
+        diag_emit(DIAG_HAL_I2C_BUS_CONFLICT, DIAG_SEV_INFO, 0, "EEPROM", "WiFi SDIO active");
     }
 
     LOG_I("[HAL:Discovery]", "Discovery complete: %d new devices", newDevices);

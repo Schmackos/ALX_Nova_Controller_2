@@ -559,7 +559,11 @@
                     return r.json();
                 })
                 .then(function(data) {
-                    if (data) showToast('Scan complete: ' + (data.devicesFound || 0) + ' devices found');
+                    if (data) {
+                        var msg = 'Scan complete: ' + (data.devicesFound || 0) + ' devices found';
+                        if (data.partialScan) msg += ' (Bus 0 skipped — WiFi SDIO conflict)';
+                        showToast(msg, data.partialScan);
+                    }
                 })
                 .catch(function(err) {
                     showToast('Scan failed: ' + err.message, true);

@@ -1503,6 +1503,12 @@ void updateWiFiConnection() {
     connectionStarted = 0;
     pendingConnection.config.clear();
 
+    // Set activeInterface to NET_WIFI when Ethernet is not the active route.
+    // This ensures hal_wifi_sdio_active() correctly detects WiFi SDIO pin usage.
+    if (appState.ethernet.activeInterface != NET_ETHERNET) {
+      appState.ethernet.activeInterface = NET_WIFI;
+    }
+
     LOG_I("[WiFi] Connected in background");
     LOG_I("[WiFi] IP address: %s", appState.wifi.newIP.c_str());
 
@@ -1517,6 +1523,11 @@ void updateWiFiConnection() {
     appState.wifi.connecting = false;
     connectionStarted = 0;
     pendingConnection.config.clear();
+
+    // Clear activeInterface if WiFi was the active route
+    if (appState.ethernet.activeInterface == NET_WIFI) {
+      appState.ethernet.activeInterface = NET_NONE;
+    }
 
     // Set timeout error if no specific disconnect reason was captured
     if (appState.wifi.connectError.length() == 0) {
