@@ -321,9 +321,8 @@
                 if (d.capabilities & HAL_CAP_PGA_CONTROL) {
                     h += '<div class="hal-form-row"><label>PGA Gain:</label>';
                     h += '<select id="halCfgPgaGain">';
-                    var pgaOpts = [0, 6, 12, 18, 23];
-                    for (var pi = 0; pi < pgaOpts.length; pi++) {
-                        h += '<option value="' + pgaOpts[pi] + '"' + (d.cfgPgaGain === pgaOpts[pi] ? ' selected' : '') + '>' + pgaOpts[pi] + ' dB</option>';
+                    for (var pi = 0; pi <= 42; pi += 6) {
+                        h += '<option value="' + pi + '"' + (d.cfgPgaGain === pi ? ' selected' : '') + '>' + pi + ' dB</option>';
                     }
                     h += '</select></div>';
                 }
@@ -332,6 +331,25 @@
                     h += '<div class="hal-form-row"><label>High-Pass Filter:</label>';
                     h += '<label class="toggle-label"><input type="checkbox" id="halCfgHpfEnabled"' + (d.cfgHpfEnabled ? ' checked' : '') + '> <span>Enabled</span></label>';
                     h += '</div>';
+                }
+
+                if (d.type === 2) {
+                    var filterPresets = [
+                        'Minimum Phase',
+                        'Linear Apodizing Fast',
+                        'Linear Fast',
+                        'Linear Fast Low Ripple',
+                        'Linear Slow',
+                        'Minimum Fast',
+                        'Minimum Slow',
+                        'Minimum Slow Low Dispersion'
+                    ];
+                    h += '<div class="hal-form-row"><label>Filter Preset:</label>';
+                    h += '<select id="halCfgFilterPreset">';
+                    for (var fi = 0; fi < filterPresets.length; fi++) {
+                        h += '<option value="' + fi + '"' + (d.cfgFilterMode === fi ? ' selected' : '') + '>' + filterPresets[fi] + '</option>';
+                    }
+                    h += '</select></div>';
                 }
             }
 
@@ -461,6 +479,8 @@
             if (pgaEl) cfg.cfgPgaGain = parseInt(pgaEl.value) || 0;
             var hpfEl = document.getElementById('halCfgHpfEnabled');
             if (hpfEl) cfg.cfgHpfEnabled = hpfEl.checked;
+            var filterPresetEl = document.getElementById('halCfgFilterPreset');
+            if (filterPresetEl) cfg.filterMode = parseInt(filterPresetEl.value) || 0;
             var paEl = document.getElementById('halCfgPaControlPin');
             if (paEl) cfg.cfgPaControlPin = parseInt(paEl.value);
             // New I2S pin fields

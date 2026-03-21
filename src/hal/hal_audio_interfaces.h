@@ -21,7 +21,7 @@ public:
 class HalAudioAdcInterface {
 public:
     virtual ~HalAudioAdcInterface() {}
-    virtual bool adcSetGain(uint8_t gainDb) = 0;      // 0-23 dB
+    virtual bool adcSetGain(uint8_t gainDb) = 0;      // Device-specific range (e.g. 0-18 for ES9822PRO)
     virtual bool adcSetHpfEnabled(bool enabled) = 0;
     virtual bool adcSetSampleRate(uint32_t hz) = 0;
     virtual uint32_t adcGetSampleRate() const = 0;

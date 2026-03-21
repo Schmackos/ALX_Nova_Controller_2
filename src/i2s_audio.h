@@ -190,15 +190,19 @@ inline void i2s_audio_push_waveform_fft(const int32_t *, int, int) {}
 // Stub implementations for native tests (no actual I2S reads)
 inline uint32_t i2s_audio_port0_read(int32_t* dst, uint32_t frames) { return 0; }
 inline uint32_t i2s_audio_port1_read(int32_t* dst, uint32_t frames) { return 0; }
+inline uint32_t i2s_audio_port2_read(int32_t* dst, uint32_t frames) { return 0; }
 inline bool i2s_audio_port0_active(void) { return false; }
 inline bool i2s_audio_port1_active(void) { return false; }
+inline bool i2s_audio_port2_active(void) { return false; }
 inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
 #else
 // Real implementations in i2s_audio.cpp
 uint32_t i2s_audio_port0_read(int32_t* dst, uint32_t frames);
 uint32_t i2s_audio_port1_read(int32_t* dst, uint32_t frames);
+uint32_t i2s_audio_port2_read(int32_t* dst, uint32_t frames);
 bool i2s_audio_port0_active(void);
 bool i2s_audio_port1_active(void);
+bool i2s_audio_port2_active(void);
 uint32_t i2s_audio_get_sample_rate(void);
 #endif
 
@@ -238,6 +242,32 @@ void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32
 bool i2s_audio_enable_es8311_tx(uint32_t sample_rate);
 void i2s_audio_disable_es8311_tx();
 void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
+
+// Expansion mezzanine ADC RX (I2S2 RX, P4 only)
+// Enables I2S2 RX for expansion ADC input. If ES8311 TX is already active on I2S2,
+// this creates a full-duplex channel sharing BCK/WS. If not, allocates I2S2 RX-only.
+bool i2s_audio_enable_expansion_rx(uint32_t sample_rate, gpio_num_t din_pin);
+void i2s_audio_disable_expansion_rx();
+bool i2s_audio_expansion_rx_ok();
+
+// TDM (4-slot) variant of the expansion ADC RX path (I2S2 RX, P4 only).
+// Used exclusively by HalTdmDeinterleaver to read a raw 4-slot interleaved
+// DMA buffer from the ES9843PRO.  The caller requests 'frames' TDM frames;
+// the function reads frames × 4 × sizeof(int32_t) bytes and returns the
+// number of complete TDM frames placed in dst.
+// dst must be at least frames × 4 × sizeof(int32_t) bytes.
+// Timeout is fixed at 5 ms (same as port2 stereo path).
+uint32_t i2s_audio_port2_tdm_read(int32_t* dst, uint32_t frames);
+bool     i2s_audio_port2_tdm_active(void);
+
+// Initialize I2S2 RX in TDM mode for the ES9843PRO 4-channel ADC.
+// Allocates/reallocates I2S2 using i2s_channel_init_tdm_mode() on the RX
+// direction.  TX (ES8311) is reinitialized in STD mode if it was previously
+// active.  Slot mask covers slots 0..(slot_count-1).
+// slot_count: 4 for ES9843PRO (CH1-CH4).  Valid range 2-16.
+bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
+                                        gpio_num_t din_pin,
+                                        uint8_t    slot_count);
 #else
 inline bool i2s_audio_enable_tx(uint32_t) { return true; }
 inline void i2s_audio_disable_tx() {}
@@ -246,6 +276,14 @@ inline void i2s_audio_write(const void*, size_t, size_t* bw, uint32_t) { if (bw)
 inline bool i2s_audio_enable_es8311_tx(uint32_t) { return false; }
 inline void i2s_audio_disable_es8311_tx() {}
 inline void i2s_audio_write_es8311(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+
+inline bool i2s_audio_enable_expansion_rx(uint32_t, int) { return false; }
+inline void i2s_audio_disable_expansion_rx() {}
+inline bool i2s_audio_expansion_rx_ok() { return false; }
+
+inline uint32_t i2s_audio_port2_tdm_read(int32_t*, uint32_t) { return 0; }
+inline bool     i2s_audio_port2_tdm_active(void) { return false; }
+inline bool     i2s_audio_enable_expansion_tdm_rx(uint32_t, int, uint8_t) { return true; }
 #endif
 
 #endif // I2S_AUDIO_H

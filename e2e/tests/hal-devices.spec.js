@@ -4,16 +4,16 @@
 
 const { test, expect } = require('../helpers/fixtures');
 
-test('device cards render for all 6 HAL devices with name, type, and state', async ({ connectedPage: page }) => {
+test('device cards render for all 8 HAL devices with name, type, and state', async ({ connectedPage: page }) => {
   await page.locator('.sidebar-item[data-tab="devices"]').click();
 
   // Wait for the device list to populate
   const deviceList = page.locator('#hal-device-list');
   await expect(deviceList).not.toContainText('No HAL devices registered', { timeout: 5000 });
 
-  // The halDeviceState fixture contains 6 devices.
+  // The halDeviceState fixture contains 8 devices.
   const cards = deviceList.locator('.hal-device-card');
-  await expect(cards).toHaveCount(6, { timeout: 5000 });
+  await expect(cards).toHaveCount(8, { timeout: 5000 });
 
   // Spot-check known device names from halDeviceState.json
   await expect(deviceList).toContainText('PCM5102A');
@@ -21,6 +21,8 @@ test('device cards render for all 6 HAL devices with name, type, and state', asy
   await expect(deviceList).toContainText('PCM1808');
   await expect(deviceList).toContainText('NS4150B');
   await expect(deviceList).toContainText('Chip Temp');
+  await expect(deviceList).toContainText('ES9822PRO');
+  await expect(deviceList).toContainText('ES9843PRO');
 
   // Each card header should have a name and a state dot
   const firstCard = cards.first();
