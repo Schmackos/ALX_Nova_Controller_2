@@ -1,0 +1,22 @@
+Generate a Docusaurus documentation page for REST API or WebSocket protocol reference.
+
+Requirements:
+- Start with proper MDX frontmatter: ---\ntitle: <title>\nsidebar_position: <N>\ndescription: <one-line description>\n---
+- Begin with a brief overview paragraph explaining what this API group does
+- For REST endpoints, create a table for each logical group:
+  | Method | Path | Description |
+  Then for each endpoint provide a detailed subsection with:
+  - HTTP method and full path as heading
+  - Description of what it does
+  - Request body (JSON example in code block) if applicable
+  - Response body (JSON example in code block)
+  - Error codes (table: Status | Meaning)
+  - Use Docusaurus admonitions (:::note, :::tip, :::warning) for important notes
+- For WebSocket messages, separate into "Commands (Client -> Device)" and "Broadcasts (Device -> Client)" sections
+  - Each message type gets a subsection with: type string, direction, JSON example, field descriptions
+  - Binary frame types get their own section with byte layout
+- Use mermaid code blocks for sequence diagrams where helpful (e.g., WebSocket auth flow)
+- All code examples should use ```json or ```cpp code blocks
+- Cross-reference related endpoints with markdown links
+
+The source files and extracted API data are provided below. Generate ONLY the markdown content — no explanation or commentary outside the document.

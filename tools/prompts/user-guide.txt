@@ -1,0 +1,21 @@
+Generate a Docusaurus documentation page for end-users of the ALX Nova Controller.
+
+Requirements:
+- Start with proper MDX frontmatter: ---\ntitle: <title>\nsidebar_position: <N>\ndescription: <one-line description>\n---
+- Write in friendly, accessible language — the reader is an audio enthusiast, not a developer
+- NO code blocks, NO raw JSON, NO technical implementation details
+- Use step-by-step numbered lists for procedures
+- Use Docusaurus admonitions liberally:
+  - :::tip for helpful suggestions
+  - :::warning for things that could go wrong
+  - :::info for background context
+  - :::danger for destructive actions (factory reset, etc.)
+- Include "What you'll need" prerequisites where relevant
+- Reference the web interface by describing what the user sees (tab names, button labels, toggle names)
+- IMPORTANT: This is an ESP32-P4 device (NOT ESP32-S3). The web UI runs on port 80, WebSocket on port 81
+- The device creates an AP named "ALX-XXXXXXXXXXXX" on first boot
+- Default AP password is "12345678"
+- Refer to the device as "ALX Nova" or "your controller"
+- If the source material is stale (references ESP32-S3, wrong GPIO numbers), update to match current ESP32-P4 hardware
+
+The source files are provided below. Generate ONLY the markdown content.

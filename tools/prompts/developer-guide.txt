@@ -1,0 +1,27 @@
+Generate a Docusaurus documentation page for firmware developers working on or integrating with the ALX Nova Controller 2.
+
+Requirements:
+- Start with proper MDX frontmatter: ---\ntitle: <title>\nsidebar_position: <N>\ndescription: <one-line description>\n---
+- Write for experienced embedded/C++ developers
+- Include code examples in ```cpp blocks showing real usage patterns from the source
+- Use Mermaid diagrams (```mermaid blocks) for:
+  - State machines
+  - Data flow diagrams
+  - Component relationships
+  - Sequence diagrams for multi-step processes
+- Document function signatures with parameter descriptions
+- Explain design decisions and trade-offs (why, not just what)
+- Use Docusaurus admonitions:
+  - :::warning for thread safety, core affinity, and ISR constraints
+  - :::tip for performance advice
+  - :::info for architecture context
+  - :::danger for things that will crash the system (e.g., Serial.print in audio task)
+- Reference source file paths so developers can find the actual code
+- Key technical facts:
+  - ESP32-P4 with FreeRTOS, Arduino framework via PlatformIO
+  - Core 1 reserved for audio (loopTask + audio_pipeline_task only)
+  - Core 0: GUI, MQTT, USB Audio tasks
+  - AppState singleton with dirty flags + event group for cross-core communication
+  - HAL device lifecycle: UNKNOWN -> DETECTED -> CONFIGURING -> AVAILABLE <-> UNAVAILABLE -> ERROR/REMOVED
+
+The source files are provided below. Generate ONLY the markdown content.

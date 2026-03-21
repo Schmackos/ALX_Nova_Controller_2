@@ -1,0 +1,32 @@
+Generate a Docusaurus documentation page about HAL (Hardware Abstraction Layer) drivers for the ALX Nova Controller 2.
+
+Requirements:
+- Start with proper MDX frontmatter: ---\ntitle: <title>\nsidebar_position: <N>\ndescription: <one-line description>\n---
+- For driver reference pages: document each driver with:
+  - Compatible string (e.g., "ti,pcm5102a")
+  - Device type (DAC, ADC, Codec, Amplifier, Sensor, etc.)
+  - Capabilities bitmask (HAL_CAP_DAC_PATH, HAL_CAP_ADC_PATH, HAL_CAP_MUTE, etc.)
+  - I2C address (if applicable)
+  - Configuration fields (from HalDeviceConfig)
+  - Lifecycle methods: probe(), init(), deinit(), dumpConfig(), healthCheck()
+  - Thread safety notes
+- For driver guide pages: explain how to write a new HAL driver:
+  1. Create header inheriting HalDevice or HalAudioDevice
+  2. Implement required virtual methods
+  3. Register in hal_builtin_devices.cpp via hal_driver_registry
+  4. Add device DB entry
+  5. Add test module in test/test_hal_<name>/
+  - Include a complete example driver skeleton
+  - Show the factory registration pattern
+  - Explain NATIVE_TEST guards for hardware calls
+- Use ```cpp code blocks for all code examples
+- Use Mermaid diagrams (```mermaid blocks) for the device lifecycle state machine
+- Key facts:
+  - HalDevice base class in src/hal/hal_device.h
+  - HalAudioDevice extends HalDevice for audio devices
+  - HalDeviceManager singleton manages up to 24 devices
+  - Pin claim/release system prevents GPIO conflicts
+  - Priority-sorted init (BUS=1000 -> LATE=100)
+  - Compatible string format: "manufacturer,model" (e.g., "ti,pcm5102a", "everest,es8311")
+
+The source files are provided below. Generate ONLY the markdown content.

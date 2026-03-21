@@ -14,6 +14,7 @@ mockup_dsp_peq.html
 # Build artifacts
 *.txt
 !CLAUDE.txt
+!tools/prompts/*.txt
 build_*.txt
 upload_*.txt
 *_log.txt
