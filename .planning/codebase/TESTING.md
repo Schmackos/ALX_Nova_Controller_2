@@ -4,459 +4,559 @@
 
 ## Test Framework
 
-**C++ Unit Tests (Firmware):**
-- **Runner**: Unity (open-source C unit test framework)
-- **Environment**: `native` platform (host machine gcc/MinGW, no hardware)
-- **Config**: `platformio.ini [env:native]`
-- **Build flags**: `-D UNIT_TEST -D NATIVE_TEST -D DSP_ENABLED`
-- **Run commands**:
-  ```bash
-  pio test -e native              # Run all tests
-  pio test -e native -v           # Verbose output
-  pio test -e native -f test_wifi # Run specific module
-  ```
-- **Test count**: ~1732 assertions across 73+ modules (as of 2026-03-21)
+**C++ Unit Tests (Unity + native platform):**
+- Framework: Unity (built into PlatformIO)
+- Platform: `native` environment compiles with GCC/MinGW on host machine
+- Total: 1866 tests across 78 modules (as of 2026-03-21)
+- Command: `pio test -e native` or `pio test -e native -v` (verbose)
 
-**JavaScript Browser Tests (Web UI):**
-- **Runner**: Playwright v1.40+ (Chromium only)
-- **Location**: `e2e/tests/*.spec.js` (26 tests across 19 specs)
-- **Mock server**: Express.js on localhost:3000, in `e2e/mock-server/`
-- **Run commands**:
+**Configuration (`platformio.ini` native environment):**
+```ini
+[env:native]
+platform = native
+test_framework = unity
+build_flags =
+  -std=c++11
+  -D UNIT_TEST
+  -D NATIVE_TEST
+  -D DSP_ENABLED
+test_build_src = no          ; Don't compile src/ directly — tests include headers + use mocks
+lib_ignore = WebSockets      ; WebSockets not available on native
+```
+
+**Browser/E2E Tests (Playwright):**
+- Framework: Playwright Test (browser automation)
+- Total: 44 tests across 20 spec files
+- Commands:
   ```bash
-  cd e2e && npm install              # First time
-  npx playwright install --with-deps # First time
-  npx playwright test                # All 26 tests
-  npx playwright test tests/auth.spec.js    # Single spec
-  npx playwright test --headed       # Visible browser
-  npx playwright test --debug        # Inspector mode
+  cd e2e
+  npm install                                    # First time only
+  npx playwright install --with-deps chromium   # First time only
+  npx playwright test                           # Run all tests
+  npx playwright test tests/auth.spec.js        # Run single spec
+  npx playwright test --headed                  # Run with visible browser
+  npx playwright test --debug                   # Debug mode with inspector
   ```
-- **Test output**: HTML report on failure (14-day artifact retention)
+
+**Test Infrastructure:**
+- Mock server: `e2e/mock-server/server.js` (Express on port 3000)
+- WebSocket interception: `page.routeWebSocket(/.*:81/, handler)`
+- Mock state: `e2e/mock-server/ws-state.js` (singleton, reset between tests)
+- Fixtures: `e2e/fixtures/ws-messages/*.json` (15 deterministic WS broadcast messages)
+- API responses: `e2e/fixtures/api-responses/*.json` (14 REST response fixtures)
 
 ## Test File Organization
 
-**C++ Location:**
-- Pattern: `test/test_<module>/test_<module>.cpp`
-- One test file per directory (prevents duplicate main/setUp/tearDown symbols)
-- Mocks live in `test/test_mocks/`
-- Examples:
-  - `test/test_audio_pipeline/test_audio_pipeline.cpp`
-  - `test/test_auth/test_auth_handler.cpp`
-  - `test/test_hal_discovery/test_hal_discovery.cpp`
-
-**JavaScript Location:**
-- Pattern: `e2e/tests/<feature>.spec.js`
-- Examples:
-  - `e2e/tests/auth.spec.js` — login, session, cookies
-  - `e2e/tests/audio-inputs.spec.js` — input routing
-  - `e2e/tests/audio-matrix.spec.js` — matrix cell manipulation
-  - `e2e/tests/wifi-network.spec.js` — WiFi connect/scan
+**Location (C++):**
+- Co-located with source: `test/test_<module>/test_<module>.cpp`
+- Each test module in its own directory to avoid duplicate `main`/`setUp`/`tearDown` symbols
+- Mock implementations in `test/test_mocks/` (shared across all C++ tests)
 
 **Naming (C++):**
-- Test names: `test_<function_underscore>_<scenario>` (snake_case)
-- Examples:
-  - `void test_audio_pipeline_matrix_identity()` — identity matrix routes input 0 → output 0
-  - `void test_audio_pipeline_set_sink_validates_bounds()` — validates slot >= 0
-  - `void test_auth_pbkdf2_matches_known_vector()` — validates PBKDF2 vs reference
+- Test files: `test_<feature>.cpp` (e.g., `test_auth_handler.cpp`, `test_audio_pipeline.cpp`)
+- Test functions: `void test_<scenario>(void)` (e.g., `void test_login_success(void)`)
+- Prefix naming pattern: `test_<subsystem>_<behavior>` (e.g., `test_session_creation_empty_slot()`)
 
-**Naming (JavaScript):**
-- Test names: descriptive sentence starting with lowercase verb
-- Examples:
-  - `test('login page renders with password field and submit button', ...)`
-  - `test('correct password submits and redirects to main page', ...)`
-  - `test('invalid session cookie results in error', ...)`
+**Structure (C++):**
+```
+test/
+├── test_auth/
+│   └── test_auth_handler.cpp      # ~500 lines, 30+ test cases
+├── test_audio_pipeline/
+│   └── test_audio_pipeline.cpp
+├── test_mocks/
+│   ├── Arduino.h
+│   ├── Preferences.h
+│   ├── WiFi.h
+│   ├── mbedtls/
+│   │   ├── md.h
+│   │   └── pkcs5.h
+│   └── ... (15 total mock files)
+└── ... (78 test modules total)
+```
+
+**Location (JavaScript/E2E):**
+- `e2e/tests/*.spec.js` (one or more spec files per feature)
+- Helpers: `e2e/helpers/` (fixtures.js, selectors.js, ws-helpers.js)
+- Mock server: `e2e/mock-server/` (Express routes, WebSocket state)
+- Fixtures: `e2e/fixtures/` (ws-messages, api-responses JSON files)
+
+**Naming (JavaScript/E2E):**
+- Spec files: `<feature>.spec.js` (e.g., `auth.spec.js`, `audio-matrix.spec.js`)
+- Test names: `test('<scenario>', async ({ page }) => { ... })`
+- Example: `test('login page renders with password field and submit button', ...)`
 
 ## Test Structure
 
-**C++ Test Suite:**
-
+**Unity test pattern (C++):**
 ```cpp
 #include <unity.h>
 #include "../test_mocks/Arduino.h"
 #include "../test_mocks/Preferences.h"
 
-// ===== Setup and Teardown =====
+// Global test state
+static bool mockValue = false;
+
 void setUp(void) {
-    // Reset mocks before each test
-    // Example: clear static arrays, reset global state
+  // Reset state before EACH test
+  mockValue = false;
+  Preferences::reset();
 }
 
 void tearDown(void) {
-    // Cleanup after each test (optional)
+  // Cleanup after each test (usually empty)
 }
 
-// ===== Test Cases =====
-void test_module_function_scenario(void) {
-    // Arrange: set up test data
-    float input[4] = { 1.0f, 0.5f, -0.5f, -1.0f };
-    float expected[4] = { /* ... */ };
+void test_feature_basic_case(void) {
+  // Arrange
+  mockValue = true;
 
-    // Act: call the function under test
-    float output[4] = {};
-    some_function(input, output, 4);
+  // Act
+  bool result = testFunction();
 
-    // Assert: verify the result
-    for (int i = 0; i < 4; i++) {
-        TEST_ASSERT_FLOAT_WITHIN(0.001f, expected[i], output[i]);
-    }
+  // Assert
+  TEST_ASSERT_EQUAL_INT(true, result);
 }
 
-// ===== Test Runner =====
-// Unity auto-invokes setUp(), test_*(), tearDown() in sequence
+void test_feature_edge_case(void) {
+  mockValue = false;
+  bool result = testFunction();
+  TEST_ASSERT_EQUAL_INT(false, result);
+}
 ```
 
-**JavaScript Test Suite:**
+**Key Unity assertions (from test files):**
+- `TEST_ASSERT_EQUAL_INT(expected, actual)`
+- `TEST_ASSERT_EQUAL_STRING(expected, actual)`
+- `TEST_ASSERT_TRUE(condition)`
+- `TEST_ASSERT_FALSE(condition)`
+- `TEST_ASSERT_NULL(ptr)`
+- `TEST_ASSERT_NOT_NULL(ptr)`
+- `TEST_ASSERT_MESSAGE(condition, "message")`
 
+**Playwright test pattern (JavaScript):**
 ```javascript
 const { test, expect } = require('@playwright/test');
 
-test('user can login with valid password', async ({ page, request, baseURL }) => {
-  // Arrange: Navigate to login page
+test('login page renders with password field and submit button', async ({ page }) => {
+  // Arrange
   await page.goto('/login');
 
-  // Act: Enter password and submit
-  await page.locator('input[type="password"]').fill('testpassword');
-  await page.locator('button[type="submit"]').click();
+  // Act
+  const pwdInput = page.locator('input[type="password"]');
+  const submitBtn = page.locator('button[type="submit"]');
 
-  // Assert: Verify redirect or state change
-  await expect(page).toHaveURL('/');
+  // Assert
+  await expect(pwdInput).toBeVisible();
+  await expect(submitBtn).toBeVisible();
 });
 
-test('invalid password shows error message', async ({ page }) => {
+test('correct password submits and redirects to main page', async ({ page }) => {
   await page.goto('/login');
 
-  // Intercept POST and simulate failure
-  await page.route('/api/auth/login', async (route) => {
-    await route.abort('failed');
+  await page.locator('input[type="password"]').fill('anypassword');
+  await page.locator('button[type="submit"]').click();
+
+  const resp = await page.request.post('/api/auth/login', {
+    data: { password: 'anypassword' },
   });
-
-  await page.locator('input[type="password"]').fill('wrongpassword');
-  await page.locator('button[type="submit"]').click();
-
-  // Verify error is displayed
-  await expect(page.locator('.error-message')).toBeVisible();
+  const body = await resp.json();
+  expect(body.success).toBe(true);
 });
 ```
 
-**Playwright Fixtures:**
-
-The `connectedPage` fixture in `e2e/helpers/fixtures.js` provides:
-1. Valid session cookie (via mock `/api/auth/login`)
-2. WebSocket connection on port 81 mocked at browser level (`page.routeWebSocket()`)
-3. Auth handshake automated (fetch `/api/ws-token`, send auth token)
-4. Initial state broadcasts pre-loaded from fixtures
-5. Waits until `#wsConnectionStatus` reads "Connected"
-
-Usage:
-```javascript
-const { test, expect } = require('../helpers/fixtures');
-
-test('audio tab shows input sources', async ({ connectedPage }) => {
-  const page = connectedPage;
-
-  // Page is already authenticated and WS is connected
-  await page.locator('[data-tab="audio"]').click();
-
-  // Verify audio elements render
-  await expect(page.locator('#audio-inputs-container')).toBeVisible();
-});
-```
+**Key Playwright assertions:**
+- `await expect(element).toBeVisible()`
+- `await expect(element).toBeChecked()`
+- `await expect(element).toHaveValue(value)`
+- `await expect(page).toHaveURL(url)`
+- `expect(response.status()).toBe(200)`
 
 ## Mocking
 
-**C++ Mocks (test_mocks/ directory):**
+**Mock Framework (C++):**
+- Manual mocks in `test/test_mocks/` — no dynamic mocking framework (embedded constraint)
+- Mock classes implement Arduino APIs (String, millis, Serial, GPIO, etc.)
+- Mock implementations: subsets of real APIs, return deterministic values
 
-Mock headers replicate Arduino/ESP-IDF APIs for native compilation:
-- `Arduino.h` — millis(), micros(), digitalWrite(), pinMode(), analogRead()
-- `Preferences.h` — key-value storage interface
-- `WiFi.h` — WiFi class stubs
-- `PubSubClient.h` — MQTT client stubs
-- `Wire.h` — I2C bus mock (beginTransmission, write, read, endTransmission)
-- `i2s_std_mock.h` — I2S driver stubs
-- `esp_random.h`, `esp_timer.h`, `mbedtls/md.h` — crypto stubs
-- `LittleFS.h` — file system mock
+**Mock Files:**
+- `Arduino.h` — String class (extends std::string), millis(), delay(), random()
+- `Preferences.h` — key-value storage (in-memory, reset-able)
+- `WiFi.h` — WiFi connection state, scan results
+- `PubSubClient.h` — MQTT client interface
+- `esp_timer.h`, `esp_random.h` — ESP-IDF functions
+- `mbedtls/md.h`, `mbedtls/pkcs5.h` — Crypto functions
+- `LittleFS.h` — File system (in-memory, deterministic)
+- `i2s_std_mock.h` — I2S driver (stub, no audio I/O)
 
-Example mock usage:
+**Mock patterns:**
+```cpp
+// From Arduino.h mock
+class String : public std::string {
+public:
+  String() : std::string() {}
+  String(const char *s) : std::string(s ? s : "") {}
+
+  int toInt() const {
+    try { return std::stoi(*this); }
+    catch (...) { return 0; }
+  }
+};
+
+// From Preferences.h mock
+class Preferences {
+private:
+  static std::map<String, String> _data;
+public:
+  static void reset() { _data.clear(); }
+  void putString(const char *key, const String &value) {
+    _data[String(key)] = value;
+  }
+  String getString(const char *key, const String &defaultValue) {
+    auto it = _data.find(String(key));
+    return it != _data.end() ? it->second : defaultValue;
+  }
+};
+```
+
+**Mocking pattern in tests:**
 ```cpp
 #ifdef NATIVE_TEST
 #include "../test_mocks/Arduino.h"
+#include "../test_mocks/Preferences.h"
 #else
 #include <Arduino.h>
+#include <Preferences.h>
 #endif
 ```
 
-**JavaScript Mocks (e2e/mock-server/ and e2e/fixtures/):**
+This allows the same test to compile on both `native` (with mocks) and hardware (with real libraries).
 
-Mock server provides:
-- Express routes matching firmware REST API (port 3000)
-- Route files in `e2e/mock-server/routes/`:
-  - `auth.js` — login, ws-token, status endpoints
-  - `audio.js` — pipeline matrix, sink/source config
-  - `hal.js` — device list, discovery, config
-  - `wifi.js` — scan, connect, AP mode
-  - `mqtt.js` — broker config, discovery status
-  - `dsp.js` — DSP config CRUD
-  - (and others: ota.js, settings.js, system.js, etc.)
-- Mock state in `e2e/mock-server/ws-state.js` — singleton holding appState snapshot
-- WS fixtures in `e2e/fixtures/ws-messages/` — 15 JSON broadcast examples
+**What to Mock:**
+- Hardware interfaces (GPIO, I2S, I2C)
+- System timing (millis, esp_timer)
+- Persistent storage (Preferences, EEPROM, NVS)
+- Random number generation (for deterministic crypto tests)
+- Network interfaces (WiFi, MQTT, HTTP)
 
-**What to mock:**
-- Hardware: GPIO, I2C, UART (use mock headers)
-- External APIs: WiFi, MQTT brokers (use mock server routes)
-- Hardware I/O: ADC reads, DAC writes (return sensible values)
-- Time: use `millis()` mock for time-based logic
-
-**What NOT to mock:**
-- Core algorithm logic (DSP math, matrix operations)
-- State machine transitions
-- Allocation/deallocation patterns (test actual behavior)
-- Concurrency primitives (FreeRTOS semaphores) — use real implementations if testable
+**What NOT to Mock:**
+- Core algorithms (DSP, crypto math, state machines) — test the real logic
+- Data structures (arrays, structs) — use real instances
+- Pure computation functions — no need to mock input/output
 
 ## Fixtures and Factories
 
-**C++ Test Data:**
-
-Test fixtures are inline in the test file or static arrays at module scope:
+**Test Data (C++):**
 ```cpp
-// Example: Known biquad coefficient vector
-static const float BQ_COEFFS_LOW_SHELF[] = {
-    0.5f, 0.0f, 0.0f,  // B coeffs (numerator)
-    1.0f, -0.5f, 0.0f  // A coeffs (denominator)
-};
+// From test_auth_handler.cpp
+void resetLoginRateLimit() {
+  _loginFailCount = 0;
+  _lastFailTime = 0;
+  _nextLoginAllowedMs = 0;
+  _passwordNeedsMigration = false;
+}
 
-void test_dsp_biquad_low_shelf(void) {
-    DspBiquadState state = {};
-    float input[16] = { /* ... */ };
-    float output[16] = {};
-
-    dsp_apply_biquad(state, BQ_COEFFS_LOW_SHELF, input, output, 16);
-
-    // Assert output
+// Global test state (reset in setUp())
+namespace TestAuthState {
+  void reset() {
+    for (int i = 0; i < MAX_SESSIONS; i++) {
+      activeSessions[i].sessionId = "";
+      activeSessions[i].createdAt = 0;
+      activeSessions[i].lastSeen = 0;
+    }
+    mockWebPassword = "default_password";
+    mockAPPassword = "ap_password";
+    Preferences::reset();
+    EspRandomMock::reset();
+    resetLoginRateLimit();
+  }
 }
 ```
 
-**JavaScript Test Fixtures:**
+**Location (C++):**
+- Test data declared at file scope in test file
+- Reset in `setUp()` function
+- No separate factory files — factories inline in test code
 
-Fixtures stored as JSON files in `e2e/fixtures/`:
-- `e2e/fixtures/ws-messages/authSuccess.json` — WS auth response
-- `e2e/fixtures/ws-messages/hardwareStats.json` — system info broadcast
-- `e2e/fixtures/ws-messages/audioChannelMap.json` — input/output device list
-- `e2e/fixtures/api-responses/authStatus.json` — REST `/api/auth/status`
-- `e2e/fixtures/api-responses/halDevices.json` — HAL device list
+**Fixtures (JavaScript/E2E):**
+- Location: `e2e/fixtures/ws-messages/*.json` (15 JSON files)
+- Pattern: each fixture is a deterministic WS broadcast message
+- Examples: `wifi-status.json`, `audio-channel-map.json`, `hal-device-state.json`
 
-Helpers in `e2e/helpers/ws-helpers.js`:
-- `buildInitialState()` — assemble all initial broadcasts
-- `handleCommand(wsMsg)` — simulate firmware response to client command
-- Binary frame builders for waveform/spectrum data
-
-Example:
+**Fixture usage in tests:**
 ```javascript
-const { buildInitialState } = require('../helpers/ws-helpers');
+// From e2e/helpers/ws-helpers.js
+function loadFixture(name) {
+  return JSON.parse(fs.readFileSync(
+    path.join(FIXTURE_DIR, `${name}.json`), 'utf8'
+  ));
+}
 
-test('hardware stats displayed on boot', async ({ connectedPage }) => {
-  const page = connectedPage;
+function buildInitialState() {
+  return [
+    'wifi-status',
+    'smart-sensing',
+    'display-state',
+    'buzzer-state',
+    'mqtt-settings',
+    'hal-device-state',
+    'audio-channel-map',
+    'audio-graph-state',
+    'signal-generator',
+    'debug-state',
+  ].map(loadFixture);
+}
+```
 
-  // Initial state includes hardwareStats fixture
-  const hardwareStats = page.evaluate(() => {
-    // Access the mock state injected by fixture
-    return window.hardwareStatsFromWs;
-  });
+**Playwright fixtures (`e2e/helpers/fixtures.js`):**
+```javascript
+// connectedPage fixture — sets up authenticated session + WS + initial state
+test.use({
+  connectedPage: async ({ page }, use) => {
+    // Set session cookie
+    await page.context().addCookies([{
+      name: 'sessionId',
+      value: 'test-session-id',
+      domain: 'localhost',
+      path: '/',
+    }]);
 
-  expect(hardwareStats.heapFreeInternal).toBeGreaterThan(0);
+    // Navigate and authenticate WS
+    await page.goto('/');
+    // Mock server sends initial state broadcasts
+    // connectedPage is now ready to use
+
+    await use(page);
+  }
 });
 ```
 
 ## Coverage
 
 **Requirements:**
-- No automated coverage enforcement, but new code should have tests
-- Critical paths must be tested: auth, audio pipeline, DSP, HAL discovery, OTA, MQTT
+- **Baseline**: ~1866 C++ tests across 78 modules (as of 2026-03-21)
+- **No target enforcement** — coverage tracked informally
+- **CI requirement**: All tests must pass (0 failures) before build/release
 
-**View coverage (native):**
+**View Coverage (C++):**
 ```bash
-pio test -e native -v            # Verbose output shows assertion counts
-# Coverage report generation not integrated (gcov available if needed)
+# Test modules report results to stdout
+# No coverage HTML report generated (PlatformIO limitation on native)
+pio test -e native -v    # Verbose output shows each test result
 ```
 
-**Manual coverage audit:**
-- Review test count per module in MEMORY.md (e.g., "1732 tests across 75 modules")
-- Check CONCERNS.md for untested areas
-- Playwright E2E coverage: 19 specs covering critical UI paths
+**View Coverage (JavaScript/E2E):**
+```bash
+# Playwright HTML report (generated on failure or with --reporter=html)
+npx playwright test --reporter=html
+# Opens test-results/index.html in browser
+```
 
-**Coverage targets (informal):**
-- Core algorithms: 90%+ (DSP, matrix, conversion)
-- Public API functions: 100% (at least basic happy path)
-- Error paths: 80%+ (boundary checks, allocation failures)
-- UI interactions: 70%+ (E2E tests for critical workflows)
+**Coverage tracking:**
+- Browser tests: 44 tests covering auth, audio, DSP, WiFi, MQTT, HAL, OTA, debug
+- C++ tests: 1866 tests covering utilities, state, HAL, audio pipeline, DSP, OTA, MQTT, auth
+- Manual spot-checks via coverage report artifacts (CI uploads on failure)
 
 ## Test Types
 
 **Unit Tests (C++):**
-- Scope: Single function or module
-- Approach: No hardware, use mocks, test pure logic
-- Example: `test_dsp_biquad_apply()` — feed sinusoid through filter, verify magnitude response
-- Runs on native platform (~0.5s total, 1732 tests)
+- Scope: Single module or function, isolated behavior
+- Example: `test_auth_handler.cpp` — password hashing, session management, rate limiting
+- Setup: Mock all dependencies (Preferences, random, millis, etc.)
+- Duration: <1ms per test, ~30s total for all 1866 tests
 
 **Integration Tests (C++):**
-- Scope: Multiple modules together (e.g., HAL discovery → pipeline sink registration)
-- Approach: Mock hardware interfaces, test end-to-end behavior
-- Example: `test_hal_discovery_i2c_bus_conflict()` — WiFi active → skip Bus 0, emit diagnostic
-- Runs alongside unit tests in native environment
+- Scope: Multi-module interactions (e.g., HAL device discovery → audio pipeline registration)
+- Example: `test_hal_pipeline_bridge.cpp` — device state changes propagate to sink slots
+- Setup: Real objects, mocked hardware (GPIO, I2S)
+- Duration: <10ms per test
 
-**E2E Tests (JavaScript/Playwright):**
-- Scope: Full web UI workflow against mock Express server + mocked WebSocket
-- Approach: Browser automation, no real hardware, deterministic fixtures
-- Example: `test('user navigates to audio tab and routes input to output', ...)`
-- 26 tests covering auth, WiFi, audio, HAL, MQTT, OTA, debug console, health dashboard
-- Runs in Chromium only (no multi-browser needed)
+**Integration Tests (JavaScript/E2E):**
+- Scope: Frontend + mock server (Express, WS) interactions
+- Example: `audio-matrix.spec.js` — drag matrix cell → WS command sent → state broadcast received → UI updates
+- Setup: Real Playwright page, mocked server, WS interception
+- Duration: 100-500ms per test
 
-**Not included (no test harness):**
-- Hardware integration tests (real ESP32-P4 board)
-- Performance/stress tests (embedded real-time constraint)
-- Load tests (WiFi client counts, MQTT publish rate)
+**E2E Tests (full-stack simulation):**
+- Scope: Login page, main UI, all tabs, state persistence
+- No real hardware — mock server simulates firmware responses
+- Example: `auth.spec.js` — login flow, session cookie, redirect
+- Duration: 500ms-2s per test
 
 ## Common Patterns
 
 **Async Testing (C++):**
-- No async in native tests (single-threaded)
-- Timer-based logic tested with mock `millis()` advancement
-- Example:
-  ```cpp
-  void test_auto_off_timer_fires_after_delay(void) {
-      smart_sensing_set_auto_off_enabled(true, 5000);  // 5 second timeout
+Not applicable — native tests are synchronous.
 
-      // Advance mock time past timeout
-      mock_millis = 6000;
-      smart_sensing_update();
+**Async Testing (JavaScript/E2E):**
+```javascript
+test('async operation completes', async ({ page }) => {
+  // All page operations are async
+  await page.goto('/');
 
-      TEST_ASSERT_TRUE(amplifier_should_disable());  // Auto-off fires
-  }
-  ```
+  // Wait for element and perform action
+  const btn = page.locator('button[id="scanBtn"]');
+  await btn.click();
 
-**Async Testing (JavaScript/Playwright):**
-- All async operations use `await` or `.then().catch()`
-- Wait for elements/conditions before assertions
-- Example:
-  ```javascript
-  test('wifi connects after submit', async ({ connectedPage }) => {
-    const page = connectedPage;
-
-    // Arrange: intercept the WiFi connect request
-    await page.route('/api/wifi/config', async (route) => {
-      await new Promise(r => setTimeout(r, 500));  // Simulate delay
-      await route.continue();
-    });
-
-    // Act: fill and submit form
-    await page.locator('input[name="ssid"]').fill('TestNetwork');
-    await page.locator('button:has-text("Connect")').click();
-
-    // Assert: wait for status update
-    await expect(page.locator('#statusWifi')).toContainText('Connected', { timeout: 2000 });
-  });
-  ```
+  // Wait for response
+  const response = await page.waitForResponse(
+    resp => resp.url().includes('/api/hal/scan') && resp.status() === 200
+  );
+  const data = await response.json();
+  expect(data.success).toBe(true);
+});
+```
 
 **Error Testing (C++):**
-- Test boundary conditions and failure modes explicitly
-- Example:
-  ```cpp
-  void test_audio_pipeline_set_sink_rejects_out_of_bounds(void) {
-      const AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+```cpp
+void test_password_verify_rejects_wrong_input(void) {
+  String hashedPwd = hashPassword("correct");
 
-      bool result = audio_pipeline_set_sink(AUDIO_OUT_MAX_SINKS + 1, &sink);
+  // Should fail for wrong password
+  bool result = verifyPassword("wrong", hashedPwd);
+  TEST_ASSERT_FALSE(result);
 
-      TEST_ASSERT_FALSE(result);  // Should reject invalid slot
-  }
-  ```
+  // Should succeed for correct password
+  result = verifyPassword("correct", hashedPwd);
+  TEST_ASSERT_TRUE(result);
+}
+```
 
-**Error Testing (JavaScript):**
-- Intercept failed requests, verify error UI
-- Example:
-  ```javascript
-  test('hal scan shows error on I2C failure', async ({ connectedPage }) => {
-    const page = connectedPage;
+**Error Testing (JavaScript/E2E):**
+```javascript
+test('invalid password shows error message', async ({ page }) => {
+  await page.goto('/login');
 
-    // Route scan to return error
-    await page.route('/api/hal/scan', async (route) => {
-      await route.abort('failed');
+  // Try to login with wrong password
+  const resp = await page.request.post('/api/auth/login', {
+    data: { password: 'wrongpassword' },
+  });
+
+  // Expect 401
+  expect(resp.status()).toBe(401);
+  const body = await resp.json();
+  expect(body.success).toBe(false);
+});
+```
+
+**WebSocket Testing (JavaScript/E2E):**
+```javascript
+test('matrix gain change sends WS command', async ({ connectedPage }) => {
+  const page = connectedPage;
+
+  // Intercept WS outbound message
+  let sentMessage = null;
+  await page.routeWebSocket(/.*:81/, async (route) => {
+    route.onMessage(msg => {
+      try {
+        sentMessage = JSON.parse(msg);
+        console.log('WS sent:', sentMessage);
+      } catch (e) {}
+      route.continue();
     });
-
-    await page.locator('button:has-text("Rescan")').click();
-
-    // Verify error toast appears
-    await expect(page.locator('.toast.error')).toBeVisible();
   });
-  ```
 
-**WS Binary Frame Testing (JavaScript):**
-- Manually construct binary frames, inject via connectedPage.wsRoute
-- Example:
-  ```javascript
-  test('waveform binary frame updates canvas', async ({ connectedPage }) => {
-    const page = connectedPage;
+  // Trigger matrix cell interaction
+  const cell = page.locator('[data-matrix-cell="0,0"]');
+  await cell.click();
+  const input = page.locator('input[type="range"]');
+  await input.fill('6');  // 6 dB gain
 
-    // Construct binary waveform frame: [type:0x01][adc:0x00][samples:256×u8]
-    const buf = new ArrayBuffer(258);
-    const dv = new DataView(buf);
-    dv.setUint8(0, 0x01);  // type = waveform
-    dv.setUint8(1, 0);     // adc = 0
-    for (let i = 0; i < 256; i++) {
-      dv.setUint8(2 + i, Math.floor(Math.random() * 256));
-    }
+  // Wait for WS message
+  await page.waitForTimeout(100);
 
-    // Inject via mock WS
-    await connectedPage.wsRoute.send(buf);
+  // Verify message was sent
+  expect(sentMessage).not.toBeNull();
+  expect(sentMessage.type).toBe('setMatrixGain');
+  expect(sentMessage.slot).toBe(0);
+  expect(sentMessage.gainDb).toBe(6);
+});
+```
 
-    // Verify canvas was redrawn
-    const canvas = page.locator('#audioWaveformCanvas0');
-    await expect(canvas).toHaveJSProperty('width', 256);
+**Binary Frame Testing (JavaScript/E2E):**
+```javascript
+test('waveform binary frame contains 256 samples', async ({ connectedPage }) => {
+  const page = connectedPage;
+  let waveformFrame = null;
+
+  // Intercept binary WS message
+  await page.routeWebSocket(/.*:81/, async (route) => {
+    route.onMessage(msg => {
+      if (msg instanceof ArrayBuffer) {
+        const view = new Uint8Array(msg);
+        if (view[0] === 0x01) {  // WS_BIN_WAVEFORM
+          waveformFrame = view;
+        }
+      }
+      route.continue();
+    });
   });
-  ```
+
+  // Subscribe to audio
+  await page.evaluate(() => wsSend({ type: 'subscribeAudio' }));
+
+  // Wait for binary frame
+  await page.waitForTimeout(200);
+
+  // Verify frame structure
+  expect(waveformFrame).not.toBeNull();
+  expect(waveformFrame.length).toBe(258);  // 1 type + 1 reserved + 256 samples
+  expect(waveformFrame[0]).toBe(0x01);
+});
+```
+
+## Mandatory Test Coverage Rules
+
+**Before completing any task:**
+
+1. **C++ firmware changes** (`src/`):
+   - Run: `pio test -e native -v` or use firmware-test-runner agent
+   - New modules must have a test file in `test/test_<module>/`
+   - Changed function signatures → update affected tests
+   - **All tests must pass** before commit
+
+2. **Web UI changes** (`web_src/`):
+   - Run: `cd e2e && npx playwright test`
+   - New toggle/button/dropdown → add test verifying correct WS command sent
+   - New WS broadcast type → add fixture JSON + test verifying DOM update
+   - New tab/section → add navigation + element presence tests
+   - Changed element IDs → update `e2e/helpers/selectors.js` + specs
+   - Removed features → delete corresponding tests + fixtures
+   - New top-level JS declarations → add to `web_src/.eslintrc.json` globals
+
+3. **WebSocket protocol changes** (`src/websocket_handler.cpp`):
+   - Update `e2e/fixtures/ws-messages/` with new/changed message fixtures
+   - Update `e2e/helpers/ws-helpers.js` `buildInitialState()` and `handleCommand()`
+   - Update `e2e/mock-server/ws-state.js` if new state fields added
+   - Add Playwright test verifying frontend handles new message type
+
+4. **REST API changes** (`src/main.cpp`, `src/hal/hal_api.cpp`):
+   - Update matching route in `e2e/mock-server/routes/*.js`
+   - Update `e2e/fixtures/api-responses/` with new/changed response fixtures
+   - Add Playwright test if UI depends on new endpoint
 
 ## Pre-commit Hooks
 
-**Location**: `.githooks/pre-commit` (activate with `git config core.hooksPath .githooks`)
+**Activated via:** `git config core.hooksPath .githooks`
 
-**Checks** (run before every commit):
-1. `node tools/find_dups.js` — detect duplicate `let`/`const` declarations in JS files
-2. `node tools/check_missing_fns.js` — detect undefined function references in JS
-3. ESLint on `web_src/js/` — linting rules from `web_src/.eslintrc.json`
+**Pre-commit checks (`.githooks/pre-commit`):**
+1. `node tools/find_dups.js` — Detect duplicate JS declarations across files
+2. `node tools/check_missing_fns.js` — Find undefined function references
+3. `npx eslint web_src/js/ --config web_src/.eslintrc.json` — ESLint all JS
 
-**Failure behavior**: If any check fails, commit is blocked. Fix the issues and retry.
+**Runs before every commit** — prevents committing broken code.
 
 ## CI/CD Quality Gates
 
-**GitHub Actions** (`.github/workflows/tests.yml`):
+All 4 gates must pass before firmware build/release proceeds (`.github/workflows/tests.yml`):
 
-4 parallel quality gates (all must pass before firmware build):
+1. **cpp-tests** (`pio test -e native -v`) — 1866 C++ tests
+2. **cpp-lint** (cppcheck) — Static analysis on `src/`
+3. **js-lint** (find_dups + check_missing_fns + ESLint) — JavaScript validation
+4. **e2e-tests** (Playwright) — 44 browser tests
 
-1. **cpp-tests** (`pio test -e native -v`)
-   - Runs ~1732 Unity tests across 73+ modules
-   - Fails if any assertion fails
-   - Takes ~30-60 seconds
-
-2. **cpp-lint** (cppcheck on `src/`)
-   - Static analysis excluding `src/gui/`
-   - Checks for memory leaks, buffer overflows, suspicious logic
-   - Fails on any issues (warnings configured as errors)
-
-3. **js-lint** (find_dups + check_missing_fns + ESLint)
-   - `node tools/find_dups.js` — duplicate declarations
-   - `node tools/check_missing_fns.js` — undefined references
-   - `cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json`
-   - Fails on any issues
-
-4. **e2e-tests** (`cd e2e && npx playwright test`)
-   - Runs 26 Playwright tests in Chromium
-   - Mock Express server on localhost:3000
-   - Fails if any test fails
-   - Takes ~60-90 seconds
-   - HTML report uploaded to artifacts on failure (14-day retention)
-
-**Release gate** (`.github/workflows/release.yml`):
-- Runs same 4 quality gates before publishing release
-- Manual trigger only
-
-**Success criteria**: All 4 gates pass + no build errors
+Execution: **parallel** (all 4 gates run simultaneously).
+On failure: Playwright HTML report uploaded as artifact (14-day retention).
 
 ---
 

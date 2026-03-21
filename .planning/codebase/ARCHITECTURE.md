@@ -4,275 +4,205 @@
 
 ## Pattern Overview
 
-**Overall:** Event-driven real-time audio pipeline with Hardware Abstraction Layer (HAL) for modular device management.
+**Overall:** Layered architecture with Hardware Abstraction Layer (HAL) singleton managing devices, real-time audio pipeline with DSP chains, and event-driven state synchronization across WiFi, MQTT, and WebSocket interfaces.
 
 **Key Characteristics:**
-- **Multi-core audio pipeline**: 8-lane input → per-input DSP → 16×16 routing matrix → per-output DSP → 8-slot sink dispatch (Core 1 exclusive)
-- **Domain-specific state composition**: 15 lightweight state headers in `src/state/` composed into thin `AppState` singleton (~80 lines)
-- **Capability-based device discovery**: 3-tier I2C bus scan (EEPROM probe, chip ID verify) → capability-driven ordinal assignment (slots/lanes)
-- **Deferred event signaling**: Dirty flags + `EVT_*` bits trigger main loop wakeup via FreeRTOS event group instead of fixed 5ms ticks
-- **Cross-cutting coordination**: HAL toggle queue, MQTT async task on Core 0, PSRAM memory budgeting with 3-state heap pressure
+- Real-time audio pipeline (8-lane input → 16×16 matrix → 8-slot sink output) runs on dedicated FreeRTOS Core 1 task
+- Pluggable HAL device framework with capability-based slot/lane assignment and state callback system
+- AppState domain decomposition (15 lightweight state headers) with dirty-flag change detection
+- Event-driven main loop waking immediately on state changes via `app_events_wait()`
+- Cross-core synchronization via atomic flags and binary semaphores (I2S driver handshake)
 
 ## Layers
 
-**I/O Layer (Hardware):**
-- Purpose: Direct ESP32-P4 hardware interface (I2S ADC/DAC, I2C, GPIO, USB, PWM)
-- Location: `src/i2s_audio.h/.cpp`, `src/hal/hal_*.cpp` (30+ driver files)
-- Contains: Driver init/config, pin negotiation, interrupt handlers, register access
-- Depends on: ESP-IDF, Arduino, PlatformIO build flags
-- Used by: Audio pipeline (I2S read/write), HAL device manager (discovery/health)
+**Hardware Abstraction Layer (HAL):**
+- Purpose: Unified device lifecycle management (UNKNOWN → DETECTED → CONFIGURING → AVAILABLE ⇄ UNAVAILABLE → ERROR/REMOVED/MANUAL), discovery via I2C bus scan + EEPROM probing, runtime pin/bus configuration persistence, multi-instance device support
+- Location: `src/hal/` (24 files covering device manager, bridge, builtin drivers, custom devices, discovery, persistence)
+- Contains: `HalDevice` base class, driver registry, device database, pipeline bridge, EEPROM v3 parser
+- Depends on: AppState (dirty flags), Audio pipeline (sink/source registration), LittleFS (config persistence), I2C/GPIO hardware
+- Used by: Audio pipeline bridge (capability-based slot/lane assignment), main.cpp (boot init sequence), REST API endpoints, WebSocket broadcasts
 
-**HAL (Device Management Layer):**
-- Purpose: Unified API for all external devices — DAC, ADC, codecs, relays, encoders, buttons, displays, USB audio
-- Location: `src/hal/` (50+ files)
-- Contains: Device lifecycle state machine (UNKNOWN→DETECTED→CONFIGURING→AVAILABLE⇌UNAVAILABLE→ERROR/REMOVED), driver registry, discovery engine, EEPROM v3 config persistence
-- Depends on: I/O layer (pin claim, bus negotiation), AppState (config), LittleFS (persistence)
-- Used by: Audio pipeline (source/sink registration), settings (config import/export), REST API (`hal_api.cpp`)
+**Audio Pipeline (Real-Time):**
+- Purpose: Stream processing engine: reads from HAL-registered input sources → applies per-input DSP → routes through 16×16 matrix → applies per-output DSP → writes to HAL-registered sinks. All sample processing float32 [-1.0, +1.0] in RAM buffers allocated from PSRAM for audio data, internal SRAM for DMA
+- Location: `src/audio_pipeline.h/.cpp` (1088 lines)
+- Contains: 16×16 routing matrix (gain[out_ch][in_ch]), input/output DSP bypass arrays, source/sink slot arrays (8 max each), noise gate fade state, DSP swap hold buffer
+- Depends on: I2S audio HAL (DMA buffers, sample rate), DSP pipeline (per-lane/per-output filter chains), AppState (bypass flags)
+- Used by: Main loop (writes frames), FreeRTOS audio task (reads sources, applies DSP, writes sinks)
 
-**Audio Pipeline (Core 1):**
-- Purpose: Real-time sample processing on Core 1 with deterministic latency
-- Location: `src/audio_pipeline.h/.cpp` (~2200 lines), `src/audio_input_source.h`, `src/audio_output_sink.h`
-- Contains: Lane-indexed sources, 16×16 matrix, output slots, sample I/O callbacks
-- Depends on: HAL (device source/sink registration), DSP (per-lane/output filtering), I2S driver (DMA)
-- Used by: Main loop (register sources/sinks via HAL), WebSocket (VU metering), REST API
+**DSP Pipeline (Signal Processing):**
+- Purpose: Multi-stage audio filtering engine (biquad IIR, FIR, limiter, gain, delay, polarity, mute, compressor) with double-buffered stage config and glitch-free atomic swap. Runs on Core 1 inside audio task
+- Location: `src/dsp_pipeline.h/.cpp` (2363 lines), `src/output_dsp.h/.cpp` (per-output variant)
+- Contains: Stage pool (~120 stages max), coefficient generators (RBJ Audio EQ Cookbook), delay line PSRAM allocation with heap pre-flight check
+- Depends on: ESP-DSP library (assembly-optimized on ESP32-S3, lite C fallback on native), audio pipeline (stage insertion points)
+- Used by: Audio pipeline task (inline DSP processing per lane/output)
 
-**DSP Pipeline (Optional, Core 1 preemption):**
-- Purpose: Multi-stage per-lane + per-output audio filtering (biquads, FIR, gain, limiting, compressor)
-- Location: `src/dsp_pipeline.h/.cpp` (~3300 lines), `src/output_dsp.h/.cpp` (~1000 lines)
-- Contains: 24 stage types (biquad PEQ/shelf/notch, FIR, convolution, compressor, limiter, noise gate, tone controls), double-buffered config swap, glitch-free morph
-- Depends on: Audio pipeline (per-stage processing callbacks), ESP-DSP (assembly FFT/biquad on S3), memory budget (PSRAM delay lines)
-- Used by: Audio pipeline (stage chain evaluation), WebSocket (PEQ overlay), REST API (`dsp_api.cpp`)
+**I2S Audio HAL:**
+- Purpose: ADC/DAC driver abstraction for ESP32 I2S peripherals (dual PCM1808 ADC on I2S_NUM_0 and I2S_NUM_1, ES8311 codec, ES9822PRO/ES9843PRO expansion ADCs on separate I2S bus)
+- Location: `src/i2s_audio.h/.cpp` (1647 lines), `src/hal/hal_i2s_bridge.cpp`
+- Contains: I2S config (pin overrides via HAL), dual ADC clock coordination (both masters), TDM frame parsing (ES9843PRO), sample rate management, FFT analysis buffers
+- Depends on: HAL device manager (pin/bus config from HalDeviceConfig), hardware drivers (PCM1808 register control, ES8311 I2C commands)
+- Used by: Audio pipeline (reads ADC frames, writes DAC frames)
 
-**Settings & State Management:**
-- Purpose: Persistent configuration (JSON) + volatile runtime state (AppState singleton)
-- Location: `src/app_state.h`, `src/state/*.h`, `src/settings_manager.cpp`, `src/hal/hal_settings.cpp`
-- Contains: Config load/save, dirty-flag change detection, cross-task signaling
-- Depends on: LittleFS, JSON parser (ArduinoJson)
-- Used by: All subsystems (config), main loop (broadcast on dirty)
+**Smart Sensing Module:**
+- Purpose: Voltage detection (smoothed with rate-matched alpha), auto-off timer, amplifier relay control via GPIO or HAL relay device
+- Location: `src/smart_sensing.h/.cpp`, `src/hal/hal_relay.h/.cpp`
+- Contains: Detection state machine (NO_SIGNAL → SIGNAL_PRESENT → AUTO_OFF_TIMER), configurable threshold/timeout
+- Depends on: AppState audio state (signal presence flags), HAL (relay device lookup), GPIO (direct relay control fallback)
+- Used by: Main loop (periodic ~100ms update), amplifier control subsystem
 
-**Network Layer:**
-- Purpose: WiFi/Ethernet connectivity, MQTT broker communication, HTTP/WebSocket servers
-- Location: `src/wifi_manager.cpp`, `src/mqtt_handler.cpp`, `src/mqtt_task.cpp`, `src/websocket_handler.cpp`, `src/main.cpp`
-- Contains: Connection state machines, MQTT QoS/subscriptions, REST API endpoint dispatch, WebSocket auth + binary frame marshaling
-- Depends on: ESP-IDF (WiFi/Ethernet drivers), PubSubClient (MQTT), WebSocketsServer (library)
-- Used by: Web UI (via HTTP/WS), Home Assistant (via MQTT), external systems
+**Network Managers:**
+- **WiFi Manager** (`src/wifi_manager.h/.cpp`, 1556 lines): Multi-SSID client, AP mode, async connection with exponential backoff, sets `activeInterface = NET_WIFI` on connect/disconnect
+- **Ethernet Manager** (`src/eth_manager.h/.cpp`): 100Mbps phy on ESP32-P4, fallback to WiFi on unplugged, IP assignment, DHCP
+- **MQTT Handler** (split across 3 files):
+  - `src/mqtt_handler.cpp` (1128 lines): Client lifecycle, broker config, callback dispatch
+  - `src/mqtt_publish.cpp` (949 lines): Change-detection statics (`prevMqtt*`), 20 Hz publish task on Core 0
+  - `src/mqtt_ha_discovery.cpp` (1897 lines): Home Assistant MQTT discovery protocol implementation
 
-**Application Controller:**
-- Purpose: Coordination, state broadcasting, event signaling
-- Location: `src/main.cpp` (~1500 lines), `src/app_events.h`, `src/websocket_handler.cpp`
-- Contains: FreeRTOS task creation, main loop (event-wait pattern), state change broadcasts
-- Depends on: All subsystems
-- Used by: Triggers all async operations (WiFi, MQTT, OTA, HAL scans)
+**Web Interface:**
+- **HTTP Server** (`src/main.cpp`, port 80): REST API endpoints, static HTML/CSS/JS asset serving, compression via gzip
+- **WebSocket Server** (`src/websocket_handler.cpp`, port 81): Real-time state broadcast (8 output channels with per-client subscription), binary frame support for audio waveforms (WS_BIN_WAVEFORM=0x01) and spectrum (WS_BIN_SPECTRUM=0x02), token auth with 60s TTL
+- **Web Assets** (`web_src/` source, auto-compiled to `src/web_pages_gz.cpp`): HTML shell, CSS modules (tokens, layout, components, canvas, responsive), 28 JS modules in concatenated scope
 
-**Presentation Layer (Optional):**
-- Purpose: Embedded web UI (HTML/CSS/JS) + optional TFT display
-- Location: `src/web_pages.cpp` (auto-generated from `web_src/`), `src/gui/*.cpp` (LVGL on Core 0)
-- Contains: REST API consumer code, WebSocket message handlers, state visualization
-- Depends on: HTTP server, WebSocket, LVGL (optional)
-- Used by: End users + developers (debugging)
+**Persistent Storage:**
+- **Settings Manager** (`src/settings_manager.h/.cpp`): JSON persistence (`/config.json`) with atomic write (tmp+rename), legacy `settings.txt` fallback, export/import/factory reset
+- **HAL Settings** (`src/hal/hal_settings.h/.cpp`): Per-device `HalDeviceConfig` persistence (`/hal_config.json`) with pin/bus overrides
+- **Diagnostic Journal** (`src/diag_journal.h/.cpp`): Event ringbuffer (64 entries), diagnostic codes with severity, event correlation IDs
 
 ## Data Flow
 
-**Audio Processing Cycle (Core 1, 8.33ms @ 48kHz):**
+**Boot Sequence (Main Loop):**
 
-```
-I2S DMA interrupt → audio_pipeline_task
-  ├─ Wait on event group (EVT_AUDIO or 2-tick timeout)
-  ├─ Read 256 samples from all I2S ports via i2s_read()
-  │   └─ AudioInputSource::read_callback() → lane[0-7] float32[-1.0,+1.0]
-  ├─ For each lane:
-  │   └─ dsp_pipeline_process_channel() → 24-stage IIR/FIR/gain/compressor chain
-  ├─ Routing matrix: 16 input channels → 16 output channels (per-cell gain)
-  ├─ For each output:
-  │   └─ output_dsp_process_channel() → per-output DSP (limiter, compressor, gain, mute)
-  └─ For each sink slot:
-      ├─ AudioOutputSink::write_callback()
-      │   └─ sink_apply_volume() → sink_float_to_i2s_int32() → I2S TX DMA
-      └─ Update VU metering (lane + output dBFS) via thread-safe snapshots
-```
+1. Firmware init: CPU, memory, task watchdog
+2. LittleFS mount → Load settings → Apply debug log level
+3. GUI init (optional, TFT+encoder on Core 0 via FreeRTOS task)
+4. HAL builtin device registry (PCM5102A, ES8311, etc.)
+5. I2S audio init (ADC1+ADC2 dual master, uses HAL pin config)
+6. Output DSP init (load all presets from LittleFS)
+7. HAL pipeline bridge sync (capability-based slot/lane assignment)
+8. Peripheral device registration (NS4150B amp, display, encoder, buzzer, button, LED, relay, temp sensor)
+9. HTTP+WebSocket server startup
+10. WiFi/Ethernet init (async, non-blocking)
+11. MQTT task spawn on Core 0
+12. Enter main loop on Core 1 (audio task spawned separately)
 
-**State Broadcast Cycle (Main Loop, Core 0, event-triggered):**
+**Main Loop Data Flow (Core 1):**
 
-```
-Main Loop
-  ├─ Wait on app_events_wait(5ms) — instant wakeup if any dirty flag set
-  ├─ Check all dirty flags:
-  │   ├─ WiFi state → WS broadcast + MQTT publish (via mqtt_task)
-  │   ├─ ADC enabled → WS broadcast
-  │   ├─ DSP config → WS broadcast (no MQTT unless explicit user save)
-  │   ├─ HAL devices → WS broadcast (enumerate from HalDeviceManager)
-  │   ├─ Audio channel map → WS broadcast (input lane + output sink names)
-  │   └─ Buzzer/Display/Settings → similar patterns
-  ├─ Drain HalCoordState toggle queue:
-  │   └─ For each PendingDeviceToggle: dac_activate_for_hal() / dac_deactivate_for_hal()
-  ├─ MQTT async publish (runs concurrently in mqtt_task on Core 0 @ 20Hz)
-  │   └─ Change-detection statics (mqtt_publish.cpp) minimize broker traffic
-  └─ OTA check/download (one-shot task spawned from REST handler)
-```
+1. Wait up to 5ms on event group (`app_events_wait(5)`), waking instantly on any dirty flag
+2. WebSocket broadcast: if any authenticated client, serialize AppState changes (WiFi, audio, DSP, etc.) to JSON + binary frames
+3. MQTT publish: handled independently by `mqtt_task` on Core 0 at 20 Hz (reads same dirty flags, publishes to broker)
+4. Handle REST API requests (synchronous, via WebServer library callbacks)
+5. Button/encoder input polling → dispatch to handlers
+6. Smart sensing update (signal detection, relay control)
+7. Periodic diagnostics (task monitor, heap budget, audio health check)
+8. Loop back to event wait
 
-**Device Lifecycle (HAL State Machine):**
+**Audio Pipeline Data Flow (Core 1, Audio Task):**
 
-```
-UNKNOWN (post-registerDevice)
-  ↓ probe() called by discovery engine
-DETECTED (chip ID verified or EEPROM match)
-  ↓ init() called by HalDeviceManager
-CONFIGURING (internal use, ~1 frame)
-  ↓ init() returns success
-AVAILABLE (device ready, registered with audio pipeline)
-  ⇌ UNAVAILABLE (transient: I2C NAK, register read fail)
-  ↓ device removed or init fails
-ERROR / REMOVED / MANUAL (terminal states → deregister from audio pipeline)
-```
+1. I2S DMA interrupt fires (every 256 stereo frames at 48kHz ≈ 5.3ms)
+2. Audio task reads ADC frames via `i2s_read()` → convert to float32 [-1.0, +1.0]
+3. Check `appState.audio.paused` flag (set by DAC deinit before I2S uninstall)
+4. Per-lane DSP: apply biquad stages (IIR/FIR) from double-buffered config
+5. Routing matrix: sum weighted input channels → 16 output channels
+6. Per-output DSP: apply biquad/limiter/compressor/etc.
+7. Sink dispatch: each of 8 sinks reads its assigned output channels (slot-indexed)
+8. Sink processing: apply volume curve, mute ramp (click-free), convert float32 → int32 left-justified for DAC
+9. I2S write to all registered sinks (PCM5102A, ES8311, etc. via HAL)
+10. VU metering: extract per-lane dBFS for display/WS broadcast
+11. Yield 2 ticks, loop back
 
-**State Management:**
+**State Management & Synchronization:**
 
-- `AppState::getInstance()` — Singleton access, no locks (Core 1 audio task reads volatile fields lock-free)
-- Domain-specific nested access: `appState.wifi.ssid`, `appState.audio.adcEnabled[lane]`, `appState.dsp.enabled`
-- Dirty flags: `isWifiDirty()`, `isAdcEnabledDirty()`, `isDspDirty()` → main loop reads & clears
-- Cross-core volatile semantics: Audio task writes `appState.audio.audioPaused`, main loop reads via binary semaphore `audioTaskPausedAck`
+- **AppState singleton** (`src/app_state.h`): 15 domain-specific state headers composed into shell, dirty flags for each domain (`isBuzzerDirty()`, `isDspConfigDirty()`, etc.)
+- **Dirty flag pattern**: Task sets flag + calls `app_events_signal(EVT_XXX)`, main loop polls flag, serializes to JSON/MQTT, clears flag
+- **Cross-core volatiles**: `appState.audio.paused` (bool), `appState.audio.taskPausedAck` (binary semaphore), `appState._mqttReconfigPending` (bool), `appState._pendingApToggle` (int8_t)
+- **I2S handshake**: DAC deinit sets `paused=true`, waits `xSemaphoreTake(taskPausedAck, 50ms)`. Audio task observes flag, gives semaphore when yielding
 
 ## Key Abstractions
 
-**AudioInputSource (Lane Provider):**
-- Purpose: Per-lane I2S read callback encapsulation
-- Examples: PCM1808 ADC driver, USB Audio RX, Signal Generator, test fixture
-- Pattern: Registered to lane 0-7 via `audio_pipeline_set_source(lane, &source)`. Pipeline calls `source->read(samples, ch_count)` per cycle. HAL bridge discovers count via `HalDeviceManager::countByCapability(HAL_CAP_ADC_PATH)`
+**AudioInputSource:**
+- Purpose: Pluggable input lane source (ADC, codec, signal generator, USB audio, etc.)
+- Examples: `src/audio_input_source.h` struct with `read()` callback, HAL drivers register via `audio_pipeline_set_source(lane, source)`
+- Pattern: Slot-indexed lane array (8 max), each lane independently registered/cleared atomically via `vTaskSuspendAll()`
 
-**AudioOutputSink (Slot Writer):**
-- Purpose: Per-slot I2S write callback + capability query
-- Examples: PCM5102A (I2S), ES8311 (I2S + volume), MCP4725 (I2C), USB Audio TX
-- Pattern: Built by `device->buildSink(slot, &sink)`. Pipeline writes `sink->write(samples)` per cycle. `isReady()` check gates underrun-free writes
+**AudioOutputSink:**
+- Purpose: Pluggable output slot sink (DAC, USB host, etc.)
+- Examples: `src/audio_output_sink.h` struct with `write()` callback, HAL drivers register via `audio_pipeline_set_sink(slot, sink)`
+- Pattern: Slot-indexed sink array (8 max), HAL-Pipeline Bridge owns all sink lifecycle
 
-**HalDevice (Driver Base):**
-- Purpose: Abstract interface for all HAL-managed devices
-- Examples: All 50+ driver classes inherit from HalDevice
-- Pattern: Lifecycle methods `probe()`, `init()`, `deinit()`, `healthCheck()` + optional `getInputSource()`/`buildSink()`. State transitions emit `HalStateChangeCb`
+**HalDevice (Base Class):**
+- Purpose: Abstract device model with lifecycle states, init/deinit, runtime pin config, discovery metadata
+- Location: `src/hal/hal_device.h`
+- Pattern: Subclass per device type (HalPcm5102a, HalEs8311, HalEs9822pro, etc.), register via `registerDevice()`, auto-init via HAL discovery or manual `probe()/init()`
 
-**HalDeviceManager (Registry):**
-- Purpose: Device lifecycle ownership + state coordination
-- Location: `src/hal/hal_device_manager.h/.cpp`
-- Pattern: Singleton instance manages up to 24 slots. Per-device `HalDeviceConfig` persisted to `/hal_config.json` (I2C/I2S/GPIO overrides). State change fires registered callback (e.g., bridge's `hal_pipeline_state_change()`)
+**HalDeviceConfig:**
+- Purpose: Persistent runtime config per device (pin/bus overrides, gain, enable state, etc.)
+- Pattern: Serialized to `/hal_config.json`, loaded on boot, runtime changes queued for save
+- Stored in: Each HalDevice instance has `HalDeviceConfig _config` field
 
-**HalCoordState (Device Toggle Queue):**
-- Purpose: Deferred cross-core device enable/disable without blocking
-- Location: `src/state/hal_coord_state.h` (inline methods) + `src/state/hal_coord_state.cpp` (portMUX spinlock)
-- Pattern: `requestDeviceToggle(halSlot, action)` enqueues request (capacity 8, same-slot dedup). Main loop drains via `hasPendingToggles()` → `pendingToggleAt(i)` → `clearPendingToggles()`. Overflow telemetry: `_overflowCount` (lifetime) + `consumeOverflowFlag()` (one-shot, triggers `DIAG_HAL_TOGGLE_OVERFLOW`)
-
-**HalPipelineBridge (Device ↔ Pipeline):**
-- Purpose: Maps HAL state transitions to audio pipeline registration/removal
-- Location: `src/hal/hal_pipeline_bridge.h/.cpp`
-- Pattern: Registered as `HalStateChangeCb` at boot. Receives state changes, decides action:
-  - AVAILABLE → `audio_pipeline_set_sink()` / `markAdcEnabledDirty()`
-  - UNAVAILABLE → set `_ready=false` (transient, no removal)
-  - REMOVED/ERROR/MANUAL → `audio_pipeline_remove_sink()` / clear ADC lane
-  - Capability-based ordinal: DAC devices map to sink slot = `HAL_CAP_DAC_PATH` ordinal; ADC devices map to lane = `HAL_CAP_ADC_PATH` ordinal
-
-**HAL Discovery Engine:**
-- Purpose: 3-tier device detection with SDIO conflict guard
-- Location: `src/hal/hal_discovery.h/.cpp`
-- Pattern: I2C bus scan (0x08–0x77), EEPROM v3 probe, manual config import. Skips Bus 0 when `hal_wifi_sdio_active()` returns true (checks `connectSuccess || connecting || activeInterface==NET_WIFI`). Emits `DIAG_HAL_I2C_BUS_CONFLICT` on Bus 0 skip. Scan API returns `partialScan` flag
-
-**Dirty Flag Pattern (Change Detection):**
-- Purpose: Minimize WebSocket/MQTT chatter by detecting state changes
-- Pattern: `bool _xxxDirty` field + setter `markXxxDirty()` that also calls `app_events_signal(EVT_XXX)`. Main loop reads flag, broadcasts if set, clears flag
-- Examples: WiFi state (EVT_WIFI), ADC enabled (EVT_ADC_ENABLED), DSP (EVT_DSP), Display (EVT_DISPLAY), Buzzer (EVT_BUZZER)
+**DspStage:**
+- Purpose: Single audio processing step (biquad, gain, delay, etc.) with coefficient set
+- Pattern: Stage pool (~120 capacity), double-buffered active config + pending config for glitch-free swap
+- Accessed via: `dsp_add_stage()`, `dsp_get_stage()`, `dsp_swap_config()` with overflow telemetry
 
 ## Entry Points
 
-**Firmware Entry:**
-- Location: `src/main.cpp` → Arduino `setup()` / `loop()`
-- Triggers: Board power-on → FreeRTOS scheduler → Arduino setup → app initialization loop
-- Responsibilities: Singleton creation (AppState, HalDeviceManager), task spawning (audio, MQTT, GUI, USB), event group init, HAL discovery + pipeline sync
+**Firmware Setup (`src/main.cpp` setup()):**
+- Location: `src/main.cpp` lines 140-500
+- Triggers: Hardware reset, OTA update completion
+- Responsibilities: Initialize all subsystems in sequence (LittleFS → HAL → audio → WiFi → servers), spawn tasks, register REST API endpoints
 
-**WebSocket Event Handler:**
-- Location: `src/websocket_handler.cpp::webSocketEvent()`
-- Triggers: WebSocket client connect/disconnect/message
-- Responsibilities: Auth token validation, message dispatch (command → REST handler), binary frame handling (waveform/spectrum), state broadcast dequeue
+**Main Loop (`src/main.cpp` loop()):**
+- Location: `src/main.cpp` lines 500+
+- Triggers: Continuous on Core 1, wakes via `app_events_wait(5)`
+- Responsibilities: Broadcast state changes via WebSocket, dispatch button/encoder input, update smart sensing, log diagnostics
 
-**REST API Handlers:**
-- Location: `src/main.cpp` → `server.on()` + `server.handleClient()`
-- Triggers: HTTP request to `/api/*` endpoints
-- Responsibilities: JSON parsing, AppState mutation, HAL operations, response serialization. Deferred saves via dirty flags
+**Audio Pipeline Task (`src/audio_pipeline.cpp`):**
+- Location: Spawned by `audio_pipeline_init()`, runs on Core 1 priority 3
+- Triggers: I2S DMA interrupt every ~5.3ms
+- Responsibilities: Read ADC frames, apply DSP, mix via matrix, write to sinks, compute VU meters
 
-**HAL Device Callback (State Change):**
-- Location: `src/hal/hal_pipeline_bridge.cpp::hal_pipeline_state_change()`
-- Triggers: HalDeviceManager sets `device->_state` → calls registered `HalStateChangeCb`
-- Responsibilities: Update audio pipeline registration (sink set/remove), mark ADC lanes dirty, emit diagnostic events
+**MQTT Task (`src/mqtt_task.cpp`):**
+- Location: Spawned at boot, runs on Core 0 priority 2
+- Triggers: 20 Hz poll timer, `_mqttReconfigPending` flag
+- Responsibilities: Maintain broker connection, periodic publish of sensor state, respond to HA commands
 
-**MQTT Task (Core 0):**
-- Location: `src/mqtt_task.cpp` → FreeRTOS task spawned at boot
-- Triggers: 50ms timer tick (20Hz poll rate)
-- Responsibilities: MQTT client reconnect on broker config change, periodic publish of state snapshots, HA discovery. Never blocks main loop
+**REST API Endpoints (`src/main.cpp`, registered via `registerXxxApiEndpoints()`):**
+- HTTP server (port 80) routes to handlers:
+  - WiFi: `GET /api/networks`, `POST /api/network/connect`, etc.
+  - MQTT: `GET /api/mqtt/settings`, `PUT /api/mqtt/settings`
+  - HAL: `GET /api/hal/devices`, `POST /api/hal/scan`, `PUT /api/hal/devices/{id}`, `DELETE /api/hal/devices/{id}`
+  - Audio: `GET /api/audio/matrix`, `PUT /api/audio/matrix`, per-output DSP CRUD
+  - DSP: `GET /api/dsp/presets`, `POST /api/dsp/config`, `PUT /api/dsp/swap`
+- All endpoints guard on `appState.halSafeMode` (skip audio/HAL if boot loop detected)
 
-**Audio Task (Core 1):**
-- Location: `src/audio_pipeline.cpp` → FreeRTOS task spawned during pipeline init
-- Triggers: I2S DMA interrupt → audio event group signal
-- Responsibilities: Sample read/process/write, DSP apply, matrix routing, sink dispatch. Runs under `vTaskSuspendAll()` (Core 1) during slot mutations
+**WebSocket Handler (`src/websocket_handler.cpp`):**
+- Location: Port 81, token auth required
+- Messages: JSON broadcasts (state sync), binary frames (waveform 0x01, spectrum 0x02)
+- Subscription model: Per-client flag `_audioSubscribed[clientId]` gates high-frequency audio data
+- Deferred init state: `_pendingInitState[clientId]` spreads auth-success burst across 16 main-loop iterations to prevent WiFi TX saturation
 
 ## Error Handling
 
-**Strategy:** Multi-level telemetry with fallback silence (no data > corrupt data)
+**Strategy:** Defensive nullability, feature degradation, diagnostic logging with severity levels, no exceptions (Arduino/embedded constraint)
 
 **Patterns:**
 
-1. **Diag Events (Error Codes):**
-   - Central journal: `src/diag_journal.h/.cpp` (800-entry persistent ring + 32-entry hot PSRAM buffer)
-   - Emitted via `diag_emit(code, [optional fields])` → stored with timestamp + correlation ID
-   - Consumed by: REST API (snapshot export), WebSocket (real-time log), serial logging (opt-in level)
-   - Examples: `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101), `DIAG_HAL_TOGGLE_OVERFLOW` (0x100E), `DIAG_SYS_HEAP_WARNING` (0x0107)
-
-2. **Allocation Failures:**
-   - PSRAM→SRAM fallback: `heap_caps_calloc(size, MALLOC_CAP_SPIRAM)` with internal SRAM retry
-   - On SRAM alloc fail: emit `DIAG_SYS_PSRAM_ALLOC_FAIL` (0x0109), reject DSP stage add/OTA download
-   - Heap pressure thresholds: `HEAP_WARNING_THRESHOLD` (50KB) + `HEAP_CRITICAL_THRESHOLD` (40KB)
-
-3. **Device Lifecycle Failures:**
-   - I2C NAK during probe/health → state → UNAVAILABLE (transient, no removal)
-   - Init failure with error code → state → ERROR (terminal, audio pipeline removes sink)
-   - REST handler calls → return HTTP 503 if device toggle queue full, HTTP 400 on validation fail
-
-4. **Audio Pipeline Underruns:**
-   - Sink `isReady()` returns false → skip write (no garbage output)
-   - Count underruns in `DacState.txUnderruns` (instrumentation only)
-   - Trigger re-init on persistent underrun (HAL health check → UNAVAILABLE → re-AVAILABLE cycle)
-
-5. **Interlock Safety:**
-   - `appState.audio.audioPaused` + binary semaphore `audioTaskPausedAck` before I2S driver uninstall
-   - Audio task yields when paused, gives semaphore → main loop continues deinit
-   - 50ms timeout guard (prevents hang if audio task crashes)
+- **HAL device registration overflow**: `registerDevice()` returns -1 on capacity exhaustion (24/24 slots), caller logs warning, emits `DIAG_HAL_REGISTRY_FULL` (0x100F)
+- **DSP swap failure**: If pool exhausted during `dsp_swap_config()`, all 42 callers check return value, respond with HTTP 503 or log warning, leave DSP unchanged
+- **I2S driver uninstall**: DAC deinit path sets `appState.audio.paused=true`, waits binary semaphore, audio task gives semaphore when safe. Timeout 50ms prevents deadlock if audio task hung
+- **Heap memory pressure**: 3-state graduated (normal → warning @ 50KB free → critical @ 40KB free), features shed at each level (WS binary rate halved, DMA alloc refused, DSP stages rejected, OTA skipped)
+- **WiFi SDIO conflict**: I2C Bus 0 (GPIO 48/54) skipped during HAL discovery when WiFi active, `hal_wifi_sdio_active()` checks `connectSuccess || connecting || activeInterface == NET_WIFI`, emits `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101)
+- **Boot loop detection**: 3 consecutive crash boots → `appState.halSafeMode=true` → skip HAL init, WiFi+web only, emit `DIAG_SYS_BOOT_LOOP` (0x0101)
 
 ## Cross-Cutting Concerns
 
-**Logging:**
-- Module-prefixed serial output via `LOG_D`/`LOG_I`/`LOG_W`/`LOG_E` macros in `src/debug_serial.h`
-- Format: `[ModuleName] message` (prefix extracted for WebSocket category filtering)
-- Real-time WebSocket forward: `broadcastLine()` sends module separately as JSON field
-- Forbidden in ISR/audio task: `Serial.print` blocks on UART TX → starves DMA. Use dirty flags instead
+**Logging:** Centralized `debug_serial.h` macros (`LOG_D`, `LOG_I`, `LOG_W`, `LOG_E`) with module prefixes (`[ModuleName]`). Runtime level control via `applyDebugSerialLevel()`. WebSocket log forwarding via `broadcastLine()` (sends separate `"module"` JSON field for category filtering). Never log in ISR or audio task (blocks UART TX, starves DMA)
 
-**Validation:**
-- JSON schema validation: ArduinoJson parsed objects + null checks + range bounds
-- HAL pin validation: `HAL_GPIO_MAX=54` upper bound, `claimPin()` rejects invalid GPIO with LOG_W
-- Matrix bounds: `static_assert(MAX_INPUTS*2 <= MATRIX_SIZE)` + runtime `firstChannel + channelCount <= MATRIX_SIZE` check in sink builders
-- Deferred matrix save: 2s debounce timer (dirty flag set → main loop waits 2s idle → `settings_manager.cpp` writes `/audio_config.json`)
+**Validation:** Input bounds checking on matrix dimensions (compile-time `static_assert` + runtime guards), GPIO number validation (rejects GPIO>54), I2C address range validation (0x08-0x77)
 
-**Authentication:**
-- Web password: PBKDF2-SHA256 10k iterations, salt stored in `/auth.json`
-- Cookies: HttpOnly + Secure flags on HTTPS (TLS offload to reverse proxy in production)
-- WebSocket tokens: 16-slot pool, 60s TTL, short-lived lookup from `GET /api/ws-token`
-- Rate limiting: HTTP 429 on >5 auth failures per minute (per IP)
+**Authentication:** Web password PBKDF2-SHA256 (10k iterations), HttpOnly cookie, WS token pool (16 slots, 60s TTL), rate limiting on failed auth (HTTP 429)
 
-**Memory Management:**
-- PSRAM for audio buffers (66KB) + DSP delay lines (~77KB): guarded by free-block checks
-- Heap budget tracker: `src/heap_budget.h/.cpp` (32-entry subsystem allocation log)
-- Feature shedding on `heapCritical`: DMA alloc refused, WS binary suppressed, DSP stages rejected, OTA skipped
-- MCLK continuity: never call `i2s_configure_adc1()` in audio task loop (MCLK must remain continuous)
-
-**Testing Coverage:**
-- C++ unit tests: 1730+ tests via Unity framework on `native` environment
-- Mock implementations: `test/test_mocks/` (Arduino, WiFi, MQTT, Preferences)
-- E2E browser tests: 26 Playwright tests on mock Express server + WS interception
-- CI/CD gates: cpp-tests, cpp-lint, js-lint, e2e-tests (all must pass before build)
+**Synchronization:** FreeRTOS `vTaskSuspendAll()` for atomic audio pipeline slot updates, binary semaphore for I2S handshake, volatile flags for cross-core coordination, no locks in audio task (real-time constraint)
 
 ---
 
