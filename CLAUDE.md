@@ -68,11 +68,11 @@ Application state is decomposed across 15 lightweight domain-specific headers un
 - `src/state/mqtt_state.h` — `MqttState` (broker config, connection state)
 - `src/state/ethernet_state.h` — `EthernetState`
 - `src/state/debug_state.h` — `DebugState` (debug mode, serial level, hw stats, heapCritical)
-- `src/state/hal_coord_state.h` — Reserved (future HAL coordination)
+- `src/state/hal_coord_state.h` — `HalCoordState`: deferred device toggle queue (capacity 8, same-slot dedup). `requestDeviceToggle(halSlot, action)` enqueues enable/disable for ANY device type. Main loop consumes via `hasPendingToggles()` / `pendingToggleAt(i)` / `clearPendingToggles()`. Overflow telemetry: `_overflowCount` (lifetime counter) + `consumeOverflowFlag()` (one-shot, triggers `DIAG_HAL_TOGGLE_OVERFLOW` diagnostic). All 6 callers check return value and LOG_W on failure; REST endpoints return HTTP 503
 
-**Usage pattern**: Access domain state via nested composition: `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.dac.filterMode`, `appState.general.darkMode`, `appState.dsp.enabled`, etc. DAC device state (enabled, volume, mute) lives in `HalDeviceConfig` via HAL manager — not in DacState. Dirty flags and event signaling remain in AppState shell for backward compat.
+**Usage pattern**: Access domain state via nested composition: `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.general.darkMode`, `appState.dsp.enabled`, `appState.halCoord.requestDeviceToggle()`, etc. DAC device state (enabled, volume, mute, filterMode) lives in `HalDeviceConfig` via HAL manager — not in DacState. Dirty flags and event signaling remain in AppState shell for backward compat.
 
-**Cross-domain coordination**: AppState retains `volatile bool _mqttReconfigPending`, `volatile int8_t _pendingApToggle`, and backoff delays — inherently cross-cutting concerns unrelated to a single domain.
+**Cross-domain coordination**: AppState retains `volatile bool _mqttReconfigPending`, `volatile int8_t _pendingApToggle`, backoff delays, and `HalCoordState halCoord` (deferred device toggle queue) — inherently cross-cutting concerns unrelated to a single domain.
 
 AppState uses **dirty flags** (e.g., `isBuzzerDirty()`, `isDisplayDirty()`, `isOTADirty()`) to detect changes and minimize unnecessary WebSocket broadcasts and MQTT publishes. Every dirty-flag setter also calls `app_events_signal(EVT_XXX)` (defined in `src/app_events.h`) so the main loop can replace `delay(5)` with `app_events_wait(5)` — waking immediately on any state change and falling back to a 5 ms tick when idle. The event group uses 24 usable bits (`EVT_ANY = 0x00FFFFFF`; bits 24-31 are reserved by FreeRTOS). Currently 16 event bits are assigned (bits 0-15) with 8 spare.
 

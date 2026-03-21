@@ -230,6 +230,101 @@ void test_hal_coord_fill_and_drain(void) {
 }
 
 // ---------------------------------------------------------------------------
+// Test: overflow counter increments on each dropped request
+// ---------------------------------------------------------------------------
+
+void test_hal_coord_overflow_counter(void) {
+    HalCoordState hc = {};
+    hc.clearPendingToggles();
+
+    TEST_ASSERT_EQUAL_UINT32(0, hc.overflowCount());
+
+    // Fill to capacity
+    for (uint8_t i = 0; i < PENDING_TOGGLE_CAPACITY; i++) {
+        TEST_ASSERT_TRUE(hc.requestDeviceToggle(i, 1));
+    }
+    TEST_ASSERT_EQUAL_UINT32(0, hc.overflowCount());
+
+    // 3 overflow attempts
+    TEST_ASSERT_FALSE(hc.requestDeviceToggle(PENDING_TOGGLE_CAPACITY, 1));
+    TEST_ASSERT_FALSE(hc.requestDeviceToggle(PENDING_TOGGLE_CAPACITY + 1, -1));
+    TEST_ASSERT_FALSE(hc.requestDeviceToggle(PENDING_TOGGLE_CAPACITY + 2, 1));
+
+    TEST_ASSERT_EQUAL_UINT32(3, hc.overflowCount());
+}
+
+// ---------------------------------------------------------------------------
+// Test: overflow flag is set on overflow
+// ---------------------------------------------------------------------------
+
+void test_hal_coord_overflow_flag_set(void) {
+    HalCoordState hc = {};
+    hc.clearPendingToggles();
+
+    // No overflow yet — flag should be false
+    TEST_ASSERT_FALSE(hc.consumeOverflowFlag());
+
+    // Fill to capacity and trigger overflow
+    for (uint8_t i = 0; i < PENDING_TOGGLE_CAPACITY; i++) {
+        hc.requestDeviceToggle(i, 1);
+    }
+    hc.requestDeviceToggle(PENDING_TOGGLE_CAPACITY, 1);
+
+    TEST_ASSERT_TRUE(hc.consumeOverflowFlag());
+}
+
+// ---------------------------------------------------------------------------
+// Test: consumeOverflowFlag clears on read, counter persists
+// ---------------------------------------------------------------------------
+
+void test_hal_coord_overflow_flag_consume_clears(void) {
+    HalCoordState hc = {};
+    hc.clearPendingToggles();
+
+    // Fill and overflow
+    for (uint8_t i = 0; i < PENDING_TOGGLE_CAPACITY; i++) {
+        hc.requestDeviceToggle(i, 1);
+    }
+    hc.requestDeviceToggle(PENDING_TOGGLE_CAPACITY, 1);
+
+    // First consume returns true
+    TEST_ASSERT_TRUE(hc.consumeOverflowFlag());
+    // Second consume returns false (cleared)
+    TEST_ASSERT_FALSE(hc.consumeOverflowFlag());
+    // Counter still reflects the overflow
+    TEST_ASSERT_EQUAL_UINT32(1, hc.overflowCount());
+}
+
+// ---------------------------------------------------------------------------
+// Test: overflow counter survives clear — lifetime accumulator
+// ---------------------------------------------------------------------------
+
+void test_hal_coord_overflow_counter_survives_clear(void) {
+    HalCoordState hc = {};
+    hc.clearPendingToggles();
+
+    // Fill and overflow once
+    for (uint8_t i = 0; i < PENDING_TOGGLE_CAPACITY; i++) {
+        hc.requestDeviceToggle(i, 1);
+    }
+    hc.requestDeviceToggle(PENDING_TOGGLE_CAPACITY, 1);
+    TEST_ASSERT_EQUAL_UINT32(1, hc.overflowCount());
+
+    // Drain (clear) and refill
+    hc.clearPendingToggles();
+    for (uint8_t i = 0; i < PENDING_TOGGLE_CAPACITY; i++) {
+        hc.requestDeviceToggle(i + 20, -1);
+    }
+
+    // Overflow again
+    hc.requestDeviceToggle(PENDING_TOGGLE_CAPACITY + 20, -1);
+    hc.requestDeviceToggle(PENDING_TOGGLE_CAPACITY + 21, 1);
+
+    // Counter accumulates across clear cycles
+    TEST_ASSERT_EQUAL_UINT32(3, hc.overflowCount());
+}
+
+// ---------------------------------------------------------------------------
 // Test runner
 // ---------------------------------------------------------------------------
 
@@ -251,6 +346,10 @@ int main(int argc, char** argv) {
     RUN_TEST(test_hal_coord_valid_after_invalid);
     RUN_TEST(test_hal_coord_at_out_of_bounds);
     RUN_TEST(test_hal_coord_fill_and_drain);
+    RUN_TEST(test_hal_coord_overflow_counter);
+    RUN_TEST(test_hal_coord_overflow_flag_set);
+    RUN_TEST(test_hal_coord_overflow_flag_consume_clears);
+    RUN_TEST(test_hal_coord_overflow_counter_survives_clear);
 
     return UNITY_END();
 }

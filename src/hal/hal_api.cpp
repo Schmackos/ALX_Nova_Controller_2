@@ -284,7 +284,9 @@ void registerHalApiEndpoints(WebServer& server) {
         const HalDeviceDescriptor& delDesc = dev->getDescriptor();
         if (delDesc.capabilities & HAL_CAP_DAC_PATH) {
             // Generic deferred deactivation — device-type agnostic
-            appState.halCoord.requestDeviceToggle(slot, -1);
+            if (!appState.halCoord.requestDeviceToggle(slot, -1)) {
+                LOG_W("[HAL API] Toggle queue full for slot %u (device delete)", slot);
+            }
             // Update HalDeviceConfig (authoritative source)
             HalDeviceConfig* cfg = mgr.getConfig(slot);
             if (cfg) cfg->enabled = false;

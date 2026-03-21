@@ -1232,6 +1232,14 @@ void loop() {
     appState.halCoord.clearPendingToggles();
   }
 
+  // Emit diagnostic if toggle queue overflowed since last drain
+  if (appState.halCoord.consumeOverflowFlag()) {
+    LOG_W("[HAL] Toggle queue overflow (total: %lu)",
+          (unsigned long)appState.halCoord.overflowCount());
+    diag_emit(DIAG_HAL_TOGGLE_OVERFLOW, DIAG_SEV_WARN, DIAG_SLOT_NONE,
+              "HalCoord", "Toggle queue full");
+  }
+
   // Broadcast DAC state changes (WS/API/MQTT -> all clients)
   if (appState.isDacDirty()) {
     sendDacState();

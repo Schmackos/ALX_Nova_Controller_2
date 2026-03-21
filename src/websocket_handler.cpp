@@ -972,9 +972,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             // setup is too heavy for the WebSocket handler context (blocks SDIO)
             HalDevice* dev = HalDeviceManager::instance().getDevice(halSlot);
             if (en && !was && dev && !dev->_ready) {
-              appState.halCoord.requestDeviceToggle(halSlot, 1);   // main loop activates
+              if (!appState.halCoord.requestDeviceToggle(halSlot, 1)) {
+                LOG_W("[WebSocket] Toggle queue full for slot %u (setDacEnabled)", halSlot);
+              }
             } else if (!en && was) {
-              appState.halCoord.requestDeviceToggle(halSlot, -1);  // main loop deactivates
+              if (!appState.halCoord.requestDeviceToggle(halSlot, -1)) {
+                LOG_W("[WebSocket] Toggle queue full for slot %u (setDacEnabled)", halSlot);
+              }
             }
             hal_save_device_config_deferred(halSlot);
             appState.markDacDirty();
@@ -1054,9 +1058,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
             // Defer init/deinit to main loop — ES8311 I2C + I2S2 setup is too heavy
             // for the WebSocket handler context (blocks SDIO -> WiFi crash)
             if (en && !was) {
-              appState.halCoord.requestDeviceToggle(halSlot, 1);   // main loop activates
+              if (!appState.halCoord.requestDeviceToggle(halSlot, 1)) {
+                LOG_W("[WebSocket] Toggle queue full for slot %u (setEs8311Enabled)", halSlot);
+              }
             } else if (!en && was) {
-              appState.halCoord.requestDeviceToggle(halSlot, -1);  // main loop deactivates
+              if (!appState.halCoord.requestDeviceToggle(halSlot, -1)) {
+                LOG_W("[WebSocket] Toggle queue full for slot %u (setEs8311Enabled)", halSlot);
+              }
             }
             hal_save_device_config_deferred(halSlot);
             appState.markDacDirty();

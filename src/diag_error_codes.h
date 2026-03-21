@@ -30,6 +30,7 @@ enum DiagErrorCode : uint16_t {
     DIAG_HAL_CONFIG_INVALID             = 0x100B,  // Invalid config supplied
     DIAG_HAL_CONFIG_APPLIED             = 0x100C,  // Config changed
     DIAG_HAL_DEVICE_DETECTED            = 0x100D,  // New device found
+    DIAG_HAL_TOGGLE_OVERFLOW            = 0x100E,  // Toggle queue full — request dropped
 
     // ===== 0x11xx: HAL — Discovery =====
     DIAG_HAL_I2C_BUS_CONFLICT           = 0x1101,  // Bus 0 scan skipped (WiFi SDIO)
