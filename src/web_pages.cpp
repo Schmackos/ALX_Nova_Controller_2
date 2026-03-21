@@ -4738,6 +4738,37 @@ body.night-mode {
                 </div>
             </div>
 
+            <!-- DSP CPU Load -->
+            <div class="card" id="dsp-cpu-section" style="display:none">
+                <div class="card-title">DSP CPU Load</div>
+                <div class="info-box-compact">
+                    <div class="info-row">
+                        <span class="info-label">Per-Input DSP</span>
+                        <span class="info-value" id="dsp-cpu-input">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Pipeline Total</span>
+                        <span class="info-value" id="dsp-cpu-pipeline">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Frame Time</span>
+                        <span class="info-value" id="dsp-frame-us">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Matrix Mix</span>
+                        <span class="info-value" id="dsp-matrix-us">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Output DSP</span>
+                        <span class="info-value" id="dsp-output-us">—</span>
+                    </div>
+                    <div class="info-row" id="dsp-cpu-warn-row" style="display:none">
+                        <span class="info-label" style="color:var(--warning)">FIR Bypassed</span>
+                        <span class="info-value" id="dsp-fir-bypass" style="color:var(--warning)">0</span>
+                    </div>
+                </div>
+            </div>
+
             </div>
 
             <!-- Audio DAC Diagnostics -->
@@ -8037,9 +8068,8 @@ body.night-mode {
                 if (d.capabilities & HAL_CAP_PGA_CONTROL) {
                     h += '<div class="hal-form-row"><label>PGA Gain:</label>';
                     h += '<select id="halCfgPgaGain">';
-                    var pgaOpts = [0, 6, 12, 18, 23];
-                    for (var pi = 0; pi < pgaOpts.length; pi++) {
-                        h += '<option value="' + pgaOpts[pi] + '"' + (d.cfgPgaGain === pgaOpts[pi] ? ' selected' : '') + '>' + pgaOpts[pi] + ' dB</option>';
+                    for (var pi = 0; pi <= 42; pi += 6) {
+                        h += '<option value="' + pi + '"' + (d.cfgPgaGain === pi ? ' selected' : '') + '>' + pi + ' dB</option>';
                     }
                     h += '</select></div>';
                 }
@@ -8048,6 +8078,25 @@ body.night-mode {
                     h += '<div class="hal-form-row"><label>High-Pass Filter:</label>';
                     h += '<label class="toggle-label"><input type="checkbox" id="halCfgHpfEnabled"' + (d.cfgHpfEnabled ? ' checked' : '') + '> <span>Enabled</span></label>';
                     h += '</div>';
+                }
+
+                if (d.type === 2) {
+                    var filterPresets = [
+                        'Minimum Phase',
+                        'Linear Apodizing Fast',
+                        'Linear Fast',
+                        'Linear Fast Low Ripple',
+                        'Linear Slow',
+                        'Minimum Fast',
+                        'Minimum Slow',
+                        'Minimum Slow Low Dispersion'
+                    ];
+                    h += '<div class="hal-form-row"><label>Filter Preset:</label>';
+                    h += '<select id="halCfgFilterPreset">';
+                    for (var fi = 0; fi < filterPresets.length; fi++) {
+                        h += '<option value="' + fi + '"' + (d.cfgFilterMode === fi ? ' selected' : '') + '>' + filterPresets[fi] + '</option>';
+                    }
+                    h += '</select></div>';
                 }
             }
 
@@ -8177,6 +8226,8 @@ body.night-mode {
             if (pgaEl) cfg.cfgPgaGain = parseInt(pgaEl.value) || 0;
             var hpfEl = document.getElementById('halCfgHpfEnabled');
             if (hpfEl) cfg.cfgHpfEnabled = hpfEl.checked;
+            var filterPresetEl = document.getElementById('halCfgFilterPreset');
+            if (filterPresetEl) cfg.filterMode = parseInt(filterPresetEl.value) || 0;
             var paEl = document.getElementById('halCfgPaControlPin');
             if (paEl) cfg.cfgPaControlPin = parseInt(paEl.value);
             // New I2S pin fields
@@ -10869,6 +10920,53 @@ function initFirmwareDragDrop() {
             // Reset Reason
             if (data.resetReason) {
                 document.getElementById('resetReason').textContent = formatResetReason(data.resetReason);
+            }
+
+            // DSP CPU Load
+            var hasDspData = (data.pipelineCpu !== undefined || data.cpuLoadPercent !== undefined);
+            var dspSection = document.getElementById('dsp-cpu-section');
+            if (hasDspData) {
+                if (dspSection) dspSection.style.display = '';
+
+                // Per-input DSP CPU (from dspMetrics cpuLoadPercent)
+                var dspInputEl = document.getElementById('dsp-cpu-input');
+                if (dspInputEl && data.cpuLoadPercent !== undefined) {
+                    dspInputEl.textContent = data.cpuLoadPercent.toFixed(1) + '%';
+                    dspInputEl.style.color = data.cpuLoadPercent >= 95 ? 'var(--error-color)' :
+                                             data.cpuLoadPercent >= 80 ? 'var(--warning-color)' : '';
+                }
+
+                // Pipeline total CPU
+                var dspPipelineEl = document.getElementById('dsp-cpu-pipeline');
+                if (dspPipelineEl && data.pipelineCpu !== undefined) {
+                    dspPipelineEl.textContent = data.pipelineCpu.toFixed(1) + '%';
+                    dspPipelineEl.style.color = data.pipelineCpu >= 95 ? 'var(--error-color)' :
+                                                data.pipelineCpu >= 80 ? 'var(--warning-color)' : '';
+                }
+
+                // Frame time breakdown
+                var dspFrameEl = document.getElementById('dsp-frame-us');
+                if (dspFrameEl && data.pipelineFrameUs !== undefined) {
+                    dspFrameEl.textContent = data.pipelineFrameUs + ' µs';
+                }
+
+                var dspMatrixEl = document.getElementById('dsp-matrix-us');
+                if (dspMatrixEl && data.matrixUs !== undefined) {
+                    dspMatrixEl.textContent = data.matrixUs + ' µs';
+                }
+
+                var dspOutputEl = document.getElementById('dsp-output-us');
+                if (dspOutputEl && data.outputDspUs !== undefined) {
+                    dspOutputEl.textContent = data.outputDspUs + ' µs';
+                }
+
+                // FIR bypass warning row
+                var dspWarnRow = document.getElementById('dsp-cpu-warn-row');
+                var dspFirEl = document.getElementById('dsp-fir-bypass');
+                if (dspWarnRow && data.firBypassCount !== undefined) {
+                    dspWarnRow.style.display = data.firBypassCount > 0 ? '' : 'none';
+                    if (dspFirEl) dspFirEl.textContent = data.firBypassCount;
+                }
             }
 
             // Add to history

@@ -1681,12 +1681,22 @@ void sendDspState() {
 void sendDspMetrics() {
   if (!_wsAnyAuth()) return;
   DspMetrics m = dsp_get_metrics();
+  PipelineTimingMetrics timing = audio_pipeline_get_timing();
   JsonDocument doc;
   doc["type"] = "dspMetrics";
   doc["processTimeUs"] = m.processTimeUs;
   doc["cpuLoad"] = m.cpuLoadPercent;
   JsonArray gr = doc["limiterGr"].to<JsonArray>();
   for (int i = 0; i < DSP_MAX_CHANNELS; i++) gr.add(m.limiterGrDb[i]);
+  // Pipeline-wide timing metrics (from audio_pipeline_task, Core 1)
+  doc["pipelineCpu"]    = timing.totalCpuPercent;
+  doc["pipelineFrameUs"] = timing.totalFrameUs;
+  doc["matrixUs"]       = timing.matrixMixUs;
+  doc["outputDspUs"]    = timing.outputDspUs;
+  // DSP threshold flags and FIR bypass counter
+  doc["dspCpuWarn"]     = m.cpuWarning;
+  doc["dspCpuCrit"]     = m.cpuCritical;
+  doc["firBypassCount"] = m.firBypassCount;
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
