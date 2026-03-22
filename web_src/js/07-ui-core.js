@@ -20,9 +20,10 @@
                 stopTimeUpdates();
             }
 
-            // Load HAL devices when switching to devices tab
+            // Load HAL devices and I2S ports when switching to devices tab
             if (tabId === 'devices') {
                 loadHalDeviceList();
+                loadI2sPorts();
             }
 
             // Load support content when switching to support tab

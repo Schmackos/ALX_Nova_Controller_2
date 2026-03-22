@@ -418,6 +418,10 @@
     "togglePsramBudget": "readonly",
     "updatePsramHealthBanner": "readonly",
     "validateWsMessage": "readonly",
-    "_wsLimitWarned": "writable"
+    "_wsLimitWarned": "writable",
+    "i2sPortData": "writable",
+    "loadI2sPorts": "readonly",
+    "renderI2sPorts": "readonly",
+    "handleI2sPortState": "readonly"
   }
 }
