@@ -13,16 +13,10 @@
 HalEncoder::HalEncoder(int pinA, int pinB, int pinSw)
     : _pinA(pinA), _pinB(pinB), _pinSw(pinSw)
 {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "alps,ec11", 31);
-    strncpy(_descriptor.name, "Rotary Encoder", 32);
-    strncpy(_descriptor.manufacturer, "Alps", 32);
-    _descriptor.type = HAL_DEV_INPUT;
-    _descriptor.bus.type = HAL_BUS_GPIO;
-    _descriptor.bus.index = 0;
+    hal_init_descriptor(_descriptor, "alps,ec11", "Rotary Encoder", "Alps",
+        HAL_DEV_INPUT, 3, 0, HAL_BUS_GPIO, 0, 0, 0);
     _descriptor.bus.pinA = pinA;
     _descriptor.bus.pinB = pinB;
-    _descriptor.channelCount = 3;
     _initPriority = HAL_PRIORITY_IO;
 }
 

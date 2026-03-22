@@ -16,14 +16,8 @@
 #endif
 
 HalDspBridge::HalDspBridge() : HalDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "alx,dsp-pipeline", 31);
-    strncpy(_descriptor.name, "DSP Pipeline", 32);
-    strncpy(_descriptor.manufacturer, "ALX Audio", 32);
-    _descriptor.type = HAL_DEV_DSP;
-    _descriptor.channelCount = 4;
-    _descriptor.bus.type = HAL_BUS_INTERNAL;
-    _descriptor.capabilities = 0;
+    hal_init_descriptor(_descriptor, "alx,dsp-pipeline", "DSP Pipeline", "ALX Audio",
+        HAL_DEV_DSP, 4, 0, HAL_BUS_INTERNAL, 0, 0, 0);
     _initPriority = HAL_PRIORITY_DATA;
 }
 

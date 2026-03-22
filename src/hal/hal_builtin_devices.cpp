@@ -32,6 +32,16 @@
 #endif
 #include <string.h>
 
+// ===== Registration macro — reduces each 7-line block to a single call =====
+// Declares a local HalDriverEntry on the stack, fills it, and registers it.
+// Logs a warning if registration fails (registry full).
+#define HAL_REGISTER(compat, devType, legacy, factoryFn) do { \
+    HalDriverEntry _e; memset(&_e, 0, sizeof(_e)); \
+    strncpy(_e.compatible, compat, 31); \
+    _e.type = devType; _e.legacyId = legacy; _e.factory = factoryFn; \
+    if (!hal_registry_register(_e)) { LOG_W("[HAL] Register failed: %s", _e.compatible); } \
+} while(0)
+
 // ===== Factory functions for new platform classes =====
 static HalDevice* factory_es8311()   { return new HalEs8311(); }
 static HalDevice* factory_pcm5102a() { return new HalPcm5102a(); }
@@ -88,287 +98,47 @@ static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 void hal_register_builtins() {
     hal_registry_init();
 
-    // PCM5102A — primary DAC, I2S-only (no I2C control)
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_PCM5102A, 31);
-        e.type = HAL_DEV_DAC;
-        e.legacyId = 0x0001;  // DAC_ID_PCM5102A
-        e.factory = factory_pcm5102a;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
+    // Core audio devices
+    HAL_REGISTER(COMPAT_PCM5102A,  HAL_DEV_DAC,     0x0001, factory_pcm5102a);  // primary DAC, I2S-only
+    HAL_REGISTER(COMPAT_ES8311,    HAL_DEV_CODEC,   0x0004, factory_es8311);    // onboard codec (I2C + I2S)
+    HAL_REGISTER(COMPAT_ES8311_ALT,HAL_DEV_CODEC,   0x0004, factory_es8311);    // legacy alias (evergrande)
+    HAL_REGISTER(COMPAT_PCM1808,   HAL_DEV_ADC,     0,      factory_pcm1808);   // I2S-only ADC
 
-    // ES8311 — onboard codec (I2C + I2S2, P4 only)
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES8311, 31);
-        e.type = HAL_DEV_CODEC;
-        e.legacyId = 0x0004;  // DAC_ID_ES8311
-        e.factory = factory_es8311;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
+    // ESS SABRE expansion ADCs (2-channel I2S, Pattern A)
+    HAL_REGISTER(COMPAT_ES9822PRO, HAL_DEV_ADC,     0,      factory_es9822pro); // PGA 0-18dB, HPF
+    HAL_REGISTER(COMPAT_ES9826,    HAL_DEV_ADC,     0,      factory_es9826);    // PGA 0-30dB
+    HAL_REGISTER(COMPAT_ES9823PRO, HAL_DEV_ADC,     0,      factory_es9823pro); // PGA 0-42dB, highest 2ch
+    HAL_REGISTER(COMPAT_ES9823MPRO,HAL_DEV_ADC,     0,      factory_es9823pro); // monolithic variant
+    HAL_REGISTER(COMPAT_ES9821,    HAL_DEV_ADC,     0,      factory_es9821);    // no PGA
+    HAL_REGISTER(COMPAT_ES9820,    HAL_DEV_ADC,     0,      factory_es9820);    // PGA 0-18dB, entry
 
-    // ES8311 legacy compatible alias (evergrande vs everest-semi)
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES8311_ALT, 31);
-        e.type = HAL_DEV_CODEC;
-        e.legacyId = 0x0004;
-        e.factory = factory_es8311;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
+    // ESS SABRE expansion ADCs (4-channel TDM, Pattern B)
+    HAL_REGISTER(COMPAT_ES9843PRO, HAL_DEV_ADC,     0,      factory_es9843pro); // PGA 0-42dB
+    HAL_REGISTER(COMPAT_ES9842PRO, HAL_DEV_ADC,     0,      factory_es9842pro); // PGA 0-18dB
+    HAL_REGISTER(COMPAT_ES9841,    HAL_DEV_ADC,     0,      factory_es9841);    // PGA 0-42dB, 8-bit vol
+    HAL_REGISTER(COMPAT_ES9840,    HAL_DEV_ADC,     0,      factory_es9840);    // entry-tier 4ch
 
-    // PCM1808 ADC — I2S-only (no I2C control)
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_PCM1808, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;  // No legacy DAC_ID for ADC
-        e.factory = factory_pcm1808;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
+    // Software and internal devices
+    HAL_REGISTER("alx,dsp-pipeline", HAL_DEV_DSP,   0,      factory_dsp);       // DSP pipeline bridge
+    HAL_REGISTER("alx,signal-gen",   HAL_DEV_ADC,   0,      factory_siggen);    // software audio source
+    HAL_REGISTER(COMPAT_MCP4725,  HAL_DEV_DAC,      0,      factory_mcp4725);   // 12-bit I2C DAC
 
-    // ES9822PRO — expansion ADC, I2C control + I2S data
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9822PRO, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9822pro;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
+    // GPIO-controlled peripherals
+    HAL_REGISTER(COMPAT_NS4150B,  HAL_DEV_AMP,      0,      factory_ns4150b);   // mono amp (GPIO PA)
+    HAL_REGISTER(COMPAT_RELAY,    HAL_DEV_AMP,      0,      factory_relay);     // amplifier relay
+    HAL_REGISTER(COMPAT_BUZZER,   HAL_DEV_GPIO,     0,      factory_buzzer);    // piezo buzzer
+    HAL_REGISTER(COMPAT_LED,      HAL_DEV_GPIO,     0,      factory_led);       // status LED
+    HAL_REGISTER(COMPAT_BUTTON,   HAL_DEV_INPUT,    0,      factory_button);    // reset button
+    HAL_REGISTER(COMPAT_EC11,     HAL_DEV_INPUT,    0,      factory_encoder);   // rotary encoder
 
-    // ES9843PRO — expansion 4-channel ADC, I2C control + I2S data
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9843PRO, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9843pro;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
+    // Sensor / display (no factory — metadata-only entries)
+    HAL_REGISTER(COMPAT_TEMP_SENSOR, HAL_DEV_SENSOR,  0,    nullptr);           // ESP32-P4 internal temp
+    HAL_REGISTER(COMPAT_ST7735S,     HAL_DEV_DISPLAY, 0,    nullptr);           // TFT display
 
-    // ES9826 — expansion 2-channel ADC, I2C control + I2S data, PGA 0-30dB
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9826, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9826;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ES9821 — expansion 2-channel ADC, I2C control + I2S data, no PGA
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9821, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9821;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ES9823PRO — expansion 2-channel ADC, I2C control + I2S data, PGA 0-42dB, highest spec 2ch
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9823PRO, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9823pro;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ES9823MPRO — monolithic package variant of ES9823PRO (same driver, different chip ID)
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9823MPRO, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9823pro;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ES9820 — expansion 2-channel ADC, I2C control + I2S data, PGA 0-18dB, entry-tier
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9820, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9820;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ES9842PRO — expansion 4-channel ADC, I2C control + TDM data, PGA 0-18dB
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9842PRO, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9842pro;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ES9840 — expansion 4-channel ADC, I2C control + TDM data, entry-tier 4ch
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9840, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9840;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ES9841 — expansion 4-channel ADC, I2C control + TDM data, PGA 0-42dB, 8-bit volume
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ES9841, 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_es9841;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // DSP Pipeline bridge
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, "alx,dsp-pipeline", 31);
-        e.type = HAL_DEV_DSP;
-        e.legacyId = 0;
-        e.factory = factory_dsp;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // NS4150B — onboard mono amplifier (GPIO PA control)
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_NS4150B, 31);
-        e.type = HAL_DEV_AMP;
-        e.legacyId = 0;
-        e.factory = factory_ns4150b;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ESP32-P4 internal temperature sensor
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_TEMP_SENSOR, 31);
-        e.type = HAL_DEV_SENSOR;
-        e.legacyId = 0;
-        e.factory = nullptr;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // ST7735S TFT Display
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_ST7735S, 31);
-        e.type = HAL_DEV_DISPLAY;
-        e.factory = nullptr;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // Rotary Encoder
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_EC11, 31);
-        e.type = HAL_DEV_INPUT;
-        e.factory = factory_encoder;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // Piezo Buzzer
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_BUZZER, 31);
-        e.type = HAL_DEV_GPIO;
-        e.factory = factory_buzzer;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // Status LED
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_LED, 31);
-        e.type = HAL_DEV_GPIO;
-        e.factory = factory_led;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // Amplifier Relay
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_RELAY, 31);
-        e.type = HAL_DEV_AMP;
-        e.factory = factory_relay;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // Reset Button
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_BUTTON, 31);
-        e.type = HAL_DEV_INPUT;
-        e.factory = factory_button;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // Signal Generator — software audio source (HAL_DEV_ADC for pipeline input lane)
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, "alx,signal-gen", 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_siggen;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
-
-    // USB Audio — software audio source (HAL_DEV_ADC for pipeline input lane)
+    // USB Audio — software audio source (guarded: requires USB_AUDIO_ENABLED build flag)
 #ifdef USB_AUDIO_ENABLED
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, "alx,usb-audio", 31);
-        e.type = HAL_DEV_ADC;
-        e.legacyId = 0;
-        e.factory = factory_usb_audio;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
+    HAL_REGISTER("alx,usb-audio", HAL_DEV_ADC,     0,      factory_usb_audio);
 #endif
-
-    // MCP4725 — 12-bit I2C voltage output DAC (add-on module)
-    {
-        HalDriverEntry e;
-        memset(&e, 0, sizeof(e));
-        strncpy(e.compatible, COMPAT_MCP4725, 31);
-        e.type = HAL_DEV_DAC;
-        e.legacyId = 0;
-        e.factory = factory_mcp4725;
-        if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
-    }
 }
 
 #endif // DAC_ENABLED

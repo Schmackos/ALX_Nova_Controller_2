@@ -63,19 +63,10 @@ inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
 // ===== Constructor =====
 
 HalEs9822pro::HalEs9822pro() : HalAudioDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible,   "ess,es9822pro",     31);
-    strncpy(_descriptor.name,         "ES9822PRO",         32);
-    strncpy(_descriptor.manufacturer, "ESS Technology",    32);
-    _descriptor.type            = HAL_DEV_ADC;
-    _descriptor.legacyId        = 0;
-    _descriptor.channelCount    = 2;
-    _descriptor.i2cAddr         = 0x40;
-    _descriptor.bus.type        = HAL_BUS_I2C;
-    _descriptor.bus.index       = HAL_I2C_BUS_EXP;
-    _descriptor.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K;
-    _descriptor.capabilities    = HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME |
-                                  HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL;
+    hal_init_descriptor(_descriptor, "ess,es9822pro", "ES9822PRO", "ESS Technology",
+        HAL_DEV_ADC, 2, 0x40, HAL_BUS_I2C, HAL_I2C_BUS_EXP,
+        HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K,
+        HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL);
     _initPriority = HAL_PRIORITY_HARDWARE;
 }
 

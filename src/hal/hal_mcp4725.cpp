@@ -17,16 +17,10 @@
 HalMcp4725::HalMcp4725(uint8_t i2cAddr, uint8_t busIndex)
     : _i2cAddr(i2cAddr), _busIndex(busIndex), _code(0)
 {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "microchip,mcp4725", 31);
-    strncpy(_descriptor.name, "MCP4725", 32);
-    strncpy(_descriptor.manufacturer, "Microchip Technology", 32);
-    _descriptor.type         = HAL_DEV_DAC;
-    _descriptor.bus.type     = HAL_BUS_I2C;
-    _descriptor.bus.index    = busIndex;
-    _descriptor.i2cAddr      = i2cAddr;
-    _descriptor.channelCount = 1;
-    _descriptor.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME;
+    hal_init_descriptor(_descriptor, "microchip,mcp4725", "MCP4725", "Microchip Technology",
+        HAL_DEV_DAC, 1, i2cAddr, HAL_BUS_I2C, busIndex,
+        0,
+        HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME);
     _initPriority = HAL_PRIORITY_HARDWARE;
     _discovery    = HAL_DISC_MANUAL;
 }

@@ -13,15 +13,9 @@
 HalLed::HalLed(int pin)
     : _pin(pin)
 {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "generic,status-led", 31);
-    strncpy(_descriptor.name, "Status LED", 32);
-    strncpy(_descriptor.manufacturer, "Generic", 32);
-    _descriptor.type = HAL_DEV_GPIO;
-    _descriptor.bus.type = HAL_BUS_GPIO;
-    _descriptor.bus.index = 0;
+    hal_init_descriptor(_descriptor, "generic,status-led", "Status LED", "Generic",
+        HAL_DEV_GPIO, 1, 0, HAL_BUS_GPIO, 0, 0, 0);
     _descriptor.bus.pinA = pin;
-    _descriptor.channelCount = 1;
     _initPriority = HAL_PRIORITY_LATE;
 }
 

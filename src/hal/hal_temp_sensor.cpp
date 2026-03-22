@@ -13,13 +13,8 @@
 HalTempSensor::HalTempSensor()
     : _lastTemp(0.0f)
 {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "espressif,esp32p4-temp", 31);
-    strncpy(_descriptor.name, "Chip Temperature", 32);
-    _descriptor.type = HAL_DEV_SENSOR;
-    _descriptor.bus.type = HAL_BUS_INTERNAL;
-    _descriptor.bus.index = 0;
-    _descriptor.channelCount = 1;
+    hal_init_descriptor(_descriptor, "espressif,esp32p4-temp", "Chip Temperature", "",
+        HAL_DEV_SENSOR, 1, 0, HAL_BUS_INTERNAL, 0, 0, 0);
     _initPriority = HAL_PRIORITY_LATE;
 
 #ifndef NATIVE_TEST
