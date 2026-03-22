@@ -12,6 +12,7 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include "../debug_serial.h"
+#include "../config.h"   // ES8311_I2S_MCLK_PIN / SCLK_PIN / LRCK_PIN defaults
 // Wire2 is defined in hal_ess_sabre_adc_base.cpp — we extern it in the header
 #else
 #define LOG_I(fmt, ...) ((void)0)
@@ -107,10 +108,21 @@ bool HalEssSabreDacBase::_validateSampleRate(uint32_t hz, const uint32_t* suppor
 
 bool HalEssSabreDacBase::_enableI2sTx() {
 #ifndef NATIVE_TEST
-    gpio_num_t dout = (_doutPin >= 0) ? (gpio_num_t)_doutPin : (gpio_num_t)-1;
-    if (!i2s_audio_enable_expansion_tx(_sampleRate, dout)) {
-        LOG_E("[HAL:ESS-DAC] Expansion TX enable failed (sr=%lu dout=%d)",
-              (unsigned long)_sampleRate, _doutPin);
+    // Resolve port: use config override if valid, otherwise default to port 2 (expansion)
+    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
+    uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2;
+
+    gpio_num_t dout  = (_doutPin >= 0) ? (gpio_num_t)_doutPin : GPIO_NUM_NC;
+    gpio_num_t mclk  = (cfg && cfg->valid && cfg->pinMclk >= 0) ? (gpio_num_t)cfg->pinMclk
+                                                                 : (gpio_num_t)ES8311_I2S_MCLK_PIN;
+    gpio_num_t bck   = (cfg && cfg->valid && cfg->pinBck  >= 0) ? (gpio_num_t)cfg->pinBck
+                                                                 : (gpio_num_t)ES8311_I2S_SCLK_PIN;
+    gpio_num_t ws    = (cfg && cfg->valid && cfg->pinLrc  >= 0) ? (gpio_num_t)cfg->pinLrc
+                                                                 : (gpio_num_t)ES8311_I2S_LRCK_PIN;
+
+    if (!i2s_port_enable_tx(port, I2S_MODE_STD, 0, dout, mclk, bck, ws)) {
+        LOG_E("[HAL:ESS-DAC] Expansion TX enable failed (port=%u sr=%lu dout=%d)",
+              port, (unsigned long)_sampleRate, _doutPin);
         return false;
     }
     _i2sTxEnabled = true;
@@ -123,7 +135,11 @@ bool HalEssSabreDacBase::_enableI2sTx() {
 
 void HalEssSabreDacBase::_disableI2sTx() {
     if (_i2sTxEnabled) {
-        i2s_audio_disable_expansion_tx();
+#ifndef NATIVE_TEST
+        HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
+        uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2;
+        i2s_port_disable_tx(port);
+#endif
         _i2sTxEnabled = false;
     }
 }
@@ -194,9 +210,15 @@ static void _ess_dac_write(const int32_t* buf, int stereoFrames) {
         // float -> int32 left-justified
         sink_float_to_i2s_int32(fBuf, txBuf, chunk);
 
-        // Write to expansion I2S TX
+        // Write to expansion I2S TX via port-generic API.
+        // The port is resolved from the device's HAL config (default port 2).
         size_t bytesWritten = 0;
-        i2s_audio_write_expansion_tx(txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
+        uint8_t txPort = 2;
+        if (dev) {
+            HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(dev->getSlot());
+            if (cfg && cfg->valid && cfg->i2sPort != 255) txPort = cfg->i2sPort;
+        }
+        i2s_port_write(txPort, txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
 
         src += chunk;
         remaining -= chunk;

@@ -56,13 +56,13 @@
 #include "../../src/hal/hal_tdm_interleaver.h"
 
 // Signal to hal_tdm_interleaver.cpp that this translation unit provides its own
-// definition of i2s_audio_write_expansion_tdm_tx so the default no-op stub is
-// skipped and we can capture what was written.
+// definition of i2s_port_write so the default no-op stub is skipped and we can
+// capture what was written.
 #define TDM_INTERLEAVER_TEST_PROVIDES_STUBS
 
 // ---------------------------------------------------------------------------
 // Capture buffer for TDM TX output
-// The interleaver calls i2s_audio_write_expansion_tdm_tx() after each flush.
+// The interleaver calls i2s_port_write(_i2sPort, ...) after each flush.
 // We capture the bytes written here for assertion.
 // ---------------------------------------------------------------------------
 static int32_t  g_txCaptureBuf[TDM_INTERLEAVER_FRAMES * 8] = {};
@@ -70,8 +70,9 @@ static size_t   g_txCaptureBytes = 0;
 static uint32_t g_txCallCount    = 0;
 
 // Our controlled TX write — captures data + counts calls
-inline void i2s_audio_write_expansion_tdm_tx(const void* src, size_t size,
-                                              size_t* bw, uint32_t /*timeout*/) {
+// Matches the port-generic signature: port, src, size, bw, timeout
+inline void i2s_port_write(uint8_t /*port*/, const void* src, size_t size,
+                            size_t* bw, uint32_t /*timeout*/) {
     g_txCaptureBytes = size;
     if (size > 0 && src) {
         memcpy(g_txCaptureBuf, src, size < sizeof(g_txCaptureBuf) ? size : sizeof(g_txCaptureBuf));

@@ -9,6 +9,7 @@
 #ifndef NATIVE_TEST
 #include <Arduino.h>
 #include "../debug_serial.h"
+#include "../config.h"   // I2S_TX_DATA_PIN, I2S_BCK_PIN, I2S_LRC_PIN, I2S_MCLK_PIN
 #else
 #define LOG_I(fmt, ...) ((void)0)
 #define LOG_W(fmt, ...) ((void)0)
@@ -61,11 +62,21 @@ HalInitResult HalPcm5102a::init() {
     }
 
     // Enable I2S TX full-duplex on port 0 (shared with PCM1808 ADC RX).
-    // i2s_audio_enable_tx() tears down the RX-only channel and recreates
+    // i2s_port_enable_tx() tears down the RX-only channel and recreates
     // it as RX+TX — MCLK remains continuous for PCM1808 PLL stability.
-    if (!i2s_audio_enable_tx(_sampleRate)) {
-        LOG_E("[HAL:PCM5102A] I2S TX enable failed");
-        return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX enable failed");
+    // Port is resolved from config (default 0 for onboard DAC).
+    {
+        HalDeviceConfig* pcmCfg = HalDeviceManager::instance().getConfig(_slot);
+        uint8_t txPort = (pcmCfg && pcmCfg->valid && pcmCfg->i2sPort != 255) ? pcmCfg->i2sPort : 0;
+        if (!i2s_port_enable_tx(txPort, I2S_MODE_STD, 0,
+                                (gpio_num_t)I2S_TX_DATA_PIN,
+                                (gpio_num_t)I2S_MCLK_PIN,
+                                (gpio_num_t)I2S_BCK_PIN,
+                                (gpio_num_t)I2S_LRC_PIN)) {
+            LOG_E("[HAL:PCM5102A] I2S TX enable failed (port=%u)", txPort);
+            return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX enable failed");
+        }
+        _i2sPort = txPort;
     }
     _i2sTxEnabled = true;
 
@@ -89,7 +100,7 @@ void HalPcm5102a::deinit() {
 
     // Disable I2S TX if this device enabled it
     if (_i2sTxEnabled) {
-        i2s_audio_disable_tx();
+        i2s_port_disable_tx(_i2sPort);
         _i2sTxEnabled = false;
     }
 
@@ -203,8 +214,19 @@ static void _pcm5102a_write(const int32_t* buf, int stereoFrames) {
         // Convert back to int32 for I2S DMA
         sink_float_to_i2s_int32(fBuf, txBuf, chunk);
 
+        // Write to I2S TX via port-generic API.
+        // The PCM5102A is on port 0 by default; resolve from HAL config via slot.
         size_t bytesWritten = 0;
-        i2s_audio_write(txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
+        HalPcm5102a* pcmDev = nullptr;
+        for (uint8_t s = 0; s < AUDIO_OUT_MAX_SINKS && !pcmDev; s++) {
+            if (_pcm5102a_slot_dev[s]) pcmDev = _pcm5102a_slot_dev[s];
+        }
+        uint8_t port = 0;
+        if (pcmDev) {
+            HalDeviceConfig* pcmCfg = HalDeviceManager::instance().getConfig(pcmDev->getSlot());
+            if (pcmCfg && pcmCfg->valid && pcmCfg->i2sPort != 255) port = pcmCfg->i2sPort;
+        }
+        i2s_port_write(port, txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
 
         src += chunk;
         remaining -= chunk;

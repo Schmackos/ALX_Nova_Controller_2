@@ -215,6 +215,8 @@
                 showToast(data.success ? 'EEPROM programmed' : 'EEPROM program failed', data.success ? 'success' : 'error');
             } else if (data.type === 'eepromEraseResult') {
                 showToast(data.success ? 'EEPROM erased' : 'EEPROM erase failed', data.success ? 'success' : 'error');
+            } else if (data.type === 'i2sPortState') {
+                handleI2sPortState(data);
             } else if (data.type === 'halDeviceState') {
                 handleHalDeviceState(data);
                 if (data.unknownDevices) handleHalUnknownDevices(data.unknownDevices);

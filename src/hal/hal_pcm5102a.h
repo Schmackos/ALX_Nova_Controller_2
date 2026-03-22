@@ -47,5 +47,6 @@ private:
     void*    _txHandle   = nullptr;
     bool     _i2sTxEnabled = false;  // tracks whether I2S TX has been enabled by this device
     float    _muteRampState = 1.0f;  // mute ramp envelope [0.0 .. 1.0]
+    uint8_t  _i2sPort      = 0;     // I2S port used for TX (from config, default 0)
 };
 #endif // DAC_ENABLED

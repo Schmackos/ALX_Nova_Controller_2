@@ -137,6 +137,12 @@ REST endpoints are registered across several focused modules rather than a singl
 | GET | `/api/inputnames` | Protected | Return user-defined input channel labels |
 | POST | `/api/inputnames` | Protected | Update input channel labels |
 
+### I2S Ports
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/i2s/ports` | No | Return status of all 3 I2S ports (or `?id=N` for a single port) |
+
 ---
 
 ## Detailed Endpoint Documentation

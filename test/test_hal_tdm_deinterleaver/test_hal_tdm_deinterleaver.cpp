@@ -31,7 +31,7 @@
 #define DAC_ENABLED
 
 // Signal to hal_tdm_deinterleaver.cpp that this translation unit provides its
-// own definitions of the i2s_audio port2 TDM functions so the .cpp stubs are
+// own definitions of the port-generic TDM functions so the .cpp stubs are
 // skipped (avoids duplicate symbol errors).
 #define TDM_TEST_PROVIDES_STUBS
 
@@ -42,16 +42,16 @@ static int32_t g_tdmFeedBuf[128 * 4] = {};   // Up to 128 TDM frames × 4 slots
 static uint32_t g_tdmFeedFrames = 0;          // Frames of data loaded into buf
 
 // These are called by the _pairARead / _pairAActive static thunks inside the
-// deinterleaver.  We define them before including the .cpp so they satisfy the
-// forward declarations inside the NATIVE_TEST block.
-inline uint32_t i2s_audio_port2_tdm_read(int32_t* dst, uint32_t frames) {
+// deinterleaver via the port-generic API.  We define them before including the
+// .cpp so they satisfy the forward declarations inside the NATIVE_TEST block.
+inline uint32_t i2s_port_tdm_read(uint8_t /*port*/, int32_t* dst, uint32_t frames, uint8_t /*slots*/) {
     uint32_t avail = (g_tdmFeedFrames < frames) ? g_tdmFeedFrames : frames;
     if (avail > 0) {
         memcpy(dst, g_tdmFeedBuf, avail * 4 * sizeof(int32_t));
     }
     return avail;
 }
-inline bool     i2s_audio_port2_tdm_active(void) { return g_tdmFeedFrames > 0; }
+inline bool     i2s_port_is_rx_active(uint8_t /*port*/) { return g_tdmFeedFrames > 0; }
 inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
 
 // psram_alloc/heap_budget required since hal_tdm_deinterleaver uses psram_alloc()

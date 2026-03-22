@@ -391,7 +391,11 @@ Override these via build flags in `platformio.ini` if you need more lanes or sin
 | `AUDIO_PIPELINE_MATRIX_SIZE` | 16 | Matrix dimension (inputs and outputs share this) |
 | `AUDIO_OUT_MAX_SINKS` | 8 | Maximum number of registered output sinks |
 
-## I2S GPIO Pin Assignment
+## I2S Port Configuration
+
+All 3 I2S ports are managed through a port-generic API (`i2s_port_enable_tx/rx()`, `i2s_port_write/read()`, `i2s_port_get_info()`). Each port is independently configurable for STD or TDM mode, any direction (TX/RX), with any pin assignment via `HalDeviceConfig.i2sPort`. Expansion I2S TX is fully implemented for both STD (2ch DACs) and TDM (8ch DACs). Port status is queryable via `GET /api/i2s/ports` and displayed on the web UI Devices tab. Legacy device-specific I2S functions are deprecated in favor of the port-generic API.
+
+### I2S GPIO Pin Assignment
 
 All I2S clock and data pin assignments are resolved from `HalDeviceConfig` at init time, with compile-time constants from `src/config.h` as fallback. Expansion modules can override the default pin mapping via HAL device configuration without recompiling firmware.
 
