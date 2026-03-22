@@ -231,7 +231,7 @@
         }
 
         // ===== Module Chip Filtering =====
-        // escapeHtml() defined in 14-io-registry.js (loads earlier in concat order)
+        // escapeHtml() defined in 01-core.js (loads first in concat order)
 
         function extractModule(msg) {
             var m = msg.match(/\[[DIWE]\]\s*\[([^\]]+)\]/);
