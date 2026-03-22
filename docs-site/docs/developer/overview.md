@@ -29,10 +29,10 @@ The current firmware version is defined in `src/config.h` as `FIRMWARE_VERSION`.
 | Persistence | LittleFS + NVS (Preferences) | `/config.json` primary; NVS for WiFi credentials |
 | Web UI | Vanilla HTML/CSS/JS (gzip-embedded) | Assembled from `web_src/` by `tools/build_web_assets.js` |
 | Messaging | WebSocket (port 81) + MQTT | Real-time state; Home Assistant discovery |
-| Auth | PBKDF2-SHA256 (10,000 iter) | HttpOnly session cookie; WS token pool |
+| Auth | PBKDF2-SHA256 (50,000 iter) | HttpOnly session cookie; WS token pool |
 | OTA | GitHub releases + SHA256 | Dual OTA partitions (4 MB each) |
-| Unit tests | Unity framework, native platform | 2,316 tests across 87 modules, no hardware needed |
-| E2E tests | Playwright + Express mock server | 107 browser tests across 22 specs |
+| Unit tests | Unity framework, native platform | 2,354 tests across 106 modules, no hardware needed |
+| E2E tests | Playwright + Express mock server | 113 browser tests across 22 specs |
 
 ---
 
@@ -126,7 +126,7 @@ Each subsystem is implemented as a pair of `.h`/`.cpp` files in `src/`. The tabl
 
 | Module | Files | Description |
 |---|---|---|
-| `hal_device_manager` | `hal_device_manager.h/.cpp` | Singleton managing up to 24 devices; priority init; pin conflict prevention |
+| `hal_device_manager` | `hal_device_manager.h/.cpp` | Singleton managing up to 32 devices; priority init; pin conflict prevention |
 | `hal_pipeline_bridge` | `hal_pipeline_bridge.h/.cpp` | Translates HAL state transitions into audio pipeline source/sink registration |
 | `hal_discovery` | `hal_discovery.h/.cpp` | 3-tier discovery: I2C bus scan → EEPROM probe → manual config |
 | `hal_device_db` | `hal_device_db.h/.cpp` | In-memory device database with LittleFS JSON persistence |
@@ -167,6 +167,14 @@ Each subsystem is implemented as a pair of `.h`/`.cpp` files in `src/`. The tabl
 | `mqtt_task` | `src/mqtt_task.h/.cpp` | Dedicated Core 0 task: reconnect + publish at 20 Hz |
 | `websocket_handler` | `src/websocket_handler.h/.cpp` | WS broadcast server port 81; binary audio frames |
 | `ota_updater` | `src/ota_updater.h/.cpp` | GitHub release check, firmware download, SHA256 verify |
+
+### Web UI (`web_src/`)
+
+The web frontend is assembled from `web_src/` into a single gzip-embedded page by `tools/build_web_assets.js`. JS files are concatenated in filename order into a shared scope.
+
+**Safety helpers** available globally:
+- `escapeHtml()` (in `01-core.js`, first in load order) — escapes `<`, `>`, `&`, `"`, `'` in dynamic content. Used for XSS prevention on all HTML rendered from API/WebSocket data.
+- `safeJson()` — wraps `apiFetch()` responses. Returns `null` instead of throwing on non-2xx status codes or malformed JSON, preventing uncaught exceptions from propagating to callers.
 
 ### GUI (`src/gui/`)
 

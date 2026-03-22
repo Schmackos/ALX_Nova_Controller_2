@@ -12,6 +12,8 @@
 #include "hal/hal_pipeline_bridge.h"
 #include "hal/hal_audio_device.h"
 #include "hal/hal_settings.h"
+#include "hal/hal_types.h"
+#include "http_security.h"
 #include <ArduinoJson.h>
 extern bool requireAuth();
 
@@ -85,7 +87,7 @@ void registerDacApiEndpoints() {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/dac — Update DAC settings
@@ -93,14 +95,14 @@ void registerDacApiEndpoints() {
         if (!requireAuth()) return;
 
         if (!server.hasArg("plain")) {
-            server.send(400, "application/json",
+            server_send(400, "application/json",
                         "{\"success\":false,\"message\":\"No data\"}");
             return;
         }
 
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) {
-            server.send(400, "application/json",
+            server_send(400, "application/json",
                         "{\"success\":false,\"message\":\"Invalid JSON\"}");
             return;
         }
@@ -127,7 +129,7 @@ void registerDacApiEndpoints() {
                     }
                     if (!ok) {
                         LOG_W("[DAC] API: toggle queue full for slot %u", halSlot);
-                        server.send(503, "application/json",
+                        server_send(503, "application/json",
                                     "{\"success\":false,\"message\":\"Device busy, retry shortly\"}");
                         return;
                     }
@@ -193,7 +195,7 @@ void registerDacApiEndpoints() {
             appState.markDacDirty();
         }
 
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // GET /api/dac/drivers -- List all DAC-path devices from HAL
@@ -222,7 +224,7 @@ void registerDacApiEndpoints() {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // ===== EEPROM Endpoints =====
@@ -283,7 +285,7 @@ void registerDacApiEndpoints() {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/dac/eeprom — Program EEPROM
@@ -291,14 +293,14 @@ void registerDacApiEndpoints() {
         if (!requireAuth()) return;
 
         if (!server.hasArg("plain")) {
-            server.send(400, "application/json",
+            server_send(400, "application/json",
                         "{\"success\":false,\"message\":\"No data\"}");
             return;
         }
 
         JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) {
-            server.send(400, "application/json",
+            server_send(400, "application/json",
                         "{\"success\":false,\"message\":\"Invalid JSON\"}");
             return;
         }
@@ -313,12 +315,10 @@ void registerDacApiEndpoints() {
         eepData.dacI2cAddress = (uint8_t)doc["dacI2cAddress"].as<int>();
 
         const char* name = doc["deviceName"] | "";
-        strncpy(eepData.deviceName, name, 32);
-        eepData.deviceName[32] = '\0';
+        hal_safe_strcpy(eepData.deviceName, sizeof(eepData.deviceName), name);
 
         const char* mfr = doc["manufacturer"] | "";
-        strncpy(eepData.manufacturer, mfr, 32);
-        eepData.manufacturer[32] = '\0';
+        hal_safe_strcpy(eepData.manufacturer, sizeof(eepData.manufacturer), mfr);
 
         // Flags
         uint8_t flags = 0;
@@ -355,7 +355,7 @@ void registerDacApiEndpoints() {
         uint8_t buf[DAC_EEPROM_DATA_SIZE];
         int serialized = dac_eeprom_serialize(&eepData, buf, sizeof(buf));
         if (serialized == 0) {
-            server.send(500, "application/json",
+            server_send(500, "application/json",
                         "{\"success\":false,\"message\":\"Serialize failed\"}");
             return;
         }
@@ -364,7 +364,7 @@ void registerDacApiEndpoints() {
         if (!dac_eeprom_write(targetAddr, buf, serialized)) {
             appState.dac.eepromDiag.writeErrors++;
             appState.markEepromDirty();
-            server.send(500, "application/json",
+            server_send(500, "application/json",
                         "{\"success\":false,\"message\":\"Write/verify failed\"}");
             return;
         }
@@ -377,10 +377,8 @@ void registerDacApiEndpoints() {
             ed.eepromAddr = scanned.i2cAddress;
             ed.deviceId = scanned.deviceId;
             ed.hwRevision = scanned.hwRevision;
-            strncpy(ed.deviceName, scanned.deviceName, 32);
-            ed.deviceName[32] = '\0';
-            strncpy(ed.manufacturer, scanned.manufacturer, 32);
-            ed.manufacturer[32] = '\0';
+            hal_safe_strcpy(ed.deviceName, sizeof(ed.deviceName), scanned.deviceName);
+            hal_safe_strcpy(ed.manufacturer, sizeof(ed.manufacturer), scanned.manufacturer);
             ed.maxChannels = scanned.maxChannels;
             ed.dacI2cAddress = scanned.dacI2cAddress;
             ed.flags = scanned.flags;
@@ -393,7 +391,7 @@ void registerDacApiEndpoints() {
         appState.markEepromDirty();
 #endif
 
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // POST /api/dac/eeprom/erase — Erase EEPROM
@@ -420,7 +418,7 @@ void registerDacApiEndpoints() {
         if (!dac_eeprom_erase(targetAddr)) {
             appState.dac.eepromDiag.writeErrors++;
             appState.markEepromDirty();
-            server.send(500, "application/json",
+            server_send(500, "application/json",
                         "{\"success\":false,\"message\":\"Erase failed\"}");
             return;
         }
@@ -442,7 +440,7 @@ void registerDacApiEndpoints() {
         appState.markEepromDirty();
 #endif
 
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // POST /api/dac/eeprom/scan — Re-scan I2C bus + EEPROM
@@ -465,10 +463,8 @@ void registerDacApiEndpoints() {
             ed.eepromAddr = eepData.i2cAddress;
             ed.deviceId = eepData.deviceId;
             ed.hwRevision = eepData.hwRevision;
-            strncpy(ed.deviceName, eepData.deviceName, 32);
-            ed.deviceName[32] = '\0';
-            strncpy(ed.manufacturer, eepData.manufacturer, 32);
-            ed.manufacturer[32] = '\0';
+            hal_safe_strcpy(ed.deviceName, sizeof(ed.deviceName), eepData.deviceName);
+            hal_safe_strcpy(ed.manufacturer, sizeof(ed.manufacturer), eepData.manufacturer);
             ed.maxChannels = eepData.maxChannels;
             ed.dacI2cAddress = eepData.dacI2cAddress;
             ed.flags = eepData.flags;
@@ -501,7 +497,7 @@ void registerDacApiEndpoints() {
         }
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // GET /api/dac/eeprom/presets -- Pre-fill data from HAL device DB
@@ -541,7 +537,7 @@ void registerDacApiEndpoints() {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     LOG_I("[DAC] REST API endpoints registered");

@@ -1,4 +1,5 @@
 #include "ota_updater.h"
+#include "http_security.h"
 #include "config.h"
 #include "app_state.h"
 #include "globals.h"
@@ -89,12 +90,12 @@ void broadcastUpdateStatus() {
 
 void handleCheckUpdate() {
   if (WiFi.status() != WL_CONNECTED) {
-    server.send(200, "application/json", "{\"success\": false, \"message\": \"Not connected to WiFi\"}");
+    server_send(200, "application/json", "{\"success\": false, \"message\": \"Not connected to WiFi\"}");
     return;
   }
 
   if (isOTATaskRunning()) {
-    server.send(200, "application/json", "{\"success\": true, \"message\": \"Check already in progress\"}");
+    server_send(200, "application/json", "{\"success\": true, \"message\": \"Check already in progress\"}");
     return;
   }
 
@@ -114,29 +115,29 @@ void handleCheckUpdate() {
 
   String json;
   serializeJson(doc, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 void handleStartUpdate() {
   if (appState.ota.inProgress || isOTATaskRunning()) {
-    server.send(200, "application/json", "{\"success\": false, \"message\": \"OTA update already in progress\"}");
+    server_send(200, "application/json", "{\"success\": false, \"message\": \"OTA update already in progress\"}");
     return;
   }
 
   if (WiFi.status() != WL_CONNECTED) {
-    server.send(200, "application/json", "{\"success\": false, \"message\": \"Not connected to WiFi\"}");
+    server_send(200, "application/json", "{\"success\": false, \"message\": \"Not connected to WiFi\"}");
     return;
   }
 
   if (!appState.ota.updateAvailable || appState.ota.cachedLatestVersion.length() == 0 || appState.ota.cachedFirmwareUrl.length() == 0) {
-    server.send(200, "application/json", "{\"success\": false, \"message\": \"No update available\"}");
+    server_send(200, "application/json", "{\"success\": false, \"message\": \"No update available\"}");
     return;
   }
 
   LOG_I("[OTA] Manual OTA update started");
 
   // Send HTTP response immediately (non-blocking)
-  server.send(200, "application/json", "{\"success\": true, \"message\": \"Update started\"}");
+  server_send(200, "application/json", "{\"success\": true, \"message\": \"Update started\"}");
 
   // Launch OTA download in a FreeRTOS task
   startOTADownloadTask();
@@ -171,18 +172,18 @@ void handleUpdateStatus() {
   
   String json;
   serializeJson(doc, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 // Release Notes Handler
 void handleGetReleaseNotes() {
   if (WiFi.status() != WL_CONNECTED) {
-    server.send(200, "application/json", "{\"success\": false, \"message\": \"Not connected to WiFi\"}");
+    server_send(200, "application/json", "{\"success\": false, \"message\": \"Not connected to WiFi\"}");
     return;
   }
   
   if (!server.hasArg("version")) {
-    server.send(400, "application/json", "{\"success\": false, \"message\": \"Version parameter required\"}");
+    server_send(400, "application/json", "{\"success\": false, \"message\": \"Version parameter required\"}");
     return;
   }
   
@@ -197,7 +198,7 @@ void handleGetReleaseNotes() {
   LOG_I("[OTA] Heap before TLS: free=%lu maxBlock=%lu", (unsigned long)ESP.getFreeHeap(), (unsigned long)maxBlock);
   if (maxBlock < 35000) {
     LOG_E("[OTA] Heap too low for TLS: largest block=%lu bytes (<35KB)", (unsigned long)maxBlock);
-    server.send(200, "application/json", "{\"success\": false, \"message\": \"Insufficient memory for secure connection\"}");
+    server_send(200, "application/json", "{\"success\": false, \"message\": \"Insufficient memory for secure connection\"}");
     return;
   }
 
@@ -216,7 +217,7 @@ void handleGetReleaseNotes() {
 
   HTTPClient https;
   if (!https.begin(client, releaseNotesUrl)) {
-    server.send(200, "application/json", "{\"success\": false, \"message\": \"Failed to initialize secure connection\"}");
+    server_send(200, "application/json", "{\"success\": false, \"message\": \"Failed to initialize secure connection\"}");
     return;
   }
   
@@ -254,7 +255,7 @@ void handleGetReleaseNotes() {
   String json;
   serializeJson(doc, json);
   https.end();
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 // ===== OTA Core Functions =====
@@ -640,11 +641,11 @@ bool fetchReleaseList(int maxCount) {
 
 void handleGetReleaseList() {
   if (WiFi.status() != WL_CONNECTED) {
-    server.send(200, "application/json", "{\"success\":false,\"message\":\"Not connected to WiFi\"}");
+    server_send(200, "application/json", "{\"success\":false,\"message\":\"Not connected to WiFi\"}");
     return;
   }
   if (appState.ota.inProgress) {
-    server.send(200, "application/json", "{\"success\":false,\"message\":\"OTA in progress\"}");
+    server_send(200, "application/json", "{\"success\":false,\"message\":\"OTA in progress\"}");
     return;
   }
 
@@ -667,24 +668,24 @@ void handleGetReleaseList() {
 
   String json;
   serializeJson(doc, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 void handleInstallRelease() {
   if (!server.hasArg("plain")) {
-    server.send(400, "application/json", "{\"success\":false,\"message\":\"No data\"}");
+    server_send(400, "application/json", "{\"success\":false,\"message\":\"No data\"}");
     return;
   }
 
   JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) {
-    server.send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
+    server_send(400, "application/json", "{\"success\":false,\"message\":\"Invalid JSON\"}");
     return;
   }
 
   String targetVersion = doc["version"].as<String>();
   if (targetVersion.length() == 0) {
-    server.send(400, "application/json", "{\"success\":false,\"message\":\"Version required\"}");
+    server_send(400, "application/json", "{\"success\":false,\"message\":\"Version required\"}");
     return;
   }
 
@@ -701,12 +702,12 @@ void handleInstallRelease() {
   }
 
   if (!found) {
-    server.send(404, "application/json", "{\"success\":false,\"message\":\"Version not in cached list. Browse releases first.\"}");
+    server_send(404, "application/json", "{\"success\":false,\"message\":\"Version not in cached list. Browse releases first.\"}");
     return;
   }
 
   if (appState.ota.inProgress) {
-    server.send(409, "application/json", "{\"success\":false,\"message\":\"OTA already in progress\"}");
+    server_send(409, "application/json", "{\"success\":false,\"message\":\"OTA already in progress\"}");
     return;
   }
 
@@ -715,7 +716,7 @@ void handleInstallRelease() {
 
   startOTADownloadTask();
 
-  server.send(200, "application/json", "{\"success\":true,\"message\":\"Installing...\"}");
+  server_send(200, "application/json", "{\"success\":true,\"message\":\"Installing...\"}");
 }
 
 // Calculate SHA256 hash of data
@@ -1175,7 +1176,7 @@ void handleFirmwareUploadComplete() {
     
     String json;
     serializeJson(doc, json);
-    server.send(200, "application/json", json);
+    server_send(200, "application/json", json);
     
     // Reset state
     uploadError = false;
@@ -1191,7 +1192,7 @@ void handleFirmwareUploadComplete() {
     
     String json;
     serializeJson(doc, json);
-    server.send(200, "application/json", json);
+    server_send(200, "application/json", json);
     
     // Save success flag and reboot
     LOG_I("[OTA] Rebooting in 2 seconds");
@@ -1204,7 +1205,7 @@ void handleFirmwareUploadComplete() {
     
     String json;
     serializeJson(doc, json);
-    server.send(200, "application/json", json);
+    server_send(200, "application/json", json);
   }
   
   // Reset OTA state

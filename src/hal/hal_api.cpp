@@ -2,6 +2,7 @@
 #ifndef NATIVE_TEST
 
 #include "hal_api.h"
+#include "../http_security.h"
 #include "hal_device_manager.h"
 #include "hal_device_db.h"
 #include "hal_driver_registry.h"
@@ -80,13 +81,13 @@ void registerHalApiEndpoints(WebServer& server) {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/hal/scan — trigger device rescan
     server.on("/api/hal/scan", HTTP_POST, [&server]() {
         if (appState._halScanInProgress) {
-            server.send(409, "application/json", "{\"error\":\"Scan already in progress\"}");
+            server_send(409, "application/json", "{\"error\":\"Scan already in progress\"}");
             return;
         }
         appState._halScanInProgress = true;
@@ -104,7 +105,7 @@ void registerHalApiEndpoints(WebServer& server) {
         }
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // GET /api/hal/db — list device database entries
@@ -126,7 +127,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // GET /api/hal/db/presets — list available device presets
@@ -145,43 +146,43 @@ void registerHalApiEndpoints(WebServer& server) {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/hal/devices — manually register a device by compatible string
     server.on("/api/hal/devices", HTTP_POST, [&server]() {
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
-        if (err) { server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
+        if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
 
         const char* compatible = doc["compatible"] | "";
-        if (!compatible[0]) { server.send(400, "application/json", "{\"error\":\"Missing compatible\"}"); return; }
+        if (!compatible[0]) { server_send(400, "application/json", "{\"error\":\"Missing compatible\"}"); return; }
 
         HalDeviceDescriptor desc;
         if (!hal_db_lookup(compatible, &desc)) {
-            server.send(404, "application/json", "{\"error\":\"Unknown device\"}"); return;
+            server_send(404, "application/json", "{\"error\":\"Unknown device\"}"); return;
         }
 
         const HalDriverEntry* entry = hal_registry_find(compatible);
         if (!entry || !entry->factory) {
-            server.send(422, "application/json", "{\"error\":\"No driver for this device\"}"); return;
+            server_send(422, "application/json", "{\"error\":\"No driver for this device\"}"); return;
         }
 
         HalDeviceManager& mgr = HalDeviceManager::instance();
         // Allow multiple instances of the same compatible string (multi-instance support).
         // Max 8 instances per compatible — matches pipeline dimension limits.
         if (mgr.countByCompatible(compatible) >= 8) {
-            server.send(409, "application/json", "{\"error\":\"Max instances reached for this device\"}"); return;
+            server_send(409, "application/json", "{\"error\":\"Max instances reached for this device\"}"); return;
         }
         if (mgr.getCount() >= HAL_MAX_DEVICES) {
-            server.send(409, "application/json", "{\"error\":\"No free slots\"}"); return;
+            server_send(409, "application/json", "{\"error\":\"No free slots\"}"); return;
         }
 
         HalDevice* dev = entry->factory();
-        if (!dev) { server.send(500, "application/json", "{\"error\":\"Factory failed\"}"); return; }
+        if (!dev) { server_send(500, "application/json", "{\"error\":\"Factory failed\"}"); return; }
 
         int slot = mgr.registerDevice(dev, HAL_DISC_MANUAL);
-        if (slot < 0) { delete dev; server.send(500, "application/json", "{\"error\":\"No free slots\"}"); return; }
+        if (slot < 0) { delete dev; server_send(500, "application/json", "{\"error\":\"No free slots\"}"); return; }
 
         dev->_state = HAL_STATE_CONFIGURING;
         bool ok = dev->probe() && dev->init().success;
@@ -198,21 +199,21 @@ void registerHalApiEndpoints(WebServer& server) {
         resp["name"] = desc.name;
         resp["state"] = static_cast<uint8_t>(dev->_state);
         String json; serializeJson(resp, json);
-        server.send(201, "application/json", json);
+        server_send(201, "application/json", json);
     });
 
     // PUT /api/hal/devices — update device config
     server.on("/api/hal/devices", HTTP_PUT, [&server]() {
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
-        if (err) { server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
+        if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
 
         uint8_t slot = doc["slot"] | 255;
-        if (slot >= HAL_MAX_DEVICES) { server.send(400, "application/json", "{\"error\":\"Invalid slot\"}"); return; }
+        if (slot >= HAL_MAX_DEVICES) { server_send(400, "application/json", "{\"error\":\"Invalid slot\"}"); return; }
 
         HalDeviceManager& mgr = HalDeviceManager::instance();
         HalDevice* dev = mgr.getDevice(slot);
-        if (!dev) { server.send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
+        if (!dev) { server_send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
 
         // Get or create config
         HalDeviceConfig* cfg = mgr.getConfig(slot);
@@ -269,21 +270,21 @@ void registerHalApiEndpoints(WebServer& server) {
         hal_apply_config(slot);
         appState.markHalDeviceDirty();
 
-        server.send(200, "application/json", "{\"status\":\"ok\"}");
+        server_send(200, "application/json", "{\"status\":\"ok\"}");
     });
 
     // DELETE /api/hal/devices — remove a device
     server.on("/api/hal/devices", HTTP_DELETE, [&server]() {
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
-        if (err) { server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
+        if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
 
         uint8_t slot = doc["slot"] | 255;
-        if (slot >= HAL_MAX_DEVICES) { server.send(400, "application/json", "{\"error\":\"Invalid slot\"}"); return; }
+        if (slot >= HAL_MAX_DEVICES) { server_send(400, "application/json", "{\"error\":\"Invalid slot\"}"); return; }
 
         HalDeviceManager& mgr = HalDeviceManager::instance();
         HalDevice* dev = mgr.getDevice(slot);
-        if (!dev) { server.send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
+        if (!dev) { server_send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
 
         // DAC-path devices: trigger deferred deactivation before removal
         const HalDeviceDescriptor& delDesc = dev->getDescriptor();
@@ -312,21 +313,21 @@ void registerHalApiEndpoints(WebServer& server) {
         appState.markHalDeviceDirty();
         LOG_I("[HAL:API]", "Device removed from slot %d", slot);
 
-        server.send(200, "application/json", "{\"status\":\"ok\"}");
+        server_send(200, "application/json", "{\"status\":\"ok\"}");
     });
 
     // POST /api/hal/devices/reinit — re-initialize a device
     server.on("/api/hal/devices/reinit", HTTP_POST, [&server]() {
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
-        if (err) { server.send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
+        if (err) { server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}"); return; }
 
         uint8_t slot = doc["slot"] | 255;
-        if (slot >= HAL_MAX_DEVICES) { server.send(400, "application/json", "{\"error\":\"Invalid slot\"}"); return; }
+        if (slot >= HAL_MAX_DEVICES) { server_send(400, "application/json", "{\"error\":\"Invalid slot\"}"); return; }
 
         HalDeviceManager& mgr = HalDeviceManager::instance();
         HalDevice* dev = mgr.getDevice(slot);
-        if (!dev) { server.send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
+        if (!dev) { server_send(404, "application/json", "{\"error\":\"No device in slot\"}"); return; }
 
         // Deinit then re-init
         dev->deinit();
@@ -349,7 +350,7 @@ void registerHalApiEndpoints(WebServer& server) {
         resp["state"] = dev->_state;
         String json;
         serializeJson(resp, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // GET /api/hal/settings — auto-discovery toggle
@@ -358,7 +359,7 @@ void registerHalApiEndpoints(WebServer& server) {
         doc["halAutoDiscovery"] = appState.halAutoDiscovery;
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // PUT /api/hal/settings — save auto-discovery toggle
@@ -370,7 +371,7 @@ void registerHalApiEndpoints(WebServer& server) {
                 saveSettings();
             }
         }
-        server.send(200, "application/json", "{\"status\":\"ok\"}");
+        server_send(200, "application/json", "{\"status\":\"ok\"}");
     });
 
     // GET /api/hal/devices/custom — list custom device schemas stored in LittleFS
@@ -393,7 +394,7 @@ void registerHalApiEndpoints(WebServer& server) {
 
         String out;
         serializeJson(doc, out);
-        server.send(200, "application/json", out);
+        server_send(200, "application/json", out);
     });
 
     // POST /api/hal/devices/custom — upload a JSON device schema
@@ -403,7 +404,7 @@ void registerHalApiEndpoints(WebServer& server) {
         JsonDocument doc;
         if (deserializeJson(doc, bodyBuf) != DeserializationError::Ok ||
             !doc.containsKey("compatible")) {
-            server.send(400, "application/json", "{\"error\":\"Invalid schema\"}");
+            server_send(400, "application/json", "{\"error\":\"Invalid schema\"}");
             return;
         }
 
@@ -421,16 +422,16 @@ void registerHalApiEndpoints(WebServer& server) {
             f.print(bodyBuf);
             f.close();
             hal_load_custom_devices();  // Reload custom devices
-            server.send(200, "application/json", "{\"ok\":true}");
+            server_send(200, "application/json", "{\"ok\":true}");
         } else {
-            server.send(500, "application/json", "{\"error\":\"Write failed\"}");
+            server_send(500, "application/json", "{\"error\":\"Write failed\"}");
         }
     });
 
     // DELETE /api/hal/devices/custom — remove a schema by name query param (?name=<compatible>)
     server.on("/api/hal/devices/custom", HTTP_DELETE, [&server]() {
         if (!server.hasArg("name")) {
-            server.send(400, "application/json", "{\"error\":\"Missing name parameter\"}");
+            server_send(400, "application/json", "{\"error\":\"Missing name parameter\"}");
             return;
         }
         String name = server.arg("name");
@@ -438,9 +439,9 @@ void registerHalApiEndpoints(WebServer& server) {
 
         if (LittleFS.remove(filename)) {
             hal_load_custom_devices();
-            server.send(200, "application/json", "{\"ok\":true}");
+            server_send(200, "application/json", "{\"ok\":true}");
         } else {
-            server.send(404, "application/json", "{\"error\":\"Not found\"}");
+            server_send(404, "application/json", "{\"error\":\"Not found\"}");
         }
     });
 

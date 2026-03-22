@@ -19,6 +19,11 @@
 
 // ===== Home Assistant Auto-Discovery =====
 
+// ArduinoJson v7: JsonDocument heap-allocates tree nodes via malloc().
+// Only ~24 bytes on stack per instance. Static reuse here avoids
+// repeated malloc/free for 23+ HA entities on mqtt_task (4KB stack).
+static JsonDocument haDoc;
+
 // Helper function to create device info JSON object
 static void addHADeviceInfo(JsonDocument &doc) {
   String deviceId = getMqttDeviceId();
@@ -50,6 +55,10 @@ static void addHADeviceInfo(JsonDocument &doc) {
 
 // Publish Home Assistant auto-discovery configuration
 void publishHADiscovery() {
+  if (appState.debug.heapCritical) {
+    LOG_W("[MQTT] Skipping HA discovery — heap critical");
+    return;
+  }
   if (!mqttClient.connected() || !appState.mqtt.haDiscovery)
     return;
 
@@ -60,76 +69,76 @@ void publishHADiscovery() {
 
   // ===== Amplifier Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Amplifier";
-    doc["unique_id"] = deviceId + "_amplifier";
-    doc["state_topic"] = base + "/smartsensing/amplifier";
-    doc["command_topic"] = base + "/smartsensing/amplifier/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:amplifier";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Amplifier";
+    haDoc["unique_id"] = deviceId + "_amplifier";
+    haDoc["state_topic"] = base + "/smartsensing/amplifier";
+    haDoc["command_topic"] = base + "/smartsensing/amplifier/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["icon"] = "mdi:amplifier";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/amplifier/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== AP Mode Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Access Point";
-    doc["unique_id"] = deviceId + "_ap";
-    doc["state_topic"] = base + "/ap/enabled";
-    doc["command_topic"] = base + "/ap/enabled/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:access-point";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Access Point";
+    haDoc["unique_id"] = deviceId + "_ap";
+    haDoc["state_topic"] = base + "/ap/enabled";
+    haDoc["command_topic"] = base + "/ap/enabled/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["icon"] = "mdi:access-point";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/ap/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Smart Sensing Mode Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Smart Sensing Mode";
-    doc["unique_id"] = deviceId + "_mode";
-    doc["state_topic"] = base + "/smartsensing/mode";
-    doc["command_topic"] = base + "/smartsensing/mode/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Smart Sensing Mode";
+    haDoc["unique_id"] = deviceId + "_mode";
+    haDoc["state_topic"] = base + "/smartsensing/mode";
+    haDoc["command_topic"] = base + "/smartsensing/mode/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("always_on");
     options.add("always_off");
     options.add("smart_auto");
-    doc["icon"] = "mdi:auto-fix";
-    addHADeviceInfo(doc);
+    haDoc["icon"] = "mdi:auto-fix";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/select/" + deviceId + "/mode/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Timer Duration Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Timer Duration";
-    doc["unique_id"] = deviceId + "_timer_duration";
-    doc["state_topic"] = base + "/smartsensing/timer_duration";
-    doc["command_topic"] = base + "/smartsensing/timer_duration/set";
-    doc["min"] = 1;
-    doc["max"] = 60;
-    doc["step"] = 1;
-    doc["unit_of_measurement"] = "min";
-    doc["icon"] = "mdi:timer-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Timer Duration";
+    haDoc["unique_id"] = deviceId + "_timer_duration";
+    haDoc["state_topic"] = base + "/smartsensing/timer_duration";
+    haDoc["command_topic"] = base + "/smartsensing/timer_duration/set";
+    haDoc["min"] = 1;
+    haDoc["max"] = 60;
+    haDoc["step"] = 1;
+    haDoc["unit_of_measurement"] = "min";
+    haDoc["icon"] = "mdi:timer-outline";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/number/" + deviceId + "/timer_duration/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -137,20 +146,20 @@ void publishHADiscovery() {
 
   // ===== Audio Threshold Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Audio Threshold";
-    doc["unique_id"] = deviceId + "_audio_threshold";
-    doc["state_topic"] = base + "/smartsensing/audio_threshold";
-    doc["command_topic"] = base + "/smartsensing/audio_threshold/set";
-    doc["min"] = -96;
-    doc["max"] = 0;
-    doc["step"] = 1;
-    doc["unit_of_measurement"] = "dBFS";
-    doc["icon"] = "mdi:volume-vibrate";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Audio Threshold";
+    haDoc["unique_id"] = deviceId + "_audio_threshold";
+    haDoc["state_topic"] = base + "/smartsensing/audio_threshold";
+    haDoc["command_topic"] = base + "/smartsensing/audio_threshold/set";
+    haDoc["min"] = -96;
+    haDoc["max"] = 0;
+    haDoc["step"] = 1;
+    haDoc["unit_of_measurement"] = "dBFS";
+    haDoc["icon"] = "mdi:volume-vibrate";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/number/" + deviceId + "/audio_threshold/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -158,34 +167,34 @@ void publishHADiscovery() {
 
   // ===== Audio Level Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Audio Level";
-    doc["unique_id"] = deviceId + "_audio_level";
-    doc["state_topic"] = base + "/smartsensing/audio_level";
-    doc["unit_of_measurement"] = "dBFS";
-    doc["state_class"] = "measurement";
-    doc["suggested_display_precision"] = 1;
-    doc["icon"] = "mdi:volume-vibrate";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Audio Level";
+    haDoc["unique_id"] = deviceId + "_audio_level";
+    haDoc["state_topic"] = base + "/smartsensing/audio_level";
+    haDoc["unit_of_measurement"] = "dBFS";
+    haDoc["state_class"] = "measurement";
+    haDoc["suggested_display_precision"] = 1;
+    haDoc["icon"] = "mdi:volume-vibrate";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/audio_level/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Timer Remaining Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Timer Remaining";
-    doc["unique_id"] = deviceId + "_timer_remaining";
-    doc["state_topic"] = base + "/smartsensing/timer_remaining";
-    doc["unit_of_measurement"] = "s";
-    doc["icon"] = "mdi:timer-sand";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Timer Remaining";
+    haDoc["unique_id"] = deviceId + "_timer_remaining";
+    haDoc["state_topic"] = base + "/smartsensing/timer_remaining";
+    haDoc["unit_of_measurement"] = "s";
+    haDoc["icon"] = "mdi:timer-sand";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/sensor/" + deviceId + "/timer_remaining/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -193,37 +202,37 @@ void publishHADiscovery() {
 
   // ===== WiFi RSSI Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "WiFi Signal";
-    doc["unique_id"] = deviceId + "_rssi";
-    doc["state_topic"] = base + "/wifi/rssi";
-    doc["unit_of_measurement"] = "dBm";
-    doc["device_class"] = "signal_strength";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:wifi";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "WiFi Signal";
+    haDoc["unique_id"] = deviceId + "_rssi";
+    haDoc["state_topic"] = base + "/wifi/rssi";
+    haDoc["unit_of_measurement"] = "dBm";
+    haDoc["device_class"] = "signal_strength";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:wifi";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/rssi/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== WiFi Connected Binary Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "WiFi Connected";
-    doc["unique_id"] = deviceId + "_wifi_connected";
-    doc["state_topic"] = base + "/wifi/connected";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["device_class"] = "connectivity";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "WiFi Connected";
+    haDoc["unique_id"] = deviceId + "_wifi_connected";
+    haDoc["state_topic"] = base + "/wifi/connected";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["device_class"] = "connectivity";
+    haDoc["entity_category"] = "diagnostic";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/binary_sensor/" + deviceId + "/wifi_connected/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -231,17 +240,17 @@ void publishHADiscovery() {
 
   // ===== Signal Detected Binary Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Detected";
-    doc["unique_id"] = deviceId + "_signal_detected";
-    doc["state_topic"] = base + "/smartsensing/signal_detected";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:sine-wave";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Signal Detected";
+    haDoc["unique_id"] = deviceId + "_signal_detected";
+    haDoc["state_topic"] = base + "/smartsensing/signal_detected";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/binary_sensor/" + deviceId + "/signal_detected/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -250,18 +259,18 @@ void publishHADiscovery() {
 
   // ===== Update Available Binary Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Update Available";
-    doc["unique_id"] = deviceId + "_update_available";
-    doc["state_topic"] = base + "/system/update_available";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["device_class"] = "update";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Update Available";
+    haDoc["unique_id"] = deviceId + "_update_available";
+    haDoc["state_topic"] = base + "/system/update_available";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["device_class"] = "update";
+    haDoc["entity_category"] = "diagnostic";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/binary_sensor/" + deviceId + "/update_available/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -269,32 +278,32 @@ void publishHADiscovery() {
 
   // ===== Firmware Version Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Firmware Version";
-    doc["unique_id"] = deviceId + "_firmware";
-    doc["state_topic"] = base + "/system/firmware";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:tag";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Firmware Version";
+    haDoc["unique_id"] = deviceId + "_firmware";
+    haDoc["state_topic"] = base + "/system/firmware";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:tag";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/firmware/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Latest Firmware Version Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Latest Firmware Version";
-    doc["unique_id"] = deviceId + "_latest_firmware";
-    doc["state_topic"] = base + "/system/latest_version";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:tag-arrow-up";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Latest Firmware Version";
+    haDoc["unique_id"] = deviceId + "_latest_firmware";
+    haDoc["state_topic"] = base + "/system/latest_version";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:tag-arrow-up";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/sensor/" + deviceId + "/latest_firmware/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -302,90 +311,90 @@ void publishHADiscovery() {
 
   // ===== Reboot Button =====
   {
-    JsonDocument doc;
-    doc["name"] = "Reboot";
-    doc["unique_id"] = deviceId + "_reboot";
-    doc["command_topic"] = base + "/system/reboot";
-    doc["payload_press"] = "REBOOT";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:restart";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Reboot";
+    haDoc["unique_id"] = deviceId + "_reboot";
+    haDoc["command_topic"] = base + "/system/reboot";
+    haDoc["payload_press"] = "REBOOT";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:restart";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/button/" + deviceId + "/reboot/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Check Update Button =====
   {
-    JsonDocument doc;
-    doc["name"] = "Check for Updates";
-    doc["unique_id"] = deviceId + "_check_update";
-    doc["command_topic"] = base + "/system/check_update";
-    doc["payload_press"] = "CHECK";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:update";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Check for Updates";
+    haDoc["unique_id"] = deviceId + "_check_update";
+    haDoc["command_topic"] = base + "/system/check_update";
+    haDoc["payload_press"] = "CHECK";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:update";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/button/" + deviceId + "/check_update/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Factory Reset Button =====
   {
-    JsonDocument doc;
-    doc["name"] = "Factory Reset";
-    doc["unique_id"] = deviceId + "_factory_reset";
-    doc["command_topic"] = base + "/system/factory_reset";
-    doc["payload_press"] = "RESET";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:factory";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Factory Reset";
+    haDoc["unique_id"] = deviceId + "_factory_reset";
+    haDoc["command_topic"] = base + "/system/factory_reset";
+    haDoc["payload_press"] = "RESET";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:factory";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/button/" + deviceId + "/factory_reset/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Auto-Update Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Auto Update";
-    doc["unique_id"] = deviceId + "_auto_update";
-    doc["state_topic"] = base + "/settings/auto_update";
-    doc["command_topic"] = base + "/settings/auto_update/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:update";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Auto Update";
+    haDoc["unique_id"] = deviceId + "_auto_update";
+    haDoc["state_topic"] = base + "/settings/auto_update";
+    haDoc["command_topic"] = base + "/settings/auto_update/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:update";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/auto_update/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== OTA Channel Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Update Channel";
-    doc["unique_id"] = deviceId + "_ota_channel";
-    doc["state_topic"] = base + "/settings/ota_channel";
-    doc["command_topic"] = base + "/settings/ota_channel/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Update Channel";
+    haDoc["unique_id"] = deviceId + "_ota_channel";
+    haDoc["state_topic"] = base + "/settings/ota_channel";
+    haDoc["command_topic"] = base + "/settings/ota_channel/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("stable");
     options.add("beta");
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:tag-multiple";
-    addHADeviceInfo(doc);
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:tag-multiple";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/select/" + deviceId + "/ota_channel/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
@@ -393,35 +402,35 @@ void publishHADiscovery() {
   // ===== Firmware Update Entity =====
   // This provides the native HA Update entity with install capability
   {
-    JsonDocument doc;
-    doc["name"] = "Firmware";
-    doc["unique_id"] = deviceId + "_firmware_update";
-    doc["device_class"] = "firmware";
-    doc["state_topic"] = base + "/system/update/state";
-    doc["command_topic"] = base + "/system/update/command";
-    doc["payload_install"] = "install";
-    doc["entity_picture"] =
+    haDoc.clear();
+    haDoc["name"] = "Firmware";
+    haDoc["unique_id"] = deviceId + "_firmware_update";
+    haDoc["device_class"] = "firmware";
+    haDoc["state_topic"] = base + "/system/update/state";
+    haDoc["command_topic"] = base + "/system/update/command";
+    haDoc["payload_install"] = "install";
+    haDoc["entity_picture"] =
         "https://brands.home-assistant.io/_/esphome/icon.png";
-    addHADeviceInfo(doc);
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/update/" + deviceId + "/firmware/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== IP Address Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "IP Address";
-    doc["unique_id"] = deviceId + "_ip";
-    doc["state_topic"] = base + "/wifi/ip";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:ip-network";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "IP Address";
+    haDoc["unique_id"] = deviceId + "_ip";
+    haDoc["state_topic"] = base + "/wifi/ip";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:ip-network";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/ip/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
@@ -431,146 +440,146 @@ void publishHADiscovery() {
 
   // ===== CPU Temperature Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "CPU Temperature";
-    doc["unique_id"] = deviceId + "_cpu_temp";
-    doc["state_topic"] = base + "/hardware/temperature";
-    doc["unit_of_measurement"] = "°C";
-    doc["device_class"] = "temperature";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:thermometer";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "CPU Temperature";
+    haDoc["unique_id"] = deviceId + "_cpu_temp";
+    haDoc["state_topic"] = base + "/hardware/temperature";
+    haDoc["unit_of_measurement"] = "°C";
+    haDoc["device_class"] = "temperature";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:thermometer";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/cpu_temp/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== CPU Usage Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "CPU Usage";
-    doc["unique_id"] = deviceId + "_cpu_usage";
-    doc["state_topic"] = base + "/hardware/cpu_usage";
-    doc["unit_of_measurement"] = "%";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:cpu-64-bit";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "CPU Usage";
+    haDoc["unique_id"] = deviceId + "_cpu_usage";
+    haDoc["state_topic"] = base + "/hardware/cpu_usage";
+    haDoc["unit_of_measurement"] = "%";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:cpu-64-bit";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/cpu_usage/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Free Heap Memory Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Free Heap Memory";
-    doc["unique_id"] = deviceId + "_heap_free";
-    doc["state_topic"] = base + "/hardware/heap_free";
-    doc["unit_of_measurement"] = "B";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:memory";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Free Heap Memory";
+    haDoc["unique_id"] = deviceId + "_heap_free";
+    haDoc["state_topic"] = base + "/hardware/heap_free";
+    haDoc["unit_of_measurement"] = "B";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:memory";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/heap_free/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Uptime Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Uptime";
-    doc["unique_id"] = deviceId + "_uptime";
-    doc["state_topic"] = base + "/system/uptime";
-    doc["unit_of_measurement"] = "s";
-    doc["device_class"] = "duration";
-    doc["state_class"] = "total_increasing";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:clock-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Uptime";
+    haDoc["unique_id"] = deviceId + "_uptime";
+    haDoc["state_topic"] = base + "/system/uptime";
+    haDoc["unit_of_measurement"] = "s";
+    haDoc["device_class"] = "duration";
+    haDoc["state_class"] = "total_increasing";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:clock-outline";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/uptime/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== LittleFS Used Storage Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "LittleFS Used";
-    doc["unique_id"] = deviceId + "_LittleFS_used";
-    doc["state_topic"] = base + "/hardware/LittleFS_used";
-    doc["unit_of_measurement"] = "B";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:harddisk";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "LittleFS Used";
+    haDoc["unique_id"] = deviceId + "_LittleFS_used";
+    haDoc["state_topic"] = base + "/hardware/LittleFS_used";
+    haDoc["unit_of_measurement"] = "B";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:harddisk";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/LittleFS_used/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== WiFi Channel Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "WiFi Channel";
-    doc["unique_id"] = deviceId + "_wifi_channel";
-    doc["state_topic"] = base + "/wifi/channel";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:wifi";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "WiFi Channel";
+    haDoc["unique_id"] = deviceId + "_wifi_channel";
+    haDoc["state_topic"] = base + "/wifi/channel";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:wifi";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/wifi_channel/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Dark Mode Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Dark Mode";
-    doc["unique_id"] = deviceId + "_dark_mode";
-    doc["state_topic"] = base + "/settings/dark_mode";
-    doc["command_topic"] = base + "/settings/dark_mode/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:weather-night";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Dark Mode";
+    haDoc["unique_id"] = deviceId + "_dark_mode";
+    haDoc["state_topic"] = base + "/settings/dark_mode";
+    haDoc["command_topic"] = base + "/settings/dark_mode/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:weather-night";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/dark_mode/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Certificate Validation Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Certificate Validation";
-    doc["unique_id"] = deviceId + "_cert_validation";
-    doc["state_topic"] = base + "/settings/cert_validation";
-    doc["command_topic"] = base + "/settings/cert_validation/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:certificate";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Certificate Validation";
+    haDoc["unique_id"] = deviceId + "_cert_validation";
+    haDoc["state_topic"] = base + "/settings/cert_validation";
+    haDoc["command_topic"] = base + "/settings/cert_validation/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:certificate";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/switch/" + deviceId + "/cert_validation/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -578,39 +587,39 @@ void publishHADiscovery() {
 
   // ===== Display Backlight Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Display Backlight";
-    doc["unique_id"] = deviceId + "_backlight";
-    doc["state_topic"] = base + "/display/backlight";
-    doc["command_topic"] = base + "/display/backlight/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:brightness-6";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Display Backlight";
+    haDoc["unique_id"] = deviceId + "_backlight";
+    haDoc["state_topic"] = base + "/display/backlight";
+    haDoc["command_topic"] = base + "/display/backlight/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["icon"] = "mdi:brightness-6";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/backlight/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Screen Timeout Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Screen Timeout";
-    doc["unique_id"] = deviceId + "_screen_timeout";
-    doc["state_topic"] = base + "/settings/screen_timeout";
-    doc["command_topic"] = base + "/settings/screen_timeout/set";
-    doc["min"] = 0;
-    doc["max"] = 600;
-    doc["step"] = 30;
-    doc["unit_of_measurement"] = "s";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:timer-off-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Screen Timeout";
+    haDoc["unique_id"] = deviceId + "_screen_timeout";
+    haDoc["state_topic"] = base + "/settings/screen_timeout";
+    haDoc["command_topic"] = base + "/settings/screen_timeout/set";
+    haDoc["min"] = 0;
+    haDoc["max"] = 600;
+    haDoc["step"] = 30;
+    haDoc["unit_of_measurement"] = "s";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:timer-off-outline";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/number/" + deviceId + "/screen_timeout/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -618,19 +627,19 @@ void publishHADiscovery() {
 
   // ===== Dim Enabled Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Dim";
-    doc["unique_id"] = deviceId + "_dim_enabled";
-    doc["state_topic"] = base + "/display/dim_enabled";
-    doc["command_topic"] = base + "/display/dim_enabled/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:brightness-auto";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Dim";
+    haDoc["unique_id"] = deviceId + "_dim_enabled";
+    haDoc["state_topic"] = base + "/display/dim_enabled";
+    haDoc["command_topic"] = base + "/display/dim_enabled/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:brightness-auto";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/switch/" + deviceId + "/dim_enabled/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -638,21 +647,21 @@ void publishHADiscovery() {
 
   // ===== Dim Timeout Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Dim Timeout";
-    doc["unique_id"] = deviceId + "_dim_timeout";
-    doc["state_topic"] = base + "/settings/dim_timeout";
-    doc["command_topic"] = base + "/settings/dim_timeout/set";
-    doc["min"] = 0;
-    doc["max"] = 60;
-    doc["step"] = 5;
-    doc["unit_of_measurement"] = "s";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:brightness-auto";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Dim Timeout";
+    haDoc["unique_id"] = deviceId + "_dim_timeout";
+    haDoc["state_topic"] = base + "/settings/dim_timeout";
+    haDoc["command_topic"] = base + "/settings/dim_timeout/set";
+    haDoc["min"] = 0;
+    haDoc["max"] = 60;
+    haDoc["step"] = 5;
+    haDoc["unit_of_measurement"] = "s";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:brightness-auto";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/number/" + deviceId + "/dim_timeout/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -660,21 +669,21 @@ void publishHADiscovery() {
 
   // ===== Display Brightness Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Display Brightness";
-    doc["unique_id"] = deviceId + "_brightness";
-    doc["state_topic"] = base + "/display/brightness";
-    doc["command_topic"] = base + "/display/brightness/set";
-    doc["min"] = 10;
-    doc["max"] = 100;
-    doc["step"] = 25;
-    doc["unit_of_measurement"] = "%";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:brightness-percent";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Display Brightness";
+    haDoc["unique_id"] = deviceId + "_brightness";
+    haDoc["state_topic"] = base + "/display/brightness";
+    haDoc["command_topic"] = base + "/display/brightness/set";
+    haDoc["min"] = 10;
+    haDoc["max"] = 100;
+    haDoc["step"] = 25;
+    haDoc["unit_of_measurement"] = "%";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:brightness-percent";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/number/" + deviceId + "/brightness/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -682,22 +691,22 @@ void publishHADiscovery() {
 
   // ===== Dim Brightness Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Dim Brightness";
-    doc["unique_id"] = deviceId + "_dim_brightness";
-    doc["state_topic"] = base + "/display/dim_brightness";
-    doc["command_topic"] = base + "/display/dim_brightness/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Dim Brightness";
+    haDoc["unique_id"] = deviceId + "_dim_brightness";
+    haDoc["state_topic"] = base + "/display/dim_brightness";
+    haDoc["command_topic"] = base + "/display/dim_brightness/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("10");
     options.add("25");
     options.add("50");
     options.add("75");
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:brightness-4";
-    addHADeviceInfo(doc);
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:brightness-4";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/select/" + deviceId + "/dim_brightness/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -705,39 +714,39 @@ void publishHADiscovery() {
 
   // ===== Buzzer Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Buzzer";
-    doc["unique_id"] = deviceId + "_buzzer";
-    doc["state_topic"] = base + "/settings/buzzer";
-    doc["command_topic"] = base + "/settings/buzzer/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:volume-high";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Buzzer";
+    haDoc["unique_id"] = deviceId + "_buzzer";
+    haDoc["state_topic"] = base + "/settings/buzzer";
+    haDoc["command_topic"] = base + "/settings/buzzer/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:volume-high";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/buzzer/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Buzzer Volume Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Buzzer Volume";
-    doc["unique_id"] = deviceId + "_buzzer_volume";
-    doc["state_topic"] = base + "/settings/buzzer_volume";
-    doc["command_topic"] = base + "/settings/buzzer_volume/set";
-    doc["min"] = 0;
-    doc["max"] = 2;
-    doc["step"] = 1;
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:volume-medium";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Buzzer Volume";
+    haDoc["unique_id"] = deviceId + "_buzzer_volume";
+    haDoc["state_topic"] = base + "/settings/buzzer_volume";
+    haDoc["command_topic"] = base + "/settings/buzzer_volume/set";
+    haDoc["min"] = 0;
+    haDoc["max"] = 2;
+    haDoc["step"] = 1;
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:volume-medium";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/number/" + deviceId + "/buzzer_volume/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -746,23 +755,23 @@ void publishHADiscovery() {
 
   // ===== Audio Update Rate Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Audio Update Rate";
-    doc["unique_id"] = deviceId + "_audio_update_rate";
-    doc["state_topic"] = base + "/settings/audio_update_rate";
-    doc["command_topic"] = base + "/settings/audio_update_rate/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Audio Update Rate";
+    haDoc["unique_id"] = deviceId + "_audio_update_rate";
+    haDoc["state_topic"] = base + "/settings/audio_update_rate";
+    haDoc["command_topic"] = base + "/settings/audio_update_rate/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("20");
     options.add("33");
     options.add("50");
     options.add("100");
-    doc["unit_of_measurement"] = "ms";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:update";
-    addHADeviceInfo(doc);
+    haDoc["unit_of_measurement"] = "ms";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:update";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic =
         "homeassistant/select/" + deviceId + "/audio_update_rate/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
@@ -770,137 +779,137 @@ void publishHADiscovery() {
 
   // ===== Signal Generator Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Generator";
-    doc["unique_id"] = deviceId + "_siggen_enabled";
-    doc["state_topic"] = base + "/signalgenerator/enabled";
-    doc["command_topic"] = base + "/signalgenerator/enabled/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:sine-wave";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Signal Generator";
+    haDoc["unique_id"] = deviceId + "_siggen_enabled";
+    haDoc["state_topic"] = base + "/signalgenerator/enabled";
+    haDoc["command_topic"] = base + "/signalgenerator/enabled/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/siggen_enabled/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Signal Generator Waveform Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Waveform";
-    doc["unique_id"] = deviceId + "_siggen_waveform";
-    doc["state_topic"] = base + "/signalgenerator/waveform";
-    doc["command_topic"] = base + "/signalgenerator/waveform/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Signal Waveform";
+    haDoc["unique_id"] = deviceId + "_siggen_waveform";
+    haDoc["state_topic"] = base + "/signalgenerator/waveform";
+    haDoc["command_topic"] = base + "/signalgenerator/waveform/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("sine");
     options.add("square");
     options.add("white_noise");
     options.add("sweep");
-    doc["icon"] = "mdi:waveform";
-    addHADeviceInfo(doc);
+    haDoc["icon"] = "mdi:waveform";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/select/" + deviceId + "/siggen_waveform/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Signal Generator Frequency Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Frequency";
-    doc["unique_id"] = deviceId + "_siggen_frequency";
-    doc["state_topic"] = base + "/signalgenerator/frequency";
-    doc["command_topic"] = base + "/signalgenerator/frequency/set";
-    doc["min"] = 1;
-    doc["max"] = 22000;
-    doc["unit_of_measurement"] = "Hz";
-    doc["icon"] = "mdi:sine-wave";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Signal Frequency";
+    haDoc["unique_id"] = deviceId + "_siggen_frequency";
+    haDoc["state_topic"] = base + "/signalgenerator/frequency";
+    haDoc["command_topic"] = base + "/signalgenerator/frequency/set";
+    haDoc["min"] = 1;
+    haDoc["max"] = 22000;
+    haDoc["unit_of_measurement"] = "Hz";
+    haDoc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/number/" + deviceId + "/siggen_frequency/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Signal Generator Amplitude Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Amplitude";
-    doc["unique_id"] = deviceId + "_siggen_amplitude";
-    doc["state_topic"] = base + "/signalgenerator/amplitude";
-    doc["command_topic"] = base + "/signalgenerator/amplitude/set";
-    doc["min"] = -96;
-    doc["max"] = 0;
-    doc["step"] = 1;
-    doc["unit_of_measurement"] = "dBFS";
-    doc["icon"] = "mdi:volume-high";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Signal Amplitude";
+    haDoc["unique_id"] = deviceId + "_siggen_amplitude";
+    haDoc["state_topic"] = base + "/signalgenerator/amplitude";
+    haDoc["command_topic"] = base + "/signalgenerator/amplitude/set";
+    haDoc["min"] = -96;
+    haDoc["max"] = 0;
+    haDoc["step"] = 1;
+    haDoc["unit_of_measurement"] = "dBFS";
+    haDoc["icon"] = "mdi:volume-high";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/number/" + deviceId + "/siggen_amplitude/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Signal Generator Channel Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Channel";
-    doc["unique_id"] = deviceId + "_siggen_channel";
-    doc["state_topic"] = base + "/signalgenerator/channel";
-    doc["command_topic"] = base + "/signalgenerator/channel/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Signal Channel";
+    haDoc["unique_id"] = deviceId + "_siggen_channel";
+    haDoc["state_topic"] = base + "/signalgenerator/channel";
+    haDoc["command_topic"] = base + "/signalgenerator/channel/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("ch1");
     options.add("ch2");
     options.add("both");
-    doc["icon"] = "mdi:speaker-multiple";
-    addHADeviceInfo(doc);
+    haDoc["icon"] = "mdi:speaker-multiple";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/select/" + deviceId + "/siggen_channel/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Signal Generator Output Mode Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Output Mode";
-    doc["unique_id"] = deviceId + "_siggen_output_mode";
-    doc["state_topic"] = base + "/signalgenerator/output_mode";
-    doc["command_topic"] = base + "/signalgenerator/output_mode/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Signal Output Mode";
+    haDoc["unique_id"] = deviceId + "_siggen_output_mode";
+    haDoc["state_topic"] = base + "/signalgenerator/output_mode";
+    haDoc["command_topic"] = base + "/signalgenerator/output_mode/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("software");
     options.add("pwm");
-    doc["icon"] = "mdi:export";
-    addHADeviceInfo(doc);
+    haDoc["icon"] = "mdi:export";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/select/" + deviceId + "/siggen_output_mode/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Signal Generator Target ADC Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Target ADC";
-    doc["unique_id"] = deviceId + "_siggen_target_adc";
-    doc["state_topic"] = base + "/signalgenerator/target_adc";
-    doc["command_topic"] = base + "/signalgenerator/target_adc/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Signal Target ADC";
+    haDoc["unique_id"] = deviceId + "_siggen_target_adc";
+    haDoc["state_topic"] = base + "/signalgenerator/target_adc";
+    haDoc["command_topic"] = base + "/signalgenerator/target_adc/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("adc1");
     options.add("adc2");
     options.add("both");
-    doc["icon"] = "mdi:audio-input-stereo-minijack";
-    addHADeviceInfo(doc);
+    haDoc["icon"] = "mdi:audio-input-stereo-minijack";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/select/" + deviceId + "/siggen_target_adc/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
@@ -922,64 +931,64 @@ void publishHADiscovery() {
 
       // Per-ADC Level Sensor
       {
-        JsonDocument doc;
-        doc["name"] = String(nameBuf) + " Audio Level";
-        doc["unique_id"] = deviceId + idSuffix + "_level";
-        doc["state_topic"] = prefix + "/level";
-        doc["unit_of_measurement"] = "dBFS";
-        doc["state_class"] = "measurement";
-        doc["icon"] = "mdi:volume-high";
-        addHADeviceInfo(doc);
+        haDoc.clear();
+        haDoc["name"] = String(nameBuf) + " Audio Level";
+        haDoc["unique_id"] = deviceId + idSuffix + "_level";
+        haDoc["state_topic"] = prefix + "/level";
+        haDoc["unit_of_measurement"] = "dBFS";
+        haDoc["state_class"] = "measurement";
+        haDoc["icon"] = "mdi:volume-high";
+        addHADeviceInfo(haDoc);
         String payload;
-        serializeJson(doc, payload);
+        serializeJson(haDoc, payload);
         mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + labelBuf + "_level/config").c_str(), payload.c_str(), true);
       }
 
       // Per-ADC Status Sensor
       {
-        JsonDocument doc;
-        doc["name"] = String(nameBuf) + " ADC Status";
-        doc["unique_id"] = deviceId + idSuffix + "_adc_status";
-        doc["state_topic"] = prefix + "/adc_status";
-        doc["entity_category"] = "diagnostic";
-        doc["icon"] = "mdi:audio-input-stereo-minijack";
-        addHADeviceInfo(doc);
+        haDoc.clear();
+        haDoc["name"] = String(nameBuf) + " ADC Status";
+        haDoc["unique_id"] = deviceId + idSuffix + "_adc_status";
+        haDoc["state_topic"] = prefix + "/adc_status";
+        haDoc["entity_category"] = "diagnostic";
+        haDoc["icon"] = "mdi:audio-input-stereo-minijack";
+        addHADeviceInfo(haDoc);
         String payload;
-        serializeJson(doc, payload);
+        serializeJson(haDoc, payload);
         mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + labelBuf + "_adc_status/config").c_str(), payload.c_str(), true);
       }
 
       // Per-ADC Noise Floor Sensor
       {
-        JsonDocument doc;
-        doc["name"] = String(nameBuf) + " Noise Floor";
-        doc["unique_id"] = deviceId + idSuffix + "_noise_floor";
-        doc["state_topic"] = prefix + "/noise_floor";
-        doc["unit_of_measurement"] = "dBFS";
-        doc["state_class"] = "measurement";
-        doc["entity_category"] = "diagnostic";
-        doc["icon"] = "mdi:volume-low";
-        addHADeviceInfo(doc);
+        haDoc.clear();
+        haDoc["name"] = String(nameBuf) + " Noise Floor";
+        haDoc["unique_id"] = deviceId + idSuffix + "_noise_floor";
+        haDoc["state_topic"] = prefix + "/noise_floor";
+        haDoc["unit_of_measurement"] = "dBFS";
+        haDoc["state_class"] = "measurement";
+        haDoc["entity_category"] = "diagnostic";
+        haDoc["icon"] = "mdi:volume-low";
+        addHADeviceInfo(haDoc);
         String payload;
-        serializeJson(doc, payload);
+        serializeJson(haDoc, payload);
         mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + labelBuf + "_noise_floor/config").c_str(), payload.c_str(), true);
       }
 
       // Per-ADC Vrms Sensor
       {
-        JsonDocument doc;
-        doc["name"] = String(nameBuf) + " Vrms";
-        doc["unique_id"] = deviceId + idSuffix + "_vrms";
-        doc["state_topic"] = prefix + "/vrms";
-        doc["unit_of_measurement"] = "V";
-        doc["device_class"] = "voltage";
-        doc["state_class"] = "measurement";
-        doc["entity_category"] = "diagnostic";
-        doc["suggested_display_precision"] = 3;
-        doc["icon"] = "mdi:sine-wave";
-        addHADeviceInfo(doc);
+        haDoc.clear();
+        haDoc["name"] = String(nameBuf) + " Vrms";
+        haDoc["unique_id"] = deviceId + idSuffix + "_vrms";
+        haDoc["state_topic"] = prefix + "/vrms";
+        haDoc["unit_of_measurement"] = "V";
+        haDoc["device_class"] = "voltage";
+        haDoc["state_class"] = "measurement";
+        haDoc["entity_category"] = "diagnostic";
+        haDoc["suggested_display_precision"] = 3;
+        haDoc["icon"] = "mdi:sine-wave";
+        addHADeviceInfo(haDoc);
         String payload;
-        serializeJson(doc, payload);
+        serializeJson(haDoc, payload);
         mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + labelBuf + "_vrms/config").c_str(), payload.c_str(), true);
       }
 
@@ -990,75 +999,75 @@ void publishHADiscovery() {
 
   // ===== Legacy Combined Audio ADC Status Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "ADC Status";
-    doc["unique_id"] = deviceId + "_adc_status";
-    doc["state_topic"] = base + "/audio/adc_status";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:audio-input-stereo-minijack";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "ADC Status";
+    haDoc["unique_id"] = deviceId + "_adc_status";
+    haDoc["state_topic"] = base + "/audio/adc_status";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:audio-input-stereo-minijack";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/adc_status/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Legacy Combined Audio Noise Floor Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Audio Noise Floor";
-    doc["unique_id"] = deviceId + "_noise_floor";
-    doc["state_topic"] = base + "/audio/noise_floor";
-    doc["unit_of_measurement"] = "dBFS";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:volume-low";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Audio Noise Floor";
+    haDoc["unique_id"] = deviceId + "_noise_floor";
+    haDoc["state_topic"] = base + "/audio/noise_floor";
+    haDoc["unit_of_measurement"] = "dBFS";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:volume-low";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/noise_floor/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Legacy Combined Input Voltage (Vrms) Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "Input Voltage (Vrms)";
-    doc["unique_id"] = deviceId + "_input_vrms";
-    doc["state_topic"] = base + "/audio/input_vrms";
-    doc["unit_of_measurement"] = "V";
-    doc["device_class"] = "voltage";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["suggested_display_precision"] = 3;
-    doc["icon"] = "mdi:sine-wave";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Input Voltage (Vrms)";
+    haDoc["unique_id"] = deviceId + "_input_vrms";
+    haDoc["state_topic"] = base + "/audio/input_vrms";
+    haDoc["unit_of_measurement"] = "V";
+    haDoc["device_class"] = "voltage";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["suggested_display_precision"] = 3;
+    haDoc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/sensor/" + deviceId + "/input_vrms/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== ADC Reference Voltage Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "ADC Reference Voltage";
-    doc["unique_id"] = deviceId + "_adc_vref";
-    doc["state_topic"] = base + "/settings/adc_vref";
-    doc["command_topic"] = base + "/settings/adc_vref/set";
-    doc["min"] = 1.0;
-    doc["max"] = 5.0;
-    doc["step"] = 0.1;
-    doc["unit_of_measurement"] = "V";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:flash-triangle-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "ADC Reference Voltage";
+    haDoc["unique_id"] = deviceId + "_adc_vref";
+    haDoc["state_topic"] = base + "/settings/adc_vref";
+    haDoc["command_topic"] = base + "/settings/adc_vref/set";
+    haDoc["min"] = 1.0;
+    haDoc["max"] = 5.0;
+    haDoc["step"] = 0.1;
+    haDoc["unit_of_measurement"] = "V";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:flash-triangle-outline";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/number/" + deviceId + "/adc_vref/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
@@ -1069,18 +1078,18 @@ void publishHADiscovery() {
     const char *adcIds[] = {"input1_enabled", "input2_enabled"};
     const char *adcTopics[] = {"/audio/input1/enabled", "/audio/input2/enabled"};
     for (int a = 0; a < 2; a++) {
-      JsonDocument doc;
-      doc["name"] = adcNames[a];
-      doc["unique_id"] = deviceId + "_" + adcIds[a];
-      doc["state_topic"] = base + adcTopics[a];
-      doc["command_topic"] = base + String(adcTopics[a]) + "/set";
-      doc["payload_on"] = "ON";
-      doc["payload_off"] = "OFF";
-      doc["entity_category"] = "config";
-      doc["icon"] = "mdi:audio-input-stereo-minijack";
-      addHADeviceInfo(doc);
+      haDoc.clear();
+      haDoc["name"] = adcNames[a];
+      haDoc["unique_id"] = deviceId + "_" + adcIds[a];
+      haDoc["state_topic"] = base + adcTopics[a];
+      haDoc["command_topic"] = base + String(adcTopics[a]) + "/set";
+      haDoc["payload_on"] = "ON";
+      haDoc["payload_off"] = "OFF";
+      haDoc["entity_category"] = "config";
+      haDoc["icon"] = "mdi:audio-input-stereo-minijack";
+      addHADeviceInfo(haDoc);
       String payload;
-      serializeJson(doc, payload);
+      serializeJson(haDoc, payload);
       String topic = "homeassistant/switch/" + deviceId + "/" + adcIds[a] + "/config";
       mqttClient.publish(topic.c_str(), payload.c_str(), true);
     }
@@ -1088,81 +1097,81 @@ void publishHADiscovery() {
 
   // ===== VU Meter Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "VU Meter";
-    doc["unique_id"] = deviceId + "_vu_meter";
-    doc["state_topic"] = base + "/audio/vu_meter";
-    doc["command_topic"] = base + "/audio/vu_meter/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:chart-bar";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "VU Meter";
+    haDoc["unique_id"] = deviceId + "_vu_meter";
+    haDoc["state_topic"] = base + "/audio/vu_meter";
+    haDoc["command_topic"] = base + "/audio/vu_meter/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:chart-bar";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/vu_meter/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Audio Waveform Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Audio Waveform";
-    doc["unique_id"] = deviceId + "_waveform";
-    doc["state_topic"] = base + "/audio/waveform";
-    doc["command_topic"] = base + "/audio/waveform/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:waveform";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Audio Waveform";
+    haDoc["unique_id"] = deviceId + "_waveform";
+    haDoc["state_topic"] = base + "/audio/waveform";
+    haDoc["command_topic"] = base + "/audio/waveform/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:waveform";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/waveform/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== Frequency Spectrum Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Frequency Spectrum";
-    doc["unique_id"] = deviceId + "_spectrum";
-    doc["state_topic"] = base + "/audio/spectrum";
-    doc["command_topic"] = base + "/audio/spectrum/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:equalizer";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Frequency Spectrum";
+    haDoc["unique_id"] = deviceId + "_spectrum";
+    haDoc["state_topic"] = base + "/audio/spectrum";
+    haDoc["command_topic"] = base + "/audio/spectrum/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:equalizer";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/switch/" + deviceId + "/spectrum/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
 
   // ===== FFT Window Type Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "FFT Window";
-    doc["unique_id"] = deviceId + "_fft_window";
-    doc["state_topic"] = base + "/audio/fft_window";
-    doc["command_topic"] = base + "/audio/fft_window/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "FFT Window";
+    haDoc["unique_id"] = deviceId + "_fft_window";
+    haDoc["state_topic"] = base + "/audio/fft_window";
+    haDoc["command_topic"] = base + "/audio/fft_window/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("hann");
     options.add("blackman");
     options.add("blackman_harris");
     options.add("blackman_nuttall");
     options.add("nuttall");
     options.add("flat_top");
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:window-shutter-settings";
-    addHADeviceInfo(doc);
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:window-shutter-settings";
+    addHADeviceInfo(haDoc);
 
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     String topic = "homeassistant/select/" + deviceId + "/fft_window/config";
     mqttClient.publish(topic.c_str(), payload.c_str(), true);
   }
@@ -1170,260 +1179,260 @@ void publishHADiscovery() {
 
   // ===== Debug Mode Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Debug Mode";
-    doc["unique_id"] = deviceId + "_debug_mode";
-    doc["state_topic"] = base + "/debug/mode";
-    doc["command_topic"] = base + "/debug/mode/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:bug";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Debug Mode";
+    haDoc["unique_id"] = deviceId + "_debug_mode";
+    haDoc["state_topic"] = base + "/debug/mode";
+    haDoc["command_topic"] = base + "/debug/mode/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:bug";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/debug_mode/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Debug Serial Level Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Debug Serial Level";
-    doc["unique_id"] = deviceId + "_debug_serial_level";
-    doc["state_topic"] = base + "/debug/serial_level";
-    doc["command_topic"] = base + "/debug/serial_level/set";
-    doc["min"] = 0;
-    doc["max"] = 3;
-    doc["step"] = 1;
-    doc["mode"] = "slider";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:console";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Debug Serial Level";
+    haDoc["unique_id"] = deviceId + "_debug_serial_level";
+    haDoc["state_topic"] = base + "/debug/serial_level";
+    haDoc["command_topic"] = base + "/debug/serial_level/set";
+    haDoc["min"] = 0;
+    haDoc["max"] = 3;
+    haDoc["step"] = 1;
+    haDoc["mode"] = "slider";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:console";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/number/" + deviceId + "/debug_serial_level/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Debug HW Stats Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Debug HW Stats";
-    doc["unique_id"] = deviceId + "_debug_hw_stats";
-    doc["state_topic"] = base + "/debug/hw_stats";
-    doc["command_topic"] = base + "/debug/hw_stats/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:chart-line";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Debug HW Stats";
+    haDoc["unique_id"] = deviceId + "_debug_hw_stats";
+    haDoc["state_topic"] = base + "/debug/hw_stats";
+    haDoc["command_topic"] = base + "/debug/hw_stats/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:chart-line";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/debug_hw_stats/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Debug I2S Metrics Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Debug I2S Metrics";
-    doc["unique_id"] = deviceId + "_debug_i2s_metrics";
-    doc["state_topic"] = base + "/debug/i2s_metrics";
-    doc["command_topic"] = base + "/debug/i2s_metrics/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:timer-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Debug I2S Metrics";
+    haDoc["unique_id"] = deviceId + "_debug_i2s_metrics";
+    haDoc["state_topic"] = base + "/debug/i2s_metrics";
+    haDoc["command_topic"] = base + "/debug/i2s_metrics/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:timer-outline";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/debug_i2s_metrics/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Debug Task Monitor Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Debug Task Monitor";
-    doc["unique_id"] = deviceId + "_debug_task_monitor";
-    doc["state_topic"] = base + "/debug/task_monitor";
-    doc["command_topic"] = base + "/debug/task_monitor/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:format-list-bulleted";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Debug Task Monitor";
+    haDoc["unique_id"] = deviceId + "_debug_task_monitor";
+    haDoc["state_topic"] = base + "/debug/task_monitor";
+    haDoc["command_topic"] = base + "/debug/task_monitor/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:format-list-bulleted";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/debug_task_monitor/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Task Monitor Diagnostic Sensors =====
   {
-    JsonDocument doc;
-    doc["name"] = "Task Count";
-    doc["unique_id"] = deviceId + "_task_count";
-    doc["state_topic"] = base + "/hardware/task_count";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:format-list-numbered";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Task Count";
+    haDoc["unique_id"] = deviceId + "_task_count";
+    haDoc["state_topic"] = base + "/hardware/task_count";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:format-list-numbered";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/task_count/config").c_str(), payload.c_str(), true);
   }
   {
-    JsonDocument doc;
-    doc["name"] = "Loop Time";
-    doc["unique_id"] = deviceId + "_loop_time";
-    doc["state_topic"] = base + "/hardware/loop_time_us";
-    doc["unit_of_measurement"] = "us";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:timer-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Loop Time";
+    haDoc["unique_id"] = deviceId + "_loop_time";
+    haDoc["state_topic"] = base + "/hardware/loop_time_us";
+    haDoc["unit_of_measurement"] = "us";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:timer-outline";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/loop_time/config").c_str(), payload.c_str(), true);
   }
   {
-    JsonDocument doc;
-    doc["name"] = "Loop Time Max";
-    doc["unique_id"] = deviceId + "_loop_time_max";
-    doc["state_topic"] = base + "/hardware/loop_time_max_us";
-    doc["unit_of_measurement"] = "us";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:timer-alert-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Loop Time Max";
+    haDoc["unique_id"] = deviceId + "_loop_time_max";
+    haDoc["state_topic"] = base + "/hardware/loop_time_max_us";
+    haDoc["unit_of_measurement"] = "us";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:timer-alert-outline";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/loop_time_max/config").c_str(), payload.c_str(), true);
   }
   {
-    JsonDocument doc;
-    doc["name"] = "Min Stack Free";
-    doc["unique_id"] = deviceId + "_min_stack_free";
-    doc["state_topic"] = base + "/hardware/min_stack_free";
-    doc["unit_of_measurement"] = "B";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:memory";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Min Stack Free";
+    haDoc["unique_id"] = deviceId + "_min_stack_free";
+    haDoc["state_topic"] = base + "/hardware/min_stack_free";
+    haDoc["unit_of_measurement"] = "B";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:memory";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/min_stack_free/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Crash Diagnostics — Reset Reason (diagnostic sensor) =====
   {
-    JsonDocument doc;
-    doc["name"] = "Reset Reason";
-    doc["unique_id"] = deviceId + "_reset_reason";
-    doc["state_topic"] = base + "/diagnostics/reset_reason";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:restart-alert";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Reset Reason";
+    haDoc["unique_id"] = deviceId + "_reset_reason";
+    haDoc["state_topic"] = base + "/diagnostics/reset_reason";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:restart-alert";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/reset_reason/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Crash Diagnostics — Was Crash (binary sensor) =====
   {
-    JsonDocument doc;
-    doc["name"] = "Last Boot Was Crash";
-    doc["unique_id"] = deviceId + "_was_crash";
-    doc["state_topic"] = base + "/diagnostics/was_crash";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["device_class"] = "problem";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Last Boot Was Crash";
+    haDoc["unique_id"] = deviceId + "_was_crash";
+    haDoc["state_topic"] = base + "/diagnostics/was_crash";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["device_class"] = "problem";
+    haDoc["entity_category"] = "diagnostic";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/was_crash/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Heap Health — Heap Critical (binary sensor) =====
   {
-    JsonDocument doc;
-    doc["name"] = "Heap Critical";
-    doc["unique_id"] = deviceId + "_heap_critical";
-    doc["state_topic"] = base + "/diagnostics/heap_critical";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["device_class"] = "problem";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Heap Critical";
+    haDoc["unique_id"] = deviceId + "_heap_critical";
+    haDoc["state_topic"] = base + "/diagnostics/heap_critical";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["device_class"] = "problem";
+    haDoc["entity_category"] = "diagnostic";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/heap_critical/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Audio DMA Alloc Failed (binary sensor) =====
   {
-    JsonDocument doc;
-    doc["name"] = "Audio DMA Alloc Failed";
-    doc["unique_id"] = deviceId + "_dma_alloc_failed";
-    doc["state_topic"] = base + "/diagnostics/dma_alloc_failed";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["device_class"] = "problem";
-    doc["entity_category"] = "diagnostic";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Audio DMA Alloc Failed";
+    haDoc["unique_id"] = deviceId + "_dma_alloc_failed";
+    haDoc["state_topic"] = base + "/diagnostics/dma_alloc_failed";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["device_class"] = "problem";
+    haDoc["entity_category"] = "diagnostic";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/dma_alloc_failed/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Heap Health — Max Alloc Block (diagnostic sensor) =====
   {
-    JsonDocument doc;
-    doc["name"] = "Heap Max Block";
-    doc["unique_id"] = deviceId + "_heap_max_block";
-    doc["state_topic"] = base + "/diagnostics/heap_max_block";
-    doc["unit_of_measurement"] = "B";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:memory";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Heap Max Block";
+    haDoc["unique_id"] = deviceId + "_heap_max_block";
+    haDoc["state_topic"] = base + "/diagnostics/heap_max_block";
+    haDoc["unit_of_measurement"] = "B";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:memory";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/heap_max_block/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Timezone Offset Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Timezone Offset";
-    doc["unique_id"] = deviceId + "_timezone_offset";
-    doc["state_topic"] = base + "/settings/timezone_offset";
-    doc["command_topic"] = base + "/settings/timezone_offset/set";
-    doc["min"] = -12;
-    doc["max"] = 14;
-    doc["step"] = 1;
-    doc["unit_of_measurement"] = "h";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:map-clock-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Timezone Offset";
+    haDoc["unique_id"] = deviceId + "_timezone_offset";
+    haDoc["state_topic"] = base + "/settings/timezone_offset";
+    haDoc["command_topic"] = base + "/settings/timezone_offset/set";
+    haDoc["min"] = -12;
+    haDoc["max"] = 14;
+    haDoc["step"] = 1;
+    haDoc["unit_of_measurement"] = "h";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:map-clock-outline";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/number/" + deviceId + "/timezone_offset/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Signal Generator Sweep Speed Number =====
   {
-    JsonDocument doc;
-    doc["name"] = "Signal Sweep Speed";
-    doc["unique_id"] = deviceId + "_siggen_sweep_speed";
-    doc["state_topic"] = base + "/signalgenerator/sweep_speed";
-    doc["command_topic"] = base + "/signalgenerator/sweep_speed/set";
-    doc["min"] = 0.1;
-    doc["max"] = 10.0;
-    doc["step"] = 0.1;
-    doc["unit_of_measurement"] = "Hz/s";
-    doc["icon"] = "mdi:speedometer";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Signal Sweep Speed";
+    haDoc["unique_id"] = deviceId + "_siggen_sweep_speed";
+    haDoc["state_topic"] = base + "/signalgenerator/sweep_speed";
+    haDoc["command_topic"] = base + "/signalgenerator/sweep_speed/set";
+    haDoc["min"] = 0.1;
+    haDoc["max"] = 10.0;
+    haDoc["step"] = 0.1;
+    haDoc["unit_of_measurement"] = "Hz/s";
+    haDoc["icon"] = "mdi:speedometer";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/number/" + deviceId + "/siggen_sweep_speed/config").c_str(), payload.c_str(), true);
   }
 
@@ -1440,15 +1449,15 @@ void publishHADiscovery() {
         "Input 5 Left Name", "Input 5 Right Name", "Input 6 Left Name", "Input 6 Right Name",
         "Input 7 Left Name", "Input 7 Right Name", "Input 8 Left Name", "Input 8 Right Name"};
     for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS * 2; i++) {
-      JsonDocument doc;
-      doc["name"] = inputDisplayNames[i];
-      doc["unique_id"] = deviceId + "_" + inputLabels[i];
-      doc["state_topic"] = base + "/audio/" + inputLabels[i];
-      doc["entity_category"] = "diagnostic";
-      doc["icon"] = "mdi:label-outline";
-      addHADeviceInfo(doc);
+      haDoc.clear();
+      haDoc["name"] = inputDisplayNames[i];
+      haDoc["unique_id"] = deviceId + "_" + inputLabels[i];
+      haDoc["state_topic"] = base + "/audio/" + inputLabels[i];
+      haDoc["entity_category"] = "diagnostic";
+      haDoc["icon"] = "mdi:label-outline";
+      addHADeviceInfo(haDoc);
       String payload;
-      serializeJson(doc, payload);
+      serializeJson(haDoc, payload);
       mqttClient.publish(("homeassistant/sensor/" + deviceId + "/" + inputLabels[i] + "/config").c_str(), payload.c_str(), true);
     }
   }
@@ -1457,62 +1466,62 @@ void publishHADiscovery() {
 #ifdef DSP_ENABLED
   // ===== DSP Enabled Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "DSP";
-    doc["unique_id"] = deviceId + "_dsp_enabled";
-    doc["state_topic"] = base + "/dsp/enabled";
-    doc["command_topic"] = base + "/dsp/enabled/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:equalizer";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "DSP";
+    haDoc["unique_id"] = deviceId + "_dsp_enabled";
+    haDoc["state_topic"] = base + "/dsp/enabled";
+    haDoc["command_topic"] = base + "/dsp/enabled/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["icon"] = "mdi:equalizer";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/dsp_enabled/config").c_str(), payload.c_str(), true);
   }
 
   // ===== DSP Bypass Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "DSP Bypass";
-    doc["unique_id"] = deviceId + "_dsp_bypass";
-    doc["state_topic"] = base + "/dsp/bypass";
-    doc["command_topic"] = base + "/dsp/bypass/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["icon"] = "mdi:debug-step-over";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "DSP Bypass";
+    haDoc["unique_id"] = deviceId + "_dsp_bypass";
+    haDoc["state_topic"] = base + "/dsp/bypass";
+    haDoc["command_topic"] = base + "/dsp/bypass/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["icon"] = "mdi:debug-step-over";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/dsp_bypass/config").c_str(), payload.c_str(), true);
   }
 
   // ===== DSP CPU Load Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "DSP CPU Load";
-    doc["unique_id"] = deviceId + "_dsp_cpu_load";
-    doc["state_topic"] = base + "/dsp/cpu_load";
-    doc["unit_of_measurement"] = "%";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:cpu-64-bit";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "DSP CPU Load";
+    haDoc["unique_id"] = deviceId + "_dsp_cpu_load";
+    haDoc["state_topic"] = base + "/dsp/cpu_load";
+    haDoc["unit_of_measurement"] = "%";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:cpu-64-bit";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/dsp_cpu_load/config").c_str(), payload.c_str(), true);
   }
 
   // ===== DSP Preset Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "DSP Preset";
-    doc["unique_id"] = deviceId + "_dsp_preset";
-    doc["state_topic"] = base + "/dsp/preset";
-    doc["command_topic"] = base + "/dsp/preset/set";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:playlist-music";
-    JsonArray opts = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "DSP Preset";
+    haDoc["unique_id"] = deviceId + "_dsp_preset";
+    haDoc["state_topic"] = base + "/dsp/preset";
+    haDoc["command_topic"] = base + "/dsp/preset/set";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:playlist-music";
+    JsonArray opts = haDoc["options"].to<JsonArray>();
     opts.add("Custom");
     extern bool dsp_preset_exists(int);
     for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
@@ -1520,9 +1529,9 @@ void publishHADiscovery() {
         opts.add(appState.dsp.presetNames[i]);
       }
     }
-    addHADeviceInfo(doc);
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/select/" + deviceId + "/dsp_preset/config").c_str(), payload.c_str(), true);
   }
 
@@ -1535,49 +1544,49 @@ void publishHADiscovery() {
 
       // Per-channel bypass switch
       {
-        JsonDocument doc;
-        doc["name"] = String("DSP ") + chNames[ch] + " Bypass";
-        doc["unique_id"] = deviceId + idSuffix + "_bypass";
-        doc["state_topic"] = chPrefix + "/bypass";
-        doc["command_topic"] = chPrefix + "/bypass/set";
-        doc["payload_on"] = "ON";
-        doc["payload_off"] = "OFF";
-        doc["entity_category"] = "config";
-        doc["icon"] = "mdi:debug-step-over";
-        addHADeviceInfo(doc);
+        haDoc.clear();
+        haDoc["name"] = String("DSP ") + chNames[ch] + " Bypass";
+        haDoc["unique_id"] = deviceId + idSuffix + "_bypass";
+        haDoc["state_topic"] = chPrefix + "/bypass";
+        haDoc["command_topic"] = chPrefix + "/bypass/set";
+        haDoc["payload_on"] = "ON";
+        haDoc["payload_off"] = "OFF";
+        haDoc["entity_category"] = "config";
+        haDoc["icon"] = "mdi:debug-step-over";
+        addHADeviceInfo(haDoc);
         String payload;
-        serializeJson(doc, payload);
+        serializeJson(haDoc, payload);
         mqttClient.publish(("homeassistant/switch/" + deviceId + "/dsp_ch" + String(ch) + "_bypass/config").c_str(), payload.c_str(), true);
       }
 
       // Per-channel stage count sensor
       {
-        JsonDocument doc;
-        doc["name"] = String("DSP ") + chNames[ch] + " Stages";
-        doc["unique_id"] = deviceId + idSuffix + "_stages";
-        doc["state_topic"] = chPrefix + "/stage_count";
-        doc["state_class"] = "measurement";
-        doc["entity_category"] = "diagnostic";
-        doc["icon"] = "mdi:filter";
-        addHADeviceInfo(doc);
+        haDoc.clear();
+        haDoc["name"] = String("DSP ") + chNames[ch] + " Stages";
+        haDoc["unique_id"] = deviceId + idSuffix + "_stages";
+        haDoc["state_topic"] = chPrefix + "/stage_count";
+        haDoc["state_class"] = "measurement";
+        haDoc["entity_category"] = "diagnostic";
+        haDoc["icon"] = "mdi:filter";
+        addHADeviceInfo(haDoc);
         String payload;
-        serializeJson(doc, payload);
+        serializeJson(haDoc, payload);
         mqttClient.publish(("homeassistant/sensor/" + deviceId + "/dsp_ch" + String(ch) + "_stages/config").c_str(), payload.c_str(), true);
       }
 
       // Per-channel limiter gain reduction sensor
       {
-        JsonDocument doc;
-        doc["name"] = String("DSP ") + chNames[ch] + " Limiter GR";
-        doc["unique_id"] = deviceId + idSuffix + "_limiter_gr";
-        doc["state_topic"] = chPrefix + "/limiter_gr";
-        doc["unit_of_measurement"] = "dB";
-        doc["state_class"] = "measurement";
-        doc["entity_category"] = "diagnostic";
-        doc["icon"] = "mdi:arrow-collapse-down";
-        addHADeviceInfo(doc);
+        haDoc.clear();
+        haDoc["name"] = String("DSP ") + chNames[ch] + " Limiter GR";
+        haDoc["unique_id"] = deviceId + idSuffix + "_limiter_gr";
+        haDoc["state_topic"] = chPrefix + "/limiter_gr";
+        haDoc["unit_of_measurement"] = "dB";
+        haDoc["state_class"] = "measurement";
+        haDoc["entity_category"] = "diagnostic";
+        haDoc["icon"] = "mdi:arrow-collapse-down";
+        addHADeviceInfo(haDoc);
         String payload;
-        serializeJson(doc, payload);
+        serializeJson(haDoc, payload);
         mqttClient.publish(("homeassistant/sensor/" + deviceId + "/dsp_ch" + String(ch) + "_limiter_gr/config").c_str(), payload.c_str(), true);
       }
     }
@@ -1585,18 +1594,18 @@ void publishHADiscovery() {
 
   // ===== PEQ Bypass Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "PEQ Bypass";
-    doc["unique_id"] = deviceId + "_peq_bypass";
-    doc["state_topic"] = base + "/dsp/peq/bypass";
-    doc["command_topic"] = base + "/dsp/peq/bypass/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:equalizer";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "PEQ Bypass";
+    haDoc["unique_id"] = deviceId + "_peq_bypass";
+    haDoc["state_topic"] = base + "/dsp/peq/bypass";
+    haDoc["command_topic"] = base + "/dsp/peq/bypass/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:equalizer";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/peq_bypass/config").c_str(), payload.c_str(), true);
   }
 
@@ -1607,40 +1616,40 @@ void publishHADiscovery() {
 #ifdef GUI_ENABLED
   // ===== Boot Animation Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "Boot Animation";
-    doc["unique_id"] = deviceId + "_boot_animation";
-    doc["state_topic"] = base + "/settings/boot_animation";
-    doc["command_topic"] = base + "/settings/boot_animation/set";
-    doc["payload_on"] = "ON";
-    doc["payload_off"] = "OFF";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:animation-play";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "Boot Animation";
+    haDoc["unique_id"] = deviceId + "_boot_animation";
+    haDoc["state_topic"] = base + "/settings/boot_animation";
+    haDoc["command_topic"] = base + "/settings/boot_animation/set";
+    haDoc["payload_on"] = "ON";
+    haDoc["payload_off"] = "OFF";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:animation-play";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/boot_animation/config").c_str(), payload.c_str(), true);
   }
 
   // ===== Boot Animation Style Select =====
   {
-    JsonDocument doc;
-    doc["name"] = "Boot Animation Style";
-    doc["unique_id"] = deviceId + "_boot_animation_style";
-    doc["state_topic"] = base + "/settings/boot_animation_style";
-    doc["command_topic"] = base + "/settings/boot_animation_style/set";
-    JsonArray options = doc["options"].to<JsonArray>();
+    haDoc.clear();
+    haDoc["name"] = "Boot Animation Style";
+    haDoc["unique_id"] = deviceId + "_boot_animation_style";
+    haDoc["state_topic"] = base + "/settings/boot_animation_style";
+    haDoc["command_topic"] = base + "/settings/boot_animation_style/set";
+    JsonArray options = haDoc["options"].to<JsonArray>();
     options.add("wave_pulse");
     options.add("speaker_ripple");
     options.add("waveform");
     options.add("beat_bounce");
     options.add("freq_bars");
     options.add("heartbeat");
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:animation";
-    addHADeviceInfo(doc);
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:animation";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/select/" + deviceId + "/boot_animation_style/config").c_str(), payload.c_str(), true);
   }
 #endif
@@ -1648,114 +1657,114 @@ void publishHADiscovery() {
 #ifdef USB_AUDIO_ENABLED
   // ===== USB Audio Connected Binary Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "USB Connected";
-    doc["unique_id"] = deviceId + "_usb_audio_connected";
-    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_CONNECTED;
-    doc["payload_on"] = "true";
-    doc["payload_off"] = "false";
-    doc["device_class"] = "connectivity";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:usb";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "USB Connected";
+    haDoc["unique_id"] = deviceId + "_usb_audio_connected";
+    haDoc["state_topic"] = base + "/" + MQTT_TOPIC_USB_CONNECTED;
+    haDoc["payload_on"] = "true";
+    haDoc["payload_off"] = "false";
+    haDoc["device_class"] = "connectivity";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:usb";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/usb_audio_connected/config").c_str(), payload.c_str(), true);
   }
 
   // ===== USB Audio Streaming Binary Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "USB Streaming";
-    doc["unique_id"] = deviceId + "_usb_audio_streaming";
-    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_STREAMING;
-    doc["payload_on"] = "true";
-    doc["payload_off"] = "false";
-    doc["device_class"] = "running";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:music";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "USB Streaming";
+    haDoc["unique_id"] = deviceId + "_usb_audio_streaming";
+    haDoc["state_topic"] = base + "/" + MQTT_TOPIC_USB_STREAMING;
+    haDoc["payload_on"] = "true";
+    haDoc["payload_off"] = "false";
+    haDoc["device_class"] = "running";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:music";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/binary_sensor/" + deviceId + "/usb_audio_streaming/config").c_str(), payload.c_str(), true);
   }
 
   // ===== USB Audio Enabled Switch =====
   {
-    JsonDocument doc;
-    doc["name"] = "USB Audio";
-    doc["unique_id"] = deviceId + "_usb_audio_enabled";
-    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_ENABLED;
-    doc["command_topic"] = base + "/" + MQTT_TOPIC_USB_ENABLE_SET;
-    doc["payload_on"] = "true";
-    doc["payload_off"] = "false";
-    doc["entity_category"] = "config";
-    doc["icon"] = "mdi:usb-port";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "USB Audio";
+    haDoc["unique_id"] = deviceId + "_usb_audio_enabled";
+    haDoc["state_topic"] = base + "/" + MQTT_TOPIC_USB_ENABLED;
+    haDoc["command_topic"] = base + "/" + MQTT_TOPIC_USB_ENABLE_SET;
+    haDoc["payload_on"] = "true";
+    haDoc["payload_off"] = "false";
+    haDoc["entity_category"] = "config";
+    haDoc["icon"] = "mdi:usb-port";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/switch/" + deviceId + "/usb_audio_enabled/config").c_str(), payload.c_str(), true);
   }
 
   // ===== USB Audio Sample Rate Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "USB Sample Rate";
-    doc["unique_id"] = deviceId + "_usb_audio_sample_rate";
-    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_RATE;
-    doc["unit_of_measurement"] = "Hz";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:sine-wave";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "USB Sample Rate";
+    haDoc["unique_id"] = deviceId + "_usb_audio_sample_rate";
+    haDoc["state_topic"] = base + "/" + MQTT_TOPIC_USB_RATE;
+    haDoc["unit_of_measurement"] = "Hz";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:sine-wave";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_sample_rate/config").c_str(), payload.c_str(), true);
   }
 
   // ===== USB Audio Volume Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "USB Volume";
-    doc["unique_id"] = deviceId + "_usb_audio_volume";
-    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_VOLUME;
-    doc["unit_of_measurement"] = "dB";
-    doc["state_class"] = "measurement";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:volume-high";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "USB Volume";
+    haDoc["unique_id"] = deviceId + "_usb_audio_volume";
+    haDoc["state_topic"] = base + "/" + MQTT_TOPIC_USB_VOLUME;
+    haDoc["unit_of_measurement"] = "dB";
+    haDoc["state_class"] = "measurement";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:volume-high";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_volume/config").c_str(), payload.c_str(), true);
   }
 
   // ===== USB Audio Buffer Overruns Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "USB Buffer Overruns";
-    doc["unique_id"] = deviceId + "_usb_audio_overruns";
-    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_OVERRUNS;
-    doc["state_class"] = "total_increasing";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:alert-circle-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "USB Buffer Overruns";
+    haDoc["unique_id"] = deviceId + "_usb_audio_overruns";
+    haDoc["state_topic"] = base + "/" + MQTT_TOPIC_USB_OVERRUNS;
+    haDoc["state_class"] = "total_increasing";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:alert-circle-outline";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_overruns/config").c_str(), payload.c_str(), true);
   }
 
   // ===== USB Audio Buffer Underruns Sensor =====
   {
-    JsonDocument doc;
-    doc["name"] = "USB Buffer Underruns";
-    doc["unique_id"] = deviceId + "_usb_audio_underruns";
-    doc["state_topic"] = base + "/" + MQTT_TOPIC_USB_UNDERRUNS;
-    doc["state_class"] = "total_increasing";
-    doc["entity_category"] = "diagnostic";
-    doc["icon"] = "mdi:alert-outline";
-    addHADeviceInfo(doc);
+    haDoc.clear();
+    haDoc["name"] = "USB Buffer Underruns";
+    haDoc["unique_id"] = deviceId + "_usb_audio_underruns";
+    haDoc["state_topic"] = base + "/" + MQTT_TOPIC_USB_UNDERRUNS;
+    haDoc["state_class"] = "total_increasing";
+    haDoc["entity_category"] = "diagnostic";
+    haDoc["icon"] = "mdi:alert-outline";
+    addHADeviceInfo(haDoc);
     String payload;
-    serializeJson(doc, payload);
+    serializeJson(haDoc, payload);
     mqttClient.publish(("homeassistant/sensor/" + deviceId + "/usb_audio_underruns/config").c_str(), payload.c_str(), true);
   }
 #endif
@@ -1796,19 +1805,19 @@ void publishHADiscovery() {
 
       // Publish binary_sensor for device availability
       {
-        JsonDocument doc;
+        haDoc.clear();
         String uid = deviceId + "_hal_" + String(dev->getSlot());
-        doc["unique_id"]    = uid + "_available";
-        doc["name"]         = String(dev->getDescriptor().name) + " Available";
-        doc["state_topic"]  = base + "/hal/" + String(dev->getSlot()) + "/available";
-        doc["payload_on"]   = "true";
-        doc["payload_off"]  = "false";
-        doc["device_class"] = "connectivity";
-        doc["entity_category"] = "diagnostic";
-        addHADeviceInfo(doc);
+        haDoc["unique_id"]    = uid + "_available";
+        haDoc["name"]         = String(dev->getDescriptor().name) + " Available";
+        haDoc["state_topic"]  = base + "/hal/" + String(dev->getSlot()) + "/available";
+        haDoc["payload_on"]   = "true";
+        haDoc["payload_off"]  = "false";
+        haDoc["device_class"] = "connectivity";
+        haDoc["entity_category"] = "diagnostic";
+        addHADeviceInfo(haDoc);
 
         String payload;
-        serializeJson(doc, payload);
+        serializeJson(haDoc, payload);
         String topic = "homeassistant/binary_sensor/" + uid + "_available/config";
         client.publish(topic.c_str(), payload.c_str(), true);
       }

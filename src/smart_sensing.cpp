@@ -1,4 +1,5 @@
 #include "smart_sensing.h"
+#include "http_security.h"
 #include "app_state.h"
 #include "globals.h"
 #include "config.h"
@@ -94,12 +95,12 @@ void handleSmartSensingGet() {
 
   String json;
   serializeJson(doc, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 void handleSmartSensingUpdate() {
   if (!server.hasArg("plain")) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"No data received\"}");
     return;
   }
@@ -108,7 +109,7 @@ void handleSmartSensingUpdate() {
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
   if (error) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid JSON\"}");
     return;
   }
@@ -127,7 +128,7 @@ void handleSmartSensingUpdate() {
     } else if (modeStr == "smart_auto") {
       newMode = SMART_AUTO;
     } else {
-      server.send(400, "application/json",
+      server_send(400, "application/json",
                   "{\"success\": false, \"message\": \"Invalid mode\"}");
       return;
     }
@@ -187,7 +188,7 @@ void handleSmartSensingUpdate() {
 
       LOG_I("[Sensing] Timer duration set to %d min", duration);
     } else {
-      server.send(400, "application/json",
+      server_send(400, "application/json",
                   "{\"success\": false, \"message\": \"Timer duration must be "
                   "between 1 and 60 minutes\"}");
       return;
@@ -202,7 +203,7 @@ void handleSmartSensingUpdate() {
       settingsChanged = true;
       LOG_I("[Sensing] Audio threshold set to %+.0f dBFS", threshold);
     } else {
-      server.send(400, "application/json",
+      server_send(400, "application/json",
                   "{\"success\": false, \"message\": \"Audio threshold must "
                   "be between -96 and 0 dBFS\"}");
       return;
@@ -262,7 +263,7 @@ void handleSmartSensingUpdate() {
   resp["success"] = true;
   String json;
   serializeJson(resp, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 // ===== Smart Sensing Core Functions =====

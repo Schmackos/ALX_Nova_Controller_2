@@ -2,7 +2,7 @@
 
 function loadMqttSettings() {
     apiFetch('/api/mqtt')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         document.getElementById('appState.mqttEnabled').checked = data.enabled || false;
         document.getElementById('mqttFields').style.display = (data.enabled || false) ? '' : 'none';
@@ -61,7 +61,7 @@ function toggleMqttEnabled() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: enabled })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast(enabled ? 'MQTT enabled' : 'MQTT disabled', 'success');
@@ -93,7 +93,7 @@ function saveMqttSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('MQTT settings saved', 'success');
@@ -113,7 +113,7 @@ function toggleAutoAP() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ autoAPEnabled: enabled })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(enabled ? 'Auto AP enabled' : 'Auto AP disabled', 'success');
     })

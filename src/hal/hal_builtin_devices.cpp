@@ -49,7 +49,7 @@
 // Logs a warning if registration fails (registry full).
 #define HAL_REGISTER(compat, devType, legacy, factoryFn) do { \
     HalDriverEntry _e; memset(&_e, 0, sizeof(_e)); \
-    strncpy(_e.compatible, compat, 31); \
+    hal_safe_strcpy(_e.compatible, sizeof(_e.compatible), compat); \
     _e.type = devType; _e.legacyId = legacy; _e.factory = factoryFn; \
     if (!hal_registry_register(_e)) { LOG_W("[HAL] Register failed: %s", _e.compatible); } \
 } while(0)

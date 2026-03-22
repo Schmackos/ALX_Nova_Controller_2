@@ -16,6 +16,25 @@ Up to **16 simultaneous clients** are supported (`MAX_WS_CLIENTS = 16`). Each co
 
 ---
 
+## Module Architecture
+
+The WebSocket subsystem is split across 4 focused implementation files, all sharing the public API in `websocket_handler.h`:
+
+| File | Responsibility |
+|------|---------------|
+| `websocket_command.cpp` | WS event handler (`webSocketEvent()`), command dispatch, deferred init state |
+| `websocket_broadcast.cpp` | 17 state broadcast functions (`sendDspState()`, `sendHardwareStats()`, etc.) + audio data streaming |
+| `websocket_auth.cpp` | Client authentication tracking, session validation, auth count recalibration |
+| `websocket_cpu_monitor.cpp` | FreeRTOS idle hook CPU usage measurement, init/update/getter functions |
+
+Cross-file state is managed via accessor functions in `websocket_internal.h`. The `WebSocketsServer` instance is shared via `extern` in `globals.h`.
+
+:::info WebSocket Library
+The firmware uses [arduinoWebSockets](https://github.com/Links2004/arduinoWebSockets) v2.7.3, vendored in `lib/WebSockets/`. Migration to ESP-IDF native `esp_http_server` WebSocket support was evaluated and deferred -- it would require rewriting all 227 HTTP endpoints and 39 WebSocket API calls, plus reworking the 113 E2E test suite. The vendored library has no known CVEs and is functional on ESP32-P4.
+:::
+
+---
+
 ## Authentication Flow
 
 Every WebSocket connection must authenticate within 5 seconds of connecting or it is disconnected. The recommended authentication path uses a short-lived token fetched from `GET /api/ws-token` before opening the socket.

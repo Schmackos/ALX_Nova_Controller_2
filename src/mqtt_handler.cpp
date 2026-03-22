@@ -1,4 +1,5 @@
 #include "mqtt_handler.h"
+#include "http_security.h"
 #include "app_state.h"
 #include "globals.h"
 #include "buzzer_handler.h"
@@ -988,13 +989,13 @@ void handleMqttGet() {
 
   String json;
   serializeJson(doc, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 // POST /api/mqtt - Update MQTT settings
 void handleMqttUpdate() {
   if (!server.hasArg("plain")) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"No data received\"}");
     return;
   }
@@ -1003,7 +1004,7 @@ void handleMqttUpdate() {
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
   if (error) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid JSON\"}");
     return;
   }
@@ -1125,5 +1126,5 @@ void handleMqttUpdate() {
 
   String json;
   serializeJson(resp, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }

@@ -696,14 +696,12 @@ void handleSettingsGet() {
 
   String json;
   serializeJson(doc, json);
-  http_add_security_headers();
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 void handleSettingsUpdate() {
   if (!server.hasArg("plain")) {
-    http_add_security_headers();
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"No data received\"}");
     return;
   }
@@ -712,8 +710,7 @@ void handleSettingsUpdate() {
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
 
   if (error) {
-    http_add_security_headers();
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid JSON\"}");
     return;
   }
@@ -1037,8 +1034,7 @@ void handleSettingsUpdate() {
   resp["otaChannel"] = appState.ota.channel;
   String json;
   serializeJson(resp, json);
-  http_add_security_headers();
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 void handleSettingsExport() {
@@ -1167,10 +1163,9 @@ void handleSettingsExport() {
   serializeJsonPretty(doc, json);
 
   // Send as downloadable JSON file
-  http_add_security_headers();
   server.sendHeader("Content-Disposition",
                     "attachment; filename=\"device-settings.json\"");
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 
   LOG_I("[Settings] Settings exported successfully");
 }
@@ -1179,8 +1174,7 @@ void handleSettingsImport() {
   LOG_I("[Settings] Settings import requested via web interface");
 
   if (!server.hasArg("plain")) {
-    http_add_security_headers();
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"No data received\"}");
     return;
   }
@@ -1190,16 +1184,14 @@ void handleSettingsImport() {
 
   if (error) {
     LOG_E("[Settings] JSON parsing failed: %s", error.c_str());
-    http_add_security_headers();
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid JSON format\"}");
     return;
   }
 
   // Validate it's a settings export file
   if (doc["exportInfo"].isNull() || doc["settings"].isNull()) {
-    http_add_security_headers();
-    server.send(
+    server_send(
         400, "application/json",
         "{\"success\": false, \"message\": \"Invalid settings file format\"}");
     return;
@@ -1551,8 +1543,7 @@ void handleSettingsImport() {
   LOG_I("[Settings] All settings imported successfully");
 
   // Send success response
-  http_add_security_headers();
-  server.send(200, "application/json",
+  server_send(200, "application/json",
               "{\"success\": true, \"message\": \"Settings imported "
               "successfully. Device will reboot in 3 seconds.\"}");
 
@@ -1567,8 +1558,7 @@ void handleFactoryReset() {
   LOG_W("[Settings] Factory reset requested via web interface");
 
   // Send success response before performing reset
-  http_add_security_headers();
-  server.send(200, "application/json",
+  server_send(200, "application/json",
               "{\"success\": true, \"message\": \"Factory reset initiated\"}");
 
   // Give time for response to be sent
@@ -1582,8 +1572,7 @@ void handleReboot() {
   LOG_W("[Settings] Reboot requested via web interface");
 
   // Send success response before rebooting
-  http_add_security_headers();
-  server.send(200, "application/json",
+  server_send(200, "application/json",
               "{\"success\": true, \"message\": \"Rebooting device\"}");
 
   // Play shutdown melody then reboot
@@ -1856,9 +1845,8 @@ void handleDiagnostics() {
   char filename[64];
   snprintf(filename, sizeof(filename),
            "attachment; filename=\"diagnostics-%s.json\"", timestamp);
-  http_add_security_headers();
   server.sendHeader("Content-Disposition", filename);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 
   LOG_I("[Settings] Diagnostics exported successfully");
 }

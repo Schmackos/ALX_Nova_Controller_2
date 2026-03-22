@@ -76,10 +76,10 @@
                 const ipType = data.usingStaticIP ? 'Static IP' : 'DHCP';
                 html += `
                     <div class="info-row"><span class="info-label">Client Status</span><span class="info-value text-success">Connected</span></div>
-                    <div class="info-row"><span class="info-label">Network</span><span class="info-value">${data.ssid || 'Unknown'}</span></div>
-                    <div class="info-row"><span class="info-label">Client IP</span><span class="info-value">${data.staIP || data.ip || 'Unknown'}</span></div>
-                    <div class="info-row"><span class="info-label">IP Configuration</span><span class="info-value">${ipType}</span></div>
-                    <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${formatRssi(data.rssi)}</span></div>
+                    <div class="info-row"><span class="info-label">Network</span><span class="info-value">${escapeHtml(data.ssid) || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">Client IP</span><span class="info-value">${escapeHtml(data.staIP || data.ip) || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">IP Configuration</span><span class="info-value">${escapeHtml(ipType)}</span></div>
+                    <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${escapeHtml(formatRssi(data.rssi))}</span></div>
                     <div class="info-row"><span class="info-label">Saved Networks</span><span class="info-value">${data.networkCount || 0}</span></div>
                 `;
             } else {
@@ -95,8 +95,8 @@
 
                 html += `
                     <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
-                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data['appState.apSSID'] || 'ALX-Device'}</span></div>
-                    <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
+                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${escapeHtml(data['appState.apSSID']) || 'ALX-Device'}</span></div>
+                    <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${escapeHtml(data.apIP || data.ip) || '192.168.4.1'}</span></div>
                 `;
 
                 if (data.apClients !== undefined) {
@@ -109,7 +109,7 @@
             if (html !== '' && apContentAdded) {
                 html += `<div class="divider"></div>`;
             }
-            html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
+            html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${escapeHtml(data.mac) || 'Unknown'}</span></div>`;
 
             apToggle.checked = !!(data['appState.apEnabled']) || (data.mode === 'ap');
             document.getElementById('apFields').style.display = apToggle.checked ? '' : 'none';
@@ -298,7 +298,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     showToast('Timezone updated', 'success');
@@ -320,7 +320,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     showToast('DST setting updated', 'success');
@@ -354,7 +354,7 @@
 
         function updateCurrentTime() {
             apiFetch('/api/settings')
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     // Create date object with current UTC time

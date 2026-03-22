@@ -174,7 +174,7 @@ function showWiFiModal(ssid) {
                     <div class="info-box">
                         <div style="text-align: center; padding: 20px;">
                             <div id="wifiLoader" class="animate-pulse" style="font-size: 40px; margin-bottom: 16px;">📶</div>
-                            <div id="wifiStatusText">Connecting to <strong>${ssid}</strong>...</div>
+                            <div id="wifiStatusText">Connecting to <strong>${escapeHtml(ssid)}</strong>...</div>
                             <div id="wifiIPInfo" class="hidden" style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--success);"></div>
                         </div>
                     </div>
@@ -194,7 +194,7 @@ function updateWiFiConnectionStatus(type, message, ip) {
 
     if (!statusText) return; // Modal might be closed
 
-    statusText.innerHTML = message;
+    statusText.textContent = message;
 
     if (type === 'success') {
         loader.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="var(--success)" aria-hidden="true"><path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M11,16.5L18,9.5L16.59,8.09L11,13.67L7.91,10.59L6.5,12L11,16.5Z"/></svg>';
@@ -205,7 +205,7 @@ function updateWiFiConnectionStatus(type, message, ip) {
             ipInfo.classList.remove('hidden');
 
             actions.innerHTML = `
-                        <button class="btn btn-success" onclick="window.location.href='http://${ip}'">Go to Dashboard</button>
+                        <button class="btn btn-success" onclick="window.location.href='http://${escapeHtml(ip)}'">Go to Dashboard</button>
                     `;
         } else {
              actions.innerHTML = `<button class="btn btn-secondary" onclick="closeWiFiModal()">Close</button>`;
@@ -294,11 +294,11 @@ function showAPModeModal(apIP) {
                             <div style="font-size: 40px; margin-bottom: 16px;">📶</div>
                             <div style="margin-bottom: 8px;">No saved networks available.</div>
                             <div style="margin-bottom: 16px;">Access Point mode has been started.</div>
-                            <div style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--accent);">${apIP}</div>
+                            <div style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--accent);">${escapeHtml(apIP)}</div>
                         </div>
                     </div>
                     <div class="modal-actions" style="margin-top: 16px;">
-                        <button class="primary" onclick="window.location.href='http://${apIP}'">Go to Dashboard</button>
+                        <button class="primary" onclick="window.location.href='http://${escapeHtml(apIP)}'">Go to Dashboard</button>
                     </div>
                 </div>
             `;
