@@ -230,7 +230,7 @@ function toggleAutoUpdate() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ autoUpdateEnabled: autoUpdateEnabled })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(autoUpdateEnabled ? 'Auto-update enabled' : 'Auto-update disabled', 'success');
     })
@@ -244,7 +244,7 @@ function toggleCertValidation() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 'appState.enableCertValidation': enableCertValidation })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(enableCertValidation ? 'SSL validation enabled' : 'SSL validation disabled', 'success');
     })
@@ -258,7 +258,7 @@ function setStatsInterval() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hardwareStatsInterval: interval })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Stats interval set to ' + interval + 's', 'success');
     })
@@ -348,7 +348,7 @@ function setAudioUpdateRate() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audioUpdateRate: rate })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Audio rate set to ' + (labels[rate]||rate+'ms'), 'success');
     })
@@ -357,7 +357,7 @@ function setAudioUpdateRate() {
 
 function exportSettings() {
     apiFetch('/api/settings/export')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -393,7 +393,7 @@ function importSettings(settings) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('Settings imported. Rebooting...', 'success');
@@ -410,7 +410,7 @@ function manualOverride(state) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ manualOverride: state })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(state ? 'Turned ON' : 'Turned OFF', 'success');
     })
@@ -441,7 +441,7 @@ function updateAudioThreshold() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audioThreshold: value })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Threshold updated', 'success');
     })
@@ -460,7 +460,7 @@ function updateSensingMode() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: selected.value })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Mode updated', 'success');
     })
@@ -476,7 +476,7 @@ function updateTimerDuration() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ timerDuration: value })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Timer updated', 'success');
     })
@@ -541,7 +541,7 @@ function startFactoryReset() {
         'This will erase all settings and restore defaults. This cannot be undone.',
         function() {
             apiFetch('/api/factoryreset', { method: 'POST' })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) showToast('Factory reset in progress...', 'success');
             })
@@ -556,7 +556,7 @@ function startReboot() {
         'The device will restart. You will lose connection temporarily.',
         function() {
             apiFetch('/api/reboot', { method: 'POST' })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) showToast('Rebooting...', 'success');
             })

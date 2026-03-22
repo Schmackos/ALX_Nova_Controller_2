@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <WebSocketsServer.h>
 
-#define MAX_WS_CLIENTS 10
+#define MAX_WS_CLIENTS 16
 
 // ===== Binary WebSocket Message Types =====
 #define WS_BIN_WAVEFORM 0x01  // [type:1][adc:1][samples:256] = 258 bytes

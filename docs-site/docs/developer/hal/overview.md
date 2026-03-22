@@ -122,7 +122,7 @@ struct HalDeviceConfig {
 
 ### Slot Model
 
-The manager holds a flat array of `HAL_MAX_DEVICES` (24) device pointers. A device's slot index is assigned at registration and never changes. The audio pipeline bridge uses slot indices as stable keys in its mapping tables.
+The manager holds a flat array of `HAL_MAX_DEVICES` (32) device pointers. A device's slot index is assigned at registration and never changes. The audio pipeline bridge uses slot indices as stable keys in its mapping tables.
 
 ```cpp
 HalDeviceManager& mgr = HalDeviceManager::instance();

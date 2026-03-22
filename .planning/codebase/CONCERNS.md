@@ -106,13 +106,9 @@ These issues were identified and **completely fixed** in recent development phas
 
 ### WebSocket & REST API
 
-**WebSocket Client Limit (Max 8 Clients)**
-- **Risk**: WebSocket server configured for max 8 clients. If 9th client connects, connection accepted but frame handling fails silently
-- **Files**: `src/websocket_handler.cpp` (line 51 `wsAuthStatus[MAX_WS_CLIENTS]`), `src/config.h` (MAX_WS_CLIENTS typically 8)
-- **Current mitigation**: Arduino WebSocket library rejects 9th connection. No crash. 9th client gets HTTP 400 (connection upgrade failed). Documented in API reference
-- **Impact**: 9th browser tab / phone app cannot connect. User must close another tab first
-- **Test coverage**: E2E tests use 1-2 concurrent clients. No stress test for 9+ concurrent clients
-- **Recommendation**: Add WebSocket client limit reached warning to UI. Consider increasing MAX_WS_CLIENTS to 16 (minimal overhead per client). Priority: LOW (rare scenario; typical user has 1-2 connections)
+**WebSocket Client Limit** (FIXED: 2026-03-22)
+- **Was**: MAX_WS_CLIENTS=10, silent TCP rejection for 11th client, no UI feedback
+- **Now**: MAX_WS_CLIENTS=16 with `WEBSOCKETS_SERVER_CLIENT_MAX=16` build flag. `wsClientCount`/`wsClientMax` fields added to `hardwareStats` WS broadcast. UI warning toast when approaching limit. Adaptive rate tiers extended: 5-7 clients (skip-6), 8+ clients (skip-8). 4 new tests in `test_ws_adaptive_rate`. Priority: CLOSED
 
 **REST API Rate Limiting Gap** (REVIEWED: 2026-03-22)
 - **Risk**: Admin endpoints (factory-reset, reboot) have no server-side rate limiting beyond session auth
@@ -128,13 +124,9 @@ These issues were identified and **completely fixed** in recent development phas
 - **Review outcome**: Full PubSubClient → async MQTT library swap was rejected by code reviewer: 317 callsites, mock rewrite required, ESP32-P4 compatibility unverified. 1-line `setTimeout()` fix provides the needed protection. Full library swap deferred to dedicated future release
 - **Remaining risk**: PubSubClient still blocks during `connect()`, but for max 5s instead of 30s. GUI may be briefly unresponsive. Priority: LOW (acceptable for first-boot edge case)
 
-**OTA SSL Certificate Validation**
-- **Risk**: OTA download uses Mozilla certificate bundle via `WiFiClientSecure`. If bundle is stale (ESP32 ships with ~2-year-old cert set), newly signed certificates are rejected
-- **Files**: `src/ota_updater.cpp` (line 890-920 HTTPS download)
-- **Current mitigation**: `setCACertBundle()` used if available. Falls back to root CA cert if old Arduino version. Certs are updated via Arduino-ESP32 library updates (not in firmware)
-- **Impact**: OTA fails with "certificate verify failed" error. Device remains stable. User must update Arduino framework to get new certs
-- **Test coverage**: OTA tests use mock HTTPS. No real cert validation test
-- **Recommendation**: Add command-line tool to extract and embed latest Mozilla cert bundle in firmware (update procedure). Document certificate update flow. Priority: LOW (unlikely to hit in 2-year timeframe; community reports early if occurs)
+**OTA SSL Certificate Validation** (FIXED: 2026-03-22)
+- **Was**: 3 root CA PEM strings hardcoded inline in `ota_updater.cpp`. No update procedure or tooling. Cert rotation required manual code editing
+- **Now**: Certs extracted to `src/ota_certs.h` with expiry date comments and update timestamp. `tools/update_certs.js` Node.js script connects to GitHub API/CDN, extracts cert chains, regenerates header. Documented in Docusaurus developer docs (`build-setup.md`). Current certs: Sectigo R46 (2046), Sectigo E46 (2046), DigiCert G2 (2038). Priority: CLOSED
 
 ## Security Considerations
 
@@ -146,12 +138,9 @@ These issues were identified and **completely fixed** in recent development phas
 - **Test coverage**: 3 E2E auth tests verify cookie is set and protected
 - **Recommendation**: None — implementation is correct per OWASP guidelines
 
-**Password Storage (PBKDF2-SHA256, 10k Iterations)**
-- **Current**: `hashPassword()` uses PBKDF2 with 10,000 iterations over 32-byte SHA256 output
-- **Status**: SECURE. 10k iterations is acceptable (NIST recommends 100k+, but lower is acceptable for low-risk device with 5-min rate limit)
-- **Test coverage**: 2 auth tests verify hash generation and comparison
-- **Migration path**: Legacy SHA256 hashes migrated to PBKDF2 on boot (see MEMORY.md)
-- **Recommendation**: Consider increasing to 50k iterations if performance allows (would add ~3ms to login, acceptable). Priority: LOW
+**Password Storage (PBKDF2-SHA256, 50k Iterations)** (UPGRADED: 2026-03-22)
+- **Was**: PBKDF2 with 10,000 iterations (`p1:` format), hardcoded in `auth_handler.cpp`
+- **Now**: PBKDF2 with 50,000 iterations (`p2:` format). `PBKDF2_ITERATIONS` constant in `config.h`. Backward-compatible: `p1:` (10k) and legacy SHA256 hashes auto-migrated to `p2:` on successful login. 5 new tests verify format, roundtrip, backward compat, and migration. Priority: CLOSED
 
 **WebSocket Token TTL (60 Seconds)**
 - **Current**: WS tokens issued by `GET /api/ws-token`, valid for 60s, 16-slot pool
@@ -161,13 +150,9 @@ These issues were identified and **completely fixed** in recent development phas
 
 ### Network Security
 
-**API Response Validation in JavaScript**
-- **Risk**: Web UI doesn't validate API response schemas. If attacker injects false data via man-in-the-middle (AP mode + no HTTPS), UI could display incorrect info or crash
-- **Files**: `web_src/js/01-core.js` (WS message handler), `web_src/js/02-ws-router.js` (dispatch)
-- **Current mitigation**: Schema validation happens on firmware side (ArduinoJson validates all incoming JSON). UI trust firmware completely
-- **Impact**: In AP mode without HTTPS, attacker could spoof device state (display "volume 100" when it's 0). No command injection possible (commands validated server-side)
-- **Test coverage**: E2E tests don't cover man-in-the-middle scenarios
-- **Recommendation**: Add JSON schema validation in JavaScript (lightweight Ajv library). Add Content-Security-Policy header to prevent inline JS execution. Priority: LOW (AP mode is temporary)
+**API Response Validation in JavaScript** (FIXED: 2026-03-22)
+- **Was**: 50+ `apiFetch()` calls used `.json()` without HTTP status checks. WS messages dispatched without field validation. Non-2xx responses or missing fields could crash UI
+- **Now**: `response.safeJson()` method added to `apiFetch()` (non-breaking, opt-in). Checks `response.ok`, wraps `.json()` in try/catch. 32 high-impact call sites migrated (`22-settings.js`, `23-firmware-update.js`, `20-wifi-network.js`). `validateWsMessage(data, requiredFields)` helper validates critical WS types: `audioLevels` (requires `adc`), `hardware_stats` (requires `heap`), `wifiStatus` (requires `connected`). Priority: CLOSED
 
 ## Performance Bottlenecks
 
@@ -254,20 +239,10 @@ If include order changes or `_resolveI2sPin()` logic is modified, pins may not r
 
 **Recommendation**: Document 8×16 as current architectural limit. If user needs >4 stereo ADCs, recommend cascading two units via Ethernet (not yet supported). Priority: DEFERRED
 
-### HAL Device Limit (24/24)
+### HAL Device Limit (UPGRADED: 2026-03-22)
 
-**Current Capacity**
-- 14/24 slots used at boot (PCM5102A, ES8311, PCM1808 ×2, NS4150B, TempSensor, SigGen, USB Audio, Relay, Button, Buzzer, Encoder, LED, Display)
-- 10 slots available for expansion
-
-**Scaling Path to 48 Devices**
-- Increase `HAL_MAX_DEVICES` in `hal_types.h`
-- `HalDeviceManager._devices[]` array grows (24 pointers = 96 bytes → 192 bytes negligible)
-- `HalPinAlloc` table grows from 56 → 112 pins (384 bytes, negligible)
-
-**Blocking issue**: None identified. System is designed for N devices
-
-**Recommendation**: Consider increasing to 32 devices now (10 → 18 headroom) for future expansion. Priority: LOW (current 10-slot headroom is sufficient for 2-3 years)
+**Was**: `HAL_MAX_DEVICES=24`, 14 slots at boot, 10 free
+**Now**: `HAL_MAX_DEVICES=32`, 14 slots at boot, 18 free. `HAL_MAX_DRIVERS` (32) and `HAL_DB_MAX_ENTRIES` (32) already matched. Memory impact negligible. Test assertions updated (33rd device rejected). Priority: CLOSED
 
 ### Diagnostic Journal (800 Entries)
 
@@ -374,4 +349,4 @@ None identified. All critical features are implemented (HAL, audio pipeline, DSP
 
 *Concerns analysis: 2026-03-21*
 
-**Last updated**: 2026-03-22 (Medium Risk Mitigations). 6 MEDIUM risks reviewed by 5-agent team: 2 mitigated (security headers, I2C retry), 1 mitigated with 1-line fix (MQTT timeout), 1 mitigated with adaptive rate (WS packet loss), 2 closed after review (I2S MCLK guard — static function, REST rate limiting — security theater). Client-side confirmation dialog added for destructive operations. 25 new tests (2327 total across 91 modules).
+**Last updated**: 2026-03-22 (Low Priority Mitigations). 5 LOW risks resolved: HAL_MAX_DEVICES 24→32, PBKDF2 iterations 10k→50k with p1→p2 migration, MAX_WS_CLIENTS 10→16 with adaptive rate tiers and UI warning, OTA certs extracted to header with update tooling, frontend API/WS response validation added. Docusaurus developer docs updated across 5 pages.

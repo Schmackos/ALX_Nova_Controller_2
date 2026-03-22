@@ -378,28 +378,28 @@ void test_register_20_devices() {
     TEST_ASSERT_EQUAL(20, found);
 }
 
-// ===== Test 16: Register 25 exceeds HAL_MAX_DEVICES (24) — 25th rejected =====
-void test_register_25_exceeds_max() {
-    // HAL_MAX_DEVICES is 24 — we can register 24 but the 25th should fail
-    TestDevice devs[25];
-    for (int i = 0; i < 25; i++) {
+// ===== Test 16: Register 33 exceeds HAL_MAX_DEVICES (32) — 33rd rejected =====
+void test_register_33_exceeds_max() {
+    // HAL_MAX_DEVICES is 32 — we can register 32 but the 33rd should fail
+    TestDevice devs[33];
+    for (int i = 0; i < 33; i++) {
         char name[16];
         snprintf(name, sizeof(name), "scale%d", i);
         devs[i] = TestDevice(name, HAL_DEV_DAC);
     }
 
-    // Register 24 — should all succeed
-    for (int i = 0; i < 24; i++) {
+    // Register 32 — should all succeed
+    for (int i = 0; i < 32; i++) {
         int slot = mgr->registerDevice(&devs[i], HAL_DISC_BUILTIN);
         TEST_ASSERT_GREATER_OR_EQUAL_MESSAGE(0, slot,
-            "Devices 0-23 should register successfully");
+            "Devices 0-31 should register successfully");
     }
-    TEST_ASSERT_EQUAL(24, mgr->getCount());
+    TEST_ASSERT_EQUAL(32, mgr->getCount());
 
-    // 25th registration should fail with -1
-    int slot25 = mgr->registerDevice(&devs[24], HAL_DISC_BUILTIN);
-    TEST_ASSERT_EQUAL(-1, slot25);
-    TEST_ASSERT_EQUAL(24, mgr->getCount());
+    // 33rd registration should fail with -1
+    int slot33 = mgr->registerDevice(&devs[32], HAL_DISC_BUILTIN);
+    TEST_ASSERT_EQUAL(-1, slot33);
+    TEST_ASSERT_EQUAL(32, mgr->getCount());
 }
 
 // ===== Test 17: Remove and re-register uses freed slot =====
@@ -467,14 +467,14 @@ void test_register_null_device_returns_negative_one() {
 
 // ===== Test 21: Slot full emits diagnostic and returns -1 =====
 void test_register_device_slot_full_returns_negative_one() {
-    // Fill all 24 slots
+    // Fill all 32 slots
     TestDevice devs[HAL_MAX_DEVICES];
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         char name[16];
         snprintf(name, sizeof(name), "fill%d", i);
         devs[i] = TestDevice(name, HAL_DEV_DAC);
         int slot = mgr->registerDevice(&devs[i], HAL_DISC_BUILTIN);
-        TEST_ASSERT_GREATER_OR_EQUAL_MESSAGE(0, slot, "All 24 slots should register");
+        TEST_ASSERT_GREATER_OR_EQUAL_MESSAGE(0, slot, "All 32 slots should register");
     }
     TEST_ASSERT_EQUAL(HAL_MAX_DEVICES, mgr->getCount());
 
@@ -497,9 +497,9 @@ void test_registry_max_returns_correct_value() {
     TEST_ASSERT_EQUAL(32, hal_registry_max());
 }
 
-// ===== Test 23: Registry overflow — fill to HAL_MAX_DRIVERS, 25th rejected =====
+// ===== Test 23: Registry overflow — fill to HAL_MAX_DRIVERS, 33rd rejected =====
 void test_registry_overflow_at_max_drivers() {
-    // Fill the registry to its maximum capacity (24)
+    // Fill the registry to its maximum capacity (32)
     for (int i = 0; i < HAL_MAX_DRIVERS; i++) {
         HalDriverEntry entry;
         memset(&entry, 0, sizeof(entry));
@@ -524,7 +524,7 @@ void test_registry_overflow_at_max_drivers() {
 
     // Previously registered entries should still be findable
     TEST_ASSERT_NOT_NULL(hal_registry_find("test,driver0"));
-    TEST_ASSERT_NOT_NULL(hal_registry_find("test,driver23"));
+    TEST_ASSERT_NOT_NULL(hal_registry_find("test,driver31"));
 
     // The overflow entry should NOT be findable
     TEST_ASSERT_NULL(hal_registry_find("test,overflow"));
@@ -532,7 +532,7 @@ void test_registry_overflow_at_max_drivers() {
 
 // ===== Test 24: Remove device from full manager, then register succeeds =====
 void test_slot_full_then_remove_allows_new_registration() {
-    // Fill all 24 slots
+    // Fill all 32 slots
     TestDevice devs[HAL_MAX_DEVICES];
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
         char name[16];
@@ -601,7 +601,7 @@ int main(int argc, char** argv) {
 
     // Scaling tests
     RUN_TEST(test_register_20_devices);
-    RUN_TEST(test_register_25_exceeds_max);
+    RUN_TEST(test_register_33_exceeds_max);
     RUN_TEST(test_remove_and_reregister_reclaims_slot);
 
     // Pin tracking — high GPIO, bounds, exhaustion

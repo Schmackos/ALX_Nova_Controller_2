@@ -5277,6 +5277,21 @@ body.night-mode {
                     return new Promise(() => {});
                 }
 
+                response.safeJson = async function() {
+                    if (!this.ok) {
+                        let errorMsg = 'Request failed: ' + this.status;
+                        try {
+                            const errBody = await this.clone().json();
+                            if (errBody.error) errorMsg = errBody.error;
+                        } catch(e) { /* non-JSON error body, use status text */ }
+                        throw new Error(errorMsg);
+                    }
+                    try {
+                        return await this.json();
+                    } catch(e) {
+                        throw new Error('Invalid response format');
+                    }
+                };
                 return response;
             } catch (error) {
                 console.error(`API Fetch Error [${url}]:`, error);
@@ -5359,6 +5374,19 @@ body.night-mode {
 
 //# sourceURL=01-core.js
 
+        let _wsLimitWarned = false;
+
+        function validateWsMessage(data, requiredFields) {
+            if (!data || typeof data !== 'object') return false;
+            for (var i = 0; i < requiredFields.length; i++) {
+                if (data[requiredFields[i]] === undefined) {
+                    console.warn('[WS] Missing field "' + requiredFields[i] + '" in ' + (data.type || 'unknown') + ' message');
+                    return false;
+                }
+            }
+            return true;
+        }
+
         // Binary WS message handler (waveform + spectrum)
         var _binDiag = { wf: 0, sp: 0, last: 0 };
         function handleBinaryMessage(buf) {
@@ -5440,6 +5468,7 @@ body.night-mode {
                 }, 2000);
             }
             else if (data.type === 'wifiStatus') {
+                if (!validateWsMessage(data, ['connected'])) return;
                 updateWiFiStatus(data);
             } else if (data.type === 'updateStatus') {
                 handleUpdateStatus(data);
@@ -5459,7 +5488,12 @@ body.night-mode {
             } else if (data.type === 'debugLog') {
                 appendDebugLog(data.timestamp, data.message, data.level, data.module);
             } else if (data.type === 'hardware_stats') {
+                if (!validateWsMessage(data, ['cpu'])) return;
                 updateHardwareStats(data);
+                if (data.wsClientCount >= data.wsClientMax - 1 && !_wsLimitWarned) {
+                    showToast('WebSocket client limit nearly reached (' + data.wsClientCount + '/' + data.wsClientMax + ')', 'warning');
+                    _wsLimitWarned = true;
+                }
             } else if (data.type === 'justUpdated') {
                 showUpdateSuccessNotification(data);
             } else if (data.type === 'displayState') {
@@ -5509,6 +5543,7 @@ body.night-mode {
                 document.getElementById('appState.mqttHADiscovery').checked = data.haDiscovery || false;
                 updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
             } else if (data.type === 'audioLevels') {
+                if (!validateWsMessage(data, ['adc'])) return;
                 if (currentActiveTab === 'audio') {
                     if (data.numAdcsDetected !== undefined) {
                         numAdcsDetected = data.numAdcsDetected;
@@ -8777,7 +8812,7 @@ function submitWiFiConfig(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             // Start polling for connection status
@@ -8846,7 +8881,7 @@ function saveNetworkSettings(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('Network saved successfully', 'success');
@@ -8944,7 +8979,7 @@ function pollWiFiConnection() {
     connectionPollAttempts++;
 
     apiFetch('/api/wifistatus')
-        .then(res => res.json())
+        .then(res => res.safeJson())
         .then(data => {
             // Reset attempts on successful response
             connectionPollAttempts = 0;
@@ -9082,7 +9117,7 @@ function scanWiFiNetworks() {
 
 function pollWiFiScan() {
     apiFetch('/api/wifiscan')
-        .then(res => res.json())
+        .then(res => res.safeJson())
         .then(data => {
             const scanBtn = document.getElementById('scanBtn');
             const scanStatus = document.getElementById('scanStatus');
@@ -9187,7 +9222,7 @@ function loadSavedNetworks() {
     const configSelect = document.getElementById('configNetworkSelect');
 
     apiFetch('/api/wifilist')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success && data.networks) { // Check success flag specifically
             // Store networks data globally
@@ -9397,7 +9432,7 @@ function updateNetworkConfig(connect) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             if (connect) {
@@ -9510,14 +9545,14 @@ function performNetworkRemoval(selectedIndex, wasCurrentNetwork) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ index: selectedIndex })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('Network removed successfully', 'success');
 
             // Reload the network list
             apiFetch('/api/wifilist')
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(listData => {
                 if (listData.success && listData.networks) {
                     // Store networks data globally
@@ -9572,7 +9607,7 @@ function monitorNetworkRemoval() {
         pollCount++;
 
         apiFetch('/api/wifistatus')
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 // Check if AP mode is now active and we're not connected to WiFi
                 if (data.mode === 'ap' && !data.connected && data.apIP) {
@@ -9609,7 +9644,7 @@ function toggleAP() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(enabled ? 'AP enabled' : 'AP disabled', 'success');
     })
@@ -9648,7 +9683,7 @@ function submitAPConfig(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ssid, password })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('AP settings saved', 'success');
@@ -10018,7 +10053,7 @@ function toggleAutoUpdate() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ autoUpdateEnabled: autoUpdateEnabled })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(autoUpdateEnabled ? 'Auto-update enabled' : 'Auto-update disabled', 'success');
     })
@@ -10032,7 +10067,7 @@ function toggleCertValidation() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 'appState.enableCertValidation': enableCertValidation })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(enableCertValidation ? 'SSL validation enabled' : 'SSL validation disabled', 'success');
     })
@@ -10046,7 +10081,7 @@ function setStatsInterval() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hardwareStatsInterval: interval })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Stats interval set to ' + interval + 's', 'success');
     })
@@ -10136,7 +10171,7 @@ function setAudioUpdateRate() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audioUpdateRate: rate })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Audio rate set to ' + (labels[rate]||rate+'ms'), 'success');
     })
@@ -10145,7 +10180,7 @@ function setAudioUpdateRate() {
 
 function exportSettings() {
     apiFetch('/api/settings/export')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -10181,7 +10216,7 @@ function importSettings(settings) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('Settings imported. Rebooting...', 'success');
@@ -10198,7 +10233,7 @@ function manualOverride(state) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ manualOverride: state })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(state ? 'Turned ON' : 'Turned OFF', 'success');
     })
@@ -10229,7 +10264,7 @@ function updateAudioThreshold() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audioThreshold: value })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Threshold updated', 'success');
     })
@@ -10248,7 +10283,7 @@ function updateSensingMode() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: selected.value })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Mode updated', 'success');
     })
@@ -10264,7 +10299,7 @@ function updateTimerDuration() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ timerDuration: value })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast('Timer updated', 'success');
     })
@@ -10329,7 +10364,7 @@ function startFactoryReset() {
         'This will erase all settings and restore defaults. This cannot be undone.',
         function() {
             apiFetch('/api/factoryreset', { method: 'POST' })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) showToast('Factory reset in progress...', 'success');
             })
@@ -10344,7 +10379,7 @@ function startReboot() {
         'The device will restart. You will lose connection temporarily.',
         function() {
             apiFetch('/api/reboot', { method: 'POST' })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) showToast('Rebooting...', 'success');
             })
@@ -10360,7 +10395,7 @@ function startReboot() {
 function checkForUpdate() {
     showToast('Checking for updates...', 'info');
     apiFetch('/api/checkupdate')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         // Update current version display
         if (data.currentVersion) {
@@ -10417,14 +10452,14 @@ function checkForUpdate() {
 
 function fetchUpdateStatus() {
     apiFetch('/api/updatestatus')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => handleUpdateStatus(data))
     .catch(err => console.error('Failed to fetch update status:', err));
 }
 
 function startOTAUpdate() {
     apiFetch('/api/startupdate', { method: 'POST' })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             document.getElementById('progressContainer').classList.remove('hidden');
@@ -10607,7 +10642,7 @@ function setOtaChannel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ otaChannel: val })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast(val === 0 ? 'Channel: Stable' : 'Channel: Beta', 'success');
@@ -10644,7 +10679,7 @@ function loadReleaseList() {
     if (items) items.innerHTML = '';
 
     apiFetch('/api/releases')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         releaseListLoading = false;
         if (loading) loading.style.display = 'none';
@@ -10719,7 +10754,7 @@ function installRelease(version, isDowngrade) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version: version })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             document.getElementById('releasesBrowser').classList.add('hidden');

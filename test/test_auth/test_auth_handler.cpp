@@ -83,7 +83,11 @@ String hashPassword(const String &password) {
   return String(hexStr);
 }
 
-// ===== PBKDF2 Hashing (mirrors auth_handler.cpp Phase 3) =====
+// ===== PBKDF2 Hashing (mirrors auth_handler.cpp) =====
+
+// Iteration counts — mirror config.h (no config.h included in native tests)
+#define PBKDF2_ITERATIONS_V1   10000   // Legacy p1: format
+#define PBKDF2_ITERATIONS      50000   // Current p2: format
 
 // Helper: convert bytes to hex string
 static void bytesToHex(const uint8_t *bytes, size_t len, char *out) {
@@ -103,33 +107,52 @@ static bool hexToBytes(const char *hex, uint8_t *out, size_t outLen) {
   return true;
 }
 
-// Hash with explicit salt (for verification and re-hash)
-static String hashPasswordPbkdf2WithSalt(const String &password, const uint8_t *salt) {
+// Internal helper: hash with explicit salt, iteration count, and prefix
+static String hashPasswordPbkdf2WithSaltAndIter(const String &password, const uint8_t *salt, int iterations, const char* prefix) {
   uint8_t derivedKey[32];
 
   mbedtls_pkcs5_pbkdf2_hmac_ext(
     MBEDTLS_MD_SHA256,
     (const unsigned char *)password.c_str(), password.length(),
-    salt, 16, 10000, 32, derivedKey);
+    salt, 16, iterations, 32, derivedKey);
 
   char saltHex[33], keyHex[65];
   bytesToHex(salt, 16, saltHex);
   bytesToHex(derivedKey, 32, keyHex);
 
-  return String("p1:") + saltHex + ":" + keyHex;
+  return String(prefix) + saltHex + ":" + keyHex;
 }
 
-// Hash password with PBKDF2-SHA256 + random salt
+// Hash with explicit salt using legacy 10k iterations — produces "p1:" format
+static String hashPasswordPbkdf2WithSalt(const String &password, const uint8_t *salt) {
+  return hashPasswordPbkdf2WithSaltAndIter(password, salt, PBKDF2_ITERATIONS_V1, "p1:");
+}
+
+// Hash with explicit salt using current 50k iterations — produces "p2:" format
+static String hashPasswordPbkdf2V2WithSalt(const String &password, const uint8_t *salt) {
+  return hashPasswordPbkdf2WithSaltAndIter(password, salt, PBKDF2_ITERATIONS, "p2:");
+}
+
+// Hash password with PBKDF2-SHA256 + random salt (current v2 format)
 String hashPasswordPbkdf2(const String &password) {
   uint8_t salt[16];
   esp_fill_random(salt, 16);
-  return hashPasswordPbkdf2WithSalt(password, salt);
+  return hashPasswordPbkdf2V2WithSalt(password, salt);
 }
 
-// Verify password against stored hash (supports both legacy SHA256 and PBKDF2)
+// Verify password against stored hash (supports p2:, p1:, and legacy SHA256)
 bool verifyPassword(const String &inputPassword, const String &storedHash) {
+  if (storedHash.find("p2:") == 0 && storedHash.length() == 100) {
+    // PBKDF2 v2 format: "p2:<32-char salt>:<64-char key>" (50k iterations)
+    uint8_t salt[16];
+    if (!hexToBytes(storedHash.c_str() + 3, salt, 16)) return false;
+
+    String computed = hashPasswordPbkdf2V2WithSalt(inputPassword, salt);
+    return timingSafeCompare(computed, storedHash);
+  }
+
   if (storedHash.find("p1:") == 0 && storedHash.length() == 100) {
-    // PBKDF2 format: "p1:<32-char salt>:<64-char key>"
+    // PBKDF2 v1 format: "p1:<32-char salt>:<64-char key>" (10k iterations)
     uint8_t salt[16];
     if (!hexToBytes(storedHash.c_str() + 3, salt, 16)) return false;
 
@@ -198,9 +221,9 @@ int simulateLogin(const String &password, unsigned long &retryAfterSec) {
   _lastFailTime = 0;
   _nextLoginAllowedMs = 0;
 
-  // Migrate legacy SHA256 hash to PBKDF2 on successful login
+  // Migrate legacy SHA256 or PBKDF2 v1 hash to PBKDF2 v2 on successful login
   if (_passwordNeedsMigration) {
-    String newHash = hashPasswordPbkdf2(password);
+    String newHash = hashPasswordPbkdf2(password);  // produces p2: format
     mockWebPassword = newHash;
     _passwordNeedsMigration = false;
   }
@@ -876,13 +899,13 @@ void test_rate_limit_is_non_blocking(void) {
 // ===== PBKDF2 Password Hashing Tests (Phase 3) =====
 
 void test_pbkdf2_hash_verifies_correctly(void) {
-  // Arrange: hash a password with PBKDF2
+  // Arrange: hash a password with PBKDF2 (now produces p2: format)
   String password = "my_secure_password";
   String hash = hashPasswordPbkdf2(password);
 
-  // Assert: format is "p1:<32-char salt>:<64-char key>" = 100 chars
+  // Assert: format is "p2:<32-char salt>:<64-char key>" = 100 chars
   TEST_ASSERT_EQUAL(100, (int)hash.length());
-  TEST_ASSERT_TRUE(hash.find("p1:") == 0);
+  TEST_ASSERT_TRUE(hash.find("p2:") == 0);
 
   // Act + Assert: verifyPassword should accept the correct password
   TEST_ASSERT_TRUE(verifyPassword(password, hash));
@@ -907,14 +930,93 @@ void test_legacy_sha256_migration_on_login(void) {
   int status = simulateLogin(password, retryAfter);
   TEST_ASSERT_EQUAL(200, status);
 
-  // Assert: password should now be stored as PBKDF2 hash
+  // Assert: password should now be stored as PBKDF2 v2 hash
   TEST_ASSERT_EQUAL(100, (int)mockWebPassword.length());
-  TEST_ASSERT_TRUE(mockWebPassword.find("p1:") == 0);
+  TEST_ASSERT_TRUE(mockWebPassword.find("p2:") == 0);
 
-  // Assert: new PBKDF2 hash still verifies with the same password
+  // Assert: new PBKDF2 v2 hash still verifies with the same password
   TEST_ASSERT_TRUE(verifyPassword(password, mockWebPassword));
 
   // Assert: migration flag is cleared
+  TEST_ASSERT_FALSE(_passwordNeedsMigration);
+}
+
+// ===== PBKDF2 v2 Tests (50k iterations) =====
+
+void test_pbkdf2_v2_hash_format(void) {
+  // hashPasswordPbkdf2() must produce "p2:" prefix and exactly 100 chars
+  String hash = hashPasswordPbkdf2("test_password");
+  TEST_ASSERT_EQUAL(100, (int)hash.length());
+  TEST_ASSERT_TRUE(hash.find("p2:") == 0);
+}
+
+void test_pbkdf2_v2_verify_cycle(void) {
+  // Hash with v2 — correct password verifies, wrong password fails
+  String password = "v2_password_test";
+  String hash = hashPasswordPbkdf2(password);
+
+  TEST_ASSERT_TRUE(hash.find("p2:") == 0);
+  TEST_ASSERT_TRUE(verifyPassword(password, hash));
+  TEST_ASSERT_FALSE(verifyPassword("wrong_password", hash));
+}
+
+void test_pbkdf2_v1_still_verifies(void) {
+  // A manually constructed p1: hash (10k iterations) must still verify correctly
+  uint8_t salt[16] = {0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,
+                      0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,0x10};
+  String password = "v1_legacy_password";
+  String p1Hash = hashPasswordPbkdf2WithSalt(password, salt);
+
+  // Confirm it is a p1: hash
+  TEST_ASSERT_TRUE(p1Hash.find("p1:") == 0);
+  TEST_ASSERT_EQUAL(100, (int)p1Hash.length());
+
+  // verifyPassword must accept the correct password against a p1: hash
+  TEST_ASSERT_TRUE(verifyPassword(password, p1Hash));
+  TEST_ASSERT_FALSE(verifyPassword("wrong_password", p1Hash));
+}
+
+void test_pbkdf2_v1_to_v2_migration(void) {
+  // Simulate: stored hash is p1:, _passwordNeedsMigration=true, successful login
+  // triggers rehash to p2:
+  String password = "migrate_v1_to_v2";
+  uint8_t salt[16] = {0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,
+                      0x99,0xaa,0xbb,0xcc,0xdd,0xee,0xff,0x00};
+  mockWebPassword = hashPasswordPbkdf2WithSalt(password, salt);  // p1: hash
+  _passwordNeedsMigration = true;
+
+  TEST_ASSERT_TRUE(mockWebPassword.find("p1:") == 0);
+
+  // Successful login with the correct password
+  unsigned long retryAfter = 0;
+  int status = simulateLogin(password, retryAfter);
+  TEST_ASSERT_EQUAL(200, status);
+
+  // After migration mockWebPassword must be p2:
+  TEST_ASSERT_TRUE(mockWebPassword.find("p2:") == 0);
+  TEST_ASSERT_EQUAL(100, (int)mockWebPassword.length());
+
+  // New p2: hash must still verify with the original password
+  TEST_ASSERT_TRUE(verifyPassword(password, mockWebPassword));
+
+  // Migration flag must be cleared
+  TEST_ASSERT_FALSE(_passwordNeedsMigration);
+}
+
+void test_pbkdf2_v2_no_migration(void) {
+  // Login with an existing p2: hash must NOT trigger migration
+  String password = "already_v2_password";
+  mockWebPassword = hashPasswordPbkdf2(password);  // produces p2:
+  _passwordNeedsMigration = false;
+
+  TEST_ASSERT_TRUE(mockWebPassword.find("p2:") == 0);
+
+  unsigned long retryAfter = 0;
+  int status = simulateLogin(password, retryAfter);
+  TEST_ASSERT_EQUAL(200, status);
+
+  // Password must still be p2: — no migration occurred
+  TEST_ASSERT_TRUE(mockWebPassword.find("p2:") == 0);
   TEST_ASSERT_FALSE(_passwordNeedsMigration);
 }
 
@@ -982,6 +1084,13 @@ int runUnityTests(void) {
   // PBKDF2 password hashing tests (Phase 3)
   RUN_TEST(test_pbkdf2_hash_verifies_correctly);
   RUN_TEST(test_legacy_sha256_migration_on_login);
+
+  // PBKDF2 v2 tests (50k iterations)
+  RUN_TEST(test_pbkdf2_v2_hash_format);
+  RUN_TEST(test_pbkdf2_v2_verify_cycle);
+  RUN_TEST(test_pbkdf2_v1_still_verifies);
+  RUN_TEST(test_pbkdf2_v1_to_v2_migration);
+  RUN_TEST(test_pbkdf2_v2_no_migration);
 
   return UNITY_END();
 }

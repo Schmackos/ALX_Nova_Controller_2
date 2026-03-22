@@ -2163,6 +2163,10 @@ void sendHardwareStats() {
     doc["wifi"]["apClients"] = WiFi.softAPgetStationNum();
     doc["wifi"]["connected"] = (WiFi.status() == WL_CONNECTED);
 
+    // WebSocket client count
+    doc["wsClientCount"] = _wsAuthCount;
+    doc["wsClientMax"] = (uint8_t)MAX_WS_CLIENTS;
+
     // Audio ADC diagnostics (per-ADC)
     doc["audio"]["sampleRate"] = appState.audio.sampleRate;
     doc["audio"]["adcVref"] = appState.audio.adcVref;
@@ -2569,7 +2573,9 @@ void sendAudioData() {
   static uint8_t _clientSkipCounter = 0;
   _clientSkipCounter++;
   uint8_t skipFactor = 1;
-  if (_wsAuthCount >= 3) skipFactor = WS_BINARY_SKIP_3PLUS;
+  if (_wsAuthCount >= 8) skipFactor = WS_BINARY_SKIP_8PLUS;
+  else if (_wsAuthCount >= 5) skipFactor = WS_BINARY_SKIP_5PLUS;
+  else if (_wsAuthCount >= 3) skipFactor = WS_BINARY_SKIP_3PLUS;
   else if (_wsAuthCount == 2) skipFactor = WS_BINARY_SKIP_2_CLIENTS;
   const bool clientAllowBinary = (_clientSkipCounter % skipFactor) == 0;
 

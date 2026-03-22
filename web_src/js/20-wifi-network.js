@@ -64,7 +64,7 @@ function submitWiFiConfig(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             // Start polling for connection status
@@ -133,7 +133,7 @@ function saveNetworkSettings(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('Network saved successfully', 'success');
@@ -231,7 +231,7 @@ function pollWiFiConnection() {
     connectionPollAttempts++;
 
     apiFetch('/api/wifistatus')
-        .then(res => res.json())
+        .then(res => res.safeJson())
         .then(data => {
             // Reset attempts on successful response
             connectionPollAttempts = 0;
@@ -369,7 +369,7 @@ function scanWiFiNetworks() {
 
 function pollWiFiScan() {
     apiFetch('/api/wifiscan')
-        .then(res => res.json())
+        .then(res => res.safeJson())
         .then(data => {
             const scanBtn = document.getElementById('scanBtn');
             const scanStatus = document.getElementById('scanStatus');
@@ -474,7 +474,7 @@ function loadSavedNetworks() {
     const configSelect = document.getElementById('configNetworkSelect');
 
     apiFetch('/api/wifilist')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success && data.networks) { // Check success flag specifically
             // Store networks data globally
@@ -684,7 +684,7 @@ function updateNetworkConfig(connect) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             if (connect) {
@@ -797,14 +797,14 @@ function performNetworkRemoval(selectedIndex, wasCurrentNetwork) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ index: selectedIndex })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('Network removed successfully', 'success');
 
             // Reload the network list
             apiFetch('/api/wifilist')
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(listData => {
                 if (listData.success && listData.networks) {
                     // Store networks data globally
@@ -859,7 +859,7 @@ function monitorNetworkRemoval() {
         pollCount++;
 
         apiFetch('/api/wifistatus')
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 // Check if AP mode is now active and we're not connected to WiFi
                 if (data.mode === 'ap' && !data.connected && data.apIP) {
@@ -896,7 +896,7 @@ function toggleAP() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(enabled ? 'AP enabled' : 'AP disabled', 'success');
     })
@@ -935,7 +935,7 @@ function submitAPConfig(event) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ssid, password })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('AP settings saved', 'success');
