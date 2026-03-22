@@ -105,6 +105,7 @@ Choose your base class:
 | `HalAudioDevice` + `HalAudioDacInterface` | DAC-only output device (PCM5102A, MCP4725) |
 | `HalAudioDevice` + `HalAudioCodecInterface` | Combined codec with both DAC and ADC paths (ES8311) |
 | `HalEssSabreAdcBase` | ESS SABRE ADC expansion devices — provides shared I2C helpers, `_applyConfigOverrides()`, `_selectWire()`. Inherits `HalAudioDevice` + `HalAudioAdcInterface`. |
+| `HalEssSabreDacBase` | ESS SABRE DAC expansion devices — provides shared I2C helpers, `_applyConfigOverrides()`, `_selectWire()`, `_enableI2sTx()` / `_disableI2sTx()`. Inherits `HalAudioDevice` + `HalAudioDacInterface`. |
 
 ## Step-by-Step: Adding a New Driver
 
@@ -857,6 +858,165 @@ static HalDevice* factory_myessadc() { return new HalMyEssAdc(); }
 ```
 
 Create the per-device register definitions in `src/drivers/esXXXX_regs.h` using the shared `ESS_SABRE_REG_CHIP_ID` (0xE1) and `ESS_SABRE_I2C_ADDR_BASE` (0x40) constants from `src/drivers/ess_sabre_common.h`.
+
+### Pattern C — 2-channel I2S DAC device
+
+2-channel I2S DAC devices inherit from `HalEssSabreDacBase` and register a single `AudioOutputSink`. The base class handles most of the volume and mute plumbing. The driver supplies the five lifecycle methods and device-specific register writes.
+
+```cpp
+// Header
+#include "hal_ess_sabre_dac_base.h"
+
+class HalMyEssDac : public HalEssSabreDacBase {
+public:
+    HalMyEssDac();
+    bool          probe()       override;
+    HalInitResult init()        override;
+    void          deinit()      override;
+    void          dumpConfig()  override;
+    bool          healthCheck() override;
+
+    bool configure(uint32_t sampleRate, uint8_t bitDepth) override;
+    bool setVolume(uint8_t percent) override;
+    bool setMute(bool mute)         override;
+
+    // Optional: override if the device stores filter preset in a different register field
+    bool setFilterPreset(uint8_t preset) override;
+};
+```
+
+```cpp
+// Constructor
+HalMyEssDac::HalMyEssDac() : HalEssSabreDacBase() {
+    hal_init_descriptor(_descriptor,
+        "ess,myessdac", "MyEssDac", "ESS Technology",
+        HAL_DEV_DAC, 2, ESS_SABRE_DAC_I2C_ADDR_BASE,
+        HAL_BUS_I2C, 2,
+        HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K,
+        HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE);
+    _initPriority = HAL_PRIORITY_HARDWARE;
+}
+
+HalInitResult HalMyEssDac::init() {
+    _applyConfigOverrides();   // reads HalDeviceConfig into _i2cAddr, _sdaPin, etc.
+    _selectWire();             // sets _wire to Wire or Wire2 based on _i2cBusIndex
+    // ... I2C register init sequence (soft reset, I2S format, initial volume) ...
+    if (!_enableI2sTx()) {
+        return hal_init_fail(DIAG_ERR_I2S_INIT, "I2S TX enable failed");
+    }
+    _state = HAL_STATE_AVAILABLE;
+    _ready = true;
+    _initialized = true;
+    return hal_init_ok();
+}
+
+void HalMyEssDac::deinit() {
+    _disableI2sTx();
+    _ready       = false;
+    _initialized = false;
+    _state       = HAL_STATE_REMOVED;
+}
+```
+
+The single `AudioOutputSink` is assembled by `buildSink()` (defined in the base class). The pipeline bridge calls `buildSink(sinkSlot, &sink)` when the device becomes AVAILABLE, then calls `audio_pipeline_set_sink(sinkSlot, &sink)`. No overrides are needed for the single-sink case.
+
+Volume encoding uses `ESS_SABRE_DAC_VOL_0DB` (0x00) through `ESS_SABRE_DAC_VOL_MUTE` (0xFF) with 0.5 dB per step:
+
+```cpp
+bool HalMyEssDac::setVolume(uint8_t percent) {
+    _volume = percent;
+    uint8_t reg = (uint8_t)((100 - percent) * 255 / 100);
+    _writeReg(MYESSDAC_REG_VOL_CH1, reg);
+    _writeReg(MYESSDAC_REG_VOL_CH2, reg);
+    return true;
+}
+```
+
+### Pattern D — 8-channel TDM DAC device
+
+8-channel TDM DAC devices inherit from `HalEssSabreDacBase`, embed a `HalTdmInterleaver`, and register four `AudioOutputSink` entries. Override `getSinkCount()` and `buildSinkAt()` instead of (or in addition to) the base `buildSink()`.
+
+```cpp
+// Header additions for TDM DAC devices
+#include "hal_ess_sabre_dac_base.h"
+#include "hal_tdm_interleaver.h"
+
+class HalMyEssTdmDac : public HalEssSabreDacBase {
+public:
+    // ... (same lifecycle methods as Pattern C) ...
+
+    bool configure(uint32_t sampleRate, uint8_t bitDepth) override;
+    bool setVolume(uint8_t percent) override;
+    bool setMute(bool mute)         override;
+    bool setFilterPreset(uint8_t p) override;
+
+    int  getSinkCount() const override { return _sinksBuilt ? 4 : 0; }
+    bool buildSinkAt(int idx, uint8_t sinkSlot, AudioOutputSink* out) override;
+
+private:
+    HalTdmInterleaver _tdm;
+    AudioOutputSink   _sinks[4] = {};
+    bool              _sinksBuilt = false;
+};
+```
+
+```cpp
+// In init():
+_applyConfigOverrides();
+_selectWire();
+// ... I2C register init sequence ...
+if (!_tdm.init(i2sPort)) {
+    return hal_init_fail(DIAG_ERR_ALLOC, "TDM interleaver alloc failed");
+}
+_tdm.buildSinks("MyDac CH1/2", "MyDac CH3/4",
+                "MyDac CH5/6", "MyDac CH7/8",
+                &_sinks[0], &_sinks[1], &_sinks[2], &_sinks[3],
+                _slot);
+_sinksBuilt = true;
+if (!_enableI2sTx()) {
+    return hal_init_fail(DIAG_ERR_I2S_INIT, "I2S TX enable failed");
+}
+_state = HAL_STATE_AVAILABLE;
+_ready = true;
+return hal_init_ok();
+
+// In deinit():
+void HalMyEssTdmDac::deinit() {
+    _disableI2sTx();
+    _tdm.deinit();
+    _sinksBuilt  = false;
+    _ready       = false;
+    _initialized = false;
+    _state       = HAL_STATE_REMOVED;
+}
+
+// buildSinkAt() — called by the pipeline bridge for each of the 4 pairs:
+bool HalMyEssTdmDac::buildSinkAt(int idx, uint8_t sinkSlot, AudioOutputSink* out) {
+    if (idx < 0 || idx >= 4 || !_sinksBuilt) return false;
+    *out = _sinks[idx];
+    out->halSlot = sinkSlot;
+    return true;
+}
+```
+
+The `HalTdmInterleaver` collects stereo frames from pairs 0–2 without flushing, then on pair 3's write callback interleaves all four pairs into the 8-slot TDM buffer and calls `i2s_audio_write_expansion_tdm_tx()`. All buffer allocation uses `psram_alloc()` and is handled inside `_tdm.init()`.
+
+### Registering an ESS SABRE DAC driver
+
+The registration pattern is the same as for ADC drivers. DAC devices use `HAL_DEV_DAC` and a compatible string in the `"ess,esXXXX"` namespace. For dual-variant devices (ES9039PRO/MPRO) register both compatible strings pointing to the same factory:
+
+```cpp
+// In hal_builtin_devices.cpp:
+static HalDevice* factory_myessdac() { return new HalMyEssDac(); }
+
+// In hal_register_builtins():
+{ HalDriverEntry e; memset(&e, 0, sizeof(e));
+  strncpy(e.compatible, "ess,myessdac", 31);
+  e.type = HAL_DEV_DAC; e.factory = factory_myessdac;
+  if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register: %s", e.compatible); } }
+```
+
+Use `ESS_SABRE_DAC_I2C_ADDR_BASE` (0x48) in the descriptor. Create per-device register definitions in `src/drivers/esXXXX_regs.h` following the existing `es9038q2m_regs.h` as a reference. The shared constants (chip ID register address, filter ordinals, volume constants) are in `src/drivers/ess_sabre_common.h`.
 
 ## I2C Driver Pattern
 

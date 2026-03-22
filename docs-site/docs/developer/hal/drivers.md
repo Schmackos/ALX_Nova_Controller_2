@@ -542,6 +542,386 @@ const AudioInputSource* getInputSourceAt(int idx) const override;
 
 ---
 
+## Expansion DAC Drivers (ESS SABRE Family)
+
+Twelve ESS Technology SABRE DAC expansion drivers are registered in `hal_builtin_devices.cpp`. They connect to the carrier board via the mezzanine connector on I2C Bus 2 (GPIO 28/29). DAC devices use I2C addresses in the 0x48–0x4E range (distinct from the ADC 0x40–0x46 range), which permits a DAC and an ADC mezzanine to coexist on the same bus when the hardware supports dual module population.
+
+All twelve drivers share the common base class `HalEssSabreDacBase` (in `src/hal/hal_ess_sabre_dac_base.h`) that provides:
+
+- `_writeReg(reg, val)` / `_readReg(reg)` / `_writeReg16(regLsb, val)` — I2C register helpers
+- `_selectWire()` — Wire instance selection based on `_i2cBusIndex`
+- `_applyConfigOverrides()` — reads `HalDeviceConfig` into member fields at the start of `init()`
+- `_enableI2sTx()` / `_disableI2sTx()` — expansion I2S TX lifecycle via `i2s_audio_enable_expansion_tx()` / `i2s_audio_disable_expansion_tx()`
+- `dacSetSampleRate()`, `dacSetBitDepth()`, `dacGetSampleRate()` delegating through `configure()`
+- `dacGetVolume()`, `dacIsMuted()`, hardware-mute ramp state (`_muteRampState`) for click-free transitions
+
+Volume encoding for all ESS SABRE DAC devices uses an 8-bit attenuation register: 0x00 = 0 dB (full output), 0xFF = full mute, with 0.5 dB per step (128 effective steps). `setVolume(percent)` maps percent 0–100 linearly to this range.
+
+All ESS SABRE DAC devices share the same 8 digital filter presets, though the ordinal-to-register mapping varies by device. Filter preset names for the DAC family:
+
+| Ordinal | Filter Shape |
+|---|---|
+| 0 | Fast Roll-Off Linear Phase |
+| 1 | Slow Roll-Off Linear Phase |
+| 2 | Minimum Phase Fast Roll-Off |
+| 3 | Minimum Phase Slow Roll-Off |
+| 4 | Apodizing Fast Roll-Off Linear Phase |
+| 5 | Corrected Minimum Phase Fast Roll-Off |
+| 6 | Brick Wall |
+| 7 | HB2 |
+
+Shared family constants (I2C addresses, filter ordinals, volume constants) are defined in `src/drivers/ess_sabre_common.h`. Per-device register maps live in `src/drivers/es9XXX_regs.h` files.
+
+---
+
+### Pattern C: 2-Channel I2S DAC Devices
+
+These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (pin 11 of the connector). The ESP32-P4 drives BCK, WS, and MCLK as I2S master; the DAC operates as slave. Each Pattern C device registers a single `AudioOutputSink` via `buildSink()`. The pipeline bridge assigns one output slot when the device transitions to AVAILABLE.
+
+---
+
+#### ES9038Q2M — `ess,es9038q2m`
+
+**Class:** `HalEs9038q2m`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x48
+**Chip ID:** 0x90 (register 0xE1)
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit SABRE DAC with Hyperstream II architecture (128 dB DNR). PCM input up to 768 kHz, DSD512. I2C-controlled volume (8-bit, 0.5 dB/step), 8 digital filter presets, clock gear register for 384 kHz and 768 kHz operation (divides MCLK by 2x or 4x). Full duplex I2S slave to ESP32-P4.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 (maps to 8-bit attenuation register) |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7).
+
+**probe():** Reads chip ID register 0xE1 and verifies it matches 0x90.
+
+**healthCheck():** I2C ACK check. A NACK after init indicates the module has been disconnected.
+
+---
+
+#### ES9039Q2M — `ess,es9039q2m`
+
+**Class:** `HalEs9039q2m`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit SABRE DAC with Hyperstream IV architecture (130 dB DNR) — the newest modulator generation available in a 2-channel package. PCM input up to 768 kHz, DSD1024. Same I2S and I2C interface as ES9038Q2M; filter presets 6 and 7 are Hyperstream IV hybrid modes not present on earlier devices.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7).
+
+---
+
+#### ES9069Q — `ess,es9069q`
+
+**Class:** `HalEs9069Q`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit SABRE DAC with integrated MQA hardware renderer. DSD1024 capable. The MQA renderer is controlled via a dedicated I2C register (0x17). Setting `setMqaEnabled(true)` activates the silicon MQA unfold; `isMqaActive()` polls the MQA decode status register to report whether a valid MQA stream is currently being rendered.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_MQA`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setMqaEnabled(bool)`, `isMqaActive() const`.
+
+---
+
+#### ES9033Q — `ess,es9033q`
+
+**Class:** `HalEs9033Q`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit SABRE DAC with integrated 2 Vrms ground-centered line-level output drivers. The on-chip output stage eliminates the external op-amp output buffers typically required in discrete designs, reducing BOM cost and PCB area on compact mezzanine modules. Supports PCM up to 768 kHz. `setLineDriverEnabled(false)` disables the integrated output stage for designs that prefer an external output buffer.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_LINE_DRIVER`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setLineDriverEnabled(bool)`.
+
+---
+
+#### ES9020 — `ess,es9020-dac`
+
+**Class:** `HalEs9020Dac`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit SABRE DAC (Hyperstream IV, 122 dB DNR) with an integrated asynchronous PLL (APLL) for clock recovery directly from the I2S BCK signal. When APLL is enabled, the device switches its internal clock source to BCK recovery mode (`REG_CLK_SOURCE = 0x00`), providing jitter-immune operation without requiring a precision external MCLK oscillator. `isApllLocked()` polls the APLL lock status register — the hardware locks within approximately 1 ms of enable. Flexible TDM support (2/4/8/16 slots) is available via `REG_INPUT_CONFIG` but is not exposed in the standard driver interface.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_APLL`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7), `setApllEnabled(bool)`, `isApllLocked() const`.
+
+---
+
+### Pattern D: 8-Channel TDM DAC Devices
+
+These devices receive all 8 channels time-multiplexed on the DOUT line in 8-slot TDM mode. Each frame consists of 8 consecutive 32-bit slots: \[SLOT0=CH1\]\[SLOT1=CH2\]\[SLOT2=CH3\]\[SLOT3=CH4\]\[SLOT4=CH5\]\[SLOT5=CH6\]\[SLOT6=CH7\]\[SLOT7=CH8\].
+
+Each Pattern D driver registers **four** `AudioOutputSink` entries with the pipeline bridge:
+
+- Sink index 0: CH1/CH2 (SLOT0+SLOT1)
+- Sink index 1: CH3/CH4 (SLOT2+SLOT3)
+- Sink index 2: CH5/CH6 (SLOT4+SLOT5)
+- Sink index 3: CH7/CH8 (SLOT6+SLOT7)
+
+The bridge discovers all four sinks via `getSinkCount()` (returns 4 when initialized) and `buildSinkAt(idx, sinkSlot, out)`. Consecutive output slots are allocated for the four stereo pairs, so an 8-channel TDM DAC occupies four output slots in the routing matrix.
+
+Frame assembly is handled by `HalTdmInterleaver` embedded in each driver — see the [TDM Interleaver](#tdm-interleaver) subsection below.
+
+---
+
+#### ES9038PRO — `ess,es9038pro`
+
+**Class:** `HalEs9038pro`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX (TDM)
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+8-channel 32-bit SABRE DAC with Hyperstream II architecture (132 dB DNR). PCM up to 768 kHz, DSD512. Per-channel 8-bit volume (0.5 dB/step), global mute, 8 digital filter presets. Flagship of the HyperStream II generation, widely used in high-end DAC hardware.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 (applied to all 8 channels) |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–7 global).
+
+**Registered sinks:** "ES9038PRO CH1/2", "ES9038PRO CH3/4", "ES9038PRO CH5/6", "ES9038PRO CH7/8".
+
+**probe():** Reads chip ID register 0xE1 and verifies the expected ES9038PRO chip ID.
+
+**healthCheck():** I2C ACK check.
+
+---
+
+#### ES9028PRO — `ess,es9028pro`
+
+**Class:** `HalEs9028pro`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX (TDM)
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+8-channel 32-bit SABRE DAC with Hyperstream II architecture (124 dB DNR, lower tier than ES9038PRO). PCM up to 768 kHz, DSD512. Register-compatible with ES9038PRO — same init sequence and TDM channel map. Primary differentiation is the modulator tier DNR specification.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Registered sinks:** "ES9028PRO CH1/2", "ES9028PRO CH3/4", "ES9028PRO CH5/6", "ES9028PRO CH7/8".
+
+---
+
+#### ES9039PRO / ES9039MPRO — `ess,es9039pro` / `ess,es9039mpro`
+
+**Class:** `HalEs9039pro`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX (TDM)
+**I2C Address:** 0x48
+**Chip IDs:** 0x39 (ES9039PRO), 0x3A (ES9039MPRO)
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+8-channel 32-bit SABRE DAC with Hyperstream IV architecture (132 dB DNR) — the highest-specification 8-channel device. PCM up to 768 kHz, DSD1024. Handles both the ES9039PRO and ES9039MPRO package variants in a single driver. The chip ID register (0xE1) is read during `init()` to identify which variant is present; the device descriptor name is updated to reflect "ES9039MPRO" when the MPRO chip ID (0x3A) is detected, and the `_isMpro` flag is set internally.
+
+Both compatible strings (`ess,es9039pro` and `ess,es9039mpro`) are registered pointing to the same factory function.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Registered sinks:** "ES9039PRO CH1/2" (or "ES9039MPRO CH1/2" if MPRO detected), "ES9039PRO CH3/4", "ES9039PRO CH5/6", "ES9039PRO CH7/8".
+
+---
+
+#### ES9027PRO — `ess,es9027pro`
+
+**Class:** `HalEs9027pro`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX (TDM)
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+8-channel 32-bit SABRE DAC with Hyperstream IV architecture (124 dB DNR). PCM up to 768 kHz, DSD1024. The ES9027PRO relates to the ES9039PRO as the ES9028PRO relates to the ES9038PRO — same modulator generation, lower DNR tier. Register map is shared with ES9039PRO, making the two drivers structurally identical except for the chip ID check.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Registered sinks:** "ES9027PRO CH1/2", "ES9027PRO CH3/4", "ES9027PRO CH5/6", "ES9027PRO CH7/8".
+
+---
+
+#### ES9081 — `ess,es9081`
+
+**Class:** `HalEs9081`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX (TDM)
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+8-channel 32-bit SABRE DAC with Hyperstream IV architecture (120 dB DNR), 40-pin QFN package. Cost-optimised entry point for 8-channel Hyperstream IV designs. Pin-compatible with ES9080Q for drop-in upgrade paths on mezzanine layouts originally designed for the older device. Target use: home theatre receivers and AVR applications.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Registered sinks:** "ES9081 CH1/2", "ES9081 CH3/4", "ES9081 CH5/6", "ES9081 CH7/8".
+
+---
+
+#### ES9082 — `ess,es9082`
+
+**Class:** `HalEs9082`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX (TDM)
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+8-channel 32-bit SABRE DAC with Hyperstream IV architecture (120 dB DNR), 48-pin QFN package. Larger package than ES9081 — the additional pins expose supplementary GPIOs and an optional ASP2 user-programmable DSP interface. The ASP2 block is not exposed in the current driver implementation; only the core TDM audio path and volume control are used.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Registered sinks:** "ES9082 CH1/2", "ES9082 CH3/4", "ES9082 CH5/6", "ES9082 CH7/8".
+
+---
+
+#### ES9017 — `ess,es9017`
+
+**Class:** `HalEs9017`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX (TDM)
+**I2C Address:** 0x48
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+8-channel 32-bit SABRE DAC with Hyperstream IV architecture (120 dB DNR). Pin-compatible with ES9027PRO — intended as a direct drop-in replacement at lower cost. The register map is identical to ES9027PRO including the TDM channel map registers (0x40–0x47), so the same mezzanine PCB can be populated with either device.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–7 |
+
+**Registered sinks:** "ES9017 CH1/2", "ES9017 CH3/4", "ES9017 CH5/6", "ES9017 CH7/8".
+
+---
+
+### TDM Interleaver
+
+**Class:** `HalTdmInterleaver`
+**Header:** `src/hal/hal_tdm_interleaver.h`
+
+All seven 8-channel TDM DAC devices (ES9038PRO, ES9028PRO, ES9039PRO, ES9027PRO, ES9081, ES9082, ES9017) embed a `HalTdmInterleaver` instance. It combines four stereo pipeline output sinks into a single 8-slot TDM frame for delivery to the DAC.
+
+**How it works:**
+
+1. The audio pipeline task (Core 1) calls sink write callbacks in ascending slot order. The bridge registers pair 0 at the lowest slot index, pair 3 at the highest — so pairs are called in order 0, 1, 2, 3 within the same pipeline tick.
+2. Pairs 0, 1, and 2 copy their stereo frame data into per-pair ping-pong buffers but do not flush.
+3. Pair 3 copies its data, then interleaves all four pair buffers into the TDM output buffer (8 slots per frame) and calls `i2s_audio_write_expansion_tdm_tx()` to push to I2S DMA. The ping-pong write index is then swapped so the next tick uses the idle side.
+4. The ping-pong swap is a single `uint8_t` write, which is atomic on RISC-V. No mutex is required.
+
+**Buffer allocation:** TDM output buffer is `TDM_INTERLEAVER_FRAMES` (256) × 8 slots × 4 bytes = 8 192 bytes. Each per-pair ping-pong side is 256 × 2 × 4 = 2 048 bytes. All buffers are allocated from PSRAM when available via `psram_alloc()`.
+
+**Multi-instance support:** Up to 2 concurrent `HalTdmInterleaver` instances are supported (keyed by I2S port index), allowing two 8-channel TDM DAC devices on separate I2S ports to operate simultaneously.
+
+**API used by drivers:**
+
+```cpp
+// In driver's init():
+if (!_tdm.init(i2sPort)) { return hal_init_fail(DIAG_ERR_ALLOC, "TDM buf alloc"); }
+_tdm.buildSinks("ES9038PRO CH1/2", "ES9038PRO CH3/4",
+                "ES9038PRO CH5/6", "ES9038PRO CH7/8",
+                &_sinks[0], &_sinks[1], &_sinks[2], &_sinks[3],
+                _slot);
+
+// In driver:
+int  getSinkCount() const override { return _sinksBuilt ? 4 : 0; }
+bool buildSinkAt(int idx, uint8_t sinkSlot, AudioOutputSink* out) override;
+```
+
+---
+
 ## Amplifier Drivers
 
 ### NS4150B — `ns,ns4150b-amp`
