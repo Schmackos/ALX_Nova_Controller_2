@@ -555,7 +555,13 @@ When using an 8-channel mezzanine DAC (ES9038PRO, ES9038Q2M, etc.) alongside the
 
 ## GET /api/i2s/ports
 
-Returns the status of all 3 I2S ports, or a single port when the `?id=N` query parameter is provided. Each port entry includes its current mode (STD/TDM/off), direction (TX/RX), pin assignments, clock master status, and sample rate.
+Returns the status of all 3 I2S ports, or a single port when the `?id=N` query parameter is provided. Each port entry includes its current mode (STD/TDM/off), direction (TX/RX), pin assignments, clock master status, sample rate, and configurable audio parameters (`format`, `bitDepth`, `mclkMultiple`).
+
+| Field | Type | Values | Description |
+|-------|------|--------|-------------|
+| `format` | string | `"philips"`, `"msb"`, `"pcm_short"` | I2S data format (default: philips) |
+| `bitDepth` | integer | 16, 24, 32 | Sample bit width (default: 32) |
+| `mclkMultiple` | integer | 128, 192, 256, 384, 512, 768, 1152 | MCLK-to-sample-rate ratio (default: 256) |
 
 **Query parameters**
 
@@ -577,7 +583,10 @@ Returns the status of all 3 I2S ports, or a single port when the `?id=N` query p
       "data": 23,
       "mclk": 22,
       "clockMaster": true,
-      "sampleRate": 48000
+      "sampleRate": 48000,
+      "format": "philips",
+      "bitDepth": 32,
+      "mclkMultiple": 256
     \},
     \{
       "id": 1,
@@ -588,7 +597,10 @@ Returns the status of all 3 I2S ports, or a single port when the `?id=N` query p
       "data": 25,
       "mclk": -1,
       "clockMaster": false,
-      "sampleRate": 48000
+      "sampleRate": 48000,
+      "format": "philips",
+      "bitDepth": 32,
+      "mclkMultiple": 256
     \},
     \{
       "id": 2,
@@ -599,7 +611,10 @@ Returns the status of all 3 I2S ports, or a single port when the `?id=N` query p
       "data": -1,
       "mclk": -1,
       "clockMaster": false,
-      "sampleRate": 0
+      "sampleRate": 0,
+      "format": "philips",
+      "bitDepth": 32,
+      "mclkMultiple": 256
     \}
   ]
 \}
