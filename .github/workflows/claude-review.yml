@@ -30,7 +30,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr_diff.txt
+          # Use git diff (no size limit) with gh pr diff as fallback
+          BASE_SHA=${{ github.event.pull_request.base.sha }}
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+          git diff "$BASE_SHA"..."$HEAD_SHA" > /tmp/pr_diff.txt || \
+            gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr_diff.txt || \
+            echo "Could not retrieve diff" > /tmp/pr_diff.txt
+
           if [ -f REVIEW.md ]; then
             cat REVIEW.md > /tmp/review_context.txt
           else
@@ -41,10 +47,9 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Build the JSON payload via Python to avoid shell ARG_MAX limits
-          # on large diffs (curl -d inline fails above ~2MB)
+          # Build JSON payload via Python to avoid shell ARG_MAX limits
           python3 -c "
-          import json, sys
+          import json
 
           with open('/tmp/pr_diff.txt') as f:
               diff = f.read()
@@ -66,31 +71,24 @@ jobs:
           5. Concurrency bugs (race conditions, missing volatile, ISR safety)
 
           Focus on correctness over style.
-          Tag each finding with severity: \"BUG:\" for must-fix, \"NIT:\" for minor, \"SECURITY:\" for vulnerabilities.
+          Tag each finding with severity: BUG for must-fix, NIT for minor, SECURITY for vulnerabilities.
           Reference specific file paths and line numbers.
-          If no issues found, respond with: \"No issues found.\"'''
+          If no issues found, respond with: No issues found.'''
 
           payload = {
-              'contents': [{
-                  'parts': [
-                      {'text': prompt},
-                      {'text': 'Project review guidelines:\n'},
-                      {'text': context},
-                      {'text': '\nPull request diff:\n'},
-                      {'text': diff}
-                  ]
-              }],
-              'generationConfig': {
-                  'temperature': 0.2,
-                  'maxOutputTokens': 4096
-              }
+              'contents': [{'parts': [
+                  {'text': prompt},
+                  {'text': 'Project review guidelines:\n' + context},
+                  {'text': '\nPull request diff:\n' + diff}
+              ]}],
+              'generationConfig': {'temperature': 0.2, 'maxOutputTokens': 4096}
           }
 
           with open('/tmp/gemini_payload.json', 'w') as f:
               json.dump(payload, f)
           "
 
-          # Call Gemini API with payload from file (avoids ARG_MAX)
+          # Call Gemini API with file-based payload
           curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
             -H 'Content-Type: application/json' \
             -d @/tmp/gemini_payload.json > /tmp/gemini_response.json
@@ -102,10 +100,9 @@ jobs:
               data = json.load(f)
           if 'candidates' in data and data['candidates']:
               parts = data['candidates'][0].get('content', {}).get('parts', [])
-              text = ''.join(p.get('text', '') for p in parts)
-              print(text)
+              print(''.join(p.get('text', '') for p in parts))
           elif 'error' in data:
-              print(f'API Error: {data[\"error\"].get(\"message\", \"Unknown error\")}')
+              print('API Error: ' + data['error'].get('message', 'Unknown error'))
           else:
               print('No response generated')
           " > /tmp/review_output.txt
@@ -155,25 +152,28 @@ jobs:
           fi
 
           USER_MESSAGE=$(echo "$COMMENT_BODY" | sed 's/@claude[[:space:]]*//')
-          MSG_ESCAPED=$(echo "$USER_MESSAGE" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+
+          # Build JSON payload via Python
+          echo "$USER_MESSAGE" > /tmp/user_message.txt
+          python3 -c "
+          import json
+          with open('/tmp/user_message.txt') as f:
+              msg = f.read()
+          payload = {
+              'contents': [{'parts': [
+                  {'text': 'You are helping with the ALX Nova Controller 2 project (ESP32-P4 audio controller, C++, PlatformIO). A user asked: '},
+                  {'text': msg},
+                  {'text': '\nRespond helpfully and concisely.'}
+              ]}],
+              'generationConfig': {'temperature': 0.3, 'maxOutputTokens': 2048}
+          }
+          with open('/tmp/gemini_payload.json', 'w') as f:
+              json.dump(payload, f)
+          "
 
           curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
             -H 'Content-Type: application/json' \
-            -d "{
-              \"contents\": [{
-                \"parts\": [{
-                  \"text\": \"You are helping with the ALX Nova Controller 2 project (ESP32-P4 audio controller, C++, PlatformIO). A user asked: \"
-                }, {
-                  \"text\": ${MSG_ESCAPED}
-                }, {
-                  \"text\": \"\\nRespond helpfully and concisely.\"
-                }]
-              }],
-              \"generationConfig\": {
-                \"temperature\": 0.3,
-                \"maxOutputTokens\": 2048
-              }
-            }" > /tmp/gemini_response.json
+            -d @/tmp/gemini_payload.json > /tmp/gemini_response.json
 
           python3 -c "
           import json
@@ -183,7 +183,7 @@ jobs:
               parts = data['candidates'][0].get('content', {}).get('parts', [])
               print(''.join(p.get('text', '') for p in parts))
           elif 'error' in data:
-              print(f'API Error: {data[\"error\"].get(\"message\", \"Unknown error\")}')
+              print('API Error: ' + data['error'].get('message', 'Unknown error'))
           else:
               print('No response generated')
           " > /tmp/response.txt
