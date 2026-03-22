@@ -120,7 +120,15 @@ bool HalEssSabreDacBase::_enableI2sTx() {
     gpio_num_t ws    = (cfg && cfg->valid && cfg->pinLrc  >= 0) ? (gpio_num_t)cfg->pinLrc
                                                                  : (gpio_num_t)ES8311_I2S_LRCK_PIN;
 
-    if (!i2s_port_enable_tx(port, I2S_MODE_STD, 0, dout, mclk, bck, ws)) {
+    // Build I2sPortConfig from HAL device config (0/default fields = keep IDF defaults)
+    I2sPortConfig i2sCfg = {};
+    if (cfg && cfg->valid) {
+        i2sCfg.format       = cfg->i2sFormat;
+        i2sCfg.bitDepth     = cfg->bitDepth;
+        i2sCfg.mclkMultiple = cfg->mclkMultiple;
+    }
+
+    if (!i2s_port_enable_tx(port, I2S_MODE_STD, 0, dout, mclk, bck, ws, &i2sCfg)) {
         LOG_E("[HAL:ESS-DAC] Expansion TX enable failed (port=%u sr=%lu dout=%d)",
               port, (unsigned long)_sampleRate, _doutPin);
         return false;
