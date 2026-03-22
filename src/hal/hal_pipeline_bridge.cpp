@@ -75,8 +75,8 @@ static uint8_t _halSlotSinkCount[HAL_MAX_DEVICES];  // Number of consecutive sin
 // explicit caps (non-zero) we trust them; otherwise fall back to type-based
 // inference for backward compatibility with devices registered before the
 // capabilities field was populated.
-static uint8_t _effectiveCaps(HalDevice* dev) {
-    uint8_t caps = dev->getDescriptor().capabilities;
+static uint16_t _effectiveCaps(HalDevice* dev) {
+    uint16_t caps = dev->getDescriptor().capabilities;
     if (caps != 0) return caps;
     // Infer from device type (conservative defaults)
     switch (dev->getType()) {

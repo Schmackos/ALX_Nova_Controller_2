@@ -220,10 +220,20 @@ ESS_DAC_READY_FN(4)
 ESS_DAC_READY_FN(5)
 ESS_DAC_READY_FN(6)
 ESS_DAC_READY_FN(7)
+ESS_DAC_READY_FN(8)
+ESS_DAC_READY_FN(9)
+ESS_DAC_READY_FN(10)
+ESS_DAC_READY_FN(11)
+ESS_DAC_READY_FN(12)
+ESS_DAC_READY_FN(13)
+ESS_DAC_READY_FN(14)
+ESS_DAC_READY_FN(15)
 
 static bool (*const _ess_dac_ready_fn[AUDIO_OUT_MAX_SINKS])(void) = {
-    _ess_dac_ready_0, _ess_dac_ready_1, _ess_dac_ready_2, _ess_dac_ready_3,
-    _ess_dac_ready_4, _ess_dac_ready_5, _ess_dac_ready_6, _ess_dac_ready_7,
+    _ess_dac_ready_0,  _ess_dac_ready_1,  _ess_dac_ready_2,  _ess_dac_ready_3,
+    _ess_dac_ready_4,  _ess_dac_ready_5,  _ess_dac_ready_6,  _ess_dac_ready_7,
+    _ess_dac_ready_8,  _ess_dac_ready_9,  _ess_dac_ready_10, _ess_dac_ready_11,
+    _ess_dac_ready_12, _ess_dac_ready_13, _ess_dac_ready_14, _ess_dac_ready_15,
 };
 
 bool HalEssSabreDacBase::buildSink(uint8_t sinkSlot, AudioOutputSink* out) {
