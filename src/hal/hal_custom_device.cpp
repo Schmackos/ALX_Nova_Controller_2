@@ -3,6 +3,7 @@
 #include "hal_device_manager.h"
 #include "hal_types.h"
 #include "hal_discovery.h"     // hal_wifi_sdio_active()
+#include "hal_ess_sabre_adc_base.h" // for extern TwoWire Wire2
 #include "../audio_pipeline.h"
 #include "../sink_write_utils.h"
 #include "../i2s_audio.h"
@@ -139,6 +140,7 @@ HalCustomDevice::HalCustomDevice(const char* compatible, const char* name,
     _descriptor.capabilities = caps;
     _descriptor.bus.type     = busType;
     _descriptor.channelCount = 2;
+    memset(_initSeq, 0, sizeof(_initSeq));
     _initPriority = HAL_PRIORITY_HARDWARE;
 
     _inputSource = AUDIO_INPUT_SOURCE_INIT;
@@ -552,8 +554,7 @@ void hal_load_custom_devices() {
 
             // Set I2C bus index on descriptor for probe() SDIO guard
             if (busType == HAL_BUS_I2C && cfg) {
-                dev->_descriptor.bus.index = cfg->i2cBusIndex;
-                dev->_descriptor.i2cAddr   = cfg->i2cAddr;
+                dev->setI2cConfig(cfg->i2cAddr, cfg->i2cBusIndex);
             }
 
             dev->init();
