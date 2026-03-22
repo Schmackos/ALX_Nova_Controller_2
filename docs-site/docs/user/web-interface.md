@@ -118,11 +118,15 @@ Toggle between **Light** and **Dark** mode. The TFT display theme tracks this se
 
 ### Backup and Restore
 
-- **Export Settings** — downloads a JSON file containing all device configuration. Store this before a firmware update or factory reset.
-- **Import Settings** — upload a previously exported file to restore configuration. The controller reboots to apply the settings.
+- **Export Settings** — downloads a JSON file (v2.0 format) containing all device configuration. The export includes base settings, MQTT config, HAL device configs, custom device schemas, DSP presets, per-output DSP, and the audio routing matrix. Store this before a firmware update or factory reset.
+- **Import Settings** — upload a previously exported file to restore configuration.
+
+**Import preview:** Before any changes are applied, the web UI shows a list of sections found in the uploaded file (for example: Settings, MQTT, HAL Devices, DSP, Routing Matrix). Review the list and click **Apply** to proceed or **Cancel** to discard.
+
+**Partial imports:** Only sections present in the uploaded file are restored. If you import a v1 backup (which only contains Settings and MQTT), your current DSP presets, custom devices, and routing matrix are left untouched.
 
 :::warning
-Importing settings overwrites everything including WiFi credentials and MQTT configuration. Make sure you are importing the right file.
+Importing overwrites the sections listed in the preview — including WiFi credentials and MQTT configuration if those sections are present. Make sure you are importing the right file before clicking Apply.
 :::
 
 ### Device Actions
@@ -185,9 +189,40 @@ A live list of every device managed by the Hardware Abstraction Layer. For each 
 - **Rescan** button to re-run device discovery
 - **Reinitialise** button to recover a faulted device
 
+When a device is in the **Error** state, an orange banner appears on its card. The banner shows the exact failure reason (for example "I2C write to reg 0x00 NAKed") and offers expandable troubleshooting hints. This message comes directly from the driver's last `init()` attempt, so it is specific to the hardware rather than generic.
+
 :::info
 Normally you will not need to use this panel. It is most useful when adding expansion hardware or diagnosing a device that failed to initialise.
 :::
+
+### Create Custom Device
+
+If you plug in a mezzanine expansion card that the controller does not recognise automatically (no EEPROM, no matching driver), you can register it manually using the **Create Custom Device** flow.
+
+**Step 1 — Scan for unrecognised addresses**
+
+Click **Rescan** in the HAL Devices panel. If the card is wired correctly, its I2C address will appear in the scan results as "unmatched". Click **Create Device** next to the unmatched address to open the modal pre-filled with the detected address.
+
+If nothing is detected, verify the card is seated correctly in the mezzanine connector and that power is supplied.
+
+**Step 2 — Fill in the device details**
+
+The modal form has three sections:
+
+- **Basic info** — name, manufacturer, device type (DAC or ADC), number of channels
+- **I2S configuration** — which I2S port carries audio (port 0, 1, or 2) and the supported sample rates
+- **Init sequence (Tier 2 only)** — an editable register table for devices that require I2C programming before they produce audio. Add rows with the register address and value in decimal. Leave this section empty if the device works without any software configuration (Tier 1).
+
+**Step 3 — Test**
+
+Click **Create & Test**. The controller saves the schema, runs `probe()` and `init()`, and reports the result:
+
+- A green banner means the device is now AVAILABLE and audio routing is active.
+- An orange banner shows the error reason. Common fixes: verify the I2C address is correct, check that the init sequence register values match the datasheet, and confirm the mezzanine connector is fully inserted.
+
+**Step 4 — Submit to the community (optional)**
+
+If the device works, click **Submit to ALX**. This downloads the JSON schema and opens a pre-filled GitHub issue so the ALX team can review and include the device in a future firmware release. Once accepted, other users will get automatic discovery without any manual setup.
 
 ### OTA Updates
 

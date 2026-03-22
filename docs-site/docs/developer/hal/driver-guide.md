@@ -1069,6 +1069,129 @@ Use the `[HAL:<Model>]` prefix in all log calls. Follow the severity mapping:
 
 Never call any log macro inside an ISR or the audio pipeline task (`audio_pipeline_task`). `Serial.print` blocks on a full UART TX buffer, which starves DMA and causes audio dropouts. Use the dirty-flag pattern: set a flag in the ISR, check it in the main loop, log there.
 
+## Custom Device Registration
+
+When a user plugs in an expansion mezzanine board that has no EEPROM and no matching driver in the built-in registry, the HAL cannot auto-discover it. The custom device system gives users a path from "unknown I2C address" to "working audio passthrough" without writing any C++ code. There are three tiers of support, inspired by the Zigbee2MQTT approach of community-contributed device definitions.
+
+### Discovery flow
+
+```mermaid
+flowchart TD
+    A[User plugs in card] --> B[POST /api/hal/scan]
+    B --> C{EEPROM found?}
+    C -- Yes --> D[Auto-discovered via\nEEPROM + driver registry]
+    C -- No --> E[GET /api/hal/scan/unmatched]
+    E --> F[I2C address found but\nno driver matched]
+    F --> G[Open Create Custom Device\nmodal in web UI]
+    G --> H{Tier?}
+    H -- Tier 1 --> I[I2S passthrough only\nno I2C init needed]
+    H -- Tier 2 --> J[I2C register init sequence\ndefined in JSON]
+    H -- Tier 3 --> K[Full C++ driver\nopen GitHub issue]
+    I --> L[Test audio output]
+    J --> L
+    L --> M[Submit to ALX\nJSON export + GitHub issue]
+    K --> M
+```
+
+### Three-tier model
+
+| Tier | What the system does | When to use |
+|------|---------------------|-------------|
+| Tier 1 — I2S passthrough | Registers an audio sink immediately; applies no I2C commands | DAC that needs no software init (relies on hardware strapping pins) |
+| Tier 2 — I2C init sequence | Executes a user-defined list of register writes at init, then registers the audio sink | DAC or ADC that requires a register setup sequence before audio starts |
+| Tier 3 — Full driver | A proper C++ HAL driver contributed via pull request | Devices that need runtime control (volume, mute, filters) |
+
+Choose Tier 1 if your device produces audio without any I2C programming — this is common for very simple passthrough DACs. Choose Tier 2 if the datasheet shows a mandatory register init sequence. Choose Tier 3 (open a GitHub issue) when the device needs interactive register control from the web UI.
+
+### JSON schema format
+
+Custom device schemas are stored as JSON files in LittleFS under `/hal/custom/`. The filename is derived from the `compatible` field with commas replaced by underscores.
+
+**Tier 1 schema (I2S passthrough only):**
+
+```json
+{
+  "compatible": "vendor,my-dac",
+  "name": "My Custom DAC",
+  "manufacturer": "Acme Corp",
+  "type": 1,
+  "channels": 2,
+  "i2cAddr": 0,
+  "tier": 1,
+  "i2sPort": 2,
+  "sampleRatesMask": 14
+}
+```
+
+**Tier 2 schema (I2C init sequence):**
+
+```json
+{
+  "compatible": "vendor,my-dac-i2c",
+  "name": "My Custom DAC with Init",
+  "manufacturer": "Acme Corp",
+  "type": 1,
+  "channels": 2,
+  "i2cAddr": 72,
+  "tier": 2,
+  "i2sBus": 2,
+  "i2sPort": 2,
+  "sampleRatesMask": 14,
+  "initSequence": [
+    { "reg": 0, "val": 0 },
+    { "reg": 1, "val": 25 },
+    { "reg": 8, "val": 192 },
+    { "reg": 10, "val": 130 }
+  ]
+}
+```
+
+**Field reference:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `compatible` | string | Yes | Unique vendor,model identifier |
+| `name` | string | Yes | Display name in the web UI |
+| `manufacturer` | string | Yes | Manufacturer name |
+| `type` | integer | Yes | 1 = DAC, 2 = ADC |
+| `channels` | integer | Yes | 2 for stereo, 4 for TDM |
+| `i2cAddr` | integer | Tier 2 | 7-bit I2C address (0 for Tier 1) |
+| `tier` | integer | Yes | 1 or 2 |
+| `i2sBus` | integer | Tier 2 | I2C bus index (2 = expansion bus) |
+| `i2sPort` | integer | Yes | I2S port index (0, 1, or 2) |
+| `sampleRatesMask` | integer | Yes | Bitmask: bit 0=8K, 1=16K, 2=44.1K, 3=48K, 4=96K, 5=192K |
+| `initSequence` | array | Tier 2 | List of `\{"reg": N, "val": N\}` objects |
+
+### How HalCustomDevice works internally
+
+`HalCustomDevice` (`src/hal/hal_custom_device.h/.cpp`) is a concrete `HalDevice` subclass that is instantiated at runtime from a JSON schema rather than at compile time.
+
+During `init()`:
+
+1. The schema is loaded from LittleFS (the path is stored in the object at construction).
+2. For Tier 2 devices: the I2C bus is opened, and each `\{reg, val\}` pair in `initSequence` is written sequentially. If any write returns a NAK, `init()` returns `hal_init_fail(DIAG_HAL_INIT_FAILED, "I2C NAK at reg N")`.
+3. `i2s_port_enable_tx()` is called with the port index from the schema.
+4. A single `AudioOutputSink` is built pointing to `i2s_port_write()`.
+5. The device transitions to AVAILABLE.
+
+`probe()` for Tier 1 devices always returns `true`. For Tier 2 devices it sends the I2C address and checks for ACK.
+
+`healthCheck()` follows the same pattern: Tier 1 always returns `true`; Tier 2 performs a single I2C ACK check.
+
+:::info Real I2C probe
+Unlike the earlier basic custom device prototype, `HalCustomDevice` in the current implementation performs a real I2C probe using the address in the schema. If the device does not ACK during rescan, it transitions to UNAVAILABLE rather than staying AVAILABLE with silent failures.
+:::
+
+### Community contribution flow (Submit to ALX)
+
+Once your Tier 1 or Tier 2 device is working, you can contribute the schema to the community so future users get auto-discovery support:
+
+1. In the web UI Custom Device creator, click **Export Schema** to download the JSON file.
+2. Click **Submit to ALX** — this pre-fills a GitHub issue template with your schema, device name, and a short description of what it is and what hardware you tested it on.
+3. ALX maintainers review the submission. If the I2C init sequence is sufficient for basic operation it may be accepted as a Tier 2 community definition. If runtime control (volume, mute, filters) is needed, a Tier 3 full driver is developed and included in the next firmware release.
+
+Only certified partners may use the **Certified** badge. Community-contributed schemas receive the **Works With** badge when accepted.
+
 ## Checklist
 
 Before opening a pull request for a new driver, verify every item:

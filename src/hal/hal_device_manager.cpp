@@ -181,11 +181,13 @@ void HalDeviceManager::initAll() {
 
             HalInitResult result = dev->init();
             if (result.success) {
+                dev->clearLastError();
                 dev->_state = HAL_STATE_AVAILABLE;
                 dev->_ready = true;
                 _resetRetryState(dev->_slot);
                 if (_stateChangeCb) _stateChangeCb(dev->_slot, HAL_STATE_CONFIGURING, HAL_STATE_AVAILABLE);
             } else {
+                dev->setLastError(result);
                 dev->_state = HAL_STATE_ERROR;
                 dev->_ready = false;
                 _retryState[dev->_slot].lastErrorCode = result.errorCode;
@@ -217,6 +219,7 @@ void HalDeviceManager::healthCheckAll() {
             if (result.success) {
                 // Recovery succeeded
                 HalDeviceState oldState = dev->_state;
+                dev->clearLastError();
                 dev->_state = HAL_STATE_AVAILABLE;
                 dev->_ready = true;
                 _resetRetryState(static_cast<uint8_t>(i));
@@ -224,7 +227,8 @@ void HalDeviceManager::healthCheckAll() {
                           static_cast<uint8_t>(i), dev->getDescriptor().name, "reinit OK");
                 if (_stateChangeCb) _stateChangeCb(static_cast<uint8_t>(i), oldState, HAL_STATE_AVAILABLE);
             } else {
-                // Recovery failed
+                // Recovery failed — store the latest error reason
+                dev->setLastError(result);
                 rs.count++;
                 rs.lastErrorCode = result.errorCode;
                 // Exponential backoff: 1s, 2s, 4s

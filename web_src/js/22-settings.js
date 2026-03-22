@@ -355,36 +355,115 @@ function setAudioUpdateRate() {
     .catch(err => showToast('Failed to update audio rate', 'error'));
 }
 
+var IMPORT_SECTIONS = [
+    { key: 'wifi',            label: 'WiFi Configuration' },
+    { key: 'general',         label: 'General Settings' },
+    { key: 'smartSensing',    label: 'Smart Sensing' },
+    { key: 'mqtt',            label: 'MQTT Configuration' },
+    { key: 'signalGenerator', label: 'Signal Generator' },
+    { key: 'inputChannelNames', label: 'Input Channel Names' },
+    { key: 'hal',             label: 'HAL Device Configs',     tag: 'v2.0' },
+    { key: 'customDevices',   label: 'Custom Device Schemas',  tag: 'v2.0' },
+    { key: 'dsp',             label: 'DSP Settings',           tag: 'v2.0' },
+    { key: 'pipeline',        label: 'Pipeline Audio Routing', tag: 'v2.0' }
+];
+
+var _pendingImportData = null;
+
 function exportSettings() {
     apiFetch('/api/settings/export')
-    .then(res => res.safeJson())
-    .then(data => {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+    .then(function(res) { return res.safeJson(); })
+    .then(function(data) {
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
         a.href = url;
         a.download = 'alx-settings.json';
         a.click();
         URL.revokeObjectURL(url);
         showToast('Settings exported', 'success');
     })
-    .catch(err => showToast('Failed to export settings', 'error'));
+    .catch(function() { showToast('Failed to export settings', 'error'); });
 }
 
 function handleFileSelect(event) {
-    const file = event.target.files[0];
+    var file = event.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
+    var reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const settings = JSON.parse(e.target.result);
-            importSettings(settings);
+            var settings = JSON.parse(e.target.result);
+            showImportPreview(settings, file.name);
         } catch (err) {
             showToast('Invalid settings file', 'error');
         }
     };
     reader.readAsText(file);
+    // Reset input so same file can be re-selected
+    event.target.value = '';
+}
+
+function showImportPreview(settings, fileName) {
+    _pendingImportData = settings;
+
+    var card = document.getElementById('importPreviewCard');
+    var metaEl = document.getElementById('importPreviewMeta');
+    var sectionsEl = document.getElementById('importPreviewSections');
+
+    // Build metadata display
+    var metaHtml = '';
+    metaHtml += '<span class="meta-label">File</span><span class="meta-value">' + escapeHtml(fileName) + '</span>';
+    if (settings.exportVersion) {
+        metaHtml += '<span class="meta-label">Format</span><span class="meta-value">v' + escapeHtml(String(settings.exportVersion)) + '</span>';
+    }
+    if (settings.exportTimestamp) {
+        var ts = settings.exportTimestamp;
+        var dateStr = (typeof ts === 'number') ? new Date(ts * 1000).toLocaleString() : escapeHtml(String(ts));
+        metaHtml += '<span class="meta-label">Exported</span><span class="meta-value">' + dateStr + '</span>';
+    }
+    if (settings.firmwareVersion) {
+        metaHtml += '<span class="meta-label">Firmware</span><span class="meta-value">' + escapeHtml(String(settings.firmwareVersion)) + '</span>';
+    }
+    if (settings.deviceSerial) {
+        metaHtml += '<span class="meta-label">Device</span><span class="meta-value">' + escapeHtml(String(settings.deviceSerial)) + '</span>';
+    }
+    metaEl.innerHTML = metaHtml;
+
+    // Build section checklist
+    var checkSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z"/></svg>';
+    var missSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z"/></svg>';
+
+    var sectionsHtml = '';
+    for (var i = 0; i < IMPORT_SECTIONS.length; i++) {
+        var sec = IMPORT_SECTIONS[i];
+        var present = settings.hasOwnProperty(sec.key);
+        var cls = present ? 'present' : 'missing';
+        var icon = present ? checkSvg : missSvg;
+        var tagHtml = sec.tag ? ' <span class="section-tag">' + escapeHtml(sec.tag) + '</span>' : '';
+        sectionsHtml += '<div class="import-section-item ' + cls + '">' + icon + '<span>' + escapeHtml(sec.label) + tagHtml + '</span></div>';
+    }
+    sectionsEl.innerHTML = sectionsHtml;
+
+    card.style.display = '';
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function cancelImportPreview() {
+    _pendingImportData = null;
+    var card = document.getElementById('importPreviewCard');
+    if (card) card.style.display = 'none';
+}
+
+function applyImportPreview() {
+    if (!_pendingImportData) return;
+    var settings = _pendingImportData;
+    _pendingImportData = null;
+
+    var card = document.getElementById('importPreviewCard');
+    if (card) card.style.display = 'none';
+
+    importSettings(settings);
 }
 
 function importSettings(settings) {
@@ -393,15 +472,15 @@ function importSettings(settings) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
     })
-    .then(res => res.safeJson())
-    .then(data => {
+    .then(function(res) { return res.safeJson(); })
+    .then(function(data) {
         if (data.success) {
             showToast('Settings imported. Rebooting...', 'success');
         } else {
             showToast(data.message || 'Import failed', 'error');
         }
     })
-    .catch(err => showToast('Failed to import settings', 'error'));
+    .catch(function() { showToast('Failed to import settings', 'error'); });
 }
 
 function manualOverride(state) {

@@ -48,13 +48,14 @@ void hal_save_all_configs() {
         obj["legacyId"] = desc.legacyId;
     }, &arr);
 
-    File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");
+    File f = LittleFS.open(HAL_CONFIG_TMP_PATH, "w");
     if (!f) {
-        LOG_E("[HAL:Settings] Failed to open %s for writing", HAL_CONFIG_FILE_PATH);
+        LOG_E("[HAL:Settings] Failed to open tmp config for writing");
         return;
     }
     serializeJson(doc, f);
     f.close();
+    LittleFS.rename(HAL_CONFIG_TMP_PATH, HAL_CONFIG_FILE_PATH);
     LOG_I("[HAL:Settings] Configs saved to %s", HAL_CONFIG_FILE_PATH);
 }
 
@@ -102,14 +103,15 @@ bool hal_import_configs(const char* json, size_t len) {
         return false;
     }
 
-    // Write to file
-    File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");
+    // Write to tmp then atomically rename to final path
+    File f = LittleFS.open(HAL_CONFIG_TMP_PATH, "w");
     if (!f) {
-        LOG_E("[HAL:Settings] Failed to open %s for import", HAL_CONFIG_FILE_PATH);
+        LOG_E("[HAL:Settings] Failed to open tmp config for import");
         return false;
     }
     serializeJson(doc, f);
     f.close();
+    LittleFS.rename(HAL_CONFIG_TMP_PATH, HAL_CONFIG_FILE_PATH);
     LOG_I("[HAL:Settings] Config imported successfully");
     return true;
 }

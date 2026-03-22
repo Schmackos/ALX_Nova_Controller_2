@@ -1834,6 +1834,60 @@
         /* HAL Add Device */
         .hal-add-row { display: flex; gap: 8px; align-items: center; }
 
+        /* HAL Error/Unavailable Diagnostic Banner */
+        .hal-error-banner { margin: 6px 0 4px; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.4; }
+        .hal-error-banner-error { background: rgba(244,67,54,0.12); border: 1px solid rgba(244,67,54,0.25); color: var(--error, #f44336); }
+        .hal-error-banner-warn { background: rgba(255,193,7,0.10); border: 1px solid rgba(255,193,7,0.25); color: var(--warning, #ffc107); }
+        .hal-error-banner-header { display: flex; align-items: flex-start; gap: 6px; }
+        .hal-error-banner-header svg { flex-shrink: 0; margin-top: 1px; }
+        .hal-error-reason { flex: 1; word-break: break-word; }
+        .hal-error-tips-toggle { display: inline-flex; align-items: center; gap: 3px; margin-top: 6px; padding: 2px 4px; border-radius: 3px; font-size: 11px; cursor: pointer; opacity: 0.8; transition: opacity 0.15s; }
+        .hal-error-tips-toggle:hover, .hal-error-tips-toggle:focus-visible { opacity: 1; outline: none; text-decoration: underline; }
+        .hal-tips-chevron { transition: transform 0.2s; }
+        .hal-error-tips { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .hal-error-tips ul { margin: 0; padding-left: 18px; font-size: 11px; color: var(--text-secondary); }
+        .hal-error-tips li { margin-bottom: 3px; }
+        .hal-error-tips li:last-child { margin-bottom: 0; }
+
+        /* ===== HAL Custom Create Modal ===== */
+        .hal-cc-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px; }
+        .hal-cc-overlay.active { display:flex; }
+        .hal-cc-modal { background:var(--bg-surface); border-radius:10px; padding:20px; width:520px; max-width:95vw; max-height:85vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
+        .hal-cc-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+        .hal-cc-header h3 { margin:0; font-size:15px; font-weight:600; }
+        .hal-cc-close { background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:18px; padding:2px 6px; border-radius:4px; opacity:0.6; transition:opacity .15s; }
+        .hal-cc-close:hover { opacity:1; }
+        .hal-cc-section { font-size:11px; font-weight:600; color:var(--text-secondary); margin:14px 0 6px; padding-top:8px; border-top:1px solid var(--border); }
+        .hal-cc-section:first-of-type { border-top:none; margin-top:0; padding-top:0; }
+        .hal-cc-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; }
+        .hal-cc-row label { min-width:90px; color:var(--text-secondary); flex-shrink:0; }
+        .hal-cc-row input[type="text"], .hal-cc-row input[type="number"], .hal-cc-row select {
+            flex:1; font-size:12px; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary);
+        }
+        .hal-cc-row input:focus, .hal-cc-row select:focus { border-color:var(--accent); outline:none; }
+        .hal-cc-chips { display:flex; flex-wrap:wrap; gap:6px; padding:8px 10px; background:var(--bg-card); border-radius:6px; border:1px solid var(--border); min-height:32px; align-items:center; }
+        .hal-cc-chip { display:inline-flex; align-items:center; padding:3px 8px; border-radius:4px; font-size:11px; font-family:monospace; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-primary); transition:border-color .15s, background .15s; }
+        .hal-cc-chip:hover { border-color:var(--accent); background:rgba(var(--accent-rgb, 255,152,0),0.08); }
+        .hal-cc-chip.selected { border-color:var(--accent); background:rgba(var(--accent-rgb, 255,152,0),0.15); color:var(--accent); font-weight:600; }
+        .hal-cc-chip-bus { font-size:10px; color:var(--text-secondary); opacity:0.7; margin-left:4px; }
+        .hal-cc-chip-skip { font-size:11px; opacity:0.5; font-style:italic; }
+        .hal-cc-regtable { width:100%; border-collapse:collapse; font-size:12px; }
+        .hal-cc-regtable th { text-align:left; font-size:10px; font-weight:600; color:var(--text-secondary); padding:2px 6px 4px; }
+        .hal-cc-regtable td { padding:3px 4px; }
+        .hal-cc-regtable input { width:60px; font-size:12px; padding:3px 6px; border-radius:3px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); font-family:monospace; }
+        .hal-cc-regtable input:focus { border-color:var(--accent); outline:none; }
+        .hal-cc-regdel { background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:14px; opacity:0.5; padding:2px 4px; border-radius:3px; transition:opacity .15s, color .15s; }
+        .hal-cc-regdel:hover { opacity:1; color:var(--error, #f44336); }
+        .hal-cc-regadd { font-size:11px; padding:3px 10px; margin-top:4px; background:none; border:1px dashed var(--border); border-radius:4px; color:var(--text-secondary); cursor:pointer; transition:border-color .15s, color .15s; }
+        .hal-cc-regadd:hover { border-color:var(--accent); color:var(--text-primary); }
+        .hal-cc-caps { display:flex; flex-wrap:wrap; gap:8px 14px; font-size:12px; }
+        .hal-cc-caps label { display:flex; align-items:center; gap:4px; cursor:pointer; color:var(--text-primary); }
+        .hal-cc-caps label input { accent-color:var(--accent); }
+        .hal-cc-compat { font-size:11px; font-family:monospace; color:var(--text-secondary); padding:4px 8px; background:var(--bg-card); border-radius:4px; border:1px solid var(--border); word-break:break-all; }
+        .hal-cc-actions { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; flex-wrap:wrap; }
+        .hal-cc-actions .btn { font-size:12px; }
+        .hal-cc-note { font-size:11px; opacity:0.5; margin-top:2px; }
+
         /* ===== Audio Tab Sub-Navigation ===== */
         .audio-subnav {
             display: flex;
@@ -2328,6 +2382,95 @@
 
         .confirm-confirm-btn:not(:disabled):hover {
             background: #c0392b;
+        }
+
+        /* ===== Export/Import Preview ===== */
+        .export-sections-info {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            margin-top: 10px;
+            font-size: 0.78em;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .import-preview-card {
+            border-left: 3px solid var(--accent);
+        }
+
+        .import-preview-meta {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 12px;
+            font-size: 0.85em;
+            margin-bottom: 12px;
+            padding: 8px 10px;
+            background: var(--bg-main);
+            border-radius: 6px;
+        }
+
+        .import-preview-meta .meta-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .import-preview-meta .meta-value {
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .import-preview-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 16px;
+            margin-bottom: 12px;
+            font-size: 0.85em;
+        }
+
+        .import-section-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 0;
+        }
+
+        .import-section-item.present svg {
+            color: var(--success);
+        }
+
+        .import-section-item.missing {
+            opacity: 0.4;
+        }
+
+        .import-section-item.missing svg {
+            color: var(--text-muted);
+        }
+
+        .import-section-item .section-tag {
+            font-size: 0.75em;
+            color: var(--accent);
+            font-weight: 600;
+            margin-left: 2px;
+        }
+
+        .import-preview-warning {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: rgba(255, 193, 7, 0.08);
+            border: 1px solid rgba(255, 193, 7, 0.25);
+            border-radius: 6px;
+            font-size: 0.82em;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .import-preview-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
         }
 
 /* Ethernet status card accents */

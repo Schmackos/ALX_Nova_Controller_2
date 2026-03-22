@@ -24,19 +24,20 @@
 // ===== Test Device Implementation =====
 class TestDevice : public HalDevice {
 public:
-    bool probeResult;
-    bool initResult;
-    bool healthResult;
-    int  initCallCount;
-    int  probeCallCount;
-    int  healthCallCount;
-    int  deinitCallCount;
-    bool dumpConfigCalled;
+    bool        probeResult;
+    bool        initResult;
+    bool        healthResult;
+    int         initCallCount;
+    int         probeCallCount;
+    int         healthCallCount;
+    int         deinitCallCount;
+    bool        dumpConfigCalled;
+    const char* initReason;  // Custom failure reason (nullptr = default "test fail")
 
     TestDevice()
         : probeResult(true), initResult(true), healthResult(true),
           initCallCount(0), probeCallCount(0), healthCallCount(0),
-          deinitCallCount(0), dumpConfigCalled(false) {
+          deinitCallCount(0), dumpConfigCalled(false), initReason(nullptr) {
         strncpy(_descriptor.compatible, "default", 31);
         _descriptor.compatible[31] = '\0';
         _descriptor.type = HAL_DEV_NONE;
@@ -46,7 +47,7 @@ public:
     TestDevice(const char* compatible, HalDeviceType type, uint16_t priority = HAL_PRIORITY_HARDWARE)
         : probeResult(true), initResult(true), healthResult(true),
           initCallCount(0), probeCallCount(0), healthCallCount(0),
-          deinitCallCount(0), dumpConfigCalled(false) {
+          deinitCallCount(0), dumpConfigCalled(false), initReason(nullptr) {
         strncpy(_descriptor.compatible, compatible, 31);
         _descriptor.compatible[31] = '\0';
         _descriptor.type = type;
@@ -56,7 +57,9 @@ public:
     bool probe() override { probeCallCount++; return probeResult; }
     HalInitResult init() override {
         initCallCount++;
-        return initResult ? hal_init_ok() : hal_init_fail(DIAG_HAL_INIT_FAILED, "test fail");
+        if (initResult) return hal_init_ok();
+        const char* reason = initReason ? initReason : "test fail";
+        return hal_init_fail(DIAG_HAL_INIT_FAILED, reason);
     }
     void deinit() override { deinitCallCount++; }
     void dumpConfig() override { dumpConfigCalled = true; }
@@ -580,6 +583,45 @@ void test_pin_table_exhaustion() {
     TEST_ASSERT_TRUE(mgr->isPinClaimed(0));
 }
 
+// ===== Test 26: initAll failure stores reason on device =====
+void test_init_failure_stores_reason_on_device() {
+    TestDevice dev("bad,dev", HAL_DEV_DAC);
+    dev.initResult = false;
+    dev.initReason = "register write timed out";
+
+    mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+    mgr->initAll();
+
+    TEST_ASSERT_EQUAL(HAL_STATE_ERROR, dev._state);
+    TEST_ASSERT_EQUAL_STRING("register write timed out", dev.getLastError());
+}
+
+// ===== Test 27: initAll success clears last error =====
+void test_init_success_clears_last_error() {
+    TestDevice dev("good,dev", HAL_DEV_DAC);
+
+    // Pre-set a stale error to verify it is cleared on successful init
+    dev.setLastError("stale error from previous attempt");
+
+    dev.initResult = true;
+    mgr->registerDevice(&dev, HAL_DISC_BUILTIN);
+    mgr->initAll();
+
+    TEST_ASSERT_EQUAL(HAL_STATE_AVAILABLE, dev._state);
+    TEST_ASSERT_TRUE(dev._ready);
+    TEST_ASSERT_EQUAL_CHAR('\0', dev.getLastError()[0]);
+}
+
+// ===== Test 28: probe failure path sets last error (simulates API layer behaviour) =====
+void test_probe_failure_sets_last_error() {
+    TestDevice dev("probe,fail", HAL_DEV_DAC);
+    // Simulate the API path: probe() returns false → build a failure result and store it
+    HalInitResult failResult = hal_init_fail(DIAG_HAL_INIT_FAILED, "I2C probe failed (no device response)");
+    dev.setLastError(failResult);
+
+    TEST_ASSERT_EQUAL_STRING("I2C probe failed (no device response)", dev.getLastError());
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
@@ -615,6 +657,11 @@ int main(int argc, char** argv) {
     RUN_TEST(test_registry_max_returns_correct_value);
     RUN_TEST(test_registry_overflow_at_max_drivers);
     RUN_TEST(test_slot_full_then_remove_allows_new_registration);
+
+    // lastError propagation through device manager
+    RUN_TEST(test_init_failure_stores_reason_on_device);
+    RUN_TEST(test_init_success_clears_last_error);
+    RUN_TEST(test_probe_failure_sets_last_error);
 
     return UNITY_END();
 }

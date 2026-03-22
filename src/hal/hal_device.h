@@ -74,6 +74,22 @@ public:
     volatile bool _ready;
     volatile HalDeviceState _state;
 
+    // ----- Last init/reinit error (stored on the device, surfaced via API + WS) -----
+    char _lastError[48];
+
+    void setLastError(const HalInitResult& r) {
+        _lastError[0] = '\0';
+        if (!r.success && r.reason[0]) {
+            hal_safe_strcpy(_lastError, sizeof(_lastError), r.reason);
+        }
+    }
+    void setLastError(const char* msg) {
+        if (msg) hal_safe_strcpy(_lastError, sizeof(_lastError), msg);
+        else _lastError[0] = '\0';
+    }
+    void clearLastError() { _lastError[0] = '\0'; }
+    const char* getLastError() const { return _lastError; }
+
 protected:
     HalDeviceDescriptor _descriptor;
     uint8_t             _slot;
@@ -86,5 +102,6 @@ protected:
                   _slot(0), _initPriority(HAL_PRIORITY_HARDWARE),
                   _discovery(HAL_DISC_BUILTIN) {
         memset(&_descriptor, 0, sizeof(_descriptor));
+        _lastError[0] = '\0';
     }
 };

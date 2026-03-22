@@ -581,6 +581,24 @@ Full HAL device list. Sent at boot and after any device state change.
       "cfgMute": false,
       "cfgPinSda": -1,
       "cfgPinScl": -1
+    },
+    {
+      "slot": 4,
+      "compatible": "ess,es9038q2m",
+      "name": "ES9038Q2M",
+      "type": 1,
+      "state": 5,
+      "discovery": "eeprom",
+      "ready": false,
+      "i2cAddr": 72,
+      "channels": 2,
+      "capabilities": 23,
+      "manufacturer": "ESS Technology",
+      "errorReason": "I2C write to reg 0x00 NAKed",
+      "cfgEnabled": true,
+      "cfgI2sPort": 2,
+      "cfgVolume": 75,
+      "cfgMute": false
     }
   ]
 }
@@ -595,7 +613,17 @@ HAL device states (`state` field): 0 = Unknown, 1 = Detected, 2 = Configuring, 3
 | `driverCount` | integer | Number of registered driver factory functions |
 | `driverMax` | integer | Maximum driver registry slots (currently 32) |
 
+**Error reason field:**
+
+| Field | Type | When present | Description |
+|-------|------|-------------|-------------|
+| `errorReason` | string | `state` is `5` (ERROR) or `4` (UNAVAILABLE) | Human-readable failure reason from the driver's `init()` or `healthCheck()` call. Sourced from `HalDevice._lastError[48]`. Present only when non-empty. |
+
 `scanning: true` is set while a `POST /api/hal/scan` rescan is in progress. The `cfgXxx` fields are only present if a `HalDeviceConfig` record exists for that slot in `hal_config.json`. For temperature sensor devices (`type == HAL_DEV_SENSOR`), an additional `temperature` field (°C, float) is included.
+
+:::tip Using errorReason in clients
+When `state == 5` and `errorReason` is present, display it in the device card so the user can act without opening a serial console. Common values include I2C NAK messages, GPIO claim conflicts, and I2S channel allocation failures.
+:::
 
 ### `audioLevels`
 

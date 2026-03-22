@@ -18,7 +18,9 @@ The HAL API manages the hardware abstraction layer device lifecycle. It covers d
 | GET | `/api/hal/devices/custom` | No | List custom device schemas stored in LittleFS |
 | POST | `/api/hal/devices/custom` | No | Upload a custom JSON device schema |
 | DELETE | `/api/hal/devices/custom` | No | Remove a custom device schema by name |
+| POST | `/api/hal/devices/custom/create` | No | Create a new custom device via structured form data |
 | POST | `/api/hal/scan` | No | Trigger a full device rescan (I2C + EEPROM) |
+| GET | `/api/hal/scan/unmatched` | No | List I2C addresses found but not matched to any driver |
 | GET | `/api/hal/db` | No | List all entries in the device database |
 | GET | `/api/hal/db/presets` | No | List device presets (compatible string + name + type) |
 | GET | `/api/hal/settings` | No | Get HAL auto-discovery toggle state |
@@ -179,7 +181,7 @@ Manually register a device from the built-in driver registry. Use this to add ex
 }
 ```
 
-**Response (201 Created)**
+**Response (201 Created — success)**
 
 ```json
 {
@@ -190,11 +192,25 @@ Manually register a device from the built-in driver registry. Use this to add ex
 }
 ```
 
+**Response (201 Created — init failure)**
+
+When the slot is allocated but `init()` fails (the device is in ERROR state), the response includes an `error` field with the reason stored in `HalDevice._lastError`:
+
+```json
+{
+  "status": "ok",
+  "slot": 5,
+  "name": "PCM5102A",
+  "state": 5,
+  "error": "I2C write to reg 0x00 NAKed"
+}
+```
+
 **Error codes**
 
 | Status | Meaning |
 |--------|---------|
-| 201 | Device registered and initialized |
+| 201 | Device registered and init attempted (check `state` for result) |
 | 400 | Missing or empty `compatible` field |
 | 404 | Unknown compatible string — not in device database |
 | 409 | Max instances for this compatible reached (8), or no free slots |
@@ -202,7 +218,7 @@ Manually register a device from the built-in driver registry. Use this to add ex
 | 500 | Driver factory returned null, or no free slots internally |
 
 :::note
-A 201 response does not guarantee hardware is functioning. Check the returned `state` field: `3` (AVAILABLE) indicates success; `5` (ERROR) means initialization failed but the slot was still allocated.
+A 201 response does not guarantee hardware is functioning. Check the returned `state` field: `3` (AVAILABLE) indicates success; `5` (ERROR) means initialization failed but the slot was still allocated. When `state` is `5`, the `error` field contains the reason text from the driver's `init()` call.
 :::
 
 ---
@@ -307,12 +323,13 @@ Deinitialize and re-initialize a device in place. Useful after configuration cha
 }
 ```
 
-On failure:
+On failure, the response includes the `error` field containing the reason text from `HalDevice._lastError`:
 
 ```json
 {
   "status": "error",
-  "state": 5
+  "state": 5,
+  "error": "I2C write to reg 0x00 NAKed"
 }
 ```
 
@@ -515,6 +532,132 @@ Removes a custom schema file. The schema is identified by the `name` query param
 | 200 | Schema removed |
 | 400 | Missing `name` query parameter |
 | 404 | Schema file not found |
+
+---
+
+## POST /api/hal/devices/custom/create
+
+Creates a new custom device from a structured JSON body. This endpoint is the counterpart to the web UI custom device modal — it validates the schema, writes it to LittleFS, and immediately registers and initialises the device.
+
+**Request**
+
+```json
+{
+  "compatible": "vendor,my-dac-i2c",
+  "name": "My Custom DAC",
+  "manufacturer": "Acme Corp",
+  "type": 1,
+  "channels": 2,
+  "i2cAddr": 72,
+  "tier": 2,
+  "i2sBus": 2,
+  "i2sPort": 2,
+  "sampleRatesMask": 14,
+  "initSequence": [
+    { "reg": 0, "val": 0 },
+    { "reg": 1, "val": 25 },
+    { "reg": 8, "val": 192 }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `compatible` | string | Yes | Unique `vendor,model` identifier. Commas are replaced with underscores in the filename. |
+| `name` | string | Yes | Human-readable display name (max 32 chars) |
+| `manufacturer` | string | Yes | Manufacturer name (max 32 chars) |
+| `type` | integer | Yes | `1` = DAC, `2` = ADC |
+| `channels` | integer | Yes | `2` for stereo, `4` for 4-channel TDM |
+| `i2cAddr` | integer | Tier 2 | 7-bit I2C address. Required when `tier` is 2. |
+| `tier` | integer | Yes | `1` = I2S passthrough only, `2` = I2C init sequence |
+| `i2sBus` | integer | Tier 2 | I2C bus index: `0` = external, `1` = onboard, `2` = expansion |
+| `i2sPort` | integer | Yes | I2S port index (0, 1, or 2) |
+| `sampleRatesMask` | integer | Yes | Bitfield: bit 0=8K, 1=16K, 2=44.1K, 3=48K, 4=96K, 5=192K |
+| `initSequence` | array | Tier 2 | Ordered list of `\{"reg": N, "val": N\}` register writes |
+
+**Response (201 Created — success)**
+
+```json
+{
+  "status": "ok",
+  "slot": 7,
+  "state": 3
+}
+```
+
+**Response (201 Created — init failure)**
+
+```json
+{
+  "status": "ok",
+  "slot": 7,
+  "state": 5,
+  "error": "I2C NAK at address 0x48"
+}
+```
+
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 201 | Device schema saved and init attempted (check `state` for hardware result) |
+| 400 | Invalid JSON, missing required fields, or `compatible` already in use |
+| 409 | No free device slots |
+| 500 | LittleFS write failed |
+
+:::note Init result
+A 201 response indicates the schema was saved. The `state` field tells you whether hardware init succeeded (`3` = AVAILABLE) or failed (`5` = ERROR). When `state` is `5`, `error` contains the failure reason from the driver's `probe()` or `init()` call.
+:::
+
+---
+
+## GET /api/hal/scan/unmatched
+
+Returns I2C addresses that were found during the most recent bus scan but could not be matched to any registered driver or custom schema. This endpoint is used by the web UI's custom device creation flow to help users identify what is connected.
+
+**Request body**: none required.
+
+**Response**
+
+```json
+{
+  "status": "ok",
+  "count": 2,
+  "addresses": [
+    {
+      "bus": 2,
+      "addr": 72,
+      "addrHex": "0x48",
+      "description": "No driver matched"
+    },
+    {
+      "bus": 2,
+      "addr": 80,
+      "addrHex": "0x50",
+      "description": "No driver matched"
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `count` | integer | Number of unmatched addresses |
+| `addresses[].bus` | integer | I2C bus index (0, 1, or 2) |
+| `addresses[].addr` | integer | 7-bit I2C address |
+| `addresses[].addrHex` | string | Address in hexadecimal (for display) |
+| `addresses[].description` | string | Human-readable reason why no driver matched |
+
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success (count may be 0 if all addresses were matched) |
+| 409 | A scan is currently in progress — retry after the scan completes |
+
+:::tip Using this endpoint
+Call `POST /api/hal/scan` first to ensure the address list is fresh, then call this endpoint to get unmatched addresses. The web UI custom device modal does this automatically when you click **Scan for devices**.
+:::
 
 ---
 

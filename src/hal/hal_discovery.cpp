@@ -7,6 +7,20 @@
 #include "hal_eeprom_v3.h"
 // HalDacAdapter removed -- EEPROM-discovered devices use HalDriverRegistry factories
 
+// ===== Unmatched address tracking =====
+// Updated at the end of each bus scan. Records addresses that responded
+// to an I2C probe but were not claimed by any registered driver.
+// HAL_UNMATCHED_MAX defined in hal_discovery.h
+static HalUnmatchedAddr _unmatchedAddrs[HAL_UNMATCHED_MAX];
+static int              _unmatchedCount = 0;
+
+int hal_get_unmatched_addresses(HalUnmatchedAddr* out, int maxOut) {
+    if (!out || maxOut <= 0) return 0;
+    int n = (_unmatchedCount < maxOut) ? _unmatchedCount : maxOut;
+    for (int i = 0; i < n; i++) out[i] = _unmatchedAddrs[i];
+    return n;
+}
+
 #ifndef NATIVE_TEST
 #include "../debug_serial.h"
 #include "../dac_eeprom.h"
@@ -186,6 +200,9 @@ static int hal_eeprom_scan_expansion(HalDeviceManager& mgr) {
 int hal_discover_devices() {
     int newDevices = 0;
 
+    // Reset unmatched address table at the start of each new discovery pass
+    _unmatchedCount = 0;
+
 #ifndef NATIVE_TEST
     HalDeviceManager& mgr = HalDeviceManager::instance();
 
@@ -350,12 +367,17 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
     uint8_t timeoutCount = 0;
     memset(timeoutAddrs, 0, sizeof(timeoutAddrs));
 
+    // Addresses that ACK'd (not yet filtered against registered devices)
+    uint8_t ackAddrs[112];  // max addresses in 0x08-0x77 range
+    uint8_t ackCount = 0;
+
     // Scan standard I2C address range (0x08-0x77, skip reserved)
     for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
         bus->beginTransmission(addr);
         uint8_t err = bus->endTransmission();
         if (err == 0) {
             found++;
+            if (ackCount < sizeof(ackAddrs)) ackAddrs[ackCount++] = addr;
             LOG_I("[HAL:Discovery]", "Bus %u: device at 0x%02X", busIndex, addr);
         } else if ((err == 4 || err == 5) && timeoutCount < HAL_PROBE_RETRY_MAX_ADDRS) {
             timeoutAddrs[timeoutCount++] = addr;
@@ -375,6 +397,7 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
                 uint8_t retryErr = bus->endTransmission();
                 if (retryErr == 0) {
                     found++;
+                    if (ackCount < sizeof(ackAddrs)) ackAddrs[ackCount++] = timeoutAddrs[i];
                     LOG_I("[HAL:Discovery]", "Bus %u: device at 0x%02X (retry %u)",
                           busIndex, timeoutAddrs[i], retry + 1);
                     char diagMsg[24];
@@ -392,6 +415,40 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
     // Release bus if we initialized it (avoid holding pins)
     if (needsInit) {
         bus->end();
+    }
+
+    // Record unmatched addresses: ACK'd but not claimed by any registered HAL device
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    for (uint8_t ai = 0; ai < ackCount; ai++) {
+        uint8_t ackAddr = ackAddrs[ai];
+        bool claimed = false;
+        for (uint8_t di = 0; di < HAL_MAX_DEVICES; di++) {
+            HalDevice* dev = mgr.getDevice(di);
+            if (dev && dev->getDescriptor().i2cAddr == ackAddr &&
+                (dev->getDescriptor().bus.type == HAL_BUS_I2C) &&
+                dev->getDescriptor().bus.index == busIndex) {
+                claimed = true;
+                break;
+            }
+        }
+        if (!claimed && _unmatchedCount < HAL_UNMATCHED_MAX) {
+            // Avoid adding duplicates from multiple scans
+            bool alreadyStored = false;
+            for (int ui = 0; ui < _unmatchedCount; ui++) {
+                if (_unmatchedAddrs[ui].addr == ackAddr &&
+                    _unmatchedAddrs[ui].bus  == busIndex) {
+                    alreadyStored = true;
+                    break;
+                }
+            }
+            if (!alreadyStored) {
+                _unmatchedAddrs[_unmatchedCount].addr = ackAddr;
+                _unmatchedAddrs[_unmatchedCount].bus  = busIndex;
+                _unmatchedCount++;
+                LOG_I("[HAL:Discovery]", "Bus %u: unmatched addr 0x%02X (no driver)",
+                      busIndex, ackAddr);
+            }
+        }
     }
 #else
     (void)busIndex;

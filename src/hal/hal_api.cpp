@@ -38,6 +38,13 @@ static void deviceToJson(JsonObject& obj, HalDevice* dev) {
     obj["busFreq"] = desc.bus.freqHz;
     obj["sampleRates"] = desc.sampleRatesMask;
 
+    // Surface last init error for devices in error/unavailable state
+    if (dev->_state == HAL_STATE_ERROR || dev->_state == HAL_STATE_UNAVAILABLE) {
+        if (dev->_lastError[0]) {
+            obj["lastError"] = dev->getLastError();
+        }
+    }
+
     // Per-device runtime config
     HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(dev->getSlot());
     if (cfg && cfg->valid) {
@@ -185,19 +192,32 @@ void registerHalApiEndpoints(WebServer& server) {
         if (slot < 0) { delete dev; server_send(500, "application/json", "{\"error\":\"No free slots\"}"); return; }
 
         dev->_state = HAL_STATE_CONFIGURING;
-        bool ok = dev->probe() && dev->init().success;
-        dev->_state = ok ? HAL_STATE_AVAILABLE : HAL_STATE_ERROR;
-        dev->_ready = ok;
+        bool probeOk = dev->probe();
+        HalInitResult initResult = probeOk ? dev->init() : hal_init_fail(DIAG_HAL_INIT_FAILED, "I2C probe failed (no device response)");
+        bool ok = probeOk && initResult.success;
+        if (ok) {
+            dev->clearLastError();
+            dev->_state = HAL_STATE_AVAILABLE;
+            dev->_ready = true;
+        } else {
+            dev->setLastError(initResult);
+            dev->_state = HAL_STATE_ERROR;
+            dev->_ready = false;
+            LOG_W("[HAL] Probe/init failed for %s (slot %d): %s", compatible, slot, initResult.reason);
+        }
 
         hal_save_device_config(static_cast<uint8_t>(slot));
         appState.markHalDeviceDirty();
         LOG_I("[HAL:API]", "Manual register: %s slot %d (%s)", compatible, slot, ok ? "ok" : "init failed");
 
         JsonDocument resp;
-        resp["status"] = "ok";
+        resp["status"] = ok ? "ok" : "error";
         resp["slot"] = slot;
         resp["name"] = desc.name;
         resp["state"] = static_cast<uint8_t>(dev->_state);
+        if (!ok && dev->_lastError[0]) {
+            resp["error"] = dev->getLastError();
+        }
         String json; serializeJson(resp, json);
         server_send(201, "application/json", json);
     });
@@ -335,19 +355,27 @@ void registerHalApiEndpoints(WebServer& server) {
         dev->_ready = false;
         appState.markHalDeviceDirty();
 
-        bool ok = dev->probe() && dev->init().success;
+        bool probeOk = dev->probe();
+        HalInitResult reinitResult = probeOk ? dev->init() : hal_init_fail(DIAG_HAL_INIT_FAILED, "I2C probe failed (no device response)");
+        bool ok = probeOk && reinitResult.success;
         if (ok) {
+            dev->clearLastError();
             dev->_state = HAL_STATE_AVAILABLE;
             dev->_ready = true;
         } else {
+            dev->setLastError(reinitResult);
             dev->_state = HAL_STATE_ERROR;
             dev->_ready = false;
+            LOG_W("[HAL] Reinit failed for slot %d: %s", slot, reinitResult.reason);
         }
         appState.markHalDeviceDirty();
 
         JsonDocument resp;
         resp["status"] = ok ? "ok" : "error";
         resp["state"] = dev->_state;
+        if (!ok && dev->_lastError[0]) {
+            resp["error"] = dev->getLastError();
+        }
         String json;
         serializeJson(resp, json);
         server_send(200, "application/json", json);
@@ -443,6 +471,189 @@ void registerHalApiEndpoints(WebServer& server) {
         } else {
             server_send(404, "application/json", "{\"error\":\"Not found\"}");
         }
+    });
+
+    // POST /api/hal/devices/custom/create — structured custom device creation
+    // Accepts JSON body: name, type, bus, i2cAddr, i2cBus, i2sPort, channels,
+    //                    capabilities[], initSequence[] (up to 32 {reg, val} pairs).
+    // Auto-generates compatible: "custom," + slugified(name).
+    // Returns 201 with slot, name, state.
+    server.on("/api/hal/devices/custom/create", HTTP_POST, [&server]() {
+        JsonDocument body;
+        DeserializationError err = deserializeJson(body, server.arg("plain"));
+        if (err) {
+            server_send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+            return;
+        }
+
+        // Validate required: name
+        const char* devName = body["name"] | "";
+        if (!devName[0]) {
+            server_send(400, "application/json", "{\"error\":\"name is required\"}");
+            return;
+        }
+
+        // Validate type
+        const char* typeStr = body["type"] | "dac";
+        if (strcmp(typeStr, "dac") != 0 && strcmp(typeStr, "adc") != 0 &&
+            strcmp(typeStr, "codec") != 0 && strcmp(typeStr, "amp") != 0) {
+            server_send(400, "application/json", "{\"error\":\"Invalid type (dac/adc/codec/amp)\"}");
+            return;
+        }
+
+        // Validate I2C address if provided
+        uint8_t i2cAddr = 0;
+        if (body.containsKey("i2cAddr")) {
+            int addrVal = body["i2cAddr"].as<int>();
+            if (addrVal < 0x08 || addrVal > 0x77) {
+                server_send(400, "application/json", "{\"error\":\"i2cAddr must be 0x08-0x77\"}");
+                return;
+            }
+            i2cAddr = (uint8_t)addrVal;
+        }
+
+        // Validate bus index
+        uint8_t i2cBus = body["i2cBus"] | (uint8_t)2;
+        if (i2cBus > 2) {
+            server_send(400, "application/json", "{\"error\":\"i2cBus must be 0-2\"}");
+            return;
+        }
+
+        // Validate initSequence length
+        if (body["initSequence"].is<JsonArray>()) {
+            if (body["initSequence"].as<JsonArray>().size() > 32) {
+                server_send(400, "application/json",
+                            "{\"error\":\"initSequence exceeds 32 entries\"}");
+                return;
+            }
+        }
+
+        // Auto-generate compatible string: "custom," + slugified(name)
+        char slug[30];
+        {
+            const char* src = devName;
+            int si = 0;
+            for (int ci = 0; src[ci] && si < 29; ci++) {
+                char c = src[ci];
+                if (c >= 'A' && c <= 'Z') c = (char)(c + 32);  // lowercase
+                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+                    slug[si++] = c;
+                } else if (c == ' ' || c == '_') {
+                    slug[si++] = '-';
+                }
+                // Other chars stripped
+            }
+            slug[si] = '\0';
+        }
+        char compatible[36];
+        snprintf(compatible, sizeof(compatible), "custom,%s", slug);
+
+        // Build schema JSON
+        JsonDocument schema;
+        schema["compatible"] = compatible;
+        schema["name"]       = devName;
+        schema["type"]       = typeStr;
+        schema["bus"]        = body["bus"] | "i2c";
+        if (i2cAddr) schema["i2cAddr"]  = (int)i2cAddr;
+        if (body.containsKey("i2cBus"))  schema["i2cBus"]  = i2cBus;
+        if (body.containsKey("i2sPort")) schema["i2sPort"] = body["i2sPort"].as<uint8_t>();
+        if (body.containsKey("channels")) schema["channels"] = body["channels"].as<uint8_t>();
+
+        // Copy capabilities array
+        if (body["capabilities"].is<JsonArray>()) {
+            JsonArray dstCaps = schema["capabilities"].to<JsonArray>();
+            for (const char* cap : body["capabilities"].as<JsonArray>()) {
+                dstCaps.add(cap);
+            }
+        }
+
+        // Copy initSequence array
+        if (body["initSequence"].is<JsonArray>()) {
+            JsonArray dstSeq = schema["initSequence"].to<JsonArray>();
+            for (JsonObject entry : body["initSequence"].as<JsonArray>()) {
+                JsonObject dstEntry = dstSeq.add<JsonObject>();
+                dstEntry["reg"] = entry["reg"].as<uint8_t>();
+                dstEntry["val"] = entry["val"].as<uint8_t>();
+            }
+        }
+
+        // Copy defaults
+        if (body["defaults"].is<JsonObject>()) {
+            JsonObject dstDef = schema["defaults"].to<JsonObject>();
+            JsonObject srcDef = body["defaults"].as<JsonObject>();
+            if (srcDef["sample_rate"].is<uint32_t>())
+                dstDef["sample_rate"] = srcDef["sample_rate"].as<uint32_t>();
+            if (srcDef["bits_per_sample"].is<uint8_t>())
+                dstDef["bits_per_sample"] = srcDef["bits_per_sample"].as<uint8_t>();
+            if (srcDef["mclk_multiple"].is<uint16_t>())
+                dstDef["mclk_multiple"] = srcDef["mclk_multiple"].as<uint16_t>();
+        }
+
+        // Persist schema to LittleFS
+        String schemaJson;
+        serializeJson(schema, schemaJson);
+        if (!LittleFS.exists("/hal/custom")) {
+            LittleFS.mkdir("/hal/custom");
+        }
+        {
+            char fname[80];
+            snprintf(fname, sizeof(fname), "/hal/custom/%s.json", compatible);
+            for (char* p = fname; *p; p++) {
+                if (*p == ',') *p = '_';
+            }
+            File f = LittleFS.open(fname, "w");
+            if (!f) {
+                server_send(500, "application/json", "{\"error\":\"Failed to write schema\"}");
+                return;
+            }
+            f.print(schemaJson);
+            f.close();
+        }
+
+        // Reload custom devices — picks up the newly written schema
+        hal_load_custom_devices();
+
+        // Find the newly registered device
+        HalDeviceManager& mgr2 = HalDeviceManager::instance();
+        HalDevice* newDev = mgr2.findByCompatible(compatible);
+        int newSlot = newDev ? (int)newDev->getSlot() : -1;
+
+        JsonDocument resp;
+        resp["status"]     = newDev ? "ok" : "registered";
+        resp["compatible"] = compatible;
+        resp["name"]       = devName;
+        resp["slot"]       = newSlot;
+        if (newDev) {
+            resp["state"] = (uint8_t)newDev->_state;
+            if (newDev->_lastError[0]) resp["error"] = newDev->getLastError();
+        }
+        appState.markHalDeviceDirty();
+        LOG_I("[HAL:API]", "Custom device created: %s (slot %d)", compatible, newSlot);
+
+        String respJson;
+        serializeJson(resp, respJson);
+        server_send(201, "application/json", respJson);
+    });
+
+    // GET /api/hal/scan/unmatched — return unmatched I2C addresses from last scan
+    server.on("/api/hal/scan/unmatched", HTTP_GET, [&server]() {
+        HalUnmatchedAddr buf[HAL_UNMATCHED_MAX];
+        int n = hal_get_unmatched_addresses(buf, HAL_UNMATCHED_MAX);
+
+        JsonDocument doc;
+        JsonArray arr = doc["unmatched"].to<JsonArray>();
+        for (int i = 0; i < n; i++) {
+            JsonObject obj = arr.add<JsonObject>();
+            obj["addr"] = buf[i].addr;
+            obj["bus"]  = buf[i].bus;
+            char hexAddr[8];
+            snprintf(hexAddr, sizeof(hexAddr), "0x%02X", buf[i].addr);
+            obj["addrHex"] = hexAddr;
+        }
+        doc["count"] = n;
+        String json;
+        serializeJson(doc, json);
+        server_send(200, "application/json", json);
     });
 
     LOG_I("[HAL:API]", "Registered HAL REST endpoints");

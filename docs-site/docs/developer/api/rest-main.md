@@ -298,15 +298,171 @@ Settings are written to `/config.json` via an atomic write: the payload is first
 
 Downloads the full settings file as a JSON attachment. The response is suitable for saving as a backup and re-importing with `POST /api/settings/import`.
 
+The current export format is **version 2.0**, which includes HAL device configs, custom device schemas, DSP configuration, output DSP, and the audio routing matrix in addition to the base settings from v1.
+
 **Success response** (HTTP 200, `application/json`):
 
 ```json
 {
-  "version": 1,
-  "settings": { "audioUpdateRate": 50, "... " : "..." },
-  "mqtt": { "broker": "192.168.1.100", "...": "..." }
+  "version": "2.0",
+  "settings": {
+    "audioUpdateRate": 50,
+    "vuMeterEnabled": true,
+    "buzzerEnabled": true
+  },
+  "mqtt": {
+    "broker": "192.168.1.100",
+    "port": 1883,
+    "user": "ha_user",
+    "prefix": "alxnova"
+  },
+  "halDevices": [
+    {
+      "slot": 0,
+      "compatible": "ti,pcm5102a",
+      "enabled": true,
+      "volume": 80,
+      "mute": false,
+      "i2sPort": 0,
+      "label": "Main DAC"
+    }
+  ],
+  "halCustomSchemas": [
+    {
+      "compatible": "vendor,my-dac",
+      "name": "My Custom DAC",
+      "tier": 1,
+      "i2sPort": 2,
+      "sampleRatesMask": 14
+    }
+  ],
+  "dspGlobal": {
+    "enabled": true,
+    "bypass": false,
+    "sampleRate": 48000
+  },
+  "dspChannels": [
+    {
+      "channel": 0,
+      "bypass": false,
+      "stages": [
+        {
+          "type": 0,
+          "enabled": true,
+          "freq": 80.0,
+          "gain": -3.0,
+          "Q": 0.707
+        }
+      ]
+    }
+  ],
+  "outputDsp": [
+    {
+      "slot": 0,
+      "stages": []
+    }
+  ],
+  "pipelineMatrix": {
+    "bypass": false,
+    "matrix": [
+      [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    ]
+  }
 }
 ```
+
+**New sections in v2.0:**
+
+| Section | Description |
+|---------|-------------|
+| `halDevices` | Per-device runtime config (volume, mute, I2S port, user label) for all registered HAL devices with saved configs |
+| `halCustomSchemas` | Full JSON schemas for all custom devices stored in `/hal/custom/` |
+| `dspGlobal` | Global DSP enable/bypass state and sample rate |
+| `dspChannels` | Per-input-channel DSP stage list (filter type, frequency, gain, Q) |
+| `outputDsp` | Per-output-sink DSP stage list |
+| `pipelineMatrix` | Full 16×16 audio routing matrix and bypass state |
+
+:::tip v1 files are still accepted
+`POST /api/settings/import` accepts both v1 and v2.0 files. A v1 file restores base settings and MQTT only; a v2.0 file additionally restores HAL configs, custom schemas, DSP, and the routing matrix. The import reads whatever sections are present — missing sections are silently skipped.
+:::
+
+---
+
+#### POST /api/settings/import
+
+Uploads and applies a settings export file previously downloaded from `GET /api/settings/export`. The controller parses the file and restores whatever sections are present. If the `version` field is absent or `"1"`, only `settings` and `mqtt` are restored. If `version` is `"2.0"`, all available sections are restored.
+
+**Request**: `multipart/form-data` with a field named `file` containing the JSON export file.
+
+**Import preview response** (HTTP 200, before applying):
+
+Before applying changes, the endpoint returns a summary of what sections it found in the uploaded file:
+
+```json
+{
+  "status": "preview",
+  "version": "2.0",
+  "sectionsFound": [
+    "settings",
+    "mqtt",
+    "halDevices",
+    "halCustomSchemas",
+    "dspGlobal",
+    "dspChannels",
+    "outputDsp",
+    "pipelineMatrix"
+  ]
+}
+```
+
+The web UI displays this preview and asks the user to confirm before applying. To apply after preview, send the same file again with an `apply=1` query parameter:
+
+```
+POST /api/settings/import?apply=1
+```
+
+**Apply response** (HTTP 200):
+
+```json
+{
+  "status": "ok",
+  "sectionsApplied": [
+    "settings",
+    "mqtt",
+    "halDevices",
+    "dspGlobal",
+    "dspChannels",
+    "pipelineMatrix"
+  ],
+  "sectionsSkipped": [
+    "halCustomSchemas",
+    "outputDsp"
+  ]
+}
+```
+
+`sectionsSkipped` lists sections that were present in the file but could not be applied — for example, a `halCustomSchemas` section whose devices could not be instantiated due to a missing I2S port.
+
+**Version compatibility:**
+
+| File `version` | Sections restored |
+|----------------|-----------------|
+| absent or `"1"` | `settings`, `mqtt` |
+| `"2.0"` | All sections present in the file |
+
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Preview or apply successful |
+| 400 | Not a valid JSON file, or `version` field unrecognised |
+| 413 | File too large (max 64 KB) |
+| 500 | LittleFS write failed during apply |
+
+:::warning Partial imports
+Only sections present in the uploaded file are touched. Sections absent from the file are left unchanged. This means you can safely import a v1 backup onto a device that has custom schemas and DSP presets — only the base settings and MQTT will be overwritten.
+:::
 
 ---
 

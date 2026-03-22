@@ -12,7 +12,11 @@ public:
   String() : std::string() {}
   String(const char *s) : std::string(s ? s : "") {}
   String(const std::string &s) : std::string(s) {}
+  String(std::nullptr_t) : std::string() {} // ArduinoJson clears via nullptr
   String(int v) : std::string(std::to_string(v)) {}
+
+  String& operator=(const char *s) { assign(s ? s : ""); return *this; }
+  String& operator=(std::nullptr_t) { clear(); return *this; }
   String(long v) : std::string(std::to_string(v)) {}
   String(unsigned int v) : std::string(std::to_string(v)) {}
   String(unsigned long v) : std::string(std::to_string(v)) {}
@@ -148,6 +152,43 @@ public:
 
   const char *c_str() const { return std::string::c_str(); }
   unsigned int length() const { return (unsigned int)std::string::length(); }
+
+  // Arduino String concat methods (used by ArduinoJson Writer)
+  bool concat(const char *s) {
+    if (s) this->append(s);
+    return true;
+  }
+  bool concat(const char *s, size_t len) {
+    if (s && len > 0) this->append(s, len);
+    return true;
+  }
+  bool concat(char c) {
+    this->append(1, c);
+    return true;
+  }
+
+  void trim() {
+    size_t start = find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) { clear(); return; }
+    size_t end = find_last_not_of(" \t\r\n");
+    *this = String(substr(start, end - start + 1).c_str());
+  }
+
+  void reserve(unsigned int size) {
+    std::string::reserve(size);
+  }
+
+  bool startsWith(const String &prefix) const {
+    return std::string::find(prefix) == 0;
+  }
+  bool startsWith(const char *prefix) const {
+    return prefix && std::string::find(prefix) == 0;
+  }
+
+  bool endsWith(const String &suffix) const {
+    if (suffix.length() > length()) return false;
+    return compare(length() - suffix.length(), suffix.length(), suffix) == 0;
+  }
 
   char operator[](unsigned int index) const {
     if (index >= std::string::length())

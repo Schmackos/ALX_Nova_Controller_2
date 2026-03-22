@@ -36,6 +36,10 @@ public:
         return toRead;
     }
 
+    size_t write(uint8_t c) {
+        return write(&c, 1);
+    }
+
     size_t write(const uint8_t* buf, size_t len) {
         if (!_valid || !_writable || !_data) return 0;
         // Extend if needed
@@ -46,6 +50,62 @@ public:
         memcpy(&(*_data)[_pos], buf, len);
         _pos += len;
         return len;
+    }
+
+    size_t print(const char* str) {
+        if (!str) return 0;
+        return write((const uint8_t*)str, strlen(str));
+    }
+
+    size_t print(const String& str) {
+        return write((const uint8_t*)str.c_str(), str.length());
+    }
+
+    size_t println(const char* str = "") {
+        size_t n = print(str);
+        n += write((uint8_t)'\n');
+        return n;
+    }
+
+    size_t println(const String& str) {
+        size_t n = print(str);
+        n += write((uint8_t)'\n');
+        return n;
+    }
+
+    size_t println(int val) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d", val);
+        return println(buf);
+    }
+
+    size_t println(float val) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%f", val);
+        return println(buf);
+    }
+
+    String readString() {
+        if (!_valid || !_data) return String();
+        size_t avail = _data->size() - _pos;
+        String result;
+        result.reserve(avail);
+        for (size_t i = _pos; i < _data->size(); i++) {
+            result += (char)(*_data)[i];
+        }
+        _pos = _data->size();
+        return result;
+    }
+
+    String readStringUntil(char terminator) {
+        if (!_valid || !_data) return String();
+        String result;
+        while (_pos < _data->size()) {
+            char c = (*_data)[_pos++];
+            if (c == terminator) break;
+            result += c;
+        }
+        return result;
     }
 
     bool seek(size_t pos) {
@@ -118,6 +178,11 @@ public:
     bool remove(const char* path) {
         if (!_mounted || !path) return false;
         return _files.erase(std::string(path)) > 0;
+    }
+
+    bool mkdir(const char* path) {
+        (void)path; // No-op: map-based FS doesn't need directories
+        return true;
     }
 
     bool rename(const char* from, const char* to) {

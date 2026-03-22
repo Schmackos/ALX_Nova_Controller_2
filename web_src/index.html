@@ -1204,10 +1204,37 @@
             <div class="card">
                 <div class="card-title">Backup & Restore</div>
                 <div class="btn-row">
-                    <button class="btn btn-secondary" onclick="exportSettings()">Export</button>
-                    <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Import</button>
+                    <button class="btn btn-secondary" onclick="exportSettings()">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>Export
+                    </button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" transform="rotate(180 12 12)"/></svg>Import
+                    </button>
+                </div>
+                <div class="export-sections-info">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--text-muted)" aria-hidden="true" style="flex-shrink:0;margin-top:1px;"><path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg>
+                    <span>Export includes: WiFi, General, Sensing, MQTT, Signal Generator, Input Names, HAL Configs, Custom Devices, DSP, Pipeline Routing</span>
                 </div>
                 <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileSelect(event)">
+            </div>
+
+            <!-- Import Preview (hidden until file selected) -->
+            <div id="importPreviewCard" class="card import-preview-card" style="display:none;">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true" style="margin-right:6px;vertical-align:-3px;"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,9V3.5L18.5,9H13Z"/></svg>Import Preview
+                </div>
+                <div id="importPreviewMeta" class="import-preview-meta"></div>
+                <div id="importPreviewSections" class="import-preview-sections"></div>
+                <div class="import-preview-warning">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--warning, #FFC107)" aria-hidden="true" style="flex-shrink:0;"><path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z"/></svg>
+                    <span>This will overwrite current settings and reboot the device.</span>
+                </div>
+                <div class="import-preview-actions">
+                    <button class="btn" onclick="cancelImportPreview()">Cancel</button>
+                    <button class="btn btn-primary" onclick="applyImportPreview()">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/></svg>Apply Import
+                    </button>
+                </div>
             </div>
 
             <!-- Reboot & Factory Reset -->
@@ -1901,6 +1928,10 @@
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,9V3.5L18.5,9H13M9,13H11V11H13V13H15V15H13V17H11V15H9V13Z"/></svg>
                   Custom Device
                 </button>
+                <button class="btn" onclick="halOpenCustomCreate()">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M17,14H19V17H22V19H19V22H17V19H14V17H17V14M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22C12.69,22 13.36,21.93 14,21.8C13.38,21.17 12.88,20.43 12.5,19.6C12.34,19.67 12.17,19.73 12,19.78V18H13.08C13.18,17.3 13.4,16.63 13.72,16H10V14H15.5C16.36,13.35 17.4,12.88 18.53,12.67C19.47,12.42 20,12.24 20,12C20,6.48 16.42,2 12,2M10,4H14V8H10V4M4,10H8V14H4V10M10,10H14V12.03C12.77,12.14 11.63,12.55 10.63,13.19C10.23,12.84 10,12.44 10,12V10Z"/></svg>
+                  Create Device
+                </button>
             </div>
             <div class="card" style="padding:10px 16px;margin-bottom:4px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -2031,6 +2062,108 @@
     <div class="toast" id="toast"></div>
 
     <script>/* JS_INJECT */</script>
+
+    <!-- Custom Device Create Modal -->
+    <div class="hal-cc-overlay" id="halCustomCreateModal">
+      <div class="hal-cc-modal">
+        <div class="hal-cc-header">
+          <h3>Create Custom Device</h3>
+          <button class="hal-cc-close" onclick="halCloseCustomCreate()">&times;</button>
+        </div>
+
+        <div class="hal-cc-section">Detected I2C Addresses</div>
+        <div class="hal-cc-chips" id="halCcAddrChips">
+          <span class="hal-cc-chip-skip">Run Rescan first to detect addresses</span>
+        </div>
+        <div class="hal-cc-note">Click an address to auto-fill I2C settings</div>
+
+        <div class="hal-cc-section">Device Info</div>
+        <div class="hal-cc-row">
+          <label>Name:</label>
+          <input type="text" id="halCcName" maxlength="32" placeholder="My Custom DAC" oninput="halCcUpdateCompat()">
+        </div>
+        <div class="hal-cc-row">
+          <label>Type:</label>
+          <select id="halCcType" onchange="halCcTypeChanged()">
+            <option value="1">DAC</option>
+            <option value="2">ADC</option>
+            <option value="3">Codec</option>
+            <option value="4">Amp</option>
+            <option value="9">GPIO</option>
+          </select>
+        </div>
+        <div class="hal-cc-row">
+          <label>Bus:</label>
+          <select id="halCcBus" onchange="halCcBusChanged()">
+            <option value="1">I2C</option>
+            <option value="2">I2S</option>
+            <option value="4">GPIO</option>
+          </select>
+        </div>
+
+        <div id="halCcI2cSection">
+          <div class="hal-cc-section">I2C Settings</div>
+          <div class="hal-cc-row">
+            <label>Address:</label>
+            <input type="text" id="halCcI2cAddr" placeholder="0x48" style="width:70px;flex:0;">
+          </div>
+          <div class="hal-cc-row">
+            <label>I2C Bus:</label>
+            <select id="halCcI2cBus">
+              <option value="0">External (GPIO 48/54)</option>
+              <option value="1">Onboard (GPIO 7/8)</option>
+              <option value="2" selected>Expansion (GPIO 28/29)</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="halCcAudioSection">
+          <div class="hal-cc-section">Audio Settings</div>
+          <div class="hal-cc-row">
+            <label>I2S Port:</label>
+            <select id="halCcI2sPort">
+              <option value="0">I2S 0</option>
+              <option value="1">I2S 1</option>
+              <option value="2" selected>I2S 2</option>
+            </select>
+          </div>
+          <div class="hal-cc-row">
+            <label>Channels:</label>
+            <select id="halCcChannels">
+              <option value="2">2 (Stereo)</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="hal-cc-section">Init Registers <span style="font-weight:400;opacity:0.6">(optional)</span></div>
+        <table class="hal-cc-regtable">
+          <thead><tr><th>Register</th><th>Value</th><th></th></tr></thead>
+          <tbody id="halCcRegBody"></tbody>
+        </table>
+        <button class="hal-cc-regadd" onclick="halCcAddInitReg()">+ Add Register</button>
+
+        <div class="hal-cc-section">Capabilities</div>
+        <div class="hal-cc-caps" id="halCcCaps"></div>
+
+        <div class="hal-cc-section">Compatible String</div>
+        <div class="hal-cc-compat" id="halCcCompatDisplay">custom,</div>
+
+        <div class="hal-cc-actions">
+          <button class="btn btn-sm" onclick="halCloseCustomCreate()">Cancel</button>
+          <button class="btn btn-sm" onclick="halExportCustomSchema()" title="Download JSON schema">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true" style="margin-right:3px;vertical-align:-2px;"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+            Export
+          </button>
+          <button class="btn btn-sm" onclick="halSubmitToAlx()" title="Submit device schema to ALX community">
+            Submit to ALX
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style="margin-left:3px;vertical-align:-1px;"><path d="M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z"/></svg>
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="halSubmitCustomCreate(event)">Create &amp; Test</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Custom Device Upload Modal -->
     <div id="halCustomUploadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
