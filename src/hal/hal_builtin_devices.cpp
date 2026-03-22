@@ -24,6 +24,11 @@
 #include "hal_es9842pro.h"
 #include "hal_es9840.h"
 #include "hal_es9841.h"
+#include "hal_es9038q2m.h"
+#include "hal_es9039q2m.h"
+#include "hal_es9069q.h"
+#include "hal_es9033q.h"
+#include "hal_es9020_dac.h"
 #include "../config.h"
 #include "../debug_serial.h"
 #include "../drivers/es8311_regs.h"
@@ -64,6 +69,11 @@ static HalDevice* factory_es9820()    { return new HalEs9820(); }
 static HalDevice* factory_es9842pro() { return new HalEs9842pro(); }
 static HalDevice* factory_es9840()    { return new HalEs9840(); }
 static HalDevice* factory_es9841()    { return new HalEs9841(); }
+static HalDevice* factory_es9038q2m() { return new HalEs9038q2m(); }
+static HalDevice* factory_es9039q2m() { return new HalEs9039q2m(); }
+static HalDevice* factory_es9069q()   { return new HalEs9069q(); }
+static HalDevice* factory_es9033q()   { return new HalEs9033q(); }
+static HalDevice* factory_es9020_dac() { return new HalEs9020Dac(); }
 #ifdef USB_AUDIO_ENABLED
 static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 #endif
@@ -94,6 +104,11 @@ static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 #define COMPAT_ES9842PRO   "ess,es9842pro"
 #define COMPAT_ES9840      "ess,es9840"
 #define COMPAT_ES9841      "ess,es9841"
+#define COMPAT_ES9038Q2M   "ess,es9038q2m"
+#define COMPAT_ES9039Q2M   "ess,es9039q2m"
+#define COMPAT_ES9069Q     "ess,es9069q"
+#define COMPAT_ES9033Q     "ess,es9033q"
+#define COMPAT_ES9020_DAC  "ess,es9020-dac"
 
 void hal_register_builtins() {
     hal_registry_init();
@@ -139,6 +154,13 @@ void hal_register_builtins() {
 #ifdef USB_AUDIO_ENABLED
     HAL_REGISTER("alx,usb-audio", HAL_DEV_ADC,     0,      factory_usb_audio);
 #endif
+
+    // ESS SABRE expansion DACs (2-channel I2S, Pattern C)
+    HAL_REGISTER(COMPAT_ES9038Q2M, HAL_DEV_DAC,     0,      factory_es9038q2m);  // HyperStream II, 128dB DNR
+    HAL_REGISTER(COMPAT_ES9039Q2M, HAL_DEV_DAC,     0,      factory_es9039q2m);  // HyperStream IV, 130dB DNR
+    HAL_REGISTER(COMPAT_ES9069Q,   HAL_DEV_DAC,     0,      factory_es9069q);    // HyperStream IV, MQA renderer
+    HAL_REGISTER(COMPAT_ES9033Q,   HAL_DEV_DAC,     0,      factory_es9033q);    // HyperStream II, line driver
+    HAL_REGISTER(COMPAT_ES9020_DAC,HAL_DEV_DAC,     0,      factory_es9020_dac); // HyperStream IV, APLL
 }
 
 #endif // DAC_ENABLED

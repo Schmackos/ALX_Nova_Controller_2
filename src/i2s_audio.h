@@ -244,6 +244,13 @@ bool i2s_audio_enable_es8311_tx(uint32_t sample_rate);
 void i2s_audio_disable_es8311_tx();
 void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
 
+// Expansion mezzanine DAC TX (configurable I2S port)
+// Enables I2S TX for expansion DAC output. dout_pin comes from HalDeviceConfig.pinData.
+// Auto-selects an available I2S port unless overridden via HalDeviceConfig.i2sPort.
+bool i2s_audio_enable_expansion_tx(uint32_t sample_rate, gpio_num_t dout_pin);
+void i2s_audio_disable_expansion_tx();
+void i2s_audio_write_expansion_tx(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
+
 // Expansion mezzanine ADC RX (I2S2 RX, P4 only)
 // Enables I2S2 RX for expansion ADC input. If ES8311 TX is already active on I2S2,
 // this creates a full-duplex channel sharing BCK/WS. If not, allocates I2S2 RX-only.
@@ -277,6 +284,10 @@ inline void i2s_audio_write(const void*, size_t, size_t* bw, uint32_t) { if (bw)
 inline bool i2s_audio_enable_es8311_tx(uint32_t) { return false; }
 inline void i2s_audio_disable_es8311_tx() {}
 inline void i2s_audio_write_es8311(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+
+inline bool i2s_audio_enable_expansion_tx(uint32_t, int) { return true; }
+inline void i2s_audio_disable_expansion_tx() {}
+inline void i2s_audio_write_expansion_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
 
 inline bool i2s_audio_enable_expansion_rx(uint32_t, int) { return false; }
 inline void i2s_audio_disable_expansion_rx() {}

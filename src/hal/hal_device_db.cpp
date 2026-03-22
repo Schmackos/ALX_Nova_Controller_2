@@ -417,6 +417,91 @@ static void hal_db_add_builtins() {
         d.capabilities = HAL_CAP_HW_VOLUME;
         hal_db_add(&d);
     }
+    // ES9038Q2M — expansion 2-channel SABRE DAC, I2C control + I2S data, up to 768kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9038q2m", 31);
+        strncpy(d.name, "ES9038Q2M", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9039Q2M — expansion 2-channel SABRE DAC, I2C control + I2S data, up to 768kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9039q2m", 31);
+        strncpy(d.name, "ES9039Q2M", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9069Q — expansion 2-channel SABRE DAC with MQA hardware renderer, up to 768kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9069q", 31);
+        strncpy(d.name, "ES9069Q", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_MQA;
+        hal_db_add(&d);
+    }
+    // ES9033Q — expansion 2-channel SABRE DAC with integrated line driver, up to 768kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9033q", 31);
+        strncpy(d.name, "ES9033Q", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_LINE_DRIVER;
+        hal_db_add(&d);
+    }
+    // ES9020 — expansion 2-channel SABRE DAC with analog PLL, up to 192kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9020-dac", 31);
+        strncpy(d.name, "ES9020", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_APLL;
+        hal_db_add(&d);
+    }
 }
 
 void hal_db_init() {

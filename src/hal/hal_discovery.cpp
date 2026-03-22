@@ -60,11 +60,21 @@ int hal_discover_devices() {
     LOG_I("[HAL:Discovery]", "Bus EXP scan: %u device(s)", expCount);
 
     // Phase 2: EEPROM probe — skip when WiFi active (same GPIO48/54 SDIO conflict)
+    // Iterate ALL EEPROM addresses (0x50-0x57) to support dual mezzanine (ADC + DAC)
     uint8_t eepMask = 0;
     if (!wifiActive) {
         dac_i2c_scan(&eepMask);
-        DacEepromData eepromData;
-        if (dac_eeprom_scan(&eepromData, eepMask)) {
+        uint8_t remainingMask = eepMask;
+
+        // Loop: scan for each EEPROM device, clearing found addresses from mask
+        while (remainingMask) {
+            DacEepromData eepromData;
+            if (!dac_eeprom_scan(&eepromData, remainingMask)) break;
+
+            // Clear this address from mask so next iteration finds the next device
+            uint8_t addrBit = (uint8_t)(1 << (eepromData.i2cAddress - 0x50));
+            remainingMask &= ~addrBit;
+
             const HalDriverEntry* entry = nullptr;
             if (eepromData.deviceId > 0) {
                 entry = hal_registry_find_by_legacy_id(eepromData.deviceId);
