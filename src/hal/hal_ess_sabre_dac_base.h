@@ -93,7 +93,9 @@ protected:
     bool     _muted        = false;
     bool     _initialized  = false;
     bool     _i2sTxEnabled = false;
-    float    _muteRampState = 1.0f;  // Mute ramp envelope [0.0 .. 1.0]
+public:
+    float    _muteRampState = 1.0f;  // Mute ramp envelope [0.0 .. 1.0] (public: accessed by static write callback)
+protected:
     int8_t   _doutPin      = -1;    // I2S DOUT GPIO (from HalDeviceConfig.pinData)
 
 #ifndef NATIVE_TEST
