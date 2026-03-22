@@ -43,6 +43,7 @@ enum DiagErrorCode : uint16_t {
     DIAG_HAL_EEPROM_READ_ERROR          = 0x1102,  // EEPROM read failure
     DIAG_HAL_NO_DRIVER_MATCH            = 0x1103,  // EEPROM found, no matching driver
     DIAG_HAL_SCAN_CONFLICT              = 0x1104,  // Scan already in progress
+    DIAG_HAL_PROBE_RETRY_OK             = 0x1105,  // I2C device found on retry (slow power-on)
 
     // ===== 0x20xx: Audio — I2S/ADC =====
     DIAG_AUDIO_I2S_READ_ERROR           = 0x2001,  // i2s_read() returned error

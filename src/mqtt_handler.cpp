@@ -855,6 +855,7 @@ void setupMqtt() {
   LOG_I("[MQTT] Base Topic: %s", appState.mqtt.baseTopic.c_str());
   LOG_I("[MQTT] HA Discovery: %s", appState.mqtt.haDiscovery ? "enabled" : "disabled");
 
+  mqttWifiClient.setTimeout(MQTT_SOCKET_TIMEOUT_MS);
   mqttClient.setServer(appState.mqtt.broker.c_str(), appState.mqtt.port);
   mqttClient.setCallback(mqttCallback);
   mqttClient.setBufferSize(1024); // Increase buffer for HA discovery payloads

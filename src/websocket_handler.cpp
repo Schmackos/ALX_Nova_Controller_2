@@ -65,6 +65,20 @@ static bool _audioSubscribed[MAX_WS_CLIENTS] = {};
 static uint8_t _wsAuthCount = 0;
 static inline bool _wsAnyAuth() { return _wsAuthCount > 0; }
 bool wsAnyClientAuthenticated() { return _wsAuthCount > 0; }
+uint8_t wsAuthenticatedClientCount() { return _wsAuthCount; }
+
+// Periodic recalibration of _wsAuthCount to handle stale counts from unclean disconnects
+static unsigned long _lastAuthRecount = 0;
+static void _recalibrateAuthCount() {
+    unsigned long now = millis();
+    if (now - _lastAuthRecount < WS_AUTH_RECOUNT_INTERVAL_MS) return;
+    _lastAuthRecount = now;
+    uint8_t count = 0;
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        if (wsAuthStatus[i]) count++;
+    }
+    _wsAuthCount = count;
+}
 
 // Deferred initial-state queue — spreads the auth-success broadcast burst
 // across multiple main-loop iterations to prevent WiFi TX saturation that
@@ -2550,9 +2564,21 @@ void sendAudioData() {
   else { _heapSkipBinaryFrame = false; }
   const bool heapAllowBinary = !appState.debug.heapCritical && !_heapSkipBinaryFrame;
 
+  // Client-count adaptive rate: skip binary frames based on authenticated client count
+  _recalibrateAuthCount();
+  static uint8_t _clientSkipCounter = 0;
+  _clientSkipCounter++;
+  uint8_t skipFactor = 1;
+  if (_wsAuthCount >= 3) skipFactor = WS_BINARY_SKIP_3PLUS;
+  else if (_wsAuthCount == 2) skipFactor = WS_BINARY_SKIP_2_CLIENTS;
+  const bool clientAllowBinary = (_clientSkipCounter % skipFactor) == 0;
+
+  // Combined gate: both heap pressure AND client count must allow binary
+  const bool allowBinary = heapAllowBinary && clientAllowBinary;
+
   if (_sendWaveformNext) {
     // --- Waveform data (per-ADC) — binary: [type:1][adc:1][samples:256] ---
-    if (appState.audio.waveformEnabled && heapAllowBinary) {
+    if (appState.audio.waveformEnabled && allowBinary) {
       uint8_t wfBin[2 + WAVEFORM_BUFFER_SIZE]; // 258 bytes
       wfBin[0] = WS_BIN_WAVEFORM;
       for (int a = 0; a < appState.audio.numAdcsDetected; a++) {
@@ -2568,7 +2594,7 @@ void sendAudioData() {
     }
   } else {
     // --- Spectrum data (per-ADC) — binary: [type:1][adc:1][freq:f32LE][bands:Nxf32LE] ---
-    if (appState.audio.spectrumEnabled && heapAllowBinary) {
+    if (appState.audio.spectrumEnabled && allowBinary) {
       uint8_t spBin[2 + sizeof(float) + SPECTRUM_BANDS * sizeof(float)]; // 70 bytes
       spBin[0] = WS_BIN_SPECTRUM;
       float bands[SPECTRUM_BANDS];

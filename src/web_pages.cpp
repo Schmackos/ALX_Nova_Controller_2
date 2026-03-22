@@ -2722,6 +2722,72 @@ body.night-mode {
             flex-wrap: wrap;
         }
 
+        /* ===== Confirmation Dialog ===== */
+        .confirm-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .confirm-dialog {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .confirm-header {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .confirm-body {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .confirm-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .confirm-cancel-btn {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .confirm-confirm-btn {
+            background: var(--error, #F44336);
+            color: #fff;
+            border: none;
+        }
+
+        .confirm-confirm-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .confirm-confirm-btn:not(:disabled):hover {
+            background: #c0392b;
+        }
+
 /* ===== 04-canvas.css ===== */
 
         /* ===== Graph Canvas ===== */
@@ -10205,26 +10271,86 @@ function updateTimerDuration() {
     .catch(err => showToast('Failed to update timer', 'error'));
 }
 
+function confirmDestructiveAction(title, message, onConfirm) {
+    var overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    var dialog = document.createElement('div');
+    dialog.className = 'confirm-dialog';
+
+    var iconSvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="var(--warning, #FFC107)" aria-hidden="true"><path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z"/></svg>';
+
+    dialog.innerHTML =
+        '<div class="confirm-header">' + iconSvg + ' ' + title + '</div>' +
+        '<div class="confirm-body">' + message + '</div>' +
+        '<div class="confirm-actions">' +
+            '<button class="btn confirm-cancel-btn" id="confirmCancelBtn">Cancel</button>' +
+            '<button class="btn confirm-confirm-btn" id="confirmConfirmBtn" disabled>Confirm (3)</button>' +
+        '</div>';
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    var confirmBtn = document.getElementById('confirmConfirmBtn');
+    var cancelBtn = document.getElementById('confirmCancelBtn');
+    var countdown = 3;
+    var timer = setInterval(function() {
+        countdown--;
+        if (countdown > 0) {
+            confirmBtn.textContent = 'Confirm (' + countdown + ')';
+        } else {
+            clearInterval(timer);
+            confirmBtn.textContent = 'Confirm';
+            confirmBtn.disabled = false;
+        }
+    }, 1000);
+
+    cancelBtn.onclick = function() {
+        clearInterval(timer);
+        document.body.removeChild(overlay);
+    };
+
+    confirmBtn.onclick = function() {
+        clearInterval(timer);
+        document.body.removeChild(overlay);
+        onConfirm();
+    };
+
+    overlay.onclick = function(e) {
+        if (e.target === overlay) {
+            clearInterval(timer);
+            document.body.removeChild(overlay);
+        }
+    };
+}
+
 function startFactoryReset() {
-    if (confirm('Are you sure? This will erase all settings!')) {
-        apiFetch('/api/factoryreset', { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) showToast('Factory reset in progress...', 'success');
-        })
-        .catch(err => showToast('Failed to reset', 'error'));
-    }
+    confirmDestructiveAction(
+        'Factory Reset',
+        'This will erase all settings and restore defaults. This cannot be undone.',
+        function() {
+            apiFetch('/api/factoryreset', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast('Factory reset in progress...', 'success');
+            })
+            .catch(err => showToast('Failed to reset', 'error'));
+        }
+    );
 }
 
 function startReboot() {
-    if (confirm('Are you sure you want to reboot the device?')) {
-        apiFetch('/api/reboot', { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) showToast('Rebooting...', 'success');
-        })
-        .catch(err => showToast('Failed to reboot', 'error'));
-    }
+    confirmDestructiveAction(
+        'Reboot Device',
+        'The device will restart. You will lose connection temporarily.',
+        function() {
+            apiFetch('/api/reboot', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast('Rebooting...', 'success');
+            })
+            .catch(err => showToast('Failed to reboot', 'error'));
+        }
+    );
 }
 
 //# sourceURL=22-settings.js

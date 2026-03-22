@@ -313,6 +313,7 @@
     "updateAudioThreshold": "readonly",
     "updateSensingMode": "readonly",
     "updateTimerDuration": "readonly",
+    "confirmDestructiveAction": "readonly",
     "startFactoryReset": "readonly",
     "startReboot": "readonly",
     "checkForUpdate": "readonly",
