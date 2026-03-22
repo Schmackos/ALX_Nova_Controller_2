@@ -18,6 +18,9 @@ namespace WireMock {
     static int pinSDA[3];
     static int pinSCL[3];
     static std::map<uint8_t, int> addressToBusIndex;  // i2cAddr -> busIndex
+    // EEPROM-style register address tracking (repeated start pattern)
+    static uint8_t lastRegAddr;
+    static bool hasRegAddr;
 
     inline void reset() {
         registerMap.clear();
@@ -26,6 +29,8 @@ namespace WireMock {
         currentAddr = 0;
         txInProgress = false;
         rxIndex = 0;
+        lastRegAddr = 0;
+        hasRegAddr = false;
         memset(busInitialized, 0, sizeof(busInitialized));
         for (int i = 0; i < 3; i++) { pinSDA[i] = -1; pinSCL[i] = -1; }
         addressToBusIndex.clear();
@@ -88,7 +93,6 @@ public:
     }
 
     uint8_t endTransmission(bool sendStop = true) {
-        (void)sendStop;
         if (!WireMock::txInProgress) return 5;
         // Address not registered -> NACK
         if (WireMock::addressToBusIndex.find(WireMock::currentAddr) ==
@@ -96,8 +100,13 @@ public:
             WireMock::txInProgress = false;
             return 2;  // NACK
         }
+        // Repeated start (sendStop=false) with single byte: EEPROM register pointer
+        if (!sendStop && WireMock::txBuffer.size() == 1) {
+            WireMock::lastRegAddr = WireMock::txBuffer[0];
+            WireMock::hasRegAddr = true;
+        }
         // Multi-byte write: txBuffer[0] = register addr, txBuffer[1..n] = values
-        if (WireMock::txBuffer.size() >= 2) {
+        else if (WireMock::txBuffer.size() >= 2) {
             uint8_t reg = WireMock::txBuffer[0];
             for (size_t i = 1; i < WireMock::txBuffer.size(); i++) {
                 WireMock::registerMap[WireMock::currentAddr][(uint8_t)(reg + i - 1)] =
@@ -112,9 +121,12 @@ public:
         (void)stop;
         if (WireMock::addressToBusIndex.find(addr) == WireMock::addressToBusIndex.end()) return 0;
         WireMock::rxBuffer.clear();
+        // Use stored register address from repeated start, or 0 as default
+        uint8_t startReg = WireMock::hasRegAddr ? WireMock::lastRegAddr : 0;
+        WireMock::hasRegAddr = false;
         for (uint8_t i = 0; i < len; i++) {
             auto& regmap = WireMock::registerMap[addr];
-            auto it = regmap.find(i);
+            auto it = regmap.find((uint8_t)(startReg + i));
             WireMock::rxBuffer.push_back(it != regmap.end() ? it->second : 0);
         }
         WireMock::rxIndex = 0;
@@ -137,4 +149,5 @@ public:
 
 static WireClass Wire;
 static WireClass Wire1;  // Second I2C bus alias
+static WireClass Wire2;  // Third I2C bus alias (expansion)
 #endif // NATIVE_TEST

@@ -142,6 +142,106 @@ bool hal_parse_device_yaml(const char* yamlText, int len, HalDeviceDescriptor* o
 // ===== Wire Mock for I2C bus scan tests =====
 #include "../test_mocks/Wire.h"
 
+// ===== EEPROM v3 parsing for expansion discovery tests =====
+// Include v3 parser directly (no platform dependencies)
+#include "../../src/hal/hal_eeprom_v3.cpp"
+
+// Inline dac_eeprom constants + parse/serialize (cannot include dac_eeprom.cpp
+// because it pulls in debug_serial.h → Arduino.h → platform headers)
+#define DAC_EEPROM_MAGIC      "ALXD"
+#define DAC_EEPROM_MAGIC_LEN  4
+#define DAC_EEPROM_VERSION    1
+#define DAC_EEPROM_VERSION_V2  2
+#define DAC_EEPROM_VERSION_V3  3
+#define DAC_EEPROM_MAX_RATES  4
+#define DAC_EEPROM_DATA_SIZE  0x5C
+#define DAC_EEPROM_DATA_SIZE_V2  0x5E
+#define DAC_EEPROM_DATA_SIZE_V3  0x80
+#define DAC_EEPROM_ADDR_START 0x50
+#define DAC_EEPROM_ADDR_END   0x57
+#define DAC_DEVICE_TYPE_DAC    0
+#define DAC_DEVICE_TYPE_ADC    1
+#define DAC_DEVICE_TYPE_CODEC  2
+#define DAC_FLAG_INDEPENDENT_CLOCK  0x01
+#define DAC_FLAG_HW_VOLUME          0x02
+#define DAC_FLAG_FILTERS            0x04
+
+struct DacEepromData {
+    bool valid;
+    uint8_t formatVersion;
+    uint16_t deviceId;
+    uint8_t hwRevision;
+    char deviceName[33];
+    char manufacturer[33];
+    uint8_t maxChannels;
+    uint8_t dacI2cAddress;
+    uint8_t flags;
+    uint8_t numSampleRates;
+    uint32_t sampleRates[DAC_EEPROM_MAX_RATES];
+    uint8_t i2cAddress;
+    uint8_t deviceType;
+    uint8_t i2sPort;
+};
+
+static bool dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData* out) {
+    if (!rawData || !out || len < 0x5C) { if (out) out->valid = false; return false; }
+    memset(out, 0, sizeof(DacEepromData));
+    if (memcmp(rawData, DAC_EEPROM_MAGIC, DAC_EEPROM_MAGIC_LEN) != 0) { out->valid = false; return false; }
+    out->formatVersion = rawData[0x04];
+    if (out->formatVersion != DAC_EEPROM_VERSION &&
+        out->formatVersion != DAC_EEPROM_VERSION_V2 &&
+        out->formatVersion != DAC_EEPROM_VERSION_V3) { out->valid = false; return false; }
+    out->deviceId = (uint16_t)rawData[0x05] | ((uint16_t)rawData[0x06] << 8);
+    out->hwRevision = rawData[0x07];
+    memcpy(out->deviceName, &rawData[0x08], 32); out->deviceName[32] = '\0';
+    memcpy(out->manufacturer, &rawData[0x28], 32); out->manufacturer[32] = '\0';
+    out->maxChannels = rawData[0x48];
+    out->dacI2cAddress = rawData[0x49];
+    out->flags = rawData[0x4A];
+    out->numSampleRates = rawData[0x4B];
+    if (out->numSampleRates > DAC_EEPROM_MAX_RATES) out->numSampleRates = DAC_EEPROM_MAX_RATES;
+    for (uint8_t i = 0; i < out->numSampleRates; i++) {
+        int off = 0x4C + i * 4;
+        out->sampleRates[i] = (uint32_t)rawData[off] | ((uint32_t)rawData[off+1]<<8) |
+                              ((uint32_t)rawData[off+2]<<16) | ((uint32_t)rawData[off+3]<<24);
+    }
+    out->valid = true;
+    if (out->formatVersion >= DAC_EEPROM_VERSION_V2 && len >= DAC_EEPROM_DATA_SIZE_V2) {
+        out->deviceType = rawData[0x5C]; out->i2sPort = rawData[0x5D];
+    } else { out->deviceType = DAC_DEVICE_TYPE_DAC; out->i2sPort = 0; }
+    return true;
+}
+
+static int dac_eeprom_serialize(const DacEepromData* data, uint8_t* outBuf, int bufLen) {
+    if (!data || !outBuf || bufLen < DAC_EEPROM_DATA_SIZE_V2) return 0;
+    memset(outBuf, 0, DAC_EEPROM_DATA_SIZE_V2);
+    memcpy(&outBuf[0x00], DAC_EEPROM_MAGIC, DAC_EEPROM_MAGIC_LEN);
+    outBuf[0x04] = DAC_EEPROM_VERSION_V2;
+    outBuf[0x05] = (uint8_t)(data->deviceId & 0xFF);
+    outBuf[0x06] = (uint8_t)((data->deviceId >> 8) & 0xFF);
+    outBuf[0x07] = data->hwRevision;
+    size_t nLen = strlen(data->deviceName); if (nLen > 32) nLen = 32;
+    memcpy(&outBuf[0x08], data->deviceName, nLen);
+    size_t mLen = strlen(data->manufacturer); if (mLen > 32) mLen = 32;
+    memcpy(&outBuf[0x28], data->manufacturer, mLen);
+    outBuf[0x48] = data->maxChannels;
+    outBuf[0x49] = data->dacI2cAddress;
+    outBuf[0x4A] = data->flags;
+    uint8_t numRates = data->numSampleRates;
+    if (numRates > DAC_EEPROM_MAX_RATES) numRates = DAC_EEPROM_MAX_RATES;
+    outBuf[0x4B] = numRates;
+    for (uint8_t i = 0; i < numRates; i++) {
+        int off = 0x4C + i * 4;
+        outBuf[off]   = (uint8_t)(data->sampleRates[i] & 0xFF);
+        outBuf[off+1] = (uint8_t)((data->sampleRates[i] >> 8) & 0xFF);
+        outBuf[off+2] = (uint8_t)((data->sampleRates[i] >> 16) & 0xFF);
+        outBuf[off+3] = (uint8_t)((data->sampleRates[i] >> 24) & 0xFF);
+    }
+    outBuf[0x5C] = data->deviceType;
+    outBuf[0x5D] = data->i2sPort;
+    return DAC_EEPROM_DATA_SIZE_V2;
+}
+
 // --- Test-local I2C scan that mirrors the production hal_i2c_scan_bus() logic
 //     but uses the WireMock instead of being #ifndef NATIVE_TEST guarded.
 //     Scans standard address range 0x08-0x77 (skips reserved 0x00-0x07, 0x78-0x7F).
@@ -668,6 +768,235 @@ void test_registry_overflow_at_max_drivers() {
     TEST_ASSERT_NULL(hal_registry_find("reg,overflow"));
 }
 
+// ===== Expansion EEPROM V3 Discovery Tests =====
+
+// Helper: build a v3 EEPROM image and register it on Wire2 (Bus 2)
+static void mock_expansion_eeprom_v3(uint8_t eepromAddr, const char* compatible,
+                                      const char* deviceName, uint16_t deviceId,
+                                      uint8_t devType = 0) {
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V3];
+    memset(buf, 0, sizeof(buf));
+
+    // v2 base data
+    DacEepromData data;
+    memset(&data, 0, sizeof(data));
+    data.formatVersion = DAC_EEPROM_VERSION_V3;
+    data.deviceId = deviceId;
+    data.hwRevision = 1;
+    strncpy(data.deviceName, deviceName, 32);
+    strncpy(data.manufacturer, "ESS Technology", 32);
+    data.maxChannels = 2;
+    data.dacI2cAddress = 0x48;
+    data.flags = DAC_FLAG_HW_VOLUME | DAC_FLAG_FILTERS;
+    data.numSampleRates = 2;
+    data.sampleRates[0] = 48000;
+    data.sampleRates[1] = 96000;
+    data.deviceType = devType;
+    data.i2sPort = 2;
+
+    // Serialize v2 base
+    dac_eeprom_serialize(&data, buf, DAC_EEPROM_DATA_SIZE_V2);
+    // Override version to 3 (serialize writes v2)
+    buf[0x04] = DAC_EEPROM_VERSION_V3;
+
+    // Add v3 compatible string + CRC
+    hal_eeprom_serialize_v3(buf, DAC_EEPROM_DATA_SIZE_V3, compatible);
+
+    // Register EEPROM on Bus 2
+    WireMock::registerDevice(eepromAddr, 2, buf, DAC_EEPROM_DATA_SIZE_V3);
+}
+
+void test_expansion_eeprom_v3_discovers_device() {
+    // Register driver and DB entry for es9038q2m
+    HalDriverEntry entry;
+    memset(&entry, 0, sizeof(entry));
+    strncpy(entry.compatible, "ess,es9038q2m", 31);
+    entry.type = HAL_DEV_DAC;
+    entry.legacyId = 0;  // No legacy ID — v3 compatible string only
+    hal_registry_register(entry);
+
+    HalDeviceDescriptor desc;
+    memset(&desc, 0, sizeof(desc));
+    strncpy(desc.compatible, "ess,es9038q2m", 31);
+    strncpy(desc.name, "ES9038Q2M", 32);
+    desc.type = HAL_DEV_DAC;
+    hal_db_add(&desc);
+
+    // Mock EEPROM at 0x50 on Bus 2 with v3 data
+    mock_expansion_eeprom_v3(0x50, "ess,es9038q2m", "ES9038Q2M", 0);
+
+    // Read raw data from mock and verify v3 parsing
+    uint8_t rawData[DAC_EEPROM_DATA_SIZE_V3];
+    for (int i = 0; i < DAC_EEPROM_DATA_SIZE_V3; i++) {
+        auto& regmap = WireMock::registerMap[0x50];
+        auto it = regmap.find((uint8_t)i);
+        rawData[i] = (it != regmap.end()) ? it->second : 0;
+    }
+
+    // Verify v3 compatible string extraction
+    char compat[32];
+    TEST_ASSERT_TRUE(hal_eeprom_parse_v3(rawData, DAC_EEPROM_DATA_SIZE_V3, compat));
+    TEST_ASSERT_EQUAL_STRING("ess,es9038q2m", compat);
+
+    // Verify registry lookup by compatible string succeeds
+    const HalDriverEntry* found = hal_registry_find(compat);
+    TEST_ASSERT_NOT_NULL(found);
+    TEST_ASSERT_EQUAL_STRING("ess,es9038q2m", found->compatible);
+}
+
+void test_expansion_eeprom_v3_no_driver_returns_no_match() {
+    // EEPROM with v3 compatible string but no registered driver
+    mock_expansion_eeprom_v3(0x51, "unknown,device123", "UnknownDevice", 0);
+
+    uint8_t rawData[DAC_EEPROM_DATA_SIZE_V3];
+    for (int i = 0; i < DAC_EEPROM_DATA_SIZE_V3; i++) {
+        auto& regmap = WireMock::registerMap[0x51];
+        auto it = regmap.find((uint8_t)i);
+        rawData[i] = (it != regmap.end()) ? it->second : 0;
+    }
+
+    char compat[32];
+    TEST_ASSERT_TRUE(hal_eeprom_parse_v3(rawData, DAC_EEPROM_DATA_SIZE_V3, compat));
+    TEST_ASSERT_EQUAL_STRING("unknown,device123", compat);
+
+    // No driver registered for this compatible string
+    TEST_ASSERT_NULL(hal_registry_find(compat));
+}
+
+void test_expansion_eeprom_legacy_fallback() {
+    // v1 EEPROM on Bus 2 with legacy ID (no compatible string)
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V3];
+    memset(buf, 0, sizeof(buf));
+    buf[0] = 'A'; buf[1] = 'L'; buf[2] = 'X'; buf[3] = 'D';
+    buf[4] = 1;  // v1 format
+    buf[5] = 0x01; buf[6] = 0x00;  // deviceId = 0x0001
+    strncpy((char*)&buf[0x08], "PCM5102A", 32);
+    strncpy((char*)&buf[0x28], "Texas Instruments", 32);
+    buf[0x48] = 2;  // channels
+
+    WireMock::registerDevice(0x52, 2, buf, DAC_EEPROM_DATA_SIZE_V3);
+
+    // Register driver with legacy ID
+    HalDriverEntry entry;
+    memset(&entry, 0, sizeof(entry));
+    strncpy(entry.compatible, "ti,pcm5102a", 31);
+    entry.type = HAL_DEV_DAC;
+    entry.legacyId = 0x0001;
+    hal_registry_register(entry);
+
+    // v3 parse should fail (v1 format, no CRC)
+    char compat[32];
+    TEST_ASSERT_FALSE(hal_eeprom_parse_v3(buf, DAC_EEPROM_DATA_SIZE_V3, compat));
+
+    // But v1 parse + legacy ID lookup should succeed
+    DacEepromData eepromData;
+    TEST_ASSERT_TRUE(dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE, &eepromData));
+    TEST_ASSERT_EQUAL(0x0001, eepromData.deviceId);
+
+    const HalDriverEntry* found = hal_registry_find_by_legacy_id(eepromData.deviceId);
+    TEST_ASSERT_NOT_NULL(found);
+    TEST_ASSERT_EQUAL_STRING("ti,pcm5102a", found->compatible);
+}
+
+void test_dac_eeprom_parse_accepts_v3() {
+    uint8_t buf[DAC_EEPROM_DATA_SIZE_V3];
+    memset(buf, 0, sizeof(buf));
+    buf[0] = 'A'; buf[1] = 'L'; buf[2] = 'X'; buf[3] = 'D';
+    buf[4] = DAC_EEPROM_VERSION_V3;
+    buf[5] = 0x38; buf[6] = 0x90;  // deviceId = 0x9038
+    buf[7] = 1;
+    strncpy((char*)&buf[0x08], "TestV3Device", 32);
+    strncpy((char*)&buf[0x28], "TestMfg", 32);
+    buf[0x48] = 8;  // channels
+    buf[0x5C] = 0;  // DAC
+    buf[0x5D] = 2;  // i2sPort
+
+    DacEepromData out;
+    TEST_ASSERT_TRUE(dac_eeprom_parse(buf, DAC_EEPROM_DATA_SIZE_V3, &out));
+    TEST_ASSERT_EQUAL(DAC_EEPROM_VERSION_V3, out.formatVersion);
+    TEST_ASSERT_EQUAL_STRING("TestV3Device", out.deviceName);
+    TEST_ASSERT_EQUAL(0x9038, out.deviceId);
+    TEST_ASSERT_EQUAL(8, out.maxChannels);
+    TEST_ASSERT_EQUAL(0, out.deviceType);  // DAC
+    TEST_ASSERT_EQUAL(2, out.i2sPort);
+}
+
+void test_dual_mezzanine_discovery() {
+    // Two EEPROMs on Bus 2: ADC at 0x50, DAC at 0x51
+    mock_expansion_eeprom_v3(0x50, "ess,es9822pro", "ES9822PRO", 0, DAC_DEVICE_TYPE_ADC);
+    mock_expansion_eeprom_v3(0x51, "ess,es9038q2m", "ES9038Q2M", 0, DAC_DEVICE_TYPE_DAC);
+
+    // Register both drivers
+    HalDriverEntry e1, e2;
+    memset(&e1, 0, sizeof(e1));
+    memset(&e2, 0, sizeof(e2));
+    strncpy(e1.compatible, "ess,es9822pro", 31);
+    e1.type = HAL_DEV_ADC;
+    strncpy(e2.compatible, "ess,es9038q2m", 31);
+    e2.type = HAL_DEV_DAC;
+    hal_registry_register(e1);
+    hal_registry_register(e2);
+
+    // Verify both can be looked up by compatible string
+    TEST_ASSERT_NOT_NULL(hal_registry_find("ess,es9822pro"));
+    TEST_ASSERT_NOT_NULL(hal_registry_find("ess,es9038q2m"));
+
+    // Verify both EEPROMs have valid v3 data
+    for (uint8_t addr = 0x50; addr <= 0x51; addr++) {
+        uint8_t rawData[DAC_EEPROM_DATA_SIZE_V3];
+        for (int i = 0; i < DAC_EEPROM_DATA_SIZE_V3; i++) {
+            auto& regmap = WireMock::registerMap[addr];
+            auto it = regmap.find((uint8_t)i);
+            rawData[i] = (it != regmap.end()) ? it->second : 0;
+        }
+        char compat[32];
+        TEST_ASSERT_TRUE(hal_eeprom_parse_v3(rawData, DAC_EEPROM_DATA_SIZE_V3, compat));
+    }
+}
+
+void test_eeprom_v3_crc_mismatch_rejects() {
+    // Build valid v3 EEPROM, then corrupt one byte to invalidate CRC
+    mock_expansion_eeprom_v3(0x53, "ess,es9039q2m", "ES9039Q2M", 0);
+
+    uint8_t rawData[DAC_EEPROM_DATA_SIZE_V3];
+    for (int i = 0; i < DAC_EEPROM_DATA_SIZE_V3; i++) {
+        auto& regmap = WireMock::registerMap[0x53];
+        auto it = regmap.find((uint8_t)i);
+        rawData[i] = (it != regmap.end()) ? it->second : 0;
+    }
+
+    // Verify it's valid first
+    char compat[32];
+    TEST_ASSERT_TRUE(hal_eeprom_parse_v3(rawData, DAC_EEPROM_DATA_SIZE_V3, compat));
+
+    // Corrupt the compatible string area
+    rawData[0x60] ^= 0xFF;
+
+    // CRC should now fail
+    TEST_ASSERT_FALSE(hal_eeprom_parse_v3(rawData, DAC_EEPROM_DATA_SIZE_V3, compat));
+}
+
+void test_wire_mock_eeprom_read_with_register_address() {
+    // Verify the Wire mock correctly handles EEPROM-style reads:
+    // write(memAddr) + endTransmission(false) + requestFrom(addr, len)
+    uint8_t testData[8] = { 0xAA, 0xBB, 0xCC, 0xDD, 0x11, 0x22, 0x33, 0x44 };
+    WireMock::registerDevice(0x50, 2, testData, 8);
+
+    Wire2.begin(28, 29, 100000);
+
+    // Read from offset 4 (should get 0x11, 0x22, 0x33, 0x44)
+    Wire2.beginTransmission(0x50);
+    Wire2.write((uint8_t)4);
+    Wire2.endTransmission(false);  // Repeated start — sets register pointer
+
+    uint8_t received = Wire2.requestFrom((uint8_t)0x50, (uint8_t)4);
+    TEST_ASSERT_EQUAL(4, received);
+    TEST_ASSERT_EQUAL(0x11, Wire2.read());
+    TEST_ASSERT_EQUAL(0x22, Wire2.read());
+    TEST_ASSERT_EQUAL(0x33, Wire2.read());
+    TEST_ASSERT_EQUAL(0x44, Wire2.read());
+}
+
 // ===== Test Runner =====
 int main(int argc, char** argv) {
     UNITY_BEGIN();
@@ -712,6 +1041,15 @@ int main(int argc, char** argv) {
     RUN_TEST(test_db_overflow_at_new_limit);
     RUN_TEST(test_db_remove_then_add_after_full);
     RUN_TEST(test_registry_overflow_at_max_drivers);
+
+    // Expansion EEPROM v3 discovery tests
+    RUN_TEST(test_expansion_eeprom_v3_discovers_device);
+    RUN_TEST(test_expansion_eeprom_v3_no_driver_returns_no_match);
+    RUN_TEST(test_expansion_eeprom_legacy_fallback);
+    RUN_TEST(test_dac_eeprom_parse_accepts_v3);
+    RUN_TEST(test_dual_mezzanine_discovery);
+    RUN_TEST(test_eeprom_v3_crc_mismatch_rejects);
+    RUN_TEST(test_wire_mock_eeprom_read_with_register_address);
 
     return UNITY_END();
 }
