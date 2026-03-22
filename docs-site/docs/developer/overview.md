@@ -160,7 +160,7 @@ Each subsystem is implemented as a pair of `.h`/`.cpp` files in `src/`. The tabl
 | Module | Files | Description |
 |---|---|---|
 | `wifi_manager` | `src/wifi_manager.h/.cpp` | Multi-network client, AP mode, async retry/backoff |
-| `eth_manager` | `src/eth_manager.h/.cpp` | 100 Mbps Ethernet via ESP32-P4 EMAC |
+| `eth_manager` | `src/eth_manager.h/.cpp` | 100 Mbps Ethernet: event handling, static IP, hostname, 60 s revert timer, REST API |
 | `mqtt_handler` | `src/mqtt_handler.h/.cpp` | MQTT lifecycle, settings, callback dispatch |
 | `mqtt_publish` | `src/mqtt_publish.cpp` | All `publishMqtt*()` functions; change-detection shadow fields |
 | `mqtt_ha_discovery` | `src/mqtt_ha_discovery.cpp` | Home Assistant MQTT discovery (~1880 lines) |

@@ -2,6 +2,7 @@
 #define ETH_MOCK_H
 
 #include "Arduino.h"
+#include "IPAddress.h"
 
 // PHY type constants
 #define ETH_PHY_TLK110 0
@@ -48,11 +49,25 @@ public:
     bool fullDuplex() const { return true; }
     bool setHostname(const char*) { return true; }
     bool setDefault() { return true; }
+    String macAddress() const { return "AA:BB:CC:DD:EE:FF"; }
+    IPAddress gatewayIP() const { return IPAddress(192, 168, 1, 1); }
+    IPAddress subnetMask() const { return IPAddress(255, 255, 255, 0); }
+    IPAddress dnsIP(uint8_t idx = 0) const {
+        return (idx == 0) ? IPAddress(8, 8, 8, 8) : IPAddress(8, 8, 4, 4);
+    }
+    bool config(IPAddress ip, IPAddress gw, IPAddress sn,
+                IPAddress d1 = IPAddress(), IPAddress d2 = IPAddress()) {
+        _configCalled = true;
+        _configIP = ip;
+        return true;
+    }
 
     // Test helpers — set these directly in tests
     bool _linkUp = false;
     bool _connected = false;
     bool _hasIP = false;
+    bool _configCalled = false;
+    IPAddress _configIP;
 
     static void reset() {
         // Instance fields reset via individual test helper assignments

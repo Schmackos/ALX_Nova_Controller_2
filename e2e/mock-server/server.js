@@ -47,6 +47,7 @@ const sensing = require('./routes/sensing');
 const siggen = require('./routes/siggen');
 const diagnostics = require('./routes/diagnostics');
 const system = require('./routes/system');
+const ethernet = require('./routes/ethernet');
 
 app.use('/api/auth', auth);
 
@@ -70,6 +71,7 @@ app.use('/api', sensing);
 app.use('/api', siggen);
 app.use('/api', diagnostics);
 app.use('/api', system);
+app.use('/api', ethernet);
 
 // ===== Start Server =====
 const PORT = process.env.PORT || 3000;

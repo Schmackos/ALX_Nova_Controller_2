@@ -199,6 +199,14 @@ Valid ranges:
 - `outputMode`: 0 = software injection, 1 = PWM output
 - `sweepSpeed`: 1.0 – 22000.0 Hz/s
 
+### Ethernet
+
+| Type | Key Fields | Description |
+|------|-----------|-------------|
+| `setEthConfig` | `useStaticIP, staticIP, subnet, gateway, dns1, dns2, hostname` | Apply Ethernet static IP and/or hostname configuration |
+| `confirmEthConfig` | _(none)_ | Confirm a pending static IP change (must be sent within 60 s of applying) |
+| `setHostname` | `hostname: string` | Set the device hostname (applies to both Ethernet and WiFi interfaces) |
+
 ### Access Point
 
 | Type | Key Fields | Description |
@@ -221,6 +229,64 @@ Valid ranges:
 ## Broadcasts (Device to Client)
 
 The device broadcasts JSON text frames to all authenticated clients when state changes. Broadcasts skip JSON serialization entirely when no authenticated clients are connected (`_wsAuthCount == 0`).
+
+### `wifiStatus`
+
+Sent at connect and whenever WiFi or Ethernet state changes. Carries both WiFi and Ethernet fields in a single broadcast so the web UI can display network status from either interface without separate subscriptions.
+
+```json
+{
+  "type": "wifiStatus",
+  "connected": true,
+  "ssid": "HomeNetwork",
+  "ip": "192.168.1.50",
+  "rssi": -62,
+  "apEnabled": false,
+  "apSSID": "ALX-Nova-AP",
+  "apIP": "192.168.4.1",
+  "ethLinkUp": true,
+  "ethConnected": true,
+  "ethIP": "192.168.1.100",
+  "ethMAC": "AA:BB:CC:DD:EE:FF",
+  "ethSpeed": 100,
+  "ethFullDuplex": true,
+  "ethGateway": "192.168.1.1",
+  "ethSubnet": "255.255.255.0",
+  "ethDns1": "8.8.8.8",
+  "ethDns2": "8.8.4.4",
+  "ethUseStaticIP": false,
+  "ethHostname": "alx-nova",
+  "ethPendingConfirm": false,
+  "activeInterface": "ethernet"
+}
+```
+
+#### Ethernet Fields in wifiStatus
+
+The following Ethernet fields are always present in `wifiStatus`, even when no Ethernet link is established. Fields representing unconfigured string values are empty strings; numeric fields are `0` when no link is up.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ethLinkUp` | boolean | Physical Ethernet link detected |
+| `ethConnected` | boolean | Ethernet interface has an assigned IP address |
+| `ethIP` | string | Assigned IP address (DHCP or static) |
+| `ethMAC` | string | Hardware MAC address |
+| `ethSpeed` | number | Negotiated link speed in Mbps (0, 10, or 100) |
+| `ethFullDuplex` | boolean | Full duplex negotiated |
+| `ethGateway` | string | Gateway IP |
+| `ethSubnet` | string | Subnet mask |
+| `ethDns1` | string | Primary DNS server |
+| `ethDns2` | string | Secondary DNS server |
+| `ethUseStaticIP` | boolean | Static IP is configured |
+| `ethHostname` | string | Device hostname (shared between Ethernet and WiFi) |
+| `ethPendingConfirm` | boolean | Awaiting static IP confirmation within the 60-second window |
+| `activeInterface` | string | Active network interface: `"ethernet"`, `"wifi"`, or `"none"` |
+
+:::info Auto-failover behaviour
+Ethernet is preferred over WiFi when both interfaces are connected. `activeInterface` reflects the interface currently carrying traffic. The firmware switches automatically — no user action or reboot is required.
+:::
+
+---
 
 ### `displayState`
 

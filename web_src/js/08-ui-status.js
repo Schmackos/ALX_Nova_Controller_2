@@ -1,14 +1,17 @@
         // ===== Status Bar Updates =====
         function updateStatusBar(wifiConnected, mqttConnected, ampState, wsConnected) {
-            // WiFi status
+            // Network status (Ethernet or WiFi)
             const wifiIndicator = document.getElementById('statusWifi');
             const wifiText = document.getElementById('statusWifiText');
-            if (wifiConnected) {
+            if (typeof currentActiveInterface !== 'undefined' && currentActiveInterface === 'ethernet' && typeof currentEthConnected !== 'undefined' && currentEthConnected) {
+                wifiIndicator.className = 'status-indicator online';
+                wifiText.textContent = 'ETH';
+            } else if (wifiConnected && (typeof currentActiveInterface === 'undefined' || currentActiveInterface !== 'ethernet')) {
                 wifiIndicator.className = 'status-indicator online';
                 wifiText.textContent = 'WiFi';
             } else {
                 wifiIndicator.className = 'status-indicator offline';
-                wifiText.textContent = 'WiFi';
+                wifiText.textContent = 'Net';
             }
 
             // MQTT status
@@ -52,6 +55,11 @@
 
         // ===== WiFi Status =====
         function updateWiFiStatus(data) {
+            // Update Ethernet and Network Overview
+            if (typeof updateNetworkOverview === 'function') updateNetworkOverview(data);
+            if (typeof updateEthernetStatus === 'function') updateEthernetStatus(data);
+            if (typeof updateEthConfigFromStatus === 'function') updateEthConfigFromStatus(data);
+
             const statusBox = document.getElementById('wifiStatusBox');
             const apToggle = document.getElementById('apToggle');
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');

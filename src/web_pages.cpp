@@ -1719,7 +1719,7 @@ body.night-mode {
             right: 0;
             bottom: 0;
             background: rgba(0, 0, 0, 0.5);
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
             z-index: 2000;
@@ -2788,6 +2788,28 @@ body.night-mode {
             background: #c0392b;
         }
 
+/* Ethernet status card accents */
+.eth-connected {
+    border-left: 3px solid var(--success);
+}
+.eth-link-up {
+    border-left: 3px solid var(--warning);
+}
+.eth-disconnected {
+    border-left: 3px solid var(--text-secondary);
+}
+
+/* AP access banner */
+.ap-access-banner {
+    background: rgba(255, 140, 0, 0.1);
+    border: 1px solid rgba(255, 140, 0, 0.3);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 8px;
+    font-size: 0.85em;
+    color: var(--accent);
+}
+
 /* ===== 04-canvas.css ===== */
 
         /* ===== Graph Canvas ===== */
@@ -3353,8 +3375,8 @@ body.night-mode {
                 <span>Devices</span>
             </button>
             <button class="sidebar-item" data-tab="wifi" onclick="switchTab('wifi')">
-                <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
-                <span>WiFi</span>
+                <svg viewBox="0 0 24 24"><path d="M4,1C2.89,1 2,1.89 2,3V7C2,8.11 2.89,9 4,9H1V11H13V9H10C11.11,9 12,8.11 12,7V3C12,1.89 11.11,1 10,1H4M4,3H10V7H4V3M14,13C12.89,13 12,13.89 12,15V19C12,20.11 12.89,21 14,21H11V23H23V21H20C21.11,21 22,20.11 22,19V15C22,13.89 21.11,13 20,13H14M14,15H20V19H14V15Z"/></svg>
+                <span>Network</span>
             </button>
             <button class="sidebar-item" data-tab="mqtt" onclick="switchTab('mqtt')">
                 <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/></svg>
@@ -3417,7 +3439,7 @@ body.night-mode {
             <svg viewBox="0 0 24 24"><path d="M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17C5,18.1 5.89,19 7,19H9V21H11V19H13V21H15V19H17C18.1,19 19,18.1 19,17V15H21V13H19V11"/></svg>
         </button>
         <button class="tab" data-tab="wifi" onclick="switchTab('wifi')">
-            <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M4,1C2.89,1 2,1.89 2,3V7C2,8.11 2.89,9 4,9H1V11H13V9H10C11.11,9 12,8.11 12,7V3C12,1.89 11.11,1 10,1H4M4,3H10V7H4V3M14,13C12.89,13 12,13.89 12,15V19C12,20.11 12.89,21 14,21H11V23H23V21H20C21.11,21 22,20.11 22,19V15C22,13.89 21.11,13 20,13H14M14,15H20V19H14V15Z"/></svg>
         </button>
         <button class="tab" data-tab="mqtt" onclick="switchTab('mqtt')">
             <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/></svg>
@@ -3883,9 +3905,107 @@ body.night-mode {
 
         <!-- ===== WIFI TAB ===== -->
         <section id="wifi" class="panel">
+            <!-- Network Overview -->
+            <div class="card" id="networkOverviewCard">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                        <path d="M17,3A2,2 0 0,1 19,5V15A2,2 0 0,1 17,17H13V19H14A1,1 0 0,1 15,20H22V22H15A1,1 0 0,1 14,23H10A1,1 0 0,1 9,22H2V20H9A1,1 0 0,1 10,19H11V17H7A2,2 0 0,1 5,15V5A2,2 0 0,1 7,3H17Z"/>
+                    </svg>
+                    Network Overview
+                </div>
+                <div class="info-box" id="networkOverviewBox">
+                    <div class="info-row">
+                        <span class="info-label">Active Interface</span>
+                        <span class="info-value" id="activeInterfaceText">—</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Device Hostname</span>
+                        <span class="info-value" id="networkHostnameDisplay">alx-nova</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Failover</span>
+                        <span class="info-value">Ethernet preferred, WiFi backup</span>
+                    </div>
+                    <div id="apAccessBanner" class="ap-access-banner" style="display:none">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" style="vertical-align:middle;margin-right:4px">
+                            <path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/>
+                        </svg>
+                        You are accessing this device via Access Point (<span id="apAccessIP">192.168.4.1</span>)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ethernet Status -->
+            <div class="card eth-disconnected" id="ethStatusCard">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+                        <path d="M7,15H9V18H11V15H13V18H15V15H17V18H19V9H5V18H7V15M4.38,3H19.63L22,8H2L4.38,3Z"/>
+                    </svg>
+                    Ethernet
+                </div>
+                <div class="info-box" id="ethStatusBox">
+                    <div class="info-row">
+                        <span class="info-label">Link Status</span>
+                        <span class="info-value" id="ethLinkStatusText">No cable detected</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">MAC Address</span>
+                        <span class="info-value" id="ethMacAddress">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ethernet Configuration -->
+            <div class="card" id="ethConfigCard">
+                <div class="card-title">Ethernet Configuration</div>
+
+                <div class="form-group">
+                    <label for="ethHostnameInput">Hostname</label>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="text" class="form-input" id="ethHostnameInput" value="alx-nova" maxlength="63" placeholder="e.g. alx-nova" style="flex:1">
+                        <button class="btn btn-sm" onclick="submitHostname()">Save</button>
+                    </div>
+                    <small style="color:var(--text-secondary)">Applied to both Ethernet and WiFi. Letters, numbers, hyphens only.</small>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="toggle-row">
+                    <span>Use Static IP</span>
+                    <label class="switch">
+                        <input type="checkbox" id="ethUseStaticIP" onchange="toggleEthStaticIPFields()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div id="ethStaticIPFields" style="display:none">
+                    <div class="form-group">
+                        <label for="ethStaticIP">IPv4 Address</label>
+                        <input type="text" class="form-input" id="ethStaticIP" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label for="ethSubnetInput">Subnet Mask</label>
+                        <input type="text" class="form-input" id="ethSubnetInput" value="255.255.255.0" placeholder="255.255.255.0">
+                    </div>
+                    <div class="form-group">
+                        <label for="ethGatewayInput">Gateway</label>
+                        <input type="text" class="form-input" id="ethGatewayInput" placeholder="192.168.1.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="ethDns1Input">Primary DNS</label>
+                        <input type="text" class="form-input" id="ethDns1Input" placeholder="8.8.8.8">
+                    </div>
+                    <div class="form-group">
+                        <label for="ethDns2Input">Secondary DNS (optional)</label>
+                        <input type="text" class="form-input" id="ethDns2Input" placeholder="8.8.4.4">
+                    </div>
+                    <button class="btn" onclick="submitEthConfig(event)" style="margin-top:8px">Apply Static IP</button>
+                </div>
+            </div>
+
             <!-- WiFi Status -->
             <div class="card">
-                <div class="card-title">Connection Status</div>
+                <div class="card-title">WiFi Status</div>
                 <div class="info-box" id="wifiStatusBox">
                     <div class="skeleton skeleton-text"></div>
                     <div class="skeleton skeleton-text short"></div>
@@ -4041,6 +4161,27 @@ body.night-mode {
                     </label>
                 </div>
                 <button class="btn btn-secondary mt-12" onclick="openAPConfig()">Configure AP</button>
+                </div>
+            </div>
+
+            <!-- Ethernet Config Confirmation Modal -->
+            <div id="ethConfirmModal" class="modal-overlay" onclick="if(event.target===this)closeEthConfirmModal()">
+                <div class="modal">
+                    <div class="modal-title">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
+                            <path d="M13,14H11V10H13M13,18H11V16H13M1,21H23L12,2L1,21Z"/>
+                        </svg>
+                        Confirm Ethernet Configuration
+                    </div>
+                    <div class="modal-body">
+                        <p>Static IP configuration has been applied.</p>
+                        <p>Confirm within <strong id="ethConfirmCountdown">60</strong> seconds or settings will revert to DHCP.</p>
+                        <p id="ethConfirmFallbackInfo" style="color:var(--text-secondary);font-size:0.85em"></p>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn" onclick="confirmEthConfig()">Confirm Configuration</button>
+                        <button class="btn btn-secondary" onclick="cancelEthConfig()">Revert to DHCP</button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -7028,15 +7169,18 @@ body.night-mode {
 
         // ===== Status Bar Updates =====
         function updateStatusBar(wifiConnected, mqttConnected, ampState, wsConnected) {
-            // WiFi status
+            // Network status (Ethernet or WiFi)
             const wifiIndicator = document.getElementById('statusWifi');
             const wifiText = document.getElementById('statusWifiText');
-            if (wifiConnected) {
+            if (typeof currentActiveInterface !== 'undefined' && currentActiveInterface === 'ethernet' && typeof currentEthConnected !== 'undefined' && currentEthConnected) {
+                wifiIndicator.className = 'status-indicator online';
+                wifiText.textContent = 'ETH';
+            } else if (wifiConnected && (typeof currentActiveInterface === 'undefined' || currentActiveInterface !== 'ethernet')) {
                 wifiIndicator.className = 'status-indicator online';
                 wifiText.textContent = 'WiFi';
             } else {
                 wifiIndicator.className = 'status-indicator offline';
-                wifiText.textContent = 'WiFi';
+                wifiText.textContent = 'Net';
             }
 
             // MQTT status
@@ -7080,6 +7224,11 @@ body.night-mode {
 
         // ===== WiFi Status =====
         function updateWiFiStatus(data) {
+            // Update Ethernet and Network Overview
+            if (typeof updateNetworkOverview === 'function') updateNetworkOverview(data);
+            if (typeof updateEthernetStatus === 'function') updateEthernetStatus(data);
+            if (typeof updateEthConfigFromStatus === 'function') updateEthConfigFromStatus(data);
+
             const statusBox = document.getElementById('wifiStatusBox');
             const apToggle = document.getElementById('apToggle');
             const autoUpdateToggle = document.getElementById('autoUpdateToggle');
@@ -8752,6 +8901,320 @@ body.night-mode {
         // importDeviceYaml() is defined in 15-hal-devices.js (full version with server registration)
 
 //# sourceURL=15a-yaml-parser.js
+
+// ===== Ethernet State Variables =====
+let currentEthConnected = false;
+let currentEthLinkUp = false;
+let currentActiveInterface = 'none';
+let ethConfirmTimer = null;
+let ethConfirmSecondsLeft = 0;
+
+// ===== Network Overview =====
+function updateNetworkOverview(data) {
+    const activeText = document.getElementById('activeInterfaceText');
+    if (activeText) {
+        switch (data.activeInterface) {
+        case 'ethernet':
+            activeText.textContent = 'Ethernet';
+            activeText.style.color = 'var(--success)';
+            break;
+        case 'wifi':
+            activeText.textContent = 'WiFi';
+            activeText.style.color = '#2196F3';
+            break;
+        default:
+            activeText.textContent = 'None';
+            activeText.style.color = 'var(--text-secondary)';
+            break;
+        }
+    }
+
+    const hostnameDisplay = document.getElementById('networkHostnameDisplay');
+    if (hostnameDisplay) {
+        hostnameDisplay.textContent = escapeHtml(data.ethHostname || 'alx-nova');
+    }
+
+    const apBanner = document.getElementById('apAccessBanner');
+    if (apBanner) {
+        apBanner.style.display = data['appState.apEnabled'] ? '' : 'none';
+        const apAccessIP = document.getElementById('apAccessIP');
+        if (apAccessIP) {
+            apAccessIP.textContent = escapeHtml(data.apIP || '192.168.4.1');
+        }
+    }
+}
+
+// ===== Ethernet Status =====
+function updateEthernetStatus(data) {
+    currentEthConnected = data.ethConnected || false;
+    currentEthLinkUp = data.ethLinkUp || false;
+    currentActiveInterface = data.activeInterface || 'none';
+
+    const card = document.getElementById('ethStatusCard');
+    const statusBox = document.getElementById('ethStatusBox');
+    if (!card || !statusBox) return;
+
+    card.classList.remove('eth-connected', 'eth-link-up', 'eth-disconnected');
+
+    var html = '';
+
+    if (data.ethConnected) {
+        card.classList.add('eth-connected');
+
+        var speedText = '';
+        if (data.ethSpeed) {
+            speedText = ' &mdash; ' + escapeHtml(String(data.ethSpeed)) + ' Mbps';
+            if (data.ethFullDuplex) {
+                speedText += ' Full Duplex';
+            } else {
+                speedText += ' Half Duplex';
+            }
+        }
+
+        html += '<div class="info-row"><span class="info-label">Link Status</span><span class="info-value" style="color:var(--success)">Connected' + speedText + '</span></div>';
+
+        if (data.ethIP) {
+            html += '<div class="info-row"><span class="info-label">IP Address</span><span class="info-value">' + escapeHtml(data.ethIP) + '</span></div>';
+        }
+
+        html += '<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">' + escapeHtml(data.ethMAC || '—') + '</span></div>';
+
+        if (data.ethGateway) {
+            html += '<div class="info-row"><span class="info-label">Gateway</span><span class="info-value">' + escapeHtml(data.ethGateway) + '</span></div>';
+        }
+
+        if (data.ethSubnet) {
+            html += '<div class="info-row"><span class="info-label">Subnet</span><span class="info-value">' + escapeHtml(data.ethSubnet) + '</span></div>';
+        }
+
+        if (data.ethDns1) {
+            var dnsText = escapeHtml(data.ethDns1);
+            if (data.ethDns2) {
+                dnsText += ', ' + escapeHtml(data.ethDns2);
+            }
+            html += '<div class="info-row"><span class="info-label">DNS</span><span class="info-value">' + dnsText + '</span></div>';
+        }
+
+    } else if (data.ethLinkUp) {
+        card.classList.add('eth-link-up');
+
+        html += '<div class="info-row"><span class="info-label">Link Status</span><span class="info-value" style="color:var(--warning)">Link Up — Awaiting DHCP...</span></div>';
+
+        if (data.ethSpeed) {
+            var linkSpeedText = escapeHtml(String(data.ethSpeed)) + ' Mbps';
+            if (data.ethFullDuplex) {
+                linkSpeedText += ' Full Duplex';
+            } else {
+                linkSpeedText += ' Half Duplex';
+            }
+            html += '<div class="info-row"><span class="info-label">Speed</span><span class="info-value">' + linkSpeedText + '</span></div>';
+        }
+
+        html += '<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">' + escapeHtml(data.ethMAC || '—') + '</span></div>';
+
+    } else {
+        card.classList.add('eth-disconnected');
+
+        html += '<div class="info-row"><span class="info-label">Link Status</span><span class="info-value" style="color:var(--text-secondary)">No cable detected</span></div>';
+        html += '<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">' + escapeHtml(data.ethMAC || '—') + '</span></div>';
+    }
+
+    statusBox.innerHTML = html;
+}
+
+// ===== Ethernet Config Sync =====
+function updateEthConfigFromStatus(data) {
+    var hostnameInput = document.getElementById('ethHostnameInput');
+    if (hostnameInput && document.activeElement !== hostnameInput) {
+        hostnameInput.value = data.ethHostname || '';
+    }
+
+    var useStaticCheckbox = document.getElementById('ethUseStaticIP');
+    if (useStaticCheckbox) {
+        useStaticCheckbox.checked = !!data.ethUseStaticIP;
+        var staticFields = document.getElementById('ethStaticIPFields');
+        if (staticFields) {
+            staticFields.style.display = data.ethUseStaticIP ? 'block' : 'none';
+        }
+    }
+
+    if (data.ethPendingConfirm) {
+        var modal = document.getElementById('ethConfirmModal');
+        if (modal && !modal.classList.contains('active')) {
+            showEthCountdownModal();
+        }
+    }
+}
+
+// ===== Toggle Static IP Fields =====
+function toggleEthStaticIPFields() {
+    var useStaticIP = document.getElementById('ethUseStaticIP').checked;
+    var fields = document.getElementById('ethStaticIPFields');
+    fields.style.display = useStaticIP ? 'block' : 'none';
+}
+
+// ===== Submit Ethernet Config =====
+function submitEthConfig(event) {
+    event.preventDefault();
+
+    var useStaticIP = document.getElementById('ethUseStaticIP').checked;
+
+    var body = { useStaticIP: useStaticIP };
+
+    if (useStaticIP) {
+        var staticIP = document.getElementById('ethStaticIP').value.trim();
+        var subnet = document.getElementById('ethSubnetInput').value.trim();
+        var gateway = document.getElementById('ethGatewayInput').value.trim();
+        var dns1 = document.getElementById('ethDns1Input').value.trim();
+        var dns2 = document.getElementById('ethDns2Input').value.trim();
+
+        if (!isValidIP(staticIP)) {
+            showToast('Invalid static IP address', 'error');
+            return;
+        }
+        if (!isValidIP(subnet)) {
+            showToast('Invalid subnet mask', 'error');
+            return;
+        }
+        if (!isValidIP(gateway)) {
+            showToast('Invalid gateway address', 'error');
+            return;
+        }
+        if (dns1 && !isValidIP(dns1)) {
+            showToast('Invalid primary DNS address', 'error');
+            return;
+        }
+        if (dns2 && !isValidIP(dns2)) {
+            showToast('Invalid secondary DNS address', 'error');
+            return;
+        }
+
+        body.staticIP = staticIP;
+        body.subnet = subnet;
+        body.gateway = gateway;
+        body.dns1 = dns1;
+        body.dns2 = dns2;
+    }
+
+    apiFetch('/api/ethconfig', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+    .then(function(res) { return res.safeJson(); })
+    .then(function(data) {
+        if (data.pendingConfirm) {
+            showEthCountdownModal();
+        } else {
+            showToast('Ethernet configuration saved', 'success');
+        }
+    })
+    .catch(function() { showToast('Failed to apply config', 'error'); });
+}
+
+// ===== Submit Hostname =====
+function submitHostname() {
+    var value = document.getElementById('ethHostnameInput').value.trim();
+
+    if (!value || value.length > 63) {
+        showToast('Hostname must be 1–63 characters', 'error');
+        return;
+    }
+    if (!/^[a-zA-Z0-9-]+$/.test(value)) {
+        showToast('Hostname may only contain letters, numbers, and hyphens', 'error');
+        return;
+    }
+    if (value.charAt(0) === '-' || value.charAt(value.length - 1) === '-') {
+        showToast('Hostname cannot start or end with a hyphen', 'error');
+        return;
+    }
+
+    apiFetch('/api/ethconfig', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostname: value })
+    })
+    .then(function(res) { return res.safeJson(); })
+    .then(function() { showToast('Hostname saved', 'success'); })
+    .catch(function() { showToast('Failed to save hostname', 'error'); });
+}
+
+// ===== Ethernet Confirm Modal =====
+function showEthCountdownModal() {
+    var modal = document.getElementById('ethConfirmModal');
+    if (!modal) return;
+
+    modal.classList.add('active');
+    ethConfirmSecondsLeft = 60;
+
+    var countdown = document.getElementById('ethConfirmCountdown');
+    if (countdown) {
+        countdown.textContent = ethConfirmSecondsLeft;
+    }
+
+    var fallbackInfo = document.getElementById('ethConfirmFallbackInfo');
+    if (fallbackInfo) {
+        fallbackInfo.textContent = 'If you lose connection, access via WiFi or AP mode (192.168.4.1)';
+    }
+
+    if (ethConfirmTimer) {
+        clearInterval(ethConfirmTimer);
+    }
+
+    ethConfirmTimer = setInterval(function() {
+        ethConfirmSecondsLeft -= 1;
+        if (countdown) {
+            countdown.textContent = ethConfirmSecondsLeft;
+        }
+        if (ethConfirmSecondsLeft <= 0) {
+            closeEthConfirmModal();
+            showToast('Configuration reverted to DHCP', 'info');
+        }
+    }, 1000);
+}
+
+function confirmEthConfig() {
+    apiFetch('/api/ethconfig/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(function(res) { return res.safeJson(); })
+    .then(function() {
+        closeEthConfirmModal();
+        showToast('Configuration confirmed and saved', 'success');
+    })
+    .catch(function() { showToast('Failed to confirm configuration', 'error'); });
+}
+
+function cancelEthConfig() {
+    apiFetch('/api/ethconfig', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ useStaticIP: false })
+    })
+    .then(function(res) { return res.safeJson(); })
+    .then(function() {
+        closeEthConfirmModal();
+        showToast('Reverted to DHCP', 'info');
+    })
+    .catch(function() {
+        closeEthConfirmModal();
+        showToast('Reverted to DHCP', 'info');
+    });
+}
+
+function closeEthConfirmModal() {
+    var modal = document.getElementById('ethConfirmModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+    if (ethConfirmTimer) {
+        clearInterval(ethConfirmTimer);
+        ethConfirmTimer = null;
+    }
+}
+
+//# sourceURL=19-ethernet.js
 
 // ===== WiFi Network Variables =====
 let wifiScanInProgress = false;
@@ -12284,7 +12747,7 @@ function initFirmwareDragDrop() {
 
         function showPasswordChangeModal() {
             const modal = document.createElement('div');
-            modal.className = 'modal-overlay';
+            modal.className = 'modal-overlay active';
             modal.id = 'passwordChangeModal';
             modal.innerHTML = `
                 <div class="modal-content">

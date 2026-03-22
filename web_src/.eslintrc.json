@@ -422,6 +422,21 @@
     "i2sPortData": "writable",
     "loadI2sPorts": "readonly",
     "renderI2sPorts": "readonly",
-    "handleI2sPortState": "readonly"
+    "handleI2sPortState": "readonly",
+    "cancelEthConfig": "readonly",
+    "closeEthConfirmModal": "readonly",
+    "confirmEthConfig": "readonly",
+    "currentActiveInterface": "writable",
+    "currentEthConnected": "writable",
+    "currentEthLinkUp": "writable",
+    "ethConfirmSecondsLeft": "writable",
+    "ethConfirmTimer": "writable",
+    "showEthCountdownModal": "readonly",
+    "submitEthConfig": "readonly",
+    "submitHostname": "readonly",
+    "toggleEthStaticIPFields": "readonly",
+    "updateEthConfigFromStatus": "readonly",
+    "updateEthernetStatus": "readonly",
+    "updateNetworkOverview": "readonly"
   }
 }

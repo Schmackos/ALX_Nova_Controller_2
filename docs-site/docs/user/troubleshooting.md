@@ -40,6 +40,39 @@ This page collects the most common problems reported by users, grouped by catego
 
 ---
 
+## Ethernet Issues
+
+### No Ethernet Link
+
+If the Ethernet Status card shows "No cable detected":
+- Verify the cable is securely connected at both ends.
+- Try a different Ethernet cable.
+- Check that your switch or router port has link activity lights.
+- The ESP32-P4 supports 100 Mbps Ethernet — ensure your switch port is compatible and not locked to a speed that prevents auto-negotiation.
+
+### Ethernet Connected but No IP
+
+If the card shows "Link Up — Awaiting DHCP":
+- Verify your DHCP server is running on the network.
+- Check for VLAN or MAC filtering on your switch that may be blocking the new device.
+- Try configuring a static IP instead (see [Network Configuration](./wifi-configuration.md#static-ip-configuration)).
+- The MAC address is always visible in the Ethernet Status card — use it to set up a DHCP reservation on your router for a consistent address.
+
+### Static IP Not Working
+
+- Verify the IP address is within the correct subnet for your network (e.g., `192.168.1.x` if your gateway is `192.168.1.1`).
+- Confirm the gateway IP is correct and reachable on the same subnet.
+- If you applied a wrong static IP and lost access, wait 60 seconds — the device automatically reverts to DHCP if you do not confirm the change.
+- As a last resort, access the device via WiFi or AP mode (`192.168.4.1`) and correct the configuration from there.
+
+### Ethernet and WiFi Both Show Connected but Traffic Is Wrong
+
+- This is normal. Ethernet takes priority when the cable is connected. All outbound traffic (OTA, MQTT, API) routes over Ethernet.
+- WiFi remains associated as a backup interface. The status bar shows **Net** when both are active.
+- If you need traffic to route exclusively over one interface, disconnect the other.
+
+---
+
 ## MQTT Issues
 
 ### MQTT shows "Disconnected" in the web UI

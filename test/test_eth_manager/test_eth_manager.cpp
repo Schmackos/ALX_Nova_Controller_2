@@ -21,6 +21,28 @@ struct MockEthernetState {
     bool connected = false;
     String ip = "";
     NetIfType activeInterface = NET_NONE;
+
+    // Runtime status (populated from ETH events, NOT persisted)
+    String mac = "";
+    String gateway = "";
+    String subnet = "";
+    String dns1 = "";
+    String dns2 = "";
+    uint16_t speed = 0;
+    bool fullDuplex = false;
+
+    // Configuration (persisted to /config.json)
+    bool useStaticIP = false;
+    String staticIP = "";
+    String staticSubnet = "255.255.255.0";
+    String staticGateway = "";
+    String staticDns1 = "";
+    String staticDns2 = "";
+    String hostname = "alx-nova";
+
+    // Revert timer (NOT persisted)
+    bool pendingConfirm = false;
+    unsigned long confirmDeadline = 0;
 };
 
 struct MockWifiState {
@@ -43,6 +65,22 @@ struct MockAppState {
         ethernet.connected = false;
         ethernet.ip = "";
         ethernet.activeInterface = NET_NONE;
+        ethernet.mac = "";
+        ethernet.gateway = "";
+        ethernet.subnet = "";
+        ethernet.dns1 = "";
+        ethernet.dns2 = "";
+        ethernet.speed = 0;
+        ethernet.fullDuplex = false;
+        ethernet.useStaticIP = false;
+        ethernet.staticIP = "";
+        ethernet.staticSubnet = "255.255.255.0";
+        ethernet.staticGateway = "";
+        ethernet.staticDns1 = "";
+        ethernet.staticDns2 = "";
+        ethernet.hostname = "alx-nova";
+        ethernet.pendingConfirm = false;
+        ethernet.confirmDeadline = 0;
         wifi.connectSuccess = false;
         _ethernetDirty = false;
     }
@@ -290,6 +328,128 @@ void test_mock_eth_localIP_toString_returns_address(void) {
     TEST_ASSERT_EQUAL_STRING("192.168.1.100", ip.c_str());
 }
 
+// ===== Default Config Field Tests =====
+
+void test_default_hostname_is_alx_nova(void) {
+    TEST_ASSERT_EQUAL_STRING("alx-nova", appState.ethernet.hostname.c_str());
+}
+
+void test_default_useStaticIP_is_false(void) {
+    TEST_ASSERT_FALSE(appState.ethernet.useStaticIP);
+}
+
+void test_default_staticIP_is_empty(void) {
+    TEST_ASSERT_EQUAL_STRING("", appState.ethernet.staticIP.c_str());
+}
+
+void test_default_staticSubnet_is_255(void) {
+    TEST_ASSERT_EQUAL_STRING("255.255.255.0", appState.ethernet.staticSubnet.c_str());
+}
+
+void test_default_speed_is_zero(void) {
+    TEST_ASSERT_EQUAL_UINT16(0, appState.ethernet.speed);
+}
+
+void test_default_fullDuplex_is_false(void) {
+    TEST_ASSERT_FALSE(appState.ethernet.fullDuplex);
+}
+
+void test_default_pendingConfirm_is_false(void) {
+    TEST_ASSERT_FALSE(appState.ethernet.pendingConfirm);
+}
+
+void test_default_confirmDeadline_is_zero(void) {
+    TEST_ASSERT_EQUAL_UINT32(0, (uint32_t)appState.ethernet.confirmDeadline);
+}
+
+void test_default_mac_is_empty(void) {
+    TEST_ASSERT_EQUAL_STRING("", appState.ethernet.mac.c_str());
+}
+
+void test_default_gateway_is_empty(void) {
+    TEST_ASSERT_EQUAL_STRING("", appState.ethernet.gateway.c_str());
+}
+
+void test_default_dns1_is_empty(void) {
+    TEST_ASSERT_EQUAL_STRING("", appState.ethernet.dns1.c_str());
+}
+
+void test_static_ip_fields_independent(void) {
+    appState.ethernet.staticIP = "192.168.1.100";
+    appState.ethernet.staticGateway = "192.168.1.1";
+    TEST_ASSERT_EQUAL_STRING("192.168.1.100", appState.ethernet.staticIP.c_str());
+    TEST_ASSERT_EQUAL_STRING("192.168.1.1", appState.ethernet.staticGateway.c_str());
+    TEST_ASSERT_EQUAL_STRING("255.255.255.0", appState.ethernet.staticSubnet.c_str());
+    TEST_ASSERT_EQUAL_STRING("", appState.ethernet.staticDns1.c_str());
+}
+
+void test_hostname_assignment(void) {
+    appState.ethernet.hostname = "my-audio-device";
+    TEST_ASSERT_EQUAL_STRING("my-audio-device", appState.ethernet.hostname.c_str());
+}
+
+void test_runtime_fields_cleared_on_reset(void) {
+    // Simulate connected state
+    appState.ethernet.speed = 100;
+    appState.ethernet.fullDuplex = true;
+    appState.ethernet.gateway = "192.168.1.1";
+    appState.ethernet.subnet = "255.255.255.0";
+    appState.ethernet.dns1 = "8.8.8.8";
+    appState.ethernet.dns2 = "8.8.4.4";
+    appState.ethernet.mac = "AA:BB:CC:DD:EE:FF";
+
+    // Simulate disconnect (clear runtime, keep MAC)
+    appState.ethernet.speed = 0;
+    appState.ethernet.fullDuplex = false;
+    appState.ethernet.gateway = "";
+    appState.ethernet.subnet = "";
+    appState.ethernet.dns1 = "";
+    appState.ethernet.dns2 = "";
+
+    TEST_ASSERT_EQUAL_UINT16(0, appState.ethernet.speed);
+    TEST_ASSERT_FALSE(appState.ethernet.fullDuplex);
+    TEST_ASSERT_EQUAL_STRING("", appState.ethernet.gateway.c_str());
+    TEST_ASSERT_EQUAL_STRING("AA:BB:CC:DD:EE:FF", appState.ethernet.mac.c_str());
+}
+
+void test_static_config_preserved_on_disconnect(void) {
+    appState.ethernet.useStaticIP = true;
+    appState.ethernet.staticIP = "10.0.0.50";
+    appState.ethernet.staticGateway = "10.0.0.1";
+    appState.ethernet.hostname = "test-device";
+
+    // Simulate disconnect
+    appState.ethernet.connected = false;
+    appState.ethernet.linkUp = false;
+    appState.ethernet.ip = "";
+
+    TEST_ASSERT_TRUE(appState.ethernet.useStaticIP);
+    TEST_ASSERT_EQUAL_STRING("10.0.0.50", appState.ethernet.staticIP.c_str());
+    TEST_ASSERT_EQUAL_STRING("10.0.0.1", appState.ethernet.staticGateway.c_str());
+    TEST_ASSERT_EQUAL_STRING("test-device", appState.ethernet.hostname.c_str());
+}
+
+void test_pending_confirm_lifecycle(void) {
+    appState.ethernet.pendingConfirm = true;
+    appState.ethernet.confirmDeadline = 60000;
+    TEST_ASSERT_TRUE(appState.ethernet.pendingConfirm);
+    TEST_ASSERT_EQUAL_UINT32(60000, (uint32_t)appState.ethernet.confirmDeadline);
+
+    appState.ethernet.pendingConfirm = false;
+    appState.ethernet.confirmDeadline = 0;
+    TEST_ASSERT_FALSE(appState.ethernet.pendingConfirm);
+    TEST_ASSERT_EQUAL_UINT32(0, (uint32_t)appState.ethernet.confirmDeadline);
+}
+
+void test_dirty_flag_on_config_change(void) {
+    appState.clearEthernetDirty();
+    TEST_ASSERT_FALSE(appState.isEthernetDirty());
+
+    appState.ethernet.useStaticIP = true;
+    appState.markEthernetDirty();
+    TEST_ASSERT_TRUE(appState.isEthernetDirty());
+}
+
 // ===== Test Runner =====
 
 int main(int argc, char **argv) {
@@ -333,6 +493,27 @@ int main(int argc, char **argv) {
     RUN_TEST(test_mock_eth_linkSpeed_returns_100);
     RUN_TEST(test_mock_eth_fullDuplex_returns_true);
     RUN_TEST(test_mock_eth_localIP_toString_returns_address);
+
+    // Default config field tests
+    RUN_TEST(test_default_hostname_is_alx_nova);
+    RUN_TEST(test_default_useStaticIP_is_false);
+    RUN_TEST(test_default_staticIP_is_empty);
+    RUN_TEST(test_default_staticSubnet_is_255);
+    RUN_TEST(test_default_speed_is_zero);
+    RUN_TEST(test_default_fullDuplex_is_false);
+    RUN_TEST(test_default_pendingConfirm_is_false);
+    RUN_TEST(test_default_confirmDeadline_is_zero);
+    RUN_TEST(test_default_mac_is_empty);
+    RUN_TEST(test_default_gateway_is_empty);
+    RUN_TEST(test_default_dns1_is_empty);
+
+    // Static IP config tests
+    RUN_TEST(test_static_ip_fields_independent);
+    RUN_TEST(test_hostname_assignment);
+    RUN_TEST(test_runtime_fields_cleared_on_reset);
+    RUN_TEST(test_static_config_preserved_on_disconnect);
+    RUN_TEST(test_pending_confirm_lifecycle);
+    RUN_TEST(test_dirty_flag_on_config_change);
 
     return UNITY_END();
 }

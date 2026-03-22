@@ -38,6 +38,7 @@
 #ifdef USB_AUDIO_ENABLED
 #include "usb_audio.h"
 #endif
+#include "eth_manager.h"
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -1313,6 +1314,89 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
         }
 #endif
+
+        // ===== Ethernet Configuration =====
+        else if (msgType == "setEthConfig") {
+          bool useStatic = doc["useStaticIP"] | false;
+
+          // Apply hostname if provided (RFC 1123: [a-zA-Z0-9-], no leading/trailing hyphen)
+          if (doc["hostname"].is<const char*>()) {
+            String h = doc["hostname"].as<String>();
+            bool valid = h.length() >= 1 && h.length() <= 63;
+            if (valid && (h[0] == '-' || h[h.length() - 1] == '-')) valid = false;
+            if (valid) {
+              for (unsigned int i = 0; i < h.length(); i++) {
+                char c = h[i];
+                if (!isalnum(c) && c != '-') { valid = false; break; }
+              }
+            }
+            if (valid) {
+              appState.ethernet.hostname = h;
+            } else {
+              LOG_W("[WebSocket] setEthConfig: invalid hostname");
+            }
+          }
+
+          if (useStatic) {
+            if (!doc["staticIP"].is<const char*>()) {
+              LOG_W("[WebSocket] setEthConfig: missing staticIP");
+              return;
+            }
+            IPAddress test;
+            if (!test.fromString(doc["staticIP"].as<const char*>())) {
+              LOG_W("[WebSocket] setEthConfig: invalid staticIP");
+              return;
+            }
+            appState.ethernet.useStaticIP = true;
+            appState.ethernet.staticIP = doc["staticIP"].as<String>();
+            if (doc["subnet"].is<const char*>()) appState.ethernet.staticSubnet = doc["subnet"].as<String>();
+            if (doc["gateway"].is<const char*>()) appState.ethernet.staticGateway = doc["gateway"].as<String>();
+            if (doc["dns1"].is<const char*>()) appState.ethernet.staticDns1 = doc["dns1"].as<String>();
+            if (doc["dns2"].is<const char*>()) appState.ethernet.staticDns2 = doc["dns2"].as<String>();
+          } else {
+            appState.ethernet.useStaticIP = false;
+          }
+
+          eth_manager_apply_config();
+          if (useStatic) {
+            eth_manager_start_confirm_timer();
+          } else {
+            saveSettings();
+          }
+          appState.markEthernetDirty();
+          LOG_I("[WebSocket] Ethernet config updated");
+          sendWiFiStatus();
+        }
+        else if (msgType == "confirmEthConfig") {
+          eth_manager_confirm_config();
+          LOG_I("[WebSocket] Ethernet config confirmed");
+          sendWiFiStatus();
+        }
+        else if (msgType == "setHostname") {
+          if (!doc["hostname"].is<const char*>()) {
+            LOG_W("[WebSocket] setHostname: missing hostname");
+            return;
+          }
+          String h = doc["hostname"].as<String>();
+          // RFC 1123: 1-63 chars, [a-zA-Z0-9-], no leading/trailing hyphen
+          bool valid = h.length() >= 1 && h.length() <= 63;
+          if (valid && (h[0] == '-' || h[h.length() - 1] == '-')) valid = false;
+          if (valid) {
+            for (unsigned int i = 0; i < h.length(); i++) {
+              char c = h[i];
+              if (!isalnum(c) && c != '-') { valid = false; break; }
+            }
+          }
+          if (!valid) {
+            LOG_W("[WebSocket] setHostname: invalid hostname");
+            return;
+          }
+          appState.ethernet.hostname = h;
+          saveSettings();
+          appState.markEthernetDirty();
+          LOG_I("[WebSocket] Hostname set to: %s", h.c_str());
+          sendWiFiStatus();
+        }
       }
       break;
 

@@ -86,6 +86,27 @@ const SELECTORS = {
   halDeviceCards: '.hal-device-card',
   halDeviceHeader: '.hal-device-header',
 
+  // ===== Ethernet (within Network/WiFi tab) =====
+  networkOverviewCard: '#networkOverviewCard',
+  activeInterfaceText: '#activeInterfaceText',
+  networkHostnameDisplay: '#networkHostnameDisplay',
+  apAccessBanner: '#apAccessBanner',
+  ethStatusCard: '#ethStatusCard',
+  ethStatusBox: '#ethStatusBox',
+  ethLinkStatusText: '#ethLinkStatusText',
+  ethMacAddress: '#ethMacAddress',
+  ethConfigCard: '#ethConfigCard',
+  ethHostnameInput: '#ethHostnameInput',
+  ethUseStaticIP: '#ethUseStaticIP',
+  ethStaticIPFields: '#ethStaticIPFields',
+  ethStaticIP: '#ethStaticIP',
+  ethSubnetInput: '#ethSubnetInput',
+  ethGatewayInput: '#ethGatewayInput',
+  ethDns1Input: '#ethDns1Input',
+  ethDns2Input: '#ethDns2Input',
+  ethConfirmModal: '#ethConfirmModal',
+  ethConfirmCountdown: '#ethConfirmCountdown',
+
   // ===== WiFi tab =====
   wifiPanel: '#wifi',
   wifiStatusBox: '#wifiStatusBox',
