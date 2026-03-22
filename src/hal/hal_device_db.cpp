@@ -502,6 +502,134 @@ static void hal_db_add_builtins() {
         d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_APLL;
         hal_db_add(&d);
     }
+    // ES9038PRO — expansion 8-channel SABRE DAC, HyperStream II, 132dB DNR, up to 768kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9038pro", 31);
+        strncpy(d.name, "ES9038PRO", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 8;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9028PRO — expansion 8-channel SABRE DAC, HyperStream II, 124dB DNR, up to 768kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9028pro", 31);
+        strncpy(d.name, "ES9028PRO", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 8;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9039PRO — expansion 8-channel SABRE DAC, HyperStream IV, 132dB DNR, up to 768kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9039pro", 31);
+        strncpy(d.name, "ES9039PRO", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 8;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9039MPRO — industrial/automotive variant of ES9039PRO (auto-detected at init)
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9039mpro", 31);
+        strncpy(d.name, "ES9039MPRO", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 8;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9027PRO — expansion 8-channel SABRE DAC, HyperStream IV, 124dB DNR, up to 768kHz
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9027pro", 31);
+        strncpy(d.name, "ES9027PRO", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 8;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9081 — expansion 8-channel SABRE DAC, HyperStream IV, 120dB DNR, 40-pin QFN
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9081", 31);
+        strncpy(d.name, "ES9081", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 8;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9082 — expansion 8-channel SABRE DAC, HyperStream IV, 120dB DNR, 48-pin QFN, ASP2
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9082", 31);
+        strncpy(d.name, "ES9082", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 8;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
+    // ES9017 — expansion 8-channel SABRE DAC, HyperStream IV, 120dB DNR, ES9027PRO drop-in
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        strncpy(d.compatible, "ess,es9017", 31);
+        strncpy(d.name, "ES9017", 32);
+        strncpy(d.manufacturer, "ESS Technology", 32);
+        d.type = HAL_DEV_DAC;
+        d.channelCount = 8;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K | HAL_RATE_768K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
+        hal_db_add(&d);
+    }
 }
 
 void hal_db_init() {
