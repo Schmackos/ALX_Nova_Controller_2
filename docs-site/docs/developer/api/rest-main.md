@@ -752,6 +752,14 @@ The device reboots approximately 2 seconds after this response is sent.
 Factory reset erases all LittleFS data: settings, DSP presets, input names, MQTT configuration, HAL device configs, and the diagnostic journal. WiFi credentials stored in ESP32 NVS are preserved. There is no confirmation step or undo.
 :::
 
+:::info HTTP Security Headers
+All HTTP responses include security headers:
+- `X-Frame-Options: DENY` — prevents clickjacking via iframe embedding
+- `X-Content-Type-Options: nosniff` — prevents MIME type sniffing
+
+Applied via `http_add_security_headers()` in `src/http_security.h`.
+:::
+
 ---
 
 #### POST /api/reboot

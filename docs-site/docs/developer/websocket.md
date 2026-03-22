@@ -757,6 +757,18 @@ Offset  Size  Type     Description
 
 Band boundaries follow a logarithmic scale covering approximately 20 Hz to 20 kHz across 16 bands.
 
+#### Adaptive Binary Rate
+
+Binary audio frame rate adapts based on authenticated client count to prevent WiFi TX buffer starvation:
+
+| Clients | Skip Factor | Effective Rate |
+|---------|-------------|----------------|
+| 1       | 1 (none)    | Every frame    |
+| 2       | 2           | Every 2nd frame |
+| 3+      | 4           | Every 4th frame |
+
+This combines with existing heap pressure gating (binary halved at 50KB free, suppressed at 40KB free). Both gates must allow transmission. Auth count is recalibrated every 10 seconds to handle stale counts from unclean disconnects.
+
 :::tip Bandwidth estimation
 At 50 ms update rate with 2 active audio lanes:
 - Waveform: 2 frames x 258 bytes = 516 bytes per update = ~10.3 KB/s

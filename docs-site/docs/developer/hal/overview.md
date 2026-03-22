@@ -246,6 +246,10 @@ The `hal_wifi_sdio_active()` helper function checks `connectSuccess || connectin
 
 Discovery scans Bus 1 (ONBOARD) only through the ES8311 driver's existing Wire instance. Buses 0 and 2 are initialised, scanned, then released in `hal_i2c_scan_bus()` to avoid holding GPIO pins unnecessarily.
 
+#### I2C Probe Retry
+
+Addresses that return I2C timeout (error codes 4/5) during bus scan are automatically retried up to 2 times with increasing backoff (50ms, 100ms). NACK responses (error code 2, meaning "no device present") are not retried. On successful retry, `DIAG_HAL_PROBE_RETRY_OK` (0x1105) is emitted. Worst-case boot delay: ~300ms.
+
 ## Config Persistence
 
 Per-device configuration is persisted to `/hal_config.json` on LittleFS. The structure is a JSON array keyed by slot index. Changes made through the web UI are applied immediately and written to flash; they survive power cycles and OTA updates.

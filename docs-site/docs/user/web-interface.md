@@ -127,8 +127,8 @@ Importing settings overwrites everything including WiFi credentials and MQTT con
 
 ### Device Actions
 
-- **Reboot** — soft-restarts the controller without erasing any settings.
-- **Factory Reset** — erases all settings and returns to factory defaults. See [Troubleshooting](./troubleshooting.md) for the full reset procedure.
+- **Reboot** — soft-restarts the controller without erasing any settings. A confirmation dialog appears before the reboot executes.
+- **Factory Reset** — erases all settings and returns to factory defaults. A confirmation dialog with a 3-second countdown appears before the reset executes, giving you time to cancel. See [Troubleshooting](./troubleshooting.md) for the full reset procedure.
 
 ---
 

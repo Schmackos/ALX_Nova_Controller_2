@@ -191,7 +191,7 @@ You can trigger a factory reset in three ways:
 **Method 2 — Web interface**
 1. Go to **Settings > Device Actions**.
 2. Click **Factory Reset**.
-3. Confirm in the dialogue that appears.
+3. A confirmation dialog with a **3-second countdown** appears. Wait for the countdown to complete and confirm to proceed. This delay prevents accidental resets.
 
 **Method 3 — Web interface (if you are logged in)**
 1. Go to **System > Device Actions > Factory Reset**.

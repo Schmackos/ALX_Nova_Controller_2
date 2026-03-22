@@ -44,6 +44,10 @@ If you are using Home Assistant, the easiest path is to install the **Mosquitto 
 The controller attempts to reconnect to the broker every 5 seconds if the connection is lost. All state changes that occur while disconnected are published as a batch when the connection is restored.
 :::
 
+:::note Connection Timeout
+The MQTT client TCP socket timeout is capped at 5 seconds (`MQTT_SOCKET_TIMEOUT_MS`). If the broker does not respond within this window, the connection attempt is abandoned and reconnection follows exponential backoff (1s → 32s).
+:::
+
 ---
 
 ## Home Assistant Auto-Discovery
