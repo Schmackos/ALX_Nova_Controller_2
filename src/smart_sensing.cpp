@@ -340,11 +340,10 @@ void setAmplifierState(bool state) {
     HalDevice* relayDev = HalDeviceManager::instance().findByCompatible("generic,relay-amp");
     if (relayDev && relayDev->_ready) {
       static_cast<HalRelay*>(relayDev)->setEnabled(state);
+      LOG_I("[Sensing] Amplifier %s (via HAL)", state ? "ON" : "OFF");
     } else {
-      digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
+      LOG_W("[Sensing] Amplifier control skipped — HAL relay not ready");
     }
-    LOG_I("[Sensing] Amplifier %s (via %s)", state ? "ON" : "OFF",
-          (relayDev && relayDev->_ready) ? "HAL" : "GPIO");
 #else
     digitalWrite(AMPLIFIER_PIN, state ? HIGH : LOW);
     LOG_I("[Sensing] Amplifier %s", state ? "ON" : "OFF");

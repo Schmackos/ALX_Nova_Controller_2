@@ -14,15 +14,9 @@
 HalButton::HalButton(int pin)
     : _pin(pin)
 {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "generic,tact-switch", 31);
-    strncpy(_descriptor.name, "Reset Button", 32);
-    strncpy(_descriptor.manufacturer, "Generic", 32);
-    _descriptor.type = HAL_DEV_INPUT;
-    _descriptor.bus.type = HAL_BUS_GPIO;
-    _descriptor.bus.index = 0;
+    hal_init_descriptor(_descriptor, "generic,tact-switch", "Reset Button", "Generic",
+        HAL_DEV_INPUT, 0, 0, HAL_BUS_GPIO, 0, 0, 0);
     _descriptor.bus.pinA = pin;
-    _descriptor.channelCount = 0;
     _initPriority = HAL_PRIORITY_IO;  // 900
 }
 

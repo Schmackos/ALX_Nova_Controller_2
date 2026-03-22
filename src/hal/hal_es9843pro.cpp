@@ -53,19 +53,10 @@ inline void i2s_audio_disable_expansion_rx() {}
 // ===== Constructor =====
 
 HalEs9843pro::HalEs9843pro() : HalAudioDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible,   "ess,es9843pro",     31);
-    strncpy(_descriptor.name,         "ES9843PRO",         32);
-    strncpy(_descriptor.manufacturer, "ESS Technology",    32);
-    _descriptor.type            = HAL_DEV_ADC;
-    _descriptor.legacyId        = 0;
-    _descriptor.channelCount    = 4;
-    _descriptor.i2cAddr         = 0x40;
-    _descriptor.bus.type        = HAL_BUS_I2C;
-    _descriptor.bus.index       = HAL_I2C_BUS_EXP;
-    _descriptor.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K;
-    _descriptor.capabilities    = HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME |
-                                  HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL;
+    hal_init_descriptor(_descriptor, "ess,es9843pro", "ES9843PRO", "ESS Technology",
+        HAL_DEV_ADC, 4, 0x40, HAL_BUS_I2C, HAL_I2C_BUS_EXP,
+        HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K,
+        HAL_CAP_ADC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_PGA_CONTROL | HAL_CAP_HPF_CONTROL);
     _initPriority = HAL_PRIORITY_HARDWARE;
 }
 

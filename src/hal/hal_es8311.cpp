@@ -67,19 +67,11 @@ static const Es8311ClockCoeff* es8311_find_coeff(uint32_t, uint32_t) { return nu
 #endif // NATIVE_TEST
 
 HalEs8311::HalEs8311() : HalAudioDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "everest-semi,es8311", 31);
-    strncpy(_descriptor.name, "ES8311", 32);
-    strncpy(_descriptor.manufacturer, "Everest Semiconductor", 32);
-    _descriptor.type = HAL_DEV_CODEC;
+    hal_init_descriptor(_descriptor, "everest-semi,es8311", "ES8311", "Everest Semiconductor",
+        HAL_DEV_CODEC, 2, 0x18, HAL_BUS_I2C, HAL_I2C_BUS_ONBOARD,
+        HAL_RATE_8K | HAL_RATE_16K | HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K,
+        HAL_CAP_CODEC | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_ADC_PATH | HAL_CAP_DAC_PATH);
     _descriptor.legacyId = 0x0004;
-    _descriptor.channelCount = 2;
-    _descriptor.i2cAddr = 0x18;
-    _descriptor.bus.type = HAL_BUS_I2C;
-    _descriptor.bus.index = HAL_I2C_BUS_ONBOARD;
-    _descriptor.sampleRatesMask = HAL_RATE_8K | HAL_RATE_16K | HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
-    _descriptor.capabilities = HAL_CAP_CODEC | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE |
-                                HAL_CAP_ADC_PATH | HAL_CAP_DAC_PATH;
     _initPriority = HAL_PRIORITY_HARDWARE;
 }
 

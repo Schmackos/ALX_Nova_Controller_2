@@ -13,15 +13,9 @@
 HalRelay::HalRelay(int pin)
     : _pin(pin)
 {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "generic,relay-amp", 31);
-    strncpy(_descriptor.name, "Amplifier Relay", 32);
-    strncpy(_descriptor.manufacturer, "Generic", 32);
-    _descriptor.type = HAL_DEV_AMP;
-    _descriptor.bus.type = HAL_BUS_GPIO;
-    _descriptor.bus.index = 0;
+    hal_init_descriptor(_descriptor, "generic,relay-amp", "Amplifier Relay", "Generic",
+        HAL_DEV_AMP, 1, 0, HAL_BUS_GPIO, 0, 0, 0);
     _descriptor.bus.pinA = pin;
-    _descriptor.channelCount = 1;
     _initPriority = HAL_PRIORITY_IO;
 }
 

@@ -24,18 +24,12 @@ static void digitalWrite(int, int) {}
 #endif
 
 HalPcm5102a::HalPcm5102a() : HalAudioDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "ti,pcm5102a", 31);
-    strncpy(_descriptor.name, "PCM5102A", 32);
-    strncpy(_descriptor.manufacturer, "Texas Instruments", 32);
-    _descriptor.type = HAL_DEV_DAC;
-    _descriptor.legacyId = 0x0001;
-    _descriptor.channelCount = 2;
-    _descriptor.bus.type = HAL_BUS_I2S;
-    _descriptor.bus.index = 0;
-    _descriptor.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
     // PCM5102A has no hardware volume control via I2C — HAL_CAP_HW_VOLUME NOT set
-    _descriptor.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_MUTE;
+    hal_init_descriptor(_descriptor, "ti,pcm5102a", "PCM5102A", "Texas Instruments",
+        HAL_DEV_DAC, 2, 0, HAL_BUS_I2S, 0,
+        HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K,
+        HAL_CAP_DAC_PATH | HAL_CAP_MUTE);
+    _descriptor.legacyId = 0x0001;
     _initPriority = HAL_PRIORITY_HARDWARE;
 }
 

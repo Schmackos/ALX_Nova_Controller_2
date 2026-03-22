@@ -27,6 +27,8 @@ static HalAudioDevice* _dacApiAudioDeviceForSlot(uint8_t sinkSlot) {
 
 void registerDacApiEndpoints() {
     // GET /api/dac — Full DAC state + capabilities (queries HAL)
+    // Optional ?slot=N query parameter: query any DAC-path device by HAL slot.
+    // Without ?slot, defaults to backward-compatible PCM5102A lookup.
     server.on("/api/dac", HTTP_GET, []() {
         if (!requireAuth()) return;
 
@@ -34,7 +36,21 @@ void registerDacApiEndpoints() {
         doc["success"] = true;
 
         HalDeviceManager& mgr = HalDeviceManager::instance();
-        HalDevice* dev = mgr.findByCompatible("ti,pcm5102a");
+
+        // Slot-based lookup when ?slot=N is provided
+        int slotParam = server.hasArg("slot") ? server.arg("slot").toInt() : -1;
+        HalDevice* dev;
+        if (slotParam >= 0) {
+            dev = mgr.getDevice((uint8_t)slotParam);
+            // Validate it is a DAC-path device
+            if (dev && !(dev->getDescriptor().capabilities & HAL_CAP_DAC_PATH)) {
+                dev = nullptr; // Not a DAC device
+            }
+        } else {
+            // Default: backward-compatible PCM5102A lookup
+            dev = mgr.findByCompatible("ti,pcm5102a");
+        }
+
         HalDeviceConfig* cfg = dev ? mgr.getConfig(dev->getSlot()) : nullptr;
 
         doc["enabled"] = cfg ? cfg->enabled : false;
@@ -47,11 +63,15 @@ void registerDacApiEndpoints() {
         doc["ready"] = dev ? dev->_ready : false;
         doc["filterMode"] = cfg ? cfg->filterMode : 0;
         doc["txUnderruns"] = appState.dac.txUnderruns;
+        doc["halSlot"] = dev ? (int)dev->getSlot() : -1;
 
         // Capabilities from HAL device descriptor
         if (dev) {
             const HalDeviceDescriptor& desc = dev->getDescriptor();
-            HalAudioDevice* audioDev = _dacApiAudioDeviceForSlot(0);
+            int8_t devSinkSlot = hal_pipeline_get_sink_slot(dev->getSlot());
+            HalAudioDevice* audioDev = (devSinkSlot >= 0)
+                ? _dacApiAudioDeviceForSlot((uint8_t)devSinkSlot)
+                : nullptr;
             JsonObject capsObj = doc["capabilities"].to<JsonObject>();
             capsObj["name"] = desc.name;
             capsObj["manufacturer"] = desc.manufacturer;

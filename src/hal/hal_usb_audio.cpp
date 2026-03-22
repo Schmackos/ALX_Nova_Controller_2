@@ -45,17 +45,10 @@ static uint32_t _usb_getSampleRate(void) {
 // ===== HalUsbAudio implementation =====
 
 HalUsbAudio::HalUsbAudio() : HalDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "alx,usb-audio", 31);
-    strncpy(_descriptor.name, "USB Audio", 32);
-    strncpy(_descriptor.manufacturer, "ALX", 32);
-    _descriptor.type = HAL_DEV_ADC;
-    _descriptor.legacyId = 0;
-    _descriptor.channelCount = 2;
-    _descriptor.bus.type = HAL_BUS_INTERNAL;
-    _descriptor.bus.index = 0;
-    _descriptor.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
-    _descriptor.capabilities = HAL_CAP_ADC_PATH;
+    hal_init_descriptor(_descriptor, "alx,usb-audio", "USB Audio", "ALX",
+        HAL_DEV_ADC, 2, 0, HAL_BUS_INTERNAL, 0,
+        HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K,
+        HAL_CAP_ADC_PATH);
     _initPriority = HAL_PRIORITY_DATA;
 
     // Initialize AudioInputSource

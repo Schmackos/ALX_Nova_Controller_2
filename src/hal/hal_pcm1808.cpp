@@ -15,17 +15,10 @@
 #endif
 
 HalPcm1808::HalPcm1808() : HalAudioDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "ti,pcm1808", 31);
-    strncpy(_descriptor.name, "PCM1808", 32);
-    strncpy(_descriptor.manufacturer, "Texas Instruments", 32);
-    _descriptor.type = HAL_DEV_ADC;
-    _descriptor.legacyId = 0;
-    _descriptor.channelCount = 2;
-    _descriptor.bus.type = HAL_BUS_I2S;
-    _descriptor.bus.index = 0;
-    _descriptor.sampleRatesMask = HAL_RATE_48K | HAL_RATE_96K;
-    _descriptor.capabilities = HAL_CAP_ADC_PATH;
+    hal_init_descriptor(_descriptor, "ti,pcm1808", "PCM1808", "Texas Instruments",
+        HAL_DEV_ADC, 2, 0, HAL_BUS_I2S, 0,
+        HAL_RATE_48K | HAL_RATE_96K,
+        HAL_CAP_ADC_PATH);
     _initPriority = HAL_PRIORITY_HARDWARE;
 }
 

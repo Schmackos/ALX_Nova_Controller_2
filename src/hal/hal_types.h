@@ -70,6 +70,7 @@ enum HalBusType : uint8_t {
 #define HAL_PRIORITY_LATE       100   // Non-critical (diagnostics, logging)
 
 // ===== Capability Bit Flags =====
+// Bits 0-7: original flags (uint8_t-safe, preserved for backward compat)
 #define HAL_CAP_HW_VOLUME    (1 << 0)
 #define HAL_CAP_FILTERS      (1 << 1)
 #define HAL_CAP_MUTE         (1 << 2)
@@ -78,6 +79,12 @@ enum HalBusType : uint8_t {
 #define HAL_CAP_PGA_CONTROL  (1 << 5)   // ADC gain knob
 #define HAL_CAP_HPF_CONTROL  (1 << 6)   // ADC HPF toggle
 #define HAL_CAP_CODEC        (1 << 7)   // both ADC + DAC paths
+// Bits 8-11: extended flags (require uint16_t capabilities field)
+#define HAL_CAP_MQA          (1 << 8)   // MQA decoder support
+#define HAL_CAP_LINE_DRIVER  (1 << 9)   // Line driver outputs
+#define HAL_CAP_APLL         (1 << 10)  // Asynchronous PLL
+#define HAL_CAP_DSD          (1 << 11)  // DSD native playback
+// Bits 12-15 reserved for future use
 
 // ===== Bus Reference =====
 struct HalBusRef {
@@ -108,7 +115,7 @@ struct HalDeviceDescriptor {
     uint8_t       i2cAddr;           // Primary I2C address (0 = none)
     uint8_t       channelCount;      // 1-8 audio channels
     uint32_t      sampleRatesMask;   // Bit per rate: b0=8k, b1=16k, b2=44.1k, b3=48k, b4=96k
-    uint8_t       capabilities;      // HAL_CAP_* flags
+    uint16_t      capabilities;      // HAL_CAP_* flags (bits 0-7 legacy, bits 8-15 extended)
     uint8_t       instanceId;        // Auto-assigned per compatible string (0-based)
     uint8_t       maxInstances;      // Max concurrent instances (0 = use default by type)
 };
@@ -174,3 +181,28 @@ struct HalDeviceConfig {
 #define HAL_RATE_48K   (1 << 3)
 #define HAL_RATE_96K   (1 << 4)
 #define HAL_RATE_192K  (1 << 5)
+#define HAL_RATE_384K  (1 << 6)
+#define HAL_RATE_768K  (1 << 7)
+
+// ===== Descriptor Initializer Helper =====
+// Fills all common HalDeviceDescriptor fields in one call, eliminating
+// per-driver boilerplate (memset + 10-12 individual assignments).
+// Extra driver-specific fields (e.g. _initPriority, _pin) must be set after.
+inline void hal_init_descriptor(HalDeviceDescriptor& d,
+    const char* compatible, const char* name, const char* manufacturer,
+    HalDeviceType type, uint8_t channels, uint8_t i2cAddr,
+    HalBusType busType, uint8_t busIndex,
+    uint32_t ratesMask, uint16_t caps)
+{
+    memset(&d, 0, sizeof(d));
+    strncpy(d.compatible, compatible, 31);
+    strncpy(d.name, name, 32);
+    strncpy(d.manufacturer, manufacturer, 32);
+    d.type            = type;
+    d.channelCount    = channels;
+    d.i2cAddr         = i2cAddr;
+    d.bus.type        = busType;
+    d.bus.index       = busIndex;
+    d.sampleRatesMask = ratesMask;
+    d.capabilities    = caps;
+}

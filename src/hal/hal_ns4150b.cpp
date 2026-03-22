@@ -21,15 +21,9 @@
 HalNs4150b::HalNs4150b(int paPin)
     : _paPin(paPin), _enabled(false)
 {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "ns,ns4150b-amp", 31);
-    strncpy(_descriptor.name, "NS4150B Amp", 32);
-    strncpy(_descriptor.manufacturer, "Nsiway", 32);
-    _descriptor.type = HAL_DEV_AMP;
-    _descriptor.bus.type = HAL_BUS_GPIO;
-    _descriptor.bus.index = 0;
+    hal_init_descriptor(_descriptor, "ns,ns4150b-amp", "NS4150B Amp", "Nsiway",
+        HAL_DEV_AMP, 1, 0, HAL_BUS_GPIO, 0, 0, 0);
     _descriptor.bus.pinA = paPin;
-    _descriptor.channelCount = 1;
     _initPriority = HAL_PRIORITY_IO;  // 900
 }
 

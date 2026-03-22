@@ -49,6 +49,9 @@ void publishMqttAdcEnabledState();
 void publishMqttDebugState();
 void publishMqttCrashDiagnostics();
 void publishMqttInputNames();
+#ifdef DAC_ENABLED
+void publishMqttHalDevices();
+#endif
 #ifdef DSP_ENABLED
 void publishMqttDspState();
 #endif
