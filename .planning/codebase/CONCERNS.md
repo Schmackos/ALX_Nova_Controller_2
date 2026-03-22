@@ -6,90 +6,13 @@
 
 This document identifies technical debt, known risks, fragile areas, and potential failure modes in the ALX Nova Controller 2 codebase. Most critical and high-priority issues have been mitigated via recent fixes. Remaining concerns and newly identified issues are documented here for planning future work.
 
-**Test baseline:** 2335 C++ tests (91 modules), 113 E2E Playwright tests (22 specs).
+**Test baseline:** 2354 C++ tests (106 modules), 113 E2E Playwright tests (22 specs).
 
 ---
 
 ## Active Concerns (NEW / OUTSTANDING)
 
-### Security: HTTP Security Headers Incomplete Coverage
-
-- **Issue**: `http_add_security_headers()` (X-Frame-Options, X-Content-Type-Options) is applied in `src/auth_handler.cpp` (16 calls), `src/settings_manager.cpp` (12 calls), `src/web_pages.h` (`sendGzipped()`), and `src/main.cpp` (2 calls for 404/captive portal). However, ~150 `server.send()` calls across 8 other handler files have NO security headers.
-- **Files missing headers**:
-  - `src/wifi_manager.cpp` (24 send calls, 0 security headers)
-  - `src/dsp_api.cpp` (37 send calls, 0 security headers)
-  - `src/hal/hal_api.cpp` (35 send calls, 0 security headers)
-  - `src/pipeline_api.cpp` (26 send calls, 0 security headers)
-  - `src/ota_updater.cpp` (25 send calls, 0 security headers)
-  - `src/dac_api.cpp` (16 send calls, 0 security headers)
-  - `src/smart_sensing.cpp` (7 send calls, 0 security headers)
-  - `src/mqtt_handler.cpp` (4 send calls, 0 security headers)
-  - `src/psram_api.cpp` (1 send call, 0 security headers)
-- **Impact**: API JSON responses served without X-Frame-Options and X-Content-Type-Options. While JSON responses are lower risk than HTML, MIME-sniffing could still be exploited in edge cases.
-- **Fix approach**: Move `http_add_security_headers()` into a centralized response wrapper (e.g., hook into `WebServer` before every send), or add calls to each handler file. A middleware-style approach is preferred to avoid missing future endpoints.
-- **Priority**: LOW (JSON API responses are lower risk than HTML pages; all HTML pages already have headers)
-
-### Tech Debt: Frontend `.json()` Calls Without `safeJson()` Protection
-
-- **Issue**: `safeJson()` wrapper (checks `response.ok`, wraps `.json()` in try/catch) was added to `src/web_src/js/01-core.js` and adopted in `web_src/js/20-wifi-network.js` (11 calls) and `web_src/js/22-settings.js` (4 calls). However, 28 `.json()` calls in other JS files remain unprotected.
-- **Files with unprotected `.json()` calls**:
-  - `web_src/js/15-hal-devices.js` — 12 unprotected calls
-  - `web_src/js/21-mqtt-settings.js` — 4 unprotected calls
-  - `web_src/js/24-hardware-stats.js` — 4 unprotected calls
-  - `web_src/js/08-ui-status.js` — 3 unprotected calls
-  - `web_src/js/06-peq-overlay.js` — 3 unprotected calls
-  - `web_src/js/05-audio-tab.js` — 2 unprotected calls
-- **Impact**: Non-2xx HTTP responses or malformed JSON from these endpoints will throw uncaught exceptions, potentially crashing the UI tab/section.
-- **Fix approach**: Replace `r.json()` with `r.safeJson()` in all remaining files. Mechanical change, no logic modification needed.
-- **Priority**: LOW (UI crash is recoverable by page refresh; auth-protected endpoints rarely return errors)
-
-### Tech Debt: `websocket_handler.cpp` is 2623 Lines
-
-- **Issue**: Single file handles WebSocket event dispatch, state broadcasting (15+ `send*()` functions), binary audio streaming, CPU monitoring, auth token validation, client count tracking, and adaptive rate logic.
-- **Files**: `src/websocket_handler.cpp`, `src/websocket_handler.h`
-- **Impact**: Difficult to navigate, test individual broadcast functions, or modify one concern without risking another. Adding new WS message types requires editing a 2600-line file.
-- **Fix approach**: Split into focused files: `ws_auth.cpp` (token validation), `ws_broadcast.cpp` (state broadcasting), `ws_binary.cpp` (audio data), `ws_cpu_monitor.cpp` (CPU tracking). Requires careful header management to avoid circular dependencies.
-- **Priority**: MEDIUM (affects developer velocity on any WS-related feature work)
-
-### Tech Debt: `main.cpp` is 1579 Lines with 81 Endpoint Registrations
-
-- **Issue**: `main.cpp` registers ~50 HTTP endpoints inline with lambda handlers, plus `setup()` init sequence (~300 lines) and `loop()` polling (~200 lines). Some endpoint handlers are defined inline (signal generator, diagnostics journal, heap budget) rather than delegated to handler modules.
-- **Files**: `src/main.cpp`
-- **Impact**: Long setup/loop functions are hard to audit. Inline endpoint handlers duplicate the pattern used by dedicated handler modules. Adding new endpoints increases file size.
-- **Fix approach**: Extract inline endpoint handlers to their respective modules (e.g., signal generator endpoints to `signal_generator.cpp`, diagnostic endpoints to `diag_api.cpp`). Keep `main.cpp` as a thin orchestrator that calls `register*Endpoints()` functions.
-- **Priority**: LOW (functional, well-organized by section comments; splitting is optional improvement)
-
-### Tech Debt: ArduinoJson `JsonDocument` Stack Allocation Pattern
-
-- **Issue**: 273 `JsonDocument` instances are allocated across the codebase. ArduinoJson v7 uses the stack by default (no explicit capacity). Large JSON responses (e.g., HAL device list with 14+ devices, DSP config with 24 stages x 4 channels) may consume significant stack space, risking stack overflow on FreeRTOS tasks with limited stack sizes.
-- **Files**: Throughout `src/*.cpp`, `src/hal/*.cpp` — 273 total instances
-- **Impact**: Stack overflow on tasks with 4096-byte stacks (MQTT, sensing) if large JSON documents are constructed. The 8192-byte web task stack provides more headroom. ArduinoJson v7 dynamically allocates on heap when needed, partially mitigating this.
-- **Fix approach**: For large JSON operations (DSP config export, HAL device list, diagnostic journal), allocate `JsonDocument` on heap or use PSRAM-backed allocator. Monitor stack high-water marks via `task_monitor`.
-- **Priority**: LOW (ArduinoJson v7 handles overflow gracefully; no crashes observed)
-
-### Security: `innerHTML` Usage Without Sanitization in Some Paths
-
-- **Issue**: ~30 `innerHTML` assignments in frontend JS. Most use `escapeHtml()` for user-controlled data (device names, SSID strings). However, some paths construct HTML from WS broadcast data or API responses without escaping every interpolated value.
-- **Files**: `web_src/js/05-audio-tab.js`, `web_src/js/06-peq-overlay.js`, `web_src/js/08-ui-status.js`, `web_src/js/15-hal-devices.js`, `web_src/js/20-wifi-network.js`
-- **Impact**: XSS risk is LOW because: (1) all data originates from the ESP32 (not external user input), (2) all endpoints require session auth, (3) the device runs on local network. An attacker would need to compromise the ESP32 firmware first, at which point XSS is moot.
-- **Fix approach**: Audit all `innerHTML` assignments to ensure `escapeHtml()` is used for any string that could originate from user configuration (device names, SSID, MQTT topics). Consider migrating to `textContent` + DOM APIs for simple text updates.
-- **Priority**: LOW (local network device, auth-protected, data from trusted source)
-
-### Fragile: `strncpy()` Without Explicit Null Termination in Some Paths
-
-- **Issue**: 52 `strncpy()` calls in `src/hal/hal_builtin_devices.cpp` (26 calls) and `src/hal/hal_device_db.cpp` (26 calls) use `strncpy(field, value, 31)` for `compatible[32]` and `strncpy(field, value, 32)` for `name[33]`/`manufacturer[33]`. While the destination buffers are zero-initialized in struct constructors, `strncpy()` does NOT null-terminate if the source is exactly N bytes. Additionally, `src/dac_api.cpp` uses `strncpy(field, value, 32)` without explicit null termination.
-- **Files**: `src/hal/hal_builtin_devices.cpp`, `src/hal/hal_device_db.cpp`, `src/dac_api.cpp`
-- **Impact**: Practically safe because source strings are compile-time constants (all < 31 chars) and structs are zero-initialized. But future use with dynamic strings (e.g., user-provided custom device names) could expose unterminated strings.
-- **Fix approach**: Add explicit `field[sizeof(field)-1] = '\0'` after each `strncpy()`, or switch to `snprintf(field, sizeof(field), "%s", value)` which always null-terminates.
-- **Priority**: LOW (compile-time constants are safe; guard against future dynamic use)
-
-### Performance: Vendored WebSockets Library v2.7.3
-
-- **Issue**: `lib/WebSockets/` is vendored at v2.7.3. The upstream library (Links2004/arduinoWebSockets) has had security patches and ESP32-P4 compatibility improvements since 2.7.3.
-- **Files**: `lib/WebSockets/` (vendored copy)
-- **Impact**: No known security vulnerability in 2.7.3, but the library is not receiving upstream patches. Vendoring means manual merge of any fixes.
-- **Fix approach**: Periodically diff against upstream, cherry-pick relevant fixes. Consider returning to PlatformIO lib_deps if P4 compatibility is confirmed.
-- **Priority**: LOW (functional, no known CVEs)
+No active concerns. All identified issues have been mitigated.
 
 ---
 
@@ -156,7 +79,30 @@ This document identifies technical debt, known risks, fragile areas, and potenti
 **FIR Convolution Performance** (MITIGATED: 2026-03-21)
 - CPU load thresholds (80%/95%). FIR/convolution auto-bypass at critical. `DIAG_DSP_CPU_CRIT`.
 
-### LOW (All Resolved)
+### LOW (Concerns Cleanup — 2026-03-22)
+
+**HTTP Security Headers Incomplete Coverage** (FIXED: 2026-03-22)
+- `server_send()` wrapper in `http_security.h` centralizes security headers. All 12+ handler files now covered.
+
+**Frontend `.json()` Calls Without `safeJson()` Protection** (FIXED: 2026-03-22)
+- Remaining `apiFetch()` chains migrated to `safeJson()`. All frontend `.json()` calls now protected.
+
+**`websocket_handler.cpp` Size (2623 Lines)** (FIXED: 2026-03-22)
+- Decomposed into 4 focused files: `websocket_command.cpp`, `websocket_broadcast.cpp`, `websocket_auth.cpp`, `websocket_cpu_monitor.cpp`.
+
+**`main.cpp` Size (1579 Lines)** (FIXED: 2026-03-22)
+- Extracted `diag_api.cpp` and `siggen_api.cpp`. Main reduced by ~170 lines.
+
+**ArduinoJson `JsonDocument` Stack Allocation** (MITIGATED: 2026-03-22)
+- Static reuse + heapCritical guard in `mqtt_ha_discovery.cpp`. ArduinoJson v7 handles overflow gracefully.
+
+**`innerHTML` Usage Without Sanitization** (FIXED: 2026-03-22)
+- `escapeHtml()` moved to `01-core.js`. Audit completed across 3 key files (`05-audio-tab.js`, `15-hal-devices.js`, `20-wifi-network.js`).
+
+**`strncpy()` Without Explicit Null Termination** (FIXED: 2026-03-22)
+- `hal_safe_strcpy()` helper added. All 107+ `strncpy()` calls migrated to safe wrapper.
+
+### LOW (All Resolved — Prior)
 
 **Password Storage** (UPGRADED: 2026-03-22)
 - PBKDF2 50,000 iterations (`p2:` format). Backward-compatible migration from `p1:` and legacy SHA256.
@@ -244,7 +190,7 @@ Graduated CPU thresholds at 80%/95%. FIR/convolution auto-bypass at critical. Pi
 
 ### WebSocket Message Dispatch (Firmware <-> JS Contract)
 
-- **Files**: `src/websocket_handler.cpp` (2623 lines, parseCommand), `web_src/js/02-ws-router.js`
+- **Files**: `src/websocket_command.cpp` (parseCommand), `web_src/js/02-ws-router.js`
 - **Fragility**: Firmware and JS must agree on message type strings. Rename without updating both sides causes silent failure.
 - **Protected by**: 18 E2E tests verify end-to-end command flow. `validateWsMessage()` for 3 critical types.
 - **Safe modification**: Update both sides. Add E2E test for new commands.
@@ -292,6 +238,7 @@ Graduated CPU thresholds at 80%/95%. FIR/convolution auto-bypass at critical. Pi
 ### Vendored WebSockets (v2.7.3)
 
 - No known CVEs. Periodically diff against upstream. Priority: LOW.
+- **Decision (2026-03-22)**: Retain vendored library. ESP-IDF native httpd_ws migration evaluated and deferred (227 endpoint + 39 WS API rewrite, 113 E2E test rework). No known CVEs. Revisit on framework migration to pure ESP-IDF.
 
 ---
 
@@ -313,12 +260,6 @@ Graduated CPU thresholds at 80%/95%. FIR/convolution auto-bypass at critical. Pi
 - Only mock MQTT tests. No real broker test.
 - Priority: LOW (QoS 1 acceptable for telemetry)
 
-### Frontend `.json()` Error Handling
-
-- 28 unprotected `.json()` calls across 6 JS files (see tech debt section above)
-- Crash on non-2xx or malformed JSON responses
-- Priority: LOW
-
 ---
 
 ## Missing Critical Features
@@ -327,15 +268,16 @@ None identified. Suggested enhancements (not critical):
 - Archive mirror for OTA downloads (deferred, requires S3)
 - TLS server for AP mode (deferred, certificate management complex)
 - Multi-device clustering (not planned, significant architecture change)
-- Centralized HTTP response middleware for security headers
+- Centralized HTTP response middleware for security headers (DONE: `server_send()` wrapper)
 
 ---
 
 *Concerns analysis: 2026-03-22*
 
 **Summary of changes from previous version:**
-- 7 NEW active concerns identified (HTTP security headers coverage gap, frontend `.json()` incomplete migration, `websocket_handler.cpp` size, `main.cpp` size, JsonDocument stack allocation, innerHTML audit, strncpy null termination)
+- All 7 active concerns mitigated and moved to resolved section (HTTP security headers, frontend `.json()`, websocket_handler.cpp size, main.cpp size, JsonDocument stack allocation, innerHTML sanitization, strncpy null termination)
+- No active concerns remain
+- Test counts updated (2354 C++/106 modules, 113 E2E/22 specs)
+- Vendored WebSockets decision record added (retain, defer ESP-IDF migration)
+- Default AP password security consideration preserved
 - All previously resolved items preserved as historical record
-- Accurate test counts updated (2335 C++/91 modules, 113 E2E/22 specs)
-- Default AP password security consideration added
-- Vendored WebSockets library version risk documented

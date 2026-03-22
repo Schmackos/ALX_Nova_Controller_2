@@ -549,6 +549,39 @@ void mqttPublishPendingState() {
 
 This keeps `AppState` from growing unbounded and makes each module's state self-contained.
 
+### Multi-File Module Splits
+
+Some modules have grown beyond a single `.cpp` file and are split by concern while sharing a common header:
+
+**WebSocket subsystem** (`websocket_handler.h`) -- split into 4 files:
+
+| File | Responsibility |
+|------|---------------|
+| `websocket_command.cpp` | WS event handler (`webSocketEvent()`), command dispatch, deferred init state |
+| `websocket_broadcast.cpp` | 17 state broadcast functions + audio data streaming |
+| `websocket_auth.cpp` | Client authentication tracking, session validation |
+| `websocket_cpu_monitor.cpp` | FreeRTOS idle hook CPU usage measurement |
+
+Cross-file shared state uses accessor functions in `websocket_internal.h`.
+
+**MQTT subsystem** (`mqtt_handler.h`) -- split into 3 files: `mqtt_handler.cpp`, `mqtt_publish.cpp`, `mqtt_ha_discovery.cpp`.
+
+### Extracted API Modules
+
+REST API endpoint handlers that were previously registered inline in `main.cpp setup()` have been extracted into dedicated modules:
+
+| Module | File | Endpoints |
+|--------|------|-----------|
+| Diagnostics | `src/diag_api.cpp` | `/api/diagnostics`, `/api/diagnostics/journal`, `/api/diag/snapshot` |
+| Signal generator | `src/siggen_api.cpp` | `/api/signalgenerator` (GET + POST) |
+| DSP | `src/dsp_api.cpp` | DSP config CRUD, persistence |
+| Audio pipeline | `src/pipeline_api.cpp` | Matrix CRUD, per-output DSP config |
+| DAC | `src/dac_api.cpp` | DAC state, volume, enable/disable |
+| HAL | `src/hal/hal_api.cpp` | HAL device CRUD, discovery, database |
+| PSRAM | `src/psram_api.cpp` | PSRAM health status |
+
+Each module exposes a `registerXxxApiEndpoints()` function called from `setup()` in `main.cpp`.
+
 ---
 
 ## Logging Conventions

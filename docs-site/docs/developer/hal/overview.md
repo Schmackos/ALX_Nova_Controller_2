@@ -97,6 +97,21 @@ struct HalDeviceDescriptor {
 };
 ```
 
+### Safe String Copying
+
+All HAL string fields (compatible, name, manufacturer) must use `hal_safe_strcpy()` from `hal_types.h` instead of `strncpy()`:
+
+```cpp
+hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9038q2m");
+hal_safe_strcpy(d.name, sizeof(d.name), "ES9038Q2M");
+```
+
+This helper guarantees null termination even if the source string exceeds the destination buffer size. The `hal_init_descriptor()` function uses it internally for all 3 string fields.
+
+:::warning
+Do NOT use raw `strncpy()` for HAL descriptor fields. It does not guarantee null termination when the source string fills the entire buffer.
+:::
+
 ### HalDeviceConfig
 
 Runtime configuration that is persisted to `/hal_config.json`. Drivers read this during `init()` to honour any overrides the user set through the web UI:

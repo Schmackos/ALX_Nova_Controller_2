@@ -5299,6 +5299,12 @@ body.night-mode {
             }
         }
 
+        // ===== HTML Escaping =====
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
         // ===== Connection Status =====
         let currentWifiConnected = false;
         let currentWifiSSID = '';
@@ -6282,10 +6288,7 @@ body.night-mode {
             }
         }
 
-        function escapeHtml(str) {
-            if (!str) return '';
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        }
+
 
 //# sourceURL=05-audio-tab.js
 
@@ -7097,10 +7100,10 @@ body.night-mode {
                 const ipType = data.usingStaticIP ? 'Static IP' : 'DHCP';
                 html += `
                     <div class="info-row"><span class="info-label">Client Status</span><span class="info-value text-success">Connected</span></div>
-                    <div class="info-row"><span class="info-label">Network</span><span class="info-value">${data.ssid || 'Unknown'}</span></div>
-                    <div class="info-row"><span class="info-label">Client IP</span><span class="info-value">${data.staIP || data.ip || 'Unknown'}</span></div>
-                    <div class="info-row"><span class="info-label">IP Configuration</span><span class="info-value">${ipType}</span></div>
-                    <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${formatRssi(data.rssi)}</span></div>
+                    <div class="info-row"><span class="info-label">Network</span><span class="info-value">${escapeHtml(data.ssid) || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">Client IP</span><span class="info-value">${escapeHtml(data.staIP || data.ip) || 'Unknown'}</span></div>
+                    <div class="info-row"><span class="info-label">IP Configuration</span><span class="info-value">${escapeHtml(ipType)}</span></div>
+                    <div class="info-row"><span class="info-label">Signal</span><span class="info-value">${escapeHtml(formatRssi(data.rssi))}</span></div>
                     <div class="info-row"><span class="info-label">Saved Networks</span><span class="info-value">${data.networkCount || 0}</span></div>
                 `;
             } else {
@@ -7116,8 +7119,8 @@ body.night-mode {
 
                 html += `
                     <div class="info-row"><span class="info-label">AP Mode</span><span class="info-value text-warning">Active</span></div>
-                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${data['appState.apSSID'] || 'ALX-Device'}</span></div>
-                    <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${data.apIP || data.ip || '192.168.4.1'}</span></div>
+                    <div class="info-row"><span class="info-label">AP SSID</span><span class="info-value">${escapeHtml(data['appState.apSSID']) || 'ALX-Device'}</span></div>
+                    <div class="info-row"><span class="info-label">AP IP</span><span class="info-value">${escapeHtml(data.apIP || data.ip) || '192.168.4.1'}</span></div>
                 `;
 
                 if (data.apClients !== undefined) {
@@ -7130,7 +7133,7 @@ body.night-mode {
             if (html !== '' && apContentAdded) {
                 html += `<div class="divider"></div>`;
             }
-            html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${data.mac || 'Unknown'}</span></div>`;
+            html += `<div class="info-row"><span class="info-label">MAC Address</span><span class="info-value">${escapeHtml(data.mac) || 'Unknown'}</span></div>`;
 
             apToggle.checked = !!(data['appState.apEnabled']) || (data.mode === 'ap');
             document.getElementById('apFields').style.display = apToggle.checked ? '' : 'none';
@@ -7319,7 +7322,7 @@ body.night-mode {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     showToast('Timezone updated', 'success');
@@ -7341,7 +7344,7 @@ body.night-mode {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     showToast('DST setting updated', 'success');
@@ -7375,7 +7378,7 @@ body.night-mode {
 
         function updateCurrentTime() {
             apiFetch('/api/settings')
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     // Create date object with current UTC time
@@ -8922,7 +8925,7 @@ function showWiFiModal(ssid) {
                     <div class="info-box">
                         <div style="text-align: center; padding: 20px;">
                             <div id="wifiLoader" class="animate-pulse" style="font-size: 40px; margin-bottom: 16px;">📶</div>
-                            <div id="wifiStatusText">Connecting to <strong>${ssid}</strong>...</div>
+                            <div id="wifiStatusText">Connecting to <strong>${escapeHtml(ssid)}</strong>...</div>
                             <div id="wifiIPInfo" class="hidden" style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--success);"></div>
                         </div>
                     </div>
@@ -8942,7 +8945,7 @@ function updateWiFiConnectionStatus(type, message, ip) {
 
     if (!statusText) return; // Modal might be closed
 
-    statusText.innerHTML = message;
+    statusText.textContent = message;
 
     if (type === 'success') {
         loader.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="var(--success)" aria-hidden="true"><path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M11,16.5L18,9.5L16.59,8.09L11,13.67L7.91,10.59L6.5,12L11,16.5Z"/></svg>';
@@ -8953,7 +8956,7 @@ function updateWiFiConnectionStatus(type, message, ip) {
             ipInfo.classList.remove('hidden');
 
             actions.innerHTML = `
-                        <button class="btn btn-success" onclick="window.location.href='http://${ip}'">Go to Dashboard</button>
+                        <button class="btn btn-success" onclick="window.location.href='http://${escapeHtml(ip)}'">Go to Dashboard</button>
                     `;
         } else {
              actions.innerHTML = `<button class="btn btn-secondary" onclick="closeWiFiModal()">Close</button>`;
@@ -9042,11 +9045,11 @@ function showAPModeModal(apIP) {
                             <div style="font-size: 40px; margin-bottom: 16px;">📶</div>
                             <div style="margin-bottom: 8px;">No saved networks available.</div>
                             <div style="margin-bottom: 16px;">Access Point mode has been started.</div>
-                            <div style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--accent);">${apIP}</div>
+                            <div style="margin-top: 16px; font-family: monospace; font-size: 18px; color: var(--accent);">${escapeHtml(apIP)}</div>
                         </div>
                     </div>
                     <div class="modal-actions" style="margin-top: 16px;">
-                        <button class="primary" onclick="window.location.href='http://${apIP}'">Go to Dashboard</button>
+                        <button class="primary" onclick="window.location.href='http://${escapeHtml(apIP)}'">Go to Dashboard</button>
                     </div>
                 </div>
             `;
@@ -9701,7 +9704,7 @@ function submitAPConfig(event) {
 
 function loadMqttSettings() {
     apiFetch('/api/mqtt')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         document.getElementById('appState.mqttEnabled').checked = data.enabled || false;
         document.getElementById('mqttFields').style.display = (data.enabled || false) ? '' : 'none';
@@ -9760,7 +9763,7 @@ function toggleMqttEnabled() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: enabled })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast(enabled ? 'MQTT enabled' : 'MQTT disabled', 'success');
@@ -9792,7 +9795,7 @@ function saveMqttSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast('MQTT settings saved', 'success');
@@ -9812,7 +9815,7 @@ function toggleAutoAP() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ autoAPEnabled: enabled })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) showToast(enabled ? 'Auto AP enabled' : 'Auto AP disabled', 'success');
     })
@@ -10718,8 +10721,8 @@ function renderReleaseList(releases) {
             btnHtml = '<button class="btn btn-sm btn-primary" style="white-space:nowrap;" onclick="installRelease(\'' + rel.version.replace(/'/g, "\\'") + '\',false)">Install</button>';
         }
         const notesBtn = '<a href="#" class="release-notes-link" onclick="showReleaseNotesFor(\'' + rel.version.replace(/'/g, "\\'") + '\'); return false;" title="View release notes"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2M12 20C7.58 20 4 16.42 4 12C4 7.58 7.58 4 12 4C16.42 4 20 7.58 20 12C20 16.42 16.42 20 12 20Z"/></svg></a>';
-        div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + rel.version + '</span>' + badge + notesBtn +
-            '<span class="text-secondary" style="font-size:12px;margin-left:8px;">' + dateStr + '</span></div>' +
+        div.innerHTML = '<div style="min-width:0;"><span style="font-weight:600;">' + escapeHtml(rel.version) + '</span>' + badge + notesBtn +
+            '<span class="text-secondary" style="font-size:12px;margin-left:8px;">' + escapeHtml(dateStr) + '</span></div>' +
             '<div style="margin-left:8px;">' + btnHtml + '</div>';
         container.appendChild(div);
     });
@@ -10801,7 +10804,7 @@ function initFirmwareDragDrop() {
         function eepromLoadPresets() {
             if (_eepromPresetsLoaded) return;
             apiFetch('/api/dac/eeprom/presets')
-            .then(r => r.json())
+            .then(r => r.safeJson())
             .then(d => {
                 if (!d.success) return;
                 var sel = document.getElementById('eepromPreset');
@@ -11563,7 +11566,7 @@ function initFirmwareDragDrop() {
                 flags: flags, sampleRates: rates
             };
             apiFetch('/api/dac/eeprom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-            .then(function(r){ return r.json(); })
+            .then(function(r){ return r.safeJson(); })
             .then(function(d){ if (d.success) showToast('EEPROM programmed successfully','success'); else showToast(d.message||'Program failed','error'); })
             .catch(function(){ showToast('EEPROM program failed','error'); });
         }
@@ -11572,7 +11575,7 @@ function initFirmwareDragDrop() {
             if (!confirm('Erase EEPROM? This will clear all stored DAC identification data.')) return;
             var addr = parseInt(document.getElementById('eepromTargetAddr').value);
             apiFetch('/api/dac/eeprom/erase', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ address: addr }) })
-            .then(function(r){ return r.json(); })
+            .then(function(r){ return r.safeJson(); })
             .then(function(d){ if (d.success) showToast('EEPROM erased','success'); else showToast(d.message||'Erase failed','error'); })
             .catch(function(){ showToast('EEPROM erase failed','error'); });
         }
@@ -11599,7 +11602,7 @@ function initFirmwareDragDrop() {
         }
         function eepromLoadHex() {
             apiFetch('/api/dac/eeprom')
-            .then(r => r.json())
+            .then(r => r.safeJson())
             .then(d => {
                 var el = document.getElementById('dbgEepromHex');
                 if (!el) return;
@@ -11859,7 +11862,7 @@ function initFirmwareDragDrop() {
         }
 
         // ===== Module Chip Filtering =====
-        // escapeHtml() defined in 14-io-registry.js (loads earlier in concat order)
+        // escapeHtml() defined in 01-core.js (loads first in concat order)
 
         function extractModule(msg) {
             var m = msg.match(/\[[DIWE]\]\s*\[([^\]]+)\]/);
