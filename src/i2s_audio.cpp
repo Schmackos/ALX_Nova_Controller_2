@@ -261,28 +261,37 @@ AudioHealthStatus audio_derive_health_status(const AudioDiagnostics &diag) {
 // ===== Hardware-dependent code (ESP32 only) =====
 #ifndef NATIVE_TEST
 
-// Channel handles for new IDF5 I2S std API
-// Phase 4: Dynamic array supports N ADCs instead of hardcoded 2
-static i2s_chan_handle_t _rx_handle[AUDIO_PIPELINE_MAX_INPUTS] = {};
-static i2s_chan_handle_t _tx_handle_adc1 = NULL;  // NULL when TX not active (used by full-duplex DAC toggle)
+// ===== Unified I2S Port State =====
+#define I2S_PORT_COUNT 3
+#define I2S_MODE_STD   0
+#define I2S_MODE_TDM   1
+#define I2S_MODE_NONE  255
+#define I2S_USER_TX    0x01
+#define I2S_USER_RX    0x02
 
-// Backward-compat macros (Phase 4) — will be removed after full cutover
-#define _rx_handle_adc1 _rx_handle[0]
-#define _rx_handle_adc2 _rx_handle[1]
-
-#if CONFIG_IDF_TARGET_ESP32P4
-// I2S2 full-duplex shared state (ES8311 TX + expansion mezzanine ADC RX)
-// Both directions share BCK/WS/MCLK on the same I2S peripheral.
-// IDF5 requires both handles allocated in a single i2s_new_channel() call.
-struct I2s2State {
-    i2s_chan_handle_t tx;          // ES8311 DAC output (NULL when inactive)
-    i2s_chan_handle_t rx;          // Expansion ADC input (NULL when inactive)
-    uint8_t          users;       // Bitmask: 0x01=ES8311 TX, 0x02=expansion RX
-    uint32_t         sampleRate;  // Rate at which I2S2 was last allocated
-    gpio_num_t       rxDinPin;    // Expansion ADC data-in GPIO (remembered for realloc)
+struct I2sPortState {
+    i2s_chan_handle_t tx;
+    i2s_chan_handle_t rx;
+    uint8_t          users;        // Bitmask: I2S_USER_TX=0x01, I2S_USER_RX=0x02
+    uint32_t         sampleRate;
+    uint8_t          txMode;       // I2S_MODE_STD / I2S_MODE_TDM / I2S_MODE_NONE
+    uint8_t          rxMode;
+    uint8_t          txTdmSlots;
+    uint8_t          rxTdmSlots;
+    gpio_num_t       txDoutPin;
+    gpio_num_t       rxDinPin;
+    gpio_num_t       mclkPin;
+    gpio_num_t       bckPin;
+    gpio_num_t       lrcPin;
+    bool             isClockMaster;
+    bool             autoCleared;
 };
-static I2s2State _i2s2 = {};
-#endif
+static I2sPortState _port[I2S_PORT_COUNT] = {};
+
+// Backward-compat macros — map legacy per-port names onto the unified array
+#define _rx_handle_adc1 _port[0].rx
+#define _tx_handle_adc1 _port[0].tx
+#define _rx_handle_adc2 _port[1].rx
 
 static uint32_t _currentSampleRate = DEFAULT_AUDIO_SAMPLE_RATE;
 static portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
@@ -365,6 +374,207 @@ static void i2s_audio_apply_window(FftWindowType type) {
 // Convention: HAL config stores -1 for "use board default"; 0 is a strapping pin (never I2S).
 static inline gpio_num_t _resolveI2sPin(int8_t cfgValue, int fallback) {
     return (cfgValue > 0) ? (gpio_num_t)cfgValue : (gpio_num_t)fallback;
+}
+
+// ===== Port-generic I2S helpers =====
+// All helpers validate port < I2S_PORT_COUNT and operate on _port[port].
+
+// Disable + delete one direction of an I2S port.
+// tx=true targets the TX handle; tx=false targets the RX handle.
+static void _i2s_port_teardown_dir(uint8_t port, bool tx) {
+    if (port >= I2S_PORT_COUNT) return;
+    i2s_chan_handle_t* h = tx ? &_port[port].tx : &_port[port].rx;
+    if (*h) {
+        i2s_channel_disable(*h);
+        i2s_del_channel(*h);
+        *h = NULL;
+    }
+}
+
+// Full teardown of both directions; resets all state fields.
+static void _i2s_port_teardown(uint8_t port) {
+    if (port >= I2S_PORT_COUNT) return;
+    _i2s_port_teardown_dir(port, true);   // TX
+    _i2s_port_teardown_dir(port, false);  // RX
+    _port[port] = I2sPortState{};         // Reset all state
+}
+
+// Allocate I2S channels for a port via i2s_new_channel().
+// needTx / needRx control whether TX and/or RX handles are requested.
+// autoClr enables auto_clear on the channel config (zero-fill TX DMA on underrun).
+// Returns true on success.
+static bool _i2s_port_alloc(uint8_t port, bool needTx, bool needRx, bool autoClr) {
+    if (port >= I2S_PORT_COUNT) return false;
+
+    // Clean up any existing handles before reallocating
+    _i2s_port_teardown_dir(port, true);
+    _i2s_port_teardown_dir(port, false);
+
+    i2s_port_t idfPort = (i2s_port_t)port;
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(idfPort, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num  = DMA_BUF_COUNT;
+    chan_cfg.dma_frame_num = DMA_BUF_LEN;
+    chan_cfg.auto_clear    = autoClr;
+
+    i2s_chan_handle_t* pTx = needTx ? &_port[port].tx : nullptr;
+    i2s_chan_handle_t* pRx = needRx ? &_port[port].rx : nullptr;
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, pTx, pRx);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] Port %u channel alloc failed: %d", port, err);
+        if (pTx) *pTx = NULL;
+        if (pRx) *pRx = NULL;
+        return false;
+    }
+    _port[port].autoCleared = autoClr;
+    return true;
+}
+
+// Init TX direction in standard (STD) I2S mode.
+// Updates _port[port].{txMode, sampleRate, txDoutPin, mclkPin, bckPin, lrcPin}.
+static bool _i2s_port_init_tx_std(uint8_t port, uint32_t rate,
+                                   gpio_num_t doutPin, gpio_num_t mclk,
+                                   gpio_num_t bck, gpio_num_t ws) {
+    if (port >= I2S_PORT_COUNT || !_port[port].tx) return false;
+
+    i2s_std_config_t cfg = {};
+    cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(rate);
+    cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT,
+                                                        I2S_SLOT_MODE_STEREO);
+    cfg.gpio_cfg.mclk = mclk;
+    cfg.gpio_cfg.bclk = bck;
+    cfg.gpio_cfg.ws   = ws;
+    cfg.gpio_cfg.dout = doutPin;
+    cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    cfg.gpio_cfg.invert_flags.ws_inv   = false;
+
+    esp_err_t err = i2s_channel_init_std_mode(_port[port].tx, &cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] Port %u TX STD init failed: %d", port, err);
+        return false;
+    }
+    _port[port].txMode    = I2S_MODE_STD;
+    _port[port].sampleRate = rate;
+    _port[port].txDoutPin = doutPin;
+    _port[port].mclkPin   = mclk;
+    _port[port].bckPin    = bck;
+    _port[port].lrcPin    = ws;
+    return true;
+}
+
+// Init RX direction in standard (STD) I2S mode.
+// Updates _port[port].{rxMode, rxDinPin} and inherits clock fields already set by TX.
+static bool _i2s_port_init_rx_std(uint8_t port, uint32_t rate,
+                                   gpio_num_t dinPin, gpio_num_t mclk,
+                                   gpio_num_t bck, gpio_num_t ws) {
+    if (port >= I2S_PORT_COUNT || !_port[port].rx) return false;
+
+    i2s_std_config_t cfg = {};
+    cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(rate);
+    cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT,
+                                                        I2S_SLOT_MODE_STEREO);
+    cfg.gpio_cfg.mclk = mclk;
+    cfg.gpio_cfg.bclk = bck;
+    cfg.gpio_cfg.ws   = ws;
+    cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.din  = dinPin;
+    cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    cfg.gpio_cfg.invert_flags.ws_inv   = false;
+
+    esp_err_t err = i2s_channel_init_std_mode(_port[port].rx, &cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] Port %u RX STD init failed: %d", port, err);
+        return false;
+    }
+    _port[port].rxMode   = I2S_MODE_STD;
+    _port[port].rxDinPin = dinPin;
+    // Propagate rate/clock pins in case TX was not initialized
+    _port[port].sampleRate = rate;
+    _port[port].mclkPin    = mclk;
+    _port[port].bckPin     = bck;
+    _port[port].lrcPin     = ws;
+    return true;
+}
+
+// Init TX direction in TDM mode.
+static bool _i2s_port_init_tx_tdm(uint8_t port, uint32_t rate,
+                                    gpio_num_t doutPin, uint8_t slots,
+                                    gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws) {
+    if (port >= I2S_PORT_COUNT || !_port[port].tx) return false;
+
+    uint32_t slotMask = (1u << slots) - 1u;
+    i2s_tdm_config_t cfg = {};
+    cfg.clk_cfg  = I2S_TDM_CLK_DEFAULT_CONFIG(rate);
+    cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(
+        I2S_DATA_BIT_WIDTH_32BIT,
+        I2S_SLOT_MODE_STEREO,
+        (i2s_tdm_slot_mask_t)slotMask);
+    cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
+    cfg.gpio_cfg.mclk = mclk;
+    cfg.gpio_cfg.bclk = bck;
+    cfg.gpio_cfg.ws   = ws;
+    cfg.gpio_cfg.dout = doutPin;
+    cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    cfg.gpio_cfg.invert_flags.ws_inv   = false;
+
+    esp_err_t err = i2s_channel_init_tdm_mode(_port[port].tx, &cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] Port %u TX TDM init failed: %d", port, err);
+        return false;
+    }
+    _port[port].txMode     = I2S_MODE_TDM;
+    _port[port].txTdmSlots = slots;
+    _port[port].sampleRate = rate;
+    _port[port].txDoutPin  = doutPin;
+    _port[port].mclkPin    = mclk;
+    _port[port].bckPin     = bck;
+    _port[port].lrcPin     = ws;
+    return true;
+}
+
+// Init RX direction in TDM mode.
+static bool _i2s_port_init_rx_tdm(uint8_t port, uint32_t rate,
+                                    gpio_num_t dinPin, uint8_t slots,
+                                    gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws) {
+    if (port >= I2S_PORT_COUNT || !_port[port].rx) return false;
+
+    uint32_t slotMask = (1u << slots) - 1u;
+    i2s_tdm_config_t cfg = {};
+    cfg.clk_cfg  = I2S_TDM_CLK_DEFAULT_CONFIG(rate);
+    cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(
+        I2S_DATA_BIT_WIDTH_32BIT,
+        I2S_SLOT_MODE_STEREO,
+        (i2s_tdm_slot_mask_t)slotMask);
+    cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
+    cfg.gpio_cfg.mclk = mclk;
+    cfg.gpio_cfg.bclk = bck;
+    cfg.gpio_cfg.ws   = ws;
+    cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
+    cfg.gpio_cfg.din  = dinPin;
+    cfg.gpio_cfg.invert_flags.mclk_inv = false;
+    cfg.gpio_cfg.invert_flags.bclk_inv = false;
+    cfg.gpio_cfg.invert_flags.ws_inv   = false;
+
+    esp_err_t err = i2s_channel_init_tdm_mode(_port[port].rx, &cfg);
+    if (err != ESP_OK) {
+        LOG_E("[Audio] Port %u RX TDM init failed: %d", port, err);
+        return false;
+    }
+    _port[port].rxMode     = I2S_MODE_TDM;
+    _port[port].rxTdmSlots = slots;
+    _port[port].rxDinPin   = dinPin;
+    _port[port].sampleRate = rate;
+    _port[port].mclkPin    = mclk;
+    _port[port].bckPin     = bck;
+    _port[port].lrcPin     = ws;
+    return true;
 }
 
 // DEPRECATED: use i2s_audio_configure_adc(0, cfg) for new code.
@@ -637,10 +847,10 @@ bool i2s_audio_port1_active(void) {
 
 uint32_t i2s_audio_port2_read(int32_t* dst, uint32_t frames) {
 #if CONFIG_IDF_TARGET_ESP32P4
-    if (!_i2s2.rx || !_expansionRxOk) return 0;
+    if (!_port[2].rx || !_expansionRxOk) return 0;
     size_t bytes_read = 0;
     size_t size = frames * 2 * sizeof(int32_t);
-    esp_err_t err = i2s_channel_read(_i2s2.rx, dst, size, &bytes_read, 5);
+    esp_err_t err = i2s_channel_read(_port[2].rx, dst, size, &bytes_read, 5);
     if (err != ESP_OK || bytes_read == 0) return 0;
     return (uint32_t)(bytes_read / (2 * sizeof(int32_t)));
 #else
@@ -668,11 +878,11 @@ bool i2s_audio_port2_active(void) {
 // ---------------------------------------------------------------------------
 uint32_t i2s_audio_port2_tdm_read(int32_t* dst, uint32_t frames) {
 #if CONFIG_IDF_TARGET_ESP32P4
-    if (!_i2s2.rx || !_expansionRxOk) return 0;
+    if (!_port[2].rx || !_expansionRxOk) return 0;
     size_t bytes_read = 0;
     // 4 slots per TDM frame, each slot is one int32_t
     size_t size = (size_t)frames * 4 * sizeof(int32_t);
-    esp_err_t err = i2s_channel_read(_i2s2.rx, dst, size, &bytes_read, pdMS_TO_TICKS(5));
+    esp_err_t err = i2s_channel_read(_port[2].rx, dst, size, &bytes_read, pdMS_TO_TICKS(5));
     if (err != ESP_OK || bytes_read == 0) return 0;
     return (uint32_t)(bytes_read / (4 * sizeof(int32_t)));
 #else
@@ -951,15 +1161,15 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
 
 #if CONFIG_IDF_TARGET_ESP32P4
     // Save I2S2 user state before teardown so we can restore at the new rate.
-    uint8_t savedI2s2Users = _i2s2.users;
-    gpio_num_t savedDin    = _i2s2.rxDinPin;
+    uint8_t savedI2s2Users = _port[2].users;
+    gpio_num_t savedDin    = _port[2].rxDinPin;
 
     if (savedI2s2Users) {
-        if (_i2s2.rx) { i2s_channel_disable(_i2s2.rx); }
-        if (_i2s2.tx) { i2s_channel_disable(_i2s2.tx); }
-        if (_i2s2.rx) { i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL; }
-        if (_i2s2.tx) { i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL; }
-        _i2s2.users    = 0;
+        if (_port[2].rx) { i2s_channel_disable(_port[2].rx); }
+        if (_port[2].tx) { i2s_channel_disable(_port[2].tx); }
+        if (_port[2].rx) { i2s_del_channel(_port[2].rx); _port[2].rx = NULL; }
+        if (_port[2].tx) { i2s_del_channel(_port[2].tx); _port[2].tx = NULL; }
+        _port[2].users    = 0;
         _expansionRxOk = false;
     }
 
@@ -1199,107 +1409,84 @@ void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32
 
 #if CONFIG_IDF_TARGET_ESP32P4
 
-// Tears down any existing I2S2 channels and reallocates as full-duplex.
-// Always allocates both TX+RX handles (IDF5 requirement for shared peripheral).
-// rxDinPin: expansion ADC data-in GPIO, or I2S_GPIO_UNUSED if no RX needed yet.
+// Legacy wrapper — tears down any existing I2S2 channels, reallocates as full-duplex,
+// and initializes TX (ES8311 STD) + RX (expansion ADC STD) using the generic helpers.
+// Always allocates both TX+RX handles (IDF5 requirement for a shared peripheral).
+// rx_din_pin: expansion ADC data-in GPIO, or I2S_GPIO_UNUSED if no RX needed yet.
 static bool _i2s2_alloc_full_duplex(uint32_t sample_rate, gpio_num_t rx_din_pin) {
-    // Clean up any existing handles
-    if (_i2s2.rx) { i2s_channel_disable(_i2s2.rx); i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL; }
-    if (_i2s2.tx) { i2s_channel_disable(_i2s2.tx); i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL; }
-
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_2, I2S_ROLE_MASTER);
-    chan_cfg.dma_desc_num  = DMA_BUF_COUNT;
-    chan_cfg.dma_frame_num = DMA_BUF_LEN;
-    chan_cfg.auto_clear    = true;
-
-    // Allocate both handles in one call — IDF5 full-duplex requirement
-    esp_err_t err = i2s_new_channel(&chan_cfg, &_i2s2.tx, &_i2s2.rx);
-    if (err != ESP_OK) {
-        LOG_E("[I2S2] Full-duplex channel alloc failed: %d", err);
-        _i2s2.tx = NULL; _i2s2.rx = NULL;
+    // Allocate both handles via the generic helper (port 2, TX+RX, auto_clear=true)
+    if (!_i2s_port_alloc(2, /*needTx=*/true, /*needRx=*/true, /*autoClr=*/true)) {
         return false;
     }
 
-    // TX config: ES8311 DAC output — clock master (MCLK/BCK/WS/DOUT)
-    i2s_std_config_t tx_cfg = {};
-    tx_cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
-    tx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
-    tx_cfg.gpio_cfg.mclk = (gpio_num_t)ES8311_I2S_MCLK_PIN;
-    tx_cfg.gpio_cfg.bclk = (gpio_num_t)ES8311_I2S_SCLK_PIN;
-    tx_cfg.gpio_cfg.ws   = (gpio_num_t)ES8311_I2S_LRCK_PIN;
-    tx_cfg.gpio_cfg.dout = (gpio_num_t)ES8311_I2S_DSDIN_PIN;
-    tx_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
-    tx_cfg.gpio_cfg.invert_flags.mclk_inv = false;
-    tx_cfg.gpio_cfg.invert_flags.bclk_inv = false;
-    tx_cfg.gpio_cfg.invert_flags.ws_inv   = false;
-    tx_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    // TX first — activates MCLK/BCK/WS output (ES8311 clock master)
+    if (!_i2s_port_init_tx_std(2, sample_rate,
+                                (gpio_num_t)ES8311_I2S_DSDIN_PIN,
+                                (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                                (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                                (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+        // TX init failed — clean up
+        _i2s_port_teardown_dir(2, false);  // del RX
+        _i2s_port_teardown_dir(2, true);   // del TX
+        return false;
+    }
+    // Apply MCLK multiple after TX init (helper sets STD defaults; override here)
+    // Note: the helper already set the standard MCLK multiple; ES8311 needs x256
+    // which is the IDF5 default so no additional override is required.
 
-    // TX init first — activates MCLK output
-    err = i2s_channel_init_std_mode(_i2s2.tx, &tx_cfg);
-    if (err != ESP_OK) {
-        LOG_E("[I2S2] TX init failed: %d", err);
-        i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
-        i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
+    // RX — expansion ADC data-in, shares clocks with TX
+    if (!_i2s_port_init_rx_std(2, sample_rate,
+                                rx_din_pin,
+                                (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                                (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                                (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+        // RX init failed — disable TX and clean up
+        _i2s_port_teardown_dir(2, true);   // disable+del TX
+        _i2s_port_teardown_dir(2, false);  // del RX (already failed but handle may exist)
         return false;
     }
 
-    // RX config: expansion ADC input — shares clocks, separate DIN
-    i2s_std_config_t rx_cfg = tx_cfg;  // Copy clock + slot config
-    rx_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;   // RX has no data out
-    rx_cfg.gpio_cfg.din  = rx_din_pin;        // I2S_GPIO_UNUSED when no expansion ADC yet
-
-    err = i2s_channel_init_std_mode(_i2s2.rx, &rx_cfg);
-    if (err != ESP_OK) {
-        LOG_E("[I2S2] RX init failed: %d", err);
-        i2s_channel_disable(_i2s2.tx);
-        i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
-        i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
-        return false;
-    }
-
-    _i2s2.sampleRate = sample_rate;
-    _i2s2.rxDinPin   = rx_din_pin;
     return true;
 }
 
 bool i2s_audio_enable_es8311_tx(uint32_t sample_rate) {
-    if (_i2s2.users & 0x01) {
+    if (_port[2].users & 0x01) {
         LOG_I("[ES8311] I2S2 TX already enabled");
         return true;
     }
 
     LOG_I("[ES8311] Enabling I2S2 TX, rate=%luHz", (unsigned long)sample_rate);
 
-    if (_i2s2.users == 0) {
+    if (_port[2].users == 0) {
         // I2S2 idle — fresh full-duplex allocation (RX side idles until expansion ADC connects)
         if (!_i2s2_alloc_full_duplex(sample_rate, I2S_GPIO_UNUSED)) return false;
 
-        esp_err_t err = i2s_channel_enable(_i2s2.tx);
+        esp_err_t err = i2s_channel_enable(_port[2].tx);
         if (err != ESP_OK) {
             LOG_E("[ES8311] I2S2 TX enable failed: %d", err);
-            i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
-            i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
+            i2s_del_channel(_port[2].rx); _port[2].rx = NULL;
+            i2s_del_channel(_port[2].tx); _port[2].tx = NULL;
             return false;
         }
     } else {
         // Expansion RX already active (bit 0x02) — I2S2 is up.
         // Teardown and reallocate as full-duplex with both directions.
         LOG_I("[ES8311] I2S2 RX active — upgrading to full-duplex");
-        gpio_num_t savedDin = _i2s2.rxDinPin;
+        gpio_num_t savedDin = _port[2].rxDinPin;
 
         if (!_i2s2_alloc_full_duplex(sample_rate, savedDin)) return false;
 
         // Enable both TX and RX
-        i2s_channel_enable(_i2s2.tx);
-        esp_err_t err = i2s_channel_enable(_i2s2.rx);
+        i2s_channel_enable(_port[2].tx);
+        esp_err_t err = i2s_channel_enable(_port[2].rx);
         if (err != ESP_OK) {
             LOG_W("[ES8311] I2S2 RX re-enable after upgrade failed: %d — expansion ADC degraded", err);
             _expansionRxOk = false;
-            _i2s2.users &= ~0x02u;
+            _port[2].users &= ~0x02u;
         }
     }
 
-    _i2s2.users |= 0x01;
+    _port[2].users |= 0x01;
 
     LOG_I("[ES8311] I2S2 TX enabled: rate=%luHz MCLK=GPIO%d@%luHz BCK=GPIO%d WS=GPIO%d DOUT=GPIO%d DMA=%dx%d",
           (unsigned long)sample_rate,
@@ -1310,14 +1497,14 @@ bool i2s_audio_enable_es8311_tx(uint32_t sample_rate) {
 }
 
 void i2s_audio_disable_es8311_tx() {
-    if (!(_i2s2.users & 0x01)) return;
+    if (!(_port[2].users & 0x01)) return;
 
-    _i2s2.users &= ~0x01u;
+    _port[2].users &= ~0x01u;
 
-    if (_i2s2.users == 0) {
+    if (_port[2].users == 0) {
         // Last user — full teardown
-        if (_i2s2.tx) { i2s_channel_disable(_i2s2.tx); i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL; }
-        if (_i2s2.rx) { i2s_channel_disable(_i2s2.rx); i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL; }
+        if (_port[2].tx) { i2s_channel_disable(_port[2].tx); i2s_del_channel(_port[2].tx); _port[2].tx = NULL; }
+        if (_port[2].rx) { i2s_channel_disable(_port[2].rx); i2s_del_channel(_port[2].rx); _port[2].rx = NULL; }
         LOG_I("[ES8311] I2S2 TX disabled — peripheral released");
     } else {
         // Expansion RX still active — keep peripheral up, TX DMA fills zeros (auto_clear)
@@ -1326,11 +1513,11 @@ void i2s_audio_disable_es8311_tx() {
 }
 
 void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms) {
-    if (!(_i2s2.users & 0x01) || !_i2s2.tx || !src) {
+    if (!(_port[2].users & 0x01) || !_port[2].tx || !src) {
         if (bytes_written) *bytes_written = 0;
         return;
     }
-    i2s_channel_write(_i2s2.tx, src, size, bytes_written, timeout_ms);
+    i2s_channel_write(_port[2].tx, src, size, bytes_written, timeout_ms);
 }
 
 // ===== Expansion Mezzanine ADC RX Bridge (I2S2, P4 only) =====
@@ -1339,7 +1526,7 @@ void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written,
 // IDF5 requires both handles to be allocated together via i2s_new_channel().
 
 bool i2s_audio_enable_expansion_rx(uint32_t sample_rate, gpio_num_t din_pin) {
-    if (_i2s2.users & 0x02) {
+    if (_port[2].users & 0x02) {
         LOG_I("[Audio] I2S2 expansion RX already enabled");
         return true;
     }
@@ -1347,26 +1534,26 @@ bool i2s_audio_enable_expansion_rx(uint32_t sample_rate, gpio_num_t din_pin) {
     LOG_I("[Audio] Enabling I2S2 expansion RX, rate=%luHz DIN=GPIO%d",
           (unsigned long)sample_rate, (int)din_pin);
 
-    if (_i2s2.users == 0) {
+    if (_port[2].users == 0) {
         // I2S2 idle — fresh allocation
         if (!_i2s2_alloc_full_duplex(sample_rate, din_pin)) return false;
 
-        esp_err_t err = i2s_channel_enable(_i2s2.rx);
+        esp_err_t err = i2s_channel_enable(_port[2].rx);
         if (err != ESP_OK) {
             LOG_E("[Audio] I2S2 expansion RX enable failed: %d", err);
-            i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
-            i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
+            i2s_del_channel(_port[2].rx); _port[2].rx = NULL;
+            i2s_del_channel(_port[2].tx); _port[2].tx = NULL;
             return false;
         }
         // TX handle exists but not enabled — no clocks until ES8311 activates
     } else {
         // ES8311 TX already active (bit 0x01) — I2S2 is up.
         // Rate must match (shared clocks).
-        if (_i2s2.sampleRate != sample_rate) {
+        if (_port[2].sampleRate != sample_rate) {
             LOG_W("[Audio] I2S2 expansion RX rate mismatch: I2S2@%luHz, requested %luHz — adopting %luHz",
-                  (unsigned long)_i2s2.sampleRate, (unsigned long)sample_rate,
-                  (unsigned long)_i2s2.sampleRate);
-            sample_rate = _i2s2.sampleRate;
+                  (unsigned long)_port[2].sampleRate, (unsigned long)sample_rate,
+                  (unsigned long)_port[2].sampleRate);
+            sample_rate = _port[2].sampleRate;
         }
 
         // Teardown and reallocate with the real DIN pin
@@ -1374,17 +1561,17 @@ bool i2s_audio_enable_expansion_rx(uint32_t sample_rate, gpio_num_t din_pin) {
         if (!_i2s2_alloc_full_duplex(sample_rate, din_pin)) return false;
 
         // Re-enable both directions
-        i2s_channel_enable(_i2s2.tx);
-        esp_err_t err = i2s_channel_enable(_i2s2.rx);
+        i2s_channel_enable(_port[2].tx);
+        esp_err_t err = i2s_channel_enable(_port[2].rx);
         if (err != ESP_OK) {
             LOG_E("[Audio] I2S2 expansion RX enable failed after upgrade: %d", err);
             return false;
         }
         // Restore TX user bit (was cleared during teardown in _alloc)
-        _i2s2.users |= 0x01;
+        _port[2].users |= 0x01;
     }
 
-    _i2s2.users |= 0x02;
+    _port[2].users |= 0x02;
     _expansionRxOk = true;
 
     LOG_I("[Audio] I2S2 expansion RX enabled: rate=%luHz DIN=GPIO%d DMA=%dx%d",
@@ -1393,19 +1580,19 @@ bool i2s_audio_enable_expansion_rx(uint32_t sample_rate, gpio_num_t din_pin) {
 }
 
 void i2s_audio_disable_expansion_rx() {
-    if (!(_i2s2.users & 0x02)) return;
+    if (!(_port[2].users & 0x02)) return;
 
-    _i2s2.users &= ~0x02u;
+    _port[2].users &= ~0x02u;
     _expansionRxOk = false;
 
-    if (_i2s2.users == 0) {
+    if (_port[2].users == 0) {
         // Last user — full teardown
-        if (_i2s2.rx) { i2s_channel_disable(_i2s2.rx); i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL; }
-        if (_i2s2.tx) { i2s_channel_disable(_i2s2.tx); i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL; }
+        if (_port[2].rx) { i2s_channel_disable(_port[2].rx); i2s_del_channel(_port[2].rx); _port[2].rx = NULL; }
+        if (_port[2].tx) { i2s_channel_disable(_port[2].tx); i2s_del_channel(_port[2].tx); _port[2].tx = NULL; }
         LOG_I("[Audio] I2S2 expansion RX disabled — peripheral released");
     } else {
         // ES8311 TX still active — disable RX DMA but keep peripheral up
-        if (_i2s2.rx) i2s_channel_disable(_i2s2.rx);
+        if (_port[2].rx) i2s_channel_disable(_port[2].rx);
         LOG_I("[Audio] I2S2 expansion RX disabled — ES8311 TX still active");
     }
 }
@@ -1439,7 +1626,7 @@ bool i2s_audio_expansion_rx_ok() {
 bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
                                         gpio_num_t din_pin,
                                         uint8_t    slot_count) {
-    if (_i2s2.users & 0x02) {
+    if (_port[2].users & 0x02) {
         LOG_I("[Audio] I2S2 expansion TDM RX already enabled");
         return true;
     }
@@ -1455,114 +1642,65 @@ bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
     // --- Allocate or reallocate I2S2 channels ---
     // Always tear down and rebuild because TDM RX and STD RX have different
     // i2s_chan_config_t slot settings and cannot be reconfigured in place.
-    if (_i2s2.rx)  { i2s_channel_disable(_i2s2.rx);  i2s_del_channel(_i2s2.rx);  _i2s2.rx = NULL; }
-    if (_i2s2.tx)  { i2s_channel_disable(_i2s2.tx);  i2s_del_channel(_i2s2.tx);  _i2s2.tx = NULL; }
+    bool txWasActive = (_port[2].users & 0x01) != 0;
+    _port[2].users = 0;   // Cleared — will be restored below
 
-    bool txWasActive = (_i2s2.users & 0x01) != 0;
-    _i2s2.users = 0;   // Cleared — will be restored below
-
-    // Allocate fresh full-duplex pair
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_2, I2S_ROLE_MASTER);
-    chan_cfg.dma_desc_num  = DMA_BUF_COUNT;
-    // TDM frame = slot_count × 32-bit.  IDF5 counts frames in terms of slot groups.
-    // dma_frame_num = number of TDM frames per DMA buffer — same as stereo DMA_BUF_LEN.
-    chan_cfg.dma_frame_num = DMA_BUF_LEN;
-    chan_cfg.auto_clear    = true;
-
-    esp_err_t err = i2s_new_channel(&chan_cfg, &_i2s2.tx, &_i2s2.rx);
-    if (err != ESP_OK) {
-        LOG_E("[Audio] I2S2 TDM channel alloc failed: %d", err);
-        _i2s2.tx = NULL; _i2s2.rx = NULL;
+    // _i2s_port_alloc() handles teardown of any existing handles before realloc
+    if (!_i2s_port_alloc(2, /*needTx=*/true, /*needRx=*/true, /*autoClr=*/true)) {
         return false;
     }
 
     // TX: standard stereo mode (ES8311 DAC — unchanged from stereo path)
     if (txWasActive) {
-        i2s_std_config_t tx_cfg = {};
-        tx_cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
-        tx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT,
-                                                               I2S_SLOT_MODE_STEREO);
-        tx_cfg.gpio_cfg.mclk = (gpio_num_t)ES8311_I2S_MCLK_PIN;
-        tx_cfg.gpio_cfg.bclk = (gpio_num_t)ES8311_I2S_SCLK_PIN;
-        tx_cfg.gpio_cfg.ws   = (gpio_num_t)ES8311_I2S_LRCK_PIN;
-        tx_cfg.gpio_cfg.dout = (gpio_num_t)ES8311_I2S_DSDIN_PIN;
-        tx_cfg.gpio_cfg.din  = I2S_GPIO_UNUSED;
-        tx_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-
-        err = i2s_channel_init_std_mode(_i2s2.tx, &tx_cfg);
-        if (err != ESP_OK) {
-            LOG_E("[Audio] I2S2 TDM: TX (ES8311) reinit failed: %d", err);
-            i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
-            i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
+        if (!_i2s_port_init_tx_std(2, sample_rate,
+                                    (gpio_num_t)ES8311_I2S_DSDIN_PIN,
+                                    (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                                    (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                                    (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+            LOG_E("[Audio] I2S2 TDM: TX (ES8311) reinit failed");
+            _i2s_port_teardown(2);
             return false;
         }
     }
 
-    // RX: TDM mode — 4 slots × 32-bit, left-justified PCM
-    // i2s_tdm_config_t slot_cfg masks: each active slot set in slot_mask.
-    i2s_tdm_config_t tdm_rx_cfg = {};
-
-    // Clock: MCLK on same pin as ES8311 so TDM ADC can derive its PLL clock.
-    tdm_rx_cfg.clk_cfg = I2S_TDM_CLK_DEFAULT_CONFIG(sample_rate);
-    tdm_rx_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-
-    // Slot: left-justified 32-bit, slot_count active slots.
-    // The slot_mask bit-field selects which slots carry data.  For the ES9843PRO
-    // with 4 active channels we enable slots 0-3 (0x0F).
-    uint32_t slotMask = (1u << slot_count) - 1u;  // e.g. slot_count=4 → 0x0F
-
-    // IDF5 TDM slot config: left-justified MSB-first, all active slots enabled
-    tdm_rx_cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(
-        I2S_DATA_BIT_WIDTH_32BIT,
-        I2S_SLOT_MODE_STEREO,   // Physical slot mode (even/odd pairs)
-        (i2s_tdm_slot_mask_t)slotMask
-    );
-    tdm_rx_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-
-    // GPIO: RX shares MCLK/BCK/WS with TX (ES8311 is clock master)
-    tdm_rx_cfg.gpio_cfg.mclk = (gpio_num_t)ES8311_I2S_MCLK_PIN;
-    tdm_rx_cfg.gpio_cfg.bclk = (gpio_num_t)ES8311_I2S_SCLK_PIN;
-    tdm_rx_cfg.gpio_cfg.ws   = (gpio_num_t)ES8311_I2S_LRCK_PIN;
-    tdm_rx_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
-    tdm_rx_cfg.gpio_cfg.din  = din_pin;
-    tdm_rx_cfg.gpio_cfg.invert_flags.mclk_inv = false;
-    tdm_rx_cfg.gpio_cfg.invert_flags.bclk_inv = false;
-    tdm_rx_cfg.gpio_cfg.invert_flags.ws_inv   = false;
-
-    err = i2s_channel_init_tdm_mode(_i2s2.rx, &tdm_rx_cfg);
-    if (err != ESP_OK) {
-        LOG_E("[Audio] I2S2 TDM RX init failed: %d", err);
-        i2s_channel_disable(_i2s2.tx);
-        i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
-        i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
+    // RX: TDM mode — slot_count slots × 32-bit, left-justified PCM
+    // RX shares MCLK/BCK/WS with TX (ES8311 is clock master)
+    if (!_i2s_port_init_rx_tdm(2, sample_rate,
+                                 din_pin,
+                                 slot_count,
+                                 (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                                 (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                                 (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+        LOG_E("[Audio] I2S2 TDM RX init failed");
+        _i2s_port_teardown_dir(2, true);   // disable+del TX
+        _i2s_port_teardown_dir(2, false);  // del RX
         return false;
     }
 
     // Enable TX first (activates MCLK/BCK/WS for TDM ADC PLL lock)
     if (txWasActive) {
-        err = i2s_channel_enable(_i2s2.tx);
+        esp_err_t err = i2s_channel_enable(_port[2].tx);
         if (err != ESP_OK) {
             LOG_E("[Audio] I2S2 TDM: TX enable failed: %d", err);
         } else {
-            _i2s2.users |= 0x01;
+            _port[2].users |= 0x01;
         }
     }
 
     // Enable RX
-    err = i2s_channel_enable(_i2s2.rx);
+    esp_err_t err = i2s_channel_enable(_port[2].rx);
     if (err != ESP_OK) {
         LOG_E("[Audio] I2S2 TDM RX enable failed: %d", err);
-        if (txWasActive) i2s_channel_disable(_i2s2.tx);
-        i2s_del_channel(_i2s2.rx); _i2s2.rx = NULL;
-        i2s_del_channel(_i2s2.tx); _i2s2.tx = NULL;
-        _i2s2.users = 0;
+        if (txWasActive) i2s_channel_disable(_port[2].tx);
+        _i2s_port_teardown(2);
+        _port[2].users = 0;
         return false;
     }
 
-    _i2s2.users      |= 0x02;
-    _i2s2.sampleRate  = sample_rate;
-    _i2s2.rxDinPin    = din_pin;
-    _expansionRxOk    = true;
+    _port[2].users      |= 0x02;
+    _port[2].sampleRate  = sample_rate;
+    _port[2].rxDinPin    = din_pin;
+    _expansionRxOk       = true;
 
     LOG_I("[Audio] I2S2 expansion TDM RX enabled: rate=%luHz DIN=GPIO%d slots=%u DMA=%dx%d",
           (unsigned long)sample_rate, (int)din_pin, slot_count, DMA_BUF_COUNT, DMA_BUF_LEN);
