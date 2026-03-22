@@ -1,3 +1,16 @@
+        let _wsLimitWarned = false;
+
+        function validateWsMessage(data, requiredFields) {
+            if (!data || typeof data !== 'object') return false;
+            for (var i = 0; i < requiredFields.length; i++) {
+                if (data[requiredFields[i]] === undefined) {
+                    console.warn('[WS] Missing field "' + requiredFields[i] + '" in ' + (data.type || 'unknown') + ' message');
+                    return false;
+                }
+            }
+            return true;
+        }
+
         // Binary WS message handler (waveform + spectrum)
         var _binDiag = { wf: 0, sp: 0, last: 0 };
         function handleBinaryMessage(buf) {
@@ -79,6 +92,7 @@
                 }, 2000);
             }
             else if (data.type === 'wifiStatus') {
+                if (!validateWsMessage(data, ['connected'])) return;
                 updateWiFiStatus(data);
             } else if (data.type === 'updateStatus') {
                 handleUpdateStatus(data);
@@ -98,7 +112,12 @@
             } else if (data.type === 'debugLog') {
                 appendDebugLog(data.timestamp, data.message, data.level, data.module);
             } else if (data.type === 'hardware_stats') {
+                if (!validateWsMessage(data, ['cpu'])) return;
                 updateHardwareStats(data);
+                if (data.wsClientCount >= data.wsClientMax - 1 && !_wsLimitWarned) {
+                    showToast('WebSocket client limit nearly reached (' + data.wsClientCount + '/' + data.wsClientMax + ')', 'warning');
+                    _wsLimitWarned = true;
+                }
             } else if (data.type === 'justUpdated') {
                 showUpdateSuccessNotification(data);
             } else if (data.type === 'displayState') {
@@ -148,6 +167,7 @@
                 document.getElementById('appState.mqttHADiscovery').checked = data.haDiscovery || false;
                 updateMqttConnectionStatus(data.connected, data.broker, data.port, data.baseTopic);
             } else if (data.type === 'audioLevels') {
+                if (!validateWsMessage(data, ['adc'])) return;
                 if (currentActiveTab === 'audio') {
                     if (data.numAdcsDetected !== undefined) {
                         numAdcsDetected = data.numAdcsDetected;

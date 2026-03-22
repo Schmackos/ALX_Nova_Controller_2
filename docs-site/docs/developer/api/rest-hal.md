@@ -32,7 +32,7 @@ Every device returned by `GET /api/hal/devices` has the following fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `slot` | integer | Slot index (0 – `HAL_MAX_DEVICES - 1`, currently 23) |
+| `slot` | integer | Slot index (0 – `HAL_MAX_DEVICES - 1`, currently 31) |
 | `compatible` | string | ESPHome-style compatible string (e.g. `"alx,es8311"`) |
 | `name` | string | Human-readable device name |
 | `manufacturer` | string | Manufacturer string |

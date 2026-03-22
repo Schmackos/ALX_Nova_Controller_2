@@ -12,7 +12,7 @@ The ALX Nova Controller exposes a WebSocket server on **port 81** alongside the 
 - Control commands (JSON text frames) — sent by the client to change settings
 - Binary audio frames — waveform samples and FFT spectrum data at configurable intervals
 
-Up to **10 simultaneous clients** are supported (`MAX_WS_CLIENTS = 10`). Each connection must authenticate independently before receiving any state data or sending commands.
+Up to **16 simultaneous clients** are supported (`MAX_WS_CLIENTS = 16`). Each connection must authenticate independently before receiving any state data or sending commands.
 
 ---
 
@@ -466,7 +466,7 @@ Full HAL device list. Sent at boot and after any device state change.
   "type": "halDeviceState",
   "scanning": false,
   "deviceCount": 14,
-  "deviceMax": 24,
+  "deviceMax": 32,
   "driverCount": 18,
   "driverMax": 32,
   "devices": [
@@ -506,7 +506,7 @@ HAL device states (`state` field): 0 = Unknown, 1 = Detected, 2 = Configuring, 3
 | Field | Type | Description |
 |-------|------|-------------|
 | `deviceCount` | integer | Number of currently registered HAL devices |
-| `deviceMax` | integer | Maximum device slots (`HAL_MAX_DEVICES`, currently 24) |
+| `deviceMax` | integer | Maximum device slots (`HAL_MAX_DEVICES`, currently 32) |
 | `driverCount` | integer | Number of registered driver factory functions |
 | `driverMax` | integer | Maximum driver registry slots (currently 32) |
 
@@ -659,6 +659,8 @@ Sent periodically while `debugMode` is `true`. Only the `cpu` block is always in
   ],
   "heapBudgetPsram": 524288,
   "heapBudgetSram": 32768,
+  "wsClientCount": 2,
+  "wsClientMax": 16,
   "crashHistory": []
 }
 ```
@@ -675,6 +677,8 @@ The following PSRAM and heap budget fields are included when `debugHwStats` is e
 | `heapBudget` | array | Per-subsystem allocation entries — each has `label` (string), `bytes` (integer), and `psram` (boolean) |
 | `heapBudgetPsram` | integer | Total tracked bytes currently in PSRAM across all budget entries |
 | `heapBudgetSram` | integer | Total tracked bytes currently in internal SRAM across all budget entries |
+| `wsClientCount` | integer | Number of currently authenticated WebSocket clients |
+| `wsClientMax` | integer | Maximum concurrent clients (`MAX_WS_CLIENTS`, currently 16) |
 
 ### `eepromProgramResult` / `eepromEraseResult`
 
@@ -765,9 +769,13 @@ Binary audio frame rate adapts based on authenticated client count to prevent Wi
 |---------|-------------|----------------|
 | 1       | 1 (none)    | Every frame    |
 | 2       | 2           | Every 2nd frame |
-| 3+      | 4           | Every 4th frame |
+| 3–4     | 4           | Every 4th frame |
+| 5–7     | 6           | Every 6th frame |
+| 8+      | 8           | Every 8th frame |
 
 This combines with existing heap pressure gating (binary halved at 50KB free, suppressed at 40KB free). Both gates must allow transmission. Auth count is recalibrated every 10 seconds to handle stale counts from unclean disconnects.
+
+The current connected client count and the configured maximum are reported in the `hardware_stats` broadcast as `wsClientCount` and `wsClientMax`. A warning toast is displayed in the web UI when `wsClientCount` reaches or exceeds `wsClientMax - 2`.
 
 :::tip Bandwidth estimation
 At 50 ms update rate with 2 active audio lanes:
@@ -799,6 +807,47 @@ Functions that are intentionally not guarded — they respond to explicit user a
 - `sendDisplayState`, `sendBuzzerState`, `sendSignalGenState`
 - `sendDiagEvent`
 - `drainPendingInitState`
+
+---
+
+## Frontend Helpers (web_src/)
+
+The web UI JavaScript provides two utility functions that all code consuming the WebSocket and REST API should use.
+
+### `apiFetch()` and `response.safeJson()`
+
+`apiFetch()` wraps `fetch()` with session-expiry handling and adds a `safeJson()` method to the response object for safe JSON parsing:
+
+```javascript
+// Safe REST call — redirects to login on 302, returns null on parse failure
+const res = await apiFetch('/api/hal/devices');
+if (!res) return;  // network error or session expired
+const data = await res.safeJson();
+if (!data) return;  // body was not valid JSON (e.g. empty 204)
+// use data safely
+```
+
+`safeJson()` wraps `response.json()` in a try/catch. It returns `null` on any parse failure rather than throwing, preventing uncaught promise rejections from malformed server responses.
+
+### `validateWsMessage(data, requiredFields)`
+
+All WebSocket message handlers for critical message types must call `validateWsMessage()` before accessing any field:
+
+```javascript
+// In ws-router.js or individual message handlers:
+if (!validateWsMessage(data, ['adc', 'signalDetected'])) return;
+updateVuMeters(data.adc);
+```
+
+The function returns `false` and emits a `LOG_W`-equivalent console warning if any required field is missing or `undefined`. The following critical message types are validated on every receive:
+
+| Message type | Required fields validated |
+|---|---|
+| `audioLevels` | `adc`, `signalDetected` |
+| `hardware_stats` | `cpu`, `memory` |
+| `wifiStatus` | `connected` |
+
+Other message types that only update UI state (e.g. `displayState`, `buzzerState`) do not require validation because a missing field results in a benign no-op rather than a runtime error.
 
 ---
 

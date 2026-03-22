@@ -142,9 +142,15 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define PSRAM_CRITICAL_THRESHOLD   524288   // 512KB free PSRAM — critical
 #endif
 
+// ===== Authentication =====
+#define PBKDF2_ITERATIONS_V1   10000   // Legacy p1: format
+#define PBKDF2_ITERATIONS      50000   // Current p2: format
+
 // ===== WebSocket Binary Rate Scaling =====
 #define WS_BINARY_SKIP_2_CLIENTS      2       // Send every 2nd binary frame for 2 clients
-#define WS_BINARY_SKIP_3PLUS          4       // Send every 4th binary frame for 3+ clients
+#define WS_BINARY_SKIP_3PLUS          4       // Send every 4th binary frame for 3-4 clients
+#define WS_BINARY_SKIP_5PLUS          6       // Send every 6th binary frame for 5-7 clients
+#define WS_BINARY_SKIP_8PLUS          8       // Send every 8th binary frame for 8+ clients
 #define WS_AUTH_RECOUNT_INTERVAL_MS   10000   // Recalibrate auth count every 10s
 
 // ===== Server Ports =====

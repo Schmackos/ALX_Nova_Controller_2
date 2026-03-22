@@ -101,33 +101,52 @@ static bool hexToBytes(const char *hex, uint8_t *out, size_t outLen) {
   return true;
 }
 
-// Hash with explicit salt (for verification and re-hash)
-static String hashPasswordPbkdf2WithSalt(const String &password, const uint8_t *salt) {
+// Internal helper: hash with explicit salt and iteration count, producing a prefixed hash
+static String hashPasswordPbkdf2WithSaltAndIter(const String &password, const uint8_t *salt, int iterations, const char* prefix) {
   uint8_t derivedKey[32];
 
   mbedtls_pkcs5_pbkdf2_hmac_ext(
     MBEDTLS_MD_SHA256,
     (const unsigned char *)password.c_str(), password.length(),
-    salt, 16, 10000, 32, derivedKey);
+    salt, 16, iterations, 32, derivedKey);
 
   char saltHex[33], keyHex[65];
   bytesToHex(salt, 16, saltHex);
   bytesToHex(derivedKey, 32, keyHex);
 
-  return String("p1:") + saltHex + ":" + keyHex;
+  return String(prefix) + saltHex + ":" + keyHex;
 }
 
-// Hash password with PBKDF2-SHA256 + random salt
+// Hash with explicit salt using legacy 10k iterations — produces "p1:" format
+static String hashPasswordPbkdf2WithSalt(const String &password, const uint8_t *salt) {
+  return hashPasswordPbkdf2WithSaltAndIter(password, salt, PBKDF2_ITERATIONS_V1, "p1:");
+}
+
+// Hash with explicit salt using current 50k iterations — produces "p2:" format
+static String hashPasswordPbkdf2V2WithSalt(const String &password, const uint8_t *salt) {
+  return hashPasswordPbkdf2WithSaltAndIter(password, salt, PBKDF2_ITERATIONS, "p2:");
+}
+
+// Hash password with PBKDF2-SHA256 + random salt (current v2 format)
 String hashPasswordPbkdf2(const String &password) {
   uint8_t salt[16];
   esp_fill_random(salt, 16);
-  return hashPasswordPbkdf2WithSalt(password, salt);
+  return hashPasswordPbkdf2V2WithSalt(password, salt);
 }
 
-// Verify password against stored hash (supports both legacy SHA256 and PBKDF2)
+// Verify password against stored hash (supports p2:, p1:, and legacy SHA256)
 bool verifyPassword(const String &inputPassword, const String &storedHash) {
+  if (storedHash.startsWith("p2:") && storedHash.length() == 100) {
+    // PBKDF2 v2 format: "p2:<32-char salt>:<64-char key>" (50k iterations)
+    uint8_t salt[16];
+    if (!hexToBytes(storedHash.c_str() + 3, salt, 16)) return false;
+
+    String computed = hashPasswordPbkdf2V2WithSalt(inputPassword, salt);
+    return timingSafeCompare(computed, storedHash);
+  }
+
   if (storedHash.startsWith("p1:") && storedHash.length() == 100) {
-    // PBKDF2 format: "p1:<32-char salt>:<64-char key>"
+    // PBKDF2 v1 format: "p1:<32-char salt>:<64-char key>" (10k iterations)
     uint8_t salt[16];
     if (!hexToBytes(storedHash.c_str() + 3, salt, 16)) return false;
 
@@ -263,8 +282,12 @@ void initAuth() {
 
   if (authPrefs.isKey("pwd_hash")) {
     appState.wifi.webPassword = authPrefs.getString("pwd_hash", "");
-    if (appState.wifi.webPassword.startsWith("p1:")) {
-      LOG_I("[Auth] Loaded PBKDF2 password hash from NVS");
+    if (appState.wifi.webPassword.startsWith("p2:")) {
+      LOG_I("[Auth] Loaded PBKDF2 v2 password hash from NVS");
+    } else if (appState.wifi.webPassword.startsWith("p1:")) {
+      // p1: hash uses 10k iterations — flag for upgrade to p2: (50k) on next login
+      _passwordNeedsMigration = true;
+      LOG_I("[Auth] Loaded PBKDF2 v1 hash (will migrate to v2 on next login)");
     } else {
       // Legacy bare SHA256 — flag for migration on next successful login
       _passwordNeedsMigration = true;
@@ -628,15 +651,15 @@ void handleLogin() {
   _lastFailTime = 0;
   _nextLoginAllowedMs = 0;
 
-  // Migrate legacy SHA256 hash to PBKDF2 on successful login
+  // Migrate legacy SHA256 or PBKDF2 v1 hash to PBKDF2 v2 on successful login
   if (_passwordNeedsMigration) {
-    String newHash = hashPasswordPbkdf2(password);
+    String newHash = hashPasswordPbkdf2(password);  // produces p2: format
     appState.wifi.webPassword = newHash;
     authPrefs.begin("auth", false);
     authPrefs.putString("pwd_hash", newHash);
     authPrefs.end();
     _passwordNeedsMigration = false;
-    LOG_I("[Auth] Migrated password hash to PBKDF2");
+    LOG_I("[Auth] Migrated password hash to PBKDF2 v2 (50k iterations)");
   }
 
   LOG_I("[Auth] Login successful");

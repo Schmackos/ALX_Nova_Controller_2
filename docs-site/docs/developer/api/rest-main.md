@@ -117,7 +117,7 @@ Every endpoint marked **Protected** returns HTTP 302 to `/login` when no valid s
 
 #### POST /api/auth/login
 
-Authenticates and sets the `session` HttpOnly cookie on success. The default password is printed to both the TFT display and the serial console on first boot and after every factory reset. Passwords are stored as `p1:<saltHex>:<keyHex>` using PBKDF2-SHA256 with a random 16-byte salt and 10,000 iterations. Legacy unsalted SHA256 hashes are migrated automatically on the next successful login.
+Authenticates and sets the `session` HttpOnly cookie on success. The default password is printed to both the TFT display and the serial console on first boot and after every factory reset. Passwords are stored as `p2:<saltHex>:<keyHex>` using PBKDF2-SHA256 with a random 16-byte salt and 50,000 iterations (controlled by the `PBKDF2_ITERATIONS` constant in `src/config.h`). The previous `p1:` format (10,000 iterations) and legacy unsalted SHA256 hashes are both accepted and automatically re-hashed to the `p2:` format on the next successful login.
 
 **Request body** (`application/x-www-form-urlencoded`):
 
@@ -174,7 +174,7 @@ See the [WebSocket Protocol](../websocket.md) page for the full authentication h
 
 #### POST /api/auth/change
 
-Changes the web UI password. The new password is hashed with PBKDF2-SHA256 and persisted to NVS. All existing sessions remain valid after a password change — clients are not forcibly logged out.
+Changes the web UI password. The new password is hashed with PBKDF2-SHA256 at 50,000 iterations (`p2:` format) and persisted to NVS. All existing sessions remain valid after a password change — clients are not forcibly logged out.
 
 **Request body** (`application/json`):
 

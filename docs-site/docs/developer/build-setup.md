@@ -329,6 +329,50 @@ The mock server runs on port 3000 and assembles HTML directly from `web_src/` �
 
 ---
 
+## OTA Certificate Management
+
+The firmware verifies the TLS certificate chain when downloading firmware updates from GitHub. Root CA certificates are stored in `src/ota_certs.h` as PEM-encoded string constants and compiled directly into the firmware — no external certificate file is needed at runtime.
+
+### Current Certificate Inventory
+
+Three root CAs are bundled to cover the certificate chains used by GitHub release downloads:
+
+| Constant | CA | Algorithm | Expiry |
+|---|---|---|---|
+| `OTA_CA_SECTIGO_R46` | Sectigo Public Code Signing Root R46 | RSA | 2046 |
+| `OTA_CA_SECTIGO_E46` | Sectigo Public Code Signing Root E46 | EC | 2046 |
+| `OTA_CA_DIGICERT_G2` | DigiCert Global Root G2 | RSA | 2038 |
+
+The `ota_updater.cpp` module iterates through all three CAs and attempts a connection with each until one succeeds. This provides resilience if GitHub rotates its certificate chain between firmware releases.
+
+### Updating Certificates
+
+When a root CA expires or GitHub changes its certificate chain, use the provided Node.js tool to fetch fresh certificates and regenerate `src/ota_certs.h`:
+
+```bash
+node tools/update_certs.js
+```
+
+The script connects to `github.com`, `objects.githubusercontent.com`, and `api.github.com`, captures the full certificate chain presented by each host, extracts the root CA certificates, deduplicates them, and writes them to `src/ota_certs.h`. Review the output for any unexpected CA changes before committing.
+
+After regenerating the file, rebuild the firmware and run a full OTA check (`GET /api/checkupdate`) against a test device to confirm the new certificates are accepted before releasing to production.
+
+:::warning Certificate expiry monitoring
+The `DigiCert Global Root G2` CA expires in 2038, but `Sectigo R46` and `E46` are valid until 2046. Check the GitHub certificate chain annually and regenerate `src/ota_certs.h` if the presented CA changes. Firmware with an expired or mismatched CA will fail all OTA update checks silently — the device will report "no update available" rather than a TLS error.
+:::
+
+### Adding a New Root CA
+
+If the GitHub CDN begins presenting a certificate chain rooted in a new CA not already in `src/ota_certs.h`, add it manually:
+
+1. Obtain the PEM-encoded root certificate from the CA's official distribution point.
+2. Add a new `const char*` constant to `src/ota_certs.h` following the existing pattern.
+3. Add the new constant to the `OTA_CA_LIST` array at the bottom of the file.
+4. Run `pio run` to verify the file compiles without errors.
+5. Test OTA check and download on a physical device before releasing.
+
+---
+
 ## Building Web Assets
 
 The web UI source lives in `web_src/`. After any edit to those files, regenerate the C++ asset files before building firmware:

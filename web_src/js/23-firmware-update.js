@@ -3,7 +3,7 @@
 function checkForUpdate() {
     showToast('Checking for updates...', 'info');
     apiFetch('/api/checkupdate')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         // Update current version display
         if (data.currentVersion) {
@@ -60,14 +60,14 @@ function checkForUpdate() {
 
 function fetchUpdateStatus() {
     apiFetch('/api/updatestatus')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => handleUpdateStatus(data))
     .catch(err => console.error('Failed to fetch update status:', err));
 }
 
 function startOTAUpdate() {
     apiFetch('/api/startupdate', { method: 'POST' })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             document.getElementById('progressContainer').classList.remove('hidden');
@@ -250,7 +250,7 @@ function setOtaChannel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ otaChannel: val })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             showToast(val === 0 ? 'Channel: Stable' : 'Channel: Beta', 'success');
@@ -287,7 +287,7 @@ function loadReleaseList() {
     if (items) items.innerHTML = '';
 
     apiFetch('/api/releases')
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         releaseListLoading = false;
         if (loading) loading.style.display = 'none';
@@ -362,7 +362,7 @@ function installRelease(version, isDowngrade) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version: version })
     })
-    .then(res => res.json())
+    .then(res => res.safeJson())
     .then(data => {
         if (data.success) {
             document.getElementById('releasesBrowser').classList.add('hidden');

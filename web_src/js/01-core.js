@@ -45,6 +45,21 @@
                     return new Promise(() => {});
                 }
 
+                response.safeJson = async function() {
+                    if (!this.ok) {
+                        let errorMsg = 'Request failed: ' + this.status;
+                        try {
+                            const errBody = await this.clone().json();
+                            if (errBody.error) errorMsg = errBody.error;
+                        } catch(e) { /* non-JSON error body, use status text */ }
+                        throw new Error(errorMsg);
+                    }
+                    try {
+                        return await this.json();
+                    } catch(e) {
+                        throw new Error('Invalid response format');
+                    }
+                };
                 return response;
             } catch (error) {
                 console.error(`API Fetch Error [${url}]:`, error);

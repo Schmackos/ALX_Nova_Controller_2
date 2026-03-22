@@ -416,6 +416,8 @@
     "initHealthDashboard": "readonly",
     "psramBudgetOpen": "writable",
     "togglePsramBudget": "readonly",
-    "updatePsramHealthBanner": "readonly"
+    "updatePsramHealthBanner": "readonly",
+    "validateWsMessage": "readonly",
+    "_wsLimitWarned": "writable"
   }
 }
