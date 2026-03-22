@@ -1,5 +1,7 @@
 # Code Review Guidelines — ALX Nova Controller 2
 
+> Reviewed by Gemini 2.5 Flash (free tier)
+
 ## Always check
 
 ### Memory & Heap Safety
