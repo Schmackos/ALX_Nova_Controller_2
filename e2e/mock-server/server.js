@@ -48,6 +48,7 @@ const siggen = require('./routes/siggen');
 const diagnostics = require('./routes/diagnostics');
 const system = require('./routes/system');
 const ethernet = require('./routes/ethernet');
+const i2sPorts = require('./routes/i2s-ports');
 
 app.use('/api/auth', auth);
 
@@ -72,6 +73,7 @@ app.use('/api', siggen);
 app.use('/api', diagnostics);
 app.use('/api', system);
 app.use('/api', ethernet);
+app.use('/api/i2s', i2sPorts);
 
 // ===== Start Server =====
 const PORT = process.env.PORT || 3000;

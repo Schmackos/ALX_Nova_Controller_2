@@ -1,0 +1,50 @@
+{
+  "type": "dspState",
+  "dspEnabled": true,
+  "dspBypass": false,
+  "presetIndex": 0,
+  "presets": [
+    { "index": 0, "name": "Default", "exists": true },
+    { "index": 1, "name": "", "exists": false },
+    { "index": 2, "name": "", "exists": false },
+    { "index": 3, "name": "", "exists": false }
+  ],
+  "globalBypass": false,
+  "sampleRate": 48000,
+  "channels": [
+    {
+      "bypass": false,
+      "stereoLink": false,
+      "stageCount": 1,
+      "stages": [
+        {
+          "enabled": true,
+          "type": 0,
+          "label": "PEQ Band 1",
+          "freq": 1000.0,
+          "gain": 0.0,
+          "Q": 0.707,
+          "coeffs": [1.0, 0.0, 0.0, 0.0, 0.0]
+        }
+      ]
+    },
+    {
+      "bypass": false,
+      "stereoLink": false,
+      "stageCount": 0,
+      "stages": []
+    },
+    {
+      "bypass": false,
+      "stereoLink": false,
+      "stageCount": 0,
+      "stages": []
+    },
+    {
+      "bypass": false,
+      "stereoLink": false,
+      "stageCount": 0,
+      "stages": []
+    }
+  ]
+}

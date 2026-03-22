@@ -1,0 +1,12 @@
+{
+  "type": "updateStatus",
+  "status": "downloading",
+  "progress": 45,
+  "message": "Downloading: 45% (230 / 512 KB)",
+  "bytesDownloaded": 235520,
+  "totalBytes": 524288,
+  "currentVersion": "1.12.0",
+  "latestVersion": "1.13.0",
+  "updateAvailable": true,
+  "otaChannel": 0
+}

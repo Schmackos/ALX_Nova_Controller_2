@@ -62,6 +62,9 @@ const test = base.extend({
     //    The frontend dials: ws://<hostname>:81
     let wsRoute = null;
 
+    // Capture array for WS messages sent by the frontend (excludes auth)
+    page.wsCapture = [];
+
     await page.routeWebSocket(/.*:81/, (ws) => {
       wsRoute = ws;
 
@@ -90,6 +93,9 @@ const test = base.extend({
           }
           return;
         }
+
+        // Capture non-auth messages for test assertions
+        page.wsCapture.push(data);
 
         // Route any other inbound commands and send responses
         const responses = handleCommand(type, data);

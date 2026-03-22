@@ -1,0 +1,48 @@
+{
+  "type": "diagJournal",
+  "count": 3,
+  "entries": [
+    {
+      "seq": 1,
+      "boot": 1,
+      "t": 1200,
+      "heap": 182340,
+      "c": "0x1001",
+      "corr": 0,
+      "sub": "HAL",
+      "dev": "PCM5102A",
+      "slot": 0,
+      "msg": "Device initialized",
+      "sev": "I",
+      "retry": 0
+    },
+    {
+      "seq": 2,
+      "boot": 1,
+      "t": 1500,
+      "heap": 180000,
+      "c": "0x1002",
+      "corr": 0,
+      "sub": "HAL",
+      "dev": "ES8311",
+      "slot": 1,
+      "msg": "Device initialized",
+      "sev": "I",
+      "retry": 0
+    },
+    {
+      "seq": 3,
+      "boot": 1,
+      "t": 5000,
+      "heap": 175000,
+      "c": "0x2001",
+      "corr": 0,
+      "sub": "AUDIO",
+      "dev": "",
+      "slot": 255,
+      "msg": "Pipeline started",
+      "sev": "I",
+      "retry": 0
+    }
+  ]
+}

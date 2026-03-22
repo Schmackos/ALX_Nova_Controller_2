@@ -1,0 +1,44 @@
+{
+  "type": "diagSnapshot",
+  "timestamp": 10000,
+  "freeHeap": 182340,
+  "freePsram": 4194304,
+  "maxAllocHeap": 131072,
+  "heapBudgetPsram": 262144,
+  "heapBudgetSram": 32768,
+  "fsmState": 0,
+  "halDevices": [
+    {
+      "slot": 0,
+      "name": "PCM5102A",
+      "compatible": "ti,pcm5102a",
+      "type": 1,
+      "state": 3,
+      "ready": true,
+      "retries": 0,
+      "lastErr": 0,
+      "faults": 0
+    },
+    {
+      "slot": 1,
+      "name": "ES8311",
+      "compatible": "everest-semi,es8311",
+      "type": 3,
+      "state": 3,
+      "ready": true,
+      "retries": 0,
+      "lastErr": 0,
+      "faults": 0
+    }
+  ],
+  "recentEvents": [
+    {
+      "seq": 1,
+      "t": 1200,
+      "c": "0x1001",
+      "dev": "PCM5102A",
+      "msg": "Device initialized",
+      "sev": "I"
+    }
+  ]
+}

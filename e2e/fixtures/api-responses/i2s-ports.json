@@ -1,0 +1,77 @@
+{
+  "ports": [
+    {
+      "id": 0,
+      "tx": {
+        "active": true,
+        "mode": "std",
+        "doutPin": 24,
+        "format": "philips",
+        "bitDepth": 32
+      },
+      "rx": {
+        "active": true,
+        "mode": "std",
+        "dinPin": 23,
+        "format": "philips",
+        "bitDepth": 32
+      },
+      "clocks": {
+        "master": true,
+        "mclk": 22,
+        "bck": 20,
+        "lrc": 21,
+        "mclkMultiple": 256
+      }
+    },
+    {
+      "id": 1,
+      "tx": {
+        "active": false,
+        "mode": "off",
+        "doutPin": 0,
+        "format": "philips",
+        "bitDepth": 32
+      },
+      "rx": {
+        "active": true,
+        "mode": "std",
+        "dinPin": 25,
+        "format": "philips",
+        "bitDepth": 32
+      },
+      "clocks": {
+        "master": false,
+        "mclk": 0,
+        "bck": 0,
+        "lrc": 0,
+        "mclkMultiple": 256
+      }
+    },
+    {
+      "id": 2,
+      "tx": {
+        "active": false,
+        "mode": "off",
+        "doutPin": 0,
+        "format": "philips",
+        "bitDepth": 32
+      },
+      "rx": {
+        "active": false,
+        "mode": "off",
+        "dinPin": 0,
+        "format": "philips",
+        "bitDepth": 32
+      },
+      "clocks": {
+        "master": false,
+        "mclk": 0,
+        "bck": 0,
+        "lrc": 0,
+        "mclkMultiple": 256
+      }
+    }
+  ],
+  "sampleRate": 48000
+}

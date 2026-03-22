@@ -61,6 +61,7 @@ function handleCommand(type, data) {
       return [{ type: 'debugState', [type.replace('set', '').charAt(0).toLowerCase() + type.replace('set', '').slice(1)]: data.enabled }];
 
     case 'setSerialLogLevel':
+    case 'setDebugSerialLevel':
       return [];
 
     case 'setStatsInterval':
@@ -84,6 +85,69 @@ function handleCommand(type, data) {
 
     case 'setHostname':
       return [{ type: 'wifiStatus', ethHostname: data.hostname || 'alx-nova' }];
+
+    // ===== HAL device commands =====
+    case 'setDeviceEnabled':
+      return [loadFixture('hal-device-state')];
+
+    // ===== Input pipeline commands =====
+    case 'setInputGain':
+      return [];
+
+    case 'setInputMute':
+      return [];
+
+    case 'setInputPhase':
+      return [];
+
+    // ===== Output pipeline commands =====
+    case 'setOutputGain':
+      return [];
+
+    case 'setOutputHwVolume':
+      return [];
+
+    case 'setOutputMute':
+      return [];
+
+    case 'setOutputPhase':
+      return [];
+
+    case 'setOutputDelay':
+      return [];
+
+    // ===== Signal generator =====
+    case 'setSignalGen':
+      return [Object.assign({}, loadFixture('signal-generator'), {
+        enabled: data.enabled !== undefined ? data.enabled : false,
+        waveform: data.waveform !== undefined ? data.waveform : 0,
+        frequency: data.frequency !== undefined ? data.frequency : 1000.0,
+        amplitude: data.amplitude !== undefined ? data.amplitude : -20.0,
+      })];
+
+    // ===== Display / brightness commands =====
+    case 'setBrightness':
+      return [{ type: 'displayState', backlightBrightness: data.value }];
+
+    case 'setScreenTimeout':
+      return [{ type: 'displayState', screenTimeout: data.value }];
+
+    case 'setDimTimeout':
+      return [{ type: 'displayState', dimTimeout: data.value }];
+
+    case 'setDimBrightness':
+      return [{ type: 'displayState', dimBrightness: data.value }];
+
+    // ===== Buzzer commands =====
+    case 'setBuzzerEnabled':
+      return [{ type: 'buzzerState', enabled: !!data.enabled, volume: 1 }];
+
+    case 'setBuzzerVolume':
+      return [{ type: 'buzzerState', enabled: true, volume: data.value }];
+
+    // ===== Audio / FFT settings =====
+    case 'setFftWindowType':
+      return [];
 
     default:
       return [];

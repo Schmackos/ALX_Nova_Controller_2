@@ -1,0 +1,13 @@
+{
+  "type": "outputDspState",
+  "channels": [
+    { "bypass": false, "stageCount": 0, "stages": [] },
+    { "bypass": false, "stageCount": 0, "stages": [] },
+    { "bypass": false, "stageCount": 0, "stages": [] },
+    { "bypass": false, "stageCount": 0, "stages": [] },
+    { "bypass": false, "stageCount": 0, "stages": [] },
+    { "bypass": false, "stageCount": 0, "stages": [] },
+    { "bypass": false, "stageCount": 0, "stages": [] },
+    { "bypass": false, "stageCount": 0, "stages": [] }
+  ]
+}
