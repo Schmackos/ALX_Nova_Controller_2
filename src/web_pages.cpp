@@ -2292,6 +2292,60 @@ body.night-mode {
         /* HAL Add Device */
         .hal-add-row { display: flex; gap: 8px; align-items: center; }
 
+        /* HAL Error/Unavailable Diagnostic Banner */
+        .hal-error-banner { margin: 6px 0 4px; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.4; }
+        .hal-error-banner-error { background: rgba(244,67,54,0.12); border: 1px solid rgba(244,67,54,0.25); color: var(--error, #f44336); }
+        .hal-error-banner-warn { background: rgba(255,193,7,0.10); border: 1px solid rgba(255,193,7,0.25); color: var(--warning, #ffc107); }
+        .hal-error-banner-header { display: flex; align-items: flex-start; gap: 6px; }
+        .hal-error-banner-header svg { flex-shrink: 0; margin-top: 1px; }
+        .hal-error-reason { flex: 1; word-break: break-word; }
+        .hal-error-tips-toggle { display: inline-flex; align-items: center; gap: 3px; margin-top: 6px; padding: 2px 4px; border-radius: 3px; font-size: 11px; cursor: pointer; opacity: 0.8; transition: opacity 0.15s; }
+        .hal-error-tips-toggle:hover, .hal-error-tips-toggle:focus-visible { opacity: 1; outline: none; text-decoration: underline; }
+        .hal-tips-chevron { transition: transform 0.2s; }
+        .hal-error-tips { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08); }
+        .hal-error-tips ul { margin: 0; padding-left: 18px; font-size: 11px; color: var(--text-secondary); }
+        .hal-error-tips li { margin-bottom: 3px; }
+        .hal-error-tips li:last-child { margin-bottom: 0; }
+
+        /* ===== HAL Custom Create Modal ===== */
+        .hal-cc-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:16px; }
+        .hal-cc-overlay.active { display:flex; }
+        .hal-cc-modal { background:var(--bg-surface); border-radius:10px; padding:20px; width:520px; max-width:95vw; max-height:85vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.5); }
+        .hal-cc-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+        .hal-cc-header h3 { margin:0; font-size:15px; font-weight:600; }
+        .hal-cc-close { background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:18px; padding:2px 6px; border-radius:4px; opacity:0.6; transition:opacity .15s; }
+        .hal-cc-close:hover { opacity:1; }
+        .hal-cc-section { font-size:11px; font-weight:600; color:var(--text-secondary); margin:14px 0 6px; padding-top:8px; border-top:1px solid var(--border); }
+        .hal-cc-section:first-of-type { border-top:none; margin-top:0; padding-top:0; }
+        .hal-cc-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; }
+        .hal-cc-row label { min-width:90px; color:var(--text-secondary); flex-shrink:0; }
+        .hal-cc-row input[type="text"], .hal-cc-row input[type="number"], .hal-cc-row select {
+            flex:1; font-size:12px; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary);
+        }
+        .hal-cc-row input:focus, .hal-cc-row select:focus { border-color:var(--accent); outline:none; }
+        .hal-cc-chips { display:flex; flex-wrap:wrap; gap:6px; padding:8px 10px; background:var(--bg-card); border-radius:6px; border:1px solid var(--border); min-height:32px; align-items:center; }
+        .hal-cc-chip { display:inline-flex; align-items:center; padding:3px 8px; border-radius:4px; font-size:11px; font-family:monospace; cursor:pointer; border:1px solid var(--border); background:transparent; color:var(--text-primary); transition:border-color .15s, background .15s; }
+        .hal-cc-chip:hover { border-color:var(--accent); background:rgba(var(--accent-rgb, 255,152,0),0.08); }
+        .hal-cc-chip.selected { border-color:var(--accent); background:rgba(var(--accent-rgb, 255,152,0),0.15); color:var(--accent); font-weight:600; }
+        .hal-cc-chip-bus { font-size:10px; color:var(--text-secondary); opacity:0.7; margin-left:4px; }
+        .hal-cc-chip-skip { font-size:11px; opacity:0.5; font-style:italic; }
+        .hal-cc-regtable { width:100%; border-collapse:collapse; font-size:12px; }
+        .hal-cc-regtable th { text-align:left; font-size:10px; font-weight:600; color:var(--text-secondary); padding:2px 6px 4px; }
+        .hal-cc-regtable td { padding:3px 4px; }
+        .hal-cc-regtable input { width:60px; font-size:12px; padding:3px 6px; border-radius:3px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); font-family:monospace; }
+        .hal-cc-regtable input:focus { border-color:var(--accent); outline:none; }
+        .hal-cc-regdel { background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:14px; opacity:0.5; padding:2px 4px; border-radius:3px; transition:opacity .15s, color .15s; }
+        .hal-cc-regdel:hover { opacity:1; color:var(--error, #f44336); }
+        .hal-cc-regadd { font-size:11px; padding:3px 10px; margin-top:4px; background:none; border:1px dashed var(--border); border-radius:4px; color:var(--text-secondary); cursor:pointer; transition:border-color .15s, color .15s; }
+        .hal-cc-regadd:hover { border-color:var(--accent); color:var(--text-primary); }
+        .hal-cc-caps { display:flex; flex-wrap:wrap; gap:8px 14px; font-size:12px; }
+        .hal-cc-caps label { display:flex; align-items:center; gap:4px; cursor:pointer; color:var(--text-primary); }
+        .hal-cc-caps label input { accent-color:var(--accent); }
+        .hal-cc-compat { font-size:11px; font-family:monospace; color:var(--text-secondary); padding:4px 8px; background:var(--bg-card); border-radius:4px; border:1px solid var(--border); word-break:break-all; }
+        .hal-cc-actions { display:flex; gap:8px; margin-top:16px; justify-content:flex-end; flex-wrap:wrap; }
+        .hal-cc-actions .btn { font-size:12px; }
+        .hal-cc-note { font-size:11px; opacity:0.5; margin-top:2px; }
+
         /* ===== Audio Tab Sub-Navigation ===== */
         .audio-subnav {
             display: flex;
@@ -2786,6 +2840,95 @@ body.night-mode {
 
         .confirm-confirm-btn:not(:disabled):hover {
             background: #c0392b;
+        }
+
+        /* ===== Export/Import Preview ===== */
+        .export-sections-info {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            margin-top: 10px;
+            font-size: 0.78em;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .import-preview-card {
+            border-left: 3px solid var(--accent);
+        }
+
+        .import-preview-meta {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 12px;
+            font-size: 0.85em;
+            margin-bottom: 12px;
+            padding: 8px 10px;
+            background: var(--bg-main);
+            border-radius: 6px;
+        }
+
+        .import-preview-meta .meta-label {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .import-preview-meta .meta-value {
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .import-preview-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 16px;
+            margin-bottom: 12px;
+            font-size: 0.85em;
+        }
+
+        .import-section-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 0;
+        }
+
+        .import-section-item.present svg {
+            color: var(--success);
+        }
+
+        .import-section-item.missing {
+            opacity: 0.4;
+        }
+
+        .import-section-item.missing svg {
+            color: var(--text-muted);
+        }
+
+        .import-section-item .section-tag {
+            font-size: 0.75em;
+            color: var(--accent);
+            font-weight: 600;
+            margin-left: 2px;
+        }
+
+        .import-preview-warning {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: rgba(255, 193, 7, 0.08);
+            border: 1px solid rgba(255, 193, 7, 0.25);
+            border-radius: 6px;
+            font-size: 0.82em;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .import-preview-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
         }
 
 /* Ethernet status card accents */
@@ -4546,10 +4689,37 @@ body.night-mode {
             <div class="card">
                 <div class="card-title">Backup & Restore</div>
                 <div class="btn-row">
-                    <button class="btn btn-secondary" onclick="exportSettings()">Export</button>
-                    <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Import</button>
+                    <button class="btn btn-secondary" onclick="exportSettings()">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>Export
+                    </button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" transform="rotate(180 12 12)"/></svg>Import
+                    </button>
+                </div>
+                <div class="export-sections-info">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--text-muted)" aria-hidden="true" style="flex-shrink:0;margin-top:1px;"><path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg>
+                    <span>Export includes: WiFi, General, Sensing, MQTT, Signal Generator, Input Names, HAL Configs, Custom Devices, DSP, Pipeline Routing</span>
                 </div>
                 <input type="file" id="importFile" accept=".json" style="display: none;" onchange="handleFileSelect(event)">
+            </div>
+
+            <!-- Import Preview (hidden until file selected) -->
+            <div id="importPreviewCard" class="card import-preview-card" style="display:none;">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true" style="margin-right:6px;vertical-align:-3px;"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,9V3.5L18.5,9H13Z"/></svg>Import Preview
+                </div>
+                <div id="importPreviewMeta" class="import-preview-meta"></div>
+                <div id="importPreviewSections" class="import-preview-sections"></div>
+                <div class="import-preview-warning">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="var(--warning, #FFC107)" aria-hidden="true" style="flex-shrink:0;"><path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z"/></svg>
+                    <span>This will overwrite current settings and reboot the device.</span>
+                </div>
+                <div class="import-preview-actions">
+                    <button class="btn" onclick="cancelImportPreview()">Cancel</button>
+                    <button class="btn btn-primary" onclick="applyImportPreview()">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/></svg>Apply Import
+                    </button>
+                </div>
             </div>
 
             <!-- Reboot & Factory Reset -->
@@ -5242,6 +5412,10 @@ body.night-mode {
                 <button class="btn" onclick="halOpenCustomUpload()">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M13,9V3.5L18.5,9H13M9,13H11V11H13V13H15V15H13V17H11V15H9V13Z"/></svg>
                   Custom Device
+                </button>
+                <button class="btn" onclick="halOpenCustomCreate()">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true" style="margin-right:4px;vertical-align:-2px;"><path d="M17,14H19V17H22V19H19V22H17V19H14V17H17V14M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22C12.69,22 13.36,21.93 14,21.8C13.38,21.17 12.88,20.43 12.5,19.6C12.34,19.67 12.17,19.73 12,19.78V18H13.08C13.18,17.3 13.4,16.63 13.72,16H10V14H15.5C16.36,13.35 17.4,12.88 18.53,12.67C19.47,12.42 20,12.24 20,12C20,6.48 16.42,2 12,2M10,4H14V8H10V4M4,10H8V14H4V10M10,10H14V12.03C12.77,12.14 11.63,12.55 10.63,13.19C10.23,12.84 10,12.44 10,12V10Z"/></svg>
+                  Create Device
                 </button>
             </div>
             <div class="card" style="padding:10px 16px;margin-bottom:4px;">
@@ -8217,6 +8391,9 @@ body.night-mode {
             }
             h += '</div>';
 
+            // Error/unavailable diagnostic banner
+            h += halBuildErrorBanner(d);
+
             // Expanded detail section
             if (expanded) {
                 h += '<div class="hal-device-details">';
@@ -8272,6 +8449,77 @@ body.night-mode {
 
             h += '</div>'; // card
             return h;
+        }
+
+        function halBuildErrorBanner(d) {
+            // Show banner only for ERROR (5) or UNAVAILABLE (4) with a reason
+            var reason = d.errorReason || d.error;
+            if ((d.state !== 5 && d.state !== 4) || !reason) return '';
+            var isError = (d.state === 5);
+            var bannerCls = isError ? 'hal-error-banner hal-error-banner-error' : 'hal-error-banner hal-error-banner-warn';
+            var tips = halGetErrorTips(d);
+
+            var h = '<div class="' + bannerCls + '" role="alert">';
+            h += '<div class="hal-error-banner-header">';
+            h += '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z"/></svg>';
+            h += '<span class="hal-error-reason">' + escapeHtml(reason) + '</span>';
+            h += '</div>';
+
+            if (tips.length > 0) {
+                h += '<div class="hal-error-tips-toggle" tabindex="0" role="button" aria-expanded="false" onclick="halToggleErrorTips(' + d.slot + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();halToggleErrorTips(' + d.slot + ')}">';
+                h += '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" class="hal-tips-chevron"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
+                h += ' Troubleshooting tips</div>';
+                h += '<div class="hal-error-tips" id="hal-error-tips-' + d.slot + '" style="display:none">';
+                h += '<ul>';
+                for (var i = 0; i < tips.length; i++) {
+                    h += '<li>' + escapeHtml(tips[i]) + '</li>';
+                }
+                h += '</ul></div>';
+            }
+            h += '</div>';
+            return h;
+        }
+
+        function halGetErrorTips(d) {
+            var tips = [];
+            var busType = d.busType || 0;
+            if (busType === 1) {
+                // I2C
+                tips.push('Check I2C wiring: SDA and SCL connections');
+                tips.push('Verify pull-up resistors on SDA/SCL lines (4.7k typical)');
+                tips.push('Confirm I2C address matches device configuration');
+                if (d.busIndex === 0) {
+                    tips.push('Bus 0 shares GPIO 48/54 with WiFi SDIO — disable WiFi or use a different bus');
+                }
+            } else if (busType === 2) {
+                // I2S
+                tips.push('Check I2S pin assignments (BCK, LRC, DATA, MCLK)');
+                tips.push('Verify clock source and sample rate configuration');
+                tips.push('Ensure no I2S port conflict with another device');
+            } else if (busType === 4) {
+                // GPIO
+                tips.push('Verify GPIO pin number is correct and not claimed by another device');
+                tips.push('Check for pin conflicts in the HAL pin table');
+            }
+            tips.push('Try re-initializing the device (use the \u21bb button)');
+            tips.push('Check the Debug Console for detailed error logs');
+            return tips;
+        }
+
+        function halToggleErrorTips(slot) {
+            var el = document.getElementById('hal-error-tips-' + slot);
+            if (!el) return;
+            var visible = el.style.display !== 'none';
+            el.style.display = visible ? 'none' : 'block';
+            // Update aria-expanded on the toggle
+            var toggle = el.previousElementSibling;
+            if (toggle && toggle.classList.contains('hal-error-tips-toggle')) {
+                toggle.setAttribute('aria-expanded', String(!visible));
+                var chevron = toggle.querySelector('.hal-tips-chevron');
+                if (chevron) {
+                    chevron.style.transform = visible ? '' : 'rotate(180deg)';
+                }
+            }
         }
 
         function halBuildEditForm(d) {
@@ -8858,6 +9106,337 @@ body.night-mode {
                 h += '</div>';
             }
             container.innerHTML = h;
+        }
+
+        // ===== Custom Device Create Modal =====
+
+        var halCcRegCount = 0;
+        var halCcSelectedAddr = null;
+        var halCcSelectedBus = -1;
+
+        function halOpenCustomCreate() {
+            var modal = document.getElementById('halCustomCreateModal');
+            if (modal) modal.classList.add('active');
+            // Reset form
+            var nameEl = document.getElementById('halCcName');
+            if (nameEl) nameEl.value = '';
+            var typeEl = document.getElementById('halCcType');
+            if (typeEl) typeEl.value = '1';
+            var busEl = document.getElementById('halCcBus');
+            if (busEl) busEl.value = '1';
+            var addrEl = document.getElementById('halCcI2cAddr');
+            if (addrEl) addrEl.value = '';
+            var i2cBusEl = document.getElementById('halCcI2cBus');
+            if (i2cBusEl) i2cBusEl.value = '2';
+            var portEl = document.getElementById('halCcI2sPort');
+            if (portEl) portEl.value = '2';
+            var chEl = document.getElementById('halCcChannels');
+            if (chEl) chEl.value = '2';
+            halCcRegCount = 0;
+            halCcSelectedAddr = null;
+            halCcSelectedBus = -1;
+            var regBody = document.getElementById('halCcRegBody');
+            if (regBody) regBody.innerHTML = '';
+            halCcTypeChanged();
+            halCcBusChanged();
+            halCcUpdateCompat();
+            halCcFetchUnmatched();
+        }
+
+        function halCloseCustomCreate() {
+            var modal = document.getElementById('halCustomCreateModal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function halCcFetchUnmatched() {
+            var container = document.getElementById('halCcAddrChips');
+            if (!container) return;
+            container.innerHTML = '<span class="hal-cc-chip-skip">Loading...</span>';
+            fetch('/api/hal/scan/unmatched')
+                .then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function(data) {
+                    var addrs = data.addresses || data || [];
+                    if (!addrs.length) {
+                        container.innerHTML = '<span class="hal-cc-chip-skip">No unmatched addresses found. Run Rescan first.</span>';
+                        return;
+                    }
+                    var h = '';
+                    for (var i = 0; i < addrs.length; i++) {
+                        var item = addrs[i];
+                        var addr = typeof item === 'object' ? (item.address || item.addr || 0) : item;
+                        var bus = typeof item === 'object' ? (item.bus !== undefined ? item.bus : 2) : 2;
+                        var addrHex = '0x' + addr.toString(16).toUpperCase().padStart(2, '0');
+                        h += '<button class="hal-cc-chip" onclick="halCcSelectAddr(' + addr + ',' + bus + ',this)" data-addr="' + addr + '" data-bus="' + bus + '">';
+                        h += addrHex;
+                        h += '<span class="hal-cc-chip-bus">Bus ' + bus + '</span>';
+                        h += '</button>';
+                    }
+                    // Show skipped buses
+                    if (data.skippedBuses && data.skippedBuses.length > 0) {
+                        for (var s = 0; s < data.skippedBuses.length; s++) {
+                            h += '<span class="hal-cc-chip-skip">Bus ' + data.skippedBuses[s] + ' skipped (WiFi active)</span>';
+                        }
+                    }
+                    container.innerHTML = h;
+                })
+                .catch(function() {
+                    container.innerHTML = '<span class="hal-cc-chip-skip">Could not fetch addresses. Run Rescan and try again.</span>';
+                });
+        }
+
+        function halCcSelectAddr(addr, bus, el) {
+            // Deselect previous
+            var chips = document.querySelectorAll('#halCcAddrChips .hal-cc-chip');
+            for (var i = 0; i < chips.length; i++) {
+                chips[i].classList.remove('selected');
+            }
+            // Select this one
+            if (el) el.classList.add('selected');
+            halCcSelectedAddr = addr;
+            halCcSelectedBus = bus;
+            // Auto-fill I2C fields
+            var addrEl = document.getElementById('halCcI2cAddr');
+            if (addrEl) addrEl.value = '0x' + addr.toString(16).toUpperCase().padStart(2, '0');
+            var busEl = document.getElementById('halCcI2cBus');
+            if (busEl) busEl.value = String(bus);
+            // Switch bus type to I2C
+            var mainBusEl = document.getElementById('halCcBus');
+            if (mainBusEl) mainBusEl.value = '1';
+            halCcBusChanged();
+        }
+
+        function halCcTypeChanged() {
+            var typeEl = document.getElementById('halCcType');
+            var type = typeEl ? parseInt(typeEl.value) : 1;
+            // Show/hide audio section for DAC(1), ADC(2), Codec(3)
+            var audioSection = document.getElementById('halCcAudioSection');
+            if (audioSection) audioSection.style.display = (type >= 1 && type <= 3) ? '' : 'none';
+            halCcBuildCapCheckboxes(type);
+            halCcUpdateCompat();
+        }
+
+        function halCcBusChanged() {
+            var busEl = document.getElementById('halCcBus');
+            var bus = busEl ? parseInt(busEl.value) : 1;
+            var i2cSection = document.getElementById('halCcI2cSection');
+            if (i2cSection) i2cSection.style.display = (bus === 1) ? '' : 'none';
+        }
+
+        function halCcUpdateCompat() {
+            var nameEl = document.getElementById('halCcName');
+            var name = nameEl ? nameEl.value.trim() : '';
+            var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            var compat = 'custom,' + (slug || 'my-device');
+            var display = document.getElementById('halCcCompatDisplay');
+            if (display) display.textContent = compat;
+        }
+
+        function halCcAddInitReg() {
+            var body = document.getElementById('halCcRegBody');
+            if (!body) return;
+            var idx = halCcRegCount++;
+            var tr = document.createElement('tr');
+            tr.id = 'halCcReg' + idx;
+            tr.innerHTML = '<td><input type="text" id="halCcRegAddr' + idx + '" placeholder="0x00" value="0x"></td>' +
+                '<td><input type="text" id="halCcRegVal' + idx + '" placeholder="0x00" value="0x"></td>' +
+                '<td><button class="hal-cc-regdel" onclick="halCcRemoveInitReg(' + idx + ')" title="Remove">&times;</button></td>';
+            body.appendChild(tr);
+        }
+
+        function halCcRemoveInitReg(idx) {
+            var row = document.getElementById('halCcReg' + idx);
+            if (row) row.remove();
+        }
+
+        function halCcBuildCapCheckboxes(type) {
+            var container = document.getElementById('halCcCaps');
+            if (!container) return;
+            var caps = [
+                { bit: 4, label: 'DAC Output', defOn: (type === 1 || type === 3) },
+                { bit: 3, label: 'ADC Input', defOn: (type === 2 || type === 3) },
+                { bit: 7, label: 'Codec', defOn: (type === 3) },
+                { bit: 0, label: 'HW Volume', defOn: false },
+                { bit: 1, label: 'Filters', defOn: false },
+                { bit: 2, label: 'Mute', defOn: false },
+                { bit: 5, label: 'PGA Control', defOn: false },
+                { bit: 6, label: 'HPF Control', defOn: false }
+            ];
+            var h = '';
+            for (var i = 0; i < caps.length; i++) {
+                var c = caps[i];
+                h += '<label><input type="checkbox" value="' + c.bit + '" class="halCcCapCheck"' + (c.defOn ? ' checked' : '') + '> ' + escapeHtml(c.label) + '</label>';
+            }
+            container.innerHTML = h;
+        }
+
+        function halCcCollectCaps() {
+            var checks = document.querySelectorAll('.halCcCapCheck:checked');
+            var val = 0;
+            for (var i = 0; i < checks.length; i++) {
+                val |= (1 << parseInt(checks[i].value));
+            }
+            return val;
+        }
+
+        function halCcCollectInitRegs() {
+            var regs = [];
+            var body = document.getElementById('halCcRegBody');
+            if (!body) return regs;
+            var rows = body.querySelectorAll('tr');
+            for (var i = 0; i < rows.length; i++) {
+                var regInput = rows[i].querySelector('input[id^="halCcRegAddr"]');
+                var valInput = rows[i].querySelector('input[id^="halCcRegVal"]');
+                if (!regInput || !valInput) continue;
+                var reg = parseInt(regInput.value, 16);
+                var val = parseInt(valInput.value, 16);
+                if (isNaN(reg) || isNaN(val)) continue;
+                if (reg < 0 || reg > 255 || val < 0 || val > 255) continue;
+                regs.push({ reg: reg, val: val });
+            }
+            return regs;
+        }
+
+        function halCcValidate() {
+            var nameEl = document.getElementById('halCcName');
+            var name = nameEl ? nameEl.value.trim() : '';
+            if (!name) { showToast('Device name is required', true); return null; }
+            if (name.length > 32) { showToast('Name must be 32 characters or less', true); return null; }
+
+            var typeEl = document.getElementById('halCcType');
+            var type = typeEl ? parseInt(typeEl.value) : 1;
+
+            var busEl = document.getElementById('halCcBus');
+            var busType = busEl ? parseInt(busEl.value) : 1;
+
+            var i2cAddr = 0;
+            var i2cBus = 2;
+            if (busType === 1) {
+                var addrEl = document.getElementById('halCcI2cAddr');
+                var addrStr = addrEl ? addrEl.value.trim() : '';
+                i2cAddr = parseInt(addrStr, 16);
+                if (isNaN(i2cAddr) || i2cAddr < 0x08 || i2cAddr > 0x77) {
+                    showToast('I2C address must be hex 0x08-0x77', true);
+                    return null;
+                }
+                var i2cBusEl = document.getElementById('halCcI2cBus');
+                i2cBus = i2cBusEl ? parseInt(i2cBusEl.value) : 2;
+            }
+
+            var i2sPort = 2;
+            var channels = 2;
+            if (type >= 1 && type <= 3) {
+                var portEl = document.getElementById('halCcI2sPort');
+                i2sPort = portEl ? parseInt(portEl.value) : 2;
+                var chEl = document.getElementById('halCcChannels');
+                channels = chEl ? parseInt(chEl.value) : 2;
+            }
+
+            var caps = halCcCollectCaps();
+            if ((type >= 1 && type <= 3) && caps === 0) {
+                showToast('Select at least one capability for audio devices', true);
+                return null;
+            }
+
+            // Validate init registers
+            var body = document.getElementById('halCcRegBody');
+            if (body) {
+                var rows = body.querySelectorAll('tr');
+                for (var i = 0; i < rows.length; i++) {
+                    var regInput = rows[i].querySelector('input[id^="halCcRegAddr"]');
+                    var valInput = rows[i].querySelector('input[id^="halCcRegVal"]');
+                    if (!regInput || !valInput) continue;
+                    var rv = parseInt(regInput.value, 16);
+                    var vv = parseInt(valInput.value, 16);
+                    if (isNaN(rv) || rv < 0 || rv > 255) {
+                        showToast('Init register address must be hex 0x00-0xFF', true);
+                        return null;
+                    }
+                    if (isNaN(vv) || vv < 0 || vv > 255) {
+                        showToast('Init register value must be hex 0x00-0xFF', true);
+                        return null;
+                    }
+                }
+            }
+
+            var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            var compatible = 'custom,' + (slug || 'my-device');
+
+            return {
+                name: name,
+                compatible: compatible,
+                type: type,
+                busType: busType,
+                i2cAddr: i2cAddr,
+                i2cBus: i2cBus,
+                i2sPort: i2sPort,
+                channels: channels,
+                capabilities: caps,
+                initRegs: halCcCollectInitRegs()
+            };
+        }
+
+        function halSubmitCustomCreate(event) {
+            if (event) event.preventDefault();
+            var data = halCcValidate();
+            if (!data) return;
+
+            fetch('/api/hal/devices/custom/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(result) {
+                if (result.ok || result.status === 'ok') {
+                    showToast('Device created in slot ' + (result.slot !== undefined ? result.slot : '?'));
+                    halCloseCustomCreate();
+                    loadHalDeviceList();
+                } else {
+                    showToast('Create failed: ' + (result.error || 'Unknown error'), true);
+                }
+            })
+            .catch(function(err) { showToast('Error: ' + err, true); });
+        }
+
+        function halCcBuildExportJson() {
+            var data = halCcValidate();
+            if (!data) return null;
+            return JSON.stringify(data, null, 2);
+        }
+
+        function halExportCustomSchema() {
+            var json = halCcBuildExportJson();
+            if (!json) return;
+            var data = JSON.parse(json);
+            var filename = (data.compatible || 'custom-device').replace(/,/g, '_') + '.json';
+            var blob = new Blob([json], { type: 'application/json' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
+        function halSubmitToAlx() {
+            var json = halCcBuildExportJson();
+            if (!json) return;
+            var data = JSON.parse(json);
+            // Download the file
+            var filename = (data.compatible || 'custom-device').replace(/,/g, '_') + '.json';
+            var blob = new Blob([json], { type: 'application/json' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            // Open GitHub issue with pre-filled template
+            var title = encodeURIComponent('Custom Device: ' + (data.name || 'Unknown'));
+            var body = encodeURIComponent('## Custom Device Schema\n\nPlease find the attached JSON schema file: `' + filename + '`\n\n### Device Info\n- **Name**: ' + data.name + '\n- **Compatible**: ' + data.compatible + '\n- **Type**: ' + data.type + '\n- **Bus**: ' + data.busType + '\n\n### Notes\n\n(Describe your device and how it should be used)\n');
+            var url = 'https://github.com/ALX-Audio/ALX_Nova_Controller_2/issues/new?title=' + title + '&body=' + body + '&labels=custom-device';
+            window.open(url, '_blank');
         }
 
 //# sourceURL=15-hal-devices.js
@@ -10648,36 +11227,115 @@ function setAudioUpdateRate() {
     .catch(err => showToast('Failed to update audio rate', 'error'));
 }
 
+var IMPORT_SECTIONS = [
+    { key: 'wifi',            label: 'WiFi Configuration' },
+    { key: 'general',         label: 'General Settings' },
+    { key: 'smartSensing',    label: 'Smart Sensing' },
+    { key: 'mqtt',            label: 'MQTT Configuration' },
+    { key: 'signalGenerator', label: 'Signal Generator' },
+    { key: 'inputChannelNames', label: 'Input Channel Names' },
+    { key: 'hal',             label: 'HAL Device Configs',     tag: 'v2.0' },
+    { key: 'customDevices',   label: 'Custom Device Schemas',  tag: 'v2.0' },
+    { key: 'dsp',             label: 'DSP Settings',           tag: 'v2.0' },
+    { key: 'pipeline',        label: 'Pipeline Audio Routing', tag: 'v2.0' }
+];
+
+var _pendingImportData = null;
+
 function exportSettings() {
     apiFetch('/api/settings/export')
-    .then(res => res.safeJson())
-    .then(data => {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+    .then(function(res) { return res.safeJson(); })
+    .then(function(data) {
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
         a.href = url;
         a.download = 'alx-settings.json';
         a.click();
         URL.revokeObjectURL(url);
         showToast('Settings exported', 'success');
     })
-    .catch(err => showToast('Failed to export settings', 'error'));
+    .catch(function() { showToast('Failed to export settings', 'error'); });
 }
 
 function handleFileSelect(event) {
-    const file = event.target.files[0];
+    var file = event.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
+    var reader = new FileReader();
     reader.onload = function(e) {
         try {
-            const settings = JSON.parse(e.target.result);
-            importSettings(settings);
+            var settings = JSON.parse(e.target.result);
+            showImportPreview(settings, file.name);
         } catch (err) {
             showToast('Invalid settings file', 'error');
         }
     };
     reader.readAsText(file);
+    // Reset input so same file can be re-selected
+    event.target.value = '';
+}
+
+function showImportPreview(settings, fileName) {
+    _pendingImportData = settings;
+
+    var card = document.getElementById('importPreviewCard');
+    var metaEl = document.getElementById('importPreviewMeta');
+    var sectionsEl = document.getElementById('importPreviewSections');
+
+    // Build metadata display
+    var metaHtml = '';
+    metaHtml += '<span class="meta-label">File</span><span class="meta-value">' + escapeHtml(fileName) + '</span>';
+    if (settings.exportVersion) {
+        metaHtml += '<span class="meta-label">Format</span><span class="meta-value">v' + escapeHtml(String(settings.exportVersion)) + '</span>';
+    }
+    if (settings.exportTimestamp) {
+        var ts = settings.exportTimestamp;
+        var dateStr = (typeof ts === 'number') ? new Date(ts * 1000).toLocaleString() : escapeHtml(String(ts));
+        metaHtml += '<span class="meta-label">Exported</span><span class="meta-value">' + dateStr + '</span>';
+    }
+    if (settings.firmwareVersion) {
+        metaHtml += '<span class="meta-label">Firmware</span><span class="meta-value">' + escapeHtml(String(settings.firmwareVersion)) + '</span>';
+    }
+    if (settings.deviceSerial) {
+        metaHtml += '<span class="meta-label">Device</span><span class="meta-value">' + escapeHtml(String(settings.deviceSerial)) + '</span>';
+    }
+    metaEl.innerHTML = metaHtml;
+
+    // Build section checklist
+    var checkSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2C6.5 2 2 6.5 2 12S6.5 22 12 22 22 17.5 22 12 17.5 2 12 2M10 17L5 12L6.41 10.59L10 14.17L17.59 6.58L19 8L10 17Z"/></svg>';
+    var missSvg = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4Z"/></svg>';
+
+    var sectionsHtml = '';
+    for (var i = 0; i < IMPORT_SECTIONS.length; i++) {
+        var sec = IMPORT_SECTIONS[i];
+        var present = settings.hasOwnProperty(sec.key);
+        var cls = present ? 'present' : 'missing';
+        var icon = present ? checkSvg : missSvg;
+        var tagHtml = sec.tag ? ' <span class="section-tag">' + escapeHtml(sec.tag) + '</span>' : '';
+        sectionsHtml += '<div class="import-section-item ' + cls + '">' + icon + '<span>' + escapeHtml(sec.label) + tagHtml + '</span></div>';
+    }
+    sectionsEl.innerHTML = sectionsHtml;
+
+    card.style.display = '';
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function cancelImportPreview() {
+    _pendingImportData = null;
+    var card = document.getElementById('importPreviewCard');
+    if (card) card.style.display = 'none';
+}
+
+function applyImportPreview() {
+    if (!_pendingImportData) return;
+    var settings = _pendingImportData;
+    _pendingImportData = null;
+
+    var card = document.getElementById('importPreviewCard');
+    if (card) card.style.display = 'none';
+
+    importSettings(settings);
 }
 
 function importSettings(settings) {
@@ -10686,15 +11344,15 @@ function importSettings(settings) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
     })
-    .then(res => res.safeJson())
-    .then(data => {
+    .then(function(res) { return res.safeJson(); })
+    .then(function(data) {
         if (data.success) {
             showToast('Settings imported. Rebooting...', 'success');
         } else {
             showToast(data.message || 'Import failed', 'error');
         }
     })
-    .catch(err => showToast('Failed to import settings', 'error'));
+    .catch(function() { showToast('Failed to import settings', 'error'); });
 }
 
 function manualOverride(state) {
@@ -13267,6 +13925,108 @@ function initFirmwareDragDrop() {
 
 //# sourceURL=29-i2s-ports.js
 </script>
+
+    <!-- Custom Device Create Modal -->
+    <div class="hal-cc-overlay" id="halCustomCreateModal">
+      <div class="hal-cc-modal">
+        <div class="hal-cc-header">
+          <h3>Create Custom Device</h3>
+          <button class="hal-cc-close" onclick="halCloseCustomCreate()">&times;</button>
+        </div>
+
+        <div class="hal-cc-section">Detected I2C Addresses</div>
+        <div class="hal-cc-chips" id="halCcAddrChips">
+          <span class="hal-cc-chip-skip">Run Rescan first to detect addresses</span>
+        </div>
+        <div class="hal-cc-note">Click an address to auto-fill I2C settings</div>
+
+        <div class="hal-cc-section">Device Info</div>
+        <div class="hal-cc-row">
+          <label>Name:</label>
+          <input type="text" id="halCcName" maxlength="32" placeholder="My Custom DAC" oninput="halCcUpdateCompat()">
+        </div>
+        <div class="hal-cc-row">
+          <label>Type:</label>
+          <select id="halCcType" onchange="halCcTypeChanged()">
+            <option value="1">DAC</option>
+            <option value="2">ADC</option>
+            <option value="3">Codec</option>
+            <option value="4">Amp</option>
+            <option value="9">GPIO</option>
+          </select>
+        </div>
+        <div class="hal-cc-row">
+          <label>Bus:</label>
+          <select id="halCcBus" onchange="halCcBusChanged()">
+            <option value="1">I2C</option>
+            <option value="2">I2S</option>
+            <option value="4">GPIO</option>
+          </select>
+        </div>
+
+        <div id="halCcI2cSection">
+          <div class="hal-cc-section">I2C Settings</div>
+          <div class="hal-cc-row">
+            <label>Address:</label>
+            <input type="text" id="halCcI2cAddr" placeholder="0x48" style="width:70px;flex:0;">
+          </div>
+          <div class="hal-cc-row">
+            <label>I2C Bus:</label>
+            <select id="halCcI2cBus">
+              <option value="0">External (GPIO 48/54)</option>
+              <option value="1">Onboard (GPIO 7/8)</option>
+              <option value="2" selected>Expansion (GPIO 28/29)</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="halCcAudioSection">
+          <div class="hal-cc-section">Audio Settings</div>
+          <div class="hal-cc-row">
+            <label>I2S Port:</label>
+            <select id="halCcI2sPort">
+              <option value="0">I2S 0</option>
+              <option value="1">I2S 1</option>
+              <option value="2" selected>I2S 2</option>
+            </select>
+          </div>
+          <div class="hal-cc-row">
+            <label>Channels:</label>
+            <select id="halCcChannels">
+              <option value="2">2 (Stereo)</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="hal-cc-section">Init Registers <span style="font-weight:400;opacity:0.6">(optional)</span></div>
+        <table class="hal-cc-regtable">
+          <thead><tr><th>Register</th><th>Value</th><th></th></tr></thead>
+          <tbody id="halCcRegBody"></tbody>
+        </table>
+        <button class="hal-cc-regadd" onclick="halCcAddInitReg()">+ Add Register</button>
+
+        <div class="hal-cc-section">Capabilities</div>
+        <div class="hal-cc-caps" id="halCcCaps"></div>
+
+        <div class="hal-cc-section">Compatible String</div>
+        <div class="hal-cc-compat" id="halCcCompatDisplay">custom,</div>
+
+        <div class="hal-cc-actions">
+          <button class="btn btn-sm" onclick="halCloseCustomCreate()">Cancel</button>
+          <button class="btn btn-sm" onclick="halExportCustomSchema()" title="Download JSON schema">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true" style="margin-right:3px;vertical-align:-2px;"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+            Export
+          </button>
+          <button class="btn btn-sm" onclick="halSubmitToAlx()" title="Submit device schema to ALX community">
+            Submit to ALX
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" style="margin-left:3px;vertical-align:-1px;"><path d="M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z"/></svg>
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="halSubmitCustomCreate(event)">Create &amp; Test</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Custom Device Upload Modal -->
     <div id="halCustomUploadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">

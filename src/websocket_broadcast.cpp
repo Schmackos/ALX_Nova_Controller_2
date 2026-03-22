@@ -487,6 +487,13 @@ void sendHalDeviceState() {
         obj["sampleRates"] = desc.sampleRatesMask;
         obj["legacyId"] = desc.legacyId;
 
+        // Surface last init error for devices in error/unavailable state
+        if (dev->_state == HAL_STATE_ERROR || dev->_state == HAL_STATE_UNAVAILABLE) {
+            if (dev->_lastError[0]) {
+                obj["errorReason"] = dev->getLastError();
+            }
+        }
+
         // For sensor devices, include live readings
         if (desc.type == HAL_DEV_SENSOR) {
             HalTempSensor* ts = static_cast<HalTempSensor*>(dev);
