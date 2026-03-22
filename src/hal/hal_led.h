@@ -13,6 +13,8 @@ public:
     void dumpConfig() override;
     bool healthCheck() override;
 
+    void setOn(bool state);
+
 private:
     int _pin;
 };

@@ -13,6 +13,8 @@
 #include "hal_button.h"
 #include "hal_encoder.h"
 #include "hal_ns4150b.h"
+#include "hal_led.h"
+#include "hal_relay.h"
 #include "hal_es9822pro.h"
 #include "hal_es9843pro.h"
 #include "hal_es9826.h"
@@ -41,6 +43,8 @@ static HalDevice* factory_buzzer()   { return new HalBuzzer(BUZZER_PIN); }
 static HalDevice* factory_button()   { return new HalButton(RESET_BUTTON_PIN); }
 static HalDevice* factory_encoder()  { return new HalEncoder(ENCODER_A_PIN, ENCODER_B_PIN, ENCODER_SW_PIN); }
 static HalDevice* factory_ns4150b()  { return new HalNs4150b(ES8311_PA_PIN); }
+static HalDevice* factory_led()      { return new HalLed(LED_PIN); }
+static HalDevice* factory_relay()    { return new HalRelay(AMPLIFIER_PIN); }
 static HalDevice* factory_es9822pro() { return new HalEs9822pro(); }
 static HalDevice* factory_es9843pro() { return new HalEs9843pro(); }
 static HalDevice* factory_es9826()    { return new HalEs9826(); }
@@ -307,7 +311,7 @@ void hal_register_builtins() {
         memset(&e, 0, sizeof(e));
         strncpy(e.compatible, COMPAT_LED, 31);
         e.type = HAL_DEV_GPIO;
-        e.factory = nullptr;
+        e.factory = factory_led;
         if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
@@ -317,7 +321,7 @@ void hal_register_builtins() {
         memset(&e, 0, sizeof(e));
         strncpy(e.compatible, COMPAT_RELAY, 31);
         e.type = HAL_DEV_AMP;
-        e.factory = nullptr;
+        e.factory = factory_relay;
         if (!hal_registry_register(e)) { LOG_W("[HAL] Failed to register driver: %s", e.compatible); }
     }
 
