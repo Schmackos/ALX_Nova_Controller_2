@@ -261,7 +261,8 @@
     "src/psram_alloc.h",
     "src/psram_alloc.cpp",
     "src/psram_api.h",
-    "src/psram_api.cpp"
+    "src/psram_api.cpp",
+    "src/http_security.h"
   ],
   "sectionToPromptType": {
     "api/rest-main": "api-reference",
