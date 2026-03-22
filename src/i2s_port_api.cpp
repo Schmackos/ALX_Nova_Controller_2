@@ -17,6 +17,9 @@ static void _buildPortJson(JsonObject& obj, uint8_t port) {
                  (info.txMode == I2S_MODE_TDM) ? "tdm" : "off";
     if (info.txMode == I2S_MODE_TDM) tx["tdmSlots"] = info.txTdmSlots;
     tx["doutPin"] = info.txDoutPin;
+    tx["format"] = (info.txFormat == 1) ? "msb" :
+                   (info.txFormat == 2) ? "pcm" : "philips";
+    tx["bitDepth"] = info.txBitDepth;
 
     JsonObject rx = obj["rx"].to<JsonObject>();
     rx["active"] = info.rxActive;
@@ -24,12 +27,16 @@ static void _buildPortJson(JsonObject& obj, uint8_t port) {
                  (info.rxMode == I2S_MODE_TDM) ? "tdm" : "off";
     if (info.rxMode == I2S_MODE_TDM) rx["tdmSlots"] = info.rxTdmSlots;
     rx["dinPin"] = info.rxDinPin;
+    rx["format"] = (info.rxFormat == 1) ? "msb" :
+                   (info.rxFormat == 2) ? "pcm" : "philips";
+    rx["bitDepth"] = info.rxBitDepth;
 
     JsonObject clocks = obj["clocks"].to<JsonObject>();
     clocks["master"] = info.isClockMaster;
     clocks["mclk"] = info.mclkPin;
     clocks["bck"] = info.bckPin;
     clocks["lrc"] = info.lrcPin;
+    clocks["mclkMultiple"] = info.mclkMultiple;
 }
 
 void registerI2sPortApiEndpoints(WebServer& server) {

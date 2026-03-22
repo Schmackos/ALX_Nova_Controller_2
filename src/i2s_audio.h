@@ -104,11 +104,19 @@ I2sStaticConfig i2s_audio_get_static_config();
 #define I2S_MODE_NONE 255
 #endif
 
+// Optional I2S port configuration parameters (format, bit depth, MCLK multiplier).
+// Pass to i2s_port_enable_tx/rx(). NULL = use defaults (Philips, 32-bit, 256x MCLK).
+struct I2sPortConfig {
+    uint8_t  format;       // 0=Philips/I2S, 1=MSB/left-justified, 2=PCM short (default 0)
+    uint8_t  bitDepth;     // 16, 24, 32 (default 32; 0=auto -> 32)
+    uint16_t mclkMultiple; // 128,192,256,384,512,768,1024,1152 (default 256; 0 -> 256)
+};
+
 struct I2sPortInfo {
     uint8_t port;
     bool    txActive;
     bool    rxActive;
-    uint8_t txMode;      // I2S_MODE_STD, I2S_MODE_TDM, or I2S_MODE_NONE
+    uint8_t txMode;        // I2S_MODE_STD, I2S_MODE_TDM, or I2S_MODE_NONE
     uint8_t rxMode;
     uint8_t txTdmSlots;
     uint8_t rxTdmSlots;
@@ -118,6 +126,12 @@ struct I2sPortInfo {
     int8_t  txDoutPin;
     int8_t  rxDinPin;
     bool    isClockMaster;
+    // Resolved config parameters (populated by i2s_port_get_info after enable)
+    uint8_t  txFormat;       // Resolved TX format (0=Philips, 1=MSB, 2=PCM)
+    uint8_t  rxFormat;       // Resolved RX format
+    uint8_t  txBitDepth;     // Resolved TX bit depth (16/24/32)
+    uint8_t  rxBitDepth;     // Resolved RX bit depth
+    uint16_t mclkMultiple;   // Resolved MCLK multiple (128/192/256/384/512/768/1024/1152)
 };
 
 // ===== Public API =====
@@ -266,10 +280,12 @@ inline bool i2s_audio_configure_adc(int, const HalDeviceConfig*) { return true; 
 
 // ===== Port-generic I2S API =====
 bool i2s_port_enable_tx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
-                         gpio_num_t doutPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws);
+                         gpio_num_t doutPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws,
+                         const I2sPortConfig* cfg = nullptr);
 void i2s_port_disable_tx(uint8_t port);
 bool i2s_port_enable_rx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
-                         gpio_num_t dinPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws);
+                         gpio_num_t dinPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws,
+                         const I2sPortConfig* cfg = nullptr);
 void i2s_port_disable_rx(uint8_t port);
 void i2s_port_write(uint8_t port, const void* src, size_t size, size_t* bw, uint32_t timeout);
 uint32_t i2s_port_read(uint8_t port, int32_t* dst, uint32_t frames);
@@ -325,9 +341,11 @@ bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
                                         uint8_t    slot_count);
 #else
 // ===== Port-generic I2S API stubs =====
-inline bool i2s_port_enable_tx(uint8_t, uint8_t, uint8_t, int, int, int, int) { return true; }
+inline bool i2s_port_enable_tx(uint8_t, uint8_t, uint8_t, int, int, int, int,
+                                const I2sPortConfig* = nullptr) { return true; }
 inline void i2s_port_disable_tx(uint8_t) {}
-inline bool i2s_port_enable_rx(uint8_t, uint8_t, uint8_t, int, int, int, int) { return true; }
+inline bool i2s_port_enable_rx(uint8_t, uint8_t, uint8_t, int, int, int, int,
+                                const I2sPortConfig* = nullptr) { return true; }
 inline void i2s_port_disable_rx(uint8_t) {}
 inline void i2s_port_write(uint8_t, const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
 inline uint32_t i2s_port_read(uint8_t, int32_t*, uint32_t) { return 0; }

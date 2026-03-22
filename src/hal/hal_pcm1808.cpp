@@ -40,7 +40,9 @@ HalInitResult HalPcm1808::init() {
 
 #ifndef NATIVE_TEST
     if (cfg && cfg->valid) {
-        // Apply FMT pin: controls serial data format (LOW=Philips/I2S, HIGH=MSB/left-justified)
+        // Apply FMT pin: controls PCM1808 hardware serial data format
+        // LOW=Philips/I2S (i2sFormat=0), HIGH=MSB/left-justified (i2sFormat=1)
+        // The I2S port format is also wired through I2sPortConfig in i2s_audio_configure_adc().
         if (cfg->pinFmt >= 0) {
             bool msb = (cfg->i2sFormat == 1);
             pinMode(cfg->pinFmt, OUTPUT);
@@ -51,6 +53,12 @@ HalInitResult HalPcm1808::init() {
         if (cfg->pinBck >= 0 || cfg->pinLrc >= 0) {
             LOG_I("[HAL:PCM1808] I2S clock pins: BCK=GPIO%d LRC=GPIO%d (managed by i2s_audio)",
                   cfg->pinBck, cfg->pinLrc);
+        }
+        // Log I2S format parameters (wired via I2sPortConfig in i2s_audio_configure_adc)
+        if (cfg->i2sFormat > 0 || cfg->bitDepth > 0 || cfg->mclkMultiple > 0) {
+            LOG_I("[HAL:PCM1808] I2S port config: fmt=%u bits=%u mclkMult=%u (applied at port init)",
+                  cfg->i2sFormat, cfg->bitDepth ? cfg->bitDepth : 32,
+                  cfg->mclkMultiple ? cfg->mclkMultiple : 256);
         }
     }
 #endif
