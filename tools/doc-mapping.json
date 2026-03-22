@@ -153,6 +153,8 @@
     "src/thd_measurement.cpp": ["developer/dsp-system"],
     "src/i2s_audio.h": ["developer/audio-pipeline"],
     "src/i2s_audio.cpp": ["developer/audio-pipeline"],
+    "src/i2s_port_api.h": ["api/rest-hal", "developer/audio-pipeline"],
+    "src/i2s_port_api.cpp": ["api/rest-hal", "developer/audio-pipeline"],
     "src/signal_generator.h": ["developer/audio-pipeline"],
     "src/signal_generator.cpp": ["developer/audio-pipeline"],
     "src/sink_write_utils.h": ["developer/audio-pipeline"],

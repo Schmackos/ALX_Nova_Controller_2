@@ -487,6 +487,10 @@ Key implementation details:
 
 ---
 
+## I2S Port Architecture
+
+All 3 ESP32-P4 I2S ports are managed through a unified port-generic API (`i2s_port_enable_tx/rx()`, `i2s_port_write/read()`, `i2s_port_get_info()`). Each port is independently configurable for STD or TDM mode, any direction, and any pin assignment. HAL drivers use `HalDeviceConfig.i2sPort` to select their port. Expansion I2S TX (both STD and TDM) is fully implemented. Port status is available via `GET /api/i2s/ports` and the web UI Devices tab.
+
 ## I2S Driver Safety (DAC Toggle Handshake)
 
 The DAC driver may uninstall and reinstall the I2S peripheral at runtime (e.g., when the user toggles the DAC output from the web UI). This races with `audio_pipeline_task` calling `i2s_read()` on Core 1.

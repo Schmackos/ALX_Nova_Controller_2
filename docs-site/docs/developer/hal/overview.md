@@ -265,6 +265,10 @@ Discovery scans Bus 1 (ONBOARD) only through the ES8311 driver's existing Wire i
 
 Addresses that return I2C timeout (error codes 4/5) during bus scan are automatically retried up to 2 times with increasing backoff (50ms, 100ms). NACK responses (error code 2, meaning "no device present") are not retried. On successful retry, `DIAG_HAL_PROBE_RETRY_OK` (0x1105) is emitted. Worst-case boot delay: ~300ms.
 
+## Port-Generic I2S API
+
+All I2S port access goes through the port-generic API in `i2s_audio.h`. Three ports are managed via a unified `I2sPortState` array, each independently configurable for STD or TDM mode, TX or RX direction, with any pin assignment. HAL drivers read the port index from `HalDeviceConfig.i2sPort` and call `i2s_port_enable_tx()` / `i2s_port_enable_rx()` during init, then `i2s_port_write()` / `i2s_port_read()` for audio I/O. Expansion I2S TX (both STD for 2ch DACs and TDM for 8ch DACs) is fully implemented. Port status is available via `GET /api/i2s/ports`.
+
 ## Config Persistence
 
 Per-device configuration is persisted to `/hal_config.json` on LittleFS. The structure is a JSON array keyed by slot index. Changes made through the web UI are applied immediately and written to flash; they survive power cycles and OTA updates.

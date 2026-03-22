@@ -553,6 +553,67 @@ When using an 8-channel mezzanine DAC (ES9038PRO, ES9038Q2M, etc.) alongside the
 
 ---
 
+## GET /api/i2s/ports
+
+Returns the status of all 3 I2S ports, or a single port when the `?id=N` query parameter is provided. Each port entry includes its current mode (STD/TDM/off), direction (TX/RX), pin assignments, clock master status, and sample rate.
+
+**Query parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | integer (optional) | I2S port index (0–2). When omitted, all 3 ports are returned. |
+
+**Response (all ports)**
+
+```json
+\{
+  "ports": [
+    \{
+      "id": 0,
+      "mode": "STD",
+      "direction": "RX",
+      "bck": 20,
+      "ws": 21,
+      "data": 23,
+      "mclk": 22,
+      "clockMaster": true,
+      "sampleRate": 48000
+    \},
+    \{
+      "id": 1,
+      "mode": "STD",
+      "direction": "RX",
+      "bck": -1,
+      "ws": -1,
+      "data": 25,
+      "mclk": -1,
+      "clockMaster": false,
+      "sampleRate": 48000
+    \},
+    \{
+      "id": 2,
+      "mode": "off",
+      "direction": "none",
+      "bck": -1,
+      "ws": -1,
+      "data": -1,
+      "mclk": -1,
+      "clockMaster": false,
+      "sampleRate": 0
+    \}
+  ]
+\}
+```
+
+**Error codes**
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success |
+| 400 | Invalid `id` value (out of range 0–2) |
+
+---
+
 ## GET /api/psram/status
 
 Returns PSRAM health and per-subsystem allocation tracking. Requires authentication.
