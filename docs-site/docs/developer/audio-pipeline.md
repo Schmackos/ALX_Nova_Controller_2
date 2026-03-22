@@ -395,6 +395,16 @@ Override these via build flags in `platformio.ini` if you need more lanes or sin
 
 All 3 I2S ports are managed through a port-generic API (`i2s_port_enable_tx/rx()`, `i2s_port_write/read()`, `i2s_port_get_info()`). Each port is independently configurable for STD or TDM mode, any direction (TX/RX), with any pin assignment via `HalDeviceConfig.i2sPort`. Expansion I2S TX is fully implemented for both STD (2ch DACs) and TDM (8ch DACs). Port status is queryable via `GET /api/i2s/ports` and displayed on the web UI Devices tab. Legacy device-specific I2S functions are deprecated in favor of the port-generic API.
 
+Each port also carries an `I2sPortConfig` with three configurable parameters:
+
+| Parameter | Values | Default | Description |
+|-----------|--------|---------|-------------|
+| `format` | Philips (0), MSB/left-justified (1), PCM short (2) | Philips | I2S data format. PCM1808 FMT pin is driven automatically to match (LOW=Philips, HIGH=left-justified) |
+| `bitDepth` | 16, 24, 32 | 32 | Sample bit width. 24-bit combined with a non-3x MCLK multiple emits a LOG_W warning (IDF5 hardware constraint) |
+| `mclkMultiple` | 128, 192, 256, 384, 512, 768, 1152 | 256 | MCLK-to-sample-rate ratio |
+
+These are persisted in `HalDeviceConfig` and exposed via `GET /api/i2s/ports` (`format`, `bitDepth`, `mclkMultiple` fields) and `PUT /api/i2s/ports` for runtime changes.
+
 ### I2S GPIO Pin Assignment
 
 All I2S clock and data pin assignments are resolved from `HalDeviceConfig` at init time, with compile-time constants from `src/config.h` as fallback. Expansion modules can override the default pin mapping via HAL device configuration without recompiling firmware.

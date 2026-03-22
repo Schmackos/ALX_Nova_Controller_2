@@ -263,11 +263,19 @@ HalInitResult HalEs8311::init() {
                          ? es8311Cfg->i2sPort : 2;
         _i2sPort = txPort;
 #ifndef NATIVE_TEST
+        // Build I2sPortConfig from HAL device config
+        I2sPortConfig i2sCfg = {};
+        if (es8311Cfg && es8311Cfg->valid) {
+            i2sCfg.format       = es8311Cfg->i2sFormat;
+            i2sCfg.bitDepth     = es8311Cfg->bitDepth;
+            i2sCfg.mclkMultiple = es8311Cfg->mclkMultiple;
+        }
         if (!i2s_port_enable_tx(txPort, I2S_MODE_STD, 0,
                                 (gpio_num_t)ES8311_I2S_DSDIN_PIN,
                                 (gpio_num_t)ES8311_I2S_MCLK_PIN,
                                 (gpio_num_t)ES8311_I2S_SCLK_PIN,
-                                (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+                                (gpio_num_t)ES8311_I2S_LRCK_PIN,
+                                &i2sCfg)) {
             LOG_E("[HAL:ES8311] I2S TX enable failed (port=%u)", txPort);
             _powerDown();
             return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX enable failed");

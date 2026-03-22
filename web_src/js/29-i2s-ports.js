@@ -26,22 +26,29 @@
                 var rxBadgeCls = port.rx.active ? 'badge-green' : 'badge-grey';
                 var masterCls = port.clocks.master ? 'badge-blue' : 'badge-grey';
 
+                var fmtLabel = function(f) { return f === 'msb' ? 'MSB' : f === 'pcm' ? 'PCM' : 'Philips'; };
+
                 var txDetail = '';
                 if (port.tx.active) {
                     txDetail = ' GPIO ' + port.tx.doutPin;
                     if (port.tx.mode === 'tdm' && port.tx.tdmSlots) txDetail += ' (' + port.tx.tdmSlots + 'ch)';
+                    if (port.tx.format) txDetail += ' ' + fmtLabel(port.tx.format);
+                    if (port.tx.bitDepth) txDetail += ' ' + port.tx.bitDepth + '-bit';
                 }
 
                 var rxDetail = '';
                 if (port.rx.active) {
                     rxDetail = ' GPIO ' + port.rx.dinPin;
                     if (port.rx.mode === 'tdm' && port.rx.tdmSlots) rxDetail += ' (' + port.rx.tdmSlots + 'ch)';
+                    if (port.rx.format) rxDetail += ' ' + fmtLabel(port.rx.format);
+                    if (port.rx.bitDepth) rxDetail += ' ' + port.rx.bitDepth + '-bit';
                 }
 
                 var clockHtml = '';
                 if (port.clocks.master) {
+                    var mclkMul = port.clocks.mclkMultiple ? ' (' + port.clocks.mclkMultiple + 'x)' : '';
                     clockHtml = '<div style="margin-top:4px;opacity:0.7;font-size:0.8em">' +
-                        'MCLK=' + port.clocks.mclk + ' BCK=' + port.clocks.bck + ' LRC=' + port.clocks.lrc +
+                        'MCLK=' + port.clocks.mclk + mclkMul + ' BCK=' + port.clocks.bck + ' LRC=' + port.clocks.lrc +
                         '</div>';
                 }
 

@@ -285,6 +285,12 @@ struct I2sPortState {
     gpio_num_t       lrcPin;
     bool             isClockMaster;
     bool             autoCleared;
+    // Resolved I2sPortConfig fields (stored for querying via i2s_port_get_info)
+    uint8_t          txFormat;       // 0=Philips, 1=MSB, 2=PCM
+    uint8_t          rxFormat;
+    uint8_t          txBitDepth;     // 16 / 24 / 32
+    uint8_t          rxBitDepth;
+    uint16_t         mclkMultiple;   // 128/192/256/384/512/768/1024/1152
 };
 static I2sPortState _port[I2S_PORT_COUNT] = {};
 
@@ -431,16 +437,49 @@ static bool _i2s_port_alloc(uint8_t port, bool needTx, bool needRx, bool autoClr
 }
 
 // Init TX direction in standard (STD) I2S mode.
-// Updates _port[port].{txMode, sampleRate, txDoutPin, mclkPin, bckPin, lrcPin}.
+// Updates _port[port].{txMode, sampleRate, txDoutPin, mclkPin, bckPin, lrcPin, txFormat, txBitDepth, mclkMultiple}.
 static bool _i2s_port_init_tx_std(uint8_t port, uint32_t rate,
                                    gpio_num_t doutPin, gpio_num_t mclk,
-                                   gpio_num_t bck, gpio_num_t ws) {
+                                   gpio_num_t bck, gpio_num_t ws,
+                                   uint8_t format, uint8_t bitDepth, uint16_t mclkMult) {
     if (port >= I2S_PORT_COUNT || !_port[port].tx) return false;
+
+    // Map bit depth
+    i2s_data_bit_width_t bw = I2S_DATA_BIT_WIDTH_32BIT;
+    if      (bitDepth == 16) bw = I2S_DATA_BIT_WIDTH_16BIT;
+    else if (bitDepth == 24) bw = I2S_DATA_BIT_WIDTH_24BIT;
 
     i2s_std_config_t cfg = {};
     cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(rate);
-    cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT,
-                                                        I2S_SLOT_MODE_STEREO);
+
+    // Map format to slot config
+    switch (format) {
+        case 1:  cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+#ifdef I2S_STD_PCM_SLOT_DEFAULT_CONFIG
+        case 2:  cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+#else
+        case 2:
+            LOG_W("[Audio] Port %u: PCM short format not supported on this IDF version, using Philips", port);
+            cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO);
+            break;
+#endif
+        default: cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+    }
+
+    // Map MCLK multiple (0 or unrecognised -> 256)
+    i2s_mclk_multiple_t mclkEnum = I2S_MCLK_MULTIPLE_256;
+    switch (mclkMult) {
+        case 128:  mclkEnum = I2S_MCLK_MULTIPLE_128;  break;
+        case 192:  mclkEnum = I2S_MCLK_MULTIPLE_192;  break;
+        case 384:  mclkEnum = I2S_MCLK_MULTIPLE_384;  break;
+        case 512:  mclkEnum = I2S_MCLK_MULTIPLE_512;  break;
+        case 768:  mclkEnum = I2S_MCLK_MULTIPLE_768;  break;
+        case 1024: mclkEnum = I2S_MCLK_MULTIPLE_1024; break;
+        case 1152: mclkEnum = I2S_MCLK_MULTIPLE_1152; break;
+        default:   mclkEnum = I2S_MCLK_MULTIPLE_256;  break;
+    }
+    cfg.clk_cfg.mclk_multiple = mclkEnum;
+
     cfg.gpio_cfg.mclk = mclk;
     cfg.gpio_cfg.bclk = bck;
     cfg.gpio_cfg.ws   = ws;
@@ -455,26 +494,62 @@ static bool _i2s_port_init_tx_std(uint8_t port, uint32_t rate,
         LOG_E("[Audio] Port %u TX STD init failed: %d", port, err);
         return false;
     }
-    _port[port].txMode    = I2S_MODE_STD;
-    _port[port].sampleRate = rate;
-    _port[port].txDoutPin = doutPin;
-    _port[port].mclkPin   = mclk;
-    _port[port].bckPin    = bck;
-    _port[port].lrcPin    = ws;
+    _port[port].txMode       = I2S_MODE_STD;
+    _port[port].sampleRate   = rate;
+    _port[port].txDoutPin    = doutPin;
+    _port[port].mclkPin      = mclk;
+    _port[port].bckPin       = bck;
+    _port[port].lrcPin       = ws;
+    _port[port].txFormat     = format;
+    _port[port].txBitDepth   = bitDepth;
+    _port[port].mclkMultiple = mclkMult;
     return true;
 }
 
 // Init RX direction in standard (STD) I2S mode.
-// Updates _port[port].{rxMode, rxDinPin} and inherits clock fields already set by TX.
+// Updates _port[port].{rxMode, rxDinPin, rxFormat, rxBitDepth} and inherits clock fields set by TX.
 static bool _i2s_port_init_rx_std(uint8_t port, uint32_t rate,
                                    gpio_num_t dinPin, gpio_num_t mclk,
-                                   gpio_num_t bck, gpio_num_t ws) {
+                                   gpio_num_t bck, gpio_num_t ws,
+                                   uint8_t format, uint8_t bitDepth, uint16_t mclkMult) {
     if (port >= I2S_PORT_COUNT || !_port[port].rx) return false;
+
+    // Map bit depth
+    i2s_data_bit_width_t bw = I2S_DATA_BIT_WIDTH_32BIT;
+    if      (bitDepth == 16) bw = I2S_DATA_BIT_WIDTH_16BIT;
+    else if (bitDepth == 24) bw = I2S_DATA_BIT_WIDTH_24BIT;
 
     i2s_std_config_t cfg = {};
     cfg.clk_cfg  = I2S_STD_CLK_DEFAULT_CONFIG(rate);
-    cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT,
-                                                        I2S_SLOT_MODE_STEREO);
+
+    // Map format to slot config
+    switch (format) {
+        case 1:  cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+#ifdef I2S_STD_PCM_SLOT_DEFAULT_CONFIG
+        case 2:  cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+#else
+        case 2:
+            LOG_W("[Audio] Port %u: PCM short format not supported on this IDF version, using Philips", port);
+            cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO);
+            break;
+#endif
+        default: cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+    }
+
+    // Map MCLK multiple
+    i2s_mclk_multiple_t mclkEnum = I2S_MCLK_MULTIPLE_256;
+    switch (mclkMult) {
+        case 128:  mclkEnum = I2S_MCLK_MULTIPLE_128;  break;
+        case 192:  mclkEnum = I2S_MCLK_MULTIPLE_192;  break;
+        case 384:  mclkEnum = I2S_MCLK_MULTIPLE_384;  break;
+        case 512:  mclkEnum = I2S_MCLK_MULTIPLE_512;  break;
+        case 768:  mclkEnum = I2S_MCLK_MULTIPLE_768;  break;
+        case 1024: mclkEnum = I2S_MCLK_MULTIPLE_1024; break;
+        case 1152: mclkEnum = I2S_MCLK_MULTIPLE_1152; break;
+        default:   mclkEnum = I2S_MCLK_MULTIPLE_256;  break;
+    }
+    cfg.clk_cfg.mclk_multiple = mclkEnum;
+
     cfg.gpio_cfg.mclk = mclk;
     cfg.gpio_cfg.bclk = bck;
     cfg.gpio_cfg.ws   = ws;
@@ -489,30 +564,72 @@ static bool _i2s_port_init_rx_std(uint8_t port, uint32_t rate,
         LOG_E("[Audio] Port %u RX STD init failed: %d", port, err);
         return false;
     }
-    _port[port].rxMode   = I2S_MODE_STD;
-    _port[port].rxDinPin = dinPin;
+    _port[port].rxMode     = I2S_MODE_STD;
+    _port[port].rxDinPin   = dinPin;
+    _port[port].rxFormat   = format;
+    _port[port].rxBitDepth = bitDepth;
     // Propagate rate/clock pins in case TX was not initialized
-    _port[port].sampleRate = rate;
-    _port[port].mclkPin    = mclk;
-    _port[port].bckPin     = bck;
-    _port[port].lrcPin     = ws;
+    _port[port].sampleRate   = rate;
+    _port[port].mclkPin      = mclk;
+    _port[port].bckPin       = bck;
+    _port[port].lrcPin       = ws;
+    _port[port].mclkMultiple = mclkMult;
     return true;
 }
 
 // Init TX direction in TDM mode.
 static bool _i2s_port_init_tx_tdm(uint8_t port, uint32_t rate,
                                     gpio_num_t doutPin, uint8_t slots,
-                                    gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws) {
+                                    gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws,
+                                    uint8_t format, uint8_t bitDepth, uint16_t mclkMult) {
     if (port >= I2S_PORT_COUNT || !_port[port].tx) return false;
+
+    // Map bit depth
+    i2s_data_bit_width_t bw = I2S_DATA_BIT_WIDTH_32BIT;
+    if      (bitDepth == 16) bw = I2S_DATA_BIT_WIDTH_16BIT;
+    else if (bitDepth == 24) bw = I2S_DATA_BIT_WIDTH_24BIT;
 
     uint32_t slotMask = (1u << slots) - 1u;
     i2s_tdm_config_t cfg = {};
     cfg.clk_cfg  = I2S_TDM_CLK_DEFAULT_CONFIG(rate);
-    cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-    cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(
-        I2S_DATA_BIT_WIDTH_32BIT,
-        I2S_SLOT_MODE_STEREO,
-        (i2s_tdm_slot_mask_t)slotMask);
+
+    // Map MCLK multiple
+    i2s_mclk_multiple_t mclkEnum = I2S_MCLK_MULTIPLE_256;
+    switch (mclkMult) {
+        case 128:  mclkEnum = I2S_MCLK_MULTIPLE_128;  break;
+        case 192:  mclkEnum = I2S_MCLK_MULTIPLE_192;  break;
+        case 384:  mclkEnum = I2S_MCLK_MULTIPLE_384;  break;
+        case 512:  mclkEnum = I2S_MCLK_MULTIPLE_512;  break;
+        case 768:  mclkEnum = I2S_MCLK_MULTIPLE_768;  break;
+        case 1024: mclkEnum = I2S_MCLK_MULTIPLE_1024; break;
+        case 1152: mclkEnum = I2S_MCLK_MULTIPLE_1152; break;
+        default:   mclkEnum = I2S_MCLK_MULTIPLE_256;  break;
+    }
+    cfg.clk_cfg.mclk_multiple = mclkEnum;
+
+    // Map TDM format: 0=Philips, 1=MSB (default for TDM), 2=PCM short
+    switch (format) {
+        case 0:
+            cfg.slot_cfg = I2S_TDM_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO,
+                               (i2s_tdm_slot_mask_t)slotMask);
+            break;
+#ifdef I2S_TDM_PCM_SHORT_SLOT_DEFAULT_CONFIG
+        case 2:
+            cfg.slot_cfg = I2S_TDM_PCM_SHORT_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO,
+                               (i2s_tdm_slot_mask_t)slotMask);
+            break;
+#else
+        case 2:
+            LOG_W("[Audio] Port %u: PCM short TDM format not supported on this IDF version, using MSB", port);
+            cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO,
+                               (i2s_tdm_slot_mask_t)slotMask);
+            break;
+#endif
+        default: // 1 = MSB (existing default)
+            cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO,
+                               (i2s_tdm_slot_mask_t)slotMask);
+            break;
+    }
     cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
     cfg.gpio_cfg.mclk = mclk;
     cfg.gpio_cfg.bclk = bck;
@@ -528,30 +645,72 @@ static bool _i2s_port_init_tx_tdm(uint8_t port, uint32_t rate,
         LOG_E("[Audio] Port %u TX TDM init failed: %d", port, err);
         return false;
     }
-    _port[port].txMode     = I2S_MODE_TDM;
-    _port[port].txTdmSlots = slots;
-    _port[port].sampleRate = rate;
-    _port[port].txDoutPin  = doutPin;
-    _port[port].mclkPin    = mclk;
-    _port[port].bckPin     = bck;
-    _port[port].lrcPin     = ws;
+    _port[port].txMode       = I2S_MODE_TDM;
+    _port[port].txTdmSlots   = slots;
+    _port[port].sampleRate   = rate;
+    _port[port].txDoutPin    = doutPin;
+    _port[port].mclkPin      = mclk;
+    _port[port].bckPin       = bck;
+    _port[port].lrcPin       = ws;
+    _port[port].txFormat     = format;
+    _port[port].txBitDepth   = bitDepth;
+    _port[port].mclkMultiple = mclkMult;
     return true;
 }
 
 // Init RX direction in TDM mode.
 static bool _i2s_port_init_rx_tdm(uint8_t port, uint32_t rate,
                                     gpio_num_t dinPin, uint8_t slots,
-                                    gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws) {
+                                    gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws,
+                                    uint8_t format, uint8_t bitDepth, uint16_t mclkMult) {
     if (port >= I2S_PORT_COUNT || !_port[port].rx) return false;
+
+    // Map bit depth
+    i2s_data_bit_width_t bw = I2S_DATA_BIT_WIDTH_32BIT;
+    if      (bitDepth == 16) bw = I2S_DATA_BIT_WIDTH_16BIT;
+    else if (bitDepth == 24) bw = I2S_DATA_BIT_WIDTH_24BIT;
 
     uint32_t slotMask = (1u << slots) - 1u;
     i2s_tdm_config_t cfg = {};
     cfg.clk_cfg  = I2S_TDM_CLK_DEFAULT_CONFIG(rate);
-    cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-    cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(
-        I2S_DATA_BIT_WIDTH_32BIT,
-        I2S_SLOT_MODE_STEREO,
-        (i2s_tdm_slot_mask_t)slotMask);
+
+    // Map MCLK multiple
+    i2s_mclk_multiple_t mclkEnum = I2S_MCLK_MULTIPLE_256;
+    switch (mclkMult) {
+        case 128:  mclkEnum = I2S_MCLK_MULTIPLE_128;  break;
+        case 192:  mclkEnum = I2S_MCLK_MULTIPLE_192;  break;
+        case 384:  mclkEnum = I2S_MCLK_MULTIPLE_384;  break;
+        case 512:  mclkEnum = I2S_MCLK_MULTIPLE_512;  break;
+        case 768:  mclkEnum = I2S_MCLK_MULTIPLE_768;  break;
+        case 1024: mclkEnum = I2S_MCLK_MULTIPLE_1024; break;
+        case 1152: mclkEnum = I2S_MCLK_MULTIPLE_1152; break;
+        default:   mclkEnum = I2S_MCLK_MULTIPLE_256;  break;
+    }
+    cfg.clk_cfg.mclk_multiple = mclkEnum;
+
+    // Map TDM format: 0=Philips, 1=MSB (default for TDM), 2=PCM short
+    switch (format) {
+        case 0:
+            cfg.slot_cfg = I2S_TDM_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO,
+                               (i2s_tdm_slot_mask_t)slotMask);
+            break;
+#ifdef I2S_TDM_PCM_SHORT_SLOT_DEFAULT_CONFIG
+        case 2:
+            cfg.slot_cfg = I2S_TDM_PCM_SHORT_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO,
+                               (i2s_tdm_slot_mask_t)slotMask);
+            break;
+#else
+        case 2:
+            LOG_W("[Audio] Port %u: PCM short TDM format not supported on this IDF version, using MSB", port);
+            cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO,
+                               (i2s_tdm_slot_mask_t)slotMask);
+            break;
+#endif
+        default: // 1 = MSB (existing default)
+            cfg.slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO,
+                               (i2s_tdm_slot_mask_t)slotMask);
+            break;
+    }
     cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
     cfg.gpio_cfg.mclk = mclk;
     cfg.gpio_cfg.bclk = bck;
@@ -567,13 +726,16 @@ static bool _i2s_port_init_rx_tdm(uint8_t port, uint32_t rate,
         LOG_E("[Audio] Port %u RX TDM init failed: %d", port, err);
         return false;
     }
-    _port[port].rxMode     = I2S_MODE_TDM;
-    _port[port].rxTdmSlots = slots;
-    _port[port].rxDinPin   = dinPin;
-    _port[port].sampleRate = rate;
-    _port[port].mclkPin    = mclk;
-    _port[port].bckPin     = bck;
-    _port[port].lrcPin     = ws;
+    _port[port].rxMode       = I2S_MODE_TDM;
+    _port[port].rxTdmSlots   = slots;
+    _port[port].rxDinPin     = dinPin;
+    _port[port].rxFormat     = format;
+    _port[port].rxBitDepth   = bitDepth;
+    _port[port].sampleRate   = rate;
+    _port[port].mclkPin      = mclk;
+    _port[port].bckPin       = bck;
+    _port[port].lrcPin       = ws;
+    _port[port].mclkMultiple = mclkMult;
     return true;
 }
 
@@ -620,11 +782,39 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     gpio_num_t bckPin  = _resolveI2sPin((_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->pinBck  : -1, I2S_BCK_PIN);
     gpio_num_t lrcPin  = _resolveI2sPin((_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->pinLrc  : -1, I2S_LRC_PIN);
 
+    // Resolve format/bitDepth/mclkMultiple from ADC HAL config (with safe defaults)
+    uint8_t  adcFmt  = (_adcHalCfg && _adcHalCfg->valid) ? _adcHalCfg->i2sFormat   : 0;
+    uint8_t  adcBd   = (_adcHalCfg && _adcHalCfg->valid && _adcHalCfg->bitDepth > 0)
+                       ? _adcHalCfg->bitDepth : 32;
+    uint16_t adcMm   = (_adcHalCfg && _adcHalCfg->valid && _adcHalCfg->mclkMultiple > 0)
+                       ? _adcHalCfg->mclkMultiple : 256;
+
+    // Map bit width
+    i2s_data_bit_width_t bw = I2S_DATA_BIT_WIDTH_32BIT;
+    if      (adcBd == 16) bw = I2S_DATA_BIT_WIDTH_16BIT;
+    else if (adcBd == 24) bw = I2S_DATA_BIT_WIDTH_24BIT;
+
+    // Map MCLK multiple
+    i2s_mclk_multiple_t mclkEnum = I2S_MCLK_MULTIPLE_256;
+    switch (adcMm) {
+        case 128:  mclkEnum = I2S_MCLK_MULTIPLE_128;  break;
+        case 192:  mclkEnum = I2S_MCLK_MULTIPLE_192;  break;
+        case 384:  mclkEnum = I2S_MCLK_MULTIPLE_384;  break;
+        case 512:  mclkEnum = I2S_MCLK_MULTIPLE_512;  break;
+        case 768:  mclkEnum = I2S_MCLK_MULTIPLE_768;  break;
+        case 1024: mclkEnum = I2S_MCLK_MULTIPLE_1024; break;
+        case 1152: mclkEnum = I2S_MCLK_MULTIPLE_1152; break;
+        default:   mclkEnum = I2S_MCLK_MULTIPLE_256;  break;
+    }
+
     // TX config: full clock master — MCLK/BCK/WS output, DOUT to DAC.
     // TX is initialized FIRST so clocks are live before the RX DMA starts.
     i2s_std_config_t tx_cfg = {};
     tx_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
-    tx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    tx_cfg.clk_cfg.mclk_multiple = mclkEnum;
+    // TX always uses Philips (the DAC side) regardless of ADC format setting;
+    // the slot format for the RX side is applied below.
+    tx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO);
     tx_cfg.gpio_cfg.mclk = mclkPin;
     tx_cfg.gpio_cfg.bclk = bckPin;
     tx_cfg.gpio_cfg.ws   = lrcPin;
@@ -637,8 +827,21 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     // RX config: mclkPin (same as TX). Both configs pointing to the same GPIO causes the
     // IDF5 GPIO matrix to re-route that pin to the same I2S MCLK output — no clearing occurs.
     // Setting MCLK=I2S_GPIO_UNUSED in the second init call clears the pin's routing, removing
-    // MCLK from the PCM1808 SCKI → PLL never locks → noise floor only (~-68 dBFS).
+    // MCLK from the PCM1808 SCKI -> PLL never locks -> noise floor only (~-68 dBFS).
     i2s_std_config_t rx_cfg = tx_cfg;
+    // Apply ADC format to RX slot config
+    switch (adcFmt) {
+        case 1:  rx_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+#ifdef I2S_STD_PCM_SLOT_DEFAULT_CONFIG
+        case 2:  rx_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+#else
+        case 2:
+            LOG_W("[Audio] ADC1: PCM short format not supported on this IDF version, using Philips");
+            rx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO);
+            break;
+#endif
+        default: rx_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw, I2S_SLOT_MODE_STEREO); break;
+    }
     rx_cfg.gpio_cfg.mclk = mclkPin;   // Same as TX — re-routes to same signal
     rx_cfg.gpio_cfg.bclk = bckPin;    // Keep — RX DMA needs BCK sync
     rx_cfg.gpio_cfg.ws   = lrcPin;    // Keep — RX DMA needs WS sync
@@ -673,8 +876,8 @@ static void i2s_configure_adc1(uint32_t sample_rate, const HalDeviceConfig* cfg 
     // caller's post-init delay before audio_pipeline_task starts reading.
     i2s_channel_enable(_tx_handle_adc1);
     i2s_channel_enable(_rx_handle_adc1);
-    LOG_I("[Audio] ADC1 TX+RX enabled — MCLK=GPIO%d @%lu Hz, drive=CAP_3",
-          (int)mclkPin, _currentSampleRate * 256UL);
+    LOG_I("[Audio] ADC1 TX+RX enabled — MCLK=GPIO%d @%lu Hz, fmt=%u bits=%u mclkMult=%u, drive=CAP_3",
+          (int)mclkPin, (unsigned long)sample_rate * (unsigned long)adcMm, adcFmt, adcBd, (unsigned)adcMm);
 }
 
 // ADC2 uses I2S_NUM_1 configured as MASTER (not slave) to bypass ESP32-S3
@@ -711,11 +914,31 @@ static bool i2s_configure_adc2(uint32_t sample_rate, const HalDeviceConfig* cfg 
     gpio_num_t dinPin = (cfg && cfg->valid && cfg->pinData > 0)
         ? (gpio_num_t)cfg->pinData : (gpio_num_t)I2S_DOUT2_PIN;
 
+    // Resolve format/bitDepth from ADC HAL config (MCLK not used on ADC2 — no clocks output)
+    uint8_t adc2Fmt = (cfg && cfg->valid) ? cfg->i2sFormat : 0;
+    uint8_t adc2Bd  = (cfg && cfg->valid && cfg->bitDepth > 0) ? cfg->bitDepth : 32;
+
+    i2s_data_bit_width_t bw2 = I2S_DATA_BIT_WIDTH_32BIT;
+    if      (adc2Bd == 16) bw2 = I2S_DATA_BIT_WIDTH_16BIT;
+    else if (adc2Bd == 24) bw2 = I2S_DATA_BIT_WIDTH_24BIT;
+
     // Only data_in pin — secondary I2S does NOT output BCK/WS/MCLK.
     // I2S0 (ADC1) provides all clock signals to both PCM1808 boards.
     i2s_std_config_t std_cfg = {};
     std_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate);
-    std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO);
+    // Apply format to slot config
+    switch (adc2Fmt) {
+        case 1:  std_cfg.slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(bw2, I2S_SLOT_MODE_STEREO); break;
+#ifdef I2S_STD_PCM_SLOT_DEFAULT_CONFIG
+        case 2:  std_cfg.slot_cfg = I2S_STD_PCM_SLOT_DEFAULT_CONFIG(bw2, I2S_SLOT_MODE_STEREO); break;
+#else
+        case 2:
+            LOG_W("[Audio] ADC2: PCM short format not supported on this IDF version, using Philips");
+            std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw2, I2S_SLOT_MODE_STEREO);
+            break;
+#endif
+        default: std_cfg.slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bw2, I2S_SLOT_MODE_STEREO); break;
+    }
     std_cfg.gpio_cfg.mclk = I2S_GPIO_UNUSED;
     std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;
     std_cfg.gpio_cfg.ws   = I2S_GPIO_UNUSED;
@@ -1420,26 +1643,26 @@ static bool _i2s2_alloc_full_duplex(uint32_t sample_rate, gpio_num_t rx_din_pin)
     }
 
     // TX first — activates MCLK/BCK/WS output (ES8311 clock master)
+    // Use legacy defaults: Philips (0), 32-bit, 256x MCLK
     if (!_i2s_port_init_tx_std(2, sample_rate,
                                 (gpio_num_t)ES8311_I2S_DSDIN_PIN,
                                 (gpio_num_t)ES8311_I2S_MCLK_PIN,
                                 (gpio_num_t)ES8311_I2S_SCLK_PIN,
-                                (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+                                (gpio_num_t)ES8311_I2S_LRCK_PIN,
+                                0, 32, 256)) {
         // TX init failed — clean up
         _i2s_port_teardown_dir(2, false);  // del RX
         _i2s_port_teardown_dir(2, true);   // del TX
         return false;
     }
-    // Apply MCLK multiple after TX init (helper sets STD defaults; override here)
-    // Note: the helper already set the standard MCLK multiple; ES8311 needs x256
-    // which is the IDF5 default so no additional override is required.
 
-    // RX — expansion ADC data-in, shares clocks with TX
+    // RX — expansion ADC data-in, shares clocks with TX; Philips, 32-bit, 256x MCLK
     if (!_i2s_port_init_rx_std(2, sample_rate,
                                 rx_din_pin,
                                 (gpio_num_t)ES8311_I2S_MCLK_PIN,
                                 (gpio_num_t)ES8311_I2S_SCLK_PIN,
-                                (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+                                (gpio_num_t)ES8311_I2S_LRCK_PIN,
+                                0, 32, 256)) {
         // RX init failed — disable TX and clean up
         _i2s_port_teardown_dir(2, true);   // disable+del TX
         _i2s_port_teardown_dir(2, false);  // del RX (already failed but handle may exist)
@@ -1651,26 +1874,29 @@ bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
     }
 
     // TX: standard stereo mode (ES8311 DAC — unchanged from stereo path)
+    // Legacy call: Philips (0), 32-bit, 256x MCLK defaults preserved
     if (txWasActive) {
         if (!_i2s_port_init_tx_std(2, sample_rate,
                                     (gpio_num_t)ES8311_I2S_DSDIN_PIN,
                                     (gpio_num_t)ES8311_I2S_MCLK_PIN,
                                     (gpio_num_t)ES8311_I2S_SCLK_PIN,
-                                    (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+                                    (gpio_num_t)ES8311_I2S_LRCK_PIN,
+                                    0, 32, 256)) {
             LOG_E("[Audio] I2S2 TDM: TX (ES8311) reinit failed");
             _i2s_port_teardown(2);
             return false;
         }
     }
 
-    // RX: TDM mode — slot_count slots × 32-bit, left-justified PCM
+    // RX: TDM mode — slot_count slots × 32-bit, MSB (TDM default), 256x MCLK
     // RX shares MCLK/BCK/WS with TX (ES8311 is clock master)
     if (!_i2s_port_init_rx_tdm(2, sample_rate,
                                  din_pin,
                                  slot_count,
                                  (gpio_num_t)ES8311_I2S_MCLK_PIN,
                                  (gpio_num_t)ES8311_I2S_SCLK_PIN,
-                                 (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+                                 (gpio_num_t)ES8311_I2S_LRCK_PIN,
+                                 1, 32, 256)) {
         LOG_E("[Audio] I2S2 TDM RX init failed");
         _i2s_port_teardown_dir(2, true);   // disable+del TX
         _i2s_port_teardown_dir(2, false);  // del RX
@@ -1747,45 +1973,65 @@ void i2s_audio_write_expansion_tdm_tx(const void *src, size_t size, size_t *byte
 // They wrap the Phase 1 internal helpers with user-bit tracking and full-duplex upgrade logic.
 
 bool i2s_port_enable_tx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
-                         gpio_num_t doutPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws) {
+                         gpio_num_t doutPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws,
+                         const I2sPortConfig* portCfg) {
     if (port >= I2S_PORT_COUNT) return false;
 
     // Already have TX — nothing to do
     if (_port[port].users & I2S_USER_TX) return true;
 
+    // Extract format/bitDepth/mclkMultiple from optional config (NULL = defaults)
+    uint8_t  fmt = portCfg ? portCfg->format       : 0;
+    uint8_t  bd  = portCfg ? portCfg->bitDepth      : 32;
+    uint16_t mm  = portCfg ? portCfg->mclkMultiple  : 256;
+    if (bd == 0)  bd  = 32;   // auto -> 32-bit
+    if (mm == 0)  mm  = 256;  // auto -> 256x
+
+    // Warn if 24-bit with a non-multiple-of-3 MCLK multiplier (may cause imprecise sample rate)
+    if (bd == 24 && (mm % 3 != 0)) {
+        LOG_W("[Audio] Port %u: 24-bit with mclkMultiple=%u (not multiple of 3) may cause imprecise sample rate",
+              port, (unsigned)mm);
+    }
+
     uint32_t rate = _port[port].sampleRate ? _port[port].sampleRate : _currentSampleRate;
 
     if (_port[port].users & I2S_USER_RX) {
         // RX already active — tear down and realloc as full-duplex, then restore RX
-        LOG_I("[I2S] Port%u: upgrading RX-only → full-duplex for TX", port);
+        LOG_I("[I2S] Port%u: upgrading RX-only -> full-duplex for TX", port);
         gpio_num_t savedDin     = _port[port].rxDinPin;
         uint8_t    savedRxMode  = _port[port].rxMode;
         uint8_t    savedRxSlots = _port[port].rxTdmSlots;
         gpio_num_t savedMclk    = _port[port].mclkPin;
         gpio_num_t savedBck     = _port[port].bckPin;
         gpio_num_t savedWs      = _port[port].lrcPin;
+        // Preserve saved RX config params so the restored RX keeps its settings
+        uint8_t  savedRxFmt = _port[port].rxFormat;
+        uint8_t  savedRxBd  = _port[port].rxBitDepth ? _port[port].rxBitDepth : 32;
+        uint16_t savedRxMm  = _port[port].mclkMultiple ? _port[port].mclkMultiple : 256;
         _port[port].users = 0;
 
         if (!_i2s_port_alloc(port, true, true, true)) return false;
 
-        // Restore TX
+        // Restore TX (with new config)
         bool txOk = false;
         if (mode == I2S_MODE_TDM) {
-            txOk = _i2s_port_init_tx_tdm(port, rate, doutPin, tdmSlots, mclk, bck, ws);
+            txOk = _i2s_port_init_tx_tdm(port, rate, doutPin, tdmSlots, mclk, bck, ws, fmt, bd, mm);
         } else {
-            txOk = _i2s_port_init_tx_std(port, rate, doutPin, mclk, bck, ws);
+            txOk = _i2s_port_init_tx_std(port, rate, doutPin, mclk, bck, ws, fmt, bd, mm);
         }
         if (!txOk) {
             _i2s_port_teardown(port);
             return false;
         }
 
-        // Restore RX
+        // Restore RX (with previously saved config)
         bool rxOk = false;
         if (savedRxMode == I2S_MODE_TDM) {
-            rxOk = _i2s_port_init_rx_tdm(port, rate, savedDin, savedRxSlots, savedMclk, savedBck, savedWs);
+            rxOk = _i2s_port_init_rx_tdm(port, rate, savedDin, savedRxSlots, savedMclk, savedBck, savedWs,
+                                          savedRxFmt, savedRxBd, savedRxMm);
         } else {
-            rxOk = _i2s_port_init_rx_std(port, rate, savedDin, savedMclk, savedBck, savedWs);
+            rxOk = _i2s_port_init_rx_std(port, rate, savedDin, savedMclk, savedBck, savedWs,
+                                          savedRxFmt, savedRxBd, savedRxMm);
         }
         if (!rxOk) {
             LOG_W("[I2S] Port%u: RX restore failed during TX upgrade — RX degraded", port);
@@ -1816,9 +2062,9 @@ bool i2s_port_enable_tx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
 
         bool txOk = false;
         if (mode == I2S_MODE_TDM) {
-            txOk = _i2s_port_init_tx_tdm(port, rate, doutPin, tdmSlots, mclk, bck, ws);
+            txOk = _i2s_port_init_tx_tdm(port, rate, doutPin, tdmSlots, mclk, bck, ws, fmt, bd, mm);
         } else {
-            txOk = _i2s_port_init_tx_std(port, rate, doutPin, mclk, bck, ws);
+            txOk = _i2s_port_init_tx_std(port, rate, doutPin, mclk, bck, ws, fmt, bd, mm);
         }
         if (!txOk) {
             _i2s_port_teardown(port);
@@ -1834,8 +2080,8 @@ bool i2s_port_enable_tx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
     }
 
     _port[port].users |= I2S_USER_TX;
-    LOG_I("[I2S] Port%u TX enabled: mode=%u slots=%u DOUT=GPIO%d MCLK=GPIO%d BCK=GPIO%d WS=GPIO%d",
-          port, mode, tdmSlots, (int)doutPin, (int)mclk, (int)bck, (int)ws);
+    LOG_I("[I2S] Port%u TX enabled: mode=%u slots=%u fmt=%u bits=%u mclk=%u DOUT=GPIO%d MCLK=GPIO%d BCK=GPIO%d WS=GPIO%d",
+          port, mode, tdmSlots, fmt, bd, mm, (int)doutPin, (int)mclk, (int)bck, (int)ws);
     return true;
 }
 
@@ -1864,41 +2110,61 @@ void i2s_port_disable_tx(uint8_t port) {
 }
 
 bool i2s_port_enable_rx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
-                         gpio_num_t dinPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws) {
+                         gpio_num_t dinPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws,
+                         const I2sPortConfig* portCfg) {
     if (port >= I2S_PORT_COUNT) return false;
 
     // Already have RX — nothing to do
     if (_port[port].users & I2S_USER_RX) return true;
 
+    // Extract format/bitDepth/mclkMultiple from optional config (NULL = defaults)
+    uint8_t  fmt = portCfg ? portCfg->format       : 0;
+    uint8_t  bd  = portCfg ? portCfg->bitDepth      : 32;
+    uint16_t mm  = portCfg ? portCfg->mclkMultiple  : 256;
+    if (bd == 0)  bd  = 32;   // auto -> 32-bit
+    if (mm == 0)  mm  = 256;  // auto -> 256x
+
+    // Warn if 24-bit with a non-multiple-of-3 MCLK multiplier
+    if (bd == 24 && (mm % 3 != 0)) {
+        LOG_W("[Audio] Port %u: 24-bit with mclkMultiple=%u (not multiple of 3) may cause imprecise sample rate",
+              port, (unsigned)mm);
+    }
+
     uint32_t rate = _port[port].sampleRate ? _port[port].sampleRate : _currentSampleRate;
 
     if (_port[port].users & I2S_USER_TX) {
         // TX already active — tear down and realloc as full-duplex, then restore TX
-        LOG_I("[I2S] Port%u: upgrading TX-only → full-duplex for RX", port);
+        LOG_I("[I2S] Port%u: upgrading TX-only -> full-duplex for RX", port);
         gpio_num_t savedDout    = _port[port].txDoutPin;
         uint8_t    savedTxMode  = _port[port].txMode;
         uint8_t    savedTxSlots = _port[port].txTdmSlots;
         gpio_num_t savedMclk    = _port[port].mclkPin;
         gpio_num_t savedBck     = _port[port].bckPin;
         gpio_num_t savedWs      = _port[port].lrcPin;
+        // Preserve saved TX config params
+        uint8_t  savedTxFmt = _port[port].txFormat;
+        uint8_t  savedTxBd  = _port[port].txBitDepth ? _port[port].txBitDepth : 32;
+        uint16_t savedTxMm  = _port[port].mclkMultiple ? _port[port].mclkMultiple : 256;
         _port[port].users = 0;
 
         if (!_i2s_port_alloc(port, true, true, true)) return false;
 
-        // Restore TX
+        // Restore TX (with previously saved config)
         bool txOk = false;
         if (savedTxMode == I2S_MODE_TDM) {
-            txOk = _i2s_port_init_tx_tdm(port, rate, savedDout, savedTxSlots, savedMclk, savedBck, savedWs);
+            txOk = _i2s_port_init_tx_tdm(port, rate, savedDout, savedTxSlots, savedMclk, savedBck, savedWs,
+                                          savedTxFmt, savedTxBd, savedTxMm);
         } else {
-            txOk = _i2s_port_init_tx_std(port, rate, savedDout, savedMclk, savedBck, savedWs);
+            txOk = _i2s_port_init_tx_std(port, rate, savedDout, savedMclk, savedBck, savedWs,
+                                          savedTxFmt, savedTxBd, savedTxMm);
         }
 
-        // Init RX
+        // Init RX (with new config)
         bool rxOk = false;
         if (mode == I2S_MODE_TDM) {
-            rxOk = _i2s_port_init_rx_tdm(port, rate, dinPin, tdmSlots, mclk, bck, ws);
+            rxOk = _i2s_port_init_rx_tdm(port, rate, dinPin, tdmSlots, mclk, bck, ws, fmt, bd, mm);
         } else {
-            rxOk = _i2s_port_init_rx_std(port, rate, dinPin, mclk, bck, ws);
+            rxOk = _i2s_port_init_rx_std(port, rate, dinPin, mclk, bck, ws, fmt, bd, mm);
         }
 
         if (!rxOk) {
@@ -1928,9 +2194,9 @@ bool i2s_port_enable_rx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
 
         bool rxOk = false;
         if (mode == I2S_MODE_TDM) {
-            rxOk = _i2s_port_init_rx_tdm(port, rate, dinPin, tdmSlots, mclk, bck, ws);
+            rxOk = _i2s_port_init_rx_tdm(port, rate, dinPin, tdmSlots, mclk, bck, ws, fmt, bd, mm);
         } else {
-            rxOk = _i2s_port_init_rx_std(port, rate, dinPin, mclk, bck, ws);
+            rxOk = _i2s_port_init_rx_std(port, rate, dinPin, mclk, bck, ws, fmt, bd, mm);
         }
         if (!rxOk) {
             _i2s_port_teardown(port);
@@ -1946,7 +2212,8 @@ bool i2s_port_enable_rx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
     }
 
     _port[port].users |= I2S_USER_RX;
-    LOG_I("[I2S] Port%u RX enabled: mode=%u slots=%u DIN=GPIO%d", port, mode, tdmSlots, (int)dinPin);
+    LOG_I("[I2S] Port%u RX enabled: mode=%u slots=%u fmt=%u bits=%u mclk=%u DIN=GPIO%d",
+          port, mode, tdmSlots, fmt, bd, mm, (int)dinPin);
     return true;
 }
 
@@ -2004,18 +2271,23 @@ I2sPortInfo i2s_port_get_info(uint8_t port) {
     I2sPortInfo info = {};
     info.port         = port;
     if (port >= I2S_PORT_COUNT) return info;
-    info.txActive     = (_port[port].users & I2S_USER_TX) != 0;
-    info.rxActive     = (_port[port].users & I2S_USER_RX) != 0;
-    info.txMode       = _port[port].txMode;
-    info.rxMode       = _port[port].rxMode;
-    info.txTdmSlots   = _port[port].txTdmSlots;
-    info.rxTdmSlots   = _port[port].rxTdmSlots;
-    info.mclkPin      = (int8_t)_port[port].mclkPin;
-    info.bckPin       = (int8_t)_port[port].bckPin;
-    info.lrcPin       = (int8_t)_port[port].lrcPin;
-    info.txDoutPin    = (int8_t)_port[port].txDoutPin;
-    info.rxDinPin     = (int8_t)_port[port].rxDinPin;
+    info.txActive      = (_port[port].users & I2S_USER_TX) != 0;
+    info.rxActive      = (_port[port].users & I2S_USER_RX) != 0;
+    info.txMode        = _port[port].txMode;
+    info.rxMode        = _port[port].rxMode;
+    info.txTdmSlots    = _port[port].txTdmSlots;
+    info.rxTdmSlots    = _port[port].rxTdmSlots;
+    info.mclkPin       = (int8_t)_port[port].mclkPin;
+    info.bckPin        = (int8_t)_port[port].bckPin;
+    info.lrcPin        = (int8_t)_port[port].lrcPin;
+    info.txDoutPin     = (int8_t)_port[port].txDoutPin;
+    info.rxDinPin      = (int8_t)_port[port].rxDinPin;
     info.isClockMaster = _port[port].isClockMaster;
+    info.txFormat      = _port[port].txFormat;
+    info.rxFormat      = _port[port].rxFormat;
+    info.txBitDepth    = _port[port].txBitDepth ? _port[port].txBitDepth : 32;
+    info.rxBitDepth    = _port[port].rxBitDepth ? _port[port].rxBitDepth : 32;
+    info.mclkMultiple  = _port[port].mclkMultiple ? _port[port].mclkMultiple : 256;
     return info;
 }
 
@@ -2034,9 +2306,11 @@ void i2s_audio_write_expansion_tx(const void*, size_t, size_t* bw, uint32_t) { i
 bool i2s_audio_enable_expansion_tdm_tx(uint32_t, gpio_num_t, uint8_t) { return false; }
 void i2s_audio_write_expansion_tdm_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
 void i2s_audio_disable_expansion_tdm_tx() {}
-bool i2s_port_enable_tx(uint8_t, uint8_t, uint8_t, gpio_num_t, gpio_num_t, gpio_num_t, gpio_num_t) { return false; }
+bool i2s_port_enable_tx(uint8_t, uint8_t, uint8_t, gpio_num_t, gpio_num_t, gpio_num_t, gpio_num_t,
+                         const I2sPortConfig*) { return false; }
 void i2s_port_disable_tx(uint8_t) {}
-bool i2s_port_enable_rx(uint8_t, uint8_t, uint8_t, gpio_num_t, gpio_num_t, gpio_num_t, gpio_num_t) { return false; }
+bool i2s_port_enable_rx(uint8_t, uint8_t, uint8_t, gpio_num_t, gpio_num_t, gpio_num_t, gpio_num_t,
+                         const I2sPortConfig*) { return false; }
 void i2s_port_disable_rx(uint8_t) {}
 void i2s_port_write(uint8_t, const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
 uint32_t i2s_port_read(uint8_t, int32_t*, uint32_t) { return 0; }

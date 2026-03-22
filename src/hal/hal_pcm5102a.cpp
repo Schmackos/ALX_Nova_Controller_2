@@ -68,11 +68,19 @@ HalInitResult HalPcm5102a::init() {
     {
         HalDeviceConfig* pcmCfg = HalDeviceManager::instance().getConfig(_slot);
         uint8_t txPort = (pcmCfg && pcmCfg->valid && pcmCfg->i2sPort != 255) ? pcmCfg->i2sPort : 0;
+        // Build I2sPortConfig from HAL device config
+        I2sPortConfig i2sCfg = {};
+        if (pcmCfg && pcmCfg->valid) {
+            i2sCfg.format       = pcmCfg->i2sFormat;
+            i2sCfg.bitDepth     = pcmCfg->bitDepth;
+            i2sCfg.mclkMultiple = pcmCfg->mclkMultiple;
+        }
         if (!i2s_port_enable_tx(txPort, I2S_MODE_STD, 0,
                                 (gpio_num_t)I2S_TX_DATA_PIN,
                                 (gpio_num_t)I2S_MCLK_PIN,
                                 (gpio_num_t)I2S_BCK_PIN,
-                                (gpio_num_t)I2S_LRC_PIN)) {
+                                (gpio_num_t)I2S_LRC_PIN,
+                                &i2sCfg)) {
             LOG_E("[HAL:PCM5102A] I2S TX enable failed (port=%u)", txPort);
             return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX enable failed");
         }
