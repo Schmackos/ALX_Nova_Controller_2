@@ -241,8 +241,8 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 
 // ===== Audio Pipeline Configuration =====
 #define AUDIO_PIPELINE_MAX_INPUTS  8   // Max input lanes (HAL-driven, up to 8 stereo sources)
-#define AUDIO_PIPELINE_MAX_OUTPUTS 8   // Max output channels (matches matrix size)
-#define AUDIO_PIPELINE_MATRIX_SIZE 16  // 16x16 routing matrix (8 inputs × 2ch = 16 input channels)
+#define AUDIO_PIPELINE_MAX_OUTPUTS 16  // Max output channels (supports up to 16 sink slots for 8ch DAC expansion)
+#define AUDIO_PIPELINE_MATRIX_SIZE 32  // 32x32 routing matrix (16 sinks × 2ch = 32 output channels)
 #define AUDIO_OUT_MAX_SINKS AUDIO_PIPELINE_MAX_OUTPUTS
 
 // ===== ES8311 Onboard Codec (P4 only) =====

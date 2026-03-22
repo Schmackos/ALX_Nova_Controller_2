@@ -22,7 +22,7 @@
 #define LOG_E(...)
 #define diag_emit(...) ((void)0)
 #ifndef AUDIO_OUT_MAX_SINKS
-#define AUDIO_OUT_MAX_SINKS 8
+#define AUDIO_OUT_MAX_SINKS 16
 #endif
 #ifndef AUDIO_PIPELINE_MAX_INPUTS
 #define AUDIO_PIPELINE_MAX_INPUTS 8
@@ -65,6 +65,7 @@ inline void hal_pipeline_reset_mock_counters() {
 static int8_t  _halSlotToSinkSlot[HAL_MAX_DEVICES];
 static int8_t  _halSlotToAdcLane[HAL_MAX_DEVICES];
 static uint8_t _halSlotAdcLaneCount[HAL_MAX_DEVICES];
+static uint8_t _halSlotSinkCount[HAL_MAX_DEVICES];  // Number of consecutive sink slots owned
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -86,28 +87,39 @@ static uint8_t _effectiveCaps(HalDevice* dev) {
     }
 }
 
-// Map a HAL device to a pipeline sink slot index using ordinal counting.
+// Allocate needCount consecutive free sink slots for a device.
+// Returns the FIRST slot index, or -1 if insufficient consecutive free slots.
 // Uses HAL_CAP_DAC_PATH capability — not device type.
-// Returns -1 if the device has no DAC path or all slots are taken.
-static int8_t _sinkSlotForDevice(HalDevice* dev) {
+static int8_t _sinkSlotForDevice(HalDevice* dev, int needCount = 1) {
     uint8_t caps = _effectiveCaps(dev);
     if (!(caps & HAL_CAP_DAC_PATH)) return -1;
 
-    // If this HAL slot already has a mapping, return it (idempotent)
+    // Idempotent: if already mapped, return existing
     uint8_t halSlot = dev->getSlot();
     if (_halSlotToSinkSlot[halSlot] >= 0) return _halSlotToSinkSlot[halSlot];
 
-    // Find first free sink slot
+    if (needCount < 1) needCount = 1;
+
+    // Build taken bitmap covering all slots owned by any device
     bool taken[AUDIO_OUT_MAX_SINKS] = {};
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        if (_halSlotToSinkSlot[i] >= 0 && _halSlotToSinkSlot[i] < (int8_t)AUDIO_OUT_MAX_SINKS) {
-            taken[(int)_halSlotToSinkSlot[i]] = true;
+        if (_halSlotToSinkSlot[i] >= 0) {
+            int count = (_halSlotSinkCount[i] > 0) ? _halSlotSinkCount[i] : 1;
+            for (int j = 0; j < count && (_halSlotToSinkSlot[i] + j) < (int)AUDIO_OUT_MAX_SINKS; j++) {
+                taken[_halSlotToSinkSlot[i] + j] = true;
+            }
         }
     }
-    for (int8_t s = 0; s < (int8_t)AUDIO_OUT_MAX_SINKS; s++) {
-        if (!taken[s]) return s;
+
+    // Find needCount consecutive free slots
+    for (int8_t s = 0; s <= (int8_t)(AUDIO_OUT_MAX_SINKS - needCount); s++) {
+        bool ok = true;
+        for (int j = 0; j < needCount; j++) {
+            if (taken[s + j]) { ok = false; break; }
+        }
+        if (ok) return s;
     }
-    return -1;  // All slots taken
+    return -1;  // Not enough consecutive free slots
 }
 
 // Map a HAL device to an ADC lane index using ordinal counting.
@@ -203,11 +215,12 @@ static void _updateAmpGating() {
 // hal_pipeline_activate_device -- bridge owns sink registration
 //
 // For any device with HAL_CAP_DAC_PATH:
-//   1. Get or allocate a sink slot (HC-5: idempotent mapping)
-//   2. Call dev->buildSink() -- device populates the AudioOutputSink struct
-//   3. Call audio_pipeline_set_sink() with the populated sink struct
+//   1. Query getSinkCount() -- defaults to 1 for all existing DACs
+//   2. Allocate N consecutive sink slots (HC-5: idempotent mapping)
+//   3. Call dev->buildSinkAt(idx, slot, &sink) for each slot
+//   4. Call audio_pipeline_set_sink() for each successfully built sink
 //
-// HC-1: No calloc under vTaskSuspendAll -- buildSink runs outside scheduler suspend
+// HC-1: No calloc under vTaskSuspendAll -- buildSinkAt runs outside scheduler suspend
 // ---------------------------------------------------------------------------
 void hal_pipeline_activate_device(uint8_t halSlot) {
     if (halSlot >= HAL_MAX_DEVICES) return;
@@ -219,39 +232,50 @@ void hal_pipeline_activate_device(uint8_t halSlot) {
     uint8_t caps = _effectiveCaps(dev);
     if (!(caps & HAL_CAP_DAC_PATH)) return;
 
-    // HC-5: Get or allocate a sink slot -- idempotent (returns existing mapping)
-    int8_t sinkSlot = _sinkSlotForDevice(dev);
-    if (sinkSlot < 0) {
-        LOG_W("[HAL:Bridge] No free sink slot for device at HAL slot %u", halSlot);
+    // Determine how many sink slots this device needs
+    int sinkCount = dev->getSinkCount();
+    if (sinkCount < 1) sinkCount = 1;
+
+    // HC-5: Get or allocate consecutive sink slots -- idempotent
+    int8_t baseSinkSlot = _sinkSlotForDevice(dev, sinkCount);
+    if (baseSinkSlot < 0) {
+        LOG_W("[HAL:Bridge] No %d consecutive free sink slots for device at HAL slot %u",
+              sinkCount, halSlot);
         diag_emit(DIAG_HAL_SLOT_FULL, DIAG_SEV_WARN, halSlot, dev->getDescriptor().name, "sink slots full");
         return;
     }
 
     // Record the mapping
-    _halSlotToSinkSlot[halSlot] = sinkSlot;
+    _halSlotToSinkSlot[halSlot] = baseSinkSlot;
+    _halSlotSinkCount[halSlot]  = (uint8_t)sinkCount;
 
     const char* name = dev->getDescriptor().name;
 
-    // Call buildSink() -- devices with DAC path override this virtual method.
-    // buildSink() is virtual on HalDevice base class (returns false by default).
-    AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
-    if (dev->buildSink((uint8_t)sinkSlot, &sink)) {
-        // buildSink succeeded -- bridge registers the sink with the pipeline
-        sink.halSlot = halSlot;
-        if (!audio_pipeline_set_sink((int)sinkSlot, &sink)) {
-            LOG_E("[HAL:Bridge] DMA buffer alloc failed for sink slot %d (%s)", (int)sinkSlot, name);
-            diag_emit(DIAG_AUDIO_DMA_ALLOC_FAIL, DIAG_SEV_ERROR,
-                      halSlot, name, "sink reg fail");
-            _halSlotToSinkSlot[halSlot] = -1;
-            return;
+    // Build and register each sink slot
+    int registered = 0;
+    for (int si = 0; si < sinkCount; si++) {
+        uint8_t slot = (uint8_t)(baseSinkSlot + si);
+        AudioOutputSink sink = AUDIO_OUTPUT_SINK_INIT;
+        if (dev->buildSinkAt(si, slot, &sink)) {
+            sink.halSlot = halSlot;
+            if (audio_pipeline_set_sink((int)slot, &sink)) {
+                registered++;
+                LOG_I("[HAL:Bridge] Activated via buildSinkAt(%d): %s (HAL slot %u) -> sink slot %d",
+                      si, name, halSlot, (int)slot);
+            } else {
+                LOG_E("[HAL:Bridge] DMA buffer alloc failed for sink slot %d (%s)", (int)slot, name);
+                diag_emit(DIAG_AUDIO_DMA_ALLOC_FAIL, DIAG_SEV_ERROR,
+                          halSlot, name, "sink reg fail");
+            }
+        } else {
+            LOG_W("[HAL:Bridge] buildSinkAt(%d) failed for %s (HAL slot %u)", si, name, halSlot);
         }
-        LOG_I("[HAL:Bridge] Activated via buildSink: %s (HAL slot %u) -> sink slot %d",
-              name, halSlot, (int)sinkSlot);
-    } else {
-        LOG_W("[HAL:Bridge] Activation failed for %s (HAL slot %u) -- buildSink returned false",
-              name, halSlot);
-        // Clear the mapping on failure so the slot can be reused
+    }
+
+    if (registered == 0) {
+        // No sinks registered -- clear mapping
         _halSlotToSinkSlot[halSlot] = -1;
+        _halSlotSinkCount[halSlot]  = 0;
     }
 }
 
@@ -288,11 +312,15 @@ void hal_pipeline_deactivate_device(uint8_t halSlot) {
         dev->deinit();
     }
 
-    // Remove sink from pipeline
-    audio_pipeline_remove_sink((int)sinkSlot);
+    // Remove all owned sink slots
+    int count = (_halSlotSinkCount[halSlot] > 0) ? _halSlotSinkCount[halSlot] : 1;
+    for (int i = 0; i < count; i++) {
+        audio_pipeline_remove_sink((int)(sinkSlot + i));
+    }
 
     // Clear the mapping
     _halSlotToSinkSlot[halSlot] = -1;
+    _halSlotSinkCount[halSlot]  = 0;
 
     // Release audioPaused
 #ifndef NATIVE_TEST
@@ -519,6 +547,7 @@ void hal_pipeline_sync() {
         _halSlotToSinkSlot[i]   = -1;
         _halSlotToAdcLane[i]    = -1;
         _halSlotAdcLaneCount[i] = 0;
+        _halSlotSinkCount[i]    = 0;
     }
 
     // Register the state-change callback so future transitions fire automatically
@@ -585,7 +614,12 @@ int8_t hal_pipeline_get_slot_for_adc_lane(uint8_t lane) {
 
 int8_t hal_pipeline_get_slot_for_sink(uint8_t sinkSlot) {
     for (int i = 0; i < HAL_MAX_DEVICES; i++) {
-        if (_halSlotToSinkSlot[i] == (int8_t)sinkSlot) return (int8_t)i;
+        if (_halSlotToSinkSlot[i] < 0) continue;
+        int base  = _halSlotToSinkSlot[i];
+        int count = (_halSlotSinkCount[i] > 0) ? _halSlotSinkCount[i] : 1;
+        if ((int)sinkSlot >= base && (int)sinkSlot < base + count) {
+            return (int8_t)i;
+        }
     }
     return -1;
 }
@@ -596,6 +630,13 @@ int8_t hal_pipeline_get_slot_for_sink(uint8_t sinkSlot) {
 int8_t hal_pipeline_get_sink_slot(uint8_t halSlot) {
     if (halSlot >= HAL_MAX_DEVICES) return -1;
     return _halSlotToSinkSlot[halSlot];
+}
+
+uint8_t hal_pipeline_get_sink_count(uint8_t halSlot) {
+    if (halSlot >= HAL_MAX_DEVICES) return 0;
+    if (_halSlotToSinkSlot[halSlot] < 0) return 0;
+    uint8_t n = _halSlotSinkCount[halSlot];
+    return (n > 0) ? n : 1;
 }
 
 int8_t hal_pipeline_get_input_lane(uint8_t halSlot) {
@@ -637,6 +678,7 @@ void hal_pipeline_reset() {
         _halSlotToSinkSlot[i]    = -1;
         _halSlotToAdcLane[i]     = -1;
         _halSlotAdcLaneCount[i]  = 0;
+        _halSlotSinkCount[i]     = 0;
     }
     _globalCorrCounter = 0;
     _activeCorrId      = 0;

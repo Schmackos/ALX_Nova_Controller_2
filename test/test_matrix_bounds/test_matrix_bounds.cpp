@@ -118,11 +118,12 @@ void test_input_source_max_inputs_matches() {
 void test_gain_valid_corner_indices() {
     set_matrix_gain(0, 0, 1.0f);
     set_matrix_gain(7, 7, 0.5f);
-    set_matrix_gain(15, 15, 0.25f);
+    set_matrix_gain(AUDIO_PIPELINE_MATRIX_SIZE - 1, AUDIO_PIPELINE_MATRIX_SIZE - 1, 0.25f);
 
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 1.0f,  get_matrix_gain(0, 0));
     TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5f,  get_matrix_gain(7, 7));
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.25f, get_matrix_gain(15, 15));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.25f, get_matrix_gain(AUDIO_PIPELINE_MATRIX_SIZE - 1,
+                                                              AUDIO_PIPELINE_MATRIX_SIZE - 1));
 }
 
 void test_gain_negative_out_rejected() {
@@ -133,11 +134,13 @@ void test_gain_negative_out_rejected() {
 }
 
 void test_gain_out_at_boundary() {
-    set_matrix_gain(15, 0, 0.75f);  // Last valid
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.75f, get_matrix_gain(15, 0));
+    int lastValid = AUDIO_PIPELINE_MATRIX_SIZE - 1;
+    int oob       = AUDIO_PIPELINE_MATRIX_SIZE;
+    set_matrix_gain(lastValid, 0, 0.75f);  // Last valid
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.75f, get_matrix_gain(lastValid, 0));
 
-    set_matrix_gain(16, 0, 0.5f);   // Out of bounds — should be rejected
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, get_matrix_gain(16, 0));
+    set_matrix_gain(oob, 0, 0.5f);   // Out of bounds — should be rejected
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, get_matrix_gain(oob, 0));
 }
 
 void test_gain_negative_in_rejected() {
@@ -148,16 +151,19 @@ void test_gain_negative_in_rejected() {
 }
 
 void test_gain_in_at_boundary() {
-    set_matrix_gain(0, 15, 0.8f);  // Last valid
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.8f, get_matrix_gain(0, 15));
+    int lastValid = AUDIO_PIPELINE_MATRIX_SIZE - 1;
+    int oob       = AUDIO_PIPELINE_MATRIX_SIZE;
+    set_matrix_gain(0, lastValid, 0.8f);  // Last valid
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.8f, get_matrix_gain(0, lastValid));
 
-    set_matrix_gain(0, 16, 0.5f);  // Out of bounds
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, get_matrix_gain(0, 16));
+    set_matrix_gain(0, oob, 0.5f);  // Out of bounds
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, get_matrix_gain(0, oob));
 }
 
 void test_gain_both_at_max() {
-    set_matrix_gain(15, 15, 0.42f);
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.42f, get_matrix_gain(15, 15));
+    int lastValid = AUDIO_PIPELINE_MATRIX_SIZE - 1;
+    set_matrix_gain(lastValid, lastValid, 0.42f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.42f, get_matrix_gain(lastValid, lastValid));
 }
 
 // ============================================================
@@ -170,8 +176,9 @@ void test_firstChannel_0_valid() {
 }
 
 void test_firstChannel_14_valid() {
+    // firstChannel=14, count=2: 14+2=16 <= MATRIX_SIZE (32) -- always valid
     TEST_ASSERT_FALSE_MESSAGE(dispatch_would_skip(14, 2),
-        "firstChannel=14, count=2 (14+2=16=MATRIX_SIZE) should not be skipped");
+        "firstChannel=14, count=2 should not be skipped");
 }
 
 void test_firstChannel_15_mono_valid() {
@@ -180,8 +187,9 @@ void test_firstChannel_15_mono_valid() {
 }
 
 void test_firstChannel_16_overflow_skipped() {
-    TEST_ASSERT_TRUE_MESSAGE(dispatch_would_skip(16, 2),
-        "firstChannel=16 exceeds MATRIX_SIZE and must be skipped");
+    // With MATRIX_SIZE=32, firstChannel=32 (one past last valid) must be skipped
+    TEST_ASSERT_TRUE_MESSAGE(dispatch_would_skip(AUDIO_PIPELINE_MATRIX_SIZE, 2),
+        "firstChannel=MATRIX_SIZE exceeds matrix and must be skipped");
 }
 
 // ============================================================
@@ -257,14 +265,17 @@ void test_inCh_null_lane_stays_null() {
 
 void test_inCh_bounds_safe_with_max_inputs() {
     // Verify the loop guard: lane * 2 + 1 < AUDIO_PIPELINE_MATRIX_SIZE
-    // With MAX_INPUTS=8 and MATRIX_SIZE=16: lane 7 -> index 15 -> 15 < 16 -> OK
-    int maxValidLane = (AUDIO_PIPELINE_MATRIX_SIZE / 2) - 1;  // 7
+    // With MAX_INPUTS=8 and MATRIX_SIZE=32: lane 7 -> index 15 -> 15 < 32 -> OK
+    // The loop stops at MAX_INPUTS-1 (not MATRIX_SIZE/2-1) to avoid wasting
+    // compute on lanes that have no ADC source registered.
+    int maxInputLane = AUDIO_PIPELINE_MAX_INPUTS - 1;  // 7
     TEST_ASSERT_TRUE_MESSAGE(
-        maxValidLane < AUDIO_PIPELINE_MAX_INPUTS,
-        "Highest valid lane must be within MAX_INPUTS");
+        maxInputLane * 2 + 1 < AUDIO_PIPELINE_MATRIX_SIZE,
+        "Highest input lane's R channel must be within matrix size");
+    // MATRIX_SIZE is now >= 2 * MAX_INPUTS (verified by static_assert in audio_pipeline.cpp)
     TEST_ASSERT_TRUE_MESSAGE(
-        maxValidLane * 2 + 1 < AUDIO_PIPELINE_MATRIX_SIZE,
-        "Highest valid lane's R channel must be within matrix size");
+        AUDIO_PIPELINE_MAX_INPUTS * 2 <= AUDIO_PIPELINE_MATRIX_SIZE,
+        "Matrix must be wide enough to hold all stereo input channels");
 }
 
 // ============================================================
@@ -272,30 +283,33 @@ void test_inCh_bounds_safe_with_max_inputs() {
 // ============================================================
 
 void test_set_sink_firstChannel_within_matrix_accepted() {
-    // sinkSlot 0, firstChannel=0, channelCount=2: 0+2=2 <= 16
+    // sinkSlot 0, firstChannel=0, channelCount=2: 0+2=2 <= MATRIX_SIZE (32)
     TEST_ASSERT_TRUE(validate_set_sink(0, 0, 2));
-    // sinkSlot 7, firstChannel=14, channelCount=2: 14+2=16 <= 16
+    // sinkSlot 7, firstChannel=14, channelCount=2: 14+2=16 <= MATRIX_SIZE (32)
     TEST_ASSERT_TRUE(validate_set_sink(7, 14, 2));
+    // sinkSlot 15 (max for 16 sinks), firstChannel=30, channelCount=2: 30+2=32 <= 32
+    TEST_ASSERT_TRUE(validate_set_sink(AUDIO_OUT_MAX_SINKS - 1,
+                                       (uint8_t)(AUDIO_PIPELINE_MATRIX_SIZE - 2), 2));
 }
 
 void test_set_sink_firstChannel_exceeds_matrix_rejected() {
-    // firstChannel=15, channelCount=2: 15+2=17 > 16
-    TEST_ASSERT_FALSE(validate_set_sink(0, 15, 2));
-    // firstChannel=16, channelCount=1: 16+1=17 > 16
-    TEST_ASSERT_FALSE(validate_set_sink(0, 16, 1));
+    // firstChannel=MATRIX_SIZE-1, channelCount=2: (32-1)+2=33 > 32
+    TEST_ASSERT_FALSE(validate_set_sink(0, (uint8_t)(AUDIO_PIPELINE_MATRIX_SIZE - 1), 2));
+    // firstChannel=MATRIX_SIZE, channelCount=1: 32+1=33 > 32
+    TEST_ASSERT_FALSE(validate_set_sink(0, (uint8_t)AUDIO_PIPELINE_MATRIX_SIZE, 1));
 }
 
 void test_set_sink_channelCount_overflow_rejected() {
-    // firstChannel=14, channelCount=4: 14+4=18 > 16
-    TEST_ASSERT_FALSE(validate_set_sink(0, 14, 4));
+    // firstChannel=MATRIX_SIZE-2, channelCount=4: (32-2)+4=34 > 32
+    TEST_ASSERT_FALSE(validate_set_sink(0, (uint8_t)(AUDIO_PIPELINE_MATRIX_SIZE - 2), 4));
 }
 
 void test_dispatch_clamps_chR_when_at_boundary() {
-    // firstChannel=15, channelCount=2 -> chR would be 16 -> clamped to chL (15)
-    // But this should be caught by set_sink validation first.
-    // In dispatch, chL=15 < 16 so not skipped
-    TEST_ASSERT_FALSE_MESSAGE(dispatch_would_skip(15, 2),
-        "Dispatch should not skip chL=15 (valid); chR gets clamped");
+    // firstChannel=MATRIX_SIZE-1 (last channel), channelCount=2 ->
+    // chR would be MATRIX_SIZE -> clamped to chL
+    // In dispatch, chL=MATRIX_SIZE-1 < MATRIX_SIZE so not skipped
+    TEST_ASSERT_FALSE_MESSAGE(dispatch_would_skip((uint8_t)(AUDIO_PIPELINE_MATRIX_SIZE - 1), 2),
+        "Dispatch should not skip last valid chL; chR gets clamped");
 }
 
 // ===== Main =====

@@ -47,6 +47,11 @@ int8_t hal_pipeline_get_slot_for_sink(uint8_t sinkSlot);
 // Returns -1 when the HAL slot has no sink mapping.
 int8_t hal_pipeline_get_sink_slot(uint8_t halSlot);
 
+// Forward-lookup: return how many consecutive sink slots a HAL device owns.
+// Returns 0 when the HAL slot has no sink mapping.
+// 1 for all existing single-stereo-pair DACs; 4 for 8ch DAC expansion devices.
+uint8_t hal_pipeline_get_sink_count(uint8_t halSlot);
+
 // Forward-lookup: return the FIRST input lane assigned to a HAL device.
 // Returns -1 when the HAL slot has no input lane mapping.
 // For multi-source devices (ES9843PRO) this returns the base lane;

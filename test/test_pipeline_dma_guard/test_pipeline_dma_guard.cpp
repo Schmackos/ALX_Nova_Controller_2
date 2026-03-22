@@ -202,7 +202,7 @@ void test_set_sink_returns_true_valid(void) {
     result = pipeline_set_sink_validate(AUDIO_OUT_MAX_SINKS - 1, &sink);
     TEST_ASSERT_TRUE(result);
 
-    // Valid at the edge of the matrix (ch14+2 = 16 = MATRIX_SIZE, OK)
+    // Valid at the edge of the matrix (ch(MATRIX_SIZE-2)+2 = MATRIX_SIZE, OK)
     sink.firstChannel = AUDIO_PIPELINE_MATRIX_SIZE - 2;
     sink.channelCount = 2;
     result = pipeline_set_sink_validate(0, &sink);
@@ -231,7 +231,7 @@ void test_set_sink_returns_false_invalid(void) {
     // firstChannel + channelCount > MATRIX_SIZE (overflow guard)
     AudioOutputSink bad_sink = AUDIO_OUTPUT_SINK_INIT;
     bad_sink.name = "Overflow";
-    bad_sink.firstChannel = 15;   // 15 + 2 = 17 > 16 (MATRIX_SIZE)
+    bad_sink.firstChannel = (uint8_t)(AUDIO_PIPELINE_MATRIX_SIZE - 1);  // last ch + 2 > MATRIX_SIZE
     bad_sink.channelCount = 2;
     TEST_ASSERT_FALSE(pipeline_set_sink_validate(0, &bad_sink));
 

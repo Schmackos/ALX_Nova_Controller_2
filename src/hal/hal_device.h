@@ -53,6 +53,15 @@ public:
         return false;
     }
 
+    // Multi-sink extension for 8ch DACs (mirrors getInputSourceCount/At for ADCs).
+    // Default wraps single buildSink(). 8ch DAC drivers override to return 4.
+    virtual int getSinkCount() const {
+        return 1;  // All existing DACs produce 1 sink
+    }
+    virtual bool buildSinkAt(int idx, uint8_t sinkSlot, AudioOutputSink* out) {
+        return (idx == 0) ? buildSink(sinkSlot, out) : false;
+    }
+
     // ----- Descriptor -----
     const HalDeviceDescriptor& getDescriptor() const { return _descriptor; }
     HalDeviceType getType() const { return _descriptor.type; }
