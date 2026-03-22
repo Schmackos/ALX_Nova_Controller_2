@@ -766,6 +766,16 @@ const HalDeviceDescriptor* hal_db_get(int index) {
 
 void hal_load_device_configs() {
 #ifndef NATIVE_TEST
+    // Recovery: complete an interrupted atomic write (tmp exists, final does not)
+    if (LittleFS.exists(HAL_CONFIG_TMP_PATH) && !LittleFS.exists(HAL_CONFIG_FILE_PATH)) {
+        LittleFS.rename(HAL_CONFIG_TMP_PATH, HAL_CONFIG_FILE_PATH);
+        LOG_I("[HAL:DB]", "Recovered config from interrupted write");
+    }
+    // Clean up stale tmp if both exist (previous rename succeeded before crash check ran)
+    if (LittleFS.exists(HAL_CONFIG_TMP_PATH)) {
+        LittleFS.remove(HAL_CONFIG_TMP_PATH);
+    }
+
     if (!LittleFS.exists(HAL_CONFIG_FILE_PATH)) return;
 
     File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "r");
@@ -851,13 +861,14 @@ bool hal_save_device_config(uint8_t slot) {
         if (cfg->filterMode != 0) obj["filterMode"] = cfg->filterMode;
     }
 
-    File f = LittleFS.open(HAL_CONFIG_FILE_PATH, "w");
+    File f = LittleFS.open(HAL_CONFIG_TMP_PATH, "w");
     if (!f) {
-        LOG_E("[HAL:DB]", "Failed to open %s for writing", HAL_CONFIG_FILE_PATH);
+        LOG_E("[HAL:DB]", "Failed to open tmp config for writing");
         return false;
     }
     serializeJson(doc, f);
     f.close();
+    LittleFS.rename(HAL_CONFIG_TMP_PATH, HAL_CONFIG_FILE_PATH);
     LOG_I("[HAL:DB]", "Saved device configs to %s", HAL_CONFIG_FILE_PATH);
     return true;
 #else

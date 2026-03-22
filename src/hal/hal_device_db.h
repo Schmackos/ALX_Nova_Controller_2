@@ -9,6 +9,7 @@
 #define HAL_DB_MAX_ENTRIES 32
 #define HAL_DB_FILE_PATH "/hal_devices.json"
 #define HAL_CONFIG_FILE_PATH "/hal_config.json"
+#define HAL_CONFIG_TMP_PATH  "/hal_config.json.tmp"
 
 // Initialize the device DB (loads from LittleFS if available)
 void hal_db_init();
