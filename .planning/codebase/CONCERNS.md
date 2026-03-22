@@ -12,7 +12,7 @@ These issues were identified and **completely fixed** in recent development phas
 
 **HAL Capacity Exhaustion** (FIXED: commit 03ff439)
 - **Was**: Driver registry and device DB capacity silently exhausted at 16/16 — adding new drivers failed without error
-- **Now**: `HAL_MAX_DRIVERS` and `HAL_MAX_DEVICES` both increased to 24. All 23 callers check return values and emit `DIAG_HAL_REGISTRY_FULL` / `DIAG_HAL_DB_FULL` diagnostics on failure. Web UI shows capacity indicator with 80% warning
+- **Now**: `HAL_MAX_DRIVERS` and `HAL_DB_MAX_ENTRIES` both increased to 32. `HAL_MAX_DEVICES` increased to 32. All 23 callers check return values and emit `DIAG_HAL_REGISTRY_FULL` / `DIAG_HAL_DB_FULL` diagnostics on failure. Web UI shows capacity indicator with 80% warning
 
 **I2C Bus 0 WiFi SDIO Conflict** (FIXED: commit e610299)
 - **Was**: Bus 0 (GPIO 48/54) scanned during WiFi connection, causing MCU reset
@@ -47,7 +47,7 @@ These issues were identified and **completely fixed** in recent development phas
 - **Files**: `src/audio_pipeline.cpp`, `src/i2s_audio.cpp`
 - **Current mitigation**: `i2s_configure_adc1()` is `static` in `i2s_audio.cpp` — not externally callable. Only two callsites exist, both from main loop context (never from audio task). CLAUDE.md explicitly documents the constraint
 - **Review outcome**: 5-agent team reviewed (architect, embedded, backend, testing, code-reviewer). Code reviewer rejected runtime guard as over-engineering — function's `static` linkage prevents incorrect callers. Documentation-only mitigation is appropriate
-- **Test coverage**: Implicit via all audio pipeline tests (2327 tests); no explicit test for clock continuity
+- **Test coverage**: Implicit via all audio pipeline tests (2335 tests); no explicit test for clock continuity
 - **Recommendation**: None — risk is well-mitigated by static linkage + documentation. Priority: CLOSED (downgraded from MEDIUM)
 
 ### FreeRTOS Task Watchdog
@@ -152,7 +152,7 @@ These issues were identified and **completely fixed** in recent development phas
 
 **API Response Validation in JavaScript** (FIXED: 2026-03-22)
 - **Was**: 50+ `apiFetch()` calls used `.json()` without HTTP status checks. WS messages dispatched without field validation. Non-2xx responses or missing fields could crash UI
-- **Now**: `response.safeJson()` method added to `apiFetch()` (non-breaking, opt-in). Checks `response.ok`, wraps `.json()` in try/catch. 32 high-impact call sites migrated (`22-settings.js`, `23-firmware-update.js`, `20-wifi-network.js`). `validateWsMessage(data, requiredFields)` helper validates critical WS types: `audioLevels` (requires `adc`), `hardware_stats` (requires `heap`), `wifiStatus` (requires `connected`). Priority: CLOSED
+- **Now**: `response.safeJson()` method added to `apiFetch()` (non-breaking, opt-in). Checks `response.ok`, wraps `.json()` in try/catch. 32 high-impact call sites migrated (`22-settings.js`, `23-firmware-update.js`, `20-wifi-network.js`). `validateWsMessage(data, requiredFields)` helper validates critical WS types: `audioLevels` (requires `adc`), `hardware_stats` (requires `cpu`), `wifiStatus` (requires `connected`). Priority: CLOSED
 
 ## Performance Bottlenecks
 
@@ -169,8 +169,8 @@ These issues were identified and **completely fixed** in recent development phas
 
 **WiFi TX Packet Loss During Audio Burst** (MITIGATED: 2026-03-22)
 - **Was**: Binary WS broadcast at fixed 20ms interval regardless of client count. With 3+ concurrent clients, WiFi RX buffer starvation confirmed (dropped pings). Heap pressure only halved rate — insufficient for 3+ clients
-- **Now**: Client-count adaptive rate scaling in `websocket_handler.cpp`. Three-tier skip factor: 1 client = every frame (20ms), 2 clients = every 2nd frame (40ms), 3+ clients = every 4th frame (80ms). Combined with existing heap pressure via `&&` (both gates must allow). Periodic auth count recalibration every `WS_AUTH_RECOUNT_INTERVAL_MS` (10s) fixes stale counts from unclean disconnects. `wsAuthenticatedClientCount()` getter exposed in header. 11 new tests in `test_ws_adaptive_rate`
-- **Remaining risk**: 80ms interval (12.5 Hz) for 3+ clients shows visible stepping in waveform visualization. Acceptable tradeoff — users already choose 100ms update rate in settings. No multi-client stress test yet. Priority: LOW
+- **Now**: Client-count adaptive rate scaling in `websocket_handler.cpp`. Five-tier skip factor: 1 client = every frame (20ms), 2 clients = skip-2 (40ms), 3-4 clients = skip-4 (80ms), 5-7 clients = skip-6 (120ms), 8+ clients = skip-8 (160ms). Combined with existing heap pressure via `&&` (both gates must allow). Periodic auth count recalibration every `WS_AUTH_RECOUNT_INTERVAL_MS` (10s) fixes stale counts from unclean disconnects. `wsAuthenticatedClientCount()` getter exposed in header. `wsClientCount`/`wsClientMax` fields in `hardwareStats` broadcast. UI warning toast when approaching limit. 15 tests in `test_ws_adaptive_rate`
+- **Remaining risk**: Higher skip factors for many clients show visible stepping in waveform visualization. Acceptable tradeoff. No multi-client stress test yet. Priority: LOW
 
 ## Fragile Areas
 
