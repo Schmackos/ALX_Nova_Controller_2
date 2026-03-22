@@ -588,6 +588,84 @@ Each module exposes a `registerXxxApiEndpoints()` function called from `setup()`
 
 ---
 
+## Ethernet Subsystem
+
+### Overview
+
+The Ethernet subsystem is implemented in `src/eth_manager.h/.cpp` and manages the ESP32-P4's built-in 100 Mbps EMAC (Ethernet MAC). It operates entirely through Arduino network events — no polling loops are used — and integrates with `AppState` via the `EthernetState` domain struct in `src/state/ethernet_state.h`.
+
+Ethernet is preferred over WiFi when both interfaces report a valid connection. The `activeInterface` field in `AppState` and all network-related broadcasts always reflects the currently active transport.
+
+### EthernetState Fields
+
+`EthernetState` (`src/state/ethernet_state.h`) groups its 15+ fields into three categories:
+
+| Category | Fields | Description |
+|----------|--------|-------------|
+| Runtime | `linkUp`, `connected`, `ip`, `mac`, `speed`, `fullDuplex`, `gateway`, `subnet`, `dns1`, `dns2` | Live interface status updated by event callbacks |
+| Configuration | `useStaticIP`, `staticIP`, `staticSubnet`, `staticGateway`, `staticDns1`, `staticDns2`, `hostname` | Persisted to `/config.json` (7 fields) |
+| Timer | `pendingConfirm`, `confirmDeadlineMs` | 60-second static IP safety revert timer |
+
+The `hostname` field is shared between Ethernet and WiFi — changing it via either interface updates both.
+
+### Event-Driven Architecture
+
+The firmware registers 5 Arduino network event handlers in `eth_manager_init()`:
+
+| Event | Action |
+|-------|--------|
+| `ARDUINO_EVENT_ETH_START` | Record MAC address, set hostname |
+| `ARDUINO_EVENT_ETH_CONNECTED` | Mark `linkUp = true`, record speed and duplex |
+| `ARDUINO_EVENT_ETH_GOT_IP` | Record assigned IP, mark `connected = true`, signal `EVT_ETHERNET` |
+| `ARDUINO_EVENT_ETH_DISCONNECTED` | Clear runtime fields, signal `EVT_ETHERNET` |
+| `ARDUINO_EVENT_ETH_STOP` | Clear all runtime fields, signal `EVT_ETHERNET` |
+
+Each handler updates `appState.eth` fields and calls `appState.markEthernetDirty()`, which signals `EVT_ETHERNET` (bit 11). The main loop picks this up within one 5 ms tick and broadcasts the updated `wifiStatus` message to all connected WebSocket clients.
+
+### Static IP Safety Revert Timer
+
+Applying a static IP configuration via `POST /api/ethconfig` (or the `setEthConfig` WebSocket command) immediately reconfigures the interface but starts a 60-second revert timer:
+
+```
+Client calls POST /api/ethconfig with useStaticIP=true
+  → Interface reconfigured immediately
+  → confirmDeadlineMs = millis() + 60000
+  → pendingConfirm = true
+  → Response: { "success": true, "pendingConfirm": true }
+
+Within 60 seconds:
+  → Client reachable at new IP → POST /api/ethconfig/confirm
+  → Timer cancelled, config persisted to /config.json
+  → pendingConfirm = false
+
+OR timer expires without confirmation:
+  → eth_manager_tick() detects millis() > confirmDeadlineMs
+  → Reverts to DHCP, clears pendingConfirm
+  → Dirty flag set → wifiStatus broadcast
+```
+
+`eth_manager_tick()` is called from the main loop on every iteration. It is a lightweight check (`millis()` comparison) that adds no measurable overhead when no confirmation is pending.
+
+:::tip Why a revert timer?
+A misconfigured static IP (e.g., an address outside the local subnet) would make the device unreachable over the network with no way to recover without physical access. The 60-second window gives enough time to verify connectivity while providing an automatic recovery path.
+:::
+
+### Auto-Failover
+
+When Ethernet is connected, `appState.general.activeInterface` is set to `NET_ETH`. When Ethernet disconnects and WiFi is connected, it is set to `NET_WIFI`. The MQTT task, OTA updater, and WebSocket broadcasts all read `activeInterface` to determine which interface is carrying traffic. No explicit failover configuration is needed.
+
+### REST API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/ethstatus` | Full Ethernet status and configuration |
+| `POST` | `/api/ethconfig` | Apply static IP and/or hostname |
+| `POST` | `/api/ethconfig/confirm` | Confirm pending static IP within 60 seconds |
+
+Settings persisted to `/config.json` on confirmation: `ethUseStaticIP`, `ethStaticIP`, `ethSubnet`, `ethGateway`, `ethDns1`, `ethDns2`, `hostname`.
+
+---
+
 ## Logging Conventions
 
 All modules use `debug_serial.h` macros with a consistent `[ModuleName]` prefix:

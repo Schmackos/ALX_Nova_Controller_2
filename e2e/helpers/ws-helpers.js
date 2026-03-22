@@ -76,6 +76,15 @@ function handleCommand(type, data) {
     case 'eepromScan':
       return [{ type: 'dacState', eeprom: { scanned: true, found: false, i2cMask: 0, i2cDevices: 0, readErrors: 0, writeErrors: 0 } }];
 
+    case 'setEthConfig':
+      return [{ type: 'wifiStatus', ethHostname: data.hostname || 'alx-nova', ethUseStaticIP: !!data.useStaticIP, ethPendingConfirm: !!data.useStaticIP }];
+
+    case 'confirmEthConfig':
+      return [{ type: 'wifiStatus', ethPendingConfirm: false }];
+
+    case 'setHostname':
+      return [{ type: 'wifiStatus', ethHostname: data.hostname || 'alx-nova' }];
+
     default:
       return [];
   }

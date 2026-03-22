@@ -57,7 +57,7 @@
 
         function showPasswordChangeModal() {
             const modal = document.createElement('div');
-            modal.className = 'modal-overlay';
+            modal.className = 'modal-overlay active';
             modal.id = 'passwordChangeModal';
             modal.innerHTML = `
                 <div class="modal-content">

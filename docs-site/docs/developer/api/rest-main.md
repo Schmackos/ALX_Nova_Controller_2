@@ -121,6 +121,14 @@ REST endpoints are registered across several focused modules rather than a singl
 | GET | `/api/mqtt` | Protected | Return MQTT broker configuration and connection state |
 | POST | `/api/mqtt` | Protected | Update MQTT broker settings and trigger reconnect |
 
+### Ethernet
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/ethstatus` | Protected | Return full Ethernet interface status and configuration |
+| POST | `/api/ethconfig` | Protected | Apply Ethernet static IP and/or hostname |
+| POST | `/api/ethconfig/confirm` | Protected | Confirm a pending static IP change within 60 seconds |
+
 ### Signal Generator
 
 | Method | Path | Auth | Description |
@@ -797,6 +805,129 @@ Reboots the device cleanly. All pending settings writes are flushed before reboo
 ```json
 { "status": "ok", "message": "Rebooting" }
 ```
+
+---
+
+### Ethernet Endpoints
+
+#### GET /api/ethstatus
+
+Returns the full Ethernet interface status and configuration. Available regardless of link state.
+
+**Success response** (HTTP 200):
+
+```json
+{
+  "linkUp": true,
+  "connected": true,
+  "ip": "192.168.1.100",
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "speed": 100,
+  "fullDuplex": true,
+  "gateway": "192.168.1.1",
+  "subnet": "255.255.255.0",
+  "dns1": "8.8.8.8",
+  "dns2": "8.8.4.4",
+  "hostname": "alx-nova",
+  "useStaticIP": false,
+  "staticIP": "",
+  "staticSubnet": "255.255.255.0",
+  "staticGateway": "",
+  "staticDns1": "",
+  "staticDns2": "",
+  "activeInterface": "ethernet",
+  "pendingConfirm": false
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `linkUp` | boolean | Physical link is detected on the Ethernet port |
+| `connected` | boolean | Interface has an assigned IP address |
+| `ip` | string | Currently assigned IP address (DHCP or static) |
+| `mac` | string | Hardware MAC address |
+| `speed` | number | Negotiated link speed in Mbps (0, 10, or 100) |
+| `fullDuplex` | boolean | Full duplex negotiated |
+| `gateway` | string | Default gateway IP |
+| `subnet` | string | Subnet mask |
+| `dns1` / `dns2` | string | Primary and secondary DNS server addresses |
+| `hostname` | string | Device hostname (shared between Ethernet and WiFi) |
+| `useStaticIP` | boolean | Static IP configuration is active |
+| `staticIP` | string | Configured static IP (empty string if not set) |
+| `activeInterface` | string | Active network interface: `"ethernet"`, `"wifi"`, or `"none"` |
+| `pendingConfirm` | boolean | A static IP change is awaiting confirmation within the 60-second window |
+
+---
+
+#### POST /api/ethconfig
+
+Apply Ethernet configuration. Supports updating the static IP settings, the hostname, or both in a single request.
+
+**Request body** (`application/json`):
+
+```json
+{
+  "useStaticIP": true,
+  "staticIP": "192.168.1.100",
+  "subnet": "255.255.255.0",
+  "gateway": "192.168.1.1",
+  "dns1": "8.8.8.8",
+  "dns2": "8.8.4.4",
+  "hostname": "alx-nova"
+}
+```
+
+**Response when static IP is applied** (HTTP 200):
+
+```json
+{ "success": true, "pendingConfirm": true }
+```
+
+**Response for hostname-only or DHCP changes** (HTTP 200):
+
+```json
+{ "success": true }
+```
+
+When `pendingConfirm` is `true`, the new configuration is applied immediately but a 60-second safety timer starts. If `/api/ethconfig/confirm` is not called before the timer expires, the configuration automatically reverts to DHCP. This prevents a misconfigured static IP from making the device permanently unreachable.
+
+**Validation rules:**
+
+- IP addresses (staticIP, subnet, gateway, dns1, dns2) are validated with `IPAddress.fromString()`
+- Hostname: 1–63 characters, characters must match `[a-zA-Z0-9-]`, no leading or trailing hyphen (RFC 1123)
+- When `useStaticIP` is `true`: the `staticIP`, `subnet`, and `gateway` fields are all required
+
+**Error responses** (HTTP 400):
+
+```json
+{ "success": false, "message": "Invalid IP address" }
+{ "success": false, "message": "Invalid hostname" }
+{ "success": false, "message": "Static IP, subnet, and gateway required" }
+```
+
+:::warning Static IP confirmation window
+After applying a static IP, you must call `POST /api/ethconfig/confirm` within 60 seconds from a client that can reach the device at the new IP. If you cannot reach the device at the new address, wait 60 seconds — the configuration reverts to DHCP automatically.
+:::
+
+---
+
+#### POST /api/ethconfig/confirm
+
+Confirms a pending static IP configuration. Must be called within 60 seconds of a `POST /api/ethconfig` response that returned `pendingConfirm: true`.
+
+**Success response** (HTTP 200):
+
+```json
+{ "success": true }
+```
+
+**No pending confirmation** (HTTP 400):
+
+```json
+{ "success": false, "message": "No pending confirmation" }
+```
+
+Once confirmed, the static IP configuration is persisted to `/config.json` and the revert timer is cancelled.
 
 ---
 

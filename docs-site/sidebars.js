@@ -15,7 +15,11 @@ const sidebars = {
       items: [
         'user/web-interface',
         'user/smart-sensing',
-        'user/wifi-configuration',
+        {
+          type: 'doc',
+          id: 'user/wifi-configuration',
+          label: 'Network Configuration',
+        },
         'user/mqtt-home-assistant',
         'user/ota-updates',
         'user/button-controls',

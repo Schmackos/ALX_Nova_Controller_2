@@ -89,11 +89,13 @@ A new random password is generated any time the device is factory reset. After y
 
 ---
 
-## Step 5: Configure Your Home WiFi Network
+## Step 5: Connect to Your Network
 
-Once logged in, you will be taken to the main web interface. Now configure the controller to connect to your home WiFi network.
+You can connect the ALX Nova to your network via WiFi or Ethernet — or both at the same time.
 
-1. Click the **WiFi** tab at the top of the page.
+### Option A: WiFi Setup
+
+1. Click the **Network** tab at the top of the page.
 2. Click the scan button (shown as a search icon) to discover nearby networks.
 3. Select your home network from the dropdown list.
 4. Type your WiFi password into the password field.
@@ -106,8 +108,20 @@ The ALX Nova's onboard WiFi operates on the 2.4 GHz band. If your router has sep
 :::
 
 :::tip Save multiple networks
-The ALX Nova can remember up to 5 WiFi networks. If you want the controller to work in different locations, add all the networks in the WiFi tab. It will automatically try each one in order on startup.
+The ALX Nova can remember up to 5 WiFi networks. If you want the controller to work in different locations, add all the networks in the Network tab. It will automatically try each one in order on startup.
 :::
+
+### Option B: Ethernet Setup
+
+For a wired connection, plug an Ethernet cable into the ESP32-P4's Ethernet port. No configuration is required — the controller configures itself via DHCP automatically and Ethernet becomes the preferred interface.
+
+The **Network** tab shows both the Ethernet status and the WiFi status side by side. When Ethernet is connected, the status bar at the top of the page shows **ETH**.
+
+:::tip Ethernet is recommended for reliability
+A wired connection eliminates WiFi range and interference issues. If your equipment rack has network access, use Ethernet as the primary interface and leave WiFi as a backup.
+:::
+
+See the [Network Configuration](./wifi-configuration.md) page for static IP setup, hostname configuration, and auto failover details.
 
 ---
 

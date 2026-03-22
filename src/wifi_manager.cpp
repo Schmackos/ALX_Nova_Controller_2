@@ -477,6 +477,7 @@ void connectToWiFi(const WiFiNetworkConfig &config) {
     WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
   // else 0: accept any auth mode (default, backward compatible)
 
+  WiFi.setHostname(appState.ethernet.hostname.c_str());
   WiFi.begin(config.ssid.c_str(), config.password.c_str());
 
   LOG_I("[WiFi] Connecting to: %s", config.ssid.c_str());
@@ -778,6 +779,7 @@ bool connectToStoredNetworks() {
       LOG_D("[WiFi] Using DHCP");
     }
 
+    WiFi.setHostname(appState.ethernet.hostname.c_str());
     WiFi.begin(config.ssid.c_str(), config.password.c_str());
 
     unsigned long startTime = millis();
@@ -952,6 +954,16 @@ void buildWiFiStatusJson(JsonDocument &doc, bool fetchVersionIfMissing) {
   doc["ethIP"] = appState.ethernet.ip;
   const char* ifNames[] = {"none", "ethernet", "wifi"};
   doc["activeInterface"] = ifNames[appState.ethernet.activeInterface];
+  doc["ethMAC"] = appState.ethernet.mac;
+  doc["ethSpeed"] = appState.ethernet.speed;
+  doc["ethFullDuplex"] = appState.ethernet.fullDuplex;
+  doc["ethGateway"] = appState.ethernet.gateway;
+  doc["ethSubnet"] = appState.ethernet.subnet;
+  doc["ethDns1"] = appState.ethernet.dns1;
+  doc["ethDns2"] = appState.ethernet.dns2;
+  doc["ethUseStaticIP"] = appState.ethernet.useStaticIP;
+  doc["ethHostname"] = appState.ethernet.hostname;
+  doc["ethPendingConfirm"] = appState.ethernet.pendingConfirm;
 }
 
 void sendWiFiStatus() {
@@ -1005,6 +1017,7 @@ void handleAPConfig() {
 
   WiFi.mode(WIFI_AP_STA);
   wifi_ensure_ps_none();
+  WiFi.setHostname(appState.ethernet.hostname.c_str());
   WiFi.begin(ssid.c_str(), password.c_str());
 
   server_send(200, "application/json",
@@ -1484,6 +1497,7 @@ void updateWiFiConnection() {
       WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
     // else 0: accept any auth mode (default, backward compatible)
 
+    WiFi.setHostname(appState.ethernet.hostname.c_str());
     WiFi.begin(cfg.ssid.c_str(), cfg.password.c_str());
   }
 

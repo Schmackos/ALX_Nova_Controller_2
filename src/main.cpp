@@ -493,6 +493,18 @@ void setup() {
     httpServingPage = false;
   });
 
+  server.on("/api/ethstatus", HTTP_GET, []() {
+    if (!requireAuth()) return;
+    handleEthStatus();
+  });
+  server.on("/api/ethconfig", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleEthConfig();
+  });
+  server.on("/api/ethconfig/confirm", HTTP_POST, []() {
+    if (!requireAuth()) return;
+    handleEthConfigConfirm();
+  });
   server.on("/api/wificonfig", HTTP_POST, []() {
     if (!requireAuth())
       return;
@@ -1154,6 +1166,9 @@ void loop() {
     appState.clearChannelMapDirty();
   }
 #endif
+
+  // Check Ethernet config revert timer (reverts static IP to DHCP on timeout)
+  eth_manager_check_revert();
 
   // Broadcast Ethernet state changes (link up/down, IP acquired/lost)
   if (appState.isEthernetDirty()) {

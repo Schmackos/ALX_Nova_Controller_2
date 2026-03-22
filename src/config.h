@@ -235,6 +235,9 @@ const unsigned long HARDWARE_STATS_INTERVAL =
 #define OTA_CONNECT_TIMEOUT_MS 20000  // 20s TCP+TLS connect timeout
 #define OTA_READ_TIMEOUT_MS     5000  // 5s per-read timeout on download stream
 
+// ===== Ethernet Config Confirm Timeout =====
+#define ETH_CONFIRM_TIMEOUT_MS 60000  // 60s to confirm static IP config before revert to DHCP
+
 // ===== I2S DMA Configuration =====
 #define I2S_DMA_BUF_COUNT 12    // 12 buffers x 256 frames = ~64ms runway at 48kHz
 #define I2S_DMA_BUF_LEN   256
