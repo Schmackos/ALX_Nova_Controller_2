@@ -290,6 +290,69 @@ virtual const AudioInputSource* getInputSourceAt(uint8_t idx) const;
 
 The bridge tracks how many consecutive input lanes each HAL slot occupies using `_halSlotAdcLaneCount[]`. For a 4-channel TDM device like ES9843PRO, `getInputSourceCount()` returns 2, so the bridge allocates two consecutive lanes and populates both. `hal_pipeline_get_input_lane_count(halSlot)` returns this count; `hal_pipeline_get_input_lane(halSlot)` returns the base lane.
 
+## Probe Failure and Recovery
+
+When a device fails to initialise, the manager stores the failure reason in the device's `_lastError` field so that the API, WebSocket, and web UI can surface it without requiring the user to dig into serial logs.
+
+### How errors are stored
+
+`HalDevice` holds a 48-byte character array for the most recent failure reason:
+
+```cpp
+char _lastError[48];  // set by init() via setLastError(); cleared on successful init
+```
+
+Drivers set the error via `hal_init_fail()`:
+
+```cpp
+return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2C write to reg 0x00 NAKed");
+```
+
+`hal_init_fail()` both constructs the `HalInitResult` and copies the reason string into `_lastError` via `hal_safe_strcpy()`. On a successful `init()` call the manager clears `_lastError` before returning.
+
+### Error propagation path
+
+```
+init() returns hal_init_fail(code, "reason")
+  └── _lastError = "reason"          [stored on HalDevice]
+  └── diag_emit(code, ...)           [diagnostic journal entry]
+        └── GET /api/diagnostics/journal  [REST — all journal entries]
+  └── state → ERROR
+        └── POST /api/hal/devices/reinit → "error" field in response [REST]
+        └── sendHalDeviceState() → "errorReason" field in WS broadcast [WebSocket]
+              └── Device card inline error banner [Web UI]
+              └── Debug Console — HAL and DIAG module chips
+```
+
+### State diagram: init failure and recovery
+
+```mermaid
+stateDiagram-v2
+    [*] --> CONFIGURING : registerDevice() or reinit
+
+    CONFIGURING --> AVAILABLE : init() returns ok\n_lastError cleared
+    CONFIGURING --> ERROR : init() returns fail\n_lastError = "reason"
+
+    ERROR --> CONFIGURING : POST /api/hal/devices/reinit\n(resets retry counter)
+    ERROR --> REMOVED : DELETE /api/hal/devices
+```
+
+### Diagnostic codes for init failures
+
+| Code | Constant | Trigger |
+|------|----------|---------|
+| 0x1001 | `DIAG_HAL_INIT_FAILED` | `init()` returned a non-ok result |
+| 0x1002 | `DIAG_HAL_PROBE_FAILED` | `probe()` returned false during discovery |
+| 0x1009 | `DIAG_HAL_REINIT_EXHAUSTED` | 3 consecutive self-healing failures |
+
+All three codes appear in the web UI Health Dashboard and are accessible via `GET /api/diagnostics/journal`. The journal entry carries the same human-readable reason string stored in `_lastError`.
+
+:::tip Reading the error banner
+When a device card in the HAL Devices panel shows an orange error banner, hover over or tap the **Details** link to see the exact reason text. Typical reasons are I2C NAK (wrong address or device absent), I2S channel create failure (pin already claimed), or GPIO claim conflict.
+:::
+
+---
+
 ## Diagnostic Journal Integration
 
 Every significant lifecycle transition emits an event to the diagnostic journal via `diag_emit()`:
@@ -297,14 +360,47 @@ Every significant lifecycle transition emits an event to the diagnostic journal 
 | Event | Code | Severity | Trigger |
 |---|---|---|---|
 | `DIAG_HAL_DEVICE_DETECTED` | 0x100D | INFO | `registerDevice()` |
+| `DIAG_HAL_INIT_FAILED` | 0x1001 | ERROR | `init()` returns failure — reason stored in `_lastError` |
+| `DIAG_HAL_PROBE_FAILED` | 0x1002 | ERROR | `probe()` returns false during discovery |
 | `DIAG_HAL_HEALTH_FAIL` | 0x1005 | WARN | `healthCheck()` returns false |
 | `DIAG_HAL_REINIT_OK` | 0x1008 | INFO | Self-healing reinit succeeds |
 | `DIAG_HAL_REINIT_EXHAUSTED` | 0x1009 | CRIT | 3 consecutive reinit failures |
 | `DIAG_HAL_DEVICE_REMOVED` | 0x1007 | WARN | `removeDevice()` |
-| `DIAG_HAL_INIT_FAILED` | 0x1001 | ERROR | `init()` returns failure |
 | `DIAG_HAL_TOGGLE_OVERFLOW` | 0x100E | WARN | Toggle queue full (capacity 8) |
 | `DIAG_HAL_REGISTRY_FULL` | 0x100F | WARN | Driver registry at capacity |
 | `DIAG_HAL_DB_FULL` | 0x1010 | WARN | Device DB at capacity |
 | `DIAG_HAL_I2C_BUS_CONFLICT` | 0x1101 | WARN | Bus 0 scan skipped (WiFi SDIO active) |
 
 These events appear in the Health Dashboard in the web UI and are accessible via `GET /api/diag/events`.
+
+---
+
+## HAL Config Persistence and Atomic Write Protection
+
+Per-device runtime configuration (`HalDeviceConfig` — volume, mute, pin overrides, I2S port, etc.) is persisted to `/hal_config.json` on LittleFS. Since power can be lost during a write, the manager uses a tmp-then-rename atomic write pattern to prevent configuration corruption.
+
+### Write sequence
+
+```
+1. Serialise full HalDeviceConfig array to JSON
+2. Write payload to /hal_config.json.tmp   (HAL_CONFIG_TMP_PATH)
+3. Rename /hal_config.json.tmp → /hal_config.json
+```
+
+The rename is atomic at the LittleFS layer. If power is lost between steps 2 and 3, the `.tmp` file exists but `/hal_config.json` is still the previous intact copy. If power is lost during step 2, the `.tmp` file is partially written but `/hal_config.json` is unchanged.
+
+### Boot recovery
+
+`hal_settings_load()` runs at boot before any device init. If `/hal_config.json` is absent but `/hal_config.json.tmp` exists, the manager promotes the `.tmp` file:
+
+```
+/hal_config.json.tmp found, /hal_config.json absent
+  → rename /hal_config.json.tmp → /hal_config.json
+  → load normally
+```
+
+This recovery path handles the rare case where a rename succeeded at the OS level but the device rebooted before the directory entry was flushed to flash.
+
+:::info Constant reference
+`HAL_CONFIG_TMP_PATH` is defined in `src/hal/hal_settings.h` as `"/hal_config.json.tmp"`. Use this constant when writing tests or tools that need to reference the temp path.
+:::

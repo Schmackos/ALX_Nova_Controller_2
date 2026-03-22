@@ -186,6 +186,118 @@ If you consistently need more DSP resources than the device allows, export your 
 
 ---
 
+## HAL Device Issues
+
+### Device Shows Error State
+
+A device in the **Error** state failed to initialise or exhausted its self-recovery retries. An orange banner on the device card shows the exact reason. Common causes and fixes:
+
+**I2C NAK / address not responding**
+
+The controller sent the device's I2C address and received no acknowledgement. This means the device is absent, powered off, or wired to the wrong bus.
+
+1. Check that the mezzanine card is fully seated in the connector.
+2. Verify the card is receiving power (check for any power indicator LEDs on the module).
+3. Go to **System > HAL Devices** and confirm the I2C bus and address shown match the card's datasheet.
+4. Click **Reinitialise** to retry. If the device is now responding it will return to Available.
+
+**I2S channel create failed**
+
+The I2S peripheral the driver requested is already in use by another device.
+
+1. Check **System > HAL Devices** to see which devices are using each I2S port (the port number appears in the device details).
+2. Go to the device's config and change it to a free I2S port (0, 1, or 2) using the **Edit Config** option.
+3. Click **Reinitialise** after saving the config.
+
+**GPIO claim conflict**
+
+Two devices attempted to use the same GPIO pin. The second device's `init()` will have failed with a claim conflict error.
+
+1. Read the error reason on the device card — it names the conflicting pin.
+2. Edit the config for one of the devices to assign a different pin.
+3. Reinitialise both devices.
+
+**Error persists after reinitialise**
+
+If a device stays in Error after three or more manual reinitialise attempts:
+
+1. Check the Debug Console (filter by `HAL` module chip) for more detailed log output.
+2. Check the Health Dashboard for any correlated diagnostic events.
+3. Try a power cycle — remove the mezzanine card, reboot the controller, then reinsert the card and rescan.
+
+---
+
+### Custom Device Not Working
+
+**Tier 1 device produces no audio**
+
+A Tier 1 device (I2S passthrough, no I2C init) requires no software configuration but does require the hardware to be ready at power-on. If no audio comes through:
+
+1. Verify the I2S port number in the custom schema matches where you connected the mezzanine.
+2. Open the routing matrix (**Audio > Routing Matrix**) and confirm the device's output sink appears and has a connection from at least one input.
+3. Check the VU meters in **Audio > Outputs** — if they show signal the device is receiving audio; if not, the routing matrix may be empty.
+4. Check the mezzanine's data sheet to confirm the device does not require an I2C init sequence. If it does, you need to edit the custom schema to Tier 2 and add the init sequence.
+
+**Tier 2 init sequence failing**
+
+If the device card shows an error containing "NAK at reg" or "I2C write failed":
+
+1. The register address or value in your init sequence is wrong. Compare each entry against the device's datasheet.
+2. Verify the I2C address — write it in decimal (not hex) in the init sequence form. For example, if the datasheet shows address `0x48`, enter `72`.
+3. Check the bus index. Expansion mezzanine cards use **Bus 2** (GPIO 28/29). If your card appears on a different bus, update the `i2sBus` field in the schema.
+4. Try reducing the init sequence to the minimum required registers and adding more one at a time until the failure reappears.
+
+**Device works but volume control has no effect**
+
+Custom Tier 1 and Tier 2 devices do not have runtime volume control — the controller cannot send volume commands because it does not know the device's volume register format. Volume changes in the web UI apply software gain in the audio pipeline instead. If you need hardware volume control, a Tier 3 full driver is required (open a GitHub issue with your device's datasheet).
+
+**When to request a full driver (Tier 3)**
+
+Open a GitHub issue requesting a Tier 3 driver when:
+
+- The device requires runtime commands (volume, mute, filter selection) from the web UI
+- The init sequence is too complex for a simple register write list (e.g., conditional writes, read-modify-write cycles, firmware loading)
+- The device has multiple operating modes that need to switch at runtime
+
+Attach your Tier 2 schema (exported from the custom device creator) and a link to the device datasheet. ALX maintainers will review and prioritise.
+
+---
+
+### Recovering Lost Settings
+
+**I accidentally factory reset — can I restore my settings?**
+
+If you exported your settings before the reset (**Settings > Backup and Restore > Export Settings**), you can restore everything by importing the file after the reset. The v2.0 export format includes DSP presets, custom device schemas, HAL configs, and the routing matrix, so a full restore brings the controller back to its previous state.
+
+After a factory reset:
+
+1. Connect to the `ALX-XXXXXXXXXXXX` access point.
+2. Browse to `http://192.168.4.1` and log in with the one-time password shown on the TFT display.
+3. Go to **Settings > Backup and Restore > Import Settings** and upload your export file.
+4. Review the import preview to confirm it shows all the expected sections.
+5. Click **Apply**. The controller restores all sections found in the file and reboots.
+
+**The import preview shows fewer sections than expected**
+
+If the export file is a v1 backup (downloaded from older firmware), it only contains Settings and MQTT. Sections like DSP, HAL Devices, and the routing matrix were not included in v1 exports. You will need to reconfigure those manually.
+
+**My routing matrix is correct but my DSP presets are gone**
+
+DSP presets are included in v2.0 exports under the `dspChannels` section. If that section is missing from your import:
+
+1. Check when the backup was made — v2.0 export was introduced in firmware v1.17. Backups from earlier versions will not include DSP.
+2. If you have individual DSP preset files (.txt from REW or .json from a previous export), you can re-import them via the DSP overlay Import button on each channel.
+
+**WiFi credentials survive factory reset**
+
+WiFi credentials are stored in ESP32 NVS (non-volatile storage), which is separate from LittleFS and is not erased by a factory reset. After a reset the controller will automatically reconnect to your home network using the stored credentials — you do not need to re-enter your WiFi password.
+
+:::tip Always keep a recent backup
+Export your settings after any significant configuration change — after setting up DSP, adding custom devices, or building a routing matrix. The export file is small (typically under 20 KB) and contains everything needed for a full restore.
+:::
+
+---
+
 ## Web Interface Issues
 
 ### I cannot access the web interface
