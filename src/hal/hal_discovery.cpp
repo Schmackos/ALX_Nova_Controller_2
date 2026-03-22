@@ -35,6 +35,154 @@ bool hal_wifi_sdio_active() {
 #endif
 }
 
+// ===== Expansion EEPROM scan (Bus 2 / Wire2, always safe) =====
+
+#ifndef NATIVE_TEST
+// Read a block of bytes from EEPROM on Wire2 (expansion bus)
+static bool exp_eeprom_read_block(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, int len) {
+    Wire2.beginTransmission(i2cAddr);
+    Wire2.write(memAddr);
+    if (Wire2.endTransmission(false) != 0) return false;
+    int received = Wire2.requestFrom(i2cAddr, (uint8_t)len);
+    if (received != len) return false;
+    for (int i = 0; i < len; i++) {
+        buf[i] = Wire2.read();
+    }
+    return true;
+}
+
+// Scan Bus 2 (expansion) for EEPROMs with ALXD magic.
+// Uses v3 compatible string matching first, falls back to legacy ID.
+static int hal_eeprom_scan_expansion(HalDeviceManager& mgr) {
+    int newDevices = 0;
+
+    if (!Wire2.begin(28, 29, 100000)) {
+        LOG_W("[HAL:Discovery]", "Wire2.begin(28,29) failed for expansion EEPROM scan");
+        return 0;
+    }
+    Wire2.setClock(100000);
+
+    for (uint8_t addr = DAC_EEPROM_ADDR_START; addr <= DAC_EEPROM_ADDR_END; addr++) {
+        // Check EEPROM presence
+        Wire2.beginTransmission(addr);
+        if (Wire2.endTransmission() != 0) continue;
+
+        // Read magic first (4 bytes)
+        uint8_t magic[DAC_EEPROM_MAGIC_LEN];
+        if (!exp_eeprom_read_block(addr, 0x00, magic, DAC_EEPROM_MAGIC_LEN)) continue;
+        if (memcmp(magic, DAC_EEPROM_MAGIC, DAC_EEPROM_MAGIC_LEN) != 0) {
+            LOG_D("[HAL:Discovery]", "EXP EEPROM 0x%02X: no ALXD magic", addr);
+            continue;
+        }
+
+        LOG_I("[HAL:Discovery]", "EXP EEPROM with ALXD magic at 0x%02X", addr);
+
+        // Read full 128 bytes (v3 size) in 16-byte chunks
+        uint8_t rawData[DAC_EEPROM_V3_DATA_SIZE];
+        memcpy(rawData, magic, DAC_EEPROM_MAGIC_LEN);
+        int remaining = DAC_EEPROM_V3_DATA_SIZE - DAC_EEPROM_MAGIC_LEN;
+        int offset = DAC_EEPROM_MAGIC_LEN;
+        bool readOk = true;
+        while (remaining > 0) {
+            int chunk = (remaining > 16) ? 16 : remaining;
+            if (!exp_eeprom_read_block(addr, (uint8_t)offset, &rawData[offset], chunk)) {
+                LOG_W("[HAL:Discovery]", "EXP EEPROM read failed at 0x%02X offset 0x%02X", addr, offset);
+                readOk = false;
+                break;
+            }
+            offset += chunk;
+            remaining -= chunk;
+        }
+        if (!readOk) continue;
+
+        // Try v3 compatible string matching first
+        const HalDriverEntry* entry = nullptr;
+        char compatible[32] = {0};
+
+        uint8_t version = rawData[0x04];
+        if (version >= DAC_EEPROM_VERSION_V3 &&
+            hal_eeprom_parse_v3(rawData, DAC_EEPROM_V3_DATA_SIZE, compatible)) {
+            entry = hal_registry_find(compatible);
+            if (entry) {
+                LOG_I("[HAL:Discovery]", "EXP EEPROM 0x%02X: v3 match '%s'", addr, compatible);
+            } else {
+                LOG_I("[HAL:Discovery]", "EXP EEPROM 0x%02X: v3 compatible '%s' — no driver",
+                      addr, compatible);
+            }
+        }
+
+        // Fallback: try v1/v2 legacy ID matching
+        if (!entry) {
+            DacEepromData eepromData;
+            if (dac_eeprom_parse(rawData, DAC_EEPROM_V3_DATA_SIZE, &eepromData)) {
+                if (eepromData.deviceId > 0) {
+                    entry = hal_registry_find_by_legacy_id(eepromData.deviceId);
+                    if (entry) {
+                        strncpy(compatible, entry->compatible, 31);
+                        compatible[31] = '\0';
+                        LOG_I("[HAL:Discovery]", "EXP EEPROM 0x%02X: legacy ID 0x%04X → %s",
+                              addr, eepromData.deviceId, compatible);
+                    }
+                }
+            }
+        }
+
+        if (!entry) {
+            LOG_I("[HAL:Discovery]", "EXP EEPROM at 0x%02X: no matching driver — manual config required",
+                  addr);
+            appState.markHalDeviceDirty();
+            continue;
+        }
+
+        // Look up device descriptor from database
+        HalDeviceDescriptor desc;
+        if (!hal_db_lookup(entry->compatible, &desc)) {
+            LOG_W("[HAL:Discovery]", "EXP EEPROM: driver '%s' not in device DB", entry->compatible);
+            continue;
+        }
+
+        // Check if already registered (don't duplicate)
+        bool alreadyRegistered = false;
+        for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+            HalDevice* existing = mgr.getDevice(i);
+            if (existing && existing->getDiscovery() == HAL_DISC_EEPROM &&
+                strcmp(existing->getDescriptor().compatible, desc.compatible) == 0) {
+                alreadyRegistered = true;
+                break;
+            }
+        }
+        if (alreadyRegistered) {
+            LOG_I("[HAL:Discovery]", "EXP device already registered: %s", desc.compatible);
+            continue;
+        }
+
+        // Create and register device
+        HalDevice* dev = entry->factory ? entry->factory() : nullptr;
+        if (!dev) {
+            LOG_W("[HAL:Discovery]", "EXP factory returned null for %s", entry->compatible);
+            continue;
+        }
+
+        int slot = mgr.registerDevice(dev, HAL_DISC_EEPROM);
+        if (slot < 0) {
+            LOG_W("[HAL:Discovery]", "EXP registration failed (slots full): %s", desc.name);
+            delete dev;
+        } else if (appState.halAutoDiscovery) {
+            dev->_state = HAL_STATE_AVAILABLE;
+            LOG_I("[HAL:Discovery]", "EXP device auto-registered: %s (slot %d)", desc.name, slot);
+            newDevices++;
+        } else {
+            dev->_state = HAL_STATE_CONFIGURING;
+            LOG_I("[HAL:Discovery]", "EXP device registered, awaiting init: %s (slot %d)", desc.name, slot);
+            newDevices++;
+        }
+    }
+
+    Wire2.end();
+    return newDevices;
+}
+#endif // NATIVE_TEST
+
 int hal_discover_devices() {
     int newDevices = 0;
 
@@ -128,8 +276,15 @@ int hal_discover_devices() {
             }
         }
     } else {
-        LOG_I("[HAL:Discovery]", "Skipping EEPROM scan (WiFi active, SDIO conflict)");
+        LOG_I("[HAL:Discovery]", "Skipping Bus 0 EEPROM scan (WiFi active, SDIO conflict)");
         diag_emit(DIAG_HAL_I2C_BUS_CONFLICT, DIAG_SEV_INFO, 0, "EEPROM", "WiFi SDIO active");
+    }
+
+    // Phase 3: Expansion EEPROM probe (Bus 2, always safe — not affected by WiFi SDIO)
+    int expEepromDevices = hal_eeprom_scan_expansion(mgr);
+    if (expEepromDevices > 0) {
+        LOG_I("[HAL:Discovery]", "Expansion EEPROM: %d new devices", expEepromDevices);
+        newDevices += expEepromDevices;
     }
 
     LOG_I("[HAL:Discovery]", "Discovery complete: %d new devices", newDevices);

@@ -73,7 +73,9 @@ bool dac_eeprom_parse(const uint8_t* rawData, int len, DacEepromData* out) {
 
     // Check version
     out->formatVersion = rawData[0x04];
-    if (out->formatVersion != DAC_EEPROM_VERSION && out->formatVersion != DAC_EEPROM_VERSION_V2) {
+    if (out->formatVersion != DAC_EEPROM_VERSION &&
+        out->formatVersion != DAC_EEPROM_VERSION_V2 &&
+        out->formatVersion != DAC_EEPROM_VERSION_V3) {
         out->valid = false;
         return false;
     }

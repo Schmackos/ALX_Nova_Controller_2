@@ -22,6 +22,10 @@
 // v2 data size: 94 bytes (v1 92 + deviceType + i2sPort)
 #define DAC_EEPROM_DATA_SIZE_V2  0x5E
 
+// v3 format extension (compatible string + CRC-16)
+#define DAC_EEPROM_VERSION_V3  3
+#define DAC_EEPROM_DATA_SIZE_V3  0x80  // 128 bytes
+
 // EEPROM flags byte (offset 0x4A)
 #define DAC_FLAG_INDEPENDENT_CLOCK  0x01
 #define DAC_FLAG_HW_VOLUME          0x02
@@ -30,7 +34,7 @@
 // Parsed EEPROM data
 struct DacEepromData {
     bool valid;                   // Magic + version OK
-    uint8_t formatVersion;        // Format version (1 or 2)
+    uint8_t formatVersion;        // Format version (1, 2, or 3)
     uint16_t deviceId;            // Device ID (uint16_t LE)
     uint8_t hwRevision;           // Hardware revision
     char deviceName[33];          // Null-terminated (32 chars + null)
