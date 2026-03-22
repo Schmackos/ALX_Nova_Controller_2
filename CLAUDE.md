@@ -54,7 +54,7 @@ pio test -e native -f test_auth
 pio test -e native -v
 ```
 
-Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (~3050 tests across 110 modules). E2E browser tests: 113 tests across 22 Playwright specs. Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_probe_retry`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_hal_es9822pro`, `test_hal_es9843pro`, `test_hal_tdm_deinterleaver`, `test_hal_es9826`, `test_hal_es9821`, `test_hal_es9823pro`, `test_hal_es9820`, `test_hal_es9842pro`, `test_hal_es9840`, `test_hal_es9841`, `test_hal_es9038q2m`, `test_hal_es9039q2m`, `test_hal_es9069q`, `test_hal_es9033q`, `test_hal_es9020_dac`, `test_hal_es9038pro`, `test_hal_es9028pro`, `test_hal_es9039pro`, `test_hal_es9027pro`, `test_hal_es9081`, `test_hal_es9082`, `test_hal_es9017`, `test_hal_tdm_interleaver`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`, `test_heap_monitor`, `test_http_security`, `test_heap_budget`, `test_pipeline_dma_guard`, `test_psram_alloc`, `test_ws_adaptive_rate`, `test_strncpy_safety`, `test_hal_init_result`, `test_hal_atomic_write`, `test_settings_export_v2`.
+Tests run on the `native` environment (host machine with gcc/MinGW) using the Unity framework (~3050 tests across 110 modules). E2E browser tests: 302 tests across 50 Playwright specs. Mock implementations of Arduino, WiFi, MQTT, and Preferences libraries live in `test/test_mocks/`. Test modules: `test_utils`, `test_auth`, `test_wifi`, `test_mqtt`, `test_settings`, `test_ota`, `test_ota_task`, `test_button`, `test_websocket`, `test_websocket_messages`, `test_api`, `test_smart_sensing`, `test_buzzer`, `test_gui_home`, `test_gui_input`, `test_gui_navigation`, `test_pinout`, `test_i2s_audio`, `test_fft`, `test_signal_generator`, `test_audio_diagnostics`, `test_audio_health_bridge`, `test_audio_pipeline`, `test_vrms`, `test_dim_timeout`, `test_debug_mode`, `test_dsp`, `test_dsp_rew`, `test_dsp_presets`, `test_dsp_swap`, `test_crash_log`, `test_task_monitor`, `test_esp_dsp`, `test_usb_audio`, `test_hal_core`, `test_hal_bridge`, `test_hal_coord`, `test_hal_dsp_bridge`, `test_hal_discovery`, `test_hal_integration`, `test_hal_eeprom_v3`, `test_hal_pcm5102a`, `test_hal_pcm1808`, `test_hal_probe_retry`, `test_hal_es8311`, `test_hal_mcp4725`, `test_hal_siggen`, `test_hal_usb_audio`, `test_hal_custom_device`, `test_hal_multi_instance`, `test_hal_state_callback`, `test_hal_retry`, `test_hal_wire_mock`, `test_hal_buzzer`, `test_hal_button`, `test_hal_encoder`, `test_hal_ns4150b`, `test_hal_es9822pro`, `test_hal_es9843pro`, `test_hal_tdm_deinterleaver`, `test_hal_es9826`, `test_hal_es9821`, `test_hal_es9823pro`, `test_hal_es9820`, `test_hal_es9842pro`, `test_hal_es9840`, `test_hal_es9841`, `test_hal_es9038q2m`, `test_hal_es9039q2m`, `test_hal_es9069q`, `test_hal_es9033q`, `test_hal_es9020_dac`, `test_hal_es9038pro`, `test_hal_es9028pro`, `test_hal_es9039pro`, `test_hal_es9027pro`, `test_hal_es9081`, `test_hal_es9082`, `test_hal_es9017`, `test_hal_tdm_interleaver`, `test_output_dsp`, `test_dac_hal`, `test_dac_eeprom`, `test_dac_settings`, `test_diag_journal`, `test_peq`, `test_evt_any`, `test_sink_slot_api`, `test_sink_write_utils`, `test_deferred_toggle`, `test_pipeline_bounds`, `test_pipeline_output`, `test_matrix_bounds`, `test_eth_manager`, `test_es8311`, `test_heap_monitor`, `test_http_security`, `test_heap_budget`, `test_pipeline_dma_guard`, `test_psram_alloc`, `test_ws_adaptive_rate`, `test_strncpy_safety`, `test_hal_init_result`, `test_hal_atomic_write`, `test_settings_export_v2`.
 
 ## Architecture
 
@@ -299,13 +299,19 @@ DOUT2 uses `INPUT_PULLDOWN` so an unconnected pin reads zeros (→ NO_DATA) inst
 - Each test module must be in its own directory to avoid duplicate `main`/`setUp`/`tearDown` symbols
 
 ### Browser / E2E Tests (Playwright)
-Playwright browser tests live in `e2e/tests/` (91 tests across 22 specs). They verify the web UI against a mock Express server + Playwright `routeWebSocket()` interception — no real hardware needed. Full architecture: `docs-internal/testing-architecture.md`. Diagrams: `docs-internal/architecture/test-infrastructure.mmd`, `e2e-test-flow.mmd`, `test-coverage-map.mmd`. Plan: `docs-internal/planning/test-strategy.md`.
+Playwright browser tests live in `e2e/tests/` (302 tests across 50 specs). They verify the web UI against a mock Express server + Playwright `routeWebSocket()` interception — no real hardware needed. Full architecture: `docs-internal/testing-architecture.md`. Diagrams: `docs-internal/architecture/test-infrastructure.mmd`, `e2e-test-flow.mmd`, `test-coverage-map.mmd`. Plan: `docs-internal/planning/test-strategy.md`.
+
+**Page Object Model (POM)**: 19 POM classes in `e2e/pages/` wrap DOM interactions for each tab/modal. New tests should use POM methods; `selectors.js` remains the source of truth for element IDs. Key POMs: `BasePage` (navigation, WS capture, assertions), `DevicesPage`, `AudioPage`/sub-views, `SettingsPage`, `NetworkPage`.
+
+**Test helpers**: `ws-assertions.js` (WS command capture/verification), `fixture-factories.js` (13 programmatic fixture builders), `a11y-helpers.js` (axe-core wrapper).
+
+**Test tagging**: Tags in `test.describe` titles (`@smoke`, `@ws`, `@api`, `@visual`, `@a11y`, `@hal`, `@audio`, `@settings`, `@error`). Filter via `npm run test:smoke`, `test:hal`, etc.
 
 ```bash
 cd e2e
 npm install                              # First time only
 npx playwright install --with-deps chromium  # First time only
-npx playwright test                      # Run all 26 browser tests
+npx playwright test                      # Run all 302 browser tests
 npx playwright test tests/auth.spec.js   # Run single spec
 npx playwright test --headed             # Run with visible browser
 npx playwright test --debug              # Debug mode with inspector
@@ -315,18 +321,28 @@ npx playwright test --debug              # Debug mode with inspector
 - `e2e/mock-server/server.js` — Express server (port 3000) assembling HTML from `web_src/`
 - `e2e/mock-server/assembler.js` — Replicates `tools/build_web_assets.js` HTML assembly
 - `e2e/mock-server/ws-state.js` — Deterministic mock state singleton, reset between tests
-- `e2e/mock-server/routes/*.js` — 12 Express route files matching firmware REST API
-- `e2e/helpers/fixtures.js` — `connectedPage` fixture: session cookie + WS auth + initial state broadcasts
-- `e2e/helpers/ws-helpers.js` — `buildInitialState()`, `handleCommand()`, binary frame builders
+- `e2e/mock-server/routes/*.js` — 14 Express route files matching firmware REST API
+- `e2e/helpers/fixtures.js` — `connectedPage` fixture: session cookie + WS auth + initial state broadcasts + WS capture
+- `e2e/helpers/ws-helpers.js` — `buildInitialState()`, `handleCommand()` (37 command types), binary frame builders
+- `e2e/helpers/ws-assertions.js` — `expectWsCommand()`, `captureApiCall()` for WS/REST verification
+- `e2e/helpers/fixture-factories.js` — 13 programmatic fixture builders for per-test overrides
+- `e2e/helpers/a11y-helpers.js` — `expectNoViolations()` axe-core accessibility wrapper
 - `e2e/helpers/selectors.js` — Reusable DOM selectors matching `web_src/index.html` IDs
-- `e2e/fixtures/ws-messages/*.json` — 15 hand-crafted WS broadcast fixtures
-- `e2e/fixtures/api-responses/*.json` — 14 deterministic REST response fixtures
+- `e2e/pages/*.js` — 19 Page Object Model classes (BasePage + one per tab/modal)
+- `e2e/fixtures/ws-messages/*.json` — 21 hand-crafted WS broadcast fixtures
+- `e2e/fixtures/api-responses/*.json` — 20 deterministic REST response fixtures
 
 **Key Playwright patterns:**
 - WS interception: `page.routeWebSocket(/.*:81/, handler)` — uses `onMessage`/`onClose` (capital M/C)
+- WS capture: `page.wsCapture[]` collects all outbound WS commands; verify with `expectWsCommand(page, type, fields)`
 - Tab navigation in tests: `page.evaluate(() => switchTab('tabName'))` — avoids scroll issues with sidebar clicks
 - CSS-hidden checkboxes: use `toBeChecked()` not `toBeVisible()` for toggle inputs styled with `label.switch`
 - Strict mode: use `.first()` when a selector might match multiple elements
+- POM usage: `const DevicesPage = require('../pages/DevicesPage'); const devices = new DevicesPage(page); await devices.open()`
+- Visual regression: `await expect(element).toHaveScreenshot('name.png')` — element-level, `animations: 'disabled'`
+- Accessibility: `const AxeBuilder = require('@axe-core/playwright').default; await new AxeBuilder({page}).analyze()`
+- Test tags: `test.describe('@hal @smoke ...', ...)` — filter with `npx playwright test --grep @smoke`
+- API capture: `const cap = captureApiCall(page, '/api/hal/scan', 'POST'); await cap.expectCalled()`
 
 ### Mandatory Test Coverage Rules
 
@@ -386,7 +402,7 @@ All 4 gates must pass before firmware build proceeds (parallel execution):
 1. `cpp-tests` — `pio test -e native -v` (~2354 Unity tests across 106 modules)
 2. `cpp-lint` — cppcheck on `src/`
 3. `js-lint` — find_dups + check_missing_fns + ESLint
-4. `e2e-tests` — Playwright browser tests (91 tests across 22 specs)
+4. `e2e-tests` — Playwright browser tests (302 tests across 50 specs)
 
 See `docs-internal/architecture/ci-quality-gates.mmd` for the pipeline flow diagram.
 

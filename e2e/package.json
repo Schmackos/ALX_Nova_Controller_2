@@ -8,15 +8,26 @@
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:ui": "npx playwright test --ui",
+    "test:smoke": "npx playwright test --grep @smoke",
+    "test:ws": "npx playwright test --grep @ws",
+    "test:api": "npx playwright test --grep @api",
+    "test:visual": "npx playwright test --grep @visual",
+    "test:a11y": "npx playwright test --grep @a11y",
+    "test:hal": "npx playwright test --grep @hal",
+    "test:audio": "npx playwright test --grep @audio",
+    "test:settings": "npx playwright test --grep @settings",
+    "test:error": "npx playwright test --grep @error",
+    "test:update-snapshots": "npx playwright test --grep @visual --update-snapshots",
     "mock-server": "node mock-server/server.js",
     "lint": "npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.50.0",
     "eslint": "^8.57.0"
   },
   "dependencies": {
-    "express": "^4.21.0",
-    "cookie-parser": "^1.4.7"
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.0"
   }
 }
