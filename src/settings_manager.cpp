@@ -16,6 +16,8 @@
 #include "dac_hal.h"
 #include "hal/hal_device_manager.h"
 #include "hal/hal_device_db.h"
+#include "hal/hal_settings.h"
+#include "hal/hal_custom_device.h"
 #endif
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -1175,7 +1177,125 @@ void handleSettingsExport() {
     snprintf(timestamp, sizeof(timestamp), "unknown");
   }
   doc["exportInfo"]["timestamp"] = timestamp;
-  doc["exportInfo"]["version"] = "1.0";
+  doc["exportInfo"]["version"] = "2.0";
+
+#ifdef DAC_ENABLED
+  // HAL device configs — iterate all valid device slots
+  {
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    JsonArray halArr = doc["halDevices"].to<JsonArray>();
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; i++) {
+      HalDevice* dev = mgr.getDevice(i);
+      HalDeviceConfig* cfg = mgr.getConfig(i);
+      if (!dev || !cfg || !cfg->valid) continue;
+
+      JsonObject obj = halArr.add<JsonObject>();
+      obj["slot"] = i;
+      obj["compatible"] = dev->getDescriptor().compatible;
+      obj["i2cAddr"] = cfg->i2cAddr;
+      obj["i2cBusIndex"] = cfg->i2cBusIndex;
+      obj["i2sPort"] = cfg->i2sPort;
+      obj["volume"] = cfg->volume;
+      obj["mute"] = cfg->mute;
+      obj["enabled"] = cfg->enabled;
+      obj["userLabel"] = cfg->userLabel;
+      obj["filterMode"] = cfg->filterMode;
+      obj["sampleRate"] = cfg->sampleRate;
+      obj["bitDepth"] = cfg->bitDepth;
+    }
+  }
+
+  // Custom device schemas from /hal/custom/ directory
+#ifndef NATIVE_TEST
+  {
+    JsonArray schemas = doc["halCustomSchemas"].to<JsonArray>();
+    if (LittleFS.exists("/hal/custom")) {
+      File dir = LittleFS.open("/hal/custom");
+      if (dir && dir.isDirectory()) {
+        File f = dir.openNextFile();
+        while (f) {
+          if (!f.isDirectory()) {
+            String content = f.readString();
+            JsonDocument schemaDoc;
+            if (deserializeJson(schemaDoc, content) == DeserializationError::Ok) {
+              schemas.add(schemaDoc.as<JsonObject>());
+            }
+          }
+          f = dir.openNextFile();
+        }
+      }
+    }
+  }
+#endif // NATIVE_TEST
+#endif // DAC_ENABLED
+
+  // DSP global config
+  {
+    File dspFile = LittleFS.open("/dsp_global.json", "r");
+    if (dspFile && dspFile.size() > 0) {
+      JsonDocument dspDoc;
+      if (deserializeJson(dspDoc, dspFile) == DeserializationError::Ok) {
+        doc["dspGlobal"] = dspDoc.as<JsonObject>();
+      }
+      dspFile.close();
+    }
+  }
+
+  // DSP per-channel configs
+  {
+    JsonArray chArr = doc["dspChannels"].to<JsonArray>();
+    for (int ch = 0; ch < 4; ch++) {
+      char path[24];
+      snprintf(path, sizeof(path), "/dsp_ch%d.json", ch);
+      File chFile = LittleFS.open(path, "r");
+      if (chFile && chFile.size() > 0) {
+        JsonDocument chDoc;
+        if (deserializeJson(chDoc, chFile) == DeserializationError::Ok) {
+          chArr.add(chDoc.as<JsonObject>());
+        } else {
+          chArr.add(JsonObject()); // Placeholder for missing/invalid channel
+        }
+        chFile.close();
+      } else {
+        chArr.add(JsonObject()); // Placeholder for missing channel
+        if (chFile) chFile.close();
+      }
+    }
+  }
+
+  // Output DSP per-channel configs
+  {
+    JsonArray outArr = doc["outputDsp"].to<JsonArray>();
+    for (int ch = 0; ch < 16; ch++) {
+      char path[32];
+      snprintf(path, sizeof(path), "/output_dsp_ch%d.json", ch);
+      File outFile = LittleFS.open(path, "r");
+      if (outFile && outFile.size() > 0) {
+        JsonDocument outDoc;
+        if (deserializeJson(outDoc, outFile) == DeserializationError::Ok) {
+          outArr.add(outDoc.as<JsonObject>());
+        } else {
+          outArr.add(JsonObject());
+        }
+        outFile.close();
+      } else {
+        outArr.add(JsonObject());
+        if (outFile) outFile.close();
+      }
+    }
+  }
+
+  // Pipeline matrix config
+  {
+    File matFile = LittleFS.open("/pipeline_matrix.json", "r");
+    if (matFile && matFile.size() > 0) {
+      JsonDocument matDoc;
+      if (deserializeJson(matDoc, matFile) == DeserializationError::Ok) {
+        doc["pipelineMatrix"] = matDoc.as<JsonObject>();
+      }
+      matFile.close();
+    }
+  }
 
   String json;
   serializeJsonPretty(doc, json);
@@ -1185,7 +1305,7 @@ void handleSettingsExport() {
                     "attachment; filename=\"device-settings.json\"");
   server_send(200, "application/json", json);
 
-  LOG_I("[Settings] Settings exported successfully");
+  LOG_I("[Settings] Settings exported successfully (v2.0)");
 }
 
 void handleSettingsImport() {
@@ -1558,7 +1678,151 @@ void handleSettingsImport() {
 
   // Note: Certificate import removed - now using Mozilla certificate bundle
 
-  LOG_I("[Settings] All settings imported successfully");
+  // ===== v2.0 sections (backward compatible — skipped for v1.0 exports) =====
+  const char* exportVersion = doc["exportInfo"]["version"] | "1.0";
+  bool isV2 = (strcmp(exportVersion, "2.0") == 0);
+
+  if (isV2) {
+#ifdef DAC_ENABLED
+    // Import custom device schemas — must happen before HAL device configs
+    if (!doc["halCustomSchemas"].isNull() && doc["halCustomSchemas"].is<JsonArray>()) {
+      JsonArray schemas = doc["halCustomSchemas"].as<JsonArray>();
+      LittleFS.mkdir("/hal");
+      LittleFS.mkdir("/hal/custom");
+      for (JsonObject schema : schemas) {
+        const char* compat = schema["compatible"] | "";
+        if (strlen(compat) == 0) continue;
+        // Write schema to /hal/custom/<compatible>.json
+        char path[64];
+        snprintf(path, sizeof(path), "/hal/custom/%s.json", compat);
+        String schemaStr;
+        serializeJson(schema, schemaStr);
+        File f = LittleFS.open(path, "w");
+        if (f) {
+          f.print(schemaStr);
+          f.close();
+          LOG_D("[Settings] Imported custom schema: %s", compat);
+        }
+      }
+      // Reload custom device registry
+      hal_load_custom_devices();
+      LOG_I("[Settings] Custom device schemas imported (%d)", schemas.size());
+    }
+
+    // Import HAL device configs
+    if (!doc["halDevices"].isNull() && doc["halDevices"].is<JsonArray>()) {
+      HalDeviceManager& mgr = HalDeviceManager::instance();
+      JsonArray halArr = doc["halDevices"].as<JsonArray>();
+      for (JsonObject obj : halArr) {
+        uint8_t slot = obj["slot"] | 255;
+        if (slot >= HAL_MAX_DEVICES) continue;
+
+        HalDevice* dev = mgr.getDevice(slot);
+        if (!dev) continue; // Slot not populated on this device
+
+        HalDeviceConfig cfg;
+        memset(&cfg, 0, sizeof(cfg));
+        cfg.valid = true;
+        cfg.i2cAddr = obj["i2cAddr"] | 0;
+        cfg.i2cBusIndex = obj["i2cBusIndex"] | 0;
+        cfg.i2sPort = obj["i2sPort"] | 255;
+        cfg.volume = obj["volume"] | 100;
+        cfg.mute = obj["mute"] | false;
+        cfg.enabled = obj["enabled"] | true;
+        cfg.filterMode = obj["filterMode"] | 0;
+        cfg.sampleRate = obj["sampleRate"] | 0;
+        cfg.bitDepth = obj["bitDepth"] | 0;
+        const char* label = obj["userLabel"] | "";
+        hal_safe_strcpy(cfg.userLabel, sizeof(cfg.userLabel), label);
+
+        // Preserve pin assignments from current config (not exported)
+        HalDeviceConfig* existing = mgr.getConfig(slot);
+        if (existing) {
+          cfg.pinSda = existing->pinSda;
+          cfg.pinScl = existing->pinScl;
+          cfg.pinMclk = existing->pinMclk;
+          cfg.pinData = existing->pinData;
+          cfg.pinBck = existing->pinBck;
+          cfg.pinLrc = existing->pinLrc;
+          cfg.pinFmt = existing->pinFmt;
+          cfg.paControlPin = existing->paControlPin;
+          cfg.gpioA = existing->gpioA;
+          cfg.gpioB = existing->gpioB;
+          cfg.gpioC = existing->gpioC;
+          cfg.gpioD = existing->gpioD;
+          cfg.i2cSpeedHz = existing->i2cSpeedHz;
+          cfg.mclkMultiple = existing->mclkMultiple;
+          cfg.i2sFormat = existing->i2sFormat;
+          cfg.pgaGain = existing->pgaGain;
+          cfg.hpfEnabled = existing->hpfEnabled;
+          cfg.isI2sClockMaster = existing->isI2sClockMaster;
+          cfg.usbPid = existing->usbPid;
+          cfg.i2sMode = existing->i2sMode;
+          cfg.tdmSlots = existing->tdmSlots;
+        }
+
+        mgr.setConfig(slot, cfg);
+        hal_save_device_config(slot);
+        LOG_D("[Settings] Imported HAL config for slot %d", slot);
+      }
+      LOG_I("[Settings] HAL device configs imported (%d)", halArr.size());
+    }
+#endif // DAC_ENABLED
+
+    // Import DSP global config
+    if (!doc["dspGlobal"].isNull()) {
+      File f = LittleFS.open("/dsp_global.json", "w");
+      if (f) {
+        serializeJson(doc["dspGlobal"], f);
+        f.close();
+        LOG_D("[Settings] Imported dspGlobal");
+      }
+    }
+
+    // Import DSP channel configs
+    if (!doc["dspChannels"].isNull() && doc["dspChannels"].is<JsonArray>()) {
+      JsonArray chArr = doc["dspChannels"].as<JsonArray>();
+      for (size_t i = 0; i < chArr.size() && i < 4; i++) {
+        if (chArr[i].as<JsonObject>().size() == 0) continue; // Skip empty placeholders
+        char path[24];
+        snprintf(path, sizeof(path), "/dsp_ch%d.json", (int)i);
+        File f = LittleFS.open(path, "w");
+        if (f) {
+          serializeJson(chArr[i], f);
+          f.close();
+          LOG_D("[Settings] Imported dsp_ch%d", (int)i);
+        }
+      }
+    }
+
+    // Import output DSP channel configs
+    if (!doc["outputDsp"].isNull() && doc["outputDsp"].is<JsonArray>()) {
+      JsonArray outArr = doc["outputDsp"].as<JsonArray>();
+      for (size_t i = 0; i < outArr.size() && i < 16; i++) {
+        if (outArr[i].as<JsonObject>().size() == 0) continue; // Skip empty placeholders
+        char path[32];
+        snprintf(path, sizeof(path), "/output_dsp_ch%d.json", (int)i);
+        File f = LittleFS.open(path, "w");
+        if (f) {
+          serializeJson(outArr[i], f);
+          f.close();
+          LOG_D("[Settings] Imported output_dsp_ch%d", (int)i);
+        }
+      }
+    }
+
+    // Import pipeline matrix config
+    if (!doc["pipelineMatrix"].isNull()) {
+      File f = LittleFS.open("/pipeline_matrix.json", "w");
+      if (f) {
+        serializeJson(doc["pipelineMatrix"], f);
+        f.close();
+        LOG_D("[Settings] Imported pipelineMatrix");
+      }
+    }
+  }
+
+  LOG_I("[Settings] All settings imported successfully%s", isV2 ? " (v2.0)" : "");
 
   // Send success response
   server_send(200, "application/json",
