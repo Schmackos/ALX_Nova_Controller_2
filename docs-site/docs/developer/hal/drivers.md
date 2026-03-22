@@ -1,7 +1,7 @@
 ---
 title: Built-in Drivers
 sidebar_position: 4
-description: Reference for all built-in HAL drivers — PCM5102A, ES8311, PCM1808, NS4150B, MCP4725, ESS SABRE ADC expansion family, amplifier relay, and more.
+description: Reference for all built-in HAL drivers — PCM5102A, ES8311, PCM1808, NS4150B, MCP4725, ESS SABRE ADC expansion family, ESS SABRE DAC expansion family, amplifier relay, and more.
 ---
 
 This page documents every driver registered by `hal_register_builtins()` in `src/hal/hal_builtin_devices.cpp`. Each entry covers the compatible string, device class, type, capabilities, bus requirements, and any runtime configuration options that affect behaviour.
@@ -27,6 +27,19 @@ This page documents every driver registered by `hal_register_builtins()` in `src
 | `ess,es9842pro` | `HalEs9842pro` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
 | `ess,es9840` | `HalEs9840` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
 | `ess,es9841` | `HalEs9841` | ADC | I2C Bus 2 | 0x40 | `ADC_PATH`, `HW_VOLUME`, `PGA_CONTROL`, `HPF_CONTROL` |
+| `ess,es9038q2m` | `HalEs9038q2m` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9039q2m` | `HalEs9039q2m` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9069q` | `HalEs9069Q` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `MQA` |
+| `ess,es9033q` | `HalEs9033Q` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `LINE_DRIVER` |
+| `ess,es9020-dac` | `HalEs9020Dac` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `APLL` |
+| `ess,es9038pro` | `HalEs9038pro` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9028pro` | `HalEs9028pro` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9039pro` | `HalEs9039pro` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9039mpro` | `HalEs9039pro` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9027pro` | `HalEs9027pro` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9081` | `HalEs9081` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9082` | `HalEs9082` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `ess,es9017` | `HalEs9017` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
 | `generic,relay-amp` | `HalRelay` | AMP | GPIO | — | — |
 | `alx,dsp-pipeline` | `HalDspBridge` | DSP | Internal | — | — |
 | `generic,piezo-buzzer` | `HalBuzzer` | GPIO | GPIO | — | — |

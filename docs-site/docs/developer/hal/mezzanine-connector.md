@@ -105,29 +105,33 @@ A Python flashing script and a set of pre-built binary images for supported modu
 ```mermaid
 graph LR
     subgraph Mezzanine
-        ADC[ESS SABRE ADC]
+        CODEC[ESS SABRE ADC or DAC]
         EEPROM[AT24C02\n0x50+slot]
         OSC[MCLK Oscillator\noptional]
     end
 
     subgraph ESP32-P4
-        I2S2[I2S2 RX]
+        I2S2[I2S2 RX/TX]
         I2C2[I2C Bus 2\nGPIO 28/29]
         HAL[HAL Driver]
         Pipeline[Audio Pipeline]
     end
 
-    ADC -->|I2S DIN pin 10| I2S2
+    CODEC -->|I2S DIN pin 10 (ADC)| I2S2
+    I2S2 -->|I2S DOUT pin 11 (DAC)| CODEC
     EEPROM -->|Compatible string| I2C2
-    I2C2 -->|Register control| ADC
-    OSC -->|MCLK optional| ADC
+    I2C2 -->|Register control| CODEC
+    OSC -->|MCLK optional| CODEC
     I2S2 --> HAL
-    HAL -->|AudioInputSource| Pipeline
+    HAL -->|AudioInputSource (ADC)| Pipeline
+    Pipeline -->|AudioOutputSink (DAC)| HAL
 ```
 
-The carrier drives BCK and WS to the mezzanine in the default clock-master configuration. When the mezzanine provides its own MCLK oscillator, pin 9 is left floating on the carrier side and the module drives the ADC directly. The HAL driver sets `_descriptor.bus` accordingly and the HAL discovery layer resolves the I2S pin map from `HalDeviceConfig` at init time.
+The carrier drives BCK and WS to the mezzanine in the default clock-master configuration. When the mezzanine provides its own MCLK oscillator, pin 9 is left floating on the carrier side and the module drives the device directly. The HAL driver sets `_descriptor.bus` accordingly and the HAL discovery layer resolves the I2S pin map from `HalDeviceConfig` at init time.
 
 ## Supported Expansion Devices
+
+### ADC Modules
 
 The following expansion ADC modules have registered HAL drivers and EEPROM images:
 
@@ -144,18 +148,51 @@ The following expansion ADC modules have registered HAL drivers and EEPROM image
 | ES9841 | `ess,es9841` | 4 | TDM | 8-bit per-ch | 0–42 dB (6 dB steps) | Yes | 0x40 |
 | ES9840 | `ess,es9840` | 4 | TDM | 16-bit per-ch | 0–18 dB (6 dB steps) | Yes | 0x40 |
 
-All nine devices are registered in `hal_builtin_devices.cpp` and have preset entries in the device database (`GET /api/hal/db/presets`). Only one expansion ADC module is physically installed at a time on the mezzanine connector — the correct driver is selected automatically from the compatible string stored in the module's AT24C02 EEPROM.
+All nine ADC devices are registered in `hal_builtin_devices.cpp` and have preset entries in the device database (`GET /api/hal/db/presets`). Only one expansion ADC module is physically installed at a time on the mezzanine connector — the correct driver is selected automatically from the compatible string stored in the module's AT24C02 EEPROM.
 
-**I2S output mode (2-channel devices):** ES9822PRO, ES9826, ES9823PRO, ES9823MPRO, ES9821, and ES9820 output standard stereo I2S. The pipeline bridge registers each as a single `AudioInputSource` and assigns one input lane.
+**I2S output mode (2-channel ADC devices):** ES9822PRO, ES9826, ES9823PRO, ES9823MPRO, ES9821, and ES9820 output standard stereo I2S. The pipeline bridge registers each as a single `AudioInputSource` and assigns one input lane.
 
-**TDM output mode (4-channel devices):** ES9843PRO, ES9842PRO, ES9841, and ES9840 output all 4 channels time-multiplexed on the DIN line in TDM mode: \[SLOT0=CH1\]\[SLOT1=CH2\]\[SLOT2=CH3\]\[SLOT3=CH4\] per frame. The `HalTdmDeinterleaver` embedded in each TDM driver splits the stream into two stereo pairs. The pipeline bridge calls `getInputSourceCount()` (returns 2 when initialized) and registers each stereo pair as a separate `AudioInputSource` at consecutive input lanes. A 4-channel TDM device therefore occupies two input lanes in the routing matrix.
+**TDM output mode (4-channel ADC devices):** ES9843PRO, ES9842PRO, ES9841, and ES9840 output all 4 channels time-multiplexed on the DIN line in TDM mode: \[SLOT0=CH1\]\[SLOT1=CH2\]\[SLOT2=CH3\]\[SLOT3=CH4\] per frame. The `HalTdmDeinterleaver` embedded in each TDM driver splits the stream into two stereo pairs. The pipeline bridge calls `getInputSourceCount()` (returns 2 when initialized) and registers each stereo pair as a separate `AudioInputSource` at consecutive input lanes. A 4-channel TDM device therefore occupies two input lanes in the routing matrix.
 
 **ES9823PRO / ES9823MPRO variants:** Both package variants share the `HalEs9823pro` driver class. `ess,es9823mpro` is registered as a second compatible string pointing to the same factory. The driver reads chip ID register 0xE1 at `init()` time to distinguish between the two (0x8D = PRO, 0x8C = MPRO) and sets an internal `_isMonolithic` flag.
 
 **HPF "Flag only" note:** On ES9826, ES9823PRO/MPRO, and ES9821, `adcSetHpfEnabled()` stores the HPF state for web UI display but does not write a dedicated hardware register — these devices do not expose a separate HPF control bit in their register maps.
 
+### DAC Modules
+
+The following expansion DAC modules have registered HAL drivers and EEPROM images. DAC modules use the DOUT pin (pin 11 of the connector) for I2S audio data received from the ESP32-P4. DAC I2C addresses are in the 0x48–0x4E range (separate from the ADC 0x40–0x46 range), allowing a DAC and an ADC mezzanine to coexist on the same I2C Bus 2 if the hardware supports dual population.
+
+#### 2-Channel DAC Modules (Pattern C)
+
+| Device | Compatible | Channels | Interface | Volume Control | Key Feature | I2C Address |
+|--------|-----------|----------|-----------|----------------|-------------|-------------|
+| ES9038Q2M | `ess,es9038q2m` | 2 | I2S | 128-step (0.5 dB/step) | Hyperstream II, 128 dB DNR, DSD512 | 0x48 |
+| ES9039Q2M | `ess,es9039q2m` | 2 | I2S | 128-step (0.5 dB/step) | Hyperstream IV, 130 dB DNR, DSD1024 | 0x48 |
+| ES9069Q | `ess,es9069q` | 2 | I2S | 128-step (0.5 dB/step) | Integrated MQA hardware renderer, DSD1024 | 0x48 |
+| ES9033Q | `ess,es9033q` | 2 | I2S | 128-step (0.5 dB/step) | Integrated 2 Vrms line drivers (no external op-amp) | 0x48 |
+| ES9020 | `ess,es9020-dac` | 2 | I2S | 128-step (0.5 dB/step) | Integrated APLL for BCK-based clock recovery, 122 dB DNR | 0x48 |
+
+All five 2-channel DAC devices receive standard stereo I2S from the ESP32-P4 on the mezzanine DOUT line (pin 11). The pipeline bridge registers each as a single `AudioOutputSink` and assigns one output slot. Volume is controlled via an 8-bit attenuation register: 0x00 = 0 dB, 0xFF = full mute, with 0.5 dB per step.
+
+#### 8-Channel DAC Modules (Pattern D)
+
+| Device | Compatible | Channels | Interface | Volume Control | Key Feature | I2C Address |
+|--------|-----------|----------|-----------|----------------|-------------|-------------|
+| ES9038PRO | `ess,es9038pro` | 8 | TDM (8-slot) | 8-bit per-ch (0.5 dB/step) | Hyperstream II, 132 dB DNR, DSD512 | 0x48 |
+| ES9028PRO | `ess,es9028pro` | 8 | TDM (8-slot) | 8-bit per-ch (0.5 dB/step) | Hyperstream II, 124 dB DNR, register-compatible with ES9038PRO | 0x48 |
+| ES9039PRO | `ess,es9039pro` | 8 | TDM (8-slot) | 8-bit per-ch (0.5 dB/step) | Hyperstream IV, 132 dB DNR, DSD1024 | 0x48 |
+| ES9039MPRO | `ess,es9039mpro` | 8 | TDM (8-slot) | 8-bit per-ch (0.5 dB/step) | ES9039PRO MPRO variant (industrial temp range), auto-detected | 0x48 |
+| ES9027PRO | `ess,es9027pro` | 8 | TDM (8-slot) | 8-bit per-ch (0.5 dB/step) | Hyperstream IV, 124 dB DNR, DSD1024, ES9039PRO register-compatible | 0x48 |
+| ES9081 | `ess,es9081` | 8 | TDM (8-slot) | 8-bit per-ch (0.5 dB/step) | Hyperstream IV, 120 dB DNR, 40-pin QFN, cost-optimised | 0x48 |
+| ES9082 | `ess,es9082` | 8 | TDM (8-slot) | 8-bit per-ch (0.5 dB/step) | Hyperstream IV, 120 dB DNR, 48-pin QFN, optional ASP2 DSP | 0x48 |
+| ES9017 | `ess,es9017` | 8 | TDM (8-slot) | 8-bit per-ch (0.5 dB/step) | Hyperstream IV, 120 dB DNR, pin-compatible with ES9027PRO | 0x48 |
+
+8-channel DAC devices receive all 8 channels time-multiplexed on the DOUT line in 8-slot TDM mode: \[SLOT0=CH1\]\[SLOT1=CH2\]...\[SLOT7=CH8\] per frame, 32 bits per slot. The `HalTdmInterleaver` embedded in each driver combines four stereo pipeline output sinks into the single TDM stream. The pipeline bridge calls `getSinkCount()` (returns 4 when initialized) and `buildSinkAt(idx, ...)` to register each stereo pair as a separate `AudioOutputSink` at consecutive output slots. An 8-channel TDM DAC therefore occupies four output slots in the routing matrix.
+
+**ES9039PRO / ES9039MPRO variants:** Both package variants share the `HalEs9039pro` driver class. `ess,es9039mpro` is registered as a second compatible string pointing to the same factory. The driver reads chip ID register 0xE1 at `init()` time (0x39 = PRO, 0x3A = MPRO) and updates the device name accordingly.
+
 :::info Adding your own module
-If you are developing a new mezzanine module, follow the [Driver Guide](./driver-guide.md) to create the HAL driver class, register the factory, and write the unit tests. Use `"ess,es9822pro"` as a reference implementation for 2-channel I2S ADC devices with PGA control, or `"ess,es9843pro"` as a reference for 4-channel TDM devices using `HalTdmDeinterleaver`.
+If you are developing a new mezzanine module, follow the [Driver Guide](./driver-guide.md) to create the HAL driver class, register the factory, and write the unit tests. For ADCs: use `"ess,es9822pro"` as a reference for 2-channel I2S ADC devices, or `"ess,es9843pro"` for 4-channel TDM ADC devices using `HalTdmDeinterleaver`. For DACs: use `"ess,es9038q2m"` as a reference for 2-channel I2S DAC devices (Pattern C), or `"ess,es9038pro"` for 8-channel TDM DAC devices using `HalTdmInterleaver` (Pattern D).
 :::
 
 ## Design Guidelines for Mezzanine Makers
