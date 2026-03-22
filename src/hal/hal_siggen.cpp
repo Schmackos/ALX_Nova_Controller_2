@@ -49,17 +49,10 @@ static uint32_t _siggen_getSampleRate(void) {
 // ===== HalSigGen implementation =====
 
 HalSigGen::HalSigGen() : HalDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible, "alx,signal-gen", 31);
-    strncpy(_descriptor.name, "Signal Generator", 32);
-    strncpy(_descriptor.manufacturer, "ALX", 32);
-    _descriptor.type = HAL_DEV_ADC;
-    _descriptor.legacyId = 0;
-    _descriptor.channelCount = 2;
-    _descriptor.bus.type = HAL_BUS_INTERNAL;
-    _descriptor.bus.index = 0;
-    _descriptor.sampleRatesMask = HAL_RATE_48K | HAL_RATE_96K;
-    _descriptor.capabilities = HAL_CAP_ADC_PATH;
+    hal_init_descriptor(_descriptor, "alx,signal-gen", "Signal Generator", "ALX",
+        HAL_DEV_ADC, 2, 0, HAL_BUS_INTERNAL, 0,
+        HAL_RATE_48K | HAL_RATE_96K,
+        HAL_CAP_ADC_PATH);
     _initPriority = HAL_PRIORITY_DATA;
 
     // Initialize AudioInputSource

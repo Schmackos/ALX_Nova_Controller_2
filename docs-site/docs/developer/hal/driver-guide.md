@@ -333,6 +333,44 @@ HalInitResult HalMyDac::init() {
 }
 ```
 
+#### Using `hal_init_descriptor()` to reduce boilerplate
+
+Instead of manually setting each `_descriptor` field with `memset`/`strncpy`, use the `hal_init_descriptor()` inline helper (defined in `hal_types.h`). This replaces 10+ lines of constructor boilerplate with a single call:
+
+**Before** (manual):
+
+```cpp
+HalMyDac::HalMyDac() : HalAudioDevice() {
+    memset(&_descriptor, 0, sizeof(_descriptor));
+    strncpy(_descriptor.compatible,   "myvendor,mydac",   31);
+    strncpy(_descriptor.name,         "MyDac",            32);
+    strncpy(_descriptor.manufacturer, "My Vendor Inc.",   32);
+    _descriptor.type             = HAL_DEV_DAC;
+    _descriptor.channelCount     = 2;
+    _descriptor.bus.type         = HAL_BUS_I2S;
+    _descriptor.bus.index        = 0;
+    _descriptor.sampleRatesMask  = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
+    _descriptor.capabilities     = HAL_CAP_DAC_PATH | HAL_CAP_MUTE;
+    _initPriority                = HAL_PRIORITY_HARDWARE;
+}
+```
+
+**After** (using helper):
+
+```cpp
+HalMyDac::HalMyDac() : HalAudioDevice() {
+    hal_init_descriptor(_descriptor,
+        "myvendor,mydac", "MyDac", "My Vendor Inc.",
+        HAL_DEV_DAC, 2, 0x00,
+        HAL_BUS_I2S, 0,
+        HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K,
+        HAL_CAP_DAC_PATH | HAL_CAP_MUTE);
+    _initPriority = HAL_PRIORITY_HARDWARE;
+}
+```
+
+All existing drivers in the codebase use this helper. The parameters are: `(descriptor, compatible, name, manufacturer, type, channels, i2cAddr, busType, busIndex, ratesMask, caps)`.
+
 ### Step 3 — Register the factory in hal_builtin_devices.cpp
 
 Open `src/hal/hal_builtin_devices.cpp` and add your driver in two places:
@@ -349,19 +387,13 @@ Open `src/hal/hal_builtin_devices.cpp` and add your driver in two places:
 static HalDevice* factory_mydac() { return new HalMyDac(); }
 ```
 
-**3. Register the entry** inside `hal_register_builtins()`:
+**3. Register the entry** inside `hal_register_builtins()` using the `HAL_REGISTER()` macro:
 
 ```cpp
-{
-    HalDriverEntry e;
-    memset(&e, 0, sizeof(e));
-    strncpy(e.compatible, "myvendor,mydac", 31);
-    e.type     = HAL_DEV_DAC;
-    e.legacyId = 0;              // Non-zero only if migrating from old DAC_ID_*
-    e.factory  = factory_mydac;
-    hal_registry_register(e);
-}
+HAL_REGISTER("myvendor,mydac", HAL_DEV_DAC, 0, factory_mydac);
 ```
+
+The macro wraps the boilerplate of creating a `HalDriverEntry`, filling its fields, and calling `hal_registry_register()` with error logging. The four arguments are: compatible string, device type, legacy ID (0 for new devices), and factory function pointer.
 
 The `HalDriverEntry.compatible` field is the lookup key used during 3-tier discovery (I2C bus scan → EEPROM probe → manual config). It must match the string set in your constructor's `_descriptor.compatible` field exactly.
 
@@ -551,7 +583,7 @@ All fields live in `HalDeviceDescriptor` (defined in `src/hal/hal_types.h`). Set
 | `bus.index` | `uint8_t` | Bus instance index (I2C: 0=ext, 1=onboard, 2=expansion). |
 | `i2cAddr` | `uint8_t` | 7-bit I2C address (0 = not applicable). |
 | `sampleRatesMask` | `uint32_t` | Bitmask of supported rates. See `HAL_RATE_*` constants. |
-| `capabilities` | `uint8_t` | Bitmask of `HAL_CAP_*` flags (see below). |
+| `capabilities` | `uint16_t` | Bitmask of `HAL_CAP_*` flags (see below). |
 | `instanceId` | `uint8_t` | Auto-assigned by device manager. Do not set in constructor. |
 | `maxInstances` | `uint8_t` | Maximum concurrent instances of this compatible string (0 = type default). |
 
@@ -581,6 +613,14 @@ All fields live in `HalDeviceDescriptor` (defined in `src/hal/hal_types.h`). Set
 | `HAL_CAP_PGA_CONTROL` | 5 | ADC has programmable gain |
 | `HAL_CAP_HPF_CONTROL` | 6 | ADC has high-pass filter control |
 | `HAL_CAP_CODEC` | 7 | Device has both ADC and DAC paths |
+| `HAL_CAP_MQA` | 8 | MQA decoder support |
+| `HAL_CAP_LINE_DRIVER` | 9 | Line driver outputs |
+| `HAL_CAP_APLL` | 10 | Asynchronous PLL |
+| `HAL_CAP_DSD` | 11 | DSD native playback |
+
+:::note
+The `capabilities` field is `uint16_t` (widened from the original `uint8_t` to accommodate bits 8-11). Defined in `src/hal/hal_types.h`.
+:::
 
 The pipeline bridge uses `HAL_CAP_DAC_PATH` and `HAL_CAP_ADC_PATH` to decide whether to register the device as an output sink or an input source when it transitions to AVAILABLE. Getting these flags wrong means the device will not appear in the audio routing matrix.
 
@@ -596,6 +636,8 @@ Combine `HAL_RATE_*` constants with `|`:
 | `HAL_RATE_48K` | 48 000 Hz |
 | `HAL_RATE_96K` | 96 000 Hz |
 | `HAL_RATE_192K` | 192 000 Hz |
+| `HAL_RATE_384K` | 384 000 Hz |
+| `HAL_RATE_768K` | 768 000 Hz |
 
 ## Configuration Persistence
 

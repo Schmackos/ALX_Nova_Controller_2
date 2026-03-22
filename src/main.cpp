@@ -194,8 +194,7 @@ void setup() {
   appState.wifi.apSSID = appState.general.deviceSerialNumber;
   LOG_I("[Main] AP SSID set to: %s", appState.wifi.apSSID.c_str());
 
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  // LED GPIO setup is handled by HalLed::init() via HAL lifecycle
 
   // Configure factory reset button with enhanced detection
   resetButton.begin();
@@ -203,10 +202,8 @@ void setup() {
   LOG_I("[Main] Factory reset button configured: GPIO%d", RESET_BUTTON_PIN);
   LOG_D("[Main] Button: short=status, double=AP, long=restart, vlong=reboot");
 
-  // Configure Smart Sensing pins
-  pinMode(AMPLIFIER_PIN, OUTPUT);
-  digitalWrite(AMPLIFIER_PIN, LOW); // Start with amplifier OFF (fail-safe)
-  LOG_I("[Main] Amplifier relay configured: GPIO%d", AMPLIFIER_PIN);
+  // Amplifier relay GPIO setup is handled by HalRelay::init() via HAL lifecycle
+  LOG_I("[Main] Amplifier relay will be configured via HAL on GPIO%d", AMPLIFIER_PIN);
 
   // Initialize LittleFS and load settings BEFORE GUI so boot animation
   // settings are available when gui_init() runs.
@@ -362,10 +359,14 @@ void setup() {
     if (mgr.registerDevice(_halLed, HAL_DISC_BUILTIN) < 0) {
       LOG_E("[HAL] Failed to register LED — slots full");
     }
+    _halLed->probe();
+    _halLed->init();  // Configures GPIO pin via HAL lifecycle
     _halRelay = new HalRelay(AMPLIFIER_PIN);
     if (mgr.registerDevice(_halRelay, HAL_DISC_BUILTIN) < 0) {
       LOG_E("[HAL] Failed to register relay — slots full");
     }
+    _halRelay->probe();
+    _halRelay->init();  // Configures GPIO pin, sets relay OFF (fail-safe) via HAL lifecycle
     _halButton = new HalButton(RESET_BUTTON_PIN);
     if (mgr.registerDevice(_halButton, HAL_DISC_BUILTIN) < 0) {
       LOG_E("[HAL] Failed to register button — slots full");
@@ -1073,7 +1074,9 @@ void loop() {
       // Fast blink LED to indicate progress during hold (every 200ms)
       static unsigned long lastBlinkTime = 0;
       if (millis() - lastBlinkTime >= 200) {
-        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+        static bool _ledBlinkState = false;
+        _ledBlinkState = !_ledBlinkState;
+        if (_halLed && _halLed->_ready) static_cast<HalLed*>(_halLed)->setOn(_ledBlinkState);
         lastBlinkTime = millis();
       }
 
@@ -1095,7 +1098,7 @@ void loop() {
       // Button not pressed - restore LED to low if it was lit for feedback
       static bool wasPressed = false;
       if (wasPressed) {
-        digitalWrite(LED_PIN, LOW);
+        if (_halLed && _halLed->_ready) static_cast<HalLed*>(_halLed)->setOn(false);
         wasPressed = false;
       }
       if (resetButton.isPressed()) {

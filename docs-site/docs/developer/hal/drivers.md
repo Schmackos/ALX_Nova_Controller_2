@@ -31,6 +31,7 @@ This page documents every driver registered by `hal_register_builtins()` in `src
 | `alx,dsp-pipeline` | `HalDspBridge` | DSP | Internal | — | — |
 | `generic,piezo-buzzer` | `HalBuzzer` | GPIO | GPIO | — | — |
 | `generic,tact-switch` | `HalButton` | INPUT | GPIO | — | — |
+| `generic,status-led` | `HalLed` | GPIO | GPIO | — | — |
 | `alps,ec11` | `HalEncoder` | INPUT | GPIO | — | — |
 
 ---
@@ -730,6 +731,31 @@ Registers the EC11-compatible rotary encoder used for GUI navigation. The ISR-dr
 
 ---
 
+### Status LED — `generic,status-led`
+
+**Class:** `HalLed`
+**Type:** `HAL_DEV_GPIO`
+**Bus:** GPIO
+**Init Priority:** `HAL_PRIORITY_IO` (900)
+
+Registers the onboard status LED in the HAL device model. The driver claims the LED GPIO pin and provides a `setOn(bool)` API for controlling the LED state. Has a wired factory function in `hal_builtin_devices.cpp`.
+
+**Key API:**
+
+- `setOn(bool state)` — Set the LED on or off
+
+**Relevant config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `gpioA` | 1 | LED GPIO pin |
+
+**probe():** Returns `true` if the configured GPIO pin number is valid.
+
+**healthCheck():** Returns `true` unconditionally.
+
+---
+
 ## Capability Flags Reference
 
 | Flag | Bit | Meaning |
@@ -742,5 +768,13 @@ Registers the EC11-compatible rotary encoder used for GUI navigation. The ISR-dr
 | `HAL_CAP_PGA_CONTROL` | 5 | ADC gain is software-controllable |
 | `HAL_CAP_HPF_CONTROL` | 6 | ADC high-pass filter is software-controllable |
 | `HAL_CAP_CODEC` | 7 | Device has both ADC and DAC paths (combined codec) |
+| `HAL_CAP_MQA` | 8 | MQA decoder support |
+| `HAL_CAP_LINE_DRIVER` | 9 | Line driver outputs |
+| `HAL_CAP_APLL` | 10 | Asynchronous PLL |
+| `HAL_CAP_DSD` | 11 | DSD native playback |
+
+:::note
+The `capabilities` field is `uint16_t` (widened from `uint8_t` to accommodate bits 8-11).
+:::
 
 The pipeline bridge uses `HAL_CAP_DAC_PATH` and `HAL_CAP_ADC_PATH` exclusively to decide whether to assign a sink slot or input lane. Device type (`HAL_DEV_DAC`, `HAL_DEV_ADC`, etc.) is used only for UI display and type-based fallback when capabilities are zero.
