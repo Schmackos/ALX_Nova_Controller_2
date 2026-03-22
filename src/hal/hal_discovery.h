@@ -33,4 +33,21 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex);
 // Used by discovery to skip Bus 0 and by scan API to report partial results.
 bool hal_wifi_sdio_active();
 
+// ===== Unmatched I2C address tracking =====
+// Addresses that responded to the I2C scan but had no matching EEPROM/driver.
+// These are candidate addresses for manual custom-device creation.
+
+// Maximum number of unmatched addresses retained after a scan.
+#define HAL_UNMATCHED_MAX 32
+
+struct HalUnmatchedAddr {
+    uint8_t addr;     // I2C address (0x08-0x77)
+    uint8_t bus;      // Bus index (HAL_I2C_BUS_EXT / ONBOARD / EXP)
+};
+
+// Returns up to maxOut unmatched addresses from the last completed scan.
+// Returns the number of entries written into out[].
+// Thread-safe for single-consumer reads (main-loop only).
+int hal_get_unmatched_addresses(HalUnmatchedAddr* out, int maxOut);
+
 #endif // DAC_ENABLED
