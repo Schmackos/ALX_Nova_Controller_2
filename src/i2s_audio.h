@@ -94,6 +94,32 @@ struct I2sStaticConfig {
 };
 I2sStaticConfig i2s_audio_get_static_config();
 
+// ===== Port-generic I2S configuration (all 3 ports equally configurable) =====
+#ifndef I2S_PORT_COUNT
+#define I2S_PORT_COUNT 3
+#endif
+#ifndef I2S_MODE_STD
+#define I2S_MODE_STD  0
+#define I2S_MODE_TDM  1
+#define I2S_MODE_NONE 255
+#endif
+
+struct I2sPortInfo {
+    uint8_t port;
+    bool    txActive;
+    bool    rxActive;
+    uint8_t txMode;      // I2S_MODE_STD, I2S_MODE_TDM, or I2S_MODE_NONE
+    uint8_t rxMode;
+    uint8_t txTdmSlots;
+    uint8_t rxTdmSlots;
+    int8_t  mclkPin;
+    int8_t  bckPin;
+    int8_t  lrcPin;
+    int8_t  txDoutPin;
+    int8_t  rxDinPin;
+    bool    isClockMaster;
+};
+
 // ===== Public API =====
 void i2s_audio_init();
 // Create I2S channels — MUST be called from Core 1 (audio_pipeline_task) so the
@@ -235,6 +261,21 @@ inline bool i2s_audio_configure_adc(int, const HalDeviceConfig*) { return true; 
 // Pauses audio task during reinit. Returns true on success.
 #ifndef NATIVE_TEST
 #include <hal/gpio_types.h>  // gpio_num_t
+
+// ===== Port-generic I2S API =====
+bool i2s_port_enable_tx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
+                         gpio_num_t doutPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws);
+void i2s_port_disable_tx(uint8_t port);
+bool i2s_port_enable_rx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
+                         gpio_num_t dinPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws);
+void i2s_port_disable_rx(uint8_t port);
+void i2s_port_write(uint8_t port, const void* src, size_t size, size_t* bw, uint32_t timeout);
+uint32_t i2s_port_read(uint8_t port, int32_t* dst, uint32_t frames);
+uint32_t i2s_port_tdm_read(uint8_t port, int32_t* dst, uint32_t frames, uint8_t slots);
+bool i2s_port_is_tx_active(uint8_t port);
+bool i2s_port_is_rx_active(uint8_t port);
+I2sPortInfo i2s_port_get_info(uint8_t port);
+
 bool i2s_audio_enable_tx(uint32_t sample_rate);
 void i2s_audio_disable_tx();
 void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
@@ -282,6 +323,18 @@ bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
                                         gpio_num_t din_pin,
                                         uint8_t    slot_count);
 #else
+// ===== Port-generic I2S API stubs =====
+inline bool i2s_port_enable_tx(uint8_t, uint8_t, uint8_t, int, int, int, int) { return true; }
+inline void i2s_port_disable_tx(uint8_t) {}
+inline bool i2s_port_enable_rx(uint8_t, uint8_t, uint8_t, int, int, int, int) { return true; }
+inline void i2s_port_disable_rx(uint8_t) {}
+inline void i2s_port_write(uint8_t, const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+inline uint32_t i2s_port_read(uint8_t, int32_t*, uint32_t) { return 0; }
+inline uint32_t i2s_port_tdm_read(uint8_t, int32_t*, uint32_t, uint8_t) { return 0; }
+inline bool i2s_port_is_tx_active(uint8_t) { return false; }
+inline bool i2s_port_is_rx_active(uint8_t) { return false; }
+inline I2sPortInfo i2s_port_get_info(uint8_t port) { I2sPortInfo info = {}; info.port = port; return info; }
+
 inline bool i2s_audio_enable_tx(uint32_t) { return true; }
 inline void i2s_audio_disable_tx() {}
 inline void i2s_audio_write(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }

@@ -1707,15 +1707,343 @@ bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
     return true;
 }
 
+// ===== Expansion Mezzanine DAC TX Bridge (port-generic, P4 only) =====
+// These wrappers delegate to the port-generic API using port 2 with ES8311 clock pins.
+// In Phase 3 the port and clock pin selection will become fully configurable via
+// HalDeviceConfig; for now port 2 + ES8311 defaults are the only expansion TX path.
+
+bool i2s_audio_enable_expansion_tx(uint32_t sample_rate, gpio_num_t dout_pin) {
+    return i2s_port_enable_tx(2, I2S_MODE_STD, 0, dout_pin,
+        (gpio_num_t)ES8311_I2S_MCLK_PIN,
+        (gpio_num_t)ES8311_I2S_SCLK_PIN,
+        (gpio_num_t)ES8311_I2S_LRCK_PIN);
+}
+
+void i2s_audio_disable_expansion_tx() {
+    i2s_port_disable_tx(2);
+}
+
+void i2s_audio_write_expansion_tx(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms) {
+    i2s_port_write(2, src, size, bytes_written, timeout_ms);
+}
+
+bool i2s_audio_enable_expansion_tdm_tx(uint32_t sample_rate, gpio_num_t dout_pin, uint8_t slot_count) {
+    return i2s_port_enable_tx(2, I2S_MODE_TDM, slot_count, dout_pin,
+        (gpio_num_t)ES8311_I2S_MCLK_PIN,
+        (gpio_num_t)ES8311_I2S_SCLK_PIN,
+        (gpio_num_t)ES8311_I2S_LRCK_PIN);
+}
+
+void i2s_audio_disable_expansion_tdm_tx() {
+    i2s_port_disable_tx(2);
+}
+
+void i2s_audio_write_expansion_tdm_tx(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms) {
+    i2s_port_write(2, src, size, bytes_written, timeout_ms);
+}
+
+// ===== Port-generic I2S Public API =====
+// These functions provide uniform TX/RX lifecycle management for all 3 I2S ports.
+// They wrap the Phase 1 internal helpers with user-bit tracking and full-duplex upgrade logic.
+
+bool i2s_port_enable_tx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
+                         gpio_num_t doutPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws) {
+    if (port >= I2S_PORT_COUNT) return false;
+
+    // Already have TX — nothing to do
+    if (_port[port].users & I2S_USER_TX) return true;
+
+    uint32_t rate = _port[port].sampleRate ? _port[port].sampleRate : _currentSampleRate;
+
+    if (_port[port].users & I2S_USER_RX) {
+        // RX already active — tear down and realloc as full-duplex, then restore RX
+        LOG_I("[I2S] Port%u: upgrading RX-only → full-duplex for TX", port);
+        gpio_num_t savedDin     = _port[port].rxDinPin;
+        uint8_t    savedRxMode  = _port[port].rxMode;
+        uint8_t    savedRxSlots = _port[port].rxTdmSlots;
+        gpio_num_t savedMclk    = _port[port].mclkPin;
+        gpio_num_t savedBck     = _port[port].bckPin;
+        gpio_num_t savedWs      = _port[port].lrcPin;
+        _port[port].users = 0;
+
+        if (!_i2s_port_alloc(port, true, true, true)) return false;
+
+        // Restore TX
+        bool txOk = false;
+        if (mode == I2S_MODE_TDM) {
+            txOk = _i2s_port_init_tx_tdm(port, rate, doutPin, tdmSlots, mclk, bck, ws);
+        } else {
+            txOk = _i2s_port_init_tx_std(port, rate, doutPin, mclk, bck, ws);
+        }
+        if (!txOk) {
+            _i2s_port_teardown(port);
+            return false;
+        }
+
+        // Restore RX
+        bool rxOk = false;
+        if (savedRxMode == I2S_MODE_TDM) {
+            rxOk = _i2s_port_init_rx_tdm(port, rate, savedDin, savedRxSlots, savedMclk, savedBck, savedWs);
+        } else {
+            rxOk = _i2s_port_init_rx_std(port, rate, savedDin, savedMclk, savedBck, savedWs);
+        }
+        if (!rxOk) {
+            LOG_W("[I2S] Port%u: RX restore failed during TX upgrade — RX degraded", port);
+            _port[port].users &= ~I2S_USER_RX;
+        }
+
+        // Enable TX
+        esp_err_t err = i2s_channel_enable(_port[port].tx);
+        if (err != ESP_OK) {
+            LOG_E("[I2S] Port%u TX enable failed: %d", port, err);
+            _i2s_port_teardown(port);
+            return false;
+        }
+
+        // Re-enable RX if restore succeeded
+        if (rxOk && _port[port].rx) {
+            err = i2s_channel_enable(_port[port].rx);
+            if (err != ESP_OK) {
+                LOG_W("[I2S] Port%u RX re-enable after upgrade failed: %d", port, err);
+                _port[port].users &= ~I2S_USER_RX;
+            } else {
+                _port[port].users |= I2S_USER_RX;
+            }
+        }
+    } else {
+        // Port idle — fresh TX-only alloc
+        if (!_i2s_port_alloc(port, true, false, true)) return false;
+
+        bool txOk = false;
+        if (mode == I2S_MODE_TDM) {
+            txOk = _i2s_port_init_tx_tdm(port, rate, doutPin, tdmSlots, mclk, bck, ws);
+        } else {
+            txOk = _i2s_port_init_tx_std(port, rate, doutPin, mclk, bck, ws);
+        }
+        if (!txOk) {
+            _i2s_port_teardown(port);
+            return false;
+        }
+
+        esp_err_t err = i2s_channel_enable(_port[port].tx);
+        if (err != ESP_OK) {
+            LOG_E("[I2S] Port%u TX enable failed: %d", port, err);
+            _i2s_port_teardown(port);
+            return false;
+        }
+    }
+
+    _port[port].users |= I2S_USER_TX;
+    LOG_I("[I2S] Port%u TX enabled: mode=%u slots=%u DOUT=GPIO%d MCLK=GPIO%d BCK=GPIO%d WS=GPIO%d",
+          port, mode, tdmSlots, (int)doutPin, (int)mclk, (int)bck, (int)ws);
+    return true;
+}
+
+void i2s_port_disable_tx(uint8_t port) {
+    if (port >= I2S_PORT_COUNT) return;
+    if (!(_port[port].users & I2S_USER_TX)) return;
+
+    // Port 0 is the primary ADC clock master — never tear down to preserve MCLK continuity
+    if (port == 0 && _port[0].isClockMaster) {
+        LOG_I("[I2S] Port0 TX disable skipped — clock master, MCLK continuity preserved");
+        _port[port].users &= ~I2S_USER_TX;
+        return;
+    }
+
+    _port[port].users &= ~I2S_USER_TX;
+
+    if (_port[port].users == 0) {
+        // Last user — full teardown
+        _i2s_port_teardown(port);
+        LOG_I("[I2S] Port%u TX disabled — peripheral released", port);
+    } else {
+        // RX still active — disable TX DMA but keep peripheral up
+        if (_port[port].tx) i2s_channel_disable(_port[port].tx);
+        LOG_I("[I2S] Port%u TX disabled — RX still active, clocks remain", port);
+    }
+}
+
+bool i2s_port_enable_rx(uint8_t port, uint8_t mode, uint8_t tdmSlots,
+                         gpio_num_t dinPin, gpio_num_t mclk, gpio_num_t bck, gpio_num_t ws) {
+    if (port >= I2S_PORT_COUNT) return false;
+
+    // Already have RX — nothing to do
+    if (_port[port].users & I2S_USER_RX) return true;
+
+    uint32_t rate = _port[port].sampleRate ? _port[port].sampleRate : _currentSampleRate;
+
+    if (_port[port].users & I2S_USER_TX) {
+        // TX already active — tear down and realloc as full-duplex, then restore TX
+        LOG_I("[I2S] Port%u: upgrading TX-only → full-duplex for RX", port);
+        gpio_num_t savedDout    = _port[port].txDoutPin;
+        uint8_t    savedTxMode  = _port[port].txMode;
+        uint8_t    savedTxSlots = _port[port].txTdmSlots;
+        gpio_num_t savedMclk    = _port[port].mclkPin;
+        gpio_num_t savedBck     = _port[port].bckPin;
+        gpio_num_t savedWs      = _port[port].lrcPin;
+        _port[port].users = 0;
+
+        if (!_i2s_port_alloc(port, true, true, true)) return false;
+
+        // Restore TX
+        bool txOk = false;
+        if (savedTxMode == I2S_MODE_TDM) {
+            txOk = _i2s_port_init_tx_tdm(port, rate, savedDout, savedTxSlots, savedMclk, savedBck, savedWs);
+        } else {
+            txOk = _i2s_port_init_tx_std(port, rate, savedDout, savedMclk, savedBck, savedWs);
+        }
+
+        // Init RX
+        bool rxOk = false;
+        if (mode == I2S_MODE_TDM) {
+            rxOk = _i2s_port_init_rx_tdm(port, rate, dinPin, tdmSlots, mclk, bck, ws);
+        } else {
+            rxOk = _i2s_port_init_rx_std(port, rate, dinPin, mclk, bck, ws);
+        }
+
+        if (!rxOk) {
+            _i2s_port_teardown(port);
+            return false;
+        }
+
+        if (txOk && _port[port].tx) {
+            esp_err_t err = i2s_channel_enable(_port[port].tx);
+            if (err != ESP_OK) {
+                LOG_W("[I2S] Port%u TX re-enable after RX upgrade failed: %d", port, err);
+                _port[port].users &= ~I2S_USER_TX;
+            } else {
+                _port[port].users |= I2S_USER_TX;
+            }
+        }
+
+        esp_err_t err = i2s_channel_enable(_port[port].rx);
+        if (err != ESP_OK) {
+            LOG_E("[I2S] Port%u RX enable failed: %d", port, err);
+            _i2s_port_teardown(port);
+            return false;
+        }
+    } else {
+        // Port idle — fresh RX-only alloc
+        if (!_i2s_port_alloc(port, false, true, true)) return false;
+
+        bool rxOk = false;
+        if (mode == I2S_MODE_TDM) {
+            rxOk = _i2s_port_init_rx_tdm(port, rate, dinPin, tdmSlots, mclk, bck, ws);
+        } else {
+            rxOk = _i2s_port_init_rx_std(port, rate, dinPin, mclk, bck, ws);
+        }
+        if (!rxOk) {
+            _i2s_port_teardown(port);
+            return false;
+        }
+
+        esp_err_t err = i2s_channel_enable(_port[port].rx);
+        if (err != ESP_OK) {
+            LOG_E("[I2S] Port%u RX enable failed: %d", port, err);
+            _i2s_port_teardown(port);
+            return false;
+        }
+    }
+
+    _port[port].users |= I2S_USER_RX;
+    LOG_I("[I2S] Port%u RX enabled: mode=%u slots=%u DIN=GPIO%d", port, mode, tdmSlots, (int)dinPin);
+    return true;
+}
+
+void i2s_port_disable_rx(uint8_t port) {
+    if (port >= I2S_PORT_COUNT) return;
+    if (!(_port[port].users & I2S_USER_RX)) return;
+
+    _port[port].users &= ~I2S_USER_RX;
+
+    if (_port[port].users == 0) {
+        _i2s_port_teardown(port);
+        LOG_I("[I2S] Port%u RX disabled — peripheral released", port);
+    } else {
+        // TX still active — disable RX DMA but keep peripheral up
+        if (_port[port].rx) i2s_channel_disable(_port[port].rx);
+        LOG_I("[I2S] Port%u RX disabled — TX still active", port);
+    }
+}
+
+void i2s_port_write(uint8_t port, const void *src, size_t size, size_t *bw, uint32_t timeout) {
+    if (port >= I2S_PORT_COUNT || !_port[port].tx || !src) {
+        if (bw) *bw = 0;
+        return;
+    }
+    i2s_channel_write(_port[port].tx, src, size, bw, timeout);
+}
+
+uint32_t i2s_port_read(uint8_t port, int32_t *dst, uint32_t frames) {
+    if (port >= I2S_PORT_COUNT || !_port[port].rx || !dst) return 0;
+    size_t bytes = frames * 2 * sizeof(int32_t);
+    size_t br = 0;
+    i2s_channel_read(_port[port].rx, dst, bytes, &br, pdMS_TO_TICKS(5));
+    return (uint32_t)(br / (2 * sizeof(int32_t)));
+}
+
+uint32_t i2s_port_tdm_read(uint8_t port, int32_t *dst, uint32_t frames, uint8_t slots) {
+    if (port >= I2S_PORT_COUNT || !_port[port].rx || !dst || slots == 0) return 0;
+    size_t bytes = frames * slots * sizeof(int32_t);
+    size_t br = 0;
+    i2s_channel_read(_port[port].rx, dst, bytes, &br, pdMS_TO_TICKS(5));
+    return (uint32_t)(br / (slots * sizeof(int32_t)));
+}
+
+bool i2s_port_is_tx_active(uint8_t port) {
+    if (port >= I2S_PORT_COUNT) return false;
+    return (_port[port].users & I2S_USER_TX) != 0;
+}
+
+bool i2s_port_is_rx_active(uint8_t port) {
+    if (port >= I2S_PORT_COUNT) return false;
+    return (_port[port].users & I2S_USER_RX) != 0;
+}
+
+I2sPortInfo i2s_port_get_info(uint8_t port) {
+    I2sPortInfo info = {};
+    info.port         = port;
+    if (port >= I2S_PORT_COUNT) return info;
+    info.txActive     = (_port[port].users & I2S_USER_TX) != 0;
+    info.rxActive     = (_port[port].users & I2S_USER_RX) != 0;
+    info.txMode       = _port[port].txMode;
+    info.rxMode       = _port[port].rxMode;
+    info.txTdmSlots   = _port[port].txTdmSlots;
+    info.rxTdmSlots   = _port[port].rxTdmSlots;
+    info.mclkPin      = (int8_t)_port[port].mclkPin;
+    info.bckPin       = (int8_t)_port[port].bckPin;
+    info.lrcPin       = (int8_t)_port[port].lrcPin;
+    info.txDoutPin    = (int8_t)_port[port].txDoutPin;
+    info.rxDinPin     = (int8_t)_port[port].rxDinPin;
+    info.isClockMaster = _port[port].isClockMaster;
+    return info;
+}
+
 #else // !CONFIG_IDF_TARGET_ESP32P4
 
-// Non-P4 targets: ES8311 and expansion functions are no-ops (I2S2 not available)
+// Non-P4 targets: ES8311, expansion TX, and expansion RX functions are no-ops
 bool i2s_audio_enable_es8311_tx(uint32_t) { return false; }
 void i2s_audio_disable_es8311_tx() {}
 void i2s_audio_write_es8311(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
 bool i2s_audio_enable_expansion_rx(uint32_t, gpio_num_t) { return false; }
 void i2s_audio_disable_expansion_rx() {}
 bool i2s_audio_expansion_rx_ok() { return false; }
+bool i2s_audio_enable_expansion_tx(uint32_t, gpio_num_t) { return false; }
+void i2s_audio_disable_expansion_tx() {}
+void i2s_audio_write_expansion_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+bool i2s_audio_enable_expansion_tdm_tx(uint32_t, gpio_num_t, uint8_t) { return false; }
+void i2s_audio_write_expansion_tdm_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+void i2s_audio_disable_expansion_tdm_tx() {}
+bool i2s_port_enable_tx(uint8_t, uint8_t, uint8_t, gpio_num_t, gpio_num_t, gpio_num_t, gpio_num_t) { return false; }
+void i2s_port_disable_tx(uint8_t) {}
+bool i2s_port_enable_rx(uint8_t, uint8_t, uint8_t, gpio_num_t, gpio_num_t, gpio_num_t, gpio_num_t) { return false; }
+void i2s_port_disable_rx(uint8_t) {}
+void i2s_port_write(uint8_t, const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
+uint32_t i2s_port_read(uint8_t, int32_t*, uint32_t) { return 0; }
+uint32_t i2s_port_tdm_read(uint8_t, int32_t*, uint32_t, uint8_t) { return 0; }
+bool i2s_port_is_tx_active(uint8_t) { return false; }
+bool i2s_port_is_rx_active(uint8_t) { return false; }
+I2sPortInfo i2s_port_get_info(uint8_t port) { I2sPortInfo info = {}; info.port = port; return info; }
 
 #endif // CONFIG_IDF_TARGET_ESP32P4
 

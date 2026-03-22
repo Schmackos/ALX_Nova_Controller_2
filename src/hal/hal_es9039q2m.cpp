@@ -51,10 +51,6 @@
 #define ES9039Q2M_VOL_MUTE               0xFF
 #define ES9039Q2M_INIT_INPUT_CFG         (ES9039Q2M_I2S_LEN_32BIT | ES9039Q2M_I2S_FMT_PHILIPS)
 
-// I2S TX stubs for native (provided by HalEssSabreDacBase in real build)
-inline bool i2s_audio_enable_expansion_tx(uint32_t, int) { return true; }
-inline void i2s_audio_disable_expansion_tx(void) {}
-inline void i2s_audio_write_expansion_tx(const void*, size_t, size_t*, uint32_t) {}
 #endif // NATIVE_TEST
 
 // ===== Constructor =====

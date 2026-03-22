@@ -23,14 +23,6 @@
 #include <cstdlib>
 static inline void* heap_caps_calloc(size_t n, size_t sz, uint32_t) { return calloc(n, sz); }
 
-// TX write stub — guarded so the interleaver unit test can provide its own
-// controlled version to capture what was written.
-#ifndef TDM_INTERLEAVER_TEST_PROVIDES_STUBS
-inline void i2s_audio_write_expansion_tdm_tx(const void*, size_t, size_t* bw, uint32_t) {
-    if (bw) *bw = 0;
-}
-#endif // TDM_INTERLEAVER_TEST_PROVIDES_STUBS
-
 #define MALLOC_CAP_SPIRAM 0
 #endif // NATIVE_TEST
 

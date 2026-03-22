@@ -50,8 +50,6 @@
 #define ES9039PRO_VOL_0DB                0x00
 #define ES9039PRO_VOL_MUTE               0xFF
 
-inline bool i2s_audio_enable_expansion_tdm_tx(uint32_t, int, uint8_t) { return true; }
-inline void i2s_audio_disable_expansion_tdm_tx() {}
 #endif // NATIVE_TEST
 
 #include <string.h>
