@@ -1,4 +1,5 @@
 #include "wifi_manager.h"
+#include "http_security.h"
 #include "app_state.h"
 #include "globals.h"
 #include "config.h"
@@ -135,14 +136,14 @@ String getNetworkKey(const char *prefix, int index) {
 // Parse JSON from HTTP request body
 bool parseJsonRequest(JsonDocument &doc) {
   if (!server.hasArg("plain")) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"No data received\"}");
     return false;
   }
 
   DeserializationError error = deserializeJson(doc, server.arg("plain"));
   if (error) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid JSON\"}");
     return false;
   }
@@ -982,7 +983,7 @@ void handleAPConfig() {
   String password = doc["password"].as<String>();
 
   if (ssid.length() == 0 || password.length() == 0) {
-    server.send(
+    server_send(
         400, "application/json",
         "{\"success\": false, \"message\": \"SSID and password required\"}");
     return;
@@ -1006,7 +1007,7 @@ void handleAPConfig() {
   wifi_ensure_ps_none();
   WiFi.begin(ssid.c_str(), password.c_str());
 
-  server.send(200, "application/json",
+  server_send(200, "application/json",
               "{\"success\": true, \"message\": \"Connection initiated\"}");
 
   LOG_I("[WiFi] Credentials saved. Connecting to %s in background", ssid.c_str());
@@ -1021,7 +1022,7 @@ void handleAPConfigUpdate() {
   String newSSID = doc["ssid"].as<String>();
 
   if (newSSID.length() == 0) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"SSID required\"}");
     return;
   }
@@ -1036,7 +1037,7 @@ void handleAPConfigUpdate() {
       appState.wifi.apPassword = newPassword;
       LOG_D("[WiFi] AP password updated");
     } else if (newPassword.length() > 0) {
-      server.send(400, "application/json",
+      server_send(400, "application/json",
                   "{\"success\": false, \"message\": \"Password must be at "
                   "least 8 characters\"}");
       return;
@@ -1067,7 +1068,7 @@ void handleAPConfigUpdate() {
   }
 
   sendWiFiStatus();
-  server.send(200, "application/json", "{\"success\": true}");
+  server_send(200, "application/json", "{\"success\": true}");
 }
 
 void handleAPToggle() {
@@ -1115,7 +1116,7 @@ void handleAPToggle() {
   }
 
   sendWiFiStatus();
-  server.send(200, "application/json", "{\"success\": true}");
+  server_send(200, "application/json", "{\"success\": true}");
 }
 
 void handleWiFiConfig() {
@@ -1128,7 +1129,7 @@ void handleWiFiConfig() {
   extractStaticIPConfig(doc, config);
 
   if (config.ssid.length() == 0) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"SSID required\"}");
     return;
   }
@@ -1159,7 +1160,7 @@ void handleWiFiConfig() {
 
   // Save to multi-WiFi list with static IP configuration
   if (!saveWiFiNetwork(config)) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Failed to save network. "
                 "Maximum 5 networks reached.\"}");
     return;
@@ -1177,7 +1178,7 @@ void handleWiFiConfig() {
   appState.wifi.newIP = "";
   appState.wifi.connectError = "";
 
-  server.send(200, "application/json",
+  server_send(200, "application/json",
               "{\"success\": true, \"message\": \"Connection initiated\"}");
 
   LOG_I("[WiFi] Network saved. Connection request queued for %s", config.ssid.c_str());
@@ -1193,20 +1194,20 @@ void handleWiFiSave() {
   extractStaticIPConfig(doc, config);
 
   if (config.ssid.length() == 0) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"SSID required\"}");
     return;
   }
 
   // Save to multi-WiFi list with static IP configuration
   if (!saveWiFiNetwork(config)) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Failed to save network. "
                 "Maximum 5 networks reached.\"}");
     return;
   }
 
-  server.send(200, "application/json",
+  server_send(200, "application/json",
               "{\"success\": true, \"message\": \"Network settings saved\"}");
 
   LOG_D("[WiFi] Network saved: %s (without connecting)", config.ssid.c_str());
@@ -1219,7 +1220,7 @@ void handleWiFiStatus() {
 
   String json;
   serializeJson(doc, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 void handleWiFiScan() {
@@ -1255,19 +1256,19 @@ void handleWiFiScan() {
     if (result == WIFI_SCAN_FAILED) {
       LOG_W("[WiFi] Failed to start scan");
       wifiScanInProgress = false;
-      server.send(500, "application/json",
+      server_send(500, "application/json",
                   "{\"scanning\": false, \"networks\": [], \"error\": \"Failed "
                   "to start scan\"}");
       return;
     }
-    server.send(200, "application/json",
+    server_send(200, "application/json",
                 "{\"scanning\": true, \"networks\": []}");
     return;
   }
 
   if (n == WIFI_SCAN_RUNNING) {
     // Scan still in progress
-    server.send(200, "application/json",
+    server_send(200, "application/json",
                 "{\"scanning\": true, \"networks\": []}");
     return;
   }
@@ -1323,7 +1324,7 @@ void handleWiFiScan() {
 
   String json;
   serializeJson(doc, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 void handleWiFiList() {
@@ -1354,7 +1355,7 @@ void handleWiFiList() {
 
   String json;
   serializeJson(doc, json);
-  server.send(200, "application/json", json);
+  server_send(200, "application/json", json);
 }
 
 void handleWiFiRemove() {
@@ -1364,7 +1365,7 @@ void handleWiFiRemove() {
   }
 
   if (!doc["index"].is<int>()) {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Index required\"}");
     return;
   }
@@ -1383,7 +1384,7 @@ void handleWiFiRemove() {
   }
 
   if (removeWiFiNetwork(index)) {
-    server.send(200, "application/json", "{\"success\": true}");
+    server_send(200, "application/json", "{\"success\": true}");
 
     // If we were connected to the removed network, disconnect and try to
     // reconnect
@@ -1408,7 +1409,7 @@ void handleWiFiRemove() {
       sendWiFiStatus();
     }
   } else {
-    server.send(400, "application/json",
+    server_send(400, "application/json",
                 "{\"success\": false, \"message\": \"Invalid index or removal "
                 "failed\"}");
   }

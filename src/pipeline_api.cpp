@@ -2,6 +2,7 @@
 #ifndef NATIVE_TEST
 
 #include "pipeline_api.h"
+#include "http_security.h"
 #include "audio_pipeline.h"
 #include "audio_output_sink.h"
 #include "output_dsp.h"
@@ -47,20 +48,20 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/pipeline/matrix/cell — set a single cell: {out, in, gainDb}
     server.on("/api/pipeline/matrix/cell", HTTP_POST, []() {
         if (!server.hasArg("plain")) {
-            server.send(400, "application/json", "{\"error\":\"no body\"}");
+            server_send(400, "application/json", "{\"error\":\"no body\"}");
             return;
         }
 
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, server.arg("plain"));
         if (err) {
-            server.send(400, "application/json", "{\"error\":\"parse error\"}");
+            server_send(400, "application/json", "{\"error\":\"parse error\"}");
             return;
         }
 
@@ -70,7 +71,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
 
         if (out_ch < 0 || out_ch >= AUDIO_PIPELINE_MATRIX_SIZE ||
             in_ch  < 0 || in_ch  >= AUDIO_PIPELINE_MATRIX_SIZE) {
-            server.send(400, "application/json", "{\"error\":\"channel out of range\"}");
+            server_send(400, "application/json", "{\"error\":\"channel out of range\"}");
             return;
         }
 
@@ -87,7 +88,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
         resp["gainLinear"] = audio_pipeline_get_matrix_gain(out_ch, in_ch);
         String json;
         serializeJson(resp, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // GET /api/pipeline/sinks — registered output sinks with VU/ready state
@@ -112,14 +113,14 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // GET /api/output/dsp?ch=N — get output DSP channel config
     server.on("/api/output/dsp", HTTP_GET, []() {
         int ch = server.hasArg("ch") ? server.arg("ch").toInt() : -1;
         if (ch < 0 || ch >= OUTPUT_DSP_MAX_CHANNELS) {
-            server.send(400, "application/json", "{\"error\":\"invalid channel\"}");
+            server_send(400, "application/json", "{\"error\":\"invalid channel\"}");
             return;
         }
 
@@ -166,21 +167,21 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/output/dsp/stage — add stage: {ch, type, position?}
     server.on("/api/output/dsp/stage", HTTP_POST, []() {
-        if (!server.hasArg("plain")) { server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+        if (!server.hasArg("plain")) { server_send(400, "application/json", "{\"error\":\"no body\"}"); return; }
         JsonDocument doc;
-        if (deserializeJson(doc, server.arg("plain"))) { server.send(400, "application/json", "{\"error\":\"parse\"}"); return; }
+        if (deserializeJson(doc, server.arg("plain"))) { server_send(400, "application/json", "{\"error\":\"parse\"}"); return; }
 
         int ch = doc["ch"] | -1;
         const char *typeName = doc["type"] | "";
         int position = doc["position"] | -1;
 
         if (ch < 0 || ch >= OUTPUT_DSP_MAX_CHANNELS) {
-            server.send(400, "application/json", "{\"error\":\"invalid channel\"}");
+            server_send(400, "application/json", "{\"error\":\"invalid channel\"}");
             return;
         }
 
@@ -202,7 +203,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
         output_dsp_copy_active_to_inactive();
         int idx = output_dsp_add_stage(ch, type, position);
         if (idx < 0) {
-            server.send(400, "application/json", "{\"error\":\"add failed\"}");
+            server_send(400, "application/json", "{\"error\":\"add failed\"}");
             return;
         }
         output_dsp_swap_config();
@@ -215,44 +216,44 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
         resp["type"] = typeName;
         String json;
         serializeJson(resp, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // DELETE /api/output/dsp/stage — remove stage: {ch, index}
     server.on("/api/output/dsp/stage", HTTP_DELETE, []() {
-        if (!server.hasArg("plain")) { server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+        if (!server.hasArg("plain")) { server_send(400, "application/json", "{\"error\":\"no body\"}"); return; }
         JsonDocument doc;
-        if (deserializeJson(doc, server.arg("plain"))) { server.send(400, "application/json", "{\"error\":\"parse\"}"); return; }
+        if (deserializeJson(doc, server.arg("plain"))) { server_send(400, "application/json", "{\"error\":\"parse\"}"); return; }
 
         int ch = doc["ch"] | -1;
         int idx = doc["index"] | -1;
 
         if (ch < 0 || ch >= OUTPUT_DSP_MAX_CHANNELS) {
-            server.send(400, "application/json", "{\"error\":\"invalid channel\"}");
+            server_send(400, "application/json", "{\"error\":\"invalid channel\"}");
             return;
         }
 
         output_dsp_copy_active_to_inactive();
         bool ok = output_dsp_remove_stage(ch, idx);
         if (!ok) {
-            server.send(400, "application/json", "{\"error\":\"remove failed\"}");
+            server_send(400, "application/json", "{\"error\":\"remove failed\"}");
             return;
         }
         output_dsp_swap_config();
         output_dsp_save_channel(ch);
 
-        server.send(200, "application/json", "{\"status\":\"ok\"}");
+        server_send(200, "application/json", "{\"status\":\"ok\"}");
     });
 
     // PUT /api/output/dsp — set channel config: {ch, bypass, stages:[...]}
     server.on("/api/output/dsp", HTTP_PUT, []() {
-        if (!server.hasArg("plain")) { server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+        if (!server.hasArg("plain")) { server_send(400, "application/json", "{\"error\":\"no body\"}"); return; }
         JsonDocument doc;
-        if (deserializeJson(doc, server.arg("plain"))) { server.send(400, "application/json", "{\"error\":\"parse\"}"); return; }
+        if (deserializeJson(doc, server.arg("plain"))) { server_send(400, "application/json", "{\"error\":\"parse\"}"); return; }
 
         int ch = doc["ch"] | -1;
         if (ch < 0 || ch >= OUTPUT_DSP_MAX_CHANNELS) {
-            server.send(400, "application/json", "{\"error\":\"invalid channel\"}");
+            server_send(400, "application/json", "{\"error\":\"invalid channel\"}");
             return;
         }
 
@@ -276,14 +277,14 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
         output_dsp_swap_config();
         output_dsp_save_channel(ch);
 
-        server.send(200, "application/json", "{\"status\":\"ok\"}");
+        server_send(200, "application/json", "{\"status\":\"ok\"}");
     });
 
     // POST /api/output/dsp/crossover — setup crossover: {subCh, mainCh, freqHz, order}
     server.on("/api/output/dsp/crossover", HTTP_POST, []() {
-        if (!server.hasArg("plain")) { server.send(400, "application/json", "{\"error\":\"no body\"}"); return; }
+        if (!server.hasArg("plain")) { server_send(400, "application/json", "{\"error\":\"no body\"}"); return; }
         JsonDocument doc;
-        if (deserializeJson(doc, server.arg("plain"))) { server.send(400, "application/json", "{\"error\":\"parse\"}"); return; }
+        if (deserializeJson(doc, server.arg("plain"))) { server_send(400, "application/json", "{\"error\":\"parse\"}"); return; }
 
         int subCh = doc["subCh"] | -1;
         int mainCh = doc["mainCh"] | -1;
@@ -293,7 +294,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
         output_dsp_copy_active_to_inactive();
         int result = output_dsp_setup_crossover(subCh, mainCh, freqHz, order);
         if (result < 0) {
-            server.send(400, "application/json", "{\"error\":\"crossover setup failed\"}");
+            server_send(400, "application/json", "{\"error\":\"crossover setup failed\"}");
             return;
         }
         output_dsp_swap_config();
@@ -305,7 +306,7 @@ void registerPipelineApiEndpoints(WebServer& /*srv*/) {
         resp["stagesAdded"] = result;
         String json;
         serializeJson(resp, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     LOG_I("[Pipeline API] Registered pipeline REST endpoints");

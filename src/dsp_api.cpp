@@ -1,6 +1,7 @@
 #ifdef DSP_ENABLED
 
 #include "dsp_api.h"
+#include "http_security.h"
 #include "dsp_pipeline.h"
 #include "dsp_coefficients.h"
 #include "dsp_rew_parser.h"
@@ -378,7 +379,7 @@ static int parseStageParam() {
 static void sendJsonError(int code, const char *msg) {
     char buf[128];
     snprintf(buf, sizeof(buf), "{\"success\":false,\"message\":\"%s\"}", msg);
-    server.send(code, "application/json", buf);
+    server_send(code, "application/json", buf);
 }
 
 static DspStageType typeFromString(const char *name) {
@@ -432,7 +433,7 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         const int bufSize = 8192;
         char *buf = (char *)psram_alloc(bufSize, 1, "dsp_api_get");
-        if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
+        if (!buf) { server_send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
 
         dsp_export_full_config_json(buf, bufSize);
 
@@ -445,7 +446,7 @@ void registerDspApiEndpoints() {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // PUT /api/dsp — replace full config
@@ -464,7 +465,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] Full config replaced via API");
     });
 
@@ -486,7 +487,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // GET /api/dsp/metrics
@@ -503,7 +504,7 @@ void registerDspApiEndpoints() {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // GET /api/dsp/channel?ch=N — get channel config
@@ -514,10 +515,10 @@ void registerDspApiEndpoints() {
 
         const int bufSize = 4096;
         char *buf = (char *)psram_alloc(bufSize, 1, "dsp_api_ch");
-        if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
+        if (!buf) { server_send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
 
         dsp_export_config_to_json(ch, buf, bufSize);
-        server.send(200, "application/json", buf);
+        server_send(200, "application/json", buf);
         psram_free(buf, "dsp_api_ch");
     });
 
@@ -541,7 +542,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // POST /api/dsp/stage?ch=N — add stage
@@ -650,7 +651,7 @@ void registerDspApiEndpoints() {
 
         char resp[64];
         snprintf(resp, sizeof(resp), "{\"success\":true,\"index\":%d}", idx);
-        server.send(200, "application/json", resp);
+        server_send(200, "application/json", resp);
         LOG_I("[DSP] Stage added: ch=%d type=%d pos=%d", ch, type, idx);
     });
 
@@ -761,7 +762,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // DELETE /api/dsp/stage?ch=N&stage=M — remove stage
@@ -783,7 +784,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] Stage removed: ch=%d stage=%d", ch, si);
     });
 
@@ -819,7 +820,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // POST /api/dsp/stage/enable?ch=N&stage=M — toggle stage enable
@@ -854,7 +855,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // ===== Import/Export Endpoints =====
@@ -881,7 +882,7 @@ void registerDspApiEndpoints() {
 
         char resp[64];
         snprintf(resp, sizeof(resp), "{\"success\":true,\"added\":%d}", added);
-        server.send(200, "application/json", resp);
+        server_send(200, "application/json", resp);
         LOG_I("[DSP] APO import: %d filters added to ch=%d", added, ch);
     });
 
@@ -906,7 +907,7 @@ void registerDspApiEndpoints() {
 
         char resp[64];
         snprintf(resp, sizeof(resp), "{\"success\":true,\"added\":%d}", added);
-        server.send(200, "application/json", resp);
+        server_send(200, "application/json", resp);
     });
 
     // POST /api/dsp/import/fir?ch=N — import FIR text coefficients
@@ -950,7 +951,7 @@ void registerDspApiEndpoints() {
 
         char resp[64];
         snprintf(resp, sizeof(resp), "{\"success\":true,\"taps\":%d}", taps);
-        server.send(200, "application/json", resp);
+        server_send(200, "application/json", resp);
         LOG_I("[DSP] FIR import: %d taps to ch=%d", taps, ch);
     });
 
@@ -963,7 +964,7 @@ void registerDspApiEndpoints() {
         DspState *cfg = dsp_get_active_config();
         char buf[2048];
         dsp_export_apo(cfg->channels[ch], cfg->sampleRate, buf, sizeof(buf));
-        server.send(200, "text/plain", buf);
+        server_send(200, "text/plain", buf);
     });
 
     // GET /api/dsp/export/minidsp?ch=N
@@ -975,7 +976,7 @@ void registerDspApiEndpoints() {
         DspState *cfg = dsp_get_active_config();
         char buf[2048];
         dsp_export_minidsp(cfg->channels[ch], buf, sizeof(buf));
-        server.send(200, "text/plain", buf);
+        server_send(200, "text/plain", buf);
     });
 
     // GET /api/dsp/export/json
@@ -983,10 +984,10 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         const int bufSize = 8192;
         char *buf = (char *)psram_alloc(bufSize, 1, "dsp_api_export");
-        if (!buf) { server.send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
+        if (!buf) { server_send(503, "application/json", "{\"error\":\"Out of memory\"}"); return; }
 
         dsp_export_full_config_json(buf, bufSize);
-        server.send(200, "application/json", buf);
+        server_send(200, "application/json", buf);
         psram_free(buf, "dsp_api_export");
     });
 
@@ -1034,7 +1035,7 @@ void registerDspApiEndpoints() {
 
         char resp[64];
         snprintf(resp, sizeof(resp), "{\"success\":true,\"firstStage\":%d}", result);
-        server.send(200, "application/json", resp);
+        server_send(200, "application/json", resp);
         LOG_I("[DSP] Crossover applied: ch=%d type=%s freq=%.0f role=%d", ch, typeStr, freq, role);
     });
 
@@ -1071,7 +1072,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] Bass management: sub=%d mains=%d freq=%.0f", subChannel, numMains, crossoverFreq);
     });
 
@@ -1109,7 +1110,7 @@ void registerDspApiEndpoints() {
 
         char resp[128];
         snprintf(resp, sizeof(resp), "{\"success\":true,\"frequency\":%.1f,\"gainDb\":%.1f,\"index\":%d}", bsr.frequency, bsr.gainDb, idx);
-        server.send(200, "application/json", resp);
+        server_send(200, "application/json", resp);
         LOG_I("[DSP] Baffle step: ch=%d width=%.0fmm freq=%.0fHz", ch, widthMm, bsr.frequency);
     });
 
@@ -1131,7 +1132,7 @@ void registerDspApiEndpoints() {
         for (int h = 0; h < THD_MAX_HARMONICS; h++) harmonics.add(r.harmonicLevels[h]);
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/thd — start THD measurement
@@ -1144,7 +1145,7 @@ void registerDspApiEndpoints() {
         float freq = doc["freq"] | 1000.0f;
         int avg = doc["averages"] | 8;
         thd_start_measurement(freq, (uint16_t)avg);
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] THD measurement started: %.0f Hz, %d avg", freq, avg);
     });
 
@@ -1152,7 +1153,7 @@ void registerDspApiEndpoints() {
     server.on("/api/thd", HTTP_DELETE, []() {
         if (!requireAuth()) return;
         thd_stop_measurement();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
     });
 
     // ===== PEQ Preset Endpoints =====
@@ -1182,7 +1183,7 @@ void registerDspApiEndpoints() {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/dsp/peq/presets — save preset
@@ -1263,7 +1264,7 @@ void registerDspApiEndpoints() {
         serializeJson(preset, json);
         File f = LittleFS.open(path, "w");
         if (f) { f.print(json); f.close(); }
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] PEQ preset saved: %s", safeName);
     });
 
@@ -1280,7 +1281,7 @@ void registerDspApiEndpoints() {
         if (!f) { sendJsonError(500, "Read error"); return; }
         String json = f.readString();
         f.close();
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // DELETE /api/dsp/peq/preset?name=X — delete preset
@@ -1293,7 +1294,7 @@ void registerDspApiEndpoints() {
         if (!dspFileExists(path)) { sendJsonError(404, "Preset not found"); return; }
 
         LittleFS.remove(path);
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] PEQ preset deleted: %s", server.arg("name").c_str());
     });
 
@@ -1314,7 +1315,7 @@ void registerDspApiEndpoints() {
         }
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 
     // POST /api/dsp/presets/save?slot=N — save current config to slot
@@ -1332,7 +1333,7 @@ void registerDspApiEndpoints() {
         }
 
         if (dsp_preset_save(slot, name)) {
-            server.send(200, "application/json", "{\"success\":true}");
+            server_send(200, "application/json", "{\"success\":true}");
         } else {
             sendJsonError(500, "Failed to save preset");
         }
@@ -1346,7 +1347,7 @@ void registerDspApiEndpoints() {
         if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) { sendJsonError(400, "Invalid slot (0-31)"); return; }
 
         if (dsp_preset_load(slot)) {
-            server.send(200, "application/json", "{\"success\":true}");
+            server_send(200, "application/json", "{\"success\":true}");
         } else {
             sendJsonError(404, "Preset not found or load failed");
         }
@@ -1361,7 +1362,7 @@ void registerDspApiEndpoints() {
 
         if (dsp_preset_delete(slot)) {
             saveDspSettings();
-            server.send(200, "application/json", "{\"success\":true}");
+            server_send(200, "application/json", "{\"success\":true}");
         } else {
             sendJsonError(500, "Failed to delete preset");
         }
@@ -1385,7 +1386,7 @@ void registerDspApiEndpoints() {
 
         extern bool dsp_preset_rename(int, const char*);
         if (dsp_preset_rename(slot, name.c_str())) {
-            server.send(200, "application/json", "{\"success\":true}");
+            server_send(200, "application/json", "{\"success\":true}");
         } else {
             sendJsonError(500, "Failed to rename preset");
         }
@@ -1421,7 +1422,7 @@ void registerDspApiEndpoints() {
         if (!dsp_swap_config()) { dsp_log_swap_failure("DSP API"); sendJsonError(503, "DSP busy, retry"); return; }
         saveDspSettingsDebounced();
         appState.markDspConfigDirty();
-        server.send(200, "application/json", "{\"success\":true}");
+        server_send(200, "application/json", "{\"success\":true}");
         LOG_I("[DSP] Stereo link pair %d: %s", pair, linked ? "linked" : "unlinked");
     });
 

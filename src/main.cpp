@@ -452,14 +452,12 @@ void setup() {
           server.uri().c_str());
 
     if (appState.wifi.isAPMode) {
-      http_add_security_headers();
       server.sendHeader("Location",
                         String("http://") + WiFi.softAPIP().toString() + "/",
                         true);
-      server.send(302, "text/plain", "Redirecting to Captive Portal");
+      server_send(302, "text/plain", "Redirecting to Captive Portal");
     } else {
-      http_add_security_headers();
-      server.send(404, "text/plain", "Not Found");
+      server_send(404, "text/plain", "Not Found");
     }
   });
 

@@ -1,6 +1,7 @@
 #ifndef NATIVE_TEST
 
 #include "psram_api.h"
+#include "http_security.h"
 #include "psram_alloc.h"
 #include "heap_budget.h"
 #include "app_state.h"
@@ -53,7 +54,7 @@ void registerPsramApiEndpoints(WebServer &/*srv*/) {
 
         String json;
         serializeJson(doc, json);
-        server.send(200, "application/json", json);
+        server_send(200, "application/json", json);
     });
 }
 
