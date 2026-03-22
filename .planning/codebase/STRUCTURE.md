@@ -6,372 +6,444 @@
 
 ```
 ALX_Nova_Controller_2/
-├── src/                    # Firmware source (C++ Arduino + FreeRTOS, ESP32-P4)
-│   ├── main.cpp            # Boot sequence + main loop (Core 1, 1579 lines)
-│   ├── config.h            # Build-time constants (pins, stack sizes, feature flags)
-│   ├── app_state.h/.cpp    # AppState singleton (15 domain state headers)
-│   ├── app_events.h/.cpp   # FreeRTOS event group (17 bits for state changes)
-│   ├── http_security.h     # HTTP security headers (X-Frame-Options, X-Content-Type-Options)
-│   ├── state/              # Domain-specific state headers (16 files)
-│   ├── hal/                # Hardware Abstraction Layer (83 files)
-│   ├── gui/                # LVGL GUI (22 files, guarded by GUI_ENABLED)
-│   │   └── screens/        # 12 screen modules (home, control, settings, debug, etc.)
-│   ├── drivers/            # Hardware register definitions (11 files)
-│   ├── audio_pipeline.h/.cpp  # 8-lane → 16×16 matrix → 8-sink routing (1139 lines)
-│   ├── dsp_pipeline.h/.cpp    # DSP filter chains (2408 lines)
-│   ├── output_dsp.h/.cpp      # Per-output DSP (878 lines)
-│   ├── i2s_audio.h/.cpp       # ADC/DAC I2S driver (1637 lines)
-│   ├── websocket_handler.h/.cpp # Port 81 real-time broadcasts (2623 lines)
-│   ├── wifi_manager.h/.cpp    # WiFi client + AP mode (1556 lines)
-│   ├── mqtt_handler.h/.cpp    # MQTT client lifecycle (1129 lines)
-│   ├── mqtt_publish.cpp       # 20 Hz publish loop (951 lines)
-│   ├── mqtt_ha_discovery.cpp  # Home Assistant discovery (1914 lines)
-│   ├── mqtt_task.h/.cpp       # FreeRTOS MQTT task (Core 0)
-│   ├── settings_manager.h/.cpp # JSON persistence (1869 lines)
-│   ├── auth_handler.h/.cpp    # PBKDF2-SHA256 auth + WS tokens (792 lines)
-│   ├── dsp_api.h/.cpp         # REST DSP endpoints (1437 lines)
-│   ├── pipeline_api.h/.cpp    # REST audio matrix endpoints (323 lines)
-│   ├── dac_api.h/.cpp         # REST DAC endpoints (530 lines)
-│   ├── psram_api.h/.cpp       # REST PSRAM status endpoint (60 lines)
-│   ├── psram_alloc.h/.cpp     # Unified PSRAM allocation wrapper
-│   ├── heap_budget.h/.cpp     # Per-subsystem allocation tracker (32 entries)
-│   ├── sink_write_utils.h/.cpp # Float → int32 conversion, volume/mute
-│   ├── web_pages.h/.cpp       # AUTO-GENERATED (do NOT edit)
-│   ├── web_pages_gz.cpp       # AUTO-GENERATED gzip variant (do NOT edit)
-│   └── [20+ more modules]    # smart_sensing, ota, buzzer, button, signal_gen, etc.
+├── src/                    # Firmware source code (C++)
+│   ├── main.cpp           # Entry point: setup() + loop()
+│   ├── app_state.h        # AppState singleton (15 domain state headers)
+│   ├── config.h           # Build config (pins, stack sizes, feature flags)
+│   ├── audio_pipeline.h/.cpp  # 8→16→16 input/matrix/output audio routing
+│   ├── i2s_audio.h/.cpp   # I2S ADC drivers, analysis buffers
+│   ├── dsp_pipeline.h/.cpp # Double-buffered DSP stages (biquad, FIR, gain, limiter)
+│   ├── output_dsp.h/.cpp  # Per-output DSP (mono processing)
+│   ├── websocket_handler.cpp  # WS server (port 81), binary frame protocol
+│   ├── auth_handler.cpp   # PBKDF2 auth, WS token pool
+│   ├── http_security.h    # Security headers (X-Frame-Options, X-Content-Type-Options)
+│   ├── mqtt_handler.cpp   # MQTT broker, callback dispatch
+│   ├── mqtt_task.cpp      # FreeRTOS MQTT task (Core 0)
+│   ├── mqtt_publish.cpp   # Change-detection statics, periodic publishes
+│   ├── mqtt_ha_discovery.cpp  # Home Assistant discovery (binary_sensor for all devices)
+│   ├── wifi_manager.cpp   # WiFi client + AP mode, scan, retry backoff
+│   ├── settings_manager.cpp  # /config.json (primary) + settings.txt (fallback)
+│   ├── ota_updater.cpp    # GitHub release check, SHA256 verification
+│   ├── ota_certs.h        # Root CA certs (Sectigo, DigiCert)
+│   ├── smart_sensing.cpp  # Voltage detection, auto-off timer, amplifier relay
+│   ├── signal_generator.cpp  # Multi-waveform test signal (sine, square, noise, sweep)
+│   ├── buzzer_handler.cpp # Piezo pattern sequencer, ISR-safe
+│   ├── button_handler.cpp # Debounce, short/long/multi-click
+│   ├── gui/               # LVGL GUI (ST7735S 128×160, Core 0)
+│   │   ├── gui_manager.cpp   # Init, FreeRTOS task, sleep/wake
+│   │   ├── gui_input.cpp     # Rotary encoder Gray code, button debounce
+│   │   ├── gui_theme.cpp     # Orange accent, dark/light mode
+│   │   ├── gui_navigation.cpp # Screen stack, push/pop, animations
+│   │   └── screens/          # 8 screen implementations
+│   ├── hal/               # Hardware Abstraction Layer (32-device registry)
+│   │   ├── hal_device_manager.h/.cpp  # Lifecycle, discovery, pin tracking
+│   │   ├── hal_device.h   # Base class, capability flags, state enum
+│   │   ├── hal_discovery.h/.cpp  # 3-tier scan: I2C → EEPROM → manual
+│   │   ├── hal_device_db.h/.cpp  # Built-in + LittleFS-persisted device configs
+│   │   ├── hal_pipeline_bridge.h/.cpp  # State→sink/source registration, multi-sink/multi-source
+│   │   ├── hal_api.h/.cpp # REST endpoints (13 routes, CRUD + discovery)
+│   │   ├── hal_settings.h/.cpp  # /hal_config.json persistence
+│   │   ├── hal_builtin_devices.h/.cpp  # HAL_REGISTER() macro, all driver factories
+│   │   ├── hal_audio_device.h/.cpp  # Base for audio sources/sinks
+│   │   ├── hal_pcm5102a.h/.cpp   # 2ch DAC (onboard, I2S)
+│   │   ├── hal_es8311.h/.cpp     # Codec (onboard, I2C, Bus 1)
+│   │   ├── hal_ns4150b.h/.cpp    # Class-D amp enable (GPIO 53)
+│   │   ├── hal_relay.h/.cpp      # GPIO relay for amplifier
+│   │   ├── hal_led.h/.cpp        # Status LED (GPIO 1)
+│   │   ├── hal_button.h/.cpp     # Pushbutton (GPIO 36)
+│   │   ├── hal_encoder.h/.cpp    # Rotary encoder (GPIO 32/33)
+│   │   ├── hal_buzzer.h/.cpp     # Piezo buzzer (GPIO 45, PWM)
+│   │   ├── hal_signal_gen.h/.cpp # Signal generator lane provider
+│   │   ├── hal_display.h/.cpp    # TFT display
+│   │   ├── hal_temp_sensor.h/.cpp # Chip temperature (IDF5)
+│   │   ├── hal_eeprom_v3.h       # V3 mezzanine EEPROM format
+│   │   ├── hal_es_sabre_adc_base.h/.cpp  # Abstract base for 9 ADC drivers
+│   │   ├── hal_es9822pro.h/.cpp  # 2ch ADC (I2S, 16-bit vol)
+│   │   ├── hal_es9826.h/.cpp     # 2ch ADC (I2S, 30dB gain)
+│   │   ├── hal_es9823pro.h/.cpp  # 2ch ADC (I2S, 42dB gain, auto-detect PRO/MPRO)
+│   │   ├── hal_es9821.h/.cpp     # 2ch ADC (I2S, no PGA)
+│   │   ├── hal_es9820.h/.cpp     # 2ch ADC (I2S, 18dB gain)
+│   │   ├── hal_es9843pro.h/.cpp  # 4ch ADC (TDM, 42dB gain per-channel)
+│   │   ├── hal_es9842pro.h/.cpp  # 4ch ADC (TDM, 18dB gain)
+│   │   ├── hal_es9841.h/.cpp     # 4ch ADC (TDM, 42dB gain, 0xFF=0dB)
+│   │   ├── hal_es9840.h/.cpp     # 4ch ADC (TDM, 18dB gain)
+│   │   ├── hal_ess_sabre_dac_base.h/.cpp  # Abstract base for 12 DAC drivers
+│   │   ├── hal_es9038q2m.h/.cpp  # 2ch DAC (128dB, ultra-low power)
+│   │   ├── hal_es9039q2m.h/.cpp  # 2ch DAC (130dB, HyperStream IV)
+│   │   ├── hal_es9069q.h/.cpp    # 2ch DAC (130dB, MQA renderer)
+│   │   ├── hal_es9033q.h/.cpp    # 2ch DAC (122dB, integrated line drivers)
+│   │   ├── hal_es9020_dac.h/.cpp # 2ch DAC (122dB, APLL)
+│   │   ├── hal_es9038pro.h/.cpp  # 8ch DAC (132dB, HyperStream II, 4 sink slots)
+│   │   ├── hal_es9028pro.h/.cpp  # 8ch DAC (124dB, HyperStream II)
+│   │   ├── hal_es9039pro.h/.cpp  # 8ch DAC (132dB, HyperStream IV, auto-detect PRO/MPRO)
+│   │   ├── hal_es9027pro.h/.cpp  # 8ch DAC (124dB, HyperStream IV)
+│   │   ├── hal_es9081.h/.cpp     # 8ch DAC (120dB, 40-QFN)
+│   │   ├── hal_es9082.h/.cpp     # 8ch DAC (120dB, 48-QFN, ASP2/SIS)
+│   │   ├── hal_es9017.h/.cpp     # 8ch DAC (120dB, ES9027PRO pin-compat)
+│   │   ├── hal_tdm_interleaver.h/.cpp  # TDM frame combiner for 8ch DAC output
+│   │   ├── hal_tdm_deinterleaver.h/.cpp # TDM frame splitter for 4ch ADC input
+│   │   ├── hal_dsp_bridge.h/.cpp # DSP device wrapper for pipeline
+│   │   ├── hal_driver_registry.h  # Driver factory type
+│   │   ├── hal_custom_device.h/.cpp  # Manual device creation from REST API
+│   │   └── hal_types.h    # Enums, structs, hal_init_descriptor() inline
+│   ├── dac_hal.h/.cpp     # DAC state, enable/disable, toggle queue
+│   ├── dac_api.h/.cpp     # REST endpoints (volume, mute, enable, capabilities)
+│   ├── dac_eeprom.h/.cpp  # EEPROM diagnostics (CapacityError, HalModel)
+│   ├── pipeline_api.h/.cpp # REST endpoints (matrix, sink DSP CRUD)
+│   ├── psram_api.h/.cpp   # REST endpoint (PSRAM status, budget array)
+│   ├── psram_alloc.h/.cpp # Unified PSRAM/SRAM wrapper, auto heap_budget recording
+│   ├── heap_budget.h/.cpp # Per-subsystem allocation tracker (32 entries)
+│   ├── dsp_api.h/.cpp     # REST endpoints (DSP import/export, stage CRUD)
+│   ├── dsp_coefficients.h/.cpp  # RBJ biquad coefficient generation
+│   ├── dsp_biquad_gen.h/c    # dsp_gen_* functions (renamed from dsps_)
+│   ├── dsp_crossover.cpp  # Crossover presets (LR2/LR4/LR8, Butterworth)
+│   ├── dsp_rew_parser.h/.cpp  # Equalizer APO, miniDSP, WAV IR import/export
+│   ├── dsp_convolution.h/.cpp # FIR convolution engine (PSRAM-preferred)
+│   ├── output_dsp.h/.cpp  # Per-output mono DSP (post-matrix/pre-sink)
+│   ├── sink_write_utils.h/.cpp  # Shared sink utilities (volume, mute ramp, F32→I32S)
+│   ├── audio_input_source.h  # Interface for input lane sources
+│   ├── audio_output_sink.h   # Interface for output slot sinks
+│   ├── app_events.h/.cpp  # Event group (24 usable bits, EVT_ANY)
+│   ├── app_state.cpp      # AppState implementation (singleton, dirty flags)
+│   ├── diag_journal.h/.cpp # DiagEvent ring buffer (256 max), auto-dedup
+│   ├── diag_event.h       # DiagEvent struct, severity enum
+│   ├── diag_error_codes.h # All diagnostic codes (0x10xx HAL, 0x20xx audio, etc.)
+│   ├── debug_serial.h/.cpp # Log macros (LOG_D/I/W/E), level control
+│   ├── crash_log.h/.cpp   # Stack trace recovery from RTC memory
+│   ├── task_monitor.cpp   # FreeRTOS task enumeration (stack, priority, core)
+│   ├── eth_manager.h/.cpp # Ethernet initialization (placeholder)
+│   ├── globals.h          # extern declarations (mqttClient, server, webSocket)
+│   ├── design_tokens.h    # Theme colors/sizes (extracted to CSS via tools/extract_tokens.js)
+│   ├── strings.h          # Localized strings (18KB of UI text)
+│   ├── utils.h            # Utility functions (version compare, JSON helpers)
+│   ├── web_pages.cpp/.h   # Auto-generated (DO NOT EDIT): HTML asset embedding
+│   ├── web_pages_gz.cpp   # Auto-generated: gzip-compressed assets
+│   ├── login_page.h       # Embedded auth login HTML
+│   ├── usb_audio.cpp      # TinyUSB UAC2 speaker device (guarded by USB_AUDIO_ENABLED)
+│   ├── state/             # 15 domain state headers (composed in AppState)
+│   │   ├── enums.h        # AppFSMState, FftWindowType, NetIfType
+│   │   ├── general_state.h # tzOffset, dstOffset, darkMode, serialNumber
+│   │   ├── ota_state.h    # Update info, release data
+│   │   ├── audio_state.h  # ADC enabled, I2S metrics, sensing, DMA diagnostics
+│   │   ├── dac_state.h    # TX underruns, EEPROM diagnostics (minimal, device state in HAL)
+│   │   ├── dsp_state.h    # Enabled, bypass, presets, swap diagnostics
+│   │   ├── display_state.h # Brightness, timeout, dim, backlight
+│   │   ├── buzzer_state.h # Enabled, volume
+│   │   ├── signal_gen_state.h # Waveform, freq, amp, PWM mode
+│   │   ├── usb_audio_state.h # Connection, streaming, device name (guarded)
+│   │   ├── wifi_state.h   # SSID, password, AP mode, connection state
+│   │   ├── mqtt_state.h   # Broker config, connection, topics
+│   │   ├── ethernet_state.h # IP config (placeholder)
+│   │   ├── debug_state.h  # Debug mode, serial level, hw stats, heapCritical
+│   │   └── hal_coord_state.h # Deferred toggle queue (capacity 8), overflow telemetry
+│   └── drivers/           # Vendor chip register definitions
+│       ├── ess_sabre_common.h   # ESS SABRE family constants
+│       ├── es8311_regs.h  # Codec register map
+│       ├── es9*_regs.h    # ESS SABRE register maps (9 ADC + 12 DAC)
 │
-├── web_src/                # Web UI source (edit ONLY these files)
-│   ├── index.html          # HTML shell (body content)
-│   ├── .eslintrc.json      # ESLint config (380+ globals for concatenated scope)
-│   ├── css/                # 7 CSS modules (tokens, variables, layout, components, canvas, responsive, health)
-│   └── js/                 # 22 JS modules (concatenated in filename order)
+├── test/                  # C++ Unit Tests (Unity framework, native platform)
+│   ├── README.md          # Test infrastructure overview
+│   ├── test_*/            # 105 test modules (each ~1-2 Unity tests)
+│   │   ├── test_wifi/     # WiFi connection, scan, AP mode
+│   │   ├── test_mqtt/     # MQTT client, payload serialization
+│   │   ├── test_audio_pipeline/  # Matrix routing, bypass, gain
+│   │   ├── test_dsp_pipeline/    # Biquad, FIR, coefficients
+│   │   ├── test_hal_*/    # All 30+ HAL drivers (init, config, lifecycle)
+│   │   ├── test_auth/     # PBKDF2, token pool, cookie validation
+│   │   └── ...            # 100+ more (see CLAUDE.md for full list)
+│   └── test_mocks/        # Mock implementations (Arduino, WiFi, MQTT, Preferences)
 │
-├── test/                   # C++ unit tests (Unity framework, native platform)
-│   ├── test_mocks/         # Mock implementations of Arduino/WiFi/MQTT/NVS
-│   └── [94 test modules]   # One directory per module (~2316 tests)
+├── web_src/               # Web UI source (HTML/CSS/JS, auto-compiled to web_pages.cpp)
+│   ├── index.html         # Shell (body injected at build time)
+│   ├── css/               # Modular stylesheets (split by concern)
+│   │   ├── 01-variables.css  # Design tokens, colors, sizes
+│   │   ├── 02-layout.css     # Grid, flex, sidebar, tabs
+│   │   ├── 03-components.css # Buttons, inputs, cards, modals
+│   │   ├── 04-canvas.css     # Waveform/spectrum visualization
+│   │   └── 05-responsive.css # Mobile breakpoints
+│   ├── js/                # 28 JavaScript modules (concatenated, shared scope)
+│   │   ├── 01-core.js           # HTTP/WS client, fetch wrapper, alert/confirm
+│   │   ├── 02-ws-router.js      # WS message dispatcher (commandDone, broadcasts)
+│   │   ├── 03-app-state.js      # Client-side state mirror
+│   │   ├── 04-shared-audio.js   # Audio tab data, matrix, DSP shared logic
+│   │   ├── 05-audio-tab.js      # Audio UI (matrix, routing, DSP editor)
+│   │   ├── 06-peq-overlay.js    # PEQ curve editor (modal)
+│   │   ├── 07-ui-core.js        # Common UI helpers (modal, toast, layout)
+│   │   ├── 08-ui-status.js      # Status bar indicators
+│   │   ├── 09-audio-viz.js      # Waveform + spectrum canvas rendering
+│   │   ├── 13-signal-gen.js     # Signal generator control
+│   │   ├── 15-hal-devices.js    # HAL device CRUD, discovery, config
+│   │   ├── 15a-yaml-parser.js   # YAML preset parsing
+│   │   ├── 20-wifi-network.js   # WiFi scan, connect, AP mode
+│   │   ├── 21-mqtt-settings.js  # MQTT broker config, HA topics
+│   │   ├── 22-settings.js       # Display, audio, factory reset
+│   │   ├── 23-firmware-update.js # OTA version check, download progress
+│   │   ├── 24-hardware-stats.js # Heap, PSRAM, task, pin telemetry
+│   │   ├── 25-debug-console.js  # Serial log viewer (filtering, search)
+│   │   ├── 26-support.js        # About, links, crash log viewer
+│   │   ├── 27-auth.js           # Login, logout, password reset, token refresh
+│   │   ├── 27a-health-dashboard.js # Health cards (audio, HAL, memory)
+│   │   └── 28-init.js           # WS connect, initial state broadcast handler
+│   ├── .eslintrc.json     # ESLint config (380+ globals for concatenated scope)
 │
-├── e2e/                    # Playwright browser tests
-│   ├── tests/              # 22 spec files (107 tests)
-│   ├── fixtures/           # WS messages (15 JSON) + API responses (16 JSON)
-│   ├── helpers/            # Playwright fixtures, selectors, WS helpers
-│   ├── mock-server/        # Express server (port 3000) + 12 route files
-│   └── playwright.config.js
+├── e2e/                   # Browser E2E Tests (Playwright, 113 tests across 22 specs)
+│   ├── tests/             # Spec files (*.spec.js)
+│   │   ├── auth.spec.js         # Login, cookie, token pool
+│   │   ├── audio.spec.js        # Matrix, routing, DSP editing
+│   │   ├── devices.spec.js      # HAL CRUD, discovery, config
+│   │   ├── wifi.spec.js         # Scan, connect, AP mode toggle
+│   │   ├── mqtt.spec.js         # Broker config, connection, subscriptions
+│   │   └── ...                  # 17 more specs
+│   ├── helpers/           # Reusable test utilities
+│   │   ├── fixtures.js          # connectedPage fixture (auth + WS handshake)
+│   │   ├── ws-helpers.js        # buildInitialState(), handleCommand(), binary frames
+│   │   └── selectors.js         # DOM ID mappings from index.html
+│   ├── fixtures/          # Pre-built test data
+│   │   ├── ws-messages/         # 15 mock WS broadcast JSON samples
+│   │   └── api-responses/       # 14 mock REST response JSON files
+│   ├── mock-server/       # Express mock server (port 3000)
+│   │   ├── server.js            # Main server setup, route mounting
+│   │   ├── assembler.js         # Replicates build_web_assets.js HTML assembly
+│   │   ├── ws-state.js          # Mock state singleton (reset per test)
+│   │   └── routes/              # 12 Express route files (auth, WiFi, MQTT, HAL, etc.)
+│   └── package.json       # Playwright deps (test runner)
 │
-├── lib/                    # Vendored libraries
-│   ├── WebSockets/         # Vendored WebSocket library (not from registry)
-│   └── esp_dsp_lite/       # ANSI C fallback for native tests (lib_ignored on ESP32)
+├── docs-site/             # Docusaurus v3 documentation (public, deployed to GH Pages)
+│   ├── docusaurus.config.js  # Mermaid, dark mode default, routeBasePath: 'docs'
+│   ├── sidebars.js           # userSidebar (9 items) + devSidebar (17 items)
+│   ├── docs/                 # 26 markdown pages
+│   │   ├── user/             # 9 pages: Getting Started, Setup, WiFi, MQTT, etc.
+│   │   └── developer/        # 17 pages: Architecture, API, HAL, Testing, DSP, etc.
+│   ├── src/                  # Docusaurus components + landing page
+│   │   ├── pages/index.js    # Hero landing + feature cards
+│   │   └── css/              # tokens.css (auto-generated from src/design_tokens.h)
+│   └── build/               # Generated static site (NOT committed)
 │
-├── docs-site/              # Public documentation (Docusaurus v3, 26 pages)
-│   ├── docs/               # 9 user guide + 17 developer reference pages
-│   ├── src/                # Docusaurus components + CSS (design tokens)
-│   └── docusaurus.config.js
+├── docs-internal/         # Internal working docs (non-public)
+│   ├── testing-architecture.md # Test infrastructure deep-dive
+│   ├── architecture/       # 10 Mermaid diagrams (CI, tasks, test flow, etc.)
+│   └── planning/           # Phase plans, design notes
 │
-├── docs-internal/          # Internal working docs
-│   ├── architecture/       # 13 Mermaid diagrams + analysis docs
-│   ├── planning/           # Phase plans, debt registry, test strategy
-│   └── archive/            # Completed implementation summaries
+├── tools/                 # Build & maintenance scripts
+│   ├── build_web_assets.js     # Compiles web_src/ → src/web_pages.cpp
+│   ├── extract_tokens.js       # Extracts src/design_tokens.h → CSS files
+│   ├── update_certs.js         # Downloads root CAs → src/ota_certs.h
+│   ├── extract_api.js          # Parses C++ source for API doc generation
+│   ├── find_dups.js            # CI: Detects duplicate JS declarations
+│   ├── check_missing_fns.js    # CI: Finds undefined function references
+│   ├── generate_docs.js        # Claude API orchestrator (doc regen)
+│   ├── detect_doc_changes.js   # Git diff → doc section mapping
+│   └── doc-mapping.json        # Source file → documentation section mapping (65 entries)
 │
-├── tools/                  # Build + CI automation (18 files)
-│   ├── build_web_assets.js # Compile web_src/ → src/web_pages.cpp + web_pages_gz.cpp
-│   ├── extract_tokens.js   # design_tokens.h → CSS for web UI + Docusaurus
-│   ├── find_dups.js        # Duplicate JS declaration checker (pre-commit)
-│   ├── check_missing_fns.js # Undefined function reference checker
-│   └── generate_docs.js    # Claude API doc generation orchestrator
+├── lib/                   # Third-party libraries (vendored + overrides)
+│   ├── WebSockets/        # WebSocket library (vendored, no longer from registry)
+│   ├── esp_dsp_lite/      # ANSI C fallback for native tests (lib_ignore'd on ESP32)
+│   └── ...                # Arduino standard libs (included via platformio.ini)
 │
-├── .github/workflows/      # CI/CD automation
-│   ├── tests.yml           # 4 parallel quality gates
-│   ├── release.yml         # Same 4 gates before release
-│   └── docs.yml            # Doc generation + deploy to gh-pages
+├── platformio.ini         # PlatformIO config (esp32-p4 board, compiler flags)
+├── .github/workflows/     # CI/CD pipeline
+│   ├── tests.yml          # 4 parallel gates (cpp-tests, cpp-lint, js-lint, e2e-tests)
+│   └── docs.yml           # Doc regen trigger (on changes detected)
+├── .githooks/pre-commit   # Pre-commit checks (find_dups, check_missing_fns, ESLint)
 │
-├── .planning/codebase/     # GSD codebase analysis documents
-│   ├── ARCHITECTURE.md     # Pattern, layers, data flow, abstractions
-│   ├── STRUCTURE.md        # Directory layout, key locations (THIS FILE)
-│   ├── CONVENTIONS.md      # Coding conventions
-│   ├── TESTING.md          # Testing patterns
-│   ├── STACK.md            # Technology stack
-│   ├── INTEGRATIONS.md     # External integrations
-│   └── CONCERNS.md         # Technical debt and issues
-│
-├── platformio.ini          # PlatformIO config (board=esp32-p4)
-├── CLAUDE.md               # Project instructions for Claude Code
-└── .githooks/pre-commit    # Pre-commit hook (find_dups + check_missing_fns + ESLint)
+├── CLAUDE.md              # Project instructions (this file, checked into repo)
+└── .planning/codebase/    # GSD analysis output (ARCHITECTURE.md, STRUCTURE.md, etc.)
 ```
 
 ## Directory Purposes
 
 **src/**
-- Purpose: All firmware source code (C++ Arduino + FreeRTOS on ESP32-P4)
-- Contains: Main loop, HAL framework, audio pipeline, DSP engine, network managers, web server, GUI, authentication, diagnostics
-- Key files: `main.cpp` (boot + loop, 1579 lines), `app_state.h` (state singleton), `config.h` (all build-time constants), `audio_pipeline.h/.cpp` (routing engine)
+- Purpose: All firmware source code (C++)
+- Contains: Main loop, HAL devices, audio pipeline, web APIs, state management
+- Key files: `main.cpp`, `app_state.h`, `audio_pipeline.h`, `hal/hal_device_manager.h`
 
 **src/hal/**
-- Purpose: Hardware Abstraction Layer — unified device model, discovery, lifecycle, persistence
-- Contains: Device manager (24 slots), pipeline bridge, driver registry (32 max), device database (32 max), 15+ concrete hardware drivers, ESS SABRE ADC base class, TDM deinterleaver, custom device support
-- Key files: `hal_device_manager.h/.cpp` (registry, 387 lines), `hal_pipeline_bridge.h/.cpp` (slot/lane assignment, 655 lines), `hal_discovery.h/.cpp` (3-tier auto-detection, 238 lines), `hal_api.h/.cpp` (REST endpoints, 451 lines)
-- Driver files: `hal_pcm5102a`, `hal_es8311`, `hal_pcm1808`, `hal_ns4150b`, `hal_mcp4725`, `hal_relay`, `hal_buzzer`, `hal_button`, `hal_encoder`, `hal_display`, `hal_led`, `hal_siggen`, `hal_signal_gen`, `hal_temp_sensor`, `hal_usb_audio`, `hal_custom_device`
-- ESS SABRE ADCs: `hal_ess_sabre_adc_base` (abstract base), `hal_es9822pro`, `hal_es9826`, `hal_es9823pro`, `hal_es9821`, `hal_es9820` (2ch I2S), `hal_es9843pro`, `hal_es9842pro`, `hal_es9841`, `hal_es9840` (4ch TDM)
-
-**src/state/**
-- Purpose: Domain-specific application state (decomposed from monolithic AppState)
-- Contains: 16 files (15 headers + 1 implementation for `hal_coord_state.cpp`)
-- Files: `enums.h`, `general_state.h`, `ota_state.h`, `audio_state.h`, `dac_state.h`, `dsp_state.h`, `display_state.h`, `buzzer_state.h`, `signal_gen_state.h`, `usb_audio_state.h`, `wifi_state.h`, `mqtt_state.h`, `ethernet_state.h`, `debug_state.h`, `hal_coord_state.h/.cpp`
-- Pattern: Each header defines one domain struct, composed into `AppState` shell. Access via `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`, `appState.halCoord.requestDeviceToggle()`
+- Purpose: Hardware Abstraction Layer — all device drivers and discovery
+- Contains: 44 drivers (onboard + expansion), device registry, pin tracking, lifecycle callbacks
+- Key files: `hal_device_manager.h`, `hal_discovery.h`, `hal_pipeline_bridge.h`
 
 **src/gui/**
-- Purpose: LVGL-based TFT display interface (Core 0 FreeRTOS task, guarded by `GUI_ENABLED`)
-- Contains: 22 files — display manager, theme, input handling, navigation stack, 12 screen modules
-- Key files: `gui_manager.h/.cpp` (task lifecycle), `gui_input.h/.cpp` (encoder Gray code ISR), `gui_navigation.h/.cpp` (screen stack), `gui_theme.h/.cpp` (orange accent), `gui_config.h`, `gui_icons.h`, `lgfx_config.h`, `lv_conf.h`
-- Screens (`gui/screens/`): `scr_boot_anim`, `scr_home`, `scr_control`, `scr_desktop`, `scr_devices`, `scr_dsp`, `scr_wifi`, `scr_mqtt`, `scr_settings`, `scr_debug`, `scr_siggen`, `scr_support`, `scr_keyboard`, `scr_value_edit`, `scr_menu`
+- Purpose: LVGL-based local display interface
+- Contains: Screen implementations, navigation, input handling, theme management
+- Key files: `gui_manager.cpp`, `gui_navigation.cpp`, screen files in `screens/`
 
-**src/drivers/**
-- Purpose: Hardware register definitions (read-only constants, no implementation)
-- Contains: 11 header files — PCM1808, ES8311, ESS SABRE common, plus per-chip register maps for all 9 ESS ADCs
-- Files: `es8311_regs.h`, `ess_sabre_common.h`, `es9822pro_regs.h`, `es9843pro_regs.h`, `es9826_regs.h`, `es9823pro_regs.h`, `es9821_regs.h`, `es9820_regs.h`, `es9842pro_regs.h`, `es9841_regs.h`, `es9840_regs.h`
-
-**web_src/**
-- Purpose: Web UI source files — edit ONLY these, auto-compiled to `src/web_pages.cpp` + `src/web_pages_gz.cpp`
-- CSS modules (7): `00-tokens.css` (auto-generated from `design_tokens.h`), `01-variables.css`, `02-layout.css`, `03-components.css`, `04-canvas.css`, `05-responsive.css`, `06-health-dashboard.css`
-- JS modules (22, concatenated in filename order): `01-core.js` (WS client), `02-ws-router.js`, `03-app-state.js`, `04-shared-audio.js`, `05-audio-tab.js`, `06-canvas-helpers.js`, `06-peq-overlay.js`, `07-ui-core.js`, `08-ui-status.js`, `09-audio-viz.js`, `13-signal-gen.js`, `15-hal-devices.js`, `15a-yaml-parser.js`, `20-wifi-network.js`, `21-mqtt-settings.js`, `22-settings.js`, `23-firmware-update.js`, `24-hardware-stats.js`, `25-debug-console.js`, `26-support.js`, `27-auth.js`, `27a-health-dashboard.js`, `28-init.js`
-- CRITICAL: Run `node tools/build_web_assets.js` after ANY edit to `web_src/` before building firmware
+**src/state/**
+- Purpose: Domain-specific state structs (composed into AppState)
+- Contains: 15 lightweight headers for WiFi, MQTT, Audio, DAC, DSP, etc.
+- Key files: One `*_state.h` per domain
 
 **test/**
-- Purpose: C++ unit tests (Unity framework, native platform, no hardware needed)
-- Contains: 94 test module directories + `test_mocks/` (mock Arduino/WiFi/MQTT/NVS libraries)
-- Pattern: One directory per module (`test/test_<module>/test_<module>.cpp`) to avoid duplicate `main`/`setUp`/`tearDown` symbols
-- Run: `pio test -e native -v` (~2316 tests across 87+ modules)
-- Notable: 3 new test modules on current branch: `test_hal_probe_retry/`, `test_http_security/`, `test_ws_adaptive_rate/`
+- Purpose: C++ unit tests (105 modules, native platform)
+- Contains: Test modules, mock implementations, test data fixtures
+- Key files: Each `test_*/` directory has `test_main.cpp` or individual test `.cpp` files
+
+**web_src/**
+- Purpose: Web UI source (HTML, CSS, JavaScript)
+- Contains: Single-page app with tab navigation, real-time visualization, REST API client
+- **IMPORTANT:** Edit files here, NOT `src/web_pages.cpp` (auto-generated). After ANY edit, run `node tools/build_web_assets.js` before building firmware.
+- Key files: `index.html`, `css/`, `js/` (28 modules)
 
 **e2e/**
-- Purpose: Playwright browser end-to-end tests (mock Express server, no hardware needed)
-- Contains: 22 spec files (107 tests), mock server with 12 route files, 31 fixture JSON files
-- Key files: `mock-server/server.js` (Express port 3000), `mock-server/assembler.js` (HTML assembly), `mock-server/ws-state.js` (deterministic state), `helpers/fixtures.js` (connectedPage fixture), `helpers/selectors.js` (DOM selectors), `helpers/ws-helpers.js` (WS builders)
-- Run: `cd e2e && npx playwright test`
-
-**lib/**
-- Purpose: Vendored libraries (not from PlatformIO registry)
-- `WebSockets/`: Vendored WebSocket server library
-- `esp_dsp_lite/`: ANSI C ESP-DSP fallback for native tests only (`lib_ignore`d on ESP32 builds)
+- Purpose: Playwright browser E2E tests (113 tests across 22 specs)
+- Contains: Test specs, mock server, test helpers, fixture data
+- Key files: `tests/*.spec.js`, `mock-server/server.js`, `helpers/`
 
 **docs-site/**
-- Purpose: Public documentation site (Docusaurus v3, deployed to GitHub Pages)
-- Contains: 26 pages (9 user guide + 17 developer reference), design token CSS, Mermaid diagrams
-- Build: `cd docs-site && npm run build && npm run serve`
-
-**docs-internal/**
-- Purpose: Internal working documents (not in public site)
-- `architecture/`: 13 Mermaid diagrams + analysis docs (system, boot, HAL lifecycle, pipeline, events, etc.)
-- `planning/`: Phase plans, debt registry, test strategy
-- `archive/`: Completed implementation summaries
+- Purpose: Docusaurus v3 public documentation (26 pages)
+- Contains: User guide, developer reference, landing page, design tokens
+- Key files: `docs/user/` + `docs/developer/`, `docusaurus.config.js`
 
 **tools/**
-- Purpose: Build automation, linting, code generation (18 files)
-- Build: `build_web_assets.js` (MUST run after `web_src/` edits), `extract_tokens.js` (design tokens -> CSS)
-- Linting: `find_dups.js` (duplicate JS declarations), `check_missing_fns.js` (undefined function refs), `deep_check_fns.js`
-- Docs: `generate_docs.js` (Claude API orchestrator), `detect_doc_changes.js`, `doc-mapping.json` (65 entries), `extract_api.js`
-- Misc: `update_certs.js`, `fix_riscv_toolchain.py`, `check_hal_debug_contract.sh`, `diagram-validation.js`, `check_mapping_coverage.js`
+- Purpose: Build automation and code generation
+- Contains: Web asset compilation, certificate updates, CI helper scripts
+- Key files: `build_web_assets.js`, `extract_tokens.js`, `update_certs.js`
 
 ## Key File Locations
 
 **Entry Points:**
-- `src/main.cpp`: Firmware boot (`setup()`) and main loop (`loop()`) — 1579 lines
-- `platformio.ini`: PlatformIO build config (board=esp32-p4, build flags, upload port COM8)
-- `tools/build_web_assets.js`: Web UI compilation (web_src/ -> src/web_pages.cpp + web_pages_gz.cpp)
+- `src/main.cpp`: Firmware boot (setup/loop), HTTP route registration, FreeRTOS task spawning
+- `web_src/index.html`: Web UI shell (body injected at compile-time)
+- `e2e/tests/*.spec.js`: E2E test entry points
 
 **Configuration:**
-- `src/config.h`: All build-time constants — pin assignments, stack sizes, buffer sizes, feature flags (`DSP_ENABLED`, `DAC_ENABLED`, `GUI_ENABLED`, `USB_AUDIO_ENABLED`), heap thresholds, firmware version
-- `src/design_tokens.h`: Theme colors/sizes — source for TFT, web UI (`00-tokens.css`), and docs site
-- `platformio.ini`: Board config, build flags, lib deps, upload/monitor settings
-- `.github/workflows/tests.yml`: CI quality gates configuration
+- `src/config.h`: Build flags, pin assignments, stack sizes, feature toggles
+- `platformio.ini`: PlatformIO board config, compiler flags, library dependencies
+- `web_src/.eslintrc.json`: JavaScript linting rules (380+ globals)
+- `docusaurus.config.js`: Documentation site configuration
 
-**Core Audio:**
-- `src/audio_pipeline.h/.cpp`: 8-lane input -> 16x16 matrix -> 8-sink routing engine
-- `src/dsp_pipeline.h/.cpp`: DSP stage pool, biquad IIR/FIR, limiter, compressor, delay
-- `src/output_dsp.h/.cpp`: Per-output DSP (post-matrix, pre-sink)
-- `src/i2s_audio.h/.cpp`: ADC/DAC I2S peripheral control, dual master coordination
-- `src/audio_input_source.h`: Input lane pluggable source interface
-- `src/audio_output_sink.h`: Output sink pluggable interface
-- `src/sink_write_utils.h/.cpp`: Shared sink utilities (volume, mute ramp, float->int32)
-
-**State Management:**
-- `src/app_state.h/.cpp`: AppState singleton shell (composes 15 domain headers)
-- `src/app_events.h/.cpp`: FreeRTOS event group (17 bits, `EVT_ANY = 0x00FFFFFF`)
-- `src/state/*.h`: Domain headers — each defines one struct for one concern
-
-**HAL Framework:**
-- `src/hal/hal_device.h`: Base device class (lifecycle, config, state callback)
-- `src/hal/hal_device_manager.h/.cpp`: Device registry (24 slots, pin tracking)
-- `src/hal/hal_pipeline_bridge.h/.cpp`: Links HAL to audio pipeline (capability-based)
-- `src/hal/hal_discovery.h/.cpp`: 3-tier auto-detection (I2C -> EEPROM -> manual)
-- `src/hal/hal_builtin_devices.h/.cpp`: Driver registry (compatible string -> factory)
-- `src/hal/hal_ess_sabre_adc_base.h/.cpp`: Shared ESS SABRE ADC base class
-- `src/hal/hal_api.h/.cpp`: REST endpoints for HAL CRUD
-
-**Network:**
-- `src/wifi_manager.h/.cpp`: WiFi client + AP mode
-- `src/eth_manager.h/.cpp`: Ethernet (100Mbps)
-- `src/mqtt_handler.h/.cpp` + `src/mqtt_publish.cpp` + `src/mqtt_ha_discovery.cpp`: MQTT stack
-- `src/mqtt_task.h/.cpp`: Dedicated MQTT FreeRTOS task
-
-**Web Server:**
-- `src/websocket_handler.h/.cpp`: Real-time WS server (port 81)
-- `src/auth_handler.h/.cpp`: PBKDF2-SHA256 auth, WS token pool, rate limiting
-- `src/http_security.h`: Security headers applied to all HTTP responses
-- `src/web_pages.h/.cpp`: AUTO-GENERATED from web_src/ (do not edit)
-
-**REST APIs:**
-- `src/dsp_api.h/.cpp`: DSP config CRUD (1437 lines)
-- `src/pipeline_api.h/.cpp`: Audio matrix + per-output DSP (323 lines)
-- `src/dac_api.h/.cpp`: DAC state/volume/enable (530 lines)
-- `src/hal/hal_api.h/.cpp`: HAL device CRUD (451 lines)
-- `src/psram_api.h/.cpp`: PSRAM health status (60 lines)
-
-**Diagnostics:**
-- `src/diag_journal.h/.cpp`: Event ringbuffer (64 entries)
-- `src/diag_error_codes.h`: Error code enum (100+ codes)
-- `src/diag_event.h`: Emission macro
-- `src/heap_budget.h/.cpp`: Per-subsystem allocation tracker (32 entries)
-- `src/psram_alloc.h/.cpp`: Unified PSRAM allocation wrapper with SRAM fallback
-- `src/task_monitor.h/.cpp`: FreeRTOS task enumeration
-- `src/crash_log.h/.cpp`: Reset reason ringbuffer
-
-**Persistence (LittleFS):**
-- `/config.json`: Settings (WiFi, MQTT, sample rate, etc.) — atomic write via tmp+rename
-- `/hal_config.json`: Per-device HAL config (pin overrides, enable state, gain)
-- `/hal_auto_devices.json`: Auto-discovered add-on devices (EEPROM metadata)
-- `/crash_log.json`: Reset reason ringbuffer
-- `/diag_journal.json`: Diagnostic event ringbuffer
+**Core Logic:**
+- `src/app_state.h`: Global state singleton (15 domain structs)
+- `src/audio_pipeline.h/.cpp`: Input lanes → matrix → output sinks
+- `src/i2s_audio.h/.cpp`: ADC acquisition, analysis (RMS/VU/peak), diagnostics
+- `src/dsp_pipeline.h/.cpp`: Double-buffered DSP stages, coefficient generation
+- `src/hal/hal_device_manager.h/.cpp`: Device registry, lifecycle, discovery
+- `src/hal/hal_pipeline_bridge.h/.cpp`: HAL ↔ audio pipeline integration
+- `src/websocket_handler.cpp`: Real-time WebSocket protocol, binary frames
 
 **Testing:**
-- `test/test_mocks/`: Mock Arduino/WiFi/MQTT/NVS headers
-- `test/test_<module>/test_<module>.cpp`: One directory per test module
-- `e2e/tests/*.spec.js`: Playwright browser test specs
-- `e2e/mock-server/`: Express server replicating firmware REST API
-- `e2e/fixtures/`: Hand-crafted test data (WS messages + API responses)
+- `test/test_*/`: 105 C++ unit test modules
+- `e2e/tests/`: 22 Playwright spec files
+- `test/test_mocks/`: Arduino/WiFi/MQTT mock implementations
 
 ## Naming Conventions
 
 **Files:**
-- C++ source: `module_name.h` / `module_name.cpp` (lowercase, underscores)
-- HAL drivers: `hal_<device_type>.h/.cpp` (e.g., `hal_es9822pro.h/.cpp`)
-- HAL ESS SABRE ADCs: `hal_es<XXXX>.h/.cpp` (chip model number)
-- State headers: `src/state/<domain>_state.h` (e.g., `audio_state.h`, `wifi_state.h`)
-- Driver registers: `src/drivers/<chip>_regs.h` (e.g., `es9822pro_regs.h`)
-- Test modules: `test/test_<module>/test_<module>.cpp` (one per directory)
-- Web CSS: `NN-feature.css` (numeric prefix for load order, 00-06)
-- Web JS: `NN-feature.js` (numeric prefix for load order, 01-28)
-- GUI screens: `src/gui/screens/scr_<name>.h/.cpp` (e.g., `scr_home.h`)
+- C++ source: `module.cpp` / `module.h` (e.g., `audio_pipeline.cpp`)
+- Drivers: `hal_<device>.h/.cpp` (e.g., `hal_es9038pro.h`)
+- State: `<domain>_state.h` in `src/state/` (e.g., `audio_state.h`)
+- Tests: `test_<module>/test_main.cpp` or `test_<module>.cpp` (e.g., `test_audio_pipeline/`)
+- Web assets: `NN-description.{css,js}` with load order via prefix (e.g., `05-audio-tab.js`)
 
 **Directories:**
-- Feature domain: `src/<feature>/` (e.g., `src/hal/`, `src/gui/`, `src/state/`, `src/drivers/`)
-- Test suite: `test/test_<module>/` (one per test module, avoids symbol conflicts)
-- Build artifacts: `.pio/build/` (git-ignored)
-- Generated docs: `.planning/codebase/` (committed)
+- Subsystems: lowercase with underscores (e.g., `src/hal/`, `src/gui/`)
+- Expanded names: `src/state/`, `src/drivers/` for file grouping
 
 **Functions:**
-- Module functions: `snake_case` with module prefix — `audio_pipeline_set_matrix_gain()`, `hal_device_manager_register()`, `dsp_add_stage()`
-- Init functions: `<module>_init()` — `audio_pipeline_init()`, `gui_init()`, `mqtt_task_start()`
-- API registration: `register<Module>ApiEndpoints()` — `registerHalApiEndpoints()`, `registerDspApiEndpoints()`
-- Handler callbacks: `<module>Event()` or `<module>Callback()` — `webSocketEvent()`, `mqttCallback()`
-- ISR handlers: `<module>_isr()` — `button_isr()`
+- C: snake_case with module prefix (e.g., `audio_pipeline_set_source()`)
+- C++: camelCase in classes (e.g., `HalDeviceManager::registerDevice()`)
+- Callbacks: `on` + CamelCase (e.g., `onHalStateChange()`, `onWsEvent()`)
 
 **Variables:**
-- Global state: `appState` (macro for `AppState::getInstance()`), domain access `appState.wifi.ssid`
-- File-local statics: `_leadingUnderscore` (private to translation unit)
-- Class members: `_leadingUnderscore` (private/protected)
-- Constants: `UPPER_SNAKE_CASE` — `HAL_MAX_DEVICES`, `HEAP_WARNING_THRESHOLD`
+- Public: snake_case (e.g., `fsmState`, `isReady`)
+- Private: underscore prefix (e.g., `_devices`, `_currentCfg`)
+- Global singletons: no prefix (e.g., `appState`, accessed via `getInstance()`)
 
 **Types:**
-- Struct: `PascalCase` — `AudioInputSource`, `HalDeviceConfig`, `DspStage`, `HeapBudgetEntry`
-- Enum: `PascalCase` — `AppFSMState`, `HalDeviceState`, `FftWindowType`
-- Class: `PascalCase` with `Hal` prefix for HAL — `HalPcm5102a`, `HalDevice`, `HalEssSabreAdcBase`
-- State structs: `<Domain>State` — `WifiState`, `AudioState`, `DebugState`
+- Structs: PascalCase (e.g., `AudioState`, `HalDevice`)
+- Enums: SCREAMING_SNAKE_CASE (e.g., `STATE_IDLE`, `HAL_CAP_DAC_PATH`)
+- Class templates: PascalCase + Template suffix (e.g., `AudioInputSource`)
 
 ## Where to Add New Code
 
-**New Firmware Feature (Audio DSP, Signal Processing):**
-- Primary code: `src/<feature_name>.h/.cpp`
-- State: Create `src/state/<feature>_state.h`, include in `src/app_state.h`, add dirty flag setter/getter + event bit in `src/app_events.h` (7 spare bits available)
-- Tests: Create `test/test_<feature>/test_<feature>.cpp` (Unity framework)
-- REST API: Create `src/<feature>_api.h/.cpp`, register via `register<Feature>ApiEndpoints()` in `src/main.cpp`
+**New Audio Feature (DSP stage, filter, analyzer):**
+- Primary: `src/dsp_pipeline.h/.cpp` (stage registration) or `src/output_dsp.h/.cpp` (mono processing)
+- Config/API: `src/dsp_api.cpp` (REST endpoints if needed)
+- Tests: `test/test_dsp_*/` directory
+- Example: Adding a compressor stage → add to DspStageType enum, implement apply function, register in dsp_add_stage()
 
-**New HAL Device Driver (ADC, DAC, Codec, Sensor):**
-- Driver class: `src/hal/hal_<device>.h/.cpp` (subclass `HalDevice`, implement `init()`/`deinit()`)
-- For ESS SABRE ADC: subclass `HalEssSabreAdcBase`, add register map to `src/drivers/<chip>_regs.h`
-- For 4ch TDM device: use `HalTdmDeinterleaver` (see `hal_es9843pro.cpp` pattern)
-- Register: Add factory function to `src/hal/hal_builtin_devices.cpp`
-- If audio device: implement `AudioOutputSink` or `AudioInputSource`, HAL pipeline bridge handles registration automatically via state callback
-- Tests: `test/test_hal_<device>/test_hal_<device>.cpp`
-- Documentation: `docs-site/docs/developer/hal/`
+**New HAL Device (expansion driver or onboard control):**
+- Driver: `src/hal/hal_<device>.h/.cpp` — inherit from HalDevice or HalAudioDevice
+- Registration: Entry in `hal_builtin_devices.cpp` using `HAL_REGISTER()` macro
+- Tests: `test/test_hal_<device>/test_main.cpp`
+- Docs: `docs-site/docs/developer/hal/` reference
+- Example: New GPIO relay → HalRelay class, COMPATIBLE_STRING entry, test coverage
 
-**New Web UI Tab or Feature:**
-- HTML: Add `<div id="tabName">` container to `web_src/index.html`
-- CSS: Create `web_src/css/NN-<feature>.css`
-- JS: Create `web_src/js/NN-<feature>.js` (pick number that places it in correct load order)
-- WS messages: Add handler in `web_src/js/02-ws-router.js`
-- Globals: Add new top-level declarations to `web_src/.eslintrc.json` globals
-- E2E test: Add `e2e/tests/<feature>.spec.js` + fixtures in `e2e/fixtures/`
-- CRITICAL: Run `node tools/build_web_assets.js` after edits, THEN build firmware
+**New REST Endpoint:**
+- Implementation: New handler function in relevant `src/*_api.cpp` file (or create new)
+- Registration: `server.on("/api/path", HTTP_GET, handler)` in `main.cpp`
+- Response: Use `sendGzipped()` for JSON (handles gzip + security headers)
+- Auth: Call `auth_check_token(server)` before processing
+- Tests: Add Playwright spec in `e2e/tests/` if UI depends on it
 
-**New REST API Endpoint:**
-- Implementation: Create `src/<feature>_api.h/.cpp` with `register<Feature>ApiEndpoints()`
-- Auth: Use auth guard pattern from existing endpoints (see `src/dac_api.cpp`)
-- Security headers: Call `http_add_security_headers()` from `src/http_security.h`
-- Register: Add `register<Feature>ApiEndpoints()` call in `src/main.cpp` setup()
-- E2E mock: Add route file `e2e/mock-server/routes/<feature>.js`, add fixture JSON
+**New Web UI Tab:**
+- HTML: Add button to sidebar/tab-bar in `web_src/index.html` with `data-tab="name"` + `onclick="switchTab('name')"`
+- JavaScript: New module `web_src/js/NN-name.js` with global `initTabName()` function
+- CSS: Add styles to `web_src/css/` (modular by concern)
+- WS Handler: If real-time data needed, add case in `ws_router` (in `02-ws-router.js`)
+- Tests: `e2e/tests/name.spec.js` verifying toggle/input behavior and WS/REST calls
+- After ANY edit: Run `node tools/build_web_assets.js` before building
 
-**New Network Integration (WiFi, MQTT, External API):**
-- Implementation: `src/<integration>.h/.cpp`
-- If concurrent: Spawn FreeRTOS task on Core 0 (never Core 1), coordinate via dirty flags
-- State: Add domain header to `src/state/`, add event bit, include in `src/app_state.h`
-- Tests: `test/test_<integration>/` with mocked network calls
+**New Configuration Setting:**
+- State: Add field to relevant domain state struct in `src/state/` (e.g., `general_state.h`)
+- Persistence: Add JSON key to `settings_manager.cpp` load/save
+- UI: Form input in `web_src/` with `POST /api/settings` or domain-specific endpoint
+- API: Optional REST getter/setter in domain `*_api.cpp`
+- Example: New timezone offset → add to GeneralState, JSON serialize in settings_manager, UI input in settings.js
 
-**New GUI Screen:**
-- Screen module: `src/gui/screens/scr_<name>.h/.cpp`
-- Navigation: Link via `gui_push_screen()` / `gui_pop_screen()` in `src/gui/gui_navigation.cpp`
-- Guard: All GUI code must be inside `#ifdef GUI_ENABLED`
-- Tests: `test/test_gui_<name>/` with LVGL object tree verification
+**Utilities/Helpers:**
+- Shared helpers: `src/utils.h` (small utilities) or new `src/helper.h/.cpp` (larger modules)
+- No global state in helpers — pass AppState or config as parameters
+- Reusable JS: `web_src/js/01-core.js` (HTTP/WS primitives) or new utility module before consumer
 
-**New Utility Function:**
-- Shared helpers: `src/utils.h/.cpp`
-- Module-specific: inline in the module's header
-- Avoid: Creating new utility files unless >200 lines
-
-**New Build-Time Configuration:**
-- Constants: Add to `src/config.h` with descriptive comments
-- Feature flags: Use `#ifdef FEATURE_ENABLED` / `#endif` to gate entire modules
-- PlatformIO flags: Add `-D FLAG_NAME` to `platformio.ini` build_flags section
+**Tests:**
+- C++ unit: `test/test_<module>/` directory with test fixtures + mocks
+- E2E: `e2e/tests/feature.spec.js` using Playwright fixtures + selectors
+- Before committing: Run `pio test -e native -v` (C++) and `npx playwright test` (E2E)
 
 ## Special Directories
 
-**`.pio/build/`**
-- Purpose: PlatformIO build artifacts (object files, firmware binary, test executables)
-- Generated: Yes (by `pio run`, `pio test`)
-- Committed: No (git-ignored)
-
-**`.planning/codebase/`**
-- Purpose: GSD (Claude Code) codebase analysis documents
-- Generated: Yes (by `/gsd:map-codebase`)
-- Committed: Yes (checked in for context preservation across conversations)
-
-**`logs/`**
-- Purpose: Build output, test reports, serial captures (keeps project root clean)
-- Generated: Yes
-- Committed: No (git-ignored)
-
-**`.github/workflows/`**
-- Purpose: CI/CD automation (GitHub Actions)
-- Generated: No (hand-authored)
-- Contains: `tests.yml` (4 parallel quality gates on push/PR), `release.yml` (same gates before release), `docs.yml` (doc generation + deploy)
-
-**`.githooks/`**
-- Purpose: Pre-commit checks (find_dups + check_missing_fns + ESLint on web_src/js/)
-- Activate: `git config core.hooksPath .githooks`
+**src/state/**
+- Purpose: Domain-specific state structs (15 total), composed into AppState
+- Generated: No — hand-maintained, one per domain
 - Committed: Yes
+- Usage: `appState.domain.field` (e.g., `appState.wifi.ssid`, `appState.audio.adcEnabled[i]`)
 
-**`.claude/`**
-- Purpose: Claude Code configuration (agents, commands, skills, plans, reviews)
-- Contains: Agent definitions in `.claude/agents/`, custom commands in `.claude/commands/`
-- Committed: Partially (agents and commands yes, skills vary)
+**src/drivers/**
+- Purpose: Vendor chip register definitions (ESS SABRE, ES8311)
+- Generated: No — extracted from datasheets
+- Committed: Yes
+- Usage: Included by HAL drivers for low-level I2C register control
+
+**src/hal/**
+- Purpose: Hardware abstraction layer (drivers + lifecycle)
+- Generated: No — hand-implemented per device
+- Committed: Yes
+- Key: All 44 drivers (onboard + expansion) live here; discovery + bridge orchestrate them
+
+**web_src/**
+- Purpose: Web UI source (DO NOT EDIT src/web_pages.cpp directly)
+- Generated: No — this is the source
+- Auto-Generated From: `build_web_assets.js` compiles web_src/ → src/web_pages.cpp (compiled into firmware)
+- Committed: Yes
+- **CRITICAL:** After ANY edit to web_src/, run `node tools/build_web_assets.js` before building firmware
+
+**e2e/mock-server/**
+- Purpose: Mock REST/WS server for E2E tests (no real hardware)
+- Generated: No — hand-maintained
+- Committed: Yes
+- Usage: Replaces live firmware during Playwright tests; deterministic state + fixtures
+
+**docs-site/**
+- Purpose: Public documentation (Docusaurus v3)
+- Generated: docs content auto-updated by `tools/generate_docs.js` on CI
+- Committed: Yes (except build/ which is excluded)
+- Deploy: `npm run build && npm run serve` locally, or GitHub Actions to gh-pages on merge
+
+**logs/**
+- Purpose: Build artifacts, test reports, serial captures
+- Generated: Yes (all build/test output)
+- Committed: No (.gitignore)
+- Usage: Keep project root clean; save all `.log` files here
 
 ---
 
