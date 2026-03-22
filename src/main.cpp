@@ -50,8 +50,9 @@
 #include "usb_audio.h"
 #endif
 #include "smart_sensing.h"
-#include "heap_budget.h"
 #include "psram_api.h"
+#include "diag_api.h"
+#include "siggen_api.h"
 #include "utils.h"
 #include "web_pages.h"
 #include "http_security.h"
@@ -579,106 +580,7 @@ void setup() {
       return;
     handleSettingsImport();
   });
-  server.on("/api/diagnostics", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
-    handleDiagnostics();
-  });
-  // Diagnostic journal endpoints
-  server.on("/api/diagnostics/journal", HTTP_GET, []() {
-    if (!requireAuth()) return;
-    JsonDocument doc;
-    doc["type"] = "diagJournal";
-    uint8_t count = diag_journal_count();
-    JsonArray entries = doc["entries"].to<JsonArray>();
-    for (uint8_t i = 0; i < count; i++) {
-      DiagEvent ev;
-      if (diag_journal_read(i, &ev)) {
-        JsonObject e = entries.add<JsonObject>();
-        e["seq"]   = ev.seq;
-        e["boot"]  = ev.bootId;
-        e["t"]     = ev.timestamp;
-        e["heap"]  = ev.heapFree;
-        char codeBuf[8];
-        snprintf(codeBuf, sizeof(codeBuf), "0x%04X", ev.code);
-        e["c"]     = codeBuf;
-        e["corr"]  = ev.corrId;
-        e["sub"]   = diag_subsystem_name(diag_subsystem_from_code((DiagErrorCode)ev.code));
-        e["dev"]   = ev.device;
-        e["slot"]  = ev.slot;
-        e["msg"]   = ev.message;
-        e["sev"]   = diag_severity_char((DiagSeverity)ev.severity);
-        e["retry"] = ev.retryCount;
-      }
-    }
-    doc["count"] = count;
-    String json;
-    serializeJson(doc, json);
-    server.send(200, "application/json", json);
-  });
-  server.on("/api/diagnostics/journal", HTTP_DELETE, []() {
-    if (!requireAuth()) return;
-    diag_journal_clear();
-    server.send(200, "application/json", "{\"success\":true}");
-  });
-  // Diagnostic snapshot — single JSON blob for AI-assisted debugging
-  server.on("/api/diag/snapshot", HTTP_GET, []() {
-    if (!requireAuth()) return;
-    JsonDocument doc;
-    doc["type"] = "diagSnapshot";
-    doc["timestamp"] = millis();
-    doc["freeHeap"] = ESP.getFreeHeap();
-    doc["freePsram"] = ESP.getFreePsram();
-    doc["maxAllocHeap"] = ESP.getMaxAllocHeap();
-    doc["heapBudgetPsram"] = heap_budget_total_psram();
-    doc["heapBudgetSram"]  = heap_budget_total_sram();
-    doc["fsmState"] = (int)appState.fsmState;
-    // HAL devices
-#ifdef DAC_ENABLED
-    {
-      JsonArray devs = doc["halDevices"].to<JsonArray>();
-      HalDeviceManager::instance().forEach([](HalDevice* dev, void* ctx) {
-        JsonArray* arr = static_cast<JsonArray*>(ctx);
-        JsonObject d = arr->add<JsonObject>();
-        d["slot"]       = dev->getSlot();
-        d["name"]       = dev->getDescriptor().name;
-        d["compatible"] = dev->getDescriptor().compatible;
-        d["type"]       = (int)dev->getType();
-        d["state"]      = (int)dev->_state;
-        d["ready"]      = dev->_ready;
-        const HalRetryState* rs = HalDeviceManager::instance().getRetryState(dev->getSlot());
-        if (rs) {
-          d["retries"]  = rs->count;
-          d["lastErr"]  = rs->lastErrorCode;
-        }
-        d["faults"]     = HalDeviceManager::instance().getFaultCount(dev->getSlot());
-      }, &devs);
-    }
-#endif
-    // Recent diag events
-    {
-      JsonArray events = doc["recentEvents"].to<JsonArray>();
-      uint8_t count = diag_journal_count();
-      uint8_t limit = count < 10 ? count : 10;
-      for (uint8_t i = 0; i < limit; i++) {
-        DiagEvent ev;
-        if (diag_journal_read(i, &ev)) {
-          JsonObject e = events.add<JsonObject>();
-          e["seq"]  = ev.seq;
-          e["t"]    = ev.timestamp;
-          char codeBuf[8];
-          snprintf(codeBuf, sizeof(codeBuf), "0x%04X", ev.code);
-          e["c"]    = codeBuf;
-          e["dev"]  = ev.device;
-          e["msg"]  = ev.message;
-          e["sev"]  = diag_severity_char((DiagSeverity)ev.severity);
-        }
-      }
-    }
-    String json;
-    serializeJson(doc, json);
-    server.send(200, "application/json", json);
-  });
+  // Diagnostic endpoints registered in diag_api.cpp
   server.on("/api/factoryreset", HTTP_POST, []() {
     if (!requireAuth())
       return;
@@ -721,84 +623,7 @@ void setup() {
           return;
         handleFirmwareUploadChunk();
       });
-  // Signal Generator API
-  server.on("/api/signalgenerator", HTTP_GET, []() {
-    if (!requireAuth())
-      return;
-    JsonDocument doc;
-    doc["success"] = true;
-    doc["enabled"] = appState.sigGen.enabled;
-    const char *waveNames[] = {"sine", "square", "white_noise", "sweep"};
-    doc["waveform"] = waveNames[appState.sigGen.waveform % 4];
-    doc["frequency"] = appState.sigGen.frequency;
-    doc["amplitude"] = appState.sigGen.amplitude;
-    const char *chanNames[] = {"left", "right", "both"};
-    doc["channel"] = chanNames[appState.sigGen.channel % 3];
-    doc["outputMode"] = appState.sigGen.outputMode == 0 ? "software" : "pwm";
-    doc["sweepSpeed"] = appState.sigGen.sweepSpeed;
-    String json;
-    serializeJson(doc, json);
-    server.send(200, "application/json", json);
-  });
-  server.on("/api/signalgenerator", HTTP_POST, []() {
-    if (!requireAuth())
-      return;
-    if (!server.hasArg("plain")) {
-      server.send(400, "application/json",
-                  "{\"success\":false,\"message\":\"No data\"}");
-      return;
-    }
-    JsonDocument doc;
-    if (deserializeJson(doc, server.arg("plain"))) {
-      server.send(400, "application/json",
-                  "{\"success\":false,\"message\":\"Invalid JSON\"}");
-      return;
-    }
-    bool changed = false;
-    if (doc["enabled"].is<bool>()) {
-      appState.sigGen.enabled = doc["enabled"].as<bool>();
-      changed = true;
-    }
-    if (doc["waveform"].is<String>()) {
-      String w = doc["waveform"].as<String>();
-      if (w == "sine") appState.sigGen.waveform = 0;
-      else if (w == "square") appState.sigGen.waveform = 1;
-      else if (w == "white_noise") appState.sigGen.waveform = 2;
-      else if (w == "sweep") appState.sigGen.waveform = 3;
-      changed = true;
-    }
-    if (doc["frequency"].is<float>()) {
-      float f = doc["frequency"].as<float>();
-      if (f >= 1.0f && f <= 22000.0f) { appState.sigGen.frequency = f; changed = true; }
-    }
-    if (doc["amplitude"].is<float>()) {
-      float a = doc["amplitude"].as<float>();
-      if (a >= -96.0f && a <= 0.0f) { appState.sigGen.amplitude = a; changed = true; }
-    }
-    if (doc["channel"].is<String>()) {
-      String c = doc["channel"].as<String>();
-      if (c == "left") appState.sigGen.channel = 0;
-      else if (c == "right") appState.sigGen.channel = 1;
-      else if (c == "both") appState.sigGen.channel = 2;
-      changed = true;
-    }
-    if (doc["outputMode"].is<String>()) {
-      String m = doc["outputMode"].as<String>();
-      if (m == "software") appState.sigGen.outputMode = 0;
-      else if (m == "pwm") appState.sigGen.outputMode = 1;
-      changed = true;
-    }
-    if (doc["sweepSpeed"].is<float>()) {
-      float s = doc["sweepSpeed"].as<float>();
-      if (s >= 1.0f && s <= 22000.0f) { appState.sigGen.sweepSpeed = s; changed = true; }
-    }
-    if (changed) {
-      siggen_apply_params();
-      saveSignalGenSettings();
-      appState.markSignalGenDirty();
-    }
-    server.send(200, "application/json", "{\"success\":true}");
-  });
+  // Signal generator endpoints registered in siggen_api.cpp
   // Audio Pipeline Matrix API
   server.on("/api/pipeline/matrix", HTTP_GET, []() {
     if (!requireAuth())
@@ -929,6 +754,10 @@ void setup() {
 
   // Register PSRAM health API endpoint
   registerPsramApiEndpoints(server);
+
+  // Register extracted API modules
+  registerDiagApiEndpoints();
+  registerSignalGenApiEndpoints();
 
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
