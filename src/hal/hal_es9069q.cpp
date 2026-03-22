@@ -270,7 +270,7 @@ bool HalEs9069Q::isMqaActive() const {
     if (!_initialized) return false;
 
     // Read MQA status from bits[3:1] of REG_MQA_CONTROL
-    uint8_t reg = _readReg(ES9069Q_REG_MQA_CONTROL);
+    uint8_t reg = const_cast<HalEs9069Q*>(this)->_readReg(ES9069Q_REG_MQA_CONTROL);
     uint8_t status = (uint8_t)((reg & ES9069Q_MQA_STATUS_MASK) >> ES9069Q_MQA_STATUS_SHIFT);
     return (status != ES9069Q_MQA_STATUS_NONE);
 }
