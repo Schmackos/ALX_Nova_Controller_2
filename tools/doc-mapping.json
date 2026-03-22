@@ -280,7 +280,8 @@
     "src/drivers/es9033q_regs.h",
     "src/drivers/es9038q2m_regs.h",
     "src/drivers/es9039q2m_regs.h",
-    "src/drivers/es9069q_regs.h"
+    "src/drivers/es9069q_regs.h",
+    "src/hal/hal_eeprom.h"
   ],
   "sectionToPromptType": {
     "api/rest-main": "api-reference",
