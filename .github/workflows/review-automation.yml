@@ -2,7 +2,7 @@ name: Review Automation
 
 on:
   workflow_run:
-    workflows: ["Claude Code Review"]
+    workflows: ["AI Code Review"]
     types: [completed]
 
 permissions:
