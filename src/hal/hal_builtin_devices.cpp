@@ -78,8 +78,8 @@ static HalDevice* factory_es9840()    { return new HalEs9840(); }
 static HalDevice* factory_es9841()    { return new HalEs9841(); }
 static HalDevice* factory_es9038q2m() { return new HalEs9038q2m(); }
 static HalDevice* factory_es9039q2m() { return new HalEs9039q2m(); }
-static HalDevice* factory_es9069q()   { return new HalEs9069q(); }
-static HalDevice* factory_es9033q()   { return new HalEs9033q(); }
+static HalDevice* factory_es9069q()   { return new HalEs9069Q(); }
+static HalDevice* factory_es9033q()   { return new HalEs9033Q(); }
 static HalDevice* factory_es9020_dac() { return new HalEs9020Dac(); }
 static HalDevice* factory_es9038pro()  { return new HalEs9038pro(); }
 static HalDevice* factory_es9028pro()  { return new HalEs9028pro(); }
