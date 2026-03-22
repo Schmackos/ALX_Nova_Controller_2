@@ -298,7 +298,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     showToast('Timezone updated', 'success');
@@ -320,7 +320,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 'appState.timezoneOffset': offset, 'appState.dstOffset': dstOffset })
             })
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     showToast('DST setting updated', 'success');
@@ -354,7 +354,7 @@
 
         function updateCurrentTime() {
             apiFetch('/api/settings')
-            .then(res => res.json())
+            .then(res => res.safeJson())
             .then(data => {
                 if (data.success) {
                     // Create date object with current UTC time

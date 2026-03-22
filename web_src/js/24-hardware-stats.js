@@ -4,7 +4,7 @@
         function eepromLoadPresets() {
             if (_eepromPresetsLoaded) return;
             apiFetch('/api/dac/eeprom/presets')
-            .then(r => r.json())
+            .then(r => r.safeJson())
             .then(d => {
                 if (!d.success) return;
                 var sel = document.getElementById('eepromPreset');
@@ -766,7 +766,7 @@
                 flags: flags, sampleRates: rates
             };
             apiFetch('/api/dac/eeprom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-            .then(function(r){ return r.json(); })
+            .then(function(r){ return r.safeJson(); })
             .then(function(d){ if (d.success) showToast('EEPROM programmed successfully','success'); else showToast(d.message||'Program failed','error'); })
             .catch(function(){ showToast('EEPROM program failed','error'); });
         }
@@ -775,7 +775,7 @@
             if (!confirm('Erase EEPROM? This will clear all stored DAC identification data.')) return;
             var addr = parseInt(document.getElementById('eepromTargetAddr').value);
             apiFetch('/api/dac/eeprom/erase', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ address: addr }) })
-            .then(function(r){ return r.json(); })
+            .then(function(r){ return r.safeJson(); })
             .then(function(d){ if (d.success) showToast('EEPROM erased','success'); else showToast(d.message||'Erase failed','error'); })
             .catch(function(){ showToast('EEPROM erase failed','error'); });
         }
@@ -802,7 +802,7 @@
         }
         function eepromLoadHex() {
             apiFetch('/api/dac/eeprom')
-            .then(r => r.json())
+            .then(r => r.safeJson())
             .then(d => {
                 var el = document.getElementById('dbgEepromHex');
                 if (!el) return;
