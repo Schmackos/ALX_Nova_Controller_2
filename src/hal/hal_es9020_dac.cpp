@@ -122,7 +122,7 @@ HalInitResult HalEs9020Dac::init() {
     if (!_enableI2sTx()) {
         LOG_E("[HAL:ES9020] Failed to enable expansion I2S TX");
         _state = HAL_STATE_ERROR;
-        return hal_init_fail("I2S TX enable failed");
+        return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX enable failed");
     }
 
     // ---- 10. Mark device ready ----
@@ -247,7 +247,7 @@ bool HalEs9020Dac::setApllEnabled(bool enable) {
 bool HalEs9020Dac::isApllLocked() const {
     if (!_initialized) return false;
     // APLL_LOCK_STATUS is bit4 of REG_APLL_CTRL (0x0C), read-only
-    uint8_t val = _readReg(ES9020_REG_APLL_CTRL);
+    uint8_t val = const_cast<HalEs9020Dac*>(this)->_readReg(ES9020_REG_APLL_CTRL);
     return (val & ES9020_APLL_LOCK_BIT) != 0;
 }
 
