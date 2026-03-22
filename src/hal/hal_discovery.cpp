@@ -213,7 +213,7 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
                     LOG_I("[HAL:Discovery]", "Bus %u: device at 0x%02X (retry %u)",
                           busIndex, timeoutAddrs[i], retry + 1);
                     char diagMsg[24];
-                    snprintf(diagMsg, sizeof(diagMsg), "0x%02X retry %u", timeoutAddrs[i], retry + 1);
+                    snprintf(diagMsg, sizeof(diagMsg), "0x%02X retry %u", timeoutAddrs[i], (unsigned)(retry + 1));
                     diag_emit(DIAG_HAL_PROBE_RETRY_OK, DIAG_SEV_INFO, 0xFF, "I2C", diagMsg);
                     timeoutAddrs[i] = 0; // mark as found
                 } else {
