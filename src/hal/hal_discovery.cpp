@@ -180,6 +180,11 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
             return 0;
     }
 
+    // Track addresses that return timeout for retry
+    uint8_t timeoutAddrs[HAL_PROBE_RETRY_MAX_ADDRS];
+    uint8_t timeoutCount = 0;
+    memset(timeoutAddrs, 0, sizeof(timeoutAddrs));
+
     // Scan standard I2C address range (0x08-0x77, skip reserved)
     for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
         bus->beginTransmission(addr);
@@ -187,6 +192,35 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
         if (err == 0) {
             found++;
             LOG_I("[HAL:Discovery]", "Bus %u: device at 0x%02X", busIndex, addr);
+        } else if ((err == 4 || err == 5) && timeoutCount < HAL_PROBE_RETRY_MAX_ADDRS) {
+            timeoutAddrs[timeoutCount++] = addr;
+        }
+    }
+
+    // Retry pass: only addresses that returned timeout (err 4/5)
+    // NACK (err 2) means "nobody home" — no point retrying
+    if (timeoutCount > 0) {
+        LOG_I("[HAL:Discovery]", "Bus %u: retrying %u timeout addresses", busIndex, timeoutCount);
+        for (uint8_t retry = 0; retry < HAL_PROBE_RETRY_COUNT; retry++) {
+            vTaskDelay(pdMS_TO_TICKS(HAL_PROBE_RETRY_BACKOFF_MS * (retry + 1)));
+            uint8_t remaining = 0;
+            for (uint8_t i = 0; i < timeoutCount; i++) {
+                if (timeoutAddrs[i] == 0) continue; // already found
+                bus->beginTransmission(timeoutAddrs[i]);
+                uint8_t retryErr = bus->endTransmission();
+                if (retryErr == 0) {
+                    found++;
+                    LOG_I("[HAL:Discovery]", "Bus %u: device at 0x%02X (retry %u)",
+                          busIndex, timeoutAddrs[i], retry + 1);
+                    char diagMsg[24];
+                    snprintf(diagMsg, sizeof(diagMsg), "0x%02X retry %u", timeoutAddrs[i], retry + 1);
+                    diag_emit(DIAG_HAL_PROBE_RETRY_OK, DIAG_SEV_INFO, 0xFF, "I2C", diagMsg);
+                    timeoutAddrs[i] = 0; // mark as found
+                } else {
+                    remaining++;
+                }
+            }
+            if (remaining == 0) break; // all found
         }
     }
 

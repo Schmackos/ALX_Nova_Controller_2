@@ -42,12 +42,13 @@ These issues were identified and **completely fixed** in recent development phas
 
 ### Core Audio Pipeline
 
-**I2S Master Clock Continuity**
+**I2S Master Clock Continuity** (REVIEWED: 2026-03-22)
 - **Risk**: MCLK must remain continuous for PCM1808 PLL stability. If `i2s_configure_adc1()` is called from within the audio task loop, clock stops
 - **Files**: `src/audio_pipeline.cpp`, `src/i2s_audio.cpp`
-- **Current mitigation**: CLAUDE.md explicitly warns against calling `i2s_configure_adc1()` in task loop. Code follows pattern. No guard is needed because the abstraction is enforced at design level
-- **Test coverage**: Implicit via all audio pipeline tests (1600+ tests); no explicit test for clock continuity
-- **Recommendation**: Add integration test that monitors MCLK GPIO for continuous output during various state transitions. Priority: MEDIUM
+- **Current mitigation**: `i2s_configure_adc1()` is `static` in `i2s_audio.cpp` — not externally callable. Only two callsites exist, both from main loop context (never from audio task). CLAUDE.md explicitly documents the constraint
+- **Review outcome**: 5-agent team reviewed (architect, embedded, backend, testing, code-reviewer). Code reviewer rejected runtime guard as over-engineering — function's `static` linkage prevents incorrect callers. Documentation-only mitigation is appropriate
+- **Test coverage**: Implicit via all audio pipeline tests (2327 tests); no explicit test for clock continuity
+- **Recommendation**: None — risk is well-mitigated by static linkage + documentation. Priority: CLOSED (downgraded from MEDIUM)
 
 ### FreeRTOS Task Watchdog
 
@@ -65,13 +66,10 @@ These issues were identified and **completely fixed** in recent development phas
 - **Test coverage**: `test_hal_discovery` has 5 SDIO guard tests, all passing
 - **Recommendation**: None — risk is well-mitigated by design. Monitor for any future async WiFi changes
 
-**DNS Spoofing via Unencrypted WiFi Captive Portal**
-- **Risk**: WiFi AP mode (on `POST /api/wifi/ap`) returns plain HTTP login page. Man-in-the-middle attacker can replace page or redirect `/api/` endpoints to fake server
-- **Files**: `src/wifi_manager.cpp`, `src/main.cpp` (AP mode setup), `web_pages.cpp` (login page)
-- **Current mitigation**: AP mode is only active for ~5 minutes (hard-coded timeout). Password auth required to exit AP mode. No sensitive operations (firmware upload, MQTT config) possible without password
-- **Impact**: Attacker could inject JavaScript to steal credentials or redirect to fake audio DSP config. Device remains stable; no crash
-- **Test coverage**: No security test for captive portal. Auth tests only verify legitimate flow
-- **Recommendation**: Add `X-Frame-Options: DENY` and `X-Content-Type-Options: nosniff` headers to AP mode responses. Consider adding Content-Security-Policy header. Priority: MEDIUM (AP mode is temporary, but risk exists if attacker is on same network)
+**DNS Spoofing via Unencrypted WiFi Captive Portal** (MITIGATED: 2026-03-22)
+- **Was**: All HTTP responses lacked security headers. Man-in-the-middle attacker could inject content via clickjacking (iframe embedding) or MIME-type confusion
+- **Now**: `X-Frame-Options: DENY` and `X-Content-Type-Options: nosniff` headers added to ALL HTTP responses via `http_add_security_headers()` helper in `src/http_security.h`. Applied to: gzipped pages (`sendGzipped()`), auth responses, API responses in `main.cpp` and `settings_manager.cpp`. CSP intentionally omitted — code reviewer determined `unsafe-inline` provides zero XSS protection for inline scripts (security theater). 5 new tests in `test_http_security`
+- **Remaining risk**: AP mode still uses plain HTTP (no TLS). Content injection via MITM remains possible but clickjacking and MIME sniffing are now blocked. TLS for AP mode deferred (certificate management complex)
 
 ### Heap & Memory Management
 
@@ -101,13 +99,10 @@ These issues were identified and **completely fixed** in recent development phas
 - **Test coverage**: `test_hal_coord` has 16 tests including dedup, all pass
 - **Recommendation**: None — dedup logic is robust and tested. Monitor in field for overflow telemetry
 
-**Device Probing Timeout at Boot**
-- **Risk**: Some I2C devices (ES8311, PCM1808) take 10-50ms to respond to address scan. If many devices are present (6+), discovery takes 1-2 seconds. If timeout set too low, devices miss probe window
-- **Files**: `src/hal/hal_discovery.cpp` (lines 180-220 bus scan), `src/i2s_audio.cpp` (init timing)
-- **Current mitigation**: Discovery runs post-WiFi (after GUI splash screen). I2C timeout configured conservatively (100ms per address). Retry logic in health monitor if device misses initial probe
-- **Impact**: Device not discovered at boot. User must manually rescan via Web UI. Device is discovered on second scan
-- **Test coverage**: `test_hal_discovery` has 18 tests; unit tests only (no real I2C timing)
-- **Recommendation**: Add integration test with real ESP32-P4 + I2C devices. Monitor discovery latency. Consider adding boot retry loop (3× retry with backoff). Priority: MEDIUM (rare, affects onboarding experience)
+**Device Probing Timeout at Boot** (MITIGATED: 2026-03-22)
+- **Was**: Single I2C scan pass at boot. Expansion devices with slow power-on (EEPROM POR 5-100ms) missed on first probe. User required manual rescan
+- **Now**: Targeted retry in `hal_i2c_scan_bus()`: addresses returning I2C timeout (error codes 4/5) are collected (max 16) and retried up to `HAL_PROBE_RETRY_COUNT` (2) times with increasing backoff (`HAL_PROBE_RETRY_BACKOFF_MS` × attempt = 50ms, 100ms). NACK addresses (error 2 = "nobody home") are NOT retried. Worst-case boot delay: ~300ms. `DIAG_HAL_PROBE_RETRY_OK` (0x1105) emitted on retry success. 8 new tests in `test_hal_probe_retry`
+- **Remaining risk**: Hardware integration test with real ESP32-P4 + I2C devices not yet added. Priority: LOW (retry logic covers the common case)
 
 ### WebSocket & REST API
 
@@ -119,23 +114,19 @@ These issues were identified and **completely fixed** in recent development phas
 - **Test coverage**: E2E tests use 1-2 concurrent clients. No stress test for 9+ concurrent clients
 - **Recommendation**: Add WebSocket client limit reached warning to UI. Consider increasing MAX_WS_CLIENTS to 16 (minimal overhead per client). Priority: LOW (rare scenario; typical user has 1-2 connections)
 
-**REST API Rate Limiting Gap**
-- **Risk**: Auth rate limiting (5-minute cooldown after 5 failed logins) applies only to `POST /api/login`. Admin/management endpoints (e.g., `POST /api/settings/factory-reset`) have no rate limit. Attacker could brute-force settings via repeated POST
-- **Files**: `src/auth_handler.cpp` (lines 18-21 login cooldown), `src/settings_manager.cpp` (no rate limit on endpoints)
-- **Current mitigation**: Admin endpoints require valid session cookie (HttpOnly, 1-hour TTL). Brute-force password is still required first. Cookie stealing via XSS would require JavaScript injection (CSP header not yet deployed)
-- **Impact**: Attacker with valid cookie could factory-reset device repeatedly (annoying but not destructive — resets to last saved config or defaults)
-- **Test coverage**: E2E auth tests verify login rate limit. No test for admin endpoint protection
-- **Recommendation**: Add per-endpoint rate limiting (e.g., 10 resets per hour per IP). Add audit log for sensitive operations. Priority: MEDIUM (API is protected by auth, but defense-in-depth would help)
+**REST API Rate Limiting Gap** (REVIEWED: 2026-03-22)
+- **Risk**: Admin endpoints (factory-reset, reboot) have no server-side rate limiting beyond session auth
+- **Review outcome**: 5-agent team reviewed. Code reviewer rejected server-side rate limiting as security theater: (1) attacker must already have valid session cookie, (2) reboot resets RAM-based counter, (3) MQTT path exposes same operations without rate limiting, creating inconsistent posture. UX risk: legitimate user blocked by 429 on retry after network glitch
+- **Mitigation applied**: Client-side confirmation dialog with 3-second countdown timer added for factory-reset and reboot buttons in `web_src/js/22-settings.js`. Prevents accidental rapid-fire clicks (the actual UX problem). Modal uses MDI warning icon, disabled confirm button with countdown, cancel/backdrop dismiss
+- **Recommendation**: None — server-side rate limiting deferred. If needed in future, also guard MQTT `system/factory_reset` and `system/reboot` topics for consistency. Priority: CLOSED (downgraded from MEDIUM)
 
 ### External Integrations
 
-**MQTT Broker Connection Timeout**
-- **Risk**: MQTT connection initiated from `mqtt_task` (Core 0). If broker is unreachable, TCP connection timeout is 15-30 seconds (OS-dependent). During this time, other Core 0 tasks (GUI, USB audio) may be starved
-- **Files**: `src/mqtt_task.cpp` (line 50-80 reconnect logic), `src/mqtt_handler.cpp`
-- **Current mitigation**: MQTT task runs at priority 1 (same as main loop). Connection happens once at boot + on settings change. Reconnect backoff is exponential (1s → 32s max)
-- **Impact**: GUI unresponsive for 15-30s on first boot if broker unreachable. WiFi network still works (different Core 0 task). Audio unaffected (Core 1)
-- **Test coverage**: Mock MQTT tests (3 modules) don't test timeout. No real TCP timeout test
-- **Recommendation**: Add explicit TCP connection timeout (5s) using `socket` API instead of relying on PubSubClient. Add UI spinner during MQTT connect. Priority: MEDIUM (first-boot experience if broker is offline)
+**MQTT Broker Connection Timeout** (MITIGATED: 2026-03-22)
+- **Was**: `WiFiClient` TCP socket timeout was OS-dependent (15-30s). `mqttWifiClient.connect()` already had a 1s pre-connect timeout (line 889), but `PubSubClient.connect()` could still block for up to 15-30s on the TCP stack level
+- **Now**: `mqttWifiClient.setTimeout(MQTT_SOCKET_TIMEOUT_MS)` (5000ms) caps the overall socket timeout at 5 seconds. Combined with the existing 1s pre-connect timeout, total worst-case blocking is ~6 seconds — well under the 30s TWDT timeout. 1 new test verifying constant value and TWDT safety margin
+- **Review outcome**: Full PubSubClient → async MQTT library swap was rejected by code reviewer: 317 callsites, mock rewrite required, ESP32-P4 compatibility unverified. 1-line `setTimeout()` fix provides the needed protection. Full library swap deferred to dedicated future release
+- **Remaining risk**: PubSubClient still blocks during `connect()`, but for max 5s instead of 30s. GUI may be briefly unresponsive. Priority: LOW (acceptable for first-boot edge case)
 
 **OTA SSL Certificate Validation**
 - **Risk**: OTA download uses Mozilla certificate bundle via `WiFiClientSecure`. If bundle is stale (ESP32 ships with ~2-year-old cert set), newly signed certificates are rejected
@@ -191,13 +182,10 @@ These issues were identified and **completely fixed** in recent development phas
 - **Was**: No CPU load visibility, no automatic shedding — user could overload DSP chain and starve WiFi RX
 - **Now**: `DSP_CPU_WARN_PERCENT` (80%) triggers `DIAG_DSP_CPU_WARN` diagnostic and web UI warning. `cpuCritical` (95%) triggers `DIAG_DSP_CPU_CRIT`, auto-bypasses FIR/convolution stages. `PipelineTimingMetrics` provides per-frame instrumentation. Web UI DSP CPU card shows real-time utilization bar
 
-**WiFi TX Packet Loss During Audio Burst**
-- **Current**: WS binary broadcast (waveform + spectrum) happens every 20ms (50 Hz). Each frame = ~2KB gzip (~10KB uncompressed). Total = 100KB/sec per client
-- **Observation**: With 2 concurrent WS clients + MQTT at 1Hz + HTTP requests, WiFi RX buffer starvation confirmed on oscilloscope (dropped pings)
-- **Mitigation**: Binary rate halved when heap warning (50KB free) — broadcast every 40ms instead of 20ms. Reduces to 50KB/sec
-- **Risk**: With 3 concurrent clients, even halved rate still starves WiFi. User loses WebSocket connection, must reconnect
-- **Test coverage**: E2E tests use 1 WS client only. No multi-client load test
-- **Recommendation**: Add adaptive bit rate to WS binary (reduce resolution when 2+ clients). Implement client-side request throttling. Priority: MEDIUM
+**WiFi TX Packet Loss During Audio Burst** (MITIGATED: 2026-03-22)
+- **Was**: Binary WS broadcast at fixed 20ms interval regardless of client count. With 3+ concurrent clients, WiFi RX buffer starvation confirmed (dropped pings). Heap pressure only halved rate — insufficient for 3+ clients
+- **Now**: Client-count adaptive rate scaling in `websocket_handler.cpp`. Three-tier skip factor: 1 client = every frame (20ms), 2 clients = every 2nd frame (40ms), 3+ clients = every 4th frame (80ms). Combined with existing heap pressure via `&&` (both gates must allow). Periodic auth count recalibration every `WS_AUTH_RECOUNT_INTERVAL_MS` (10s) fixes stale counts from unclean disconnects. `wsAuthenticatedClientCount()` getter exposed in header. 11 new tests in `test_ws_adaptive_rate`
+- **Remaining risk**: 80ms interval (12.5 Hz) for 3+ clients shows visible stepping in waveform visualization. Acceptable tradeoff — users already choose 100ms update rate in settings. No multi-client stress test yet. Priority: LOW
 
 ## Fragile Areas
 
@@ -386,4 +374,4 @@ None identified. All critical features are implemented (HAL, audio pipeline, DSP
 
 *Concerns analysis: 2026-03-21*
 
-**Last updated**: Commit a2aaa7b (ESS SABRE ADC Integration). All major fixes from 2026-03-09 through 2026-03-21 included.
+**Last updated**: 2026-03-22 (Medium Risk Mitigations). 6 MEDIUM risks reviewed by 5-agent team: 2 mitigated (security headers, I2C retry), 1 mitigated with 1-line fix (MQTT timeout), 1 mitigated with adaptive rate (WS packet loss), 2 closed after review (I2S MCLK guard — static function, REST rate limiting — security theater). Client-side confirmation dialog added for destructive operations. 25 new tests (2327 total across 91 modules).

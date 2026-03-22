@@ -54,6 +54,7 @@
 #include "psram_api.h"
 #include "utils.h"
 #include "web_pages.h"
+#include "http_security.h"
 #include "websocket_handler.h"
 #include "wifi_manager.h"
 #include "eth_manager.h"
@@ -450,11 +451,13 @@ void setup() {
           server.uri().c_str());
 
     if (appState.wifi.isAPMode) {
+      http_add_security_headers();
       server.sendHeader("Location",
                         String("http://") + WiFi.softAPIP().toString() + "/",
                         true);
       server.send(302, "text/plain", "Redirecting to Captive Portal");
     } else {
+      http_add_security_headers();
       server.send(404, "text/plain", "Not Found");
     }
   });

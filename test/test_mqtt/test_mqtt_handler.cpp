@@ -12,6 +12,8 @@
 #include <PubSubClient.h>
 #endif
 
+#include "../../src/config.h"
+
 // Mock MQTT settings
 struct MQTTSettings {
     String broker;
@@ -658,6 +660,15 @@ void test_mqtt_usb_audio_topic_format(void) {
     }
 }
 
+// ===== MQTT Socket Timeout Tests =====
+
+void test_mqtt_socket_timeout_constant(void) {
+    // MQTT socket timeout should be set to prevent 15-30s blocking
+    TEST_ASSERT_EQUAL(5000, MQTT_SOCKET_TIMEOUT_MS);
+    // Must be less than TWDT timeout (30s) to prevent watchdog reboot
+    TEST_ASSERT_LESS_THAN(30000, MQTT_SOCKET_TIMEOUT_MS);
+}
+
 // ===== Test Runner =====
 
 int runUnityTests(void) {
@@ -733,6 +744,9 @@ int runUnityTests(void) {
     RUN_TEST(test_mqtt_usb_audio_enable_command_subscribe);
     RUN_TEST(test_mqtt_usb_audio_disable_command_subscribe);
     RUN_TEST(test_mqtt_usb_audio_topic_format);
+
+    // MQTT socket timeout tests
+    RUN_TEST(test_mqtt_socket_timeout_constant);
 
     return UNITY_END();
 }

@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "config.h"
 #include "debug_serial.h"
+#include "http_security.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
@@ -219,6 +220,7 @@ void handleGetWsToken() {
 
   String responseStr;
   serializeJson(response, responseStr);
+  http_add_security_headers();
   server.send(token.length() > 0 ? 200 : 429, "application/json", responseStr);
 }
 
@@ -467,6 +469,7 @@ bool requireAuth() {
                     "<body><p>Redirecting to login...</p>"
                     "<script>window.location.href='/login';</script>"
                     "</body></html>");
+    http_add_security_headers();
     server.sendHeader("Location", "/login");
     server.send(302, "text/html", html);
     return false;
@@ -480,6 +483,7 @@ bool requireAuth() {
 
   String response;
   serializeJson(doc, response);
+  http_add_security_headers();
   server.send(401, "application/json", response);
 
   return false;
@@ -533,6 +537,7 @@ bool isDefaultPassword() {
 // Handler: Login
 void handleLogin() {
   if (server.method() != HTTP_POST) {
+    http_add_security_headers();
     server.send(405, "text/plain", "Method Not Allowed");
     return;
   }
@@ -547,6 +552,7 @@ void handleLogin() {
 
     String responseStr;
     serializeJson(response, responseStr);
+    http_add_security_headers();
     server.send(400, "application/json", responseStr);
     return;
   }
@@ -568,6 +574,7 @@ void handleLogin() {
 
     LOG_W("[Auth] Rate limited — retry after %lus", retryAfterSec);
 
+    http_add_security_headers();
     server.sendHeader("Retry-After", String(retryAfterSec));
     JsonDocument response;
     response["success"] = false;
@@ -597,6 +604,7 @@ void handleLogin() {
 
     String responseStr;
     serializeJson(response, responseStr);
+    http_add_security_headers();
     server.send(401, "application/json", responseStr);
     return;
   }
@@ -610,6 +618,7 @@ void handleLogin() {
 
     String responseStr;
     serializeJson(response, responseStr);
+    http_add_security_headers();
     server.send(500, "application/json", responseStr);
     return;
   }
@@ -644,6 +653,7 @@ void handleLogin() {
   // Set cookie with HttpOnly — JS uses /api/ws-token for WS auth instead
   String cookie =
       "sessionId=" + sessionId + "; Path=/; Max-Age=3600; SameSite=Strict; HttpOnly";
+  http_add_security_headers();
   server.sendHeader("Set-Cookie", cookie);
   LOG_D("[Auth] Set-Cookie for session %s...",
         sessionId.substring(0, 8).c_str());
@@ -653,6 +663,7 @@ void handleLogin() {
 // Handler: Logout
 void handleLogout() {
   if (server.method() != HTTP_POST) {
+    http_add_security_headers();
     server.send(405, "text/plain", "Method Not Allowed");
     return;
   }
@@ -667,6 +678,7 @@ void handleLogout() {
 
   // Clear cookie
   String cookie = "sessionId=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly";
+  http_add_security_headers();
   server.sendHeader("Set-Cookie", cookie);
 
   JsonDocument response;
@@ -695,6 +707,7 @@ void handleAuthStatus() {
 
   String responseStr;
   serializeJson(response, responseStr);
+  http_add_security_headers();
   server.send(200, "application/json", responseStr);
 }
 
@@ -704,6 +717,7 @@ void handlePasswordChange() {
     return;
 
   if (server.method() != HTTP_POST) {
+    http_add_security_headers();
     server.send(405, "text/plain", "Method Not Allowed");
     return;
   }
@@ -718,6 +732,7 @@ void handlePasswordChange() {
 
     String responseStr;
     serializeJson(response, responseStr);
+    http_add_security_headers();
     server.send(400, "application/json", responseStr);
     return;
   }
@@ -732,6 +747,7 @@ void handlePasswordChange() {
 
     String responseStr;
     serializeJson(response, responseStr);
+    http_add_security_headers();
     server.send(400, "application/json", responseStr);
     return;
   }
@@ -748,5 +764,6 @@ void handlePasswordChange() {
 
   String responseStr;
   serializeJson(response, responseStr);
+  http_add_security_headers();
   server.send(200, "application/json", responseStr);
 }

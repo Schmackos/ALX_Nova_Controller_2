@@ -483,24 +483,84 @@ function updateTimerDuration() {
     .catch(err => showToast('Failed to update timer', 'error'));
 }
 
+function confirmDestructiveAction(title, message, onConfirm) {
+    var overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    var dialog = document.createElement('div');
+    dialog.className = 'confirm-dialog';
+
+    var iconSvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="var(--warning, #FFC107)" aria-hidden="true"><path d="M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z"/></svg>';
+
+    dialog.innerHTML =
+        '<div class="confirm-header">' + iconSvg + ' ' + title + '</div>' +
+        '<div class="confirm-body">' + message + '</div>' +
+        '<div class="confirm-actions">' +
+            '<button class="btn confirm-cancel-btn" id="confirmCancelBtn">Cancel</button>' +
+            '<button class="btn confirm-confirm-btn" id="confirmConfirmBtn" disabled>Confirm (3)</button>' +
+        '</div>';
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    var confirmBtn = document.getElementById('confirmConfirmBtn');
+    var cancelBtn = document.getElementById('confirmCancelBtn');
+    var countdown = 3;
+    var timer = setInterval(function() {
+        countdown--;
+        if (countdown > 0) {
+            confirmBtn.textContent = 'Confirm (' + countdown + ')';
+        } else {
+            clearInterval(timer);
+            confirmBtn.textContent = 'Confirm';
+            confirmBtn.disabled = false;
+        }
+    }, 1000);
+
+    cancelBtn.onclick = function() {
+        clearInterval(timer);
+        document.body.removeChild(overlay);
+    };
+
+    confirmBtn.onclick = function() {
+        clearInterval(timer);
+        document.body.removeChild(overlay);
+        onConfirm();
+    };
+
+    overlay.onclick = function(e) {
+        if (e.target === overlay) {
+            clearInterval(timer);
+            document.body.removeChild(overlay);
+        }
+    };
+}
+
 function startFactoryReset() {
-    if (confirm('Are you sure? This will erase all settings!')) {
-        apiFetch('/api/factoryreset', { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) showToast('Factory reset in progress...', 'success');
-        })
-        .catch(err => showToast('Failed to reset', 'error'));
-    }
+    confirmDestructiveAction(
+        'Factory Reset',
+        'This will erase all settings and restore defaults. This cannot be undone.',
+        function() {
+            apiFetch('/api/factoryreset', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast('Factory reset in progress...', 'success');
+            })
+            .catch(err => showToast('Failed to reset', 'error'));
+        }
+    );
 }
 
 function startReboot() {
-    if (confirm('Are you sure you want to reboot the device?')) {
-        apiFetch('/api/reboot', { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) showToast('Rebooting...', 'success');
-        })
-        .catch(err => showToast('Failed to reboot', 'error'));
-    }
+    confirmDestructiveAction(
+        'Reboot Device',
+        'The device will restart. You will lose connection temporarily.',
+        function() {
+            apiFetch('/api/reboot', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) showToast('Rebooting...', 'success');
+            })
+            .catch(err => showToast('Failed to reboot', 'error'));
+        }
+    );
 }

@@ -115,6 +115,11 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define USB_AUDIO_TASK_CORE           0     // TinyUSB task on Core 0 (separate from audio on Core 1)
 #endif
 
+// ===== HAL Discovery Retry =====
+#define HAL_PROBE_RETRY_COUNT      2       // Max I2C probe retries for timeout addresses
+#define HAL_PROBE_RETRY_BACKOFF_MS 50      // Base backoff ms (multiplied by attempt number)
+#define HAL_PROBE_RETRY_MAX_ADDRS  16      // Max timeout addresses to track for retry
+
 // ===== Diagnostic Journal Configuration =====
 #define DIAG_JOURNAL_HOT_ENTRIES    32    // In-memory ring buffer (PSRAM, 2KB)
 #define DIAG_JOURNAL_MAX_ENTRIES   800    // Persistent ring on LittleFS (64KB)
@@ -136,6 +141,11 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #ifndef PSRAM_CRITICAL_THRESHOLD
 #define PSRAM_CRITICAL_THRESHOLD   524288   // 512KB free PSRAM — critical
 #endif
+
+// ===== WebSocket Binary Rate Scaling =====
+#define WS_BINARY_SKIP_2_CLIENTS      2       // Send every 2nd binary frame for 2 clients
+#define WS_BINARY_SKIP_3PLUS          4       // Send every 4th binary frame for 3+ clients
+#define WS_AUTH_RECOUNT_INTERVAL_MS   10000   // Recalibrate auth count every 10s
 
 // ===== Server Ports =====
 const int WEB_SERVER_PORT = 80;
@@ -179,6 +189,7 @@ const float DEFAULT_ADC_VREF = 3.3f; // PCM1808 full-scale reference voltage (V)
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };
 
 // ===== MQTT Configuration =====
+#define MQTT_SOCKET_TIMEOUT_MS 5000  // TCP socket timeout for MQTT broker connection (ms)
 const unsigned long MQTT_RECONNECT_INTERVAL = 5000; // Reconnect every 5 seconds
 const unsigned long MQTT_PUBLISH_INTERVAL =
     1000; // Check for state changes every 1 second
