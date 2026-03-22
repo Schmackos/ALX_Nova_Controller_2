@@ -53,6 +53,7 @@
 #include "psram_api.h"
 #include "diag_api.h"
 #include "siggen_api.h"
+#include "i2s_port_api.h"
 #include "utils.h"
 #include "web_pages.h"
 #include "http_security.h"
@@ -758,6 +759,9 @@ void setup() {
   // Register extracted API modules
   registerDiagApiEndpoints();
   registerSignalGenApiEndpoints();
+
+  // Register I2S port status API endpoint
+  registerI2sPortApiEndpoints(server);
 
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
