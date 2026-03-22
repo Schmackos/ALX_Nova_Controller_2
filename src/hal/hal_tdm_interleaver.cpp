@@ -259,14 +259,15 @@ void HalTdmInterleaver::_flushTdm(int frames) {
         slot[7] = p3[f * 2 + 1];  // CH8 R
     }
 
-    // Write assembled TDM buffer to I2S TX DMA.
+    // Write assembled TDM buffer to I2S TX DMA via port-generic API.
+    // _i2sPort is set during init() from the HAL device config (default 2 for expansion).
     // In native builds the call is compiled out unless the test provides its own
     // controlled stub via TDM_INTERLEAVER_TEST_PROVIDES_STUBS, which overrides the
     // default no-op and lets tests capture what was transmitted.
     const size_t txBytes = (size_t)frames * TDM_INTERLEAVER_SLOTS * sizeof(int32_t);
 #if !defined(NATIVE_TEST) || defined(TDM_INTERLEAVER_TEST_PROVIDES_STUBS)
     size_t written = 0;
-    i2s_audio_write_expansion_tdm_tx(_tdmBuf, txBytes, &written, 5);
+    i2s_port_write(_i2sPort, _tdmBuf, txBytes, &written, 5);
 #endif
 
     // Ping-pong swap: next tick writes into the other side

@@ -11,6 +11,7 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include "../debug_serial.h"
+#include "../config.h"  // ES8311_I2S_DSDIN_PIN, MCLK_PIN, SCLK_PIN, LRCK_PIN defaults
 #include "../drivers/es8311_regs.h"
 #else
 // Native test stubs — no hardware access
@@ -255,11 +256,23 @@ HalInitResult HalEs8311::init() {
     dacCtrl &= ~(ES8311_DAC_SOFT_MUTE | ES8311_DAC_MUTE);
     _writeReg(ES8311_REG_DAC_CTRL, dacCtrl);
 
-    // Enable I2S TX on port 2 (ES8311 secondary I2S output)
-    if (!i2s_audio_enable_es8311_tx(_sampleRate)) {
-        LOG_E("[HAL:ES8311] I2S port 2 TX enable failed");
-        _powerDown();
-        return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX port 2 enable failed");
+    // Enable I2S TX on the configured port (default port 2 for ES8311).
+    {
+        HalDeviceConfig* es8311Cfg = HalDeviceManager::instance().getConfig(_slot);
+        uint8_t txPort = (es8311Cfg && es8311Cfg->valid && es8311Cfg->i2sPort != 255)
+                         ? es8311Cfg->i2sPort : 2;
+        _i2sPort = txPort;
+#ifndef NATIVE_TEST
+        if (!i2s_port_enable_tx(txPort, I2S_MODE_STD, 0,
+                                (gpio_num_t)ES8311_I2S_DSDIN_PIN,
+                                (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                                (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                                (gpio_num_t)ES8311_I2S_LRCK_PIN)) {
+            LOG_E("[HAL:ES8311] I2S TX enable failed (port=%u)", txPort);
+            _powerDown();
+            return hal_init_fail(DIAG_HAL_INIT_FAILED, "I2S TX enable failed");
+        }
+#endif
     }
     _i2sTxEnabled = true;
 
@@ -284,7 +297,7 @@ HalInitResult HalEs8311::init() {
 
 void HalEs8311::deinit() {
     // HC-3: ONLY disable TX. NEVER call i2s_channel_disable() on RX.
-    // Use i2s_audio_disable_es8311_tx() which handles port 2 TX teardown only.
+    // i2s_port_disable_tx() handles TX teardown on the configured port only.
 
     if (!_initialized) return;
 
@@ -297,9 +310,9 @@ void HalEs8311::deinit() {
 
     _powerDown();
 
-    // Disable I2S TX port 2 if this device enabled it
+    // Disable I2S TX if this device enabled it
     if (_i2sTxEnabled) {
-        i2s_audio_disable_es8311_tx();
+        i2s_port_disable_tx(_i2sPort);
         _i2sTxEnabled = false;
     }
 
@@ -312,7 +325,7 @@ void HalEs8311::deinit() {
     _state = HAL_STATE_REMOVED;
     _muteRampState = 1.0f;  // HC-6: Reset mute ramp state on deactivation
 
-    LOG_I("[HAL:ES8311] Deinitialized (I2S TX port 2 disabled)");
+    LOG_I("[HAL:ES8311] Deinitialized (I2S TX port %u disabled)", _i2sPort);
 }
 
 void HalEs8311::dumpConfig() {
@@ -484,8 +497,19 @@ static void _es8311_write(const int32_t* buf, int stereoFrames) {
         // Convert back to int32 for I2S DMA
         sink_float_to_i2s_int32(fBuf, txBuf, chunk);
 
+        // Write to I2S TX via port-generic API.
+        // The ES8311 is on port 2 by default; resolve from HAL config via slot.
         size_t bytesWritten = 0;
-        i2s_audio_write_es8311(txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
+        HalEs8311* es8311Dev = nullptr;
+        for (uint8_t s = 0; s < AUDIO_OUT_MAX_SINKS && !es8311Dev; s++) {
+            if (_es8311_slot_dev[s]) es8311Dev = _es8311_slot_dev[s];
+        }
+        uint8_t port = 2;
+        if (es8311Dev) {
+            HalDeviceConfig* es8311Cfg = HalDeviceManager::instance().getConfig(es8311Dev->getSlot());
+            if (es8311Cfg && es8311Cfg->valid && es8311Cfg->i2sPort != 255) port = es8311Cfg->i2sPort;
+        }
+        i2s_port_write(port, txBuf, (size_t)chunk * sizeof(int32_t), &bytesWritten, 20);
 
         src += chunk;
         remaining -= chunk;

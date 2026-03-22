@@ -66,7 +66,8 @@ private:
     int8_t   _sclPin     = 8;
     int8_t   _paPin      = 53;
     bool     _initialized = false;
-    bool     _i2sTxEnabled = false;  // tracks whether I2S TX port 2 has been enabled
+    bool     _i2sTxEnabled = false;  // tracks whether I2S TX has been enabled
     float    _muteRampState = 1.0f;  // mute ramp envelope [0.0 .. 1.0]
+    uint8_t  _i2sPort      = 2;     // I2S port used for TX (from config, default 2)
 };
 #endif // DAC_ENABLED

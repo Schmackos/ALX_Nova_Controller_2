@@ -28,7 +28,7 @@ static inline void* heap_caps_calloc(size_t n, size_t sz, uint32_t) { return cal
 
 // Port read stubs (real implementations live in i2s_audio.cpp).
 // Guarded by TDM_TEST_PROVIDES_STUBS: the deinterleaver unit test defines
-// its own controlled versions of i2s_audio_port2_tdm_read / _active so it
+// its own controlled versions of i2s_port_tdm_read / i2s_port_is_rx_active so it
 // can inject synthetic TDM frames.  Other native tests that include this
 // .cpp get the no-op versions below.
 #ifndef TDM_TEST_PROVIDES_STUBS
@@ -40,9 +40,9 @@ inline bool i2s_audio_port1_active(void) { return false; }
 inline bool i2s_audio_port2_active(void) { return false; }
 inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
 
-// TDM-specific stubs used in native tests
-inline uint32_t i2s_audio_port2_tdm_read(int32_t* dst, uint32_t frames) { (void)dst; (void)frames; return 0; }
-inline bool     i2s_audio_port2_tdm_active(void) { return false; }
+// Port-generic TDM stubs used in native tests
+inline uint32_t i2s_port_tdm_read(uint8_t, int32_t* dst, uint32_t frames, uint8_t) { (void)dst; (void)frames; return 0; }
+inline bool     i2s_port_is_rx_active(uint8_t) { return false; }
 #endif // TDM_TEST_PROVIDES_STUBS
 
 #define MALLOC_CAP_SPIRAM 0
@@ -244,11 +244,11 @@ uint32_t HalTdmDeinterleaver::_doPairARead(int32_t* dst, uint32_t frames) {
     // Cap to TDM_MAX_FRAMES_PER_BUF to protect the scratch buffer.
     if (frames > TDM_MAX_FRAMES_PER_BUF) frames = TDM_MAX_FRAMES_PER_BUF;
 
-    // Use the port2 TDM variant that reads 4-slot frames.
-    // i2s_audio_port2_tdm_read() reads frames × 4 × sizeof(int32_t) bytes from I2S2.
+    // Use the port-generic TDM read with the port stored in _i2sPort (default 2).
+    // i2s_port_tdm_read() reads frames × 4 × sizeof(int32_t) bytes from the configured port.
     // In native tests, the test translation unit provides its own stub via
     // TDM_TEST_PROVIDES_STUBS; see the NATIVE_TEST block at the top of this file.
-    uint32_t framesRead = i2s_audio_port2_tdm_read(_rawBuf, frames);
+    uint32_t framesRead = i2s_port_tdm_read(_i2sPort, _rawBuf, frames, 4);
 
     if (framesRead == 0) {
         _lastFrameCount = 0;
@@ -329,7 +329,7 @@ uint32_t HalTdmDeinterleaver::_pairBRead_0(int32_t* dst, uint32_t frames) {
 }
 bool HalTdmDeinterleaver::_pairAActive_0(void) {
     if (!_gInstances[0]) return false;
-    return i2s_audio_port2_tdm_active();
+    return i2s_port_is_rx_active(_gInstances[0]->_i2sPort);
 }
 bool HalTdmDeinterleaver::_pairBActive_0(void) {
     if (!_gInstances[0]) return false;
@@ -347,7 +347,7 @@ uint32_t HalTdmDeinterleaver::_pairBRead_1(int32_t* dst, uint32_t frames) {
 }
 bool HalTdmDeinterleaver::_pairAActive_1(void) {
     if (!_gInstances[1]) return false;
-    return i2s_audio_port2_tdm_active();
+    return i2s_port_is_rx_active(_gInstances[1]->_i2sPort);
 }
 bool HalTdmDeinterleaver::_pairBActive_1(void) {
     if (!_gInstances[1]) return false;

@@ -12,6 +12,7 @@
 #include <Arduino.h>
 #include "../debug_serial.h"
 #include "../i2s_audio.h"
+#include "../config.h"              // ES8311_I2S_MCLK_PIN / SCLK_PIN / LRCK_PIN defaults
 #include "../drivers/es9038pro_regs.h"
 #else
 // ===== Native test stubs — no hardware access =====
@@ -140,11 +141,20 @@ HalInitResult HalEs9038pro::init() {
     _writeReg(ES9038PRO_REG_FILTER_MUTE, filterReg);
 
     // ---- 12. Enable expansion TDM TX output (8-slot TDM) ----
+    // Resolve port from HAL device config (default port 2 for expansion devices).
+    HalDeviceConfig* _tdmCfg = HalDeviceManager::instance().getConfig(_slot);
+    uint8_t tdmPort = (_tdmCfg && _tdmCfg->valid && _tdmCfg->i2sPort != 255) ? _tdmCfg->i2sPort : 2;
 #ifndef NATIVE_TEST
-    gpio_num_t doutPin = (_doutPin >= 0) ? (gpio_num_t)_doutPin : (gpio_num_t)-1;
-    bool tdmOk = i2s_audio_enable_expansion_tdm_tx(_sampleRate, doutPin, 8);
+    gpio_num_t doutPin = (_doutPin >= 0) ? (gpio_num_t)_doutPin : GPIO_NUM_NC;
+    gpio_num_t tdmMclk = (_tdmCfg && _tdmCfg->valid && _tdmCfg->pinMclk >= 0)
+                         ? (gpio_num_t)_tdmCfg->pinMclk : (gpio_num_t)ES8311_I2S_MCLK_PIN;
+    gpio_num_t tdmBck  = (_tdmCfg && _tdmCfg->valid && _tdmCfg->pinBck  >= 0)
+                         ? (gpio_num_t)_tdmCfg->pinBck  : (gpio_num_t)ES8311_I2S_SCLK_PIN;
+    gpio_num_t tdmWs   = (_tdmCfg && _tdmCfg->valid && _tdmCfg->pinLrc  >= 0)
+                         ? (gpio_num_t)_tdmCfg->pinLrc  : (gpio_num_t)ES8311_I2S_LRCK_PIN;
+    bool tdmOk = i2s_port_enable_tx(tdmPort, I2S_MODE_TDM, 8, doutPin, tdmMclk, tdmBck, tdmWs);
     if (!tdmOk) {
-        LOG_E("[HAL:ES9038PRO] Expansion TDM TX enable failed");
+        LOG_E("[HAL:ES9038PRO] Expansion TDM TX enable failed (port=%u)", tdmPort);
         _state = HAL_STATE_ERROR;
         return hal_init_fail(DIAG_HAL_INIT_FAILED, "TDM TX init failed");
     }
@@ -154,8 +164,7 @@ HalInitResult HalEs9038pro::init() {
 #endif
 
     // ---- 13. Init TDM interleaver (allocate ping-pong buffers) ----
-    uint8_t port = 0;  // Expansion TDM TX uses port 0 (same peripheral as standard I2S TX)
-    if (!_tdm.init(port)) {
+    if (!_tdm.init(tdmPort)) {
         LOG_E("[HAL:ES9038PRO] TDM interleaver init failed — out of memory");
         return hal_init_fail(DIAG_HAL_INIT_FAILED, "TDM interleaver alloc failed");
     }
@@ -187,10 +196,12 @@ void HalEs9038pro::deinit() {
     _writeReg(ES9038PRO_REG_FILTER_MUTE, ES9038PRO_MUTE_BIT);
 #endif
 
-    // Disable expansion TDM TX
+    // Disable expansion TDM TX via port-generic API
 #ifndef NATIVE_TEST
     if (_i2sTxEnabled) {
-        i2s_audio_disable_expansion_tdm_tx();
+        HalDeviceConfig* _deiCfg = HalDeviceManager::instance().getConfig(_slot);
+        uint8_t deiPort = (_deiCfg && _deiCfg->valid && _deiCfg->i2sPort != 255) ? _deiCfg->i2sPort : 2;
+        i2s_port_disable_tx(deiPort);
         _i2sTxEnabled = false;
     }
 #else
