@@ -41,11 +41,22 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          DIFF=$(cat /tmp/pr_diff.txt)
-          CONTEXT=$(cat /tmp/review_context.txt)
+          # Build the JSON payload via Python to avoid shell ARG_MAX limits
+          # on large diffs (curl -d inline fails above ~2MB)
+          python3 -c "
+          import json, sys
 
-          PROMPT=$(cat <<'ENDPROMPT'
-          You are a senior code reviewer for an ESP32-P4 embedded audio controller project (C++, PlatformIO, Arduino framework).
+          with open('/tmp/pr_diff.txt') as f:
+              diff = f.read()
+          with open('/tmp/review_context.txt') as f:
+              context = f.read()
+
+          # Truncate diff to ~800KB to stay within Gemini token limits
+          MAX_DIFF = 800000
+          if len(diff) > MAX_DIFF:
+              diff = diff[:MAX_DIFF] + '\n\n... (diff truncated, ' + str(len(diff) - MAX_DIFF) + ' bytes omitted) ...'
+
+          prompt = '''You are a senior code reviewer for an ESP32-P4 embedded audio controller project (C++, PlatformIO, Arduino framework).
 
           Review the following pull request diff for:
           1. Logic errors and bugs that could break production
@@ -55,39 +66,34 @@ jobs:
           5. Concurrency bugs (race conditions, missing volatile, ISR safety)
 
           Focus on correctness over style.
-          Tag each finding with severity: "BUG:" for must-fix, "NIT:" for minor, "SECURITY:" for vulnerabilities.
+          Tag each finding with severity: \"BUG:\" for must-fix, \"NIT:\" for minor, \"SECURITY:\" for vulnerabilities.
           Reference specific file paths and line numbers.
-          If no issues found, respond with: "No issues found."
-          ENDPROMPT
-          )
+          If no issues found, respond with: \"No issues found.\"'''
 
-          # Escape strings for JSON
-          DIFF_ESCAPED=$(echo "$DIFF" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
-          CONTEXT_ESCAPED=$(echo "$CONTEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
-          PROMPT_ESCAPED=$(echo "$PROMPT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+          payload = {
+              'contents': [{
+                  'parts': [
+                      {'text': prompt},
+                      {'text': 'Project review guidelines:\n'},
+                      {'text': context},
+                      {'text': '\nPull request diff:\n'},
+                      {'text': diff}
+                  ]
+              }],
+              'generationConfig': {
+                  'temperature': 0.2,
+                  'maxOutputTokens': 4096
+              }
+          }
 
-          # Call Gemini API
+          with open('/tmp/gemini_payload.json', 'w') as f:
+              json.dump(payload, f)
+          "
+
+          # Call Gemini API with payload from file (avoids ARG_MAX)
           curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
             -H 'Content-Type: application/json' \
-            -d "{
-              \"contents\": [{
-                \"parts\": [{
-                  \"text\": ${PROMPT_ESCAPED}
-                }, {
-                  \"text\": \"Project review guidelines:\\n\"
-                }, {
-                  \"text\": ${CONTEXT_ESCAPED}
-                }, {
-                  \"text\": \"\\nPull request diff:\\n\"
-                }, {
-                  \"text\": ${DIFF_ESCAPED}
-                }]
-              }],
-              \"generationConfig\": {
-                \"temperature\": 0.2,
-                \"maxOutputTokens\": 4096
-              }
-            }" > /tmp/gemini_response.json
+            -d @/tmp/gemini_payload.json > /tmp/gemini_response.json
 
           # Extract the text response
           python3 -c "
