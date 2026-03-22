@@ -1,4 +1,4 @@
-name: Claude Code Review
+name: AI Code Review
 
 on:
   pull_request:
@@ -20,65 +20,101 @@ jobs:
   review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
-
-      - name: Run Claude review
+      - name: Get PR diff and project context
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get the PR diff
           gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr_diff.txt
+          if [ -f REVIEW.md ]; then
+            cat REVIEW.md > /tmp/review_context.txt
+          else
+            echo "No REVIEW.md found" > /tmp/review_context.txt
+          fi
 
-          # Build the review prompt with diff appended
-          cat <<'PROMPT' > /tmp/review_prompt.txt
-          Review this pull request diff for:
+      - name: Run AI review
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          DIFF=$(cat /tmp/pr_diff.txt)
+          CONTEXT=$(cat /tmp/review_context.txt)
+
+          PROMPT=$(cat <<'ENDPROMPT'
+          You are a senior code reviewer for an ESP32-P4 embedded audio controller project (C++, PlatformIO, Arduino framework).
+
+          Review the following pull request diff for:
           1. Logic errors and bugs that could break production
           2. Security vulnerabilities (OWASP top 10, command injection, XSS)
           3. Regressions in existing functionality
           4. Memory safety issues (buffer overflows, use-after-free, heap exhaustion)
           5. Concurrency bugs (race conditions, missing volatile, ISR safety)
-          6. Violations of the project's CLAUDE.md and REVIEW.md guidelines
 
           Focus on correctness over style.
-          Tag severity: "BUG:" for must-fix, "NIT:" for minor, "SECURITY:" for vulnerabilities.
-          Reference specific file paths and line numbers where issues are found.
+          Tag each finding with severity: "BUG:" for must-fix, "NIT:" for minor, "SECURITY:" for vulnerabilities.
+          Reference specific file paths and line numbers.
+          If no issues found, respond with: "No issues found."
+          ENDPROMPT
+          )
 
-          If no issues found, respond with exactly: "No issues found."
+          # Escape strings for JSON
+          DIFF_ESCAPED=$(echo "$DIFF" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+          CONTEXT_ESCAPED=$(echo "$CONTEXT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+          PROMPT_ESCAPED=$(echo "$PROMPT" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
 
-          Here is the diff:
-          PROMPT
-          cat /tmp/pr_diff.txt >> /tmp/review_prompt.txt
+          # Call Gemini API
+          curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"contents\": [{
+                \"parts\": [{
+                  \"text\": ${PROMPT_ESCAPED}
+                }, {
+                  \"text\": \"Project review guidelines:\\n\"
+                }, {
+                  \"text\": ${CONTEXT_ESCAPED}
+                }, {
+                  \"text\": \"\\nPull request diff:\\n\"
+                }, {
+                  \"text\": ${DIFF_ESCAPED}
+                }]
+              }],
+              \"generationConfig\": {
+                \"temperature\": 0.2,
+                \"maxOutputTokens\": 4096
+              }
+            }" > /tmp/gemini_response.json
 
-          # Run Claude in non-interactive print mode
-          claude --print \
-            --model claude-sonnet-4-6 \
-            --max-turns 5 \
-            < /tmp/review_prompt.txt > /tmp/review_output.txt 2>&1 || true
+          # Extract the text response
+          python3 -c "
+          import json
+          with open('/tmp/gemini_response.json') as f:
+              data = json.load(f)
+          if 'candidates' in data and data['candidates']:
+              parts = data['candidates'][0].get('content', {}).get('parts', [])
+              text = ''.join(p.get('text', '') for p in parts)
+              print(text)
+          elif 'error' in data:
+              print(f'API Error: {data[\"error\"].get(\"message\", \"Unknown error\")}')
+          else:
+              print('No response generated')
+          " > /tmp/review_output.txt
 
       - name: Post review comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Post review output as PR comment
           {
-            echo "## Claude Code Review"
+            echo "## AI Code Review"
             echo ""
             cat /tmp/review_output.txt
             echo ""
             echo "---"
-            echo "*Automated review by Claude Code CLI*"
+            echo "*Automated review by Gemini 2.5 Flash*"
           } > /tmp/review_comment.txt
 
           gh pr comment ${{ github.event.pull_request.number }} \
@@ -90,25 +126,17 @@ jobs:
       (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code
-
       - name: Get comment and respond
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Determine the issue/PR number and comment body
           if [ "${{ github.event_name }}" = "issues" ]; then
             COMMENT_BODY=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }} --jq '.body')
             ISSUE_NUMBER=${{ github.event.issue.number }}
@@ -120,32 +148,45 @@ jobs:
             ISSUE_NUMBER=${{ github.event.issue.number }}
           fi
 
-          # Strip @claude prefix
           USER_MESSAGE=$(echo "$COMMENT_BODY" | sed 's/@claude[[:space:]]*//')
+          MSG_ESCAPED=$(echo "$USER_MESSAGE" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
 
-          # Build context prompt
-          cat <<EOF > /tmp/respond_prompt.txt
-          You are helping with the ALX Nova Controller 2 project.
-          A user commented on a GitHub issue/PR and mentioned @claude.
-          Read the CLAUDE.md and REVIEW.md in this repository for project context.
+          curl -s "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"contents\": [{
+                \"parts\": [{
+                  \"text\": \"You are helping with the ALX Nova Controller 2 project (ESP32-P4 audio controller, C++, PlatformIO). A user asked: \"
+                }, {
+                  \"text\": ${MSG_ESCAPED}
+                }, {
+                  \"text\": \"\\nRespond helpfully and concisely.\"
+                }]
+              }],
+              \"generationConfig\": {
+                \"temperature\": 0.3,
+                \"maxOutputTokens\": 2048
+              }
+            }" > /tmp/gemini_response.json
 
-          Their message: ${USER_MESSAGE}
+          python3 -c "
+          import json
+          with open('/tmp/gemini_response.json') as f:
+              data = json.load(f)
+          if 'candidates' in data and data['candidates']:
+              parts = data['candidates'][0].get('content', {}).get('parts', [])
+              print(''.join(p.get('text', '') for p in parts))
+          elif 'error' in data:
+              print(f'API Error: {data[\"error\"].get(\"message\", \"Unknown error\")}')
+          else:
+              print('No response generated')
+          " > /tmp/response.txt
 
-          Respond helpfully based on the codebase context. Be concise.
-          EOF
-
-          # Run Claude
-          claude --print \
-            --model claude-sonnet-4-6 \
-            --max-turns 5 \
-            < /tmp/respond_prompt.txt > /tmp/response.txt 2>&1 || true
-
-          # Post response
           {
             cat /tmp/response.txt
             echo ""
             echo "---"
-            echo "*Response by Claude Code CLI*"
+            echo "*Response by Gemini 2.5 Flash*"
           } > /tmp/response_comment.txt
 
           gh issue comment "$ISSUE_NUMBER" \
