@@ -243,6 +243,9 @@ void mqttPublishHeartbeat() {
   publishMqttWifiStatus();
   publishMqttCrashDiagnostics();
   publishMqttHardwareStats();
+#ifdef DAC_ENABLED
+  publishMqttHalDevices();
+#endif
   String base = getEffectiveMqttBaseTopic();
   mqttClient.publish((base + "/system/uptime").c_str(),
                      String(millis() / 1000).c_str(), true);
@@ -906,6 +909,44 @@ void publishMqttInputNames() {
   }
 }
 
+#ifdef DAC_ENABLED
+// Publish HAL device availability states to their state_topic.
+// Skips devices that have their own dedicated MQTT topics, matching the
+// skip list used by publishHADiscovery() so discovery and state are in sync.
+void publishMqttHalDevices() {
+  if (!mqttClient.connected()) return;
+
+  String base = getEffectiveMqttBaseTopic();
+
+  struct HalPubCtx {
+    const String* base;
+    PubSubClient* client;
+  };
+  HalPubCtx ctx { &base, &mqttClient };
+
+  HalDeviceManager::instance().forEach([](HalDevice* dev, void* raw) {
+    if (!dev || dev->_state == HAL_STATE_REMOVED) return;
+
+    // Skip devices with dedicated MQTT topics to avoid duplicate state
+    const char* compat = dev->getDescriptor().compatible;
+    if (strcmp(compat, "ti,pcm5102a") == 0 ||
+        strcmp(compat, "everest-semi,es8311") == 0 ||
+        strcmp(compat, "generic,relay-amp") == 0 ||
+        strcmp(compat, "generic,piezo-buzzer") == 0 ||
+        strcmp(compat, "alx,signal-gen") == 0 ||
+        strcmp(compat, "alx,usb-audio") == 0 ||
+        strcmp(compat, "generic,status-led") == 0 ||
+        strcmp(compat, "alps,ec11") == 0 ||
+        strcmp(compat, "generic,tact-switch") == 0 ||
+        strcmp(compat, "sitronix,st7735s") == 0) return;
+
+    auto* c = static_cast<HalPubCtx*>(raw);
+    String topic = *c->base + "/hal/" + String(dev->getSlot()) + "/available";
+    c->client->publish(topic.c_str(), dev->_ready ? "true" : "false", true);
+  }, static_cast<void*>(&ctx));
+}
+#endif
+
 #ifdef GUI_ENABLED
 // Publish boot animation state
 void publishMqttBootAnimState() {
@@ -939,6 +980,9 @@ void publishMqttState() {
   publishMqttDebugState();
   publishMqttCrashDiagnostics();
   publishMqttInputNames();
+#ifdef DAC_ENABLED
+  publishMqttHalDevices();
+#endif
 #ifdef USB_AUDIO_ENABLED
   publishMqttUsbAudioState();
 #endif

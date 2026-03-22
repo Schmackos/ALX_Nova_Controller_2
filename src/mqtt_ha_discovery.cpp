@@ -1775,12 +1775,19 @@ void publishHADiscovery() {
     HalDeviceManager::instance().forEach([](HalDevice* dev, void* raw) {
       if (!dev || dev->_state == HAL_STATE_REMOVED) return;
 
-      // Skip devices that already have dedicated HA entities above
+      // Skip devices that already have dedicated HA entities above, and
+      // internal/utility devices that should not appear as HA entities.
       const char* compat = dev->getDescriptor().compatible;
       if (strcmp(compat, "ti,pcm5102a") == 0 ||
           strcmp(compat, "everest-semi,es8311") == 0 ||
           strcmp(compat, "generic,relay-amp") == 0 ||
-          strcmp(compat, "generic,piezo-buzzer") == 0) return;
+          strcmp(compat, "generic,piezo-buzzer") == 0 ||
+          strcmp(compat, "alx,signal-gen") == 0 ||
+          strcmp(compat, "alx,usb-audio") == 0 ||
+          strcmp(compat, "generic,status-led") == 0 ||
+          strcmp(compat, "alps,ec11") == 0 ||
+          strcmp(compat, "generic,tact-switch") == 0 ||
+          strcmp(compat, "sitronix,st7735s") == 0) return;
 
       auto* c = static_cast<HalDiscoveryCtx*>(raw);
       const String& base      = *c->base;
@@ -1957,6 +1964,39 @@ void removeHADiscovery() {
       String topic = "homeassistant/switch/" + deviceId + "/peq_ch" + String(ch) + "_band" + String(b + 1) + "/config";
       mqttClient.publish(topic.c_str(), "", true);
     }
+  }
+
+  // Remove dynamic HAL device entities published by publishHADiscovery().
+  // These use per-slot topics and are not in the static array above.
+  {
+    struct RemoveCtx {
+      const String* deviceId;
+      PubSubClient* client;
+    };
+    RemoveCtx rctx { &deviceId, &mqttClient };
+
+    HalDeviceManager::instance().forEach([](HalDevice* dev, void* raw) {
+      if (!dev) return;
+
+      // Mirror the skip list from publishHADiscovery() so we only remove
+      // topics that were actually published.
+      const char* compat = dev->getDescriptor().compatible;
+      if (strcmp(compat, "ti,pcm5102a") == 0 ||
+          strcmp(compat, "everest-semi,es8311") == 0 ||
+          strcmp(compat, "generic,relay-amp") == 0 ||
+          strcmp(compat, "generic,piezo-buzzer") == 0 ||
+          strcmp(compat, "alx,signal-gen") == 0 ||
+          strcmp(compat, "alx,usb-audio") == 0 ||
+          strcmp(compat, "generic,status-led") == 0 ||
+          strcmp(compat, "alps,ec11") == 0 ||
+          strcmp(compat, "generic,tact-switch") == 0 ||
+          strcmp(compat, "sitronix,st7735s") == 0) return;
+
+      auto* c = static_cast<RemoveCtx*>(raw);
+      String uid = *c->deviceId + "_hal_" + String(dev->getSlot());
+      String topic = "homeassistant/binary_sensor/" + uid + "_available/config";
+      c->client->publish(topic.c_str(), "", true); // Empty payload removes the config
+    }, static_cast<void*>(&rctx));
   }
 
   LOG_I("[MQTT] Home Assistant discovery configs removed");
