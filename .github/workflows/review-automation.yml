@@ -1,0 +1,90 @@
+name: Review Automation
+
+on:
+  workflow_run:
+    workflows: ["Claude Code Review"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request'
+    steps:
+      - name: Get PR number
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headBranch = context.payload.workflow_run.head_branch;
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${headBranch}`,
+              state: 'open',
+            });
+            if (prs.data.length === 0) {
+              core.setFailed('No open PR found for branch ' + headBranch);
+              return;
+            }
+            core.setOutput('number', prs.data[0].number);
+
+      - name: Label PR based on review result
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.pr.outputs.number }};
+            const conclusion = '${{ github.event.workflow_run.conclusion }}';
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Ensure labels exist (create if needed)
+            for (const label of ['review-passed', 'review-issues']) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: label });
+              } catch {
+                const color = label === 'review-passed' ? '0e8a16' : 'e11d48';
+                await github.rest.issues.createLabel({ owner, repo, name: label, color });
+              }
+            }
+
+            if (conclusion === 'success') {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: ['review-passed'] });
+              try { await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: 'review-issues' }); } catch {}
+            } else {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: ['review-issues'] });
+              try { await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: 'review-passed' }); } catch {}
+            }
+
+  auto-merge:
+    runs-on: ubuntu-latest
+    needs: label
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    steps:
+      - name: Get PR number
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headBranch = context.payload.workflow_run.head_branch;
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${headBranch}`,
+              state: 'open',
+            });
+            if (prs.data.length === 0) return;
+            core.setOutput('number', prs.data[0].number);
+
+      - name: Enable auto-merge
+        if: steps.pr.outputs.number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge ${{ steps.pr.outputs.number }} \
+            --repo ${{ github.repository }} \
+            --auto --squash
