@@ -11,9 +11,9 @@ extern "C" {
 // Removed in Phase 4: AUDIO_SINK_SLOT_PRIMARY and AUDIO_SINK_SLOT_ES8311 constants
 // Use hal_pipeline_get_sink_slot() for dynamic assignment instead.
 
-// Maximum sinks
+// Maximum sinks (expanded to 16 to support 8ch DAC expansion with 4 stereo sink pairs)
 #ifndef AUDIO_OUT_MAX_SINKS
-#define AUDIO_OUT_MAX_SINKS 8
+#define AUDIO_OUT_MAX_SINKS 16
 #endif
 
 // Output sink interface — mirrors AudioInputSource pattern.

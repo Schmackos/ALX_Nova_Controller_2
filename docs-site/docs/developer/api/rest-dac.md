@@ -53,6 +53,8 @@ Client               Firmware HTTP handler        Main loop
 
 Returns the complete DAC state including enabled/ready flags, volume, mute, device ID, detected status, TX underrun count, filter mode, and full driver capabilities.
 
+**Query parameter**: `?slot=N` — optional HAL slot index. When present, queries the DAC device at that slot rather than the legacy primary slot. Use `GET /api/hal/devices` to discover slot indices. See [DAC State by HAL Slot](./rest-hal.md#dac-state-by-hal-slot) for full error code reference.
+
 **Response**
 
 ```json
