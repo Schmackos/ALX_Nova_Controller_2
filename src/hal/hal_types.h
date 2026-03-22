@@ -184,6 +184,14 @@ struct HalDeviceConfig {
 #define HAL_RATE_384K  (1 << 6)
 #define HAL_RATE_768K  (1 << 7)
 
+// ===== Safe String Copy Helper =====
+// Unlike strncpy, always writes a terminating '\0' even if src is longer than destSize.
+inline void hal_safe_strcpy(char* dest, size_t destSize, const char* src) {
+    if (destSize == 0) return;
+    strncpy(dest, src, destSize - 1);
+    dest[destSize - 1] = '\0';
+}
+
 // ===== Descriptor Initializer Helper =====
 // Fills all common HalDeviceDescriptor fields in one call, eliminating
 // per-driver boilerplate (memset + 10-12 individual assignments).
@@ -195,9 +203,9 @@ inline void hal_init_descriptor(HalDeviceDescriptor& d,
     uint32_t ratesMask, uint16_t caps)
 {
     memset(&d, 0, sizeof(d));
-    strncpy(d.compatible, compatible, 31);
-    strncpy(d.name, name, 32);
-    strncpy(d.manufacturer, manufacturer, 32);
+    hal_safe_strcpy(d.compatible, sizeof(d.compatible), compatible);
+    hal_safe_strcpy(d.name, sizeof(d.name), name);
+    hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), manufacturer);
     d.type            = type;
     d.channelCount    = channels;
     d.i2cAddr         = i2cAddr;

@@ -27,9 +27,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ti,pcm5102a", 31);
-        strncpy(d.name, "PCM5102A", 32);
-        strncpy(d.manufacturer, "Texas Instruments", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ti,pcm5102a");
+        hal_safe_strcpy(d.name, sizeof(d.name), "PCM5102A");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Texas Instruments");
         d.type = HAL_DEV_DAC;
         d.legacyId = 0x0001;
         d.channelCount = 2;
@@ -43,9 +43,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "everest-semi,es8311", 31);
-        strncpy(d.name, "ES8311", 32);
-        strncpy(d.manufacturer, "Everest Semiconductor", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "everest-semi,es8311");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES8311");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Everest Semiconductor");
         d.type = HAL_DEV_CODEC;
         d.legacyId = 0x0004;
         d.channelCount = 2;
@@ -61,9 +61,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "evergrande,es8311", 31);
-        strncpy(d.name, "ES8311", 32);
-        strncpy(d.manufacturer, "Everest Semiconductor", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "evergrande,es8311");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES8311");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Everest Semiconductor");
         d.type = HAL_DEV_CODEC;
         d.legacyId = 0x0004;
         d.channelCount = 2;
@@ -79,9 +79,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ti,pcm1808", 31);
-        strncpy(d.name, "PCM1808", 32);
-        strncpy(d.manufacturer, "Texas Instruments", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ti,pcm1808");
+        hal_safe_strcpy(d.name, sizeof(d.name), "PCM1808");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Texas Instruments");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 2;
@@ -95,9 +95,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9822pro", 31);
-        strncpy(d.name, "ES9822PRO", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9822pro");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9822PRO");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 2;
@@ -112,9 +112,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9843pro", 31);
-        strncpy(d.name, "ES9843PRO", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9843pro");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9843PRO");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 4;
@@ -129,9 +129,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9826", 31);
-        strncpy(d.name, "ES9826", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9826");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9826");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 2;
@@ -146,9 +146,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9821", 31);
-        strncpy(d.name, "ES9821", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9821");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9821");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 2;
@@ -163,9 +163,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9823pro", 31);
-        strncpy(d.name, "ES9823PRO", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9823pro");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9823PRO");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 2;
@@ -180,9 +180,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9823mpro", 31);
-        strncpy(d.name, "ES9823MPRO", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9823mpro");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9823MPRO");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 2;
@@ -197,9 +197,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9820", 31);
-        strncpy(d.name, "ES9820", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9820");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9820");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 2;
@@ -214,9 +214,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9842pro", 31);
-        strncpy(d.name, "ES9842PRO", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9842pro");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9842PRO");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 4;
@@ -231,9 +231,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9840", 31);
-        strncpy(d.name, "ES9840", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9840");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9840");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 4;
@@ -248,9 +248,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ess,es9841", 31);
-        strncpy(d.name, "ES9841", 32);
-        strncpy(d.manufacturer, "ESS Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ess,es9841");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ES9841");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ESS Technology");
         d.type = HAL_DEV_ADC;
         d.legacyId = 0;
         d.channelCount = 4;
@@ -265,9 +265,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "ns,ns4150b-amp", 31);
-        strncpy(d.name, "NS4150B Amp", 32);
-        strncpy(d.manufacturer, "Nsiway", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "ns,ns4150b-amp");
+        hal_safe_strcpy(d.name, sizeof(d.name), "NS4150B Amp");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Nsiway");
         d.type = HAL_DEV_AMP;
         d.channelCount = 1;
         d.bus.type = HAL_BUS_GPIO;
@@ -278,9 +278,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "espressif,esp32p4-temp", 31);
-        strncpy(d.name, "Chip Temperature", 32);
-        strncpy(d.manufacturer, "Espressif", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "espressif,esp32p4-temp");
+        hal_safe_strcpy(d.name, sizeof(d.name), "Chip Temperature");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Espressif");
         d.type = HAL_DEV_SENSOR;
         d.channelCount = 1;
         d.bus.type = HAL_BUS_INTERNAL;
@@ -291,9 +291,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "sitronix,st7735s", 31);
-        strncpy(d.name, "ST7735S TFT", 32);
-        strncpy(d.manufacturer, "Sitronix", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "sitronix,st7735s");
+        hal_safe_strcpy(d.name, sizeof(d.name), "ST7735S TFT");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Sitronix");
         d.type = HAL_DEV_DISPLAY;
         d.channelCount = 1;
         d.bus.type = HAL_BUS_SPI;
@@ -307,9 +307,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "alps,ec11", 31);
-        strncpy(d.name, "Rotary Encoder", 32);
-        strncpy(d.manufacturer, "Alps", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "alps,ec11");
+        hal_safe_strcpy(d.name, sizeof(d.name), "Rotary Encoder");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Alps");
         d.type = HAL_DEV_INPUT;
         d.channelCount = 3;
         d.bus.type = HAL_BUS_GPIO;
@@ -321,9 +321,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "generic,piezo-buzzer", 31);
-        strncpy(d.name, "Piezo Buzzer", 32);
-        strncpy(d.manufacturer, "Generic", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "generic,piezo-buzzer");
+        hal_safe_strcpy(d.name, sizeof(d.name), "Piezo Buzzer");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Generic");
         d.type = HAL_DEV_GPIO;
         d.channelCount = 1;
         d.bus.type = HAL_BUS_GPIO;
@@ -335,9 +335,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "generic,status-led", 31);
-        strncpy(d.name, "Status LED", 32);
-        strncpy(d.manufacturer, "Generic", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "generic,status-led");
+        hal_safe_strcpy(d.name, sizeof(d.name), "Status LED");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Generic");
         d.type = HAL_DEV_GPIO;
         d.channelCount = 1;
         d.bus.type = HAL_BUS_GPIO;
@@ -349,9 +349,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "generic,relay-amp", 31);
-        strncpy(d.name, "Amplifier Relay", 32);
-        strncpy(d.manufacturer, "Generic", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "generic,relay-amp");
+        hal_safe_strcpy(d.name, sizeof(d.name), "Amplifier Relay");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Generic");
         d.type = HAL_DEV_AMP;
         d.channelCount = 1;
         d.bus.type = HAL_BUS_GPIO;
@@ -363,9 +363,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "generic,tact-switch", 31);
-        strncpy(d.name, "Reset Button", 32);
-        strncpy(d.manufacturer, "Generic", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "generic,tact-switch");
+        hal_safe_strcpy(d.name, sizeof(d.name), "Reset Button");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Generic");
         d.type = HAL_DEV_INPUT;
         d.channelCount = 1;
         d.bus.type = HAL_BUS_GPIO;
@@ -377,9 +377,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "alx,signal-gen", 31);
-        strncpy(d.name, "Signal Generator", 32);
-        strncpy(d.manufacturer, "ALX", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "alx,signal-gen");
+        hal_safe_strcpy(d.name, sizeof(d.name), "Signal Generator");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ALX");
         d.type = HAL_DEV_ADC;
         d.channelCount = 2;
         d.bus.type = HAL_BUS_INTERNAL;
@@ -391,9 +391,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "alx,usb-audio", 31);
-        strncpy(d.name, "USB Audio", 32);
-        strncpy(d.manufacturer, "ALX", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "alx,usb-audio");
+        hal_safe_strcpy(d.name, sizeof(d.name), "USB Audio");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "ALX");
         d.type = HAL_DEV_ADC;
         d.channelCount = 2;
         d.bus.type = HAL_BUS_INTERNAL;
@@ -405,9 +405,9 @@ static void hal_db_add_builtins() {
     {
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, "microchip,mcp4725", 31);
-        strncpy(d.name, "MCP4725", 32);
-        strncpy(d.manufacturer, "Microchip Technology", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "microchip,mcp4725");
+        hal_safe_strcpy(d.name, sizeof(d.name), "MCP4725");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Microchip Technology");
         d.type = HAL_DEV_DAC;
         d.channelCount = 1;
         d.i2cAddr = 0x60;
@@ -446,9 +446,9 @@ void hal_db_init() {
 
         HalDeviceDescriptor d;
         memset(&d, 0, sizeof(d));
-        strncpy(d.compatible, compat, 31);
-        strncpy(d.name, obj["name"] | "", 32);
-        strncpy(d.manufacturer, obj["manufacturer"] | "", 32);
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), compat);
+        hal_safe_strcpy(d.name, sizeof(d.name), obj["name"] | "");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), obj["manufacturer"] | "");
         d.type = static_cast<HalDeviceType>(obj["type"] | 0);
         d.legacyId = obj["legacyId"] | 0;
         d.i2cAddr = obj["i2cAddr"] | 0;
@@ -595,8 +595,7 @@ void hal_load_device_configs() {
         cfg.mute = obj["mute"] | false;
         cfg.enabled = obj["enabled"] | true;
         const char* label = obj["label"] | "";
-        strncpy(cfg.userLabel, label, 32);
-        cfg.userLabel[32] = '\0';
+        hal_safe_strcpy(cfg.userLabel, sizeof(cfg.userLabel), label);
 
         mgr.setConfig(slot, cfg);
     }
@@ -789,8 +788,7 @@ void hal_load_auto_devices() {
         cfg.paControlPin = -1;
         cfg.volume       = 100;
         const char* label = obj["label"] | "";
-        strncpy(cfg.userLabel, label, 32);
-        cfg.userLabel[32] = '\0';
+        hal_safe_strcpy(cfg.userLabel, sizeof(cfg.userLabel), label);
         mgr.setConfig(slot, cfg);
 
         // probeOnly=true  — device is a config/state holder; full init done elsewhere

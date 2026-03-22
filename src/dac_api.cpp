@@ -12,6 +12,7 @@
 #include "hal/hal_pipeline_bridge.h"
 #include "hal/hal_audio_device.h"
 #include "hal/hal_settings.h"
+#include "hal/hal_types.h"
 #include <ArduinoJson.h>
 extern bool requireAuth();
 
@@ -313,12 +314,10 @@ void registerDacApiEndpoints() {
         eepData.dacI2cAddress = (uint8_t)doc["dacI2cAddress"].as<int>();
 
         const char* name = doc["deviceName"] | "";
-        strncpy(eepData.deviceName, name, 32);
-        eepData.deviceName[32] = '\0';
+        hal_safe_strcpy(eepData.deviceName, sizeof(eepData.deviceName), name);
 
         const char* mfr = doc["manufacturer"] | "";
-        strncpy(eepData.manufacturer, mfr, 32);
-        eepData.manufacturer[32] = '\0';
+        hal_safe_strcpy(eepData.manufacturer, sizeof(eepData.manufacturer), mfr);
 
         // Flags
         uint8_t flags = 0;
@@ -377,10 +376,8 @@ void registerDacApiEndpoints() {
             ed.eepromAddr = scanned.i2cAddress;
             ed.deviceId = scanned.deviceId;
             ed.hwRevision = scanned.hwRevision;
-            strncpy(ed.deviceName, scanned.deviceName, 32);
-            ed.deviceName[32] = '\0';
-            strncpy(ed.manufacturer, scanned.manufacturer, 32);
-            ed.manufacturer[32] = '\0';
+            hal_safe_strcpy(ed.deviceName, sizeof(ed.deviceName), scanned.deviceName);
+            hal_safe_strcpy(ed.manufacturer, sizeof(ed.manufacturer), scanned.manufacturer);
             ed.maxChannels = scanned.maxChannels;
             ed.dacI2cAddress = scanned.dacI2cAddress;
             ed.flags = scanned.flags;
@@ -465,10 +462,8 @@ void registerDacApiEndpoints() {
             ed.eepromAddr = eepData.i2cAddress;
             ed.deviceId = eepData.deviceId;
             ed.hwRevision = eepData.hwRevision;
-            strncpy(ed.deviceName, eepData.deviceName, 32);
-            ed.deviceName[32] = '\0';
-            strncpy(ed.manufacturer, eepData.manufacturer, 32);
-            ed.manufacturer[32] = '\0';
+            hal_safe_strcpy(ed.deviceName, sizeof(ed.deviceName), eepData.deviceName);
+            hal_safe_strcpy(ed.manufacturer, sizeof(ed.manufacturer), eepData.manufacturer);
             ed.maxChannels = eepData.maxChannels;
             ed.dacI2cAddress = eepData.dacI2cAddress;
             ed.flags = eepData.flags;
