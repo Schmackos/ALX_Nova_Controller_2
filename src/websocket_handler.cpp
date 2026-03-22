@@ -1,4 +1,5 @@
 #include "websocket_handler.h"
+#include "websocket_internal.h"
 #include "auth_handler.h"
 #include "config.h"
 #include "app_state.h"
@@ -45,38 +46,6 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
-
-// ===== WebSocket Authentication Tracking =====
-bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
-unsigned long wsAuthTimeout[MAX_WS_CLIENTS] = {0};
-static String wsSessionId[MAX_WS_CLIENTS];
-
-// ===== HTTP Page Serving Flag =====
-volatile bool httpServingPage = false;
-
-// ===== Per-client Audio Streaming Subscription =====
-static bool _audioSubscribed[MAX_WS_CLIENTS] = {};
-
-// ===== Authenticated Client Counter =====
-// Tracked via webSocketEvent() connect/disconnect callbacks.
-// Used by broadcast functions to skip JSON serialization when no clients are listening.
-static uint8_t _wsAuthCount = 0;
-static inline bool _wsAnyAuth() { return _wsAuthCount > 0; }
-bool wsAnyClientAuthenticated() { return _wsAuthCount > 0; }
-uint8_t wsAuthenticatedClientCount() { return _wsAuthCount; }
-
-// Periodic recalibration of _wsAuthCount to handle stale counts from unclean disconnects
-static unsigned long _lastAuthRecount = 0;
-static void _recalibrateAuthCount() {
-    unsigned long now = millis();
-    if (now - _lastAuthRecount < WS_AUTH_RECOUNT_INTERVAL_MS) return;
-    _lastAuthRecount = now;
-    uint8_t count = 0;
-    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-        if (wsAuthStatus[i]) count++;
-    }
-    _wsAuthCount = count;
-}
 
 // Deferred initial-state queue — spreads the auth-success broadcast burst
 // across multiple main-loop iterations to prevent WiFi TX saturation that
@@ -126,11 +95,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
   switch(type) {
     case WStype_DISCONNECTED:
       LOG_I("[WebSocket] Client [%u] disconnected", num);
-      if (wsAuthStatus[num] && _wsAuthCount > 0) _wsAuthCount--;
+      if (wsAuthStatus[num]) ws_auth_decrement();
       wsAuthStatus[num] = false;
       wsAuthTimeout[num] = 0;
-      wsSessionId[num] = "";
-      _audioSubscribed[num] = false;
+      ws_clear_session_id(num);
+      ws_set_audio_subscribed(num, false);
       _pendingInitState[num] = 0;
       break;
 
@@ -180,11 +149,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
 
           if (authenticated) {
             wsAuthStatus[num] = true;
-            _wsAuthCount++;
+            ws_auth_increment();
             wsAuthTimeout[num] = 0;
-            wsSessionId[num] = sessionId;
+            ws_set_session_id(num, sessionId);
             webSocket.sendTXT(num, "{\"type\":\"authSuccess\"}");
-            LOG_D("[WebSocket] Client [%u] authenticated (total: %u)", num, _wsAuthCount);
+            LOG_D("[WebSocket] Client [%u] authenticated (total: %u)", num, ws_auth_count());
 
             // Defer initial state sends — drainPendingInitState() will send
             // 3 per main-loop iteration to avoid WiFi TX burst audio pops.
@@ -197,9 +166,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         }
 
         // Re-validate session for every non-auth command (catches logout/expiry)
-        if (!wsAuthStatus[num] || !validateSession(wsSessionId[num])) {
+        if (!wsAuthStatus[num] || !validateSession(ws_get_session_id(num))) {
           wsAuthStatus[num] = false;
-          wsSessionId[num] = "";
+          ws_clear_session_id(num);
           webSocket.sendTXT(num, "{\"type\":\"authFailed\",\"error\":\"Session expired or revoked\"}");
           webSocket.disconnect(num);
           return;
@@ -293,7 +262,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
           }
         } else if (msgType == "subscribeAudio") {
           bool enabled = doc["enabled"] | false;
-          _audioSubscribed[num] = enabled;
+          ws_set_audio_subscribed(num, enabled);
           LOG_I("[WebSocket] Client [%u] audio subscription %s", num, enabled ? "enabled" : "disabled");
         } else if (msgType == "setAudioUpdateRate") {
           int rate = doc["value"].as<int>();
@@ -1539,7 +1508,7 @@ void sendDiagEvent() {
 
 #ifdef DSP_ENABLED
 void sendDspState() {
-  if (!_wsAnyAuth()) return;
+  if (!ws_any_auth()) return;
   JsonDocument doc;
   doc["type"] = "dspState";
   doc["dspEnabled"] = appState.dsp.enabled;
@@ -1650,7 +1619,7 @@ void sendDspState() {
 }
 
 void sendDspMetrics() {
-  if (!_wsAnyAuth()) return;
+  if (!ws_any_auth()) return;
   DspMetrics m = dsp_get_metrics();
   PipelineTimingMetrics timing = audio_pipeline_get_timing();
   JsonDocument doc;
@@ -1676,7 +1645,7 @@ void sendDspMetrics() {
 
 #ifdef DAC_ENABLED
 void sendDacState() {
-  if (!_wsAnyAuth()) return;
+  if (!ws_any_auth()) return;
   JsonDocument doc;
   doc["type"] = "dacState";
 
@@ -1775,7 +1744,7 @@ void sendDacState() {
 }
 
 void sendHalDeviceState() {
-    if (!_wsAnyAuth()) return;
+    if (!ws_any_auth()) return;
     JsonDocument doc;
     doc["type"] = "halDeviceState";
     doc["scanning"] = appState._halScanInProgress;
@@ -1833,7 +1802,7 @@ void sendHalDeviceState() {
 }
 
 void sendAudioChannelMap() {
-    if (!_wsAnyAuth()) return;
+    if (!ws_any_auth()) return;
     JsonDocument doc;
     doc["type"] = "audioChannelMap";
 
@@ -1929,7 +1898,7 @@ void sendAudioChannelMap() {
 
 #ifdef USB_AUDIO_ENABLED
 void sendUsbAudioState() {
-  if (!_wsAnyAuth()) return;
+  if (!ws_any_auth()) return;
   JsonDocument doc;
   doc["type"] = "usbAudioState";
   doc["enabled"] = appState.usbAudio.enabled;
@@ -1954,7 +1923,7 @@ void sendUsbAudioState() {
 #endif
 
 void sendMqttSettingsState() {
-  if (!_wsAnyAuth()) return;
+  if (!ws_any_auth()) return;
   JsonDocument doc;
   doc["type"] = "mqttSettings";
   doc["enabled"] = appState.mqtt.enabled;
@@ -1976,7 +1945,7 @@ void sendHardwareStats() {
     deinitCpuUsageMonitoring();
     return;
   }
-  if (!_wsAnyAuth()) return;
+  if (!ws_any_auth()) return;
 
   JsonDocument doc;
   doc["type"] = "hardware_stats";
@@ -2035,7 +2004,7 @@ void sendHardwareStats() {
     doc["wifi"]["connected"] = (WiFi.status() == WL_CONNECTED);
 
     // WebSocket client count
-    doc["wsClientCount"] = _wsAuthCount;
+    doc["wsClientCount"] = ws_auth_count();
     doc["wsClientMax"] = (uint8_t)MAX_WS_CLIENTS;
 
     // Audio ADC diagnostics (per-ADC)
@@ -2356,7 +2325,7 @@ void sendAudioData() {
   // Early return if no clients are subscribed
   bool anySubscribed = false;
   for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-    if (_audioSubscribed[i]) {
+    if (ws_is_audio_subscribed(i)) {
       anySubscribed = true;
       break;
     }
@@ -2423,7 +2392,7 @@ void sendAudioData() {
     String json;
     serializeJson(doc, json);
     for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-      if (_audioSubscribed[i]) {
+      if (ws_is_audio_subscribed(i)) {
         webSocket.sendTXT(i, (uint8_t*)json.c_str(), json.length());
       }
     }
@@ -2440,14 +2409,15 @@ void sendAudioData() {
   const bool heapAllowBinary = !appState.debug.heapCritical && !_heapSkipBinaryFrame;
 
   // Client-count adaptive rate: skip binary frames based on authenticated client count
-  _recalibrateAuthCount();
+  ws_auth_recalibrate();
   static uint8_t _clientSkipCounter = 0;
   _clientSkipCounter++;
   uint8_t skipFactor = 1;
-  if (_wsAuthCount >= 8) skipFactor = WS_BINARY_SKIP_8PLUS;
-  else if (_wsAuthCount >= 5) skipFactor = WS_BINARY_SKIP_5PLUS;
-  else if (_wsAuthCount >= 3) skipFactor = WS_BINARY_SKIP_3PLUS;
-  else if (_wsAuthCount == 2) skipFactor = WS_BINARY_SKIP_2_CLIENTS;
+  uint8_t authCount = ws_auth_count();
+  if (authCount >= 8) skipFactor = WS_BINARY_SKIP_8PLUS;
+  else if (authCount >= 5) skipFactor = WS_BINARY_SKIP_5PLUS;
+  else if (authCount >= 3) skipFactor = WS_BINARY_SKIP_3PLUS;
+  else if (authCount == 2) skipFactor = WS_BINARY_SKIP_2_CLIENTS;
   const bool clientAllowBinary = (_clientSkipCounter % skipFactor) == 0;
 
   // Combined gate: both heap pressure AND client count must allow binary
@@ -2462,7 +2432,7 @@ void sendAudioData() {
         if (i2s_audio_get_waveform(wfBin + 2, a)) {
           wfBin[1] = (uint8_t)a;
           for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-            if (_audioSubscribed[i]) {
+            if (ws_is_audio_subscribed(i)) {
               webSocket.sendBIN(i, wfBin, sizeof(wfBin));
             }
           }
@@ -2482,7 +2452,7 @@ void sendAudioData() {
           memcpy(spBin + 2, &freq, sizeof(float));
           memcpy(spBin + 2 + sizeof(float), bands, SPECTRUM_BANDS * sizeof(float));
           for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-            if (_audioSubscribed[i]) {
+            if (ws_is_audio_subscribed(i)) {
               webSocket.sendBIN(i, spBin, sizeof(spBin));
             }
           }
