@@ -188,7 +188,9 @@ void audio_aggregate_fft_bands(const float *magnitudes, int fft_size,
 
 // ===== ADC Read API (used by audio_pipeline) =====
 #ifndef NATIVE_TEST
+// DEPRECATED: use i2s_port_read(0, ...) instead
 bool i2s_audio_read_adc1(void *buf, size_t size, size_t *bytes_read, uint32_t timeout_ms);
+// DEPRECATED: use i2s_port_read(1, ...) instead
 bool i2s_audio_read_adc2(void *buf, size_t size, size_t *bytes_read, uint32_t timeout_ms);
 bool i2s_audio_adc2_ok();
 // Simple dBFS-only update (kept for backward compatibility).
@@ -276,49 +278,48 @@ bool i2s_port_is_tx_active(uint8_t port);
 bool i2s_port_is_rx_active(uint8_t port);
 I2sPortInfo i2s_port_get_info(uint8_t port);
 
+// ===== DEPRECATED I2S Functions (use port-generic i2s_port_*() API instead) =====
+
+// DEPRECATED: use i2s_port_enable_tx(0, I2S_MODE_STD, ...) instead
 bool i2s_audio_enable_tx(uint32_t sample_rate);
+// DEPRECATED: use i2s_port_disable_tx(0) instead
 void i2s_audio_disable_tx();
+// DEPRECATED: use i2s_port_write(0, ...) instead
 void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
 
-// ES8311 secondary DAC output (I2S2 TX, P4 only)
+// DEPRECATED: use i2s_port_enable_tx(2, I2S_MODE_STD, ...) instead
 bool i2s_audio_enable_es8311_tx(uint32_t sample_rate);
+// DEPRECATED: use i2s_port_disable_tx(2) instead
 void i2s_audio_disable_es8311_tx();
+// DEPRECATED: use i2s_port_write(2, ...) instead
 void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
 
-// Expansion mezzanine DAC TX (configurable I2S port)
-// Enables I2S TX for expansion DAC output. dout_pin comes from HalDeviceConfig.pinData.
-// Auto-selects an available I2S port unless overridden via HalDeviceConfig.i2sPort.
+// DEPRECATED: use i2s_port_enable_tx(port, I2S_MODE_STD, ...) instead
 bool i2s_audio_enable_expansion_tx(uint32_t sample_rate, gpio_num_t dout_pin);
+// DEPRECATED: use i2s_port_disable_tx(port) instead
 void i2s_audio_disable_expansion_tx();
+// DEPRECATED: use i2s_port_write(port, ...) instead
 void i2s_audio_write_expansion_tx(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
 
-// TDM TX for 8ch DAC expansion -- sends N-slot TDM frames on a single data line
+// DEPRECATED: use i2s_port_enable_tx(port, I2S_MODE_TDM, ...) instead
 bool i2s_audio_enable_expansion_tdm_tx(uint32_t sample_rate, gpio_num_t dout_pin, uint8_t slot_count);
+// DEPRECATED: use i2s_port_write(port, ...) instead
 void i2s_audio_write_expansion_tdm_tx(const void* src, size_t size, size_t* bytes_written, uint32_t timeout_ms);
+// DEPRECATED: use i2s_port_disable_tx(port) instead
 void i2s_audio_disable_expansion_tdm_tx();
 
-// Expansion mezzanine ADC RX (I2S2 RX, P4 only)
-// Enables I2S2 RX for expansion ADC input. If ES8311 TX is already active on I2S2,
-// this creates a full-duplex channel sharing BCK/WS. If not, allocates I2S2 RX-only.
+// DEPRECATED: use i2s_port_enable_rx(port, I2S_MODE_STD, ...) instead
 bool i2s_audio_enable_expansion_rx(uint32_t sample_rate, gpio_num_t din_pin);
+// DEPRECATED: use i2s_port_disable_rx(port) instead
 void i2s_audio_disable_expansion_rx();
 bool i2s_audio_expansion_rx_ok();
 
-// TDM (4-slot) variant of the expansion ADC RX path (I2S2 RX, P4 only).
-// Used exclusively by HalTdmDeinterleaver to read a raw 4-slot interleaved
-// DMA buffer from the ES9843PRO.  The caller requests 'frames' TDM frames;
-// the function reads frames × 4 × sizeof(int32_t) bytes and returns the
-// number of complete TDM frames placed in dst.
-// dst must be at least frames × 4 × sizeof(int32_t) bytes.
-// Timeout is fixed at 5 ms (same as port2 stereo path).
+// DEPRECATED: use i2s_port_tdm_read(port, ...) instead
 uint32_t i2s_audio_port2_tdm_read(int32_t* dst, uint32_t frames);
+// DEPRECATED: use i2s_port_is_rx_active(port) instead
 bool     i2s_audio_port2_tdm_active(void);
 
-// Initialize I2S2 RX in TDM mode for the ES9843PRO 4-channel ADC.
-// Allocates/reallocates I2S2 using i2s_channel_init_tdm_mode() on the RX
-// direction.  TX (ES8311) is reinitialized in STD mode if it was previously
-// active.  Slot mask covers slots 0..(slot_count-1).
-// slot_count: 4 for ES9843PRO (CH1-CH4).  Valid range 2-16.
+// DEPRECATED: use i2s_port_enable_rx(port, I2S_MODE_TDM, ...) instead
 bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
                                         gpio_num_t din_pin,
                                         uint8_t    slot_count);
@@ -335,26 +336,22 @@ inline bool i2s_port_is_tx_active(uint8_t) { return false; }
 inline bool i2s_port_is_rx_active(uint8_t) { return false; }
 inline I2sPortInfo i2s_port_get_info(uint8_t port) { I2sPortInfo info = {}; info.port = port; return info; }
 
+// DEPRECATED stubs — use port-generic i2s_port_*() stubs above instead
 inline bool i2s_audio_enable_tx(uint32_t) { return true; }
 inline void i2s_audio_disable_tx() {}
 inline void i2s_audio_write(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
-
 inline bool i2s_audio_enable_es8311_tx(uint32_t) { return false; }
 inline void i2s_audio_disable_es8311_tx() {}
 inline void i2s_audio_write_es8311(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
-
 inline bool i2s_audio_enable_expansion_tx(uint32_t, int) { return true; }
 inline void i2s_audio_disable_expansion_tx() {}
 inline void i2s_audio_write_expansion_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
-
 inline bool i2s_audio_enable_expansion_tdm_tx(uint32_t, int, uint8_t) { return true; }
 inline void i2s_audio_write_expansion_tdm_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
 inline void i2s_audio_disable_expansion_tdm_tx() {}
-
 inline bool i2s_audio_enable_expansion_rx(uint32_t, int) { return false; }
 inline void i2s_audio_disable_expansion_rx() {}
 inline bool i2s_audio_expansion_rx_ok() { return false; }
-
 inline uint32_t i2s_audio_port2_tdm_read(int32_t*, uint32_t) { return 0; }
 inline bool     i2s_audio_port2_tdm_active(void) { return false; }
 inline bool     i2s_audio_enable_expansion_tdm_rx(uint32_t, int, uint8_t) { return true; }
