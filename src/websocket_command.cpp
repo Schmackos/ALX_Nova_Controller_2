@@ -1,3 +1,10 @@
+// websocket_command.cpp — WebSocket event handler (connect/disconnect/auth/commands)
+// and deferred initial-state drain logic.
+// Broadcast functions live in websocket_broadcast.cpp.
+// Auth state lives in websocket_auth.cpp.
+// CPU monitoring lives in websocket_cpu_monitor.cpp.
+// Public API declared in websocket_handler.h.
+
 #include "websocket_handler.h"
 #include "websocket_internal.h"
 #include "auth_handler.h"
