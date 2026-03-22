@@ -24,7 +24,8 @@ void test_hal_safe_strcpy_normal(void) {
 void test_hal_safe_strcpy_boundary(void) {
     // src is exactly 31 chars — fits in 32-byte buf with null at [31]
     const char* src = "1234567890123456789012345678901"; // 31 chars
-    char buf[32] = {0xFF};
+    char buf[32];
+    memset(buf, (char)0xFF, sizeof(buf));
     hal_safe_strcpy(buf, sizeof(buf), src);
     TEST_ASSERT_EQUAL_STRING(src, buf);
     TEST_ASSERT_EQUAL_CHAR('\0', buf[31]);
@@ -50,7 +51,8 @@ void test_hal_safe_strcpy_empty(void) {
 }
 
 void test_hal_safe_strcpy_size_one(void) {
-    char buf[1] = {0xFF};
+    char buf[1];
+    buf[0] = (char)0xFF;
     hal_safe_strcpy(buf, 1, "hello");
     TEST_ASSERT_EQUAL_CHAR('\0', buf[0]);
 }

@@ -1,10 +1,8 @@
 #include <unity.h>
 #include <string.h>
 
-// Since http_security.h is a no-op under NATIVE_TEST, we test the concept
-// by verifying the header values are correct constants
-
-#define NATIVE_TEST
+// http_security.h is a no-op under NATIVE_TEST (defined by the build system).
+// Tests verify constant values and that the stub overloads compile correctly.
 #include "../../src/http_security.h"
 
 void setUp(void) {}
@@ -41,22 +39,21 @@ void test_header_names_are_standard(void) {
 
 // ===== server_send wrapper tests (NATIVE_TEST stubs) =====
 
-void test_server_send_stub_no_content_compiles(void) {
+void test_server_send_no_content_compiles(void) {
     // server_send(code) stub must be callable without crash
     server_send(200);
     TEST_ASSERT_TRUE(true);
 }
 
-void test_server_send_stub_with_cstr_compiles(void) {
+void test_server_send_with_cstr_compiles(void) {
     // server_send(code, type, cstr) stub must be callable without crash
     server_send(200, "application/json", "{\"ok\":true}");
     TEST_ASSERT_TRUE(true);
 }
 
-void test_server_send_stub_with_string_compiles(void) {
-    // server_send(code, type, std::string) stub must be callable without crash
-    std::string body = "{\"ok\":true}";
-    server_send(200, "application/json", body);
+void test_server_send_error_code_compiles(void) {
+    // server_send with error code must be callable without crash
+    server_send(400, "application/json", "{\"error\":true}");
     TEST_ASSERT_TRUE(true);
 }
 
@@ -73,9 +70,9 @@ int main(int argc, char **argv) {
     RUN_TEST(test_no_csp_header_added);
     RUN_TEST(test_security_headers_count);
     RUN_TEST(test_header_names_are_standard);
-    RUN_TEST(test_server_send_stub_no_content_compiles);
-    RUN_TEST(test_server_send_stub_with_cstr_compiles);
-    RUN_TEST(test_server_send_stub_with_string_compiles);
+    RUN_TEST(test_server_send_no_content_compiles);
+    RUN_TEST(test_server_send_with_cstr_compiles);
+    RUN_TEST(test_server_send_error_code_compiles);
     RUN_TEST(test_http_add_security_headers_stub_compiles);
     return UNITY_END();
 }
