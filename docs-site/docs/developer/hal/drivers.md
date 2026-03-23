@@ -44,11 +44,11 @@ The 19 device-specific I2S wrapper functions that existed before the port-generi
 | `ess,es9081` | `HalEs9081` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
 | `ess,es9082` | `HalEs9082` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
 | `ess,es9017` | `HalEs9017` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
-| `cirrus,cs43198` | `HalCs43198` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD` |
-| `cirrus,cs43131` | `HalCs43131` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD`, `HP_AMP` |
-| `cirrus,cs4398` | `HalCs4398` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD` |
-| `cirrus,cs4399` | `HalCs4399` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
-| `cirrus,cs43130` | `HalCs43130` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD`, `HP_AMP` |
+| `cirrus,cs43198` | `HalCs43198` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD` |
+| `cirrus,cs43131` | `HalCs43131` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD`, `HP_AMP` |
+| `cirrus,cs4398` | `HalCs4398` | DAC | I2C Bus 2 | 0x4C | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD` |
+| `cirrus,cs4399` | `HalCs4399` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `cirrus,cs43130` | `HalCs43130` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD`, `HP_AMP` |
 | `generic,relay-amp` | `HalRelay` | AMP | GPIO | — | — |
 | `alx,dsp-pipeline` | `HalDspBridge` | DSP | Internal | — | — |
 | `generic,piezo-buzzer` | `HalBuzzer` | GPIO | GPIO | — | — |
@@ -935,7 +935,7 @@ bool buildSinkAt(int idx, uint8_t sinkSlot, AudioOutputSink* out) override;
 
 ## Expansion DAC Drivers (Cirrus Logic Family)
 
-Five Cirrus Logic DAC expansion drivers are registered in `hal_builtin_devices.cpp`. They connect to the carrier board via the mezzanine connector on I2C Bus 2 (GPIO 28/29). Cirrus DAC devices use I2C address 0x49 (distinct from the ESS SABRE DAC 0x48 range and ADC 0x40 range), which permits a Cirrus DAC, an ESS DAC, and an ADC mezzanine to coexist on the same bus.
+Five Cirrus Logic DAC expansion drivers are registered in `hal_builtin_devices.cpp`. They connect to the carrier board via the mezzanine connector on I2C Bus 2 (GPIO 28/29). CS43198, CS43131, CS4399, and CS43130 use I2C address 0x48 — the same base address range as ESS SABRE DACs. They coexist with ESS devices via different EEPROM IDs and compatible string matching rather than by address separation. CS4398 uses its hardware-fixed address 0x4C, which is distinct from both the ESS SABRE DAC range and the ADC 0x40 range.
 
 All five drivers share the common base class `HalCirrusDacBase` (in `src/hal/hal_cirrus_dac_base.h`) that provides:
 
@@ -962,7 +962,7 @@ These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (p
 **Class:** `HalCs43198`
 **Type:** `HAL_DEV_DAC`
 **Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
-**I2C Address:** 0x49
+**I2C Address:** 0x48
 **Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
 
 2-channel 32-bit SABRE-class DAC (130 dBA DNR) with PCM input up to 384 kHz and DSD256 support. Uses 16-bit paged I2C register access. I2C-controlled volume, 7 digital filter presets, and a low-power mode for battery-powered designs. Full duplex I2S slave to ESP32-P4.
@@ -989,7 +989,7 @@ These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (p
 **Class:** `HalCs43131`
 **Type:** `HAL_DEV_DAC`
 **Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
-**I2C Address:** 0x49
+**I2C Address:** 0x48
 **Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
 
 2-channel 32-bit DAC (127 dB DNR) with an integrated high-performance headphone amplifier and DSD256 support. PCM input up to 384 kHz. The on-chip headphone amplifier eliminates the need for an external amplifier stage in portable and desktop headphone designs. Uses 16-bit paged I2C register access. 7 digital filter presets.
@@ -1003,7 +1003,7 @@ These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (p
 | `volume` | 100 | Master volume 0–100 |
 | `filterMode` | 0 | Digital filter preset 0–6 |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–6), `setHpAmpEnabled(bool)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–6), `setHeadphoneAmpEnabled(bool)`, `isHeadphoneAmpEnabled() const`.
 
 ---
 
@@ -1012,7 +1012,7 @@ These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (p
 **Class:** `HalCs4398`
 **Type:** `HAL_DEV_DAC`
 **Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
-**I2C Address:** 0x49
+**I2C Address:** 0x4C
 **Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
 
 2-channel 24-bit DAC (120 dB DNR) with DSD64 support. PCM input up to 192 kHz. Uses legacy 8-bit direct I2C register access (no paged addressing). 3 digital filter presets. A proven, well-established converter widely used in CD player and standalone DAC designs.
@@ -1035,7 +1035,7 @@ These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (p
 **Class:** `HalCs4399`
 **Type:** `HAL_DEV_DAC`
 **Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
-**I2C Address:** 0x49
+**I2C Address:** 0x48
 **Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
 
 2-channel 32-bit DAC (130 dBA DNR) with PCM input up to 384 kHz. Uses 16-bit paged I2C register access. 5 digital filter presets including a NOS (non-oversampling) mode that bypasses the internal digital interpolation filter for a time-domain-optimized impulse response preferred by some audiophile listeners.
@@ -1049,7 +1049,7 @@ These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (p
 | `volume` | 100 | Master volume 0–100 |
 | `filterMode` | 0 | Digital filter preset 0–4 (4 = NOS mode) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–4).
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–4), `setNosMode(bool enable)`, `isNosMode() const`.
 
 ---
 
@@ -1058,7 +1058,7 @@ These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (p
 **Class:** `HalCs43130`
 **Type:** `HAL_DEV_DAC`
 **Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
-**I2C Address:** 0x49
+**I2C Address:** 0x48
 **Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
 
 2-channel 32-bit DAC (130 dB DNR) with an integrated headphone amplifier and DSD128 support. PCM input up to 384 kHz. Combines the headphone amplifier of the CS43131 with a NOS (non-oversampling) filter mode option. Uses 16-bit paged I2C register access. 5 digital filter presets including NOS mode.
@@ -1072,7 +1072,7 @@ These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (p
 | `volume` | 100 | Master volume 0–100 |
 | `filterMode` | 0 | Digital filter preset 0–4 (4 = NOS mode) |
 
-**Extension methods:** `setFilterPreset(uint8_t preset)` (0–4), `setHpAmpEnabled(bool)`.
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–4), `setHeadphoneAmpEnabled(bool)`, `isHeadphoneAmpEnabled() const`, `setNosMode(bool enable)`, `isNosMode() const`.
 
 ---
 
