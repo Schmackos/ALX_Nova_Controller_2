@@ -37,6 +37,11 @@
 #include "hal_es9081.h"
 #include "hal_es9082.h"
 #include "hal_es9017.h"
+#include "hal_cs43198.h"
+#include "hal_cs43131.h"
+#include "hal_cs4398.h"
+#include "hal_cs4399.h"
+#include "hal_cs43130.h"
 #include "../config.h"
 #include "../debug_serial.h"
 #include "../drivers/es8311_regs.h"
@@ -89,6 +94,11 @@ static HalDevice* factory_es9027pro()  { return new HalEs9027pro(); }
 static HalDevice* factory_es9081()     { return new HalEs9081(); }
 static HalDevice* factory_es9082()     { return new HalEs9082(); }
 static HalDevice* factory_es9017()     { return new HalEs9017(); }
+static HalDevice* factory_cs43198()    { return new HalCs43198(); }
+static HalDevice* factory_cs43131()    { return new HalCs43131(); }
+static HalDevice* factory_cs4398()     { return new HalCs4398(); }
+static HalDevice* factory_cs4399()     { return new HalCs4399(); }
+static HalDevice* factory_cs43130()    { return new HalCs43130(); }
 #ifdef USB_AUDIO_ENABLED
 static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 #endif
@@ -132,6 +142,11 @@ static HalDevice* factory_usb_audio() { return new HalUsbAudio(); }
 #define COMPAT_ES9081      "ess,es9081"
 #define COMPAT_ES9082      "ess,es9082"
 #define COMPAT_ES9017      "ess,es9017"
+#define COMPAT_CS43198     "cirrus,cs43198"
+#define COMPAT_CS43131     "cirrus,cs43131"
+#define COMPAT_CS4398      "cirrus,cs4398"
+#define COMPAT_CS4399      "cirrus,cs4399"
+#define COMPAT_CS43130     "cirrus,cs43130"
 
 void hal_register_builtins() {
     hal_registry_init();
@@ -194,12 +209,19 @@ void hal_register_builtins() {
     HAL_REGISTER(COMPAT_ES9081,    HAL_DEV_DAC,     0,      factory_es9081);     // HyperStream IV, 120dB, 40-QFN
     HAL_REGISTER(COMPAT_ES9082,    HAL_DEV_DAC,     0,      factory_es9082);     // HyperStream IV, 120dB, 48-QFN ASP2
     HAL_REGISTER(COMPAT_ES9017,    HAL_DEV_DAC,     0,      factory_es9017);     // HyperStream IV, 120dB, ES9027PRO drop-in
+
+    // Cirrus Logic expansion DACs (2-channel I2S, Pattern C)
+    HAL_REGISTER(COMPAT_CS43198,   HAL_DEV_DAC,     0,      factory_cs43198);    // MasterHIFI, 130dBA, DSD256
+    HAL_REGISTER(COMPAT_CS43131,   HAL_DEV_DAC,     0,      factory_cs43131);    // MasterHIFI, 127dB, HP amp, DSD256
+    HAL_REGISTER(COMPAT_CS4398,    HAL_DEV_DAC,     0,      factory_cs4398);     // Classic, 120dB, 192kHz/24-bit
+    HAL_REGISTER(COMPAT_CS4399,    HAL_DEV_DAC,     0,      factory_cs4399);     // MasterHIFI, 130dBA, NOS filter
+    HAL_REGISTER(COMPAT_CS43130,   HAL_DEV_DAC,     0,      factory_cs43130);    // MasterHIFI, 130dB, HP amp + NOS
 }
 
 // Compile-time capacity check — fails the build if more drivers are
 // added than the registry/DB can hold, preventing silent runtime overflow.
 // Update HAL_BUILTIN_DRIVER_COUNT when adding new HAL_REGISTER() calls.
-#define HAL_BUILTIN_DRIVER_COUNT 39  // 38 without USB_AUDIO_ENABLED
+#define HAL_BUILTIN_DRIVER_COUNT 44  // 43 without USB_AUDIO_ENABLED
 static_assert(HAL_BUILTIN_DRIVER_COUNT <= HAL_MAX_DRIVERS,
               "HAL_BUILTIN_DRIVER_COUNT exceeds HAL_MAX_DRIVERS — increase in hal_types.h");
 static_assert(HAL_BUILTIN_DRIVER_COUNT <= HAL_DB_MAX_ENTRIES,

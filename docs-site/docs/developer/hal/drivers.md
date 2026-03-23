@@ -1,7 +1,7 @@
 ---
 title: Built-in Drivers
 sidebar_position: 4
-description: Reference for all built-in HAL drivers — PCM5102A, ES8311, PCM1808, NS4150B, MCP4725, ESS SABRE ADC expansion family, ESS SABRE DAC expansion family, amplifier relay, and more.
+description: Reference for all built-in HAL drivers — PCM5102A, ES8311, PCM1808, NS4150B, MCP4725, ESS SABRE ADC expansion family, ESS SABRE DAC expansion family, Cirrus Logic DAC expansion family, amplifier relay, and more.
 ---
 
 This page documents every driver registered by `hal_register_builtins()` in `src/hal/hal_builtin_devices.cpp`. Each entry covers the compatible string, device class, type, capabilities, bus requirements, and any runtime configuration options that affect behaviour.
@@ -44,6 +44,11 @@ The 19 device-specific I2S wrapper functions that existed before the port-generi
 | `ess,es9081` | `HalEs9081` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
 | `ess,es9082` | `HalEs9082` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
 | `ess,es9017` | `HalEs9017` | DAC | I2C Bus 2 | 0x48 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `cirrus,cs43198` | `HalCs43198` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD` |
+| `cirrus,cs43131` | `HalCs43131` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD`, `HP_AMP` |
+| `cirrus,cs4398` | `HalCs4398` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD` |
+| `cirrus,cs4399` | `HalCs4399` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE` |
+| `cirrus,cs43130` | `HalCs43130` | DAC | I2C Bus 2 | 0x49 | `DAC_PATH`, `HW_VOLUME`, `FILTERS`, `MUTE`, `DSD`, `HP_AMP` |
 | `generic,relay-amp` | `HalRelay` | AMP | GPIO | — | — |
 | `alx,dsp-pipeline` | `HalDspBridge` | DSP | Internal | — | — |
 | `generic,piezo-buzzer` | `HalBuzzer` | GPIO | GPIO | — | — |
@@ -925,6 +930,149 @@ _tdm.buildSinks("ES9038PRO CH1/2", "ES9038PRO CH3/4",
 int  getSinkCount() const override { return _sinksBuilt ? 4 : 0; }
 bool buildSinkAt(int idx, uint8_t sinkSlot, AudioOutputSink* out) override;
 ```
+
+---
+
+## Expansion DAC Drivers (Cirrus Logic Family)
+
+Five Cirrus Logic DAC expansion drivers are registered in `hal_builtin_devices.cpp`. They connect to the carrier board via the mezzanine connector on I2C Bus 2 (GPIO 28/29). Cirrus DAC devices use I2C address 0x49 (distinct from the ESS SABRE DAC 0x48 range and ADC 0x40 range), which permits a Cirrus DAC, an ESS DAC, and an ADC mezzanine to coexist on the same bus.
+
+All five drivers share the common base class `HalCirrusDacBase` (in `src/hal/hal_cirrus_dac_base.h`) that provides:
+
+- Dual I2C addressing mode: 8-bit direct registers for legacy devices (CS4398) and 16-bit paged register access for modern devices (CS43198, CS43131, CS4399, CS43130)
+- `_writeReg(reg, val)` / `_readReg(reg)` — I2C register helpers with automatic address width selection
+- `_selectWire()` — Wire instance selection based on `_i2cBusIndex`
+- `_applyConfigOverrides()` — reads `HalDeviceConfig` into member fields at the start of `init()`
+- `_enableI2sTx()` / `_disableI2sTx()` — expansion I2S TX lifecycle via port-generic API
+- `dacSetSampleRate()`, `dacSetBitDepth()`, `dacGetSampleRate()` delegating through `configure()`
+- `dacGetVolume()`, `dacIsMuted()`, hardware-mute ramp state (`_muteRampState`) for click-free transitions
+
+Shared family constants are defined in `src/drivers/cirrus_dac_common.h`. Per-device register maps live in `src/drivers/cs*_regs.h` files.
+
+---
+
+### Pattern C: 2-Channel I2S DAC Devices (Cirrus Logic)
+
+These devices receive stereo audio via standard I2S on the mezzanine DOUT pin (pin 11 of the connector). The ESP32-P4 drives BCK, WS, and MCLK as I2S master; the DAC operates as slave. Each device registers a single `AudioOutputSink` via `buildSink()`. The pipeline bridge assigns one output slot when the device transitions to AVAILABLE.
+
+---
+
+#### CS43198 — `cirrus,cs43198`
+
+**Class:** `HalCs43198`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x49
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit SABRE-class DAC (130 dBA DNR) with PCM input up to 384 kHz and DSD256 support. Uses 16-bit paged I2C register access. I2C-controlled volume, 7 digital filter presets, and a low-power mode for battery-powered designs. Full duplex I2S slave to ESP32-P4.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_DSD`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–6 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–6).
+
+**probe():** Reads chip ID via paged register access and verifies the Cirrus Logic device ID.
+
+**healthCheck():** I2C ACK check. A NACK after init indicates the module has been disconnected.
+
+---
+
+#### CS43131 — `cirrus,cs43131`
+
+**Class:** `HalCs43131`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x49
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit DAC (127 dB DNR) with an integrated high-performance headphone amplifier and DSD256 support. PCM input up to 384 kHz. The on-chip headphone amplifier eliminates the need for an external amplifier stage in portable and desktop headphone designs. Uses 16-bit paged I2C register access. 7 digital filter presets.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_DSD | HAL_CAP_HP_AMP`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–6 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–6), `setHpAmpEnabled(bool)`.
+
+---
+
+#### CS4398 — `cirrus,cs4398`
+
+**Class:** `HalCs4398`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x49
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 24-bit DAC (120 dB DNR) with DSD64 support. PCM input up to 192 kHz. Uses legacy 8-bit direct I2C register access (no paged addressing). 3 digital filter presets. A proven, well-established converter widely used in CD player and standalone DAC designs.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_DSD`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–2 |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–2).
+
+---
+
+#### CS4399 — `cirrus,cs4399`
+
+**Class:** `HalCs4399`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x49
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit DAC (130 dBA DNR) with PCM input up to 384 kHz. Uses 16-bit paged I2C register access. 5 digital filter presets including a NOS (non-oversampling) mode that bypasses the internal digital interpolation filter for a time-domain-optimized impulse response preferred by some audiophile listeners.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–4 (4 = NOS mode) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–4).
+
+---
+
+#### CS43130 — `cirrus,cs43130`
+
+**Class:** `HalCs43130`
+**Type:** `HAL_DEV_DAC`
+**Bus:** I2C Bus 2 (GPIO 28/29) + I2S slave TX
+**I2C Address:** 0x49
+**Init Priority:** `HAL_PRIORITY_HARDWARE` (800)
+
+2-channel 32-bit DAC (130 dB DNR) with an integrated headphone amplifier and DSD128 support. PCM input up to 384 kHz. Combines the headphone amplifier of the CS43131 with a NOS (non-oversampling) filter mode option. Uses 16-bit paged I2C register access. 5 digital filter presets including NOS mode.
+
+**Capabilities:** `HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_FILTERS | HAL_CAP_MUTE | HAL_CAP_DSD | HAL_CAP_HP_AMP`
+
+**Config fields:**
+
+| Field | Default | Notes |
+|---|---|---|
+| `volume` | 100 | Master volume 0–100 |
+| `filterMode` | 0 | Digital filter preset 0–4 (4 = NOS mode) |
+
+**Extension methods:** `setFilterPreset(uint8_t preset)` (0–4), `setHpAmpEnabled(bool)`.
 
 ---
 
