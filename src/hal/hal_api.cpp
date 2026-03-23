@@ -96,7 +96,11 @@ void registerHalApiEndpoints(WebServer& server) {
         server_send(200, "application/json", json);
     });
 
-    // POST /api/hal/scan — trigger device rescan
+    // POST /api/hal/scan — trigger device rescan (async, non-blocking)
+    // Returns 202 Accepted immediately. The scan runs in a one-shot FreeRTOS
+    // task on Core 0 so the web server remains responsive throughout.
+    // Poll GET /api/hal/devices or watch the "halDeviceState" WebSocket
+    // broadcast (scanning=false) to know when the scan is complete.
     server.on("/api/hal/scan", HTTP_POST, [&server]() {
         if (appState._halScanInProgress) {
             server_send(409, "application/json", "{\"error\":\"Scan already in progress\"}");
@@ -104,20 +108,48 @@ void registerHalApiEndpoints(WebServer& server) {
         }
         appState._halScanInProgress = true;
         appState.markHalDeviceDirty();  // Broadcast scanning=true
+
         bool partialScan = hal_wifi_sdio_active();
-        int found = hal_rescan();
+
+#ifndef NATIVE_TEST
+        // One-shot task: runs hal_rescan() on Core 0 then clears the flag.
+        // Stack 4096 is sufficient — hal_rescan() uses <1KB locals.
+        struct HalScanTaskCtx { bool partialScan; };
+        static auto halScanTask = [](void* param) {
+            (void)param;
+            int found = hal_rescan();
+            appState._halScanInProgress = false;
+            appState.markHalDeviceDirty();  // Broadcast scanning=false
+            LOG_I("[HAL:API]", "Async scan complete: %d device(s) found", found);
+            vTaskDelete(NULL);
+        };
+        BaseType_t spawned = xTaskCreatePinnedToCore(
+            halScanTask, "hal_scan", 4096, nullptr, 1, nullptr, 0);
+        if (spawned != pdPASS) {
+            // Task creation failed — fall back to synchronous execution so the
+            // scan still runs rather than leaving _halScanInProgress stuck true.
+            LOG_W("[HAL:API]", "Failed to spawn async scan task — running synchronously");
+            int found = hal_rescan();
+            appState._halScanInProgress = false;
+            appState.markHalDeviceDirty();
+            LOG_I("[HAL:API]", "Sync fallback scan complete: %d device(s) found", found);
+        }
+#else
+        // Native test environment: no FreeRTOS, run synchronously.
+        hal_rescan();
         appState._halScanInProgress = false;
-        appState.markHalDeviceDirty();  // Broadcast scanning=false
+        appState.markHalDeviceDirty();
+#endif
+
         JsonDocument doc;
-        doc["status"] = "ok";
-        doc["devicesFound"] = found;
+        doc["status"] = "scanning";
         doc["partialScan"] = partialScan;
         if (partialScan) {
             doc["skippedBuses"] = "Bus 0 (WiFi SDIO conflict)";
         }
         String json;
         serializeJson(doc, json);
-        server_send(200, "application/json", json);
+        server_send(202, "application/json", json);
     });
 
     // GET /api/hal/db — list device database entries

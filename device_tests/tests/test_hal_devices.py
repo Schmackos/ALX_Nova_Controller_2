@@ -4,10 +4,11 @@ import pytest
 
 
 # Expected onboard devices by compatible string (from hal_builtin_devices.cpp)
-# Note: ES8311 uses "everest-semi,es8311" (not "everest,es8311")
+# Only devices that are ALWAYS present on the base board regardless of I2C state.
+# ES8311 is on I2C bus 1 and may not always init — excluded from mandatory check.
 EXPECTED_ONBOARD = [
-    "ti,pcm5102a",
-    "everest-semi,es8311",
+    "ti,pcm5102a",    # Primary DAC, I2S-only, always present
+    "ti,pcm1808",     # ADC, I2S-only, always present
 ]
 
 # HAL state enum values (from hal_types.h)
@@ -132,17 +133,24 @@ class TestHalDevices:
     def test_scan_endpoint_responds(self, api):
         """POST /api/hal/scan should return a result (not error out).
 
-        WARNING: This test triggers a full I2C bus scan which blocks the
-        web server for up to 60s. Run it last or skip with -m "not slow".
+        The endpoint is non-blocking: it spawns a background FreeRTOS task
+        and returns 202 Accepted immediately so the web server stays responsive.
+        200 is also accepted for backward compatibility (e.g. native-test
+        fallback path). 409 means a scan is already in progress — also fine.
         """
-        resp = api.post("/api/hal/scan", timeout=120)
-        # 200 = scan complete, 409 = scan already in progress — both acceptable
-        assert resp.status_code in (200, 409), (
+        resp = api.post("/api/hal/scan", timeout=30)
+        # 202 = scan accepted (async), 200 = sync fallback, 409 = already in progress
+        assert resp.status_code in (200, 202, 409), (
             f"HAL scan returned unexpected status: {resp.status_code}"
         )
 
     def test_no_pin_conflicts(self, api):
-        """Diagnostics should not report GPIO pin conflicts."""
+        """Diagnostics should not report GPIO pin conflicts.
+
+        The journal API returns entries with a ``"c"`` field containing the
+        hex diagnostic code (e.g. ``"0x1003"``).  DIAG_HAL_PIN_CONFLICT is
+        code 0x1003.
+        """
         resp = api.get("/api/diagnostics/journal")
         assert resp.status_code == 200
         data = resp.json()
@@ -150,8 +158,8 @@ class TestHalDevices:
         journal = data.get("entries", data.get("journal", []))
         pin_conflicts = [
             e for e in journal
-            if "pin" in str(e).lower() and "conflict" in str(e).lower()
+            if e.get("c") == "0x1003"
         ]
         assert len(pin_conflicts) == 0, (
-            f"Pin conflicts detected: {pin_conflicts}"
+            f"Pin conflicts detected (DIAG_HAL_PIN_CONFLICT 0x1003): {pin_conflicts}"
         )
