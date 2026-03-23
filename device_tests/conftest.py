@@ -144,10 +144,15 @@ def auth_session(base_url, device_password):
             )
             if resp.status_code == 200:
                 return session
-            # 429 = rate limited, wait longer
+            # 429 = rate limited — respect retryAfter from device
             if resp.status_code == 429:
-                time.sleep(3)
+                try:
+                    retry_after = resp.json().get("retryAfter", 30)
+                except Exception:
+                    retry_after = 30
+                time.sleep(retry_after + 2)
                 continue
+            last_exc = Exception(f"HTTP {resp.status_code}: {resp.text[:200]}")
         except requests.ConnectionError as exc:
             last_exc = exc
         time.sleep(2)

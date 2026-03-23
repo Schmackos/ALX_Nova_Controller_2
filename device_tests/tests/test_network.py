@@ -30,9 +30,9 @@ class TestNetwork:
             f"Response keys: {list(data.keys())}"
         )
 
-    def test_security_headers_present(self, base_url, auth_session):
+    def test_security_headers_present(self, api):
         """All HTTP responses must include security headers."""
-        resp = auth_session.get(f"{base_url}/api/diagnostics", timeout=5)
+        resp = api.get("/api/auth/status")
         assert resp.status_code == 200
         assert resp.headers.get("X-Frame-Options") == "DENY", (
             "Missing or wrong X-Frame-Options header"
