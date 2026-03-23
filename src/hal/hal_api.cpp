@@ -3,6 +3,7 @@
 
 #include "hal_api.h"
 #include "../http_security.h"
+#include "../rate_limiter.h"
 #include "hal_device_manager.h"
 #include "hal_device_db.h"
 #include "hal_driver_registry.h"
@@ -77,6 +78,10 @@ static void deviceToJson(JsonObject& obj, HalDevice* dev) {
 void registerHalApiEndpoints(WebServer& server) {
     // GET /api/hal/devices — list all registered devices
     server.on("/api/hal/devices", HTTP_GET, [&server]() {
+        if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
+            server_send(server, 429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
+            return;
+        }
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
 

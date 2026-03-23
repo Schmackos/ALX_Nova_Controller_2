@@ -6,6 +6,7 @@
 #include "i2s_audio.h"
 #include "debug_serial.h"
 #include "http_security.h"
+#include "rate_limiter.h"
 
 // Helper: build JSON object for a single I2S port
 static void _buildPortJson(JsonObject& obj, uint8_t port) {
@@ -43,6 +44,10 @@ static void _buildPortJson(JsonObject& obj, uint8_t port) {
 void registerI2sPortApiEndpoints(WebServer& server) {
     // GET /api/i2s/ports — list all I2S port status (or single port with ?id=N)
     server.on("/api/i2s/ports", HTTP_GET, [&server]() {
+        if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
+            server_send(server, 429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
+            return;
+        }
         // Single-port query
         if (server.hasArg("id")) {
             int id = server.arg("id").toInt();

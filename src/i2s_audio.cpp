@@ -994,7 +994,11 @@ bool i2s_audio_configure_adc(int lane, const HalDeviceConfig* cfg) {
             LOG_W("[Audio] Lane 2: no data pin configured for expansion ADC");
             return false;
         }
-        bool ok = i2s_audio_enable_expansion_rx(_currentSampleRate, dinPin);
+        bool ok = i2s_port_enable_rx(2, I2S_MODE_STD, 2,
+                                     dinPin,
+                                     (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                                     (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                                     (gpio_num_t)ES8311_I2S_LRCK_PIN);
         _expansionRxOk = ok;
         return ok;
 #else
@@ -1399,10 +1403,18 @@ bool i2s_audio_set_sample_rate(uint32_t rate) {
     // Restore I2S2 users at the new sample rate.
     // TX (ES8311) first so the clock is stable before RX is enabled.
     if (savedI2s2Users & 0x01) {
-        i2s_audio_enable_es8311_tx(rate);
+        i2s_port_enable_tx(2, I2S_MODE_STD, 2,
+                           (gpio_num_t)ES8311_I2S_DSDIN_PIN,
+                           (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                           (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                           (gpio_num_t)ES8311_I2S_LRCK_PIN);
     }
     if (savedI2s2Users & 0x02) {
-        i2s_audio_enable_expansion_rx(rate, savedDin);
+        i2s_port_enable_rx(2, I2S_MODE_STD, 2,
+                           savedDin,
+                           (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                           (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                           (gpio_num_t)ES8311_I2S_LRCK_PIN);
     }
 #endif // CONFIG_IDF_TARGET_ESP32P4
 

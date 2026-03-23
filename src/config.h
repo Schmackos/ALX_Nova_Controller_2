@@ -195,7 +195,7 @@ const float DEFAULT_ADC_VREF = 3.3f; // PCM1808 full-scale reference voltage (V)
 enum SensingMode { ALWAYS_ON, ALWAYS_OFF, SMART_AUTO };
 
 // ===== MQTT Configuration =====
-#define MQTT_SOCKET_TIMEOUT_MS 5000  // TCP socket timeout for MQTT broker connection (ms)
+#define MQTT_SOCKET_TIMEOUT_MS 2000  // TCP socket timeout for MQTT broker connection (ms)
 const unsigned long MQTT_RECONNECT_INTERVAL = 5000; // Reconnect every 5 seconds
 const unsigned long MQTT_PUBLISH_INTERVAL =
     1000; // Check for state changes every 1 second
