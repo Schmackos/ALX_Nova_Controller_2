@@ -61,9 +61,10 @@ enum InitStateBit : uint32_t {
     INIT_DAC         = (1u << 9),
     INIT_USB_AUDIO   = (1u << 10),
     INIT_UPDATED     = (1u << 11),
-    INIT_HAL_DEVICE  = (1u << 13),
-    INIT_CHANNEL_MAP = (1u << 14),
-    INIT_ALL         = 0x7FFFu,
+    INIT_HAL_DEVICE    = (1u << 13),
+    INIT_CHANNEL_MAP   = (1u << 14),
+    INIT_HEALTH_CHECK  = (1u << 15),
+    INIT_ALL           = 0xFFFFu,
 };
 
 // ===== WebSocket Event Handler =====
@@ -181,6 +182,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
         } else if (doc["type"] == "getHardwareStats") {
           // Client requesting hardware stats
           sendHardwareStats();
+        } else if (msgType == "getHealthCheck") {
+          sendHealthCheckState();
         } else if (msgType == "setBacklight") {
           bool newState = doc["enabled"].as<bool>();
           AppState::getInstance().setBacklightOn(newState);
@@ -1310,6 +1313,7 @@ void drainPendingInitState() {
             pending &= ~INIT_UPDATED;
             sent++;
         }
+        if (sent < MAX_PER_ITER && (pending & INIT_HEALTH_CHECK)) { sendHealthCheckState();            pending &= ~INIT_HEALTH_CHECK; sent++; }
 
         break; // Only drain one client per call to avoid starving the loop
     }

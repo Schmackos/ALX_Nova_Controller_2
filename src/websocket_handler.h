@@ -40,6 +40,9 @@ void sendAudioChannelMap();
 void sendUsbAudioState();
 #endif
 
+// ===== Health Check Broadcast =====
+void sendHealthCheckState();
+
 // ===== Diagnostic Event Broadcast =====
 void sendDiagEvent();
 
