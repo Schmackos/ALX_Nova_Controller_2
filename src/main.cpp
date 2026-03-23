@@ -99,7 +99,8 @@ WebSocketsServer webSocket = WebSocketsServer(81);
 
 // ===== MQTT Client Objects =====
 WiFiClient mqttWifiClient;
-PubSubClient mqttClient(mqttWifiClient);
+WiFiClientSecure mqttWifiClientSecure;
+PubSubClient mqttClient(mqttWifiClient);  // Default plaintext; switched to secure in setupMqtt()
 
 // ===== Firmware Constants =====
 const char *firmwareVer = FIRMWARE_VERSION;

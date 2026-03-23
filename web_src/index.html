@@ -887,6 +887,30 @@
                     <label class="form-label">Port</label>
                     <input type="number" class="form-input" id="appState.mqttPort" inputmode="numeric" placeholder="1883" value="1883">
                 </div>
+                <div class="divider"></div>
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Use TLS (Secure Connection)</div>
+                        <div class="toggle-sublabel">Encrypt MQTT traffic (use port 8883)</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="appState.mqttUseTls" onchange="toggleMqttTls()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div id="mqttTlsFields" style="display:none">
+                <div class="toggle-row">
+                    <div>
+                        <div class="toggle-label">Verify Certificate</div>
+                        <div class="toggle-sublabel">Disable for self-signed broker certificates</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="appState.mqttVerifyCert">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                </div>
+                <div class="divider"></div>
                 <div class="form-group">
                     <label class="form-label">Username (optional)</label>
                     <input type="text" class="form-input" id="appState.mqttUsername" placeholder="Username">

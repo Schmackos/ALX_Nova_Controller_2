@@ -8,6 +8,13 @@ class WiFiClient {
 public:
     bool connected() { return false; }
     void stop() {}
+    bool connect(const char*, uint16_t, int) { return false; }
+    void setTimeout(uint32_t) {}
+};
+class WiFiClientSecure : public WiFiClient {
+public:
+    void setInsecure() {}
+    void setCACert(const char*) {}
 };
 class PubSubClient {
 public:
@@ -15,6 +22,7 @@ public:
     bool connect(const char*) { return false; }
     bool publish(const char*, const char*) { return false; }
     void loop() {}
+    void setClient(WiFiClient&) {}
 };
 class WebServer {
 public:
@@ -35,6 +43,7 @@ public:
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #endif
 
 // ===== Global Object extern declarations =====
@@ -42,6 +51,7 @@ public:
 extern WebServer server;
 extern WebSocketsServer webSocket;
 extern WiFiClient mqttWifiClient;
+extern WiFiClientSecure mqttWifiClientSecure;
 extern PubSubClient mqttClient;
 
 // Firmware info (const, not state)

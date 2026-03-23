@@ -169,6 +169,8 @@ static void applyMqttFromJson(const JsonDocument &doc) {
   if (m["password"].is<const char*>()) appState.mqtt.password   = m["password"].as<const char*>();
   if (m["baseTopic"].is<const char*>()) appState.mqtt.baseTopic = m["baseTopic"].as<const char*>();
   if (m["haDiscovery"].is<bool>())    appState.mqtt.haDiscovery = m["haDiscovery"].as<bool>();
+  if (m["useTls"].is<bool>())         appState.mqtt.useTls      = m["useTls"].as<bool>();
+  if (m["verifyCert"].is<bool>())     appState.mqtt.verifyCert  = m["verifyCert"].as<bool>();
 }
 
 // Try loading settings from /config.json
@@ -1161,6 +1163,8 @@ void handleSettingsExport() {
   doc["mqtt"]["username"] = appState.mqtt.username;
   doc["mqtt"]["baseTopic"] = appState.mqtt.baseTopic;
   doc["mqtt"]["haDiscovery"] = appState.mqtt.haDiscovery;
+  doc["mqtt"]["useTls"] = appState.mqtt.useTls;
+  doc["mqtt"]["verifyCert"] = appState.mqtt.verifyCert;
   // Note: Password is intentionally excluded from export for security
 
   // Note: Certificate management removed - now using Mozilla certificate bundle
@@ -1591,6 +1595,14 @@ void handleSettingsImport() {
       appState.mqtt.haDiscovery = doc["mqtt"]["haDiscovery"].as<bool>();
       LOG_D("[Settings] MQTT HA Discovery: %s",
             appState.mqtt.haDiscovery ? "enabled" : "disabled");
+    }
+    if (doc["mqtt"]["useTls"].is<bool>()) {
+      appState.mqtt.useTls = doc["mqtt"]["useTls"].as<bool>();
+      LOG_D("[Settings] MQTT TLS: %s", appState.mqtt.useTls ? "enabled" : "disabled");
+    }
+    if (doc["mqtt"]["verifyCert"].is<bool>()) {
+      appState.mqtt.verifyCert = doc["mqtt"]["verifyCert"].as<bool>();
+      LOG_D("[Settings] MQTT Cert Verify: %s", appState.mqtt.verifyCert ? "enabled" : "disabled");
     }
     // Note: Password is not imported for security - user needs to re-enter it
     // Save MQTT settings
@@ -2077,6 +2089,8 @@ void handleDiagnostics() {
   mqtt["username"] = appState.mqtt.username;
   mqtt["baseTopic"] = appState.mqtt.baseTopic;
   mqtt["haDiscovery"] = appState.mqtt.haDiscovery;
+  mqtt["useTls"] = appState.mqtt.useTls;
+  mqtt["verifyCert"] = appState.mqtt.verifyCert;
   mqtt["connected"] = appState.mqtt.connected;
 
   // ===== OTA Status =====
