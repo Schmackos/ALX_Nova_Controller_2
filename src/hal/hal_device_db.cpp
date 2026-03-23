@@ -696,7 +696,7 @@ static void hal_db_add_builtins() {
         d.bus.type = HAL_BUS_I2C;
         d.bus.index = HAL_I2C_BUS_EXP;
         d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K;
-        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DSD;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
         hal_db_add(&d);
     }
     // CS43130 — Cirrus Logic MasterHIFI 2-channel DAC, 130dB DNR, HP amp + NOS filter + DSD

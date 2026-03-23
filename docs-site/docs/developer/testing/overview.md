@@ -15,16 +15,17 @@ This section also covers on-device testing — hardware-in-the-loop validation u
 
 | Layer | Tool | Count | What It Covers |
 |---|---|---|---|
-| C++ unit tests | Unity (PlatformIO native) | ~3,050 tests / 110 modules | Firmware logic, HAL, DSP, audio pipeline, networking, auth |
+| C++ unit tests | Unity (PlatformIO native) | ~3,125 tests / 114 modules | Firmware logic, HAL, DSP, audio pipeline, networking, auth |
 | E2E browser tests | Playwright + Express mock | 302 tests / 50 specs | Web UI, WS state sync, REST API contracts, accessibility, visual regression |
 | Static analysis | ESLint, cppcheck, find_dups, check_missing_fns | — | JS correctness, C++ warnings, duplicate/missing declarations |
+| On-device tests | pytest + pyserial + requests | 105 tests / 9 modules | I2S DMA, GPIO, HAL lifecycle, DSP, audio pipeline, WiFi SDIO conflict (real hardware) |
 
 ## Layer 1: C++ Unit Tests
 
 Tests run on the **native platform** (host machine, gcc/MinGW) using the [Unity](https://github.com/ThrowTheSwitch/Unity) assertion framework, compiled and executed by PlatformIO.
 
 ```bash
-# Run all ~3,050 tests across all 110 modules
+# Run all ~3,125 tests across all 114 modules
 pio test -e native
 
 # Run with verbose output (show individual test names and pass/fail)

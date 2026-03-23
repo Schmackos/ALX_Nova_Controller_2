@@ -141,7 +141,7 @@ pytest tests/test_hal_advanced.py --device-port COM8 --device-ip 192.168.178.229
 | `--device-password` | `test1234` | Web UI password (TEST\_MODE default) |
 | `--baud` | `115200` | Serial baud rate |
 | `-m "not slow"` | — | Skip slow tests (HAL scan, reboot) |
-| `--create-issues` | — | Auto-create GitHub issues on failure |
+| `--create-issues` | — | Auto-create GitHub issues on failure (wired via `pytest_runtest_makereport` hook; reads firmware version from `/api/settings` automatically) |
 | `--timeout` | `120` | Per-test timeout in seconds |
 
 ## Test Modules
@@ -174,6 +174,145 @@ pytest tests/ -m "health" -v            # Health check endpoint only
 ```
 
 Available markers: `boot`, `health`, `hal`, `audio`, `network`, `mqtt`, `settings`, `reboot`, `slow`.
+
+## HAL Testing in Depth
+
+`test_hal_advanced.py` (31 tests across 8 classes) covers the full HAL REST API surface beyond the basic device-list checks in `test_hal_devices.py`. All write operations restore original state after each test.
+
+### Device Database
+
+`TestHalDeviceDatabase` verifies that the in-memory device database is populated and correctly structured:
+
+- The `GET /api/hal/db` response contains at least 10 builtin entries.
+- Each entry has at minimum a `compatible` or `name` field.
+- `GET /api/hal/scan/unmatched` returns a valid JSON object (exposes I2C addresses that responded on the bus but had no matching EEPROM or driver).
+
+### Scan Behavior
+
+`TestHalScanBehavior` (all `@slow`) verifies the async scan lifecycle:
+
+- `POST /api/hal/scan` returns 202 (async started), 200 (sync result), or 409 (scan already running). The test waits 5 seconds for the async scan to finish before proceeding.
+- Two back-to-back scan requests — the second should receive 409 if the first is still running, documenting the `_halScanInProgress` conflict guard.
+- The 202/200 response body includes a `partialScan` boolean that is `true` when Bus 0 (GPIO 48/54) was skipped due to the WiFi SDIO conflict.
+
+### Config Update Roundtrips
+
+`TestHalConfigUpdates` makes write calls against live devices and restores state:
+
+- **Mute roundtrip** — finds the first device with `HAL_CAP_MUTE` (capability bit 2), toggles `cfgMute`, verifies HTTP 200, then restores.
+- **Volume roundtrip** — finds the first device with `HAL_CAP_HW_VOLUME` (capability bit 0), sets `cfgVolume` to 50, verifies HTTP 200, then restores.
+- **Auto-discovery toggle** — reads `GET /api/hal/settings`, toggles `halAutoDiscovery`, verifies HTTP 200 from `PUT /api/hal/settings`, then restores.
+
+Tests skip with a descriptive message when no suitable device is found.
+
+### Config Validation
+
+`TestHalConfigValidation` documents the current boundary-checking behaviour of `PUT /api/hal/devices`. Several validation gaps exist in the firmware at the time of writing — these tests are written to **pass in both the current and fixed states**, so they act as live documentation rather than blocking tests:
+
+| Test | Current behaviour | Fixed behaviour |
+|---|---|---|
+| GPIO pin > 54 | HTTP 200 accepted | HTTP 400/422 |
+| I2S port > 2 | HTTP 200 accepted | HTTP 400/422 |
+| I2C bus > 2 | HTTP 200 accepted | HTTP 400/422 |
+| Non-existent slot (31) | HTTP 400 or 404 | HTTP 400 or 404 |
+| Missing `slot` field | HTTP 400 or 422 | HTTP 400 or 422 |
+
+When the firmware is updated to call `hal_validate_config()` in the PUT handler, the first three tests will automatically pass with the new 422 response without needing test changes.
+
+### Device Reinit
+
+`TestHalReinit` exercises `POST /api/hal/devices/reinit`:
+
+- Reinitialising an AVAILABLE device (state 3) should return 200 and leave the device non-ERROR after a 1-second settle.
+- Slot 31 (always empty) must return 400 or 404.
+- A body with no `slot` field must return 400 or 422.
+
+### CRUD Lifecycle
+
+`TestHalDeviceLifecycle` probes the error paths of the add/remove lifecycle without actually registering new devices:
+
+- Registering an unknown compatible string (`"nonexistent,fake-device-xyz"`) must return 404 or 422.
+- Deleting an empty slot (30) must return 400 or 404.
+- DELETE with no request body must return 400 or 422.
+- POST without a `compatible` field must return 400 or 422.
+
+### Custom Device Schemas
+
+`TestHalCustomDevices` tests the `GET/POST/DELETE /api/hal/devices/custom` endpoints used by the web UI custom device creator:
+
+- Listing custom schemas (`GET`) returns HTTP 200 with a JSON object.
+- A minimal Tier 1 schema (I2S passthrough, no I2C) can be uploaded and then deleted. The test skips if the firmware rejects the schema format, allowing for schema evolution without test breakage.
+- A compatible string containing `../` must be rejected with 400, 403, or 422 — this verifies the `sanitize_filename()` path traversal guard.
+- A schema missing the `compatible` field must return 400 or 422.
+- Deleting a non-existent schema name must return 400 or 404.
+
+### Error Handling
+
+`TestHalErrorHandling` validates the structural integrity of the device list:
+
+- Sending a raw non-JSON body to `PUT /api/hal/devices` must return 400 or 422.
+- All `state` values in the device list must be valid enum integers (0–7).
+- All `slot` values must be within the 0–31 range.
+- No two devices may share the same slot number.
+- Devices in ERROR state (state 5) must have a non-empty `lastError` field.
+
+## DSP and Audio Testing
+
+`test_dsp_audio.py` (24 tests across 6 classes) covers the DSP engine, signal generator, pipeline matrix, DAC, THD measurement, and audio diagnostics. All write tests restore original state.
+
+### DSP Configuration
+
+`TestDspConfig` exercises the DSP REST API:
+
+- `GET /api/dsp` returns a valid config object containing `dspEnabled` or `enabled`.
+- `GET /api/dsp/metrics` returns processing metrics — `cpuLoad` and/or `processTimeUs`.
+- Bypass toggle roundtrip via `POST /api/dsp/bypass` — sets `bypass: true` then `bypass: false`, both returning 200.
+- `GET /api/dsp/channel?ch=0` returns a channel config dict.
+- Channel bypass roundtrip via `POST /api/dsp/channel/bypass?ch=0` — same on/off pattern.
+- `GET /api/dsp/presets` returns a response with `slots` array or a list.
+- `GET /api/dsp/peq/presets` returns a response with a `presets` array.
+- `GET /api/dsp/export/json` returns the full DSP config as a JSON object.
+
+### Signal Generator
+
+`TestSignalGenerator` verifies the signal generator control surface:
+
+- `GET /api/signalgenerator` returns state with `enabled`, `waveform`, and `frequency` fields.
+- The reported waveform must be one of `sine`, `square`, `white_noise`, or `sweep`.
+- The reported frequency must be in the range 1–22000 Hz.
+- Enable/disable roundtrip — enables with `sine` at 1000 Hz / -20 dB, reads back `enabled: true`, then restores original enabled state.
+- The reported amplitude must be in the range -96 to 0 dB.
+
+### Pipeline Matrix
+
+`TestPipelineMatrix` checks the 32×32 routing matrix:
+
+- `GET /api/pipeline/matrix` response contains `matrix` and `size` fields, with `size == 32`.
+- The matrix array is square — every row has the same number of columns as there are rows.
+- Cell set and restore via `POST /api/pipeline/matrix/cell` — sets cell \[0\]\[0\] to -6 dB and restores the original value.
+- `GET /api/pipeline/sinks` returns a list (may be empty if no DAC is enabled).
+
+### DAC Endpoints
+
+`TestDacEndpoints` validates the DAC API:
+
+- `GET /api/dac` returns 200 with a `success` field.
+- Reported volume (if present) must be 0–100.
+- `GET /api/dac/drivers` returns 200 with a `drivers` key or `success` field.
+
+### THD Measurement
+
+`TestThdMeasurement` checks that the THD+N measurement endpoint is reachable without triggering a measurement:
+
+- `GET /api/thd` returns 200 with a `measuring` boolean field.
+
+### Audio Diagnostics
+
+`TestAudioDiagnostics` validates the diagnostic subsystem from an audio perspective:
+
+- `GET /api/diag/snapshot` returns a JSON object with more than 5 keys.
+- `GET /api/diagnostics/journal` returns 200 with an `entries` or `journal` list.
+- On a healthy device, no audio error diagnostics (error codes `0x2001`–`0x200E` at Error or Critical severity) should be present in the journal.
 
 ## TEST\_MODE Build Flag
 

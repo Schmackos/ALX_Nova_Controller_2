@@ -271,7 +271,7 @@ static void _cirrus_dac_write(const int32_t* buf, int stereoFrames) {
 // isReady callback template — looks up device via static table
 #define CIRRUS_DAC_READY_FN(N) \
     static bool _cirrus_dac_ready_##N(void) { \
-        return _cirrus_dac_slot_dev[N] && _cirrus_dac_slot_dev[N]->_ready; \
+        return _cirrus_dac_slot_dev[N] && _cirrus_dac_slot_dev[N]->isReady(); \
     }
 
 CIRRUS_DAC_READY_FN(0)
