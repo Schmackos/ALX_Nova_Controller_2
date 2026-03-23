@@ -3,11 +3,41 @@
 import pytest
 
 
-# Expected onboard devices by compatible string
+# Expected onboard devices by compatible string (from hal_builtin_devices.cpp)
+# Note: ES8311 uses "everest-semi,es8311" (not "everest,es8311")
 EXPECTED_ONBOARD = [
     "ti,pcm5102a",
-    "everest,es8311",
+    "everest-semi,es8311",
 ]
+
+# HAL state enum values (from hal_types.h)
+HAL_STATE_UNKNOWN     = 0
+HAL_STATE_DETECTED    = 1
+HAL_STATE_CONFIGURING = 2
+HAL_STATE_AVAILABLE   = 3
+HAL_STATE_UNAVAILABLE = 4
+HAL_STATE_ERROR       = 5
+HAL_STATE_MANUAL      = 6
+HAL_STATE_REMOVED     = 7
+
+HAL_STATE_NAMES = {
+    0: "UNKNOWN", 1: "DETECTED", 2: "CONFIGURING", 3: "AVAILABLE",
+    4: "UNAVAILABLE", 5: "ERROR", 6: "MANUAL", 7: "REMOVED",
+}
+
+
+def _state_name(state_val):
+    """Convert numeric or string state to a display name."""
+    if isinstance(state_val, int):
+        return HAL_STATE_NAMES.get(state_val, f"UNKNOWN({state_val})")
+    return str(state_val).upper()
+
+
+def _state_is_error(state_val):
+    """Return True if the state represents an ERROR condition."""
+    if isinstance(state_val, int):
+        return state_val == HAL_STATE_ERROR
+    return str(state_val).upper() == "ERROR"
 
 
 @pytest.mark.hal
@@ -39,20 +69,24 @@ class TestHalDevices:
             )
 
     def test_no_error_state_devices(self, api):
-        """No device should be stuck in ERROR state."""
+        """No device should be stuck in ERROR state.
+
+        Devices in UNAVAILABLE or CONFIGURING states are acceptable —
+        only ERROR (state=5) indicates a real problem.
+        """
         resp = api.get("/api/hal/devices")
         assert resp.status_code == 200
         devices = resp.json()
 
         error_devices = [
             d for d in devices
-            if d.get("state", "").upper() == "ERROR"
+            if _state_is_error(d.get("state", 0))
         ]
         assert len(error_devices) == 0, (
             f"Devices in ERROR state:\n"
             + "\n".join(
                 f"  - {d.get('name', '?')} ({d.get('compatible', '?')}): "
-                f"{d.get('error', d.get('errorReason', 'unknown'))}"
+                f"{d.get('lastError', d.get('error', 'unknown'))}"
                 for d in error_devices
             )
         )
@@ -65,17 +99,25 @@ class TestHalDevices:
 
         for dev in devices:
             name = dev.get("name", "unnamed")
-            assert "slot" in dev or "halSlot" in dev, (
-                f"Device '{name}' has no slot field"
+            # API uses "slot" field (numeric)
+            assert "slot" in dev, (
+                f"Device '{name}' has no slot field. Keys: {list(dev.keys())}"
             )
-            state = dev.get("state", "")
-            valid_states = {
-                "UNKNOWN", "DETECTED", "CONFIGURING", "AVAILABLE",
-                "UNAVAILABLE", "ERROR", "REMOVED", "MANUAL",
-            }
-            assert state.upper() in valid_states, (
-                f"Device '{name}' has invalid state: '{state}'"
-            )
+            state = dev.get("state", -1)
+            # State is numeric (0-7) in the firmware API
+            if isinstance(state, int):
+                assert 0 <= state <= 7, (
+                    f"Device '{name}' has invalid state value: {state}"
+                )
+            else:
+                # Fallback: accept string states for forward compatibility
+                valid_states = {
+                    "UNKNOWN", "DETECTED", "CONFIGURING", "AVAILABLE",
+                    "UNAVAILABLE", "ERROR", "REMOVED", "MANUAL",
+                }
+                assert str(state).upper() in valid_states, (
+                    f"Device '{name}' has invalid state: '{state}'"
+                )
 
     def test_device_db_presets_accessible(self, api):
         """HAL device database presets endpoint must respond."""
@@ -88,7 +130,8 @@ class TestHalDevices:
 
     def test_scan_endpoint_responds(self, api):
         """POST /api/hal/scan should return a result (not error out)."""
-        resp = api.post("/api/hal/scan")
+        # I2C probing can take a long time — use extended timeout
+        resp = api.post("/api/hal/scan", timeout=60)
         # 200 = scan complete, 409 = scan already in progress — both acceptable
         assert resp.status_code in (200, 409), (
             f"HAL scan returned unexpected status: {resp.status_code}"
@@ -96,11 +139,11 @@ class TestHalDevices:
 
     def test_no_pin_conflicts(self, api):
         """Diagnostics should not report GPIO pin conflicts."""
-        resp = api.get("/api/diagnostics")
+        resp = api.get("/api/diagnostics/journal")
         assert resp.status_code == 200
         data = resp.json()
-        # Check diagnostic journal for pin conflict events
-        journal = data.get("journal", [])
+        # Journal entries are under "entries" key
+        journal = data.get("entries", data.get("journal", []))
         pin_conflicts = [
             e for e in journal
             if "pin" in str(e).lower() and "conflict" in str(e).lower()

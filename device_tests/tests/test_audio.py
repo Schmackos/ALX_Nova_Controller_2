@@ -11,10 +11,14 @@ class TestAudio:
         """I2S port status endpoint returns valid data."""
         resp = api.get("/api/i2s/ports")
         assert resp.status_code == 200
-        data = resp.json()
-        assert isinstance(data, list), "I2S ports response is not a list"
+        body = resp.json()
+        # API returns {"ports": [...], "sampleRate": N}, not a bare list
+        data = body.get("ports", body) if isinstance(body, dict) else body
+        assert isinstance(data, list), f"I2S ports response is not a list: {type(data)}"
         # Should have at least 1 configured port
-        active_ports = [p for p in data if p.get("mode", "off") != "off"]
+        active_ports = [p for p in data if p.get("mode", "off") != "off"
+                        or p.get("tx", {}).get("active", False)
+                        or p.get("rx", {}).get("active", False)]
         assert len(active_ports) > 0, (
             f"No active I2S ports found. Ports: {data}"
         )
@@ -58,7 +62,9 @@ class TestAudio:
         assert resp.status_code == 200
         data = resp.json()
 
-        dma_failed = data.get("dmaAllocFailed", False)
+        # Check nested under system or at top level
+        system = data.get("system", data)
+        dma_failed = system.get("dmaAllocFailed", False)
         assert not dma_failed, "DMA buffer allocation failure reported"
 
     def test_audio_not_paused(self, api):
@@ -67,7 +73,9 @@ class TestAudio:
         assert resp.status_code == 200
         data = resp.json()
 
-        paused = data.get("audioPaused", False)
+        # Check nested under system or at top level
+        system = data.get("system", data)
+        paused = system.get("audioPaused", False)
         assert not paused, "Audio pipeline is paused — may indicate I2S issue"
 
     def test_heap_budget_reasonable(self, api):

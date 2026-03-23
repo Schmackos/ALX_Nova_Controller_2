@@ -95,22 +95,33 @@ def health_parser(serial_reader):
 # ---------------------------------------------------------------------------
 
 class ApiClient:
-    """Thin wrapper around requests.Session with device base URL and auth."""
+    """Thin wrapper around requests.Session with device base URL and auth.
+
+    All requests default to a 30s timeout (ESP32-P4 can be slow on
+    PBKDF2 and I2C operations). Callers can override per-request via
+    ``api.get("/path", timeout=60)``.
+    """
+
+    DEFAULT_TIMEOUT = 30  # seconds
 
     def __init__(self, session, base_url):
         self._session = session
         self._base_url = base_url
 
     def get(self, path, **kwargs):
+        kwargs.setdefault("timeout", self.DEFAULT_TIMEOUT)
         return self._session.get(f"{self._base_url}{path}", **kwargs)
 
     def post(self, path, **kwargs):
+        kwargs.setdefault("timeout", self.DEFAULT_TIMEOUT)
         return self._session.post(f"{self._base_url}{path}", **kwargs)
 
     def put(self, path, **kwargs):
+        kwargs.setdefault("timeout", self.DEFAULT_TIMEOUT)
         return self._session.put(f"{self._base_url}{path}", **kwargs)
 
     def delete(self, path, **kwargs):
+        kwargs.setdefault("timeout", self.DEFAULT_TIMEOUT)
         return self._session.delete(f"{self._base_url}{path}", **kwargs)
 
 
