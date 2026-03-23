@@ -35,6 +35,7 @@ test.describe('@settings @api Settings Password', () => {
     });
 
     await test.step('Fill mismatched passwords (>= 8 chars)', async () => {
+      await page.locator('#currentPassword').fill('currentpwd');
       await page.locator('#newPassword').fill('password123');
       await page.locator('#confirmPassword').fill('differentpassword');
     });

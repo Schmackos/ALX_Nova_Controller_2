@@ -135,10 +135,10 @@ test('incorrect current password shows error from API', async ({ connectedPage: 
   await page.locator('#newPassword').fill('newpassword123');
   await page.locator('#confirmPassword').fill('newpassword123');
 
-  // Intercept with 401 response (wrong current password)
+  // Intercept with 403 response (wrong current password — 403 not 401 to avoid login redirect)
   await page.route('/api/auth/change', async (route) => {
     await route.fulfill({
-      status: 401,
+      status: 403,
       contentType: 'application/json',
       body: JSON.stringify({ success: false, error: 'Current password is incorrect' }),
     });

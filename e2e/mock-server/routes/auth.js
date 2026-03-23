@@ -77,8 +77,9 @@ router.post('/change', (req, res) => {
   }
 
   // Mock: reject a known "wrong" current password to enable error-path tests
+  // Use 403 (not 401) — 401 triggers login redirect in apiFetch()
   if (!state.isDefaultPassword && currentPassword === 'wrongpassword') {
-    return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+    return res.status(403).json({ success: false, error: 'Current password is incorrect' });
   }
 
   // Update state: no longer using default password after successful change

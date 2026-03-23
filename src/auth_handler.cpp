@@ -803,7 +803,7 @@ void handlePasswordChange() {
       response["error"] = "Current password is incorrect";
       String responseStr;
       serializeJson(response, responseStr);
-      server_send(401, "application/json", responseStr);
+      server_send(403, "application/json", responseStr);
       return;
     }
   }

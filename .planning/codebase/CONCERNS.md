@@ -70,6 +70,18 @@
 - Files: `src/main.cpp` (WiFiClientSecure global), `src/mqtt_handler.cpp` (setupMqtt TLS logic), `src/state/mqtt_state.h` (useTls, verifyCert fields), `src/globals.h` (extern declarations)
 - Impact: Resolved — users can now enable TLS encryption for MQTT broker connections with optional certificate validation
 
+**Password Change Without Current Password Verification:**
+✅ RESOLVED (2026-03-23): `handlePasswordChange()` now requires `currentPassword` field verified via `verifyPassword()`. Returns HTTP 403 on mismatch. First-boot exemption via `isDefaultPassword()`. All sessions cleared + WS clients disconnected on successful change.
+
+**Content-Security-Policy Header Missing:**
+✅ RESOLVED (2026-03-23): Added CSP to `http_add_security_headers()`. Policy blocks object/frame-src, restricts connect-src to self+ws.
+
+**Rate Limiting Coverage Gaps:**
+✅ RESOLVED (2026-03-23): `rate_limit_check()` added inside `requireAuth()` — all 35+ REST endpoints rate-limited at 30 req/sec per IP. WS unaffected.
+
+**WS Clients Not Disconnected on Password Change:**
+✅ RESOLVED (2026-03-23): `ws_disconnect_all_clients()` + `clearAllSessions()` called after successful password change.
+
 **PBKDF2 Password Hashing — Automatic Migration Required:**
 - Risk: Legacy accounts use 10,000 PBKDF2 iterations (`p1:` prefix) or plain SHA256 hash. While newer accounts use 50,000 iterations (`p2:` prefix), legacy hashes are slower to crack but still weaker
 - Files: `src/auth_handler.cpp` (lines 35, 100+, auto-migration logic), `src/config.h` (PBKDF2_ITERATIONS constant = 50000)
