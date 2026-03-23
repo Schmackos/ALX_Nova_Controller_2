@@ -78,3 +78,8 @@ e2e/blob-report/
 .zencoder/
 skills/
 skills-lock.json
+
+# Device test artifacts
+device_tests/__pycache__/
+device_tests/venv/
+device_tests/.pytest_cache/
