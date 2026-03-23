@@ -7,6 +7,7 @@
 #ifndef NATIVE_TEST
 #include <Wire.h>
 #include <sdkconfig.h>
+#include "hal/hal_discovery.h"  // hal_wifi_sdio_active()
 
 // On P4: use Wire1 for external EEPROM (pins 48/54) to avoid collision with
 // onboard ES8311 which uses Wire (pins 7/8)
@@ -28,7 +29,12 @@ void dac_eeprom_init_mutex() {
 }
 
 static bool i2c_mutex_take(TickType_t timeout = pdMS_TO_TICKS(1000)) {
-    if (!_i2c_mutex) return true; // No mutex yet, allow access
+    if (!_i2c_mutex) {
+        // Mutex not yet created — this indicates a call before dac_eeprom_init_mutex().
+        // Deny access rather than silently permitting concurrent I2C transactions.
+        LOG_W("[DAC] i2c_mutex_take: mutex not initialised — denying access");
+        return false;
+    }
     return xSemaphoreTakeRecursive(_i2c_mutex, timeout) == pdTRUE;
 }
 
@@ -210,7 +216,18 @@ static bool eeprom_read_block(uint8_t i2cAddr, uint8_t memAddr, uint8_t* buf, in
 // If a previous I2C transaction was interrupted (power glitch, reset mid-transfer),
 // the slave device (EEPROM) can hold SDA low indefinitely. Recovery: toggle SCL up
 // to 9 times while SDA is low, then issue a STOP condition to release the bus.
+//
+// GPIO 48/54 are shared with the ESP32-C6 WiFi SDIO interface. Direct GPIO
+// manipulation while WiFi is active causes sdmmc_send_cmd errors and MCU reset.
+// Guard: skip recovery and log a warning when SDIO is in use.
 static void i2c_bus_recovery() {
+#if CONFIG_IDF_TARGET_ESP32P4
+    if (hal_wifi_sdio_active()) {
+        LOG_W("[DAC] I2C bus recovery skipped — GPIO %d/%d in use by WiFi SDIO",
+              DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
+        return;
+    }
+#endif
     LOG_D("[DAC] I2C bus recovery: toggling SCL on GPIO %d/%d", DAC_I2C_SDA_PIN, DAC_I2C_SCL_PIN);
 
     // Temporarily use GPIO mode (not I2C peripheral)

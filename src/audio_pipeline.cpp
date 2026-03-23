@@ -30,6 +30,21 @@
 #include "audio_input_source.h"
 #include "audio_output_sink.h"
 
+// ===== RAII Scheduler Suspend Guard =====
+// Wraps vTaskSuspendAll()/xTaskResumeAll() to prevent deadlocks from early returns.
+// Constructed only on non-native targets (FreeRTOS required). Zero overhead on native.
+#ifndef NATIVE_TEST
+struct ScopedSchedulerSuspend {
+    ScopedSchedulerSuspend()  { vTaskSuspendAll(); }
+    ~ScopedSchedulerSuspend() { xTaskResumeAll();  }
+    // Non-copyable, non-movable
+    ScopedSchedulerSuspend(const ScopedSchedulerSuspend&)            = delete;
+    ScopedSchedulerSuspend& operator=(const ScopedSchedulerSuspend&) = delete;
+};
+#else
+struct ScopedSchedulerSuspend { /* No-op on native test platform */ };
+#endif
+
 // ===== Compile-time dimension invariants =====
 static_assert(AUDIO_PIPELINE_MAX_INPUTS * 2 <= AUDIO_PIPELINE_MATRIX_SIZE,
     "Matrix columns must accommodate all stereo input channels");
@@ -852,11 +867,10 @@ bool audio_pipeline_set_source(int lane, const AudioInputSource *src) {
               (unsigned)(RAW_SAMPLES * sizeof(int32_t)));
         heap_budget_record("pipe_rawBuf_lazy", RAW_SAMPLES * sizeof(int32_t), false);
     }
-    vTaskSuspendAll();
-#endif
-    _sources[lane] = *src;  // Value copy — atomic w.r.t. task preemption
-#ifndef NATIVE_TEST
-    xTaskResumeAll();
+    {
+        ScopedSchedulerSuspend guard;
+        _sources[lane] = *src;  // Value copy — atomic w.r.t. task preemption
+    }
 #endif
     return true;
 }
@@ -864,13 +878,10 @@ bool audio_pipeline_set_source(int lane, const AudioInputSource *src) {
 void audio_pipeline_remove_source(int lane) {
     if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS) return;
     AudioInputSource empty = AUDIO_INPUT_SOURCE_INIT;
-#ifndef NATIVE_TEST
-    vTaskSuspendAll();
-#endif
-    _sources[lane] = empty;
-#ifndef NATIVE_TEST
-    xTaskResumeAll();
-#endif
+    {
+        ScopedSchedulerSuspend guard;
+        _sources[lane] = empty;
+    }
 }
 
 // DEPRECATED alias
@@ -938,16 +949,13 @@ void audio_pipeline_dump_raw_diag() {
 
 void audio_pipeline_register_sink(const AudioOutputSink *sink) {
     if (!sink || _sinkCount >= AUDIO_OUT_MAX_SINKS) return;
-#ifndef NATIVE_TEST
     // Suspend scheduler to prevent audio task (priority 3) from preempting
     // mid-struct-copy and reading a partially-written sink with garbage function pointers.
-    vTaskSuspendAll();
-#endif
-    _sinks[_sinkCount] = *sink;  // Value copy — atomic w.r.t. task preemption
-    _sinkCount = _sinkCount + 1;
-#ifndef NATIVE_TEST
-    xTaskResumeAll();
-#endif
+    {
+        ScopedSchedulerSuspend guard;
+        _sinks[_sinkCount] = *sink;  // Value copy — atomic w.r.t. task preemption
+        _sinkCount = _sinkCount + 1;
+    }
     LOG_I("[Audio] Sink registered: %s ch=%d,%d (count=%d)",
           sink->name ? sink->name : "?",
           sink->firstChannel, sink->firstChannel + sink->channelCount - 1,
@@ -1002,11 +1010,10 @@ bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
     }
     // Reset the no-sink warning so it fires again if all sinks are later removed
     _noSinkWarned = false;
-    vTaskSuspendAll();
-#endif
-    _sinks[slot] = *sink;
-#ifndef NATIVE_TEST
-    xTaskResumeAll();
+    {
+        ScopedSchedulerSuspend guard;
+        _sinks[slot] = *sink;
+    }
 #endif
     // Update _sinkCount to reflect highest occupied slot + 1
     _sinkCount = 0;
@@ -1025,13 +1032,10 @@ bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
 
 void audio_pipeline_set_sink_muted(uint8_t slot, bool muted) {
     if (slot >= AUDIO_OUT_MAX_SINKS) return;
-#ifndef NATIVE_TEST
-    vTaskSuspendAll();
-#endif
-    _sinks[slot].muted = muted;  // Single bool write — no heap allocation
-#ifndef NATIVE_TEST
-    xTaskResumeAll();
-#endif
+    {
+        ScopedSchedulerSuspend guard;
+        _sinks[slot].muted = muted;  // Single bool write — no heap allocation
+    }
 }
 
 bool audio_pipeline_is_sink_muted(uint8_t slot) {
@@ -1053,18 +1057,15 @@ void audio_pipeline_remove_sink(int slot) {
     if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS) return;
     if (!_sinks[slot].write) return;  // Already empty
     const char *name = _sinks[slot].name;
-#ifndef NATIVE_TEST
-    vTaskSuspendAll();
-#endif
-    memset(&_sinks[slot], 0, sizeof(AudioOutputSink));
-    _sinks[slot].gainLinear = 1.0f;
-    _sinks[slot].volumeGain = 1.0f;
-    _sinks[slot].vuL = -90.0f;
-    _sinks[slot].vuR = -90.0f;
-    _sinks[slot].halSlot = 0xFF;
-#ifndef NATIVE_TEST
-    xTaskResumeAll();
-#endif
+    {
+        ScopedSchedulerSuspend guard;
+        memset(&_sinks[slot], 0, sizeof(AudioOutputSink));
+        _sinks[slot].gainLinear = 1.0f;
+        _sinks[slot].volumeGain = 1.0f;
+        _sinks[slot].vuL = -90.0f;
+        _sinks[slot].vuR = -90.0f;
+        _sinks[slot].halSlot = 0xFF;
+    }
     // Update _sinkCount
     _sinkCount = 0;
     for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {

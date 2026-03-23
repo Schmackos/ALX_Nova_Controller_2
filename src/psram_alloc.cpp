@@ -16,6 +16,10 @@
 // Internal state
 // ---------------------------------------------------------------------------
 
+// Maximum total SRAM bytes allowed as PSRAM fallback across the process lifetime.
+// Protects the WiFi RX buffer reserve (~40KB) from being exhausted by fallback allocs.
+static constexpr uint32_t PSRAM_SRAM_FALLBACK_MAX = 65536u;  // 64 KB cap
+
 static uint32_t _fallbackCount  = 0;
 static uint32_t _failedCount    = 0;
 static uint32_t _activePsram    = 0;
@@ -56,14 +60,22 @@ void* psram_alloc(size_t count, size_t size, const char* label) {
     if (ptr) {
         isPsram = true;
     } else {
-        // SRAM fallback
-        ptr = calloc(count, size);
-        if (ptr) {
-            isPsram = false;
-            _fallbackCount++;
-            LOG_W("[PsramAlloc] %s (%lu bytes) fell back to SRAM", label, (unsigned long)bytes);
-            diag_emit(DIAG_SYS_PSRAM_ALLOC_FAIL, DIAG_SEV_WARN,
+        // SRAM fallback — enforce the cap to protect internal heap headroom
+        if (_activeSram + bytes > PSRAM_SRAM_FALLBACK_MAX) {
+            LOG_W("[PsramAlloc] %s (%lu bytes) SRAM fallback refused — cap (%lu KB) reached",
+                  label, (unsigned long)bytes, (unsigned long)(PSRAM_SRAM_FALLBACK_MAX / 1024u));
+            diag_emit(DIAG_SYS_PSRAM_ALLOC_FAIL, DIAG_SEV_ERROR,
                       0xFF, "System", label);
+        } else {
+            ptr = calloc(count, size);
+            if (ptr) {
+                isPsram = false;
+                _fallbackCount++;
+                LOG_W("[PsramAlloc] %s (%lu bytes) fell back to SRAM (total SRAM fallback: %lu bytes)",
+                      label, (unsigned long)bytes, (unsigned long)(_activeSram + bytes));
+                diag_emit(DIAG_SYS_PSRAM_ALLOC_FAIL, DIAG_SEV_WARN,
+                          0xFF, "System", label);
+            }
         }
     }
 #endif

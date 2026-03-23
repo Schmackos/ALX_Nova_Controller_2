@@ -17,8 +17,6 @@
 #include <sys/stat.h>
 #include <esp_heap_caps.h>
 
-// Static JSON document pool for all DSP API handlers (safe: single-threaded Core 0 HTTP server)
-static JsonDocument _dspApiDoc;
 
 // Check if a LittleFS file exists without triggering VFS "no permits" error log.
 // Arduino's dspFileExists() internally calls open("r") which logs the error.
@@ -42,8 +40,7 @@ void loadDspSettings() {
             String json = f.readString();
             f.close();
 
-            _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
             if (!deserializeJson(doc, json)) {
                 DspState *cfg = dsp_get_inactive_config();
                 if (doc["globalBypass"].is<bool>()) cfg->globalBypass = doc["globalBypass"].as<bool>();
@@ -220,8 +217,7 @@ bool dsp_preset_save(int slot, const char *name) {
     dsp_export_full_config_json(configBuf, 8192);
 
     // Parse and augment with name
-    _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
     if (deserializeJson(doc, configBuf)) { psram_free(configBuf, "dsp_export"); return false; }
 
     doc["name"] = name ? name : "";
@@ -265,8 +261,7 @@ bool dsp_preset_load(int slot) {
     String json = f.readString();
     f.close();
 
-    _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
     if (deserializeJson(doc, json)) return false;
 
     // Load full config into inactive buffer
@@ -336,8 +331,7 @@ bool dsp_preset_rename(int slot, const char *newName) {
     f.close();
 
     // Parse and update name field
-    _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
     if (deserializeJson(doc, json)) return false;
 
     doc["name"] = newName;
@@ -438,8 +432,7 @@ void registerDspApiEndpoints() {
         dsp_export_full_config_json(buf, bufSize);
 
         // Wrap with dspEnabled
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         deserializeJson(doc, buf);
         doc["dspEnabled"] = appState.dsp.enabled;
         psram_free(buf, "dsp_api_get");
@@ -456,8 +449,7 @@ void registerDspApiEndpoints() {
 
         dsp_import_full_config_json(server.arg("plain").c_str());
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (!deserializeJson(doc, server.arg("plain"))) {
             if (doc["dspEnabled"].is<bool>()) appState.dsp.enabled = doc["dspEnabled"].as<bool>();
         }
@@ -475,8 +467,7 @@ void registerDspApiEndpoints() {
         dsp_copy_active_to_inactive();
         DspState *cfg = dsp_get_inactive_config();
         if (server.hasArg("plain")) {
-            _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
             if (!deserializeJson(doc, server.arg("plain"))) {
                 if (doc["bypass"].is<bool>()) cfg->globalBypass = doc["bypass"].as<bool>();
                 if (doc["enabled"].is<bool>()) appState.dsp.enabled = doc["enabled"].as<bool>();
@@ -494,8 +485,7 @@ void registerDspApiEndpoints() {
     server.on("/api/dsp/metrics", HTTP_GET, []() {
         if (!requireAuth()) return;
         DspMetrics m = dsp_get_metrics();
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         doc["processTimeUs"] = m.processTimeUs;
         doc["maxProcessTimeUs"] = m.maxProcessTimeUs;
         doc["cpuLoad"] = m.cpuLoadPercent;
@@ -531,8 +521,7 @@ void registerDspApiEndpoints() {
         dsp_copy_active_to_inactive();
         DspState *cfg = dsp_get_inactive_config();
         if (server.hasArg("plain")) {
-            _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
             if (!deserializeJson(doc, server.arg("plain"))) {
                 if (doc["bypass"].is<bool>()) cfg->channels[ch].bypass = doc["bypass"].as<bool>();
             }
@@ -552,8 +541,7 @@ void registerDspApiEndpoints() {
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
 
         DspStageType type = typeFromString(doc["type"].as<const char *>());
@@ -663,8 +651,7 @@ void registerDspApiEndpoints() {
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
 
         DspState *inactive = dsp_get_inactive_config();
@@ -795,8 +782,7 @@ void registerDspApiEndpoints() {
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
 
         if (!doc["order"].is<JsonArray>()) { sendJsonError(400, "Missing order array"); return; }
@@ -835,8 +821,7 @@ void registerDspApiEndpoints() {
 
         bool newState = true;
         if (server.hasArg("plain")) {
-            _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
             if (!deserializeJson(doc, server.arg("plain"))) {
                 if (doc["enabled"].is<bool>()) newState = doc["enabled"].as<bool>();
             }
@@ -1000,8 +985,7 @@ void registerDspApiEndpoints() {
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
 
         float freq = doc["freq"] | 1000.0f;
@@ -1044,8 +1028,7 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
 
         int subChannel = doc["subChannel"] | 0;
@@ -1085,8 +1068,7 @@ void registerDspApiEndpoints() {
         if (ch < 0) { sendJsonError(400, "Invalid channel"); return; }
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
 
         float widthMm = doc["baffleWidthMm"] | 250.0f;
@@ -1118,8 +1100,7 @@ void registerDspApiEndpoints() {
     server.on("/api/thd", HTTP_GET, []() {
         if (!requireAuth()) return;
         ThdResult r = thd_get_result();
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         doc["measuring"] = thd_is_measuring();
         doc["testFreq"] = thd_get_test_freq();
         doc["valid"] = r.valid;
@@ -1139,8 +1120,7 @@ void registerDspApiEndpoints() {
     server.on("/api/thd", HTTP_POST, []() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
         float freq = doc["freq"] | 1000.0f;
         int avg = doc["averages"] | 8;
@@ -1161,8 +1141,7 @@ void registerDspApiEndpoints() {
     // GET /api/dsp/peq/presets — list preset names
     server.on("/api/dsp/peq/presets", HTTP_GET, []() {
         if (!requireAuth()) return;
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         JsonArray names = doc["presets"].to<JsonArray>();
 
         File root = LittleFS.open("/");
@@ -1191,8 +1170,7 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
 
         const char *name = doc["name"] | (const char *)nullptr;
@@ -1303,8 +1281,7 @@ void registerDspApiEndpoints() {
     // GET /api/dsp/presets — list all preset slots
     server.on("/api/dsp/presets", HTTP_GET, []() {
         if (!requireAuth()) return;
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         doc["activeIndex"] = appState.dsp.presetIndex;
         JsonArray slots = doc["slots"].to<JsonArray>();
         for (int i = 0; i < DSP_PRESET_MAX_SLOTS; i++) {
@@ -1326,8 +1303,7 @@ void registerDspApiEndpoints() {
         if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) { sendJsonError(400, "Invalid slot (0-31)"); return; }
 
         const char *name = "";
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (server.hasArg("plain") && !deserializeJson(doc, server.arg("plain"))) {
             name = doc["name"] | "";
         }
@@ -1376,8 +1352,7 @@ void registerDspApiEndpoints() {
         if (slot < 0 || slot >= DSP_PRESET_MAX_SLOTS) { sendJsonError(400, "Invalid slot (0-31)"); return; }
 
         String name = "";
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (server.hasArg("plain") && !deserializeJson(doc, server.arg("plain"))) {
             name = doc["name"] | "";
         }
@@ -1399,8 +1374,7 @@ void registerDspApiEndpoints() {
         if (!requireAuth()) return;
         if (!server.hasArg("plain")) { sendJsonError(400, "No data"); return; }
 
-        _dspApiDoc.clear();
-    JsonDocument &doc = _dspApiDoc;
+JsonDocument doc;
         if (deserializeJson(doc, server.arg("plain"))) { sendJsonError(400, "Invalid JSON"); return; }
 
         int pair = doc["pair"] | -1; // 0 = ch0+1, 1 = ch2+3
