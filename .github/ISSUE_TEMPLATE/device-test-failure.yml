@@ -1,0 +1,47 @@
+name: Device Test Failure
+description: Automated report from on-device test harness
+title: "[Device Test] "
+labels: ["device-test", "bug"]
+body:
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware Version
+      placeholder: "1.12.3"
+    validations:
+      required: true
+  - type: textarea
+    id: failed-checks
+    attributes:
+      label: Failed Checks
+      description: Table of failed check results
+      placeholder: |
+        | Check | Status | Detail |
+        |-------|--------|--------|
+        | heap_free | FAIL | 35KB < 40KB threshold |
+    validations:
+      required: true
+  - type: textarea
+    id: device-state
+    attributes:
+      label: Device State
+      description: Heap, PSRAM, uptime at time of failure
+    validations:
+      required: true
+  - type: textarea
+    id: serial-log
+    attributes:
+      label: Serial Log Excerpt
+      description: Last 50 lines of serial output
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction Steps
+      value: |
+        1. Flash firmware version (see above)
+        2. Run: `cd device_tests && pytest <test_file> --device-port COM8 -v`
+    validations:
+      required: false
