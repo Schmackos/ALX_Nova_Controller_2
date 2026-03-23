@@ -40,12 +40,10 @@
 
 ## Known Bugs
 
-**I2C Bus 0 SDIO Conflict — PARTIALLY MITIGATED:**
-- Symptoms: I2C transactions on GPIO 48/54 cause MCU reset when WiFi is active. HAL device discovery hangs or crashes. Expansion mezzanine detection fails intermittently
-- Files: `src/hal/hal_discovery.cpp` (bus selection logic), `src/wifi_manager.cpp` (activeInterface tracking), `src/hal/hal_device_manager.cpp` (init order)
-- Current mitigation: `hal_wifi_sdio_active()` helper checks `connectSuccess`, `connecting`, AND `activeInterface == NET_WIFI` before scanning Bus 0. Returns `partialScan` flag. Emits `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101). Onboard Bus 1 (ES8311) and expansion Bus 2 always safe
-- Remaining risk: If `activeInterface` is not set or cleared correctly (e.g., connection lost but flag not cleared), Bus 0 may be scanned anyway → MCU reset. Currently mitigated by explicit disconnect logic in `wifi_manager.cpp`
-- Workaround: Turn WiFi off before scanning for expansion devices. Use `POST /api/hal/scan?skipBus0=true` parameter (not yet implemented — could be added)
+**I2C Bus 0 SDIO Conflict:**
+✅ RESOLVED (2026-03-23): `ARDUINO_EVENT_WIFI_STA_DISCONNECTED` event handler now immediately clears `connectSuccess` and `activeInterface` — Bus 0 is safe to scan within one event loop tick after disconnect, not after 20s timeout. Static IP config failure path also clears `activeInterface`. 2 new regression tests added to `test_hal_discovery` (3385 C++ tests total).
+- Files fixed: `src/wifi_manager.cpp` — disconnect event handler + static IP failure path
+- Guard mechanism intact: `hal_wifi_sdio_active()` checks `connectSuccess || connecting || activeInterface == NET_WIFI` before scanning Bus 0. Emits `DIAG_HAL_I2C_BUS_CONFLICT` (0x1101). Bus 1 (ONBOARD) and Bus 2 (EXPANSION) always safe.
 
 **Deprecated Flat Fields Divergence:**
 - Symptoms: WS broadcast sends both array (`adcs[]`) and flat (`adc1Enabled`) versions. If one path updates but not the other, frontend sees inconsistent state. Example: DSP bypass array updates but legacy flat field doesn't

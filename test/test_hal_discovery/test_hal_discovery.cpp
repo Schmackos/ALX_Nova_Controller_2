@@ -665,6 +665,34 @@ void test_wifi_sdio_active_combinations() {
     }
 }
 
+void test_wifi_sdio_clears_on_disconnect() {
+    // Simulate: WiFi was connected (SDIO pins active, Bus 0 blocked)
+    _testWifiConnectSuccess = true;
+    _testActiveInterface = 2;  // NET_WIFI
+    TEST_ASSERT_TRUE(test_wifi_sdio_active());
+    TEST_ASSERT_FALSE(test_should_scan_bus(HAL_I2C_BUS_EXT));
+
+    // Simulate: onWiFiEvent(ARDUINO_EVENT_WIFI_STA_DISCONNECTED) fires and clears flags
+    // This is the fix — these flags are now cleared immediately in the event handler.
+    _testWifiConnectSuccess = false;
+    _testActiveInterface = 0;  // NET_NONE
+
+    // Bus 0 should now be immediately scannable — no 20s timeout required
+    TEST_ASSERT_FALSE(test_wifi_sdio_active());
+    TEST_ASSERT_TRUE(test_should_scan_bus(HAL_I2C_BUS_EXT));
+}
+
+void test_wifi_sdio_connecting_remains_active_during_reconnect() {
+    // Simulate: WiFi disconnected but reconnect is in progress (connecting=true)
+    // Bus 0 must remain blocked during reconnect handshake
+    _testWifiConnectSuccess = false;  // Cleared by disconnect event
+    _testActiveInterface = 0;         // Cleared by disconnect event
+    _testWifiConnecting = true;       // Reconnect attempt started
+
+    TEST_ASSERT_TRUE(test_wifi_sdio_active());
+    TEST_ASSERT_FALSE(test_should_scan_bus(HAL_I2C_BUS_EXT));
+}
+
 // ===== Capacity Accessor Tests =====
 
 void test_db_max_returns_correct_value() {
@@ -1034,6 +1062,8 @@ int main(int argc, char** argv) {
     RUN_TEST(test_wifi_sdio_active_when_activeInterface_wifi);
     RUN_TEST(test_wifi_sdio_inactive_when_fully_disconnected);
     RUN_TEST(test_wifi_sdio_active_combinations);
+    RUN_TEST(test_wifi_sdio_clears_on_disconnect);
+    RUN_TEST(test_wifi_sdio_connecting_remains_active_during_reconnect);
 
     // Capacity accessor and overflow tests
     RUN_TEST(test_db_max_returns_correct_value);
