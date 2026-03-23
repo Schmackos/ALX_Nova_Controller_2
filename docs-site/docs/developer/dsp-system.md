@@ -125,6 +125,8 @@ if (!dsp_swap_config()) {
 
 :::warning dsp_swap_config() can fail
 `dsp_swap_config()` returns `false` if the audio task holds the swap semaphore. This is normal under high load. Use `dsp_log_swap_failure()` to log the event (it writes one `LOG_W` line without double-counting the failure counter). Return HTTP 503 to the client so it can retry. Never spin-wait on `dsp_swap_config()` — this will block the main loop.
+
+The semaphore acquisition uses a fixed timeout. If the timeout expires, `dsp_swap_config()` returns `false` immediately — it does **not** proceed with the swap. Previously, a timeout caused the swap to proceed unsafely with the audio task potentially mid-read. Any code that previously relied on the "proceed anyway" behaviour must now handle the `false` return and retry the operation.
 :::
 
 ## Stage CRUD
@@ -350,6 +352,27 @@ dsp_clear_cpu_load();      // Reset CPU load estimate
 ```
 
 Metrics are broadcast via WebSocket as part of the `dsp_metrics` message type, displayed in the DSP Metrics card in the web UI.
+
+## Implementation Notes
+
+### JsonDocument Usage
+
+DSP API handlers and the DSP persistence layer use **stack-local `JsonDocument` instances** rather than reusing a global document. This avoids heap fragmentation from a long-lived large allocation and eliminates the risk of one request clobbering state used by a concurrent handler. Stack allocation is safe for documents up to ~2KB; larger payloads (e.g., full preset export) must use heap allocation with explicit lifetime management.
+
+```cpp
+// Correct: stack-local, scoped lifetime
+void handleDspGetRequest(ESP8266WebServer& server) {
+    JsonDocument doc;
+    dsp_serialize_config(doc, dsp_get_active_config());
+    String out;
+    serializeJson(doc, out);
+    server_send(server, 200, "application/json", out);
+}   // doc destroyed here — no heap residue
+```
+
+### Null I2C Mutex Guard
+
+I2C mutex handles may be null during early boot (before `hal_i2c_init()` completes) or in native test builds. All I2C wrapper functions now return `false` immediately when the mutex is null rather than proceeding without the lock. Previously the null check was inverted, causing unguarded I2C transactions. If you are calling HAL I2C helpers from a non-standard context, ensure `hal_i2c_init()` has run first.
 
 ## Persistence
 

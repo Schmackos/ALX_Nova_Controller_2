@@ -116,6 +116,15 @@ const AudioInputSource* audio_pipeline_get_source(int lane);
 
 :::warning vTaskSuspendAll atomicity
 `audio_pipeline_set_source()` and `audio_pipeline_remove_source()` suspend all tasks on Core 1 for the duration of the pointer update. This is safe because both calls are short (pointer write only) and are never called from within the audio task itself. Calling them from the audio task will deadlock.
+
+The firmware uses `ScopedSchedulerSuspend` — an RAII guard that calls `vTaskSuspendAll()` on construction and `xTaskResumeAll()` on destruction. This replaces 7 manual `vTaskSuspendAll` / `xTaskResumeAll` pairs in the pipeline and reduces the risk of unbalanced calls on early-return paths:
+
+```cpp
+{
+    ScopedSchedulerSuspend guard;   // suspends all Core 1 tasks
+    _sources[lane] = *src;          // atomic pointer update
+}   // guard destructor: xTaskResumeAll()
+```
 :::
 
 ### VU Metering
@@ -167,7 +176,7 @@ audio_pipeline_register_sink(const AudioOutputSink *sink);
 audio_pipeline_clear_sinks();   // Requires audioPaused=true before calling
 ```
 
-`hal_pipeline_bridge` checks the return value of `audio_pipeline_set_sink()` and emits a `LOG_W` when slot registration fails. HAL driver `buildSink()` methods (PCM5102A, ES8311, MCP4725) guard `firstChannel` overflow before constructing the sink descriptor.
+`hal_pipeline_bridge` checks the return value of `audio_pipeline_set_sink()` and emits a `LOG_W` when slot registration fails. If `audio_pipeline_set_sink()` returns false due to a DMA buffer allocation failure, the bridge immediately calls `setReady(false)` on the device so the audio task does not try to write to the unregistered sink. HAL driver `buildSink()` methods (PCM5102A, ES8311, MCP4725) guard `firstChannel` overflow before constructing the sink descriptor.
 
 :::danger Do not call audio_pipeline_clear_sinks() from a HAL driver
 `audio_pipeline_clear_sinks()` removes all sinks globally and requires `appState.audioPaused = true` beforehand. HAL drivers must use `audio_pipeline_remove_sink(slot)` to remove only their own sink. Calling `clear_sinks()` from a device deinit path removes all other active sinks and causes audio dropouts on unrelated devices.

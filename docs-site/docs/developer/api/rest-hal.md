@@ -262,6 +262,16 @@ Update runtime configuration for a device. All fields are optional — only fiel
 { "status": "ok" }
 ```
 
+**Response (422 — invalid field)**
+
+```json
+{
+  "status": "error",
+  "field": "i2sPort",
+  "error": "i2sPort must be 0-2 or 255"
+}
+```
+
 **Error codes**
 
 | Status | Meaning |
@@ -269,6 +279,15 @@ Update runtime configuration for a device. All fields are optional — only fiel
 | 200 | Configuration saved and applied |
 | 400 | Invalid JSON, or `slot` out of range |
 | 404 | No device in the specified slot |
+| 422 | Config field failed validation (see `field` and `error` in response body) |
+
+Config fields validated by `hal_validate_config()`:
+
+| Field | Valid values |
+|-------|-------------|
+| `i2sPort` | 0, 1, 2 (physical ports), or 255 (auto / not set) |
+| `i2cBus` | 0 (EXT), 1 (ONBOARD), 2 (EXPANSION) |
+| GPIO pins (`pinSda`, `pinScl`, `pinBck`, `pinLrc`, `pinData`, `pinMclk`, `cfgPaControlPin`, `cfgGpioA`–`cfgGpioD`) | -1 (not set) or 0–54 |
 
 :::warning
 For DAC-path devices, changing `enabled` to `false` uses the `HalCoordState` deferred toggle queue (`appState.halCoord.requestDeviceToggle(halSlot, -1)`). `hal_apply_config()` handles this automatically.

@@ -67,14 +67,23 @@ graph TD
 
 ### HalDevice — the base class
 
-Every driver inherits from `HalDevice` (`src/hal/hal_device.h`). The two most important members are declared `volatile` because the audio pipeline task on Core 1 reads them without taking any lock:
+Every driver inherits from `HalDevice` (`src/hal/hal_device.h`). Two members are declared `volatile` because the audio pipeline task on Core 1 reads them without taking any lock:
 
 ```cpp
 volatile bool           _ready;   // true only when AVAILABLE — read by pipeline hot path
 volatile HalDeviceState _state;   // full state enum for UI and bridge logic
 ```
 
-The pipeline reads `_ready` directly with no virtual dispatch. A state change that sets `_ready = false` is immediately visible to the audio task on the next DMA callback cycle without any locking overhead.
+Direct access to `_ready` is encapsulated behind atomic accessors added during HAL hardening. All 35 built-in drivers use these instead of touching `_ready` directly:
+
+```cpp
+void setReady(bool r);   // write — ensures _ready is set before _state = AVAILABLE
+bool isReady() const;    // read  — same volatile guarantee, usable from any core
+```
+
+The `setReady(false)` / `setReady(true)` calls in `init()`, `deinit()`, and `healthCheck()` must always precede the corresponding `_state` assignment so the audio task never observes `_state == AVAILABLE` with `_ready == false`.
+
+The pipeline reads `isReady()` in the hot path with no virtual dispatch. A state change that calls `setReady(false)` is immediately visible to the audio task on the next DMA callback cycle without any locking overhead.
 
 ### HalDeviceDescriptor
 
@@ -265,6 +274,14 @@ Discovery scans Bus 1 (ONBOARD) only through the ES8311 driver's existing Wire i
 
 Addresses that return I2C timeout (error codes 4/5) during bus scan are automatically retried up to 2 times with increasing backoff (50ms, 100ms). NACK responses (error code 2, meaning "no device present") are not retried. On successful retry, `DIAG_HAL_PROBE_RETRY_OK` (0x1105) is emitted. Worst-case boot delay: ~300ms.
 
+#### I2C Bus Recovery
+
+When an EEPROM probe times out, the bus is recovered with a 9-clock toggle sequence followed by a STOP condition before the retry. This clears any mid-transaction slave state that would prevent the address from ACKing on subsequent attempts.
+
+#### Address Deduplication
+
+A bitmap-based dedup filter prevents the same I2C address from being probed twice during a single scan pass. This avoids double-registration when an address appears on multiple buses or when a retry loop re-reports the same address.
+
 ## Port-Generic I2S API
 
 All I2S port access goes through the port-generic API in `i2s_audio.h`. Three ports are managed via a unified `I2sPortState` array, each independently configurable for STD or TDM mode, TX or RX direction, with any pin assignment. HAL drivers read the port index from `HalDeviceConfig.i2sPort` and call `i2s_port_enable_tx()` / `i2s_port_enable_rx()` during init, then `i2s_port_write()` / `i2s_port_read()` for audio I/O. Expansion I2S TX (both STD for 2ch DACs and TDM for 8ch DACs) is fully implemented. Port status is available via `GET /api/i2s/ports`.
@@ -273,7 +290,7 @@ All I2S port access goes through the port-generic API in `i2s_audio.h`. Three po
 
 Per-device configuration is persisted to `/hal_config.json` on LittleFS. The structure is a JSON array keyed by slot index. Changes made through the web UI are applied immediately and written to flash; they survive power cycles and OTA updates.
 
-The REST endpoint `PUT /api/hal/devices` accepts a partial config object — only the fields present in the request body are updated. The driver's `init()` method is then re-run with the new config active.
+The REST endpoint `PUT /api/hal/devices` accepts a partial config object — only the fields present in the request body are updated. All fields are validated by `hal_validate_config()` before being written. Invalid values (e.g., an `i2sPort` outside 0–2 or 255, an `i2cBusIndex` outside 0–2, or a GPIO pin outside -1 to 54) cause the endpoint to return HTTP 422 with a field-specific error message. On successful validation the driver's `init()` method is re-run with the new config active.
 
 ## REST API Surface
 
@@ -283,7 +300,7 @@ All HAL management is exposed under `/api/hal/`:
 |---|---|---|
 | `GET` | `/api/hal/devices` | List all registered devices with state, config, and retry counters |
 | `POST` | `/api/hal/scan` | Trigger a full rescan (returns 409 if scan already in progress) |
-| `PUT` | `/api/hal/devices` | Update per-device config (triggers reinit) |
+| `PUT` | `/api/hal/devices` | Update per-device config (validated, triggers reinit; 422 on invalid fields) |
 | `DELETE` | `/api/hal/devices` | Remove a device (sets state to REMOVED) |
 | `POST` | `/api/hal/devices/reinit` | Force reinitialise a specific device slot |
 | `GET` | `/api/hal/db/presets` | Return the full device DB preset list |
@@ -305,6 +322,6 @@ For the full diagnostic code reference, see `src/diag_error_codes.h`.
 
 `hal_pipeline_bridge` (`src/hal/hal_pipeline_bridge.h`) is the glue between device lifecycle events and the audio pipeline's slot-indexed sink/source API. It is covered in detail in the [Device Lifecycle](./device-lifecycle.md) page. The short version:
 
-- When a device reaches `AVAILABLE`, the bridge assigns it a pipeline sink slot (for DAC/CODEC devices) or an ADC lane (for ADC devices) using first-fit capability-based ordinal counting.
-- When a device becomes `UNAVAILABLE` (transient), the bridge sets `_ready = false` and leaves the slot/lane registered — the pipeline skips it automatically.
+- When a device reaches `AVAILABLE`, the bridge assigns it a pipeline sink slot (for DAC/CODEC devices) or an ADC lane (for ADC devices) using first-fit capability-based ordinal counting. After calling `audio_pipeline_set_sink()`, the bridge checks the return value: if the DMA buffer allocation failed, it immediately calls `setReady(false)` and logs a warning rather than leaving the device in a false-ready state.
+- When a device becomes `UNAVAILABLE` (transient), the bridge calls `setReady(false)` and leaves the slot/lane registered — the pipeline skips it automatically.
 - When a device reaches `ERROR`, `REMOVED`, or `MANUAL`, the bridge explicitly calls `audio_pipeline_remove_sink()` or `audio_pipeline_remove_source()` to free the slot.

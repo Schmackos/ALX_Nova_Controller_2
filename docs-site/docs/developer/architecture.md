@@ -246,10 +246,10 @@ Threshold constants: `PSRAM_WARNING_THRESHOLD = 1048576`, `PSRAM_CRITICAL_THRESH
 
 ### Unified PSRAM Allocator
 
-All PSRAM-preferred allocations use the `psram_alloc()` wrapper (`src/psram_alloc.h/.cpp`):
+All PSRAM-preferred allocations use the `psram_alloc()` wrapper (`src/psram_alloc.h/.cpp`). SRAM fallback is capped at 64KB per allocation; requests larger than this cap are refused rather than filling internal SRAM and compromising WiFi RX headroom:
 
 ```cpp
-// Attempt PSRAM; fall back to SRAM on failure.
+// Attempt PSRAM; fall back to SRAM on failure (capped at 64KB per allocation).
 // Records automatically in heap_budget and emits DIAG_SYS_PSRAM_ALLOC_FAIL on fallback.
 void* ptr = psram_alloc(count, size, "dsp-delay");
 
@@ -585,6 +585,31 @@ REST API endpoint handlers that were previously registered inline in `main.cpp s
 | PSRAM | `src/psram_api.cpp` | PSRAM health status |
 
 Each module exposes a `registerXxxApiEndpoints()` function called from `setup()` in `main.cpp`.
+
+---
+
+## Security Model
+
+The firmware applies several hardening measures to protect the HTTP/WebSocket surface and the filesystem.
+
+### HTTP Responses
+
+`server_send()` is a thin wrapper around `server.send()` that automatically appends `X-Frame-Options: DENY` and `X-Content-Type-Options: nosniff` to every response. All handler files use `server_send()` instead of calling `server.send()` directly. `sendGzipped()` applies the same headers independently for compressed HTML responses.
+
+### Input Validation and Sanitisation
+
+| Area | Mechanism |
+|------|-----------|
+| REST API numeric ranges | All slot and port parameters are bounds-checked before use |
+| HAL device config fields | `hal_validate_config()` rejects invalid `i2sPort`, `i2cBusIndex`, and GPIO pin values with HTTP 422 |
+| Filename sanitisation | `sanitize_filename()` strips path-traversal characters (`..`, `/`, `\`) from preset and custom device names before LittleFS writes |
+| WebSocket message size | Incoming text frames are rejected and the connection is closed if the payload exceeds 4096 bytes |
+| Open redirect | `apiFetch()` validates the URL is a same-origin path before following redirects |
+| Markdown rendering | `sanitizeHtml()` strips raw HTML tags from markdown content on the support page to prevent XSS injection |
+
+### Authentication
+
+Session cookies are issued with `HttpOnly` and `SameSite=Strict` attributes. PBKDF2-SHA256 with 50,000 iterations (`p2:` prefix) is used for stored password hashes. Legacy `p1:` (10,000 iterations) and plain SHA-256 hashes are auto-migrated to `p2:` on first successful login. Rate limiting returns HTTP 429 after repeated failed attempts. WebSocket connections authenticate via a short-lived single-use token from `GET /api/ws-token` (60-second TTL, 16-slot pool).
 
 ---
 

@@ -6,6 +6,10 @@ description: Reference for all built-in HAL drivers — PCM5102A, ES8311, PCM180
 
 This page documents every driver registered by `hal_register_builtins()` in `src/hal/hal_builtin_devices.cpp`. Each entry covers the compatible string, device class, type, capabilities, bus requirements, and any runtime configuration options that affect behaviour.
 
+:::note Deprecated wrappers removed
+The 19 device-specific I2S wrapper functions that existed before the port-generic API (`i2s_configure_adc1()`, `i2s_configure_dac_tx()`, etc.) have been removed. All drivers now call the port-generic API (`i2s_port_enable_tx()`, `i2s_port_enable_rx()`, `i2s_port_write()`, `i2s_port_read()`) with the port index from `HalDeviceConfig.i2sPort`. If you are porting a driver that still references the old functions, replace them with their port-generic equivalents.
+:::
+
 ## Quick Reference
 
 | Compatible String | Class | Type | Bus | I2C Addr | Capabilities |
@@ -78,13 +82,15 @@ The PCM5102A is a passive stereo I2S DAC with no I2C control interface. All comm
 | `isI2sClockMaster` | `false` | Set `true` to output BCK/WS clocks |
 
 ```cpp
-// Reading PCM5102A from the bridge
+// Reading PCM5102A from the bridge — use isReady() accessor, not raw _ready
 HalDevice* dev = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
-if (dev && dev->_ready) {
+if (dev && dev->isReady()) {
     auto* dac = static_cast<HalAudioDacInterface*>(static_cast<HalPcm5102a*>(dev));
     dac->dacSetVolume(75);
 }
 ```
+
+PCM5102A discovery no longer uses a hardcoded slot lookup. The HAL device manager now locates the device by capability scan (`HAL_CAP_DAC_PATH`) rather than by a fixed slot index, so any `HAL_CAP_DAC_PATH` device at any slot can be returned.
 
 **healthCheck():** Always returns `true` — no I2C register to probe. The audio pipeline's VU meter provides runtime signal health.
 

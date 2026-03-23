@@ -30,6 +30,18 @@ stateDiagram-v2
 
 :::info Volatile hot-path fields
 `_ready` and `_state` are declared `volatile`. The audio pipeline on Core 1 reads `_ready` in the hot path without a mutex — `volatile` ensures the compiler does not cache the value in a register across DMA interrupt boundaries. Never add a mutex to this read path.
+
+Access `_ready` exclusively through the `setReady()` and `isReady()` accessors — never write the field directly. `setReady(true)` must be called **before** `_state = HAL_STATE_AVAILABLE` so the audio task never observes `_state == AVAILABLE` with `_ready == false`:
+
+```cpp
+// Correct ordering in init():
+setReady(true);
+_state = HAL_STATE_AVAILABLE;
+
+// Correct ordering in deinit() and on failure:
+setReady(false);
+_state = HAL_STATE_REMOVED;  // or ERROR
+```
 :::
 
 ### Hybrid transient policy
@@ -191,20 +203,16 @@ static void digitalWrite(int, int) {}
 #  endif
 #endif
 
-// Constructor — populate the descriptor, set priority
+// Constructor — populate the descriptor, set priority.
+// Use hal_init_descriptor() which calls hal_safe_strcpy() for all string fields.
 HalMyDac::HalMyDac() : HalAudioDevice() {
-    memset(&_descriptor, 0, sizeof(_descriptor));
-    strncpy(_descriptor.compatible,    "myvendor,mydac",   31);
-    strncpy(_descriptor.name,          "MyDac",            32);
-    strncpy(_descriptor.manufacturer,  "My Vendor Inc.",   32);
-    _descriptor.type             = HAL_DEV_DAC;
-    _descriptor.legacyId         = 0;      // No legacy DAC_ID — new device
-    _descriptor.channelCount     = 2;
-    _descriptor.bus.type         = HAL_BUS_I2S;
-    _descriptor.bus.index        = 0;
-    _descriptor.sampleRatesMask  = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K;
-    _descriptor.capabilities     = HAL_CAP_DAC_PATH | HAL_CAP_MUTE;
-    _initPriority                = HAL_PRIORITY_HARDWARE;
+    hal_init_descriptor(_descriptor,
+        "myvendor,mydac", "MyDac", "My Vendor Inc.",
+        HAL_DEV_DAC, 2, 0x00,
+        HAL_BUS_I2S, 0,
+        HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K,
+        HAL_CAP_DAC_PATH | HAL_CAP_MUTE);
+    _initPriority = HAL_PRIORITY_HARDWARE;
 }
 
 // probe() — non-destructive presence check
@@ -238,9 +246,9 @@ HalInitResult HalMyDac::init() {
 #endif
     }
 
-    // Mark device as ready
+    // Mark device as ready — setReady() must be called BEFORE assigning _state
+    setReady(true);
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
     LOG_I("[HAL:MyDac] Ready");
     return hal_init_ok();
 }
@@ -250,9 +258,10 @@ void HalMyDac::deinit() {
     if (_paPin >= 0) {
 #ifndef NATIVE_TEST
         digitalWrite(_paPin, LOW);   // Drive output mute on shutdown
+        releasePin(_paPin);          // Return GPIO to the pin claim pool
 #endif
     }
-    _ready = false;
+    setReady(false);
     _state = HAL_STATE_REMOVED;
     LOG_I("[HAL:MyDac] Deinitialized");
 }
@@ -313,7 +322,7 @@ bool HalMyDac::dacSetBitDepth(uint8_t bits)     { return configure(_sampleRate, 
 
 #### Returning errors from init()
 
-Use `hal_init_fail()` with a diagnostic error code when init cannot proceed:
+Use `hal_init_fail()` with a diagnostic error code when init cannot proceed. The device manager calls `deinit()` before retrying a device that is in `CONFIGURING`, so `deinit()` must be safe to call even if `init()` never ran to completion:
 
 ```cpp
 #include "../diag_error_codes.h"
@@ -328,10 +337,17 @@ HalInitResult HalMyDac::init() {
         return hal_init_fail(DIAG_ERR_DEVICE_NOT_FOUND, "Unexpected chip ID");
     }
 #endif
+    setReady(true);
     _state = HAL_STATE_AVAILABLE;
-    _ready = true;
     return hal_init_ok();
 }
+```
+
+The `ERROR → ERROR` state transition fires the state-change callback. Prior versions skipped it. Drivers that relied on the callback being suppressed on repeat failures must be tolerant of duplicate transitions.
+
+:::tip Double-init safety
+The device manager calls `deinit()` before retrying an `init()` that previously left the device in `CONFIGURING`. Keep `deinit()` idempotent: guard GPIO releases with a validity check, and handle the case where `init()` failed before any hardware was touched.
+:::
 ```
 
 #### Using `hal_init_descriptor()` to reduce boilerplate

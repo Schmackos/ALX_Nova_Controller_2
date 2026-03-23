@@ -14,6 +14,8 @@ The ALX Nova Controller exposes a WebSocket server on **port 81** alongside the 
 
 Up to **16 simultaneous clients** are supported (`MAX_WS_CLIENTS = 16`). Each connection must authenticate independently before receiving any state data or sending commands.
 
+Incoming text frames are limited to **4096 bytes**. Messages exceeding this limit are discarded and the sending client is disconnected. Binary audio subscription frames are excluded from this limit.
+
 ---
 
 ## Module Architecture
@@ -184,6 +186,11 @@ All commands are JSON text frames. The `type` field is required and case-sensiti
 | `eepromScan` | _(none)_ | Scan I2C bus for AT24C02 EEPROM |
 | `eepromProgram` | `deviceId, hwRevision, deviceName, manufacturer, ...` | Write device identity to EEPROM |
 | `eepromErase` | `address: int` | Erase an EEPROM at the given I2C address |
+
+:::note Removed deprecated DAC commands
+The following WS command types were removed in the legacy-cleanup phase. Use the HAL REST API or HAL-routed `PUT /api/hal/devices` instead:
+`setDacEnabled`, `setDacVolume`, `setDacMute`, `setDacFilter`, `setDacBitDepth`, `setDacSampleRate`, `getDacState`.
+:::
 
 ### Signal Generator
 
