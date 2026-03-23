@@ -84,7 +84,8 @@ enum HalBusType : uint8_t {
 #define HAL_CAP_LINE_DRIVER  (1 << 9)   // Line driver outputs
 #define HAL_CAP_APLL         (1 << 10)  // Asynchronous PLL
 #define HAL_CAP_DSD          (1 << 11)  // DSD native playback
-// Bits 12-15 reserved for future use
+#define HAL_CAP_HP_AMP       (1 << 12)  // Integrated headphone amplifier
+// Bits 13-15 reserved for future use
 
 // ===== Bus Reference =====
 struct HalBusRef {

@@ -630,6 +630,93 @@ static void hal_db_add_builtins() {
         d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS;
         hal_db_add(&d);
     }
+    // CS43198 — Cirrus Logic MasterHIFI 2-channel DAC, 130dBA DNR, DSD256
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "cirrus,cs43198");
+        hal_safe_strcpy(d.name, sizeof(d.name), "CS43198");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Cirrus Logic");
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DSD;
+        hal_db_add(&d);
+    }
+    // CS43131 — Cirrus Logic MasterHIFI 2-channel DAC + HP amp, 127dB DNR, DSD256
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "cirrus,cs43131");
+        hal_safe_strcpy(d.name, sizeof(d.name), "CS43131");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Cirrus Logic");
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS |
+                         HAL_CAP_DSD | HAL_CAP_HP_AMP;
+        hal_db_add(&d);
+    }
+    // CS4398 — Cirrus Logic Classic 2-channel DAC, 120dB DNR, 192kHz/24-bit
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "cirrus,cs4398");
+        hal_safe_strcpy(d.name, sizeof(d.name), "CS4398");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Cirrus Logic");
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x4C;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DSD;
+        hal_db_add(&d);
+    }
+    // CS4399 — Cirrus Logic MasterHIFI 2-channel DAC, 130dBA DNR, NOS filter
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "cirrus,cs4399");
+        hal_safe_strcpy(d.name, sizeof(d.name), "CS4399");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Cirrus Logic");
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS | HAL_CAP_DSD;
+        hal_db_add(&d);
+    }
+    // CS43130 — Cirrus Logic MasterHIFI 2-channel DAC, 130dB DNR, HP amp + NOS filter + DSD
+    {
+        HalDeviceDescriptor d;
+        memset(&d, 0, sizeof(d));
+        hal_safe_strcpy(d.compatible, sizeof(d.compatible), "cirrus,cs43130");
+        hal_safe_strcpy(d.name, sizeof(d.name), "CS43130");
+        hal_safe_strcpy(d.manufacturer, sizeof(d.manufacturer), "Cirrus Logic");
+        d.type = HAL_DEV_DAC;
+        d.legacyId = 0;
+        d.channelCount = 2;
+        d.i2cAddr = 0x48;
+        d.bus.type = HAL_BUS_I2C;
+        d.bus.index = HAL_I2C_BUS_EXP;
+        d.sampleRatesMask = HAL_RATE_44K1 | HAL_RATE_48K | HAL_RATE_96K | HAL_RATE_192K | HAL_RATE_384K;
+        d.capabilities = HAL_CAP_DAC_PATH | HAL_CAP_HW_VOLUME | HAL_CAP_MUTE | HAL_CAP_FILTERS |
+                         HAL_CAP_DSD | HAL_CAP_HP_AMP;
+        hal_db_add(&d);
+    }
 }
 
 void hal_db_init() {
