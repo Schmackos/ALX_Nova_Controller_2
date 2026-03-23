@@ -11,6 +11,7 @@ import requests
 
 from utils.serial_reader import SerialReader
 from utils.health_parser import HealthParser
+from utils.issue_creator import IssueCreator
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +40,59 @@ def pytest_addoption(parser):
         type=int,
         help="Serial baud rate (default: 115200)",
     )
+    parser.addoption(
+        "--create-issues",
+        action="store_true",
+        default=False,
+        help="Auto-create GitHub issues for test failures via gh CLI",
+    )
+
+
+# ---------------------------------------------------------------------------
+# GitHub issue creation hook
+# ---------------------------------------------------------------------------
+
+def pytest_runtest_makereport(item, call):
+    """Create a GitHub issue when a test fails and --create-issues is set."""
+    if call.when != "call":
+        return
+    if not call.excinfo:
+        return
+    if not item.config.getoption("--create-issues", default=False):
+        return
+
+    test_name = item.nodeid.replace("::", "/")
+    check_name = item.name
+    firmware_version = getattr(item.config, "_firmware_version", "unknown")
+
+    failure_text = str(call.excinfo.value)[:1000]
+    traceback_text = str(call.excinfo.traceback[-1]) if call.excinfo.traceback else ""
+
+    failed_table = (
+        "| Test | Error |\n"
+        "|------|-------|\n"
+        f"| `{test_name}` | `{failure_text[:200]}` |"
+    )
+    device_ip = item.config.getoption("--device-ip", default="unknown")
+    device_port = item.config.getoption("--device-port", default="unknown")
+    device_state = (
+        f"- Device IP: `{device_ip}`\n"
+        f"- Serial port: `{device_port}`\n"
+        f"- Traceback: `{traceback_text}`"
+    )
+
+    creator = IssueCreator()
+    try:
+        result, created = creator.report_failure(
+            check_name=check_name,
+            firmware_version=firmware_version,
+            failed_checks=failed_table,
+            device_state=device_state,
+        )
+        action = "Created" if created else "Updated"
+        print(f"\n  [{action} GitHub issue: {result}]")
+    except Exception as exc:  # noqa: BLE001 — gh CLI may not be available
+        print(f"\n  [Could not create GitHub issue: {exc}]")
 
 
 # ---------------------------------------------------------------------------
@@ -163,9 +217,22 @@ def auth_session(base_url, device_password):
 
 
 @pytest.fixture(scope="session")
-def api(auth_session, base_url):
+def api(auth_session, base_url, request):
     """Authenticated API client for REST calls."""
-    return ApiClient(auth_session, base_url)
+    client = ApiClient(auth_session, base_url)
+    # Cache firmware version for GitHub issue reporting
+    if not hasattr(request.config, "_firmware_version"):
+        try:
+            resp = client.get("/api/settings", timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                ver = data.get("deviceInfo", {}).get("firmwareVersion", "unknown")
+            else:
+                ver = "unknown"
+        except Exception:
+            ver = "unknown"
+        request.config._firmware_version = ver
+    return client
 
 
 # ---------------------------------------------------------------------------
