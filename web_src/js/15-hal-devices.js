@@ -33,6 +33,7 @@
         function renderHalDevices() {
             var container = document.getElementById('hal-device-list');
             if (!container) return;
+            halInitDelegation();  // Ensure delegation is set up when content is rendered
 
             var scanBtn = document.getElementById('hal-rescan-btn');
             if (scanBtn) {
@@ -110,24 +111,24 @@
             var h = '<div class="card hal-device-card ' + stateClass + (expanded ? ' expanded' : '') + '">';
 
             // Header row - clickable to expand
-            h += '<div class="hal-device-header" onclick="halToggleExpand(' + d.slot + ')">';
+            h += '<div class="hal-device-header" data-action="hal-toggle-expand" data-slot="' + d.slot + '">';
             h += '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="' + ti.icon + '"/></svg>';
             h += '<span class="hal-device-name">' + escapeHtml(displayName) + '</span>';
             if (d.type === 6 && d.temperature !== undefined) {
                 h += '<span class="hal-temp-reading">' + d.temperature.toFixed(1) + ' &deg;C</span>';
             }
             h += '<span class="status-dot status-' + si.cls + '" title="' + si.label + '"></span>';
-            // Icon action buttons — left of toggle, stopPropagation so card doesn't expand
-            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();halStartEdit(' + d.slot + ')" title="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
+            // Icon action buttons — left of toggle, data-stop-propagation so card doesn't expand
+            h += '<button class="hal-icon-btn" data-action="hal-start-edit" data-slot="' + d.slot + '" data-stop-propagation="1" title="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg></button>';
             if (d.discovery !== 0) {  // Can't remove builtins
-                h += '<button class="hal-icon-btn hal-icon-btn-danger" onclick="event.stopPropagation();halConfirmRemove(' + d.slot + ',\'' + escapeHtml(displayName) + '\')" title="Remove device"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
+                h += '<button class="hal-icon-btn hal-icon-btn-danger" data-action="hal-confirm-remove" data-slot="' + d.slot + '" data-name="' + escapeHtml(displayName) + '" data-stop-propagation="1" title="Remove device"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg></button>';
             }
-            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();halReinitDevice(' + d.slot + ')" title="Re-initialize"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg></button>';
-            h += '<button class="hal-icon-btn" onclick="event.stopPropagation();exportDeviceYaml(' + d.slot + ')" title="Export YAML"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>';
+            h += '<button class="hal-icon-btn" data-action="hal-reinit" data-slot="' + d.slot + '" data-stop-propagation="1" title="Re-initialize"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"/></svg></button>';
+            h += '<button class="hal-icon-btn" data-action="hal-export-yaml" data-slot="' + d.slot + '" data-stop-propagation="1" title="Export YAML"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg></button>';
             // Enable/disable toggle — visible on card without needing to open edit form
             var togChecked = (d.cfgEnabled !== false) ? 'checked' : '';
-            h += '<label class="hal-enable-toggle" title="' + (d.cfgEnabled !== false ? 'Enabled — click to disable' : 'Disabled — click to enable') + '" onclick="event.stopPropagation()">';
-            h += '<input type="checkbox" ' + togChecked + ' onchange="halToggleDeviceEnabled(' + d.slot + ',this.checked)">';
+            h += '<label class="hal-enable-toggle" title="' + (d.cfgEnabled !== false ? 'Enabled — click to disable' : 'Disabled — click to enable') + '" data-stop-propagation="1">';
+            h += '<input type="checkbox" ' + togChecked + ' data-action="hal-toggle-enabled" data-slot="' + d.slot + '">';
             h += '<span class="hal-toggle-track"></span></label>';
             h += '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="hal-expand-icon' + (expanded ? ' rotated' : '') + '" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
             h += '</div>';
@@ -223,7 +224,7 @@
             h += '</div>';
 
             if (tips.length > 0) {
-                h += '<div class="hal-error-tips-toggle" tabindex="0" role="button" aria-expanded="false" onclick="halToggleErrorTips(' + d.slot + ')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();halToggleErrorTips(' + d.slot + ')}">';
+                h += '<div class="hal-error-tips-toggle" tabindex="0" role="button" aria-expanded="false" data-action="hal-toggle-tips" data-slot="' + d.slot + '">';
                 h += '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true" class="hal-tips-chevron"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>';
                 h += ' Troubleshooting tips</div>';
                 h += '<div class="hal-error-tips" id="hal-error-tips-' + d.slot + '" style="display:none">';
@@ -465,8 +466,8 @@
 
             // Save/Cancel
             h += '<div class="hal-form-buttons">';
-            h += '<button class="btn btn-primary btn-sm" onclick="halSaveConfig(' + d.slot + ')">Save</button>';
-            h += '<button class="btn btn-sm" onclick="halCancelEdit()">Cancel</button>';
+            h += '<button class="btn btn-primary btn-sm" data-action="hal-save-config" data-slot="' + d.slot + '">Save</button>';
+            h += '<button class="btn btn-sm" data-action="hal-cancel-edit">Cancel</button>';
             h += '</div>';
 
             h += '</div>';
@@ -696,6 +697,7 @@
                 })
                 .catch(function(err) {
                     console.error('Failed to load HAL devices:', err);
+                    showToast('Failed to load device list: ' + err.message, 'error');
                 });
             loadHalSettings();
         }
@@ -707,7 +709,7 @@
                     var cb = document.getElementById('halAutoDiscovery');
                     if (cb) cb.checked = d.halAutoDiscovery !== false;
                 })
-                .catch(function() {});
+                .catch(function(err) { console.warn('[HAL] Failed to load settings:', err); });
         }
 
         function setHalAutoDiscovery(enabled) {
@@ -926,7 +928,7 @@
                         var addr = typeof item === 'object' ? (item.address || item.addr || 0) : item;
                         var bus = typeof item === 'object' ? (item.bus !== undefined ? item.bus : 2) : 2;
                         var addrHex = '0x' + addr.toString(16).toUpperCase().padStart(2, '0');
-                        h += '<button class="hal-cc-chip" onclick="halCcSelectAddr(' + addr + ',' + bus + ',this)" data-addr="' + addr + '" data-bus="' + bus + '">';
+                        h += '<button class="hal-cc-chip" data-action="hal-cc-select-addr" data-addr="' + addr + '" data-bus="' + bus + '">';
                         h += addrHex;
                         h += '<span class="hal-cc-chip-bus">Bus ' + bus + '</span>';
                         h += '</button>';
@@ -999,7 +1001,7 @@
             tr.id = 'halCcReg' + idx;
             tr.innerHTML = '<td><input type="text" id="halCcRegAddr' + idx + '" placeholder="0x00" value="0x"></td>' +
                 '<td><input type="text" id="halCcRegVal' + idx + '" placeholder="0x00" value="0x"></td>' +
-                '<td><button class="hal-cc-regdel" onclick="halCcRemoveInitReg(' + idx + ')" title="Remove">&times;</button></td>';
+                '<td><button class="hal-cc-regdel" data-action="hal-cc-remove-reg" data-idx="' + idx + '" title="Remove">&times;</button></td>';
             body.appendChild(tr);
         }
 
@@ -1195,3 +1197,78 @@
             var url = 'https://github.com/ALX-Audio/ALX_Nova_Controller_2/issues/new?title=' + title + '&body=' + body + '&labels=custom-device';
             window.open(url, '_blank');
         }
+
+        // ===== Event Delegation for HAL Device List =====
+        // Set up once on the devices tab to handle all dynamically rendered hal cards and custom device UI
+        function halInitDelegation() {
+            var tabEl = document.getElementById('devices');
+            if (!tabEl || tabEl.dataset.halDelegationInit) return;
+            tabEl.dataset.halDelegationInit = '1';
+
+            tabEl.addEventListener('click', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                // Stop propagation for icon buttons inside headers
+                if (el.dataset.stopPropagation) {
+                    e.stopPropagation();
+                }
+
+                if (action === 'hal-toggle-expand') {
+                    halToggleExpand(parseInt(el.dataset.slot));
+                } else if (action === 'hal-start-edit') {
+                    e.stopPropagation();
+                    halStartEdit(parseInt(el.dataset.slot));
+                } else if (action === 'hal-confirm-remove') {
+                    e.stopPropagation();
+                    halConfirmRemove(parseInt(el.dataset.slot), el.dataset.name);
+                } else if (action === 'hal-reinit') {
+                    e.stopPropagation();
+                    halReinitDevice(parseInt(el.dataset.slot));
+                } else if (action === 'hal-export-yaml') {
+                    e.stopPropagation();
+                    exportDeviceYaml(parseInt(el.dataset.slot));
+                } else if (action === 'hal-save-config') {
+                    halSaveConfig(parseInt(el.dataset.slot));
+                } else if (action === 'hal-cancel-edit') {
+                    halCancelEdit();
+                } else if (action === 'hal-toggle-tips') {
+                    halToggleErrorTips(parseInt(el.dataset.slot));
+                } else if (action === 'hal-cc-select-addr') {
+                    halCcSelectAddr(parseInt(el.dataset.addr), parseInt(el.dataset.bus), el);
+                } else if (action === 'hal-cc-remove-reg') {
+                    halCcRemoveInitReg(parseInt(el.dataset.idx));
+                }
+            });
+
+            // Handle keyboard for tips toggle (accessibility)
+            tabEl.addEventListener('keydown', function(e) {
+                var el = e.target.closest('[data-action="hal-toggle-tips"]');
+                if (!el) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    halToggleErrorTips(parseInt(el.dataset.slot));
+                }
+            });
+
+            // Handle the enable toggle checkbox change (needs to stop propagation on label click)
+            tabEl.addEventListener('change', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                if (el.dataset.action === 'hal-toggle-enabled') {
+                    halToggleDeviceEnabled(parseInt(el.dataset.slot), el.checked);
+                }
+            });
+
+            // Stop propagation on labels with data-stop-propagation so header click-expand doesn't trigger
+            tabEl.addEventListener('click', function(e) {
+                var label = e.target.closest('label[data-stop-propagation]');
+                if (label) e.stopPropagation();
+            }, true);  // capture phase to intercept before the header handler
+        }
+
+        // Initialize delegation on DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', function() {
+            halInitDelegation();
+        });

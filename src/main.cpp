@@ -459,7 +459,7 @@ void setup() {
                         true);
       server_send(302, "text/plain", "Redirecting to Captive Portal");
     } else {
-      server_send(404, "text/plain", "Not Found");
+      server_send(404, "application/json", "{\"error\":\"Not found\"}");
     }
   });
 

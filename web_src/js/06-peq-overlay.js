@@ -82,6 +82,7 @@
                 overlay.id = 'peqOverlay';
                 overlay.className = 'peq-overlay';
                 document.body.appendChild(overlay);
+                peqOverlayInitDelegation(overlay);
             }
 
             var title = target.type === 'input' ? 'Input PEQ — Lane ' + target.channel : 'Output PEQ — Ch ' + target.channel;
@@ -89,7 +90,7 @@
 
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">' + title + '</span>';
-            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
             html += '</div>';
@@ -114,11 +115,11 @@
             // Actions
             html += '<div class="peq-overlay-actions">';
             if (peqOverlayBands.length < maxBands) {
-                html += '  <button class="btn btn-sm btn-primary" onclick="peqAddBand()">Add Band</button>';
+                html += '  <button class="btn btn-sm btn-primary" data-action="peq-add-band">Add Band</button>';
             }
-            html += '  <button class="btn btn-sm btn-secondary" onclick="peqResetAll()">Reset All</button>';
-            html += '  <button class="btn btn-sm btn-primary" onclick="peqApply()">Apply</button>';
-            html += '  <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '  <button class="btn btn-sm btn-secondary" data-action="peq-reset-all">Reset All</button>';
+            html += '  <button class="btn btn-sm btn-primary" data-action="peq-apply">Apply</button>';
+            html += '  <button class="btn btn-sm btn-secondary" data-action="peq-close">Cancel</button>';
             html += '</div>';
 
             overlay.innerHTML = html;
@@ -137,12 +138,12 @@
             }
             var html = '<tr data-band="' + idx + '">';
             html += '<td>' + (idx + 1) + '</td>';
-            html += '<td><select class="peq-input peq-type-sel" onchange="peqUpdateBand(' + idx + ',\'type\',parseInt(this.value))">' + typeOptions + '</select></td>';
-            html += '<td><input type="number" class="peq-input" value="' + (b.freq || 1000) + '" min="20" max="20000" step="1" onchange="peqUpdateBand(' + idx + ',\'freq\',parseFloat(this.value))"></td>';
-            html += '<td><input type="number" class="peq-input" value="' + (b.gain || 0).toFixed(1) + '" min="-24" max="24" step="0.5" onchange="peqUpdateBand(' + idx + ',\'gain\',parseFloat(this.value))"></td>';
-            html += '<td><input type="number" class="peq-input" value="' + (b.Q || 0.707).toFixed(3) + '" min="0.1" max="30" step="0.01" onchange="peqUpdateBand(' + idx + ',\'Q\',parseFloat(this.value))"></td>';
-            html += '<td><input type="checkbox"' + (b.enabled !== false ? ' checked' : '') + ' onchange="peqUpdateBand(' + idx + ',\'enabled\',this.checked)"></td>';
-            html += '<td><button class="channel-btn" onclick="peqRemoveBand(' + idx + ')" style="padding:2px 6px;min-width:0">';
+            html += '<td><select class="peq-input peq-type-sel" data-action="peq-update-band" data-band="' + idx + '" data-field="type" data-parse="int">' + typeOptions + '</select></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.freq || 1000) + '" min="20" max="20000" step="1" data-action="peq-update-band" data-band="' + idx + '" data-field="freq" data-parse="float"></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.gain || 0).toFixed(1) + '" min="-24" max="24" step="0.5" data-action="peq-update-band" data-band="' + idx + '" data-field="gain" data-parse="float"></td>';
+            html += '<td><input type="number" class="peq-input" value="' + (b.Q || 0.707).toFixed(3) + '" min="0.1" max="30" step="0.01" data-action="peq-update-band" data-band="' + idx + '" data-field="Q" data-parse="float"></td>';
+            html += '<td><input type="checkbox"' + (b.enabled !== false ? ' checked' : '') + ' data-action="peq-update-band" data-band="' + idx + '" data-field="enabled" data-parse="bool"></td>';
+            html += '<td><button class="channel-btn" data-action="peq-remove-band" data-band="' + idx + '" style="padding:2px 6px;min-width:0">';
             html += '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"/></svg>';
             html += '</button></td>';
             html += '</tr>';
@@ -406,11 +407,12 @@
                 overlay.id = 'peqOverlay';
                 overlay.className = 'peq-overlay';
                 document.body.appendChild(overlay);
+                peqOverlayInitDelegation(overlay);
             }
 
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">Crossover — Ch ' + channel + '</span>';
-            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
             html += '</div>';
@@ -434,8 +436,8 @@
             html += '    <span class="channel-gain-value">Hz</span>';
             html += '  </div>';
             html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
-            html += '    <button class="btn btn-sm btn-primary" onclick="applyXover(' + channel + ')">Apply</button>';
-            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '    <button class="btn btn-sm btn-primary" data-action="xover-apply" data-channel="' + channel + '">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" data-action="peq-close">Cancel</button>';
             html += '  </div>';
             html += '</div>';
 
@@ -471,11 +473,12 @@
                 overlay.id = 'peqOverlay';
                 overlay.className = 'peq-overlay';
                 document.body.appendChild(overlay);
+                peqOverlayInitDelegation(overlay);
             }
 
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">Compressor — Ch ' + channel + '</span>';
-            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
             html += '</div>';
@@ -487,8 +490,8 @@
             html += peqControlRow('Knee', 'compKnee', 0, 20, 6, 0.5, 'dB');
             html += peqControlRow('Makeup', 'compMakeup', 0, 24, 0, 0.5, 'dB');
             html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
-            html += '    <button class="btn btn-sm btn-primary" onclick="applyCompressor(' + channel + ')">Apply</button>';
-            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '    <button class="btn btn-sm btn-primary" data-action="compressor-apply" data-channel="' + channel + '">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" data-action="peq-close">Cancel</button>';
             html += '  </div>';
             html += '</div>';
 
@@ -527,11 +530,12 @@
                 overlay.id = 'peqOverlay';
                 overlay.className = 'peq-overlay';
                 document.body.appendChild(overlay);
+                peqOverlayInitDelegation(overlay);
             }
 
             var html = '<div class="peq-overlay-header">';
             html += '  <span class="peq-overlay-title">Limiter — Ch ' + channel + '</span>';
-            html += '  <button class="peq-overlay-close" onclick="closePeqOverlay()">';
+            html += '  <button class="peq-overlay-close" data-action="peq-close">';
             html += '    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>';
             html += '  </button>';
             html += '</div>';
@@ -540,8 +544,8 @@
             html += peqControlRow('Attack', 'limAttack', 0.01, 50, 0.1, 0.01, 'ms');
             html += peqControlRow('Release', 'limRelease', 1, 1000, 50, 1, 'ms');
             html += '  <div style="display:flex;gap:6px;margin-top:12px;">';
-            html += '    <button class="btn btn-sm btn-primary" onclick="applyLimiter(' + channel + ')">Apply</button>';
-            html += '    <button class="btn btn-sm btn-secondary" onclick="closePeqOverlay()">Cancel</button>';
+            html += '    <button class="btn btn-sm btn-primary" data-action="limiter-apply" data-channel="' + channel + '">Apply</button>';
+            html += '    <button class="btn btn-sm btn-secondary" data-action="peq-close">Cancel</button>';
             html += '  </div>';
             html += '</div>';
 
@@ -566,7 +570,94 @@
         function peqControlRow(label, id, min, max, defaultVal, step, unit) {
             return '<div class="channel-control-row" style="margin-bottom:8px;">' +
                 '<label class="channel-control-label" style="min-width:80px">' + label + '</label>' +
-                '<input type="range" class="channel-gain-slider" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + defaultVal + '" oninput="document.getElementById(\'' + id + 'Val\').textContent=this.value">' +
+                '<input type="range" class="channel-gain-slider" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + defaultVal + '" data-action="peq-control-update" data-val-id="' + id + 'Val">' +
                 '<span class="channel-gain-value" id="' + id + 'Val">' + defaultVal + ' ' + unit + '</span>' +
                 '</div>';
+        }
+
+        // ===== Event Delegation for PEQ Overlay =====
+        // Set up once on the overlay element; handles all dynamic child elements
+        function peqOverlayInitDelegation(overlay) {
+            if (overlay.dataset.delegationInit) return;
+            overlay.dataset.delegationInit = '1';
+
+            overlay.addEventListener('click', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                if (action === 'peq-close') {
+                    closePeqOverlay();
+                } else if (action === 'peq-add-band') {
+                    peqAddBand();
+                } else if (action === 'peq-reset-all') {
+                    peqResetAll();
+                } else if (action === 'peq-apply') {
+                    peqApply();
+                } else if (action === 'peq-remove-band') {
+                    peqRemoveBand(parseInt(el.dataset.band));
+                } else if (action === 'xover-apply') {
+                    applyXover(parseInt(el.dataset.channel));
+                } else if (action === 'compressor-apply') {
+                    applyCompressor(parseInt(el.dataset.channel));
+                } else if (action === 'limiter-apply') {
+                    applyLimiter(parseInt(el.dataset.channel));
+                } else if (action === 'matrix-gain-set0') {
+                    setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), 0);
+                    closeMatrixPopup();
+                } else if (action === 'matrix-gain-setoff') {
+                    setMatrixGainDb(parseInt(el.dataset.out), parseInt(el.dataset.in), -72);
+                    closeMatrixPopup();
+                } else if (action === 'matrix-popup-close') {
+                    closeMatrixPopup();
+                }
+            });
+
+            overlay.addEventListener('change', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                if (action === 'peq-update-band') {
+                    var bandIdx = parseInt(el.dataset.band);
+                    var field = el.dataset.field;
+                    var parse = el.dataset.parse;
+                    var value;
+                    if (parse === 'int') {
+                        value = parseInt(el.value);
+                    } else if (parse === 'float') {
+                        value = parseFloat(el.value);
+                    } else if (parse === 'bool') {
+                        value = el.checked;
+                    } else {
+                        value = el.value;
+                    }
+                    peqUpdateBand(bandIdx, field, value);
+                }
+            });
+
+            overlay.addEventListener('input', function(e) {
+                var el = e.target.closest('[data-action]');
+                if (!el) return;
+                var action = el.dataset.action;
+
+                if (action === 'peq-control-update') {
+                    var valEl = document.getElementById(el.dataset.valId);
+                    if (valEl) valEl.textContent = el.value;
+                } else if (action === 'peq-update-band') {
+                    // For number inputs, update in real-time on input too
+                    var bandIdx = parseInt(el.dataset.band);
+                    var field = el.dataset.field;
+                    var parse = el.dataset.parse;
+                    var value;
+                    if (parse === 'int') {
+                        value = parseInt(el.value);
+                    } else if (parse === 'float') {
+                        value = parseFloat(el.value);
+                    } else {
+                        value = el.value;
+                    }
+                    if (!isNaN(value)) peqUpdateBand(bandIdx, field, value);
+                }
+            });
         }

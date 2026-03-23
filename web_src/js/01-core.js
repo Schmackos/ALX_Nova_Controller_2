@@ -9,24 +9,25 @@
         // ===== Session & Authentication =====
         // Cookie is HttpOnly — browser sends it automatically with credentials: 'include'
 
-        // Global fetch wrapper for API calls (handles 401 Unauthorized)
+        // Global fetch wrapper for API calls (handles 401 Unauthorized + 10s timeout)
         async function apiFetch(url, options = {}) {
-            const defaultOptions = {
-                credentials: 'include'
-            };
+            const controller = new AbortController();
+            const timeoutMs = options.timeout || 10000;
+            const timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs);
 
             // Merge options with defaults, ensuring headers are properly combined
             const mergedOptions = {
-                ...defaultOptions,
+                credentials: 'include',
                 ...options,
+                signal: controller.signal,
                 headers: {
-                    ...defaultOptions.headers,
                     ...(options.headers || {})
                 }
             };
 
             try {
                 const response = await fetch(url, mergedOptions);
+                clearTimeout(timeoutId);
 
                 if (response.status === 401) {
                     console.warn(`Unauthorized (401) on ${url}. Redirecting...`);
@@ -62,6 +63,11 @@
                 };
                 return response;
             } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    console.warn('Request timeout:', url);
+                    throw new Error('Request timed out');
+                }
                 console.error(`API Fetch Error [${url}]:`, error);
                 throw error;
             }
