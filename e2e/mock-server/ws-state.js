@@ -6,6 +6,7 @@
 function createDefaultState() {
   return {
     authenticated: false,
+    isDefaultPassword: false,
     wifiConnected: true,
     wifiSSID: 'TestNetwork',
     wifiIP: '192.168.1.100',

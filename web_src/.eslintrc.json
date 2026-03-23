@@ -419,6 +419,7 @@
     "showReleaseNotes": "readonly",
     "showReleaseNotesFor": "readonly",
     "toggleInlineReleaseNotes": "readonly",
+    "_isDefaultPassword": "writable",
     "checkPasswordWarning": "readonly",
     "showDefaultPasswordWarning": "readonly",
     "dismissPasswordWarning": "readonly",

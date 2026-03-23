@@ -58,6 +58,10 @@ void sendAudioData();
 bool wsAnyClientAuthenticated();
 uint8_t wsAuthenticatedClientCount();
 
+// ===== Forced Disconnect =====
+// Disconnect all authenticated clients and clear auth state (called on password change).
+void ws_disconnect_all_clients();
+
 // ===== HTTP Page Serving Flag =====
 extern volatile bool httpServingPage;
 

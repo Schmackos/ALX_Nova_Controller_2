@@ -6,6 +6,8 @@
 #include "websocket_handler.h"
 #include "websocket_internal.h"
 #include "config.h"
+#include "globals.h"
+#include "debug_serial.h"
 
 // ===== WebSocket Authentication Tracking =====
 bool wsAuthStatus[MAX_WS_CLIENTS] = {false};
@@ -71,4 +73,18 @@ void ws_set_session_id(uint8_t clientNum, const String& id) {
 void ws_clear_session_id(uint8_t clientNum) {
     if (clientNum >= MAX_WS_CLIENTS) return;
     wsSessionId[clientNum] = "";
+}
+
+// Disconnect all authenticated WebSocket clients (called on password change)
+void ws_disconnect_all_clients() {
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        if (wsAuthStatus[i]) {
+            webSocket.disconnect(i);
+            wsAuthStatus[i] = false;
+            wsAuthTimeout[i] = 0;
+            ws_clear_session_id(i);
+        }
+    }
+    _wsAuthCount = 0;
+    LOG_I("[WS] All clients disconnected (password change)");
 }
