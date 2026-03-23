@@ -12,7 +12,7 @@
 - Fix approach: Enforce pre-commit hook to verify no manual edits to `web_pages.cpp`. Document clearly in CLAUDE.md (already done). Add linter check to CI to reject commits that modify `web_pages.cpp` directly
 
 **Deprecated I2S Functions (19 legacy APIs):**
-✅ PARTIALLY RESOLVED (2026-03-23): Migrated 3 of 4 internal call sites to port-generic API. `dac_hal.cpp` remains due to audio pause handshake safety (requires larger refactor).
+✅ RESOLVED (2026-03-23): All external call sites migrated to port-generic API. `dac_hal.cpp` confirmed clean (verified 2026-03-23 — uses `i2s_port_enable_tx/disable_tx` exclusively). Only `i2s_audio_read_adc1/2()` wrappers remain, used solely internally within `i2s_audio.cpp` — not exported or called externally.
 - Issue: Port-specific functions like `i2s_audio_configure_adc1()`, `i2s_configure_dac_tx()`, expansion TX stubs now superseded by port-generic API (`i2s_port_*()`)
 - Files: `src/i2s_audio.h` (19 marked DEPRECATED), `src/i2s_audio.cpp` (2 implementations)
 - Impact: New code must use port-generic API. Legacy code still works but consuming deprecated functions is fragile — mixing old + new patterns leads to subtle bugs
