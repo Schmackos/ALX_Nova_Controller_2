@@ -47,6 +47,7 @@ const sidebars = {
         'developer/api/rest-dsp',
         'developer/api/rest-pipeline',
         'developer/api/rest-dac',
+        'developer/api/rest-health',
         'developer/websocket',
       ],
     },
@@ -80,7 +81,15 @@ const sidebars = {
     },
     'developer/audio-pipeline',
     'developer/dsp-system',
-    'developer/testing',
+    {
+      type: 'category',
+      label: 'Testing',
+      items: [
+        'developer/testing/overview',
+        'developer/testing/device-testing',
+        'developer/testing/ci-device-tests',
+      ],
+    },
     'developer/contributing',
   ],
 };

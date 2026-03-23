@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://alx-nova-controller-2.github.io/docs
+    about: Check the documentation before filing an issue

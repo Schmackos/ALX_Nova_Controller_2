@@ -54,6 +54,8 @@
 #include "diag_api.h"
 #include "siggen_api.h"
 #include "i2s_port_api.h"
+#include "health_check.h"
+#include "health_check_api.h"
 #include "utils.h"
 #include "web_pages.h"
 #include "http_security.h"
@@ -775,6 +777,11 @@ void setup() {
   // Register I2S port status API endpoint
   registerI2sPortApiEndpoints(server);
 
+#ifdef HEALTH_CHECK_ENABLED
+  // Register health check REST API endpoint
+  registerHealthCheckApiEndpoints();
+#endif
+
   // Initialize CPU usage monitoring
   initCpuUsageMonitoring();
 
@@ -817,6 +824,9 @@ void setup() {
   // Start dedicated MQTT task (owns connection, reconnect, publish)
   mqtt_task_init();
 
+  // Initialize health check module (deferred timer for post-boot checks)
+  health_check_init();
+
   // Set initial FSM state
   appState.setFSMState(STATE_IDLE);
 
@@ -832,6 +842,10 @@ void loop() {
   // Wake immediately on any dirty flag; fall back to 5ms tick when idle.
   // Replaces delay(5) — identical worst-case latency, zero latency on state changes.
   app_events_wait(5);
+
+  // Health check: drain deferred-pending flag and poll serial trigger
+  health_check_poll_deferred();
+  health_check_poll_serial();
 
   server.handleClient();
   if (appState.wifi.isAPMode) {
@@ -1032,6 +1046,12 @@ void loop() {
     appState.clearSignalGenDirty();
   }
 
+  // Broadcast health check state changes (deferred completion, periodic re-run)
+  if (appState.isHealthCheckDirty()) {
+    sendHealthCheckState();
+    appState.clearHealthCheckDirty();
+  }
+
 #ifdef DSP_ENABLED
   // Broadcast DSP config changes (API/MQTT -> WS clients + MQTT)
   if (appState.isDspConfigDirty()) {
@@ -1225,6 +1245,15 @@ void loop() {
     if (millis() - lastJournalFlush >= 60000) {
       diag_journal_flush();
       lastJournalFlush = millis();
+    }
+  }
+
+  // Periodic health check re-run (every 60s)
+  {
+    static unsigned long lastHealthCheck = 0;
+    if (millis() - lastHealthCheck >= 60000) {
+      lastHealthCheck = millis();
+      health_check_run_full(nullptr);  // Uses internal static report
     }
   }
 

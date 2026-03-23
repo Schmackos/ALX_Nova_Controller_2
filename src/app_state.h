@@ -18,6 +18,7 @@
 #include "state/mqtt_state.h"
 #include "state/debug_state.h"
 #include "state/hal_coord_state.h"
+#include "state/health_check_state.h"
 
 // ===== AppState Singleton Class =====
 class AppState {
@@ -58,6 +59,13 @@ public:
 
   // ===== HAL Coordination State (deferred device toggles) =====
   HalCoordState halCoord;
+
+  // ===== Health Check State =====
+  HealthCheckState healthCheck;
+
+  void markHealthCheckDirty() { _healthCheckDirty = true; app_events_signal(EVT_HEALTH); }
+  bool isHealthCheckDirty() const { return _healthCheckDirty; }
+  void clearHealthCheckDirty() { _healthCheckDirty = false; }
 
   // ===== Cross-task Coordination Flags =====
   volatile bool _mqttReconfigPending = false;  // set by HTTP handler; mqtt_task reconnects
@@ -244,6 +252,7 @@ private:
 #endif
   bool _diagJournalDirty = false;
   bool _heapDirty = false;
+  bool _healthCheckDirty = false;
 };
 
 // Convenience macro for accessing AppState

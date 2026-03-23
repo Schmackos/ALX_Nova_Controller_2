@@ -1100,3 +1100,19 @@ void sendAudioData() {
   }
   _sendWaveformNext = !_sendWaveformNext;
 }
+
+void sendHealthCheckState() {
+  JsonDocument doc;
+  doc["type"] = "healthCheckState";
+  const auto& hc = appState.healthCheck;
+  doc["pass"] = hc.lastPassCount;
+  doc["fail"] = hc.lastFailCount;
+  doc["skip"] = hc.lastSkipCount;
+  doc["durationMs"] = hc.lastCheckDurationMs;
+  doc["timestamp"] = hc.lastCheckTimestamp;
+  doc["deferredComplete"] = hc.deferredComplete;
+  doc["overall"] = (hc.lastFailCount == 0) ? "pass" : "fail";
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT((uint8_t*)json.c_str(), json.length());
+}

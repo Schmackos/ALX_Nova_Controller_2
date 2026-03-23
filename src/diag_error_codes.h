@@ -96,6 +96,21 @@ enum DiagErrorCode : uint16_t {
     DIAG_USB_BUFFER_OVERRUN             = 0x7002,  // Ring buffer full
     DIAG_USB_BUFFER_UNDERRUN            = 0x7003,  // Ring buffer empty during read
 
+    // ===== 0x08xx: Health Check =====
+    DIAG_HEALTH_HEAP_LOW                = 0x0801,  // Heap below threshold
+    DIAG_HEALTH_PSRAM_LOW               = 0x0802,  // PSRAM below threshold
+    DIAG_HEALTH_PSRAM_MISSING           = 0x0803,  // PSRAM not detected
+    DIAG_HEALTH_BOOT_LOOP               = 0x0804,  // Boot loop detected
+    DIAG_HEALTH_DMA_FAIL                = 0x0805,  // DMA buffer allocation failed
+    DIAG_HEALTH_I2C_BUS_FAIL            = 0x0806,  // I2C bus scan failed
+    DIAG_HEALTH_HAL_DEVICE              = 0x0807,  // HAL device not AVAILABLE
+    DIAG_HEALTH_I2S_PORT                = 0x0808,  // I2S port not configured
+    DIAG_HEALTH_NETWORK                 = 0x0809,  // Network check failed
+    DIAG_HEALTH_MQTT                    = 0x080A,  // MQTT not connected
+    DIAG_HEALTH_TASK                    = 0x080B,  // FreeRTOS task unhealthy
+    DIAG_HEALTH_STORAGE                 = 0x080C,  // Storage check failed
+    DIAG_HEALTH_AUDIO                   = 0x080D,  // Audio pipeline unhealthy
+
     // Sentinel — must be last. Used by error code coverage tests.
     DIAG_CODE_COUNT
 };
@@ -119,6 +134,7 @@ enum DiagSubsystem : uint8_t {
     DIAG_SUB_MQTT       = 0x50,
     DIAG_SUB_OTA        = 0x60,
     DIAG_SUB_USB        = 0x70,
+    DIAG_SUB_HEALTH     = 0x08,
 };
 
 // Extract subsystem from error code
@@ -138,6 +154,7 @@ static inline const char* diag_subsystem_name(DiagSubsystem sub) {
         case DIAG_SUB_MQTT:     return "MQTT";
         case DIAG_SUB_OTA:      return "OTA";
         case DIAG_SUB_USB:      return "USB";
+        case DIAG_SUB_HEALTH:   return "Health";
         default:                return "Unknown";
     }
 }

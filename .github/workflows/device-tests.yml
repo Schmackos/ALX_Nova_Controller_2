@@ -1,0 +1,49 @@
+name: Device Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+  pull_request:
+    types: [labeled]
+
+jobs:
+  device-tests:
+    runs-on: [self-hosted, has-esp32p4]
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[device-test]') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'device-test'))
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: pip install -r device_tests/requirements.txt
+
+      - name: Run device tests
+        shell: bash
+        run: |
+          cd device_tests
+          pytest tests/ \
+            --device-port "$CI_ESP32_PORT" \
+            --create-issues \
+            --junitxml=results.xml \
+            --skip-reboot-tests \
+            -v
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-test-results
+          path: |
+            device_tests/results.xml
+            device_tests/logs/
+          retention-days: 14

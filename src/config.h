@@ -126,6 +126,11 @@ const int DAC_I2C_SCL_PIN = 54;  // GPIO 54 - I2C SCL (EEPROM + I2C DACs) (P4)
 #define DIAG_FLUSH_INTERVAL_MS   60000    // Persist WARN+ entries every 60s
 #define DIAG_JOURNAL_FILE "/diag_journal.bin"
 
+// ===== Health Check =====
+#ifndef HEALTH_CHECK_DEFERRED_DELAY
+#define HEALTH_CHECK_DEFERRED_DELAY 30000   // ms after boot before deferred checks run
+#endif
+
 // ===== Heap Health Thresholds =====
 #ifndef HEAP_WARNING_THRESHOLD
 #define HEAP_WARNING_THRESHOLD  50000   // 50KB — early warning (logging + rate reduction)

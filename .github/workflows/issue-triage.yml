@@ -1,0 +1,37 @@
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    if: contains(github.event.issue.labels.*.name, 'device-test')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Add area labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+            const labels = [];
+            if (body.includes('heap') || body.includes('PSRAM') || body.includes('storage') || body.includes('boot'))
+              labels.push('area:system');
+            if (body.includes('HAL') || body.includes('I2C') || body.includes('device'))
+              labels.push('area:hal');
+            if (body.includes('WiFi') || body.includes('network') || body.includes('MQTT') || body.includes('HTTP'))
+              labels.push('area:network');
+            if (body.includes('audio') || body.includes('I2S') || body.includes('DMA') || body.includes('pipeline'))
+              labels.push('area:audio');
+            if (body.includes('task') || body.includes('FreeRTOS') || body.includes('stack'))
+              labels.push('area:freertos');
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+            }
