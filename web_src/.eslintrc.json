@@ -124,6 +124,7 @@
     "drawChannelVu": "readonly",
     "audioTabUpdateLevels": "readonly",
     "escapeHtml": "readonly",
+    "sanitizeHtml": "readonly",
     "canvasDims": "writable",
     "resizeCanvasIfNeeded": "readonly",
     "bgCache": "writable",

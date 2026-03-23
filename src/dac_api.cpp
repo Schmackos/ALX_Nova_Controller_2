@@ -41,6 +41,10 @@ void registerDacApiEndpoints() {
 
         // Slot-based lookup when ?slot=N is provided
         int slotParam = server.hasArg("slot") ? server.arg("slot").toInt() : -1;
+        if (slotParam >= HAL_MAX_DEVICES) {
+            server_send(400, "application/json", "{\"error\":\"Invalid slot\"}");
+            return;
+        }
         HalDevice* dev;
         if (slotParam >= 0) {
             dev = mgr.getDevice((uint8_t)slotParam);

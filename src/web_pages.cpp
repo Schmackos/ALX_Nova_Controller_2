@@ -5581,7 +5581,7 @@ body.night-mode {
                     // Try to parse JSON to see if there's a redirect provided
                     try {
                         const data = await response.clone().json();
-                        if (data.redirect) {
+                        if (data.redirect && data.redirect.startsWith('/') && !data.redirect.startsWith('//')) {
                             window.location.href = data.redirect;
                         } else {
                             window.location.href = '/login';
@@ -5619,6 +5619,22 @@ body.night-mode {
         function escapeHtml(str) {
             if (!str) return '';
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Sanitize HTML from markdown rendering — strip dangerous elements and attributes
+        function sanitizeHtml(html) {
+            // Remove script tags and their content
+            html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+            // Remove iframe, object, embed, form tags (with content)
+            html = html.replace(/<(iframe|object|embed|form)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
+            html = html.replace(/<(iframe|object|embed|form)\b[^>]*\/?\s*>/gi, '');
+            // Remove event handlers (onclick, onerror, onload, etc.)
+            html = html.replace(/\s+on\w+\s*=\s*(['"])[^'"]*\1/gi, '');
+            html = html.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
+            // Remove javascript: URLs
+            html = html.replace(/href\s*=\s*(['"])javascript:[^'"]*\1/gi, 'href=$1#$1');
+            html = html.replace(/src\s*=\s*(['"])javascript:[^'"]*\1/gi, 'src=$1#$1');
+            return html;
         }
 
         // ===== Connection Status =====
@@ -10554,7 +10570,7 @@ function showRemoveCurrentNetworkModal(network, selectedIndex) {
                                 Warning: You are currently connected to this network
                             </div>
                             <div style="margin-bottom: 12px;">
-                                Network: <strong>${network.ssid}</strong>
+                                Network: <strong>${escapeHtml(network.ssid)}</strong>
                             </div>
                             <div style="margin-bottom: 16px; line-height: 1.5;">
                                 If you remove this network, the device will:
@@ -13225,14 +13241,14 @@ function initFirmwareDragDrop() {
             const container = document.getElementById('manualRendered');
 
             if (typeof marked !== 'undefined') {
-                container.innerHTML = marked.parse(md);
+                container.innerHTML = sanitizeHtml(marked.parse(md));
                 return;
             }
 
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
             script.onload = () => {
-                container.innerHTML = marked.parse(md);
+                container.innerHTML = sanitizeHtml(marked.parse(md));
             };
             script.onerror = () => {
                 container.innerHTML = '<pre style="white-space: pre-wrap;">' + md.replace(/</g, '&lt;') + '</pre>';
@@ -13249,7 +13265,7 @@ function initFirmwareDragDrop() {
                 return;
             }
 
-            container.innerHTML = marked.parse(manualRawMarkdown);
+            container.innerHTML = sanitizeHtml(marked.parse(manualRawMarkdown));
 
             if (!query || query.length < 2) {
                 status.textContent = '';

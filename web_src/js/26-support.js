@@ -69,14 +69,14 @@
             const container = document.getElementById('manualRendered');
 
             if (typeof marked !== 'undefined') {
-                container.innerHTML = marked.parse(md);
+                container.innerHTML = sanitizeHtml(marked.parse(md));
                 return;
             }
 
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
             script.onload = () => {
-                container.innerHTML = marked.parse(md);
+                container.innerHTML = sanitizeHtml(marked.parse(md));
             };
             script.onerror = () => {
                 container.innerHTML = '<pre style="white-space: pre-wrap;">' + md.replace(/</g, '&lt;') + '</pre>';
@@ -93,7 +93,7 @@
                 return;
             }
 
-            container.innerHTML = marked.parse(manualRawMarkdown);
+            container.innerHTML = sanitizeHtml(marked.parse(manualRawMarkdown));
 
             if (!query || query.length < 2) {
                 status.textContent = '';
