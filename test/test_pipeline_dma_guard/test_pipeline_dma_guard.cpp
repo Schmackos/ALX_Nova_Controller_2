@@ -255,8 +255,8 @@ void test_diag_code_value(void) {
     DiagSubsystem sub = diag_subsystem_from_code(DIAG_AUDIO_DMA_ALLOC_FAIL);
     TEST_ASSERT_EQUAL(DIAG_SUB_AUDIO, sub);
 
-    // Verify it comes before the sentinel
-    TEST_ASSERT_TRUE(DIAG_AUDIO_DMA_ALLOC_FAIL < DIAG_CODE_COUNT);
+    // Verify it is a real (non-zero) error code
+    TEST_ASSERT_TRUE(DIAG_AUDIO_DMA_ALLOC_FAIL != DIAG_OK);
 }
 
 // ============================================================

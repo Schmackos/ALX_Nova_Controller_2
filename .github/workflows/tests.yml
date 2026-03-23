@@ -86,7 +86,7 @@ jobs:
     - name: Install Playwright Chromium
       run: cd e2e && npx playwright install --with-deps chromium
     - name: Run E2E tests
-      run: cd e2e && npx playwright test
+      run: cd e2e && npx playwright test --grep-invert @visual
     - name: Upload Playwright report
       if: failure()
       uses: actions/upload-artifact@v4

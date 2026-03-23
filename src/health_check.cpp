@@ -394,7 +394,7 @@ static void _check_hal_devices(HealthCheckReport* report) {
     uint8_t unhealthy = ctx.unavailable + ctx.error;
     if (unhealthy > 8) {
         char detail[40];
-        snprintf(detail, sizeof(detail), "%u more not shown", unhealthy - 8);
+        snprintf(detail, sizeof(detail), "%u more not shown", (unsigned int)(unhealthy - 8));
         _add_item(report, "hal_overflow", HC_FAIL, detail);
     }
 
