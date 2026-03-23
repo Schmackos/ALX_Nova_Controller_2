@@ -308,7 +308,12 @@ void initAuth() {
     }
   } else {
     // First boot — generate unique per-device password
+#ifdef TEST_MODE
+    String defaultPwd = "test1234";
+    LOG_W("[Auth] TEST MODE: using fixed password 'test1234'");
+#else
     String defaultPwd = generateDefaultPassword();
+#endif
     appState.wifi.webPassword = hashPasswordPbkdf2(defaultPwd);
     authPrefs.putString("pwd_hash", appState.wifi.webPassword);
     authPrefs.putString("default_pwd", defaultPwd);  // plaintext for display
@@ -584,6 +589,7 @@ void handleLogin() {
     _nextLoginAllowedMs = 0;
   }
 
+#ifndef TEST_MODE
   // Non-blocking rate limit gate — reject immediately if in cooldown
   unsigned long nowMs = millis();
   if (_nextLoginAllowedMs > 0 && nowMs < _nextLoginAllowedMs) {
@@ -603,9 +609,11 @@ void handleLogin() {
     server_send(429, "application/json", responseStr);
     return;
   }
+#endif // TEST_MODE
 
   // Validate password (supports PBKDF2 and legacy SHA256)
   if (!verifyPassword(password, appState.wifi.webPassword)) {
+#ifndef TEST_MODE
     // Progressive rate limiting (non-blocking)
     _loginFailCount++;
     _lastFailTime = (uint64_t)esp_timer_get_time();
@@ -614,6 +622,9 @@ void handleLogin() {
 
     LOG_W("[Auth] Login failed - incorrect password (attempt %d, next allowed in %lums)",
           _loginFailCount, delayMs);
+#else
+    LOG_W("[Auth] Login failed - incorrect password (TEST_MODE: no rate limiting)");
+#endif
 
     JsonDocument response;
     response["success"] = false;

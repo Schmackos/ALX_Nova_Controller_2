@@ -38,7 +38,8 @@ class TestSettings:
 
         # Toggle it
         new_value = not original
-        resp = api.post("/api/settings", json={"darkMode": new_value})
+        # POST uses the same dotted key format as GET response
+        resp = api.post("/api/settings", json={"appState.darkMode": new_value})
         assert resp.status_code == 200
 
         # Read back
@@ -49,7 +50,7 @@ class TestSettings:
         )
 
         # Restore original value
-        api.post("/api/settings", json={"darkMode": original})
+        api.post("/api/settings", json={"appState.darkMode": original})
 
     @pytest.mark.reboot
     @pytest.mark.slow

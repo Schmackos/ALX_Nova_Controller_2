@@ -7,6 +7,9 @@ void rate_limit_reset() {
 }
 
 bool rate_limit_check(uint32_t ipAddr) {
+#ifdef TEST_MODE
+    return true;  // No rate limiting in test mode
+#endif
     uint32_t now = millis();
 
     // Find existing slot for this IP
