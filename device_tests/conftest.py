@@ -129,7 +129,7 @@ def auth_session(base_url, device_password):
             resp = session.post(
                 login_url,
                 json={"password": device_password},
-                timeout=5,
+                timeout=30,  # PBKDF2 50k iterations takes ~15-20s on ESP32-P4
             )
             if resp.status_code == 200:
                 return session
