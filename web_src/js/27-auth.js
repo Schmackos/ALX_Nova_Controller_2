@@ -1,11 +1,17 @@
 // ===== Authentication Helper Functions =====
 
+        // Tracks whether the device is using its first-boot default password.
+        // Set by checkPasswordWarning() on page load; used by showPasswordChangeModal()
+        // to hide the "Current Password" field on first-boot (no current password exists).
+        let _isDefaultPassword = false;
+
         async function checkPasswordWarning() {
             try {
                 const response = await apiFetch('/api/auth/status');
                 const data = await response.json();
 
-                if (data.success && data.isDefaultPassword) {
+                _isDefaultPassword = !!(data.success && data.isDefaultPassword);
+                if (_isDefaultPassword) {
                     showDefaultPasswordWarning();
                 }
             } catch (err) {
@@ -63,6 +69,10 @@
                 <div class="modal-content">
                     <h2>Change Password</h2>
                     <form id="passwordChangeForm">
+                        <div class="form-group" id="currentPasswordGroup">
+                            <label class="form-label">Current Password</label>
+                            <input type="password" class="form-input" id="currentPassword" required minlength="1" placeholder="Enter current password">
+                        </div>
                         <div class="form-group">
                             <label>New Password</label>
                             <input type="password" id="newPassword" required minlength="8">
@@ -81,6 +91,16 @@
             `;
             document.body.appendChild(modal);
 
+            // On first-boot the device has no current password — hide the field.
+            if (_isDefaultPassword) {
+                const currentPwGroup = document.getElementById('currentPasswordGroup');
+                if (currentPwGroup) {
+                    currentPwGroup.style.display = 'none';
+                    const currentPwInput = document.getElementById('currentPassword');
+                    if (currentPwInput) currentPwInput.removeAttribute('required');
+                }
+            }
+
             document.getElementById('passwordChangeForm').onsubmit = async function(e) {
                 e.preventDefault();
                 await changePassword();
@@ -88,6 +108,7 @@
         }
 
         async function changePassword() {
+            const currentPassword = document.getElementById('currentPassword')?.value || '';
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
             const errorDiv = document.getElementById('passwordError');
@@ -104,11 +125,19 @@
                 return;
             }
 
+            // Require current password unless this is a first-boot default password scenario
+            if (!_isDefaultPassword && currentPassword.length === 0) {
+                errorDiv.textContent = 'Current password is required';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
             try {
                 const response = await apiFetch('/api/auth/change', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        currentPassword: currentPassword,
                         newPassword: newPassword
                     })
                 });

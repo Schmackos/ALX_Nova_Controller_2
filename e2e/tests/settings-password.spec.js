@@ -2,8 +2,9 @@
  * settings-password.spec.js -- Password change modal: open, validation, submit, cancel.
  *
  * The modal is dynamically created by showPasswordChangeModal() and appended to <body>.
- * Password change calls POST /api/auth/change with { newPassword }.
- * HTML5 minlength="8" on inputs triggers browser-native validation.
+ * Password change calls POST /api/auth/change with { currentPassword, newPassword }.
+ * HTML5 minlength="8" on new/confirm inputs triggers browser-native validation.
+ * currentPassword field is hidden (and not required) when _isDefaultPassword is true.
  */
 
 const { test, expect } = require('../helpers/fixtures');
@@ -69,6 +70,32 @@ test.describe('@settings @api Settings Password', () => {
     });
   });
 
+  test('missing current password shows error', async ({ connectedPage: page }) => {
+    await test.step('Open modal and force non-default-password state', async () => {
+      await page.evaluate(() => { _isDefaultPassword = false; });
+      await page.evaluate(() => switchTab('settings'));
+      await page.locator('button[onclick="showPasswordChangeModal()"]').click();
+      await expect(page.locator('#passwordChangeModal')).toBeVisible({ timeout: 3000 });
+    });
+
+    await test.step('Fill new passwords without current password and submit via JS', async () => {
+      // Leave currentPassword empty, fill new and confirm
+      const currentPwdInput = page.locator('#currentPassword');
+      if (await currentPwdInput.count() > 0) {
+        await currentPwdInput.fill('');
+      }
+      await page.locator('#newPassword').fill('newpassword123');
+      await page.locator('#confirmPassword').fill('newpassword123');
+      await page.evaluate(() => changePassword());
+    });
+
+    await test.step('Verify current password required error', async () => {
+      const errorDiv = page.locator('#passwordError');
+      await expect(errorDiv).toBeVisible({ timeout: 2000 });
+      await expect(errorDiv).toContainText('Current password is required');
+    });
+  });
+
   test('matching valid password sends POST /api/auth/change', async ({ connectedPage: page }) => {
     await test.step('Open modal', async () => {
       await page.evaluate(() => switchTab('settings'));
@@ -91,11 +118,16 @@ test.describe('@settings @api Settings Password', () => {
         });
       });
 
+      // Fill current password (required when not on default password)
+      const currentPwdInput = page.locator('#currentPassword');
+      if (await currentPwdInput.count() > 0 && await currentPwdInput.isVisible()) {
+        await currentPwdInput.fill('currentpassword');
+      }
       await page.locator('#newPassword').fill('newpassword123');
       await page.locator('#confirmPassword').fill('newpassword123');
     });
 
-    await test.step('Submit and verify API was called', async () => {
+    await test.step('Submit and verify API was called with newPassword', async () => {
       await page.locator('#passwordChangeModal button[type="submit"]').click();
       await page.waitForTimeout(500);
       expect(changeCalled).toBe(true);
@@ -145,7 +177,12 @@ test.describe('@settings @api Settings Password', () => {
       });
     });
 
-    await test.step('Submit valid password and verify modal closes', async () => {
+    await test.step('Fill current and new passwords then submit', async () => {
+      // Fill current password if the field is visible (non-default-password state)
+      const currentPwdInput = page.locator('#currentPassword');
+      if (await currentPwdInput.count() > 0 && await currentPwdInput.isVisible()) {
+        await currentPwdInput.fill('currentpassword');
+      }
       await page.locator('#newPassword').fill('validpassword123');
       await page.locator('#confirmPassword').fill('validpassword123');
       await page.locator('#passwordChangeModal button[type="submit"]').click();

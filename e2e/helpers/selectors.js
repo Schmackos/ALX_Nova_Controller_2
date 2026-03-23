@@ -176,6 +176,8 @@ const SELECTORS = {
 
   // ===== Auth / Password change modal =====
   passwordChangeModal: '#passwordChangeModal',
+  currentPasswordInput: '#currentPassword',
+  currentPasswordGroup: '#currentPasswordGroup',
   newPasswordInput: '#newPassword',
   confirmPasswordInput: '#confirmPassword',
   passwordError: '#passwordError',

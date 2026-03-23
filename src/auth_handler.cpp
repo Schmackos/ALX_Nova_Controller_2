@@ -10,6 +10,8 @@
 #include "config.h"
 #include "debug_serial.h"
 #include "http_security.h"
+#include "rate_limiter.h"
+#include "websocket_handler.h"
 #include "hal/hal_types.h"  // hal_safe_strcpy
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -444,6 +446,16 @@ void removeSession(String sessionId) {
   }
 }
 
+// Invalidate all active sessions (force re-login after password change)
+void clearAllSessions() {
+  for (int i = 0; i < MAX_SESSIONS; i++) {
+    activeSessions[i].sessionId = "";
+    activeSessions[i].createdAt = 0;
+    activeSessions[i].lastSeen = 0;
+  }
+  LOG_I("[Auth] All sessions cleared");
+}
+
 // Helper: Get session ID from Cookie header (HttpOnly — no JS access)
 String getSessionFromCookie() {
   if (!server.hasHeader("Cookie")) {
@@ -478,6 +490,14 @@ bool requireAuth() {
   String sessionId = getSessionFromCookie();
 
   if (validateSession(sessionId)) {
+#ifndef TEST_MODE
+    // Per-IP rate limiting for all authenticated endpoints
+    if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
+      server.sendHeader("Retry-After", "1");
+      server_send(429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
+      return false;
+    }
+#endif
     return true;
   }
 
@@ -763,6 +783,31 @@ void handlePasswordChange() {
     return;
   }
 
+  // Require current password unless device is still on its generated default (first-boot exemption)
+  if (!isDefaultPassword()) {
+    if (!doc["currentPassword"].is<String>() || doc["currentPassword"].as<String>().length() == 0) {
+      JsonDocument response;
+      response["success"] = false;
+      response["error"] = "Current password is required";
+      String responseStr;
+      serializeJson(response, responseStr);
+      server_send(400, "application/json", responseStr);
+      return;
+    }
+
+    String currentPassword = doc["currentPassword"].as<String>();
+    if (!verifyPassword(currentPassword, appState.wifi.webPassword)) {
+      LOG_W("[Auth] Password change failed: incorrect current password");
+      JsonDocument response;
+      response["success"] = false;
+      response["error"] = "Current password is incorrect";
+      String responseStr;
+      serializeJson(response, responseStr);
+      server_send(401, "application/json", responseStr);
+      return;
+    }
+  }
+
   String newPassword = doc["newPassword"].as<String>();
 
   // Validate new password
@@ -779,6 +824,10 @@ void handlePasswordChange() {
 
   // Change password
   setWebPassword(newPassword);
+
+  // Invalidate all existing sessions and WebSocket connections (force re-login)
+  clearAllSessions();
+  ws_disconnect_all_clients();
 
   LOG_I("[Auth] Password changed successfully");
 

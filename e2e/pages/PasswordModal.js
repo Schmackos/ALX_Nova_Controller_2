@@ -17,6 +17,15 @@ class PasswordModal extends BasePage {
   }
 
   /**
+   * Fill the current password input field.
+   * Only visible when the device is NOT on its first-boot default password.
+   * @param {string} pwd
+   */
+  async fillCurrentPassword(pwd) {
+    await this.page.locator(SELECTORS.currentPasswordInput).fill(pwd);
+  }
+
+  /**
    * Fill the new password input field.
    * @param {string} pwd
    */

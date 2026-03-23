@@ -25,6 +25,7 @@ String generateSessionId();
 bool createSession(String &sessionId);
 bool validateSession(String sessionId);
 void removeSession(String sessionId);
+void clearAllSessions();
 String getSessionFromCookie();
 
 // Middleware

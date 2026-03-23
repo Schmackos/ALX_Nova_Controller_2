@@ -52,16 +52,38 @@ router.post('/logout', (req, res) => {
 // GET /status — returns current auth state
 router.get('/status', (req, res) => {
   const authed = isAuthenticated(req);
-  res.json({ authenticated: authed, username: 'admin' });
+  const state = getState();
+  res.json({
+    authenticated: authed,
+    username: 'admin',
+    success: authed,
+    isDefaultPassword: state.isDefaultPassword || false
+  });
 });
 
 // POST /change — accepts {currentPassword, newPassword}
+// currentPassword may be omitted when isDefaultPassword is true (first-boot exemption).
 router.post('/change', (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ success: false, message: 'Missing fields' });
+  const state = getState();
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
   }
-  res.json({ success: true });
+
+  // Require currentPassword unless device is on first-boot default password
+  if (!state.isDefaultPassword && !currentPassword) {
+    return res.status(400).json({ success: false, error: 'Current password is required' });
+  }
+
+  // Mock: reject a known "wrong" current password to enable error-path tests
+  if (!state.isDefaultPassword && currentPassword === 'wrongpassword') {
+    return res.status(401).json({ success: false, error: 'Current password is incorrect' });
+  }
+
+  // Update state: no longer using default password after successful change
+  state.isDefaultPassword = false;
+  res.json({ success: true, message: 'Password changed successfully', isDefaultPassword: false });
 });
 
 module.exports = router;
