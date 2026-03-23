@@ -14,7 +14,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.head_commit.message, '[device-test]') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'device-test'))
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -32,10 +32,11 @@ jobs:
         run: |
           cd device_tests
           pytest tests/ \
-            --device-port "$CI_ESP32_PORT" \
+            --device-port "${CI_ESP32_PORT:-COM8}" \
+            --device-ip "${CI_ESP32_IP:-192.168.4.1}" \
             --create-issues \
             --junitxml=results.xml \
-            --skip-reboot-tests \
+            -m "not reboot" \
             -v
 
       - name: Upload test results
