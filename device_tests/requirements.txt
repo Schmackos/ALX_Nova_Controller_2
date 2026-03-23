@@ -1,0 +1,9 @@
+# Core test framework
+pytest>=7.4,<9.0
+pytest-timeout>=2.2
+
+# Serial communication
+pyserial>=3.5
+
+# HTTP client for REST API testing
+requests>=2.31
