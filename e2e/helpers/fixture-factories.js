@@ -227,10 +227,7 @@ function buildHardwareStats(overrides = {}) {
           i2sRecoveries: 0
         }
       ],
-      fftWindowType: 2,
-      adcStatus: 'OK',
-      noiseFloorDbfs: -72.5,
-      vrms: 0.0
+      fftWindowType: 2
     },
     uptime: 10000,
     resetReason: 'PowerOn',

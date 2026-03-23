@@ -81,7 +81,12 @@ void handleSmartSensingGet() {
     adcObj["vrms"] = adc.vrmsCombined;
     adcObj["dBFS"] = adc.dBFS;
   }
-  // DEPRECATED v1.14: flat fields — use adc[] array above. Kept for backward compat.
+  // DEPRECATED v1.14: flat REST fields — use adc[] array above
+  static bool _flatFieldWarnLogged = false;
+  if (!_flatFieldWarnLogged) {
+      LOG_W("[Sensing] REST flat fields (audioRms1, etc.) are deprecated — use adc[] array");
+      _flatFieldWarnLogged = true;
+  }
   doc["audioRms1"] = appState.audio.adc[0].rms1;
   doc["audioRms2"] = appState.audio.adc[0].rms2;
   doc["audioVu1"] = appState.audio.adc[0].vu1;
