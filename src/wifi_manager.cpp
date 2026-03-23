@@ -246,6 +246,14 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
       lastDisconnectWarning = millis();
     }
 
+    // Clear connection state immediately so hal_wifi_sdio_active() reflects
+    // reality without waiting for the 20s updateWiFiConnection() timeout.
+    // This ensures Bus 0 (GPIO 48/54) can be scanned again right after disconnect.
+    appState.wifi.connectSuccess = false;
+    if (appState.ethernet.activeInterface == NET_WIFI) {
+      appState.ethernet.activeInterface = NET_NONE;
+    }
+
     // Detect "Network not found" error (201) - trigger retry of other networks
     if (reason == 201) {
       lastFailedSSID = WiFi.SSID();
@@ -1481,6 +1489,9 @@ void updateWiFiConnection() {
         appState.wifi.connectSuccess = false;
         appState.wifi.connectError = "Invalid Static IP Configuration";
         appState.wifi.connecting = false;
+        if (appState.ethernet.activeInterface == NET_WIFI) {
+          appState.ethernet.activeInterface = NET_NONE;
+        }
         pendingConnection.config.clear();
         return;
       }

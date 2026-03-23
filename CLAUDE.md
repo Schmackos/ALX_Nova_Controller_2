@@ -460,7 +460,7 @@ Activate: `git config core.hooksPath .githooks`
 
 Active warnings that prevent common bugs:
 
-- **I2C Bus 0 SDIO conflict**: GPIO 48/54 shared with WiFi SDIO — I2C transactions cause MCU reset. HAL discovery skips Bus 0 via `hal_wifi_sdio_active()` (checks `connectSuccess`, `connecting`, AND `activeInterface`). `wifi_manager.cpp` sets `activeInterface = NET_WIFI` on connect, clears on disconnect
+- **I2C Bus 0 SDIO conflict**: GPIO 48/54 shared with WiFi SDIO — I2C transactions cause MCU reset. HAL discovery skips Bus 0 via `hal_wifi_sdio_active()` (checks `connectSuccess`, `connecting`, AND `activeInterface`). `wifi_manager.cpp` sets `activeInterface = NET_WIFI` on connect and immediately clears `connectSuccess` + `activeInterface` in the `ARDUINO_EVENT_WIFI_STA_DISCONNECTED` handler — no 20s timeout needed
 - **No logging in ISR/audio task**: `Serial.print` blocks on UART TX buffer full, starving DMA. Use dirty-flag pattern: task sets flag, main loop does Serial/WS output
 - **Slot-indexed sink removal only**: Never call `audio_pipeline_clear_sinks()` from deinit paths — use `audio_pipeline_remove_sink(slot)` to remove only the specific device
 - **I2S driver reinstall handshake**: `appState.audio.paused` + `appState.audio.taskPausedAck` binary semaphore required before `i2s_driver_uninstall()` — see FreeRTOS Tasks section
