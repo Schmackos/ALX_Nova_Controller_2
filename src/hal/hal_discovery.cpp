@@ -424,6 +424,10 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
             return 0;
     }
 
+    // Reduce Wire timeout from default ~1s to 200ms per address to limit
+    // worst-case blocking time during a full 112-address bus sweep.
+    bus->setTimeout(200);
+
     // Track addresses that return timeout for retry
     uint8_t timeoutAddrs[HAL_PROBE_RETRY_MAX_ADDRS];
     uint8_t timeoutCount = 0;
@@ -433,8 +437,13 @@ uint8_t hal_i2c_scan_bus(uint8_t busIndex) {
     uint8_t ackAddrs[112];  // max addresses in 0x08-0x77 range
     uint8_t ackCount = 0;
 
-    // Scan standard I2C address range (0x08-0x77, skip reserved)
+    // Scan standard I2C address range (0x08-0x77, skip reserved).
+    // Yield to the scheduler every 8 addresses so the web server can service
+    // incoming HTTP/WebSocket requests during a scan (prevents total starvation).
     for (uint8_t addr = 0x08; addr <= 0x77; addr++) {
+        if (((addr - 0x08) & 0x07) == 0) {
+            vTaskDelay(1);  // yield every 8 addresses (~1 tick, <1ms)
+        }
         bus->beginTransmission(addr);
         uint8_t err = bus->endTransmission();
         if (err == 0) {
