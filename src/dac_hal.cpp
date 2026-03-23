@@ -35,12 +35,6 @@ static void dac_load_settings();
 // Port 1 is ADC2 RX-only -- never TX. Index 0/2 map to the two TX-capable ports.
 static bool _i2sTxEnabledFor[3] = {};
 
-// Mute ramp: prevents abrupt silence->audio or audio->silence transitions.
-// Steps by 0.5f per buffer call (256 frames @ 48kHz = 5.33ms each -> ~10ms full ramp).
-static float _muteGain = 1.0f;        // Current mute envelope (0.0 = silent, 1.0 = full)
-static bool  _prevDacMute = false;    // Previous dacMute state to detect transitions
-static const float MUTE_RAMP_STEP = 0.5f;
-
 // Periodic logging state (5s interval, aligned with ADC dump)
 static unsigned long _lastDacDumpMs = 0;
 static uint32_t _prevTxUnderruns = 0;
@@ -132,15 +126,20 @@ void dac_periodic_log() {
 #endif
 }
 
-// ===== I2S TX Full-Duplex (delegates to i2s_audio bridge) =====
+// ===== I2S TX Full-Duplex (port-generic API) =====
 #ifndef NATIVE_TEST
 
 bool dac_enable_i2s_tx(uint32_t sampleRate) {
     if (_i2sTxEnabledFor[0]) return true;
-    bool ok = i2s_audio_enable_tx(sampleRate);
+    // Use port-generic API: port 0, STD mode, 0 TDM slots, standard pins from config.h
+    bool ok = i2s_port_enable_tx(0, I2S_MODE_STD, 0,
+                                  (gpio_num_t)I2S_TX_DATA_PIN,
+                                  (gpio_num_t)I2S_MCLK_PIN,
+                                  (gpio_num_t)I2S_BCK_PIN,
+                                  (gpio_num_t)I2S_LRC_PIN);
     if (ok) {
         _i2sTxEnabledFor[0] = true;
-        LOG_I("[DAC] I2S TX full-duplex enabled via bridge");
+        LOG_I("[DAC] I2S TX full-duplex enabled (port 0)");
     } else {
         LOG_E("[DAC] I2S TX enable failed");
     }
@@ -149,9 +148,9 @@ bool dac_enable_i2s_tx(uint32_t sampleRate) {
 
 void dac_disable_i2s_tx() {
     if (!_i2sTxEnabledFor[0]) return;
-    i2s_audio_disable_tx();
+    i2s_port_disable_tx(0);
     _i2sTxEnabledFor[0] = false;
-    LOG_I("[DAC] I2S TX disabled via bridge");
+    LOG_I("[DAC] I2S TX disabled (port 0)");
 }
 
 #else
@@ -161,13 +160,20 @@ void dac_disable_i2s_tx() { _i2sTxEnabledFor[0] = false; }
 #endif
 
 // ===== I2S TX for a Specific Port =====
-// port 0 -> i2s_audio_enable_tx (primary RX+TX full-duplex)
-// port 2 -> i2s_audio_enable_es8311_tx (I2S2 secondary TX)
+// port 0 -> primary RX+TX full-duplex (ADC1 + DAC)
+// port 2 -> ES8311 secondary TX (I2S2)
 #ifndef NATIVE_TEST
 bool dac_enable_i2s_tx_for_port(uint8_t port, uint32_t sampleRate) {
+    (void)sampleRate; // Sample rate is managed globally via i2s_audio; port API uses current rate
+    if (port < 3) {
+        if (_i2sTxEnabledFor[port]) return true;
+    }
     if (port == 0) {
-        if (_i2sTxEnabledFor[0]) return true;
-        bool ok = i2s_audio_enable_tx(sampleRate);
+        bool ok = i2s_port_enable_tx(0, I2S_MODE_STD, 0,
+                                      (gpio_num_t)I2S_TX_DATA_PIN,
+                                      (gpio_num_t)I2S_MCLK_PIN,
+                                      (gpio_num_t)I2S_BCK_PIN,
+                                      (gpio_num_t)I2S_LRC_PIN);
         if (ok) {
             _i2sTxEnabledFor[0] = true;
             LOG_I("[DAC] I2S0 TX full-duplex enabled (port 0)");
@@ -175,8 +181,11 @@ bool dac_enable_i2s_tx_for_port(uint8_t port, uint32_t sampleRate) {
         return ok;
     }
     if (port == 2) {
-        if (_i2sTxEnabledFor[2]) return true;
-        bool ok = i2s_audio_enable_es8311_tx(sampleRate);
+        bool ok = i2s_port_enable_tx(2, I2S_MODE_STD, 0,
+                                      (gpio_num_t)ES8311_I2S_DSDIN_PIN,
+                                      (gpio_num_t)ES8311_I2S_MCLK_PIN,
+                                      (gpio_num_t)ES8311_I2S_SCLK_PIN,
+                                      (gpio_num_t)ES8311_I2S_LRCK_PIN);
         if (ok) {
             _i2sTxEnabledFor[2] = true;
             LOG_I("[DAC] I2S2 TX enabled (port 2 / ES8311)");
@@ -189,11 +198,11 @@ bool dac_enable_i2s_tx_for_port(uint8_t port, uint32_t sampleRate) {
 
 void dac_disable_i2s_tx_for_port(uint8_t port) {
     if (port == 0 && _i2sTxEnabledFor[0]) {
-        i2s_audio_disable_tx();
+        i2s_port_disable_tx(0);
         _i2sTxEnabledFor[0] = false;
         LOG_I("[DAC] I2S0 TX disabled (port 0)");
     } else if (port == 2 && _i2sTxEnabledFor[2]) {
-        i2s_audio_disable_es8311_tx();
+        i2s_port_disable_tx(2);
         _i2sTxEnabledFor[2] = false;
         LOG_I("[DAC] I2S2 TX disabled (port 2 / ES8311)");
     }
@@ -364,8 +373,5 @@ static void dac_load_settings() {
 // DAC settings are now persisted in /hal_config.json via hal_save_device_config().
 // The legacy /dac_config.json is migrated on first boot via dac_load_settings() above.
 
-// Mute ramp state accessors (for testing -- HC-6 verification)
-float dac_get_mute_gain()  { return _muteGain; }
-bool  dac_get_prev_mute()  { return _prevDacMute; }
 
 #endif // DAC_ENABLED

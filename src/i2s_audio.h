@@ -294,51 +294,6 @@ bool i2s_port_is_tx_active(uint8_t port);
 bool i2s_port_is_rx_active(uint8_t port);
 I2sPortInfo i2s_port_get_info(uint8_t port);
 
-// ===== DEPRECATED I2S Functions (use port-generic i2s_port_*() API instead) =====
-
-// DEPRECATED: use i2s_port_enable_tx(0, I2S_MODE_STD, ...) instead
-bool i2s_audio_enable_tx(uint32_t sample_rate);
-// DEPRECATED: use i2s_port_disable_tx(0) instead
-void i2s_audio_disable_tx();
-// DEPRECATED: use i2s_port_write(0, ...) instead
-void i2s_audio_write(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
-
-// DEPRECATED: use i2s_port_enable_tx(2, I2S_MODE_STD, ...) instead
-bool i2s_audio_enable_es8311_tx(uint32_t sample_rate);
-// DEPRECATED: use i2s_port_disable_tx(2) instead
-void i2s_audio_disable_es8311_tx();
-// DEPRECATED: use i2s_port_write(2, ...) instead
-void i2s_audio_write_es8311(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
-
-// DEPRECATED: use i2s_port_enable_tx(port, I2S_MODE_STD, ...) instead
-bool i2s_audio_enable_expansion_tx(uint32_t sample_rate, gpio_num_t dout_pin);
-// DEPRECATED: use i2s_port_disable_tx(port) instead
-void i2s_audio_disable_expansion_tx();
-// DEPRECATED: use i2s_port_write(port, ...) instead
-void i2s_audio_write_expansion_tx(const void *src, size_t size, size_t *bytes_written, uint32_t timeout_ms);
-
-// DEPRECATED: use i2s_port_enable_tx(port, I2S_MODE_TDM, ...) instead
-bool i2s_audio_enable_expansion_tdm_tx(uint32_t sample_rate, gpio_num_t dout_pin, uint8_t slot_count);
-// DEPRECATED: use i2s_port_write(port, ...) instead
-void i2s_audio_write_expansion_tdm_tx(const void* src, size_t size, size_t* bytes_written, uint32_t timeout_ms);
-// DEPRECATED: use i2s_port_disable_tx(port) instead
-void i2s_audio_disable_expansion_tdm_tx();
-
-// DEPRECATED: use i2s_port_enable_rx(port, I2S_MODE_STD, ...) instead
-bool i2s_audio_enable_expansion_rx(uint32_t sample_rate, gpio_num_t din_pin);
-// DEPRECATED: use i2s_port_disable_rx(port) instead
-void i2s_audio_disable_expansion_rx();
-bool i2s_audio_expansion_rx_ok();
-
-// DEPRECATED: use i2s_port_tdm_read(port, ...) instead
-uint32_t i2s_audio_port2_tdm_read(int32_t* dst, uint32_t frames);
-// DEPRECATED: use i2s_port_is_rx_active(port) instead
-bool     i2s_audio_port2_tdm_active(void);
-
-// DEPRECATED: use i2s_port_enable_rx(port, I2S_MODE_TDM, ...) instead
-bool i2s_audio_enable_expansion_tdm_rx(uint32_t sample_rate,
-                                        gpio_num_t din_pin,
-                                        uint8_t    slot_count);
 #else
 // ===== Port-generic I2S API stubs =====
 inline bool i2s_port_enable_tx(uint8_t, uint8_t, uint8_t, int, int, int, int,
@@ -354,25 +309,6 @@ inline bool i2s_port_is_tx_active(uint8_t) { return false; }
 inline bool i2s_port_is_rx_active(uint8_t) { return false; }
 inline I2sPortInfo i2s_port_get_info(uint8_t port) { I2sPortInfo info = {}; info.port = port; return info; }
 
-// DEPRECATED stubs — use port-generic i2s_port_*() stubs above instead
-inline bool i2s_audio_enable_tx(uint32_t) { return true; }
-inline void i2s_audio_disable_tx() {}
-inline void i2s_audio_write(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
-inline bool i2s_audio_enable_es8311_tx(uint32_t) { return false; }
-inline void i2s_audio_disable_es8311_tx() {}
-inline void i2s_audio_write_es8311(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
-inline bool i2s_audio_enable_expansion_tx(uint32_t, int) { return true; }
-inline void i2s_audio_disable_expansion_tx() {}
-inline void i2s_audio_write_expansion_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
-inline bool i2s_audio_enable_expansion_tdm_tx(uint32_t, int, uint8_t) { return true; }
-inline void i2s_audio_write_expansion_tdm_tx(const void*, size_t, size_t* bw, uint32_t) { if (bw) *bw = 0; }
-inline void i2s_audio_disable_expansion_tdm_tx() {}
-inline bool i2s_audio_enable_expansion_rx(uint32_t, int) { return false; }
-inline void i2s_audio_disable_expansion_rx() {}
-inline bool i2s_audio_expansion_rx_ok() { return false; }
-inline uint32_t i2s_audio_port2_tdm_read(int32_t*, uint32_t) { return 0; }
-inline bool     i2s_audio_port2_tdm_active(void) { return false; }
-inline bool     i2s_audio_enable_expansion_tdm_rx(uint32_t, int, uint8_t) { return true; }
 #endif
 
 #endif // I2S_AUDIO_H

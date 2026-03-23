@@ -44,10 +44,8 @@
 #define ES9843PRO_ASP_BYPASS_ALL          0x0F
 #define ES9843PRO_VOL_0DB                 0x00
 #define ES9843PRO_VOL_MUTE                0xFF
-// i2s_audio stubs — TDM functions covered by hal_tdm_deinterleaver native stubs
+// Port-generic API stubs for native test (real i2s_audio.h provides these inline)
 inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
-inline bool i2s_audio_enable_expansion_tdm_rx(uint32_t, int, uint8_t) { return true; }
-inline void i2s_audio_disable_expansion_rx() {}
 #endif // NATIVE_TEST
 
 // ===== Constructor =====
@@ -215,14 +213,14 @@ HalInitResult HalEs9843pro::init() {
     }
 
 #ifndef NATIVE_TEST
-    // Enable I2S2 in TDM mode with 4 slots (one per ES9843PRO output channel)
-    bool tdmOk = i2s_audio_enable_expansion_tdm_rx(
-        _sampleRate,
-        (gpio_num_t)dinPinRaw,
-        4   // 4 TDM slots: CH1/CH2/CH3/CH4
-    );
+    // Enable I2S TDM RX using port-generic API (4 slots: CH1/CH2/CH3/CH4)
+    bool tdmOk = i2s_port_enable_rx((uint8_t)port, I2S_MODE_TDM, 4,
+                                     (gpio_num_t)dinPinRaw,
+                                     I2S_GPIO_UNUSED,
+                                     (gpio_num_t)I2S_BCK_PIN,
+                                     (gpio_num_t)I2S_LRC_PIN);
     if (!tdmOk) {
-        LOG_E("[HAL:ES9843PRO] I2S2 TDM init failed — audio will be silent");
+        LOG_E("[HAL:ES9843PRO] I2S TDM init failed (port=%u) — audio will be silent", port);
         // Non-fatal: device still registers; operator can reinit via REST API.
     }
 #endif
@@ -257,8 +255,10 @@ void HalEs9843pro::deinit() {
     // Power down: disable all ADC channels (reg 0x00 = 0x00)
     _writeReg(ES9843PRO_REG_SYS_CONFIG, 0x00);
 
-    // Release I2S2 expansion TDM RX (decrements _i2s2.users bit 0x02)
-    i2s_audio_disable_expansion_rx();
+    // Release I2S expansion TDM RX via port-generic API
+    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(getSlot());
+    uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2;
+    i2s_port_disable_rx(port);
 #endif
 
     // Release deinterleaver ping-pong buffers

@@ -41,10 +41,6 @@
 
 // ===== HAL Device Lookup Helpers =====
 #ifdef DAC_ENABLED
-uint8_t ws_hal_slot_for_compatible(const char* compat) {
-    HalDevice* dev = HalDeviceManager::instance().findByCompatible(compat);
-    return dev ? dev->getSlot() : 0xFF;
-}
 HalAudioDevice* ws_audio_device_for_sink_slot(uint8_t sinkSlot) {
     int8_t halSlot = hal_pipeline_get_slot_for_sink(sinkSlot);
     if (halSlot < 0) return nullptr;
