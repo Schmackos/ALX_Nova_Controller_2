@@ -94,9 +94,16 @@ static int8_t _sinkSlotForDevice(HalDevice* dev, int needCount = 1) {
     uint8_t caps = _effectiveCaps(dev);
     if (!(caps & HAL_CAP_DAC_PATH)) return -1;
 
-    // Idempotent: if already mapped, return existing
+    // Idempotent: if already mapped, validate bounds then return existing
     uint8_t halSlot = dev->getSlot();
-    if (_halSlotToSinkSlot[halSlot] >= 0) return _halSlotToSinkSlot[halSlot];
+    if (_halSlotToSinkSlot[halSlot] >= 0) {
+        // Guard against stale mapping that points beyond current pipeline capacity
+        if (_halSlotToSinkSlot[halSlot] >= (int8_t)AUDIO_OUT_MAX_SINKS) {
+            _halSlotToSinkSlot[halSlot] = -1;  // Invalidate and reallocate below
+        } else {
+            return _halSlotToSinkSlot[halSlot];
+        }
+    }
 
     if (needCount < 1) needCount = 1;
 
@@ -359,6 +366,15 @@ void hal_pipeline_on_device_available(uint8_t slot) {
     uint8_t caps = _effectiveCaps(dev);
     if (caps & HAL_CAP_DAC_PATH) {
         hal_pipeline_activate_device(slot);
+
+        // 2b: Verify at least one sink was successfully registered.
+        // If DMA allocation failed during buildSink, the device is AVAILABLE but
+        // has no pipeline sinks — audio would be silently dropped without this check.
+        if (_halSlotToSinkSlot[slot] < 0) {
+            LOG_E("[HAL:Bridge] Sink registration failed for %s (HAL slot %u) — forcing not-ready",
+                  name, slot);
+            dev->_ready = false;
+        }
     }
     int8_t sinkSlot = _halSlotToSinkSlot[slot]; // Read back mapping (set by activate)
 

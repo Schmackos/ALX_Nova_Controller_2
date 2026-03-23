@@ -234,6 +234,12 @@ bool HalCustomDevice::_runInitSequence() {
         default:                   wire = &Wire2; break;
     }
 
+    // Cap per-write timeout to 10 ms to prevent a non-responsive device from
+    // blocking the main loop for up to 1.6 s (32 writes × default 50 ms timeout).
+    uint32_t savedTimeout = wire->getTimeout();
+    wire->setTimeout(10);
+
+    bool seqOk = true;
     for (int i = 0; i < _initSeqCount; i++) {
         wire->beginTransmission(i2cAddr);
         wire->write(_initSeq[i].reg);
@@ -245,9 +251,14 @@ bool HalCustomDevice::_runInitSequence() {
                      _initSeq[i].reg, err);
             setLastError(msg);
             LOG_E("[HAL:Custom]", "%s: %s", _descriptor.name, msg);
-            return false;
+            seqOk = false;
+            break;
         }
     }
+
+    wire->setTimeout(savedTimeout);
+
+    if (!seqOk) return false;
     LOG_I("[HAL:Custom]", "%s: init sequence complete (%d regs)", _descriptor.name, _initSeqCount);
     return true;
 #else
@@ -291,7 +302,7 @@ HalInitResult HalCustomDevice::init() {
         return hal_init_fail(DIAG_HAL_INIT_FAILED, _lastError);
     }
 
-    // For DAC-path I2S devices: enable I2S TX output
+    // For DAC-path I2S devices: enable I2S TX output and claim GPIO pins
     if ((_descriptor.capabilities & HAL_CAP_DAC_PATH) &&
         _descriptor.bus.type == HAL_BUS_I2S) {
 #ifndef NATIVE_TEST
@@ -310,6 +321,16 @@ HalInitResult HalCustomDevice::init() {
                                 GPIO_NUM_NC, GPIO_NUM_NC, GPIO_NUM_NC, &i2sCfg)) {
             LOG_W("[HAL:Custom]", "%s: I2S TX enable failed (port %u)", _descriptor.name, port);
             // Non-fatal: device can still be registered without audio output
+        }
+
+        // Claim GPIO pins used by this I2S device so the pin conflict tracker
+        // prevents another driver from reusing them.  Released in deinit().
+        HalDeviceManager& pinMgr = HalDeviceManager::instance();
+        if (cfg && cfg->valid) {
+            if (cfg->pinData >= 0) pinMgr.claimPin(cfg->pinData, HAL_BUS_I2S, port, _slot);
+            if (cfg->pinBck  >= 0) pinMgr.claimPin(cfg->pinBck,  HAL_BUS_I2S, port, _slot);
+            if (cfg->pinLrc  >= 0) pinMgr.claimPin(cfg->pinLrc,  HAL_BUS_I2S, port, _slot);
+            if (cfg->pinMclk >= 0) pinMgr.claimPin(cfg->pinMclk, HAL_BUS_I2S, port, _slot);
         }
 #endif
     }
@@ -335,13 +356,22 @@ HalInitResult HalCustomDevice::init() {
 }
 
 void HalCustomDevice::deinit() {
-    // Disable I2S TX if it was enabled
+    // Disable I2S TX and release claimed GPIO pins
     if ((_descriptor.capabilities & HAL_CAP_DAC_PATH) &&
         _descriptor.bus.type == HAL_BUS_I2S) {
 #ifndef NATIVE_TEST
-        HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(_slot);
+        HalDeviceManager& mgr = HalDeviceManager::instance();
+        HalDeviceConfig* cfg = mgr.getConfig(_slot);
         uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2;
         i2s_port_disable_tx(port);
+
+        // Release GPIO pins claimed during init()
+        if (cfg && cfg->valid) {
+            if (cfg->pinData >= 0) mgr.releasePin(cfg->pinData);
+            if (cfg->pinBck  >= 0) mgr.releasePin(cfg->pinBck);
+            if (cfg->pinLrc  >= 0) mgr.releasePin(cfg->pinLrc);
+            if (cfg->pinMclk >= 0) mgr.releasePin(cfg->pinMclk);
+        }
 #endif
     }
 
