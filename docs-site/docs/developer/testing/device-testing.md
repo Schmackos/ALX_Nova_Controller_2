@@ -145,6 +145,73 @@ export ALX_IP=192.168.1.100
 pytest
 ```
 
+## TEST\_MODE Build Flag
+
+For local device test development, the firmware supports a `TEST_MODE` build flag that removes authentication friction:
+
+| Feature | Normal Build | TEST\_MODE Build |
+|---|---|---|
+| Default password | Random 10-char (per device) | Fixed `test1234` |
+| Login rate limiting | Progressive delays (1s → 30s) | Disabled |
+| REST API rate limiting | 30 req/s per IP | Disabled |
+| PBKDF2 hashing | 50k iterations (~15-20s on P4) | 50k iterations (unchanged) |
+
+### Enabling TEST\_MODE
+
+**Option 1 — Uncomment in platformio.ini** (cannot be committed):
+
+```ini
+; -D TEST_MODE  ; Uncomment for local testing only
+```
+
+**Option 2 — Command line** (preferred, no file changes):
+
+```bash
+PLATFORMIO_BUILD_FLAGS="-DTEST_MODE" pio run --target upload
+```
+
+### Security Safeguards
+
+TEST\_MODE must **never** ship in production firmware. Four layers prevent this:
+
+```mermaid
+flowchart LR
+  A["Developer uncomments\nTEST_MODE"] --> B{{"Pre-commit hook"}}
+  B -->|Blocked| C["Commit rejected:\n'TEST_MODE enabled'"]
+  B -->|Bypassed| D{{"CI security-check"}}
+  D -->|Blocked| E["PR blocked:\n'SECURITY: TEST_MODE enabled'"]
+  D -->|Bypassed| F{{"Compiler #warning"}}
+  F --> G["Build log shows:\n'TEST_MODE is enabled — DO NOT RELEASE'"]
+```
+
+| Layer | File | What it does |
+|---|---|---|
+| **Commented by default** | `platformio.ini` | `; -D TEST_MODE` — must be explicitly uncommented |
+| **Pre-commit hook** | `.githooks/pre-commit` | `grep` rejects commits with uncommented `-D TEST_MODE` |
+| **CI gate** | `.github/workflows/tests.yml` | `security-check` job blocks PRs with TEST\_MODE enabled |
+| **Compiler warning** | `src/auth_handler.cpp` | `#warning` in build output when TEST\_MODE is defined |
+
+:::danger
+**Never commit `platformio.ini` with TEST\_MODE uncommented.** The pre-commit hook and CI gate will reject it, but defence in depth requires awareness. If you need TEST\_MODE for a CI device-test runner, use a separate PlatformIO environment or pass the flag via environment variable.
+:::
+
+After enabling TEST\_MODE, a full flash erase is required to reset the stored password hash:
+
+```bash
+# Erase all flash (NVS + LittleFS + firmware)
+PYTHONIOENCODING=utf-8 ~/.platformio/penv/Scripts/python.exe -m esptool --port COM8 erase-flash
+
+# Reflash firmware
+PYTHONIOENCODING=utf-8 pio run --target upload
+```
+
+The device will boot with password `test1234` and serial output confirms:
+
+```
+[W] [Auth] TEST MODE: using fixed password 'test1234'
+[I] [Auth] Default password: test1234
+```
+
 ## Adding New Checks
 
 To add a check to the `health_check` module:
