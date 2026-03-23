@@ -7,27 +7,36 @@ set -e
 echo "Running pre-commit checks..."
 
 # 1. Check for duplicate declarations
-echo "[1/6] Checking for duplicate JS declarations..."
+echo "[1/7] Checking for duplicate JS declarations..."
 node tools/find_dups.js || exit 1
 
 # 2. Check for missing function references
-echo "[2/6] Checking for missing function references..."
+echo "[2/7] Checking for missing function references..."
 node tools/check_missing_fns.js || exit 1
 
 # 3. ESLint on web_src/js/
-echo "[3/6] Running ESLint on web_src/js/..."
+echo "[3/7] Running ESLint on web_src/js/..."
 cd e2e && npx eslint ../web_src/js/ --config ../web_src/.eslintrc.json || exit 1
 
 # 4. Check doc mapping coverage
-echo "[4/6] Checking doc mapping coverage..."
+echo "[4/7] Checking doc mapping coverage..."
 cd "$(git rev-parse --show-toplevel)" && node tools/check_mapping_coverage.js || exit 1
 
 # 5. Validate architecture diagram symbols
-echo "[5/6] Validating architecture diagram symbols..."
+echo "[5/7] Validating architecture diagram symbols..."
 cd "$(git rev-parse --show-toplevel)" && node tools/diagram-validation.js || exit 1
 
-# 6. Guard against direct edits to auto-generated web pages
-echo "[6/6] Checking web_pages.cpp not edited directly..."
+# 6. SECURITY: Block TEST_MODE in platformio.ini build flags
+echo "[6/7] Checking TEST_MODE not enabled in platformio.ini..."
+if grep -q '^\s*-D TEST_MODE' platformio.ini 2>/dev/null; then
+    echo "ERROR: TEST_MODE is enabled in platformio.ini build flags."
+    echo "This disables auth rate limiting and uses a fixed password."
+    echo "Comment it out before committing: ; -D TEST_MODE"
+    exit 1
+fi
+
+# 7. Guard against direct edits to auto-generated web pages
+echo "[7/7] Checking web_pages.cpp not edited directly..."
 PAGES_CHANGED=$(git diff --cached --name-only | grep -c 'src/web_pages.*\.cpp$' || true)
 WEB_SRC_CHANGED=$(git diff --cached --name-only | grep -c '^web_src/' || true)
 if [ "$PAGES_CHANGED" -gt 0 ] && [ "$WEB_SRC_CHANGED" -eq 0 ]; then

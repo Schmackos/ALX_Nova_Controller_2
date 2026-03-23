@@ -1,4 +1,10 @@
 #include "auth_handler.h"
+
+// ===== SECURITY GATE: TEST_MODE must NEVER ship in production firmware =====
+#ifdef TEST_MODE
+  #warning "TEST_MODE is enabled — rate limiting disabled, fixed password 'test1234'. DO NOT RELEASE this firmware."
+#endif
+
 #include "app_state.h"
 #include "globals.h"
 #include "config.h"
