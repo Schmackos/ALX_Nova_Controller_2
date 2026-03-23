@@ -687,8 +687,9 @@ void audio_pipeline_init() {
             _swapHoldCh[i] = (float *)psram_alloc(FRAMES, sizeof(float), "pipe_swap");
         }
     }
-    // ===== Eager DMA buffer pre-allocation (internal SRAM) =====
-    // Pre-allocate all 16 DMA buffers at init rather than lazily in set_source/set_sink.
+    // ===== DMA buffer allocation (internal SRAM) =====
+    // Pre-allocate lane 0 rawBuf + slot 0 sinkBuf at init (always-on onboard devices).
+    // Remaining lanes/slots are lazy-allocated in set_source()/set_sink().
     // DMA buffers MUST be in internal SRAM — PSRAM is not DMA-accessible.
     {
         int dmaAllocCount = 0;
@@ -697,31 +698,29 @@ void audio_pipeline_init() {
         size_t totalRawBytes = 0;
         size_t totalSinkBytes = 0;
 
-        // 8 rawBuf (input lanes) — bits 0-7
-        for (int i = 0; i < AUDIO_PIPELINE_MAX_INPUTS; i++) {
-            _rawBuf[i] = (int32_t *)heap_caps_calloc(RAW_SAMPLES, sizeof(int32_t),
-                                                      MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-            if (_rawBuf[i]) {
-                dmaAllocCount++;
-                totalRawBytes += RAW_SAMPLES * sizeof(int32_t);
-            } else {
-                dmaFailCount++;
-                dmaFailMask |= (1u << i);
-            }
+        // rawBuf lane 0: always-on onboard ADC1 — pre-allocate
+        _rawBuf[0] = (int32_t *)heap_caps_calloc(RAW_SAMPLES, sizeof(int32_t),
+                                                  MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+        if (_rawBuf[0]) {
+            dmaAllocCount++;
+            totalRawBytes += RAW_SAMPLES * sizeof(int32_t);
+        } else {
+            dmaFailCount++;
+            dmaFailMask |= 1u;
         }
+        // Lanes 1-7: lazy-allocated in audio_pipeline_set_source()
 
-        // 8 sinkBuf (output slots) — bits 8-15
-        for (int i = 0; i < AUDIO_OUT_MAX_SINKS; i++) {
-            _sinkBuf[i] = (int32_t *)heap_caps_calloc(RAW_SAMPLES, sizeof(int32_t),
-                                                       MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-            if (_sinkBuf[i]) {
-                dmaAllocCount++;
-                totalSinkBytes += RAW_SAMPLES * sizeof(int32_t);
-            } else {
-                dmaFailCount++;
-                dmaFailMask |= (1u << (i + 8));
-            }
+        // sinkBuf slot 0: onboard DAC — pre-allocate
+        _sinkBuf[0] = (int32_t *)heap_caps_calloc(RAW_SAMPLES, sizeof(int32_t),
+                                                   MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+        if (_sinkBuf[0]) {
+            dmaAllocCount++;
+            totalSinkBytes += RAW_SAMPLES * sizeof(int32_t);
+        } else {
+            dmaFailCount++;
+            dmaFailMask |= (1u << 8);
         }
+        // Slots 1-15: lazy-allocated in audio_pipeline_set_sink()
 
         if (totalRawBytes > 0)  heap_budget_record("pipeline_rawBuf",  totalRawBytes,  false);
         if (totalSinkBytes > 0) heap_budget_record("pipeline_sinkBuf", totalSinkBytes, false);
@@ -736,7 +735,7 @@ void audio_pipeline_init() {
             diag_emit(DIAG_AUDIO_DMA_ALLOC_FAIL, DIAG_SEV_ERROR,
                       (uint8_t)dmaFailCount, "Audio", msg);
         } else {
-            LOG_I("[Audio] Pre-allocated %d DMA buffers (%u bytes internal SRAM)",
+            LOG_I("[Audio] Pre-allocated %d DMA buffers (%u bytes internal SRAM, remaining lazy)",
                   dmaAllocCount, (unsigned)(totalRawBytes + totalSinkBytes));
         }
     }
@@ -828,8 +827,8 @@ bool audio_pipeline_set_source(int lane, const AudioInputSource *src) {
     if (lane < 0 || lane >= AUDIO_PIPELINE_MAX_INPUTS || !src) return false;
     if (lane * 2 + 1 >= AUDIO_PIPELINE_MATRIX_SIZE) return false;
 #ifndef NATIVE_TEST
-    // Defense-in-depth: rawBuf should already be pre-allocated at init.
-    // Fall back to lazy allocation if somehow missing.
+    // Lazy DMA allocation: only lane 0 is pre-allocated at init.
+    // Other lanes are allocated on first use.
     if (!_rawBuf[lane]) {
         if (AppState::getInstance().debug.heapCritical) {
             LOG_W("[Audio] Heap critical — refusing rawBuf alloc for lane %d", lane);
@@ -851,6 +850,7 @@ bool audio_pipeline_set_source(int lane, const AudioInputSource *src) {
         }
         LOG_D("[Audio] Allocated rawBuf[%d] (%u bytes internal SRAM)", lane,
               (unsigned)(RAW_SAMPLES * sizeof(int32_t)));
+        heap_budget_record("pipe_rawBuf_lazy", RAW_SAMPLES * sizeof(int32_t), false);
     }
     vTaskSuspendAll();
 #endif
@@ -975,8 +975,8 @@ bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
     if (slot < 0 || slot >= AUDIO_OUT_MAX_SINKS || !sink) return false;
     if (sink->firstChannel + sink->channelCount > AUDIO_PIPELINE_MATRIX_SIZE) return false;
 #ifndef NATIVE_TEST
-    // Defense-in-depth: sinkBuf should already be pre-allocated at init.
-    // Fall back to lazy allocation if somehow missing.
+    // Lazy DMA allocation: only slot 0 is pre-allocated at init.
+    // Other slots are allocated on first use.
     if (!_sinkBuf[slot]) {
         if (AppState::getInstance().debug.heapCritical) {
             LOG_W("[Audio] Heap critical — refusing sinkBuf alloc for slot %d", slot);
@@ -998,6 +998,7 @@ bool audio_pipeline_set_sink(int slot, const AudioOutputSink *sink) {
         }
         LOG_D("[Audio] Allocated sinkBuf[%d] (%u bytes internal SRAM)", slot,
               (unsigned)(RAW_SAMPLES * sizeof(int32_t)));
+        heap_budget_record("pipe_sinkBuf_lazy", RAW_SAMPLES * sizeof(int32_t), false);
     }
     // Reset the no-sink warning so it fires again if all sinks are later removed
     _noSinkWarned = false;

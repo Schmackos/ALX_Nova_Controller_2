@@ -12188,13 +12188,6 @@ function initFirmwareDragDrop() {
                         var tb2 = document.getElementById('adcTotalBuffers1');
                         if (tb2) tb2.textContent = adcs[1].totalBuffers !== undefined ? adcs[1].totalBuffers : '--';
                     }
-                } else {
-                    // Legacy flat format fallback
-                    document.getElementById('adcStatus').textContent = data.audio.adcStatus || '--';
-                    document.getElementById('adcNoiseFloor').textContent = (data.audio.noiseFloorDbfs !== undefined ? data.audio.noiseFloorDbfs.toFixed(1) + ' dBFS' : '--');
-                    document.getElementById('adcI2sErrors').textContent = data.audio.i2sErrors !== undefined ? data.audio.i2sErrors : '--';
-                    document.getElementById('adcConsecutiveZeros').textContent = data.audio.consecutiveZeros !== undefined ? data.audio.consecutiveZeros : '--';
-                    document.getElementById('adcTotalBuffers').textContent = data.audio.totalBuffers !== undefined ? data.audio.totalBuffers : '--';
                 }
                 document.getElementById('adcSampleRate').textContent = data.audio.sampleRate ? (data.audio.sampleRate / 1000).toFixed(1) + ' kHz' : '--';
             }

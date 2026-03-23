@@ -750,10 +750,6 @@ void sendHardwareStats() {
       adcObj["sfdrDb"] = appState.audio.sfdrDb[a];
     }
     doc["audio"]["fftWindowType"] = (int)appState.audio.fftWindowType;
-    // DEPRECATED v1.14: flat fields — use audio.adcs[] array. Kept for backward compat.
-    doc["audio"]["adcStatus"] = adcArr[0]["status"];
-    doc["audio"]["noiseFloorDbfs"] = appState.audio.adc[0].noiseFloorDbfs;
-    doc["audio"]["vrms"] = appState.audio.adc[0].vrmsCombined;
 
     // Uptime (milliseconds since boot)
     doc["uptime"] = millis();
@@ -1023,17 +1019,6 @@ void sendAudioData() {
       adcStatusArr.add(statusStr);
       adcNoiseArr.add(adc.noiseFloorDbfs);
     }
-    // DEPRECATED v1.14: flat fields — use adcs[] array. Kept for backward compat.
-    doc["audioRms1"] = appState.audio.adc[0].rms1;
-    doc["audioRms2"] = appState.audio.adc[0].rms2;
-    doc["audioVu1"] = appState.audio.adc[0].vu1;
-    doc["audioVu2"] = appState.audio.adc[0].vu2;
-    doc["audioPeak1"] = appState.audio.adc[0].peak1;
-    doc["audioPeak2"] = appState.audio.adc[0].peak2;
-    doc["audioPeak"] = appState.audio.adc[0].peakCombined;
-    doc["audioVrms1"] = appState.audio.adc[0].vrms1;
-    doc["audioVrms2"] = appState.audio.adc[0].vrms2;
-    doc["audioVrms"] = appState.audio.adc[0].vrmsCombined;
     // Output sink VU data
     JsonArray sinkArr = doc["sinks"].to<JsonArray>();
     int sinkCnt = audio_pipeline_get_sink_count();

@@ -664,7 +664,7 @@ void test_mqtt_usb_audio_topic_format(void) {
 
 void test_mqtt_socket_timeout_constant(void) {
     // MQTT socket timeout should be set to prevent 15-30s blocking
-    TEST_ASSERT_EQUAL(5000, MQTT_SOCKET_TIMEOUT_MS);
+    TEST_ASSERT_EQUAL(2000, MQTT_SOCKET_TIMEOUT_MS);
     // Must be less than TWDT timeout (30s) to prevent watchdog reboot
     TEST_ASSERT_LESS_THAN(30000, MQTT_SOCKET_TIMEOUT_MS);
 }

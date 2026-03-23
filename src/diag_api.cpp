@@ -2,6 +2,7 @@
 
 #include "diag_api.h"
 #include "http_security.h"
+#include "rate_limiter.h"
 #include "diag_journal.h"
 #include "diag_event.h"
 #include "diag_error_codes.h"
@@ -21,6 +22,10 @@ void registerDiagApiEndpoints() {
   // GET /api/diagnostics — full diagnostics export (delegates to settings_manager)
   server.on("/api/diagnostics", HTTP_GET, []() {
     if (!requireAuth()) return;
+    if (!rate_limit_check((uint32_t)server.client().remoteIP())) {
+        server_send(429, "application/json", "{\"error\":\"Rate limit exceeded\"}");
+        return;
+    }
     handleDiagnostics();
   });
 
