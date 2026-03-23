@@ -3,11 +3,11 @@
 // All fields are plain data types for binary serialization and cross-platform tests.
 
 #include <stdint.h>
-#include "diag_error_codes.h"
-
-#ifdef UNIT_TEST
 #include <string.h>
-#else
+#include "diag_error_codes.h"
+#include "hal/hal_types.h"  // hal_safe_strcpy
+
+#ifndef UNIT_TEST
 #include <Arduino.h>
 #endif
 
@@ -42,13 +42,7 @@ static inline DiagEvent diag_event_create(
     ev.severity = severity;
     ev.slot     = slot;
     // Safe string copy with null termination
-    if (deviceName) {
-        strncpy(ev.device, deviceName, sizeof(ev.device) - 1);
-        ev.device[sizeof(ev.device) - 1] = '\0';
-    }
-    if (msg) {
-        strncpy(ev.message, msg, sizeof(ev.message) - 1);
-        ev.message[sizeof(ev.message) - 1] = '\0';
-    }
+    if (deviceName) hal_safe_strcpy(ev.device, sizeof(ev.device), deviceName);
+    if (msg)        hal_safe_strcpy(ev.message, sizeof(ev.message), msg);
     return ev;
 }

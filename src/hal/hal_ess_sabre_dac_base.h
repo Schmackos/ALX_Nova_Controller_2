@@ -78,8 +78,8 @@ protected:
     bool _validateSampleRate(uint32_t hz, const uint32_t* supported, uint8_t count);
 
     // --- I2S TX lifecycle (expansion DAC output) ---
-    bool _enableI2sTx();      // Calls i2s_audio_enable_expansion_tx()
-    void _disableI2sTx();     // Calls i2s_audio_disable_expansion_tx()
+    bool _enableI2sTx();      // Calls i2s_port_enable_tx() via port-generic API
+    void _disableI2sTx();     // Calls i2s_port_disable_tx() via port-generic API
 
     // --- Common member fields ---
     uint8_t  _i2cAddr      = ESS_SABRE_DAC_I2C_ADDR_BASE;  // 0x48 default for DACs

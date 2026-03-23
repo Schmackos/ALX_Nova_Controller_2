@@ -1,5 +1,6 @@
 #include "crash_log.h"
 #include "debug_serial.h"
+#include "hal/hal_types.h"  // hal_safe_strcpy
 #include <LittleFS.h>
 
 static const char *CRASHLOG_FILE = "/crashlog.bin";
@@ -55,8 +56,7 @@ void crashlog_record(const String &reason) {
     memset(&entry, 0, sizeof(CrashLogEntry));
 
     // Copy reason (truncate to fit)
-    strncpy(entry.reason, reason.c_str(), sizeof(entry.reason) - 1);
-    entry.reason[sizeof(entry.reason) - 1] = '\0';
+    hal_safe_strcpy(entry.reason, sizeof(entry.reason), reason.c_str());
 
     // Heap stats at boot
     entry.heapFree = ESP.getFreeHeap();

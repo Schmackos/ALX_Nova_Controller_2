@@ -54,10 +54,8 @@
 #define ES9842PRO_FILTER_SHIFT            2
 #define ES9842PRO_VOL_MUTE                0x0000
 #define ES9842PRO_VOL_0DB                 0x7FFF
-// i2s_audio stubs
+// Port-generic API stubs for native test (real i2s_audio.h provides these inline)
 inline uint32_t i2s_audio_get_sample_rate(void) { return 48000; }
-inline bool i2s_audio_enable_expansion_tdm_rx(uint32_t, int, uint8_t) { return true; }
-inline void i2s_audio_disable_expansion_rx() {}
 #endif // NATIVE_TEST
 
 // ===== Constructor =====
@@ -218,13 +216,13 @@ HalInitResult HalEs9842pro::init() {
     }
 
 #ifndef NATIVE_TEST
-    bool tdmOk = i2s_audio_enable_expansion_tdm_rx(
-        _sampleRate,
-        (gpio_num_t)dinPinRaw,
-        4   // 4 TDM slots: CH1/CH2/CH3/CH4
-    );
+    bool tdmOk = i2s_port_enable_rx((uint8_t)port, I2S_MODE_TDM, 4,
+                                     (gpio_num_t)dinPinRaw,
+                                     I2S_GPIO_UNUSED,
+                                     (gpio_num_t)I2S_BCK_PIN,
+                                     (gpio_num_t)I2S_LRC_PIN);
     if (!tdmOk) {
-        LOG_E("[HAL:ES9842PRO] I2S2 TDM init failed — audio will be silent");
+        LOG_E("[HAL:ES9842PRO] I2S TDM init failed (port=%u) — audio will be silent", port);
     }
 #endif
 
@@ -258,8 +256,10 @@ void HalEs9842pro::deinit() {
     // Power down: disable TDM output (reg 0x00 = 0x00)
     _writeReg(ES9842PRO_REG_SYS_CONFIG, 0x00);
 
-    // Release I2S2 expansion TDM RX
-    i2s_audio_disable_expansion_rx();
+    // Release I2S expansion TDM RX via port-generic API
+    HalDeviceConfig* cfg = HalDeviceManager::instance().getConfig(getSlot());
+    uint8_t port = (cfg && cfg->valid && cfg->i2sPort != 255) ? cfg->i2sPort : 2;
+    i2s_port_disable_rx(port);
 #endif
 
     // Release deinterleaver ping-pong buffers

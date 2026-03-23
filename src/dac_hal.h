@@ -6,14 +6,17 @@
 #include <stdint.h>
 
 // ===== Pin Configuration =====
+// Defaults match the ESP32-P4 board layout (GPIO 24=I2S DAC DOUT, 48=SDA, 54=SCL).
+// Build flags in platformio.ini always define these, so the defaults are only used
+// in environments without build flags (e.g. IDE auto-complete, static analysis).
 #ifndef I2S_TX_DATA_PIN
-#define I2S_TX_DATA_PIN 40
+#define I2S_TX_DATA_PIN 24
 #endif
 #ifndef DAC_I2C_SDA_PIN
-#define DAC_I2C_SDA_PIN 41
+#define DAC_I2C_SDA_PIN 48
 #endif
 #ifndef DAC_I2C_SCL_PIN
-#define DAC_I2C_SCL_PIN 42
+#define DAC_I2C_SCL_PIN 54
 #endif
 
 // ===== DAC Device IDs (EEPROM identification) =====
@@ -52,10 +55,6 @@ void dac_disable_i2s_tx_for_port(uint8_t port);
 
 // Query whether a given I2S TX port is currently enabled
 bool dac_is_tx_enabled_for_port(uint8_t port);
-
-// Mute ramp state accessors (for testing -- HC-6 verification)
-float dac_get_mute_gain();
-bool  dac_get_prev_mute();
 
 // ===== TX Diagnostics (snapshot of interval counters) =====
 struct DacTxDiag {

@@ -17,6 +17,17 @@
 #include <ArduinoJson.h>
 extern bool requireAuth();
 
+// Find the first registered DAC-path device (capability-based, no compatible-string coupling).
+// Returns nullptr when no DAC-path device is registered in the HAL.
+static HalDevice* _dacApiFindFirstDacDevice() {
+    HalDeviceManager& mgr = HalDeviceManager::instance();
+    for (uint8_t i = 0; i < HAL_MAX_DEVICES; ++i) {
+        HalDevice* d = mgr.getDevice(i);
+        if (d && (d->getDescriptor().capabilities & HAL_CAP_DAC_PATH)) return d;
+    }
+    return nullptr;
+}
+
 // Get HalAudioDevice* for a given pipeline sink slot (nullptr if not found)
 static HalAudioDevice* _dacApiAudioDeviceForSlot(uint8_t sinkSlot) {
     int8_t halSlot = hal_pipeline_get_slot_for_sink(sinkSlot);
@@ -53,8 +64,8 @@ void registerDacApiEndpoints() {
                 dev = nullptr; // Not a DAC device
             }
         } else {
-            // Default: backward-compatible PCM5102A lookup
-            dev = mgr.findByCompatible("ti,pcm5102a");
+            // Default: first registered DAC-path device (capability-based, not tied to PCM5102A)
+            dev = _dacApiFindFirstDacDevice();
         }
 
         HalDeviceConfig* cfg = dev ? mgr.getConfig(dev->getSlot()) : nullptr;
@@ -113,8 +124,8 @@ void registerDacApiEndpoints() {
 
         bool changed = false;
 
-        // HAL device lookup for PCM5102A
-        HalDevice* dev = HalDeviceManager::instance().findByCompatible("ti,pcm5102a");
+        // HAL device lookup — first registered DAC-path device (capability-based)
+        HalDevice* dev = _dacApiFindFirstDacDevice();
         uint8_t halSlot = dev ? dev->getSlot() : 0xFF;
         HalDeviceConfig* cfg = (halSlot < 0xFF) ? HalDeviceManager::instance().getConfig(halSlot) : nullptr;
 

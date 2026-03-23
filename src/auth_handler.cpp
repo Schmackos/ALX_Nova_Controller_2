@@ -4,6 +4,7 @@
 #include "config.h"
 #include "debug_serial.h"
 #include "http_security.h"
+#include "hal/hal_types.h"  // hal_safe_strcpy
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
@@ -200,10 +201,8 @@ String generateWsToken() {
   for (int i = 0; i < WS_TOKEN_SLOTS; i++) {
     if (_wsTokens[i].token[0] == '\0') {
       String uuid = generateSessionId();  // reuse UUID generator
-      strncpy(_wsTokens[i].token, uuid.c_str(), 36);
-      _wsTokens[i].token[36] = '\0';
-      strncpy(_wsTokens[i].sessionId, currentSession.c_str(), 36);
-      _wsTokens[i].sessionId[36] = '\0';
+      hal_safe_strcpy(_wsTokens[i].token, sizeof(_wsTokens[i].token), uuid.c_str());
+      hal_safe_strcpy(_wsTokens[i].sessionId, sizeof(_wsTokens[i].sessionId), currentSession.c_str());
       _wsTokens[i].createdMs = now;
       _wsTokens[i].used = false;
       return uuid;

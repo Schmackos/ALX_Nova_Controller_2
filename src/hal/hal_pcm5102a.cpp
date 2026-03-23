@@ -97,7 +97,7 @@ HalInitResult HalPcm5102a::init() {
 
 void HalPcm5102a::deinit() {
     // HC-3: ONLY disable TX. NEVER call i2s_channel_disable() on RX.
-    // Use i2s_audio_disable_tx() which handles port-specific TX teardown.
+    // Use i2s_port_disable_tx() which handles port-specific TX teardown.
     // RX and MCLK must remain active for PCM1808 ADC operation.
 
     if (_paPin >= 0) {

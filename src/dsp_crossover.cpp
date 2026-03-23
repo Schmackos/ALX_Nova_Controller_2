@@ -2,6 +2,7 @@
 
 #include "dsp_crossover.h"
 #include "dsp_coefficients.h"
+#include "hal/hal_types.h"  // hal_safe_strcpy
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -61,7 +62,7 @@ static int insert_butterworth_filter(int channel, float freq, int order,
         DspStage &s = cfg->channels[channel].stages[idx];
         s.biquad.frequency = freq;
         s.biquad.Q = 0.0f; // Not used for 1st-order
-        if (label) strncpy(s.label, label, sizeof(s.label) - 1);
+        if (label) hal_safe_strcpy(s.label, sizeof(s.label), label);
         dsp_compute_biquad_coeffs(s.biquad, type1st, cfg->sampleRate);
     }
 
@@ -81,7 +82,7 @@ static int insert_butterworth_filter(int channel, float freq, int order,
         DspStage &s = cfg->channels[channel].stages[idx];
         s.biquad.frequency = freq;
         s.biquad.Q = qValues[i];
-        if (label) strncpy(s.label, label, sizeof(s.label) - 1);
+        if (label) hal_safe_strcpy(s.label, sizeof(s.label), label);
         dsp_compute_biquad_coeffs(s.biquad, type2nd, cfg->sampleRate);
     }
 
@@ -134,7 +135,7 @@ int dsp_insert_crossover_bessel(int channel, float freq, int order, int role) {
         DspStage &s = cfg->channels[channel].stages[idx];
         s.biquad.frequency = freq;
         s.biquad.Q = qValues[i];
-        strncpy(s.label, label, sizeof(s.label) - 1);
+        hal_safe_strcpy(s.label, sizeof(s.label), label);
         dsp_compute_biquad_coeffs(s.biquad, type2nd, cfg->sampleRate);
     }
 
@@ -199,7 +200,7 @@ int dsp_insert_crossover_lr(int channel, float freq, int order, int role) {
         DspStage &s = cfg->channels[channel].stages[idx];
         s.biquad.frequency = freq;
         s.biquad.Q = 0.5f;
-        strncpy(s.label, label, sizeof(s.label) - 1);
+        hal_safe_strcpy(s.label, sizeof(s.label), label);
         dsp_compute_biquad_coeffs(s.biquad, type2nd, cfg->sampleRate);
         return idx;
     }
