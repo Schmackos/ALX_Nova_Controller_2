@@ -13,6 +13,7 @@
     "src/diag_api.h": ["api/rest-main"],
     "src/siggen_api.cpp": ["api/rest-main"],
     "src/siggen_api.h": ["api/rest-main"],
+    "src/health_check_api.h": ["api/rest-main"],
     "src/websocket_command.cpp": ["developer/websocket"],
     "src/websocket_handler.h": ["developer/websocket"],
     "src/websocket_internal.h": ["developer/websocket"],
@@ -318,7 +319,10 @@
     "src/drivers/es9027pro_regs.h",
     "src/drivers/es9081_regs.h",
     "src/drivers/es9082_regs.h",
-    "src/drivers/es9017_regs.h"
+    "src/drivers/es9017_regs.h",
+    "src/rate_limiter.h",
+    "src/rate_limiter.cpp",
+    "src/state/health_check_state.h"
   ],
   "sectionToPromptType": {
     "api/rest-main": "api-reference",

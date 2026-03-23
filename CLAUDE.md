@@ -483,6 +483,8 @@ chore: Maintenance tasks
 
 GitHub Actions (`.github/workflows/tests.yml`): 4 parallel quality gates (cpp-tests, cpp-lint, js-lint, e2e-tests) must all pass before firmware build. Triggers on push/PR to `main` and `develop` branches. A separate `release.yml` workflow runs the same 4 gates before release. Pipeline diagram: `docs-internal/architecture/ci-quality-gates.mmd`. Playwright HTML report uploaded as artifact on failure (14-day retention).
 
+When CI/doc-coverage gates fail after a merge, fix them immediately in the same session rather than leaving them for later.
+
 ## Documentation Site (Docusaurus v3)
 
 Public documentation site in `docs-site/` built with Docusaurus v3, deployed to GitHub Pages. 26 documentation pages across User Guide (9) and Developer Reference (17).
@@ -584,3 +586,24 @@ All icons in the web UI **must** use inline SVG paths sourced from [Material Des
 - `LovyanGFX@^1.2.0` — TFT display driver for ST7735S (replaced TFT_eSPI)
 - `arduinoFFT@^2.0` — FFT spectrum analysis (**native tests only**; ESP32 uses pre-built ESP-DSP FFT)
 - **ESP-DSP pre-built library** (`libespressif__esp-dsp.a`) — S3 assembly-optimized biquad IIR, FIR, Radix-4 FFT, window functions, vector math (mulc/mul/add), dot product, SNR/SFDR analysis. Include paths added via `-I` flags in `platformio.ini`. `lib/esp_dsp_lite/` provides ANSI C fallbacks for native tests only (`lib_ignore = esp_dsp_lite` in ESP32 envs)
+
+## Workflow Rules
+
+After completing code fixes or concern mitigations, ALWAYS update concerns.md/MEMORY.md to mark items as resolved before proceeding to commit/push/merge.
+
+## Git Operations
+
+After completing any implementation or fix task, automatically proceed to commit, push, create PR, merge to main, and delete the feature branch. Show the final commit hash on main. Do not wait for the user to ask for git operations separately.
+
+When performing git operations, always:
+1. Confirm which branch you're on
+2. Show the commit hash after pushing
+3. Delete the remote feature branch after merge unless told otherwise
+
+## Firmware / ESP32
+
+Never modify `platformio.ini` board configuration unless explicitly asked. Treat `board=` and `board_build` settings as protected fields.
+
+## Multi-Agent Workflow Rules
+
+After multi-agent workflows, scan for and clean up any tool artifacts (firecrawl files, skill temp files, cache files) before committing.

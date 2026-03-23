@@ -16,13 +16,28 @@
       "mcp__jcodemunch__search_symbols",
       "mcp__jcodemunch__search_text",
       "mcp__jcodemunch__get_symbol",
-      "Bash(/dev/null:*)"
+      "Bash(/dev/null:*)",
+      "Edit(~/.claude/skills/fix-concern/**)"
     ],
     "additionalDirectories": [
       "c:\\Users\\Necrosis\\Documents\\GitHub\\ALX_Nova_Controller_2",
       "C:\\Users\\Necrosis\\.claude\\skills",
       "C:\\Users\\Necrosis\\.claude",
       "c:\\Users\\Necrosis\\Documents\\GitHub\\ALX_Nova_Controller_2\\test\\test_audio_health_bridge"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | grep -q 'platformio.ini' && echo '{\"decision\":\"block\",\"reason\":\"platformio.ini board config is protected. Only modify if explicitly asked by the user.\"}' || true",
+            "statusMessage": "Checking protected files..."
+          }
+        ]
+      }
     ]
   }
 }
